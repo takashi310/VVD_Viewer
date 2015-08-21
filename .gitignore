@@ -165,3 +165,5 @@ FluoRender.rc
 Thumbs.db
 fluorender/FluoRender/img/Thumbs.db
 resource.h
+*.zip
+*.gz
