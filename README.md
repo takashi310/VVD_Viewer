@@ -1,22 +1,23 @@
-FluoRender
+VVD_Viewer
 ========
 
-FluoRender2.14 Release Source Code
+VVD_Viewer Source Code
 
-This is the open-source repository for FluoRender2.14, an interactive rendering tool for confocal microscopy data visualization. It combines the renderings of multi-channel volume data and polygon mesh data, where the properties of each dataset can be adjusted independently and quickly. The tool is designed especially for neurobiologists, and it helps them better visualize the fluorescent-stained confocal samples.
+This is the open-source repository for VVD_Viewer, an interactive rendering tool for confocal microscopy data visualization. It combines the renderings of multi-channel volume data and polygon mesh data, where the properties of each dataset can be adjusted independently and quickly. The tool is designed especially for neurobiologists, and it helps them better visualize the fluorescent-stained confocal samples.
+This is a branch of Fluorender (https://github.com/SCIInstitute/fluorender)
 
 Aknowledgements
 ========
-If you use FluoRender in work that leads to published research, we humbly ask that you add the following to the 'Acknowledgments' section of your paper: 
-"This work was made possible in part by software funded by the NIH: Fluorender: An Imaging Tool for Visualization and Analysis of Confocal Data as Applied to Zebrafish Research, R01-GM098151-01."
+If you use VVD_Viewer in work that leads to published research, we humbly ask that you add the following to the 'Acknowledgments' section of your paper: 
+"This work was made possible in part by software funded by the NIH: VVD_Viewer: An Imaging Tool for Visualization and Analysis of Confocal Data as Applied to Zebrafish Research, R01-GM098151-01."
 
-<strong>Author: </strong> Yong Wan<br/>
+<strong>Author: </strong>Takashi Kawase, Yong Wan<br/>
 <strong>Developer: </strong> Brig Bagley<br/>
 
-Building FluoRender
+Building VVD_Viewer
 ========
 Requirements: Git, CMake, wxWidgets 3.0<br/>
-We recommend building FluoRender outside of the source tree. <br/>
+We recommend building VVD_Viewer outside of the source tree. <br/>
 
 <h4>OSX</h4> 
 
@@ -30,7 +31,7 @@ We recommend building FluoRender outside of the source tree. <br/>
 
    * You may need root pivileges to link the libraries if brew asks you to.<br/>
 
-3) In the main FluoRender directory, (containing "CMakeLists.txt" & "fluorender" folder):
+3) In the main VVD_Viewer directory, (containing "CMakeLists.txt" & "VVD_Viewer" folder):
    
    * <code>mkdir build</code><br/>
    
@@ -58,7 +59,7 @@ We recommend building FluoRender outside of the source tree. <br/>
 
     * Compile using Visual Studio (<code>C:/wxWidgets-3.0.0/build/msw/wx_vc7.sln</code>)
 
-    * Be sure to compile the same configuration (Debug/Release) as you do for FluoRender below.
+    * Be sure to compile the same configuration (Debug/Release) as you do for VVD_Viewer below.
 
 3) You will need to add lines to C:/Program Files (x86)/CMake X.X/share/cmake-x.x/Modules (x's are your version) 
     for wxWidgets 3.0.
@@ -67,11 +68,11 @@ We recommend building FluoRender outside of the source tree. <br/>
 
     * In 4 places, you will need to add above each line with a "29" a new line that is exactly the same, but with a "30" instead.
 
-4) In the main FluoRender directory, (containing "CMakeLists.txt" & "fluorender" folder):
+4) In the main VVD_Viewer directory, (containing "CMakeLists.txt" & "VVD_Viewer" folder):
 
     * Use the C:\Program Files(x86)\CMake2.8\bin\cmake-gui.exe in the CMake install folder to configure build properties.
 
-         - Choose the FluoRender main folder for both browse options (source and build)
+         - Choose the VVD_Viewer main folder for both browse options (source and build)
 
          - Edit the values as necessary, Click Configure, then Click Generate.
               Be sure to set wxWidgets_LIB_DIR to C:/wxWidgets-3.0.0/lib/vc_lib (C:/wxWidgets-3.0.0/lib/vc_x64_lib for 64 bit)
@@ -91,13 +92,11 @@ We recommend building FluoRender outside of the source tree. <br/>
 		   Check Project Properties -> Configuration Properties -> Linker -> Command line.
 		   Make sure "Additional Options" should is "/machine:X64" NOT "/machine:X86"
 
-         - You may need to right-click FluoRender project on the left to "Set as StarUp Project" for it to run.
+         - You may need to right-click VVD_Viewer project on the left to "Set as StarUp Project" for it to run.
 
-         - You may also need to add additional dependencies in the FluoRender properties.
+         - You may also need to add additional dependencies in the VVD_Viewer properties.
     
     * NOTE: There are known issues with rendering XML stitched TIFF files when in "Debug" Configuration.
 
 
 --------------------------------------------------------------------------------------------------
-
-If there are any problems, email: fluorender@sci.utah.edu
