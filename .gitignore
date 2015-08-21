@@ -2,8 +2,6 @@
 *.rc
 *.ico
 resource*
-*.set
-*.dft
 *.a
 .DS_Store
 *.cmake
