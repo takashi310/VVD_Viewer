@@ -8403,7 +8403,7 @@ void VRenderGLView::DrawColormap()
    for (int i=0; i<GetDispVolumeNum(); i++)
    {
       VolumeData* vd = GetDispVolumeData(i);
-      if (vd && vd->GetColormapMode() && vd->GetDisp())
+      if (vd && vd->GetColormapMode() == 1 && vd->GetDisp())
       {
          num++;
          vd_index = i;

@@ -98,6 +98,9 @@ namespace FLIVR
 		case 2://depth map
 			z << VOL_UNIFORMS_DEPTHMAP;
 			break;
+		case 3://index color
+			z << VOL_UNIFORMS_INDEX_COLOR;
+			break;
 		}
 
 		// add uniform for depth peeling
@@ -153,7 +156,11 @@ namespace FLIVR
 			z << VOL_HEAD_FOG;
 
 		//bodies
-		if (shading_)
+		if (color_mode_ == 3)
+		{
+			z << VOL_INDEX_COLOR_BODY;
+		}
+		else if (shading_)
 		{
 			//no gradient volume, need to calculate in real-time
 			z << VOL_DATA_VOLUME_LOOKUP;
@@ -237,7 +244,9 @@ namespace FLIVR
 		switch (mask_)
 		{
 		case 0:
-			if (color_mode_ == 2)
+			if (color_mode_ == 3)
+				z << VOL_RASTER_BLEND_ID;
+			else if (color_mode_ == 2)
 				z << VOL_RASTER_BLEND_DMAP;
 			else
 			{
@@ -248,7 +257,9 @@ namespace FLIVR
 			}
 			break;
 		case 1:
-			if (color_mode_ == 2)
+			if (color_mode_ == 3)
+				z << VOL_RASTER_BLEND_MASK_ID;
+			else if (color_mode_ == 2)
 				z << VOL_RASTER_BLEND_MASK_DMAP;
 			else
 			{
@@ -259,7 +270,9 @@ namespace FLIVR
 			}
 			break;
 		case 2:
-			if (color_mode_ == 2)
+			if (color_mode_ == 3)
+				z << VOL_RASTER_BLEND_NOMASK_ID;
+			else if (color_mode_ == 2)
 				z << VOL_RASTER_BLEND_NOMASK_DMAP;
 			else
 			{

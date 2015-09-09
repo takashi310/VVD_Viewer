@@ -718,8 +718,8 @@ namespace FLIVR
 				pyramid_[i].bricks[j]->set_nrrd(0, 1);
 			}
 		}
-		pyramid_cur_lv_ = -1;
 		setLevel(pyramid_lv_num_ - 1);
+		pyramid_cur_lv_ = -1;
 
 		return true;
 	}

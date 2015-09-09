@@ -195,7 +195,7 @@ namespace FLIVR
 		bool shading_;
 		double ambient_, diffuse_, specular_, shine_;
 		//colormap mode
-		int colormap_mode_;//0-normal; 1-rainbow; 2-depth
+		int colormap_mode_;//0-normal; 1-rainbow; 2-depth; 3-index
 		double colormap_low_value_;
 		double colormap_hi_value_;
 		//solid

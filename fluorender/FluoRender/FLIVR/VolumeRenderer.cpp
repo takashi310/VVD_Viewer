@@ -550,7 +550,7 @@ namespace FLIVR
 		glGetIntegerv(GL_VIEWPORT, vp);
 
 		// set up blending
-		glEnable(GL_BLEND);
+/*		glEnable(GL_BLEND);
 		switch(mode_)
 		{
 		case MODE_OVER:
@@ -567,6 +567,7 @@ namespace FLIVR
 		default:
 			break;
 		}
+*/
 
 		// Cache this value to reset, in case another framebuffer is active,
 		// as it is in the case of saving an image from the viewer.
@@ -605,6 +606,7 @@ namespace FLIVR
 			{
 				glGenFramebuffers(1, &blend_framebuffer_);
 				glGenTextures(1, &blend_tex_id_);
+				glGenTextures(1, &label_tex_id_);
 
 				glBindFramebuffer(GL_FRAMEBUFFER, blend_framebuffer_);
 
@@ -619,6 +621,31 @@ namespace FLIVR
 				glFramebufferTexture2D(GL_FRAMEBUFFER,
 					GL_COLOR_ATTACHMENT0,
 					GL_TEXTURE_2D, blend_tex_id_, 0);
+				glBindTexture(GL_TEXTURE_2D, 0);
+
+				glBindTexture(GL_TEXTURE_2D, label_tex_id_);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
+					GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+				glFramebufferTexture2D(GL_FRAMEBUFFER,
+					GL_COLOR_ATTACHMENT1,
+					GL_TEXTURE_2D, label_tex_id_, 0);
+				glBindTexture(GL_TEXTURE_2D, 0);
+			}
+			else
+			{
+				glBindFramebuffer(GL_FRAMEBUFFER, blend_framebuffer_);
+
+				glFramebufferTexture2D(GL_FRAMEBUFFER,
+					GL_COLOR_ATTACHMENT0,
+					GL_TEXTURE_2D, blend_tex_id_, 0);
+				
+				glFramebufferTexture2D(GL_FRAMEBUFFER,
+					GL_COLOR_ATTACHMENT1,
+					GL_TEXTURE_2D, label_tex_id_, 0);
 			}
 
 			if (blend_framebuffer_resize_)
@@ -627,6 +654,12 @@ namespace FLIVR
 				glBindTexture(GL_TEXTURE_2D, blend_tex_id_);
 				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
 					GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+				glBindTexture(GL_TEXTURE_2D, 0);
+
+				glBindTexture(GL_TEXTURE_2D, label_tex_id_);
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
+					GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+				glBindTexture(GL_TEXTURE_2D, 0);
 
 				blend_framebuffer_resize_ = false;
 			}
@@ -636,10 +669,46 @@ namespace FLIVR
 
 			glBindFramebuffer(GL_FRAMEBUFFER, blend_framebuffer_);
 
+			static const GLenum draw_buffers[] =
+			{
+				GL_COLOR_ATTACHMENT0,
+				GL_COLOR_ATTACHMENT1
+			};
+			glDrawBuffers(cur_chan_brick_num_ == 0 ? 2 : 1, draw_buffers);
+
 			glClearColor(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
 			glClear(GL_COLOR_BUFFER_BIT);
 
+			glDrawBuffers(2, draw_buffers);
+
 			glViewport(vp[0], vp[1], w2, h2);
+		}
+		
+		glEnablei(GL_BLEND, 0);
+		switch(mode_)
+		{
+		case MODE_OVER:
+			glBlendEquationi(0, GL_FUNC_ADD);
+			if (update_order_ == 0)
+				glBlendFunci(0, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+			else if (update_order_ == 1)
+				glBlendFunci(0, GL_ONE_MINUS_DST_ALPHA, GL_ONE);
+			break;
+		case MODE_MIP:
+			glBlendEquationi(0, GL_MAX);
+			glBlendFunci(0, GL_ONE, GL_ONE);
+			break;
+		default:
+			break;
+		}
+		glDisablei(GL_BLEND, 1);
+		
+
+		if(glIsTexture(label_tex_id_)){
+			glActiveTexture(GL_TEXTURE5);
+			glEnable(GL_TEXTURE_2D);
+			glBindTexture(GL_TEXTURE_2D, label_tex_id_);
+			glActiveTexture(GL_TEXTURE0);
 		}
 
 		//disable depth test
@@ -771,6 +840,8 @@ namespace FLIVR
 		if (depth_peel_ || colormap_mode_ == 2)
 			shader->setLocalParam(7, 1.0/double(w2), 1.0/double(h2), 0.0, 0.0);
 
+		shader->setLocalParam(8, double(w2), double(h2), 0.0, 0.0);
+
 		//set clipping planes
 		double abcd[4];
 		planes_[0]->get(abcd);
@@ -864,7 +935,7 @@ namespace FLIVR
 				continue;
 			}
 			GLint filter;
-			if (intp)
+			if (intp && colormap_mode_ != 3)
 				filter = GL_LINEAR;
 			else
 				filter = GL_NEAREST;
@@ -924,6 +995,49 @@ namespace FLIVR
 //			QueryPerformanceCounter(&liBegin);
 
 			draw_polygons(vertex, texcoord, size, use_fog, shader);
+/*
+			{
+				//transformations
+				glMatrixMode(GL_PROJECTION);
+				glPushMatrix();
+				glLoadIdentity();
+				glMatrixMode(GL_MODELVIEW);
+				glPushMatrix();
+				glLoadIdentity();
+
+				glBindFramebuffer(GL_FRAMEBUFFER, blend_framebuffer_); 
+				glFramebufferTexture2D(GL_FRAMEBUFFER,
+					GL_COLOR_ATTACHMENT0,
+					GL_TEXTURE_2D, label_tex_id_copy_, 0);
+				glBindTexture(GL_TEXTURE_2D, label_tex_id_);
+				glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+				static const GLenum draw_buf = GL_COLOR_ATTACHMENT0;
+				glDrawBuffers(1, &draw_buf);
+				glBegin(GL_QUADS);
+				{
+					glTexCoord2f(0.0, 0.0);
+					glVertex3f(-1, -1, 0.0);
+					glTexCoord2f(1.0, 0.0);
+					glVertex3f(1, -1, 0.0);
+					glTexCoord2f(1.0, 1.0);
+					glVertex3f(1, 1, 0.0);
+					glTexCoord2f(0.0, 1.0);
+					glVertex3f(-1, 1, 0.0);
+				}
+				glEnd();
+				glBindTexture(GL_TEXTURE_2D, 0);
+
+				glFramebufferTexture2D(GL_FRAMEBUFFER,
+					GL_COLOR_ATTACHMENT0,
+					GL_TEXTURE_2D, blend_tex_id_, 0);
+				glDrawBuffers(2, draw_buffers);
+
+				glMatrixMode(GL_PROJECTION);
+				glPopMatrix();
+				glMatrixMode(GL_MODELVIEW);
+				glPopMatrix();
+			}
+*/
 			
 			//takashi_debug
 /*			if(i == 0 && !mask_){
@@ -986,9 +1100,26 @@ namespace FLIVR
 			done_loop_[bmode] = true;
 		}
 
+		glFinish();
+
 		// Undo transform.
 		glPopMatrix();
 		////////////////////////////////////////////////////////
+		{		
+			if(glIsTexture(label_tex_id_)){
+				glActiveTexture(GL_TEXTURE5);
+				glBindTexture(GL_TEXTURE_2D, 0);
+				glDisable(GL_TEXTURE_2D);
+				glActiveTexture(GL_TEXTURE0);
+			}
+			glBindFramebuffer(GL_FRAMEBUFFER, blend_framebuffer_);
+			glFramebufferTexture2D(GL_FRAMEBUFFER,
+				GL_COLOR_ATTACHMENT1,
+				GL_TEXTURE_2D, 0, 0);
+			static const GLenum draw_buf = GL_COLOR_ATTACHMENT0;
+			glDrawBuffers(1, &draw_buf);
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		}
 
 		//release depth texture for rendering shadows
 		if (colormap_mode_ == 2)

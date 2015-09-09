@@ -72,6 +72,7 @@ class VPropView: public wxPanel
 		ID_ColormapLowValueSldr,
 		ID_ColormapLowValueText,
 		ID_InvChk,
+		ID_IDCLChk,
 		ID_MipChk,
 		ID_NRChk,
 		ID_DepthChk
@@ -174,6 +175,8 @@ private:
 	//bottom line
 	//invert
 	wxCheckBox *m_inv_chk;
+	//Index color
+	wxCheckBox *m_idcl_chk;
 	//MIP
 	wxCheckBox *m_mip_chk;
 	//Noise reduction
@@ -255,6 +258,8 @@ private:
 	void OnResetDefault(wxCommandEvent& event);
 	//inversion
 	void OnInvCheck(wxCommandEvent &event);
+	//Index color
+	void OnIDCLCheck(wxCommandEvent &event);
 	//MIP
 	void OnMIPCheck(wxCommandEvent &event);
 	//noise reduction

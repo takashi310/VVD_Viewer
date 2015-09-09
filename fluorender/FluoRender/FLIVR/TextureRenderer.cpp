@@ -1039,6 +1039,8 @@ namespace FLIVR
 			}
 			glEnd();
 
+			glFlush();
+
 			k += poly[i];
 		}
 	}

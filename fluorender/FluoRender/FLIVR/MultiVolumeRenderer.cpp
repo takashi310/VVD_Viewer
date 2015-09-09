@@ -326,6 +326,14 @@ namespace FLIVR
          shader->bind();
       }
 
+	  //takashi_debug
+/*	  ofstream ofs;
+	  ofs.open("draw_shader_depth.txt");
+	  ofs << shader->getProgram() << endl;
+	  ofs.close();
+*/
+			
+
       //setup depth peeling
       if (depth_peel_ || colormap_mode_ == 2)
          shader->setLocalParam(7, 1.0/double(w2), 1.0/double(h2), 0.0, 0.0);

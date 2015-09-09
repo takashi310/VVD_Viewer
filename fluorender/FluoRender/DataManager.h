@@ -423,7 +423,7 @@ private:
 	bool m_test_wiref;
 
 	//color map mode
-	int m_colormap_mode;	//0-normal; 1-rainbow
+	int m_colormap_mode;	//0-normal; 1-rainbow; 3-index
 	bool m_colormap_disp;	//true/false
 	double m_colormap_low_value;
 	double m_colormap_hi_value;

@@ -55,6 +55,13 @@ namespace FLIVR
 	"uniform vec4 loc6;//(red, green, blue, mask_threshold)\n" \
 	"\n"
 
+#define VOL_UNIFORMS_INDEX_COLOR \
+	"//VOL_UNIFORMS_INDEX_COLOR\n" \
+	"uniform sampler2D tex5;\n" \
+	"uniform vec4 loc6;//(red, green, blue, mask_threshold)\n" \
+	"uniform vec4 loc8;//(vx, vy, 0, 0)\n" \
+	"\n"
+
 #define VOL_UNIFORMS_COLORMAP \
 	"//VOL_UNIFORMS_COLORMAP\n" \
 	"uniform vec4 loc6;//(low, hi, hi-lo, 0)\n" \
@@ -552,6 +559,39 @@ namespace FLIVR
 	"	}\n" \
 	"\n"
 
+#define VOL_INDEX_COLOR_BODY \
+	"	//VOL_INDEX_COLOR_BODY\n" \
+	"	vec4 v;\n" \
+	"	uint label = uint(texture3D(tex0, t.stp).x*65535.0+0.5); //get mask value\n" \
+	"	vec4 c = vec4(0.0, 0.0, 0.0, 0.0);\n" \
+	"	float hue, p2, p3;\n" \
+	"	if (label > uint(0))\n" \
+	"	{\n" \
+	"		hue = float((label*uint(50))%uint(360))/60.0;\n" \
+	"		p2 = 1.0 - hue + floor(hue);\n" \
+	"		p3 = hue - floor(hue);\n" \
+	"		if (hue < 1.0)\n" \
+	"			c = vec4(1.0, p3, 0.0, 1.0);\n" \
+	"		else if (hue < 2.0)\n" \
+	"			c = vec4(p2, 1.0, 0.0, 1.0);\n" \
+	"		else if (hue < 3.0)\n" \
+	"			c = vec4(0.0, 1.0, p3, 1.0);\n" \
+	"		else if (hue < 4.0)\n" \
+	"			c = vec4(0.0, p2, 1.0, 1.0);\n" \
+	"		else if (hue < 5.0)\n" \
+	"			c = vec4(p3, 0.0, 1.0, 1.0);\n" \
+	"		else\n" \
+	"			c = vec4(1.0, 0.0, p2, 1.0);\n" \
+	"	}\n" \
+	"	vec4 col = texture(tex5, gl_FragCoord.xy/loc8.xy);\n" \
+	"	if (c.rgb == vec3(0.0) || col.rgb == c.rgb)\n" \
+	"	{\n" \
+	"		discard;\n" \
+	"		return;\n" \
+	"	}\n" \
+	"	gl_FragData[1] = c;\n" \
+	"\n"
+
 #define VOL_COLOR_OUTPUT \
 	"	//VOL_COLOR_OUTPUT\n" \
 	"	c.xyz = c.xyz*clamp(1.0-loc1.x, 0.0, 1.0) + loc1.x*c.xyz*(loc1.y > 0.0?(n.w + n.z):1.0);\n" \
@@ -569,6 +609,11 @@ namespace FLIVR
 #define VOL_RASTER_BLEND \
 	"	//VOL_RASTER_BLEND\n" \
 	"	gl_FragColor = c*l.w; // VOL_RASTER_BLEND\n" \
+	"\n"
+
+#define VOL_RASTER_BLEND_ID \
+	"	//VOL_RASTER_BLEND_ID\n" \
+	"	gl_FragData[0] = c*l.w;\n" \
 	"\n"
 
 #define VOL_RASTER_BLEND_SOLID \
@@ -617,6 +662,12 @@ namespace FLIVR
 	"	gl_FragColor = vec4(vec3(intpo>0.05?currz:prevz), 1.0);\n" \
 	"\n"
 
+#define VOL_RASTER_BLEND_NOMASK_ID \
+	"	//VOL_RASTER_BLEND_NOMASK_ID\n" \
+	"	vec4 cmask = texture3D(tex2, t.stp); //get mask value\n" \
+	"	gl_FragData[0] = vec4(1.0-cmask.x)*c*l.w;\n" \
+	"\n"
+
 #define VOL_RASTER_BLEND_MASK \
 	"	//VOL_RASTER_BLEND_MASK\n" \
 	"	vec4 cmask = texture3D(tex2, t.stp); //get mask value\n" \
@@ -636,6 +687,11 @@ namespace FLIVR
 	"	vec4 cmask = texture3D(tex2, t.stp); //get mask value\n" \
 	"	float intpo = (vec4(cmask.x)*c*l.w).r;\n" \
 	"	gl_FragColor = vec4(vec3(intpo>0.05?currz:prevz), 1.0);\n" \
+	"\n"
+#define VOL_RASTER_BLEND_MASK_ID \
+	"	//VOL_RASTER_BLEND_MASK_ID\n" \
+	"	vec4 cmask = texture3D(tex2, t.stp); //get mask value\n" \
+	"	gl_FragData[0] = vec4(cmask.x)*c*l.w;\n" \
 	"\n"
 
 #define VOL_RASTER_BLEND_LABEL \

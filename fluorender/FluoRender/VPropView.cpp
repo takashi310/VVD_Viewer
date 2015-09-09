@@ -65,6 +65,8 @@ EVT_BUTTON(ID_SaveDefault, VPropView::OnSaveDefault)
 EVT_BUTTON(ID_ResetDefault, VPropView::OnResetDefault)
 //inversion
 EVT_CHECKBOX(ID_InvChk, VPropView::OnInvCheck)
+//Index color
+EVT_CHECKBOX(ID_IDCLChk, VPropView::OnIDCLCheck)
 //MIP
 EVT_CHECKBOX(ID_MipChk, VPropView::OnMIPCheck)
 //noise reduction
@@ -358,6 +360,10 @@ VPropView::VPropView(wxWindow* frame,
    VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
    if (vr_frame && vr_frame->GetFreeVersion())
       m_inv_chk->Hide();
+   //Index color
+   m_idcl_chk = new wxCheckBox(this, ID_IDCLChk, ":Index",
+         wxDefaultPosition, wxDefaultSize);
+   sizer_b->Add(m_idcl_chk, 0, wxALIGN_CENTER, 0);
    //MIP
    m_mip_chk = new wxCheckBox(this, ID_MipChk, ":MIP",
          wxDefaultPosition, wxDefaultSize);
@@ -1443,6 +1449,80 @@ void VPropView::OnInvCheck(wxCommandEvent &event)
 
    RefreshVRenderViews();
 }
+
+void VPropView::OnIDCLCheck(wxCommandEvent &event)
+{
+   bool idcolor = m_idcl_chk->GetValue();
+   bool colormap = m_colormap_enable_chk->GetValue();
+
+   int colormode;
+
+   if (idcolor) colormode = 3;
+   else if (colormap) colormode = 1;
+   else colormode = 0;
+
+/*   if (m_sync_group && m_group)
+   {
+      m_group->SetColormapMode(mode?3:0);
+   }
+   else*/ if (m_vd)
+   {
+      m_vd->SetColormapMode(colormode);
+   }
+
+   VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+   if (vr_frame)
+   {
+      AdjustView *adjust_view = vr_frame->GetAdjustView();
+      if (adjust_view)
+         adjust_view->UpdateSync();
+   }
+
+   if (m_vd)
+   {
+	   if (colormode == 3)
+	   {
+		   m_colormap_enable_chk->Disable();
+		   m_colormap_high_value_text->Disable();
+		   m_colormap_high_value_sldr->Disable();
+		   m_colormap_low_value_text->Disable();
+		   m_colormap_low_value_sldr->Disable();
+	   }
+	   else
+	   {
+		   m_colormap_enable_chk->Enable();
+		   m_colormap_high_value_text->Enable();
+		   m_colormap_high_value_sldr->Enable();
+		   m_colormap_low_value_text->Enable();
+		   m_colormap_low_value_sldr->Enable();
+	   }
+   }
+
+   if (m_vd && m_vd->GetMode()==1)
+   {
+      if (colormode)
+      {
+         m_gamma_sldr->Disable();
+         m_gamma_text->Disable();
+         m_contrast_sldr->Disable();
+         m_contrast_text->Disable();
+         m_luminance_sldr->Disable();
+         m_luminance_text->Disable();
+      }
+      else
+      {
+         m_gamma_sldr->Enable();
+         m_gamma_text->Enable();
+         m_contrast_sldr->Enable();
+         m_contrast_text->Enable();
+         m_luminance_sldr->Enable();
+         m_luminance_text->Enable();
+      }
+   }
+
+   RefreshVRenderViews();
+}
+
 
 void VPropView::OnMIPCheck(wxCommandEvent &event)
 {
