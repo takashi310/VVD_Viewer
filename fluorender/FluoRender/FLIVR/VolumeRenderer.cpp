@@ -834,13 +834,15 @@ namespace FLIVR
 			shader->setLocalParam(6, colormap_low_value_, colormap_hi_value_,
 				colormap_hi_value_-colormap_low_value_, 0.0);
 			break;
+		case 3://indexed color
+			shader->setLocalParam(6, double(w2), double(h2), 0.0, 0.0);
+			break;
 		}
 
 		//setup depth peeling
 		if (depth_peel_ || colormap_mode_ == 2)
 			shader->setLocalParam(7, 1.0/double(w2), 1.0/double(h2), 0.0, 0.0);
 
-		shader->setLocalParam(8, double(w2), double(h2), 0.0, 0.0);
 
 		//set clipping planes
 		double abcd[4];
