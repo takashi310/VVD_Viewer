@@ -292,7 +292,7 @@ namespace FLIVR
          glBindTexture(GL_TEXTURE_2D, 0);
          glDisable(GL_TEXTURE_2D);
 
-         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, blend_framebuffer_);
+         glBindFramebuffer(GL_FRAMEBUFFER, blend_framebuffer_);
 
          glClearColor(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
          glClear(GL_COLOR_BUFFER_BIT);
@@ -312,7 +312,7 @@ namespace FLIVR
 
       //--------------------------------------------------------------------------
       // Set up shaders
-      FragmentProgram* shader = 0;
+ /*     FragmentProgram* shader = 0;
       shader = VolumeRenderer::vol_shader_factory_.shader(
             vr_list_[0]->tex_->nc(),
             use_shading, use_fog!=0,
@@ -325,7 +325,7 @@ namespace FLIVR
             shader->create();
          shader->bind();
       }
-
+*/
 	  //takashi_debug
 /*	  ofstream ofs;
 	  ofs.open("draw_shader_depth.txt");
@@ -335,9 +335,9 @@ namespace FLIVR
 			
 
       //setup depth peeling
-      if (depth_peel_ || colormap_mode_ == 2)
+ /*     if (depth_peel_ || colormap_mode_ == 2)
          shader->setLocalParam(7, 1.0/double(w2), 1.0/double(h2), 0.0, 0.0);
-
+*/
       //--------------------------------------------------------------------------
       // render bricks
       // Set up transform
@@ -416,7 +416,24 @@ namespace FLIVR
             size.clear();
             b->compute_polygons(view_ray, dt, vertex, texcoord, size);
             if (vertex.size() == 0) { continue; }
-            shader->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(), 1.0/rate);
+
+			FragmentProgram* shader = 0;
+			shader = VolumeRenderer::vol_shader_factory_.shader(
+				vr_list_[0]->tex_->nc(),
+				use_shading, use_fog!=0,
+				depth_peel_, true,
+				hiqual_, 0,
+				colormap_mode_, false);
+			if (shader)
+			{
+				if (!shader->valid())
+					shader->create();
+				shader->bind();
+			}
+			if (depth_peel_ || colormap_mode_ == 2)
+				shader->setLocalParam(7, 1.0/double(w2), 1.0/double(h2), 0.0, 0.0);
+			
+			shader->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(), 1.0/rate);
 
             //for brick transformation
             BBox bbox = b->bbox();
@@ -442,7 +459,11 @@ namespace FLIVR
                   shader, i, orthographic_p, w2, h2, intp, quota_bricks_chan);
 
 			glFinish();
-         }
+			//break;
+
+			if (shader && shader->valid())
+				shader->release();
+		 }
       }
 
       if (TextureRenderer::get_mem_swap() &&
@@ -459,9 +480,9 @@ namespace FLIVR
       glDepthMask(GL_TRUE);
 
       // Release shader.
-      if (shader && shader->valid())
+/*      if (shader && shader->valid())
          shader->release();
-
+*/
       //release texture
       glActiveTexture(GL_TEXTURE0);
       glBindTexture(GL_TEXTURE_3D, 0);
@@ -696,6 +717,7 @@ namespace FLIVR
       glGetIntegerv(GL_READ_BUFFER, &cur_read_buffer);
       GLuint *blend_fbo = &(vr_list_[0]->blend_framebuffer_);
       GLuint *blend_tex = &(vr_list_[0]->blend_tex_id_);
+	  GLuint *blend_id_tex = &(vr_list_[0]->label_tex_id_);
 
       if (blend_slices_ && colormap_mode_!=2)
       {
@@ -705,6 +727,8 @@ namespace FLIVR
             glGenFramebuffers(1, blend_fbo);
             if (!glIsTexture(*blend_tex))
                glGenTextures(1, blend_tex);
+			if (!glIsTexture(*blend_id_tex))
+               glGenTextures(1, blend_id_tex);
             glBindFramebuffer(GL_FRAMEBUFFER, *blend_fbo);
             // Initialize texture color renderbuffer
             glBindTexture(GL_TEXTURE_2D, *blend_tex);
@@ -718,13 +742,33 @@ namespace FLIVR
             glFramebufferTexture2D(GL_FRAMEBUFFER,
                   GL_COLOR_ATTACHMENT0,
                   GL_TEXTURE_2D, *blend_tex, 0);
+			glBindTexture(GL_TEXTURE_2D, 0);
+
+			glBindTexture(GL_TEXTURE_2D, *blend_id_tex);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w, h, 0,
+				GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+/*			glFramebufferTexture2D(GL_FRAMEBUFFER,
+				GL_COLOR_ATTACHMENT1,
+				GL_TEXTURE_2D, *blend_id_tex, 0);
+*/			glBindTexture(GL_TEXTURE_2D, 0);
          }
          if (vr_list_[0]->blend_framebuffer_resize_)
          {
             glBindTexture(GL_TEXTURE_2D, *blend_tex);
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w, h, 0,
                   GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-            vr_list_[0]->blend_framebuffer_resize_ = false;
+            glBindTexture(GL_TEXTURE_2D, 0);
+
+			glBindTexture(GL_TEXTURE_2D, *blend_id_tex);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w, h, 0,
+				GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+			glBindTexture(GL_TEXTURE_2D, 0);
+			
+			vr_list_[0]->blend_framebuffer_resize_ = false;
          }
       }
 
@@ -868,26 +912,27 @@ namespace FLIVR
          }
          k += poly[i];
 
-         if (blend_slices_ && colormap_mode_!=2)
+		 if (blend_slices_ && colormap_mode_!=2)
          {
-            glUseProgram(0);
-            glActiveTexture(GL_TEXTURE0);
-            glEnable(GL_TEXTURE_2D);
-            glDisable(GL_TEXTURE_3D);
-
             //set buffer back
             glBindFramebuffer(GL_FRAMEBUFFER, cur_framebuffer_id);
             glDrawBuffer(cur_draw_buffer);
             glReadBuffer(cur_read_buffer);
             glBindTexture(GL_TEXTURE_2D, *blend_tex);
             glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+			 
+			glUseProgram(0);
+            glActiveTexture(GL_TEXTURE0);
+            glEnable(GL_TEXTURE_2D);
+            glDisable(GL_TEXTURE_3D);
+
             //transformations
             glMatrixMode(GL_PROJECTION);
-            glPushMatrix();
-            glLoadIdentity();
-            glMatrixMode(GL_MODELVIEW);
-            glPushMatrix();
-            glLoadIdentity();
+			glPushMatrix();
+			glLoadIdentity();
+			glMatrixMode(GL_MODELVIEW);
+			glPushMatrix();
+			glLoadIdentity();
             //blend
             if (TextureRenderer::get_update_order() == 0)
                glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
@@ -908,8 +953,8 @@ namespace FLIVR
             glEnd();
             glMatrixMode(GL_PROJECTION);
             glPopMatrix();
-            glMatrixMode(GL_MODELVIEW);
-            glPopMatrix();
+			glMatrixMode(GL_MODELVIEW);
+			glPopMatrix();
          }
       }
 
