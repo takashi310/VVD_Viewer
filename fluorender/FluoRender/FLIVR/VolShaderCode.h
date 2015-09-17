@@ -58,7 +58,7 @@ namespace FLIVR
 #define VOL_UNIFORMS_INDEX_COLOR \
 	"//VOL_UNIFORMS_INDEX_COLOR\n" \
 	"uniform sampler2D tex5;\n" \
-	"uniform vec4 loc6;//(vx, vy, 0, 0)\n" \
+	"uniform vec4 loc6;//(1/vx, 1/vy, luminance, 0)\n" \
 	"\n"
 
 #define VOL_UNIFORMS_COLORMAP \
@@ -582,13 +582,14 @@ namespace FLIVR
 	"		else\n" \
 	"			c = vec4(1.0, 0.0, p2, 1.0);\n" \
 	"	}\n" \
-	"	vec4 col = texture(tex5, gl_FragCoord.xy/loc6.xy);\n" \
+	"	vec4 col = texture(tex5, gl_FragCoord.xy*loc6.xy);\n" \
 	"	if (c.rgb == vec3(0.0) || col.rgb == c.rgb)\n" \
 	"	{\n" \
 	"		discard;\n" \
 	"		return;\n" \
 	"	}\n" \
 	"	gl_FragData[1] = c;\n" \
+	"	c.rgb = c.rgb*loc6.z;\n" \
 	"\n"
 
 #define VOL_COLOR_OUTPUT \

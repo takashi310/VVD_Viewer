@@ -3248,7 +3248,10 @@ void VRenderGLView::DrawOVER(VolumeData* vd, GLuint tex, int peel, double sampli
       vd->SetColormapMode(2);
       vd->SetStreamMode(0);
 */
+//	  int uporder =  TextureRenderer::get_update_order();
+//	  TextureRenderer::set_update_order(0);
 	  vd->Draw(!m_persp, m_interactive, m_scale_factor, m_intp, sampling_frq_fac);
+//	  TextureRenderer::set_update_order(uporder);
    }
 
    if (vd->GetShadow())
@@ -4016,37 +4019,48 @@ void VRenderGLView::DrawOLShadows(vector<VolumeData*> &vlist, GLuint tex)
    if (vlist.size() == 1 && vlist[0]->GetShadow())
    {
       VolumeData* vd = vlist[0];
-      //save
-      int colormode = vd->GetColormapMode();
-      bool shading = vd->GetVR()->get_shading();
-      //set to draw depth
-      vd->GetVR()->set_shading(false);
-      vd->SetMode(0);
-      vd->SetColormapMode(2);
-      vd->Set2dDmap(m_tex_ol1);
-      //draw
-      vd->SetStreamMode(3);
-	  int uporder = TextureRenderer::get_update_order();
-	  TextureRenderer::set_update_order(0);
-	  vd->Draw(!m_persp, m_interactive, m_scale_factor, m_intp);
-      //restore
-      vd->RestoreMode();
-      vd->SetColormapMode(colormode);
-      vd->GetVR()->set_shading(shading);
-      vd->GetShadowParams(shadow_darkness);
-	  TextureRenderer::set_update_order(uporder);
+
+	  if (vd->GetTexture())
+	  {
+		  //save
+		  int colormode = vd->GetColormapMode();
+		  bool shading = vd->GetVR()->get_shading();
+		  //set to draw depth
+		  vd->GetVR()->set_shading(false);
+		  vd->SetMode(0);
+		  vd->SetColormapMode(2);
+		  vd->Set2dDmap(m_tex_ol1);
+		  //draw
+		  vd->SetStreamMode(3);
+		  int uporder = TextureRenderer::get_update_order();
+		  TextureRenderer::set_update_order(0);
+		  vd->GetTexture()->set_sort_bricks();
+		  vd->Draw(!m_persp, m_interactive, m_scale_factor, m_intp);
+		  //restore
+		  vd->RestoreMode();
+		  vd->SetColormapMode(colormode);
+		  vd->GetVR()->set_shading(shading);
+		  vd->GetShadowParams(shadow_darkness);
+		  TextureRenderer::set_update_order(uporder);
+		  vd->GetTexture()->set_sort_bricks();
+	  }
+
    }
    else
    {
       vector<int> colormodes;
       vector<bool> shadings;
       vector<VolumeData*> list;
+
+	  int uporder = TextureRenderer::get_update_order();
+	  TextureRenderer::set_update_order(0);
+
       //geenerate list
       int i;
       for (i=0; i<(int)vlist.size(); i++)
       {
          VolumeData* vd = vlist[i];
-         if (vd && vd->GetShadow())
+		 if (vd && vd->GetShadow() && vd->GetTexture())
          {
             colormodes.push_back(vd->GetColormapMode());
             shadings.push_back(vd->GetVR()->get_shading());
@@ -4063,6 +4077,7 @@ void VRenderGLView::DrawOLShadows(vector<VolumeData*> &vlist, GLuint tex)
             vd->SetMode(0);
             vd->SetColormapMode(2);
             vd->Set2dDmap(m_tex_ol1);
+			vd->GetTexture()->set_sort_bricks();
             VolumeRenderer* vr = list[i]->GetVR();
             if (vr)
             {
@@ -4082,9 +4097,12 @@ void VRenderGLView::DrawOLShadows(vector<VolumeData*> &vlist, GLuint tex)
             vd->RestoreMode();
             vd->SetColormapMode(colormodes[i]);
             vd->GetVR()->set_shading(shadings[i]);
+			vd->GetTexture()->set_sort_bricks();
          }
          list[0]->GetShadowParams(shadow_darkness);
       }
+	  
+	  TextureRenderer::set_update_order(uporder);
    }
 
    //
@@ -4248,7 +4266,7 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
    m_mvr->clear_vr();
    for (i=0; i<(int)list.size(); i++)
    {
-      if (list[i] && list[i]->GetDisp())
+	   if (list[i] && list[i]->GetDisp())
       {
 		 
 		 //switchLevel(list[i]);

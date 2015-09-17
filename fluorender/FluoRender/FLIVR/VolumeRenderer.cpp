@@ -643,9 +643,9 @@ namespace FLIVR
 					GL_COLOR_ATTACHMENT0,
 					GL_TEXTURE_2D, blend_tex_id_, 0);
 				
-				glFramebufferTexture2D(GL_FRAMEBUFFER,
-					GL_COLOR_ATTACHMENT1,
-					GL_TEXTURE_2D, label_tex_id_, 0);
+					glFramebufferTexture2D(GL_FRAMEBUFFER,
+						GL_COLOR_ATTACHMENT1,
+						GL_TEXTURE_2D, label_tex_id_, 0);
 			}
 
 			if (blend_framebuffer_resize_)
@@ -674,12 +674,12 @@ namespace FLIVR
 				GL_COLOR_ATTACHMENT0,
 				GL_COLOR_ATTACHMENT1
 			};
-			glDrawBuffers(cur_chan_brick_num_ == 0 ? 2 : 1, draw_buffers);
+			glDrawBuffers(cur_chan_brick_num_==0 && colormap_mode_==3 ? 2 : 1, draw_buffers);
 
 			glClearColor(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
 			glClear(GL_COLOR_BUFFER_BIT);
 
-			glDrawBuffers(2, draw_buffers);
+			glDrawBuffers(colormap_mode_==3 ? 2 : 1, draw_buffers);
 
 			glViewport(vp[0], vp[1], w2, h2);
 		}
@@ -701,10 +701,10 @@ namespace FLIVR
 		default:
 			break;
 		}
-		glDisablei(GL_BLEND, 1);
+		if (colormap_mode_ == 3) glDisablei(GL_BLEND, 1);
 		
 
-		if(glIsTexture(label_tex_id_)){
+		if(colormap_mode_ == 3 && glIsTexture(label_tex_id_)){
 			glActiveTexture(GL_TEXTURE5);
 			glEnable(GL_TEXTURE_2D);
 			glBindTexture(GL_TEXTURE_2D, label_tex_id_);
@@ -835,7 +835,9 @@ namespace FLIVR
 				colormap_hi_value_-colormap_low_value_, 0.0);
 			break;
 		case 3://indexed color
-			shader->setLocalParam(6, double(w2), double(h2), 0.0, 0.0);
+			HSVColor hsv(color_);
+			double luminance = hsv.val();
+			shader->setLocalParam(6, 1.0/double(w2), 1.0/double(h2), luminance, 0.0);
 			break;
 		}
 
@@ -884,6 +886,28 @@ namespace FLIVR
 		//glGetDoublev(GL_MODELVIEW_MATRIX, mvmat);
 		//for(int n = 0; n < 16; n++)ofs << mvmat[n] << endl;
 		//ofs.close();
+
+		//takashi_debug
+/*		if(mode == 3){
+			ofstream ofs;
+			ofs.open("draw_depth_shader.txt");
+			ofs << shader->getProgram() << endl;
+			ofs.close();
+		}
+
+		if(i == 0 && !mask_){
+			ofstream ofs;
+			ofs.open("draw_shader.txt");
+			ofs << shader->getProgram() << endl;
+			ofs.close();
+		}
+		if(i == 0 && mask_){
+			ofstream ofs;
+			ofs.open("draw_mask_shader.txt");
+			ofs << shader->getProgram() << endl;
+			ofs.close();
+		}
+*/
 
 		if (cur_chan_brick_num_ == 0) rearrangeLoadedBrkVec();
 
@@ -1041,21 +1065,6 @@ namespace FLIVR
 			}
 */
 			
-			//takashi_debug
-/*			if(i == 0 && !mask_){
-				ofstream ofs;
-				ofs.open("draw_shader.txt");
-				ofs << shader->getProgram() << endl;
-				ofs.close();
-			}
-
-			if(i == 0 && mask_){
-				ofstream ofs;
-				ofs.open("draw_mask_shader.txt");
-				ofs << shader->getProgram() << endl;
-				ofs.close();
-			}
-*/			
 			if (mem_swap_){
 				finished_bricks_++;
 				glFinish();//Added by takashi
@@ -1107,8 +1116,10 @@ namespace FLIVR
 		// Undo transform.
 		glPopMatrix();
 		////////////////////////////////////////////////////////
+		if (colormap_mode_ == 3)
 		{		
-			if(glIsTexture(label_tex_id_)){
+			if(glIsTexture(label_tex_id_))
+			{
 				glActiveTexture(GL_TEXTURE5);
 				glBindTexture(GL_TEXTURE_2D, 0);
 				glDisable(GL_TEXTURE_2D);
