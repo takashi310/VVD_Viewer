@@ -312,7 +312,7 @@ namespace FLIVR
 
       //--------------------------------------------------------------------------
       // Set up shaders
- /*     FragmentProgram* shader = 0;
+      FragmentProgram* shader = 0;
       shader = VolumeRenderer::vol_shader_factory_.shader(
             vr_list_[0]->tex_->nc(),
             use_shading, use_fog!=0,
@@ -325,7 +325,7 @@ namespace FLIVR
             shader->create();
          shader->bind();
       }
-*/
+
 	  //takashi_debug
 /*	  ofstream ofs;
 	  ofs.open("draw_shader_depth.txt");
@@ -417,19 +417,16 @@ namespace FLIVR
             b->compute_polygons(view_ray, dt, vertex, texcoord, size);
             if (vertex.size() == 0) { continue; }
 
-			FragmentProgram* shader = 0;
-			shader = VolumeRenderer::vol_shader_factory_.shader(
-				vr_list_[0]->tex_->nc(),
-				use_shading, use_fog!=0,
-				depth_peel_, true,
-				hiqual_, 0,
-				colormap_mode_, false);
-			if (shader)
+			if (blend_slices_)
 			{
-				if (!shader->valid())
-					shader->create();
-				shader->bind();
+				if (shader)
+				{
+					if (!shader->valid())
+						shader->create();
+					shader->bind();
+				}
 			}
+
 			if (depth_peel_ || colormap_mode_ == 2)
 				shader->setLocalParam(7, 1.0/double(w2), 1.0/double(h2), 0.0, 0.0);
 			
@@ -460,9 +457,6 @@ namespace FLIVR
 
 			glFinish();
 			//break;
-
-			if (shader && shader->valid())
-				shader->release();
 		 }
       }
 
@@ -480,9 +474,9 @@ namespace FLIVR
       glDepthMask(GL_TRUE);
 
       // Release shader.
-/*      if (shader && shader->valid())
+      if (shader && shader->valid())
          shader->release();
-*/
+
       //release texture
       glActiveTexture(GL_TEXTURE0);
       glBindTexture(GL_TEXTURE_3D, 0);

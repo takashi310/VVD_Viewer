@@ -628,18 +628,25 @@ void VPropView::GetSettings()
       m_right_thresh_sldr->Disable();
       m_right_thresh_text->Disable();
       m_boundary_sldr->Disable();
-      m_boundary_text->Disable();
-      if (m_vd->GetColormapMode() == 1)
-      {
-         m_gamma_sldr->Disable();
-         m_gamma_text->Disable();
-         m_contrast_sldr->Disable();
-         m_contrast_text->Disable();
-         m_luminance_sldr->Disable();
-         m_luminance_text->Disable();
-      }
-      if (m_threh_st)
-         m_threh_st->SetLabel("Shade Threshold:");
+	  m_boundary_text->Disable();
+	  m_luminance_sldr->Disable();
+	  m_luminance_text->Disable();
+	  if (m_vd->GetColormapMode() == 1)
+	  {
+		  m_gamma_sldr->Disable();
+		  m_gamma_text->Disable();
+		  m_contrast_sldr->Disable();
+		  m_contrast_text->Disable();
+	  }
+	  else
+	  {
+		  m_gamma_sldr->Enable();
+		  m_gamma_text->Enable();
+		  m_contrast_sldr->Enable();
+		  m_contrast_text->Enable();
+	  }
+	  if (m_threh_st)
+		  m_threh_st->SetLabel("Shade Threshold:");
    }
    else
    {
@@ -652,15 +659,35 @@ void VPropView::GetSettings()
       m_right_thresh_sldr->Enable();
       m_right_thresh_text->Enable();
       m_boundary_sldr->Enable();
-      m_boundary_text->Enable();
-      m_gamma_sldr->Enable();
-      m_gamma_text->Enable();
-      m_contrast_sldr->Enable();
-      m_contrast_text->Enable();
-      m_luminance_sldr->Enable();
-      m_luminance_text->Enable();
-      if (m_threh_st)
+	  m_boundary_text->Enable();
+	  m_gamma_sldr->Enable();
+	  m_gamma_text->Enable();
+	  m_contrast_sldr->Enable();
+	  m_contrast_text->Enable();
+	  m_luminance_sldr->Enable();
+	  m_luminance_text->Enable();
+	  if (m_threh_st)
          m_threh_st->SetLabel("Threshold:");
+   }
+
+   //Indexed color
+   if (m_vd->GetColormapMode() == 3)
+   {
+	   m_idcl_chk->SetValue(true);
+	   m_colormap_enable_chk->Disable();
+	   m_colormap_high_value_text->Disable();
+	   m_colormap_high_value_sldr->Disable();
+	   m_colormap_low_value_text->Disable();
+	   m_colormap_low_value_sldr->Disable();
+   }
+   else
+   {
+	   m_idcl_chk->SetValue(false);
+	   m_colormap_enable_chk->Enable();
+	   m_colormap_high_value_text->Enable();
+	   m_colormap_high_value_sldr->Enable();
+	   m_colormap_low_value_text->Enable();
+	   m_colormap_low_value_sldr->Enable();
    }
 
    //noise reduction
@@ -1195,8 +1222,8 @@ void VPropView::OnEnableColormap(wxCommandEvent &event)
          m_gamma_text->Enable();
          m_contrast_sldr->Enable();
          m_contrast_text->Enable();
-         m_luminance_sldr->Enable();
-         m_luminance_text->Enable();
+         //m_luminance_sldr->Enable();
+         //m_luminance_text->Enable();
       }
    }
 
@@ -1500,7 +1527,7 @@ void VPropView::OnIDCLCheck(wxCommandEvent &event)
 
    if (m_vd && m_vd->GetMode()==1)
    {
-      if (colormode)
+      if (colormode == 1)
       {
          m_gamma_sldr->Disable();
          m_gamma_text->Disable();
@@ -1579,7 +1606,7 @@ void VPropView::OnMIPCheck(wxCommandEvent &event)
       m_contrast_text->Enable();
       m_luminance_sldr->Enable();
       m_luminance_text->Enable();
-      if (m_threh_st)
+	  if (m_threh_st)
          m_threh_st->SetLabel("Threshold:");
    }
 
