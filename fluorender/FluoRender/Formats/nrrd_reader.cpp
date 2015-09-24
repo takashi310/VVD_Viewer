@@ -280,6 +280,7 @@ Nrrd* NRRDReader::Convert(int t, int c, bool get_max)
             if (get_max)
                 m_max_value = (n > m_max_value)?n:m_max_value;
         }
+		if (output->type == nrrdTypeUShort) min_value = 0;
         output->type = nrrdTypeUShort;
     }
    //find max value

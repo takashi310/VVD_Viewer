@@ -2023,7 +2023,7 @@ void VRenderFrame::SaveProject(wxString& filename)
          fconfig.SetPath(str);
          str = vd->GetName();
          fconfig.Write("name", str);
-         //compression
+		 //compression
          fconfig.Write("compression", m_compression);
          //skip brick
          fconfig.Write("skip_brick", vd->GetSkipBrick());
@@ -2089,21 +2089,22 @@ void VRenderFrame::SaveProject(wxString& filename)
 
          //resolution scale
          double resx, resy, resz;
+		 double b_resx, b_resy, b_resz;
 		 double s_resx, s_resy, s_resz;
          double sclx, scly, sclz;
-         vd->GetBaseSpacings(resx, resy, resz);
+		 vd->GetSpacings(resx, resy, resz);
+         vd->GetBaseSpacings(b_resx, b_resy, b_resz);
 		 vd->GetSpacingScales(s_resx, s_resy, s_resz);
          vd->GetScalings(sclx, scly, sclz);
-         fconfig.Write("x_res", resx);
-         fconfig.Write("y_res", resy);
-         fconfig.Write("z_res", resz);
-		 fconfig.Write("x_sres", s_resx);
-         fconfig.Write("y_sres", s_resy);
-         fconfig.Write("z_sres", s_resz);
-         fconfig.Write("x_scl", sclx);
-         fconfig.Write("y_scl", scly);
-         fconfig.Write("z_scl", sclz);
-
+		 str = wxString::Format("%lf %lf %lf", resx, resy, resz);
+         fconfig.Write("res", str);
+		 str = wxString::Format("%lf %lf %lf", b_resx, b_resy, b_resz);
+		 fconfig.Write("b_res", str);
+		 str = wxString::Format("%lf %lf %lf", s_resx, s_resy, s_resz);
+		 fconfig.Write("s_res", str);
+		 str = wxString::Format("%lf %lf %lf", sclx, scly, sclz);
+		 fconfig.Write("scl", str);
+         
          //planes
          vector<Plane*> *planes = 0;
          if (vd->GetVR())
@@ -2847,23 +2848,41 @@ void VRenderFrame::OpenProject(wxString& filename)
                      else
                         vd->SetSampleRate(srate);
                   }
-                  double resx, resy, resz;
-                  if (fconfig.Read("x_res", &resx) &&
-                        fconfig.Read("y_res", &resy) &&
-                        fconfig.Read("z_res", &resz))
-                     vd->SetBaseSpacings(resx, resy, resz);
-				  double s_resx, s_resy, s_resz;
-				  if (fconfig.Read("x_sres", &s_resx) &&
-                        fconfig.Read("y_sres", &s_resy) &&
-                        fconfig.Read("z_sres", &s_resz))
-                     vd->SetSpacingScales(s_resx, s_resy, s_resz);
-                  double sclx, scly, sclz;
-                  if (fconfig.Read("x_scl", &sclx) &&
-                        fconfig.Read("y_scl", &scly) &&
-                        fconfig.Read("z_scl", &sclz))
-                     vd->SetScalings(sclx, scly, sclz);
-                  vector<Plane*> *planes = 0;
-                  if (vd->GetVR())
+
+				  //spacings and scales
+				  if (!vd->isBrxml())
+				  {
+					  if (fconfig.Read("res", &str))
+					  {
+						  double resx, resy, resz;
+						  if (SSCANF(str.c_str(), "%lf%lf%lf", &resx, &resy, &resz))
+							  vd->SetSpacings(resx, resy, resz);
+					  }
+				  }
+				  else
+				  {
+					  if (fconfig.Read("b_res", &str))
+					  {
+						  double b_resx, b_resy, b_resz;
+						  if (SSCANF(str.c_str(), "%lf%lf%lf", &b_resx, &b_resy, &b_resz))
+							  vd->SetBaseSpacings(b_resx, b_resy, b_resz);
+					  }
+					  if (fconfig.Read("s_res", &str))
+					  {
+						  double s_resx, s_resy, s_resz;
+						  if (SSCANF(str.c_str(), "%lf%lf%lf", &s_resx, &s_resy, &s_resz))
+							  vd->SetSpacingScales(s_resx, s_resy, s_resz);
+					  }
+				  }
+				  if (fconfig.Read("scl", &str))
+				  {
+					  double sclx, scly, sclz;
+					  if (SSCANF(str.c_str(), "%lf%lf%lf", &sclx, &scly, &sclz))
+						  vd->SetScalings(sclx, scly, sclz);
+				  }
+
+				  vector<Plane*> *planes = 0;
+				  if (vd->GetVR())
                      planes = vd->GetVR()->get_planes();
                   int iresx, iresy, iresz;
                   vd->GetResolution(iresx, iresy, iresz);
