@@ -44,6 +44,8 @@ namespace FLIVR {
 
 	using std::vector;
 
+	class VolumeRenderer;
+
 	// We use no more than 2 texture units.
 	// GL_MAX_TEXTURE_UNITS is the actual maximum.
 	//we now added maximum to 4
@@ -137,15 +139,21 @@ namespace FLIVR {
 		virtual void* tex_data(int c);
 		virtual void* tex_data_brk(int c, std::wstring* fname, int filetype, bool useURL);
 		
+		void compute_t_index_min_max(Ray& view, double dt);
+
 		void compute_polygons(Ray& view, double tmin, double tmax, double dt,
 			vector<double>& vertex, vector<double>& texcoord,
 			vector<int>& size);
 		void compute_polygons(Ray& view, double dt,
 			vector<double>& vertex, vector<double>& texcoord,
 			vector<int>& size);
+		void compute_polygons2();
+		void clear_polygons();
 		void compute_polygon(Ray& view, double t,
 			vector<double>& vertex, vector<double>& texcoord,
 			vector<int>& size);
+
+		void get_polygon(int tid, int &size, double* &v, double* &t);
 		
 		//set d
 		void set_d(double d) { d_ = d; }
@@ -154,6 +162,11 @@ namespace FLIVR {
 		{ return b1->d_ > b2->d_; }
 		static bool sort_dsc(const TextureBrick* b1, const TextureBrick* b2)
 		{ return b2->d_ > b1->d_; }
+
+		static bool less_timin(const TextureBrick* b1, const TextureBrick* b2) { return b1->timin_ < b2->timin_; }
+		static bool high_timin(const TextureBrick* b1, const TextureBrick* b2) { return b1->timin_ > b2->timin_; }
+		static bool less_timax(const TextureBrick* b1, const TextureBrick* b2) { return b1->timax_ < b2->timax_; }
+		static bool high_timax(const TextureBrick* b1, const TextureBrick* b2) { return b1->timax_ > b2->timax_; }
 
 		//current index
 		inline void set_ind(size_t ind) {ind_ = ind;}
@@ -165,6 +178,23 @@ namespace FLIVR {
 		int get_id_in_loadedbrks() {return id_in_loadedbrks;}
 		int getID() {return findex_;}
 		const void *getBrickData() {return brkdata_;}
+
+		double dt() {return dt_;}
+		double timin() {return timin_;}
+		double timax() {return timax_;}
+		Ray *vray() {return &vray_;}
+		double rate_fac() {return rate_fac_;}
+		VolumeRenderer *get_vr() {return vr_;}
+		void set_dt(double dt) {dt_ = dt;}
+		void set_t_index_min(int timin) {timin_ = timin;}
+		void set_t_index_max(int timax) {timax_ = timax;}
+		void set_vray(Ray vray) {vray_ = vray;}
+		void set_rate_fac(double rate_fac) {rate_fac_ = rate_fac;}
+		void set_vr(VolumeRenderer *vr) {vr_ = vr;}
+
+		std::vector<double> *get_vertex_list() {return &vertex_;}
+		std::vector<double> *get_texcoord_list() {return &texcoord_;}
+		std::vector<int> *get_size_list() {return &size_;}
 
 	private:
 		void compute_edge_rays(BBox &bbox);
@@ -218,6 +248,16 @@ namespace FLIVR {
 		int id_in_loadedbrks;
 
 		int findex_;
+
+		double dt_;
+		int timax_, timin_;
+		Ray vray_;
+		double rate_fac_;
+		VolumeRenderer *vr_;
+		vector<double> vertex_;
+		vector<double> texcoord_;
+		vector<int> size_;
+		vector<int> size_integ_;
 	};
 
 	struct Pyramid_Level {

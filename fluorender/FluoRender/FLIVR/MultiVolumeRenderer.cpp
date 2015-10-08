@@ -676,6 +676,776 @@ namespace FLIVR
       }
    }
 
+   
+   void MultiVolumeRenderer::draw_volume2(bool interactive_mode_p, bool orthographic_p, double zoom, bool intp)
+   {
+      if (get_vr_num()<=0 || !(vr_list_[0]))
+         return;
+
+      set_interactive_mode(adaptive_ && interactive_mode_p);
+
+	  double sampling_frq_fac = -1.0;
+	  for (int i=0; i<(int)vr_list_.size(); i++)
+	  {
+		  VolumeRenderer* vr = vr_list_[i];
+		  if (!vr)
+			  continue;
+		  Texture *tex = vr->tex_;
+		  if (tex)
+		  {
+			  Transform *field_trans = tex->transform();
+			  Vector spcv[3] = {Vector(1.0, 0.0, 0.0), Vector(0.0, 1.0, 0.0), Vector(0.0, 0.0, 1.0)};
+			  double maxlen = -1;
+			  for(int j = 0; j < 3 ; j++)
+			  {
+				  // index space view direction
+				  Vector v;
+				  v = field_trans->project(spcv[j]);
+				  v.safe_normalize();
+				  v = field_trans->project(spcv[j]);
+
+				  double len = Dot(spcv[j], v);;
+				  if(len > maxlen) maxlen = len;
+			  }
+			  if (maxlen > sampling_frq_fac) sampling_frq_fac = maxlen;
+		  }
+	  }
+
+	  // Set sampling rate based on interaction.
+      double rate = imode_ ? irate_ : sampling_rate_;
+	  Vector diag = vr_list_[0]->tex_->bbox()->diagonal();
+	  double dt = 0.0025/rate;
+	  num_slices_ = (int)(diag.length()/dt);
+	   
+	  int all_timin = INT_MAX, all_timax = -INT_MAX;
+	  for (int i=0; i<(int)vr_list_.size(); i++)
+	  {
+		  Texture *tex = vr_list_[i]->tex_;
+		  double rate_fac = 1.0;
+
+		  double maxlen;
+		  double vdmaxlen;
+		  Transform *field_trans = tex->transform();
+
+		  double mvmat[16];
+		  glGetDoublev(GL_MODELVIEW_MATRIX, mvmat);
+		  Transform mv;
+		  mv.set_trans(mvmat);
+
+		  Vector spcv[3] = {Vector(1.0, 0.0, 0.0), Vector(0.0, 1.0, 0.0), Vector(0.0, 0.0, 1.0)};
+		  vdmaxlen = -1.0;
+
+		  for(int j = 0; j < 3 ; j++)
+		  {
+			  // index space view direction
+			  Vector v;
+			  v = field_trans->project(spcv[j]);
+			  v.safe_normalize();
+			  v = field_trans->project(spcv[j]);
+
+			  double len = Dot(spcv[j], v);;
+			  if(len > vdmaxlen) vdmaxlen = len;
+
+		  }
+
+		  if(sampling_frq_fac > 0.0)maxlen = sampling_frq_fac;
+		  else maxlen = vdmaxlen;
+
+		  // index space view direction
+		  Vector mv_ray = Vector(-mvmat[2], -mvmat[6], -mvmat[10]);//normalized
+		  Vector v = field_trans->project(Vector(-mvmat[2], -mvmat[6], -mvmat[10]));
+		  v.safe_normalize();
+		  v = field_trans->project(v);
+
+		  double l = Dot(mv_ray, v);
+		  dt = dt * maxlen / l;
+
+		  rate_fac = sampling_frq_fac / vdmaxlen;
+
+		  vector<TextureBrick *> *brs = tex->get_bricks();
+		  Ray view_ray = vr_list_[i]->compute_view();
+		  for (int j = 0; j < brs->size(); j++)
+		  {
+			  TextureBrick *b = (*brs)[j];
+			  b->compute_t_index_min_max(view_ray, dt);
+			  b->set_rate_fac(rate_fac);
+			  b->set_vr(vr_list_[i]);
+
+			  int tmp = b->timin();
+			  all_timin = (all_timin > tmp) ? tmp : all_timin;
+			  tmp = b->timax();
+			  all_timax = (all_timax < tmp) ? tmp : all_timax;
+		  }
+
+	  }
+
+      //--------------------------------------------------------------------------
+      bool use_shading = vr_list_[0]->shading_;
+      GLboolean use_fog = glIsEnabled(GL_FOG) && colormap_mode_!=2;
+      GLfloat clear_color[4];
+      glGetFloatv(GL_COLOR_CLEAR_VALUE, clear_color);
+      GLint vp[4];
+      glGetIntegerv(GL_VIEWPORT, vp);
+
+      // set up blending
+      glEnable(GL_BLEND);
+      switch(mode_)
+      {
+      case TextureRenderer::MODE_OVER:
+         glBlendEquation(GL_FUNC_ADD);
+         if (TextureRenderer::get_update_order() == 0)
+            glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+         else if (TextureRenderer::get_update_order() == 1)
+            glBlendFunc(GL_ONE_MINUS_DST_ALPHA, GL_ONE);
+         break;
+      case TextureRenderer::MODE_MIP:
+         glBlendEquation(GL_MAX);
+         glBlendFunc(GL_ONE, GL_ONE);
+         break;
+      default:
+         break;
+	  }
+
+	  // Cache this value to reset, in case another framebuffer is active,
+	  // as it is in the case of saving an image from the viewer.
+	  GLint cur_framebuffer_id;
+	  glGetIntegerv(GL_FRAMEBUFFER_BINDING, &cur_framebuffer_id);
+	  GLint cur_draw_buffer;
+	  glGetIntegerv(GL_DRAW_BUFFER, &cur_draw_buffer);
+	  GLint cur_read_buffer;
+	  glGetIntegerv(GL_READ_BUFFER, &cur_read_buffer);
+
+	  int w = vp[2];
+	  int h = vp[3];
+	  int w2 = w;
+	  int h2 = h;
+/*
+	  double sf = vr_list_[0]->CalcScaleFactor(w, h, res_.x(), res_.y(), zoom);
+	  if (fabs(sf-sfactor_)>0.05)
+	  {
+		  sfactor_ = sf;
+		  blend_framebuffer_resize_ = true;
+		  filter_buffer_resize_ = true;
+		  vr_list_[0]->blend_framebuffer_resize_ = true;
+	  }
+	  else if (sf==1.0 && sfactor_!=1.0)
+	  {
+		  sfactor_ = sf;
+		  blend_framebuffer_resize_ = true;
+		  filter_buffer_resize_ = true;
+		  vr_list_[0]->blend_framebuffer_resize_ = true;
+	  }
+
+	  w2 = int(w*sfactor_+0.5);
+	  h2 = int(h*sfactor_+0.5);
+*/
+	  if(blend_num_bits_ > 8)
+      {
+         if (!glIsFramebuffer(blend_framebuffer_))
+         {
+            glGenFramebuffers(1, &blend_framebuffer_);
+            glGenTextures(1, &blend_tex_id_);
+
+            glBindFramebuffer(GL_FRAMEBUFFER, blend_framebuffer_);
+
+            // Initialize texture color renderbuffer
+            glBindTexture(GL_TEXTURE_2D, blend_tex_id_);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
+                  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+            glFramebufferTexture2D(GL_FRAMEBUFFER,
+                  GL_COLOR_ATTACHMENT0,
+                  GL_TEXTURE_2D, blend_tex_id_, 0);
+         }
+
+         if (blend_framebuffer_resize_)
+         {
+            // resize texture color renderbuffer
+            glBindTexture(GL_TEXTURE_2D, blend_tex_id_);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
+                  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+
+            blend_framebuffer_resize_ = false;
+         }
+
+         glBindTexture(GL_TEXTURE_2D, 0);
+         glDisable(GL_TEXTURE_2D);
+
+         glBindFramebuffer(GL_FRAMEBUFFER, blend_framebuffer_);
+
+         glClearColor(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
+         glClear(GL_COLOR_BUFFER_BIT);
+
+         glViewport(vp[0], vp[1], w2, h2);
+      }
+
+	  GLint draw_buffer;
+	  glGetIntegerv(GL_DRAW_BUFFER, &draw_buffer);
+	  GLint read_buffer;
+	  glGetIntegerv(GL_READ_BUFFER, &read_buffer);
+
+      //disable depth buffer writing
+      glDepthMask(GL_FALSE);
+
+      //--------------------------------------------------------------------------
+      // enable data texture unit 0
+      glActiveTexture(GL_TEXTURE0);
+
+      glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+      glEnable(GL_TEXTURE_3D);
+
+      //--------------------------------------------------------------------------
+      // Set up shaders
+      FragmentProgram* shader = 0;
+      shader = VolumeRenderer::vol_shader_factory_.shader(
+            vr_list_[0]->tex_->nc(),
+            use_shading, use_fog!=0,
+            depth_peel_, true,
+            hiqual_, 0,
+            colormap_mode_, false);
+      if (shader)
+      {
+         if (!shader->valid())
+            shader->create();
+         shader->bind();
+      }
+
+	  //takashi_debug
+/*	  ofstream ofs;
+	  ofs.open("draw_shader_depth.txt");
+	  ofs << shader->getProgram() << endl;
+	  ofs.close();
+*/
+
+      //setup depth peeling
+ /*     if (depth_peel_ || colormap_mode_ == 2)
+         shader->setLocalParam(7, 1.0/double(w2), 1.0/double(h2), 0.0, 0.0);
+*/
+      vector<TextureBrick*> bs;
+	  unsigned long bs_size = 0; 
+	  for (int i = 0; i < vr_list_.size(); i++) bs_size += vr_list_[i]->tex_->get_bricks()->size();
+	  bs.reserve(bs_size);
+	  for (int i = 0; i < vr_list_.size(); i++)
+	  {
+		  vector<TextureBrick*> *vrb = vr_list_[i]->tex_->get_bricks();
+		  std::copy(vrb->begin(), vrb->end(), std::back_inserter(bs));
+	  }
+
+	  GLuint *blend_fbo = &(vr_list_[0]->blend_framebuffer_);
+      GLuint *blend_tex = &(vr_list_[0]->blend_tex_id_);
+	  GLuint *blend_id_tex = &(vr_list_[0]->label_tex_id_);
+	  if (blend_slices_ && colormap_mode_!=2)
+      {
+         //check blend buffer
+         if (!glIsFramebuffer(*blend_fbo))
+         {
+            glGenFramebuffers(1, blend_fbo);
+            if (!glIsTexture(*blend_tex))
+               glGenTextures(1, blend_tex);
+			if (!glIsTexture(*blend_id_tex))
+               glGenTextures(1, blend_id_tex);
+            glBindFramebuffer(GL_FRAMEBUFFER, *blend_fbo);
+            // Initialize texture color renderbuffer
+            glBindTexture(GL_TEXTURE_2D, *blend_tex);
+            glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
+                  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+            glFramebufferTexture2D(GL_FRAMEBUFFER,
+                  GL_COLOR_ATTACHMENT0,
+                  GL_TEXTURE_2D, *blend_tex, 0);
+			glBindTexture(GL_TEXTURE_2D, 0);
+
+			glBindTexture(GL_TEXTURE_2D, *blend_id_tex);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
+				GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+/*			glFramebufferTexture2D(GL_FRAMEBUFFER,
+				GL_COLOR_ATTACHMENT1,
+				GL_TEXTURE_2D, *blend_id_tex, 0);
+*/			glBindTexture(GL_TEXTURE_2D, 0);
+         }
+         if (vr_list_[0]->blend_framebuffer_resize_)
+         {
+            glBindTexture(GL_TEXTURE_2D, *blend_tex);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
+                  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+            glBindTexture(GL_TEXTURE_2D, 0);
+
+			glBindTexture(GL_TEXTURE_2D, *blend_id_tex);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
+				GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+			glBindTexture(GL_TEXTURE_2D, 0);
+			
+			vr_list_[0]->blend_framebuffer_resize_ = false;
+         }
+      }
+
+	  //memswap—LŒøŽž‚Ícur_brs, cur_bid, i‚ð•Û‘¶‚µ‚Ä‚¨‚©‚È‚¯‚ê‚Î‚È‚ç‚È‚¢
+	  vector<TextureBrick *> cur_brs;
+	  int cur_bid;
+	  if (TextureRenderer::get_update_order())
+	  {
+		  std::sort(bs.begin(), bs.end(), TextureBrick::less_timin);
+		  cur_bid = 0;
+		  for (int i = all_timin; i <= all_timax; i++)
+		  {
+			  vector<TextureBrick *>::iterator ite = cur_brs.begin();
+			  while (ite != cur_brs.end())
+			  {
+				  if ((*ite)->timax() < i) ite = cur_brs.erase(ite);
+				  else ite++;
+			  }
+
+			  while (bs[cur_bid]->timin() > i)
+			  {
+				  bs[cur_bid]->compute_polygons2();
+				  if (bs[cur_bid]->get_vr()->test_against_view(bs[cur_bid]->bbox()))
+					  cur_brs.push_back(bs[cur_bid]);
+				  cur_bid++;
+			  }
+
+			  for (int j = 0; j < cur_brs.size(); j++)
+			  {
+				  TextureBrick *b = cur_brs[j];
+				  VolumeRenderer *vr = b->get_vr();
+				  Transform *tform = vr->tex_->transform();
+				  double tpmat[16];
+				  tform->get_trans(tpmat);
+				  glMatrixMode(GL_MODELVIEW);
+				  glPushMatrix();
+				  glMultMatrixd(tpmat);
+				  float matrix[16];
+
+				  if (blend_slices_)
+				  {
+					  if (shader)
+					  {
+						  if (!shader->valid())
+							  shader->create();
+						  shader->bind();
+					  }
+				  }
+
+				  if (depth_peel_ || colormap_mode_ == 2)
+					  shader->setLocalParam(7, 1.0/double(w2), 1.0/double(h2), 0.0, 0.0);
+
+				  shader->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(), 1.0/rate);
+
+				  //for brick transformation
+				  BBox bbox = b->bbox();
+				  matrix[0] = float(bbox.max().x()-bbox.min().x());
+				  matrix[1] = 0.0f;
+				  matrix[2] = 0.0f;
+				  matrix[3] = 0.0f;
+				  matrix[4] = 0.0f;
+				  matrix[5] = float(bbox.max().y()-bbox.min().y());
+				  matrix[6] = 0.0f;
+				  matrix[7] = 0.0f;
+				  matrix[8] = 0.0f;
+				  matrix[9] = 0.0f;
+				  matrix[10] = float(bbox.max().z()-bbox.min().z());
+				  matrix[11] = 0.0f;
+				  matrix[12] = float(bbox.min().x());
+				  matrix[13] = float(bbox.min().y());
+				  matrix[14] = float(bbox.min().z());
+				  matrix[15] = 1.0f;
+				  shader->setLocalParamMatrix(2, matrix);
+
+
+				  double mvmat[16];
+				  if(use_fog)
+				  {
+					  glGetDoublev(GL_MODELVIEW_MATRIX, mvmat);
+				  }
+
+				  double mat[16];
+				  glGetDoublev(GL_MODELVIEW_MATRIX, mat);
+				  Transform mv;
+				  mv.set_trans(mat);
+
+				  if (blend_slices_ && colormap_mode_!=2)
+				  {
+					  //set blend buffer
+					  glBindFramebuffer(GL_FRAMEBUFFER, *blend_fbo);
+					  glClearColor(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
+					  glClear(GL_COLOR_BUFFER_BIT);
+					  glEnable(GL_BLEND);
+					  glBlendFunc(GL_ONE, GL_ONE);
+
+					  glUseProgram(shader->id());
+					  glEnable(GL_TEXTURE_3D);
+					  glDisable(GL_TEXTURE_2D);
+				  }
+
+				  //draw a single slice
+				  // set shader parameters
+				  light_pos_ = b->vray()->direction();
+				  light_pos_.safe_normalize();
+				  shader->setLocalParam(0, light_pos_.x(), light_pos_.y(), light_pos_.z(), vr->alpha_);
+				  shader->setLocalParam(1, 2.0 - vr->ambient_,
+					  vr->shading_?vr->diffuse_:0.0,
+					  vr->specular_,
+					  vr->shine_);
+				  shader->setLocalParam(2, vr->scalar_scale_,
+					  vr->gm_scale_,
+					  vr->lo_thresh_,
+					  vr->hi_thresh_);
+				  shader->setLocalParam(3, 1.0/vr->gamma3d_,
+					  vr->gm_thresh_,
+					  vr->offset_,
+					  sw_);
+				  double spcx, spcy, spcz;
+				  vr->tex_->get_spacings(spcx, spcy, spcz);
+				  shader->setLocalParam(5, spcx, spcy, spcz, 1.0);
+				  //switch (vr->colormap_mode_)
+				  //{
+				  //case 0://normal
+				  shader->setLocalParam(6, vr->color_.r(),
+					  vr->color_.g(),
+					  vr->color_.b(), 0.0);
+				  //  break;
+				  //case 1://colormap
+				  //  shader->setLocalParam(6, vr->colormap_low_value_,
+				  //    vr->colormap_hi_value_,
+				  //    vr->colormap_hi_value_-vr->colormap_low_value_, 0.0);
+				  //  break;
+				  //}
+
+				  double abcd[4];
+				  vr->planes_[0]->get(abcd);
+				  shader->setLocalParam(10, abcd[0], abcd[1], abcd[2], abcd[3]);
+				  vr->planes_[1]->get(abcd);
+				  shader->setLocalParam(11, abcd[0], abcd[1], abcd[2], abcd[3]);
+				  vr->planes_[2]->get(abcd);
+				  shader->setLocalParam(12, abcd[0], abcd[1], abcd[2], abcd[3]);
+				  vr->planes_[3]->get(abcd);
+				  shader->setLocalParam(13, abcd[0], abcd[1], abcd[2], abcd[3]);
+				  vr->planes_[4]->get(abcd);
+				  shader->setLocalParam(14, abcd[0], abcd[1], abcd[2], abcd[3]);
+				  vr->planes_[5]->get(abcd);
+				  shader->setLocalParam(15, abcd[0], abcd[1], abcd[2], abcd[3]);
+
+				  //bind depth texture for rendering shadows
+				  if (colormap_mode_ == 2)
+				  {
+					  if (blend_num_bits_ > 8)
+						  vr->tex_2d_dmap_ = blend_tex_id_;
+					  vr->bind_2d_dmap();
+				  }
+
+				  GLint filter;
+				  if (intp)
+					  filter = GL_LINEAR;
+				  else
+					  filter = GL_NEAREST;
+				  vr->load_brick(0, 0, &vector<TextureBrick *>(1,b), 0, filter, vr->compression_);
+				  
+				  int s; 
+				  double *texc, *vert;
+				  b->get_polygon(i, s, vert, texc);
+				  glBegin(GL_POLYGON);
+				  {
+					  for(int j=0; j<s; j++)
+					  {
+						  double* t = &texc[j*3];
+						  double* v = &vert[j*3];
+						  if (glMultiTexCoord3f)
+						  {
+							  glMultiTexCoord3d(GL_TEXTURE0, t[0], t[1], t[2]);
+							  if(use_fog)
+							  {
+								  double vz = mvmat[2]*v[0] + mvmat[6]*v[1] + mvmat[10]*v[2] + mvmat[14];
+								  glMultiTexCoord3d(GL_TEXTURE1, -vz, 0.0, 0.0);
+							  }
+						  }
+						  glVertex3d(v[0], v[1], v[2]);
+					  }
+				  }
+				  glEnd();
+
+				  //release depth texture for rendering shadows
+				  if (colormap_mode_ == 2)
+					  vr->release_texture(4, GL_TEXTURE_2D);
+
+				  glPopMatrix();
+			  }//for (int j = 0; j < cur_brs.size(); j++)
+
+			  glFinish();
+
+			  if (blend_slices_ && colormap_mode_!=2)
+			  {
+				  //set buffer back
+				  glBindFramebuffer(GL_FRAMEBUFFER, blend_framebuffer_);
+				  glDrawBuffer(draw_buffer);
+				  glReadBuffer(read_buffer);
+				  glBindTexture(GL_TEXTURE_2D, *blend_tex);
+				  glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+
+				  glUseProgram(0);
+				  glActiveTexture(GL_TEXTURE0);
+				  glEnable(GL_TEXTURE_2D);
+				  glDisable(GL_TEXTURE_3D);
+
+				  //transformations
+				  glMatrixMode(GL_PROJECTION);
+				  glPushMatrix();
+				  glLoadIdentity();
+				  glMatrixMode(GL_MODELVIEW);
+				  glPushMatrix();
+				  glLoadIdentity();
+				  //blend
+				  if (TextureRenderer::get_update_order() == 0)
+					  glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+				  else if (TextureRenderer::get_update_order() == 1)
+					  glBlendFunc(GL_ONE_MINUS_DST_ALPHA, GL_ONE);
+				  //draw
+				  glBegin(GL_QUADS);
+				  {
+					  glTexCoord2d(0.0, 0.0);
+					  glVertex3d(-1, -1, 0.0);
+					  glTexCoord2d(1.0, 0.0);
+					  glVertex3d(1, -1, 0.0);
+					  glTexCoord2d(1.0, 1.0);
+					  glVertex3d(1, 1, 0.0);
+					  glTexCoord2d(0.0, 1.0);
+					  glVertex3d(-1, 1, 0.0);
+				  }
+				  glEnd();
+				  glMatrixMode(GL_PROJECTION);
+				  glPopMatrix();
+				  glMatrixMode(GL_MODELVIEW);
+				  glPopMatrix();
+			  }//if (blend_slices_ && colormap_mode_!=2)
+
+		  }//for (int i = all_timin; i <= all_timax; i++)
+
+	  }//if (TextureRenderer::get_update_order())
+
+      if (TextureRenderer::get_mem_swap() &&
+            TextureRenderer::get_cur_brick_num() == TextureRenderer::get_total_brick_num())
+      {
+         TextureRenderer::set_done_update_loop(true);
+         TextureRenderer::set_clear_chan_buffer(true);
+      }
+
+      //enable depth buffer writing
+      glDepthMask(GL_TRUE);
+
+      // Release shader.
+      if (shader && shader->valid())
+         shader->release();
+
+      //release texture
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_3D, 0);
+      glDisable(GL_TEXTURE_3D);
+
+      //reset blending
+      glBlendEquation(GL_FUNC_ADD);
+      if (TextureRenderer::get_update_order() == 0)
+         glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+      else if (TextureRenderer::get_update_order() == 1)
+         glBlendFunc(GL_ONE_MINUS_DST_ALPHA, GL_ONE);
+      glDisable(GL_BLEND);
+
+      //output
+      if (blend_num_bits_ > 8)
+      {
+         //states
+         GLboolean depth_test = glIsEnabled(GL_DEPTH_TEST);
+         GLboolean lighting = glIsEnabled(GL_LIGHTING);
+         GLboolean cull_face = glIsEnabled(GL_CULL_FACE);
+         glDisable(GL_DEPTH_TEST);
+         glDisable(GL_LIGHTING);
+         glDisable(GL_CULL_FACE);
+         glActiveTexture(GL_TEXTURE0);
+         glEnable(GL_TEXTURE_2D);
+
+         //transformations
+         glMatrixMode(GL_PROJECTION);
+         glPushMatrix();
+         glLoadIdentity();
+         glMatrixMode(GL_MODELVIEW);
+         glPushMatrix();
+         glLoadIdentity();
+
+         FragmentProgram* img_shader = 0;
+
+         if (noise_red_ && colormap_mode_!=2)
+         {
+            //FILTERING/////////////////////////////////////////////////////////////////
+            if (!glIsTexture(filter_tex_id_))
+            {
+               glGenTextures(1, &filter_tex_id_);
+               glBindTexture(GL_TEXTURE_2D, filter_tex_id_);
+               glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+               glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+               glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+               glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+               glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
+                     GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+            }
+            if (!glIsFramebuffer(filter_buffer_))
+            {
+               glGenFramebuffers(1, &filter_buffer_);
+               glBindFramebuffer(GL_FRAMEBUFFER, filter_buffer_);
+               glFramebufferTexture2D(GL_FRAMEBUFFER,
+                     GL_COLOR_ATTACHMENT0,
+                     GL_TEXTURE_2D, filter_tex_id_, 0);
+            }
+            if (filter_buffer_resize_)
+            {
+               glBindTexture(GL_TEXTURE_2D, filter_tex_id_);
+               glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
+                     GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+               filter_buffer_resize_ = false;
+            }
+
+            glBindFramebuffer(GL_FRAMEBUFFER, filter_buffer_);
+
+            glBindTexture(GL_TEXTURE_2D, blend_tex_id_);
+            glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+
+            img_shader = vr_list_[0]->
+               m_img_shader_factory.shader(IMG_SHDR_FILTER_SMOOTH_MIN);
+            if (img_shader)
+            {
+               if (!img_shader->valid())
+               {
+                  img_shader->create();
+               }
+               img_shader->bind();
+            }
+            filter_size_min_ = vr_list_[0]->
+               CalcFilterSize(1, w, h, res_.x(), res_.y(), zoom, sfactor_);
+            img_shader->setLocalParam(0, filter_size_min_/w2, filter_size_min_/h2, 0.4, 0.0);
+            glBegin(GL_QUADS);
+            {
+               glTexCoord2f(0.0, 0.0);
+               glVertex3f(-1, -1, 0.0);
+               glTexCoord2f(1.0, 0.0);
+               glVertex3f(1, -1, 0.0);
+               glTexCoord2f(1.0, 1.0);
+               glVertex3f(1, 1, 0.0);
+               glTexCoord2f(0.0, 1.0);
+               glVertex3f(-1, 1, 0.0);
+            }
+            glEnd();
+            if (img_shader && img_shader->valid())
+               img_shader->release();
+
+            //
+            glBindFramebuffer(GL_FRAMEBUFFER, blend_framebuffer_);
+
+            glBindTexture(GL_TEXTURE_2D, filter_tex_id_);
+            glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+            img_shader = vr_list_[0]->
+               m_img_shader_factory.shader(IMG_SHDR_FILTER_SMOOTH_MAX);
+            if (img_shader)
+            {
+               if (!img_shader->valid())
+               {
+                  img_shader->create();
+               }
+               img_shader->bind();
+            }
+            filter_size_max_ = vr_list_[0]->
+               CalcFilterSize(2, w, h, res_.x(), res_.y(), zoom, sfactor_);
+            img_shader->setLocalParam(0, filter_size_max_/w, filter_size_max_/h, 1.0, 0.0);
+            glBegin(GL_QUADS);
+            {
+               glTexCoord2f(0.0, 0.0);
+               glVertex3f(-1, -1, 0.0);
+               glTexCoord2f(1.0, 0.0);
+               glVertex3f(1, -1, 0.0);
+               glTexCoord2f(1.0, 1.0);
+               glVertex3f(1, 1, 0.0);
+               glTexCoord2f(0.0, 1.0);
+               glVertex3f(-1, 1, 0.0);
+            }
+            glEnd();
+            if (img_shader && img_shader->valid())
+               img_shader->release();
+            ///////////////////////////////////////////////////////////////////////////
+         }
+
+         //go back to normal
+         glBindFramebuffer(GL_FRAMEBUFFER, cur_framebuffer_id);
+         glDrawBuffer(cur_draw_buffer);
+         glReadBuffer(cur_read_buffer);
+
+         glViewport(vp[0], vp[1], vp[2], vp[3]);
+
+         glBindTexture(GL_TEXTURE_2D, blend_tex_id_);
+         glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+         glEnable(GL_BLEND);
+         if (TextureRenderer::get_update_order() == 0)
+            glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+         else if (TextureRenderer::get_update_order() == 1)
+            glBlendFunc(GL_ONE_MINUS_DST_ALPHA, GL_ONE);
+
+         if (noise_red_ && colormap_mode_!=2)
+         {
+            img_shader = vr_list_[0]->
+               m_img_shader_factory.shader(IMG_SHDR_FILTER_SHARPEN);
+            if (img_shader)
+            {
+               if (!img_shader->valid())
+               {
+                  img_shader->create();
+               }
+               img_shader->bind();
+            }
+            filter_size_shp_ = vr_list_[0]->
+               CalcFilterSize(3, w, h, res_.x(), res_.y(), zoom, sfactor_);
+            img_shader->setLocalParam(0, filter_size_shp_/w, filter_size_shp_/h, 0.0, 0.0);
+         }
+
+         glBegin(GL_QUADS);
+         {
+            glTexCoord2f(0.0, 0.0);
+            glVertex3f(-1, -1, 0.0);
+            glTexCoord2f(1.0, 0.0);
+            glVertex3f(1, -1, 0.0);
+            glTexCoord2f(1.0, 1.0);
+            glVertex3f(1, 1, 0.0);
+            glTexCoord2f(0.0, 1.0);
+            glVertex3f(-1, 1, 0.0);
+         }
+         glEnd();
+
+         if (noise_red_ && colormap_mode_!=2)
+         {
+            if (img_shader && img_shader->valid())
+               img_shader->release();
+         }
+
+         if (depth_test) glEnable(GL_DEPTH_TEST);
+         if (lighting) glEnable(GL_LIGHTING);
+         if (cull_face) glEnable(GL_CULL_FACE);
+
+         glMatrixMode(GL_PROJECTION);
+         glPopMatrix();
+         glMatrixMode(GL_MODELVIEW);
+         glPopMatrix();
+         glBindTexture(GL_TEXTURE_2D, 0);
+         glDisable(GL_TEXTURE_2D);
+         glDisable(GL_BLEND);
+	  }
+
+   }
+
+
    void MultiVolumeRenderer::draw_polygons_vol(
          vector<double>& vertex,
          vector<double>& texcoord,

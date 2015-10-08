@@ -196,6 +196,40 @@ z
       compute_polygons(view, t, t, 1.0, vertex, texcoord, size);
    }
 
+   //set timin_, timax_, dt_ and vray_
+   void TextureBrick::compute_t_index_min_max(Ray& view, double dt)
+   {
+      Point corner[8];
+      corner[0] = bbox_.min();
+      corner[1] = Point(bbox_.min().x(), bbox_.min().y(), bbox_.max().z());
+      corner[2] = Point(bbox_.min().x(), bbox_.max().y(), bbox_.min().z());
+      corner[3] = Point(bbox_.min().x(), bbox_.max().y(), bbox_.max().z());
+      corner[4] = Point(bbox_.max().x(), bbox_.min().y(), bbox_.min().z());
+      corner[5] = Point(bbox_.max().x(), bbox_.min().y(), bbox_.max().z());
+      corner[6] = Point(bbox_.max().x(), bbox_.max().y(), bbox_.min().z());
+      corner[7] = bbox_.max();
+
+      double tmin = Dot(corner[0] - view.origin(), view.direction());
+      double tmax = tmin;
+      int maxi = 0;
+	  int mini = 0;
+      for (int i=1; i<8; i++)
+      {
+         double t = Dot(corner[i] - view.origin(), view.direction());
+         if (t < tmin) { mini = i; tmin = t; }
+         if (t > tmax) { maxi = i; tmax = t; }
+      }
+
+	  bool order = TextureRenderer::get_update_order();
+	  double tanchor;
+	  tanchor = Dot(corner[mini], view.direction());
+	  timin_ = (int)floor(tanchor/dt)+1;
+	  tanchor = Dot(corner[maxi], view.direction());
+	  timax_ = (int)floor(tanchor/dt);
+	  dt_ = dt;
+	  vray_ = view;
+   }
+
    void TextureBrick::compute_polygons(Ray& view, double dt,
          vector<double>& vertex, vector<double>& texcoord,
          vector<int>& size)
@@ -231,7 +265,7 @@ z
 */
 	  bool order = TextureRenderer::get_update_order();
 	  double tanchor = Dot(corner[order?mini:maxi], view.direction());
-	  double tanchor0 = floor(tanchor/dt)*dt;
+	  double tanchor0 = (floor(tanchor/dt)+1)*dt;
 	  double tanchordiff = tanchor - tanchor0;
 	  if (order) tmin -= tanchordiff;
 	  else tmax -= tanchordiff;
@@ -357,6 +391,140 @@ z
          }
          k += degree;
          size.push_back(degree);
+      }
+   }
+
+   void TextureBrick::get_polygon(int tid, int &size, double* &v, double* &t)
+   {
+	   bool order = TextureRenderer::get_update_order();
+	   int id = (order ? tid - timin_ : timax_ - tid);
+	   unsigned int offset = size_integ_[id];
+	   
+	   size = size_[id];
+	   t = &texcoord_[offset*3];
+       v = &vertex_[offset*3];
+   }
+   
+   void TextureBrick::clear_polygons()
+   {
+	   if (!vertex_.empty()) vertex_.clear();
+	   if (!texcoord_.empty()) texcoord_.clear();
+	   if (!size_.empty()) size_.clear();
+	   if (!size_integ_.empty()) size_integ_.clear();
+   }
+
+   void TextureBrick::compute_polygons2()
+   {
+	  clear_polygons();
+
+      Vector vv[12], tt[12]; // temp storage for vertices and texcoords
+
+      int k = 0, degree = 0;
+
+      // find up and right vectors
+      Vector vdir = vray_.direction();
+      view_vector_ = vdir;
+      Vector up;
+      Vector right;
+      switch(MinIndex(fabs(vdir.x()),
+               fabs(vdir.y()),
+               fabs(vdir.z())))
+      {
+      case 0:
+         up.x(0.0); up.y(-vdir.z()); up.z(vdir.y());
+         break;
+      case 1:
+         up.x(-vdir.z()); up.y(0.0); up.z(vdir.x());
+         break;
+      case 2:
+         up.x(-vdir.y()); up.y(vdir.x()); up.z(0.0);
+         break;
+      }
+      up.normalize();
+      right = Cross(vdir, up);
+      bool order = TextureRenderer::get_update_order();
+      for (int t = order?timin_:timax_;
+            order?(t <= timax_):(t >= timin_);
+            t += order?1:-1)
+      {
+         // we compute polys back to front
+         // find intersections
+         degree = 0;
+         for (size_t j=0; j<12; j++)
+         {
+            double u;
+
+            FLIVR::Vector vec = -vray_.direction();
+            FLIVR::Point pnt = vray_.parameter(t*dt_);
+            bool intersects = edge_[j].planeIntersectParameter
+               (vec, pnt, u);
+            if (intersects && u >= 0.0 && u <= 1.0)
+            {
+               Point p;
+               p = edge_[j].parameter(u);
+               vv[degree] = (Vector)p;
+               p = tex_edge_[j].parameter(u);
+               tt[degree] = (Vector)p;
+               degree++;
+            }
+         }
+
+         if (degree < 3 || degree >6) continue;
+
+         if (degree > 3)
+         {
+            // compute centroids
+            Vector vc(0.0, 0.0, 0.0), tc(0.0, 0.0, 0.0);
+            for (int j=0; j<degree; j++)
+            {
+               vc += vv[j]; tc += tt[j];
+            }
+            vc /= (double)degree; tc /= (double)degree;
+
+            // sort vertices
+            int idx[6];
+            double pa[6];
+            for (int i=0; i<degree; i++)
+            {
+               double vx = Dot(vv[i] - vc, right);
+               double vy = Dot(vv[i] - vc, up);
+
+               // compute pseudo-angle
+               pa[i] = vy / (fabs(vx) + fabs(vy));
+               if (vx < 0.0) pa[i] = 2.0 - pa[i];
+               else if (vy < 0.0) pa[i] = 4.0 + pa[i];
+               // init idx
+               idx[i] = i;
+            }
+            Sort(pa, idx, degree);
+
+            // output polygon
+            for (int j=0; j<degree; j++)
+            {
+               vertex_.push_back(vv[idx[j]].x());
+               vertex_.push_back(vv[idx[j]].y());
+               vertex_.push_back(vv[idx[j]].z());
+               texcoord_.push_back(tt[idx[j]].x());
+               texcoord_.push_back(tt[idx[j]].y());
+               texcoord_.push_back(tt[idx[j]].z());
+            }
+         }
+         else if (degree == 3)
+         {
+            // output a single triangle
+            for (int j=0; j<degree; j++)
+            {
+               vertex_.push_back(vv[j].x());
+               vertex_.push_back(vv[j].y());
+               vertex_.push_back(vv[j].z());
+               texcoord_.push_back(tt[j].x());
+               texcoord_.push_back(tt[j].y());
+               texcoord_.push_back(tt[j].z());
+            }
+         }
+         k += degree;
+         size_.push_back(degree);
+		 size_integ_.push_back(k);
       }
    }
 
