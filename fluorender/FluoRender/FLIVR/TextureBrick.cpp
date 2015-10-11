@@ -146,13 +146,27 @@ z
       corner[7] = bbox.max();
 
       // set up edges
-      edge_[0] = Ray(corner[0], corner[2] - corner[0]);
+/*
+	  edge_[0] = Ray(corner[0], corner[2] - corner[0]);
       edge_[1] = Ray(corner[2], corner[6] - corner[2]);
       edge_[2] = Ray(corner[4], corner[6] - corner[4]);
       edge_[3] = Ray(corner[0], corner[4] - corner[0]);
       edge_[4] = Ray(corner[1], corner[3] - corner[1]);
       edge_[5] = Ray(corner[3], corner[7] - corner[3]);
       edge_[6] = Ray(corner[5], corner[7] - corner[5]);
+      edge_[7] = Ray(corner[1], corner[5] - corner[1]);
+      edge_[8] = Ray(corner[0], corner[1] - corner[0]);
+      edge_[9] = Ray(corner[2], corner[3] - corner[2]);
+      edge_[10] = Ray(corner[6], corner[7] - corner[6]);
+      edge_[11] = Ray(corner[4], corner[5] - corner[4]);
+*/
+	  edge_[0] = Ray(corner[0], corner[2] - corner[0]);
+	  edge_[1] = Ray(corner[4], corner[6] - corner[4]);
+	  edge_[2] = Ray(corner[5], corner[7] - corner[5]);
+	  edge_[3] = Ray(corner[1], corner[3] - corner[1]);
+      edge_[4] = Ray(corner[2], corner[6] - corner[2]);
+      edge_[5] = Ray(corner[0], corner[4] - corner[0]);
+      edge_[6] = Ray(corner[3], corner[7] - corner[3]);
       edge_[7] = Ray(corner[1], corner[5] - corner[1]);
       edge_[8] = Ray(corner[0], corner[1] - corner[0]);
       edge_[9] = Ray(corner[2], corner[3] - corner[2]);
@@ -174,6 +188,7 @@ z
       corner[7] = bbox.max();
 
       // set up edges
+/*
       tex_edge_[0] = Ray(corner[0], corner[2] - corner[0]);
       tex_edge_[1] = Ray(corner[2], corner[6] - corner[2]);
       tex_edge_[2] = Ray(corner[4], corner[6] - corner[4]);
@@ -181,6 +196,19 @@ z
       tex_edge_[4] = Ray(corner[1], corner[3] - corner[1]);
       tex_edge_[5] = Ray(corner[3], corner[7] - corner[3]);
       tex_edge_[6] = Ray(corner[5], corner[7] - corner[5]);
+      tex_edge_[7] = Ray(corner[1], corner[5] - corner[1]);
+      tex_edge_[8] = Ray(corner[0], corner[1] - corner[0]);
+      tex_edge_[9] = Ray(corner[2], corner[3] - corner[2]);
+      tex_edge_[10] = Ray(corner[6], corner[7] - corner[6]);
+      tex_edge_[11] = Ray(corner[4], corner[5] - corner[4]);
+*/
+	  tex_edge_[0] = Ray(corner[0], corner[2] - corner[0]);
+	  tex_edge_[1] = Ray(corner[4], corner[6] - corner[4]);
+	  tex_edge_[2] = Ray(corner[5], corner[7] - corner[5]);
+	  tex_edge_[3] = Ray(corner[1], corner[3] - corner[1]);
+      tex_edge_[4] = Ray(corner[2], corner[6] - corner[2]);
+      tex_edge_[5] = Ray(corner[0], corner[4] - corner[0]);
+      tex_edge_[6] = Ray(corner[3], corner[7] - corner[3]);
       tex_edge_[7] = Ray(corner[1], corner[5] - corner[1]);
       tex_edge_[8] = Ray(corner[0], corner[1] - corner[0]);
       tex_edge_[9] = Ray(corner[2], corner[3] - corner[2]);
@@ -222,9 +250,9 @@ z
 
 	  bool order = TextureRenderer::get_update_order();
 	  double tanchor;
-	  tanchor = Dot(corner[mini], view.direction());
+	  tanchor = Dot(corner[mini] - view.origin(), view.direction());
 	  timin_ = (int)floor(tanchor/dt)+1;
-	  tanchor = Dot(corner[maxi], view.direction());
+	  tanchor = Dot(corner[maxi] - view.origin(), view.direction());
 	  timax_ = (int)floor(tanchor/dt);
 	  dt_ = dt;
 	  vray_ = view;
@@ -317,12 +345,12 @@ z
          // we compute polys back to front
          // find intersections
          degree = 0;
-         for (size_t j=0; j<12; j++)
+		 FLIVR::Vector vec = -view.direction();
+         FLIVR::Point pnt = view.parameter(t);
+		 //’f–Ê‚Ì’¸“_‚ªbbox‚Ì’¸“_‚Æd‚È‚Á‚½‚Æ‚«d•¡‚ð–h‚®
+         for (size_t j=0; j<=3; j++)
          {
             double u;
-
-            FLIVR::Vector vec = -view.direction();
-            FLIVR::Point pnt = view.parameter(t);
             bool intersects = edge_[j].planeIntersectParameter
                (vec, pnt, u);
             if (intersects && u >= 0.0 && u <= 1.0)
@@ -335,8 +363,24 @@ z
                degree++;
             }
          }
+		 for (size_t j=4; j<=11; j++)
+         {
+            double u;
+            bool intersects = edge_[j].planeIntersectParameter
+               (vec, pnt, u);
+            if (intersects && u > 0.0 && u < 1.0)
+            {
+               Point p;
+               p = edge_[j].parameter(u);
+               vv[degree] = (Vector)p;
+               p = tex_edge_[j].parameter(u);
+               tt[degree] = (Vector)p;
+               degree++;
+            }
+         }
 
-         if (degree < 3 || degree >6) continue;
+         if (degree < 3 || degree >6)
+			 continue;
 
          if (degree > 3)
          {
@@ -396,13 +440,30 @@ z
 
    void TextureBrick::get_polygon(int tid, int &size, double* &v, double* &t)
    {
+	   if (size_.empty() || size_integ_.empty() || vertex_.empty() || texcoord_.empty())
+	   {
+		   size = 0;
+		   t = NULL;
+		   v = NULL;
+
+		   return;
+	   }
+
 	   bool order = TextureRenderer::get_update_order();
 	   int id = (order ? tid - timin_ : timax_ - tid);
 	   unsigned int offset = size_integ_[id];
 	   
 	   size = size_[id];
-	   t = &texcoord_[offset*3];
-       v = &vertex_[offset*3];
+	   if (size > 0)
+	   {
+		   t = &texcoord_[offset*3];
+		   v = &vertex_[offset*3];
+	   }
+	   else
+	   {
+		   t = NULL;
+		   v = NULL;
+	   }
    }
    
    void TextureBrick::clear_polygons()
@@ -450,12 +511,12 @@ z
          // we compute polys back to front
          // find intersections
          degree = 0;
-         for (size_t j=0; j<12; j++)
+         FLIVR::Vector vec = -vray_.direction();
+         FLIVR::Point pnt = vray_.parameter(t*dt_);
+		 //’f–Ê‚Ì’¸“_‚ªbbox‚Ì’¸“_‚Æd‚È‚Á‚½‚Æ‚«d•¡‚ð–h‚®
+         for (size_t j=0; j<=3; j++)
          {
             double u;
-
-            FLIVR::Vector vec = -vray_.direction();
-            FLIVR::Point pnt = vray_.parameter(t*dt_);
             bool intersects = edge_[j].planeIntersectParameter
                (vec, pnt, u);
             if (intersects && u >= 0.0 && u <= 1.0)
@@ -468,10 +529,23 @@ z
                degree++;
             }
          }
+		 for (size_t j=4; j<=11; j++)
+         {
+            double u;
+            bool intersects = edge_[j].planeIntersectParameter
+               (vec, pnt, u);
+            if (intersects && u > 0.0 && u < 1.0)
+            {
+               Point p;
+               p = edge_[j].parameter(u);
+               vv[degree] = (Vector)p;
+               p = tex_edge_[j].parameter(u);
+               tt[degree] = (Vector)p;
+               degree++;
+            }
+         }
 
-         if (degree < 3 || degree >6) continue;
-
-         if (degree > 3)
+         if (degree > 3 && degree <= 6)
          {
             // compute centroids
             Vector vc(0.0, 0.0, 0.0), tc(0.0, 0.0, 0.0);
@@ -509,9 +583,8 @@ z
                texcoord_.push_back(tt[idx[j]].z());
             }
          }
-         else if (degree == 3)
+         else
          {
-            // output a single triangle
             for (int j=0; j<degree; j++)
             {
                vertex_.push_back(vv[j].x());
@@ -522,9 +595,9 @@ z
                texcoord_.push_back(tt[j].z());
             }
          }
-         k += degree;
-         size_.push_back(degree);
+		 size_.push_back(degree);
 		 size_integ_.push_back(k);
+         k += degree;
       }
    }
 

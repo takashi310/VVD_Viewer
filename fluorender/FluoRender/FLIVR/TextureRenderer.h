@@ -199,7 +199,7 @@ namespace FLIVR
                save_final_buffer_ = true; clear_chan_buffer_ = true;}
                static int get_cur_chan_brick_num() {return cur_chan_brick_num_;}
                static int get_cur_brick_num() {return cur_brick_num_;}
-               static void set_total_brick_num(int num) {total_brick_num_ = num; cur_brick_num_ = 0;}
+			   static void set_total_brick_num(int num) {total_brick_num_ = num; cur_brick_num_ = 0; cur_tid_offset_multi_ = 0;}
                static int get_total_brick_num() {return total_brick_num_;}
                static void reset_clear_chan_buffer() {clear_chan_buffer_ = false;}
                static bool get_clear_chan_buffer() {return clear_chan_buffer_;}
@@ -311,6 +311,7 @@ namespace FLIVR
                static int cur_chan_brick_num_;
                static bool clear_chan_buffer_;
                static bool save_final_buffer_;
+			   static int cur_tid_offset_multi_;
                //timer for rendering
                static unsigned long st_time_;
                static unsigned long up_time_;
@@ -343,7 +344,7 @@ namespace FLIVR
                void check_swap_memory(TextureBrick* brick, int c);
                //load texture bricks for drawing
                //unit:assigned unit, c:channel
-               GLint load_brick(int unit, int c, vector<TextureBrick*> *b, int i, GLint filter=GL_LINEAR, bool compression=false, int mode=0);
+               GLint load_brick(int unit, int c, vector<TextureBrick*> *b, int i, GLint filter=GL_LINEAR, bool compression=false, int mode=0, bool set_drawn=true);
                //load the texture for volume mask into texture pool
                GLint load_brick_mask(vector<TextureBrick*> *b, int i, GLint filter=GL_NEAREST, bool compression=false, int unit=0);
                //load the texture for volume labeling into texture pool

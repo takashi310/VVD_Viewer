@@ -166,7 +166,7 @@ namespace FLIVR
          bool orthographic_p,
          double zoom, bool intp)
    {
-      draw_volume(interactive_mode_p, orthographic_p, zoom, intp);
+      draw_volume2(interactive_mode_p, orthographic_p, zoom, intp);
       if(draw_wireframe_p)
          draw_wireframe(orthographic_p);
    }
@@ -684,8 +684,10 @@ namespace FLIVR
 
       set_interactive_mode(adaptive_ && interactive_mode_p);
 
+	  int i;
+
 	  double sampling_frq_fac = -1.0;
-	  for (int i=0; i<(int)vr_list_.size(); i++)
+	  for (i=0; i<(int)vr_list_.size(); i++)
 	  {
 		  VolumeRenderer* vr = vr_list_[i];
 		  if (!vr)
@@ -718,11 +720,10 @@ namespace FLIVR
 	  num_slices_ = (int)(diag.length()/dt);
 	   
 	  int all_timin = INT_MAX, all_timax = -INT_MAX;
-	  for (int i=0; i<(int)vr_list_.size(); i++)
+	  for (i=0; i<(int)vr_list_.size(); i++)
 	  {
 		  Texture *tex = vr_list_[i]->tex_;
-		  double rate_fac = 1.0;
-
+		  
 		  double maxlen;
 		  double vdmaxlen;
 		  Transform *field_trans = tex->transform();
@@ -758,16 +759,16 @@ namespace FLIVR
 		  v = field_trans->project(v);
 
 		  double l = Dot(mv_ray, v);
-		  dt = dt * maxlen / l;
+		  double vr_dt = dt * maxlen / l;
 
-		  rate_fac = sampling_frq_fac / vdmaxlen;
+		  double rate_fac = sampling_frq_fac / vdmaxlen;
 
 		  vector<TextureBrick *> *brs = tex->get_bricks();
 		  Ray view_ray = vr_list_[i]->compute_view();
 		  for (int j = 0; j < brs->size(); j++)
 		  {
 			  TextureBrick *b = (*brs)[j];
-			  b->compute_t_index_min_max(view_ray, dt);
+			  b->compute_t_index_min_max(view_ray, vr_dt);
 			  b->set_rate_fac(rate_fac);
 			  b->set_vr(vr_list_[i]);
 
@@ -926,9 +927,9 @@ namespace FLIVR
 */
       vector<TextureBrick*> bs;
 	  unsigned long bs_size = 0; 
-	  for (int i = 0; i < vr_list_.size(); i++) bs_size += vr_list_[i]->tex_->get_bricks()->size();
+	  for (i = 0; i < vr_list_.size(); i++) bs_size += vr_list_[i]->tex_->get_bricks()->size();
 	  bs.reserve(bs_size);
-	  for (int i = 0; i < vr_list_.size(); i++)
+	  for (i = 0; i < vr_list_.size(); i++)
 	  {
 		  vector<TextureBrick*> *vrb = vr_list_[i]->tex_->get_bricks();
 		  std::copy(vrb->begin(), vrb->end(), std::back_inserter(bs));
@@ -990,246 +991,314 @@ namespace FLIVR
          }
       }
 
-	  //memswap—LŒøŽž‚Ícur_brs, cur_bid, i‚ð•Û‘¶‚µ‚Ä‚¨‚©‚È‚¯‚ê‚Î‚È‚ç‚È‚¢
 	  vector<TextureBrick *> cur_brs;
 	  int cur_bid;
-	  if (TextureRenderer::get_update_order())
+	  bool order = TextureRenderer::get_update_order();
+	  int start_i = order ? all_timin : all_timax;
+
+	  if (TextureRenderer::get_mem_swap() &&
+		  TextureRenderer::get_start_update_loop() &&
+		  !TextureRenderer::get_done_update_loop())
 	  {
-		  std::sort(bs.begin(), bs.end(), TextureBrick::less_timin);
-		  cur_bid = 0;
-		  for (int i = all_timin; i <= all_timax; i++)
+		  start_i += TextureRenderer::cur_tid_offset_multi_;
+	  }
+
+	  std::sort(bs.begin(), bs.end(), order?TextureBrick::less_timin:TextureBrick::high_timax);
+	  cur_bid = 0;
+	  for (i = start_i; order?(i <= all_timax):(i >= all_timin); i += order?1:-1)
+	  {
+		  if (TextureRenderer::get_mem_swap())
 		  {
-			  vector<TextureBrick *>::iterator ite = cur_brs.begin();
-			  while (ite != cur_brs.end())
+			  uint32_t rn_time = GET_TICK_COUNT();
+			  if (rn_time - TextureRenderer::get_st_time() > TextureRenderer::get_up_time())
+				  break;
+		  }
+
+		  while (cur_bid < bs_size && (order?(bs[cur_bid]->timin() <= i):(bs[cur_bid]->timax() >= i)))
+		  {
+			  if (TextureRenderer::get_mem_swap() &&
+				  TextureRenderer::get_start_update_loop() &&
+				  !TextureRenderer::get_done_update_loop())
 			  {
-				  if ((*ite)->timax() < i) ite = cur_brs.erase(ite);
-				  else ite++;
+				  if (bs[cur_bid]->drawn(0))
+				  {
+					  cur_bid++;
+					  continue;
+				  }
 			  }
 
-			  while (bs[cur_bid]->timin() > i)
+			  Transform *tform = bs[cur_bid]->get_vr()->tex_->transform();
+			  double tpmat[16];
+			  tform->get_trans(tpmat);
+			  glMatrixMode(GL_MODELVIEW);
+			  glPushMatrix();
+			  glMultMatrixd(tpmat);
+			  if (bs[cur_bid]->get_vr()->test_against_view(bs[cur_bid]->bbox()))
 			  {
 				  bs[cur_bid]->compute_polygons2();
-				  if (bs[cur_bid]->get_vr()->test_against_view(bs[cur_bid]->bbox()))
-					  cur_brs.push_back(bs[cur_bid]);
-				  cur_bid++;
+				  cur_brs.push_back(bs[cur_bid]);
+			  }
+			  else if (TextureRenderer::get_mem_swap() &&
+				  TextureRenderer::get_start_update_loop() &&
+				  !TextureRenderer::get_done_update_loop())
+			  {
+				  if (!bs[cur_bid]->drawn(0))
+					  bs[cur_bid]->set_drawn(0, true);
 			  }
 
-			  for (int j = 0; j < cur_brs.size(); j++)
+			  cur_bid++;
+
+			  glMatrixMode(GL_MODELVIEW);
+			  glPopMatrix();
+		  }
+
+		  if (cur_brs.size() == 0)
+			  continue;
+
+		  if (blend_slices_ && colormap_mode_!=2)
+		  {
+			  //set blend buffer
+			  glBindFramebuffer(GL_FRAMEBUFFER, *blend_fbo);
+			  glClearColor(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
+			  glClear(GL_COLOR_BUFFER_BIT);
+			  glEnable(GL_BLEND);
+			  glBlendFunc(GL_ONE, GL_ONE);
+
+			  glUseProgram(shader->id());
+			  glEnable(GL_TEXTURE_3D);
+			  glDisable(GL_TEXTURE_2D);
+		  }
+
+		  for (int j = 0; j < cur_brs.size(); j++)
+		  {
+			  TextureBrick *b = cur_brs[j];
+			  VolumeRenderer *vr = b->get_vr();
+
+			  int s; 
+			  double *texc, *vert;
+			  b->get_polygon(i, s, vert, texc);
+			  if (s < 3 || s > 6)
+				  continue;
+
+			  Transform *tform = vr->tex_->transform();
+			  double tpmat[16];
+			  tform->get_trans(tpmat);
+			  glMatrixMode(GL_MODELVIEW);
+			  glPushMatrix();
+			  glMultMatrixd(tpmat);
+			  float matrix[16];
+
+			  if (blend_slices_)
 			  {
-				  TextureBrick *b = cur_brs[j];
-				  VolumeRenderer *vr = b->get_vr();
-				  Transform *tform = vr->tex_->transform();
-				  double tpmat[16];
-				  tform->get_trans(tpmat);
-				  glMatrixMode(GL_MODELVIEW);
-				  glPushMatrix();
-				  glMultMatrixd(tpmat);
-				  float matrix[16];
-
-				  if (blend_slices_)
+				  if (shader)
 				  {
-					  if (shader)
+					  if (!shader->valid())
+						  shader->create();
+					  shader->bind();
+				  }
+			  }
+
+			  if (depth_peel_ || colormap_mode_ == 2)
+				  shader->setLocalParam(7, 1.0/double(w2), 1.0/double(h2), 0.0, 0.0);
+
+			  shader->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(), 1.0/rate*b->rate_fac());
+
+			  //for brick transformation
+			  BBox bbox = b->bbox();
+			  matrix[0] = float(bbox.max().x()-bbox.min().x());
+			  matrix[1] = 0.0f;
+			  matrix[2] = 0.0f;
+			  matrix[3] = 0.0f;
+			  matrix[4] = 0.0f;
+			  matrix[5] = float(bbox.max().y()-bbox.min().y());
+			  matrix[6] = 0.0f;
+			  matrix[7] = 0.0f;
+			  matrix[8] = 0.0f;
+			  matrix[9] = 0.0f;
+			  matrix[10] = float(bbox.max().z()-bbox.min().z());
+			  matrix[11] = 0.0f;
+			  matrix[12] = float(bbox.min().x());
+			  matrix[13] = float(bbox.min().y());
+			  matrix[14] = float(bbox.min().z());
+			  matrix[15] = 1.0f;
+			  shader->setLocalParamMatrix(2, matrix);
+
+
+			  double mvmat[16];
+			  if(use_fog)
+			  {
+				  glGetDoublev(GL_MODELVIEW_MATRIX, mvmat);
+			  }
+
+			  double mat[16];
+			  glGetDoublev(GL_MODELVIEW_MATRIX, mat);
+			  Transform mv;
+			  mv.set_trans(mat);
+
+			  //draw a single slice
+			  // set shader parameters
+			  light_pos_ = b->vray()->direction();
+			  light_pos_.safe_normalize();
+			  shader->setLocalParam(0, light_pos_.x(), light_pos_.y(), light_pos_.z(), vr->alpha_);
+			  shader->setLocalParam(1, 2.0 - vr->ambient_,
+				  vr->shading_?vr->diffuse_:0.0,
+				  vr->specular_,
+				  vr->shine_);
+			  shader->setLocalParam(2, vr->scalar_scale_,
+				  vr->gm_scale_,
+				  vr->lo_thresh_,
+				  vr->hi_thresh_);
+			  shader->setLocalParam(3, 1.0/vr->gamma3d_,
+				  vr->gm_thresh_,
+				  vr->offset_,
+				  sw_);
+			  double spcx, spcy, spcz;
+			  vr->tex_->get_spacings(spcx, spcy, spcz);
+			  shader->setLocalParam(5, spcx, spcy, spcz, 1.0);
+			  //switch (vr->colormap_mode_)
+			  //{
+			  //case 0://normal
+			  shader->setLocalParam(6, vr->color_.r(),
+				  vr->color_.g(),
+				  vr->color_.b(), 0.0);
+			  //  break;
+			  //case 1://colormap
+			  //  shader->setLocalParam(6, vr->colormap_low_value_,
+			  //    vr->colormap_hi_value_,
+			  //    vr->colormap_hi_value_-vr->colormap_low_value_, 0.0);
+			  //  break;
+			  //}
+
+			  double abcd[4];
+			  vr->planes_[0]->get(abcd);
+			  shader->setLocalParam(10, abcd[0], abcd[1], abcd[2], abcd[3]);
+			  vr->planes_[1]->get(abcd);
+			  shader->setLocalParam(11, abcd[0], abcd[1], abcd[2], abcd[3]);
+			  vr->planes_[2]->get(abcd);
+			  shader->setLocalParam(12, abcd[0], abcd[1], abcd[2], abcd[3]);
+			  vr->planes_[3]->get(abcd);
+			  shader->setLocalParam(13, abcd[0], abcd[1], abcd[2], abcd[3]);
+			  vr->planes_[4]->get(abcd);
+			  shader->setLocalParam(14, abcd[0], abcd[1], abcd[2], abcd[3]);
+			  vr->planes_[5]->get(abcd);
+			  shader->setLocalParam(15, abcd[0], abcd[1], abcd[2], abcd[3]);
+
+			  //bind depth texture for rendering shadows
+			  if (colormap_mode_ == 2)
+			  {
+				  if (blend_num_bits_ > 8)
+					  vr->tex_2d_dmap_ = blend_tex_id_;
+				  vr->bind_2d_dmap();
+			  }
+
+			  GLint filter;
+			  if (intp)
+				  filter = GL_LINEAR;
+			  else
+				  filter = GL_NEAREST;
+			  vr->load_brick(0, 0, &vector<TextureBrick *>(1,b), 0, filter, vr->compression_, 0, false);
+
+			  glBegin(GL_POLYGON);
+			  {
+				  for(int j=0; j<s; j++)
+				  {
+					  double* t = &texc[j*3];
+					  double* v = &vert[j*3];
+					  if (glMultiTexCoord3f)
 					  {
-						  if (!shader->valid())
-							  shader->create();
-						  shader->bind();
-					  }
-				  }
-
-				  if (depth_peel_ || colormap_mode_ == 2)
-					  shader->setLocalParam(7, 1.0/double(w2), 1.0/double(h2), 0.0, 0.0);
-
-				  shader->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(), 1.0/rate);
-
-				  //for brick transformation
-				  BBox bbox = b->bbox();
-				  matrix[0] = float(bbox.max().x()-bbox.min().x());
-				  matrix[1] = 0.0f;
-				  matrix[2] = 0.0f;
-				  matrix[3] = 0.0f;
-				  matrix[4] = 0.0f;
-				  matrix[5] = float(bbox.max().y()-bbox.min().y());
-				  matrix[6] = 0.0f;
-				  matrix[7] = 0.0f;
-				  matrix[8] = 0.0f;
-				  matrix[9] = 0.0f;
-				  matrix[10] = float(bbox.max().z()-bbox.min().z());
-				  matrix[11] = 0.0f;
-				  matrix[12] = float(bbox.min().x());
-				  matrix[13] = float(bbox.min().y());
-				  matrix[14] = float(bbox.min().z());
-				  matrix[15] = 1.0f;
-				  shader->setLocalParamMatrix(2, matrix);
-
-
-				  double mvmat[16];
-				  if(use_fog)
-				  {
-					  glGetDoublev(GL_MODELVIEW_MATRIX, mvmat);
-				  }
-
-				  double mat[16];
-				  glGetDoublev(GL_MODELVIEW_MATRIX, mat);
-				  Transform mv;
-				  mv.set_trans(mat);
-
-				  if (blend_slices_ && colormap_mode_!=2)
-				  {
-					  //set blend buffer
-					  glBindFramebuffer(GL_FRAMEBUFFER, *blend_fbo);
-					  glClearColor(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
-					  glClear(GL_COLOR_BUFFER_BIT);
-					  glEnable(GL_BLEND);
-					  glBlendFunc(GL_ONE, GL_ONE);
-
-					  glUseProgram(shader->id());
-					  glEnable(GL_TEXTURE_3D);
-					  glDisable(GL_TEXTURE_2D);
-				  }
-
-				  //draw a single slice
-				  // set shader parameters
-				  light_pos_ = b->vray()->direction();
-				  light_pos_.safe_normalize();
-				  shader->setLocalParam(0, light_pos_.x(), light_pos_.y(), light_pos_.z(), vr->alpha_);
-				  shader->setLocalParam(1, 2.0 - vr->ambient_,
-					  vr->shading_?vr->diffuse_:0.0,
-					  vr->specular_,
-					  vr->shine_);
-				  shader->setLocalParam(2, vr->scalar_scale_,
-					  vr->gm_scale_,
-					  vr->lo_thresh_,
-					  vr->hi_thresh_);
-				  shader->setLocalParam(3, 1.0/vr->gamma3d_,
-					  vr->gm_thresh_,
-					  vr->offset_,
-					  sw_);
-				  double spcx, spcy, spcz;
-				  vr->tex_->get_spacings(spcx, spcy, spcz);
-				  shader->setLocalParam(5, spcx, spcy, spcz, 1.0);
-				  //switch (vr->colormap_mode_)
-				  //{
-				  //case 0://normal
-				  shader->setLocalParam(6, vr->color_.r(),
-					  vr->color_.g(),
-					  vr->color_.b(), 0.0);
-				  //  break;
-				  //case 1://colormap
-				  //  shader->setLocalParam(6, vr->colormap_low_value_,
-				  //    vr->colormap_hi_value_,
-				  //    vr->colormap_hi_value_-vr->colormap_low_value_, 0.0);
-				  //  break;
-				  //}
-
-				  double abcd[4];
-				  vr->planes_[0]->get(abcd);
-				  shader->setLocalParam(10, abcd[0], abcd[1], abcd[2], abcd[3]);
-				  vr->planes_[1]->get(abcd);
-				  shader->setLocalParam(11, abcd[0], abcd[1], abcd[2], abcd[3]);
-				  vr->planes_[2]->get(abcd);
-				  shader->setLocalParam(12, abcd[0], abcd[1], abcd[2], abcd[3]);
-				  vr->planes_[3]->get(abcd);
-				  shader->setLocalParam(13, abcd[0], abcd[1], abcd[2], abcd[3]);
-				  vr->planes_[4]->get(abcd);
-				  shader->setLocalParam(14, abcd[0], abcd[1], abcd[2], abcd[3]);
-				  vr->planes_[5]->get(abcd);
-				  shader->setLocalParam(15, abcd[0], abcd[1], abcd[2], abcd[3]);
-
-				  //bind depth texture for rendering shadows
-				  if (colormap_mode_ == 2)
-				  {
-					  if (blend_num_bits_ > 8)
-						  vr->tex_2d_dmap_ = blend_tex_id_;
-					  vr->bind_2d_dmap();
-				  }
-
-				  GLint filter;
-				  if (intp)
-					  filter = GL_LINEAR;
-				  else
-					  filter = GL_NEAREST;
-				  vr->load_brick(0, 0, &vector<TextureBrick *>(1,b), 0, filter, vr->compression_);
-				  
-				  int s; 
-				  double *texc, *vert;
-				  b->get_polygon(i, s, vert, texc);
-				  glBegin(GL_POLYGON);
-				  {
-					  for(int j=0; j<s; j++)
-					  {
-						  double* t = &texc[j*3];
-						  double* v = &vert[j*3];
-						  if (glMultiTexCoord3f)
+						  glMultiTexCoord3d(GL_TEXTURE0, t[0], t[1], t[2]);
+						  if(use_fog)
 						  {
-							  glMultiTexCoord3d(GL_TEXTURE0, t[0], t[1], t[2]);
-							  if(use_fog)
-							  {
-								  double vz = mvmat[2]*v[0] + mvmat[6]*v[1] + mvmat[10]*v[2] + mvmat[14];
-								  glMultiTexCoord3d(GL_TEXTURE1, -vz, 0.0, 0.0);
-							  }
+							  double vz = mvmat[2]*v[0] + mvmat[6]*v[1] + mvmat[10]*v[2] + mvmat[14];
+							  glMultiTexCoord3d(GL_TEXTURE1, -vz, 0.0, 0.0);
 						  }
-						  glVertex3d(v[0], v[1], v[2]);
 					  }
+					  glVertex3d(v[0], v[1], v[2]);
 				  }
-				  glEnd();
+			  }
+			  glEnd();
 
-				  //release depth texture for rendering shadows
-				  if (colormap_mode_ == 2)
-					  vr->release_texture(4, GL_TEXTURE_2D);
+			  //release depth texture for rendering shadows
+			  if (colormap_mode_ == 2)
+				  vr->release_texture(4, GL_TEXTURE_2D);
 
-				  glPopMatrix();
-			  }//for (int j = 0; j < cur_brs.size(); j++)
+			  glMatrixMode(GL_MODELVIEW);
+			  glPopMatrix();
+		  }//for (int j = 0; j < cur_brs.size(); j++)
+
+		  glFinish();
+
+		  if (blend_slices_ && colormap_mode_!=2)
+		  {
+			  //set buffer back
+			  glBindFramebuffer(GL_FRAMEBUFFER, blend_framebuffer_);
+			  glDrawBuffer(draw_buffer);
+			  glReadBuffer(read_buffer);
+			  glBindTexture(GL_TEXTURE_2D, *blend_tex);
+			  glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+
+			  glUseProgram(0);
+			  glActiveTexture(GL_TEXTURE0);
+			  glEnable(GL_TEXTURE_2D);
+			  glDisable(GL_TEXTURE_3D);
+
+			  //transformations
+			  glMatrixMode(GL_PROJECTION);
+			  glPushMatrix();
+			  glLoadIdentity();
+			  glMatrixMode(GL_MODELVIEW);
+			  glPushMatrix();
+			  glLoadIdentity();
+			  //blend
+			  if (TextureRenderer::get_update_order() == 0)
+				  glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+			  else if (TextureRenderer::get_update_order() == 1)
+				  glBlendFunc(GL_ONE_MINUS_DST_ALPHA, GL_ONE);
+			  //draw
+			  glBegin(GL_QUADS);
+			  {
+				  glTexCoord2d(0.0, 0.0);
+				  glVertex3d(-1, -1, 0.0);
+				  glTexCoord2d(1.0, 0.0);
+				  glVertex3d(1, -1, 0.0);
+				  glTexCoord2d(1.0, 1.0);
+				  glVertex3d(1, 1, 0.0);
+				  glTexCoord2d(0.0, 1.0);
+				  glVertex3d(-1, 1, 0.0);
+			  }
+			  glEnd();
+			  glMatrixMode(GL_PROJECTION);
+			  glPopMatrix();
+			  glMatrixMode(GL_MODELVIEW);
+			  glPopMatrix();
 
 			  glFinish();
+		  }//if (blend_slices_ && colormap_mode_!=2)
 
-			  if (blend_slices_ && colormap_mode_!=2)
+		  vector<TextureBrick *>::iterator ite = cur_brs.begin();
+		  while (ite != cur_brs.end())
+		  {
+			  if ((order && (*ite)->timax() <= i) || (!order && (*ite)->timin() >= i))
 			  {
-				  //set buffer back
-				  glBindFramebuffer(GL_FRAMEBUFFER, blend_framebuffer_);
-				  glDrawBuffer(draw_buffer);
-				  glReadBuffer(read_buffer);
-				  glBindTexture(GL_TEXTURE_2D, *blend_tex);
-				  glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+				  //count up
+				  (*ite)->set_drawn(0, true);
+				  TextureRenderer::cur_brick_num_++;
+				  TextureRenderer::cur_chan_brick_num_++;
 
-				  glUseProgram(0);
-				  glActiveTexture(GL_TEXTURE0);
-				  glEnable(GL_TEXTURE_2D);
-				  glDisable(GL_TEXTURE_3D);
+				  ite = cur_brs.erase(ite);
+			  }
+			  else ite++;
+		  }
 
-				  //transformations
-				  glMatrixMode(GL_PROJECTION);
-				  glPushMatrix();
-				  glLoadIdentity();
-				  glMatrixMode(GL_MODELVIEW);
-				  glPushMatrix();
-				  glLoadIdentity();
-				  //blend
-				  if (TextureRenderer::get_update_order() == 0)
-					  glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-				  else if (TextureRenderer::get_update_order() == 1)
-					  glBlendFunc(GL_ONE_MINUS_DST_ALPHA, GL_ONE);
-				  //draw
-				  glBegin(GL_QUADS);
-				  {
-					  glTexCoord2d(0.0, 0.0);
-					  glVertex3d(-1, -1, 0.0);
-					  glTexCoord2d(1.0, 0.0);
-					  glVertex3d(1, -1, 0.0);
-					  glTexCoord2d(1.0, 1.0);
-					  glVertex3d(1, 1, 0.0);
-					  glTexCoord2d(0.0, 1.0);
-					  glVertex3d(-1, 1, 0.0);
-				  }
-				  glEnd();
-				  glMatrixMode(GL_PROJECTION);
-				  glPopMatrix();
-				  glMatrixMode(GL_MODELVIEW);
-				  glPopMatrix();
-			  }//if (blend_slices_ && colormap_mode_!=2)
+	  }//for (i = start_i; order?(i <= all_timax):(i >= all_timin); i += order?1:-1)
 
-		  }//for (int i = all_timin; i <= all_timax; i++)
+	  TextureRenderer::cur_tid_offset_multi_ = i - (order?all_timin:all_timax);
 
-	  }//if (TextureRenderer::get_update_order())
+	  if ((order  && TextureRenderer::cur_tid_offset_multi_ > all_timax - all_timin) ||
+		  (!order && TextureRenderer::cur_tid_offset_multi_ < all_timin - all_timax) )
+	  {
+		  TextureRenderer::cur_tid_offset_multi_ = 0;
+	  }
 
       if (TextureRenderer::get_mem_swap() &&
             TextureRenderer::get_cur_brick_num() == TextureRenderer::get_total_brick_num())

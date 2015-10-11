@@ -1411,7 +1411,7 @@ void VRenderGLView::DrawVolumes(int peel)
 		 
          TextureRenderer::set_interactive(m_interactive);
          //if in interactive mode, do interactive bricking also
-         if (m_interactive)
+         if (m_interactive && !m_vol_method == VOL_METHOD_MULTI)
          {
             //calculate quota
             int total_bricks = TextureRenderer::get_total_brick_num();

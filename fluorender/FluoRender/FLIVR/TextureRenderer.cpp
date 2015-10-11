@@ -56,6 +56,7 @@ namespace FLIVR
 	int TextureRenderer::total_brick_num_ = 0;
 	int TextureRenderer::cur_brick_num_ = 0;
 	int TextureRenderer::cur_chan_brick_num_ = 0;
+	int TextureRenderer::cur_tid_offset_multi_ = 0;
 	bool TextureRenderer::clear_chan_buffer_ = true;
 	bool TextureRenderer::save_final_buffer_ = true;
 	unsigned long TextureRenderer::st_time_ = 0;
@@ -340,7 +341,7 @@ namespace FLIVR
 		v.safe_normalize();
 		Transform mv;
 		mv.set_trans(mvmat);
-		Point p = field_trans->unproject(mv.unproject(Point(0,0,0)));
+		Point p = field_trans->unproject(Point(0,0,0));//field_trans->unproject(mv.unproject(Point(0,0,0)));
 		return Ray(p, v);
 	}
 
@@ -746,7 +747,7 @@ namespace FLIVR
 
 	GLint TextureRenderer::load_brick(int unit, int c,
 		vector<TextureBrick*> *bricks, int bindex,
-		GLint filter, bool compression, int mode)
+		GLint filter, bool compression, int mode, bool set_drawn)
 	{
 		GLint result = -1;
 
@@ -980,7 +981,8 @@ namespace FLIVR
 
 		if (mem_swap_ &&
 			start_update_loop_ &&
-			!done_update_loop_)
+			!done_update_loop_ &&
+			set_drawn)
 		{
 			if (!brick->drawn(mode))
 			{
