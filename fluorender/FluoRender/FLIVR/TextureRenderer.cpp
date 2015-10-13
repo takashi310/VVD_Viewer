@@ -341,7 +341,7 @@ namespace FLIVR
 		v.safe_normalize();
 		Transform mv;
 		mv.set_trans(mvmat);
-		Point p = field_trans->unproject(Point(0,0,0));//field_trans->unproject(mv.unproject(Point(0,0,0)));
+		Point p = field_trans->unproject(mv.unproject(Point(0,0,0)));
 		return Ray(p, v);
 	}
 

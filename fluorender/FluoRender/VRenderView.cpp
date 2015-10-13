@@ -1411,7 +1411,7 @@ void VRenderGLView::DrawVolumes(int peel)
 		 
          TextureRenderer::set_interactive(m_interactive);
          //if in interactive mode, do interactive bricking also
-         if (m_interactive && !m_vol_method == VOL_METHOD_MULTI)
+         if (m_interactive && !(m_vol_method == VOL_METHOD_MULTI))
          {
             //calculate quota
             int total_bricks = TextureRenderer::get_total_brick_num();
@@ -2809,6 +2809,7 @@ void VRenderGLView::DrawFinalBuffer()
    glBindTexture(GL_TEXTURE_2D, m_tex_final);
    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
    glEnable(GL_BLEND);
+   //glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
    //glBlendFunc(GL_ONE, GL_ONE);
    glDisable(GL_DEPTH_TEST);
