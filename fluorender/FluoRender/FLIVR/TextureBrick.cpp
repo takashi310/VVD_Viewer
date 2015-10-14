@@ -225,7 +225,7 @@ z
    }
 
    //set timin_, timax_, dt_ and vray_
-   void TextureBrick::compute_t_index_min_max(Ray& view, double dt)
+   bool TextureBrick::compute_t_index_min_max(Ray& view, double dt)
    {
       Point corner[8];
       corner[0] = bbox_.min();
@@ -256,6 +256,8 @@ z
 	  timax_ = (int)floor(tanchor/dt);
 	  dt_ = dt;
 	  vray_ = view;
+
+	  return (timax_ - timin_) >= 0 ? true : false;
    }
 
    void TextureBrick::compute_polygons(Ray& view, double dt,

@@ -139,7 +139,7 @@ namespace FLIVR {
 		virtual void* tex_data(int c);
 		virtual void* tex_data_brk(int c, std::wstring* fname, int filetype, bool useURL);
 		
-		void compute_t_index_min_max(Ray& view, double dt);
+		bool compute_t_index_min_max(Ray& view, double dt);
 
 		void compute_polygons(Ray& view, double tmin, double tmax, double dt,
 			vector<double>& vertex, vector<double>& texcoord,

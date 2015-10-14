@@ -49,9 +49,14 @@ namespace FLIVR
       blend_slices_(false),
       blend_framebuffer_resize_(false),
       blend_framebuffer_(0),
-      blend_tex_id_(0),
-      filter_buffer_resize_(false),
-      filter_buffer_(0),
+	  blend_tex_id_(0),
+	  label_tex_id_(0),
+	  blend_fbo_resize_(false),
+	  blend_fbo_(0),
+	  blend_tex_(0),
+	  blend_id_tex_(0),
+	  filter_buffer_resize_(false),
+	  filter_buffer_(0),
       filter_tex_id_(0),
       noise_red_(false),
       sfactor_(1.0),
@@ -76,6 +81,11 @@ namespace FLIVR
       blend_framebuffer_resize_(false),
       blend_framebuffer_(0),
       blend_tex_id_(0),
+	  label_tex_id_(0),
+	  blend_fbo_resize_(false),
+	  blend_fbo_(0),
+	  blend_tex_(0),
+	  blend_id_tex_(0),
       filter_buffer_resize_(false),
       filter_buffer_(0),
       filter_tex_id_(0),
@@ -677,6 +687,8 @@ namespace FLIVR
    }
 
    
+#define FLV_COLORTYPE_NUM 4
+
    void MultiVolumeRenderer::draw_volume2(bool interactive_mode_p, bool orthographic_p, double zoom, bool intp)
    {
       if (get_vr_num()<=0 || !(vr_list_[0]))
@@ -684,14 +696,20 @@ namespace FLIVR
 
       set_interactive_mode(adaptive_ && interactive_mode_p);
 
-	  int i;
+	  int mode = (colormap_mode_ != 2) ? 0 : 3;
 
+	  int i;
+	  vector<bool> used_colortype(FLV_COLORTYPE_NUM, false);
+	  
 	  double sampling_frq_fac = -1.0;
 	  for (i=0; i<(int)vr_list_.size(); i++)
 	  {
 		  VolumeRenderer* vr = vr_list_[i];
 		  if (!vr)
 			  continue;
+		  if (colormap_mode_ != 2 &&vr->colormap_mode_ >= 0 && vr->colormap_mode_ < FLV_COLORTYPE_NUM)
+			  used_colortype[vr->colormap_mode_] = true;
+
 		  Texture *tex = vr->tex_;
 		  if (tex)
 		  {
@@ -712,13 +730,19 @@ namespace FLIVR
 			  if (maxlen > sampling_frq_fac) sampling_frq_fac = maxlen;
 		  }
 	  }
+	  if (colormap_mode_ == 2) used_colortype[2] = true;
 
 	  // Set sampling rate based on interaction.
       double rate = imode_ ? irate_ : sampling_rate_;
 	  Vector diag = vr_list_[0]->tex_->bbox()->diagonal();
 	  double dt = 0.0025/rate;
 	  num_slices_ = (int)(diag.length()/dt);
-	   
+
+	  vector<TextureBrick*> bs;
+	  unsigned long bs_size = 0; 
+	  for (i = 0; i < vr_list_.size(); i++) bs_size += vr_list_[i]->tex_->get_bricks()->size();
+	  bs.reserve(bs_size);
+	  	   
 	  int all_timin = INT_MAX, all_timax = -INT_MAX;
 	  for (i=0; i<(int)vr_list_.size(); i++)
 	  {
@@ -768,17 +792,42 @@ namespace FLIVR
 		  for (int j = 0; j < brs->size(); j++)
 		  {
 			  TextureBrick *b = (*brs)[j];
-			  b->compute_t_index_min_max(view_ray, vr_dt);
-			  b->set_rate_fac(rate_fac);
+
 			  b->set_vr(vr_list_[i]);
+			  if (b->compute_t_index_min_max(view_ray, vr_dt))
+			  {
+				  b->set_vr(vr_list_[i]);
+				  b->set_rate_fac(rate_fac);
 
-			  int tmp = b->timin();
-			  all_timin = (all_timin > tmp) ? tmp : all_timin;
-			  tmp = b->timax();
-			  all_timax = (all_timax < tmp) ? tmp : all_timax;
+				  int tmp = b->timin();
+				  all_timin = (all_timin > tmp) ? tmp : all_timin;
+				  tmp = b->timax();
+				  all_timax = (all_timax < tmp) ? tmp : all_timax;
+
+				  bs.push_back(b);
+			  }
+			  else if (TextureRenderer::get_mem_swap() &&
+				  TextureRenderer::get_start_update_loop() &&
+				  !TextureRenderer::get_done_update_loop())
+			  {
+				  b->set_drawn(mode, true);
+
+				  Transform *tform = b->get_vr()->tex_->transform();
+				  double tpmat[16];
+				  tform->get_trans(tpmat);
+				  glMatrixMode(GL_MODELVIEW);
+				  glPushMatrix();
+				  glMultMatrixd(tpmat);
+				  if (b->get_vr()->test_against_view(b->bbox()))
+					  TextureRenderer::cur_brick_num_++;
+
+				  glMatrixMode(GL_MODELVIEW);
+				  glPopMatrix();
+			  }
+
 		  }
-
 	  }
+	  bs_size = bs.size();
 
       //--------------------------------------------------------------------------
       bool use_shading = vr_list_[0]->shading_;
@@ -789,23 +838,24 @@ namespace FLIVR
       glGetIntegerv(GL_VIEWPORT, vp);
 
       // set up blending
-      glEnable(GL_BLEND);
-      switch(mode_)
-      {
-      case TextureRenderer::MODE_OVER:
-         glBlendEquation(GL_FUNC_ADD);
-         if (TextureRenderer::get_update_order() == 0)
-            glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-         else if (TextureRenderer::get_update_order() == 1)
-            glBlendFunc(GL_ONE_MINUS_DST_ALPHA, GL_ONE);
-         break;
-      case TextureRenderer::MODE_MIP:
-         glBlendEquation(GL_MAX);
-         glBlendFunc(GL_ONE, GL_ONE);
-         break;
-      default:
-         break;
+ 	  glEnablei(GL_BLEND, 0);
+	  switch(mode_)
+	  {
+	  case TextureRenderer::MODE_OVER:
+		  glBlendEquationi(0, GL_FUNC_ADD);
+		  if (TextureRenderer::update_order_ == 0)
+			  glBlendFunci(0, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+		  else if (TextureRenderer::update_order_ == 1)
+			  glBlendFunci(0, GL_ONE_MINUS_DST_ALPHA, GL_ONE);
+		  break;
+	  case TextureRenderer::MODE_MIP:
+		  glBlendEquationi(0, GL_MAX);
+		  glBlendFunci(0, GL_ONE, GL_ONE);
+		  break;
+	  default:
+		  break;
 	  }
+	  if (used_colortype[3]) glDisablei(GL_BLEND, 1);
 
 	  // Cache this value to reset, in case another framebuffer is active,
 	  // as it is in the case of saving an image from the viewer.
@@ -815,6 +865,8 @@ namespace FLIVR
 	  glGetIntegerv(GL_DRAW_BUFFER, &cur_draw_buffer);
 	  GLint cur_read_buffer;
 	  glGetIntegerv(GL_READ_BUFFER, &cur_read_buffer);
+
+	  glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	  int w = vp[2];
 	  int h = vp[3];
@@ -827,61 +879,121 @@ namespace FLIVR
 		  sfactor_ = sf;
 		  blend_framebuffer_resize_ = true;
 		  filter_buffer_resize_ = true;
-		  vr_list_[0]->blend_framebuffer_resize_ = true;
+		  blend_fbo_resize_ = true;
 	  }
 	  else if (sf==1.0 && sfactor_!=1.0)
 	  {
 		  sfactor_ = sf;
 		  blend_framebuffer_resize_ = true;
 		  filter_buffer_resize_ = true;
-		  vr_list_[0]->blend_framebuffer_resize_ = true;
+		  blend_fbo_resize_ = true;
 	  }
 
 	  w2 = int(w*sfactor_+0.5);
 	  h2 = int(h*sfactor_+0.5);
 */
+
+	  static const GLenum draw_buffers[] =
+	  {
+		  GL_COLOR_ATTACHMENT0,
+		  GL_COLOR_ATTACHMENT1
+	  };
+
+	  static const GLenum inv_draw_buffers[] =
+	  {
+		  GL_COLOR_ATTACHMENT1,
+		  GL_COLOR_ATTACHMENT0
+	  };
+
 	  if(blend_num_bits_ > 8)
-      {
-         if (!glIsFramebuffer(blend_framebuffer_))
-         {
-            glGenFramebuffers(1, &blend_framebuffer_);
-            glGenTextures(1, &blend_tex_id_);
+	  {
+		  if (!glIsFramebuffer(blend_framebuffer_))
+		  {
+			  glGenFramebuffers(1, &blend_framebuffer_);
+			  glGenTextures(1, &blend_tex_id_);
+			  glGenTextures(1, &label_tex_id_);
 
-            glBindFramebuffer(GL_FRAMEBUFFER, blend_framebuffer_);
+			  glBindFramebuffer(GL_FRAMEBUFFER, blend_framebuffer_);
 
-            // Initialize texture color renderbuffer
-            glBindTexture(GL_TEXTURE_2D, blend_tex_id_);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
-                  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-            glFramebufferTexture2D(GL_FRAMEBUFFER,
-                  GL_COLOR_ATTACHMENT0,
-                  GL_TEXTURE_2D, blend_tex_id_, 0);
-         }
+			  // Initialize texture color renderbuffer
+			  glBindTexture(GL_TEXTURE_2D, blend_tex_id_);
+			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+			  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
+				  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+			  glFramebufferTexture2D(GL_FRAMEBUFFER,
+				  GL_COLOR_ATTACHMENT0,
+				  GL_TEXTURE_2D, blend_tex_id_, 0);
+			  glBindTexture(GL_TEXTURE_2D, 0);
 
-         if (blend_framebuffer_resize_)
-         {
-            // resize texture color renderbuffer
-            glBindTexture(GL_TEXTURE_2D, blend_tex_id_);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
-                  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+			  glBindTexture(GL_TEXTURE_2D, label_tex_id_);
+			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+			  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
+				  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+			  glFramebufferTexture2D(GL_FRAMEBUFFER,
+				  GL_COLOR_ATTACHMENT1,
+				  GL_TEXTURE_2D, label_tex_id_, 0);
+			  glBindTexture(GL_TEXTURE_2D, 0);
 
-            blend_framebuffer_resize_ = false;
-         }
+			  glBindTexture(GL_TEXTURE_2D, 0);
+			  glDisable(GL_TEXTURE_2D);
+		  }
+		  else
+		  {
+			  glBindFramebuffer(GL_FRAMEBUFFER, blend_framebuffer_);
 
-         glBindTexture(GL_TEXTURE_2D, 0);
-         glDisable(GL_TEXTURE_2D);
+			  glFramebufferTexture2D(GL_FRAMEBUFFER,
+				  GL_COLOR_ATTACHMENT0,
+				  GL_TEXTURE_2D, blend_tex_id_, 0);
 
-         glBindFramebuffer(GL_FRAMEBUFFER, blend_framebuffer_);
+			  glFramebufferTexture2D(GL_FRAMEBUFFER,
+				  GL_COLOR_ATTACHMENT1,
+				  GL_TEXTURE_2D, label_tex_id_, 0);
+		  }
 
-         glClearColor(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
-         glClear(GL_COLOR_BUFFER_BIT);
+		  if (blend_framebuffer_resize_)
+		  {
+			  // resize texture color renderbuffer
+			  glBindTexture(GL_TEXTURE_2D, blend_tex_id_);
+			  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
+				  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+			  glBindTexture(GL_TEXTURE_2D, 0);
 
-         glViewport(vp[0], vp[1], w2, h2);
-      }
+			  glBindTexture(GL_TEXTURE_2D, label_tex_id_);
+			  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
+				  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+			  glBindTexture(GL_TEXTURE_2D, 0);
+
+			  blend_framebuffer_resize_ = false;
+
+			  glBindTexture(GL_TEXTURE_2D, 0);
+			  glDisable(GL_TEXTURE_2D);
+		  }
+
+		  glDrawBuffers((TextureRenderer::cur_tid_offset_multi_==0 && used_colortype[3]) ? 2 : 1, draw_buffers);
+
+		  glClearColor(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
+		  glClear(GL_COLOR_BUFFER_BIT);
+
+		  glDrawBuffers(used_colortype[3] ? 2 : 1, draw_buffers);
+
+		  glViewport(vp[0], vp[1], w2, h2);
+
+		  if (!glIsTexture(label_tex_id_) && used_colortype[3])
+		  {
+			  glActiveTexture(GL_TEXTURE5);
+			  glEnable(GL_TEXTURE_2D);
+			  glBindTexture(GL_TEXTURE_2D, label_tex_id_);
+			  glActiveTexture(GL_TEXTURE0);
+		  }
+		  
+		  glBindTexture(GL_TEXTURE_2D, 0);
+	  }
 
 	  GLint draw_buffer;
 	  glGetIntegerv(GL_DRAW_BUFFER, &draw_buffer);
@@ -892,27 +1004,33 @@ namespace FLIVR
       glDepthMask(GL_FALSE);
 
       //--------------------------------------------------------------------------
-      // enable data texture unit 0
-      glActiveTexture(GL_TEXTURE0);
-
-      glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-      glEnable(GL_TEXTURE_3D);
-
-      //--------------------------------------------------------------------------
       // Set up shaders
-      FragmentProgram* shader = 0;
-      shader = VolumeRenderer::vol_shader_factory_.shader(
-            vr_list_[0]->tex_->nc(),
-            use_shading, use_fog!=0,
-            depth_peel_, true,
-            hiqual_, 0,
-            colormap_mode_, false);
-      if (shader)
-      {
-         if (!shader->valid())
-            shader->create();
-         shader->bind();
-      }
+	  vector<FragmentProgram*> shader(FLV_COLORTYPE_NUM, nullptr);
+	  bool multi_shader = false;
+	  int used_shader_n = 0;
+	  int shader_id = 0;
+	  for (i = 0; i < FLV_COLORTYPE_NUM; i++)
+	  {
+		  if (used_colortype[i])
+		  {
+			  shader[i] = VolumeRenderer::vol_shader_factory_.shader(
+				  vr_list_[0]->tex_->nc(),
+				  use_shading, use_fog!=0,
+				  depth_peel_, true,
+				  hiqual_, 0, i, false);
+
+			  used_shader_n++;
+			  shader_id = i;
+		  }
+	  }
+	  if (used_shader_n > 1) multi_shader = true;
+
+	  if (!multi_shader && !blend_slices_)
+	  {
+		  if (!shader[shader_id]->valid())
+			  shader[shader_id]->create();
+		  shader[shader_id]->bind();
+	  }
 
 	  //takashi_debug
 /*	  ofstream ofs;
@@ -925,71 +1043,106 @@ namespace FLIVR
  /*     if (depth_peel_ || colormap_mode_ == 2)
          shader->setLocalParam(7, 1.0/double(w2), 1.0/double(h2), 0.0, 0.0);
 */
-      vector<TextureBrick*> bs;
-	  unsigned long bs_size = 0; 
-	  for (i = 0; i < vr_list_.size(); i++) bs_size += vr_list_[i]->tex_->get_bricks()->size();
-	  bs.reserve(bs_size);
-	  for (i = 0; i < vr_list_.size(); i++)
-	  {
-		  vector<TextureBrick*> *vrb = vr_list_[i]->tex_->get_bricks();
-		  std::copy(vrb->begin(), vrb->end(), std::back_inserter(bs));
+      if (blend_slices_ && colormap_mode_!=2)
+      {
+		  glEnable(GL_TEXTURE_2D);
+		  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+         //check blend buffer
+		  if (!glIsFramebuffer(blend_fbo_))
+		  {
+			  glGenFramebuffers(1, &blend_fbo_);
+			  if (!glIsTexture(blend_tex_))
+				  glGenTextures(1, &blend_tex_);
+			  if (!glIsTexture(blend_id_tex_))
+				  glGenTextures(1, &blend_id_tex_);
+			  glBindFramebuffer(GL_FRAMEBUFFER, blend_fbo_);
+			  // Initialize texture color renderbuffer
+			  glBindTexture(GL_TEXTURE_2D, blend_tex_);
+			  glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+			  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w2, h2, 0,
+				  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+			  glFramebufferTexture2D(GL_FRAMEBUFFER,
+				  GL_COLOR_ATTACHMENT0,
+				  GL_TEXTURE_2D, blend_tex_, 0);
+			  glBindTexture(GL_TEXTURE_2D, 0);
+
+			  glBindTexture(GL_TEXTURE_2D, blend_id_tex_);
+			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+			  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
+				  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+			  glFramebufferTexture2D(GL_FRAMEBUFFER,
+			  GL_COLOR_ATTACHMENT1,
+			  GL_TEXTURE_2D, blend_id_tex_, 0);
+			  glBindTexture(GL_TEXTURE_2D, 0);
+
+			  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		  }
+		  else
+		  {
+			  glBindFramebuffer(GL_FRAMEBUFFER, blend_fbo_);
+
+			  glFramebufferTexture2D(GL_FRAMEBUFFER,
+				  GL_COLOR_ATTACHMENT0,
+				  GL_TEXTURE_2D, blend_tex_, 0);
+
+			  glFramebufferTexture2D(GL_FRAMEBUFFER,
+				  GL_COLOR_ATTACHMENT1,
+				  GL_TEXTURE_2D, blend_id_tex_, 0);
+			  
+			  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		  }
+
+		  if (blend_fbo_resize_)
+		  {
+			  glBindFramebuffer(GL_FRAMEBUFFER, blend_fbo_);
+
+			  glBindTexture(GL_TEXTURE_2D, blend_tex_);
+			  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w2, h2, 0,
+				  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+			  glBindTexture(GL_TEXTURE_2D, 0);
+
+			  glBindTexture(GL_TEXTURE_2D, blend_id_tex_);
+			  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
+				  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+			  glBindTexture(GL_TEXTURE_2D, 0);
+
+			  blend_fbo_resize_ = false;
+
+			  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		  }
+
+		  if (!glIsTexture(blend_id_tex_) && used_colortype[3])
+		  {
+			  glBindFramebuffer(GL_FRAMEBUFFER, blend_fbo_);
+
+			  glActiveTexture(GL_TEXTURE6);
+			  glEnable(GL_TEXTURE_2D);
+			  glBindTexture(GL_TEXTURE_2D, blend_id_tex_);
+			  glActiveTexture(GL_TEXTURE0);
+
+			  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		  }
+
+		  glBindFramebuffer(GL_FRAMEBUFFER, blend_fbo_);
+
+		  glViewport(vp[0], vp[1], w2, h2);
 	  }
 
-	  GLuint *blend_fbo = &(vr_list_[0]->blend_framebuffer_);
-      GLuint *blend_tex = &(vr_list_[0]->blend_tex_id_);
-	  GLuint *blend_id_tex = &(vr_list_[0]->label_tex_id_);
-	  if (blend_slices_ && colormap_mode_!=2)
-      {
-         //check blend buffer
-         if (!glIsFramebuffer(*blend_fbo))
-         {
-            glGenFramebuffers(1, blend_fbo);
-            if (!glIsTexture(*blend_tex))
-               glGenTextures(1, blend_tex);
-			if (!glIsTexture(*blend_id_tex))
-               glGenTextures(1, blend_id_tex);
-            glBindFramebuffer(GL_FRAMEBUFFER, *blend_fbo);
-            // Initialize texture color renderbuffer
-            glBindTexture(GL_TEXTURE_2D, *blend_tex);
-            glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w2, h2, 0,
-                  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-            glFramebufferTexture2D(GL_FRAMEBUFFER,
-                  GL_COLOR_ATTACHMENT0,
-                  GL_TEXTURE_2D, *blend_tex, 0);
-			glBindTexture(GL_TEXTURE_2D, 0);
+	  //--------------------------------------------------------------------------
+      // enable data texture unit 0
+      glActiveTexture(GL_TEXTURE0);
 
-			glBindTexture(GL_TEXTURE_2D, *blend_id_tex);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
-				GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-/*			glFramebufferTexture2D(GL_FRAMEBUFFER,
-				GL_COLOR_ATTACHMENT1,
-				GL_TEXTURE_2D, *blend_id_tex, 0);
-*/			glBindTexture(GL_TEXTURE_2D, 0);
-         }
-         if (vr_list_[0]->blend_framebuffer_resize_)
-         {
-            glBindTexture(GL_TEXTURE_2D, *blend_tex);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w2, h2, 0,
-                  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-            glBindTexture(GL_TEXTURE_2D, 0);
-
-			glBindTexture(GL_TEXTURE_2D, *blend_id_tex);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
-				GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-			glBindTexture(GL_TEXTURE_2D, 0);
-			
-			vr_list_[0]->blend_framebuffer_resize_ = false;
-         }
-      }
+      glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+      glEnable(GL_TEXTURE_3D);
+	  glEnable(GL_TEXTURE_2D);
 
 	  vector<TextureBrick *> cur_brs;
 	  int cur_bid;
@@ -1020,7 +1173,7 @@ namespace FLIVR
 				  TextureRenderer::get_start_update_loop() &&
 				  !TextureRenderer::get_done_update_loop())
 			  {
-				  if (bs[cur_bid]->drawn(0))
+				  if (bs[cur_bid]->drawn(mode))
 				  {
 					  cur_bid++;
 					  continue;
@@ -1042,8 +1195,8 @@ namespace FLIVR
 				  TextureRenderer::get_start_update_loop() &&
 				  !TextureRenderer::get_done_update_loop())
 			  {
-				  if (!bs[cur_bid]->drawn(0))
-					  bs[cur_bid]->set_drawn(0, true);
+				  if (!bs[cur_bid]->drawn(mode))
+					  bs[cur_bid]->set_drawn(mode, true);
 			  }
 
 			  cur_bid++;
@@ -1057,22 +1210,38 @@ namespace FLIVR
 
 		  if (blend_slices_ && colormap_mode_!=2)
 		  {
+			  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			  
 			  //set blend buffer
-			  glBindFramebuffer(GL_FRAMEBUFFER, *blend_fbo);
+			  glBindFramebuffer(GL_FRAMEBUFFER, blend_fbo_);
+			  glDrawBuffers(used_colortype[3] ? 2 : 1, draw_buffers);
+
 			  glClearColor(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
 			  glClear(GL_COLOR_BUFFER_BIT);
 			  glEnable(GL_BLEND);
 			  glBlendFunc(GL_ONE, GL_ONE);
 
-			  glUseProgram(shader->id());
 			  glEnable(GL_TEXTURE_3D);
-			  glDisable(GL_TEXTURE_2D);
+			  if (used_colortype[3]) glEnable(GL_TEXTURE_2D);
+			  else glDisable(GL_TEXTURE_2D);
 		  }
 
 		  for (int j = 0; j < cur_brs.size(); j++)
 		  {
 			  TextureBrick *b = cur_brs[j];
 			  VolumeRenderer *vr = b->get_vr();
+			  int vr_cmode = colormap_mode_ != 2 ? vr->colormap_mode_ : 2;
+
+			  double id_mode = 0.0;
+			  if (blend_slices_ && colormap_mode_!=2)
+			  {
+				  if (vr_cmode == 3)
+				  {
+					  id_mode = 1.0f;
+					  glDrawBuffers(2, inv_draw_buffers);
+				  }
+				  else glDrawBuffers(1, draw_buffers);
+			  }
 
 			  int s; 
 			  double *texc, *vert;
@@ -1088,20 +1257,20 @@ namespace FLIVR
 			  glMultMatrixd(tpmat);
 			  float matrix[16];
 
-			  if (blend_slices_)
+			  if (blend_slices_ || multi_shader)
 			  {
-				  if (shader)
+				  if (shader[vr_cmode])
 				  {
-					  if (!shader->valid())
-						  shader->create();
-					  shader->bind();
+					  if (!shader[vr_cmode]->valid())
+						  shader[vr_cmode]->create();
+					  shader[vr_cmode]->bind();
 				  }
 			  }
 
-			  if (depth_peel_ || colormap_mode_ == 2)
-				  shader->setLocalParam(7, 1.0/double(w2), 1.0/double(h2), 0.0, 0.0);
+			  if (depth_peel_ || vr_cmode == 2)
+				  shader[vr_cmode]->setLocalParam(7, 1.0/double(w2), 1.0/double(h2), 0.0, 0.0);
 
-			  shader->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(), 1.0/rate*b->rate_fac());
+			  shader[vr_cmode]->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(), 1.0/rate*b->rate_fac());
 
 			  //for brick transformation
 			  BBox bbox = b->bbox();
@@ -1121,7 +1290,7 @@ namespace FLIVR
 			  matrix[13] = float(bbox.min().y());
 			  matrix[14] = float(bbox.min().z());
 			  matrix[15] = 1.0f;
-			  shader->setLocalParamMatrix(2, matrix);
+			  shader[vr_cmode]->setLocalParamMatrix(2, matrix);
 
 
 			  double mvmat[16];
@@ -1139,52 +1308,55 @@ namespace FLIVR
 			  // set shader parameters
 			  light_pos_ = b->vray()->direction();
 			  light_pos_.safe_normalize();
-			  shader->setLocalParam(0, light_pos_.x(), light_pos_.y(), light_pos_.z(), vr->alpha_);
-			  shader->setLocalParam(1, 2.0 - vr->ambient_,
+			  shader[vr_cmode]->setLocalParam(0, light_pos_.x(), light_pos_.y(), light_pos_.z(), vr->alpha_);
+			  shader[vr_cmode]->setLocalParam(1, 2.0 - vr->ambient_,
 				  vr->shading_?vr->diffuse_:0.0,
 				  vr->specular_,
 				  vr->shine_);
-			  shader->setLocalParam(2, vr->scalar_scale_,
+			  shader[vr_cmode]->setLocalParam(2, vr->scalar_scale_,
 				  vr->gm_scale_,
 				  vr->lo_thresh_,
 				  vr->hi_thresh_);
-			  shader->setLocalParam(3, 1.0/vr->gamma3d_,
+			  shader[vr_cmode]->setLocalParam(3, 1.0/vr->gamma3d_,
 				  vr->gm_thresh_,
 				  vr->offset_,
 				  sw_);
 			  double spcx, spcy, spcz;
 			  vr->tex_->get_spacings(spcx, spcy, spcz);
-			  shader->setLocalParam(5, spcx, spcy, spcz, 1.0);
-			  //switch (vr->colormap_mode_)
-			  //{
-			  //case 0://normal
-			  shader->setLocalParam(6, vr->color_.r(),
-				  vr->color_.g(),
-				  vr->color_.b(), 0.0);
-			  //  break;
-			  //case 1://colormap
-			  //  shader->setLocalParam(6, vr->colormap_low_value_,
-			  //    vr->colormap_hi_value_,
-			  //    vr->colormap_hi_value_-vr->colormap_low_value_, 0.0);
-			  //  break;
-			  //}
+			  shader[vr_cmode]->setLocalParam(5, spcx, spcy, spcz, 1.0);
+			  
+			  switch (vr_cmode)
+			  {
+			  case 0://normal
+				  shader[vr_cmode]->setLocalParam(6, vr->color_.r(), vr->color_.g(), vr->color_.b(), 0.0);
+				  break;
+			  case 1://colormap
+				  shader[vr_cmode]->setLocalParam(6, vr->colormap_low_value_, vr->colormap_hi_value_,
+					  vr->colormap_hi_value_-vr->colormap_low_value_, 0.0);
+				  break;
+			  case 3://indexed color
+				  HSVColor hsv(vr->color_);
+				  double luminance = hsv.val();
+				  shader[vr_cmode]->setLocalParam(6, 1.0/double(w2), 1.0/double(h2), luminance, id_mode);
+				  break;
+			  }
 
 			  double abcd[4];
 			  vr->planes_[0]->get(abcd);
-			  shader->setLocalParam(10, abcd[0], abcd[1], abcd[2], abcd[3]);
+			  shader[vr_cmode]->setLocalParam(10, abcd[0], abcd[1], abcd[2], abcd[3]);
 			  vr->planes_[1]->get(abcd);
-			  shader->setLocalParam(11, abcd[0], abcd[1], abcd[2], abcd[3]);
+			  shader[vr_cmode]->setLocalParam(11, abcd[0], abcd[1], abcd[2], abcd[3]);
 			  vr->planes_[2]->get(abcd);
-			  shader->setLocalParam(12, abcd[0], abcd[1], abcd[2], abcd[3]);
+			  shader[vr_cmode]->setLocalParam(12, abcd[0], abcd[1], abcd[2], abcd[3]);
 			  vr->planes_[3]->get(abcd);
-			  shader->setLocalParam(13, abcd[0], abcd[1], abcd[2], abcd[3]);
+			  shader[vr_cmode]->setLocalParam(13, abcd[0], abcd[1], abcd[2], abcd[3]);
 			  vr->planes_[4]->get(abcd);
-			  shader->setLocalParam(14, abcd[0], abcd[1], abcd[2], abcd[3]);
+			  shader[vr_cmode]->setLocalParam(14, abcd[0], abcd[1], abcd[2], abcd[3]);
 			  vr->planes_[5]->get(abcd);
-			  shader->setLocalParam(15, abcd[0], abcd[1], abcd[2], abcd[3]);
+			  shader[vr_cmode]->setLocalParam(15, abcd[0], abcd[1], abcd[2], abcd[3]);
 
 			  //bind depth texture for rendering shadows
-			  if (colormap_mode_ == 2)
+			  if (vr_cmode == 2)
 			  {
 				  if (blend_num_bits_ > 8)
 					  vr->tex_2d_dmap_ = blend_tex_id_;
@@ -1219,7 +1391,7 @@ namespace FLIVR
 			  glEnd();
 
 			  //release depth texture for rendering shadows
-			  if (colormap_mode_ == 2)
+			  if (vr_cmode == 2)
 				  vr->release_texture(4, GL_TEXTURE_2D);
 
 			  glMatrixMode(GL_MODELVIEW);
@@ -1231,13 +1403,37 @@ namespace FLIVR
 		  if (blend_slices_ && colormap_mode_!=2)
 		  {
 			  //set buffer back
+			  glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			  glBindFramebuffer(GL_FRAMEBUFFER, blend_framebuffer_);
 			  glDrawBuffer(draw_buffer);
 			  glReadBuffer(read_buffer);
-			  glBindTexture(GL_TEXTURE_2D, *blend_tex);
+
+			  glActiveTexture(GL_TEXTURE6);
+			  glBindTexture(GL_TEXTURE_2D, blend_id_tex_);
+			  glActiveTexture(GL_TEXTURE5);
+			  glBindTexture(GL_TEXTURE_2D, label_tex_id_);
+			  glActiveTexture(GL_TEXTURE0);
+			  glBindTexture(GL_TEXTURE_2D, blend_tex_);
+
 			  glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
 
-			  glUseProgram(0);
+			  glDrawBuffers(used_colortype[3] ? 2 : 1, draw_buffers);
+
+			  FragmentProgram* img_shader = nullptr;
+			  if (used_colortype[3])
+			  {
+				  img_shader = vr_list_[0]->m_img_shader_factory.shader(IMG_SHDR_BLEND_ID_COLOR_FOR_DEPTH_MODE);
+				  if (img_shader)
+				  {
+					  if (!img_shader->valid())
+					  {
+						  img_shader->create();
+					  }
+					  img_shader->bind();
+				  }
+			  }
+			  else glUseProgram(0);
+
 			  glActiveTexture(GL_TEXTURE0);
 			  glEnable(GL_TEXTURE_2D);
 			  glDisable(GL_TEXTURE_3D);
@@ -1250,10 +1446,13 @@ namespace FLIVR
 			  glPushMatrix();
 			  glLoadIdentity();
 			  //blend
-			  if (TextureRenderer::get_update_order() == 0)
-				  glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-			  else if (TextureRenderer::get_update_order() == 1)
-				  glBlendFunc(GL_ONE_MINUS_DST_ALPHA, GL_ONE);
+			  glEnablei(GL_BLEND, 0);
+			  glBlendEquationi(0, GL_FUNC_ADD);
+			  if (TextureRenderer::update_order_ == 0)
+				  glBlendFunci(0, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+			  else if (TextureRenderer::update_order_ == 1)
+				  glBlendFunci(0, GL_ONE_MINUS_DST_ALPHA, GL_ONE);
+			  if (used_colortype[3]) glDisablei(GL_BLEND, 1);
 			  //draw
 			  glBegin(GL_QUADS);
 			  {
@@ -1272,6 +1471,11 @@ namespace FLIVR
 			  glMatrixMode(GL_MODELVIEW);
 			  glPopMatrix();
 
+			  if (img_shader != nullptr && img_shader->valid())
+               img_shader->release();
+
+			  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
 			  glFinish();
 		  }//if (blend_slices_ && colormap_mode_!=2)
 
@@ -1281,9 +1485,8 @@ namespace FLIVR
 			  if ((order && (*ite)->timax() <= i) || (!order && (*ite)->timin() >= i))
 			  {
 				  //count up
-				  (*ite)->set_drawn(0, true);
+				  (*ite)->set_drawn(mode, true);
 				  TextureRenderer::cur_brick_num_++;
-				  TextureRenderer::cur_chan_brick_num_++;
 
 				  ite = cur_brs.erase(ite);
 			  }
@@ -1307,12 +1510,54 @@ namespace FLIVR
          TextureRenderer::set_clear_chan_buffer(true);
       }
 
+	  if (used_colortype[3])
+	  {
+		  if(glIsTexture(label_tex_id_))
+		  {
+			  glActiveTexture(GL_TEXTURE5);
+			  glBindTexture(GL_TEXTURE_2D, 0);
+			  glDisable(GL_TEXTURE_2D);
+			  glActiveTexture(GL_TEXTURE0);
+		  }
+
+		  if(glIsTexture(blend_id_tex_))
+		  {
+			  glActiveTexture(GL_TEXTURE6);
+			  glBindTexture(GL_TEXTURE_2D, 0);
+			  glDisable(GL_TEXTURE_2D);
+			  glActiveTexture(GL_TEXTURE0);
+		  }
+	  }
+
+	  if (!glIsFramebuffer(blend_fbo_))
+	  {
+		  glBindFramebuffer(GL_FRAMEBUFFER, blend_fbo_);
+		  glFramebufferTexture2D(GL_FRAMEBUFFER,
+			  GL_COLOR_ATTACHMENT1,
+			  GL_TEXTURE_2D, 0, 0);
+		  glDrawBuffers(1, draw_buffers);
+		  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	  }
+
+	  if (!glIsFramebuffer(blend_framebuffer_))
+	  {
+		  glBindFramebuffer(GL_FRAMEBUFFER, blend_framebuffer_);
+		  glFramebufferTexture2D(GL_FRAMEBUFFER,
+			  GL_COLOR_ATTACHMENT1,
+			  GL_TEXTURE_2D, 0, 0);
+		  glDrawBuffers(1, draw_buffers);
+		  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	  }
+
       //enable depth buffer writing
       glDepthMask(GL_TRUE);
 
       // Release shader.
-      if (shader && shader->valid())
-         shader->release();
+	  for (auto &sh : shader)
+	  {
+		  if (sh != nullptr && sh->valid())
+			  sh->release();
+	  }
 
       //release texture
       glActiveTexture(GL_TEXTURE0);
@@ -2052,6 +2297,7 @@ namespace FLIVR
    void MultiVolumeRenderer::resize()
    {
       blend_framebuffer_resize_ = true;
+	  blend_fbo_resize_ = true;
    }
 
 } // namespace FLIVR

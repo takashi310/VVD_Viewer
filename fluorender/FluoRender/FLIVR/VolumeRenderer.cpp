@@ -578,6 +578,8 @@ namespace FLIVR
 		GLint cur_read_buffer;
 		glGetIntegerv(GL_READ_BUFFER, &cur_read_buffer);
 
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
 		int w = vp[2];
 		int h = vp[3];
 		int w2 = w;
@@ -634,6 +636,8 @@ namespace FLIVR
 					GL_COLOR_ATTACHMENT1,
 					GL_TEXTURE_2D, label_tex_id_, 0);
 				glBindTexture(GL_TEXTURE_2D, 0);
+
+				glDisable(GL_TEXTURE_2D);
 			}
 			else
 			{
@@ -666,8 +670,6 @@ namespace FLIVR
 
 			glBindTexture(GL_TEXTURE_2D, 0);
 			glDisable(GL_TEXTURE_2D);
-
-			glBindFramebuffer(GL_FRAMEBUFFER, blend_framebuffer_);
 
 			static const GLenum draw_buffers[] =
 			{
@@ -957,9 +959,15 @@ namespace FLIVR
 			b->compute_polygons(view_ray, dt, vertex, texcoord, size);
 
 			if (vertex.size() == 0){
-				cur_chan_brick_num_++;
+				if (!b->drawn(bmode))
+				{
+					b->set_drawn(bmode, true);
+					cur_brick_num_++;
+					cur_chan_brick_num_++;
+				}
 				continue;
 			}
+
 			GLint filter;
 			if (intp && colormap_mode_ != 3)
 				filter = GL_LINEAR;
@@ -1131,8 +1139,9 @@ namespace FLIVR
 				GL_TEXTURE_2D, 0, 0);
 			static const GLenum draw_buf = GL_COLOR_ATTACHMENT0;
 			glDrawBuffers(1, &draw_buf);
-			glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		}
+
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 		//release depth texture for rendering shadows
 		if (colormap_mode_ == 2)

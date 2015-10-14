@@ -107,6 +107,11 @@ namespace FLIVR
 		bool blend_framebuffer_resize_;
 		GLuint blend_framebuffer_;
 		GLuint blend_tex_id_;
+		GLuint label_tex_id_;
+		bool blend_fbo_resize_;
+		GLuint blend_fbo_;
+		GLuint blend_tex_;
+		GLuint blend_id_tex_;
 		//2nd buffer for multiple filtering
 		bool filter_buffer_resize_;
 		GLuint filter_buffer_;

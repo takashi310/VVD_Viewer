@@ -893,6 +893,9 @@ void VRenderGLView::Draw()
    int nx = GetSize().x;
    int ny = GetSize().y;
 
+   glBindTexture(GL_TEXTURE_2D, 0);
+   glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
    // clear color and depth buffers
    glDrawBuffer(GL_BACK);
    glEnable(GL_NORMALIZE);
@@ -2103,6 +2106,7 @@ void VRenderGLView::PaintStroke()
    }
 
    //bind back the window frame buffer
+   glBindTexture(GL_TEXTURE_2D, 0);
    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 }
@@ -2788,6 +2792,9 @@ void VRenderGLView::PrepFinalBuffer()
             GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
       //m_resize = false;
    }
+
+   glBindTexture(GL_TEXTURE_2D, 0);
+   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void VRenderGLView::ClearFinalBuffer()
@@ -2796,6 +2803,7 @@ void VRenderGLView::ClearFinalBuffer()
    //clear color buffer to black for compositing
    glClearColor(0.0, 0.0, 0.0, 0.0);
    glClear(GL_COLOR_BUFFER_BIT);
+   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void VRenderGLView::DrawFinalBuffer()
@@ -3219,6 +3227,7 @@ void VRenderGLView::DrawOVER(VolumeData* vd, GLuint tex, int peel, double sampli
 
          glBindTexture(GL_TEXTURE_2D, 0);
          glPopAttrib();
+		 glBindFramebuffer(GL_FRAMEBUFFER, 0);
       }
       //bind the fbo
       glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
@@ -3254,6 +3263,9 @@ void VRenderGLView::DrawOVER(VolumeData* vd, GLuint tex, int peel, double sampli
 	  vd->Draw(!m_persp, m_interactive, m_scale_factor, m_intp, sampling_frq_fac);
 //	  TextureRenderer::set_update_order(uporder);
    }
+
+   glBindTexture(GL_TEXTURE_2D, 0);
+   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
    if (vd->GetShadow())
    {
@@ -3368,6 +3380,9 @@ void VRenderGLView::DrawOVER(VolumeData* vd, GLuint tex, int peel, double sampli
 
    if (img_shader && img_shader->valid())
       img_shader->release();
+
+   glBindTexture(GL_TEXTURE_2D, 0);
+   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void VRenderGLView::DrawMIP(VolumeData* vd, GLuint tex, int peel, double sampling_frq_fac)
@@ -3445,6 +3460,7 @@ void VRenderGLView::DrawMIP(VolumeData* vd, GLuint tex, int peel, double samplin
 
          glBindTexture(GL_TEXTURE_2D, 0);
          glPopAttrib();
+		 glBindFramebuffer(GL_FRAMEBUFFER, 0);
       }
 
       if (!glIsFramebuffer(m_fbo_ol1))
@@ -3511,6 +3527,9 @@ void VRenderGLView::DrawMIP(VolumeData* vd, GLuint tex, int peel, double samplin
          vd->SetEnableAlpha(enable_alpha);
       }
 
+	  glBindTexture(GL_TEXTURE_2D, 0);
+	  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
       //bind fbo for final composition
       glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
       glClearColor(0.0, 0.0, 0.0, 0.0);
@@ -3570,6 +3589,9 @@ void VRenderGLView::DrawMIP(VolumeData* vd, GLuint tex, int peel, double samplin
       {
          img_shader->release();
       }
+
+	  glBindTexture(GL_TEXTURE_2D, 0);
+	  glBindFramebuffer(GL_FRAMEBUFFER, 0);
    }
 
    if (shading)
@@ -3719,6 +3741,9 @@ void VRenderGLView::DrawOLShading(VolumeData* vd)
    vd->RestoreMode();
    vd->SetColormapMode(colormode);
 
+   glBindTexture(GL_TEXTURE_2D, 0);
+   glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
    //bind fbo for final composition
    glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
    glActiveTexture(GL_TEXTURE0);
@@ -3754,6 +3779,9 @@ void VRenderGLView::DrawOLShading(VolumeData* vd)
 
    glBlendEquation(GL_FUNC_ADD);
    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+
+   glBindTexture(GL_TEXTURE_2D, 0);
+   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 //get mesh shadow
@@ -4106,6 +4134,9 @@ void VRenderGLView::DrawOLShadows(vector<VolumeData*> &vlist, GLuint tex)
 	  TextureRenderer::set_update_order(uporder);
    }
 
+   glBindTexture(GL_TEXTURE_2D, 0);
+   glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
    //
    if (!TextureRenderer::get_mem_swap() ||
          (TextureRenderer::get_mem_swap() &&
@@ -4191,6 +4222,9 @@ void VRenderGLView::DrawOLShadows(vector<VolumeData*> &vlist, GLuint tex)
       if (img_shader && img_shader->valid())
          img_shader->release();
 
+	  glBindTexture(GL_TEXTURE_2D, 0);
+	  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
       //bind fbo for final composition
       glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
       glActiveTexture(GL_TEXTURE0);
@@ -4240,11 +4274,15 @@ void VRenderGLView::DrawOLShadows(vector<VolumeData*> &vlist, GLuint tex)
 
       if (img_shader && img_shader->valid())
          img_shader->release();
+
+	  glBindTexture(GL_TEXTURE_2D, 0);
+	  glBindFramebuffer(GL_FRAMEBUFFER, 0);
    }
 
    glActiveTexture(GL_TEXTURE1);
    glBindTexture(GL_TEXTURE_2D, 0);
-
+   
+   glActiveTexture(GL_TEXTURE0);
    glBlendEquation(GL_FUNC_ADD);
 }
 
@@ -4366,6 +4404,9 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
    //draw multiple volumes at the same time
    m_mvr->draw(m_test_wiref, m_interactive, !m_persp, m_scale_factor, m_intp);
 
+   glBindTexture(GL_TEXTURE_2D, 0);
+   glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
    //draw shadows
    DrawOLShadows(list, use_tex_wt2?m_tex_wt2:m_tex);
 
@@ -4443,12 +4484,16 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
    if (img_shader && img_shader->valid())
       img_shader->release();
 
+   glBindTexture(GL_TEXTURE_2D, 0);
+   glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
    if (use_tex_wt2)
    {
       glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
       glFramebufferTexture2D(GL_FRAMEBUFFER,
             GL_COLOR_ATTACHMENT0,
             GL_TEXTURE_2D, m_tex, 0);
+	  glBindFramebuffer(GL_FRAMEBUFFER, 0);
    }
 }
 

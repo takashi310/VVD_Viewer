@@ -339,6 +339,41 @@ namespace FLIVR
 	"	gl_FragColor = vec4(c.rgb,alpha);\n" \
 	"}\n"
 
+#define IMG_SHADER_CODE_BLEND_FOR_DEPTH_MODE \
+	"// IMG_SHADER_CODE_BRIGHTNESS_CONTRAST\n" \
+	"uniform sampler2D tex0;\n" \
+	"\n" \
+	"void main()\n" \
+	"{\n" \
+	"	vec4 t = gl_TexCoord[0];\n" \
+	"	vec4 c = texture2D(tex0, t.xy);\n" \
+	"	c = clamp(c, vec4(0.0), vec4(1.0));\n" \
+	"	gl_FragColor = c;\n" \
+	"}\n"
+
+#define IMG_SHADER_CODE_BLEND_ID_COLOR_FOR_DEPTH_MODE \
+	"// IMG_SHADER_CODE_BRIGHTNESS_CONTRAST\n" \
+	"uniform sampler2D tex0;\n" \
+	"uniform sampler2D tex5;\n" \
+	"uniform sampler2D tex6;\n" \
+	"\n" \
+	"void main()\n" \
+	"{\n" \
+	"	vec4 t = gl_TexCoord[0];\n" \
+	"	vec4 c_b = texture2D(tex0, t.xy);\n" \
+	"	vec4 c_id = texture2D(tex6, t.xy);\n" \
+	"	vec4 c_id_ref = texture2D(tex5, t.xy);\n" \
+	"	vec4 c = c_b;\n" \
+	"	if (c_id.rgb != vec3(0.0) && c_id_ref.rgb != c_id.rgb)\n" \
+	"	{\n" \
+	"		gl_FragData[1] = clamp(c_id, vec4(0.0), vec4(1.0));\n" \
+	"		c += c_id;\n" \
+	"	}\n" \
+	"	else gl_FragData[1] = c_id_ref;\n" \
+	"	gl_FragData[0] = clamp(c, vec4(0.0), vec4(1.0));\n" \
+	"}\n"
+
+//	"	vec4 c = clamp(c_b+c_id, vec4(0.0), vec4(1.0));\n" \
 
 	ImgShader::ImgShader(int type) : 
 	type_(type),
@@ -398,6 +433,10 @@ namespace FLIVR
 			break;
 		case IMG_SHDR_BLEND_BRIGHT_BACKGROUND:
 			z << IMG_SHADER_CODE_BLEND_BRIGHT_BACKGROUND;
+		case IMG_SHDR_BLEND_FOR_DEPTH_MODE:
+			z << IMG_SHADER_CODE_BLEND_FOR_DEPTH_MODE;
+		case IMG_SHDR_BLEND_ID_COLOR_FOR_DEPTH_MODE:
+			z << IMG_SHADER_CODE_BLEND_ID_COLOR_FOR_DEPTH_MODE;
 		}
 
 		s = z.str();
