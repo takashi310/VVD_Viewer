@@ -707,7 +707,7 @@ namespace FLIVR
 		  VolumeRenderer* vr = vr_list_[i];
 		  if (!vr)
 			  continue;
-		  if (colormap_mode_ != 2 &&vr->colormap_mode_ >= 0 && vr->colormap_mode_ < FLV_COLORTYPE_NUM)
+		  if (colormap_mode_ != 2 && vr->colormap_mode_ >= 0 && vr->colormap_mode_ < FLV_COLORTYPE_NUM)
 			  used_colortype[vr->colormap_mode_] = true;
 
 		  Texture *tex = vr->tex_;
@@ -742,6 +742,8 @@ namespace FLIVR
 	  unsigned long bs_size = 0; 
 	  for (i = 0; i < vr_list_.size(); i++) bs_size += vr_list_[i]->tex_->get_bricks()->size();
 	  bs.reserve(bs_size);
+	  int remain_brk = 0;
+	  int finished_brk = 0;
 	  	   
 	  int all_timin = INT_MAX, all_timax = -INT_MAX;
 	  for (i=0; i<(int)vr_list_.size(); i++)
@@ -794,6 +796,15 @@ namespace FLIVR
 			  TextureBrick *b = (*brs)[j];
 
 			  b->set_vr(vr_list_[i]);
+
+			  Transform *tform = b->get_vr()->tex_->transform();
+			  double tpmat[16];
+			  tform->get_trans(tpmat);
+			  glMatrixMode(GL_MODELVIEW);
+			  glPushMatrix();
+			  glMultMatrixd(tpmat);
+			  bool in_view = b->get_vr()->test_against_view(b->bbox());
+
 			  if (b->compute_t_index_min_max(view_ray, vr_dt))
 			  {
 				  b->set_vr(vr_list_[i]);
@@ -805,29 +816,26 @@ namespace FLIVR
 				  all_timax = (all_timax < tmp) ? tmp : all_timax;
 
 				  bs.push_back(b);
+
+				  if (!b->drawn(mode) && in_view) remain_brk++;
 			  }
 			  else if (TextureRenderer::get_mem_swap() &&
 				  TextureRenderer::get_start_update_loop() &&
-				  !TextureRenderer::get_done_update_loop())
+				  !TextureRenderer::get_done_update_loop() && !b->drawn(mode))
 			  {
 				  b->set_drawn(mode, true);
 
-				  Transform *tform = b->get_vr()->tex_->transform();
-				  double tpmat[16];
-				  tform->get_trans(tpmat);
-				  glMatrixMode(GL_MODELVIEW);
-				  glPushMatrix();
-				  glMultMatrixd(tpmat);
-				  if (b->get_vr()->test_against_view(b->bbox()))
+				  if (in_view)
 					  TextureRenderer::cur_brick_num_++;
-
-				  glMatrixMode(GL_MODELVIEW);
-				  glPopMatrix();
 			  }
+			  glMatrixMode(GL_MODELVIEW);
+			  glPopMatrix();
 
 		  }
 	  }
 	  bs_size = bs.size();
+
+	  if (remain_brk == 0) return;
 
       //--------------------------------------------------------------------------
       bool use_shading = vr_list_[0]->shading_;
@@ -872,7 +880,7 @@ namespace FLIVR
 	  int h = vp[3];
 	  int w2 = w;
 	  int h2 = h;
-/*
+
 	  double sf = vr_list_[0]->CalcScaleFactor(w, h, res_.x(), res_.y(), zoom);
 	  if (fabs(sf-sfactor_)>0.05)
 	  {
@@ -891,7 +899,7 @@ namespace FLIVR
 
 	  w2 = int(w*sfactor_+0.5);
 	  h2 = int(h*sfactor_+0.5);
-*/
+
 
 	  static const GLenum draw_buffers[] =
 	  {
@@ -1487,6 +1495,7 @@ namespace FLIVR
 				  //count up
 				  (*ite)->set_drawn(mode, true);
 				  TextureRenderer::cur_brick_num_++;
+				  finished_brk++;
 
 				  ite = cur_brs.erase(ite);
 			  }
@@ -1496,18 +1505,22 @@ namespace FLIVR
 	  }//for (i = start_i; order?(i <= all_timax):(i >= all_timin); i += order?1:-1)
 
 	  TextureRenderer::cur_tid_offset_multi_ = i - (order?all_timin:all_timax);
-
+	  
 	  if ((order  && TextureRenderer::cur_tid_offset_multi_ > all_timax - all_timin) ||
 		  (!order && TextureRenderer::cur_tid_offset_multi_ < all_timin - all_timax) )
 	  {
 		  TextureRenderer::cur_tid_offset_multi_ = 0;
+	  }
+	  
+	  if (TextureRenderer::get_mem_swap() && remain_brk > 0 && finished_brk == remain_brk)
+	  {
+		  TextureRenderer::set_clear_chan_buffer(true);
 	  }
 
       if (TextureRenderer::get_mem_swap() &&
             TextureRenderer::get_cur_brick_num() == TextureRenderer::get_total_brick_num())
       {
          TextureRenderer::set_done_update_loop(true);
-         TextureRenderer::set_clear_chan_buffer(true);
       }
 
 	  if (used_colortype[3])

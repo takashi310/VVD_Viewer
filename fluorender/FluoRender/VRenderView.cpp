@@ -3986,18 +3986,15 @@ void VRenderGLView::DrawOLShadows(vector<VolumeData*> &vlist, GLuint tex)
       return;
 
    if (TextureRenderer::get_mem_swap() &&
-         TextureRenderer::get_start_update_loop() &&
-         !TextureRenderer::get_done_update_loop())
+	   TextureRenderer::get_start_update_loop())
    {
-      unsigned int rn_time = GET_TICK_COUNT();
-      if (rn_time - TextureRenderer::get_st_time() >
-            TextureRenderer::get_up_time())
-         return;
-      if (vlist.size() == 1 && vlist[0]->GetShadow())
-         if (vlist[0]->GetVR()->get_done_loop(3))
-            return;
+	   if (TextureRenderer::get_done_update_loop())
+		   return;
+	   else if (vlist.size() == 1 && vlist[0]->GetShadow())
+		   if (vlist[0]->GetVR()->get_done_loop(3))
+			   return;
    }
-
+   
    int nx, ny;
    nx = GetSize().x;
    ny = GetSize().y;
