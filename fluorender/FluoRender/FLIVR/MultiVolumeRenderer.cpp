@@ -688,6 +688,14 @@ namespace FLIVR
 
    
 #define FLV_COLORTYPE_NUM 4
+#define FLV_VRMODE_NUM 2
+#define FLV_VR_ALPHA 0
+#define FLV_VR_SOLID 1
+#define FLV_CTYPE_DEFAULT 0
+#define FLV_CTYPE_RAINBOW 1
+#define FLV_CTYPE_DEPTH 2
+#define FLV_CTYPE_INDEX 3
+#define vr_stype(x, y) ((x)+(y)*FLV_COLORTYPE_NUM)
 
    void MultiVolumeRenderer::draw_volume2(bool interactive_mode_p, bool orthographic_p, double zoom, bool intp)
    {
@@ -696,10 +704,11 @@ namespace FLIVR
 
       set_interactive_mode(adaptive_ && interactive_mode_p);
 
-	  int mode = (colormap_mode_ != 2) ? 0 : 3;
+	  int mode = (colormap_mode_ != FLV_CTYPE_DEPTH) ? 0 : 3;
 
 	  int i;
 	  vector<bool> used_colortype(FLV_COLORTYPE_NUM, false);
+	  vector<bool> used_shadertype(FLV_COLORTYPE_NUM*FLV_VRMODE_NUM, false);
 	  
 	  double sampling_frq_fac = -1.0;
 	  for (i=0; i<(int)vr_list_.size(); i++)
@@ -707,8 +716,13 @@ namespace FLIVR
 		  VolumeRenderer* vr = vr_list_[i];
 		  if (!vr)
 			  continue;
-		  if (colormap_mode_ != 2 && vr->colormap_mode_ >= 0 && vr->colormap_mode_ < FLV_COLORTYPE_NUM)
-			  used_colortype[vr->colormap_mode_] = true;
+		  if (vr->colormap_mode_ >= 0 && vr->colormap_mode_ < FLV_COLORTYPE_NUM)
+		  {
+			  int cmode = colormap_mode_ != FLV_CTYPE_DEPTH ? vr->colormap_mode_ : FLV_CTYPE_DEPTH;
+			  int vmode = vr->solid_ ? FLV_VR_SOLID : FLV_VR_ALPHA;
+			  used_colortype[cmode] = true;
+			  used_shadertype[vr_stype(cmode, vmode)] = true;
+		  }
 
 		  Texture *tex = vr->tex_;
 		  if (tex)
@@ -730,7 +744,6 @@ namespace FLIVR
 			  if (maxlen > sampling_frq_fac) sampling_frq_fac = maxlen;
 		  }
 	  }
-	  if (colormap_mode_ == 2) used_colortype[2] = true;
 
 	  // Set sampling rate based on interaction.
       double rate = imode_ ? irate_ : sampling_rate_;
@@ -839,7 +852,7 @@ namespace FLIVR
 
       //--------------------------------------------------------------------------
       bool use_shading = vr_list_[0]->shading_;
-      GLboolean use_fog = glIsEnabled(GL_FOG) && colormap_mode_!=2;
+	  GLboolean use_fog = glIsEnabled(GL_FOG) && colormap_mode_!=FLV_CTYPE_DEPTH;
       GLfloat clear_color[4];
       glGetFloatv(GL_COLOR_CLEAR_VALUE, clear_color);
       GLint vp[4];
@@ -863,7 +876,7 @@ namespace FLIVR
 	  default:
 		  break;
 	  }
-	  if (used_colortype[3]) glDisablei(GL_BLEND, 1);
+	  if (used_colortype[FLV_CTYPE_INDEX]) glDisablei(GL_BLEND, 1);
 
 	  // Cache this value to reset, in case another framebuffer is active,
 	  // as it is in the case of saving an image from the viewer.
@@ -983,16 +996,16 @@ namespace FLIVR
 			  glDisable(GL_TEXTURE_2D);
 		  }
 
-		  glDrawBuffers((TextureRenderer::cur_tid_offset_multi_==0 && used_colortype[3]) ? 2 : 1, draw_buffers);
+		  glDrawBuffers((TextureRenderer::cur_tid_offset_multi_==0 && used_colortype[FLV_CTYPE_INDEX]) ? 2 : 1, draw_buffers);
 
 		  glClearColor(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
 		  glClear(GL_COLOR_BUFFER_BIT);
 
-		  glDrawBuffers(used_colortype[3] ? 2 : 1, draw_buffers);
+		  glDrawBuffers(used_colortype[FLV_CTYPE_INDEX] ? 2 : 1, draw_buffers);
 
 		  glViewport(vp[0], vp[1], w2, h2);
 
-		  if (!glIsTexture(label_tex_id_) && used_colortype[3])
+		  if (glIsTexture(label_tex_id_) && used_colortype[FLV_CTYPE_INDEX])
 		  {
 			  glActiveTexture(GL_TEXTURE5);
 			  glEnable(GL_TEXTURE_2D);
@@ -1013,22 +1026,26 @@ namespace FLIVR
 
       //--------------------------------------------------------------------------
       // Set up shaders
-	  vector<FragmentProgram*> shader(FLV_COLORTYPE_NUM, nullptr);
+	  vector<FragmentProgram*> shader(FLV_COLORTYPE_NUM*FLV_VRMODE_NUM, nullptr);
 	  bool multi_shader = false;
 	  int used_shader_n = 0;
 	  int shader_id = 0;
 	  for (i = 0; i < FLV_COLORTYPE_NUM; i++)
 	  {
-		  if (used_colortype[i])
+		  for (int j = 0; j < FLV_VRMODE_NUM; j++)
 		  {
-			  shader[i] = VolumeRenderer::vol_shader_factory_.shader(
-				  vr_list_[0]->tex_->nc(),
-				  use_shading, use_fog!=0,
-				  depth_peel_, true,
-				  hiqual_, 0, i, false);
+			  if (used_shadertype[vr_stype(i, j)])
+			  {
+				  bool solid = (j == FLV_VR_SOLID) ? true : false; 
+				  shader[vr_stype(i, j)] = VolumeRenderer::vol_shader_factory_.shader(
+					  vr_list_[0]->tex_->nc(),
+					  use_shading, use_fog!=0,
+					  depth_peel_, true,
+					  hiqual_, 0, i, solid);
 
-			  used_shader_n++;
-			  shader_id = i;
+				  used_shader_n++;
+				  shader_id = i;
+			  }
 		  }
 	  }
 	  if (used_shader_n > 1) multi_shader = true;
@@ -1047,11 +1064,7 @@ namespace FLIVR
 	  ofs.close();
 */
 
-      //setup depth peeling
- /*     if (depth_peel_ || colormap_mode_ == 2)
-         shader->setLocalParam(7, 1.0/double(w2), 1.0/double(h2), 0.0, 0.0);
-*/
-      if (blend_slices_ && colormap_mode_!=2)
+      if (blend_slices_ && colormap_mode_!=FLV_CTYPE_DEPTH)
       {
 		  glEnable(GL_TEXTURE_2D);
 		  glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -1127,7 +1140,7 @@ namespace FLIVR
 			  glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		  }
 
-		  if (!glIsTexture(blend_id_tex_) && used_colortype[3])
+		  if (glIsTexture(blend_id_tex_) && used_colortype[FLV_CTYPE_INDEX])
 		  {
 			  glBindFramebuffer(GL_FRAMEBUFFER, blend_fbo_);
 
@@ -1216,13 +1229,13 @@ namespace FLIVR
 		  if (cur_brs.size() == 0)
 			  continue;
 
-		  if (blend_slices_ && colormap_mode_!=2)
+		  if (blend_slices_ && colormap_mode_!=FLV_CTYPE_DEPTH)
 		  {
 			  glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			  
 			  //set blend buffer
 			  glBindFramebuffer(GL_FRAMEBUFFER, blend_fbo_);
-			  glDrawBuffers(used_colortype[3] ? 2 : 1, draw_buffers);
+			  glDrawBuffers(used_colortype[FLV_CTYPE_INDEX] ? 2 : 1, draw_buffers);
 
 			  glClearColor(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
 			  glClear(GL_COLOR_BUFFER_BIT);
@@ -1230,7 +1243,7 @@ namespace FLIVR
 			  glBlendFunc(GL_ONE, GL_ONE);
 
 			  glEnable(GL_TEXTURE_3D);
-			  if (used_colortype[3]) glEnable(GL_TEXTURE_2D);
+			  if (used_colortype[FLV_CTYPE_INDEX]) glEnable(GL_TEXTURE_2D);
 			  else glDisable(GL_TEXTURE_2D);
 		  }
 
@@ -1238,12 +1251,13 @@ namespace FLIVR
 		  {
 			  TextureBrick *b = cur_brs[j];
 			  VolumeRenderer *vr = b->get_vr();
-			  int vr_cmode = colormap_mode_ != 2 ? vr->colormap_mode_ : 2;
+			  int vr_cmode = colormap_mode_ != FLV_CTYPE_DEPTH ? vr->colormap_mode_ : FLV_CTYPE_DEPTH;
+			  int vr_shader_id = vr_stype(vr_cmode, vr->solid_ ? FLV_VR_SOLID : FLV_VR_ALPHA);
 
 			  double id_mode = 0.0;
-			  if (blend_slices_ && colormap_mode_!=2)
+			  if (blend_slices_ && colormap_mode_!=FLV_CTYPE_DEPTH)
 			  {
-				  if (vr_cmode == 3)
+				  if (vr_cmode == FLV_CTYPE_INDEX)
 				  {
 					  id_mode = 1.0f;
 					  glDrawBuffers(2, inv_draw_buffers);
@@ -1267,18 +1281,18 @@ namespace FLIVR
 
 			  if (blend_slices_ || multi_shader)
 			  {
-				  if (shader[vr_cmode])
+				  if (shader[vr_shader_id])
 				  {
-					  if (!shader[vr_cmode]->valid())
-						  shader[vr_cmode]->create();
-					  shader[vr_cmode]->bind();
+					  if (!shader[vr_shader_id]->valid())
+						  shader[vr_shader_id]->create();
+					  shader[vr_shader_id]->bind();
 				  }
 			  }
 
-			  if (depth_peel_ || vr_cmode == 2)
-				  shader[vr_cmode]->setLocalParam(7, 1.0/double(w2), 1.0/double(h2), 0.0, 0.0);
+			  if (depth_peel_ || vr_cmode == FLV_CTYPE_DEPTH)
+				  shader[vr_shader_id]->setLocalParam(7, 1.0/double(w2), 1.0/double(h2), 0.0, 0.0);
 
-			  shader[vr_cmode]->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(), 1.0/rate*b->rate_fac());
+			  shader[vr_shader_id]->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(), 1.0/rate*b->rate_fac());
 
 			  //for brick transformation
 			  BBox bbox = b->bbox();
@@ -1298,7 +1312,7 @@ namespace FLIVR
 			  matrix[13] = float(bbox.min().y());
 			  matrix[14] = float(bbox.min().z());
 			  matrix[15] = 1.0f;
-			  shader[vr_cmode]->setLocalParamMatrix(2, matrix);
+			  shader[vr_shader_id]->setLocalParamMatrix(2, matrix);
 
 
 			  double mvmat[16];
@@ -1316,55 +1330,55 @@ namespace FLIVR
 			  // set shader parameters
 			  light_pos_ = b->vray()->direction();
 			  light_pos_.safe_normalize();
-			  shader[vr_cmode]->setLocalParam(0, light_pos_.x(), light_pos_.y(), light_pos_.z(), vr->alpha_);
-			  shader[vr_cmode]->setLocalParam(1, 2.0 - vr->ambient_,
+			  shader[vr_shader_id]->setLocalParam(0, light_pos_.x(), light_pos_.y(), light_pos_.z(), vr->alpha_);
+			  shader[vr_shader_id]->setLocalParam(1, 2.0 - vr->ambient_,
 				  vr->shading_?vr->diffuse_:0.0,
 				  vr->specular_,
 				  vr->shine_);
-			  shader[vr_cmode]->setLocalParam(2, vr->scalar_scale_,
+			  shader[vr_shader_id]->setLocalParam(2, vr->scalar_scale_,
 				  vr->gm_scale_,
 				  vr->lo_thresh_,
 				  vr->hi_thresh_);
-			  shader[vr_cmode]->setLocalParam(3, 1.0/vr->gamma3d_,
+			  shader[vr_shader_id]->setLocalParam(3, 1.0/vr->gamma3d_,
 				  vr->gm_thresh_,
 				  vr->offset_,
 				  sw_);
 			  double spcx, spcy, spcz;
 			  vr->tex_->get_spacings(spcx, spcy, spcz);
-			  shader[vr_cmode]->setLocalParam(5, spcx, spcy, spcz, 1.0);
+			  shader[vr_shader_id]->setLocalParam(5, spcx, spcy, spcz, 1.0);
 			  
 			  switch (vr_cmode)
 			  {
-			  case 0://normal
-				  shader[vr_cmode]->setLocalParam(6, vr->color_.r(), vr->color_.g(), vr->color_.b(), 0.0);
+			  case FLV_CTYPE_DEFAULT://normal
+				  shader[vr_shader_id]->setLocalParam(6, vr->color_.r(), vr->color_.g(), vr->color_.b(), 0.0);
 				  break;
-			  case 1://colormap
-				  shader[vr_cmode]->setLocalParam(6, vr->colormap_low_value_, vr->colormap_hi_value_,
+			  case FLV_CTYPE_RAINBOW://colormap
+				  shader[vr_shader_id]->setLocalParam(6, vr->colormap_low_value_, vr->colormap_hi_value_,
 					  vr->colormap_hi_value_-vr->colormap_low_value_, 0.0);
 				  break;
-			  case 3://indexed color
+			  case FLV_CTYPE_INDEX://indexed color
 				  HSVColor hsv(vr->color_);
 				  double luminance = hsv.val();
-				  shader[vr_cmode]->setLocalParam(6, 1.0/double(w2), 1.0/double(h2), luminance, id_mode);
+				  shader[vr_shader_id]->setLocalParam(6, 1.0/double(w2), 1.0/double(h2), luminance, id_mode);
 				  break;
 			  }
 
 			  double abcd[4];
 			  vr->planes_[0]->get(abcd);
-			  shader[vr_cmode]->setLocalParam(10, abcd[0], abcd[1], abcd[2], abcd[3]);
+			  shader[vr_shader_id]->setLocalParam(10, abcd[0], abcd[1], abcd[2], abcd[3]);
 			  vr->planes_[1]->get(abcd);
-			  shader[vr_cmode]->setLocalParam(11, abcd[0], abcd[1], abcd[2], abcd[3]);
+			  shader[vr_shader_id]->setLocalParam(11, abcd[0], abcd[1], abcd[2], abcd[3]);
 			  vr->planes_[2]->get(abcd);
-			  shader[vr_cmode]->setLocalParam(12, abcd[0], abcd[1], abcd[2], abcd[3]);
+			  shader[vr_shader_id]->setLocalParam(12, abcd[0], abcd[1], abcd[2], abcd[3]);
 			  vr->planes_[3]->get(abcd);
-			  shader[vr_cmode]->setLocalParam(13, abcd[0], abcd[1], abcd[2], abcd[3]);
+			  shader[vr_shader_id]->setLocalParam(13, abcd[0], abcd[1], abcd[2], abcd[3]);
 			  vr->planes_[4]->get(abcd);
-			  shader[vr_cmode]->setLocalParam(14, abcd[0], abcd[1], abcd[2], abcd[3]);
+			  shader[vr_shader_id]->setLocalParam(14, abcd[0], abcd[1], abcd[2], abcd[3]);
 			  vr->planes_[5]->get(abcd);
-			  shader[vr_cmode]->setLocalParam(15, abcd[0], abcd[1], abcd[2], abcd[3]);
+			  shader[vr_shader_id]->setLocalParam(15, abcd[0], abcd[1], abcd[2], abcd[3]);
 
 			  //bind depth texture for rendering shadows
-			  if (vr_cmode == 2)
+			  if (vr_cmode == FLV_CTYPE_DEPTH)
 			  {
 				  if (blend_num_bits_ > 8)
 					  vr->tex_2d_dmap_ = blend_tex_id_;
@@ -1372,7 +1386,7 @@ namespace FLIVR
 			  }
 
 			  GLint filter;
-			  if (intp)
+			  if (intp && vr_cmode != FLV_CTYPE_INDEX)
 				  filter = GL_LINEAR;
 			  else
 				  filter = GL_NEAREST;
@@ -1399,7 +1413,7 @@ namespace FLIVR
 			  glEnd();
 
 			  //release depth texture for rendering shadows
-			  if (vr_cmode == 2)
+			  if (vr_cmode == FLV_CTYPE_DEPTH)
 				  vr->release_texture(4, GL_TEXTURE_2D);
 
 			  glMatrixMode(GL_MODELVIEW);
@@ -1408,7 +1422,7 @@ namespace FLIVR
 
 		  glFinish();
 
-		  if (blend_slices_ && colormap_mode_!=2)
+		  if (blend_slices_ && colormap_mode_!=FLV_CTYPE_DEPTH)
 		  {
 			  //set buffer back
 			  glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -1425,10 +1439,10 @@ namespace FLIVR
 
 			  glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
 
-			  glDrawBuffers(used_colortype[3] ? 2 : 1, draw_buffers);
+			  glDrawBuffers(used_colortype[FLV_CTYPE_INDEX] ? 2 : 1, draw_buffers);
 
 			  FragmentProgram* img_shader = nullptr;
-			  if (used_colortype[3])
+			  if (used_colortype[FLV_CTYPE_INDEX])
 			  {
 				  img_shader = vr_list_[0]->m_img_shader_factory.shader(IMG_SHDR_BLEND_ID_COLOR_FOR_DEPTH_MODE);
 				  if (img_shader)
@@ -1460,7 +1474,7 @@ namespace FLIVR
 				  glBlendFunci(0, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 			  else if (TextureRenderer::update_order_ == 1)
 				  glBlendFunci(0, GL_ONE_MINUS_DST_ALPHA, GL_ONE);
-			  if (used_colortype[3]) glDisablei(GL_BLEND, 1);
+			  if (used_colortype[FLV_CTYPE_INDEX]) glDisablei(GL_BLEND, 1);
 			  //draw
 			  glBegin(GL_QUADS);
 			  {
@@ -1485,7 +1499,7 @@ namespace FLIVR
 			  glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 			  glFinish();
-		  }//if (blend_slices_ && colormap_mode_!=2)
+		  }//if (blend_slices_ && colormap_mode_!=FLV_CTYPE_DEPTH)
 
 		  vector<TextureBrick *>::iterator ite = cur_brs.begin();
 		  while (ite != cur_brs.end())
@@ -1523,7 +1537,7 @@ namespace FLIVR
          TextureRenderer::set_done_update_loop(true);
       }
 
-	  if (used_colortype[3])
+	  if (used_colortype[FLV_CTYPE_INDEX])
 	  {
 		  if(glIsTexture(label_tex_id_))
 		  {
@@ -1572,6 +1586,8 @@ namespace FLIVR
 			  sh->release();
 	  }
 
+	  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
       //release texture
       glActiveTexture(GL_TEXTURE0);
       glBindTexture(GL_TEXTURE_3D, 0);
@@ -1608,7 +1624,7 @@ namespace FLIVR
 
          FragmentProgram* img_shader = 0;
 
-         if (noise_red_ && colormap_mode_!=2)
+         if (noise_red_ && colormap_mode_!=FLV_CTYPE_DEPTH)
          {
             //FILTERING/////////////////////////////////////////////////////////////////
             if (!glIsTexture(filter_tex_id_))
@@ -1671,6 +1687,9 @@ namespace FLIVR
             if (img_shader && img_shader->valid())
                img_shader->release();
 
+			glBindTexture(GL_TEXTURE_2D, 0);
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
             //
             glBindFramebuffer(GL_FRAMEBUFFER, blend_framebuffer_);
 
@@ -1721,7 +1740,7 @@ namespace FLIVR
          else if (TextureRenderer::get_update_order() == 1)
             glBlendFunc(GL_ONE_MINUS_DST_ALPHA, GL_ONE);
 
-         if (noise_red_ && colormap_mode_!=2)
+		 if (noise_red_ && colormap_mode_!=FLV_CTYPE_DEPTH)
          {
             img_shader = vr_list_[0]->
                m_img_shader_factory.shader(IMG_SHDR_FILTER_SHARPEN);
@@ -1751,7 +1770,7 @@ namespace FLIVR
          }
          glEnd();
 
-         if (noise_red_ && colormap_mode_!=2)
+		 if (noise_red_ && colormap_mode_!=FLV_CTYPE_DEPTH)
          {
             if (img_shader && img_shader->valid())
                img_shader->release();
