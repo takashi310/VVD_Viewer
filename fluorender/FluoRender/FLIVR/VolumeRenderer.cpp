@@ -468,6 +468,8 @@ namespace FLIVR
 
 		Ray view_ray = compute_view();
 
+		set_interactive_mode(adaptive_ && interactive_mode_p);
+
 		vector<TextureBrick*> *bricks = 0;
 		if (mem_swap_ && interactive_)
 			bricks = tex_->get_closest_bricks(

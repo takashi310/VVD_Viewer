@@ -2944,6 +2944,7 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, int peel, bool ma
       glFramebufferTexture2D(GL_FRAMEBUFFER,
             GL_COLOR_ATTACHMENT0,
             GL_TEXTURE_2D, m_tex, 0);
+	  glBindFramebuffer(GL_FRAMEBUFFER, 0);
    }
    if (TextureRenderer::get_mem_swap())
    {
@@ -2964,6 +2965,7 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, int peel, bool ma
          glFramebufferTexture2D(GL_FRAMEBUFFER,
                GL_COLOR_ATTACHMENT0,
                GL_TEXTURE_2D, m_tex_temp, 0);
+		 glBindFramebuffer(GL_FRAMEBUFFER, 0);
       }
    }
    if (use_tex_wt2)
@@ -3072,6 +3074,7 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, int peel, bool ma
                   GL_COLOR_ATTACHMENT0,
                   GL_TEXTURE_2D, m_tex_wt2, 0);
             tex = m_tex_wt2;
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
          }
          if (vd->GetBlendMode()!=2)
          {
@@ -3096,6 +3099,7 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, int peel, bool ma
             glFramebufferTexture2D(GL_FRAMEBUFFER,
                   GL_COLOR_ATTACHMENT0,
                   GL_TEXTURE_2D, m_tex, 0);
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
          }
       }
    }
