@@ -6,10 +6,14 @@
 #include <wx/txtstrm.h>
 #include <wx/url.h>
 #include <wx/file.h>
+#include <wx/stdpaths.h>
 #include "utility.h"
 #include <sstream>
 #include <fstream>
-#include <wx/stdpaths.h>
+#include <algorithm>
+#include <set>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #ifdef _WIN32
 #  undef min
@@ -1182,31 +1186,23 @@ Texture* VolumeData::GetTexture()
 	return m_tex;
 }
 
+void VolumeData::SetMatrices(glm::mat4 &mv_mat,
+	glm::mat4 &proj_mat, glm::mat4 &tex_mat)
+{
+	glm::mat4 scale_mv = glm::scale(mv_mat, glm::vec3(m_sclx, m_scly, m_sclz));
+	if (m_vr)
+		m_vr->set_matrices(scale_mv, proj_mat, tex_mat);
+}
+
 //draw volume
 void VolumeData::Draw(bool ortho, bool interactive, double zoom, bool intp, double sampling_frq_fac)
 {
-	glPushMatrix();
-	glScalef(m_sclx, m_scly, m_sclz);
-
-	//takashi_debug
-	//ofstream ofs;
-	//double mvmat[16];
-	//ofs.open("matDraw.txt");
-	//glGetDoublev(GL_MODELVIEW_MATRIX, mvmat);
-	//for(int n = 0; n < 16; n++)ofs << mvmat[n] << endl;
-	//ofs << endl;
-	//ofs << m_sclx << endl;
-	//ofs << m_scly << endl;
-	//ofs << m_sclz << endl;
-	//ofs.close();
-
 	if (m_vr)
 	{
 		m_vr->draw(m_test_wiref, interactive, ortho, zoom, intp, m_stream_mode, sampling_frq_fac);
 	}
 	if (m_draw_bounds)
 		DrawBounds();
-	glPopMatrix();
 }
 
 void VolumeData::DrawBounds()
@@ -1245,24 +1241,21 @@ void VolumeData::DrawMask(int type, int paint_mode, int hr_mode,
 						  double ini_thresh, double gm_falloff, double scl_falloff, double scl_translate,
 						  double w2d, double bins, bool ortho)
 {
-	glPushMatrix();
-	glScalef(m_sclx, m_scly, m_sclz);
 	if (m_vr)
 	{
 		m_vr->set_2d_mask(m_2d_mask);
 		m_vr->set_2d_weight(m_2d_weight1, m_2d_weight2);
-		m_vr->draw_mask(type, paint_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, scl_translate, w2d, bins, ortho);
+		m_vr->draw_mask(type, paint_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, scl_translate, w2d, bins, ortho, false);
 	}
-	glPopMatrix();
 }
 
 //draw label (create the label)
 //type: 0-initialize; 1-maximum intensity filtering
 //mode: 0-normal; 1-posterized; 2-copy values; 3-poster, copy
-void VolumeData::DrawLabel(int type, int mode, double thresh)
+void VolumeData::DrawLabel(int type, int mode, double thresh, double gm_falloff)
 {
 	if (m_vr)
-		m_vr->draw_label(type, mode, thresh);
+		m_vr->draw_label(type, mode, thresh, gm_falloff);
 }
 
 //calculation
@@ -1584,6 +1577,20 @@ void VolumeData::GetColormapValues(double &low, double &high)
 	high = m_colormap_hi_value;
 }
 
+void VolumeData::SetColormap(int value)
+{
+	m_colormap = value;
+	if (m_vr)
+		m_vr->set_colormap(m_colormap);
+}
+
+void VolumeData::SetColormapProj(int value)
+{
+	m_colormap_proj = value;
+	if (m_vr)
+		m_vr->set_colormap_proj(m_colormap_proj);
+}
+
 //resolution  scaling and spacing
 void VolumeData::GetResolution(int &res_x, int &res_y, int &res_z)
 {
@@ -1749,6 +1756,13 @@ void VolumeData::SetLegend(bool val)
 bool VolumeData::GetLegend()
 {
 	return m_legend;
+}
+
+void VolumeData::SetFog(bool use_fog,
+	double fog_intensity, double fog_start, double fog_end)
+{
+	if (m_vr)
+		m_vr->set_fog(use_fog, fog_intensity, fog_start, fog_end);
 }
 
 VolumeData* VolumeData::CopyLevel(int lv)
@@ -2002,77 +2016,61 @@ MeshRenderer* MeshData::GetMR()
 	return m_mr;
 }
 
+void MeshData::SetMatrices(glm::mat4 &mv_mat, glm::mat4 &proj_mat)
+{
+	if (m_mr)
+	{
+		glm::mat4 mv_temp;
+		mv_temp = glm::translate(
+			mv_mat, glm::vec3(
+		m_trans[0]+m_center.x(),
+		m_trans[1]+m_center.y(),
+		m_trans[2]+m_center.z()));
+		mv_temp = glm::rotate(
+			mv_temp, float(m_rot[0]),
+			glm::vec3(1.0, 0.0, 0.0));
+		mv_temp = glm::rotate(
+			mv_temp, float(m_rot[1]),
+			glm::vec3(0.0, 1.0, 0.0));
+		mv_temp = glm::rotate(
+			mv_temp, float(m_rot[2]),
+			glm::vec3(0.0, 0.0, 1.0));
+		mv_temp = glm::scale(mv_temp,
+			glm::vec3(float(m_scale[0]), float(m_scale[1]), float(m_scale[2])));
+		mv_temp = glm::translate(mv_temp,
+			glm::vec3(-m_center.x(), -m_center.y(), -m_center.z()));
+
+		m_mr->SetMatrices(mv_temp, proj_mat);
+	}
+}
+
 void MeshData::Draw(int peel)
 {
 	if (!m_mr)
 		return;
-	glPushMatrix();
-	glTranslated(m_trans[0]+m_center.x(), 
-				 m_trans[1]+m_center.y(), 
-				 m_trans[2]+m_center.z());
-	glRotated(m_rot[0], 1, 0, 0);
-	glRotated(m_rot[1], 0, 1, 0);
-	glRotated(m_rot[2], 0, 0, 1);
-	glScaled(m_scale[0], m_scale[1], m_scale[2]);
-	glTranslated(-m_center.x(), -m_center.y(), -m_center.z());
 
-	if (m_light)
-	{
-		glEnable(GL_LIGHTING);
-		glEnable(GL_LIGHT0);
-		glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-	}
+	glDisable(GL_CULL_FACE);
 	m_mr->set_depth_peel(peel);
-	//glEnable(GL_MULTISAMPLE);
 	m_mr->draw();
-	//glDisable(GL_MULTISAMPLE);
-	if (m_light)
-		glDisable(GL_LIGHTING);
-
 	if (m_draw_bounds && (peel==4 || peel==5))
 		DrawBounds();
-	glPopMatrix();
+	glEnable(GL_CULL_FACE);
 }
 
 void MeshData::DrawBounds()
 {
-	glPushAttrib(GL_ENABLE_BIT);
-	glDisable(GL_LIGHTING);
-	glDisable(GL_TEXTURE_2D);
-	glDisable(GL_FOG);
-	//glDisable(GL_BLEND);
-	glColor4d(m_mat_diff.r(), m_mat_diff.g(), m_mat_diff.b(), 1.0);
+	if (!m_mr)
+		return;
 
-	//glBegin(GL_LINE_LOOP);
-	//	glVertex3f(m_bounds.min().x(), m_bounds.min().y(), m_bounds.min().z());
-	//	glVertex3f(m_bounds.max().x(), m_bounds.min().y(), m_bounds.min().z());
-	//	glVertex3f(m_bounds.max().x(), m_bounds.max().y(), m_bounds.min().z());
-	//	glVertex3f(m_bounds.min().x(), m_bounds.max().y(), m_bounds.min().z());
-	//glEnd();
-	//glBegin(GL_LINE_LOOP);
-	//	glVertex3f(m_bounds.min().x(), m_bounds.min().y(), m_bounds.max().z());
-	//	glVertex3f(m_bounds.max().x(), m_bounds.min().y(), m_bounds.max().z());
-	//	glVertex3f(m_bounds.max().x(), m_bounds.max().y(), m_bounds.max().z());
-	//	glVertex3f(m_bounds.min().x(), m_bounds.max().y(), m_bounds.max().z());
-	//glEnd();
-	//glBegin(GL_LINES);
-	//	glVertex3f(m_bounds.min().x(), m_bounds.min().y(), m_bounds.min().z());
-	//	glVertex3f(m_bounds.min().x(), m_bounds.min().y(), m_bounds.max().z());
-	//	glVertex3f(m_bounds.max().x(), m_bounds.min().y(), m_bounds.min().z());
-	//	glVertex3f(m_bounds.max().x(), m_bounds.min().y(), m_bounds.max().z());
-	//	glVertex3f(m_bounds.max().x(), m_bounds.max().y(), m_bounds.min().z());
-	//	glVertex3f(m_bounds.max().x(), m_bounds.max().y(), m_bounds.max().z());
-	//	glVertex3f(m_bounds.min().x(), m_bounds.max().y(), m_bounds.min().z());
-	//	glVertex3f(m_bounds.min().x(), m_bounds.max().y(), m_bounds.max().z());
-	//glEnd();
+	m_mr->draw_wireframe();
+}
 
-	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-	glLineWidth(1.5);
-	m_mr->draw(false, false);
-	glLineWidth(1.0);
-	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+void MeshData::DrawInt(unsigned int name)
+{
+	if (!m_mr)
+		return;
 
-	glPopAttrib();
+	m_mr->draw_integer(name);
 }
 
 //lighting
@@ -2084,6 +2082,19 @@ void MeshData::SetLighting(bool bVal)
 bool MeshData::GetLighting()
 {
 	return m_light;
+}
+
+//fog
+void MeshData::SetFog(bool bVal,
+	double fog_intensity, double fog_start, double fog_end)
+{
+	m_fog = bVal;
+	if (m_mr) m_mr->set_fog(m_fog, fog_intensity, fog_start, fog_end);
+}
+
+bool MeshData::GetFog()
+{
+	return m_fog;
 }
 
 void MeshData::SetMaterial(Color& amb, Color& diff, Color& spec, 
@@ -2116,7 +2127,6 @@ void MeshData::SetMaterial(Color& amb, Color& diff, Color& spec,
 			m_data->materials[i].ambient[3] = m_mat_alpha;
 			m_data->materials[i].diffuse[3] = m_mat_alpha;
 		}
-		m_mr->update();
 	}
 }
 
@@ -2131,7 +2141,6 @@ void MeshData::SetColor(Color &color, int type)
 			m_data->materials[0].ambient[0] = m_mat_amb.r();
 			m_data->materials[0].ambient[1] = m_mat_amb.g();
 			m_data->materials[0].ambient[2] = m_mat_amb.b();
-			m_mr->update();
 		}
 		break;
 	case MESH_COLOR_DIFF:
@@ -2141,7 +2150,6 @@ void MeshData::SetColor(Color &color, int type)
 			m_data->materials[0].diffuse[0] = m_mat_diff.r();
 			m_data->materials[0].diffuse[1] = m_mat_diff.g();
 			m_data->materials[0].diffuse[2] = m_mat_diff.b();
-			m_mr->update();
 		}
 		break;
 	case MESH_COLOR_SPEC:
@@ -2151,7 +2159,6 @@ void MeshData::SetColor(Color &color, int type)
 			m_data->materials[0].specular[0] = m_mat_spec.r();
 			m_data->materials[0].specular[1] = m_mat_spec.g();
 			m_data->materials[0].specular[2] = m_mat_spec.b();
-			m_mr->update();
 		}
 		break;
 	}
@@ -2179,7 +2186,7 @@ void MeshData::SetFloat(double &value, int type)
 				m_data->materials[i].diffuse[3] = m_mat_alpha;
 				m_data->materials[i].specular[3] = m_mat_alpha;
 			}
-			m_mr->update();
+			if (m_mr) m_mr->set_alpha(value);
 		}
 		break;
 	}
@@ -2523,15 +2530,12 @@ void Annotations::Clear()
 }
 
 //(nx, ny): window size
-void Annotations::Draw(bool persp)
+void Annotations::Draw(bool persp, glm::mat4 mv_mat, glm::mat4 proj_mat)
 {
-	double matrix[16];
 	Transform mv;
 	Transform p;
-	glGetDoublev(GL_MODELVIEW_MATRIX, matrix);
-	mv.set(matrix);
-	glGetDoublev(GL_PROJECTION_MATRIX, matrix);
-	p.set(matrix);
+	mv.set(glm::value_ptr(mv_mat));
+	p.set(glm::value_ptr(proj_mat));
 
 	beginRenderText(2, 2, true);
 	for (int i=0; i<(int)m_alist.size(); i++)
@@ -3104,16 +3108,13 @@ void Ruler::Clear()
 	m_ruler.clear();
 }
 
-void Ruler::Draw(bool persp, int nx, int ny, vector<AnnotationDB> annotationdb, double spcx, double spcy, double spcz)
+void Ruler::Draw(bool persp, int nx, int ny, glm::mat4 mv_mat, glm::mat4 proj_mat, vector<AnnotationDB> annotationdb, double spcx, double spcy, double spcz)
 {
 	double asp = (double)nx / (double)ny;
-	double matrix[16];
 	Transform mv;
 	Transform p;
-	glGetDoublev(GL_MODELVIEW_MATRIX, matrix);
-	mv.set(matrix);
-	glGetDoublev(GL_PROJECTION_MATRIX, matrix);
-	p.set(matrix);
+	mv.set(glm::value_ptr(mv_mat));
+	p.set(glm::value_ptr(proj_mat));
 
 	beginRenderText(2, 2, true);//glOrthoÇ≈ç∂è„Ç™(0,0)âEâ∫Ç™(2,2)Ç…Ç»ÇÈ
 	for (int i=0; i<(int)m_ruler.size(); i++)
@@ -3436,14 +3437,22 @@ int TraceGroup::Load(wxString &filename)
 	return result;
 }
 
-void TraceGroup::Draw()
+void TraceGroup::Draw(glm::mat4 mv_mat, glm::mat4 proj_mat)
 {
 	if (m_ghost_num <= 0)
 		return;
 
+	glMatrixMode(GL_MODELVIEW_MATRIX);
+	glPushMatrix();
+	glLoadIdentity();
+	glMultMatrixf(glm::value_ptr(mv_mat));
+	glMatrixMode(GL_PROJECTION_MATRIX);
+	glPushMatrix();
+	glLoadIdentity();
+	glMultMatrixf(glm::value_ptr(proj_mat));
+	
 	glPushAttrib( GL_TEXTURE_BIT | GL_DEPTH_TEST | GL_LIGHTING | GL_COLOR_BUFFER_BIT);
 	glDisable(GL_TEXTURE_2D);
-	glDisable(GL_LIGHTING);
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
@@ -3576,6 +3585,11 @@ void TraceGroup::Draw()
 	}
 
 	glPopAttrib();
+
+	glMatrixMode(GL_MODELVIEW_MATRIX);
+	glPopMatrix();
+	glMatrixMode(GL_PROJECTION_MATRIX);
+	glPopMatrix();
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3853,6 +3867,26 @@ void DataGroup::SetColormapValues(double low, double high)
 	}
 }
 
+void DataGroup::SetColormap(int value)
+{
+	for (int i=0; i<GetVolumeNum(); i++)
+	{
+		VolumeData* vd = GetVolumeData(i);
+		if (vd)
+			vd->SetColormap(value);
+	}
+}
+
+void DataGroup::SetColormapProj(int value)
+{
+	for (int i=0; i<GetVolumeNum(); i++)
+	{
+		VolumeData* vd = GetVolumeData(i);
+		if (vd)
+			vd->SetColormapProj(value);
+	}
+}
+
 void DataGroup::SetShading(bool shading)
 {
 	for (int i=0; i<GetVolumeNum(); i++)
@@ -3986,6 +4020,7 @@ m_vol_xsp(1.0),
 m_vol_ysp(1.0),
 m_vol_zsp(2.5),
 m_vol_lum(1.0),
+m_vol_cmp(0),
 m_vol_lcm(0.0),
 m_vol_hcm(1.0),
 m_vol_eap(true),
@@ -4016,6 +4051,7 @@ m_override_vox(true)
 	wxFileConfig fconfig(is);
 
 	double val;
+	int ival;
 	if (fconfig.Read("extract_boundary", &val))
 		m_vol_exb = val;
 	if (fconfig.Read("gamma", &val))
@@ -4044,6 +4080,8 @@ m_override_vox(true)
 		m_vol_zsp = val;
 	if (fconfig.Read("luminance", &val))
 		m_vol_lum = val;
+	if (fconfig.Read("colormap", &ival))
+		m_vol_cmp = ival;
 	if (fconfig.Read("colormap_low", &val))
 		m_vol_lcm = val;
 	if (fconfig.Read("colormap_hi", &val))
@@ -4138,6 +4176,7 @@ void DataManager::SetVolumeDefault(VolumeData* vd)
 		vd->SetMaterial(m_vol_lsh, diff, spec, m_vol_hsh);
 		if (!vd->GetSpcFromFile())
 			vd->SetSpacings(m_vol_xsp, m_vol_ysp, m_vol_zsp);
+		vd->SetColormap(m_vol_cmp);
 		vd->SetColormapValues(m_vol_lcm, m_vol_hcm);
 
 		vd->SetEnableAlpha(m_vol_eap);

@@ -1,3 +1,24 @@
+/*
+For more information, please see: http://software.sci.utah.edu
+The MIT License
+Copyright (c) 2014 Scientific Computing and Imaging Institute,
+University of Utah.
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+*/
 #include "MPropView.h"
 #include "VRenderFrame.h"
 #include <wx/valnum.h>
@@ -50,7 +71,7 @@ m_vrv(0)
 	wxIntegerValidator<unsigned int> vald_int;
 
 	st = new wxStaticText(this, 0, " Transparency: ",
-		wxDefaultPosition, wxSize(80, 20));
+		wxDefaultPosition, wxSize(100, 20));
 	m_alpha_sldr = new wxSlider(this, ID_alpha_sldr, 255, 0, 255, 
 		wxDefaultPosition, wxSize(200, 20), wxSL_HORIZONTAL);
 	m_alpha_text = new wxTextCtrl(this, ID_alpha_text, "1.00",
@@ -61,7 +82,7 @@ m_vrv(0)
 	sizer_1->Add(m_alpha_text, 0, wxALIGN_CENTER, 0);
 
 	m_shadow_chk = new wxCheckBox(this, ID_shadow_chk, "Shadow: ",
-		wxDefaultPosition, wxSize(80, 20));
+		wxDefaultPosition, wxSize(100, 20));
 	m_shadow_sldr = new wxSlider(this, ID_shadow_sldr, 60, 0, 100,
 		wxDefaultPosition, wxSize(200, 20), wxSL_HORIZONTAL);
 	m_shadow_text = new wxTextCtrl(this, ID_shadow_text, "0.60",
@@ -81,46 +102,40 @@ m_vrv(0)
 		wxVERTICAL);
 
 	st = new wxStaticText(this, 0, " Diffuse Color: ",
-		wxDefaultPosition, wxSize(100, 20));
+		wxDefaultPosition, wxSize(110, 20));
 	m_diff_picker = new wxColourPickerCtrl(this, ID_diff_picker, *wxWHITE, 
-		wxDefaultPosition, wxSize(180, 20), wxCLRP_USE_TEXTCTRL);
-	sizer_4->Add(20, 5, 0);
-	sizer_4->Add(st, 0, wxALIGN_CENTER, 0);
+		wxDefaultPosition, wxSize(180, 30));
+	sizer_4->Add(st, 0, wxALIGN_LEFT, 0);
 	sizer_4->Add(m_diff_picker, 0, wxALIGN_CENTER, 0);
 
 	st = new wxStaticText(this, 0, " Specular Color: ",
-		wxDefaultPosition, wxSize(100, 20));
+		wxDefaultPosition, wxSize(110, 20));
 	m_spec_picker = new wxColourPickerCtrl(this, ID_spec_picker, *wxWHITE, 
-		wxDefaultPosition, wxSize(180, 20), wxCLRP_USE_TEXTCTRL);
-	sizer_5->Add(20, 5, 0);
-	sizer_5->Add(st, 0, wxALIGN_CENTER, 0);
+		wxDefaultPosition, wxSize(180, 30));
+	sizer_5->Add(st, 0, wxALIGN_LEFT, 0);
 	sizer_5->Add(m_spec_picker, 0, wxALIGN_CENTER, 0);
 
 	st = new wxStaticText(this, 0, " Shininess: ",
-		wxDefaultPosition, wxSize(80, 20));
+		wxDefaultPosition, wxSize(100, 20));
 	m_shine_sldr = new wxSlider(this, ID_shine_sldr, 30, 0, 128, 
 		wxDefaultPosition, wxSize(200, 20), wxSL_HORIZONTAL);
 	m_shine_text = new wxTextCtrl(this, ID_shine_text, "30",
 		wxDefaultPosition, wxSize(50, 20), 0, vald_int);
-	sizer_6->Add(20, 5, 0);
 	sizer_6->Add(st, 0, wxALIGN_CENTER, 0);
 	sizer_6->Add(m_shine_sldr, 0, wxALIGN_CENTER, 0);
 	sizer_6->Add(m_shine_text, 0, wxALIGN_CENTER, 0);
 
-	group1->Add(sizer_4, 0, wxALIGN_CENTER);
-	group1->Add(sizer_5, 0, wxALIGN_CENTER);
-	group1->Add(sizer_6, 0, wxALIGN_CENTER);
+	group1->Add(sizer_4, 0, wxALIGN_LEFT);
+	group1->Add(sizer_5, 0, wxALIGN_LEFT);
+	group1->Add(sizer_6, 0, wxALIGN_LEFT);
 
-	sizer_v1->Add(sizer_1, 0, wxALIGN_LEFT);
-	sizer_v1->Add(sizer_2, 0, wxALIGN_LEFT);
-	sizer_v1->Add(sizer_3, 0, wxALIGN_LEFT);
 	sizer_v1->Add(group1, 0, wxALIGN_LEFT);
 
 	wxBoxSizer* sizer_v2 = new wxBoxSizer(wxVERTICAL);
 
 	wxBoxSizer* sizer_7 = new wxBoxSizer(wxHORIZONTAL);
 	st = new wxStaticText(this, 0, " Scaling: ",
-		wxDefaultPosition, wxSize(80, 20));
+		wxDefaultPosition, wxSize(100, 20));
 	m_scale_sldr = new wxSlider(this, ID_scale_sldr, 100, 50, 200, 
 		wxDefaultPosition, wxSize(200, 20), wxSL_HORIZONTAL);
 	m_scale_text = new wxTextCtrl(this, ID_scale_text, "1.00",
@@ -133,7 +148,7 @@ m_vrv(0)
 	//size limiter
 	wxBoxSizer* sizer_8 = new wxBoxSizer(wxHORIZONTAL);
 	m_size_chk = new wxCheckBox(this, ID_size_chk, " Size limit: ",
-		wxDefaultPosition, wxSize(80, 20));
+		wxDefaultPosition, wxSize(100, 20));
 	m_size_sldr = new wxSlider(this, ID_size_sldr, 50, 0, 250,
 		wxDefaultPosition, wxSize(200, 20), wxSL_HORIZONTAL);
 	m_size_text = new wxTextCtrl(this, ID_size_text, "50",
@@ -144,6 +159,9 @@ m_vrv(0)
 	sizer_8->Add(m_size_text, 0, wxALIGN_CENTER);
 
 	sizer_v2->Add(5,5);
+	sizer_v2->Add(sizer_1, 0, wxALIGN_LEFT);
+	sizer_v2->Add(sizer_2, 0, wxALIGN_LEFT);
+	sizer_v2->Add(sizer_3, 0, wxALIGN_LEFT);
 	sizer_v2->Add(sizer_7, 0, wxALIGN_LEFT);
 	sizer_v2->Add(sizer_8, 0, wxALIGN_LEFT);
 
@@ -249,6 +267,8 @@ void MPropView::OnDiffChange(wxColourPickerEvent& event)
 	if (m_md)
 	{
 		m_md->SetColor(color, MESH_COLOR_DIFF);
+        Color amb = color * 0.3;
+		m_md->SetColor(amb, MESH_COLOR_AMB);
 		RefreshVRenderViews(true);
 	}
 }

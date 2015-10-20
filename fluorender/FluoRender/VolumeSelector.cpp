@@ -23,6 +23,7 @@ VolumeSelector::VolumeSelector() :
    m_w2d(0.0),
    m_iter_label(1),
    m_label_thresh(0.0),
+   m_label_falloff(1.0),
    m_min_voxels(0.0),
    m_max_voxels(0.0),
    m_annotations(0),
@@ -156,12 +157,12 @@ void VolumeSelector::Label(int mode)
    m_vd->AddEmptyLabel(label_mode);
 
    //apply ids to the label volume
-   m_vd->DrawLabel(0, mode, m_label_thresh);
+   m_vd->DrawLabel(0, mode, m_label_thresh, m_label_falloff);
 
    //filter the label volume by maximum intensity filtering
    for (int i=0; i<m_iter_label; i++)
    {
-      m_vd->DrawLabel(1, mode, m_label_thresh);
+      m_vd->DrawLabel(1, mode, m_label_thresh, m_label_falloff);
       if (m_prog_diag)
       {
          m_progress++;
@@ -170,10 +171,11 @@ void VolumeSelector::Label(int mode)
    }
 }
 
-int VolumeSelector::CompAnalysis(double min_voxels, double max_voxels, double thresh, bool select, bool gen_ann)
+int VolumeSelector::CompAnalysis(double min_voxels, double max_voxels, double thresh, double falloff, bool select, bool gen_ann)
 {
    int return_val = 0;
    m_label_thresh = thresh;
+   m_label_falloff = falloff;
    if (!m_vd || m_vd->isBrxml())
       return return_val;
 
@@ -819,6 +821,8 @@ void VolumeSelector::GenerateAnnotations(bool use_sel)
    memo += "\nSettings:\n";
    double threshold = m_label_thresh * m_vd->GetMaxValue();
    memo += "Threshold: " + wxString::Format("%f", threshold) + "\n";
+   double falloff = m_label_falloff * m_vd->GetMaxValue();
+   memo += "Falloff: " + wxString::Format("%f", falloff) + "\n";
    wxString str;
    if (use_sel)
       str = "Yes";

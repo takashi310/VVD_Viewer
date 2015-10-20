@@ -746,6 +746,11 @@ class VRenderGLView: public wxGLCanvas
          //depth peeling buffers
          vector<GLuint> m_dp_fbo_list;
          vector<GLuint> m_dp_tex_list;
+		 //vert buffer
+		 GLuint m_quad_vbo, m_quad_vao;
+		 GLuint m_misc_vbo, m_misc_ibo, m_misc_vao;
+		 //mesh picking buffer
+		 GLuint m_fbo_pick, m_tex_pick, m_tex_pick_depth;
 
          //camera controls
          bool m_persp;
@@ -797,9 +802,11 @@ class VRenderGLView: public wxGLCanvas
          int m_peeling_layers;
          bool m_blend_slices;
 
-         //fog
-         bool m_use_fog;
-         double m_fog_intensity;
+		 //fog
+		 bool m_use_fog;
+		 double m_fog_intensity;
+		 double m_fog_start;
+		 double m_fog_end;
 
          //movie properties
          double m_init_angle;
@@ -924,6 +931,11 @@ class VRenderGLView: public wxGLCanvas
 
 		 bool m_int_res;
 
+		 //glm matrices
+		 glm::mat4 m_mv_mat;
+		 glm::mat4 m_proj_mat;
+		 glm::mat4 m_tex_mat;
+
    private:
 #ifdef _WIN32
          //wacom tablet
@@ -945,7 +957,10 @@ class VRenderGLView: public wxGLCanvas
          void DrawGradBg();
          void DrawInfo(int nx, int ny);
 
-         //different modes
+		 //depth
+		 double CalcZ(double z);
+		 void CalcFogRange();
+		 //different modes
          void Draw();//draw volumes only
          void DrawDP();//draw volumes and meshes with depth peeling
          //mesh and volume
@@ -1014,8 +1029,8 @@ class VRenderGLView: public wxGLCanvas
          //get mouse point in 3D
          //mode: 0-maximum with original value; 1-maximum with transfered value; 2-accumulated with original value; 3-accumulated with transfered value
          double GetPointVolume(Point &mp, int mx, int my, VolumeData* vd, int mode, bool use_transf, double thresh = 0.5);
-         double GetPointVolumeBox(Point &mp, int mx, int my, VolumeData* vd);
-         double GetPointPlane(Point &mp, int mx, int my, Point *planep=0);
+         double GetPointVolumeBox(Point &mp, int mx, int my, VolumeData* vd, bool calc_mats=true);
+         double GetPointPlane(Point &mp, int mx, int my, Point *planep=0, bool calc_mats=true);
          Point* GetEditingRulerPoint(int mx, int my);
 		 //added by takashi
 		 bool SwitchRulerBalloonVisibility_Point(int mx, int my);
@@ -1029,6 +1044,8 @@ class VRenderGLView: public wxGLCanvas
          //WXLRESULT MSWWindowProc(WXUINT message, WXWPARAM wParam, WXLPARAM lParam);
 
 		 void switchLevel(VolumeData *vd);
+
+		 void DrawViewQuad();
 
          DECLARE_EVENT_TABLE();
 

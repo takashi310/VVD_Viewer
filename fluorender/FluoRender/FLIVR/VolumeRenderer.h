@@ -90,6 +90,10 @@ namespace FLIVR
 		{colormap_mode_ = mode;}
 		void set_colormap_values(double low, double hi)
 		{colormap_low_value_ = low; colormap_hi_value_ = hi;}
+		void set_colormap(int value)
+		{colormap_ = value;}
+		void set_colormap_proj(int value)
+		{colormap_proj_ = value;}
 
 		//solid
 		void set_solid(bool mode)
@@ -117,13 +121,15 @@ namespace FLIVR
 		void set_depth_peel(int dp) {depth_peel_ = dp;}
 		int get_depth_peel() {return depth_peel_;}
 
+		double compute_dt_fac(double sampling_frq_fac=-1.0, double *rate_fac=nullptr);
+
 		//draw
 		virtual void draw(bool draw_wireframe_p, 
 			bool interactive_mode_p, 
 			bool orthographic_p = false,
 			double zoom = 1.0, bool intp = true,
 			int mode = 0, double sampling_frq_fac = -1.0);
-		void draw_wireframe(bool orthographic_p = false);
+		void draw_wireframe(bool orthographic_p = false, double sampling_frq_fac = -1.0);
 		void draw_volume(bool interactive_mode_p,
 			bool orthographic_p = false,
 			double zoom = 1.0, bool intp = true,
@@ -134,11 +140,11 @@ namespace FLIVR
 		//hr_mode (hidden removal): 0-none; 1-ortho; 2-persp
 		void draw_mask(int type, int paint_mode, int hr_mode,
 			double ini_thresh, double gm_falloff, double scl_falloff,
-			double scl_translate, double w2d, double bins, bool ortho);
+			double scl_translate, double w2d, double bins, bool ortho, bool estimate);
 		//generate the labeling assuming the mask is already generated
 		//type: 0-initialization; 1-maximum intensity filtering
 		//mode: 0-normal; 1-posterized
-		void draw_label(int type, int mode, double thresh); 
+		void draw_label(int type, int mode, double thresh, double gm_falloff); 
 
 		//calculation
 		void calculate(int type, VolumeRenderer* vr_a, VolumeRenderer* vr_b);
@@ -176,6 +182,18 @@ namespace FLIVR
 		void set_done_loop(bool done)
 		{for (int i=0; i<TEXTURE_RENDER_MODES; i++) done_loop_[i] = done;}
 
+		//estimated threshold
+		double get_estimated_thresh()
+		{ return est_thresh_; }
+
+		//set matrices
+		void set_matrices(glm::mat4 &mv_mat, glm::mat4 &proj_mat, glm::mat4 &tex_mat)
+		{ m_mv_mat = mv_mat; m_proj_mat = proj_mat; m_tex_mat = tex_mat; }
+
+		//fog
+		void set_fog(bool use_fog, double fog_intensity, double fog_start, double fog_end)
+		{ m_use_fog = use_fog; m_fog_intensity = fog_intensity; m_fog_start = fog_start; m_fog_end = fog_end; }
+
 		friend class MultiVolumeRenderer;
 
 	protected:
@@ -198,6 +216,8 @@ namespace FLIVR
 		int colormap_mode_;//0-normal; 1-rainbow; 2-depth; 3-index
 		double colormap_low_value_;
 		double colormap_hi_value_;
+		int colormap_;
+		int colormap_proj_;
 		//solid
 		bool solid_;
 		//adaptive
@@ -235,6 +255,15 @@ namespace FLIVR
 
 		//done loop
 		bool done_loop_[TEXTURE_RENDER_MODES];
+
+		//estimated threshold
+		double est_thresh_;
+
+		//fog
+		bool m_use_fog;
+		double m_fog_intensity;
+		double m_fog_start;
+		double m_fog_end;
 
 		//calculating scaling factor, etc
 		double CalcScaleFactor(double w, double h, double tex_w, double tex_h, double zoom);

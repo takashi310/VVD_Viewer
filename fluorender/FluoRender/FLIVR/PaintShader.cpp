@@ -53,6 +53,7 @@ namespace FLIVR {
 	"	float d = length(pos - center);\n" \
 	"	vec4 ctemp = d<loc0.z?vec4(1.0, 1.0, 1.0, 1.0):(d<loc0.w?vec4(0.5, 0.5, 0.5, 1.0):vec4(0.0, 0.0, 0.0, 1.0));\n" \
 	"	gl_FragColor = ctemp.r>c.r?ctemp:c;\n" \
+	"	gl_FragColor.a = gl_FragColor.r>0.1?0.5:0.0;\n" \
 	"}\n"
 
 	/*"	gl_FragColor = pow(c, loc0)*b;\n" \*/
@@ -69,7 +70,7 @@ namespace FLIVR {
 	{
 		string s;
 		if (emit(s)) return true;
-		program_ = new FragmentProgram(s);
+		program_ = new ShaderProgram(s);
 		return false;
 	}
 
@@ -95,7 +96,7 @@ namespace FLIVR {
 			delete shader_[i];
 	}
 
-	FragmentProgram* PaintShaderFactory::shader()
+	ShaderProgram* PaintShaderFactory::shader()
 	{
 		if(prev_shader_ >= 0)
 		{

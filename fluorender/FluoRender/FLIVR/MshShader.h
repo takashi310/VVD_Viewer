@@ -35,37 +35,48 @@
 namespace FLIVR
 {
 
-	class FragmentProgram;
+	class ShaderProgram;
 
 	class MshShader
 	{
 	public:
-		MshShader(bool fog, int peel, bool tex);
+		MshShader(int type,
+			int peel, bool tex,
+			bool fog, bool light);
 		~MshShader();
 
 		bool create();
 
-		inline bool fog() { return fog_; }
+		inline int type() { return type_; }
 		inline int peel() { return peel_; }
 		inline bool tex() { return tex_; }
+		inline bool fog() { return fog_; }
+		inline bool light() { return light_; }
 
-		inline bool match(bool fog, int peel, bool tex)
+		inline bool match(int type,
+			int peel, bool tex,
+			bool fog, bool light)
 		{ 
-			return (fog_ == fog && 
+			return (type_ == type &&
+					fog_ == fog && 
 					peel_ == peel &&
-					tex_ == tex); 
+					tex_ == tex &&
+					light_ == light); 
 		}
 
-		inline FragmentProgram* program() { return program_; }
+		inline ShaderProgram* program() { return program_; }
 
 	protected:
-		bool emit(std::string& s);
+		bool emit_v(std::string& s);
+		bool emit_f(std::string& s);
 
-		bool fog_;
+		int type_;	//0:normal; 1:integer
 		int peel_;	//0:no peeling; 1:peel positive; 2:peel both; -1:peel negative
 		bool tex_;
+		bool fog_;
+		bool light_;
 
-		FragmentProgram* program_;
+		ShaderProgram* program_;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -75,7 +86,8 @@ namespace FLIVR
 		MshShaderFactory();
 		~MshShaderFactory();
 
-		FragmentProgram* shader(bool fog, int peel, bool tex);
+		ShaderProgram* shader(int type, int peel, bool tex,
+			bool fog, bool light);
 
 	protected:
 		std::vector<MshShader*> shader_;

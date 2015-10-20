@@ -34,45 +34,63 @@
 
 namespace FLIVR
 {
-#define IMG_SHDR_BRIGHTNESS_CONTRAST			1
-#define IMG_SHDR_BRIGHTNESS_CONTRAST_HDR		2
-#define IMG_SHDR_GRADIENT_MAP					3
-#define IMG_SHDR_FILTER_SMOOTH_MIN				4
-#define IMG_SHDR_FILTER_SMOOTH_MAX				5
-#define IMG_SHDR_FILTER_SHARPEN					6
-#define IMG_SHDR_DEPTH_TO_OUTLINES				7
-#define IMG_SHDR_DEPTH_TO_GRADIENT				8
-#define IMG_SHDR_GRADIENT_TO_SHADOW				9
-#define IMG_SHDR_GRADIENT_TO_SHADOW_MESH		10
-#define IMG_SHDR_BLEND_BRIGHT_BACKGROUND		11
-#define IMG_SHDR_BLEND_FOR_DEPTH_MODE			12
-#define IMG_SHDR_BLEND_ID_COLOR_FOR_DEPTH_MODE	13
+#define IMG_SHADER_TEXTURE_LOOKUP			0
+#define IMG_SHDR_BRIGHTNESS_CONTRAST		1
+#define IMG_SHDR_BRIGHTNESS_CONTRAST_HDR	2
+#define IMG_SHDR_GRADIENT_MAP				3
+#define IMG_SHDR_FILTER_BLUR				4
+#define IMG_SHDR_FILTER_MAX					5
+#define IMG_SHDR_FILTER_SHARPEN				6
+#define IMG_SHDR_DEPTH_TO_OUTLINES			7
+#define IMG_SHDR_DEPTH_TO_GRADIENT			8
+#define IMG_SHDR_GRADIENT_TO_SHADOW			9
+#define IMG_SHDR_GRADIENT_TO_SHADOW_MESH	10
+#define IMG_SHDR_BLEND_BRIGHT_BACKGROUND	11
+#define IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR	12
+#define IMG_SHDR_PAINT						13
+#define	IMG_SHDR_DRAW_GEOMETRY				14
+#define	IMG_SHDR_DRAW_GEOMETRY_COLOR3		15
+#define	IMG_SHDR_DRAW_GEOMETRY_COLOR4		16
+#define IMG_SHDR_BLEND_FOR_DEPTH_MODE			17
+#define IMG_SHDR_BLEND_ID_COLOR_FOR_DEPTH_MODE	18
 
-	class FragmentProgram;
+	class ShaderProgram;
 
 	class ImgShader
 	{
 	public:
-		ImgShader(int type);
+		ImgShader(int type, int colormap);
 		~ImgShader();
 
 		bool create();
 
 		inline int type() {return type_;}
+		inline int colormap() {return colormap_;}
 
-		inline bool match(int type)
-		{ 
-			return (type_ == type); 
+		inline bool match(int type, int colormap)
+		{
+			if (type_ == type)
+			{
+				if (type_ == IMG_SHDR_GRADIENT_MAP)
+					return (colormap_==colormap);
+				else
+					return true;
+			}
+			else
+				return false;
 		}
 
-		inline FragmentProgram* program() { return program_; }
+		inline ShaderProgram* program() { return program_; }
 
 	protected:
-		bool emit(std::string& s);
+		bool emit_v(std::string& s);
+		bool emit_f(std::string& s);
+		std::string get_colormap_code();
 
 		int type_;
+		int colormap_;
 
-		FragmentProgram* program_;
+		ShaderProgram* program_;
 	};
 
 	class ImgShaderFactory
@@ -81,12 +99,13 @@ namespace FLIVR
 		ImgShaderFactory();
 		~ImgShaderFactory();
 
-		FragmentProgram* shader(int type);
+		ShaderProgram* shader(int type, int colormap_=0);
 
 	protected:
 		std::vector<ImgShader*> shader_;
 		int prev_shader_;
 	};
+
 
 } // end namespace FLIVR
 

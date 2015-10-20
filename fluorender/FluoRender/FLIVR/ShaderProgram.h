@@ -37,7 +37,8 @@ namespace FLIVR
 	class ShaderProgram
 	{
 	public:
-		ShaderProgram(const std::string& program);
+		ShaderProgram(const std::string& vert_shader,const std::string& frag_shader);
+		ShaderProgram(const std::string& frag_shader);
 		~ShaderProgram();
 
 		unsigned int id();
@@ -46,15 +47,15 @@ namespace FLIVR
 		void destroy();
 
 		void bind();
+		void bind_frag_data_location(int color_num, const char* name);
 		void release();
 
 		//set vector uniform (4x1)
 		void setLocalParam(int, double, double, double, double);
 		//set matrix uniform (4x4)
 		void setLocalParamMatrix(int, float*);
-
-		//takashi debug
-		std::string getProgram() { return program_; }
+		//set integer
+		void setLocalParamUInt(int, unsigned int);
 
 		// Call init_shaders_supported before shaders_supported queries!
 		static bool init();
@@ -63,29 +64,27 @@ namespace FLIVR
 		static int max_texture_size();
 		static bool texture_non_power_of_two();
 		static const int MAX_SHADER_UNIFORMS = 16;
+		static std::string glsl_version_;
+
 	protected:
-		unsigned int type_;
 		unsigned int id_;
-		std::string  program_;
+		std::string  vert_shader_;
+		std::string  frag_shader_;
+
+		//validation
+		bool valid_;
+
+		//locations
+		int loc_ui[MAX_SHADER_UNIFORMS];
+		int loc_vec4[MAX_SHADER_UNIFORMS];
+		int loc_mat4[MAX_SHADER_UNIFORMS];
 
 		static bool init_;
 		static bool supported_;
 		static bool non_2_textures_;
 		static int  max_texture_size_;
-	};
-
-	class VertexProgram : public ShaderProgram
-	{
-	public:
-		VertexProgram(const std::string& program);
-		~VertexProgram();
-	};
-
-	class FragmentProgram : public ShaderProgram
-	{
-	public:
-		FragmentProgram(const std::string& program);
-		~FragmentProgram();
+		static int v_major_;
+		static int v_minor_;
 	};
 
 } // end namespace FLIVR

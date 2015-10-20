@@ -67,7 +67,6 @@ namespace FLIVR
 
 		void draw_wireframe(bool orthographic_p);
 		void draw_volume(bool interactive_mode_p, bool orthographic_p, double zoom, bool intp);
-		void draw_volume2(bool interactive_mode_p, bool orthographic_p, double zoom, bool intp);
 
 		double num_slices_to_rate(int slices);
 
@@ -144,28 +143,6 @@ namespace FLIVR
 
 		//soft threshold
 		static double sw_;
-
-		void draw_polygons_vol(
-			vector<double>& vertex,
-			vector<double>& texcoord,
-			vector<int>& poly,
-			bool fog,
-			Ray &view_ray,
-			FragmentProgram *shader,
-			int bi, bool orthographic_p,
-			int w, int h, bool intp,
-			int quota_bricks_chan);
-
-		void draw_polygons_vol2(
-			vector<double>& vertex,
-			vector<double>& texcoord,
-			vector<int>& poly,
-			bool fog,
-			Ray &view_ray,
-			FragmentProgram *shader,
-			int bi, bool orthographic_p,
-			int w, int h, bool intp,
-			int quota_bricks_chan);
 
 		//find out combined bricks in interactive mode
 		vector<TextureBrick*> *get_combined_bricks(

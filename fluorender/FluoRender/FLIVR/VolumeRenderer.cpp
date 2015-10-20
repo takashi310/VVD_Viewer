@@ -34,6 +34,7 @@
 #include <FLIVR/TextureBrick.h>
 #include "utility.h"
 #include "../compatibility.h"
+#include <glm/gtc/type_ptr.hpp>
 
 #include <windows.h>//added by takashi
 
@@ -76,6 +77,10 @@ namespace FLIVR
 		shine_(10.0),
 		//colormap mode
 		colormap_mode_(0),
+		colormap_low_value_(0.0),
+		colormap_hi_value_(1.0),
+		colormap_(0),
+		colormap_proj_(0),
 		//solid
 		solid_(false),
 		//adaptive
@@ -130,6 +135,10 @@ namespace FLIVR
 		shine_(copy.shine_),
 		//colormap mode
 		colormap_mode_(copy.colormap_mode_),
+		colormap_low_value_(copy.colormap_low_value_),
+		colormap_hi_value_(copy.colormap_hi_value_),
+		colormap_(copy.colormap_),
+		colormap_proj_(copy.colormap_proj_),
 		//solid
 		solid_(copy.solid_),
 		//adaptive
@@ -449,7 +458,50 @@ namespace FLIVR
 		return size*af;
 	}
 
-	//darw
+	double VolumeRenderer::compute_dt_fac(double sampling_frq_fac, double *rate_fac)
+	{
+		double maxlen;
+		double vdmaxlen;
+		Transform *field_trans = tex_->transform();
+
+		double mvmat[16] =
+			{m_mv_mat[0][0], m_mv_mat[0][1], m_mv_mat[0][2], m_mv_mat[0][3],
+			 m_mv_mat[1][0], m_mv_mat[1][1], m_mv_mat[1][2], m_mv_mat[1][3],
+			 m_mv_mat[2][0], m_mv_mat[2][1], m_mv_mat[2][2], m_mv_mat[2][3],
+			 m_mv_mat[3][0], m_mv_mat[3][1], m_mv_mat[3][2], m_mv_mat[3][3]};
+
+		Vector spcv[3] = {Vector(1.0, 0.0, 0.0), Vector(0.0, 1.0, 0.0), Vector(0.0, 0.0, 1.0)};
+		vdmaxlen = -1.0;
+
+		for(int i = 0; i < 3 ; i++)
+		{
+			// index space view direction
+			Vector v;
+			v = field_trans->project(spcv[i]);
+			v.safe_normalize();
+			v = field_trans->project(spcv[i]);
+
+			double len = Dot(spcv[i], v);
+			if(len > vdmaxlen) vdmaxlen = len;
+
+		}
+
+		if(sampling_frq_fac > 0.0)maxlen = sampling_frq_fac;
+		else maxlen = vdmaxlen;
+
+		if(rate_fac != nullptr && sampling_frq_fac > 0.0) *rate_fac = sampling_frq_fac / vdmaxlen;
+
+		// index space view direction
+		Vector mv_ray = Vector(-mvmat[2], -mvmat[6], -mvmat[10]);//normalized
+		Vector v = field_trans->project(Vector(-mvmat[2], -mvmat[6], -mvmat[10]));
+		v.safe_normalize();
+		v = field_trans->project(v);
+
+		double l = Dot(mv_ray, v);
+		return maxlen / l;
+	}
+
+	//draw
 	void VolumeRenderer::draw(bool draw_wireframe_p, bool interactive_mode_p,
 		bool orthographic_p, double zoom, bool intp, int mode, double sampling_frq_fac)
 	{
@@ -467,6 +519,7 @@ namespace FLIVR
 			return;
 
 		Ray view_ray = compute_view();
+		Ray snapview = compute_snapview(0.4);
 
 		set_interactive_mode(adaptive_ && interactive_mode_p);
 
@@ -482,94 +535,32 @@ namespace FLIVR
 
 		// Set sampling rate based on interaction
 		double rate = imode_ ? irate_ : sampling_rate_;
+		double rate_fac = 1.0;
 		Vector diag = tex_->bbox()->diagonal();
 /*		Vector cell_diag(
 			diag.x() / tex_->nx(),
 			diag.y() / tex_->ny(),
 			diag.z() / tex_->nz());
 		double dt = cell_diag.length()/compute_rate_scale()/rate;
-*/		double dt = 0.0025/rate;
+*/		double dt = 0.0025/rate * compute_dt_fac(sampling_frq_fac, &rate_fac);
 		num_slices_ = (int)(diag.length()/dt);
 
-		double rate_fac = 1.0;
-
-		if(1)
-		{
-			double maxlen;
-			double vdmaxlen;
-			Transform *field_trans = tex_->transform();
-
-			double mvmat[16];
-			glGetDoublev(GL_MODELVIEW_MATRIX, mvmat);
-			Transform mv;
-			mv.set_trans(mvmat);
-
-			Vector spcv[3] = {Vector(1.0, 0.0, 0.0), Vector(0.0, 1.0, 0.0), Vector(0.0, 0.0, 1.0)};
-			vdmaxlen = -1.0;
-
-			for(int i = 0; i < 3 ; i++)
-			{
-				// index space view direction
-				Vector v;
-				v = field_trans->project(spcv[i]);
-				v.safe_normalize();
-				v = field_trans->project(spcv[i]);
-
-				double len = Dot(spcv[i], v);;
-				if(len > vdmaxlen) vdmaxlen = len;
-
-			}
-			
-			if(sampling_frq_fac > 0.0)maxlen = sampling_frq_fac;
-			else maxlen = vdmaxlen;
-
-			// index space view direction
-			Vector mv_ray = Vector(-mvmat[2], -mvmat[6], -mvmat[10]);//normalized
-			Vector v = field_trans->project(Vector(-mvmat[2], -mvmat[6], -mvmat[10]));
-			v.safe_normalize();
-			v = field_trans->project(v);
-			
-			double l = Dot(mv_ray, v);
-			dt = dt * maxlen / l;
-
-			if(sampling_frq_fac > 0.0) rate_fac = sampling_frq_fac / vdmaxlen;
-		}
-
-		vector<double> vertex;
-		vector<double> texcoord;
-		vector<int> size;
-		vertex.reserve(num_slices_*6);
-		texcoord.reserve(num_slices_*6);
+		vector<float> vertex;
+		vector<uint32_t> index;
+		vector<uint32_t> size;
+		vertex.reserve(num_slices_*12);
+		index.reserve(num_slices_*6);
 		size.reserve(num_slices_*6);
 
 		//--------------------------------------------------------------------------
 		//int nb0 = (*bricks)[0]->nc();
 
-		bool use_fog = glIsEnabled(GL_FOG)!=0 && colormap_mode_!=2;
+		bool use_fog = m_use_fog && colormap_mode_!=2;
 		GLfloat clear_color[4];
 		glGetFloatv(GL_COLOR_CLEAR_VALUE, clear_color);
 		GLint vp[4];
 		glGetIntegerv(GL_VIEWPORT, vp);
 
-		// set up blending
-/*		glEnable(GL_BLEND);
-		switch(mode_)
-		{
-		case MODE_OVER:
-			glBlendEquation(GL_FUNC_ADD);
-			if (update_order_ == 0)
-				glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-			else if (update_order_ == 1)
-				glBlendFunc(GL_ONE_MINUS_DST_ALPHA, GL_ONE);
-			break;
-		case MODE_MIP:
-			glBlendEquation(GL_MAX);
-			glBlendFunc(GL_ONE, GL_ONE);
-			break;
-		default:
-			break;
-		}
-*/
 
 		// Cache this value to reset, in case another framebuffer is active,
 		// as it is in the case of saving an image from the viewer.
@@ -789,14 +780,15 @@ namespace FLIVR
 
 		//--------------------------------------------------------------------------
 		// Set up shaders
-		FragmentProgram* shader = 0;
+		ShaderProgram* shader = 0;
 		//create/bind
 		shader = vol_shader_factory_.shader(
-			tex_->nc(),
+			false, tex_->nc(),
 			shading_, use_fog,
 			depth_peel_, true,
 			hiqual_, ml_mode_,
-			colormap_mode_, solid_);
+			colormap_mode_, colormap_, colormap_proj_,
+			solid_, 1);
 		if (shader)
 		{
 			if (!shader->valid())
@@ -806,10 +798,6 @@ namespace FLIVR
 
 		//set uniforms
 		//set up shading
-		double mat[16];
-		glGetDoublev(GL_MODELVIEW_MATRIX, mat);
-		Transform mv;
-		mv.set_trans(mat);
 		Vector light = view_ray.direction();
 		light.safe_normalize();
 		shader->setLocalParam(0, light.x(), light.y(), light.z(), alpha_);
@@ -838,6 +826,9 @@ namespace FLIVR
 			shader->setLocalParam(6, colormap_low_value_, colormap_hi_value_,
 				colormap_hi_value_-colormap_low_value_, 0.0);
 			break;
+		case 2://depth map
+			shader->setLocalParam(6, color_.r(), color_.g(), color_.b(), 0.0);
+			break;
 		case 3://indexed color
 			HSVColor hsv(color_);
 			double luminance = hsv.val();
@@ -849,6 +840,9 @@ namespace FLIVR
 		if (depth_peel_ || colormap_mode_ == 2)
 			shader->setLocalParam(7, 1.0/double(w2), 1.0/double(h2), 0.0, 0.0);
 
+		//fog
+		if (m_use_fog)
+			shader->setLocalParam(8, m_fog_intensity, m_fog_start, m_fog_end, 0.0);
 
 		//set clipping planes
 		double abcd[4];
@@ -865,32 +859,21 @@ namespace FLIVR
 		planes_[5]->get(abcd);
 		shader->setLocalParam(15, abcd[0], abcd[1], abcd[2], abcd[3]);
 
-		//takashi_debug
-		//ofstream ofs1;
-		//ofs1.open("matdraw_volume_pre.txt");
-		//double mmat[16];
-		//glGetDoublev(GL_MODELVIEW_MATRIX, mmat);
-		//for(int n = 0; n < 16; n++)ofs1 << mmat[n] << endl;
-		//ofs1.close();
-
 		////////////////////////////////////////////////////////
 		// render bricks
 		// Set up transform
 		Transform *tform = tex_->transform();
 		double mvmat[16];
 		tform->get_trans(mvmat);
-		glMatrixMode(GL_MODELVIEW);
-		glPushMatrix();
-		glMultMatrixd(mvmat);
-		float matrix[16];
+		m_mv_mat2 = glm::mat4(
+			mvmat[0], mvmat[4], mvmat[8], mvmat[12],
+			mvmat[1], mvmat[5], mvmat[9], mvmat[13],
+			mvmat[2], mvmat[6], mvmat[10], mvmat[14],
+			mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
+		m_mv_mat2 = m_mv_mat * m_mv_mat2;
+		shader->setLocalParamMatrix(0, glm::value_ptr(m_proj_mat));
+		shader->setLocalParamMatrix(1, glm::value_ptr(m_mv_mat2));
 		
-		//takashi_debug
-		//ofstream ofs;
-		//ofs.open("matdraw_volume.txt");
-		//glGetDoublev(GL_MODELVIEW_MATRIX, mvmat);
-		//for(int n = 0; n < 16; n++)ofs << mvmat[n] << endl;
-		//ofs.close();
-
 		//takashi_debug
 /*		if(mode == 3){
 			ofstream ofs;
@@ -925,15 +908,37 @@ namespace FLIVR
 		for (unsigned int i=0; i < bricks->size(); i++)
 		{
 			//comment off when debug_ds
-			
 			if (mem_swap_)
 			{
 				uint32_t rn_time = GET_TICK_COUNT();
 				if (rn_time - st_time_ > get_up_time())
 					break;
 			}
-			
+
 			TextureBrick* b = (*bricks)[i];
+			if (colormap_mode_==1 && colormap_proj_)
+			{
+				float matrix[16];
+				BBox dbox = b->dbox();
+				matrix[0] = float(dbox.max().x()-dbox.min().x());
+				matrix[1] = 0.0f;
+				matrix[2] = 0.0f;
+				matrix[3] = 0.0f;
+				matrix[4] = 0.0f;
+				matrix[5] = float(dbox.max().y()-dbox.min().y());
+				matrix[6] = 0.0f;
+				matrix[7] = 0.0f;
+				matrix[8] = 0.0f;
+				matrix[9] = 0.0f;
+				matrix[10] = float(dbox.max().z()-dbox.min().z());
+				matrix[11] = 0.0f;
+				matrix[12] = float(dbox.min().x());
+				matrix[13] = float(dbox.min().y());
+				matrix[14] = float(dbox.min().z());
+				matrix[15] = 1.0f;
+				shader->setLocalParamMatrix(5, matrix);
+			}
+			
 			if (mem_swap_ && start_update_loop_ && !done_update_loop_)
 			{
 				if (b->drawn(bmode))
@@ -956,9 +961,9 @@ namespace FLIVR
 			}
 
 			vertex.clear();
-			texcoord.clear();
+			index.clear();
 			size.clear();
-			b->compute_polygons(view_ray, dt, vertex, texcoord, size);
+			b->compute_polygons(view_ray, dt, vertex, index, size);
 
 			if (vertex.size() == 0){
 				if (!b->drawn(bmode))
@@ -982,31 +987,12 @@ namespace FLIVR
 				load_brick_mask(bricks, i, filter);
 			if (label_)
 				load_brick_label(bricks, i);
-			/*
-			double spc[3];
-			tex_->get_spacings(spc[0], spc[1], spc[2]);
-			
-			double minspc = DBL_MAX;
-			for(int j = 0; j < 3; j++)
-			{
-				if(spc[j] < minspc)minspc = spc[j];
-			}
-			shader->setLocalParam(4, 1.0/(b->nx()*spc[0]/minspc), 1.0/(b->ny()*spc[1]/minspc), 1.0/(b->nz()*spc[2]/minspc),
-				mode_==MODE_OVER?1.0/rate*rate_fac:1.0);
-			*/
-			/*
-			double maxspc = -1;
-			for(int j = 0; j < 3; j++)
-			{
-				if(spc[j] > maxspc)maxspc = spc[j];
-			}
-			shader->setLocalParam(4, 1.0/(b->nx()*spc[0]/maxspc), 1.0/(b->ny()*spc[1]/maxspc), 1.0/(b->nz()*spc[2]/maxspc),
-				mode_==MODE_OVER?1.0/rate*rate_fac:1.0);
-			*/
+
 			shader->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(),
 				mode_==MODE_OVER?1.0/rate*rate_fac:1.0);
 
 			//for brick transformation
+			float matrix[16];
 			BBox dbox = b->dbox();
 			matrix[0] = float(dbox.max().x()-dbox.min().x());
 			matrix[1] = 0.0f;
@@ -1030,50 +1016,9 @@ namespace FLIVR
 //			LARGE_INTEGER liBegin,liEnd,liFreq;
 //			QueryPerformanceCounter(&liBegin);
 
-			draw_polygons(vertex, texcoord, size, use_fog, shader);
-/*
-			{
-				//transformations
-				glMatrixMode(GL_PROJECTION);
-				glPushMatrix();
-				glLoadIdentity();
-				glMatrixMode(GL_MODELVIEW);
-				glPushMatrix();
-				glLoadIdentity();
-
-				glBindFramebuffer(GL_FRAMEBUFFER, blend_framebuffer_); 
-				glFramebufferTexture2D(GL_FRAMEBUFFER,
-					GL_COLOR_ATTACHMENT0,
-					GL_TEXTURE_2D, label_tex_id_copy_, 0);
-				glBindTexture(GL_TEXTURE_2D, label_tex_id_);
-				glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-				static const GLenum draw_buf = GL_COLOR_ATTACHMENT0;
-				glDrawBuffers(1, &draw_buf);
-				glBegin(GL_QUADS);
-				{
-					glTexCoord2f(0.0, 0.0);
-					glVertex3f(-1, -1, 0.0);
-					glTexCoord2f(1.0, 0.0);
-					glVertex3f(1, -1, 0.0);
-					glTexCoord2f(1.0, 1.0);
-					glVertex3f(1, 1, 0.0);
-					glTexCoord2f(0.0, 1.0);
-					glVertex3f(-1, 1, 0.0);
-				}
-				glEnd();
-				glBindTexture(GL_TEXTURE_2D, 0);
-
-				glFramebufferTexture2D(GL_FRAMEBUFFER,
-					GL_COLOR_ATTACHMENT0,
-					GL_TEXTURE_2D, blend_tex_id_, 0);
-				glDrawBuffers(2, draw_buffers);
-
-				glMatrixMode(GL_PROJECTION);
-				glPopMatrix();
-				glMatrixMode(GL_MODELVIEW);
-				glPopMatrix();
-			}
-*/
+			//draw_polygons(vertex, texcoord, size, use_fog, shader);
+			if (colormap_mode_ == 3) draw_polygons(vertex, index, size);
+			else draw_polygons(vertex, index);
 			
 			if (mem_swap_){
 				finished_bricks_++;
@@ -1099,13 +1044,6 @@ namespace FLIVR
 			//}
 		}
 		
-		//takashi_debug
-		//if (mem_swap_ &&
-		//	cur_brick_num_ > total_brick_num_)
-		//{
-		//	done_update_loop_ = true;
-		//}
-
 		if (mem_swap_ &&
 			cur_brick_num_ == total_brick_num_)
 		{
@@ -1121,10 +1059,6 @@ namespace FLIVR
 			done_loop_[bmode] = true;
 		}
 
-		glFinish();
-
-		// Undo transform.
-		glPopMatrix();
 		////////////////////////////////////////////////////////
 		if (colormap_mode_ == 3)
 		{		
@@ -1164,23 +1098,13 @@ namespace FLIVR
 		{
 			//states
 			GLboolean depth_test = glIsEnabled(GL_DEPTH_TEST);
-			GLboolean lighting = glIsEnabled(GL_LIGHTING);
 			GLboolean cull_face = glIsEnabled(GL_CULL_FACE);
 			glDisable(GL_DEPTH_TEST);
-			glDisable(GL_LIGHTING);
 			glDisable(GL_CULL_FACE);
-			glActiveTexture(GL_TEXTURE0);
 			glEnable(GL_TEXTURE_2D);
-
-			//transformations
-			glMatrixMode(GL_PROJECTION);
-			glPushMatrix();
-			glLoadIdentity();
-			glMatrixMode(GL_MODELVIEW);
-			glPushMatrix();
-			glLoadIdentity();
-
-			FragmentProgram* img_shader = 0;
+			glActiveTexture(GL_TEXTURE0);
+			
+			ShaderProgram* img_shader = 0;
 
 			if (noise_red_ && colormap_mode_!=2)
 			{
@@ -1219,7 +1143,7 @@ namespace FLIVR
 				glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
 
 				img_shader = 
-					m_img_shader_factory.shader(IMG_SHDR_FILTER_SMOOTH_MIN);
+					m_img_shader_factory.shader(IMG_SHDR_FILTER_BLUR);
 				if (img_shader)
 				{
 					if (!img_shader->valid())
@@ -1231,53 +1155,10 @@ namespace FLIVR
 				filter_size_min_ = CalcFilterSize(1, w, h, tex_->nx(), tex_->ny(), zoom, sfactor_);
 				img_shader->setLocalParam(0, filter_size_min_/w2, filter_size_min_/h2, 0.5, 0.0);
 
-				glBegin(GL_QUADS);
-				{
-					glTexCoord2f(0.0, 0.0);
-					glVertex3f(-1, -1, 0.0);
-					glTexCoord2f(1.0, 0.0);
-					glVertex3f(1, -1, 0.0);
-					glTexCoord2f(1.0, 1.0);
-					glVertex3f(1, 1, 0.0);
-					glTexCoord2f(0.0, 1.0);
-					glVertex3f(-1, 1, 0.0);
-				}
-				glEnd();
+				draw_view_quad();
+
 				if (img_shader && img_shader->valid())
 					img_shader->release();
-
-				//
-				glBindFramebuffer(GL_FRAMEBUFFER, blend_framebuffer_); 
-
-				glBindTexture(GL_TEXTURE_2D, filter_tex_id_);
-				glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-				img_shader = 
-					m_img_shader_factory.shader(IMG_SHDR_FILTER_SMOOTH_MAX);
-				if (img_shader)
-				{
-					if (!img_shader->valid())
-					{
-						img_shader->create();
-					}
-					img_shader->bind();
-				}
-				filter_size_max_ = CalcFilterSize(2, w, h, tex_->nx(), tex_->ny(), zoom, sfactor_);
-				img_shader->setLocalParam(0, filter_size_max_/w, filter_size_max_/h, 1.0, 0.0);
-				glBegin(GL_QUADS);
-				{
-					glTexCoord2f(0.0, 0.0);
-					glVertex3f(-1, -1, 0.0);
-					glTexCoord2f(1.0, 0.0);
-					glVertex3f(1, -1, 0.0);
-					glTexCoord2f(1.0, 1.0);
-					glVertex3f(1, 1, 0.0);
-					glTexCoord2f(0.0, 1.0);
-					glVertex3f(-1, 1, 0.0);
-				}
-				glEnd();
-				if (img_shader && img_shader->valid())
-					img_shader->release();
-				///////////////////////////////////////////////////////////////////////////
 			}
 
 			//go back to normal
@@ -1287,52 +1168,41 @@ namespace FLIVR
 
 			glViewport(vp[0], vp[1], vp[2], vp[3]);
 
-			glBindTexture(GL_TEXTURE_2D, blend_tex_id_);
-			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+			if (noise_red_ && colormap_mode_!=2)
+				glBindTexture(GL_TEXTURE_2D, filter_tex_id_);
+			else
+				glBindTexture(GL_TEXTURE_2D, blend_tex_id_);
+
+			if (noise_red_ && colormap_mode_!=2)
+				img_shader = 
+					m_img_shader_factory.shader(IMG_SHDR_FILTER_SHARPEN);
+			else
+				img_shader = 
+				m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
+
+			if (img_shader)
+			{
+				if (!img_shader->valid())
+				{
+					img_shader->create();
+				}
+				img_shader->bind();
+			}
 
 			if (noise_red_ && colormap_mode_!=2)
 			{
-				img_shader = 
-					m_img_shader_factory.shader(IMG_SHDR_FILTER_SHARPEN);
-				if (img_shader)
-				{
-					if (!img_shader->valid())
-					{
-						img_shader->create();
-					}
-					img_shader->bind();
-				}
 				filter_size_shp_ = CalcFilterSize(3, w, h, tex_->nx(), tex_->ny(), zoom, sfactor_);
 				img_shader->setLocalParam(0, filter_size_shp_/w, filter_size_shp_/h, 0.0, 0.0);
 			}
 
-			glBegin(GL_QUADS);
-			{
-				glTexCoord2f(0.0, 0.0);
-				glVertex3f(-1, -1, 0.0);
-				glTexCoord2f(1.0, 0.0);
-				glVertex3f(1, -1, 0.0);
-				glTexCoord2f(1.0, 1.0);
-				glVertex3f(1, 1, 0.0);
-				glTexCoord2f(0.0, 1.0);
-				glVertex3f(-1, 1, 0.0);
-			}
-			glEnd();
+			draw_view_quad();
 
-			if (noise_red_ && colormap_mode_!=2)
-			{
-				if (img_shader && img_shader->valid())
-					img_shader->release();
-			}
+			if (img_shader && img_shader->valid())
+				img_shader->release();
 
 			if (depth_test) glEnable(GL_DEPTH_TEST);
-			if (lighting) glEnable(GL_LIGHTING);
 			if (cull_face) glEnable(GL_CULL_FACE);
 
-			glMatrixMode(GL_PROJECTION);
-			glPopMatrix();
-			glMatrixMode(GL_MODELVIEW);
-			glPopMatrix();
 			glBindTexture(GL_TEXTURE_2D, 0);
 			glDisable(GL_TEXTURE_2D);
 		}
@@ -1343,99 +1213,84 @@ namespace FLIVR
 		glDisable(GL_BLEND);
 	}
 
-	void VolumeRenderer::draw_wireframe(bool orthographic_p)
+	void VolumeRenderer::draw_wireframe(bool orthographic_p, double sampling_frq_fac)
 	{
 		Ray view_ray = compute_view();
-		Transform *tform = tex_->transform();
-		double mvmat[16];
-		tform->get_trans(mvmat);
-		glMatrixMode(GL_MODELVIEW);
-		glPushMatrix();
-		glMultMatrixd(mvmat);
+		Ray snapview = compute_snapview(0.4);
+
 		glEnable(GL_DEPTH_TEST);
-		GLboolean lighting = glIsEnabled(GL_LIGHTING);
-		glDisable(GL_LIGHTING);
-		glDisable(GL_TEXTURE_3D);
-		glDisable(GL_TEXTURE_2D);
-		glDisable(GL_FOG);
 		vector<TextureBrick*> *bricks = tex_->get_sorted_bricks(view_ray, orthographic_p);
 
-		double rate = imode_ ? irate_ : sampling_rate_;
+		float rate = imode_ ? irate_ : sampling_rate_;
+		double rate_fac = 1.0;
 		Vector diag = tex_->bbox()->diagonal();
 		Vector cell_diag(diag.x()/tex_->nx(),
 			diag.y()/tex_->ny(),
 			diag.z()/tex_->nz());
-		double dt = cell_diag.length()/compute_rate_scale()/rate;
+		double dt = 0.0025/rate * compute_dt_fac(sampling_frq_fac, &rate_fac);
 		num_slices_ = (int)(diag.length()/dt);
 
-		vector<double> vertex;
-		vector<double> texcoord;
-		vector<int> size;
-		vertex.reserve(num_slices_*6);
-		texcoord.reserve(num_slices_*6);
+		vector<float> vertex;
+		vector<uint32_t> index;
+		vector<uint32_t> size;
+		vertex.reserve(num_slices_*12);
+		index.reserve(num_slices_*6);
 		size.reserve(num_slices_*6);
+
+		// Set up shaders
+		ShaderProgram* shader = 0;
+		//create/bind
+		shader = vol_shader_factory_.shader(
+			true, 0,
+			false, false,
+			0, false,
+			false, 0,
+			0, 0, 0,
+			false, 1);
+		if (shader)
+		{
+			if (!shader->valid())
+				shader->create();
+			shader->bind();
+		}
+
+		////////////////////////////////////////////////////////
+		// render bricks
+		// Set up transform
+		Transform *tform = tex_->transform();
+		double mvmat[16];
+		tform->get_trans(mvmat);
+		m_mv_mat2 = glm::mat4(
+			mvmat[0], mvmat[4], mvmat[8], mvmat[12],
+			mvmat[1], mvmat[5], mvmat[9], mvmat[13],
+			mvmat[2], mvmat[6], mvmat[10], mvmat[14],
+			mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
+		m_mv_mat2 = m_mv_mat * m_mv_mat2;
+		shader->setLocalParamMatrix(0, glm::value_ptr(m_proj_mat));
+		shader->setLocalParamMatrix(1, glm::value_ptr(m_mv_mat2));
+		shader->setLocalParamMatrix(5, glm::value_ptr(m_tex_mat));
+		shader->setLocalParam(0, color_.r(), color_.g(), color_.b(), 1.0);
 
 		if (bricks)
 		{
 			for (unsigned int i=0; i<bricks->size(); i++)
 			{
-				glColor4d(float(0.8*(i+1.0)/bricks->size()), float(0.8*(i+1.0)/bricks->size()), 0.8f, 1.0f);
-
 				TextureBrick* b = (*bricks)[i];
 				if (!test_against_view(b->bbox())) continue;
 
-				Point pmin(b->bbox().min());
-				Point pmax(b->bbox().max());
-				Point corner[8];
-				corner[0] = pmin;
-				corner[1] = Point(pmin.x(), pmin.y(), pmax.z());
-				corner[2] = Point(pmin.x(), pmax.y(), pmin.z());
-				corner[3] = Point(pmin.x(), pmax.y(), pmax.z());
-				corner[4] = Point(pmax.x(), pmin.y(), pmin.z());
-				corner[5] = Point(pmax.x(), pmin.y(), pmax.z());
-				corner[6] = Point(pmax.x(), pmax.y(), pmin.z());
-				corner[7] = pmax;
-
-				glBegin(GL_LINES);
-				{
-					for(int i=0; i<4; i++) {
-						glVertex3d(corner[i].x(), corner[i].y(), corner[i].z());
-						glVertex3d(corner[i+4].x(), corner[i+4].y(), corner[i+4].z());
-					}
-				}
-				glEnd();
-				glBegin(GL_LINE_LOOP);
-				{
-					glVertex3d(corner[0].x(), corner[0].y(), corner[0].z());
-					glVertex3d(corner[1].x(), corner[1].y(), corner[1].z());
-					glVertex3d(corner[3].x(), corner[3].y(), corner[3].z());
-					glVertex3d(corner[2].x(), corner[2].y(), corner[2].z());
-				}
-				glEnd();
-				glBegin(GL_LINE_LOOP);
-				{
-					glVertex3d(corner[4].x(), corner[4].y(), corner[4].z());
-					glVertex3d(corner[5].x(), corner[5].y(), corner[5].z());
-					glVertex3d(corner[7].x(), corner[7].y(), corner[7].z());
-					glVertex3d(corner[6].x(), corner[6].y(), corner[6].z());
-				}
-				glEnd();
-
-				glColor4d(0.4, 0.4, 0.4, 1.0);
-
 				vertex.clear();
-				texcoord.clear();
+				index.clear();
 				size.clear();
 
 				// Scale out dt such that the slices are artificially further apart.
-				b->compute_polygons(view_ray, dt * 10, vertex, texcoord, size);
-				draw_polygons_wireframe(vertex, texcoord, size, false);
+				b->compute_polygons(view_ray, dt * 1, vertex, index, size);
+				draw_polygons_wireframe(vertex, index, size);
 			}
 		}
 
-		if(lighting) glEnable(GL_LIGHTING);
-		glMatrixMode(GL_MODELVIEW);
-		glPopMatrix();
+		// Release shader.
+		if (shader && shader->valid())
+			shader->release();
 	}
 
 	//type: 0-initial; 1-diffusion-based growing; 2-masked filtering
@@ -1444,8 +1299,11 @@ namespace FLIVR
 	//hr_mode (hidden removal): 0-none; 1-ortho; 2-persp
 	void VolumeRenderer::draw_mask(int type, int paint_mode, int hr_mode,
 		double ini_thresh, double gm_falloff, double scl_falloff,
-		double scl_translate, double w2d, double bins, bool orthographic_p)
+		double scl_translate, double w2d, double bins, bool orthographic_p,
+		bool estimate)
 	{
+		if (estimate && type==0)
+			est_thresh_ = 0.0;
 		bool use_2d = glIsTexture(tex_2d_weight1_)&&
 			glIsTexture(tex_2d_weight2_)?true:false;
 
@@ -1455,9 +1313,6 @@ namespace FLIVR
 		if (!bricks || bricks->size() == 0)
 			return;
 
-		glActiveTexture(GL_TEXTURE0);
-		glEnable(GL_TEXTURE_2D);
-		glEnable(GL_TEXTURE_3D);
 		//mask frame buffer object
 		if (!glIsFramebuffer(fbo_mask_))
 			glGenFramebuffers(1, &fbo_mask_);
@@ -1468,7 +1323,7 @@ namespace FLIVR
 		//--------------------------------------------------------------------------
 		// Set up shaders
 		//seg shader
-		FragmentProgram* seg_shader = 0;
+		ShaderProgram* seg_shader = 0;
 
 		switch (type)
 		{
@@ -1495,18 +1350,9 @@ namespace FLIVR
 				seg_shader->create();
 			seg_shader->bind();
 		}
-/*
-		ofstream ofs;
-		ofs.open("draw_mask_ini_shader.txt");
-		ofs << seg_shader->getProgram() << endl;
-		ofs.close();
-*/
+
 		//set uniforms
 		//set up shading
-		double mat[16];
-		glGetDoublev(GL_MODELVIEW_MATRIX, mat);
-		Transform mv;
-		mv.set_trans(mat);
 		Vector light = compute_view().direction();
 		light.safe_normalize();
 		seg_shader->setLocalParam(0, light.x(), light.y(), light.z(), alpha_);
@@ -1555,43 +1401,31 @@ namespace FLIVR
 		Transform *tform = tex_->transform();
 		double mvmat[16];
 		tform->get_trans(mvmat);
-		glMatrixMode(GL_MODELVIEW);
-		glPushMatrix();
-		glMultMatrixd(mvmat);
+		m_mv_mat2 = glm::mat4(
+			mvmat[0], mvmat[4], mvmat[8], mvmat[12],
+			mvmat[1], mvmat[5], mvmat[9], mvmat[13],
+			mvmat[2], mvmat[6], mvmat[10], mvmat[14],
+			mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
+		m_mv_mat2 = m_mv_mat * m_mv_mat2;
+		seg_shader->setLocalParamMatrix(0, glm::value_ptr(m_mv_mat2));
+		seg_shader->setLocalParamMatrix(1, glm::value_ptr(m_proj_mat));
+		if (hr_mode > 0)
+		{
+			glm::mat4 mv_inv = glm::inverse(m_mv_mat2);
+			seg_shader->setLocalParamMatrix(3, glm::value_ptr(mv_inv));
+		}
+
+		glDisable(GL_DEPTH_TEST);
 
 		//bind 2d mask texture
 		bind_2d_mask();
 		//bind 2d weight map
 		if (use_2d) bind_2d_weight();
 
-		//get transformation
-		float matrix[16];
-		glGetFloatv(GL_MODELVIEW_MATRIX, matrix);
-		seg_shader->setLocalParamMatrix(0, matrix);
-		glGetFloatv(GL_PROJECTION_MATRIX, matrix);
-		seg_shader->setLocalParamMatrix(1, matrix);
-		if (hr_mode > 0)
-		{
-			double dmatrix[16];
-			Transform mv;
-			glGetDoublev(GL_MODELVIEW_MATRIX, dmatrix);
-			mv.set(dmatrix);
-			mv.invert();
-			mv.get(matrix);
-			seg_shader->setLocalParamMatrix(3, matrix);
-		}
-
-		glMatrixMode(GL_MODELVIEW);
-		glPushMatrix();
-		glLoadIdentity();
-		glMatrixMode(GL_PROJECTION);
-		glPushMatrix();
-		glLoadIdentity();
-		glDisable(GL_DEPTH_TEST);
-
 		GLint vp[4];
 		glGetIntegerv(GL_VIEWPORT, vp);
 
+		float matrix[16];
 		for (unsigned int i=0; i < bricks->size(); i++)
 		{
 			TextureBrick* b = (*bricks)[i];
@@ -1646,17 +1480,20 @@ namespace FLIVR
 					tex_id,
 					0,
 					z);
-				draw_slices(double(z+0.5) / double(b->nz()));
+
+				draw_view_quad(double(z+0.5) / double(b->nz()));
 			}
+
+			//test cl
+/*			if (estimate && type == 0)
+			{
+				double temp = calc_hist_3d(vd_id, mask_id, b->nx(), b->ny(), b->nz());
+				est_thresh_ = max(est_thresh_, temp);
+			}
+*/
 		}
 
 		glViewport(vp[0], vp[1], vp[2], vp[3]);
-
-		glMatrixMode(GL_PROJECTION);
-		glPopMatrix();
-		glMatrixMode(GL_MODELVIEW);
-		glPopMatrix();
-		////////////////////////////////////////////////////////
 
 		//release 2d mask
 		release_texture(6, GL_TEXTURE_2D);
@@ -1669,9 +1506,6 @@ namespace FLIVR
 
 		//release 3d mask
 		release_texture((*bricks)[0]->nmask(), GL_TEXTURE_3D);
-
-		// Undo transform.
-		glPopMatrix();
 
 		//unbind framebuffer
 		glBindFramebuffer(GL_FRAMEBUFFER, cur_framebuffer_id);
@@ -1695,15 +1529,13 @@ namespace FLIVR
 	//generate the labeling assuming the mask is already generated
 	//type: 0-initialization; 1-maximum intensity filtering
 	//mode: 0-normal; 1-posterized; 2-copy values; 3-poster, copy
-	void VolumeRenderer::draw_label(int type, int mode, double thresh)
+	void VolumeRenderer::draw_label(int type, int mode, double thresh, double gm_falloff)
 	{
 		vector<TextureBrick*> *bricks = tex_->get_bricks();
 		if (!bricks || bricks->size() == 0)
 			return;
 
 		glActiveTexture(GL_TEXTURE0);
-		glEnable(GL_TEXTURE_2D);
-		glEnable(GL_TEXTURE_3D);
 		//label frame buffer object
 		if (!glIsFramebuffer(fbo_label_))
 			glGenFramebuffers(1, &fbo_label_);
@@ -1716,7 +1548,7 @@ namespace FLIVR
 		//--------------------------------------------------------------------------
 		// Set up shaders
 		//seg shader
-		FragmentProgram* seg_shader = 0;
+		ShaderProgram* seg_shader = 0;
 
 		switch (type)
 		{
@@ -1739,44 +1571,34 @@ namespace FLIVR
 			seg_shader->bind();
 		}
 
+		//set uniforms
+		//set up shading
+		Vector light = compute_view().direction();
+		light.safe_normalize();
+		seg_shader->setLocalParam(0, light.x(), light.y(), light.z(), alpha_);
+		if (shading_)
+			seg_shader->setLocalParam(1, 2.0 - ambient_, diffuse_, specular_, shine_);
+		else
+			seg_shader->setLocalParam(1, 2.0 - ambient_, 0.0, specular_, shine_);
+
+		//spacings
+		double spcx, spcy, spcz;
+		tex_->get_spacings(spcx, spcy, spcz);
+		seg_shader->setLocalParam(5, spcx, spcy, spcz, 1.0);
+
+		//transfer function
+		seg_shader->setLocalParam(2, inv_?-scalar_scale_:scalar_scale_, gm_scale_, lo_thresh_, hi_thresh_);
+		seg_shader->setLocalParam(3, 1.0/gamma3d_, gm_thresh_, offset_, sw_);
+		seg_shader->setLocalParam(6, color_.r(), color_.g(), color_.b(), 0.0);
+
 		if (type == 0)
-		{
-			//set uniforms
-			//set up shading
-			double mat[16];
-			glGetDoublev(GL_MODELVIEW_MATRIX, mat);
-			Transform mv;
-			mv.set_trans(mat);
-			Vector light = compute_view().direction();
-			light.safe_normalize();
-			seg_shader->setLocalParam(0, light.x(), light.y(), light.z(), alpha_);
-			if (shading_)
-				seg_shader->setLocalParam(1, 2.0 - ambient_, diffuse_, specular_, shine_);
-			else
-				seg_shader->setLocalParam(1, 2.0 - ambient_, 0.0, specular_, shine_);
-
-			//spacings
-			double spcx, spcy, spcz;
-			tex_->get_spacings(spcx, spcy, spcz);
-			seg_shader->setLocalParam(5, spcx, spcy, spcz, 1.0);
-
-			//transfer function
-			seg_shader->setLocalParam(2, inv_?-scalar_scale_:scalar_scale_, gm_scale_, lo_thresh_, hi_thresh_);
-			seg_shader->setLocalParam(3, 1.0/gamma3d_, gm_thresh_, offset_, sw_);
-			seg_shader->setLocalParam(6, color_.r(), color_.g(), color_.b(), 0.0);
-		}
-
-		seg_shader->setLocalParam(7, thresh, 0.0, 0.0, 0.0);
+			seg_shader->setLocalParam(7, thresh, 0.0, 0.0, 0.0);
+		else if (type == 1)
+			//loc7: (initial thresh, gm_gaussian_falloff, scalar_gaussian_falloff, scalar_translate)
+			seg_shader->setLocalParam(7, 1.0, gm_falloff, 0.0, 0.0);
 
 		////////////////////////////////////////////////////////
 		// render bricks
-		// Set up transform
-		glMatrixMode(GL_MODELVIEW);
-		glPushMatrix();
-		glLoadIdentity();
-		glMatrixMode(GL_PROJECTION);
-		glPushMatrix();
-		glLoadIdentity();
 		glDisable(GL_DEPTH_TEST);
 
 		GLint vp[4];
@@ -1795,7 +1617,7 @@ namespace FLIVR
 					b->nz(), 0.0f);//{nx, ny, nz, 0.0}
 				break;
 			case 1://maximum filter
-				seg_shader->setLocalParam(0, 
+				seg_shader->setLocalParam(4, 
 					1.0/b->nx(),
 					1.0/b->ny(),
 					1.0/b->nz(), 0.0f);//{1/spcx, 1/spcy, 1/spcz, 0.0}
@@ -1806,8 +1628,7 @@ namespace FLIVR
 			glViewport(0, 0, b->nx(), b->ny());
 
 			//load the texture
-			if (type == 0)
-				load_brick(0, 0, bricks, i, GL_NEAREST, compression_);
+			load_brick(0, 0, bricks, i, GL_NEAREST, compression_);
 			if (has_mask) load_brick_mask(bricks, i);
 			GLuint label_id = load_brick_label(bricks, i);
 
@@ -1822,14 +1643,9 @@ namespace FLIVR
 					0,
 					z);
 
-				draw_slices(double(z+0.5) / double(b->nz()));
+				draw_view_quad(double(z+0.5) / double(b->nz()));
 			}
 		}
-
-		glMatrixMode(GL_PROJECTION);
-		glPopMatrix();
-		glMatrixMode(GL_MODELVIEW);
-		glPopMatrix();
 
 		glViewport(vp[0], vp[1], vp[2], vp[3]);
 		////////////////////////////////////////////////////////
@@ -1895,7 +1711,7 @@ namespace FLIVR
 		//--------------------------------------------------------------------------
 		// Set up shaders
 		//calculate shader
-		FragmentProgram* cal_shader = cal_shader_factory_.shader(type);
+		ShaderProgram* cal_shader = cal_shader_factory_.shader(type);
 
 		if (cal_shader)
 		{

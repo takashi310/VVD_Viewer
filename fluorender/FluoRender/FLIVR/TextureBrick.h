@@ -39,6 +39,7 @@
 #include <fstream>
 #include <string>
 #include <nrrd.h>
+#include <stdint.h>
 
 namespace FLIVR {
 
@@ -153,7 +154,16 @@ namespace FLIVR {
 			vector<double>& vertex, vector<double>& texcoord,
 			vector<int>& size);
 
-		void get_polygon(int tid, int &size, double* &v, double* &t);
+		void compute_polygons(Ray& view, float dt,
+			vector<float>& vertex, vector<uint32_t>& index,
+			vector<uint32_t>& size);
+		void compute_polygons(Ray& view,
+			float tmin, float tmax, float dt,
+			vector<float>& vertex, vector<uint32_t>& index,
+			vector<uint32_t>& size);
+
+
+		void get_polygon(int tid, int &size, uint32_t* &i);
 		
 		//set d
 		void set_d(double d) { d_ = d; }
@@ -192,8 +202,8 @@ namespace FLIVR {
 		void set_rate_fac(double rate_fac) {rate_fac_ = rate_fac;}
 		void set_vr(VolumeRenderer *vr) {vr_ = vr;}
 
-		std::vector<double> *get_vertex_list() {return &vertex_;}
-		std::vector<double> *get_texcoord_list() {return &texcoord_;}
+		std::vector<float> *get_vertex_list() {return &vertex_;}
+		std::vector<uint32_t> *get_index_list() {return &index_;}
 		std::vector<int> *get_size_list() {return &size_;}
 
 	private:
@@ -254,10 +264,11 @@ namespace FLIVR {
 		Ray vray_;
 		double rate_fac_;
 		VolumeRenderer *vr_;
-		vector<double> vertex_;
-		vector<double> texcoord_;
+		vector<float> vertex_;
+		vector<uint32_t> index_;
 		vector<int> size_;
-		vector<int> size_integ_;
+		vector<int> size_i_;
+		vector<int> size_integ_i_;
 	};
 
 	struct Pyramid_Level {

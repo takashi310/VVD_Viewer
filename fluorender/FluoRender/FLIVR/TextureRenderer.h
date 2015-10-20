@@ -32,6 +32,8 @@
 #include <nrrd.h>
 #include "TextureBrick.h"
 #include "Texture.h"
+#include <stdint.h>
+#include <glm/glm.hpp>
 
 namespace FLIVR
 {
@@ -90,7 +92,7 @@ namespace FLIVR
          int m_pos;
    };
 
-   class FragmentProgram;
+   class ShaderProgram;
    class VolShaderFactory;
    class SegShaderFactory;
    class VolCalShaderFactory;
@@ -239,7 +241,7 @@ namespace FLIVR
                static void set_update_order(int val) {update_order_ = val;}
                static int get_update_order() {return update_order_;}
 
-      protected:
+      public:
                struct BrickDist
                {
                   unsigned int index;    //index of the brick in current tex pool
@@ -334,8 +336,19 @@ namespace FLIVR
                double mvmat_[16];
                double prmat_[16];
 
+			   //opengl matrices
+			   glm::mat4 m_mv_mat;
+			   glm::mat4 m_mv_mat2;
+			   glm::mat4 m_proj_mat;
+			   glm::mat4 m_tex_mat;
+
+			   //vertex and index buffer bind points
+			   GLuint m_slices_vbo, m_slices_ibo, m_slices_vao;
+			   GLuint m_quad_vbo, m_quad_vao;
+
                //compute view
                Ray compute_view();
+			   Ray compute_snapview(double snap);
                double compute_rate_scale();
 
                //brick distance sort
@@ -354,14 +367,23 @@ namespace FLIVR
                //draw slices of the volume
                void draw_slices(double d);
 
+			   void draw_view_quad(double d=0.0);
+
                //slices
                void draw_polygons(vector<double>& vertex, vector<double>& texcoord,
                      vector<int>& poly,
                      bool fog,
-                     FragmentProgram *shader = 0);
+                     ShaderProgram *shader = 0);
                void draw_polygons_wireframe(vector<double>& vertex, vector<double>& texcoord,
                      vector<int>& poly,
                      bool fog);
+
+			   void draw_polygons(vector<float>& vertex,
+				   vector<uint32_t>& triangle_verts);
+			   void draw_polygons(vector<float>& vertex,
+				   vector<uint32_t>& triangle_verts, vector<uint32_t>& size);
+			   void draw_polygons_wireframe(vector<float>& vertex,
+				   vector<uint32_t>& index, vector<uint32_t>& size);
 
                //bind 2d mask for segmentation
                void bind_2d_mask();

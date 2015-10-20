@@ -200,6 +200,7 @@ public:
 	int GetCurTime();
 
 	//draw volume
+	void SetMatrices(glm::mat4 &mv_mat, glm::mat4 &proj_mat, glm::mat4 &tex_mat);
 	void Draw(bool otho = false, bool intactive = false, double zoom = 1.0, bool intp = true, double sampling_frq_fac = -1.0);
 	void DrawBounds();
 	//draw mask (create the mask)
@@ -212,7 +213,7 @@ public:
 	//draw label (create the label)
 	//type: 0-initialize; 1-maximum intensity filtering
 	//mode: 0-normal; 1-posterized, 2-copy values
-	void DrawLabel(int type, int mode, double thresh);
+	void DrawLabel(int type, int mode, double thresh, double gm_falloff);
 
 	//calculation
 	void Calculate(int type, VolumeData* vd_a, VolumeData* vd_b);
@@ -275,6 +276,10 @@ public:
 	bool GetColormapDisp();
 	void SetColormapValues(double low, double high);
 	void GetColormapValues(double &low, double &high);
+	void SetColormap(int value);
+	void SetColormapProj(int value);
+	int GetColormap();
+	int GetColormapProj();
 
 	//resolution  scaling and spacing
 	void GetResolution(int &res_x, int &res_y, int &res_z);
@@ -362,6 +367,8 @@ public:
 	VolumeData* CopyLevel(int lv = -1);
 	bool isBrxml();
 
+	void SetFog(bool use_fog, double fog_intensity, double fog_start, double fog_end);
+
 private:
 	//duplication indicator and counter
 	bool m_dup;
@@ -427,6 +434,8 @@ private:
 	bool m_colormap_disp;	//true/false
 	double m_colormap_low_value;
 	double m_colormap_hi_value;
+	int m_colormap;//index to a colormap
+	int m_colormap_proj;//index to a way of projection
 
 	//save the mode for restoring
 	int m_saved_mode;
@@ -508,12 +517,16 @@ public:
 	MeshRenderer* GetMR();
 
 	//draw
+	void SetMatrices(glm::mat4 &mv_mat, glm::mat4 &proj_mat);
 	void Draw(int peel);
 	void DrawBounds();
+	void DrawInt(unsigned int name);
 
 	//lighting
 	void SetLighting(bool bVal);
 	bool GetLighting();
+	void SetFog(bool bVal, double fog_intensity, double fog_start, double fog_end);
+	bool GetFog();
 	void SetMaterial(Color& amb, Color& diff, Color& spec, 
 		double shine = 30.0, double alpha = 1.0);
 	void SetColor(Color &color, int type);
@@ -560,6 +573,7 @@ private:
 
 	//lighting
 	bool m_light;
+	bool m_fog;
 	Color m_mat_amb;
 	Color m_mat_diff;
 	Color m_mat_spec;
@@ -633,7 +647,7 @@ public:
 	VolumeData* GetVolume();
 
 	void Clear();
-	void Draw(bool persp);
+	void Draw(bool persp, glm::mat4 mv_mat, glm::mat4 proj_mat);
 
 	//display functions
 	void SetDisp(bool disp)
@@ -761,7 +775,7 @@ public:
 	void SetTransform(Transform *tform);
 
 	void Clear();
-	void Draw(bool persp, int nx, int ny, vector<AnnotationDB> annotationdb = vector<AnnotationDB>(), double spcx = 1.0, double spcy = 1.0, double spcz = 1.0);
+	void Draw(bool persp, int nx, int ny, glm::mat4 mv_mat, glm::mat4 proj_mat, vector<AnnotationDB> annotationdb = vector<AnnotationDB>(), double spcx = 1.0, double spcy = 1.0, double spcz = 1.0);
 
 	//display functions
 	void SetDisp(bool disp)
@@ -969,7 +983,7 @@ public:
 	bool FindID(unsigned int id);
 
 	int Load(wxString &filename);
-	void Draw();
+	void Draw(glm::mat4 mv_mat, glm::mat4 proj_mat);
 
 private:
 	static int m_num;
@@ -1084,6 +1098,8 @@ public:
 	void SetColormapMode(int mode);
 	void SetColormapDisp(bool disp);
 	void SetColormapValues(double low, double high);
+	void SetColormap(int value);
+	void SetColormapProj(int value);
 	void SetShading(bool shading);
 	void SetShadow(bool shadow);
 	void SetShadowParams(double val);
@@ -1307,6 +1323,7 @@ public:
 	double m_vol_ysp;	//y_spacing
 	double m_vol_zsp;	//z_spacing
 	double m_vol_lum;	//luminance
+	int m_vol_cmp;		//colormap
 	double m_vol_lcm;	//colormap low value
 	double m_vol_hcm;	//colormap high value
 	bool m_vol_eap;		//enable alpha
