@@ -269,6 +269,17 @@ namespace FLIVR
 
 			  b->set_vr(vr_list_[i]);
 
+			  auto vr = vr_list_[i];
+			  Transform *tform = vr->tex_->transform();
+			  double mvmat[16];
+			  tform->get_trans(mvmat);
+			  vr->m_mv_mat2 = glm::mat4(
+				  mvmat[0], mvmat[4], mvmat[8], mvmat[12],
+				  mvmat[1], mvmat[5], mvmat[9], mvmat[13],
+				  mvmat[2], mvmat[6], mvmat[10], mvmat[14],
+				  mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
+			  vr->m_mv_mat2 = vr->m_mv_mat * vr->m_mv_mat2;
+
 			  bool in_view = b->get_vr()->test_against_view(b->bbox());
 
 			  if (b->compute_t_index_min_max(view_ray, vr_dt))
@@ -650,6 +661,17 @@ namespace FLIVR
 				  }
 			  }
 
+			  auto vr = bs[cur_bid]->get_vr();
+			  Transform *tform = vr->tex_->transform();
+			  double mvmat[16];
+			  tform->get_trans(mvmat);
+			  vr->m_mv_mat2 = glm::mat4(
+				  mvmat[0], mvmat[4], mvmat[8], mvmat[12],
+				  mvmat[1], mvmat[5], mvmat[9], mvmat[13],
+				  mvmat[2], mvmat[6], mvmat[10], mvmat[14],
+				  mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
+			  vr->m_mv_mat2 = vr->m_mv_mat * vr->m_mv_mat2;
+
 			  if (bs[cur_bid]->get_vr()->test_against_view(bs[cur_bid]->bbox()))
 			  {
 				  bs[cur_bid]->compute_polygons2();
@@ -938,7 +960,11 @@ namespace FLIVR
 			  if ((order && (*ite)->timax() <= i) || (!order && (*ite)->timin() >= i))
 			  {
 				  //count up
-				  (*ite)->set_drawn(mode, true);
+				  if (TextureRenderer::get_mem_swap() &&
+					  TextureRenderer::get_start_update_loop() &&
+					  !TextureRenderer::get_done_update_loop())
+					  (*ite)->set_drawn(mode, true);
+
 				  TextureRenderer::cur_brick_num_++;
 				  finished_brk++;
 				  
