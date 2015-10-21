@@ -607,11 +607,13 @@ z
       }
    }
 
-   void TextureBrick::get_polygon(int tid, int &size, uint32_t* &i)
+   void TextureBrick::get_polygon(int tid, int &size_v, float* &v, int &size_i, uint32_t* &i)
    {
-	   if (size_.empty() || size_integ_i_.empty() || vertex_.empty() || index_.empty())
+	   if (size_i_.empty() || size_integ_i_.empty() || vertex_.empty() || index_.empty())
 	   {
-		   size = 0;
+		   size_v = 0;
+		   size_i = 0;
+		   v = nullptr;
 		   i = nullptr;
 
 		   return;
@@ -619,15 +621,21 @@ z
 
 	   bool order = TextureRenderer::get_update_order();
 	   int id = (order ? tid - timin_ : timax_ - tid);
-	   unsigned int offset = size_integ_i_[id];
+	   unsigned int offset_v = size_integ_v_[id];
+	   unsigned int offset_i = size_integ_i_[id];
 	   
-	   size = size_i_[id];
-	   if (size > 0)
+	   size_v = size_v_[id];
+	   size_i = size_i_[id];
+	   if (size_i > 0 && size_v >= 3)
 	   {
-		   i = &index_[offset*3];
+		   v = &vertex_[offset_v*6];
+		   i = &index_[offset_i*3];
 	   }
 	   else
 	   {
+		   size_v = 0;
+		   size_i = 0;
+		   v = nullptr;
 		   i = nullptr;
 	   }
    }
@@ -636,7 +644,8 @@ z
    {
 	   if (!vertex_.empty()) vertex_.clear();
 	   if (!index_.empty()) index_.clear();
-	   if (!size_.empty()) size_.clear();
+	   if (!size_v_.empty()) size_v_.clear();
+	   if (!size_integ_v_.empty()) size_integ_v_.clear();
 	   if (!size_i_.empty()) size_i_.clear();
 	   if (!size_integ_i_.empty()) size_integ_i_.clear();
    }
@@ -647,7 +656,7 @@ z
 
       Vector vv[12], tt[12]; // temp storage for vertices and texcoords
 
-      int k = 0, degree = 0;
+      int k = 0, l = 0, degree = 0;
 
       // find up and right vectors
       Vector vdir = vray_.direction();
@@ -744,9 +753,9 @@ z
 			 }
 			 // save all of the indices
 			 for(uint32_t j = 1; j < degree - 1; j++) {
-				 index_.push_back(vert_count);
-				 index_.push_back(vert_count+j);
-				 index_.push_back(vert_count+j+1);
+				 index_.push_back(0);
+				 index_.push_back(j);
+				 index_.push_back(j+1);
 			 }
 			 // save all of the verts
 			 for (uint32_t j=0; j<degree; j++)
@@ -763,9 +772,9 @@ z
 		 else
 		 {
 			 for(uint32_t j = 1; j < degree - 1; j++) {
-				 index_.push_back(vert_count);
-				 index_.push_back(vert_count+j);
-				 index_.push_back(vert_count+j+1);
+				 index_.push_back(0);
+				 index_.push_back(j);
+				 index_.push_back(j+1);
 			 }
 			 // save all of the verts
 			 for (uint32_t j=0; j<degree; j++)
@@ -780,9 +789,11 @@ z
 			 }
 		 }
 
-		size_.push_back(degree);
+		size_v_.push_back(degree);
 		size_i_.push_back((degree-2 > 0) ? degree-2 : 0);
+		size_integ_v_.push_back(l);
 		size_integ_i_.push_back(k);
+		l += degree;
 		k += degree-2;
 	  }
    }

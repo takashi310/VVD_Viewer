@@ -727,10 +727,11 @@ namespace FLIVR
 				  else glDrawBuffers(1, draw_buffers);
 			  }
 
-			  int s; 
+			  int s_v, s_i; 
+			  float *vert;
 			  uint32_t *indx;
-			  b->get_polygon(i, s, indx);
-			  if (s == 0 || indx == nullptr)
+			  b->get_polygon(i, s_v, vert, s_i, indx);
+			  if (indx == nullptr || vert == nullptr || s_v == 0 || s_i == 0)
 				  continue;
 
 			  if (blend_slices_ || multi_shader)
@@ -877,15 +878,14 @@ namespace FLIVR
 				  filter = GL_NEAREST;
 			  vr->load_brick(0, 0, &vector<TextureBrick *>(1,b), 0, filter, vr->compression_, 0, false);
 			  
-			  auto vert_list = b->get_vertex_list();
 			  glBindVertexArray(vr->m_slices_vao);
 			  glBindBuffer(GL_ARRAY_BUFFER, vr->m_slices_vbo);
-			  glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vert_list->size(), &(*vert_list)[0], GL_DYNAMIC_DRAW);
+			  glBufferData(GL_ARRAY_BUFFER, sizeof(float)*s_v*6, vert, GL_DYNAMIC_DRAW);
 			  glEnableVertexAttribArray(0);
 			  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)0);
 			  glEnableVertexAttribArray(1);
 			  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)12);
-			  glDrawElements(GL_TRIANGLES, s*3, GL_UNSIGNED_INT, indx);
+			  glDrawElements(GL_TRIANGLES, s_i*3, GL_UNSIGNED_INT, indx);
 			  glDisableVertexAttribArray(0);
 			  glDisableVertexAttribArray(1);
 			  glBindBuffer(GL_ARRAY_BUFFER, 0);

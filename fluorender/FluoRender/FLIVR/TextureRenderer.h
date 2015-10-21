@@ -333,8 +333,8 @@ namespace FLIVR
                static int update_order_;
 
                //for view testing
-               double mvmat_[16];
-               double prmat_[16];
+               float mvmat_[16];
+               float prmat_[16];
 
 			   //opengl matrices
 			   glm::mat4 m_mv_mat;

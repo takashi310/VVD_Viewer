@@ -163,7 +163,7 @@ namespace FLIVR {
 			vector<uint32_t>& size);
 
 
-		void get_polygon(int tid, int &size, uint32_t* &i);
+		void get_polygon(int tid, int &size_v, float* &v, int &size_i, uint32_t* &i);
 		
 		//set d
 		void set_d(double d) { d_ = d; }
@@ -204,7 +204,7 @@ namespace FLIVR {
 
 		std::vector<float> *get_vertex_list() {return &vertex_;}
 		std::vector<uint32_t> *get_index_list() {return &index_;}
-		std::vector<int> *get_size_list() {return &size_;}
+		std::vector<int> *get_v_size_list() {return &size_v_;}
 
 	private:
 		void compute_edge_rays(BBox &bbox);
@@ -266,7 +266,8 @@ namespace FLIVR {
 		VolumeRenderer *vr_;
 		vector<float> vertex_;
 		vector<uint32_t> index_;
-		vector<int> size_;
+		vector<int> size_v_;
+		vector<int> size_integ_v_;
 		vector<int> size_i_;
 		vector<int> size_integ_i_;
 	};

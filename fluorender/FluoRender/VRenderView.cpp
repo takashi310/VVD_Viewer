@@ -1085,7 +1085,7 @@ void VRenderGLView::Draw()
       //traces
       DrawTraces();
 
-	  m_mv_mat = mv_temp;
+	  //m_mv_mat = mv_temp;
    }
 
    m_draw_overlays_only = false;
@@ -1605,12 +1605,12 @@ void VRenderGLView::DrawVolumes(int peel)
       //DrawVolumesComp(m_vd_pop_list, peel);
       if (m_vol_method == VOL_METHOD_MULTI)
       {
-         if (TextureRenderer::get_mem_swap() &&
+/*         if (TextureRenderer::get_mem_swap() &&
                TextureRenderer::get_interactive() &&
                quota_vd_list.size()>0)
             DrawVolumesMulti(quota_vd_list, peel);
          else
-            DrawVolumesMulti(m_vd_pop_list, peel);
+*/            DrawVolumesMulti(m_vd_pop_list, peel);
          //draw masks
          if (m_draw_mask)
             DrawVolumesComp(m_vd_pop_list, peel, true);
@@ -4122,8 +4122,8 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
          VolumeRenderer* vr = list[i]->GetVR();
          if (vr)
          {
-			 list[i]->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
-			 list[i]->SetFog(m_use_fog, m_fog_intensity, m_fog_start, m_fog_end);
+			list[i]->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
+			list[i]->SetFog(m_use_fog, m_fog_intensity, m_fog_start, m_fog_end);
             m_mvr->add_vr(vr);
             m_mvr->set_sampling_rate(vr->get_sampling_rate());
             m_mvr->SetNoiseRed(vr->GetNoiseRed());
@@ -8629,16 +8629,17 @@ void VRenderGLView::DrawInfo(int nx, int ny)
    glColor3d(m_bg_color_inv.r(), m_bg_color_inv.g(), m_bg_color_inv.b());
 
    double fps_ = 1.0/goTimer->average();
-   char str[128];
+   char str[1024];
    if (TextureRenderer::get_mem_swap())
    {
-      SPRINTF(str, 128, 
+	  SPRINTF(str, 128, 
             "FPS: %.2f, Bricks: %d, Quota: %d, Int: %s, Time: %lu",
             fps_>=0.0&&fps_<300.0?fps_:0.0,
-            TextureRenderer::get_finished_bricks(),
+            TextureRenderer::get_total_brick_num(),
             TextureRenderer::get_quota_bricks(),
             m_interactive?"Yes":"No",
             TextureRenderer::get_cor_up_time());
+
       ////budget_test
       //if (m_interactive)
       //  tos <<
@@ -8658,7 +8659,25 @@ void VRenderGLView::DrawInfo(int nx, int ny)
    beginRenderText(nx, ny);
    renderText(10, 20, BITMAP_FONT_TYPE_HELVETICA_12, str);
    endRenderText();
-
+/*
+   float *mvmat = glm::value_ptr(m_mv_mat);
+   SPRINTF(str, 1024, "%.5f %.5f %.5f %.5f", mvmat[0],mvmat[1],mvmat[2],mvmat[3]);
+   beginRenderText(nx, ny);
+   renderText(10, 60, BITMAP_FONT_TYPE_HELVETICA_12, str);
+   endRenderText();
+   SPRINTF(str, 1024, "%.5f %.5f %.5f %.5f", mvmat[4],mvmat[5],mvmat[6],mvmat[7]);
+   beginRenderText(nx, ny);
+   renderText(10, 80, BITMAP_FONT_TYPE_HELVETICA_12, str);
+   endRenderText();
+   SPRINTF(str, 1024, "%.5f %.5f %.5f %.5f", mvmat[8],mvmat[9],mvmat[10],mvmat[11]);
+   beginRenderText(nx, ny);
+   renderText(10, 100, BITMAP_FONT_TYPE_HELVETICA_12, str);
+   endRenderText();
+   SPRINTF(str, 1024, "%.5f %.5f %.5f %.5f", mvmat[12],mvmat[13],mvmat[14],mvmat[15]);
+   beginRenderText(nx, ny);
+   renderText(10, 120, BITMAP_FONT_TYPE_HELVETICA_12, str);
+   endRenderText();
+*/
    if (m_draw_coord)
    {
       Point p;
