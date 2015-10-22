@@ -1781,7 +1781,6 @@ namespace FLIVR
 					z);
 				draw_slices(double(z+0.5) / double(b->nz()));
 			}
-			glFlush();
 		}
 
 		glMatrixMode(GL_PROJECTION);
