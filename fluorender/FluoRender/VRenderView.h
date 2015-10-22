@@ -219,6 +219,7 @@ class VRenderGLView: public wxGLCanvas
       wxString AddMGroup(wxString str);
       //remove
       void RemoveVolumeData(wxString &name);
+	  void ReplaceVolumeData(wxString &name, VolumeData *dst);
       void RemoveMeshData(wxString &name);
       void RemoveAnnotations(wxString &name);
       void RemoveGroup(wxString &name);
@@ -589,6 +590,8 @@ class VRenderGLView: public wxGLCanvas
 
 	void SetMinPPI(double ppi);
 	double GetMinPPI() {return m_min_ppi;};
+
+	VolumeData *CopyLevel(VolumeData *src, int lv=-1);
 
    public:
          //script run

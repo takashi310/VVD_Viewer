@@ -206,6 +206,9 @@ namespace FLIVR {
 		std::vector<uint32_t> *get_index_list() {return &index_;}
 		std::vector<int> *get_v_size_list() {return &size_v_;}
 
+		void set_disp(bool disp) {disp_ = disp;}
+		bool get_disp() {return disp_;}
+
 	private:
 		void compute_edge_rays(BBox &bbox);
 		void compute_edge_rays_tex(BBox &bbox);
@@ -270,6 +273,8 @@ namespace FLIVR {
 		vector<int> size_integ_v_;
 		vector<int> size_i_;
 		vector<int> size_integ_i_;
+
+		bool disp_;
 	};
 
 	struct Pyramid_Level {

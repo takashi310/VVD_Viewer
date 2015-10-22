@@ -1085,7 +1085,7 @@ void VRenderGLView::Draw()
       //traces
       DrawTraces();
 
-	  //m_mv_mat = mv_temp;
+	  m_mv_mat = mv_temp;
    }
 
    m_draw_overlays_only = false;
@@ -2236,6 +2236,60 @@ void VRenderGLView::Set2dWeights()
    m_selector.Set2DWeight(m_tex_final, glIsTexture(m_tex_wt2)?m_tex_wt2:m_tex);
 }
 
+VolumeData *VRenderGLView::CopyLevel(VolumeData *src, int lv)
+{
+	if (!src->isBrxml()) return NULL;
+
+	bool swap_selection = (m_cur_vol == src);
+
+	VolumeData *vd_new = src->CopyLevel(lv);
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	DataManager* mgr = vr_frame->GetDataManager();
+	if (vd_new && vr_frame && mgr)
+	{
+		wxString group_name;
+		DataGroup* group = 0;
+
+		for (int i=(int)m_layer_list.size()-1; i>=0; i--)
+		{
+			if (!m_layer_list[i]) continue;
+
+			if (m_layer_list[i]->IsA() == 5) //group
+			{
+				DataGroup* group = (DataGroup*)m_layer_list[i];
+				for (int j=group->GetVolumeNum()-1; j>=0; j--)
+				{
+					VolumeData* gvd = group->GetVolumeData(j);
+					if (gvd == src)
+					{
+						group_name = group->GetName();
+						break;
+					}
+				}
+			}
+		}
+		if (group_name.IsEmpty())
+		{
+			group_name = AddGroup("");
+			group = GetGroup(group_name);
+		}
+
+		wxString src_name = src->GetName();
+		ReplaceVolumeData(src_name, vd_new);
+		mgr->ReplaceVolumeData(mgr->GetVolumeIndex(src_name), vd_new);
+		
+		vd_new->SetName(src_name);
+		if (swap_selection) m_cur_vol = vd_new;
+		SetVolPopDirty();
+		PopVolumeList();
+		vr_frame->UpdateList();
+		//vr_frame->UpdateTree(swap_selection ? vd_new->GetName() : "", false); //UpdateTree line1: m_tree_panel->DeleteAll(); <-memory access violation
+		if (swap_selection) vr_frame->OnSelection(2, m_vrv, group, vd_new);
+	}
+
+	return vd_new;
+}
+
 //segment volumes in current view
 void VRenderGLView::Segment()
 {
@@ -2256,10 +2310,13 @@ void VRenderGLView::Segment()
 	//orthographic
 	m_selector.SetOrthographic(!m_persp);
 
+	bool copied = false;
+	
 	if (m_selector.GetSelectGroup())
 	{
 		VolumeData* vd = m_selector.GetVolume();
 		DataGroup* group = 0;
+		
 		if (vd)
 		{
 			for (int i=0; i<GetLayerNum(); i++)
@@ -2284,9 +2341,24 @@ void VRenderGLView::Segment()
 			//select the group
 			if (group && group->GetVolumeNum()>1)
 			{
+				vector<VolumeData *> cp_vd_list;
+				VolumeData* tmp_vd;
 				for (int i=0; i<group->GetVolumeNum(); i++)
 				{
-					VolumeData* tmp_vd = group->GetVolumeData(i);
+					tmp_vd = group->GetVolumeData(i);
+					if (tmp_vd && tmp_vd->isBrxml())
+						cp_vd_list.push_back(tmp_vd);
+				}
+				for (auto v : cp_vd_list)
+				{
+					bool cur = (v == vd);
+					v = CopyLevel(v);
+					if (cur) vd = v;
+				}
+
+				for (int i=0; i<group->GetVolumeNum(); i++)
+				{
+					tmp_vd = group->GetVolumeData(i);
 					if (tmp_vd && tmp_vd->GetDisp())
 					{
 						tmp_vd->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
@@ -2296,20 +2368,34 @@ void VRenderGLView::Segment()
 				}
 				m_selector.SetVolume(vd);
 			}
-			else
-				m_selector.Select(m_brush_radius2-m_brush_radius1);
 		}
 	}
 	else if (m_selector.GetSelectBoth())
 	{
 		VolumeData* vd = m_calculator.GetVolumeA();
+		if (vd && vd->isBrxml())
+		{
+			vd = CopyLevel(vd);
+			m_calculator.SetVolumeA(vd);
+			if (vd) copied = true;
+		}
+
 		if (vd)
 		{
 			vd->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
 			m_selector.SetVolume(vd);
 			m_selector.Select(m_brush_radius2-m_brush_radius1);
 		}
+
+
 		vd = m_calculator.GetVolumeB();
+		if (vd && vd->isBrxml())
+		{
+			vd = CopyLevel(vd);
+			m_calculator.SetVolumeB(vd);
+			if (vd) copied = true;
+		}
+
 		if (vd)
 		{
 			vd->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
@@ -2318,7 +2404,18 @@ void VRenderGLView::Segment()
 		}
 	}
 	else
+	{
+		VolumeData* vd = m_selector.GetVolume();
+		if (vd && vd->isBrxml())
+		{
+			vd = CopyLevel(vd);
+			m_selector.SetVolume(vd);
+			if (vd) copied = true;
+		}
 		m_selector.Select(m_brush_radius2-m_brush_radius1);
+	}
+
+	if (copied = true) RefreshGL(false, true);
 
 }
 
@@ -2333,27 +2430,20 @@ int VRenderGLView::CompAnalysis(double min_voxels, double max_voxels, double thr
 {
    int return_val = 0;
 
+   bool copied = false;
+   VolumeData *vd = m_selector.GetVolume();
+   if (vd && vd->isBrxml())
+   {
+	   vd = CopyLevel(vd);
+	   m_selector.SetVolume(vd);
+	   if (vd) copied = true;
+   }
+
    if (!select)
    {
-/*      glViewport(0, 0, (GLint)GetSize().x, (GLint)GetSize().y);
-      HandleCamera();
-
-      glMatrixMode(GL_MODELVIEW);
-      glPushMatrix();
-      //translate object
-      glTranslated(m_obj_transx, m_obj_transy, m_obj_transz);
-      //rotate object
-      glRotated(m_obj_rotx, 1.0, 0.0, 0.0);
-      glRotated(m_obj_roty+180.0, 0.0, 1.0, 0.0);
-      glRotated(m_obj_rotz+180.0, 0.0, 0.0, 1.0);
-      //center object
-      glTranslated(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz);
-*/
       m_selector.Set2DMask(m_tex_paint);
       m_selector.Set2DWeight(m_tex_final, glIsTexture(m_tex_wt2)?m_tex_wt2:m_tex);
       return_val = m_selector.CompAnalysis(min_voxels, max_voxels, thresh, 1.0, select, gen_ann);
-
-      //glPopMatrix();
    }
    else
       return_val = m_selector.CompAnalysis(min_voxels, max_voxels, thresh, 1.0, select, gen_ann);
@@ -2370,6 +2460,8 @@ int VRenderGLView::CompAnalysis(double min_voxels, double max_voxels, double thr
          vr_frame->UpdateList();
       }
    }
+
+   if (copied) RefreshGL(false, true);
 
    return return_val;
 }
@@ -2464,26 +2556,22 @@ void VRenderGLView::ShowAnnotations()
 int VRenderGLView::NoiseAnalysis(double min_voxels, double max_voxels, double thresh)
 {
    int return_val = 0;
-/*
-   glViewport(0, 0, (GLint)GetSize().x, (GLint)GetSize().y);
-   HandleCamera();
 
-   glMatrixMode(GL_MODELVIEW);
-   glPushMatrix();
-   //translate object
-   glTranslated(m_obj_transx, m_obj_transy, m_obj_transz);
-   //rotate object
-   glRotated(m_obj_rotx, 1.0, 0.0, 0.0);
-   glRotated(m_obj_roty+180.0, 0.0, 1.0, 0.0);
-   glRotated(m_obj_rotz+180.0, 0.0, 0.0, 1.0);
-   //center object
-   glTranslated(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz);
-*/
+   bool copied = false;
+   VolumeData *vd = m_selector.GetVolume();
+   if (vd && vd->isBrxml())
+   {
+	   vd = CopyLevel(vd);
+	   m_selector.SetVolume(vd);
+	   if (vd) copied = true;
+   }
+
    m_selector.Set2DMask(m_tex_paint);
    m_selector.Set2DWeight(m_tex_final, glIsTexture(m_tex_wt2)?m_tex_wt2:m_tex);
    return_val = m_selector.NoiseAnalysis(min_voxels, max_voxels, 10.0, thresh);
 
-   //glPopMatrix();
+   if (copied) RefreshGL(false, true);
+
    return return_val;
 }
 
@@ -2732,6 +2820,22 @@ wxString VRenderGLView::Calculate(int type, wxString prev_group, bool add)
 {
    wxString result = "";
 
+   bool copied = false;
+   VolumeData* vd_A = m_calculator.GetVolumeA();
+   if (vd_A && vd_A->isBrxml())
+   {
+	   vd_A = CopyLevel(vd_A);
+	   if (vd_A) copied = true;
+   }
+   VolumeData* vd_B = m_calculator.GetVolumeB();
+   if (vd_B && vd_B->isBrxml())
+   {
+	   vd_B = CopyLevel(vd_B);
+	   if (vd_B) copied = true;
+   }
+   m_calculator.SetVolumeA(vd_A);
+   m_calculator.SetVolumeB(vd_B);
+
    m_calculator.Calculate(type);
    VolumeData* vd = m_calculator.GetResult();
    if (vd)
@@ -2750,7 +2854,7 @@ wxString VRenderGLView::Calculate(int type, wxString prev_group, bool add)
          {
             //copy 2d adjust & color
             VolumeData* vd_a = m_calculator.GetVolumeA();
-            if(vd_a)
+			if(vd_a)
             {
                //clipping planes
                vector<Plane*> *planes = vd_a->GetVR()?vd_a->GetVR()->get_planes():0;
@@ -2821,6 +2925,11 @@ wxString VRenderGLView::Calculate(int type, wxString prev_group, bool add)
          }
          RefreshGL();
       }
+   }
+
+   if (copied)
+   {
+	   RefreshGL(false, true);
    }
 
    return prev_group;
@@ -2951,7 +3060,7 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, int peel, bool ma
 			  v.safe_normalize();
 			  v = field_trans->project(spcv[i]);
 
-			  double len = Dot(spcv[i], v);;
+			  double len = Dot(spcv[i], v);
 			  if(len > maxlen) maxlen = len;
 		  }
 		  if (maxlen > sampling_frq_fac) sampling_frq_fac = maxlen;
@@ -4111,30 +4220,32 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 
    int i;
    bool use_tex_wt2 = false;
+   bool shadow = false;
    m_mvr->clear_vr();
    for (i=0; i<(int)list.size(); i++)
    {
 	   if (list[i] && list[i]->GetDisp())
-      {
-		 
-		 //switchLevel(list[i]);
+	   {
 
-         VolumeRenderer* vr = list[i]->GetVR();
-         if (vr)
-         {
-			list[i]->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
-			list[i]->SetFog(m_use_fog, m_fog_intensity, m_fog_start, m_fog_end);
-            m_mvr->add_vr(vr);
-            m_mvr->set_sampling_rate(vr->get_sampling_rate());
-            m_mvr->SetNoiseRed(vr->GetNoiseRed());
-         }
-         VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-         if (list[i]->GetTexture() &&
-               list[i]->GetTexture()->nmask()!=-1 &&
-               vr_frame &&
-               list[i]==vr_frame->GetCurSelVol())
-            use_tex_wt2 = true;
-      }
+		   //switchLevel(list[i]);
+		   shadow |= list[i]->GetShadow();
+
+		   VolumeRenderer* vr = list[i]->GetVR();
+		   if (vr)
+		   {
+			   list[i]->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
+			   list[i]->SetFog(m_use_fog, m_fog_intensity, m_fog_start, m_fog_end);
+			   m_mvr->add_vr(vr);
+			   m_mvr->set_sampling_rate(vr->get_sampling_rate());
+			   m_mvr->SetNoiseRed(vr->GetNoiseRed());
+		   }
+		   VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+		   if (list[i]->GetTexture() &&
+			   list[i]->GetTexture()->nmask()!=-1 &&
+			   vr_frame &&
+			   list[i]==vr_frame->GetCurSelVol())
+			   use_tex_wt2 = true;
+	   }
    }
 
    if (m_mvr->get_vr_num()<=0)
@@ -4214,12 +4325,14 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 
    //draw multiple volumes at the same time
    m_mvr->draw(m_test_wiref, m_interactive, !m_persp, m_scale_factor, m_intp);
-
    glBindTexture(GL_TEXTURE_2D, 0);
    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-   //draw shadows
-   DrawOLShadows(list, use_tex_wt2?m_tex_wt2:m_tex);
+   if (shadow)
+   {
+	   //draw shadows
+	   DrawOLShadows(list, use_tex_wt2?m_tex_wt2:m_tex);
+   }
 
    //bind fbo for final composition
    glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_final);
@@ -4789,41 +4902,7 @@ void VRenderGLView::OnIdle(wxIdleEvent& event)
 
    if (wxGetKeyState(WXK_ALT) && wxGetKeyState(wxKeyCode('V')) && !m_key_lock)
    {
-	   if(m_cur_vol && m_cur_vol->isBrxml())
-	   {
-		   VolumeData *vd_new = m_cur_vol->CopyLevel();
-		   VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-		   if (vd_new && vr_frame)
-		   {
-			   wxString group_name;
-
-			   for (int i=(int)m_layer_list.size()-1; i>=0; i--)
-			   {
-				   if (!m_layer_list[i]) continue;
-				   
-				   if (m_layer_list[i]->IsA() == 5) //group
-				   {
-					   DataGroup* group = (DataGroup*)m_layer_list[i];
-					   for (int j=group->GetVolumeNum()-1; j>=0; j--)
-					   {
-						   VolumeData* vd = group->GetVolumeData(j);
-						   if (vd == m_cur_vol)
-						   {
-							   group_name = group->GetName();
-						   }
-					   }
-				   }
-			   }
-
-			   vr_frame->GetDataManager()->AddVolumeData(vd_new);
-			   
-			   if (group_name.IsEmpty()) group_name = AddGroup("");
-			   AddVolumeData(vd_new, group_name);
-			   m_cur_vol->SetDisp(false);
-			   vr_frame->UpdateList();
-			   vr_frame->UpdateTree(vd_new->GetName());
-		   }
-	   }
+	   if(m_cur_vol && m_cur_vol->isBrxml()) CopyLevel(m_cur_vol);
    }
 
    extern CURLM * _g_curlm;
@@ -6707,6 +6786,69 @@ void VRenderGLView::AddMeshData(MeshData* md)
 void VRenderGLView::AddAnnotations(Annotations* ann)
 {
    m_layer_list.push_back(ann);
+}
+
+void VRenderGLView::ReplaceVolumeData(wxString &name, VolumeData *dst)
+{
+	int i, j;
+
+	bool found = false;
+	DataGroup* group = 0;
+
+	for (i=0; i<(int)m_layer_list.size(); i++)
+	{
+		if (!m_layer_list[i])
+			continue;
+		switch (m_layer_list[i]->IsA())
+		{
+		case 2://volume data
+			{
+				VolumeData* vd = (VolumeData*)m_layer_list[i];
+				if (vd && vd->GetName() == name)
+				{
+					if (m_cur_vol == vd) m_cur_vol = dst;
+					m_layer_list[i] = dst;
+					m_vd_pop_dirty = true;
+					found = true;
+					break;
+				}
+			}
+			break;
+		case 5://group
+			{
+				DataGroup* tmpgroup = (DataGroup*)m_layer_list[i];
+				for (j=0; j<tmpgroup->GetVolumeNum(); j++)
+				{
+					VolumeData* vd = tmpgroup->GetVolumeData(j);
+					if (vd && vd->GetName() == name)
+					{
+						if (m_cur_vol == vd) m_cur_vol = dst;
+						tmpgroup->ReplaceVolumeData(j, dst);
+						m_vd_pop_dirty = true;
+						found = true;
+						group = tmpgroup;
+						break;
+					}
+				}
+			}
+			break;
+		}
+	}
+
+	if (found)
+	{
+		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+		if (vr_frame)
+		{
+			AdjustView* adjust_view = vr_frame->GetAdjustView();
+			if (adjust_view)
+			{
+				adjust_view->SetVolumeData(dst);
+				if (!group) adjust_view->SetGroupLink(group);
+				adjust_view->UpdateSync();
+			}
+		}
+	}
 }
 
 void VRenderGLView::RemoveVolumeData(wxString &name)
@@ -9130,7 +9272,7 @@ void VRenderGLView::StartLoopUpdate()
 		for (i=0; i<m_vd_pop_list.size(); i++)
 		{
 			VolumeData* vd = m_vd_pop_list[i];
-			if (vd)
+			if (vd && vd->GetDisp())
 			{
 				switchLevel(vd);
 				if (!TextureRenderer::get_mem_swap()) continue;
@@ -9159,7 +9301,13 @@ void VRenderGLView::StartLoopUpdate()
 							(*bricks)[j]->set_drawn(false);
 							if ((*bricks)[j]->get_priority()>0 ||
 								!vd->GetVR()->test_against_view((*bricks)[j]->bbox(), false))//changed by takashi
+							{
+								(*bricks)[j]->set_disp(false);
 								continue;
+							}
+							else
+								(*bricks)[j]->set_disp(true);
+
 							total_num++;
 							num_chan++;
 							if (vd->GetMode()==1 && vd->GetShading())

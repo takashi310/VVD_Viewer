@@ -111,7 +111,7 @@ public:
 
 	//save default
 	void SaveDefault();
-
+	
 private:
 	wxWindow* m_frame;
 
@@ -201,6 +201,8 @@ private:
 
 private:
 	void LoadDefault();
+
+	void LoadVolumes();
 
 	//event handling
 	//paint tools

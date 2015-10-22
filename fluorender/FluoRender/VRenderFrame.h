@@ -106,7 +106,7 @@ public:
 
 	TreePanel *GetTree();
 	ListPanel *GetList();
-	void UpdateTree(wxString name = "");
+	void UpdateTree(wxString name = "", bool set_calc=true);
 	void UpdateTreeColors();
 	void UpdateTreeIcons();
 	void UpdateList();

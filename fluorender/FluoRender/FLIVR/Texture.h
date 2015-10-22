@@ -173,7 +173,7 @@ namespace FLIVR
 		bool buildPyramid(vector<Pyramid_Level> &pyramid, vector<vector<vector<vector<wstring *>>>> &filenames, bool useURL = false);
 		void set_FrameAndChannel(int fr, int ch);
 		void setLevel(int lv);
-		Nrrd * loadData(int lv);
+		Nrrd * loadData(int &lv);
 		int GetCurLevel() {return pyramid_cur_lv_;}
 		int GetLevelNum() {return pyramid_.size();}
 		void SetCopyableLevel(int lv) {pyramid_copy_lv_ = lv;}

@@ -1274,7 +1274,7 @@ void VRenderFrame::UpdateTreeColors()
    m_tree_panel->Refresh(false);
 }
 
-void VRenderFrame::UpdateTree(wxString name)
+void VRenderFrame::UpdateTree(wxString name, bool set_calc)
 {
    m_tree_panel->DeleteAll();
    m_tree_panel->ClearIcons();
@@ -1329,7 +1329,7 @@ void VRenderFrame::UpdateTree(wxString name)
                if (name == vd->GetName())
                {
                   m_tree_panel->SelectItem(item);
-                  vrv->SetVolumeA(vd);
+                  if (set_calc) vrv->SetVolumeA(vd);
                   GetBrushToolDlg()->GetSettings(vrv);
                   GetMeasureDlg()->GetSettings(vrv);
                   GetTraceDlg()->GetSettings(vrv);
@@ -1402,7 +1402,7 @@ void VRenderFrame::UpdateTree(wxString name)
                   if (name == vd->GetName())
                   {
                      m_tree_panel->SelectItem(item);
-                     vrv->SetVolumeA(vd);
+                     if (set_calc) vrv->SetVolumeA(vd);
                      GetBrushToolDlg()->GetSettings(vrv);
                      GetMeasureDlg()->GetSettings(vrv);
                      GetTraceDlg()->GetSettings(vrv);

@@ -1226,9 +1226,23 @@ void BrushToolDlg::OnLoadB(wxCommandEvent &event)
    }
 }
 
+void BrushToolDlg::LoadVolumes()
+{
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+
+	DataManager* mgr = vr_frame->GetDataManager();
+    if (!mgr) return;
+
+	m_vol1 = mgr->GetVolumeData(m_calc_a_text->GetValue());
+	m_vol2 = mgr->GetVolumeData(m_calc_b_text->GetValue());
+}
+
 //operators
 void BrushToolDlg::OnCalcSub(wxCommandEvent &event)
 {
+	LoadVolumes();
+
    if (!m_vol1 || !m_vol2)
       return;
 
@@ -1261,6 +1275,8 @@ void BrushToolDlg::OnCalcSub(wxCommandEvent &event)
 
 void BrushToolDlg::OnCalcAdd(wxCommandEvent &event)
 {
+	LoadVolumes();
+
    if (!m_vol1 || !m_vol2)
       return;
 
@@ -1293,6 +1309,8 @@ void BrushToolDlg::OnCalcAdd(wxCommandEvent &event)
 
 void BrushToolDlg::OnCalcDiv(wxCommandEvent &event)
 {
+	LoadVolumes();
+
    if (!m_vol1 || !m_vol2)
       return;
 
@@ -1325,6 +1343,8 @@ void BrushToolDlg::OnCalcDiv(wxCommandEvent &event)
 
 void BrushToolDlg::OnCalcIsc(wxCommandEvent &event)
 {
+	LoadVolumes();
+
    if (!m_vol1 || !m_vol2)
       return;
 
@@ -1358,6 +1378,8 @@ void BrushToolDlg::OnCalcIsc(wxCommandEvent &event)
 //one-operators
 void BrushToolDlg::OnCalcFill(wxCommandEvent &event)
 {
+	LoadVolumes();
+
    if (!m_vol1)
       return;
 

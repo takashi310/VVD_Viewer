@@ -75,7 +75,7 @@ void DataTreeCtrl::DeleteAll()
    if (!IsEmpty())
    {
       //safe deletion, may be unnecessary
-      TraversalDelete(GetRootItem());
+      //TraversalDelete(GetRootItem());
       DeleteAllItems();
    }
 }

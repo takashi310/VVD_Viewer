@@ -88,7 +88,8 @@ namespace FLIVR
 
 	  brkdata_ = NULL;
 	  id_in_loadedbrks = -1;
-
+	  
+	  disp_ = true;
    }
 
    TextureBrick::~TextureBrick()

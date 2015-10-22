@@ -1779,7 +1779,7 @@ VolumeData* VolumeData::CopyLevel(int lv)
 	if (!nv) return NULL;
 
 	double spc[3];
-	GetSpacings(spc[0], spc[1], spc[2]);
+	GetSpacings(spc[0], spc[1], spc[2], lv);
 	vd->SetSpacings(spc[0], spc[1], spc[2]);
 
 	vd->SetColor(GetColor());
@@ -4586,6 +4586,17 @@ int DataManager::GetMeshIndex(wxString &name)
 		}
 	}
 	return -1;
+}
+
+void DataManager::ReplaceVolumeData(int index, VolumeData *vd)
+{
+	VolumeData* data = m_vd_list[index];
+	if (data)
+	{
+		delete data;
+		data = 0;
+	}
+	m_vd_list[index] = vd;
 }
 
 void DataManager::RemoveVolumeData(int index)

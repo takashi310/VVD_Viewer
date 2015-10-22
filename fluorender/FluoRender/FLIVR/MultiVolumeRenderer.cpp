@@ -199,11 +199,17 @@ namespace FLIVR
 
       set_interactive_mode(adaptive_ && interactive_mode_p);
 
+	  bool updating = (TextureRenderer::get_mem_swap() &&
+				  TextureRenderer::get_start_update_loop() &&
+				  !TextureRenderer::get_done_update_loop());
+
 	  int mode = (colormap_mode_ != FLV_CTYPE_DEPTH) ? 0 : 3;
 
 	  int i;
 	  vector<bool> used_colortype(FLV_COLORTYPE_NUM, false);
 	  vector<bool> used_shadertype(FLV_COLORTYPE_NUM*FLV_VRMODE_NUM, false);
+	  bool blend_slices = blend_slices_;
+	  bool use_id_color = false;
 	  
 	  double sampling_frq_fac = -1.0;
 	  for (i=0; i<(int)vr_list_.size(); i++)
@@ -213,10 +219,16 @@ namespace FLIVR
 			  continue;
 		  if (vr->colormap_mode_ >= 0 && vr->colormap_mode_ < FLV_COLORTYPE_NUM)
 		  {
-			  int cmode = colormap_mode_ != FLV_CTYPE_DEPTH ? vr->colormap_mode_ : FLV_CTYPE_DEPTH;
+			  int cmode = (colormap_mode_ != FLV_CTYPE_DEPTH) ? vr->colormap_mode_ : FLV_CTYPE_DEPTH;
 			  int vmode = vr->solid_ ? FLV_VR_SOLID : FLV_VR_ALPHA;
 			  used_colortype[cmode] = true;
 			  used_shadertype[vr_stype(cmode, vmode)] = true;
+			  if (cmode == FLV_CTYPE_INDEX) use_id_color = true;
+		  }
+		  else
+		  {
+			  used_colortype[FLV_CTYPE_DEFAULT] = true;
+			  used_shadertype[vr_stype(FLV_CTYPE_DEFAULT, FLV_VR_ALPHA)] = true;
 		  }
 
 		  Texture *tex = vr->tex_;
@@ -239,6 +251,8 @@ namespace FLIVR
 			  if (maxlen > sampling_frq_fac) sampling_frq_fac = maxlen;
 		  }
 	  }
+
+	  if (use_id_color) blend_slices = true;
 
 	  // Set sampling rate based on interaction.
       double rate = imode_ ? irate_ : sampling_rate_;
@@ -270,18 +284,9 @@ namespace FLIVR
 			  b->set_vr(vr_list_[i]);
 
 			  auto vr = vr_list_[i];
-			  Transform *tform = vr->tex_->transform();
-			  double mvmat[16];
-			  tform->get_trans(mvmat);
-			  vr->m_mv_mat2 = glm::mat4(
-				  mvmat[0], mvmat[4], mvmat[8], mvmat[12],
-				  mvmat[1], mvmat[5], mvmat[9], mvmat[13],
-				  mvmat[2], mvmat[6], mvmat[10], mvmat[14],
-				  mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
-			  vr->m_mv_mat2 = vr->m_mv_mat * vr->m_mv_mat2;
-
-			  bool in_view = b->get_vr()->test_against_view(b->bbox());
-
+			  bool disp = true;
+			  if (updating) disp = b->get_disp();
+			  
 			  if (b->compute_t_index_min_max(view_ray, vr_dt))
 			  {
 				  b->set_vr(vr_list_[i]);
@@ -294,15 +299,13 @@ namespace FLIVR
 
 				  bs.push_back(b);
 
-				  if (!b->drawn(mode) && in_view) remain_brk++;
+				  if (!b->drawn(mode) && disp) remain_brk++;
 			  }
-			  else if (TextureRenderer::get_mem_swap() &&
-				  TextureRenderer::get_start_update_loop() &&
-				  !TextureRenderer::get_done_update_loop() && !b->drawn(mode))
+			  else if (updating && !b->drawn(mode))
 			  {
 				  b->set_drawn(mode, true);
 
-				  if (in_view)
+				  if (disp)
 					  TextureRenderer::cur_brick_num_++;
 			  }
 		  }
@@ -505,13 +508,13 @@ namespace FLIVR
 					  hiqual_, 0, i, 0, 0, solid, 1);
 
 				  used_shader_n++;
-				  shader_id = i;
+				  shader_id = vr_stype(i, j);
 			  }
 		  }
 	  }
 	  if (used_shader_n > 1) multi_shader = true;
 
-	  if (!multi_shader && !blend_slices_)
+	  if (!multi_shader && !blend_slices)
 	  {
 		  if (!shader[shader_id]->valid())
 			  shader[shader_id]->create();
@@ -525,7 +528,7 @@ namespace FLIVR
 	  ofs.close();
 */
 
-      if (blend_slices_ && colormap_mode_!=FLV_CTYPE_DEPTH)
+      if (blend_slices && colormap_mode_!=FLV_CTYPE_DEPTH)
       {
 		  glEnable(GL_TEXTURE_2D);
 		  glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -546,7 +549,7 @@ namespace FLIVR
 			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
 			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-			  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w2, h2, 0,
+			  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
 				  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
 			  glFramebufferTexture2D(GL_FRAMEBUFFER,
 				  GL_COLOR_ATTACHMENT0,
@@ -558,7 +561,7 @@ namespace FLIVR
 			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
 			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-			  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w2, h2, 0,
+			  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
 				  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
 			  glFramebufferTexture2D(GL_FRAMEBUFFER,
 			  GL_COLOR_ATTACHMENT1,
@@ -587,12 +590,12 @@ namespace FLIVR
 			  glBindFramebuffer(GL_FRAMEBUFFER, blend_fbo_);
 
 			  glBindTexture(GL_TEXTURE_2D, blend_tex_);
-			  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w2, h2, 0,
+			  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
 				  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
 			  glBindTexture(GL_TEXTURE_2D, 0);
 
 			  glBindTexture(GL_TEXTURE_2D, blend_id_tex_);
-			  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w2, h2, 0,
+			  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
 				  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
 			  glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -630,9 +633,7 @@ namespace FLIVR
 	  bool order = TextureRenderer::get_update_order();
 	  int start_i = order ? all_timin : all_timax;
 
-	  if (TextureRenderer::get_mem_swap() &&
-		  TextureRenderer::get_start_update_loop() &&
-		  !TextureRenderer::get_done_update_loop())
+	  if (updating)
 	  {
 		  start_i += TextureRenderer::cur_tid_offset_multi_;
 	  }
@@ -650,39 +651,29 @@ namespace FLIVR
 
 		  while (cur_bid < bs_size && (order?(bs[cur_bid]->timin() <= i):(bs[cur_bid]->timax() >= i)))
 		  {
-			  if (TextureRenderer::get_mem_swap() &&
-				  TextureRenderer::get_start_update_loop() &&
-				  !TextureRenderer::get_done_update_loop())
+			  if (updating)
 			  {
 				  if (bs[cur_bid]->drawn(mode))
 				  {
 					  cur_bid++;
 					  continue;
 				  }
+
+				  if (bs[cur_bid]->get_disp())
+				  {
+					  bs[cur_bid]->compute_polygons2();
+					  cur_brs.push_back(bs[cur_bid]);
+				  }
+				  else
+				  {
+					  if (!bs[cur_bid]->drawn(mode))
+						  bs[cur_bid]->set_drawn(mode, true);
+				  }
 			  }
-
-			  auto vr = bs[cur_bid]->get_vr();
-			  Transform *tform = vr->tex_->transform();
-			  double mvmat[16];
-			  tform->get_trans(mvmat);
-			  vr->m_mv_mat2 = glm::mat4(
-				  mvmat[0], mvmat[4], mvmat[8], mvmat[12],
-				  mvmat[1], mvmat[5], mvmat[9], mvmat[13],
-				  mvmat[2], mvmat[6], mvmat[10], mvmat[14],
-				  mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
-			  vr->m_mv_mat2 = vr->m_mv_mat * vr->m_mv_mat2;
-
-			  if (bs[cur_bid]->get_vr()->test_against_view(bs[cur_bid]->bbox()))
+			  else
 			  {
 				  bs[cur_bid]->compute_polygons2();
 				  cur_brs.push_back(bs[cur_bid]);
-			  }
-			  else if (TextureRenderer::get_mem_swap() &&
-				  TextureRenderer::get_start_update_loop() &&
-				  !TextureRenderer::get_done_update_loop())
-			  {
-				  if (!bs[cur_bid]->drawn(mode))
-					  bs[cur_bid]->set_drawn(mode, true);
 			  }
 
 			  cur_bid++;
@@ -691,7 +682,7 @@ namespace FLIVR
 		  if (cur_brs.size() == 0)
 			  continue;
 
-		  if (blend_slices_ && colormap_mode_!=FLV_CTYPE_DEPTH)
+		  if (blend_slices && colormap_mode_!=FLV_CTYPE_DEPTH)
 		  {
 			  glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			  
@@ -717,7 +708,7 @@ namespace FLIVR
 			  int vr_shader_id = vr_stype(vr_cmode, vr->solid_ ? FLV_VR_SOLID : FLV_VR_ALPHA);
 
 			  double id_mode = 0.0;
-			  if (blend_slices_ && colormap_mode_!=FLV_CTYPE_DEPTH)
+			  if (blend_slices && colormap_mode_!=FLV_CTYPE_DEPTH)
 			  {
 				  if (vr_cmode == FLV_CTYPE_INDEX)
 				  {
@@ -734,7 +725,7 @@ namespace FLIVR
 			  if (indx == nullptr || vert == nullptr || s_v == 0 || s_i == 0)
 				  continue;
 
-			  if (blend_slices_ || multi_shader)
+			  if (blend_slices || multi_shader)
 			  {
 				  if (shader[vr_shader_id])
 				  {
@@ -899,7 +890,7 @@ namespace FLIVR
 
 		  glFinish();
 
-		  if (blend_slices_ && colormap_mode_!=FLV_CTYPE_DEPTH)
+		  if (blend_slices && colormap_mode_!=FLV_CTYPE_DEPTH)
 		  {
 			  //set buffer back
 			  glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -952,7 +943,7 @@ namespace FLIVR
 			  glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 			  glFinish();
-		  }//if (blend_slices_ && colormap_mode_!=FLV_CTYPE_DEPTH)
+		  }//if (blend_slices && colormap_mode_!=FLV_CTYPE_DEPTH)
 
 		  vector<TextureBrick *>::iterator ite = cur_brs.begin();
 		  while (ite != cur_brs.end())
@@ -960,11 +951,10 @@ namespace FLIVR
 			  if ((order && (*ite)->timax() <= i) || (!order && (*ite)->timin() >= i))
 			  {
 				  //count up
-				  if (TextureRenderer::get_mem_swap() &&
-					  TextureRenderer::get_start_update_loop() &&
-					  !TextureRenderer::get_done_update_loop())
+				  if (updating)
 					  (*ite)->set_drawn(mode, true);
 
+				  (*ite)->clear_polygons();
 				  TextureRenderer::cur_brick_num_++;
 				  finished_brk++;
 				  

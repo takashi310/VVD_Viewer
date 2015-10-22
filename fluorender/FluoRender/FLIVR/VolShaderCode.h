@@ -355,7 +355,7 @@ namespace FLIVR
 	"	else\n" \
 	"	{\n" \
 	"		v.x = (v.x<loc2.z?(loc3.w-loc2.z+v.x)/loc3.w:(v.x>loc2.w?(loc3.w-v.x+loc2.w)/loc3.w:1.0))*v.x;\n" \
-	"		//v.x = (v.y<loc3.y?(loc3.w-loc3.y+v.y)/loc3.w:1.0)*v.x;\n" \
+	"		v.x = (v.y<loc3.y?(loc3.w-loc3.y+v.y)/loc3.w:1.0)*v.x;\n" \
 	"		tf_alp = pow(clamp(v.x/loc3.z,\n" \
 	"			loc3.x<1.0?-(loc3.x-1.0)*0.00001:0.0,\n" \
 	"			loc3.x>1.0?0.9999:1.0), loc3.x);\n" \
@@ -573,8 +573,8 @@ namespace FLIVR
 
 #define VOL_COLOR_OUTPUT \
 	"	//VOL_COLOR_OUTPUT\n" \
-	"	//c.xyz = c.xyz*clamp(1.0-loc1.x, 0.0, 1.0) + loc1.x*c.xyz*(loc1.y > 0.0?(n.w + n.z):1.0);\n" \
-	"	//c.xyz *= pow(1.0 - loc1.x/2.0, 2.0) + 1.0;\n" \
+	"	c.xyz = c.xyz*clamp(1.0-loc1.x, 0.0, 1.0) + loc1.x*c.xyz*(loc1.y > 0.0?(n.w + n.z):1.0);\n" \
+	"	c.xyz *= pow(1.0 - loc1.x/2.0, 2.0) + 1.0;\n" \
 	"\n"
 
 #define VOL_FOG_BODY \

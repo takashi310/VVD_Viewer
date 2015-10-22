@@ -1046,6 +1046,14 @@ public:
 			m_vd_list.push_back(vd);
 		}
 	}
+
+	void ReplaceVolumeData(int index, VolumeData *vd)
+	{
+		if (index>=0 && index<(int)m_vd_list.size())
+			m_vd_list[index] = vd;
+		ResetSync();
+	}
+
 	void RemoveVolumeData(int index)
 	{
 		if (index>=0 && index<(int)m_vd_list.size())
@@ -1246,6 +1254,7 @@ public:
 	void SetLoadMask(bool load_mask) {m_load_mask = load_mask;}
 	void AddVolumeData(VolumeData* vd);
 	VolumeData* DuplicateVolumeData(VolumeData* vd);
+	void ReplaceVolumeData(int index, VolumeData *vd);
 	void RemoveVolumeData(int index);
 	int GetVolumeNum();
 	VolumeData* GetVolumeData(int index);

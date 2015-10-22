@@ -753,7 +753,7 @@ namespace FLIVR
 		pyramid_cur_lv_ = -1;
 	}
 
-	Nrrd *Texture::loadData(int lv)
+	Nrrd *Texture::loadData(int &lv)
 	{
 		if (!brkxml_) return NULL;
 
@@ -847,6 +847,8 @@ namespace FLIVR
 		}
 
 		delete prog_diag;
+
+		lv = level;
 
 		return data;
 	}
