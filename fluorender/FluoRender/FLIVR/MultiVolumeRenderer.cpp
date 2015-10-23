@@ -942,7 +942,7 @@ namespace FLIVR
 
 			  glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-			  glFinish();
+			  if (use_id_color) glFlush();
 		  }//if (blend_slices && colormap_mode_!=FLV_CTYPE_DEPTH)
 
 		  vector<TextureBrick *>::iterator ite = cur_brs.begin();
