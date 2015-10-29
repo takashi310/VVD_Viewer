@@ -4453,8 +4453,6 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
             GL_TEXTURE_2D, m_tex, 0);
 	  glBindFramebuffer(GL_FRAMEBUFFER, 0);
    }
-
-   glTexCoord1d(0.0);
 }
 
 void VRenderGLView::SetBrush(int mode)
