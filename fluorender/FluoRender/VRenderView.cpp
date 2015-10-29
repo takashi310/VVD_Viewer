@@ -4216,6 +4216,8 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
    if (!m_mvr)
       return;
 
+   ShaderProgram* img_shader;
+
    m_mvr->set_blend_slices(m_blend_slices);
 
    int i;
@@ -4312,6 +4314,37 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
       }
    }
 
+   if (TextureRenderer::get_mem_swap() &&
+	   TextureRenderer::get_start_update_loop() &&
+	   TextureRenderer::get_save_final_buffer())
+   {
+	   TextureRenderer::reset_save_final_buffer();
+
+	   glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_temp);
+	   glClearColor(0.0, 0.0, 0.0, 0.0);
+	   glClear(GL_COLOR_BUFFER_BIT);
+	   glActiveTexture(GL_TEXTURE0);
+	   glEnable(GL_TEXTURE_2D);
+	   glBindTexture(GL_TEXTURE_2D, m_tex_final);
+	   glDisable(GL_BLEND);
+	   glDisable(GL_DEPTH_TEST);
+
+	   img_shader =
+		   m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
+	   if (img_shader)
+	   {
+		   if (!img_shader->valid())
+			   img_shader->create();
+		   img_shader->bind();
+	   }
+	   DrawViewQuad();
+	   if (img_shader && img_shader->valid())
+		   img_shader->release();
+
+	   glBindTexture(GL_TEXTURE_2D, 0);
+	   glBindFramebuffer(GL_FRAMEBUFFER, 0);
+   }
+
    //bind the fbo
    glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
    if (!TextureRenderer::get_mem_swap() ||
@@ -4336,6 +4369,32 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 
    //bind fbo for final composition
    glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_final);
+
+   if (TextureRenderer::get_mem_swap())
+   {
+	   //restore m_fbo_temp to m_fbo_final
+	   glClearColor(0.0, 0.0, 0.0, 0.0);
+	   glClear(GL_COLOR_BUFFER_BIT);
+	   glActiveTexture(GL_TEXTURE0);
+	   glBindTexture(GL_TEXTURE_2D, m_tex_temp);
+	   glDisable(GL_BLEND);
+	   glDisable(GL_DEPTH_TEST);
+
+	   img_shader =
+		   m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
+	   if (img_shader)
+	   {
+		   if (!img_shader->valid())
+			   img_shader->create();
+		   img_shader->bind();
+	   }
+	   DrawViewQuad();
+	   if (img_shader && img_shader->valid())
+		   img_shader->release();
+
+	   glBindTexture(GL_TEXTURE_2D, 0);
+   }
+
    glActiveTexture(GL_TEXTURE0);
    glBindTexture(GL_TEXTURE_2D, use_tex_wt2?m_tex_wt2:m_tex);
    //build mipmap
@@ -4349,7 +4408,7 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
    glDisable(GL_DEPTH_TEST);
 
    //2d adjustment
-   ShaderProgram* img_shader =
+   img_shader =
       m_img_shader_factory.shader(IMG_SHDR_BRIGHTNESS_CONTRAST_HDR);
    if (img_shader)
    {
@@ -4394,6 +4453,8 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
             GL_TEXTURE_2D, m_tex, 0);
 	  glBindFramebuffer(GL_FRAMEBUFFER, 0);
    }
+
+   glTexCoord1d(0.0);
 }
 
 void VRenderGLView::SetBrush(int mode)
