@@ -2074,24 +2074,35 @@ void VRenderGLView::PaintStroke()
    glEnable(GL_TEXTURE_2D);
    //painting fbo
    if (!glIsFramebuffer(m_fbo_paint))
-      glGenFramebuffers(1, &m_fbo_paint);
-   //painting texture
-   if (!glIsTexture(m_tex_paint))
-      glGenTextures(1, &m_tex_paint);
+   {
+	   glGenFramebuffers(1, &m_fbo_paint);
+	   //painting texture
+	   if (!glIsTexture(m_tex_paint))
+		   glGenTextures(1, &m_tex_paint);
 
-   //set up the painting fbo
-   glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_paint);
-   //color buffer of painting
-   glBindTexture(GL_TEXTURE_2D, m_tex_paint);
-   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, nx, ny, 0,
-         GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-   glFramebufferTexture2D(GL_FRAMEBUFFER,
-         GL_COLOR_ATTACHMENT0,
-         GL_TEXTURE_2D, m_tex_paint, 0);
+	   //set up the painting fbo
+	   glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_paint);
+	   //color buffer of painting
+	   glBindTexture(GL_TEXTURE_2D, m_tex_paint);
+	   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+	   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+	   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
+		   GL_RGBA, GL_FLOAT, NULL);
+	   glFramebufferTexture2D(GL_FRAMEBUFFER,
+		   GL_COLOR_ATTACHMENT0,
+		   GL_TEXTURE_2D, m_tex_paint, 0); 
+   }
+   else
+   {
+	   glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_paint);
+
+	   glFramebufferTexture2D(GL_FRAMEBUFFER,
+		   GL_COLOR_ATTACHMENT0,
+		   GL_TEXTURE_2D, m_tex_paint, 0);
+   }
+
    //clear if asked so
    if (m_clear_paint)
    {
@@ -2115,7 +2126,6 @@ void VRenderGLView::PaintStroke()
 
       //paint to texture
       //bind fbo for final composition
-      glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_paint);
       glActiveTexture(GL_TEXTURE0);
       glEnable(GL_TEXTURE_2D);
       glBindTexture(GL_TEXTURE_2D, m_tex_paint);
@@ -2180,7 +2190,22 @@ void VRenderGLView::PaintStroke()
          glVertex3f(1.0f, 1.0f, 0.0f);
          glTexCoord2f(0.0f, 1.0f);
          glVertex3f(-1.0f, 1.0f, 0.0f);
-         glEnd();
+       
+/*		 double cx = (double)x/(double)nx * 2.0 - 1.0;
+		 double cy = -((double)y/(double)ny * 2.0 - 1.0);
+		 double tx = (double)x/(double)nx;
+		 double ty = (double(ny)-y)/(double)ny;
+		 glTexCoord2f(tx-0.03f, ty-0.03f);
+         glVertex3f(cx-0.06f, cy-0.06f, 0.0f);
+         glTexCoord2f(tx+0.03f, ty-0.03f);
+         glVertex3f(cx+0.06f, cy-0.06f, 0.0f);
+         glTexCoord2f(tx+0.03f, ty+0.03f);
+         glVertex3f(cx+0.06f, cy+0.06f, 0.0f);
+         glTexCoord2f(tx-0.03f, ty+0.03f);
+         glVertex3f(cx-0.06f, cy+0.06f, 0.0f);
+*/		 glEnd();
+
+		 glFlush();
       }
 
       glMatrixMode(GL_PROJECTION);
@@ -2339,7 +2364,7 @@ void VRenderGLView::Segment()
 					break;
 			}
 			//select the group
-			if (group && group->GetVolumeNum()>1)
+			if (group && group->GetVolumeNum()>0)
 			{
 				vector<VolumeData *> cp_vd_list;
 				VolumeData* tmp_vd;
@@ -4282,6 +4307,7 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
    }
    if (use_tex_wt2)
    {
+	  glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
       if (glIsTexture(m_tex_wt2)!=GL_TRUE)
          glGenTextures(1, &m_tex_wt2);
       //color buffer for current segmented volume
@@ -4292,7 +4318,6 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
       glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
             GL_RGBA, GL_FLOAT, NULL);
-      glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
       glFramebufferTexture2D(GL_FRAMEBUFFER,
             GL_COLOR_ATTACHMENT0,
             GL_TEXTURE_2D, m_tex_wt2, 0);

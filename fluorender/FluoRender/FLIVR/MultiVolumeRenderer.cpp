@@ -976,6 +976,7 @@ namespace FLIVR
 	  if (TextureRenderer::get_mem_swap() && remain_brk > 0 && finished_brk == remain_brk)
 	  {
 		  TextureRenderer::set_clear_chan_buffer(true);
+		  TextureRenderer::set_save_final_buffer();
 	  }
 
       if (TextureRenderer::get_mem_swap() &&

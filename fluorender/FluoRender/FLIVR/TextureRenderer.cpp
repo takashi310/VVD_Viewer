@@ -593,8 +593,8 @@ namespace FLIVR
 			if (ShaderProgram::shaders_supported())
 			{
 				//GLint internal_format = compression?GL_COMPRESSED_RED_RGTC1:GL_LUMINANCE;
-				GLint internal_format = GL_LUMINANCE;
-				GLenum format = (nb == 1 ? GL_LUMINANCE : GL_RGBA);
+				GLint internal_format = GL_R8;
+				GLenum format = (nb == 1 ? GL_RED : GL_RGBA);
 				if (glTexImage3D)
 				{
 					glTexImage3D(GL_TEXTURE_3D, 0, internal_format, nx, ny, nz, 0, format,

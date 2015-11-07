@@ -1778,15 +1778,25 @@ VolumeData* VolumeData::CopyLevel(int lv)
 	Nrrd *nv = tex->get_nrrd(0);
 	if (!nv) return NULL;
 
+	vector<Plane*> *planes = GetVR() ? GetVR()->get_planes() : 0;
+	if (planes && vd->GetVR())
+		vd->GetVR()->set_planes(planes);
+
 	double spc[3];
 	GetSpacings(spc[0], spc[1], spc[2], lv);
 	vd->SetSpacings(spc[0], spc[1], spc[2]);
+	double scl[3];
+	GetScalings(scl[0], scl[1], scl[2]);
+	vd->SetScalings(scl[0], scl[1], scl[2]);
 
 	vd->SetColor(GetColor());
 	bool bval = GetEnableAlpha();
 	vd->SetEnableAlpha(GetEnableAlpha());
 	vd->SetShading(GetShading());
 	vd->SetShadow(GetShadow());
+	double darkness;
+	GetShadowParams(darkness);
+	vd->SetShadowParams(darkness);
 	//other settings
 	double amb, diff, spec, shine;
 	GetMaterial(amb, diff, spec, shine);
@@ -1798,6 +1808,67 @@ VolumeData* VolumeData::CopyLevel(int lv)
 	vd->SetAlpha(GetAlpha());
 	vd->SetSampleRate(GetSampleRate());
 	vd->SetMaterial(amb, diff, spec, shine);
+
+	//layer properties
+	vd->SetGamma(GetGamma());
+	vd->SetBrightness(GetBrightness());
+	vd->SetHdr(GetHdr());
+	vd->SetSyncR(GetSyncR());
+	vd->SetSyncG(GetSyncG());
+	vd->SetSyncB(GetSyncB());
+
+	//current channel index
+	vd->m_chan = 0;
+	vd->m_time = 0;
+
+	//modes
+	vd->SetMode(vd->GetMode());
+	//stream modes
+	vd->SetStreamMode(GetStreamMode());
+	
+	//volume properties
+	vd->SetScalarScale(GetScalarScale());
+	vd->SetGMScale(GetGMScale());
+	vd->SetHSV();
+
+	//noise reduction
+	vd->SetNR(GetNR());
+	
+	//display control
+	vd->SetDisp(GetDisp());
+	vd->SetDrawBounds(GetDrawBounds());
+	vd->m_test_wiref = m_test_wiref;
+
+	//colormap mode
+	vd->SetColormapMode(GetColormapMode());
+	vd->SetColormapDisp(GetColormapDisp());
+	vd->SetColormapValues(m_colormap_low_value, m_colormap_hi_value);
+	
+	//blend mode
+	vd->SetBlendMode(GetBlendMode());
+
+	vd->m_2d_mask = 0;
+	vd->m_2d_weight1 = 0;
+	vd->m_2d_weight2 = 0;
+	vd->m_2d_dmap = 0;
+
+	//clip distance
+	int dists[3];
+	GetClipDistance(dists[0], dists[1], dists[2]);
+	vd->SetClipDistance(dists[0], dists[1], dists[2]);
+	
+	//compression
+	vd->m_compression = false;
+
+	//skip brick
+	vd->m_skip_brick = false;
+
+	//legend
+	vd->m_legend = true;
+
+	vd->m_annotation = m_annotation;
+
+	vd->m_landmarks = m_landmarks;
 
 	return vd;
 }

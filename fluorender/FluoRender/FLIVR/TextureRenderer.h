@@ -208,6 +208,7 @@ namespace FLIVR
                static void set_clear_chan_buffer(bool b) {clear_chan_buffer_ = b;}
                static void reset_save_final_buffer() {save_final_buffer_ = false;}
                static bool get_save_final_buffer() {return save_final_buffer_;}
+			   static void set_save_final_buffer() {save_final_buffer_ = true;}
                //set start time
                static void set_st_time(unsigned long time) {st_time_ = time;}
                static unsigned long get_st_time() {return st_time_;}
@@ -240,6 +241,7 @@ namespace FLIVR
                //update order
                static void set_update_order(int val) {update_order_ = val;}
                static int get_update_order() {return update_order_;}
+
 
       public:
                struct BrickDist
