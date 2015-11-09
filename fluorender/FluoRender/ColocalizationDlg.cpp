@@ -224,12 +224,27 @@ void ColocalizationDlg::OnSelectBothChk(wxCommandEvent &event)
 	}
 }
 
+void ColocalizationDlg::LoadVolumes()
+{
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+
+	DataManager* mgr = vr_frame->GetDataManager();
+    if (!mgr) return;
+
+	m_vol_a = mgr->GetVolumeData(m_calc_a_text->GetValue());
+	m_vol_b = mgr->GetVolumeData(m_calc_b_text->GetValue());
+}
+
 void ColocalizationDlg::OnColocalizationBtn(wxCommandEvent &event)
 {
+	LoadVolumes();
+
 	if (!m_view || !m_vol_a || !m_vol_b)
 		return;
 
-	bool select = true;
+	bool select_a = true;
+	bool select_b = true;
 	wxString str = m_min_size_text->GetValue();
 	long ival;
 	str.ToLong(&ival);
@@ -245,16 +260,20 @@ void ColocalizationDlg::OnColocalizationBtn(wxCommandEvent &event)
 	//save masks
 	m_vol_a->GetVR()->return_mask();
 	m_vol_b->GetVR()->return_mask();
+	if (m_vol_a->GetMask()) select_a = false;
+	if (m_vol_b->GetMask()) select_b = false;
 
 	//volume a
 	m_view->GetVolumeSelector()->SetVolume(m_vol_a);
-	m_view->CompAnalysis(min_voxels, max_voxels, thresh, select, true);
+	m_view->CompAnalysis(min_voxels, max_voxels, thresh, select_a, true);
+	m_vol_a = m_view->GetVolumeSelector()->GetVolume();
 
 	m_view->m_glview->ForceDraw();
 
 	//volume b
 	m_view->GetVolumeSelector()->SetVolume(m_vol_b);
-	m_view->CompAnalysis(min_voxels, max_voxels, thresh, select, true);
+	m_view->CompAnalysis(min_voxels, max_voxels, thresh, select_b, true);
+	m_vol_b = m_view->GetVolumeSelector()->GetVolume();
 
 	m_view->m_glview->ForceDraw();
 
@@ -268,9 +287,10 @@ void ColocalizationDlg::OnColocalizationBtn(wxCommandEvent &event)
 	VolumeData* vd = m_view->GetVolumeCalculator()->GetResult();
 	if (vd)
 	{
-		select = false;
 		m_view->GetVolumeSelector()->SetVolume(vd);
-		m_view->CompAnalysis(min_voxels, max_voxels, thresh, select, true);
+		m_view->CompAnalysis(min_voxels, max_voxels, thresh, false, true);
 	}
 
+	m_calc_a_text->SetValue(m_vol_a ? m_vol_a->GetName() : wxT(""));
+	m_calc_b_text->SetValue(m_vol_b ? m_vol_b->GetName() : wxT(""));
 }

@@ -75,6 +75,7 @@ void DataTreeCtrl::DeleteAll()
    if (!IsEmpty())
    {
       //safe deletion, may be unnecessary
+	  UnselectAll();
       TraversalDelete(GetRootItem());
       DeleteAllItems();
    }
@@ -95,8 +96,11 @@ void DataTreeCtrl::TraversalDelete(wxTreeItemId item)
    }
 
    LayerInfo* item_data = (LayerInfo*)GetItemData(item);
-   delete item_data;
-   SetItemData(item, 0);
+   if (item_data)
+   {
+	   delete item_data;
+	   SetItemData(item, 0);
+   }
 }
 
 void DataTreeCtrl::DeleteSelection()

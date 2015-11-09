@@ -3279,7 +3279,7 @@ void VRenderFrame::OpenProject(wxString& filename)
                            {
                               int id;
                               if (fconfig.Read("id", &id))
-                                 DataGroup::SetID(id);
+                                 DataGroup::SetID(id-1);
                               str = vrv->AddGroup(str);
                               DataGroup* group = vrv->GetGroup(str);
                               if (group)

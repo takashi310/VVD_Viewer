@@ -49,11 +49,20 @@ void VolumeCalculator::Calculate(int type)
    case 2:
    case 3:
    case 4:
-   case 8://intersection with mask
-      CreateVolumeResult2();
+	  CreateVolumeResult2();
       if (!m_vd_r)
          return;
       m_vd_r->Calculate(m_type, m_vd_a, m_vd_b);
+      return;
+   case 8://intersection with mask
+      if (!m_vd_a || !m_vd_a->GetMask())
+		  return;
+	  if (!m_vd_b || !m_vd_b->GetMask())
+		  return;
+	  CreateVolumeResult2();
+      if (!m_vd_r)
+         return;
+	  m_vd_r->Calculate(m_type, m_vd_a, m_vd_b);
       return;
    case 5:
    case 6:

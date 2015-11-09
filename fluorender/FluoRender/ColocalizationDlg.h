@@ -35,6 +35,8 @@ public:
 	void SetVolumeA(VolumeData* vd);
 	void SetVolumeB(VolumeData* vd);
 
+	void LoadVolumes();
+
 private:
 	wxWindow* m_frame;
 

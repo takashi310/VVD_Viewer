@@ -2308,6 +2308,12 @@ VolumeData *VRenderGLView::CopyLevel(VolumeData *src, int lv)
 		{
 			group_name = AddGroup("");
 			group = GetGroup(group_name);
+			group->SetGamma(src->GetGamma());
+			group->SetBrightness(src->GetBrightness());
+			group->SetHdr(src->GetHdr());
+			group->SetSyncR(src->GetSyncR());
+			group->SetSyncG(src->GetSyncG());
+			group->SetSyncB(src->GetSyncB());
 		}
 
 		wxString src_name = src->GetName();
@@ -2324,7 +2330,7 @@ VolumeData *VRenderGLView::CopyLevel(VolumeData *src, int lv)
 			bool fix;
 			fix = tree->isFixed();
 			tree->SetFix(false);
-			vr_frame->UpdateTree(select, false); //UpdateTree line1: m_tree_panel->DeleteAll(); <-memory access violation
+			vr_frame->UpdateTree(select, false); //UpdateTree line1: m_tree_panel->DeleteAll(); <- buffer overrun
 			tree->SetFix(fix);
 		}
 		if (swap_selection) vr_frame->OnSelection(2, m_vrv, group, vd_new);
@@ -2637,6 +2643,13 @@ void VRenderGLView::NoiseRemoval(int iter, double thresh)
       {
          vr_frame->GetDataManager()->AddVolumeData(vd_new);
          wxString group_name = AddGroup("");
+		 DataGroup *group = GetGroup(group_name);
+		 group->SetGamma(vd->GetGamma());
+		 group->SetBrightness(vd->GetBrightness());
+		 group->SetHdr(vd->GetHdr());
+		 group->SetSyncR(vd->GetSyncR());
+         group->SetSyncG(vd->GetSyncG());
+         group->SetSyncB(vd->GetSyncB());
          AddVolumeData(vd_new, group_name);
          vd->SetDisp(false);
          vr_frame->UpdateList();
@@ -2863,22 +2876,18 @@ wxString VRenderGLView::Calculate(int type, wxString prev_group, bool add)
 {
    wxString result = "";
 
-   VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-   
    bool copied = false;
    VolumeData* vd_A = m_calculator.GetVolumeA();
    if (vd_A && vd_A->isBrxml())
    {
 	   vd_A = CopyLevel(vd_A);
 	   if (vd_A) copied = true;
-	   if (vr_frame) vr_frame->GetBrushToolDlg()->SetCalcA(vd_A->GetName());
    }
    VolumeData* vd_B = m_calculator.GetVolumeB();
    if (vd_B && vd_B->isBrxml())
    {
 	   vd_B = CopyLevel(vd_B);
 	   if (vd_B) copied = true;
-	   if (vr_frame) vr_frame->GetBrushToolDlg()->SetCalcB(vd_B->GetName());
    }
    m_calculator.SetVolumeA(vd_A);
    m_calculator.SetVolumeB(vd_B);
@@ -2896,6 +2905,7 @@ wxString VRenderGLView::Calculate(int type, wxString prev_group, bool add)
             type==8 ||
             type==9)
       {
+		 VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
          if (vr_frame)
          {
             //copy 2d adjust & color
@@ -2953,7 +2963,8 @@ wxString VRenderGLView::Calculate(int type, wxString prev_group, bool add)
                      vd_a->SetDisp(false);
                }
                vr_frame->UpdateList();
-               vr_frame->UpdateTree(vd->GetName());
+			   vr_frame->UpdateTree(vd->GetName(), false); //UpdateTree line1: m_tree_panel->DeleteAll(); <- buffer overrun
+			   m_calculator.SetVolumeA(vd_A);
             }
          }
          RefreshGL();
@@ -6894,7 +6905,11 @@ void VRenderGLView::AddMeshData(MeshData* md)
 
 void VRenderGLView::AddAnnotations(Annotations* ann)
 {
-   m_layer_list.push_back(ann);
+	bool exist = false;
+	for (auto layer : m_layer_list)
+		if (layer->IsA() == 4 && ann == (Annotations*)layer)
+			exist = true;
+   if (!exist) m_layer_list.push_back(ann);
 }
 
 void VRenderGLView::ReplaceVolumeData(wxString &name, VolumeData *dst)

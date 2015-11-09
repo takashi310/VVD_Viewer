@@ -1269,7 +1269,11 @@ void BrushToolDlg::OnCalcSub(wxCommandEvent &event)
          m_cur_view->SetVolumeA(m_vol1);
          m_cur_view->SetVolumeB(m_vol2);
          m_cur_view->Calculate(1);
-      }
+		 m_vol1 = m_cur_view->GetVolumeA();
+		 m_vol2 = m_cur_view->GetVolumeB();
+		 m_calc_a_text->SetValue(m_vol1 ? m_vol1->GetName() : wxT(""));
+		 m_calc_b_text->SetValue(m_vol2 ? m_vol2->GetName() : wxT(""));
+	  }
    }
 }
 
@@ -1303,6 +1307,10 @@ void BrushToolDlg::OnCalcAdd(wxCommandEvent &event)
          m_cur_view->SetVolumeA(m_vol1);
          m_cur_view->SetVolumeB(m_vol2);
          m_cur_view->Calculate(2);
+		 m_vol1 = m_cur_view->GetVolumeA();
+		 m_vol2 = m_cur_view->GetVolumeB();
+		 m_calc_a_text->SetValue(m_vol1 ? m_vol1->GetName() : wxT(""));
+		 m_calc_b_text->SetValue(m_vol2 ? m_vol2->GetName() : wxT(""));
       }
    }
 }
@@ -1337,6 +1345,10 @@ void BrushToolDlg::OnCalcDiv(wxCommandEvent &event)
          m_cur_view->SetVolumeA(m_vol1);
          m_cur_view->SetVolumeB(m_vol2);
          m_cur_view->Calculate(3);
+		 m_vol1 = m_cur_view->GetVolumeA();
+		 m_vol2 = m_cur_view->GetVolumeB();
+		 m_calc_a_text->SetValue(m_vol1 ? m_vol1->GetName() : wxT(""));
+		 m_calc_b_text->SetValue(m_vol2 ? m_vol2->GetName() : wxT(""));
       }
    }
 }
@@ -1371,6 +1383,10 @@ void BrushToolDlg::OnCalcIsc(wxCommandEvent &event)
          m_cur_view->SetVolumeA(m_vol1);
          m_cur_view->SetVolumeB(m_vol2);
          m_cur_view->Calculate(4);
+		 m_vol1 = m_cur_view->GetVolumeA();
+		 m_vol2 = m_cur_view->GetVolumeB();
+		 m_calc_a_text->SetValue(m_vol1 ? m_vol1->GetName() : wxT(""));
+		 m_calc_b_text->SetValue(m_vol2 ? m_vol2->GetName() : wxT(""));
       }
    }
 }
@@ -1408,6 +1424,10 @@ void BrushToolDlg::OnCalcFill(wxCommandEvent &event)
          m_cur_view->SetVolumeB(0);
          m_calc_b_text->Clear();
          m_cur_view->Calculate(9);
+		 m_vol1 = m_cur_view->GetVolumeA();
+		 m_vol2 = m_cur_view->GetVolumeB();
+		 m_calc_a_text->SetValue(m_vol1 ? m_vol1->GetName() : wxT(""));
+		 m_calc_b_text->SetValue(m_vol2 ? m_vol2->GetName() : wxT(""));
       }
    }
 }

@@ -460,6 +460,8 @@ class VRenderGLView: public wxGLCanvas
          //calculations
          void SetVolumeA(VolumeData* vd);
          void SetVolumeB(VolumeData* vd);
+		 VolumeData* GetVolumeA() {return m_calculator.GetVolumeA();}
+         VolumeData* GetVolumeB() {return m_calculator.GetVolumeB();}
          //1-sub;2-add;3-div;4-and;5-new;6-new inv;7-clear
          wxString Calculate(int type, wxString prev_group="", bool add=true);
 
@@ -1411,6 +1413,10 @@ class VRenderView: public wxPanel
    {if (m_glview) m_glview->SetVolumeA(vd);}
    void SetVolumeB(VolumeData* vd)
    {if (m_glview) m_glview->SetVolumeB(vd);}
+   VolumeData* GetVolumeA()
+   {if (m_glview) return m_glview->GetVolumeA(); else return 0;}
+   VolumeData* GetVolumeB()
+   {if (m_glview) return m_glview->GetVolumeB(); else return 0;}
    wxString Calculate(int type, wxString prev_group="")
    {if (m_glview) return m_glview->Calculate(type, prev_group); else return "";}
 
