@@ -97,6 +97,9 @@ public:
 	void BrushCreate();
 	void BrushCreateInv();
 
+	void SetFix(bool fix) { m_fixed = fix; }
+	bool isFixed() { return m_fixed; }
+
 	friend class TreePanel;
 
 private:
@@ -216,6 +219,9 @@ public:
 	void BrushClear();
 	void BrushErase();
 	void BrushCreate();
+
+	void SetFix(bool fix) { if (m_datatree) m_datatree->SetFix(fix); }
+	bool isFixed() { return m_datatree ? m_datatree->isFixed() : false; }
 
 private:
 	wxWindow* m_frame;

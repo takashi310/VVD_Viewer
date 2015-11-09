@@ -244,31 +244,33 @@ void DataListCtrl::AddToView(int menu_index, long item)
                      break;
                   }
                }
+			   if (vd_add)
+			   {
+				   int chan_num = view->GetAny();
+				   view_empty = chan_num>0?false:view_empty;
+				   Color color(1.0, 1.0, 1.0);
+				   if (chan_num == 0)
+					   color = Color(1.0, 0.0, 0.0);
+				   else if (chan_num == 1)
+					   color = Color(0.0, 1.0, 0.0);
+				   else if (chan_num == 2)
+					   color = Color(0.0, 0.0, 1.0);
 
-               int chan_num = view->GetAny();
-               view_empty = chan_num>0?false:view_empty;
-               Color color(1.0, 1.0, 1.0);
-               if (chan_num == 0)
-                  color = Color(1.0, 0.0, 0.0);
-               else if (chan_num == 1)
-                  color = Color(0.0, 1.0, 0.0);
-               else if (chan_num == 2)
-                  color = Color(0.0, 0.0, 1.0);
+				   if (chan_num >=0 && chan_num <3)
+					   vd_add->SetColor(color);
 
-               if (chan_num >=0 && chan_num <3)
-                  vd_add->SetColor(color);
-
-               DataGroup *group = view->AddVolumeData(vd_add);
-               vr_frame->OnSelection(2, view, group, vd_add, 0);
-               if (view->GetVolMethod() == VOL_METHOD_MULTI)
-               {
-                  AdjustView* adjust_view = vr_frame->GetAdjustView();
-                  if (adjust_view)
-                  {
-                     adjust_view->SetRenderView(view);
-                     adjust_view->UpdateSync();
-                  }
-               }
+				   DataGroup *group = view->AddVolumeData(vd_add);
+				   vr_frame->OnSelection(2, view, group, vd_add, 0);
+				   if (view->GetVolMethod() == VOL_METHOD_MULTI)
+				   {
+					   AdjustView* adjust_view = vr_frame->GetAdjustView();
+					   if (adjust_view)
+					   {
+						   adjust_view->SetRenderView(view);
+						   adjust_view->UpdateSync();
+					   }
+				   }
+			   }
             }
          }
       }

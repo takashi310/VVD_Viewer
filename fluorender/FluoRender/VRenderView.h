@@ -722,6 +722,7 @@ class VRenderGLView: public wxGLCanvas
          bool m_resize;
          bool m_resize_ol1;
          bool m_resize_ol2;
+		 bool m_resize_paint;
          //brush tools
          bool m_draw_brush;
          bool m_paint_enable;

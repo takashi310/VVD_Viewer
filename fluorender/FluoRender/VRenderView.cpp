@@ -476,6 +476,7 @@ VRenderGLView::VRenderGLView(wxWindow* frame,
    m_resize(false),
    m_resize_ol1(false),
    m_resize_ol2(false),
+   m_resize_paint(false),
    //brush tools
    m_draw_brush(false),
    m_paint_enable(false),
@@ -806,6 +807,7 @@ void VRenderGLView::OnResize(wxSizeEvent& event)
    m_resize = true;
    m_resize_ol1 = true;
    m_resize_ol2 = true;
+   m_resize_paint = true;
 
    RefreshGL();
 }
@@ -2103,6 +2105,15 @@ void VRenderGLView::PaintStroke()
 		   GL_TEXTURE_2D, m_tex_paint, 0);
    }
 
+   if (m_resize_paint)
+   {
+	   glBindTexture(GL_TEXTURE_2D, m_tex_paint);
+	   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
+		   GL_RGBA, GL_FLOAT, NULL);
+	   glBindTexture(GL_TEXTURE_2D, 0);
+	   m_resize_paint = false;
+   }
+
    //clear if asked so
    if (m_clear_paint)
    {
@@ -2301,14 +2312,21 @@ VolumeData *VRenderGLView::CopyLevel(VolumeData *src, int lv)
 
 		wxString src_name = src->GetName();
 		ReplaceVolumeData(src_name, vd_new);
-		mgr->ReplaceVolumeData(mgr->GetVolumeIndex(src_name), vd_new);
-		
-		vd_new->SetName(src_name);
+		mgr->AddVolumeData(vd_new);
 		if (swap_selection) m_cur_vol = vd_new;
 		SetVolPopDirty();
 		PopVolumeList();
+		wxString select = swap_selection ? vd_new->GetName() : m_cur_vol->GetName();
 		vr_frame->UpdateList();
-		//vr_frame->UpdateTree(swap_selection ? vd_new->GetName() : "", false); //UpdateTree line1: m_tree_panel->DeleteAll(); <-memory access violation
+		TreePanel *tree = vr_frame->GetTree();
+		if (tree)
+		{
+			bool fix;
+			fix = tree->isFixed();
+			tree->SetFix(false);
+			vr_frame->UpdateTree(select, false); //UpdateTree line1: m_tree_panel->DeleteAll(); <-memory access violation
+			tree->SetFix(fix);
+		}
 		if (swap_selection) vr_frame->OnSelection(2, m_vrv, group, vd_new);
 	}
 
@@ -2371,7 +2389,7 @@ void VRenderGLView::Segment()
 				for (int i=0; i<group->GetVolumeNum(); i++)
 				{
 					tmp_vd = group->GetVolumeData(i);
-					if (tmp_vd && tmp_vd->isBrxml())
+					if (tmp_vd && tmp_vd->isBrxml() && tmp_vd->GetDisp())
 						cp_vd_list.push_back(tmp_vd);
 				}
 				for (auto v : cp_vd_list)
@@ -2845,18 +2863,22 @@ wxString VRenderGLView::Calculate(int type, wxString prev_group, bool add)
 {
    wxString result = "";
 
+   VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+   
    bool copied = false;
    VolumeData* vd_A = m_calculator.GetVolumeA();
    if (vd_A && vd_A->isBrxml())
    {
 	   vd_A = CopyLevel(vd_A);
 	   if (vd_A) copied = true;
+	   if (vr_frame) vr_frame->GetBrushToolDlg()->SetCalcA(vd_A->GetName());
    }
    VolumeData* vd_B = m_calculator.GetVolumeB();
    if (vd_B && vd_B->isBrxml())
    {
 	   vd_B = CopyLevel(vd_B);
 	   if (vd_B) copied = true;
+	   if (vr_frame) vr_frame->GetBrushToolDlg()->SetCalcB(vd_B->GetName());
    }
    m_calculator.SetVolumeA(vd_A);
    m_calculator.SetVolumeB(vd_B);
@@ -2874,7 +2896,6 @@ wxString VRenderGLView::Calculate(int type, wxString prev_group, bool add)
             type==8 ||
             type==9)
       {
-         VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
          if (vr_frame)
          {
             //copy 2d adjust & color
@@ -4986,7 +5007,11 @@ void VRenderGLView::OnIdle(wxIdleEvent& event)
 
    if (wxGetKeyState(WXK_ALT) && wxGetKeyState(wxKeyCode('V')) && !m_key_lock)
    {
-	   if(m_cur_vol && m_cur_vol->isBrxml()) CopyLevel(m_cur_vol);
+	   if(m_cur_vol && m_cur_vol->isBrxml())
+	   {
+		   CopyLevel(m_cur_vol);
+		   m_selector.SetVolume(m_cur_vol);
+	   }
    }
 
    extern CURLM * _g_curlm;

@@ -143,6 +143,8 @@ public:
 	VolumeData(VolumeData &copy);
 	virtual ~VolumeData();
 
+	static VolumeData* DeepCopy(VolumeData &copy);
+
 	//duplication
 	bool GetDup();
 	//increase duplicate counter

@@ -111,6 +111,9 @@ public:
 
 	//save default
 	void SaveDefault();
+
+	void SetCalcA(wxString name){m_calc_a_text->SetValue(name);}
+	void SetCalcB(wxString name){m_calc_b_text->SetValue(name);}
 	
 private:
 	wxWindow* m_frame;

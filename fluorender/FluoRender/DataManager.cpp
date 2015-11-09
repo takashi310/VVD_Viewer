@@ -251,6 +251,135 @@ VolumeData::~VolumeData()
 		delete m_tex;
 }
 
+//without mask and label
+VolumeData* VolumeData::DeepCopy(VolumeData &copy)
+{
+	VolumeData* vd = new VolumeData();
+
+	vd->m_reader = copy.m_reader;
+	//duplication
+	vd->m_dup = true;
+	copy.m_dup_counter++;
+	vd->m_dup_counter = copy.m_dup_counter;
+
+	Texture *tex = copy.GetTexture();
+	if (!tex)
+	{
+		delete(vd);
+		return NULL;
+	}
+	Nrrd *nv = tex->get_nrrd(0);
+	if (!nv)
+	{
+		delete(vd);
+		return NULL;
+	}
+
+	if (tex->isBrxml())	vd->Load(nv, copy.GetName()+wxString::Format("_%d", vd->m_dup_counter), wxString(""), (BRKXMLReader*)vd->m_reader);
+	else vd->Load(nv, copy.GetName()+wxString::Format("_%d", vd->m_dup_counter), wxString(""));
+	
+	//layer properties
+	vd->type = 2;//volume
+	vd->SetGamma(copy.GetGamma());
+	vd->SetBrightness(copy.GetBrightness());
+	vd->SetHdr(copy.GetHdr());
+	vd->SetSyncR(copy.GetSyncR());
+	vd->SetSyncG(copy.GetSyncG());
+	vd->SetSyncB(copy.GetSyncB());
+	
+	double spc[3];
+	if (tex->isBrxml())
+	{
+		copy.GetBaseSpacings(spc[0], spc[1], spc[2]);
+		vd->SetBaseSpacings(spc[0], spc[1], spc[2]);
+		copy.GetSpacingScales(spc[0], spc[1], spc[2]);
+		vd->SetSpacingScales(spc[0], spc[1], spc[2]);
+	}
+	else
+	{
+		copy.GetSpacings(spc[0], spc[1], spc[2]);
+		vd->SetSpacings(spc[0], spc[1], spc[2]);
+	}
+	double scl[3];
+	copy.GetScalings(scl[0], scl[1], scl[2]);
+	vd->SetScalings(scl[0], scl[1], scl[2]);
+	
+	vd->SetColor(copy.GetColor());
+	bool bval = copy.GetEnableAlpha();
+	vd->SetEnableAlpha(copy.GetEnableAlpha());
+	vd->SetShading(copy.GetShading());
+	vd->SetShadow(copy.GetShadow());
+	double darkness;
+	copy.GetShadowParams(darkness);
+	vd->SetShadowParams(darkness);
+	//other settings
+	double amb, diff, spec, shine;
+	copy.GetMaterial(amb, diff, spec, shine);
+	vd->Set3DGamma(copy.Get3DGamma());
+	vd->SetBoundary(copy.GetBoundary());
+	vd->SetOffset(copy.GetOffset());
+	vd->SetLeftThresh(copy.GetLeftThresh());
+	vd->SetRightThresh(copy.GetRightThresh());
+	vd->SetAlpha(copy.GetAlpha());
+	vd->SetSampleRate(copy.GetSampleRate());
+	vd->SetMaterial(amb, diff, spec, shine);
+
+	//current channel index
+	vd->m_chan = copy.m_chan;
+	vd->m_time = 0;
+
+	//modes
+	vd->SetMode(copy.GetMode());
+	//stream modes
+	vd->SetStreamMode(copy.GetStreamMode());
+	
+	//volume properties
+	vd->SetScalarScale(copy.GetScalarScale());
+	vd->SetGMScale(copy.GetGMScale());
+	vd->SetHSV();
+
+	//noise reduction
+	vd->SetNR(copy.GetNR());
+	
+	//display control
+	vd->SetDisp(copy.GetDisp());
+	vd->SetDrawBounds(copy.GetDrawBounds());
+	vd->m_test_wiref = copy.m_test_wiref;
+
+	//colormap mode
+	vd->SetColormapMode(copy.GetColormapMode());
+	vd->SetColormapDisp(copy.GetColormapDisp());
+	vd->SetColormapValues(copy.m_colormap_low_value, copy.m_colormap_hi_value);
+	
+	//blend mode
+	vd->SetBlendMode(copy.GetBlendMode());
+
+	vd->m_2d_mask = 0;
+	vd->m_2d_weight1 = 0;
+	vd->m_2d_weight2 = 0;
+	vd->m_2d_dmap = 0;
+
+	//clip distance
+	int dists[3];
+	copy.GetClipDistance(dists[0], dists[1], dists[2]);
+	vd->SetClipDistance(dists[0], dists[1], dists[2]);
+	
+	//compression
+	vd->m_compression = false;
+
+	//skip brick
+	vd->m_skip_brick = false;
+
+	//legend
+	vd->m_legend = true;
+
+	vd->m_annotation = copy.m_annotation;
+
+	vd->m_landmarks = copy.m_landmarks;
+
+	return vd;
+}
+
 //duplication
 bool VolumeData::GetDup()
 {
@@ -1771,7 +1900,12 @@ VolumeData* VolumeData::CopyLevel(int lv)
 
 	VolumeData* vd = new VolumeData();
 
-	vd->Load(m_tex->loadData(lv), GetName() + wxString("_Copy"), wxString(""));
+	Nrrd *src_nv = m_tex->loadData(lv);
+	if (!src_nv) return NULL;
+	vd->Load(src_nv, GetName() + wxT("_Copy_Lv") + wxString::Format("%d", lv), wxString(""));
+
+	vd->m_dup = true;
+	vd->m_dup_counter = m_dup_counter;
 	
 	Texture *tex = vd->GetTexture();
 	if (!tex) return NULL;
@@ -1822,7 +1956,7 @@ VolumeData* VolumeData::CopyLevel(int lv)
 	vd->m_time = 0;
 
 	//modes
-	vd->SetMode(vd->GetMode());
+	vd->SetMode(GetMode());
 	//stream modes
 	vd->SetStreamMode(GetStreamMode());
 	
@@ -4737,8 +4871,8 @@ VolumeData* DataManager::DuplicateVolumeData(VolumeData* vd)
 
 	if (vd)
 	{
-		vd_new = new VolumeData(*vd);
-		AddVolumeData(vd_new);
+		vd_new = VolumeData::DeepCopy(*vd);
+		if (vd_new) AddVolumeData(vd_new);
 	}
 
 	return vd_new;
