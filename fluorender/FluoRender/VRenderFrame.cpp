@@ -4213,11 +4213,17 @@ void VRenderFrame::SetTextureRendererSettings()
       }
       if (m_setting_dlg->GetGraphicsMem() < mem_info[0]/1024.0)
          use_mem_limit = true;
+
+	  double mem_size = use_mem_limit ? m_setting_dlg->GetGraphicsMem() : mem_info[0]/1024.0;
+	  
+	  //reserve a memory area for 2D textures
+	  //(TextureRenderer takes no account of 2D textures in calculating allocated memory size)
+	  if (mem_size > 1024.0) mem_size -= 300.0;
+	  else mem_size *= 0.7;
+
       TextureRenderer::set_use_mem_limit(use_mem_limit);
-      TextureRenderer::set_mem_limit(use_mem_limit?
-            m_setting_dlg->GetGraphicsMem():mem_info[0]/1024.0);
-      TextureRenderer::set_available_mem(use_mem_limit?
-            m_setting_dlg->GetGraphicsMem():mem_info[0]/1024.0);
+      TextureRenderer::set_mem_limit(mem_size);
+      TextureRenderer::set_available_mem(mem_size);
       TextureRenderer::set_large_data_size(m_setting_dlg->GetLargeDataSize());
       TextureRenderer::set_force_brick_size(m_setting_dlg->GetForceBrickSize());
       TextureRenderer::set_up_time(m_setting_dlg->GetResponseTime());
