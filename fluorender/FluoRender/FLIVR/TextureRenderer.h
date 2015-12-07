@@ -139,12 +139,14 @@ namespace FLIVR
 
          //set the texture for rendering
          void set_texture(Texture* tex);
+		void reset_texture();
 
          //set blending bits. b>8 means 32bit blending
          void set_blend_num_bits(int b);
 
          //clear the opengl textures from the texture pool
          void clear_tex_pool();
+		void clear_tex_current();
 
          //resize the fbo texture
          void resize();
@@ -160,7 +162,7 @@ namespace FLIVR
          // Tests the bounding box against the current MODELVIEW and
          // PROJECTION matrices to determine if it is within the viewport.
          // Returns true if it is visible.
-         bool test_against_view(const BBox &bbox, bool use_ex=false);
+		bool test_against_view(const BBox &bbox, bool persp=false);
 
 		 void clear_brick_buf();
 		 
@@ -351,7 +353,7 @@ namespace FLIVR
                //compute view
                Ray compute_view();
 			   Ray compute_snapview(double snap);
-               double compute_rate_scale();
+		double compute_rate_scale(Vector v);
 
                //brick distance sort
                static bool brick_sort(const BrickDist& bd1, const BrickDist& bd2);

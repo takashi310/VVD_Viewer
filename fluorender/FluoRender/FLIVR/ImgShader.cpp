@@ -39,7 +39,6 @@ using std::ostringstream;
 
 namespace FLIVR
 {
-
 #define IMG_VERTEX_CODE \
 	"//IMG_VERTEX_CODE\n" \
 	"layout(location = 0) in vec3 InVertex;\n" \
@@ -568,7 +567,7 @@ namespace FLIVR
 	"}\n"
 
 #define IMG_SHADER_CODE_BLEND_FOR_DEPTH_MODE \
-	"// IMG_SHADER_CODE_BLEND_FOR_DEPTH_MODE\n" \
+	"//IMG_SHADER_CODE_BLEND_FOR_DEPTH_MODE\n" \
 	"in vec3 OutVertex;\n" \
 	"in vec3 OutTexCoord;\n" \
 	"out vec4 FragColor;\n" \
@@ -584,7 +583,7 @@ namespace FLIVR
 	"}\n"
 
 #define IMG_SHADER_CODE_BLEND_ID_COLOR_FOR_DEPTH_MODE \
-	"// IMG_SHADER_CODE_BLEND_ID_COLOR_FOR_DEPTH_MODE\n" \
+	"//IMG_SHADER_CODE_BLEND_ID_COLOR_FOR_DEPTH_MODE\n" \
 	"in vec3 OutVertex;\n" \
 	"in vec3 OutTexCoord;\n" \
 	"layout(location = 0) out vec4 FragColor;\n" \
@@ -810,4 +809,3 @@ namespace FLIVR
 	}
 
 } // end namespace FLIVR
-

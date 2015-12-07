@@ -1,5 +1,27 @@
+/*
+For more information, please see: http://software.sci.utah.edu
+The MIT License
+Copyright (c) 2014 Scientific Computing and Imaging Institute,
+University of Utah.
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+*/
 #include "Interpolator.h"
 #include "../utility.h"
+#include <inttypes.h>
 
 int Interpolator::m_id = 0;
 
@@ -91,7 +113,7 @@ double Interpolator::GetLastT()
 
 FlKeyGroup* Interpolator::GetKeyGroup(int index)
 {
-	if (index>=0 && index<m_key_list.size())
+	if (index>=0 && (size_t)index<m_key_list.size())
 		return m_key_list[index];
 	else
 		return 0;
@@ -99,7 +121,7 @@ FlKeyGroup* Interpolator::GetKeyGroup(int index)
 
 int Interpolator::GetKeyIndex(int id)
 {
-	for (int i=0; i<m_key_list.size(); i++)
+	for (size_t i=0; i<m_key_list.size(); i++)
 	{
 		FlKeyGroup *group = m_key_list[i];
 		if (group && group->id==id)
@@ -124,7 +146,7 @@ int Interpolator::GetKeyIndexFromTime(double t)
 
 int Interpolator::GetKeyID(int index)
 {
-	if (index>=0 && index<m_key_list.size())
+	if (index>=0 && (size_t)index<m_key_list.size())
 		return m_key_list[index]->id;
 	else
 		return 0;
@@ -132,7 +154,7 @@ int Interpolator::GetKeyID(int index)
 
 double Interpolator::GetKeyTime(int index)
 {
-	if (index>=0 && index<m_key_list.size())
+	if (index>=0 && (size_t)index<m_key_list.size())
 		return m_key_list[index]->t;
 	else
 		return 0.0;
@@ -140,7 +162,7 @@ double Interpolator::GetKeyTime(int index)
 
 double Interpolator::GetKeyDuration(int index)
 {
-	if (index>0 && index<m_key_list.size())
+	if (index>0 && (size_t)index<m_key_list.size())
 	{
 		double t0 = m_key_list[index-1]->t;
 		double t1 = m_key_list[index]->t;
@@ -152,7 +174,7 @@ double Interpolator::GetKeyDuration(int index)
 
 int Interpolator::GetKeyType(int index)
 {
-	if (index>=0 && index<m_key_list.size())
+	if (index>=0 && (size_t)index<m_key_list.size())
 		return m_key_list[index]->type;
 	else
 		return 0;
@@ -160,7 +182,7 @@ int Interpolator::GetKeyType(int index)
 
 string Interpolator::GetKeyDesc(int index)
 {
-	if (index>=0 && index<m_key_list.size())
+	if (index>=0 && (size_t)index<m_key_list.size())
 		return m_key_list[index]->desc;
 	else
 		return "";
@@ -169,7 +191,7 @@ string Interpolator::GetKeyDesc(int index)
 //modify
 void Interpolator::Clear()
 {
-	for (int i=0; i<(int)m_key_list.size(); i++)
+	for (size_t i=0; i<m_key_list.size(); i++)
 	{
 		FlKeyGroup *group = m_key_list[i];
 		if (!group) continue;
@@ -345,7 +367,7 @@ bool Interpolator::GetDouble(KeyCode keycode, double t, double &dval)
 
 	if (g1==-1 && g2>-1)
 	{
-		if (g2 == m_key_list.size()-1)
+		if (g2 == (int64_t)m_key_list.size()-1)
 			return StepDouble(keycode, m_key_list[g2], dval);
 		else
 			return LinearDouble(keycode, m_key_list[g2], m_key_list[g2+1], t, dval);
@@ -400,6 +422,48 @@ bool Interpolator::GetBoolean(KeyCode keycode, double t, bool &bval)
 	return false;
 }
 
+bool Interpolator::GetInt(KeyCode keycode, double t, int &ival)
+{
+	int g1 = -1;
+	int g2 = -1;
+
+	for (int i=0; i<(int)m_key_list.size(); i++)
+	{
+		if (t > m_key_list[i]->t)
+			g1 = i;
+		else if (t < m_key_list[i]->t)
+		{
+			g2 = i;
+			break;
+		}
+		else
+		{
+			g1 = g2 = i;
+			break;
+		}
+	}
+
+	if (g1 > -1)
+	{
+		FlKey *key = SearchKey(keycode, m_key_list[g1]);
+		if (!key) return false;
+		if (key->GetType() != FLKEY_TYPE_INT)
+			return false;
+		ival = ((FlKeyInt*)key)->GetValue();
+		return true;
+	}
+	else if (g2 > -1)
+	{
+		FlKey *key = SearchKey(keycode, m_key_list[g2]);
+		if (!key) return false;
+		if (key->GetType() != FLKEY_TYPE_INT)
+			return false;
+		ival = ((FlKeyInt*)key)->GetValue();
+		return true;
+	}
+	return false;
+}
+
 bool Interpolator::GetQuaternion(KeyCode keycode, double t, Quaternion &qval)
 {
 	int g1 = -1;
@@ -437,7 +501,7 @@ bool Interpolator::GetQuaternion(KeyCode keycode, double t, Quaternion &qval)
 
 	if (g1==-1 && g2>-1)
 	{
-		if (g2 == m_key_list.size()-1)
+		if (g2 == (int64_t)m_key_list.size()-1)
 			return StepQuaternion(keycode, m_key_list[g2], qval);
 		else
 			return LinearQuaternion(keycode, m_key_list[g2], m_key_list[g2+1], t, qval);

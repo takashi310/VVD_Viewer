@@ -106,7 +106,6 @@ namespace FLIVR
 		int prev_shader_;
 	};
 
-
 } // end namespace FLIVR
 
 #endif // ImgShader_h

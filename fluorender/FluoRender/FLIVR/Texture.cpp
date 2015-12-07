@@ -31,6 +31,7 @@
 #include <FLIVR/TextureRenderer.h>
 #include <FLIVR/Utils.h>
 #include <algorithm>
+#include <inttypes.h>
 
 #include <wx/progdlg.h>
 
@@ -38,8 +39,8 @@ using namespace std;
 
 namespace FLIVR
 {
-	Texture::Texture()
-    :
+	size_t Texture::mask_undo_num_ = 0;
+	Texture::Texture() :
         sort_bricks_(true),
         nx_(0),
 		ny_(0),
@@ -66,9 +67,10 @@ namespace FLIVR
 		b_spcz_(1.0),
 		s_spcx_(1.0),
 		s_spcy_(1.0),
-		s_spcz_(1.0)
+		s_spcz_(1.0),
+        mask_undo_pointer_(-1)
 	{
-		for (int i = 0; i < TEXTURE_MAX_COMPONENTS; i++)
+		for (size_t i = 0; i < TEXTURE_MAX_COMPONENTS; i++)
 		{
 			nb_[i] = 0;
 			data_[i] = 0;
@@ -89,6 +91,9 @@ namespace FLIVR
 			vector<TextureBrick *>().swap(*bricks_);
 		}
 
+		clear_undos();
+
+		//release other data
 		for (int i=0; i<TEXTURE_MAX_COMPONENTS; i++)
 		{
 			if (data_[i])
@@ -98,13 +103,29 @@ namespace FLIVR
 					if (pyramid_[j].data == data_[i]) existInPyramid = true;
 
 				//delete [] data_[i]->data;
-				if (!existInPyramid) nrrdNuke(data_[i]);
+				if (!existInPyramid)
+				{
+					if (ntype_[i]!=TYPE_MASK) nrrdNuke(data_[i]);
+					else nrrdNix(data_[i]);
+				}
 			}
 		}
 
 		//if (ifs_) ifs_.close();
 
 		clearPyramid();
+	}
+
+	void Texture::clear_undos()
+	{
+		//mask data now managed by the undos
+		for (size_t i=0; i<mask_undos_.size(); ++i)
+		{
+			if (mask_undos_[i])
+				delete []mask_undos_[i];
+			mask_undos_.clear();
+			mask_undo_pointer_ = -1;
+		}
 	}
 
 	vector<TextureBrick*>* Texture::get_sorted_bricks(
@@ -164,7 +185,7 @@ namespace FLIVR
 		{
 			quota_bricks_.clear();
 			unsigned int i;
-			if (quota >= (*bricks_).size())
+			if (quota >= (int64_t)(*bricks_).size())
 				quota = int((*bricks_).size());
 			else
 			{
@@ -186,7 +207,7 @@ namespace FLIVR
 				}
 				else
 					quota_bricks_.push_back((*bricks_)[i]);
-				if (quota_bricks_.size() == quota)
+				if (quota_bricks_.size() == (size_t)quota)
 					break;
 			}
 
@@ -626,8 +647,9 @@ namespace FLIVR
 			
 			if (data_[index] && data && !existInPyramid)
 			{
-				//delete [] data_[index]->data;
-				nrrdNix(data_[index]);
+				if (index != nmask_)
+					nrrdNuke(data_[index]);
+				else nrrdNix(data_[index]);
 			}
 
 			data_[index] = data;
@@ -637,6 +659,9 @@ namespace FLIVR
 				{
 					(*bricks_)[i]->set_nrrd(data, index);
 				}
+				//add to undo list
+				if (index==nmask_)
+					set_mask(data->data);
 			}
 		}
 	}
@@ -851,6 +876,157 @@ namespace FLIVR
 		lv = level;
 
 		return data;
+	}
+
+	//mask undo management
+	bool Texture::trim_mask_undos_head()
+	{
+		if (nmask_<=-1 || mask_undo_num_==0)
+			return true;
+		if (mask_undos_.size() <= mask_undo_num_+1)
+			return true;
+		if (mask_undo_pointer_ == 0)
+			return false;
+		while (mask_undos_.size()>mask_undo_num_+1 &&
+			mask_undo_pointer_>0 &&
+			mask_undo_pointer_<mask_undos_.size())
+		{
+			delete []mask_undos_.front();
+			mask_undos_.erase(mask_undos_.begin());
+			mask_undo_pointer_--;
+		}
+		return true;
+	}
+
+	bool Texture::trim_mask_undos_tail()
+	{
+		if (nmask_<=-1 || mask_undo_num_==0)
+			return true;
+		if (mask_undos_.size() <= mask_undo_num_+1)
+			return true;
+		if (mask_undo_pointer_ == mask_undos_.size()-1)
+			return false;
+		while (mask_undos_.size()>mask_undo_num_+1 &&
+			mask_undo_pointer_>=0 &&
+			mask_undo_pointer_<mask_undos_.size()-1)
+		{
+			delete []mask_undos_.back();
+			mask_undos_.pop_back();
+		}
+		return true;
+	}
+
+	bool Texture::get_undo()
+	{
+		if (nmask_<=-1 || mask_undo_num_==0)
+			return false;
+		if (mask_undo_pointer_ <= 0)
+			return false;
+		return true;
+	}
+
+	bool Texture::get_redo()
+	{
+		if (nmask_<=-1 || mask_undo_num_==0)
+			return false;
+		if (mask_undo_pointer_ >= mask_undos_.size()-1)
+			return false;
+		return true;
+	}
+
+	void Texture::set_mask(void* mask_data)
+	{
+		if (nmask_<=-1 || mask_undo_num_==0)
+			return;
+
+		if (mask_undo_pointer_>-1 &&
+			mask_undo_pointer_<mask_undos_.size()-1)
+		{
+			mask_undos_.insert(
+				mask_undos_.begin()+mask_undo_pointer_+1,
+				mask_data);
+			mask_undo_pointer_++;
+			if (!trim_mask_undos_head())
+				trim_mask_undos_tail();
+		}
+		else
+		{
+			mask_undos_.push_back(mask_data);
+			mask_undo_pointer_ = mask_undos_.size()-1;
+			trim_mask_undos_head();
+		}
+	}
+
+	void Texture::push_mask()
+	{
+		if (nmask_<=-1 || mask_undo_num_==0)
+			return;
+		if (mask_undo_pointer_<0 ||
+			mask_undo_pointer_>mask_undos_.size()-1)
+			return;
+
+		//duplicate at pointer position
+		unsigned long long mem_size = (unsigned long long)nx_*
+			(unsigned long long)ny_*(unsigned long long)nz_;
+		void* new_data = (void*)new (std::nothrow) unsigned char[mem_size];
+		memcpy(new_data, mask_undos_[mask_undo_pointer_], size_t(mem_size));
+		if (mask_undo_pointer_<mask_undos_.size()-1)
+		{
+			mask_undos_.insert(
+				mask_undos_.begin()+mask_undo_pointer_+1,
+				new_data);
+			mask_undo_pointer_++;
+			if (!trim_mask_undos_head())
+				trim_mask_undos_tail();
+		}
+		else
+		{
+			mask_undos_.push_back(new_data);
+			mask_undo_pointer_++;
+			trim_mask_undos_head();
+		}
+
+		//update mask data
+		nrrdWrap_va(data_[nmask_],
+			mask_undos_[mask_undo_pointer_],
+			nrrdTypeUChar, 3, (size_t)nx_,
+			(size_t)ny_, (size_t)nz_);
+	}
+
+	void Texture:: mask_undos_backward()
+	{
+		if (nmask_<=-1 || mask_undo_num_==0)
+			return;
+		if (mask_undo_pointer_<=0 ||
+			mask_undo_pointer_>mask_undos_.size()-1)
+			return;
+
+		//move pointer
+		mask_undo_pointer_--;
+
+		//update mask data
+		nrrdWrap_va(data_[nmask_],
+			mask_undos_[mask_undo_pointer_],
+			nrrdTypeUChar, 3, (size_t)nx_,
+			(size_t)ny_, (size_t)nz_);
+	}
+
+	void Texture::mask_undos_forward()
+	{
+		if (nmask_<=-1 || mask_undo_num_==0)
+			return;
+		if (mask_undo_pointer_<0 ||
+			mask_undo_pointer_>mask_undos_.size()-2)
+			return;
+
+		//move pointer
+		mask_undo_pointer_++;
+
+		//update mask data
+		nrrdWrap_va(data_[nmask_],
+			mask_undos_[mask_undo_pointer_],
+			nrrdTypeUChar, 3, (size_t)nx_,
+			(size_t)ny_, (size_t)nz_);
 	}
 
 } // namespace FLIVR

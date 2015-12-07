@@ -442,7 +442,7 @@ z
    }
 
    // compute polygon of edge plane intersections
-   void TextureBrick::compute_polygons(Ray& view, float dt,
+   void TextureBrick::compute_polygons(Ray& view, double dt,
          vector<float>& vertex, vector<uint32_t>& index,
          vector<uint32_t>& size)
    {
@@ -484,7 +484,7 @@ z
    // The representation returned is not efficient, but it appears a
    // typical rendering only contains about 1k triangles.
    void TextureBrick::compute_polygons(Ray& view,
-         float tmin, float tmax, float dt,
+         double tmin, double tmax, double dt,
          vector<float>& vertex, vector<uint32_t>& index,
 		 vector<uint32_t>& size)
    {
@@ -515,7 +515,7 @@ z
       right = Cross(vdir, up);
       bool order = TextureRenderer::get_update_order();
 	  size_t vert_count = 0;
-      for (float t = order?tmin:tmax;
+      for (double t = order?tmin:tmax;
             order?(t <= tmax):(t >= tmin);
             t += order?dt:-dt)
 	  {
@@ -568,14 +568,14 @@ z
 			{
 				vc += vv[j]; tc += tt[j];
 			}
-			vc /= (float)degree; tc /= (float)degree;
+			vc /= (double)degree; tc /= (double)degree;
 
 			// sort vertices
-			float pa[6];
+			double pa[6];
 			for (uint32_t i=0; i<degree; i++)
 			{
-				float vx = Dot(vv[i] - vc, right);
-				float vy = Dot(vv[i] - vc, up);
+				double vx = Dot(vv[i] - vc, right);
+				double vy = Dot(vv[i] - vc, up);
 
 				// compute pseudo-angle
 				pa[i] = vy / (fabs(vx) + fabs(vy));
@@ -734,14 +734,14 @@ z
 				 {
 					 vc += vv[j]; tc += tt[j];
 				 }
-				 vc /= (float)degree; tc /= (float)degree;
+				 vc /= (double)degree; tc /= (double)degree;
 
 				 // sort vertices
-				 float pa[6];
+				 double pa[6];
 				 for (uint32_t i=0; i<degree; i++)
 				 {
-					 float vx = Dot(vv[i] - vc, right);
-					 float vy = Dot(vv[i] - vc, up);
+					 double vx = Dot(vv[i] - vc, right);
+					 double vy = Dot(vv[i] - vc, up);
 
 					 // compute pseudo-angle
 					 pa[i] = vy / (fabs(vx) + fabs(vy));

@@ -106,6 +106,23 @@ namespace FLIVR
 
    MultiVolumeRenderer::~MultiVolumeRenderer()
    {
+	   //framebuffers
+		if (glIsFramebuffer(blend_framebuffer_))
+			glDeleteFramebuffers(1, &blend_framebuffer_);
+		if (glIsTexture(blend_tex_id_))
+			glDeleteTextures(1, &blend_tex_id_);
+		if (glIsTexture(label_tex_id_))
+			glDeleteTextures(1, &label_tex_id_);
+		if (glIsFramebuffer(filter_buffer_))
+			glDeleteFramebuffers(1, &filter_buffer_);
+		if (glIsTexture(filter_tex_id_))
+			glDeleteTextures(1, &filter_tex_id_);
+		if (glIsFramebuffer(blend_fbo_))
+			glDeleteFramebuffers(1, &blend_fbo_);
+		if (glIsTexture(blend_tex_))
+			glDeleteTextures(1, &blend_tex_);
+		if (glIsTexture(blend_id_tex_))
+			glDeleteTextures(1, &blend_id_tex_);
    }
 
    //mode and sampling rate
@@ -1302,7 +1319,7 @@ namespace FLIVR
 
    void MultiVolumeRenderer::draw_wireframe(bool orthographic_p)
    {
-      if (get_vr_num()<=0)
+ /*     if (get_vr_num()<=0)
          return;
 
       Ray view_ray = vr_list_[0]->compute_view();
@@ -1406,6 +1423,7 @@ namespace FLIVR
       if(lighting) glEnable(GL_LIGHTING);
       glMatrixMode(GL_MODELVIEW);
       glPopMatrix();
+*/
    }
 
    double MultiVolumeRenderer::num_slices_to_rate(int num_slices)
