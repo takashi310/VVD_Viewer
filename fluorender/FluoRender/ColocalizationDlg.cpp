@@ -39,7 +39,7 @@ m_vol_b(0)
 	sizer_1->Add(10, 10);
 	sizer_1->Add(st, 0, wxALIGN_CENTER);
 	sizer_1->Add(m_calc_load_a_btn, 0, wxALIGN_CENTER);
-	sizer_1->Add(m_calc_a_text, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_1->Add(m_calc_a_text, 1, wxEXPAND);
 	sizer_1->Add(10, 10);
 	//operand B
 	wxBoxSizer *sizer_2 = new wxBoxSizer(wxHORIZONTAL);
@@ -52,7 +52,7 @@ m_vol_b(0)
 	sizer_2->Add(10, 10);
 	sizer_2->Add(st, 0, wxALIGN_CENTER);
 	sizer_2->Add(m_calc_load_b_btn, 0, wxALIGN_CENTER);
-	sizer_2->Add(m_calc_b_text, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_2->Add(m_calc_b_text, 1, wxEXPAND);
 	sizer_2->Add(10, 10);
 	//min size
 	wxBoxSizer *sizer_3 = new wxBoxSizer(wxHORIZONTAL);
@@ -64,7 +64,7 @@ m_vol_b(0)
 		wxDefaultPosition, wxSize(75, 20), 0, vald_int);
 	sizer_3->Add(10, 10);
 	sizer_3->Add(st, 0, wxALIGN_CENTER);
-	sizer_3->Add(m_min_size_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_3->Add(m_min_size_sldr, 1, wxEXPAND);
 	sizer_3->Add(m_min_size_text, 0, wxALIGN_CENTER);
 	sizer_3->Add(10, 10);
 	//max size
@@ -77,7 +77,7 @@ m_vol_b(0)
 		wxDefaultPosition, wxSize(75, 20), 0, vald_int);
 	sizer_4->Add(10, 10);
 	sizer_4->Add(st, 0, wxALIGN_CENTER);
-	sizer_4->Add(m_max_size_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_4->Add(m_max_size_sldr, 1, wxEXPAND);
 	sizer_4->Add(m_max_size_text, 0, wxALIGN_CENTER);
 	sizer_4->Add(10, 10);
 	//select and calculate
@@ -94,15 +94,15 @@ m_vol_b(0)
 
 	wxBoxSizer *sizerV = new wxBoxSizer(wxVERTICAL);
 	sizerV->Add(10, 10);
-	sizerV->Add(sizer_1, 0, wxEXPAND|wxALIGN_CENTER);
+	sizerV->Add(sizer_1, 0, wxEXPAND);
 	sizerV->Add(10, 10);
-	sizerV->Add(sizer_2, 0, wxEXPAND|wxALIGN_CENTER);
+	sizerV->Add(sizer_2, 0, wxEXPAND);
 	sizerV->Add(10, 10);
-	sizerV->Add(sizer_3, 0, wxEXPAND|wxALIGN_CENTER);
+	sizerV->Add(sizer_3, 0, wxEXPAND);
 	sizerV->Add(10, 10);
-	sizerV->Add(sizer_4, 0, wxEXPAND|wxALIGN_CENTER);
+	sizerV->Add(sizer_4, 0, wxEXPAND);
 	sizerV->Add(10, 10);
-	sizerV->Add(sizer_5, 0, wxEXPAND|wxALIGN_CENTER);
+	sizerV->Add(sizer_5, 0, wxEXPAND);
 	
 	SetSizer(sizerV);
 	Layout();

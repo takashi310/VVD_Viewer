@@ -17,7 +17,7 @@ END_EVENT_TABLE()
 
 ConvertDlg::ConvertDlg(wxWindow *frame, wxWindow *parent) :
 wxPanel(parent, wxID_ANY,
-	wxPoint(520, 170), wxSize(400, 200),
+	wxPoint(520, 170), wxSize(400, 300),
 	0, "ConvertDlg"),
 	m_frame(parent)
 {
@@ -36,40 +36,40 @@ wxPanel(parent, wxID_ANY,
 	//threshold slider and text
 	wxBoxSizer *sizer11 = new wxBoxSizer(wxHORIZONTAL);
 	st = new wxStaticText(this, 0, "Threshold:",
-		wxDefaultPosition, wxSize(75, 23));
+		wxDefaultPosition, wxSize(100, 23));
 	m_cnv_vol_mesh_thresh_sldr = new wxSlider(this, ID_CnvVolMeshThreshSldr, 30, 1, 99,
 		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
 	m_cnv_vol_mesh_thresh_text = new wxTextCtrl(this, ID_CnvVolMeshThreshText, "0.30",
 		wxDefaultPosition, wxSize(40, 23), 0, vald_fp2);
 	sizer11->Add(st, 0, wxALIGN_CENTER);
 	sizer11->Add(10, 10);
-	sizer11->Add(m_cnv_vol_mesh_thresh_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer11->Add(m_cnv_vol_mesh_thresh_sldr, 1, wxEXPAND);
 	sizer11->Add(m_cnv_vol_mesh_thresh_text, 0, wxALIGN_CENTER);
 	sizer11->Add(15, 15);
 	//downsampling slider and text
 	wxBoxSizer *sizer12 = new wxBoxSizer(wxHORIZONTAL);
 	st = new wxStaticText(this, 0, "Downsmp. XY:",
-		wxDefaultPosition, wxSize(75, 23));
+		wxDefaultPosition, wxSize(100, 23));
 	m_cnv_vol_mesh_downsample_sldr = new wxSlider(this, ID_CnvVolMeshDownsampleSldr, 2, 1, 10,
 		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
 	m_cnv_vol_mesh_downsample_text = new wxTextCtrl(this, ID_CnvVolMeshDownsampleText, "2",
 		wxDefaultPosition, wxSize(40, 23), 0, vald_int);
 	sizer12->Add(st, 0, wxALIGN_CENTER);
 	sizer12->Add(10, 10);
-	sizer12->Add(m_cnv_vol_mesh_downsample_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer12->Add(m_cnv_vol_mesh_downsample_sldr, 1, wxEXPAND);
 	sizer12->Add(m_cnv_vol_mesh_downsample_text, 0, wxALIGN_CENTER);
 	sizer12->Add(15, 15);
 	//downsampling in z slider and text
 	wxBoxSizer *sizer13 = new wxBoxSizer(wxHORIZONTAL);
 	st = new wxStaticText(this, 0, "Downsmp. Z:",
-		wxDefaultPosition, wxSize(75, 23));
+		wxDefaultPosition, wxSize(100, 23));
 	m_cnv_vol_mesh_downsample_z_sldr = new wxSlider(this, ID_CnvVolMeshDownsampleZSldr, 1, 1, 10,
 		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
 	m_cnv_vol_mesh_downsample_z_text = new wxTextCtrl(this, ID_CnvVolMeshDownsampleZText, "1",
 		wxDefaultPosition, wxSize(40, 23), 0, vald_int);
 	sizer13->Add(st, 0, wxALIGN_CENTER);
 	sizer13->Add(10, 10);
-	sizer13->Add(m_cnv_vol_mesh_downsample_z_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer13->Add(m_cnv_vol_mesh_downsample_z_sldr, 1, wxEXPAND);
 	sizer13->Add(m_cnv_vol_mesh_downsample_z_text, 0, wxALIGN_CENTER);
 	sizer13->Add(15, 15);
 	//check options and convert button
@@ -81,7 +81,7 @@ wxPanel(parent, wxID_ANY,
 	m_cnv_vol_mesh_selected_chk->SetValue(true);
 	m_cnv_vol_mesh_weld_chk = new wxCheckBox(this, ID_CnvVolMeshWeldChk, "Weld vertices",
 		wxDefaultPosition, wxSize(-1, 23));
-	m_cnv_vol_mesh_weld_chk->SetValue(true);
+	m_cnv_vol_mesh_weld_chk->SetValue(false);
 	sizer14->Add(m_cnv_vol_mesh_usetransf_chk, 0, wxALIGN_CENTER);
 	sizer14->Add(m_cnv_vol_mesh_selected_chk, 0, wxALIGN_CENTER);
 	sizer14->Add(m_cnv_vol_mesh_weld_chk, 0, wxALIGN_CENTER);
@@ -94,21 +94,33 @@ wxPanel(parent, wxID_ANY,
 	
 	//group1
 	group1->Add(5, 5);
-	group1->Add(sizer11, 0, wxEXPAND|wxALIGN_CENTER);
+	group1->Add(sizer11, 0, wxEXPAND);
 	group1->Add(5, 5);
-	group1->Add(sizer12, 0, wxEXPAND|wxALIGN_CENTER);
+	group1->Add(sizer12, 0, wxEXPAND);
 	group1->Add(5, 5);
-	group1->Add(sizer13, 0, wxEXPAND|wxALIGN_CENTER);
+	group1->Add(sizer13, 0, wxEXPAND);
 	group1->Add(5, 5);
-	group1->Add(sizer14, 0, wxEXPAND|wxALIGN_CENTER);
+	group1->Add(sizer14, 0, wxEXPAND);
 	group1->Add(5, 5);
-	group1->Add(sizer15, 0, wxEXPAND|wxALIGN_CENTER);
+	group1->Add(sizer15, 0, wxEXPAND);
 	group1->Add(5, 5);
+
+	//stats text
+	wxBoxSizer *sizer2 = new wxStaticBoxSizer(
+		new wxStaticBox(this, wxID_ANY, "Output"),
+		wxVERTICAL);
+	m_stat_text = new wxTextCtrl(this, ID_StatText, "",
+		wxDefaultPosition, wxSize(-1, 100), wxTE_MULTILINE);
+	m_stat_text->SetEditable(false);
+	sizer2->Add(m_stat_text, 1, wxEXPAND);
 
 	//all controls
 	wxBoxSizer *sizerV = new wxBoxSizer(wxVERTICAL);
 	sizerV->Add(10, 10);
 	sizerV->Add(group1, 0, wxEXPAND);
+	sizerV->Add(10, 10);
+	sizerV->Add(sizer2, 1, wxEXPAND);
+	sizerV->Add(10, 10);
 
 	SetSizer(sizerV);
 	Layout();
@@ -191,9 +203,9 @@ void ConvertDlg::OnCnvVolMeshConvert(wxCommandEvent& event)
 
 	VolumeMeshConv converter;
 	converter.SetVolume(sel_vol->GetTexture()->get_nrrd(0));
-	double x, y, z;
-	sel_vol->GetSpacings(x, y, z);
-	converter.SetVolumeSpacings(x, y, z);
+	double spcx, spcy, spcz;
+	sel_vol->GetSpacings(spcx, spcy, spcz);
+	converter.SetVolumeSpacings(spcx, spcy, spcz);
 	converter.SetMaxValue(sel_vol->GetMaxValue());
 	wxString str;
 	//get iso value
@@ -243,7 +255,10 @@ void ConvertDlg::OnCnvVolMeshConvert(wxCommandEvent& event)
 	if (mesh)
 	{
 		if (m_cnv_vol_mesh_weld_chk->GetValue())
-			glmWeld(mesh, Min(x, Min(y, z)*0.001));
+			glmWeld(mesh, Min(spcx, Min(spcy, spcz)*0.001));
+		float area;
+		float scale[3] = {1.0f, 1.0f, 1.0f};
+		glmArea(mesh, scale, &area);
 		DataManager* mgr = vr_frame->GetDataManager();
 		mgr->LoadMeshData(mesh);
 		MeshData* md = mgr->GetLastMeshData();
@@ -254,6 +269,10 @@ void ConvertDlg::OnCnvVolMeshConvert(wxCommandEvent& event)
 		}
 		vr_frame->UpdateList();
 		vr_frame->UpdateTree();
+		(*m_stat_text) <<
+			"The surface area of mesh object " <<
+			md->GetName() << " is " <<
+			wxString::Format("%f", area) << "\n";
 	}
 
 	delete prog_diag;

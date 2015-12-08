@@ -620,11 +620,12 @@ void TIFReader::GetTiffStrip(uint64_t page, uint64_t strip,
    uint64_t tmp = GetTiffField(kCompressionTag,NULL,0);
    uint64_t prediction = GetTiffField(kPredictionTag,NULL,0);
    uint64_t bits = GetTiffField(kSamplesPerPixelTag,NULL,0);
+   bits = bits==0?1:bits;
    tsize_t stride = (GetTiffField(kPlanarConfigurationTag,NULL,0) == 2)?1:bits;
    //uint64_t rows_per_strip = GetTiffField(kRowsPerStripTag,NULL,0);
    uint64_t rows_per_strip = strip_size /
 	   GetTiffField(kImageWidthTag,NULL,0) /
-	   GetTiffField(kSamplesPerPixelTag,NULL,0);
+	   bits;
    bool isCompressed = tmp == 5;
     if (isCompressed) {
         LZWDecode((tidata_t)temp, (tidata_t)data, strip_size);
@@ -708,7 +709,11 @@ void TIFReader::ResetTiff()
 void TIFReader::OpenTiff(std::wstring name)
 {
    //open the stream
+#ifdef _WIN32
+   tiff_stream.open(name.c_str(), std::ifstream::binary);
+#else
    tiff_stream.open((ws2s(name)).c_str(), std::ifstream::binary);
+#endif
    if (!tiff_stream.is_open())
       throw std::runtime_error( "Unable to open TIFF File for reading." );
    tiff_stream.seekg(2,tiff_stream.beg);
@@ -797,9 +802,11 @@ Nrrd* TIFReader::ReadTiff(std::vector<SliceInfo> &filelist,
    void *val = 0;
    bool eight_bit = bits == 8;
 
-   long long total_size = (long long)m_x_size * (long long)m_y_size *
-         (long long)numPages;
-   val = malloc(total_size * (eight_bit?1:2));
+   unsigned long long total_size = (unsigned long long)m_x_size*
+	   (unsigned long long)m_y_size*(unsigned long long)numPages;
+   //val = malloc(total_size * (eight_bit?1:2));
+   val = eight_bit?(void*)(new unsigned char[total_size]):
+	   (void*)(new unsigned short[total_size]);
    if (!val)
       throw std::runtime_error( "Unable to allocate memory to read TIFF." );
 

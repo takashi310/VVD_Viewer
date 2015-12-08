@@ -34,9 +34,13 @@
 #include <FLIVR/TextureBrick.h>
 #include "utility.h"
 #include "../compatibility.h"
+#include <fstream>
+#include <iostream>
 #include <glm/gtc/type_ptr.hpp>
 
+#ifdef _WIN32
 #include <windows.h>//added by takashi
+#endif
 
 namespace FLIVR
 {
@@ -67,6 +71,7 @@ namespace FLIVR
 		hi_thresh_(1.0),
 		color_(Color(1.0, 1.0, 1.0)),
 		mask_color_(Color(0.0, 1.0, 0.0)),
+		mask_color_set_(false),
 		mask_thresh_(0.0),
 		alpha_(1.0),
 		//shading
@@ -83,6 +88,8 @@ namespace FLIVR
 		colormap_proj_(0),
 		//solid
 		solid_(false),
+		//interpolate
+		interpolate_(true),
 		//adaptive
 		adaptive_(true),
 		//clipping planes
@@ -125,6 +132,7 @@ namespace FLIVR
 		hi_thresh_(copy.hi_thresh_),
 		color_(copy.color_),
 		mask_color_(copy.mask_color_),
+		mask_color_set_(copy.mask_color_set_),
 		mask_thresh_(0.0),
 		alpha_(copy.alpha_),
 		//shading
@@ -141,6 +149,8 @@ namespace FLIVR
 		colormap_proj_(copy.colormap_proj_),
 		//solid
 		solid_(copy.solid_),
+		//interpolate
+		interpolate_(copy.interpolate_),
 		//adaptive
 		adaptive_(copy.adaptive_),
 		//depth peel
@@ -261,24 +271,33 @@ namespace FLIVR
 	{
 		color_ = color;
 
-		//generate opposite color for mask
-		HSVColor hsv_color(color_);
-		double h, s, v;
-		if (hsv_color.sat() < 0.2)
-			mask_color_ = Color(0.0, 1.0, 0.0);	//if low saturation, set to green
-		else
+		if (!mask_color_set_)
 		{
-			double h0 = hsv_color.hue();
-			h = h0<30.0?h0-180.0:h0<90.0?h0+120.0:h0<210.0?h0-120.0:h0-180.0;
-			s = 1.0;
-			v = 1.0;
-			mask_color_ = Color(HSVColor(h<0.0?h+360.0:h, s, v));
+			//generate opposite color for mask
+			HSVColor hsv_color(color_);
+			double h, s, v;
+			if (hsv_color.sat() < 0.2)
+				mask_color_ = Color(0.0, 1.0, 0.0);	//if low saturation, set to green
+			else
+			{
+				double h0 = hsv_color.hue();
+				h = h0<30.0?h0-180.0:h0<90.0?h0+120.0:h0<210.0?h0-120.0:h0-180.0;
+				s = 1.0;
+				v = 1.0;
+				mask_color_ = Color(HSVColor(h<0.0?h+360.0:h, s, v));
+			}
 		}
 	}
 
 	Color VolumeRenderer::get_color()
 	{
 		return color_;
+	}
+
+	void VolumeRenderer::set_mask_color(Color color, bool set)
+	{
+		mask_color_ = color;
+		mask_color_set_ = set;
 	}
 
 	Color VolumeRenderer::get_mask_color()
@@ -377,6 +396,11 @@ namespace FLIVR
 	{
 		return &planes_;
 	}
+	
+	//interpolation
+	bool VolumeRenderer::get_interpolate() {return interpolate_; }
+
+	void VolumeRenderer::set_interpolate(bool b) { interpolate_ = b;}
 
 	//calculating scaling factor, etc
 	//calculate scaling factor according to viewport and texture size
@@ -445,17 +469,28 @@ namespace FLIVR
 			break;
 		case 3:	//sharpening filter
 			{
-				double p = 0.012221;
-				size = p*zoom;
-				size = Clamp(size, 0.0, 0.25);
+				//double p = 0.012221;
+				//size = p*zoom;
+				//size = Clamp(size, 0.0, 0.25);
+				double sf11 = sqrt(tex_w*tex_w + tex_h*tex_h)/vs;
+				size = zoom / sf11 / 10.0;
+				size = size<1.0?0.0:size;
+				size = Clamp(size, 0.0, 0.3);
 			}
 			break;
+		case 4:	//blur filter
+			{
+				double sf11 = sqrt(tex_w*tex_w + tex_h*tex_h)/vs;
+				size = zoom / sf11 / 2.0;
+				size = size<1.0?0.5:size;
+				size = Clamp(size, 0.1, 1.0);
+			}
 		}
 
 		//adjusting for screen size
-		double af = vs/800.0;
+		//double af = vs/800.0;
 
-		return size*af;
+		return size;
 	}
 
 	double VolumeRenderer::compute_dt_fac(double sampling_frq_fac, double *rate_fac)
@@ -501,6 +536,68 @@ namespace FLIVR
 		return maxlen / l;
 	}
 
+	void VolumeRenderer::eval_ml_mode()
+	{
+		//reassess the mask/label mode
+		//0-normal, 1-render with mask, 2-render with mask excluded
+		//3-random color with label, 4-random color with label+mask
+		switch (ml_mode_)
+		{
+		case 0:
+			mask_ = false;
+			label_ = false;
+			break;
+		case 1:
+			if (tex_->nmask() == -1)
+			{
+				mask_ = false;
+				ml_mode_ = 0;
+			}
+			else
+				mask_ = true;
+			label_ = false;
+			break;
+		case 2:
+			if (tex_->nmask() == -1)
+			{
+				mask_ = false;
+				ml_mode_ = 0;
+			}
+			else
+				mask_ = true;
+			label_ = false;
+			break;
+		case 3:
+			if (tex_->nlabel() == -1)
+			{
+				label_ = false;
+				ml_mode_ = 0;
+			}
+			else
+				label_ = true;
+			mask_ = false;
+			break;
+		case 4:
+			if (tex_->nlabel() == -1)
+			{
+				if (tex_->nmask()>-1)
+				{
+					mask_ = true;
+					label_ = false;
+					ml_mode_ = 1;
+				}
+				else
+				{
+					mask_ = label_ = false;
+					ml_mode_ = 0;
+				}
+			}
+			else
+				mask_ = label_ = true;
+			break;
+		}
+	}
+
 	//draw
 	void VolumeRenderer::draw(bool draw_wireframe_p, bool interactive_mode_p,
 		bool orthographic_p, double zoom, bool intp, int mode, double sampling_frq_fac)
@@ -521,8 +618,6 @@ namespace FLIVR
 		Ray view_ray = compute_view();
 		Ray snapview = compute_snapview(0.4);
 
-		set_interactive_mode(adaptive_ && interactive_mode_p);
-
 		vector<TextureBrick*> *bricks = 0;
 		if (mem_swap_ && interactive_)
 			bricks = tex_->get_closest_bricks(
@@ -532,6 +627,8 @@ namespace FLIVR
 			bricks = tex_->get_sorted_bricks(view_ray, orthographic_p);
 		if (!bricks || bricks->size() == 0)
 			return;
+
+		set_interactive_mode(adaptive_ && interactive_mode_p);
 
 		// Set sampling rate based on interaction
 		double rate = imode_ ? irate_ : sampling_rate_;
@@ -553,7 +650,6 @@ namespace FLIVR
 		size.reserve(num_slices_*6);
 
 		//--------------------------------------------------------------------------
-		//int nb0 = (*bricks)[0]->nc();
 
 		bool use_fog = m_use_fog && colormap_mode_!=2;
 		GLfloat clear_color[4];
@@ -609,8 +705,8 @@ namespace FLIVR
 				glBindTexture(GL_TEXTURE_2D, blend_tex_id_);
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
 					GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
 				glFramebufferTexture2D(GL_FRAMEBUFFER,
@@ -621,8 +717,8 @@ namespace FLIVR
 				glBindTexture(GL_TEXTURE_2D, label_tex_id_);
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
 					GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
 				glFramebufferTexture2D(GL_FRAMEBUFFER,
@@ -712,71 +808,7 @@ namespace FLIVR
 		//enable 3d texture
 		glEnable(GL_TEXTURE_3D);
 
-		//--------------------------------------------------------------------------
-		// enable data texture unit 0
-		glActiveTexture(GL_TEXTURE0);
-
-		//reassess the mask/label mode
-		//0-normal, 1-render with mask, 2-render with mask excluded
-		//3-random color with label, 4-random color with label+mask
-
-		//ml_mode_ = 4;
-
-		switch (ml_mode_)
-		{
-		case 0:
-			mask_ = false;
-			label_ = false;
-			break;
-		case 1:
-			if (tex_->nmask()==-1)
-			{
-				mask_ = false;
-				ml_mode_ = 0;
-			}
-			else
-				mask_ = true;
-			label_ = false;
-			break;
-		case 2:
-			if (tex_->nmask()==-1)
-			{
-				mask_ = false;
-				ml_mode_ = 0;
-			}
-			else
-				mask_ = true;
-			label_ = false;
-			break;
-		case 3:
-			if (tex_->nlabel()==-1)
-			{
-				label_ = false;
-				ml_mode_ = 0;
-			}
-			else
-				label_ = true;
-			mask_ = false;
-			break;
-		case 4:
-			if (tex_->nlabel()==-1)
-			{
-				if (tex_->nmask()>-1)
-				{
-					mask_ = true;
-					label_ = false;
-					ml_mode_ = 1;
-				}
-				else
-				{
-					mask_ = label_ = false;
-					ml_mode_ = 0;
-				}
-			}
-			else
-				mask_ = label_ = true;
-			break;
-		}
+		eval_ml_mode();
 
 		//--------------------------------------------------------------------------
 		// Set up shaders
@@ -798,6 +830,7 @@ namespace FLIVR
 
 		//set uniforms
 		//set up shading
+		//set the light
 		Vector light = view_ray.direction();
 		light.safe_normalize();
 		shader->setLocalParam(0, light.x(), light.y(), light.z(), alpha_);
@@ -945,7 +978,7 @@ namespace FLIVR
 					continue;
 			}
 
-			if (!test_against_view(b->bbox()) || // Clip against view
+			if (!test_against_view(b->bbox(), !orthographic_p) || // Clip against view
 				b->get_priority()>0) //nothing to draw
 			{
 				if (mem_swap_ && start_update_loop_ && !done_update_loop_)
@@ -1043,14 +1076,12 @@ namespace FLIVR
 			//		break;
 			//}
 		}
-		
+
 		if (mem_swap_ &&
 			cur_brick_num_ == total_brick_num_)
-		{
 			done_update_loop_ = true;
-		}
 		if (mem_swap_ &&
-			cur_chan_brick_num_ == (*bricks).size())
+			(size_t)cur_chan_brick_num_ == (*bricks).size())
 		{
 			done_current_chan_ = true;
 			clear_chan_buffer_ = true;
@@ -1089,6 +1120,10 @@ namespace FLIVR
 
 		//Release 3d texture
 		release_texture(0, GL_TEXTURE_3D);
+		if (mask_)
+			release_texture((*bricks)[0]->nmask(), GL_TEXTURE_3D);
+		if (label_)
+			release_texture((*bricks)[0]->nlabel(), GL_TEXTURE_3D);
 
 		//enable
 		glEnable(GL_DEPTH_TEST);
@@ -1115,8 +1150,8 @@ namespace FLIVR
 					glBindTexture(GL_TEXTURE_2D, filter_tex_id_);
 					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
 						GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
 				}
@@ -1140,8 +1175,6 @@ namespace FLIVR
 				glClear(GL_COLOR_BUFFER_BIT);
 
 				glBindTexture(GL_TEXTURE_2D, blend_tex_id_);
-				glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-
 				img_shader = 
 					m_img_shader_factory.shader(IMG_SHDR_FILTER_BLUR);
 				if (img_shader)
@@ -1152,8 +1185,8 @@ namespace FLIVR
 					}
 					img_shader->bind();
 				}
-				filter_size_min_ = CalcFilterSize(1, w, h, tex_->nx(), tex_->ny(), zoom, sfactor_);
-				img_shader->setLocalParam(0, filter_size_min_/w2, filter_size_min_/h2, 0.5, 0.0);
+				filter_size_min_ = CalcFilterSize(4, w, h, tex_->nx(), tex_->ny(), zoom, sfactor_);
+				img_shader->setLocalParam(0, filter_size_min_/w2, filter_size_min_/h2, 1.0/w2, 1.0/h2);
 
 				draw_view_quad();
 
@@ -1183,9 +1216,7 @@ namespace FLIVR
 			if (img_shader)
 			{
 				if (!img_shader->valid())
-				{
 					img_shader->create();
-				}
 				img_shader->bind();
 			}
 
@@ -1276,7 +1307,7 @@ namespace FLIVR
 			for (unsigned int i=0; i<bricks->size(); i++)
 			{
 				TextureBrick* b = (*bricks)[i];
-				if (!test_against_view(b->bbox())) continue;
+				if (!test_against_view(b->bbox(), !orthographic_p)) continue;
 
 				vertex.clear();
 				index.clear();
@@ -1674,6 +1705,65 @@ namespace FLIVR
 		glEnable(GL_DEPTH_TEST);
 	}
 
+	double VolumeRenderer::calc_hist_3d(GLuint data_id, GLuint mask_id,
+		size_t brick_x, size_t brick_y, size_t brick_z)
+	{
+		double result = 0.0;
+/*		KernelProgram* kernel = vol_kernel_factory_.kernel(KERNEL_HIST_3D);
+		if (kernel)
+		{
+			if (!kernel->valid())
+			{
+				string name = "hist_3d";
+				kernel->create(name);
+			}
+			kernel->setKernelArgTex3D(0, CL_MEM_READ_ONLY, data_id);
+			kernel->setKernelArgTex3D(1, CL_MEM_READ_ONLY, mask_id);
+			unsigned int hist_size = 64;
+			if (tex_ && tex_->get_nrrd(0))
+			{
+				if (tex_->get_nrrd(0)->type == nrrdTypeUChar)
+					hist_size = 64;
+				else if (tex_->get_nrrd(0)->type == nrrdTypeUShort)
+					hist_size = 1024;
+			}
+			float* hist = new float[hist_size];
+			memset(hist, 0, hist_size*sizeof(float));
+			kernel->setKernelArgBuf(2, CL_MEM_READ_WRITE|CL_MEM_COPY_HOST_PTR, hist_size*sizeof(float), hist);
+			kernel->setKernelArgConst(3, sizeof(unsigned int), (void*)(&hist_size));
+			size_t global_size[3] = {brick_x, brick_y, brick_z};
+			size_t local_size[3] = {1, 1, 1};
+			kernel->execute(3, global_size, local_size);
+			kernel->readBuffer(2, hist);
+			//analyze hist
+			int i;
+			float sum = 0;
+			for (i=0; i<hist_size; ++i)
+				sum += hist[i];
+			for (i=hist_size-1; i>0; --i)
+			{
+				if (hist[i] > sum/hist_size && hist[i] > hist[i-1])
+				{
+					result = double(i)/double(hist_size);
+					break;
+				}
+			}
+			////save hist
+			//ofstream outfile;
+			//outfile.open("E:\\hist.txt");
+			//for (int i=0; i<hist_size; ++i)
+			//{
+			//	float value = hist[i];
+			//	outfile << value << "\n";
+			//}
+			//outfile.close();
+
+			delete []hist;
+			VolumeRenderer::vol_kernel_factory_.clean();
+		}
+*/		return result;
+	}
+
 	//calculation
 	void VolumeRenderer::calculate(int type, FLIVR::VolumeRenderer *vr_a, FLIVR::VolumeRenderer *vr_b)
 	{
@@ -1741,15 +1831,6 @@ namespace FLIVR
 			cal_shader->setLocalParam(3, 1.0/gamma3d_, gm_thresh_, offset_, sw_);
 		}
 
-		////////////////////////////////////////////////////////
-		glMatrixMode(GL_MODELVIEW);
-		glPushMatrix();
-		glLoadIdentity();
-		glMatrixMode(GL_PROJECTION);
-		glPushMatrix();
-		glLoadIdentity();
-		glDisable(GL_DEPTH_TEST);
-
 		for (unsigned int i=0; i < bricks->size(); i++)
 		{
 			TextureBrick* b = (*bricks)[i];
@@ -1769,7 +1850,6 @@ namespace FLIVR
 				if (bricks_b)
 					vr_b->load_brick_mask(bricks_b, i, GL_NEAREST, false, 4);
 			}
-
 			//draw each slice
 			for (int z=0; z<b->nz(); z++)
 			{
@@ -1779,15 +1859,9 @@ namespace FLIVR
 					tex_id,
 					0,
 					z);
-				draw_slices(double(z+0.5) / double(b->nz()));
+				draw_view_quad(double(z+0.5) / double(b->nz()));
 			}
 		}
-
-		glMatrixMode(GL_PROJECTION);
-		glPopMatrix();
-		glMatrixMode(GL_MODELVIEW);
-		glPopMatrix();
-		////////////////////////////////////////////////////////
 
 		//release 3d mask
 		release_texture((*bricks)[0]->nmask(), GL_TEXTURE_3D);
@@ -1803,7 +1877,6 @@ namespace FLIVR
 			cal_shader->release();
 
 		glActiveTexture(GL_TEXTURE0);
-		glDisable(GL_TEXTURE_3D);
 		glBindTexture(GL_TEXTURE_3D, 0);
 		//--------------------------------------------------------------------------
 
@@ -1830,7 +1903,7 @@ namespace FLIVR
 			int nb = (*bricks)[i]->nb(c);
 			GLenum format;
 			if (nb < 3)
-				format = GL_LUMINANCE;
+				format = GL_RED;
 			else
 				format = GL_RGBA;
 
@@ -1854,7 +1927,6 @@ namespace FLIVR
 		//release 3d texture
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_3D, 0);
-		glDisable(GL_TEXTURE_3D);
 	}
 
 	//return the mask volume
@@ -1884,7 +1956,7 @@ namespace FLIVR
 
 			GLenum type = (*bricks)[i]->tex_type(c);
 			void* data = (*bricks)[i]->tex_data(c);
-			glGetTexImage(GL_TEXTURE_3D, 0, GL_LUMINANCE,
+			glGetTexImage(GL_TEXTURE_3D, 0, GL_RED,
 				type, data);
 
 			glPixelStorei(GL_PACK_ROW_LENGTH, 0);

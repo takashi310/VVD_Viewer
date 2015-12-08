@@ -25,21 +25,37 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 */
-#ifndef PNG_RESOURCE_H
-#define PNG_RESOURCE_H
+#ifndef _FLKEY_INT_H_
+#define _FLKEY_INT_H_
 
-#include <wx/wx.h>
-#include "../compatibility.h"
-#include "wx/mstream.h"
+#include "FlKey.h"
 
-#define wxGetBitmapFromMemory(name) _wxGetBitmapFromMemory(name ## _png, sizeof(name ## _png))
-//#define wxGetBitmapFromMemory(name) _wxGetBitmapFromMemory(icons::name ## _png, sizeof(icons::name ## _png))
-
-inline wxBitmap _wxGetBitmapFromMemory(const unsigned char *data, int length)
+class FlKeyInt : public FlKey
 {
-	  wxLogNull logNo;
-      wxMemoryInputStream is(data, length);
-         return wxBitmap(wxImage(is, wxBITMAP_TYPE_ANY, -1), -1);
-}
+public:
+	FlKeyInt()
+	{
+		m_code.l0 = 0;
+		m_code.l0_name = "";
+		m_code.l1 = 0;
+		m_code.l1_name = "";
+		m_code.l2 = 0;
+		m_code.l2_name = "";
+		m_ival = 0;
+	}
+	FlKeyInt(KeyCode keycode, int ival)
+	{
+		m_code = keycode;
+		m_ival = ival;
+	}
+	~FlKeyInt() {}
 
-#endif//PNG_RESOURCE_H
+	int GetType() {return FLKEY_TYPE_INT;}
+	void SetValue(int ival) {m_ival = ival;}
+	int GetValue() {return m_ival;}
+
+private:
+	int m_ival;
+};
+
+#endif//_FLKEY_INT_H_

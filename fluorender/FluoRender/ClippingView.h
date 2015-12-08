@@ -1,18 +1,55 @@
+/*
+For more information, please see: http://software.sci.utah.edu
+
+The MIT License
+
+Copyright (c) 2014 Scientific Computing and Imaging Institute,
+University of Utah.
+
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+*/
 #include "DataManager.h"
 #include <wx/wx.h>
 #include <wx/panel.h>
 #include <wx/slider.h>
 #include <wx/spinbutt.h>
 
-
 #ifndef _CLIPPINGVIEW_H_
 #define _CLIPPINGVIEW_H_
+
+//plane modes
+enum PLANE_MODES
+{
+	kNormal,
+	kFrame,
+	kLowTrans,
+	kLowTransBack,
+	kNormalBack
+};
 
 class ClippingView: public wxPanel
 {
 	enum
 	{
 		ID_LinkChannelsChk = wxID_HIGHEST+1,
+		ID_PlaneModesBtn,
 		ID_RotatePlanesChk,
 		ID_ClipResetBtn,
 		ID_SetZeroBtn,
@@ -78,6 +115,8 @@ public:
 	{
 		m_link_channels->SetValue(chann);
 	}
+	PLANE_MODES GetPlaneMode()
+	{ return m_plane_mode; }
 	bool GetXLink()
 	{
 		return m_link_x_chk->GetValue();
@@ -134,6 +173,7 @@ private:
 	MeshData* m_md;		//current mesh data
 	DataManager* m_mgr;	//manage all if clipping planes are synced
 	bool m_draw_clip;
+	PLANE_MODES m_plane_mode;
 
 	int m_x_sldr_dist;
 	int m_y_sldr_dist;
@@ -179,6 +219,10 @@ private:
 	//z2
 	wxSlider *m_z2_clip_sldr;
 	wxTextCtrl *m_z2_clip_text;
+	//keep 1 panel for sizing reasons
+	wxPanel * m_xpanel;
+	//highlighters
+	wxStaticText * m_xBar, * m_yBar, * m_zBar;
 
 	//linkers
 	wxCheckBox *m_link_x_chk;
@@ -200,6 +244,7 @@ private:
 	void OnIdle(wxIdleEvent &event);
 
 	void OnLinkChannelsCheck(wxCommandEvent &event);
+	void OnPlaneModesBtn(wxCommandEvent &event);
 	void OnClipResetBtn(wxCommandEvent &event);
 
 	void EnableAll();

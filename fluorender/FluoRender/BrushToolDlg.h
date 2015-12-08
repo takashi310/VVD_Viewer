@@ -1,4 +1,5 @@
 #include <wx/wx.h>
+#include <wx/notebook.h>
 
 #ifndef _BRUSHTOOLDLG_H_
 #define _BRUSHTOOLDLG_H_
@@ -23,6 +24,8 @@ public:
 		ID_BrushErase,
 		ID_BrushClear,
 		ID_BrushCreate,
+		ID_BrushUndo,
+		ID_BrushRedo,
 		//selection strength
 		//falloff
 		ID_BrushSclTranslateSldr,
@@ -96,6 +99,8 @@ public:
 
 	//set the brush icon down
 	void SelectBrush(int id);
+	//update undo status
+	void UpdateUndoRedo();
 
 	//get some default values
 	double GetDftCAMin() {return m_dft_ca_min;}
@@ -104,6 +109,8 @@ public:
 	void SetDftCAMax(double max) {m_dft_ca_max = max;}
 	double GetDftCAThresh() {return m_dft_ca_thresh;}
 	void SetDftCAThresh(double thresh) {m_dft_ca_thresh = thresh;}
+	double GetDftCAFalloff() {return m_dft_ca_falloff;}
+	void SetDftCAFalloff(double falloff) {m_dft_ca_falloff = falloff;}
 	double GetDftNRThresh() {return m_dft_nr_thresh;}
 	void SetDftNRThresh(double thresh) {m_dft_nr_thresh = thresh;}
 	double GetDftNRSize() {return m_dft_nr_size;}
@@ -135,23 +142,25 @@ private:
 	double m_dft_ca_min;
 	double m_dft_ca_max;
 	double m_dft_ca_thresh;
+	double m_dft_ca_falloff;
 	double m_dft_nr_thresh;
 	double m_dft_nr_size;
 
+	//tab control
+	wxNotebook *m_notebook;
 	//paint tools
 	//toolbar
 	wxToolBar *m_toolbar;
 
-	//selection strength
-	//translate
-	wxSlider* m_brush_scl_translate_sldr;
-	wxTextCtrl* m_brush_scl_translate_text;
 	//stop at boundary
 	wxCheckBox* m_edge_detect_chk;
 	//hidden removal
 	wxCheckBox* m_hidden_removal_chk;
 	//group selection
 	wxCheckBox* m_select_group_chk;
+	//translate
+	wxSlider* m_brush_scl_translate_sldr;
+	wxTextCtrl* m_brush_scl_translate_text;
 	//2d influence
 	wxSlider* m_brush_2dinfl_sldr;
 	wxTextCtrl* m_brush_2dinfl_text;
@@ -186,7 +195,7 @@ private:
 	wxButton *m_nr_analyze_btn;
 	wxButton *m_nr_remove_btn;
 	//help button
-	wxButton* m_help_btn;
+	//wxButton* m_help_btn;
 
 	//calculations
 	//operands
@@ -204,12 +213,17 @@ private:
 
 private:
 	void LoadDefault();
+	wxWindow* CreateBrushPage(wxWindow *parent);
+	wxWindow* CreateCalculationPage(wxWindow *parent);
+	wxWindow* CreateAnalysisPage(wxWindow *parent);
 
 	void LoadVolumes();
 
 	//event handling
 	//paint tools
 	//brush commands
+	void OnBrushUndo(wxCommandEvent& event);
+	void OnBrushRedo(wxCommandEvent& event);
 	void OnBrushAppend(wxCommandEvent& event);
 	void OnBrushDesel(wxCommandEvent& event);
 	void OnBrushDiffuse(wxCommandEvent& event);
@@ -217,9 +231,6 @@ private:
 	void OnBrushClear(wxCommandEvent& event);
 	void OnBrushCreate(wxCommandEvent& event);
 	//selection adjustment
-	//translate
-	void OnBrushSclTranslateChange(wxScrollEvent &event);
-	void OnBrushSclTranslateText(wxCommandEvent &event);
 	//2d influence
 	void OnBrush2dinflChange(wxScrollEvent &event);
 	void OnBrush2dinflText(wxCommandEvent &event);
@@ -229,6 +240,9 @@ private:
 	void OnBrushHiddenRemovalChk(wxCommandEvent &event);
 	//select group
 	void OnBrushSelectGroupChk(wxCommandEvent &event);
+	//translate
+	void OnBrushSclTranslateChange(wxScrollEvent &event);
+	void OnBrushSclTranslateText(wxCommandEvent &event);
 	//brush properties
 	//brush size 1
 	void OnBrushSize1Change(wxScrollEvent &event);

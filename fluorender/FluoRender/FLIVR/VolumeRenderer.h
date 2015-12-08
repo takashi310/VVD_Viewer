@@ -71,7 +71,10 @@ namespace FLIVR
 		double get_hi_thresh();
 		void set_color(Color color);
 		Color get_color();
+		void set_mask_color(Color color, bool set=true);
 		Color get_mask_color();
+		bool get_mask_color_set() {return mask_color_set_; }
+		void reset_mask_color_set() {mask_color_set_ = false;}
 		void set_mask_thresh(double thresh);
 		double get_mask_thresh();
 		void set_alpha(double alpha);
@@ -117,6 +120,10 @@ namespace FLIVR
 		void set_planes(vector<Plane*> *p);
 		vector<Plane*> *get_planes();
 
+		//interpolation
+		bool get_interpolate();
+		void set_interpolate(bool b);
+
 		//depth peel
 		void set_depth_peel(int dp) {depth_peel_ = dp;}
 		int get_depth_peel() {return depth_peel_;}
@@ -124,6 +131,7 @@ namespace FLIVR
 		double compute_dt_fac(double sampling_frq_fac=-1.0, double *rate_fac=nullptr);
 
 		//draw
+		void eval_ml_mode();
 		virtual void draw(bool draw_wireframe_p, 
 			bool interactive_mode_p, 
 			bool orthographic_p = false,
@@ -144,7 +152,9 @@ namespace FLIVR
 		//generate the labeling assuming the mask is already generated
 		//type: 0-initialization; 1-maximum intensity filtering
 		//mode: 0-normal; 1-posterized
-		void draw_label(int type, int mode, double thresh, double gm_falloff); 
+		void draw_label(int type, int mode, double thresh, double gm_falloff);
+
+		double calc_hist_3d(GLuint, GLuint, size_t, size_t, size_t);
 
 		//calculation
 		void calculate(int type, VolumeRenderer* vr_a, VolumeRenderer* vr_b);
@@ -207,6 +217,7 @@ namespace FLIVR
 		double hi_thresh_;
 		Color color_;
 		Color mask_color_;
+		bool mask_color_set_;
 		double mask_thresh_;
 		double alpha_;
 		//shading
@@ -220,6 +231,8 @@ namespace FLIVR
 		int colormap_proj_;
 		//solid
 		bool solid_;
+		//interpolation
+		bool interpolate_;
 		//adaptive
 		bool adaptive_;
 		//planes

@@ -668,9 +668,9 @@ namespace FLIVR
 #define VOL_RASTER_BLEND_LABEL \
 	"	//VOL_RASTER_BLEND_LABEL\n" \
 	"	uint label = texture(tex3, t.stp).x; //get mask value\n" \
-	"	vec4 sel = vec4(0.0,\n" \
-	"					0.0,\n" \
-	"					0.0, 0.0);\n" \
+	"	vec4 sel = vec4(0.2,\n" \
+	"					0.4,\n" \
+	"					0.4, 1.0);\n" \
 	"	float hue, p2, p3;\n" \
 	"	if (label > uint(0))\n" \
 	"	{\n" \
@@ -690,7 +690,9 @@ namespace FLIVR
 	"		else\n" \
 	"			sel = vec4(1.0, 1.0, p2, 1.0);\n" \
 	"	}\n" \
-	"	FragColor = sel;\n" \
+	"	sel.xyz = sel.xyz*clamp(1.0-loc1.x, 0.0, 1.0) + loc1.x*sel.xyz*(loc1.y > 0.0?(n.w + n.z):1.0);\n" \
+	"	sel.xyz *= pow(1.0 - loc1.x / 2.0, 2.0) + 1.0;\n" \
+	"	FragColor = sel*l.w;\n" \
 	"\n"
 
 #define VOL_RASTER_BLEND_LABEL_MASK \
@@ -702,17 +704,9 @@ namespace FLIVR
 	"		return;\n" \
 	"	}\n" \
 	"	uint label = texture(tex3, t.stp).x; //get mask value\n" \
-	"	vec4 sel = vec4(1.0-loc6.x,\n" \
-	"					1.0-loc6.y,\n" \
-	"					1.0-loc6.z, 1.0);\n" \
-	"	//if (sel.x==sel.y && sel.y==sel.z)\n" \
-	"	//	sel = vec4(0.5, 1.0, 0.5, 1.0);\n" \
-	"	//else\n" \
-	"	//{\n" \
-	"	//	if (sel.x == 0.0) sel.x = 0.5;\n" \
-	"	//	if (sel.y == 0.0) sel.y = 0.5;\n" \
-	"	//	if (sel.z == 0.0) sel.z = 0.5;\n" \
-	"	//}\n" \
+	"	vec4 sel = vec4(0.1,\n" \
+	"					0.2,\n" \
+	"					0.2, 0.5);\n" \
 	"	float hue, p2, p3;\n" \
 	"	if (label > uint(0))\n" \
 	"	{\n" \
@@ -732,7 +726,9 @@ namespace FLIVR
 	"		else\n" \
 	"			sel = vec4(1.0, 0.0, p2, 1.0);\n" \
 	"	}\n" \
-	"	FragColor = sel*alpha*tf_alp;\n" \
+	"	sel.xyz = sel.xyz*clamp(1.0-loc1.x, 0.0, 1.0) + loc1.x*sel.xyz*(loc1.y > 0.0?(n.w + n.z):1.0);\n" \
+	"	sel.xyz *= pow(1.0 - loc1.x / 2.0, 2.0) + 1.0;\n" \
+	"	FragColor = sel*alpha*tf_alp*l.w;\n" \
 	"\n"
 
 }//namespace FLIVR

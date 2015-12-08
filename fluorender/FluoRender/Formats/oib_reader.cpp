@@ -158,7 +158,8 @@ void OIBReader::ReadSingleOib()
 {
    //read the current file info
    //storage
-   POLE::Storage pStg(ws2s(m_path_name).c_str()); 
+   //use POLE's own function to convert string from wstring
+   POLE::Storage pStg(ws2s(m_path_name).c_str());
    //open
    if (pStg.open()) {
       //enumerate
@@ -258,7 +259,7 @@ int OIBReader::LoadBatch(int index)
 
 void OIBReader::ReadStream(POLE::Storage &pStg, wstring &stream_name)
 {
-	POLE::Stream pStm(&pStg,ws2s(stream_name));
+	POLE::Stream pStm(&pStg, ws2s(stream_name));
 	unsigned char *pbyData = 0;
 
 	//open
@@ -691,12 +692,13 @@ Nrrd *OIBReader::Convert(int t, int c, bool get_max)
 	   unsigned char *pbyData = 0;
        wstring path_name = m_type==0?m_path_name:m_oib_info[t].filename;
 	   //storage
-	   POLE::Storage pStg(ws2s(path_name).c_str()); 
+	   POLE::Storage pStg(ws2s(path_name).c_str());
 	   //open
 	   if (pStg.open()) {
 		  //allocate memory for nrrd
-		  unsigned short *val = new (std::nothrow) unsigned short[
-			  m_x_size*m_y_size*m_slice_num];
+		  unsigned long long mem_size = (unsigned long long)m_x_size*
+			  (unsigned long long)m_y_size*(unsigned long long)m_slice_num;
+		  unsigned short *val = new (std::nothrow) unsigned short[mem_size];
 		  //enumerate
 		  std::list<std::string> entries = 
 			  pStg.entries();

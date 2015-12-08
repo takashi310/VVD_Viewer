@@ -1,3 +1,30 @@
+/*
+For more information, please see: http://software.sci.utah.edu
+
+The MIT License
+
+Copyright (c) 2014 Scientific Computing and Imaging Institute,
+University of Utah.
+
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+*/
 #include "CountingDlg.h"
 #include "VRenderFrame.h"
 #include <wx/valnum.h>
@@ -20,8 +47,8 @@ wxPoint(500, 150), wxSize(400, 150),
 0, "CountingDlg"),
 m_frame(parent),
 m_view(0),
-m_group(0),
-m_vol(0),
+//m_group(0),
+//m_vol(0),
 m_max_value(255.0),
 m_dft_thresh(0.0)
 {
@@ -40,9 +67,9 @@ m_dft_thresh(0.0)
 	m_ca_thresh_sldr = new wxSlider(this, ID_CAThreshSldr, 0, 0, 2550,
 		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
 	m_ca_thresh_text = new wxTextCtrl(this, ID_CAThreshText, "0.0",
-		wxDefaultPosition, wxSize(40, 20), 0, vald_fp1);
+		wxDefaultPosition, wxSize(50, 20), 0, vald_fp1);
 	sizer_1->Add(st, 0, wxALIGN_CENTER);
-	sizer_1->Add(m_ca_thresh_sldr, 1, wxALIGN_CENTER|wxEXPAND);
+	sizer_1->Add(m_ca_thresh_sldr, 1, wxEXPAND);
 	sizer_1->Add(m_ca_thresh_text, 0, wxALIGN_CENTER);
 	m_ca_analyze_btn = new wxButton(this, ID_CAAnalyzeBtn, "Analyze",
 		wxDefaultPosition, wxSize(-1, 23));
@@ -50,11 +77,11 @@ m_dft_thresh(0.0)
 	//size of ccl
 	wxBoxSizer *sizer_2 = new wxBoxSizer(wxHORIZONTAL);
 	m_ca_select_only_chk = new wxCheckBox(this, ID_CASelectOnlyChk, "Selct. Only",
-		wxDefaultPosition, wxSize(75, 20));
+		wxDefaultPosition, wxSize(95, 20));
 	sizer_2->Add(m_ca_select_only_chk, 0, wxALIGN_CENTER);
 	sizer_2->AddStretchSpacer();
 	st = new wxStaticText(this, 0, "Min:",
-		wxDefaultPosition, wxSize(40, 15));
+		wxDefaultPosition, wxSize(35, 15));
 	sizer_2->Add(st, 0, wxALIGN_CENTER);
 	m_ca_min_text = new wxTextCtrl(this, ID_CAMinText, "0",
 		wxDefaultPosition, wxSize(40, 20), 0, vald_int);
@@ -64,7 +91,7 @@ m_dft_thresh(0.0)
 	sizer_2->Add(st, 0, wxALIGN_CENTER);
 	sizer_2->AddStretchSpacer();
 	st = new wxStaticText(this, 0, "Max:",
-		wxDefaultPosition, wxSize(40, 15));
+		wxDefaultPosition, wxSize(35, 15));
 	sizer_2->Add(st, 0, wxALIGN_CENTER);
 	m_ca_max_text = new wxTextCtrl(this, ID_CAMaxText, "1000",
 		wxDefaultPosition, wxSize(40, 20), 0, vald_int);
@@ -97,7 +124,7 @@ m_dft_thresh(0.0)
 	//export
 	wxBoxSizer *sizer_4 = new wxBoxSizer(wxHORIZONTAL);
 	sizer_4->AddStretchSpacer();
-	st = new wxStaticText(this, 0, "Export:  ");
+	st = new wxStaticText(this, 0, "Export:");
 	sizer_4->Add(st, 0, wxALIGN_CENTER);
 	m_ca_multi_chann_btn = new wxButton(this, ID_CAMultiChannBtn, "Multi-Channels",
 		wxDefaultPosition, wxSize(-1, 23));
@@ -113,13 +140,13 @@ m_dft_thresh(0.0)
 	//all controls
 	wxBoxSizer *sizerV = new wxBoxSizer(wxVERTICAL);
 	sizerV->Add(10, 10);
-	sizerV->Add(sizer_1, 0, wxEXPAND|wxALIGN_CENTER);
+	sizerV->Add(sizer_1, 0, wxEXPAND);
 	sizerV->Add(10, 10);
-	sizerV->Add(sizer_2, 0, wxEXPAND|wxALIGN_CENTER);
+	sizerV->Add(sizer_2, 0, wxEXPAND);
 	sizerV->Add(10, 10);
-	sizerV->Add(sizer_3, 0, wxEXPAND|wxALIGN_CENTER);
+	sizerV->Add(sizer_3, 0, wxEXPAND);
 	sizerV->Add(10, 10);
-	sizerV->Add(sizer_4, 0, wxEXPAND|wxALIGN_CENTER);
+	sizerV->Add(sizer_4, 0, wxEXPAND);
 
 	SetSizer(sizerV);
 	Layout();
@@ -134,16 +161,12 @@ CountingDlg::~CountingDlg()
 //load default
 void CountingDlg::LoadDefault()
 {
-#ifdef _DARWIN
-    
-    wxString dft = wxString(getenv("HOME")) + "/Fluorender.settings/default_brush_settings.dft";
-    std::ifstream tmp(dft);
-    if (!tmp.good())
-        dft = "FluoRender.app/Contents/Resources/default_brush_settings.dft";
-    else
-        tmp.close();
+	wxString expath = wxStandardPaths::Get().GetExecutablePath();
+	expath = expath.BeforeLast(GETSLASH(),NULL);
+#ifdef _WIN32
+    wxString dft = expath + "\\default_brush_settings.dft";
 #else
-    wxString dft = wxStandardPaths::Get().GetLocalDataDir() + wxFileName::GetPathSeparator() + "default_brush_settings.dft";
+    wxString dft = expath + "/../Resources/default_brush_settings.dft";
 #endif
 	wxFileInputStream is(dft);
 	if (!is.IsOk())

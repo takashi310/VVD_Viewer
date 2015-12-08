@@ -62,6 +62,7 @@ m_dft_sync_r(false),
 m_dft_sync_g(false),
 m_dft_sync_b(false)
 {
+	this->SetSize(75,-1);
 	//validator: floating point 2
 	wxFloatingPointValidator<double> vald_fp2(2);
 	//validator: integer
@@ -75,17 +76,13 @@ m_dft_sync_b(false)
 	wxBoxSizer *sizer_h_1 = new wxBoxSizer(wxHORIZONTAL);
 	st = new wxStaticText(this, 0, "Gam.",
 		wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER);
-	sizer_h_1->Add(st, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_h_1->Add(st, 1, wxEXPAND);
 	st = new wxStaticText(this, 0, "Lum.",
 		wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER);
-	sizer_h_1->Add(st, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_h_1->Add(st, 1, wxEXPAND);
 	st = new wxStaticText(this, 0, "Eql.",
                           wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER);
-#ifdef _WIN32
-	sizer_h_1->Add(st, 1, wxEXPAND|wxALIGN_CENTER);
-#else
-    st->Hide();
-#endif
+	sizer_h_1->Add(st, 1, wxEXPAND);
 	sizer_v->Add(sizer_h_1, 0, wxEXPAND);
 	//space
 	sizer_v->Add(5, 5, 0);
@@ -94,9 +91,9 @@ m_dft_sync_b(false)
 	wxBoxSizer *sizer_h_2 = new wxBoxSizer(wxHORIZONTAL);
 	st = new wxStaticText(this, 0, "Red:",
 		wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER);
-	sizer_h_2->Add(st, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_h_2->Add(st, 1, wxEXPAND);
 	m_sync_r_chk = new wxCheckBox(this, ID_SyncRChk, "Link");
-	sizer_h_2->Add(m_sync_r_chk, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_h_2->Add(m_sync_r_chk, 1, wxALIGN_CENTER);
 	sizer_v->Add(sizer_h_2, 0, wxEXPAND);
 
 	//third line: red bar
@@ -107,24 +104,26 @@ m_dft_sync_b(false)
 	//fourth line: sliders
 	wxBoxSizer *sizer_h_3 = new wxBoxSizer(wxHORIZONTAL);
 	m_r_gamma_sldr = new wxSlider(this, ID_RGammaSldr, 100, 10, 400,
-		wxDefaultPosition, wxDefaultSize, wxSL_VERTICAL);
-	sizer_h_3->Add(m_r_gamma_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+		wxDefaultPosition, wxSize(25,-1), wxSL_VERTICAL);
+	sizer_h_3->Add(m_r_gamma_sldr, 1, wxEXPAND);
 	m_r_brightness_sldr = new wxSlider(this, ID_RBrightnessSldr, 0, -256, 256,
-		wxDefaultPosition, wxDefaultSize, wxSL_VERTICAL);
-	sizer_h_3->Add(m_r_brightness_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+		wxDefaultPosition, wxSize(25,-1), wxSL_VERTICAL);
+	sizer_h_3->Add(m_r_brightness_sldr, 1, wxEXPAND);
     
 	m_r_hdr_sldr = new wxSlider(this, ID_RHdrSldr, 0, 0, 100,
-                                wxDefaultPosition, wxDefaultSize, wxSL_VERTICAL);
-#ifdef _WIN32
-	sizer_h_3->Add(m_r_hdr_sldr, 1, wxEXPAND|wxALIGN_CENTER);
-#else
-    m_r_hdr_sldr->Hide();
-#endif
+                                wxDefaultPosition, wxSize(25,-1), wxSL_VERTICAL);
+
+	sizer_h_3->Add(m_r_hdr_sldr, 1, wxEXPAND);
 	sizer_v->Add(sizer_h_3, 1, wxEXPAND);
 
 	//fifth line: reset buttons
+#ifndef _DARWIN
 	m_r_reset_btn = new wxButton(this, ID_RResetBtn, "Reset",
-		wxDefaultPosition, wxSize(30, 20));
+								 wxDefaultPosition, wxSize(30, 22));
+#else
+	m_r_reset_btn = new wxButton(this, ID_RResetBtn, "Reset",
+								 wxDefaultPosition, wxSize(30, 30));
+#endif
 	sizer_v->Add(m_r_reset_btn, 0, wxEXPAND);
 
 	//6th line: input boxes
@@ -132,18 +131,14 @@ m_dft_sync_b(false)
 	vald_fp2.SetRange(0.0, 10.0);
 	m_r_gamma_text = new wxTextCtrl(this, ID_RGammaText, "1.00",
 		wxDefaultPosition, wxSize(30, 20), 0, vald_fp2);
-	sizer_h_5->Add(m_r_gamma_text, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_h_5->Add(m_r_gamma_text, 1, wxEXPAND);
 	m_r_brightness_text = new wxTextCtrl(this, ID_RBrightnessText, "0",
 		wxDefaultPosition, wxSize(30, 20), 0, vald_int);
-	sizer_h_5->Add(m_r_brightness_text, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_h_5->Add(m_r_brightness_text, 1, wxEXPAND);
 	vald_fp2.SetRange(0.0, 1.0);
 	m_r_hdr_text = new wxTextCtrl(this, ID_RHdrText, "0.00",
                                   wxDefaultPosition, wxSize(30, 20), 0, vald_fp2);
-#ifdef _WIN32
-	sizer_h_5->Add(m_r_hdr_text, 1, wxEXPAND|wxALIGN_CENTER);
-#else
-    m_r_hdr_text->Hide();
-#endif
+	sizer_h_5->Add(m_r_hdr_text, 1, wxEXPAND);
 	sizer_v->Add(sizer_h_5, 0, wxEXPAND);
 
 	//space
@@ -153,10 +148,11 @@ m_dft_sync_b(false)
 	wxBoxSizer *sizer_h_6 = new wxBoxSizer(wxHORIZONTAL);
 	st = new wxStaticText(this, 0, "Green:",
 		wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER);
-	sizer_h_6->Add(st, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_h_6->Add(st, 1, wxEXPAND);
 	m_sync_g_chk = new wxCheckBox(this, ID_SyncGChk, "Link");
-	sizer_h_6->Add(m_sync_g_chk, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_h_6->Add(m_sync_g_chk, 1, wxALIGN_CENTER);
 	sizer_v->Add(sizer_h_6, 0, wxEXPAND);
+	sizer_v->Add(3,3,0);
 
 	//8th line: green bar
 	st = new wxStaticText(this, 0, "", wxDefaultPosition, wxSize(5, 5));
@@ -166,23 +162,24 @@ m_dft_sync_b(false)
 	//9th line: sliders
 	wxBoxSizer *sizer_h_7 = new wxBoxSizer(wxHORIZONTAL);
 	m_g_gamma_sldr = new wxSlider(this, ID_GGammaSldr, 100, 10, 400,
-		wxDefaultPosition, wxDefaultSize, wxSL_VERTICAL);
-	sizer_h_7->Add(m_g_gamma_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+		wxDefaultPosition, wxSize(25,-1), wxSL_VERTICAL);
+	sizer_h_7->Add(m_g_gamma_sldr, 1, wxEXPAND);
 	m_g_brightness_sldr = new wxSlider(this, ID_GBrightnessSldr, 0, -256, 256,
-		wxDefaultPosition, wxDefaultSize, wxSL_VERTICAL);
-	sizer_h_7->Add(m_g_brightness_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+		wxDefaultPosition, wxSize(25,-1), wxSL_VERTICAL);
+	sizer_h_7->Add(m_g_brightness_sldr, 1, wxEXPAND);
 	m_g_hdr_sldr = new wxSlider(this, ID_GHdrSldr, 0, 0, 100,
-                                wxDefaultPosition, wxDefaultSize, wxSL_VERTICAL);
-#ifdef _WIN32
-	sizer_h_7->Add(m_g_hdr_sldr, 1, wxEXPAND|wxALIGN_CENTER);
-#else
-    m_g_hdr_sldr->Hide();
-#endif
+                                wxDefaultPosition, wxSize(25,-1), wxSL_VERTICAL);
+	sizer_h_7->Add(m_g_hdr_sldr, 1, wxEXPAND);
 	sizer_v->Add(sizer_h_7, 1, wxEXPAND);
 
 	//10th line: reset buttons
+#ifndef _DARWIN
 	m_g_reset_btn = new wxButton(this, ID_GResetBtn, "Reset",
-		wxDefaultPosition, wxSize(30, 20));
+								 wxDefaultPosition, wxSize(30, 22));
+#else
+	m_g_reset_btn = new wxButton(this, ID_GResetBtn, "Reset",
+								 wxDefaultPosition, wxSize(30, 30));
+#endif
 	sizer_v->Add(m_g_reset_btn, 0, wxEXPAND);
 
 	//11th line: input boxes
@@ -190,18 +187,14 @@ m_dft_sync_b(false)
 	vald_fp2.SetRange(0.0, 10.0);
 	m_g_gamma_text = new wxTextCtrl(this, ID_GGammaText, "1.00",
 		wxDefaultPosition, wxSize(30, 20), 0, vald_fp2);
-	sizer_h_9->Add(m_g_gamma_text, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_h_9->Add(m_g_gamma_text, 1, wxEXPAND);
 	m_g_brightness_text = new wxTextCtrl(this, ID_GBrightnessText, "0",
 		wxDefaultPosition, wxSize(30, 20), 0, vald_int);
-	sizer_h_9->Add(m_g_brightness_text, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_h_9->Add(m_g_brightness_text, 1, wxEXPAND);
 	vald_fp2.SetRange(0.0, 1.0);
 	m_g_hdr_text = new wxTextCtrl(this, ID_GHdrText, "0.00",
                                   wxDefaultPosition, wxSize(30, 20), 0, vald_fp2);
-#ifdef _WIN32
-	sizer_h_9->Add(m_g_hdr_text, 1, wxEXPAND|wxALIGN_CENTER);
-#else
-    m_g_hdr_text->Hide();
-#endif
+	sizer_h_9->Add(m_g_hdr_text, 1, wxEXPAND);
 	sizer_v->Add(sizer_h_9, 0, wxEXPAND);
 
 	//space
@@ -211,10 +204,11 @@ m_dft_sync_b(false)
 	wxBoxSizer *sizer_h_10 = new wxBoxSizer(wxHORIZONTAL);
 	st = new wxStaticText(this, 0, "Blue:",
 		wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER);
-	sizer_h_10->Add(st, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_h_10->Add(st, 1, wxEXPAND);
 	m_sync_b_chk = new wxCheckBox(this, ID_SyncBChk, "Link");
-	sizer_h_10->Add(m_sync_b_chk, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_h_10->Add(m_sync_b_chk, 1, wxALIGN_CENTER);
 	sizer_v->Add(sizer_h_10, 0, wxEXPAND);
+	sizer_v->Add(3,3,0);
 
 	//13th line:blue bar
 	st = new wxStaticText(this, 0, "", wxDefaultPosition, wxSize(5, 5));
@@ -224,24 +218,25 @@ m_dft_sync_b(false)
 	//14th line: sliders
 	wxBoxSizer *sizer_h_11 = new wxBoxSizer(wxHORIZONTAL);
 	m_b_gamma_sldr = new wxSlider(this, ID_BGammaSldr, 100, 10, 400,
-		wxDefaultPosition, wxDefaultSize, wxSL_VERTICAL);
-	sizer_h_11->Add(m_b_gamma_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+		wxDefaultPosition, wxSize(25,-1), wxSL_VERTICAL);
+	sizer_h_11->Add(m_b_gamma_sldr, 1, wxEXPAND);
 	m_b_brightness_sldr = new wxSlider(this, ID_BBrightnessSldr, 0, -256, 256,
-		wxDefaultPosition, wxDefaultSize, wxSL_VERTICAL);
-	sizer_h_11->Add(m_b_brightness_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+		wxDefaultPosition, wxSize(25,-1), wxSL_VERTICAL);
+	sizer_h_11->Add(m_b_brightness_sldr, 1, wxEXPAND);
 	m_b_hdr_sldr = new wxSlider(this, ID_BHdrSldr, 0, 0, 100,
-                                wxDefaultPosition, wxDefaultSize, wxSL_VERTICAL);
-#ifdef _WIN32
-	sizer_h_11->Add(m_b_hdr_sldr, 1, wxEXPAND|wxALIGN_CENTER);
-#else
-    m_b_hdr_sldr->Hide();
-#endif
+                                wxDefaultPosition, wxSize(25,-1), wxSL_VERTICAL);
+	sizer_h_11->Add(m_b_hdr_sldr, 1, wxEXPAND);
 	sizer_v->Add(sizer_h_11, 1, wxEXPAND);
     
 
 	//15th line: reset buttons
+#ifndef _DARWIN
 	m_b_reset_btn = new wxButton(this, ID_BResetBtn, "Reset",
-		wxDefaultPosition, wxSize(30, 20));
+								 wxDefaultPosition, wxSize(30, 22));
+#else
+	m_b_reset_btn = new wxButton(this, ID_BResetBtn, "Reset",
+								 wxDefaultPosition, wxSize(30, 30));
+#endif
 	sizer_v->Add(m_b_reset_btn, 0, wxEXPAND);
 
 	//16th line: input boxes
@@ -249,23 +244,24 @@ m_dft_sync_b(false)
 	vald_fp2.SetRange(0.0, 10.0);
 	m_b_gamma_text = new wxTextCtrl(this, ID_BGammaText, "1.00",
 		wxDefaultPosition, wxSize(30, 20), 0, vald_fp2);
-	sizer_h_13->Add(m_b_gamma_text, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_h_13->Add(m_b_gamma_text, 1, wxEXPAND);
 	m_b_brightness_text = new wxTextCtrl(this, ID_BBrightnessText, "0",
 		wxDefaultPosition, wxSize(30, 20), 0, vald_int);
-	sizer_h_13->Add(m_b_brightness_text, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_h_13->Add(m_b_brightness_text, 1, wxEXPAND);
 	vald_fp2.SetRange(0.0, 1.0);
 	m_b_hdr_text = new wxTextCtrl(this, ID_BHdrText, "0.00",
                                   wxDefaultPosition, wxSize(30, 20), 0, vald_fp2);
-#ifdef _WIN32
-	sizer_h_13->Add(m_b_hdr_text, 1, wxEXPAND|wxALIGN_CENTER);
-#else
-    m_b_hdr_text->Hide();
-#endif
+	sizer_h_13->Add(m_b_hdr_text, 1, wxEXPAND);
 	sizer_v->Add(sizer_h_13, 0, wxEXPAND);
 
 	//17th line: default button
-	m_dft_btn = new wxButton(this, ID_DefaultBtn, "Save as Default",
-		wxDefaultPosition, wxSize(95, 20));
+#ifndef _DARWIN
+	m_dft_btn = new wxButton(this, ID_DefaultBtn, "Set Default",
+							 wxDefaultPosition, wxSize(95, 22));
+#else
+	m_dft_btn = new wxButton(this, ID_DefaultBtn, "Set Default",
+							 wxDefaultPosition, wxSize(95, 30));
+#endif
 	sizer_v->Add(m_dft_btn, 0, wxEXPAND);
 
 	SetSizer(sizer_v);
@@ -488,7 +484,7 @@ void AdjustView::OnRGammaText(wxCommandEvent& event)
 		}
 	}
 
-	if (m_glview)
+	if (m_glview && m_type==1)
 	{
 		Color gamma = m_glview->GetGamma();
 		GammaUI2(val, gamma[0]);
@@ -523,8 +519,8 @@ void AdjustView::OnRGammaText(wxCommandEvent& event)
 		if (m_link_group && m_group)
 			m_group->SetGammaAll(gamma);
 
-		RefreshVRenderViews(true);
 	}
+	RefreshVRenderViews(true);
 }
 
 void AdjustView::OnGGammaChange(wxScrollEvent & event)
@@ -555,7 +551,7 @@ void AdjustView::OnGGammaText(wxCommandEvent& event)
 		}
 	}
 
-	if (m_glview)
+	if (m_glview && m_type==1)
 	{
 		Color gamma = m_glview->GetGamma();
 		GammaUI2(val, gamma[1]);
@@ -590,8 +586,8 @@ void AdjustView::OnGGammaText(wxCommandEvent& event)
 		if (m_link_group && m_group)
 			m_group->SetGammaAll(gamma);
 
-		RefreshVRenderViews(true);
 	}
+	RefreshVRenderViews(true);
 }
 
 void AdjustView::OnBGammaChange(wxScrollEvent & event)
@@ -622,7 +618,7 @@ void AdjustView::OnBGammaText(wxCommandEvent& event)
 		}
 	}
 
-	if (m_glview)
+	if (m_glview && m_type==1)
 	{
 		Color gamma = m_glview->GetGamma();
 		GammaUI2(val, gamma[2]);
@@ -657,8 +653,8 @@ void AdjustView::OnBGammaText(wxCommandEvent& event)
 		if (m_link_group && m_group)
 			m_group->SetGammaAll(gamma);
 
-		RefreshVRenderViews(true);
 	}
+	RefreshVRenderViews(true);
 }
 
 //brightness
@@ -690,7 +686,7 @@ void AdjustView::OnRBrightnessText(wxCommandEvent& event)
 		}
 	}
 
-	if (m_glview)
+	if (m_glview && m_type==1)
 	{
 		Color brightness = m_glview->GetBrightness();
 		BrightnessUI2(val, brightness[0]);
@@ -725,8 +721,8 @@ void AdjustView::OnRBrightnessText(wxCommandEvent& event)
 		if (m_link_group && m_group)
 			m_group->SetBrightnessAll(brightness);
 
-		RefreshVRenderViews(true);
 	}
+	RefreshVRenderViews(true);
 }
 
 void AdjustView::OnGBrightnessChange(wxScrollEvent & event)
@@ -757,7 +753,7 @@ void AdjustView::OnGBrightnessText(wxCommandEvent& event)
 		}
 	}
 
-	if (m_glview)
+	if (m_glview && m_type==1)
 	{
 		Color brightness = m_glview->GetBrightness();
 		BrightnessUI2(val, brightness[1]);
@@ -792,8 +788,8 @@ void AdjustView::OnGBrightnessText(wxCommandEvent& event)
 		if (m_link_group && m_group)
 			m_group->SetBrightnessAll(brightness);
 
-		RefreshVRenderViews(true);
 	}
+	RefreshVRenderViews(true);
 }
 
 void AdjustView::OnBBrightnessChange(wxScrollEvent & event)
@@ -824,7 +820,7 @@ void AdjustView::OnBBrightnessText(wxCommandEvent& event)
 		}
 	}
 
-	if (m_glview)
+	if (m_glview && m_type==1)
 	{
 		Color brightness = m_glview->GetBrightness();
 		BrightnessUI2(val, brightness[2]);
@@ -859,8 +855,8 @@ void AdjustView::OnBBrightnessText(wxCommandEvent& event)
 		if (m_link_group && m_group)
 			m_group->SetBrightnessAll(brightness);
 
-		RefreshVRenderViews(true);
 	}
+	RefreshVRenderViews(true);
 }
 
 void AdjustView::OnRHdrChange(wxScrollEvent &event)
@@ -891,7 +887,7 @@ void AdjustView::OnRHdrText(wxCommandEvent &event)
 		}
 	}
 
-	if (m_glview)
+	if (m_glview && m_type==1)
 	{
 		Color hdr = m_glview->GetHdr();
 		HdrUI2(val, hdr[0]);
@@ -926,8 +922,8 @@ void AdjustView::OnRHdrText(wxCommandEvent &event)
 		if (m_link_group && m_group)
 			m_group->SetHdrAll(hdr);
 
-		RefreshVRenderViews(true);
 	}
+	RefreshVRenderViews(true);
 }
 
 void AdjustView::OnGHdrChange(wxScrollEvent &event)
@@ -958,7 +954,7 @@ void AdjustView::OnGHdrText(wxCommandEvent &event)
 		}
 	}
 
-	if (m_glview)
+	if (m_glview && m_type==1)
 	{
 		Color hdr = m_glview->GetHdr();
 		HdrUI2(val, hdr[1]);
@@ -993,8 +989,8 @@ void AdjustView::OnGHdrText(wxCommandEvent &event)
 		if (m_link_group && m_group)
 			m_group->SetHdrAll(hdr);
 
-		RefreshVRenderViews(true);
 	}
+	RefreshVRenderViews(true);
 }
 
 void AdjustView::OnBHdrChange(wxScrollEvent &event)
@@ -1025,7 +1021,7 @@ void AdjustView::OnBHdrText(wxCommandEvent &event)
 		}
 	}
 
-	if (m_glview)
+	if (m_glview && m_type==1)
 	{
 		Color hdr = m_glview->GetHdr();
 		HdrUI2(val, hdr[2]);
@@ -1060,8 +1056,8 @@ void AdjustView::OnBHdrText(wxCommandEvent &event)
 		if (m_link_group && m_group)
 			m_group->SetHdrAll(hdr);
 
-		RefreshVRenderViews(true);
 	}
+	RefreshVRenderViews(true);
 }
 
 void AdjustView::OnSyncRCheck(wxCommandEvent &event)
@@ -1183,13 +1179,12 @@ void AdjustView::OnSaveDefault(wxCommandEvent &event)
 	m_dft_gamma = Color(dft_r_gamma, dft_g_gamma, dft_b_gamma);
 	m_dft_brightness = Color(dft_r_brightness, dft_g_brightness, dft_b_brightness);
 	m_dft_hdr = Color(dft_r_hdr, dft_g_hdr, dft_b_hdr);
-#ifdef _DARWIN
-    wxString dft = wxString(getenv("HOME")) + "/Fluorender.settings/";
-    mkdir(dft,0777);
-    chmod(dft,0777);
-    dft = dft + "default_2d_adjustment_settings.dft";
+	wxString expath = wxStandardPaths::Get().GetExecutablePath();
+	expath = expath.BeforeLast(GETSLASH(),NULL);
+#ifdef _WIN32
+    wxString dft = expath + "\\default_2d_adjustment_settings.dft";
 #else
-    wxString dft = wxStandardPaths::Get().GetLocalDataDir() + wxFileName::GetPathSeparator() + "default_2d_adjustment_settings.dft";
+    wxString dft = expath + "/../Resources/default_2d_adjustment_settings.dft";
 #endif
 	wxFileOutputStream os(dft);
 	fconfig.Save(os);
@@ -1197,15 +1192,12 @@ void AdjustView::OnSaveDefault(wxCommandEvent &event)
 
 void AdjustView::LoadSettings()
 {
-#ifdef _DARWIN
-    wxString dft = wxString(getenv("HOME")) + "/Fluorender.settings/default_2d_adjustment_settings.dft";
-    std::ifstream tmp(dft);
-    if (!tmp.good())
-        dft = "FluoRender.app/Contents/Resources/default_2d_adjustment_settings.dft";
-    else
-        tmp.close();
+	wxString expath = wxStandardPaths::Get().GetExecutablePath();
+	expath = expath.BeforeLast(GETSLASH(),NULL);
+#ifdef _WIN32
+    wxString dft = expath + "\\default_2d_adjustment_settings.dft";
 #else
-    wxString dft = wxStandardPaths::Get().GetLocalDataDir() + wxFileName::GetPathSeparator() + "default_2d_adjustment_settings.dft";
+    wxString dft = expath + "/../Resources/default_2d_adjustment_settings.dft";
 #endif
     
 	wxFileInputStream is(dft);
