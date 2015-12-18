@@ -105,8 +105,8 @@ namespace FLIVR
 				//delete [] data_[i]->data;
 				if (!existInPyramid)
 				{
-					if (ntype_[i]!=TYPE_MASK) nrrdNuke(data_[i]);
-					else nrrdNix(data_[i]);
+					if (ntype_[i]!=TYPE_MASK) delete [] data_[i]->data;
+					nrrdNix(data_[i]);
 				}
 			}
 		}
@@ -648,8 +648,8 @@ namespace FLIVR
 			if (data_[index] && data && !existInPyramid)
 			{
 				if (index != nmask_)
-					nrrdNuke(data_[index]);
-				else nrrdNix(data_[index]);
+					delete [] data_[index]->data;
+				nrrdNix(data_[index]);
 			}
 
 			data_[index] = data;

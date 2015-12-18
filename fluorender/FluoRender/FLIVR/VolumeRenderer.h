@@ -135,13 +135,11 @@ namespace FLIVR
 		virtual void draw(bool draw_wireframe_p, 
 			bool interactive_mode_p, 
 			bool orthographic_p = false,
-			double zoom = 1.0, bool intp = true,
-			int mode = 0, double sampling_frq_fac = -1.0);
+			double zoom = 1.0, int mode = 0, double sampling_frq_fac = -1.0);
 		void draw_wireframe(bool orthographic_p = false, double sampling_frq_fac = -1.0);
 		void draw_volume(bool interactive_mode_p,
 			bool orthographic_p = false,
-			double zoom = 1.0, bool intp = true,
-			int mode = 0, double sampling_frq_fac = -1.0);
+			double zoom = 1.0, int mode = 0, double sampling_frq_fac = -1.0);
 		//type: 0-initial; 1-diffusion-based growing; 2-masked filtering
 		//paint_mode: 1-select; 2-append; 3-erase; 4-diffuse; 5-flood; 6-clear; 7-all;
 		//			  11-posterize

@@ -260,8 +260,8 @@ void ColocalizationDlg::OnColocalizationBtn(wxCommandEvent &event)
 	//save masks
 	m_vol_a->GetVR()->return_mask();
 	m_vol_b->GetVR()->return_mask();
-	if (m_vol_a->GetMask()) select_a = false;
-	if (m_vol_b->GetMask()) select_b = false;
+	if (m_vol_a->GetMask(false)) select_a = false;
+	if (m_vol_b->GetMask(false)) select_b = false;
 
 	//volume a
 	m_view->GetVolumeSelector()->SetVolume(m_vol_a);

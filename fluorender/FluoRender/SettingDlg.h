@@ -1,3 +1,30 @@
+/*
+For more information, please see: http://software.sci.utah.edu
+
+The MIT License
+
+Copyright (c) 2014 Scientific Computing and Imaging Institute,
+University of Utah.
+
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+*/
 #include <wx/wx.h>
 
 #ifndef _SETTINGDLG_H_
@@ -28,6 +55,8 @@ class SettingDlg : public wxPanel
 		ID_ShadowDirText,
 		//gradient background
 		ID_GradBgChk,
+		//link rotations
+		ID_RotLinkChk,
 		//override vox
 		ID_OverrideVoxChk,
 		//wavelength to color
@@ -49,8 +78,15 @@ class SettingDlg : public wxPanel
 		ID_MainMemBufSizeText,
 		//font
 		ID_FontCmb,
+		ID_FontSizeCmb,
+		ID_TextColorCmb,
 		//script
 		ID_RunScriptChk,
+		ID_ScriptFileText,
+		ID_ScriptFileBtn,
+		//paint history depth
+		ID_PaintHistDepthSldr,
+		ID_PaintHistDepthText,
 		//save/close
 		ID_SaveBtn,
 		ID_CloseBtn
@@ -70,6 +106,8 @@ public:
 	bool GetProjSave() {return m_prj_save;}
 	bool GetRealtimeCompress() {return m_realtime_compress;}
 	void SetRealtimeCompress(bool val) {m_realtime_compress = val;}
+	bool GetSkipBricks() {return m_skip_bricks;}
+	void SetSkipBricks(bool val) {m_skip_bricks = val;}
 	bool GetTestMode(int type);	//type	1:speed test
 								//		2:parameter test
 								//		3:wireframe mode
@@ -92,9 +130,21 @@ public:
 	//run script
 	bool GetRunScript() {return m_run_script;}
 	void SetRunScript(bool val) {m_run_script = val;}
+	wxString GetScriptFile() { return m_script_file; }
+	void SetScriptFile(wxString &file) { m_script_file = file; }
+	//paint history depth
+	int GetPaintHistDepth() {return m_paint_hist_depth;}
+	void SetPaintHistDepth(int val) {m_paint_hist_depth = val;}
 	//text font
-	int GetTextFont() {return m_text_font;}
-	void SetTextFont(int font) {m_text_font = font;}
+	wxString GetFontFile() { return m_font_file; }
+	void SetFontFile(wxString &file) { m_font_file = file; }
+	int GetTextSize() {return m_text_size;}
+	void SetTextSize(int size) {m_text_size = size;}
+	int GetTextColor() { return m_text_color; }
+	void SetTextColor(int text_color) { m_text_color = text_color; }
+	//full screen
+	bool GetStayTop() { return m_stay_top; }
+	bool GetShowCursor() { return m_show_cursor; }
 	//memory settings
 	bool GetMemSwap() {return m_mem_swap;}
 	void SetMemSwap(bool val) {m_mem_swap = val;}
@@ -119,6 +169,24 @@ public:
 	//ruler time dependent
 	bool GetRulerTimeDep() {return m_ruler_time_dep;}
 	void SetRulerTimeDep(bool val) {m_ruler_time_dep = val;}
+	//flags for pvxml flipping
+	bool GetPvxmlFlipX() {return m_pvxml_flip_x;}
+	void SetPvxmlFlipX(bool flip) {m_pvxml_flip_x = flip;}
+	bool GetPvxmlFlipY() {return m_pvxml_flip_y;}
+	void SetPvxmlFlipY(bool flip) {m_pvxml_flip_y = flip;}
+	//pixel format
+	int GetRedBit() {return m_red_bit;}
+	int GetGreenBit() {return m_green_bit;}
+	int GetBlueBit() {return m_blue_bit;}
+	int GetAlphaBit() {return m_alpha_bit;}
+	int GetDepthBit() {return m_depth_bit;}
+	int GetSamples() {return m_samples;}
+	//context attrib
+	int GetGLMajorVer() {return m_gl_major_ver;}
+	int GetGLMinorVer() {return m_gl_minor_ver;}
+	int GetGLProfileMask() {return m_gl_profile_mask;}
+	//cl device
+	int GetCLDeviceID() {return m_cl_device_id;}
 
 private:
 	wxWindow* m_frame;
@@ -129,6 +197,7 @@ private:
 							//4-pre-calculated 4 samples (removed);
 	bool m_prj_save;		//save project automatically
 	bool m_realtime_compress;//real time compress
+	bool m_skip_bricks;		//skip empty bricks
 	bool m_test_speed;		//test fps
 	bool m_test_param;		//using parameter test window
 	bool m_test_wiref;		//draw wireframe of volumes
@@ -147,9 +216,13 @@ private:
 	bool m_grad_bg;
 	bool m_override_vox;
 	double m_soft_threshold;
+	//script
 	bool m_run_script;
+	wxString m_script_file;
 	//text size
-	int m_text_font;		//text size in viewport
+	wxString m_font_file;	//font lib file in the Fonts folder
+	int m_text_size;		//text size in viewport
+	int m_text_color;		//text color: 0- contrast to bg; 1-same as bg; 2-volume sec color
 	//memory limit
 	bool m_mem_swap;		//enable memory swap
 	double m_graphics_mem;	//in MB
@@ -168,6 +241,27 @@ private:
 	bool m_ruler_use_transf;
 	//ruler time dependent
 	bool m_ruler_time_dep;
+	//flip pvxml frame
+	bool m_pvxml_flip_x;
+	bool m_pvxml_flip_y;
+	//pixel format
+	int m_red_bit;
+	int m_green_bit;
+	int m_blue_bit;
+	int m_alpha_bit;
+	int m_depth_bit;
+	int m_samples;
+	//context attrib
+	int m_gl_major_ver;
+	int m_gl_minor_ver;
+	int m_gl_profile_mask;
+	//cl device
+	int m_cl_device_id;
+	//paint history depth
+	int m_paint_hist_depth;
+	//full screen
+	bool m_stay_top;
+	bool m_show_cursor;
 
 private:
 	//save project
@@ -191,6 +285,9 @@ private:
 	wxTextCtrl *m_shadow_dir_text;
 	//gradient background
 	wxCheckBox *m_grad_bg_chk;
+	//rotations link
+	
+	wxCheckBox *m_rot_link_chk;
 	//override vox
 	wxCheckBox *m_override_vox_chk;
 	//wavelength to color
@@ -212,8 +309,15 @@ private:
 	wxTextCtrl *m_main_mem_buf_text;
 	//font
 	wxComboBox *m_font_cmb;
+	wxComboBox *m_font_size_cmb;
+	wxComboBox *m_text_color_cmb;
 	//script
 	wxCheckBox *m_run_script_chk;
+	wxTextCtrl *m_script_file_text;
+	wxButton *m_script_file_btn;
+	//history depth
+	wxSlider *m_paint_hist_depth_sldr;
+	wxTextCtrl *m_paint_hist_depth_text;
 
 	//save
 	wxButton *m_save_btn;
@@ -254,6 +358,8 @@ private:
 	void OnShadowDirEdit(wxCommandEvent &event);
 	//gradient background
 	void OnGradBgCheck(wxCommandEvent &event);
+	//link rotations
+	void OnRotLink(wxCommandEvent& event);
 	//override vox
 	void OnOverrideVoxCheck(wxCommandEvent &event);
 	//wavelength color
@@ -275,8 +381,15 @@ private:
 	void OnMainMemBufSizeEdit(wxCommandEvent &event);
 	//font
 	void OnFontChange(wxCommandEvent &event);
+	void OnFontSizeChange(wxCommandEvent &event);
+	void OnTextColorChange(wxCommandEvent &event);
 	//script
 	void OnRunScriptChk(wxCommandEvent &event);
+	void OnScriptFileEdit(wxCommandEvent &event);
+	void OnScriptFileBtn(wxCommandEvent &event);
+	//paint history depth
+	void OnPaintHistDepthChange(wxScrollEvent &event);
+	void OnPaintHistDepthEdit(wxCommandEvent &event);
 
 	DECLARE_EVENT_TABLE();
 };

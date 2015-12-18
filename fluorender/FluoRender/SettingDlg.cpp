@@ -1,3 +1,30 @@
+/*
+For more information, please see: http://software.sci.utah.edu
+
+The MIT License
+
+Copyright (c) 2014 Scientific Computing and Imaging Institute,
+University of Utah.
+
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+*/
 #include "SettingDlg.h"
 #include "VRenderFrame.h"
 #include "VRenderView.h"
@@ -26,6 +53,8 @@ BEGIN_EVENT_TABLE(SettingDlg, wxPanel)
 	EVT_TEXT(ID_ShadowDirText, SettingDlg::OnShadowDirEdit)
 	//gradient background
 	EVT_CHECKBOX(ID_GradBgChk, SettingDlg::OnGradBgCheck)
+	//link render views rotations
+	EVT_CHECKBOX(ID_RotLinkChk, SettingDlg::OnRotLink)
 	//override vox
 	EVT_CHECKBOX(ID_OverrideVoxChk, SettingDlg::OnOverrideVoxCheck)
 	//wavelength to color
@@ -47,14 +76,23 @@ BEGIN_EVENT_TABLE(SettingDlg, wxPanel)
 	EVT_TEXT(ID_MainMemBufSizeText, SettingDlg::OnMainMemBufSizeEdit)
 	//font
 	EVT_COMBOBOX(ID_FontCmb, SettingDlg::OnFontChange)
+	EVT_COMBOBOX(ID_FontSizeCmb, SettingDlg::OnFontSizeChange)
+	EVT_COMBOBOX(ID_TextColorCmb, SettingDlg::OnTextColorChange)
 	//script
 	EVT_CHECKBOX(ID_RunScriptChk, SettingDlg::OnRunScriptChk)
+	EVT_TEXT(ID_ScriptFileText, SettingDlg::OnScriptFileEdit)
+	EVT_BUTTON(ID_ScriptFileBtn, SettingDlg::OnScriptFileBtn)
+	//paint history depth
+	EVT_COMMAND_SCROLL(ID_PaintHistDepthSldr, SettingDlg::OnPaintHistDepthChange)
+	EVT_TEXT(ID_PaintHistDepthText, SettingDlg::OnPaintHistDepthEdit)
 	//show
 	EVT_SHOW(SettingDlg::OnShow)
 END_EVENT_TABLE()
 
 wxWindow* SettingDlg::CreateProjectPage(wxWindow *parent)
 {
+	//validator: integer
+	wxIntegerValidator<unsigned int> vald_int;
 	wxStaticText* st;
 	wxPanel *page = new wxPanel(parent);
 
@@ -73,21 +111,54 @@ wxWindow* SettingDlg::CreateProjectPage(wxWindow *parent)
 
 	//font
 	wxBoxSizer *group2 = new wxStaticBoxSizer(
-		new wxStaticBox(page, wxID_ANY, "Font"), wxVERTICAL);
+		new wxStaticBox(page, wxID_ANY, "Render View Text"), wxVERTICAL);
 	wxBoxSizer *sizer2_1 = new wxBoxSizer(wxHORIZONTAL);
-	st = new wxStaticText(page, 0, "Choose a font for the text in render views:");
+	st = new wxStaticText(page, 0, "Font:");
 	m_font_cmb = new wxComboBox(page, ID_FontCmb, "",
-		wxDefaultPosition, wxSize(120, -1), 0, NULL, wxCB_READONLY);
-	m_font_cmb->Append("Helvetica 12");
-	m_font_cmb->Append("Helvetica 18");
-	m_font_cmb->Append("Times Roman 10");
-	m_font_cmb->Append("Times Roman 24");
-	m_font_cmb->Select(0);
+		wxDefaultPosition, wxSize(150, -1), 0, NULL, wxCB_READONLY);
+	//populate fonts
+	std::string exePath = wxStandardPaths::Get().GetExecutablePath().ToStdString();
+	exePath = exePath.substr(0,exePath.find_last_of(std::string()+GETSLASH()));
+	wxString loc = wxString(exePath) + GETSLASH() + wxString("Fonts") +
+		GETSLASH() + wxString("*.ttf");
+	wxLogNull logNo;
+	wxString file = wxFindFirstFile(loc);
+	while (!file.empty())
+	{
+		file = file.AfterLast(GETSLASH());
+		file = file.BeforeLast('.');
+		m_font_cmb->Append(file);
+		file = wxFindNextFile();
+	}
 	sizer2_1->Add(st);
-	sizer2_1->Add(20, 10);
+	sizer2_1->Add(10, 10);
 	sizer2_1->Add(m_font_cmb);
+	sizer2_1->Add(10, 10);
+	st = new wxStaticText(page, 0, "Size:");
+	m_font_size_cmb = new wxComboBox(page, ID_FontSizeCmb, "",
+		wxDefaultPosition, wxSize(50, -1), 0, NULL, wxCB_READONLY);
+	for (int font_size=10; font_size<31; font_size+=2)
+		m_font_size_cmb->Append(wxString::Format("%d", font_size));
+	sizer2_1->Add(st);
+	sizer2_1->Add(10, 10);
+	sizer2_1->Add(m_font_size_cmb);
+	sizer2_1->Add(10, 10);
+	st = new wxStaticText(page, 0, "Color:");
+	m_text_color_cmb = new wxComboBox(page, ID_TextColorCmb, "",
+		wxDefaultPosition, wxSize(100, -1), 0, NULL, wxCB_READONLY);
+	m_text_color_cmb->Append("BG inverted");
+	m_text_color_cmb->Append("Background");
+	m_text_color_cmb->Append("Vol sec color");
+	sizer2_1->Add(st);
+	sizer2_1->Add(10, 10);
+	sizer2_1->Add(m_text_color_cmb);
 	group2->Add(10, 5);
 	group2->Add(sizer2_1, 0, wxEXPAND);
+	group2->Add(10, 5);
+	st = new wxStaticText(page, 0,
+		"Put TrueType font files into the \"Fonts\" folder.\n"\
+		"Restart FluoRender to load new font files.");
+	group2->Add(st);
 	group2->Add(10, 5);
 
 	//script
@@ -95,14 +166,41 @@ wxWindow* SettingDlg::CreateProjectPage(wxWindow *parent)
 		new wxStaticBox(page, wxID_ANY, "4D Script"), wxVERTICAL);
 	m_run_script_chk = new wxCheckBox(page, ID_RunScriptChk,
 		"Enable execution of a script on 4D data during playback.");
-	st = new wxStaticText(page, 0,
-		"Compose and save the text file \"script_4d.txt\" in the same folder as the\n"\
-		"4D data. See details in the user manual for the syntax of the script.");
+	wxBoxSizer *sizer3_1 = new wxBoxSizer(wxHORIZONTAL);
+	st = new wxStaticText(page, 0, "Script File:",
+		wxDefaultPosition, wxSize(80, -1));
+	m_script_file_text = new wxTextCtrl(page, ID_ScriptFileText, "",
+		wxDefaultPosition, wxDefaultSize);
+	m_script_file_btn = new wxButton(page, ID_ScriptFileBtn, "Browse...",
+		wxDefaultPosition, wxSize(80, -1));
+	sizer3_1->Add(st, 0, wxALIGN_CENTER);
+	sizer3_1->Add(m_script_file_text, 1, wxEXPAND);
+	sizer3_1->Add(m_script_file_btn, 0, wxALIGN_CENTER);
 	group3->Add(10, 5);
 	group3->Add(m_run_script_chk);
 	group3->Add(10, 5);
-	group3->Add(st);
+	group3->Add(sizer3_1, 0, wxEXPAND);
 	group3->Add(10, 5);
+
+	//paint history depth
+	wxBoxSizer *group4 = new wxStaticBoxSizer(
+		new wxStaticBox(page, wxID_ANY, "Paint History"), wxVERTICAL);
+	wxBoxSizer *sizer4_1 = new wxBoxSizer(wxHORIZONTAL);
+	m_paint_hist_depth_sldr = new wxSlider(page, ID_PaintHistDepthSldr, 0, 0, 10,
+		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
+	m_paint_hist_depth_text = new wxTextCtrl(page, ID_PaintHistDepthText, "0",
+		wxDefaultPosition, wxSize(40, 20), 0, vald_int);
+	st = new wxStaticText(page, 0,
+		"The number of undo steps for paint brush selection.\n" \
+		"Set the value to 0 to disable history.\n" \
+		"A value greater than 0 slows down speed and increases memory usage.");
+	sizer4_1->Add(m_paint_hist_depth_sldr, 1, wxEXPAND);
+	sizer4_1->Add(m_paint_hist_depth_text, 0, wxALIGN_CENTER);
+	group4->Add(10, 5);
+	group4->Add(sizer4_1, 0, wxEXPAND);
+	group4->Add(10, 5);
+	group4->Add(st);
+	group4->Add(10, 5);
 
 	wxBoxSizer *sizerV = new wxBoxSizer(wxVERTICAL);
 	sizerV->Add(10, 10);
@@ -111,6 +209,8 @@ wxWindow* SettingDlg::CreateProjectPage(wxWindow *parent)
 	sizerV->Add(group2, 0, wxEXPAND);
 	sizerV->Add(10, 10);
 	sizerV->Add(group3, 0, wxEXPAND);
+	sizerV->Add(10, 10);
+	sizerV->Add(group4, 0, wxEXPAND);
 
 	page->SetSizer(sizerV);
 	return page;
@@ -152,10 +252,10 @@ wxWindow* SettingDlg::CreateRenderingPage(wxWindow *parent)
 	m_peeling_layers_text = new wxTextCtrl(page, ID_PeelingLayersText, "1",
 		wxDefaultPosition, wxSize(40, 20), 0, vald_int);
 	st = new wxStaticText(page, 0,
-		"Number of depth peeling layers for rendering transparent mesh objects.\n"\
-			"Set higher numbers only for complex geometries.\n"\
-			"It slows down the rendering speed.");
-	sizer2_1->Add(m_peeling_layers_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+		"The number of depth peeling layers for rendering transparent mesh objects.\n"\
+		"Set higher numbers only for complex geometries.\n"\
+		"It slows down the rendering speed.");
+	sizer2_1->Add(m_peeling_layers_sldr, 1, wxEXPAND);
 	sizer2_1->Add(m_peeling_layers_text, 0, wxALIGN_CENTER);
 	group2->Add(10, 5);
 	group2->Add(sizer2_1, 0, wxEXPAND);
@@ -176,7 +276,7 @@ wxWindow* SettingDlg::CreateRenderingPage(wxWindow *parent)
 	st = new wxStaticText(page, 0, 
 		"The direction of the shadows, when shadow is enabled for volume data.");
 	sizer3_1->Add(m_shadow_dir_chk, 0, wxALIGN_CENTER);
-	sizer3_1->Add(m_shadow_dir_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer3_1->Add(m_shadow_dir_sldr, 1, wxEXPAND);
 	sizer3_1->Add(m_shadow_dir_text, 0, wxALIGN_CENTER);
 	group3->Add(10, 5);
 	group3->Add(sizer3_1, 0, wxEXPAND);
@@ -194,8 +294,24 @@ wxWindow* SettingDlg::CreateRenderingPage(wxWindow *parent)
 	group4->Add(10, 5);
 	group4->Add(sizer4_1, 0, wxEXPAND);
 	group4->Add(10, 5);
+	//link rotations
+	wxBoxSizer* group5 = new wxStaticBoxSizer(
+		new wxStaticBox(page, wxID_ANY, "Rotations"), wxVERTICAL);
+	wxBoxSizer *sizer5_1 = new wxBoxSizer(wxHORIZONTAL);
+	m_rot_link_chk = new wxCheckBox(page, ID_RotLinkChk,
+		"Link all rendering views' rotations.");
+	sizer5_1->Add(m_rot_link_chk, 0, wxALIGN_CENTER);
+	group5->Add(10, 5);
+	group5->Add(sizer5_1, 0, wxEXPAND);
+	group5->Add(10, 5);
+	// combine gradient and rotations checks
+	wxBoxSizer* group4_5 = new wxBoxSizer(wxHORIZONTAL);
+	group4_5->Add(group4, 0, wxEXPAND);
+	group4_5->AddStretchSpacer();
+	group4_5->Add(group5, 0, wxEXPAND);
 
 	wxBoxSizer *sizerV = new wxBoxSizer(wxVERTICAL);
+
 	sizerV->Add(10, 10);
 	sizerV->Add(group1, 0, wxEXPAND);
 	sizerV->Add(10, 10);
@@ -203,7 +319,7 @@ wxWindow* SettingDlg::CreateRenderingPage(wxWindow *parent)
 	sizerV->Add(10, 10);
 	sizerV->Add(group3, 0, wxEXPAND);
 	sizerV->Add(10, 10);
-	sizerV->Add(group4, 0, wxEXPAND);
+	sizerV->Add(group4_5, 0, wxEXPAND);
 
 	page->SetSizer(sizerV);
 	return page;
@@ -244,7 +360,7 @@ wxWindow* SettingDlg::CreatePerformancePage(wxWindow *parent)
 		wxDefaultPosition, wxSize(40, -1), 0, vald_int);
 	st = new wxStaticText(page, 0, "MB",
 		wxDefaultPosition, wxSize(20, -1));
-	sizer2_1->Add(m_graphics_mem_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer2_1->Add(m_graphics_mem_sldr, 1, wxEXPAND);
 	sizer2_1->Add(m_graphics_mem_text, 0, wxALIGN_CENTER);
 	sizer2_1->Add(st);
 	wxBoxSizer *sizer2_2 = new wxBoxSizer(wxHORIZONTAL);
@@ -257,11 +373,11 @@ wxWindow* SettingDlg::CreatePerformancePage(wxWindow *parent)
 		wxDefaultPosition, wxSize(40, -1), 0, vald_int);
 	st = new wxStaticText(page, 0, "MB",
 		wxDefaultPosition, wxSize(20, -1));
-	sizer2_2->Add(m_large_data_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer2_2->Add(m_large_data_sldr, 1, wxEXPAND);
 	sizer2_2->Add(m_large_data_text, 0, wxALIGN_CENTER);
 	sizer2_2->Add(st);
 	wxBoxSizer *sizer2_3 = new wxBoxSizer(wxHORIZONTAL);
-	st = new wxStaticText(page, 0, "Block Size:",
+	st = new wxStaticText(page, 0, "Brick Size:",
 		wxDefaultPosition, wxSize(110, -1));
 	sizer2_3->Add(st);
 	m_block_size_sldr = new wxSlider(page, ID_BlockSizeSldr, 7, 4, 11,
@@ -270,7 +386,7 @@ wxWindow* SettingDlg::CreatePerformancePage(wxWindow *parent)
 		wxDefaultPosition, wxSize(40, -1), 0, vald_int);
 	st = new wxStaticText(page, 0, "vx",
 		wxDefaultPosition, wxSize(20, -1));
-	sizer2_3->Add(m_block_size_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer2_3->Add(m_block_size_sldr, 1, wxEXPAND);
 	sizer2_3->Add(m_block_size_text, 0, wxALIGN_CENTER);
 	sizer2_3->Add(st);
 	wxBoxSizer *sizer2_4 = new wxBoxSizer(wxHORIZONTAL);
@@ -283,7 +399,7 @@ wxWindow* SettingDlg::CreatePerformancePage(wxWindow *parent)
 		wxDefaultPosition, wxSize(40, -1), 0, vald_int);
 	st = new wxStaticText(page, 0, "ms",
 		wxDefaultPosition, wxSize(20, -1));
-	sizer2_4->Add(m_response_time_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer2_4->Add(m_response_time_sldr, 1, wxEXPAND);
 	sizer2_4->Add(m_response_time_text, 0, wxALIGN_CENTER);
 	sizer2_4->Add(st);
 	group2->Add(10, 5);
@@ -317,7 +433,7 @@ wxWindow* SettingDlg::CreatePerformancePage(wxWindow *parent)
 		wxDefaultPosition, wxSize(40, -1), 0, vald_int);
 	st = new wxStaticText(page, 0, "MB",
 		wxDefaultPosition, wxSize(20, -1));
-	sizer3_1->Add(m_main_mem_buf_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer3_1->Add(m_main_mem_buf_sldr, 1, wxEXPAND);
 	sizer3_1->Add(m_main_mem_buf_text, 0, wxALIGN_CENTER);
 	sizer3_1->Add(st);
 	group3->Add(10, 5);
@@ -358,13 +474,13 @@ wxWindow* SettingDlg::CreateFormatPage(wxWindow *parent)
 	//combo box line
 	wxBoxSizer *sizer2_1 = new wxBoxSizer(wxHORIZONTAL);
 	m_wav_color1_cmb = new wxComboBox(page, ID_WavColor1Cmb, "",
-		wxDefaultPosition, wxSize(70, 23), 0, NULL, wxCB_READONLY);
+		wxDefaultPosition, wxSize(75, 23), 0, NULL, wxCB_READONLY);
 	m_wav_color2_cmb = new wxComboBox(page, ID_WavColor2Cmb, "",
-		wxDefaultPosition, wxSize(70, 23), 0, NULL, wxCB_READONLY);
+		wxDefaultPosition, wxSize(75, 23), 0, NULL, wxCB_READONLY);
 	m_wav_color3_cmb = new wxComboBox(page, ID_WavColor3Cmb, "",
-		wxDefaultPosition, wxSize(70, 23), 0, NULL, wxCB_READONLY);
+		wxDefaultPosition, wxSize(75, 23), 0, NULL, wxCB_READONLY);
 	m_wav_color4_cmb = new wxComboBox(page, ID_WavColor4Cmb, "",
-		wxDefaultPosition, wxSize(70, 23), 0, NULL, wxCB_READONLY);
+		wxDefaultPosition, wxSize(75, 23), 0, NULL, wxCB_READONLY);
 	//1
 	m_wav_color1_cmb->Append("Red");
 	m_wav_color1_cmb->Append("Green");
@@ -389,43 +505,43 @@ wxWindow* SettingDlg::CreateFormatPage(wxWindow *parent)
 	m_wav_color4_cmb->Append("Blue");
 	m_wav_color4_cmb->Append("Purple");
 	m_wav_color4_cmb->Append("White");
-	sizer2_1->Add(30, 20);
+	sizer2_1->Add(35, 20);
 	sizer2_1->Add(m_wav_color1_cmb);
-	sizer2_1->Add(20, 20);
+	sizer2_1->Add(25, 20);
 	sizer2_1->Add(m_wav_color2_cmb);
-	sizer2_1->Add(20, 20);
+	sizer2_1->Add(25, 20);
 	sizer2_1->Add(m_wav_color3_cmb);
-	sizer2_1->Add(20, 20);
+	sizer2_1->Add(25, 20);
 	sizer2_1->Add(m_wav_color4_cmb);
 	sizer2_1->Add(30, 20);
 	//static text line
 	wxBoxSizer *sizer2_2 = new wxBoxSizer(wxHORIZONTAL);
 	sizer2_2->Add(10, 20);
-	st = new wxStaticText(page, 0, "350", wxDefaultPosition, wxSize(25, 20));
+	st = new wxStaticText(page, 0, "350", wxDefaultPosition, wxSize(30, 20));
 	sizer2_2->Add(st);
 	sizer2_2->Add(20, 20);
-	st = new wxStaticText(page, 0, "--", wxDefaultPosition, wxSize(25, 20));
+	st = new wxStaticText(page, 0, "--", wxDefaultPosition, wxSize(30, 20));
 	sizer2_2->Add(st);
 	sizer2_2->Add(20, 20);
-	st = new wxStaticText(page, 0, "450\n480\n488", wxDefaultPosition, wxSize(25, 50));
+	st = new wxStaticText(page, 0, "450\n480\n488", wxDefaultPosition, wxSize(30, 50));
 	sizer2_2->Add(st);
 	sizer2_2->Add(20, 20);
-	st = new wxStaticText(page, 0, "--", wxDefaultPosition, wxSize(25, 20));
+	st = new wxStaticText(page, 0, "--", wxDefaultPosition, wxSize(30, 20));
 	sizer2_2->Add(st);
 	sizer2_2->Add(20, 20);
-	st = new wxStaticText(page, 0, "543\n568", wxDefaultPosition, wxSize(25, 30));
+	st = new wxStaticText(page, 0, "543\n568", wxDefaultPosition, wxSize(30, 35));
 	sizer2_2->Add(st);
 	sizer2_2->Add(20, 20);
-	st = new wxStaticText(page, 0, "--", wxDefaultPosition, wxSize(25, 20));
+	st = new wxStaticText(page, 0, "--", wxDefaultPosition, wxSize(30, 20));
 	sizer2_2->Add(st);
 	sizer2_2->Add(20, 20);
-	st = new wxStaticText(page, 0, "633", wxDefaultPosition, wxSize(25, 20));
+	st = new wxStaticText(page, 0, "633", wxDefaultPosition, wxSize(30, 20));
 	sizer2_2->Add(st);
 	sizer2_2->Add(20, 20);
-	st = new wxStaticText(page, 0, "--", wxDefaultPosition, wxSize(25, 20));
+	st = new wxStaticText(page, 0, "--", wxDefaultPosition, wxSize(30, 20));
 	sizer2_2->Add(st);
 	sizer2_2->Add(20, 20);
-	st = new wxStaticText(page, 0, "700", wxDefaultPosition, wxSize(25, 20));
+	st = new wxStaticText(page, 0, "700", wxDefaultPosition, wxSize(30, 20));
 	sizer2_2->Add(st);
 	group2->Add(10, 5);
 	group2->Add(sizer2_1, 0);
@@ -485,6 +601,7 @@ void SettingDlg::GetSettings()
 	m_gmc_mode = 2;
 	m_prj_save = false;
 	m_realtime_compress = false;
+	m_skip_bricks = false;
 	m_test_speed = false;
 	m_test_param = false;
 	m_test_wiref = false;
@@ -504,7 +621,10 @@ void SettingDlg::GetSettings()
 	m_override_vox = true;
 	m_soft_threshold = 0.0;
 	m_run_script = false;
-	m_text_font = BITMAP_FONT_TYPE_HELVETICA_12;
+	m_script_file = "";
+	m_text_size = 12;
+	m_text_color = 0;
+	m_font_file = "";
 	m_mem_swap = false;
 	m_graphics_mem = 1000.0;
 	m_main_mem_buf_size = 4000.0;
@@ -515,8 +635,30 @@ void SettingDlg::GetSettings()
 	m_point_volume_mode = 0;
 	m_ruler_use_transf = false;
 	m_ruler_time_dep = true;
+	m_pvxml_flip_x = false;
+	m_pvxml_flip_y = false;
+	m_red_bit = 8;
+	m_green_bit = 8;
+	m_blue_bit = 8;
+	m_alpha_bit = 8;
+	m_depth_bit = 24;
+	m_samples = 0;
+	m_gl_major_ver = 4;
+	m_gl_minor_ver = 4;
+	m_gl_profile_mask = 2;
+	m_cl_device_id = 0;
+	m_paint_hist_depth = 0;
+	m_stay_top = false;
+	m_show_cursor = true;
 
-	wxFileInputStream is(wxStandardPaths::Get().GetLocalDataDir() + wxFileName::GetPathSeparator() + SETTING_FILE_NAME);
+	wxString expath = wxStandardPaths::Get().GetExecutablePath();
+	expath = expath.BeforeLast(GETSLASH(),NULL);
+#ifdef _WIN32
+    wxString dft = expath + "\\" + SETTING_FILE_NAME;
+#else
+    wxString dft = expath + "/../Resources/" + SETTING_FILE_NAME;
+#endif
+	wxFileInputStream is(dft);
 	if (!is.IsOk())
 		return;
 	wxFileConfig fconfig(is);
@@ -550,6 +692,12 @@ void SettingDlg::GetSettings()
 	{
 		fconfig.SetPath("/realtime compress");
 		fconfig.Read("mode", &m_realtime_compress, false);
+	}
+	//skip empty bricks
+	if (fconfig.Exists("/skip bricks"))
+	{
+		fconfig.SetPath("/skip bricks");
+		fconfig.Read("mode", &m_skip_bricks, false);
 	}
 	//mouse interactions
 	if (fconfig.Exists("/mouse int"))
@@ -620,12 +768,28 @@ void SettingDlg::GetSettings()
 	{
 		fconfig.SetPath("/run script");
 		fconfig.Read("value", &m_run_script);
+		fconfig.Read("file", &m_script_file);
+	}
+	//paint history depth
+	if (fconfig.Exists("/paint history"))
+	{
+		fconfig.SetPath("/paint history");
+		fconfig.Read("value", &m_paint_hist_depth);
 	}
 	//text font
 	if (fconfig.Exists("/text font"))
 	{
 		fconfig.SetPath("/text font");
-		fconfig.Read("value", &m_text_font);
+		fconfig.Read("file", &m_font_file);
+		fconfig.Read("value", &m_text_size);
+		fconfig.Read("color", &m_text_color);
+	}
+	//full screen
+	if (fconfig.Exists("/full screen"))
+	{
+		fconfig.SetPath("/full screen");
+		fconfig.Read("stay top", &m_stay_top);
+		fconfig.Read("show cursor", &m_show_cursor);
 	}
 	//memory settings
 	if (fconfig.Exists("/memory settings"))
@@ -668,6 +832,38 @@ void SettingDlg::GetSettings()
 	{
 		fconfig.SetPath("/ruler time dep");
 		fconfig.Read("value", &m_ruler_time_dep);
+	}
+	//flags for pvxml flipping
+	if (fconfig.Exists("/pvxml flip"))
+	{
+		fconfig.SetPath("/pvxml flip");
+		fconfig.Read("x", &m_pvxml_flip_x);
+		fconfig.Read("y", &m_pvxml_flip_y);
+	}
+	//pixel format
+	if (fconfig.Exists("/pixel format"))
+	{
+		fconfig.SetPath("/pixel format");
+		fconfig.Read("red_bit", &m_red_bit);
+		fconfig.Read("green_bit", &m_green_bit);
+		fconfig.Read("blue_bit", &m_blue_bit);
+		fconfig.Read("alpha_bit", &m_alpha_bit);
+		fconfig.Read("depth_bit", &m_depth_bit);
+		fconfig.Read("samples", &m_samples);
+	}
+	//context attrib
+	if (fconfig.Exists("/context attrib"))
+	{
+		fconfig.SetPath("/context attrib");
+		fconfig.Read("gl_major_ver", &m_gl_major_ver);
+		fconfig.Read("gl_minor_ver", &m_gl_minor_ver);
+		fconfig.Read("gl_profile_mask", &m_gl_profile_mask);
+	}
+	//cl device
+	if (fconfig.Exists("/cl device"))
+	{
+		fconfig.SetPath("/cl device");
+		fconfig.Read("device_id", &m_cl_device_id);
 	}
 
 	UpdateUI();
@@ -718,11 +914,27 @@ void SettingDlg::UpdateUI()
 	m_wav_color3_cmb->Select(m_wav_color3-1);
 	m_wav_color4_cmb->Select(m_wav_color4-1);
 	//font
-	m_font_cmb->Select(m_text_font-3);
+	wxString str = m_font_file.BeforeLast('.');
+	int font_sel = m_font_cmb->FindString(str);
+	if (font_sel != wxNOT_FOUND)
+		m_font_cmb->Select(font_sel);
+	long font_size;
+	for (unsigned int i=0; i<m_font_size_cmb->GetCount(); ++i)
+	{
+		str = m_font_size_cmb->GetString(i);
+		if (str.ToLong(&font_size) &&
+			font_size <= m_text_size)
+			m_font_size_cmb->Select(i);
+	}
+	m_text_color_cmb->Select(m_text_color);
 	//script
 	m_run_script_chk->SetValue(m_run_script);
+	m_script_file_text->SetValue(m_script_file);
+	//paint history depth
+	m_paint_hist_depth_text->SetValue(wxString::Format("%d", m_paint_hist_depth));
 	//memory settings
 	m_streaming_chk->SetValue(m_mem_swap);
+	EnableStreaming(m_mem_swap);
 	m_graphics_mem_text->SetValue(wxString::Format("%d", (int)m_graphics_mem));
 	m_large_data_text->SetValue(wxString::Format("%d", (int)m_large_data_size));
 	m_block_size_text->SetValue(wxString::Format("%d", m_force_brick_size));
@@ -751,6 +963,9 @@ void SettingDlg::SaveSettings()
 
 	fconfig.SetPath("/realtime compress");
 	fconfig.Write("mode", m_realtime_compress);
+
+	fconfig.SetPath("/skip bricks");
+	fconfig.Write("mode", m_skip_bricks);
 
 	fconfig.SetPath("/mouse int");
 	fconfig.Write("mode", m_mouse_int);
@@ -789,9 +1004,20 @@ void SettingDlg::SaveSettings()
 
 	fconfig.SetPath("/run script");
 	fconfig.Write("value", m_run_script);
+	fconfig.Write("file", m_script_file);
+
+	fconfig.SetPath("/paint history");
+	fconfig.Write("value", m_paint_hist_depth);
 
 	fconfig.SetPath("/text font");
-	fconfig.Write("value", m_text_font);
+	fconfig.Write("file", m_font_file);
+	fconfig.Write("value", m_text_size);
+	fconfig.Write("color", m_text_color);
+
+	//full screen
+	fconfig.SetPath("/full screen");
+	fconfig.Write("stay top", m_stay_top);
+	fconfig.Write("show cursor", m_show_cursor);
 
 	//memory settings
 	fconfig.SetPath("/memory settings");
@@ -801,6 +1027,7 @@ void SettingDlg::SaveSettings()
 	fconfig.Write("force brick size", m_force_brick_size);
 	fconfig.Write("up time", m_up_time);
 	fconfig.Write("main memory buffer size", m_main_mem_buf_size);
+	EnableStreaming(m_mem_swap);
 
 	//update order
 	fconfig.SetPath("/update order");
@@ -818,7 +1045,38 @@ void SettingDlg::SaveSettings()
 	fconfig.SetPath("/ruler time dependent");
 	fconfig.Write("value", m_ruler_time_dep);
 
-	wxFileOutputStream os(wxStandardPaths::Get().GetLocalDataDir() + wxFileName::GetPathSeparator() + SETTING_FILE_NAME);
+	//flags for flipping pvxml
+	fconfig.SetPath("/pvxml flip");
+	fconfig.Write("x", m_pvxml_flip_x);
+	fconfig.Write("y", m_pvxml_flip_y);
+
+	//pixel format
+	fconfig.SetPath("/pixel format");
+	fconfig.Write("red_bit", m_red_bit);
+	fconfig.Write("green_bit", m_green_bit);
+	fconfig.Write("blue_bit", m_blue_bit);
+	fconfig.Write("alpha_bit", m_alpha_bit);
+	fconfig.Write("depth_bit", m_depth_bit);
+	fconfig.Write("samples", m_samples);
+
+	//context attrib
+	fconfig.SetPath("/context attrib");
+	fconfig.Write("gl_major_ver", m_gl_major_ver);
+	fconfig.Write("gl_minor_ver", m_gl_minor_ver);
+	fconfig.Write("gl_profile_mask", m_gl_profile_mask);
+
+	//cl device
+	fconfig.SetPath("/cl device");
+	fconfig.Write("device_id", m_cl_device_id);
+
+	wxString expath = wxStandardPaths::Get().GetExecutablePath();
+	expath = expath.BeforeLast(GETSLASH(),NULL);
+#ifdef _WIN32
+    wxString dft = expath + "\\" + SETTING_FILE_NAME;
+#else
+    wxString dft = expath + "/../Resources/" + SETTING_FILE_NAME;
+#endif
+	wxFileOutputStream os(dft);
 	fconfig.Save(os);
 }
 
@@ -1078,6 +1336,12 @@ void SettingDlg::EnableStreaming(bool enable)
 		m_response_time_sldr->Disable();
 		m_response_time_text->Disable();
 	}
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (vr_frame)
+	{
+		vr_frame->SetTextureRendererSettings();
+		vr_frame->RefreshVRenderViews();
+	}
 }
 
 void SettingDlg::SetShadowDir(double deg)
@@ -1113,6 +1377,19 @@ void SettingDlg::OnGradBgCheck(wxCommandEvent &event)
 			}
 		}
 	}
+}
+
+//link rotations
+void SettingDlg::OnRotLink(wxCommandEvent& event)
+{
+	
+   VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+   if (vr_frame && 0 < vr_frame->GetViewNum()) {
+     VRenderView* view = vr_frame->GetView(0);
+	 if (view) {
+		view->OnRotLink(m_rot_link_chk->GetValue());
+	 }
+   }
 }
 
 //override vox
@@ -1252,7 +1529,7 @@ void SettingDlg::OnLargeDataEdit(wxCommandEvent &event)
 	wxString str = m_large_data_text->GetValue();
 	double val;
 	str.ToDouble(&val);
-	if (val<=0.0)
+	if (val<0.0)
 		return;
 	m_large_data_sldr->SetValue(int(val/10.0));
 	m_large_data_size = val;
@@ -1311,32 +1588,62 @@ void SettingDlg::OnMainMemBufSizeEdit(wxCommandEvent &event)
 	m_main_mem_buf_sldr->SetValue(int(val/100.0));
 	m_main_mem_buf_size = val;
 }
-
 //font
 void SettingDlg::OnFontChange(wxCommandEvent &event)
 {
-	switch (m_font_cmb->GetCurrentSelection())
+	wxString str = m_font_cmb->GetValue();
+	if (str != "")
 	{
-	case 0://helvetica 12
-		m_text_font = 3;
-		break;
-	case 1://helvetica 18
-		m_text_font = 4;
-		break;
-	case 2://roman 10
-		m_text_font = 5;
-		break;
-	case 3://roman 24
-		m_text_font = 6;
-		break;
-	default:
-		break;
-	}
+		m_font_file = str + ".ttf";
+		std::string exePath = wxStandardPaths::Get().GetExecutablePath().ToStdString();
+		exePath = exePath.substr(0,exePath.find_last_of(std::string()+GETSLASH()));
+		std::string loc = exePath + GETSLASH() + wxString("Fonts") +
+			GETSLASH() + str.ToStdString() + ".ttf";
 
+		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+		if (vr_frame)
+		{
+			vr_frame->GetTextRenderer()->LoadNewFace(loc);
+			vr_frame->GetTextRenderer()->SetSize(m_text_size);
+			for (int i=0 ; i<(int)vr_frame->GetViewList()->size() ; i++)
+			{
+				VRenderView* vrv = (*vr_frame->GetViewList())[i];
+				if (vrv)
+					vrv->RefreshGL();
+			}
+		}
+	}
+}
+
+void SettingDlg::OnFontSizeChange(wxCommandEvent &event)
+{
+	wxString str = m_font_size_cmb->GetValue();
+	long size;
+	if (str.ToLong(&size))
+	{
+		m_text_size = size;
+
+		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+		if (vr_frame)
+		{
+			vr_frame->GetTextRenderer()->SetSize(m_text_size);
+			for (int i=0 ; i<(int)vr_frame->GetViewList()->size() ; i++)
+			{
+				VRenderView* vrv = (*vr_frame->GetViewList())[i];
+				if (vrv)
+					vrv->RefreshGL();
+			}
+		}
+	}
+}
+
+void SettingDlg::OnTextColorChange(wxCommandEvent &event)
+{
+	m_text_color = m_text_color_cmb->GetCurrentSelection();
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (vr_frame)
 	{
-		for (int i=0 ; i<(int)vr_frame->GetViewList()->size() ; i++)
+		for (int i = 0; i<(int)vr_frame->GetViewList()->size(); i++)
 		{
 			VRenderView* vrv = (*vr_frame->GetViewList())[i];
 			if (vrv)
@@ -1349,4 +1656,46 @@ void SettingDlg::OnFontChange(wxCommandEvent &event)
 void SettingDlg::OnRunScriptChk(wxCommandEvent &event)
 {
 	m_run_script = m_run_script_chk->GetValue();
+}
+
+void SettingDlg::OnScriptFileEdit(wxCommandEvent &event)
+{
+	m_script_file = m_script_file_text->GetValue();
+}
+
+void SettingDlg::OnScriptFileBtn(wxCommandEvent &event)
+{
+	wxFileDialog *fopendlg = new wxFileDialog(
+		m_frame, "Choose a 4D script file", "", "",
+		"4D script file (*.txt)|*.txt",
+		wxFD_OPEN);
+
+	int rval = fopendlg->ShowModal();
+	if (rval == wxID_OK)
+	{
+		m_script_file = fopendlg->GetPath();
+		m_script_file_text->SetValue(m_script_file);
+	}
+
+	delete fopendlg;
+}
+
+//paint history depth
+void SettingDlg::OnPaintHistDepthChange(wxScrollEvent &event)
+{
+	int ival = event.GetPosition();
+	wxString str = wxString::Format("%d", ival);
+	m_paint_hist_depth_text->SetValue(str);
+}
+
+void SettingDlg::OnPaintHistDepthEdit(wxCommandEvent &event)
+{
+	wxString str = m_paint_hist_depth_text->GetValue();
+	unsigned long ival;
+	str.ToULong(&ival);
+	m_paint_hist_depth_sldr->SetValue(ival);
+	m_paint_hist_depth = ival;
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (vr_frame)
+		vr_frame->SetTextureUndos();
 }

@@ -1,3 +1,30 @@
+/*
+For more information, please see: http://software.sci.utah.edu
+
+The MIT License
+
+Copyright (c) 2014 Scientific Computing and Imaging Institute,
+University of Utah.
+
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+*/
 #include "RecorderDlg.h"
 #include "VRenderFrame.h"
 #include <wx/artprov.h>
@@ -15,6 +42,8 @@ BEGIN_EVENT_TABLE(KeyListCtrl, wxListCtrl)
 	EVT_KEY_DOWN(KeyListCtrl::OnKeyDown)
 	EVT_KEY_UP(KeyListCtrl::OnKeyUp)
 	EVT_LIST_BEGIN_DRAG(wxID_ANY, KeyListCtrl::OnBeginDrag)
+	EVT_SCROLLWIN(KeyListCtrl::OnScroll)
+	EVT_MOUSEWHEEL(KeyListCtrl::OnScroll)
 END_EVENT_TABLE()
 
 KeyListCtrl::KeyListCtrl(
@@ -35,19 +64,19 @@ m_dragging_to_item(-1)
 	wxListItem itemCol;
 	itemCol.SetText("ID");
 	this->InsertColumn(0, itemCol);
-    SetColumnWidth(0, wxLIST_AUTOSIZE_USEHEADER);
+    SetColumnWidth(0, 40);
 	itemCol.SetText("Frame");
 	this->InsertColumn(1, itemCol);
-    SetColumnWidth(1, wxLIST_AUTOSIZE_USEHEADER);
+    SetColumnWidth(1, 60);
 	itemCol.SetText("Inbetweens");
 	this->InsertColumn(2, itemCol);
-    SetColumnWidth(2, wxLIST_AUTOSIZE_USEHEADER);
+    SetColumnWidth(2, 80);
 	itemCol.SetText("Interpolation");
 	this->InsertColumn(3, itemCol);
-    SetColumnWidth(3, wxLIST_AUTOSIZE_USEHEADER);
+    SetColumnWidth(3, 80);
 	itemCol.SetText("Description");
 	this->InsertColumn(4, itemCol);
-    SetColumnWidth(4, wxLIST_AUTOSIZE_USEHEADER);
+    SetColumnWidth(4, 80);
 
 	m_images = new wxImageList(16, 16, true);
 	wxIcon icon = wxIcon(key_xpm);
@@ -168,9 +197,9 @@ void KeyListCtrl::UpdateText()
 		int interp = interpolator->GetKeyType(i);
 		string desc = interpolator->GetKeyDesc(i);
 		
-                wxString wx_id = wxString::Format("%d", id);
-                wxString wx_time = wxString::Format("%d", time);
-                wxString wx_duration = wxString::Format("%d", duration);
+        wxString wx_id = wxString::Format("%d", id);
+        wxString wx_time = wxString::Format("%d", time);
+        wxString wx_duration = wxString::Format("%d", duration);
 		SetText(i, 0, wx_id);
 		SetText(i, 1, wx_time);
 		SetText(i, 2, wx_duration);
@@ -278,14 +307,17 @@ void KeyListCtrl::OnSelection(wxListEvent &event)
 	}
 }
 
-void KeyListCtrl::EndEdit()
+void KeyListCtrl::EndEdit(bool update)
 {
-	m_frame_text->Hide();
-	m_duration_text->Hide();
-	m_interpolation_cmb->Hide();
-	m_description_text->Hide();
-	m_editing_item = -1;
-	UpdateText();
+	if (m_duration_text->IsShown())
+	{
+		m_frame_text->Hide();
+		m_duration_text->Hide();
+		m_interpolation_cmb->Hide();
+		m_description_text->Hide();
+		m_editing_item = -1;
+		if (update) UpdateText();
+	}
 }
 
 void KeyListCtrl::OnEndSelection(wxListEvent &event)
@@ -312,8 +344,10 @@ void KeyListCtrl::OnFrameText(wxCommandEvent& event)
 	int index = interpolator->GetKeyIndex(int(id));
 	str = m_frame_text->GetValue();
 	double time;
-	str.ToDouble(&time);
-	interpolator->ChangeTime(index, time);
+	if (str.ToDouble(&time))
+	{
+		interpolator->ChangeTime(index, time);
+	}
 }
 
 void KeyListCtrl::OnDurationText(wxCommandEvent& event)
@@ -335,8 +369,11 @@ void KeyListCtrl::OnDurationText(wxCommandEvent& event)
 	int index = interpolator->GetKeyIndex(int(id));
 	str = m_duration_text->GetValue();
 	double duration;
-	str.ToDouble(&duration);
-	interpolator->ChangeDuration(index, duration);
+	if (str.ToDouble(&duration))
+	{
+		interpolator->ChangeDuration(index, duration);
+		SetText(m_editing_item, 2, str);
+	}
 }
 
 void KeyListCtrl::OnInterpoCmb(wxCommandEvent& event)
@@ -463,6 +500,18 @@ void KeyListCtrl::OnEndDrag(wxMouseEvent& event)
 	m_dragging_to_item = -1;
 }
 
+void KeyListCtrl::OnScroll(wxScrollWinEvent& event)
+{
+	EndEdit(false);
+	event.Skip(true);
+}
+
+void KeyListCtrl::OnScroll(wxMouseEvent& event)
+{
+	EndEdit(false);
+	event.Skip(true);
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 BEGIN_EVENT_TABLE(RecorderDlg, wxPanel)
@@ -471,38 +520,33 @@ BEGIN_EVENT_TABLE(RecorderDlg, wxPanel)
 	EVT_BUTTON(ID_InsKeyBtn, RecorderDlg::OnInsKey)
 	EVT_BUTTON(ID_DelKeyBtn, RecorderDlg::OnDelKey)
 	EVT_BUTTON(ID_DelAllBtn, RecorderDlg::OnDelAll)
-	EVT_BUTTON(ID_PreviewBtn, RecorderDlg::OnPreview)
-	EVT_BUTTON(ID_ResetBtn, RecorderDlg::OnReset)
-	EVT_BUTTON(ID_PlayBtn, RecorderDlg::OnPlay)
-	EVT_BUTTON(ID_StopBtn, RecorderDlg::OnStop)
 END_EVENT_TABLE()
 
 RecorderDlg::RecorderDlg(wxWindow* frame, wxWindow* parent)
 : wxPanel(parent, wxID_ANY,
 wxPoint(500, 150), wxSize(450, 600),
 0, "RecorderDlg"),
-m_frame(parent),
+m_frame(frame),
 m_view(0)
 {
 	//validator: integer
 	wxIntegerValidator<unsigned int> vald_int;
-
-	wxBoxSizer *group1 = new wxBoxSizer(wxHORIZONTAL);
-	wxStaticText* st = new wxStaticText(this, wxID_ANY, "Automatic Keys:");
+	wxStaticText* st = 0;
+	/*wxBoxSizer *group1 = new wxBoxSizer(wxHORIZONTAL);
+	st = new wxStaticText(this, wxID_ANY, "Automatic Keys:");
 	m_auto_key_cmb = new wxComboBox(this, ID_AutoKeyCmb, "",
-		wxDefaultPosition, wxSize(200, 30), 0, NULL, wxCB_READONLY);
+		wxDefaultPosition, wxSize(180, 30), 0, NULL, wxCB_READONLY);
 	m_auto_key_cmb->Append("Channel combination nC1");
 	m_auto_key_cmb->Append("Channel combination nC2");
 	m_auto_key_cmb->Append("Channel combination nC3");
 	m_auto_key_cmb->Select(1);
 	m_auto_key_btn = new wxButton(this, ID_AutoKeyBtn, "Generate",
 		wxDefaultPosition, wxSize(75, 23));
-	group1->Add(5, 5);
 	group1->Add(st, 0, wxALIGN_CENTER);
 	group1->Add(5, 5);
 	group1->Add(m_auto_key_cmb, 0, wxALIGN_CENTER);
 	group1->Add(5, 5);
-	group1->Add(m_auto_key_btn, 0, wxALIGN_CENTER);
+	group1->Add(m_auto_key_btn, 0, wxALIGN_CENTER);*/
 
 	//list
 	wxBoxSizer *group2 = new wxBoxSizer(wxVERTICAL);
@@ -514,63 +558,45 @@ m_view(0)
 
 	//default duration
 	wxBoxSizer *group3 = new wxBoxSizer(wxHORIZONTAL);
-	st = new wxStaticText(this, wxID_ANY, "Default:");
+	st = new wxStaticText(this, wxID_ANY, "Default:",wxDefaultPosition,wxSize(50,-1));
 	m_duration_text = new wxTextCtrl(this, ID_DurationText, "30",
-		wxDefaultPosition, wxSize(50, 23), 0, vald_int);
+		wxDefaultPosition, wxSize(30, 23), 0, vald_int);
 	m_interpolation_cmb = new wxComboBox(this, ID_InterpolationCmb, "",
-		wxDefaultPosition, wxDefaultSize, 0, NULL, wxCB_READONLY);
+		wxDefaultPosition, wxSize(65,-1), 0, NULL, wxCB_READONLY);
 	m_interpolation_cmb->Append("Linear");
 	m_interpolation_cmb->Append("Smooth");
 	m_interpolation_cmb->Select(0);
-	m_reset_btn = new wxButton(this, ID_ResetBtn, "Reset",
-		wxDefaultPosition, wxSize(75, 23));
-	m_stop_btn = new wxButton(this, ID_StopBtn, "Stop",
-		wxDefaultPosition, wxSize(75, 23));
-	group3->Add(5, 5);
+
+	//key buttons
+	//wxBoxSizer *group4 = new wxBoxSizer(wxHORIZONTAL);
+	m_set_key_btn = new wxButton(this, ID_SetKeyBtn, "Add",
+		wxDefaultPosition, wxSize(50, 23));
+	m_del_key_btn = new wxButton(this, ID_DelKeyBtn, "Delete",
+		wxDefaultPosition, wxSize(55, 23));
+	m_del_all_btn = new wxButton(this, ID_DelAllBtn, "Del. All",
+		wxDefaultPosition, wxSize(60, 23));
+
 	group3->Add(st, 0, wxALIGN_CENTER);
 	group3->Add(5, 5);
 	group3->Add(m_duration_text, 0, wxALIGN_CENTER);
 	group3->Add(5, 5);
 	group3->Add(m_interpolation_cmb, 0, wxALIGN_CENTER);
 	group3->AddStretchSpacer(1);
-	group3->Add(m_reset_btn, 0, wxALIGN_CENTER);
+	group3->Add(m_set_key_btn, 0, wxALIGN_CENTER);
 	group3->Add(5, 5);
-	group3->Add(m_stop_btn, 0, wxALIGN_CENTER);
-
-	//key buttons
-	wxBoxSizer *group4 = new wxBoxSizer(wxHORIZONTAL);
-	m_set_key_btn = new wxButton(this, ID_SetKeyBtn, "Add",
-		wxDefaultPosition, wxSize(75, 23));
-	m_del_key_btn = new wxButton(this, ID_DelKeyBtn, "Delete",
-		wxDefaultPosition, wxSize(75, 23));
-	m_del_all_btn = new wxButton(this, ID_DelAllBtn, "Del. All",
-		wxDefaultPosition, wxSize(75, 23));
-	group4->Add(m_set_key_btn, 0, wxALIGN_CENTER);
-	group4->Add(5, 5);
-	group4->Add(m_del_key_btn, 0, wxALIGN_CENTER);
-	group4->Add(5, 5);
-	group4->Add(m_del_all_btn, 0, wxALIGN_CENTER);
-	group4->AddStretchSpacer(1);
-	//play buttons
-	m_preview_btn = new wxButton(this, ID_PreviewBtn, "Preview",
-		wxDefaultPosition, wxSize(75, 23));
-	m_play_btn = new wxButton(this, ID_PlayBtn, "Save...",
-		wxDefaultPosition, wxSize(75, 23));
-	group4->Add(m_preview_btn, 0, wxALIGN_CENTER);
-	group4->Add(5, 5);
-	group4->Add(m_play_btn, 0, wxALIGN_CENTER);
+	group3->Add(m_del_key_btn, 0, wxALIGN_CENTER);
+	group3->Add(5, 5);
+	group3->Add(m_del_all_btn, 0, wxALIGN_CENTER);
 
 	//all controls
 	wxBoxSizer *sizerV = new wxBoxSizer(wxVERTICAL);
-	sizerV->Add(10, 10);
-	sizerV->Add(group1, 0, wxEXPAND);
-	sizerV->Add(10, 10);
+	//sizerV->Add(10, 5);
+	//sizerV->Add(group1, 0, wxEXPAND);
+	sizerV->Add(10, 5);
 	sizerV->Add(group2, 1, wxEXPAND);
-	sizerV->Add(10, 20);
+	sizerV->Add(10, 5);
 	sizerV->Add(group3, 0, wxEXPAND);
 	sizerV->Add(5, 5);
-	sizerV->Add(group4, 0, wxEXPAND);
-	sizerV->Add(10, 10);
 
 	SetSizer(sizerV);
 	Layout();
@@ -592,7 +618,7 @@ void RecorderDlg::SetSelection(int index)
 		long item = m_keylist->GetNextItem(-1,
 		wxLIST_NEXT_ALL,
 		wxLIST_STATE_SELECTED);
-		if (index != item)
+		if (index != item && item != -1)
 			m_keylist->SetItemState(index,
 			wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
 	}
@@ -617,7 +643,6 @@ void RecorderDlg::OnAutoKey(wxCommandEvent &event)
 		break;
 	}
 
-	m_keylist->Update();
 }
 
 void RecorderDlg::OnSetKey(wxCommandEvent &event)
@@ -684,6 +709,7 @@ void RecorderDlg::InsertKey(int index, double duration, int interpolation)
 	FlKeyDouble* flkey = 0;
 	FlKeyQuaternion* flkeyQ = 0;
 	FlKeyBoolean* flkeyB = 0;
+	FlKeyInt* flkeyI = 0;
 
 	double t = interpolator->GetLastT();
 	t = t<0.0?0.0:t+duration;
@@ -816,6 +842,11 @@ void RecorderDlg::InsertKey(int index, double duration, int interpolation)
 	keycode.l2_name = "scale";
 	flkey = new FlKeyDouble(keycode, scale);
 	interpolator->AddKey(flkey);
+	//intermixing mode
+	int ival = m_view->GetVolMethod();
+	keycode.l2_name = "volmethod";
+	flkeyI = new FlKeyInt(keycode, ival);
+	interpolator->AddKey(flkeyI);
 
 	interpolator->End();
 
@@ -894,11 +925,17 @@ void RecorderDlg::AutoKeyChanComb(int comb)
 	Interpolator *interpolator = vr_frame->GetInterpolator();
 	if (!interpolator)
 		return;
+
+	wxString str = m_duration_text->GetValue();
+	double duration;
+	str.ToDouble(&duration);
+
 	KeyCode keycode;
 	FlKeyBoolean* flkeyB = 0;
 
 	double t = interpolator->GetLastT();
 	t = t<0.0?0.0:t;
+	if (t>0.0) t += duration;
 
 	int i;
 	int numChan = m_view->GetAllVolumeNum();
@@ -914,7 +951,6 @@ void RecorderDlg::AutoKeyChanComb(int comb)
 
 	do
 	{
-		t += 1.0;
 		interpolator->Begin(t);
 
 		//for all volumes
@@ -933,7 +969,10 @@ void RecorderDlg::AutoKeyChanComb(int comb)
 		}
 
 		interpolator->End();
+		t += duration;
 	} while (GetMask(chan_mask));
+
+	m_keylist->Update();
 }
 
 void RecorderDlg::OnDelKey(wxCommandEvent &event)
@@ -1001,8 +1040,7 @@ void RecorderDlg::OnPreview(wxCommandEvent &event)
 	int begin_frame = int(interpolator->GetFirstT());
 	int end_frame = int(interpolator->GetLastT());
 	m_view->SetParamCapture(filename, begin_frame, end_frame, true);
-	m_view->SetPreDraw(true);
-	m_view->RefreshGL();
+
 }
 
 void RecorderDlg::OnReset(wxCommandEvent &event)
@@ -1032,7 +1070,7 @@ void RecorderDlg::OnPlay(wxCommandEvent &event)
 		return;
 
 	wxFileDialog *fopendlg = new wxFileDialog(
-		this, "Save Movie Sequence", 
+		m_frame, "Save Movie Sequence", 
 		"", "", "*.tif", wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
 	fopendlg->SetExtraControlCreator(CreateExtraCaptureControl);
 

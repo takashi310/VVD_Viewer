@@ -600,17 +600,15 @@ namespace FLIVR
 
 	//draw
 	void VolumeRenderer::draw(bool draw_wireframe_p, bool interactive_mode_p,
-		bool orthographic_p, double zoom, bool intp, int mode, double sampling_frq_fac)
+		bool orthographic_p, double zoom, int mode, double sampling_frq_fac)
 	{
-		draw_volume(interactive_mode_p, orthographic_p, zoom, intp, mode, sampling_frq_fac);
+		draw_volume(interactive_mode_p, orthographic_p, zoom, mode, sampling_frq_fac);
 		if(draw_wireframe_p)
 			draw_wireframe(orthographic_p);
 	}
 
 	void VolumeRenderer::draw_volume(bool interactive_mode_p,
-		bool orthographic_p,
-		double zoom, bool intp,
-		int mode, double sampling_frq_fac)
+		bool orthographic_p, double zoom, int mode, double sampling_frq_fac)
 	{
 		if (!tex_)
 			return;
@@ -999,17 +997,20 @@ namespace FLIVR
 			b->compute_polygons(view_ray, dt, vertex, index, size);
 
 			if (vertex.size() == 0){
-				if (!b->drawn(bmode))
+				if (mem_swap_ && start_update_loop_ && !done_update_loop_)
 				{
-					b->set_drawn(bmode, true);
-					cur_brick_num_++;
-					cur_chan_brick_num_++;
+					if (!b->drawn(bmode))
+					{
+						b->set_drawn(bmode, true);
+						cur_brick_num_++;
+						cur_chan_brick_num_++;
+					}
 				}
 				continue;
 			}
 
 			GLint filter;
-			if (intp && colormap_mode_ != 3)
+			if (interpolate_)
 				filter = GL_LINEAR;
 			else
 				filter = GL_NEAREST;

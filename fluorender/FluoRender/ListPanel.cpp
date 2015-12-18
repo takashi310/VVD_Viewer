@@ -1,15 +1,37 @@
+/*
+For more information, please see: http://software.sci.utah.edu
+
+The MIT License
+
+Copyright (c) 2014 Scientific Computing and Imaging Institute,
+University of Utah.
+
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+*/
 #include "ListPanel.h"
 #include "DataManager.h"
 #include "VRenderFrame.h"
 #include "Formats/png_resource.h"
 
 //resources
-#include "img/listicon_bake.h"
-#include "img/listicon_delall.h"
-#include "img/listicon_delete.h"
-#include "img/listicon_save.h"
-#include "img/listicon_rename.h"
-#include "img/listicon_view.h"
+#include "img/icons.h"
 
 BEGIN_EVENT_TABLE(DataListCtrl, wxListCtrl)
 EVT_LIST_ITEM_ACTIVATED(wxID_ANY, DataListCtrl::OnAct)
@@ -24,6 +46,8 @@ EVT_KEY_DOWN(DataListCtrl::OnKeyDown)
 EVT_KEY_UP(DataListCtrl::OnKeyUp)
 EVT_MOUSE_EVENTS(DataListCtrl::OnMouse)
 EVT_TEXT_ENTER(ID_RenameText, DataListCtrl::OnEndEditName)
+EVT_SCROLLWIN(DataListCtrl::OnScroll)
+EVT_MOUSEWHEEL(DataListCtrl::OnScroll)
 END_EVENT_TABLE()
 
 DataListCtrl::DataListCtrl(
@@ -53,6 +77,7 @@ DataListCtrl::DataListCtrl(
 
 DataListCtrl::~DataListCtrl()
 {
+	delete m_rename_text;
 }
 
 void DataListCtrl::Append(int type, wxString name, wxString path)
@@ -244,33 +269,31 @@ void DataListCtrl::AddToView(int menu_index, long item)
                      break;
                   }
                }
-			   if (vd_add)
-			   {
-				   int chan_num = view->GetAny();
-				   view_empty = chan_num>0?false:view_empty;
-				   Color color(1.0, 1.0, 1.0);
-				   if (chan_num == 0)
-					   color = Color(1.0, 0.0, 0.0);
-				   else if (chan_num == 1)
-					   color = Color(0.0, 1.0, 0.0);
-				   else if (chan_num == 2)
-					   color = Color(0.0, 0.0, 1.0);
 
-				   if (chan_num >=0 && chan_num <3)
-					   vd_add->SetColor(color);
+               int chan_num = view->GetAny();
+               view_empty = chan_num>0?false:view_empty;
+               Color color(1.0, 1.0, 1.0);
+               if (chan_num == 0)
+                  color = Color(1.0, 0.0, 0.0);
+               else if (chan_num == 1)
+                  color = Color(0.0, 1.0, 0.0);
+               else if (chan_num == 2)
+                  color = Color(0.0, 0.0, 1.0);
 
-				   DataGroup *group = view->AddVolumeData(vd_add);
-				   vr_frame->OnSelection(2, view, group, vd_add, 0);
-				   if (view->GetVolMethod() == VOL_METHOD_MULTI)
-				   {
-					   AdjustView* adjust_view = vr_frame->GetAdjustView();
-					   if (adjust_view)
-					   {
-						   adjust_view->SetRenderView(view);
-						   adjust_view->UpdateSync();
-					   }
-				   }
-			   }
+               if (chan_num >=0 && chan_num <3)
+                  vd_add->SetColor(color);
+
+               DataGroup *group = view->AddVolumeData(vd_add);
+               vr_frame->OnSelection(2, view, group, vd_add, 0);
+               if (view->GetVolMethod() == VOL_METHOD_MULTI)
+               {
+                  AdjustView* adjust_view = vr_frame->GetAdjustView();
+                  if (adjust_view)
+                  {
+                     adjust_view->SetRenderView(view);
+                     adjust_view->UpdateSync();
+                  }
+               }
             }
          }
       }
@@ -313,15 +336,12 @@ void DataListCtrl::AddToView(int menu_index, long item)
       (*vr_frame->GetViewList())[menu_index]->RefreshGL();
       vr_frame->UpdateTree(name);
    }
-   glHint(GL_POINT_SMOOTH_HINT, GL_DONT_CARE);
 }
 
 void DataListCtrl::OnAddToView(wxCommandEvent& event)
 {
    int menu_index = event.GetId() - Menu_View_start;
    int num = GetSelectedItemCount();
-   //VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-   //bool view_empty = true;
 
    if (num > 0)
    {
@@ -409,7 +429,7 @@ void DataListCtrl::OnSave(wxCommandEvent& event)
       if (GetItemText(item) == "Volume")
       {
          wxFileDialog *fopendlg = new wxFileDialog(
-               this, "Save Volume Data", "", "",
+               m_frame, "Save Volume Data", "", "",
                "Muti-page Tiff file (*.tif, *.tiff)|*.tif;*.tiff|"\
                "Single-page Tiff sequence (*.tif)|*.tif;*.tiff|"\
                "Nrrd file (*.nrrd)|*.nrrd",
@@ -439,7 +459,7 @@ void DataListCtrl::OnSave(wxCommandEvent& event)
       else if (GetItemText(item) == "Mesh")
       {
          wxFileDialog *fopendlg = new wxFileDialog(
-               this, "Save Mesh Data", "", "",
+               m_frame, "Save Mesh Data", "", "",
                "OBJ file (*.obj)|*.obj",
                wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
 
@@ -466,7 +486,7 @@ void DataListCtrl::OnSave(wxCommandEvent& event)
       else if (GetItemText(item) == "Annotations")
       {
          wxFileDialog *fopendlg = new wxFileDialog(
-               this, "Save Annotations", "", "",
+               m_frame, "Save Annotations", "", "",
                "Text file (*.txt)|*.txt",
                wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
 
@@ -503,7 +523,7 @@ void DataListCtrl::OnBake(wxCommandEvent& event)
       wxString name = GetText(item, 1);
 
       wxFileDialog *fopendlg = new wxFileDialog(
-            this, "Bake Volume Data", "", "",
+            m_frame, "Bake Volume Data", "", "",
             "Muti-page Tiff file (*.tif, *.tiff)|*.tif;*.tiff|"\
             "Single-page Tiff sequence (*.tif)|*.tif;*.tiff|"\
             "Nrrd file (*.nrrd)|*.nrrd",
@@ -582,53 +602,64 @@ void DataListCtrl::OnMouse(wxMouseEvent &event)
    event.Skip();
 }
 
-void DataListCtrl::OnEndEditName(wxCommandEvent& event)
+void DataListCtrl::EndEdit(bool update)
 {
-   wxString new_name = m_rename_text->GetValue();
+	if (!m_rename_text->IsShown())
+		return;
 
-   long item = GetNextItem(-1,
-         wxLIST_NEXT_ALL,
-         wxLIST_STATE_SELECTED);
-   VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-   DataManager* mgr = vr_frame?vr_frame->GetDataManager():0;
+	if (update)
+	{
+		wxString new_name = m_rename_text->GetValue();
 
-   if (item != -1 && mgr)
-   {
-      wxString name = GetText(item, 1);
+		long item = GetNextItem(-1,
+			wxLIST_NEXT_ALL,
+			wxLIST_STATE_SELECTED);
+		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+		DataManager* mgr = vr_frame?vr_frame->GetDataManager():0;
 
-      if (new_name != name)
-      {
-         wxString new_name2 = new_name;
-         for (int i=1; mgr->CheckNames(new_name2); i++)
-            new_name2 = new_name+wxString::Format("_%d", i);
+		if (item != -1 && mgr)
+		{
+			wxString name = GetText(item, 1);
+
+			if (new_name != name)
+			{
+				wxString new_name2 = new_name;
+				for (int i=1; mgr->CheckNames(new_name2); i++)
+					new_name2 = new_name+wxString::Format("_%d", i);
 
 
-         if (GetItemText(item) == "Volume")
-         {
-            VolumeData* vd = mgr->GetVolumeData(name);
-            if (vd)
-               vd->SetName(new_name2);
-         }
-         else if (GetItemText(item) == "Mesh")
-         {
-            MeshData* md = mgr->GetMeshData(name);
-            if (md)
-               md->SetName(new_name2);
-         }
-         else if (GetItemText(item) == "Annotations")
-         {
-            Annotations* ann = mgr->GetAnnotations(name);
-            if (ann)
-               ann->SetName(new_name2);
-         }
+				if (GetItemText(item) == "Volume")
+				{
+					VolumeData* vd = mgr->GetVolumeData(name);
+					if (vd)
+						vd->SetName(new_name2);
+				}
+				else if (GetItemText(item) == "Mesh")
+				{
+					MeshData* md = mgr->GetMeshData(name);
+					if (md)
+						md->SetName(new_name2);
+				}
+				else if (GetItemText(item) == "Annotations")
+				{
+					Annotations* ann = mgr->GetAnnotations(name);
+					if (ann)
+						ann->SetName(new_name2);
+				}
 
-         //update ui
-         SetText(item, 1, new_name2);
-         vr_frame->UpdateTree();
-      }
-   }
+				//update ui
+				SetText(item, 1, new_name2);
+				vr_frame->UpdateTree();
+			}
+		}
+	}
 
    m_rename_text->Hide();
+}
+
+void DataListCtrl::OnEndEditName(wxCommandEvent& event)
+{
+	EndEdit();
 }
 
 void DataListCtrl::DeleteSelection()
@@ -798,6 +829,18 @@ void DataListCtrl::DeleteAll()
    }
 }
 
+void DataListCtrl::OnScroll(wxScrollWinEvent& event)
+{
+	EndEdit(false);
+	event.Skip(true);
+}
+
+void DataListCtrl::OnScroll(wxMouseEvent& event)
+{
+	EndEdit(false);
+	event.Skip(true);
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 BEGIN_EVENT_TABLE(ListPanel, wxPanel)
@@ -816,8 +859,8 @@ ListPanel::ListPanel(wxWindow *frame,
       const wxSize &size,
       long style,
       const wxString& name) :
-wxPanel(parent, id, pos, size, style, name),
-m_frame(frame)
+wxPanel(parent, id, pos, size, style, name)//,
+//m_frame(frame)
 {
    //create data list
    m_datalist = new DataListCtrl(frame, this, wxID_ANY);

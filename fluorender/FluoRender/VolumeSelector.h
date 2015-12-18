@@ -1,6 +1,33 @@
+/*
+For more information, please see: http://software.sci.utah.edu
+
+The MIT License
+
+Copyright (c) 2014 Scientific Computing and Imaging Institute,
+University of Utah.
+
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+*/
 #include "DataManager.h"
 #include <wx/progdlg.h>
-#include <unordered_map>
+#include <boost/unordered_map.hpp>
 
 #ifndef _VOLUMESELECTOR_H_
 #define _VOLUMESELECTOR_H_
@@ -23,8 +50,8 @@ public:
 	//set/get brush properties
 	void SetBrushIniThresh(double val) {m_ini_thresh = val;}
 	double GetBrushIniThresh() {return m_ini_thresh;}
-	void SetBrushGMFalloff(double val) {m_gm_falloff = val;}
-	double GetBrushGMFalloff() {return m_gm_falloff;}
+	void SetBrushGmFalloff(double val) {m_gm_falloff = val;}
+	double GetBrushGmFalloff() {return m_gm_falloff;}
 	void SetBrushSclFalloff(double val) {m_scl_falloff = val;}
 	double GetBrushSclFalloff() {return m_scl_falloff;}
 	void SetBrushSclTranslate(double val) {m_scl_translate = val;}
@@ -48,6 +75,9 @@ public:
 	//select both
 	void SetSelectBoth(bool value) {m_select_multi = value?2:0;}
 	bool GetSelectBoth() {return m_select_multi==2;}
+	//size map
+	void SetSizeMap(bool size_map) {m_size_map = size_map;}
+	bool GetSizeMap() {return m_size_map;}
 
 	//modes
 	void SetMode(int mode) {m_mode = mode;}
@@ -60,10 +90,11 @@ public:
 	//mode: 0-nomral; 1-posterized
 	void Label(int mode=0);
 	int CompAnalysis(double min_voxels, double max_voxels, double thresh, double falloff, bool select, bool gen_ann);
+	int SetLabelBySize();
 	int NoiseAnalysis(double min_voxels, double max_voxels, double bins, double thresh);
 	int CompIslandCount(double min_voxels, double max_voxels);
 	void CompExportMultiChann(bool select);
-	void CompExportRandomColor(VolumeData* vd_r, VolumeData* vd_g, VolumeData* vd_b, bool select, bool hide=true);
+	void CompExportRandomColor(int hmode, VolumeData* vd_r, VolumeData* vd_g, VolumeData* vd_b, bool select, bool hide=true);
 	//mode: 0-no duplicate; 1-duplicate
 	void NoiseRemoval(int iter, double thresh, int mode=0);
 	vector<VolumeData*>* GetResultVols();
@@ -80,6 +111,12 @@ public:
 	void GenerateAnnotations(bool use_sel);
 	Annotations* GetAnnotations();
 
+	//estimate threshold
+	void SetEstimateThreshold(bool value)
+	{m_estimate_threshold = value;}
+	bool GetEstimateThreshold()
+	{return m_estimate_threshold;}
+
 	//Test functions
 	void Test();
 
@@ -92,10 +129,11 @@ private:
 	double m_prjmat[16];//projection matrix
 	int m_iter_num;		//iteration number for growing
 	int m_mode;			//segmentation modes
-						//1-select; 2-append; 3-erase; 4-diffuse; 5-flood; 6-clear; 7-all;
+						//1-select; 2-append; 3-erase; 4-diffuse; 5-flood; 6-clear; 7-all; 8-solid;
 						//image processing modes
 						//11-posterize
 	bool m_use2d;
+	bool m_size_map;
 
 	//brush properties
 	double m_ini_thresh;
@@ -119,11 +157,11 @@ private:
 	struct Component
 	{
 		unsigned int id;
-		int counter;
+		unsigned int counter;
 		Vector acc_pos;
 		double acc_int;
 	};
-	unordered_map <unsigned int, Component> m_comps;
+	boost::unordered_map <unsigned int, Component> m_comps;
 	double m_min_voxels, m_max_voxels;
 
 	//exported volumes
@@ -148,8 +186,11 @@ private:
 	Point m_ps_center;
 	double m_ps_size;
 
+	bool m_estimate_threshold;
+
 private:
 	bool SearchComponentList(unsigned int cval, Vector &pos, double intensity);
+	double HueCalculation(int mode, unsigned int label);
 };
 
 #endif//_VOLUMESELECTOR_H_

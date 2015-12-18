@@ -1,3 +1,30 @@
+/*
+For more information, please see: http://software.sci.utah.edu
+
+The MIT License
+
+Copyright (c) 2014 Scientific Computing and Imaging Institute,
+University of Utah.
+
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+*/
 #include <wx/wx.h>
 #include <wx/listctrl.h>
 #include <vector>
@@ -51,7 +78,7 @@ class KeyListCtrl : public wxListCtrl
    long m_dragging_to_item;
 
    private:
-   void EndEdit();
+   void EndEdit(bool update=true);
 
    private:
    void OnAct(wxListEvent &event);
@@ -67,6 +94,8 @@ class KeyListCtrl : public wxListCtrl
 
    void OnKeyDown(wxKeyEvent& event);
    void OnKeyUp(wxKeyEvent& event);
+   void OnScroll(wxScrollWinEvent& event);
+   void OnScroll(wxMouseEvent& event);
 
    DECLARE_EVENT_TABLE()
    protected: //Possible TODO
@@ -87,10 +116,6 @@ class RecorderDlg : public wxPanel
          ID_DelKeyBtn,
          ID_InsKeyBtn,
          ID_DelAllBtn,
-         ID_PreviewBtn,
-         ID_ResetBtn,
-         ID_PlayBtn,
-         ID_StopBtn,
          ID_AutoKeyCmb,
          ID_AutoKeyBtn
       };
@@ -105,6 +130,24 @@ class RecorderDlg : public wxPanel
       void UpdateList()
       { m_keylist->Update(); }
       void SetSelection(int index);
+	  void Save() { 
+		wxCommandEvent e;
+		OnPlay(e); 
+	  }
+	  void Rewind() { 
+		wxCommandEvent e;
+		OnReset(e); 
+	  }
+	  void Stop() { 
+		wxCommandEvent e;
+		OnStop(e); 
+	  }
+	  void Play() { 
+		wxCommandEvent e;
+		OnPreview(e); 
+	  }
+
+      void AutoKeyChanComb(int comb);
 
    private:
       wxWindow* m_frame;
@@ -114,7 +157,7 @@ class RecorderDlg : public wxPanel
       //automatic keys
       wxComboBox *m_auto_key_cmb;
       //generate
-      wxButton *m_auto_key_btn;
+      //wxButton *m_auto_key_btn;
 
       //list ctrl
       KeyListCtrl *m_keylist;
@@ -126,26 +169,17 @@ class RecorderDlg : public wxPanel
       //set key
       wxButton *m_set_key_btn;
       //insert key
-      wxButton *m_insert_key_btn;
+      //wxButton *m_insert_key_btn;
       //delete key
       wxButton *m_del_key_btn;
       //delete all keys
       wxButton *m_del_all_btn;
-      //preview
-      wxButton *m_preview_btn;
-      //reset
-      wxButton *m_reset_btn;
-      //play
-      wxButton *m_play_btn;
-      //stop
-      wxButton *m_stop_btn;
 
    private:
       //insert/append key
       void InsertKey(int index, double duration, int interpolation);
       bool MoveOne(vector<bool>& chan_mask, int lv);
       bool GetMask(vector<bool>& chan_mask);
-      void AutoKeyChanComb(int comb);
 
       void OnCh1Check(wxCommandEvent &event);
       static wxWindow* CreateExtraCaptureControl(wxWindow* parent);

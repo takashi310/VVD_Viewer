@@ -1,4 +1,32 @@
+/*
+For more information, please see: http://software.sci.utah.edu
+
+The MIT License
+
+Copyright (c) 2014 Scientific Computing and Imaging Institute,
+University of Utah.
+
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+*/
 #include <GL/glew.h>
+#include "compatibility.h"
 #include "bitmap_fonts.h"
 #include <vector>
 #include <unordered_map>
@@ -26,6 +54,7 @@
 #include "Formats/pvxml_reader.h"
 #include "Formats/brkxml_reader.h"
 
+#include "Tracking/TrackMap.h"
 #include "DatabaseDlg.h"
 
 #include <libcurl\curl\curl.h>
@@ -65,6 +94,14 @@ public:
 	void SetName(wxString name)
 	{
 		m_name = name;
+	}
+	unsigned int Id()
+	{
+		return m_id;
+	}
+	void Id(unsigned int id)
+	{
+		m_id = id;
 	}
 
 	//layer adjustment
@@ -113,6 +150,7 @@ public:
 protected:
 	int type;//-1:invalid, 2:volume, 3:mesh, 4:annotations, 5:group, 6:mesh group, 7:ruler, 8:traces
 	wxString m_name;
+	unsigned int m_id;
 
 	//layer adjustment
 	Color m_gamma;
@@ -164,20 +202,23 @@ public:
 	int Load(Nrrd* data, wxString &name, wxString &path, BRKXMLReader *breader = NULL);
 	int Replace(Nrrd* data, bool del_tex);
 	int Replace(VolumeData* data);
+	Nrrd* GetVolume(bool ret);
 	//empty data
 	void AddEmptyData(int bits,
 		int nx, int ny, int nz,
 		double spcx, double spcy, double spcz);
 	//load mask
 	void LoadMask(Nrrd* mask);
-	Nrrd* GetMask();
+	Nrrd* GetMask(bool ret);
 	//empty mask
-	void AddEmptyMask(uint8 inival=0);
+	void AddEmptyMask();
 	//load label
 	void LoadLabel(Nrrd* label);
+	Nrrd* GetLabel(bool ret);
 	//empty label
 	//mode: 0-zeros;1-ordered; 2-shuffled
 	void AddEmptyLabel(int mode=0);
+	bool SearchLabel(unsigned int label);
 
 	//save
 	double GetOriginalValue(int i, int j, int k);
@@ -188,6 +229,7 @@ public:
 	VolumeRenderer *GetVR();
 	//texture
 	Texture* GetTexture();
+	void SetTexture();
 
 	//bounding box
 	BBox GetBounds();
@@ -203,7 +245,7 @@ public:
 
 	//draw volume
 	void SetMatrices(glm::mat4 &mv_mat, glm::mat4 &proj_mat, glm::mat4 &tex_mat);
-	void Draw(bool otho = false, bool intactive = false, double zoom = 1.0, bool intp = true, double sampling_frq_fac = -1.0);
+	void Draw(bool otho = false, bool intactive = false, double zoom = 1.0, double sampling_frq_fac = -1.0);
 	void DrawBounds();
 	//draw mask (create the mask)
 	//type: 0-initial; 1-diffusion-based growing
@@ -241,7 +283,10 @@ public:
 	double GetRightThresh();
 	void SetColor(Color &color, bool update_hsv=true);
 	Color GetColor();
+	void SetMaskColor(Color &color, bool set=true);
 	Color GetMaskColor();
+	bool GetMaskColorSet();
+	void ResetMaskColorSet();
 	Color SetLuminance(double dVal);
 	double GetLuminance();
 	void SetAlpha(double alpha);
@@ -350,9 +395,12 @@ public:
 
 	//randomize color
 	void RandomizeColor();
-
+	//legend
 	void SetLegend(bool val);
 	bool GetLegend();
+	//interpolate
+	void SetInterpolate(bool val);
+	bool GetInterpolate();
 
 	//number of valid bricks
 	void SetBrickNum(int num) {m_brick_num = num;}
@@ -470,6 +518,8 @@ private:
 
 	//shown in legend
 	bool m_legend;
+	//interpolate
+	bool m_interpolate;
 
 	//valid brick number
 	int m_brick_num;
@@ -642,14 +692,14 @@ public:
 	int GetTextNum();
 	string GetTextText(int index);
 	Point GetTextPos(int index);
+	Point GetTextTransformedPos(int index);
 	string GetTextInfo(int index);
-	void AddText(string &str, Point &pos, string &info);
+	void AddText(std::string str, Point pos, std::string info);
 	void SetTransform(Transform *tform);
 	void SetVolume(VolumeData* vd);
 	VolumeData* GetVolume();
 
 	void Clear();
-	void Draw(bool persp, glm::mat4 mv_mat, glm::mat4 proj_mat);
 
 	//display functions
 	void SetDisp(bool disp)
@@ -680,6 +730,8 @@ public:
 	wxString GetInfoMeaning();
 	void SetInfoMeaning(wxString &str);
 
+	bool InsideClippingPlanes(Point &pos);
+
 private:
 	static int m_num;
 	vector<AText*> m_alist;
@@ -699,7 +751,6 @@ private:
 	wxString m_info_meaning;
 
 private:
-	bool InsideClippingPlanes(Point &pos);
 	AText* GetAText(wxString str);
 };
 
@@ -743,6 +794,16 @@ private:
 	vector<string> m_bufs;
 };
 
+class ProfileBin
+{
+public:
+	ProfileBin():
+	m_pixels(0), m_accum(0.0) {}
+	~ProfileBin() {}
+	int m_pixels;
+	double m_accum;
+};
+
 class Ruler : public TreeLayer
 {
 public:
@@ -771,7 +832,9 @@ public:
 	bool GetFinished();
 	void SetFinished();
 	double GetLength();
+	double GetLengthObject(double spcx, double spcy, double spcz);
 	double GetAngle();
+	void Scale(double spcx, double spcy, double spcz);
 
 	bool AddPoint(Point &point);
 	void SetTransform(Transform *tform);
@@ -857,6 +920,21 @@ public:
 	}
 	wxString GetDelInfoValues(wxString del=",");
 
+	//profile
+	void SetInfoProfile(wxString &str)
+	{
+		m_info_profile = str;
+	}
+	wxString &GetInfoProfile()
+	{
+		return m_info_profile;
+	}
+	vector<ProfileBin> *GetProfile()
+	{
+		return &m_profile;
+	}
+	void SaveProfile(wxString &filename);
+
 	//color
 	void SetColor(Color& color)
 	{ m_color = color; m_use_color = true;}
@@ -877,12 +955,14 @@ public:
 
 private:
 	static int m_num;
-	int m_ruler_type;	//0: 2 point; 1: multi point; 2:locator
+	int m_ruler_type;	//0: 2 point; 1: multi point; 2:locator; 3: probe; 4: protractor
 	bool m_finished;
 	vector<Point> m_ruler;
 	bool m_disp;
 	Transform *m_tform;
-
+	//a profile
+	wxString m_info_profile;
+	vector<ProfileBin> m_profile;
 	//color
 	bool m_use_color;
 	Color m_color;
@@ -903,53 +983,6 @@ private:
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//tags
-#define TAG_CELL		1
-#define TAG_EDGE		2
-#define TAG_VERT		3
-#define TAG_CMAP		4
-#define TAG_FRAM		5
-
-//label is used in render view
-struct Lbl
-{
-	unsigned int id;
-	unsigned int size;
-};
-
-//a vertex in the map contains a cell and in/out edges
-struct Vertex
-{
-	unsigned int id;
-	unsigned int vsize;
-	Point center;
-
-	vector<unsigned int> out_ids;
-	vector<unsigned int> in_ids;
-
-	int Read(ifstream &ifs);
-};
-
-typedef unordered_map<unsigned int, Vertex> CellMap;
-typedef unordered_map<unsigned int, Vertex>::iterator CellMapIter;
-
-//a frame contains a cell map
-struct Frame
-{
-	unsigned int id;
-	CellMap cell_map;
-
-	int Read(ifstream &ifs);
-	int ReadCellMap(ifstream &ifs);
-};
-
-//frame list
-typedef unordered_map<unsigned int, Frame> FrameList;
-typedef unordered_map<unsigned int, Frame>::iterator FrameIter;
-//id list
-typedef unordered_map<unsigned int, unsigned int> IDMap;
-typedef unordered_map<unsigned int, unsigned int>::iterator IDMapIter;
-
 class TraceGroup : public TreeLayer
 {
 public:
@@ -970,22 +1003,70 @@ public:
 		return m_num;
 	}
 
+	FL::TrackMap &GetTrackMap()
+	{
+		return m_track_map;
+	}
+
 	wxString GetPath() {return m_data_path;}
 	void SetCurTime(int time);
+	int GetCurTime();
 	void SetPrvTime(int time);
+	int GetPrvTime();
 	//ghost num
 	void SetGhostNum(int num) {m_ghost_num = num;}
 	int GetGhostNum() {return m_ghost_num;}
+	void SetDrawTail(bool draw) {m_draw_tail = draw;}
+	bool GetDrawTail() {return m_draw_tail;}
+	void SetDrawLead(bool draw) {m_draw_lead = draw;}
+	bool GetDrawLead() {return m_draw_lead;}
+	//cells size filter
+	void SetCellSize(int size) {m_cell_size = size;}
+	int GetSizeSize() {return m_cell_size;}
+
+	//get information
+	void GetLinkLists(size_t frame,
+		FL::VertexList &in_orphan_list,
+		FL::VertexList &out_orphan_list,
+		FL::VertexList &in_multi_list,
+		FL::VertexList &out_multi_list);
 
 	//for selective drawing
-	void ClearIDMap();
-	void AddID(unsigned int id);
-	void SetIDMap(unordered_map<unsigned int, Lbl> &sel_labels);
-	IDMap *GetIDMap();
-	bool FindID(unsigned int id);
+	void ClearCellList();
+	void UpdateCellList(FL::CellList &cur_sel_list);
+	FL::CellList &GetCellList();
+	bool FindCell(unsigned int id);
 
-	int Load(wxString &filename);
-	void Draw(glm::mat4 mv_mat, glm::mat4 proj_mat);
+	//modifications
+	bool AddCell(FL::pCell &cell, size_t frame);
+	bool LinkCells(FL::CellList &list1, FL::CellList &list2,
+		size_t frame1, size_t frame2, bool exclusive);
+	bool IsolateCells(FL::CellList &list, size_t frame);
+	bool UnlinkCells(FL::CellList &list1, FL::CellList &list2,
+		size_t frame1, size_t frame2);
+	bool CombineCells(FL::pCell &cell, FL::CellList &list,
+		size_t frame);
+	bool DivideCells(FL::CellList &list, size_t frame);
+	bool ReplaceCellID(unsigned int old_id, unsigned int new_id, size_t frame);
+
+	//rulers
+	bool GetMappedRulers(FL::RulerList &rulers);
+
+	//i/o
+	bool Load(wxString &filename);
+	bool Save(wxString &filename);
+
+	//draw
+	unsigned int Draw(vector<float> &verts);
+
+	//pattern search
+/*	typedef struct
+	{
+		int div;
+		int conv;
+	} Patterns;
+	//type: 1-diamond; 2-branching
+	bool FindPattern(int type, unsigned int id, int time);*/
 
 private:
 	static int m_num;
@@ -994,13 +1075,12 @@ private:
 	int m_cur_time;
 	int m_prv_time;
 	int m_ghost_num;
+	bool m_draw_tail;
+	bool m_draw_lead;
+	int m_cell_size;
 
-	FrameList m_frame_list;
-	IDMap m_id_map;
-
-private:
-	//reading functions
-	unsigned char ReadTag(ifstream &ifs);
+	FL::TrackMap m_track_map;
+	FL::CellList m_cell_list;
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1036,7 +1116,7 @@ public:
 	}
 	void InsertVolumeData(int index, VolumeData* vd)
 	{
-		if (m_vd_list.size() > 0)
+		if (!m_vd_list.empty())
 		{
 			if (index>-1 && index<(int)m_vd_list.size())
 				m_vd_list.insert(m_vd_list.begin()+(index+1), vd);
@@ -1115,6 +1195,7 @@ public:
 	void SetShadowParams(double val);
 	void SetMode(int mode);
 	void SetNR(bool val);
+    void SetInterpolate(bool mode);
 	void SetInvert(bool mode);
 
 	//blend mode
@@ -1317,6 +1398,11 @@ public:
 	bool GetOverrideVox()
 	{ return m_override_vox; }
 
+	//flags for pvxml flipping
+	void SetPvxmlFlipX(bool flip) {m_pvxml_flip_x = flip;}
+	bool GetPvxmlFlipX() {return m_pvxml_flip_x;}
+	void SetPvxmlFlipY(bool flip) {m_pvxml_flip_y = flip;}
+	bool GetPvxmlFlipY() {return m_pvxml_flip_y;}
 public:
 	//default values
 	//volume
@@ -1339,6 +1425,7 @@ public:
 	double m_vol_hcm;	//colormap high value
 	bool m_vol_eap;		//enable alpha
 	bool m_vol_esh;		//enable_shading
+	bool m_vol_interp;	//enable interpolation
 	bool m_vol_inv;		//enable inversion
 	bool m_vol_mip;		//enable_mip
 	bool m_vol_nrd;		//noise reduction
@@ -1372,6 +1459,9 @@ private:
 	wxString m_prj_path;
 	//override voxel size
 	bool m_override_vox;
+	//flgs for pvxml flipping
+	bool m_pvxml_flip_x;
+	bool m_pvxml_flip_y;
 };
 
 #endif//_DATAMANAGER_H_

@@ -1,3 +1,30 @@
+/*
+For more information, please see: http://software.sci.utah.edu
+
+The MIT License
+
+Copyright (c) 2014 Scientific Computing and Imaging Institute,
+University of Utah.
+
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+*/
 #include "NoiseCancellingDlg.h"
 #include "VRenderFrame.h"
 #include <wx/valnum.h>
@@ -18,8 +45,8 @@ NoiseCancellingDlg::NoiseCancellingDlg(wxWindow *frame, wxWindow *parent)
 			0, "NoiseCancellingDlg"),
 			m_frame(parent),
 			m_view(0),
-			m_group(0),
-			m_vol(0),
+			//m_group(0),
+			//m_vol(0),
 			m_max_value(255.0),
 			m_dft_thresh(0.0),
 			m_previewed(false)
@@ -40,10 +67,9 @@ NoiseCancellingDlg::NoiseCancellingDlg(wxWindow *frame, wxWindow *parent)
 	m_threshold_text = new wxTextCtrl(this, ID_ThresholdText, "0.0",
 		wxDefaultPosition, wxSize(40, 20), 0, vald_fp1);
 	m_preview_btn = new wxButton(this, ID_PreviewBtn, "Preview",
-		wxDefaultPosition, wxSize(60, 23));
-	//m_preview_btn->Hide();
+		wxDefaultPosition, wxSize(70, 23));
 	sizer1->Add(st, 0, wxALIGN_CENTER);
-	sizer1->Add(m_threshold_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer1->Add(m_threshold_sldr, 1, wxEXPAND);
 	sizer1->Add(m_threshold_text, 0, wxALIGN_CENTER);
 	sizer1->Add(5, 5);
 	sizer1->Add(m_preview_btn, 0, wxALIGN_CENTER);
@@ -57,9 +83,9 @@ NoiseCancellingDlg::NoiseCancellingDlg(wxWindow *frame, wxWindow *parent)
 	m_voxel_text = new wxTextCtrl(this, ID_VoxelText, "1",
 		wxDefaultPosition, wxSize(40, 20), 0, vald_int);
 	m_erase_btn = new wxButton(this, ID_EraseBtn, "Erase",
-		wxDefaultPosition, wxSize(60, 23));
+		wxDefaultPosition, wxSize(70, 23));
 	sizer2->Add(st, 0, wxALIGN_CENTER);
-	sizer2->Add(m_voxel_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer2->Add(m_voxel_sldr, 1, wxEXPAND);
 	sizer2->Add(m_voxel_text, 0, wxALIGN_CENTER);
 	sizer2->Add(5, 5);
 	sizer2->Add(m_erase_btn, 0, wxALIGN_CENTER);
@@ -74,7 +100,7 @@ NoiseCancellingDlg::NoiseCancellingDlg(wxWindow *frame, wxWindow *parent)
 	wxBoxSizer *sizer4 = new wxBoxSizer(wxHORIZONTAL);
 	st = new wxStaticText(this, 0,
 		"Check this option if selections are too dim. It is equivalent to\n"\
-		"adjusting the Equalization values in the Output Adjustment panel.",
+		"adjusting the Equalization values in the Output Adjustment\n panel.",
 		wxDefaultPosition, wxDefaultSize);
 	sizer4->Add(st, 0, wxALIGN_CENTER);
 
@@ -182,7 +208,7 @@ void NoiseCancellingDlg::OnPreviewBtn(wxCommandEvent &event)
 	if (m_view)
 	{
 		int comps = m_view->CompAnalysis(0.0, m_dft_size, m_dft_thresh, false, false);
-		int volume = m_view->GetVolumeSelector()->GetVolumeNum();
+		//int volume = m_view->GetVolumeSelector()->GetVolumeNum();
 		//change mask threshold
 		VolumeData* sel_vol = 0;
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;

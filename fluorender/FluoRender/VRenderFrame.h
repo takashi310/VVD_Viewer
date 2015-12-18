@@ -1,3 +1,30 @@
+/*
+For more information, please see: http://software.sci.utah.edu
+
+The MIT License
+
+Copyright (c) 2014 Scientific Computing and Imaging Institute,
+University of Utah.
+
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+*/
 #include "DataManager.h"
 #include "TreePanel.h"
 #include "ListPanel.h"
@@ -22,9 +49,11 @@
 #include "DatabaseDlg.h"
 #include "Tester.h"
 #include "Animator/Interpolator.h"
+#include "TextRenderer.h"
 #include "compatibility.h"
 
 #include <wx/wx.h>
+#include <wx/menu.h>
 #include <wx/aui/aui.h>
 
 #include <vector>
@@ -36,16 +65,37 @@ using namespace std;
 
 #define WITH_DATABASE
 
-#define VERSION_CONTACT "http://www.sci.utah.edu/software/46-documentation/137-fluorender.html?start=8"
+#define VERSION_CONTACT "http://www.sci.utah.edu/software/fluorender.html"
 #define VERSION_AUTHORS "    Yong Wan, Hideo Otsuna,\nChuck Hansen, Chi-Bin Chien,\nBrig Bagley\nTakashi Kawase\n      @The University of Utah"
-#define VERSION_UPDATES "http://www.sci.utah.edu/releases/fluorender_v2.14/"
-#define HELP_MOVIE "http://www.sci.utah.edu/software/46-documentation/137-fluorender.html.html?start=1/#MovieExport"
-#define BATCH_INFO "http://www.sci.utah.edu/software/46-documentation/137-fluorender.html?start=5/#3D_Macros"
-#define HELP_PAINT "http://www.sci.utah.edu/software/46-documentation/137-fluorender.html.html?start=1/#volume_edit"
+#define VERSION_UPDATES "http://www.sci.utah.edu/releases/fluorender_v" \
+	               VERSION_MAJOR_TAG \
+				   "." \
+				   VERSION_MINOR_TAG \
+				   "/"
+#define HELP_MANUAL "http://www.sci.utah.edu/releases/fluorender_v"\
+	               VERSION_MAJOR_TAG \
+				   "." \
+				   VERSION_MINOR_TAG \
+				   "/FluoRender" \
+	               VERSION_MAJOR_TAG \
+				   "." \
+				   VERSION_MINOR_TAG \
+				   "_Manual.pdf"
+#define HELP_TUTORIAL "http://www.sci.utah.edu/releases/fluorender_v"\
+	               VERSION_MAJOR_TAG \
+				   "." \
+				   VERSION_MINOR_TAG \
+				   "/FluoRender" \
+	               VERSION_MAJOR_TAG \
+				   "." \
+				   VERSION_MINOR_TAG \
+				   "_Tutorials.pdf"
+#define BATCH_INFO HELP_MANUAL
+#define HELP_PAINT HELP_MANUAL
 
 #define UITEXT_DATAVIEW		"Datasets"
 #define UITEXT_TREEVIEW		"Workspace"
-#define UITEXT_MAKEMOVIE	"Export"
+#define UITEXT_MAKEMOVIE	"Record/Export"
 #define UITEXT_ADJUST		"Output Adjustments"
 #define UITEXT_CLIPPING		"Clipping Planes"
 #define UITEXT_PROPERTIES	"Properties"
@@ -71,6 +121,7 @@ class VRenderFrame: public wxFrame
 		ID_CreateSphere,
 		ID_CreateCone,
 		//view
+		ID_FullScreen,
 		ID_ViewNew,
 		ID_ShowHideUI,
 		ID_PaintTool,
@@ -95,6 +146,7 @@ class VRenderFrame: public wxFrame
 		ID_Facebook,
 		ID_Twitter,
 		ID_Info,
+		ID_ShowHideToolbar
 	};
 
 public:
@@ -238,32 +290,48 @@ public:
 	//show dialogs
 	void ShowPaintTool();
 	void ShowMeasureDlg();
+	void ShowTraceDlg();
 	void ShowNoiseCancellingDlg();
 	void ShowCountingDlg();
 	void ShowColocalizationDlg();
-
+	void ShowConvertDlg();
+	void ShowRecorderDlg();
+	
 	//get interpolator
 	Interpolator* GetInterpolator()
 	{ return &m_interpolator; }
 
-	//set mac address
-	void SetAddress(wxString address)
-	{ m_address = address; }
-	//get free version
-	bool GetFreeVersion()
-	{ return false; }
-
 	//tex renderer settings
 	void SetTextureRendererSettings();
+	void SetTextureUndos();
+
+	//quit option
+	void OnQuit(wxCommandEvent& WXUNUSED(event))
+	{ Close(true); }
+	//show info
+	void OnInfo(wxCommandEvent& WXUNUSED(event));
+
+	TextRenderer* GetTextRenderer()
+	{ return m_text_renderer; }
+
+public: //public so export window can see it and set it. 
+	RecorderDlg* m_recorder_dlg;
+	VMovieView* m_movie_view;
 
 private:
 	wxAuiManager m_aui_mgr;
 	wxMenu* m_tb_menu_ui;
 	wxMenu* m_tb_menu_edit;
 	wxToolBar* m_main_tb;
+	//main top menu
+	wxMenuBar* m_top_menu;
+	wxMenu* m_top_file;
+	wxMenu* m_top_tools;
+	wxMenu* m_top_window;
+	wxMenu* m_top_help;
+
 	TreePanel *m_tree_panel;
 	ListPanel *m_list_panel;
-	VMovieView* m_movie_view;
 	vector <VRenderView*> m_vrv_list;
 	DataManager m_data_mgr;
 	wxPanel *m_prop_panel;
@@ -276,7 +344,6 @@ private:
 	CountingDlg* m_counting_dlg;
 	ConvertDlg* m_convert_dlg;
 	ColocalizationDlg* m_colocalization_dlg;
-	RecorderDlg* m_recorder_dlg;
 	MeasureDlg* m_measure_dlg;
 	TraceDlg* m_trace_dlg;
 	DatabaseDlg *m_database_dlg;
@@ -322,8 +389,9 @@ private:
 
 	//mac address
 	wxString m_address;
-	//free version
-	bool m_free_version;
+
+	//draw text
+	TextRenderer *m_text_renderer;
 
 private:
 	//views
@@ -343,15 +411,16 @@ private:
 	void OnClose(wxCloseEvent &event);
 	void OnExit(wxCommandEvent& WXUNUSED(event));
 	void OnNewView(wxCommandEvent& WXUNUSED(event));
+	void OnFullScreen(wxCommandEvent& WXUNUSED(event));
 	void OnOpenVolume(wxCommandEvent& WXUNUSED(event));
 	void OnDownloadVolume(wxCommandEvent& WXUNUSED(event));
 	void OnOpenMesh(wxCommandEvent& WXUNUSED(event));
 	void OnOrganize(wxCommandEvent& WXUNUSED(event));
 	void OnCheckUpdates(wxCommandEvent& WXUNUSED(event));
-	void OnInfo(wxCommandEvent& WXUNUSED(event));
 	void OnFacebook(wxCommandEvent& WXUNUSED(event));
 	void OnTwitter(wxCommandEvent& WXUNUSED(event));
 	void OnShowHideUI(wxCommandEvent& WXUNUSED(event));
+	void OnShowHideToolbar(wxCommandEvent& WXUNUSED(event));
 	void OnShowHideView(wxCommandEvent &event);
 
 	//panes

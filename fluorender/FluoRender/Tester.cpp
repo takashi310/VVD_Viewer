@@ -1,3 +1,30 @@
+/*
+For more information, please see: http://software.sci.utah.edu
+
+The MIT License
+
+Copyright (c) 2014 Scientific Computing and Imaging Institute,
+University of Utah.
+
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+*/
 #include "Tester.h"
 #include "VRenderFrame.h"
 
@@ -28,8 +55,8 @@ TesterDlg::TesterDlg(wxWindow *frame, wxWindow *parent)
 m_p1(1.0),
 m_p2(0.0),
 m_p3(0.0),
-m_p4(0.0),
-m_frame(frame)
+m_p4(0.0)//,
+//m_frame(frame)
 {
 /*	wxStaticText *st;
 
@@ -44,7 +71,7 @@ m_frame(frame)
 	m_p1_chck = new wxCheckBox(this, ID_P1Check, "",
 		wxDefaultPosition, wxDefaultSize);
 	sizer_1->Add(st, 0, wxALIGN_CENTER);
-	sizer_1->Add(m_p1_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_1->Add(m_p1_sldr, 1, wxEXPAND);
 	sizer_1->Add(m_p1_text, 0, wxALIGN_CENTER);
 	sizer_1->Add(m_p1_chck, 0, wxALIGN_CENTER);
 
@@ -59,7 +86,7 @@ m_frame(frame)
 	m_p2_chck = new wxCheckBox(this, ID_P2Check, "",
 		wxDefaultPosition, wxDefaultSize);
 	sizer_2->Add(st, 0, wxALIGN_CENTER);
-	sizer_2->Add(m_p2_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_2->Add(m_p2_sldr, 1, wxEXPAND);
 	sizer_2->Add(m_p2_text, 0, wxALIGN_CENTER);
 	sizer_2->Add(m_p2_chck, 0, wxALIGN_CENTER);
 
@@ -74,7 +101,7 @@ m_frame(frame)
 	m_p3_chck = new wxCheckBox(this, ID_P3Check, "",
 		wxDefaultPosition, wxDefaultSize);
 	sizer_3->Add(st, 0, wxALIGN_CENTER);
-	sizer_3->Add(m_p3_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_3->Add(m_p3_sldr, 1, wxEXPAND);
 	sizer_3->Add(m_p3_text, 0, wxALIGN_CENTER);
 	sizer_3->Add(m_p3_chck, 0, wxALIGN_CENTER);
 
@@ -89,7 +116,7 @@ m_frame(frame)
 	m_p4_chck = new wxCheckBox(this, ID_P4Check, "",
 		wxDefaultPosition, wxDefaultSize);
 	sizer_4->Add(st, 0, wxALIGN_CENTER);
-	sizer_4->Add(m_p4_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_4->Add(m_p4_sldr, 1, wxEXPAND);
 	sizer_4->Add(m_p4_text, 0, wxALIGN_CENTER);
 	sizer_4->Add(m_p4_chck, 0, wxALIGN_CENTER);
 

@@ -484,7 +484,7 @@ void AdjustView::OnRGammaText(wxCommandEvent& event)
 		}
 	}
 
-	if (m_glview && m_type==1)
+	if (m_glview/* && m_type==1*/)
 	{
 		Color gamma = m_glview->GetGamma();
 		GammaUI2(val, gamma[0]);
@@ -551,7 +551,7 @@ void AdjustView::OnGGammaText(wxCommandEvent& event)
 		}
 	}
 
-	if (m_glview && m_type==1)
+	if (m_glview/* && m_type==1*/)
 	{
 		Color gamma = m_glview->GetGamma();
 		GammaUI2(val, gamma[1]);
@@ -618,7 +618,7 @@ void AdjustView::OnBGammaText(wxCommandEvent& event)
 		}
 	}
 
-	if (m_glview && m_type==1)
+	if (m_glview/* && m_type==1*/)
 	{
 		Color gamma = m_glview->GetGamma();
 		GammaUI2(val, gamma[2]);
@@ -686,7 +686,7 @@ void AdjustView::OnRBrightnessText(wxCommandEvent& event)
 		}
 	}
 
-	if (m_glview && m_type==1)
+	if (m_glview/* && m_type==1*/)
 	{
 		Color brightness = m_glview->GetBrightness();
 		BrightnessUI2(val, brightness[0]);
@@ -753,7 +753,7 @@ void AdjustView::OnGBrightnessText(wxCommandEvent& event)
 		}
 	}
 
-	if (m_glview && m_type==1)
+	if (m_glview/* && m_type==1*/)
 	{
 		Color brightness = m_glview->GetBrightness();
 		BrightnessUI2(val, brightness[1]);
@@ -820,7 +820,7 @@ void AdjustView::OnBBrightnessText(wxCommandEvent& event)
 		}
 	}
 
-	if (m_glview && m_type==1)
+	if (m_glview/* && m_type==1*/)
 	{
 		Color brightness = m_glview->GetBrightness();
 		BrightnessUI2(val, brightness[2]);
@@ -887,7 +887,7 @@ void AdjustView::OnRHdrText(wxCommandEvent &event)
 		}
 	}
 
-	if (m_glview && m_type==1)
+	if (m_glview/* && m_type==1*/)
 	{
 		Color hdr = m_glview->GetHdr();
 		HdrUI2(val, hdr[0]);
@@ -954,7 +954,7 @@ void AdjustView::OnGHdrText(wxCommandEvent &event)
 		}
 	}
 
-	if (m_glview && m_type==1)
+	if (m_glview/* && m_type==1*/)
 	{
 		Color hdr = m_glview->GetHdr();
 		HdrUI2(val, hdr[1]);
@@ -1021,7 +1021,7 @@ void AdjustView::OnBHdrText(wxCommandEvent &event)
 		}
 	}
 
-	if (m_glview && m_type==1)
+	if (m_glview/* && m_type==1*/)
 	{
 		Color hdr = m_glview->GetHdr();
 		HdrUI2(val, hdr[2]);

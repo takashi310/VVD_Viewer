@@ -1,3 +1,30 @@
+/*
+For more information, please see: http://software.sci.utah.edu
+
+The MIT License
+
+Copyright (c) 2014 Scientific Computing and Imaging Institute,
+University of Utah.
+
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+*/
 #include "VolumeCalculator.h"
 #include <wx/progdlg.h>
 
@@ -55,9 +82,9 @@ void VolumeCalculator::Calculate(int type)
       m_vd_r->Calculate(m_type, m_vd_a, m_vd_b);
       return;
    case 8://intersection with mask
-      if (!m_vd_a || !m_vd_a->GetMask())
+      if (!m_vd_a || !m_vd_a->GetMask(false))
 		  return;
-	  if (!m_vd_b || !m_vd_b->GetMask())
+	  if (!m_vd_b || !m_vd_b->GetMask(false))
 		  return;
 	  CreateVolumeResult2();
       if (!m_vd_r)
@@ -67,7 +94,7 @@ void VolumeCalculator::Calculate(int type)
    case 5:
    case 6:
    case 7:
-      if (!m_vd_a || !m_vd_a->GetMask())
+      if (!m_vd_a || !m_vd_a->GetMask(false))
          return;
       CreateVolumeResult1();
       if (!m_vd_r)
@@ -80,7 +107,7 @@ void VolumeCalculator::Calculate(int type)
       CreateVolumeResult1();
       if (!m_vd_r)
          return;
-      FillHoles();
+      FillHoles(m_threshold);
       return;
    }
 }
@@ -185,7 +212,7 @@ void VolumeCalculator::CreateVolumeResult2()
 }
 
 //fill holes
-void VolumeCalculator::FillHoles()
+void VolumeCalculator::FillHoles(double thresh)
 {
    if (!m_vd_a || !m_vd_r)
       return;
@@ -215,8 +242,8 @@ void VolumeCalculator::FillHoles()
    m_vd_a->GetResolution(nx, ny, nz);
 
    wxProgressDialog *prog_diag = new wxProgressDialog(
-         "FluoRender: Filling holes...",
-         "Filling... Please wait.",
+         "FluoRender: Voxel Consolidation",
+         "Consolidating... Please wait.",
          100, 0,
          wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);
    int progress = 0;
@@ -236,7 +263,7 @@ void VolumeCalculator::FillHoles()
                value_a = ((unsigned char*)data_a)[index];
             else if (nrrd_a->type == nrrdTypeUShort)
                value_a = (unsigned char)((double)(((unsigned short*)data_a)[index])*m_vd_a->GetScalarScale()/257.0);
-            if (value_a)
+            if (value_a > thresh*255)
             {
                bbox.extend(Point(i, j, k));
                ((unsigned char*)data_r)[index] = 255;
@@ -249,7 +276,12 @@ void VolumeCalculator::FillHoles()
       }
    }
 
+   double dx = (bbox.max()-bbox.min()).x()/2.0;
+   double dy = (bbox.max()-bbox.min()).y()/2.0;
+   double dz = (bbox.max()-bbox.min()).z();
+
    //second pass: fill holes
+   bool found_n, found_p;
    for (i=int(bbox.min().x()); i<=int(bbox.max().x()); i++)
    {
       for (j=int(bbox.min().y()); j<=int(bbox.max().y()); j++)
@@ -263,79 +295,106 @@ void VolumeCalculator::FillHoles()
                int si;
                //search -X
                int s_n_x = i;
-               while (s_n_x >= int(bbox.min().x()))
+			   found_n = false;
+               while (s_n_x >= int(bbox.min().x()) &&
+				      s_n_x >= int(i-dx))
                {
                   si = nx*ny*k + nx*j + s_n_x;
                   if (((unsigned char*)data_r)[si])
+				  {
+					  found_n = true;
                      break;
+				  }
                   s_n_x--;
                }
                //search +X
                int s_p_x = i;
-               while (s_p_x <= int(bbox.max().x()))
+			   found_p = false;
+               while (s_p_x <= int(bbox.max().x()) &&
+				      s_p_x <= int(i+dx))
                {
                   si = nx*ny*k + nx*j + s_p_x;
                   if (((unsigned char*)data_r)[si])
+				  {
+					  found_p = true;
                      break;
+				  }
                   s_p_x++;
                }
                //found X direction?
-               if (s_n_x >= int(bbox.min().x()) &&
-                     s_p_x <= int(bbox.max().x()))
+               if (!found_n || !found_p)
                {
-                  ((unsigned char*)data_r)[index] = 255;
+                  //((unsigned char*)data_r)[index] = 255;
                   continue;
                }
                //search -Y
                int s_n_y = j;
-               while (s_n_y >= int(bbox.min().y()))
+			   found_n = false;
+               while (s_n_y >= int(bbox.min().y()) &&
+				      s_n_y >= int(j-dy))
                {
                   si = nx*ny*k + nx*s_n_y + i;
                   if (((unsigned char*)data_r)[si])
+				  {
+					  found_n = true;
                      break;
+				  }
                   s_n_y--;
                }
                //search +Y
                int s_p_y = j;
-               while (s_p_y <= int(bbox.max().y()))
+			   found_p = false;
+               while (s_p_y <= int(bbox.max().y()) &&
+				      s_p_y <= int(j+dy))
                {
                   si = nx*ny*k + nx*s_p_y + i;
                   if (((unsigned char*)data_r)[si])
+				  {
+					  found_p = true;
                      break;
+				  }
                   s_p_y++;
                }
                //found Y direction?
-               if (s_n_y >= int(bbox.min().y()) &&
-                     s_p_y <= int(bbox.max().y()))
+               if (!found_n || !found_p)
                {
-                  ((unsigned char*)data_r)[index] = 255;
+                  //((unsigned char*)data_r)[index] = 255;
                   continue;
                }
-               /*//search -Z
+               //search -Z
                  int s_n_z = k;
-                 while (s_n_z >= int(bbox.min().z()))
+				 found_n = false;
+                 while (s_n_z >= int(bbox.min().z()) &&
+					    s_n_z >= int(k-dz))
                  {
                  si = nx*ny*s_n_z + nx*j + i;
                  if (((unsigned char*)data_r)[si])
+				 {
+					 found_n = true;
                  break;
+				 }
                  s_n_z--;
                  }
                //search +Z
                int s_p_z = k;
-               while (s_p_z <= int(bbox.max().z()))
+			   found_p = false;
+               while (s_p_z <= int(bbox.max().z()) &&
+				      s_p_z <= int(k+dz))
                {
                si = nx*ny*s_p_z + nx*j + i;
                if (((unsigned char*)data_r)[si])
+			   {
+				   found_p = true;
                break;
+			   }
                s_p_z++;
                }
                //found Z direction?
-               if (s_n_z >= int(bbox.min().z()) &&
-               s_p_z <= int(bbox.max().z()))
+               if (found_p && found_n)
                {
                ((unsigned char*)data_r)[index] = 255;
-               continue;
-               }*/
+               //continue;
+               }
             }
          }
 

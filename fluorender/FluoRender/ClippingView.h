@@ -115,6 +115,8 @@ public:
 	{
 		m_link_channels->SetValue(chann);
 	}
+	bool GetHoldPlanes()
+	{ return m_hold_planes; }
 	PLANE_MODES GetPlaneMode()
 	{ return m_plane_mode; }
 	bool GetXLink()
@@ -173,6 +175,7 @@ private:
 	MeshData* m_md;		//current mesh data
 	DataManager* m_mgr;	//manage all if clipping planes are synced
 	bool m_draw_clip;
+	bool m_hold_planes;
 	PLANE_MODES m_plane_mode;
 
 	int m_x_sldr_dist;

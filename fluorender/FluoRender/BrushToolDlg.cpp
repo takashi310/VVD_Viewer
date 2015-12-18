@@ -5,15 +5,7 @@
 #include "Formats/png_resource.h"
 
 //resources
-#include "img/listicon_undo.h"
-#include "img/listicon_redo.h"
-#include "img/listicon_brushappend.h"
-#include "img/listicon_brushclear.h"
-#include "img/listicon_brushcreate.h"
-#include "img/listicon_brushdesel.h"
-#include "img/listicon_brushdiffuse.h"
-#include "img/listicon_brusherase.h"
-#include "img/listicon_qmark.h"
+#include "img/icons.h"
 
 #define GM_2_ESTR(x) (1.0 - sqrt(1.0 - (x - 1.0) * (x - 1.0)))
 
@@ -100,10 +92,10 @@ wxWindow* BrushToolDlg::CreateBrushPage(wxWindow *parent)
 	m_toolbar = new wxToolBar(page, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTB_FLAT|wxTB_TOP|wxTB_NODIVIDER|wxTB_TEXT);
 	m_toolbar->AddTool(ID_BrushUndo, "Undo",
-		wxGetBitmapFromMemory(listicon_undo),
+		wxGetBitmapFromMemory(undo),
 		"Rollback previous brush operation");
 	m_toolbar->AddTool(ID_BrushRedo, "Redo",
-		wxGetBitmapFromMemory(listicon_redo),
+		wxGetBitmapFromMemory(redo),
 		"Redo the rollback brush operation");
 	m_toolbar->AddSeparator();
 	m_toolbar->AddCheckTool(ID_BrushAppend, "Select",
