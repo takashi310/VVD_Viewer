@@ -415,7 +415,8 @@ m_delayed_stop(false)
 	sizerV->AddStretchSpacer();
 	sizerV->Add(sizer_1, 0, wxEXPAND);
 	sizerV->Add(sizerH,0,wxEXPAND);
-	SetSizerAndFit(sizerV);
+	//SetSizerAndFit(sizerV);
+	SetSizer(sizerV);
 	Layout();
 	Init();
 }

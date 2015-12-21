@@ -27,25 +27,22 @@ DEALINGS IN THE SOFTWARE.
 */
 
 #include <wx/wx.h>
-
+#include "InterprocessCommunication.h"
 
 #ifndef _MAIN_H_
 #define _MAIN_H_
 
-class MyClient;
-class MyServer;
-
 class VRenderApp : public wxApp
 {
    public:
-	   VRenderApp(void) : wxApp() { m_server = NULL; m_client = NULL; }
-      virtual bool OnInit();
+	  VRenderApp(void) : wxApp() { m_server = NULL;}
+	  virtual bool OnInit();
+	  virtual int OnExit(); 
       void OnInitCmdLine(wxCmdLineParser& parser);
       bool OnCmdLineParsed(wxCmdLineParser& parser);
 
    private:
       wxArrayString m_files;
-	  MyClient *m_client;
 	  MyServer *m_server;
 };
 

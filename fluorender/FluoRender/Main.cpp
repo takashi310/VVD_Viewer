@@ -35,112 +35,9 @@ DEALINGS IN THE SOFTWARE.
 #include <wx/tokenzr.h>
 #include "VRenderFrame.h"
 #include "compatibility.h"
-#include <wx/ipc.h>
 // -- application --
 
 bool m_open_by_web_browser = false;
-
-class ServerConnection: public wxConnection
-{
-public:
-    ServerConnection(void) : wxConnection() { m_vframe = NULL; }
-    ~ServerConnection(void) { }
-
-    bool OnAdvise(const wxString& topic, const wxString& item, char *data,
-                  int size, wxIPCFormat format)
-    {
-        //wxMessageBox(topic, data);
-    }
-
-	bool OnStartAdvise(const wxString& topic,
-		const wxString& item)
-	{
-		//wxMessageBox(wxString::Format("OnStartAdvise(\"%s\",\"%s\")", topic.c_str(), item.c_str()));
-		if (!m_vframe) return false;
-
-		SettingDlg *setting_dlg = m_vframe->GetSettingDlg();
-		if (setting_dlg)
-			m_vframe->SetRealtimeCompression(setting_dlg->GetRealtimeCompress());
-
-		wxArrayString files;
-		wxStringTokenizer tkz(item, wxT(","));
-		while(tkz.HasMoreTokens())
-		{
-			wxString path = tkz.GetNextToken();
-			files.Add(path);
-		}
-		m_vframe->StartupLoad(files);
-
-		if (setting_dlg)
-		{
-			setting_dlg->SetRealtimeCompress(m_vframe->GetRealtimeCompression());
-			setting_dlg->UpdateUI();
-		}
-
-		return true;
-	}
-	bool OnStopAdvise(const wxString& topic,
-		const wxString& item)
-	{
-		//wxMessageBox(wxString::Format("OnStopAdvise(\"%s\",\"%s\")", topic.c_str(), item.c_str()));
-		return true;
-	}
-
-	void SetFrame(VRenderFrame *vframe){ m_vframe = vframe; }
-
-protected:
-	VRenderFrame *m_vframe;
-	wxString m_advise;
-};
-
-class ClientConnection: public wxConnection
-{
-public:
-    ClientConnection(void) : wxConnection() { }
-    ~ClientConnection(void) { }
-
-    bool OnAdvise(const wxString& topic, const wxString& item, char *data,
-                  int size, wxIPCFormat format)
-    {
-        //wxMessageBox(topic, data);
-    }
-};
-
-class MyClient: public wxClient
-{
-public:
-	MyClient(void) : wxClient() { m_connection = NULL; }
-	ClientConnection *GetConnection() { return m_connection; };
-
-    wxConnectionBase* OnMakeConnection(void)
-    {
-        m_connection = new ClientConnection;
-		return m_connection;
-    }
-
-protected:
-	ClientConnection *m_connection;
-};
-
-class MyServer: public wxServer
-{
-public:
-	MyServer(void) : wxServer() { m_connection = NULL; m_vframe = NULL;}
-	ServerConnection *GetConnection() { return m_connection; };
-
-    wxConnectionBase* OnAcceptConnection(const wxString &topic)
-    {
-        m_connection = new ServerConnection;
-		m_connection->SetFrame(m_vframe);
-		return m_connection;
-    }
-
-	void SetFrame(VRenderFrame *vframe){ m_vframe = vframe; }
-
-protected:
-	ServerConnection *m_connection;
-	VRenderFrame *m_vframe;
-};
 
 IMPLEMENT_APP(VRenderApp)
 
@@ -245,6 +142,13 @@ bool VRenderApp::OnInit()
    return true;
 }
 
+int VRenderApp::OnExit()
+{
+	if (m_server) delete m_server;
+
+	return 0;
+}
+
 void VRenderApp::OnInitCmdLine(wxCmdLineParser& parser)
 {
    parser.SetDesc (g_cmdLineDesc);
@@ -292,12 +196,11 @@ bool VRenderApp::OnCmdLineParsed(wxCmdLineParser& parser)
 	   wxString server = "50001";
 	   wxString hostName = "VVDClient";
 
-	   m_client = new MyClient;
-	   ClientConnection *connection = (ClientConnection *)m_client->MakeConnection(hostName, server, "IPC TEST");
+	   MyClient *client = new MyClient;
+	   ClientConnection *connection = (ClientConnection *)client->MakeConnection(hostName, server, "IPC TEST");
 
 	   if (!connection)
 	   {
-		   delete m_client;
 		   //wxMessageBox("Failed to make connection to server", "Client Demo");
 		   m_server = new MyServer;
 		   m_server->Create(server);
@@ -309,6 +212,7 @@ bool VRenderApp::OnCmdLineParsed(wxCmdLineParser& parser)
 		   wxExit();
 		   return true;
 	   }
+	   delete client;
    }
 #endif
 

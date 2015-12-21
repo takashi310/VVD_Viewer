@@ -390,7 +390,7 @@ VRenderFrame::VRenderFrame(
 		FloatingSize(wxSize(350, 300)).Layer(3));
 */	m_aui_mgr.AddPane(m_prop_panel, wxAuiPaneInfo().
 		Name("m_prop_panel").Caption(UITEXT_PROPERTIES).
-		Bottom().CloseButton(true).MinSize(wxSize(300, 130)).
+		Bottom().CloseButton(true).MinSize(wxSize(300, 150)).
 		FloatingSize(wxSize(1100, 130)).Layer(2));
 	m_aui_mgr.AddPane(m_adjust_view, wxAuiPaneInfo().
 		Name("m_adjust_view").Caption(UITEXT_ADJUST).
@@ -638,7 +638,7 @@ void VRenderFrame::OnExit(wxCommandEvent& WXUNUSED(event))
 void VRenderFrame::OnClose(wxCloseEvent &event)
 {
 	m_setting_dlg->SaveSettings();
-	bool vrv_saved = false;
+/*	bool vrv_saved = false;
 	for (unsigned int i=0; i<m_vrv_list.size(); ++i)
 	{
 		if (m_vrv_list[i]->m_default_saved)
@@ -649,7 +649,7 @@ void VRenderFrame::OnClose(wxCloseEvent &event)
 	}
 	if (!vrv_saved)
 		m_vrv_list[0]->SaveDefault(0xaff);
-	event.Skip();
+*/	event.Skip();
 }
 
 wxString VRenderFrame::CreateView(int row)
