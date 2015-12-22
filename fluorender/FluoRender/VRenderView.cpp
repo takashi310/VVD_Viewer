@@ -10561,38 +10561,180 @@ void VRenderGLView::AddPaintRulerPoint()
 
 void VRenderGLView::DrawRulers()
 {
-	int nx = GetSize().x;
-	int ny = GetSize().y;
-
-	if (nx <= 0 || ny <= 0)
+	if (!m_text_renderer)
 		return;
 
-	double spcx = 1.0;
-	double spcy = 1.0;
-	double spcz = 1.0;
+	int nx = GetSize().x;
+	int ny = GetSize().y;
+	float sx, sy;
+	sx = 2.0/nx;
+	sy = 2.0/ny;
+	float w = m_text_renderer->GetSize()/4.0f;
+	float px, py, p2x, p2y;
 
-	if(m_cur_vol){
-		Texture *vtex = m_cur_vol->GetTexture();
-		if (vtex && vtex->isBrxml())
-		{
-			BRKXMLReader *br = (BRKXMLReader *)m_cur_vol->GetReader();
-			br->SetLevel(0);
-			spcx = br->GetXSpc();
-			spcy = br->GetYSpc();
-			spcz = br->GetZSpc();
-		}
-	}
+	vector<float> verts;
+	int vert_num = 0;
+	for (size_t i=0; i<m_ruler_list.size(); ++i)
+		if (m_ruler_list[i])
+			vert_num += m_ruler_list[i]->GetNumPoint();
+	verts.reserve(vert_num*10*3);
 
-	for (int i=0; i<(int)m_ruler_list.size(); i++)
+	Transform mv;
+	Transform p;
+	mv.set(glm::value_ptr(m_mv_mat));
+	p.set(glm::value_ptr(m_proj_mat));
+	Point p1, p2;
+	unsigned int num;
+	vector<unsigned int> nums;
+	Color color;
+	Color text_color = GetTextColor();
+
+	for (size_t i=0; i<m_ruler_list.size(); i++)
 	{
 		Ruler* ruler = m_ruler_list[i];
 		if (!ruler) continue;
 		if (!ruler->GetTimeDep() ||
 			(ruler->GetTimeDep() &&
 			ruler->GetTime() == m_tseq_cur_num))
-			ruler->Draw(m_persp, nx, ny, m_mv_mat, m_proj_mat, m_cur_vol ? m_cur_vol->GetAnnotation() : vector<AnnotationDB>(), spcx, spcy, spcz);
+		{
+			num = 0;
+			if (ruler->GetUseColor())
+				color = ruler->GetColor();
+			else
+				color = text_color;
+			for (size_t j=0; j<ruler->GetNumPoint(); ++j)
+			{
+				p2 = *(ruler->GetPoint(j));
+				p2 = mv.transform(p2);
+				p2 = p.transform(p2);
+				if ((m_persp && (p2.z()<=0.0 || p2.z()>=1.0)) ||
+					(!m_persp && (p2.z()>=0.0 || p2.z()<=-1.0)))
+					continue;
+				px = (p2.x()+1.0)*nx/2.0;
+				py = (p2.y()+1.0)*ny/2.0;
+				verts.push_back(px-w); verts.push_back(py-w); verts.push_back(0.0);
+				verts.push_back(px+w); verts.push_back(py-w); verts.push_back(0.0);
+				verts.push_back(px+w); verts.push_back(py-w); verts.push_back(0.0);
+				verts.push_back(px+w); verts.push_back(py+w); verts.push_back(0.0);
+				verts.push_back(px+w); verts.push_back(py+w); verts.push_back(0.0);
+				verts.push_back(px-w); verts.push_back(py+w); verts.push_back(0.0);
+				verts.push_back(px-w); verts.push_back(py+w); verts.push_back(0.0);
+				verts.push_back(px-w); verts.push_back(py-w); verts.push_back(0.0);
+				num += 8;
+				if (j+1 == ruler->GetNumPoint())
+				{
+					p2x = p2.x()*nx/2.0;
+					p2y = p2.y()*ny/2.0;
+					m_text_renderer->RenderText(
+					ruler->GetNameDisp().ToStdWstring(),
+					color,
+					(p2x+w)*sx, (p2y+w)*sy, sx, sy);
+				}
+				if (j > 0)
+				{
+					p1 = *(ruler->GetPoint(j-1));
+					p1 = mv.transform(p1);
+					p1 = p.transform(p1);
+					if ((m_persp && (p1.z()<=0.0 || p1.z()>=1.0)) ||
+						(!m_persp && (p1.z()>=0.0 || p1.z()<=-1.0)))
+						continue;
+					verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
+					px = (p1.x()+1.0)*nx/2.0;
+					py = (p1.y()+1.0)*ny/2.0;
+					verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
+					num += 2;
+				}
+			}
+			if (ruler->GetRulerType() == 4 &&
+				ruler->GetNumPoint() >= 3)
+			{
+				Point center = *(ruler->GetPoint(1));
+				Vector v1 = *(ruler->GetPoint(0)) - center;
+				Vector v2 = *(ruler->GetPoint(2)) - center;
+				double len = Min(v1.length(), v2.length());
+				if (len > w)
+				{
+					v1.normalize();
+					v2.normalize();
+					p1 = center + v1*w;
+					p1 = mv.transform(p1);
+					p1 = p.transform(p1);
+					px = (p1.x()+1.0)*nx/2.0;
+					py = (p1.y()+1.0)*ny/2.0;
+					verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
+					p1 = center + v2*w;
+					p1 = mv.transform(p1);
+					p1 = p.transform(p1);
+					px = (p1.x()+1.0)*nx/2.0;
+					py = (p1.y()+1.0)*ny/2.0;
+					verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
+					num += 2;
+				}
+			}
+			nums.push_back(num);
+		}
 	}
 
+	if (!verts.empty())
+	{
+		double width = m_text_renderer->GetSize()/10.0;
+		glEnable(GL_LINE_SMOOTH);
+		glLineWidth(GLfloat(width));
+		glEnable(GL_DEPTH_TEST);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+
+		glm::mat4 matrix = glm::ortho(float(0), float(nx), float(0), float(ny));
+
+		ShaderProgram* shader =
+			m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY);
+		if (shader)
+		{
+			if (!shader->valid())
+				shader->create();
+			shader->bind();
+		}
+		shader->setLocalParamMatrix(0, glm::value_ptr(matrix));
+
+		glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(float)*verts.size(), &verts[0], GL_DYNAMIC_DRAW);
+		glBindVertexArray(m_misc_vao);
+		glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
+
+		GLint pos = 0;
+		size_t j = 0;
+		for (size_t i=0; i<m_ruler_list.size(); i++)
+		{
+			Ruler* ruler = m_ruler_list[i];
+			if (!ruler) continue;
+			if (!ruler->GetTimeDep() ||
+				(ruler->GetTimeDep() &&
+				ruler->GetTime() == m_tseq_cur_num))
+			{
+				num = 0;
+				if (ruler->GetUseColor())
+					color = ruler->GetColor();
+				else
+					color = text_color;
+				shader->setLocalParam(0, color.r(), color.g(), color.b(), 1.0);
+				glDrawArrays(GL_LINES, pos, (GLsizei)(nums[j++]));
+				pos += nums[j-1];
+			}
+		}
+
+		glDisableVertexAttribArray(0);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindVertexArray(0);
+
+		if (shader && shader->valid())
+			shader->release();
+
+		glDisable(GL_LINE_SMOOTH);
+		glLineWidth(1.0);
+	}
+/*
 	vector<VolumeData *> displist;
 	for (int i=(int)m_layer_list.size()-1; i>=0; i--)
 	{
@@ -10714,6 +10856,7 @@ void VRenderGLView::DrawRulers()
 				ruler->Draw(m_persp, nx, ny, m_mv_mat, m_proj_mat, m_cur_vol ? m_cur_vol->GetAnnotation() : vector<AnnotationDB>(), spcx, spcy, spcz);
 		}
 	}
+*/
 }
 
 vector<Ruler*>* VRenderGLView::GetRulerList()

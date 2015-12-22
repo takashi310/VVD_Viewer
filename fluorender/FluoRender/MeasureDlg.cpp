@@ -19,6 +19,7 @@ BEGIN_EVENT_TABLE(RulerListCtrl, wxListCtrl)
 	EVT_TEXT(ID_RulerNameDispText, RulerListCtrl::OnNameDispText)
 	EVT_TEXT_ENTER(ID_RulerNameDispText, RulerListCtrl::OnEnterInTextCtrl)
 	EVT_TEXT(ID_RulerDescriptionText, RulerListCtrl::OnDescriptionText)
+	EVT_COLOURPICKER_CHANGED(ID_ColorPicker, RulerListCtrl::OnColorChange)
 	EVT_TEXT_ENTER(ID_RulerDescriptionText, RulerListCtrl::OnEnterInTextCtrl)
 	EVT_KEY_DOWN(RulerListCtrl::OnKeyDown)
 	EVT_KEY_UP(RulerListCtrl::OnKeyUp)
@@ -174,7 +175,7 @@ void RulerListCtrl::UpdateRulers(VRenderView* vrv)
 			int(ruler->GetColor().b()*255));
 		else
 			color = "N/A";
-		Append(ruler->GetName(), color, ruler->GetLength(), unit,
+		Append(ruler->GetNameDisp(), color, ruler->GetLength(), unit,
 			ruler->GetAngle(), points, ruler->GetTimeDep(), ruler->GetTime(), ruler->GetDelInfoValues(", "));
 	}
 }
@@ -222,16 +223,25 @@ void RulerListCtrl::UpdateText(VRenderView* vrv)
 		if (num_points > 0)
 		{
 			p = ruler->GetPoint(0);
-			points += wxString::Format("(%.0f, %.0f, %.0f)", p->x(), p->y(), p->z());
+			points += wxString::Format("(%.2f, %.2f, %.2f)", p->x(), p->y(), p->z());
 		}
 		if (num_points > 1)
 		{
 			p = ruler->GetPoint(num_points - 1);
 			points += ", ";
-			points += wxString::Format("(%.0f, %.0f, %.0f)", p->x(), p->y(), p->z());
+			points += wxString::Format("(%.2f, %.2f, %.2f)", p->x(), p->y(), p->z());
 		}
-		SetText(i, 0, ruler->GetName());
-		SetText(i, 1, ruler->GetNameDisp());
+		wxString color;
+		if (ruler->GetUseColor())
+			color = wxString::Format("RGB(%d, %d, %d)",
+			int(ruler->GetColor().r()*255),
+			int(ruler->GetColor().g()*255),
+			int(ruler->GetColor().b()*255));
+		else
+			color = "N/A";
+
+		SetText(i, 0, ruler->GetNameDisp());
+		SetText(i, 1, color);
 		wxString length = wxString::Format("%.2f", ruler->GetLength()) + unit;
 		SetText(i, 2, length);
 		wxString angle = wxString::Format("%.1f", ruler->GetAngle()) + "Deg";
@@ -489,9 +499,9 @@ void RulerListCtrl::EndEdit()
 			{
 				wxString str = m_name_disp->GetValue();
 				(*ruler_list)[m_editing_item]->SetNameDisp(str);
-				wxColor c = m_color_picker->GetColour();
-				Color color(c.Red()/255.0, c.Green()/255.0, c.Blue()/255.0);
-				(*ruler_list)[m_editing_item]->SetColor(color);
+				//wxColor c = m_color_picker->GetColour();
+				//Color color(c.Red()/255.0, c.Green()/255.0, c.Blue()/255.0);
+				//(*ruler_list)[m_editing_item]->SetColor(color);
 				str = m_description_text->GetValue();
 				(*ruler_list)[m_editing_item]->SetDesc(str);
 			}
@@ -566,12 +576,12 @@ void RulerListCtrl::OnColorChange(wxColourPickerEvent& event)
 
 	wxColor c = event.GetColour();
 	Color color(c.Red()/255.0, c.Green()/255.0, c.Blue()/255.0);
-/*	vector<Ruler*>* ruler_list = m_view->GetRulerList();
+	vector<Ruler*>* ruler_list = m_view->GetRulerList();
 	if (!ruler_list) return;
 	Ruler* ruler = (*ruler_list)[m_editing_item];
 	if (!ruler) return;
 	ruler->SetColor(color);
-*/	wxString str_color;
+	wxString str_color;
 	str_color = wxString::Format("RGB(%d, %d, %d)",
 		int(color.r()*255),
 		int(color.g()*255),
@@ -665,9 +675,12 @@ void RulerListCtrl::OnColumnSizeChanged(wxListEvent &event)
 
 	wxRect rect;
 	wxString str;
-	GetSubItemRect(m_editing_item, 1, rect);
+	GetSubItemRect(m_editing_item, 0, rect);
 	m_name_disp->SetPosition(rect.GetTopLeft());
 	m_name_disp->SetSize(rect.GetSize());
+	GetSubItemRect(m_editing_item, 1, rect);
+	m_color_picker->SetPosition(rect.GetTopLeft());
+	m_color_picker->SetSize(rect.GetSize());
 	GetSubItemRect(m_editing_item, 6, rect);
 	m_description_text->SetPosition(rect.GetTopLeft());
 	m_description_text->SetSize(rect.GetSize());
