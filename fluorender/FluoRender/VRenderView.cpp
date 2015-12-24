@@ -8839,7 +8839,7 @@ void VRenderGLView::DrawColormap()
 	for (int i=0; i<GetDispVolumeNum(); i++)
 	{
 		VolumeData* vd = GetDispVolumeData(i);
-		if (vd && vd->GetColormapMode() && vd->GetDisp())
+		if (vd && vd->GetColormapMode() == 1 && vd->GetDisp())
 		{
 			num++;
 			vd_index = i;
@@ -9639,6 +9639,7 @@ void VRenderGLView::StartLoopUpdate()
 			if (vd && vd->GetDisp())
 			{
 				switchLevel(vd);
+				vd->SetInterpolate(m_intp);
 				if (!TextureRenderer::get_mem_swap()) continue;
 
 				vd->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);

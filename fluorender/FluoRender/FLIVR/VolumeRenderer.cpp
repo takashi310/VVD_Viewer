@@ -1010,7 +1010,7 @@ namespace FLIVR
 			}
 
 			GLint filter;
-			if (interpolate_)
+			if (interpolate_ && colormap_mode_ != 3)
 				filter = GL_LINEAR;
 			else
 				filter = GL_NEAREST;

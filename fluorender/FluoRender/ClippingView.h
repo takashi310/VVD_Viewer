@@ -38,9 +38,9 @@ DEALINGS IN THE SOFTWARE.
 
 #define PM_NORMAL 0
 #define PM_FRAME 1
-#define	PM_LOWTRANS 2
-#define	PM_LOWTRANSBACK 3
-#define	PM_NORMALBACK 4
+#define PM_LOWTRANS 2
+#define PM_LOWTRANSBACK 3
+#define PM_NORMALBACK 4
 
 class ClippingView: public wxPanel
 {
