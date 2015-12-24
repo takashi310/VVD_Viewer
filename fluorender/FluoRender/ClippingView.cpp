@@ -32,6 +32,7 @@ DEALINGS IN THE SOFTWARE.
 
 BEGIN_EVENT_TABLE(ClippingView, wxPanel)
 	EVT_CHECKBOX(ID_LinkChannelsChk, ClippingView::OnLinkChannelsCheck)
+	EVT_COMBOBOX(ID_PlaneModesCombo, ClippingView::OnPlaneModesCombo)
 	EVT_BUTTON(ID_SetZeroBtn, ClippingView::OnSetZeroBtn)
 	EVT_BUTTON(ID_RotResetBtn, ClippingView::OnRotResetBtn)
 	EVT_BUTTON(ID_ClipResetBtn, ClippingView::OnClipResetBtn)
@@ -91,7 +92,7 @@ m_vd(0),
 m_md(0),
 m_draw_clip(false),
 m_hold_planes(false),
-m_plane_mode(kNormal),
+m_plane_mode(PM_NORMAL),
 m_link_x(false),
 m_link_y(false),
 m_link_z(false)
@@ -111,6 +112,24 @@ m_link_z(false)
 	sizer_1->Add(5, 5, 0);
 	sizer_1->Add(m_link_channels, 0, wxALIGN_CENTER, 0);
 
+	wxBoxSizer* sizer_pm = new wxBoxSizer(wxVERTICAL);
+	// display mode chooser
+	st = new wxStaticText(this, 0, "Display Mode:",
+		wxDefaultPosition, wxSize(100, -1), wxALIGN_CENTER);
+	m_plane_mode_combo = new wxComboBox(this, ID_PlaneModesCombo, "",
+		wxDefaultPosition, wxSize(115, 24), 0, NULL, wxCB_READONLY);
+	vector<string>dispmode_list;
+	dispmode_list.push_back("Normal");
+	dispmode_list.push_back("Frame");
+	dispmode_list.push_back("LowTrans");
+	dispmode_list.push_back("LowTransBack");
+	dispmode_list.push_back("NormalBack");
+	for (size_t i=0; i<dispmode_list.size(); ++i)
+		m_plane_mode_combo->Append(dispmode_list[i]);
+	m_plane_mode_combo->SetSelection(m_plane_mode);
+	sizer_pm->Add(st, 0, wxALIGN_CENTER, 0);
+	sizer_pm->Add(m_plane_mode_combo, 0, wxALIGN_CENTER, 0);
+	
 	//rotations
 	//set sero rotation for clipping planes
 	wxBoxSizer* sizer_2 = new wxBoxSizer(wxHORIZONTAL);
@@ -385,8 +404,10 @@ m_link_z(false)
 	wxBoxSizer *sizer_v = new wxBoxSizer(wxVERTICAL);
 //	st = new wxStaticText(this, 0, "Clippings:");
 //	sizer_v->Add(st, 0, wxALIGN_CENTER);
-	sizer_v->Add(10, 10, 0);
+	sizer_v->Add(5, 5, 0);
 	sizer_v->Add(sizer_1, 0, wxALIGN_LEFT);
+	sizer_v->Add(5, 5, 0);
+	sizer_v->Add(sizer_pm, 0, wxALIGN_CENTER);
 	sizer_v->Add(5, 5, 0);
 	sizer_v->Add(sizer_h2, 3, wxEXPAND);
 	sizer_v->Add(5, 5, 0);
@@ -699,37 +720,10 @@ void ClippingView::OnLinkChannelsCheck(wxCommandEvent &event)
 	}
 }
 
-void ClippingView::OnPlaneModesBtn(wxCommandEvent &event)
+void ClippingView::OnPlaneModesCombo(wxCommandEvent &event)
 {
-/*	switch (m_plane_mode)
-	{
-	case kNormal:
-		m_plane_mode = kFrame;
-		m_toolbar->SetToolNormalBitmap(ID_PlaneModesBtn,
-			wxGetBitmapFromMemory(clip_frame));
-		break;
-	case kFrame:
-		m_plane_mode = kLowTrans;
-		m_toolbar->SetToolNormalBitmap(ID_PlaneModesBtn,
-			wxGetBitmapFromMemory(clip_low));
-		break;
-	case kLowTrans:
-		m_plane_mode = kLowTransBack;
-		m_toolbar->SetToolNormalBitmap(ID_PlaneModesBtn,
-			wxGetBitmapFromMemory(clip_low_back));
-		break;
-	case kLowTransBack:
-		m_plane_mode = kNormalBack;
-		m_toolbar->SetToolNormalBitmap(ID_PlaneModesBtn,
-			wxGetBitmapFromMemory(clip_normal_back));
-		break;
-	case kNormalBack:
-		m_plane_mode = kNormal;
-		m_toolbar->SetToolNormalBitmap(ID_PlaneModesBtn,
-			wxGetBitmapFromMemory(clip_normal));
-		break;
-	}
-*/
+	m_plane_mode = m_plane_mode_combo->GetCurrentSelection();
+	
 	RefreshVRenderViews();
 }
 
@@ -1585,7 +1579,10 @@ void ClippingView::OnIdle(wxIdleEvent &event)
 					(*vrv_list)[i]->m_glview->m_clip_mask = -1;
 				}
 			}
-			RefreshVRenderViewsOverlay();
+			if (m_plane_mode == PM_LOWTRANSBACK || m_plane_mode == PM_NORMALBACK)
+				RefreshVRenderViews();
+			else 
+				RefreshVRenderViewsOverlay();
 			m_draw_clip = true;
 		}
 	}
@@ -1599,7 +1596,10 @@ void ClippingView::OnIdle(wxIdleEvent &event)
 				if ((*vrv_list)[i])
 					(*vrv_list)[i]->m_glview->m_draw_clip = false;
 			}
-			RefreshVRenderViewsOverlay();
+			if (m_plane_mode == PM_LOWTRANSBACK || m_plane_mode == PM_NORMALBACK)
+				RefreshVRenderViews();
+			else 
+				RefreshVRenderViewsOverlay();
 			m_draw_clip = false;
 		}
 	}

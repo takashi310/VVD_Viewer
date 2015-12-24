@@ -35,21 +35,19 @@ DEALINGS IN THE SOFTWARE.
 #define _CLIPPINGVIEW_H_
 
 //plane modes
-enum PLANE_MODES
-{
-	kNormal,
-	kFrame,
-	kLowTrans,
-	kLowTransBack,
-	kNormalBack
-};
+
+#define PM_NORMAL 0
+#define PM_FRAME 1
+#define	PM_LOWTRANS 2
+#define	PM_LOWTRANSBACK 3
+#define	PM_NORMALBACK 4
 
 class ClippingView: public wxPanel
 {
 	enum
 	{
 		ID_LinkChannelsChk = wxID_HIGHEST+1,
-		ID_PlaneModesBtn,
+		ID_PlaneModesCombo,
 		ID_RotatePlanesChk,
 		ID_ClipResetBtn,
 		ID_SetZeroBtn,
@@ -117,7 +115,7 @@ public:
 	}
 	bool GetHoldPlanes()
 	{ return m_hold_planes; }
-	PLANE_MODES GetPlaneMode()
+	int GetPlaneMode()
 	{ return m_plane_mode; }
 	bool GetXLink()
 	{
@@ -163,6 +161,15 @@ public:
 		m_z_rot_text->SetValue(wxString::Format("%.1f", rotz));
 	}
 
+	void SetPlaneMode(int mode)
+	{
+		int elem_num = m_plane_mode_combo->GetStrings().size();
+		if (mode < 0 || mode >= elem_num) return;
+		
+		m_plane_mode = mode;
+		m_plane_mode_combo->SetSelection(mode);
+	}
+
 	//move linked clipping planes
 	//dir: 0-lower; 1-higher
 	void MoveLinkedClippingPlanes(int dir);
@@ -176,7 +183,7 @@ private:
 	DataManager* m_mgr;	//manage all if clipping planes are synced
 	bool m_draw_clip;
 	bool m_hold_planes;
-	PLANE_MODES m_plane_mode;
+	int m_plane_mode;
 
 	int m_x_sldr_dist;
 	int m_y_sldr_dist;
@@ -187,6 +194,7 @@ private:
 
 	//1st line
 	wxCheckBox *m_link_channels;
+	wxComboBox *m_plane_mode_combo;
 	wxButton *m_clip_reset_btn;
 	//fix plane rotations
 	wxButton *m_set_zero_btn;
@@ -247,7 +255,7 @@ private:
 	void OnIdle(wxIdleEvent &event);
 
 	void OnLinkChannelsCheck(wxCommandEvent &event);
-	void OnPlaneModesBtn(wxCommandEvent &event);
+	void OnPlaneModesCombo(wxCommandEvent &event);
 	void OnClipResetBtn(wxCommandEvent &event);
 
 	void EnableAll();

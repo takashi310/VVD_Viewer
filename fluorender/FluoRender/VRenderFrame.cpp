@@ -601,7 +601,7 @@ VRenderFrame::VRenderFrame(
 	m = new wxMenuItem(m_top_help,ID_Twitter, wxT("&Twitter"));
 	m->SetBitmap(wxGetBitmapFromMemory(icon_twitter_mini));
 	m_top_help->Append(m);
-	m = new wxMenuItem(m_top_help,ID_Facebook, wxT("F&acebook"));
+	m = new wxMenuItem(m_top_help,ID_Facebook, wxT("&Facebook"));
 	m->SetBitmap(wxGetBitmapFromMemory(icon_facebook_mini));
 	m_top_help->Append(m);
 	m = new wxMenuItem(m_top_help,ID_Info, wxT("&About FluoRender..."));
@@ -612,7 +612,10 @@ VRenderFrame::VRenderFrame(
 	m_top_menu->Append(m_top_tools,wxT("&Tools"));
 	m_top_menu->Append(m_top_window,wxT("&Windows"));
 	m_top_menu->Append(m_top_help,wxT("&Help"));
+#ifdef _DARWIN
 	SetMenuBar(m_top_menu);
+#endif
+
 }
 
 VRenderFrame::~VRenderFrame()
@@ -2700,6 +2703,7 @@ void VRenderFrame::SaveProject(wxString& filename)
 	fconfig.Write("cur_sel_vol", m_cur_sel_vol);
 	fconfig.Write("cur_sel_mesh", m_cur_sel_mesh);
 	fconfig.Write("chann_link", m_clip_view->GetChannLink());
+	fconfig.Write("plane_mode", m_clip_view->GetPlaneMode());
 	fconfig.Write("x_link", m_clip_view->GetXLink());
 	fconfig.Write("y_link", m_clip_view->GetYLink());
 	fconfig.Write("z_link", m_clip_view->GetZLink());
@@ -3898,8 +3902,11 @@ void VRenderFrame::OpenProject(wxString& filename)
 			}
 		}
 		bool link;
+		int mode;
 		if (fconfig.Read("chann_link", &link))
 			m_clip_view->SetChannLink(link);
+		if (fconfig.Read("plane_mode", &mode))
+			m_clip_view->SetPlaneMode(mode);
 		if (fconfig.Read("x_link", &link))
 			m_clip_view->SetXLink(link);
 		if (fconfig.Read("y_link", &link))

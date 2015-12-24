@@ -7862,7 +7862,7 @@ void VRenderGLView::DrawClippingPlanes(bool border, int face_winding)
 {
 	int i;
 	bool link = false;
-	PLANE_MODES plane_mode = kNormal;
+	int plane_mode = PM_NORMAL;
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (vr_frame && vr_frame->GetClippingView())
 	{
@@ -7870,9 +7870,9 @@ void VRenderGLView::DrawClippingPlanes(bool border, int face_winding)
 		plane_mode = vr_frame->GetClippingView()->GetPlaneMode();
 	}
 
-	bool draw_plane = plane_mode != kFrame;
-	if ((plane_mode == kLowTransBack ||
-		plane_mode == kNormalBack) &&
+	bool draw_plane = plane_mode != PM_FRAME;
+	if ((plane_mode == PM_LOWTRANSBACK ||
+		plane_mode == PM_NORMALBACK) &&
 		m_clip_mask == -1)
 	{
 		glCullFace(GL_FRONT);
@@ -7884,7 +7884,7 @@ void VRenderGLView::DrawClippingPlanes(bool border, int face_winding)
 	else
 		glCullFace(GL_BACK);
 
-	if (!border && plane_mode == kFrame)
+	if (!border && plane_mode == PM_FRAME)
 		return;
 
 	glDisable(GL_DEPTH_TEST);
@@ -7998,17 +7998,17 @@ void VRenderGLView::DrawClippingPlanes(bool border, int face_winding)
 			m_clip_mask == 32 ||
 			m_clip_mask == 64)
 			)
-			plane_trans = plane_mode == kLowTrans ||
-			plane_mode == kLowTransBack ? 0.1 : 0.3;
+			plane_trans = plane_mode == PM_LOWTRANS ||
+			plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
 
 		if (face_winding == FRONT_FACE)
 		{
-			plane_trans = plane_mode == kLowTrans ||
-				plane_mode == kLowTransBack ? 0.1 : 0.3;
+			plane_trans = plane_mode == PM_LOWTRANS ||
+				plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
 		}
 
-		if (plane_mode == kNormal ||
-			plane_mode == kNormalBack)
+		if (plane_mode == PM_NORMAL ||
+			plane_mode == PM_NORMALBACK)
 		{
 			if (!link)
 				color = vd->GetColor();
@@ -8080,8 +8080,8 @@ void VRenderGLView::DrawClippingPlanes(bool border, int face_winding)
 		{
 			if (draw_plane)
 			{
-				if (plane_mode == kNormal ||
-					plane_mode == kNormalBack)
+				if (plane_mode == PM_NORMAL ||
+					plane_mode == PM_NORMALBACK)
 					shader->setLocalParam(0, 1.0, 0.5, 0.5, plane_trans);
 				else
 					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
@@ -8098,8 +8098,8 @@ void VRenderGLView::DrawClippingPlanes(bool border, int face_winding)
 		{
 			if (draw_plane)
 			{
-				if (plane_mode == kNormal ||
-					plane_mode == kNormalBack)
+				if (plane_mode == PM_NORMAL ||
+					plane_mode == PM_NORMALBACK)
 					shader->setLocalParam(0, 1.0, 0.5, 1.0, plane_trans);
 				else
 					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
@@ -8116,8 +8116,8 @@ void VRenderGLView::DrawClippingPlanes(bool border, int face_winding)
 		{
 			if (draw_plane)
 			{
-				if (plane_mode == kNormal ||
-					plane_mode == kNormalBack)
+				if (plane_mode == PM_NORMAL ||
+					plane_mode == PM_NORMALBACK)
 					shader->setLocalParam(0, 0.5, 1.0, 0.5, plane_trans);
 				else
 					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
@@ -8134,8 +8134,8 @@ void VRenderGLView::DrawClippingPlanes(bool border, int face_winding)
 		{
 			if (draw_plane)
 			{
-				if (plane_mode == kNormal ||
-					plane_mode == kNormalBack)
+				if (plane_mode == PM_NORMAL ||
+					plane_mode == PM_NORMALBACK)
 					shader->setLocalParam(0, 1.0, 1.0, 0.5, plane_trans);
 				else
 					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
@@ -8152,8 +8152,8 @@ void VRenderGLView::DrawClippingPlanes(bool border, int face_winding)
 		{
 			if (draw_plane)
 			{
-				if (plane_mode == kNormal ||
-					plane_mode == kNormalBack)
+				if (plane_mode == PM_NORMAL ||
+					plane_mode == PM_NORMALBACK)
 					shader->setLocalParam(0, 0.5, 0.5, 1.0, plane_trans);
 				else
 					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
@@ -8170,8 +8170,8 @@ void VRenderGLView::DrawClippingPlanes(bool border, int face_winding)
 		{
 			if (draw_plane)
 			{
-				if (plane_mode == kNormal ||
-					plane_mode == kNormalBack)
+				if (plane_mode == PM_NORMAL ||
+					plane_mode == PM_NORMALBACK)
 					shader->setLocalParam(0, 0.5, 1.0, 1.0, plane_trans);
 				else
 					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
@@ -10675,66 +10675,8 @@ void VRenderGLView::DrawRulers()
 		}
 	}
 
-	if (!verts.empty())
-	{
-		double width = m_text_renderer->GetSize()/10.0;
-		glEnable(GL_LINE_SMOOTH);
-		glLineWidth(GLfloat(width));
-		glEnable(GL_DEPTH_TEST);
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-
-		glm::mat4 matrix = glm::ortho(float(0), float(nx), float(0), float(ny));
-
-		ShaderProgram* shader =
-			m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY);
-		if (shader)
-		{
-			if (!shader->valid())
-				shader->create();
-			shader->bind();
-		}
-		shader->setLocalParamMatrix(0, glm::value_ptr(matrix));
-
-		glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(float)*verts.size(), &verts[0], GL_DYNAMIC_DRAW);
-		glBindVertexArray(m_misc_vao);
-		glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
-
-		GLint pos = 0;
-		size_t j = 0;
-		for (size_t i=0; i<m_ruler_list.size(); i++)
-		{
-			Ruler* ruler = m_ruler_list[i];
-			if (!ruler) continue;
-			if (!ruler->GetTimeDep() ||
-				(ruler->GetTimeDep() &&
-				ruler->GetTime() == m_tseq_cur_num))
-			{
-				num = 0;
-				if (ruler->GetUseColor())
-					color = ruler->GetColor();
-				else
-					color = text_color;
-				shader->setLocalParam(0, color.r(), color.g(), color.b(), 1.0);
-				glDrawArrays(GL_LINES, pos, (GLsizei)(nums[j++]));
-				pos += nums[j-1];
-			}
-		}
-
-		glDisableVertexAttribArray(0);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindVertexArray(0);
-
-		if (shader && shader->valid())
-			shader->release();
-
-		glDisable(GL_LINE_SMOOTH);
-		glLineWidth(1.0);
-	}
-/*
+	//draw landmarks
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	vector<VolumeData *> displist;
 	for (int i=(int)m_layer_list.size()-1; i>=0; i--)
 	{
@@ -10853,10 +10795,165 @@ void VRenderGLView::DrawRulers()
 			if (!ruler->GetTimeDep() ||
 				(ruler->GetTimeDep() &&
 				ruler->GetTime() == m_tseq_cur_num))
-				ruler->Draw(m_persp, nx, ny, m_mv_mat, m_proj_mat, m_cur_vol ? m_cur_vol->GetAnnotation() : vector<AnnotationDB>(), spcx, spcy, spcz);
+			{
+				num = 0;
+				if (ruler->GetUseColor())
+					color = ruler->GetColor();
+				else
+					color = text_color;
+				for (size_t j=0; j<ruler->GetNumPoint(); ++j)
+				{
+					p2 = *(ruler->GetPoint(j));
+					p2 = mv.transform(p2);
+					p2 = p.transform(p2);
+					if ((m_persp && (p2.z()<=0.0 || p2.z()>=1.0)) ||
+						(!m_persp && (p2.z()>=0.0 || p2.z()<=-1.0)))
+						continue;
+					px = (p2.x()+1.0)*nx/2.0;
+					py = (p2.y()+1.0)*ny/2.0;
+					verts.push_back(px-w); verts.push_back(py-w); verts.push_back(0.0);
+					verts.push_back(px+w); verts.push_back(py-w); verts.push_back(0.0);
+					verts.push_back(px+w); verts.push_back(py-w); verts.push_back(0.0);
+					verts.push_back(px+w); verts.push_back(py+w); verts.push_back(0.0);
+					verts.push_back(px+w); verts.push_back(py+w); verts.push_back(0.0);
+					verts.push_back(px-w); verts.push_back(py+w); verts.push_back(0.0);
+					verts.push_back(px-w); verts.push_back(py+w); verts.push_back(0.0);
+					verts.push_back(px-w); verts.push_back(py-w); verts.push_back(0.0);
+					num += 8;
+					if (j+1 == ruler->GetNumPoint())
+					{
+						p2x = p2.x()*nx/2.0;
+						p2y = p2.y()*ny/2.0;
+						m_text_renderer->RenderText(
+							ruler->GetNameDisp().ToStdWstring(),
+							color,
+							(p2x+w)*sx, (p2y+w)*sy, sx, sy);
+					}
+					if (j > 0)
+					{
+						p1 = *(ruler->GetPoint(j-1));
+						p1 = mv.transform(p1);
+						p1 = p.transform(p1);
+						if ((m_persp && (p1.z()<=0.0 || p1.z()>=1.0)) ||
+							(!m_persp && (p1.z()>=0.0 || p1.z()<=-1.0)))
+							continue;
+						verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
+						px = (p1.x()+1.0)*nx/2.0;
+						py = (p1.y()+1.0)*ny/2.0;
+						verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
+						num += 2;
+					}
+				}
+				if (ruler->GetRulerType() == 4 &&
+					ruler->GetNumPoint() >= 3)
+				{
+					Point center = *(ruler->GetPoint(1));
+					Vector v1 = *(ruler->GetPoint(0)) - center;
+					Vector v2 = *(ruler->GetPoint(2)) - center;
+					double len = Min(v1.length(), v2.length());
+					if (len > w)
+					{
+						v1.normalize();
+						v2.normalize();
+						p1 = center + v1*w;
+						p1 = mv.transform(p1);
+						p1 = p.transform(p1);
+						px = (p1.x()+1.0)*nx/2.0;
+						py = (p1.y()+1.0)*ny/2.0;
+						verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
+						p1 = center + v2*w;
+						p1 = mv.transform(p1);
+						p1 = p.transform(p1);
+						px = (p1.x()+1.0)*nx/2.0;
+						py = (p1.y()+1.0)*ny/2.0;
+						verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
+						num += 2;
+					}
+				}
+				nums.push_back(num);
+			}
 		}
 	}
-*/
+
+	///////////////////////////////////////////////////////////////////////////////////////////
+	if (!verts.empty())
+	{
+		double width = m_text_renderer->GetSize()/10.0;
+		glEnable(GL_LINE_SMOOTH);
+		glLineWidth(GLfloat(width));
+		glEnable(GL_DEPTH_TEST);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+
+		glm::mat4 matrix = glm::ortho(float(0), float(nx), float(0), float(ny));
+
+		ShaderProgram* shader =
+			m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY);
+		if (shader)
+		{
+			if (!shader->valid())
+				shader->create();
+			shader->bind();
+		}
+		shader->setLocalParamMatrix(0, glm::value_ptr(matrix));
+
+		glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(float)*verts.size(), &verts[0], GL_DYNAMIC_DRAW);
+		glBindVertexArray(m_misc_vao);
+		glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
+
+		GLint pos = 0;
+		size_t j = 0;
+		for (size_t i=0; i<m_ruler_list.size(); i++)
+		{
+			Ruler* ruler = m_ruler_list[i];
+			if (!ruler) continue;
+			if (!ruler->GetTimeDep() ||
+				(ruler->GetTimeDep() &&
+				ruler->GetTime() == m_tseq_cur_num))
+			{
+				num = 0;
+				if (ruler->GetUseColor())
+					color = ruler->GetColor();
+				else
+					color = text_color;
+				shader->setLocalParam(0, color.r(), color.g(), color.b(), 1.0);
+				glDrawArrays(GL_LINES, pos, (GLsizei)(nums[j++]));
+				pos += nums[j-1];
+			}
+		}
+
+		for (size_t i=0; i<m_landmarks.size(); i++)
+		{
+			Ruler* ruler = m_landmarks[i];
+			if (!ruler) continue;
+			if (!ruler->GetTimeDep() ||
+				(ruler->GetTimeDep() &&
+				ruler->GetTime() == m_tseq_cur_num))
+			{
+				num = 0;
+				if (ruler->GetUseColor())
+					color = ruler->GetColor();
+				else
+					color = text_color;
+				shader->setLocalParam(0, color.r(), color.g(), color.b(), 1.0);
+				glDrawArrays(GL_LINES, pos, (GLsizei)(nums[j++]));
+				pos += nums[j-1];
+			}
+		}
+
+		glDisableVertexAttribArray(0);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindVertexArray(0);
+
+		if (shader && shader->valid())
+			shader->release();
+
+		glDisable(GL_LINE_SMOOTH);
+		glLineWidth(1.0);
+	}
 }
 
 vector<Ruler*>* VRenderGLView::GetRulerList()
@@ -11094,9 +11191,9 @@ return wxWindow::MSWWindowProc(message, wParam, lParam);
 void VRenderGLView::OnMouse(wxMouseEvent& event)
 {
 	wxWindow *window = wxWindow::FindFocus();
-	if (window &&
-		window->GetClassInfo()->IsKindOf(CLASSINFO(wxTextCtrl)))
-		SetFocus();
+//	if (window &&
+//		window->GetClassInfo()->IsKindOf(CLASSINFO(wxTextCtrl)))
+//		SetFocus();
 	//mouse interactive flag
 	//m_interactive = false; //deleted by takashi
 	m_paint_enable = false;
@@ -13819,24 +13916,31 @@ void VRenderView::OnSearchCheck(wxCommandEvent& event)
 void VRenderView::OnAovSldrIdle(wxIdleEvent& event)
 {
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-	if (vr_frame && vr_frame->GetClippingView())
-	{
-		if (vr_frame->GetClippingView()->GetHoldPlanes())
-			return;
-	}
+	if (!vr_frame) return;
+	ClippingView *cp_view = vr_frame->GetClippingView();
+	if (!cp_view) return;
+
+	if (cp_view->GetHoldPlanes())
+		return;
 	if (m_glview->m_capture)
 		return;
 
 	wxPoint pos = wxGetMousePosition();
 	wxRect reg = m_aov_sldr->GetScreenRect();
 	wxWindow *window = wxWindow::FindFocus();
+
+	int plane_mode = cp_view->GetPlaneMode();
+
 	if (window && reg.Contains(pos))
 	{
 		if (!m_draw_clip)
 		{
 			m_glview->m_draw_clip = true;
 			m_glview->m_clip_mask = -1;
-			RefreshGLOverlays();
+			if (plane_mode == PM_LOWTRANSBACK || plane_mode == PM_NORMALBACK)
+				RefreshGL();
+			else 
+				RefreshGLOverlays();
 			m_draw_clip = true;
 		}
 	}
@@ -13845,7 +13949,10 @@ void VRenderView::OnAovSldrIdle(wxIdleEvent& event)
 		if (m_draw_clip)
 		{
 			m_glview->m_draw_clip = false;
-			RefreshGLOverlays();
+			if (plane_mode == PM_LOWTRANSBACK || plane_mode == PM_NORMALBACK)
+				RefreshGL();
+			else 
+				RefreshGLOverlays();
 			m_draw_clip = false;
 		}
 	}
