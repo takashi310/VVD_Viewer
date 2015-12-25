@@ -376,15 +376,20 @@ m_delayed_stop(false)
 	sizer_1->Add(5, 5, 0);
 	wxStaticText * st = new wxStaticText(this, wxID_ANY, "FPS:",
 		wxDefaultPosition, wxSize(30, -1));
+	m_repeat_chk = new wxCheckBox(this, wxID_ANY, "repeat");
+	m_repeat_chk->SetValue(false);
 	wxStaticText * st2 = new wxStaticText(this, wxID_ANY, "Capture:",
 		wxDefaultPosition,wxSize(60,-1));
 	sizer_1->Add(st, 0, wxALIGN_CENTER);
 	sizer_1->Add(m_fps_text, 0, wxALIGN_CENTER);
+	sizer_1->Add(10, 5, 0);
+	sizer_1->Add(m_repeat_chk, 0, wxALIGN_CENTER);
 	sizer_1->AddStretchSpacer();
 	sizer_1->Add(st2, 0, wxALIGN_CENTER);
 	sizer_1->Add(m_views_cmb, 0, wxALIGN_CENTER);
-	sizer_1->Add(5, 5, 0);
-	sizer_1->Add(m_help_btn, 0, wxALIGN_CENTER);
+//	sizer_1->Add(5, 5, 0);
+//	sizer_1->Add(m_help_btn, 0, wxALIGN_CENTER);
+	m_help_btn->Hide();
 
 	//the play/rewind/slider/save
 	wxBoxSizer *sizerH = new wxBoxSizer(wxHORIZONTAL);
@@ -567,7 +572,10 @@ void VMovieView::OnTimer(wxTimerEvent& event) {
 		SetRendering(m_cur_time/len);
 	}
 	if (len - m_cur_time < 0.1 / double(fps) || m_cur_time > len)
-		m_delayed_stop = true;
+	{
+		if (!m_repeat_chk->GetValue() || m_record) m_delayed_stop = true;
+		else m_cur_time = 0.0;
+	}
 }
 
 void VMovieView::OnPrev(wxCommandEvent& event) {

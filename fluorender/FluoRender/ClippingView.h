@@ -174,6 +174,9 @@ public:
 	//dir: 0-lower; 1-higher
 	void MoveLinkedClippingPlanes(int dir);
 
+	void SaveDefault();
+	void LoadDefault();
+
 private:
 	wxWindow* m_frame;
 

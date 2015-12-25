@@ -120,6 +120,7 @@ public:
 	//controls
 	wxTextCtrl *m_fps_text;
 	wxComboBox *m_views_cmb;
+	wxCheckBox *m_repeat_chk;
 	wxButton *m_help_btn;
 
 	wxButton *m_play_btn;

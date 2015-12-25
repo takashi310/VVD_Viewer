@@ -5683,61 +5683,96 @@ void VRenderGLView::Set3DBatFrame(int offset)
 		VolumeData* vd = m_vd_pop_list[i];
 		if (vd && vd->GetReader())
 		{
+			Texture *tex = vd->GetTexture();
 			BaseReader* reader = vd->GetReader();
-			//if (reader->GetOffset() == offset) return;
-			bool found = false;
-			for (j=0; j<(int)reader_list.size(); j++)
+			if(tex && tex->isBrxml())
 			{
-				if (reader == reader_list[j])
+				BRKXMLReader *br = (BRKXMLReader *)reader;
+				int curlv = tex->GetCurLevel();
+				for (int j = 0; j < br->GetLevelNum(); j++)
 				{
-					found = true;
-					break;
+					tex->setLevel(j);
+					if (vd->GetVR()) vd->GetVR()->clear_brick_buf();
 				}
-			}
-			if (!found)
-			{
-				reader->LoadOffset(offset);
-				reader_list.push_back(reader);
-			}
+				tex->setLevel(curlv);
+				tex->set_FrameAndChannel(0, vd->GetCurChannel());
+				vd->SetCurTime(reader->GetCurTime());
+				wxString data_name = wxString(reader->GetDataName());
+				if (i > 0)
+					m_bat_folder += "_";
+				m_bat_folder += data_name;
 
-			double spcx, spcy, spcz;
-			vd->GetSpacings(spcx, spcy, spcz);
+				int chan_num = 0;
+				if (data_name.Find("_1ch")!=-1)
+					chan_num = 1;
+				else if (data_name.Find("_2ch")!=-1)
+					chan_num = 2;
+				if (chan_num>0 && vd->GetCurChannel()>=chan_num)
+					vd->SetDisp(false);
+				else
+					vd->SetDisp(true);
 
-			Nrrd* data = reader->Convert(0, vd->GetCurChannel(), true);
-			if (vd->Replace(data, true))
-				vd->SetDisp(true);
+				if (reader->GetChanNum() > 1)
+					data_name += wxString::Format("_%d", vd->GetCurChannel()+1);
+				vd->SetName(data_name);
+			}
 			else
 			{
-				vd->SetDisp(false);
-				continue;
+				//if (reader->GetOffset() == offset) return;
+				bool found = false;
+				for (j=0; j<(int)reader_list.size(); j++)
+				{
+					if (reader == reader_list[j])
+					{
+						found = true;
+						break;
+					}
+				}
+				if (!found)
+				{
+					reader->LoadOffset(offset);
+					reader_list.push_back(reader);
+				}
+
+				double spcx, spcy, spcz;
+				vd->GetSpacings(spcx, spcy, spcz);
+
+				Nrrd* data = reader->Convert(0, vd->GetCurChannel(), true);
+				if (vd->Replace(data, true))
+					vd->SetDisp(true);
+				else
+				{
+					vd->SetDisp(false);
+					continue;
+				}
+
+				wxString data_name = wxString(reader->GetDataName());
+				if (i > 0)
+					m_bat_folder += "_";
+				m_bat_folder += data_name;
+
+				int chan_num = 0;
+				if (data_name.Find("_1ch")!=-1)
+					chan_num = 1;
+				else if (data_name.Find("_2ch")!=-1)
+					chan_num = 2;
+				if (chan_num>0 && vd->GetCurChannel()>=chan_num)
+					vd->SetDisp(false);
+				else
+					vd->SetDisp(true);
+
+				if (reader->GetChanNum() > 1)
+					data_name += wxString::Format("_%d", vd->GetCurChannel()+1);
+				vd->SetName(data_name);
+				vd->SetPath(wxString(reader->GetPathName()));
+				vd->SetCurTime(reader->GetCurTime());
+				if (!reader->IsSpcInfoValid())
+					vd->SetSpacings(spcx, spcy, spcz);
+				else
+					vd->SetSpacings(reader->GetXSpc(), reader->GetYSpc(), reader->GetZSpc());
+				if (vd->GetVR())
+					vd->GetVR()->clear_tex_pool();
 			}
-
-			wxString data_name = wxString(reader->GetDataName());
-			if (i > 0)
-				m_bat_folder += "_";
-			m_bat_folder += data_name;
-
-			int chan_num = 0;
-			if (data_name.Find("_1ch")!=-1)
-				chan_num = 1;
-			else if (data_name.Find("_2ch")!=-1)
-				chan_num = 2;
-			if (chan_num>0 && vd->GetCurChannel()>=chan_num)
-				vd->SetDisp(false);
-			else
-				vd->SetDisp(true);
-
-			if (reader->GetChanNum() > 1)
-				data_name += wxString::Format("_%d", vd->GetCurChannel()+1);
-			vd->SetName(data_name);
-			vd->SetPath(wxString(reader->GetPathName()));
-			vd->SetCurTime(reader->GetCurTime());
-			if (!reader->IsSpcInfoValid())
-				vd->SetSpacings(spcx, spcy, spcz);
-			else
-				vd->SetSpacings(reader->GetXSpc(), reader->GetYSpc(), reader->GetZSpc());
-			if (vd->GetVR())
-				vd->GetVR()->clear_tex_pool();
 		}
 	}
 

@@ -29,6 +29,7 @@ DEALINGS IN THE SOFTWARE.
 #include "VRenderFrame.h"
 #include "compatibility.h"
 #include <wx/valnum.h>
+#include <wx/stdpaths.h>
 
 BEGIN_EVENT_TABLE(ClippingView, wxPanel)
 	EVT_CHECKBOX(ID_LinkChannelsChk, ClippingView::OnLinkChannelsCheck)
@@ -435,11 +436,14 @@ m_link_z(false)
 	SetSizer(sizer_v);
 	Layout();
 
+	LoadDefault();
+
 	DisableAll();
 }
 
 ClippingView::~ClippingView()
 {
+	SaveDefault();
 }
 
 int ClippingView::GetSelType()
@@ -2393,6 +2397,64 @@ void ClippingView::OnSliderKeyDown(wxKeyEvent& event)
 	}
 
 	event.Skip();
+}
+
+void ClippingView::LoadDefault()
+{
+	wxString expath = wxStandardPaths::Get().GetExecutablePath();
+	expath = expath.BeforeLast(GETSLASH(),NULL);
+#ifdef _WIN32
+	wxString dft = expath + "\\default_clip_settings.dft";
+#else
+	wxString dft = expath + "/../Resources/default_clip_settings.dft";
+#endif
+	wxFileInputStream is(dft);
+	if (!is.IsOk())
+		return;
+	wxFileConfig fconfig(is);
+
+	long ival;
+	if (fconfig.Read("plane_mode", &ival))
+	{
+		m_plane_mode_combo->SetSelection((int)ival);
+		m_plane_mode = (int)ival;
+	}
+
+	bool bval;
+	if (fconfig.Read("link_channels", &bval))
+		m_link_channels->SetValue(bval);
+}
+
+void ClippingView::SaveDefault()
+{
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame)
+		return;
+	DataManager *mgr = vr_frame->GetDataManager();
+	if (!mgr)
+		return;
+
+	wxFileConfig fconfig("FluoRender default clip settings");
+	wxString str;
+
+	//plane mode
+	int ival = m_plane_mode_combo->GetCurrentSelection();
+	fconfig.Write("plane_mode", ival);
+
+	//link
+	bool link = m_link_channels->GetValue();
+	fconfig.Write("link_channels", link);
+	
+#ifdef _DARWIN
+	wxString dft = wxString(getenv("HOME")) + "/Fluorender.settings/";
+	mkdir(dft,0777);
+	chmod(dft,0777);
+	dft = dft + "default_clip_settings.dft";
+#else
+	wxString dft = wxStandardPaths::Get().GetLocalDataDir() + wxFileName::GetPathSeparator() + "default_clip_settings.dft";
+#endif
+	wxFileOutputStream os(dft);
+	fconfig.Save(os);
 }
 
 void ClippingView::EnableAll()
