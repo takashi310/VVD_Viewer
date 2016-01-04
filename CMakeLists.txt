@@ -92,7 +92,8 @@ if(${CMAKE_BUILD_TYPE} MATCHES "Release")
 elseif(${CMAKE_BUILD_TYPE} MATCHES "Debug")
 	set(wxWidgets_CONFIGURATION mswud)
 endif()
-find_package(wxWidgets COMPONENTS core base aui html xml adv gl stc scintilla REQUIRED)
+set(wxWidgets_EXCLUDE_COMMON_LIBRARIES TRUE)
+find_package(wxWidgets COMPONENTS core base aui html xml net adv gl stc scintilla png tiff regex expat REQUIRED)
 include(${wxWidgets_USE_FILE})
 set(wxWidgets_USE_STATIC ON)
 if (APPLE)
@@ -124,7 +125,7 @@ find_package(OpenGL REQUIRED)
 set(Boost_USE_STATIC_LIBS        ON) # only find static libs
 set(Boost_USE_MULTITHREADED      ON)
 set(Boost_USE_STATIC_RUNTIME    OFF)
-find_package(Boost COMPONENTS system chrono filesystem REQUIRED)
+find_package(Boost COMPONENTS system chrono REQUIRED)
 include_directories(${Boost_INCLUDE_DIR})
 
 #teem
@@ -177,14 +178,18 @@ else()
   file(GLOB ffmpeg_LIBRARIES ${FluoRender_SOURCE_DIR}/fluorender/ffmpeg/OSX/lib/*.a)
 endif()
 
+#curl
+add_definitions(-DCURL_STATICLIB)
 mark_as_advanced(CLEAR CURL_INCLUDE_DIR)
 mark_as_advanced(CLEAR CURL_LIBRARY)
 find_package(CURL REQUIRED)
 include_directories(${CURL_INCLUDE_DIR})
 
+#openssl
 find_package(OpenSSL REQUIRED)
 include_directories(${OPENSSL_INCLUDE_DIR})
 
+#libjpeg
 mark_as_advanced(CLEAR JPEG_INCLUDE_DIR)
 mark_as_advanced(CLEAR JPEG_LIBRARY)
 find_package(JPEG REQUIRED)
@@ -391,7 +396,7 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	target_link_libraries(FluoRender
 	   ${CURL_LIBRARIES}
 	   ${JPEG_LIBRARIES}
-	   ${ZLIB_LIBRARIES})
+	   ${ZLIB_LIBRARIES}
 	   ${OPENSSL_LIBRARIES} ws2_32.lib Wldap32.lib
 	   ${ffmpeg_LIBRARIES}
 	   ${OPENGL_LIBRARIES}
@@ -403,7 +408,7 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 	target_link_libraries(FluoRender
 	   ${CURL_LIBRARIES}
 	   ${JPEG_LIBRARIES}
-	   ${ZLIB_LIBRARIES})
+	   ${ZLIB_LIBRARIES}
 	   ${OPENSSL_LIBRARIES}
 	   ${ffmpeg_LIBRARIES}
 	   ${OPENGL_LIBRARIES}
