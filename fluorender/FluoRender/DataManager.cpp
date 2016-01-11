@@ -431,7 +431,7 @@ bool VolumeData::GetSkipBrick()
 	return m_skip_brick;
 }
 
-int VolumeData::Load(Nrrd* data, wxString &name, wxString &path, BRKXMLReader *breader)
+int VolumeData::Load(Nrrd* data, const wxString &name, const wxString &path, BRKXMLReader *breader)
 {
 	if (!data || data->dim!=3)
 		return 0;
@@ -1574,7 +1574,7 @@ double VolumeData::GetRightThresh()
 	return m_hi_thresh;
 }
 
-void VolumeData::SetColor(Color &color, bool update_hsv)
+void VolumeData::SetColor(const Color &color, bool update_hsv)
 {
 	m_color = color;
 	if (update_hsv)
@@ -3429,7 +3429,7 @@ void Ruler::Scale(double spcx, double spcy, double spcz)
 		m_ruler[i].scale(spcx, spcy, spcz);
 }
 
-bool Ruler::AddPoint(Point &point)
+bool Ruler::AddPoint(const Point &point)
 {
 	if (m_ruler_type == 2 &&
 		m_ruler.size() == 1)
@@ -4802,7 +4802,7 @@ MeshData* DataManager::GetMeshData(int index)
 		return 0;
 }
 
-VolumeData* DataManager::GetVolumeData(wxString &name)
+VolumeData* DataManager::GetVolumeData(const wxString &name)
 {
 	for (int i=0 ; i<(int)m_vd_list.size() ; i++)
 	{

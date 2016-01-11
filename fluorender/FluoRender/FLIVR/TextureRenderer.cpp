@@ -1314,35 +1314,42 @@ namespace FLIVR
 	void TextureRenderer::draw_polygons(vector<float>& vertex,
 		vector<uint32_t>& triangle_verts, vector<uint32_t>& size)
 	{
-		if (vertex.empty() || triangle_verts.empty())
-			return;
-
-		//link to the new data
-		glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_STREAM_DRAW);
-		
-		glBindVertexArray(m_slices_vao);
-		//now draw it
-		glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)0);
-		glEnableVertexAttribArray(1);
-		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)12);
-
-		int slicen = size.size();
-		uint32_t *t = &triangle_verts[0];
-		for (int s = 0; s < slicen; s++)
-		{
-			unsigned int tsize = (size[s]-2)*3;
-			glDrawElements(GL_TRIANGLES, tsize, GL_UNSIGNED_INT, t);
-			glFlush();
-			t += tsize;
-		}
-		glDisableVertexAttribArray(0);
-		glDisableVertexAttribArray(1);
-		//unbind
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindVertexArray(0);
+        if (vertex.empty() || triangle_verts.empty())
+            return;
+        
+        //link to the new data
+        glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_slices_ibo);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*triangle_verts.size(),
+                     &triangle_verts[0], GL_DYNAMIC_DRAW);
+        
+        glBindVertexArray(m_slices_vao);
+        //now draw it
+        glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)12);
+        
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_slices_ibo);
+        int slicen = size.size();
+        uint32_t *t = &triangle_verts[0];
+        for (int s = 0; s < slicen; s++)
+        {
+            unsigned int tsize = (size[s]-2)*3;
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*tsize,
+                         t, GL_DYNAMIC_DRAW);
+            glDrawElements(GL_TRIANGLES, tsize, GL_UNSIGNED_INT, 0);
+            glFlush();
+            t += tsize;
+        }
+        glDisableVertexAttribArray(0);
+        glDisableVertexAttribArray(1);
+        //unbind
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
 	}
 
 	void TextureRenderer::draw_polygons_wireframe(vector<float>& vertex,

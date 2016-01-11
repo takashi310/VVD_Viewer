@@ -180,7 +180,8 @@ void LMTreeCtrl::OnSelectChanged(wxTreeEvent &event)
 			{
 				Point p = itemdata->p;
 				m_glview->GetObjCenters(cx, cy, cz);
-				m_glview->StartManipulation(NULL, NULL, NULL, &Point(cx-p.x(), -(cy-p.y()), -(cz-p.z())), NULL);
+                Point trans = Point(cx-p.x(), -(cy-p.y()), -(cz-p.z()));
+				m_glview->StartManipulation(NULL, NULL, NULL, &trans, NULL);
 			}
 		}
 		CopyToSchTextCtrl();
@@ -309,7 +310,8 @@ void LMSeacher::OnEnterInSearcher(wxCommandEvent &event)
 					double cx, cy, cz;
 					Point *p = (*landmarks)[i]->GetPoint(0);
 					m_glview->GetObjCenters(cx, cy, cz);
-					m_glview->StartManipulation(NULL, NULL, NULL, &Point(cx-p->x(), -(cy-p->y()), -(cz-p->z())), NULL);
+                    Point trans = Point(cx-p->x(), -(cy-p->y()), -(cz-p->z()));
+					m_glview->StartManipulation(NULL, NULL, NULL, &trans, NULL);
 					break;
 				}
 			}
@@ -4734,7 +4736,7 @@ void VRenderGLView::UpdateBrushState()
 			!wxGetKeyState(wxKeyCode('Z')) &&
 			!wxGetKeyState(wxKeyCode('X')))
 		{
-			if (wxGetMouseState().LeftDown())
+			if (wxGetMouseState().LeftIsDown())
 			{
 				//         Segment();
 				m_clear_paint = true;
@@ -4944,6 +4946,8 @@ void VRenderGLView::OnIdle(wxIdleEvent& event)
 	bool ref_stat = false;
 	bool start_loop = true;
 	m_drawing_coord = false;
+    
+    event.RequestMore(true);
 
 	//check memory swap status
 	if (TextureRenderer::get_mem_swap() &&
@@ -11252,7 +11256,8 @@ void VRenderGLView::OnMouse(wxMouseEvent& event)
 		{
 			double cx, cy, cz;
 			GetObjCenters(cx, cy, cz);
-			StartManipulation(NULL, NULL, NULL, &Point(cx-p->x(), -(cy-p->y()), -(cz-p->z())), NULL);
+            Point trans = Point(cx-p->x(), -(cy-p->y()), -(cz-p->z()));
+			StartManipulation(NULL, NULL, NULL, &trans, NULL);
 		}
 	}
 
@@ -11911,7 +11916,7 @@ void VRenderGLView::CalcFrame()
 	}
 }
 
-void VRenderGLView::StartManipulation(Point *view_trans, Point *view_center, Point *view_rot, Point *obj_trans, double *scale)
+void VRenderGLView::StartManipulation(const Point *view_trans, const Point *view_center, const Point *view_rot, const Point *obj_trans, const double *scale)
 {
 	if(m_capture) return;
 
@@ -11952,7 +11957,7 @@ void VRenderGLView::EndManipulation()
 	TextureRenderer::set_done_update_loop(true);
 }
 
-void VRenderGLView::SetManipKey(double t, int interpolation, Point *view_trans, Point *view_center, Point *view_rot, Point *obj_trans, double *scale)
+void VRenderGLView::SetManipKey(double t, int interpolation, const Point *view_trans, const Point *view_center, const Point *view_rot, const Point *obj_trans, const double *scale)
 {
 	if(!m_vrv)
 		return;
@@ -12390,9 +12395,9 @@ wxPanel(parent, id, pos, size, style),
 		WX_GL_SAMPLE_BUFFERS, 1,
 		WX_GL_SAMPLES, samples,
 		// context properties.
-//		WX_GL_CORE_PROFILE,
-//		WX_GL_MAJOR_VERSION, gl_major_ver,
-//		WX_GL_MINOR_VERSION, gl_minor_ver,
+		WX_GL_CORE_PROFILE,
+		WX_GL_MAJOR_VERSION, gl_major_ver,
+		WX_GL_MINOR_VERSION, gl_minor_ver,
 		0, 0
 	};
 	m_glview = new VRenderGLView(frame, this, wxID_ANY, attriblist, sharedContext);

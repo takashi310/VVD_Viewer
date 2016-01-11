@@ -629,9 +629,9 @@ public:
 	double GetManipFPS(){ return m_manip_fps; }
 	void SetManipTime(unsigned long time){ m_manip_time = time; }
 	unsigned long GetManipTime(){ return m_manip_time; }
-	void StartManipulation(Point *view_trans, Point *view_center, Point *view_rot, Point *obj_trans, double *scale);
+	void StartManipulation(const Point *view_trans, const Point *view_center, const Point *view_rot, const Point *obj_trans, const double *scale);
 	void EndManipulation();
-	void SetManipKey(double t, int interpolation, Point *view_trans, Point *view_center, Point *view_rot, Point *obj_trans, double *scale);
+	void SetManipKey(double t, int interpolation, const Point *view_trans, const Point *view_center, const Point *view_rot, const Point *obj_trans, const double *scale);
 	void SetManipParams(double t);
 
 	void SetSearcherVisibility(bool visibility);

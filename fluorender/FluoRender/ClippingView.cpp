@@ -2447,8 +2447,8 @@ void ClippingView::SaveDefault()
 	
 #ifdef _DARWIN
 	wxString dft = wxString(getenv("HOME")) + "/Fluorender.settings/";
-	mkdir(dft,0777);
-	chmod(dft,0777);
+	mkdir(dft.ToStdString().c_str(),0777);
+	chmod(dft.ToStdString().c_str(),0777);
 	dft = dft + "default_clip_settings.dft";
 #else
 	wxString dft = wxStandardPaths::Get().GetLocalDataDir() + wxFileName::GetPathSeparator() + "default_clip_settings.dft";

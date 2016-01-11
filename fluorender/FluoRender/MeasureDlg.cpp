@@ -417,7 +417,7 @@ wxString RulerListCtrl::GetText(long item, int col)
 	return info.GetText();
 }
 
-void RulerListCtrl::SetText(long item, int col, wxString &str)
+void RulerListCtrl::SetText(long item, int col, const wxString &str)
 {
 	wxListItem info;
 	info.SetId(item);

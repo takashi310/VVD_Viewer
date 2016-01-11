@@ -267,7 +267,7 @@ namespace FLIVR
 		return hi_thresh_;
 	}
 
-	void VolumeRenderer::set_color(Color color)
+	void VolumeRenderer::set_color(const Color color)
 	{
 		color_ = color;
 
@@ -294,7 +294,7 @@ namespace FLIVR
 		return color_;
 	}
 
-	void VolumeRenderer::set_mask_color(Color color, bool set)
+	void VolumeRenderer::set_mask_color(const Color color, bool set)
 	{
 		mask_color_ = color;
 		mask_color_set_ = set;
@@ -928,9 +928,6 @@ namespace FLIVR
 */
 
 		if (cur_chan_brick_num_ == 0) rearrangeLoadedBrkVec();
-
-		timeBeginPeriod(1);
-		timeEndPeriod(1);
 
 		int bmode = mode;
 		if (mask_)  bmode = TEXTURE_RENDER_MODE_MASK;

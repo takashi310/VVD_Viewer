@@ -57,7 +57,7 @@ DEALINGS IN THE SOFTWARE.
 #include "Tracking/TrackMap.h"
 #include "DatabaseDlg.h"
 
-#include <libcurl\curl\curl.h>
+#include <curl/curl.h>
 
 #ifndef _DATAMANAGER_H_
 #define _DATAMANAGER_H_
@@ -199,7 +199,7 @@ public:
 	void SetSkipBrick(bool skip);
 	bool GetSkipBrick();
 	//load
-	int Load(Nrrd* data, wxString &name, wxString &path, BRKXMLReader *breader = NULL);
+	int Load(Nrrd* data, const wxString &name, const wxString &path, BRKXMLReader *breader = NULL);
 	int Replace(Nrrd* data, bool del_tex);
 	int Replace(VolumeData* data);
 	Nrrd* GetVolume(bool ret);
@@ -281,7 +281,7 @@ public:
 	double GetLeftThresh();
 	void SetRightThresh(double dVal);
 	double GetRightThresh();
-	void SetColor(Color &color, bool update_hsv=true);
+	void SetColor(const Color &color, bool update_hsv=true);
 	Color GetColor();
 	void SetMaskColor(Color &color, bool set=true);
 	Color GetMaskColor();
@@ -836,7 +836,7 @@ public:
 	double GetAngle();
 	void Scale(double spcx, double spcy, double spcz);
 
-	bool AddPoint(Point &point);
+	bool AddPoint(const Point &point);
 	void SetTransform(Transform *tform);
 
 	void Clear();
@@ -1341,7 +1341,7 @@ public:
 	void RemoveVolumeData(int index);
 	int GetVolumeNum();
 	VolumeData* GetVolumeData(int index);
-	VolumeData* GetVolumeData(wxString &name);
+	VolumeData* GetVolumeData(const wxString &name);
 	int GetVolumeIndex(wxString &name);
 	VolumeData* GetLastVolumeData()
 	{

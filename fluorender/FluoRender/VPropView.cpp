@@ -2159,8 +2159,8 @@ void VPropView::OnSaveDefault(wxCommandEvent& event)
 	mgr->m_vol_swi = swi;
 #ifdef _DARWIN
 	wxString dft = wxString(getenv("HOME")) + "/Fluorender.settings/";
-	mkdir(dft,0777);
-	chmod(dft,0777);
+	mkdir(dft.ToStdString().c_str(),0777);
+	chmod(dft.ToStdString().c_str(),0777);
 	dft = dft + "default_volume_settings.dft";
 #else
 	wxString dft = wxStandardPaths::Get().GetLocalDataDir() + wxFileName::GetPathSeparator() + "default_volume_settings.dft";

@@ -884,21 +884,27 @@ namespace FLIVR
 				  filter = GL_LINEAR;
 			  else
 				  filter = GL_NEAREST;
-			  vr->load_brick(0, 0, &vector<TextureBrick *>(1,b), 0, filter, vr->compression_, 0, false);
+              vector<TextureBrick *> tempbv(1, b);
+			  vr->load_brick(0, 0, &tempbv, 0, filter, vr->compression_, 0, false);
 			  
-			  glBindVertexArray(vr->m_slices_vao);
-			  glBindBuffer(GL_ARRAY_BUFFER, vr->m_slices_vbo);
-			  glBufferData(GL_ARRAY_BUFFER, sizeof(float)*s_v*6, vert, GL_DYNAMIC_DRAW);
-			  glEnableVertexAttribArray(0);
-			  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)0);
-			  glEnableVertexAttribArray(1);
-			  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)12);
-			  glDrawElements(GL_TRIANGLES, s_i*3, GL_UNSIGNED_INT, indx);
-			  glDisableVertexAttribArray(0);
-			  glDisableVertexAttribArray(1);
-			  glBindBuffer(GL_ARRAY_BUFFER, 0);
-			  glBindVertexArray(0);
-
+              glBindVertexArray(vr->m_slices_vao);
+              glBindBuffer(GL_ARRAY_BUFFER, vr->m_slices_vbo);
+              glBufferData(GL_ARRAY_BUFFER, sizeof(float)*s_v*6, vert, GL_DYNAMIC_DRAW);
+              glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vr->m_slices_ibo);
+              glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*s_i*3,
+                           indx, GL_DYNAMIC_DRAW);
+              glEnableVertexAttribArray(0);
+              glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)0);
+              glEnableVertexAttribArray(1);
+              glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)12);
+              glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vr->m_slices_ibo);
+              glDrawElements(GL_TRIANGLES, s_i*3, GL_UNSIGNED_INT, 0);
+              glDisableVertexAttribArray(0);
+              glDisableVertexAttribArray(1);
+              glBindBuffer(GL_ARRAY_BUFFER, 0);
+              glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+              glBindVertexArray(0);
+              
 			  //release depth texture for rendering shadows
 			  if (vr_cmode == FLV_CTYPE_DEPTH)
 				  vr->release_texture(4, GL_TEXTURE_2D);

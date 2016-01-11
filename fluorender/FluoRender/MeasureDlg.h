@@ -67,7 +67,7 @@ public:
 	void Export(wxString filename);
 
 	wxString GetText(long item, int col);
-	void SetText(long item, int col, wxString &str);
+	void SetText(long item, int col, const wxString &str);
 	void UpdateText(VRenderView* vrv=0);
 
 	friend class MeasureDlg;

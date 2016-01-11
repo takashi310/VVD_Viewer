@@ -43,7 +43,7 @@ DEALINGS IN THE SOFTWARE.
 #include <iostream>
 #include <sstream>
 #include <cctype>
-#include <libcurl\curl\curl.h>
+#include <curl/curl.h>
 
 //resources
 #include "img/icons.h"
@@ -125,6 +125,8 @@ VRenderFrame::VRenderFrame(
 	curl_global_init(CURL_GLOBAL_ALL);//add by takashi
 	_g_curlm = curl_multi_init();//add by takashi
 	_g_curl = curl_easy_init();//add by takashi
+    
+    FLIVR::TextureBrick::setCURL(_g_curl);
 
 	//create this first to read the settings
 	m_setting_dlg = new SettingDlg(this, this);

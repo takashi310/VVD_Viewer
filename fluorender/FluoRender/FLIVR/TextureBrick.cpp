@@ -36,12 +36,16 @@
 #include <utility>
 #include <iostream>
 #include <jpeglib.h>
-#include <libcurl\curl\curl.h>
+#include <curl/curl.h>
+#include "../compatibility.h"
+#include <setjmp.h>
 
 using namespace std;
 
 namespace FLIVR
 {
+    CURL* TextureBrick::s_curl_ = NULL;
+    
    TextureBrick::TextureBrick (Nrrd* n0, Nrrd* n1,
          int nx, int ny, int nz, int nc, int* nb,
          int ox, int oy, int oz,
@@ -1038,7 +1042,7 @@ z
 	   try
 	   {
 		   ifstream ifs;
-		   ifs.open(*fname, ios::binary);
+		   ifs.open(ws2s(*fname), ios::binary);
 		   if (!ifs) return false;
 		   ifs.read(data, size);
 		   if (ifs) ifs.close();
@@ -1114,24 +1118,23 @@ z
 	   }
 	   if(total != size)return false;
 	   */
-	   extern CURL *_g_curl;
 	   CURLcode ret;
 	   struct MemoryStruct chunk;
 	   chunk.memory = (char *)malloc(1);  /* will be grown as needed by the realloc above */ 
 	   chunk.size = 0;
 
-	   if (_g_curl == NULL) {
+	   if (s_curl_ == NULL) {
 		   cerr << "curl_easy_init() failed" << endl;
 		   return false;
 	   }
-	   curl_easy_reset(_g_curl);
-	   curl_easy_setopt(_g_curl, CURLOPT_URL, wxString::wxString(*fname).ToStdString().c_str());
-	   curl_easy_setopt(_g_curl, CURLOPT_USERAGENT, "libcurl-agent/1.0");
-	   curl_easy_setopt(_g_curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
-	   curl_easy_setopt(_g_curl, CURLOPT_WRITEDATA, &chunk);
+	   curl_easy_reset(s_curl_);
+	   curl_easy_setopt(s_curl_, CURLOPT_URL, wxString::wxString(*fname).ToStdString().c_str());
+	   curl_easy_setopt(s_curl_, CURLOPT_USERAGENT, "libcurl-agent/1.0");
+	   curl_easy_setopt(s_curl_, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
+	   curl_easy_setopt(s_curl_, CURLOPT_WRITEDATA, &chunk);
 	   //ピア証明書検証なし
-	   curl_easy_setopt(_g_curl, CURLOPT_SSL_VERIFYPEER, 0);
-	   ret = curl_easy_perform(_g_curl);
+	   curl_easy_setopt(s_curl_, CURLOPT_SSL_VERIFYPEER, 0);
+	   ret = curl_easy_perform(s_curl_);
 	   if (ret != CURLE_OK) {
 		   cerr << "curl_easy_perform() failed." << curl_easy_strerror(ret) << endl;
 		   return false;
@@ -1173,8 +1176,9 @@ z
 	   jpeg_decompress_struct cinfo;
 	   struct my_error_mgr jerr;
 	   
-	   FILE *fp = _wfopen(fname->c_str(), L"rb");
-	   if (!fp) return false;
+       FILE *fp = 0;
+       if (!WFOPEN(&fp, fname->c_str(), L"rb"))
+           return false;
 
 	   cinfo.err = jpeg_std_error(&jerr.pub);
 	   jerr.pub.error_exit = my_error_exit;
@@ -1214,24 +1218,23 @@ z
 	   jpeg_decompress_struct cinfo;
 	   struct my_error_mgr jerr;
 	   
-	   extern CURL *_g_curl;
 	   CURLcode ret;
 	   struct MemoryStruct chunk;
 	   chunk.memory = (char *)malloc(1);
 	   chunk.size = 0;
 
-	   if (_g_curl == NULL) {
+	   if (s_curl_ == NULL) {
 		   cerr << "curl_easy_init() failed" << endl;
 		   return false;
 	   }
-	   curl_easy_reset(_g_curl);
-	   curl_easy_setopt(_g_curl, CURLOPT_URL, wxString::wxString(*fname).ToStdString().c_str());
-	   curl_easy_setopt(_g_curl, CURLOPT_USERAGENT, "libcurl-agent/1.0");
-	   curl_easy_setopt(_g_curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
-	   curl_easy_setopt(_g_curl, CURLOPT_WRITEDATA, &chunk);
+	   curl_easy_reset(s_curl_);
+	   curl_easy_setopt(s_curl_, CURLOPT_URL, wxString::wxString(*fname).ToStdString().c_str());
+	   curl_easy_setopt(s_curl_, CURLOPT_USERAGENT, "libcurl-agent/1.0");
+	   curl_easy_setopt(s_curl_, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
+	   curl_easy_setopt(s_curl_, CURLOPT_WRITEDATA, &chunk);
 	   //ピア証明書検証なし
-	   curl_easy_setopt(_g_curl, CURLOPT_SSL_VERIFYPEER, 0);
-	   ret = curl_easy_perform(_g_curl);
+	   curl_easy_setopt(s_curl_, CURLOPT_SSL_VERIFYPEER, 0);
+	   ret = curl_easy_perform(s_curl_);
 	   if (ret != CURLE_OK) {
 		   cerr << "curl_easy_perform() failed." << curl_easy_strerror(ret) << endl;
 		   return false;

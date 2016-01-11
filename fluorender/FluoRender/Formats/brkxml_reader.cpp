@@ -155,11 +155,6 @@ void BRKXMLReader::SetURL(wstring &url)
 
 void BRKXMLReader::Preprocess()
 {
-	long ival;
-	double dval;
-	
-	wxString strValue;
-
 	Clear();
 	m_slice_num = 0;
 	m_chan_num = 0;
@@ -175,8 +170,7 @@ void BRKXMLReader::Preprocess()
 	wstring path = m_path_name.substr(0, pos+1);
 	wstring name = m_path_name.substr(pos+1);
 
-	wxString fname(m_path_name);
-	if (m_doc.LoadFile(fname.ToStdString().c_str()) != 0){
+	if (m_doc.LoadFile(ws2s(m_path_name).c_str()) != 0){
 		return;
 	}
 		
@@ -216,27 +210,23 @@ void BRKXMLReader::Preprocess()
 BRKXMLReader::ImageInfo BRKXMLReader::ReadImageInfo(tinyxml2::XMLElement *infoNode)
 {
 	ImageInfo iinfo;
-	long ival;
-	double dval;
+	int ival;
 	
-	wxString strValue;
+    string strValue;
 	
-	strValue = infoNode->Attribute("nChannel");
-	strValue.ToLong(&ival);
+	ival = STOI(infoNode->Attribute("nChannel"));
 	iinfo.nChannel = ival;
 
-	strValue = infoNode->Attribute("nFrame");
-	strValue.ToLong(&ival);
+    ival = STOI(infoNode->Attribute("nFrame"));
 	iinfo.nFrame = ival;
 
-	strValue = infoNode->Attribute("nLevel");
-	strValue.ToLong(&ival);
+    ival = STOI(infoNode->Attribute("nLevel"));
 	iinfo.nLevel = ival;
 
 	strValue = infoNode->Attribute("CopyableLv");
-	if(!strValue.IsEmpty())
+	if(!strValue.empty())
 	{
-		strValue.ToLong(&ival);
+		ival = STOI(strValue.c_str());
 		iinfo.copyableLv = ival;
 	}
 	else
@@ -247,8 +237,7 @@ BRKXMLReader::ImageInfo BRKXMLReader::ReadImageInfo(tinyxml2::XMLElement *infoNo
 
 void BRKXMLReader::ReadPyramid(tinyxml2::XMLElement *lvRootNode, vector<LevelInfo> &pylamid)
 {
-	wxString str;
-	long ival;
+	int ival;
 	int level;
 
 	tinyxml2::XMLElement *child = lvRootNode->FirstChildElement();
@@ -256,12 +245,12 @@ void BRKXMLReader::ReadPyramid(tinyxml2::XMLElement *lvRootNode, vector<LevelInf
 	{
 		if (strcmp(child->Name(), "Level") == 0)
 		{
-			str = child->Attribute("lv");
-			str.ToLong(&ival);
-			level = ival;
-			
-			if(level + 1 > pylamid.size()) pylamid.resize(level + 1);
-			ReadLevel(child, pylamid[level]);
+            level = STOI(child->Attribute("lv"));
+            if (level >= 0)
+            {
+                if(level + 1 > pylamid.size()) pylamid.resize(level + 1);
+                ReadLevel(child, pylamid[level]);
+            }
 		}
 		child = child->NextSiblingElement();
 	}
@@ -269,41 +258,25 @@ void BRKXMLReader::ReadPyramid(tinyxml2::XMLElement *lvRootNode, vector<LevelInf
 
 void BRKXMLReader::ReadLevel(tinyxml2::XMLElement* lvNode, LevelInfo &lvinfo)
 {
-	long ival;
-	double dval;
 	
-	wxString strValue;
+	string strValue;
 
-	strValue = lvNode->Attribute("imageW");
-	strValue.ToLong(&ival);
-	lvinfo.imageW = ival;
+	lvinfo.imageW = STOI(lvNode->Attribute("imageW"));
 
-	strValue = lvNode->Attribute("imageH");
-	strValue.ToLong(&ival);
-	lvinfo.imageH = ival;
+	lvinfo.imageH = STOI(lvNode->Attribute("imageH"));
 
-	strValue = lvNode->Attribute("imageD");
-	strValue.ToLong(&ival);
-	lvinfo.imageD = ival;
+	lvinfo.imageD = STOI(lvNode->Attribute("imageD"));
 
-	strValue = lvNode->Attribute("xspc");
-	strValue.ToDouble(&dval);
-	lvinfo.xspc = dval;
+	lvinfo.xspc = STOD(lvNode->Attribute("xspc"));
 
-	strValue = lvNode->Attribute("yspc");
-	strValue.ToDouble(&dval);
-	lvinfo.yspc = dval;
+	lvinfo.yspc = STOD(lvNode->Attribute("yspc"));
 
-	strValue = lvNode->Attribute("zspc");
-	strValue.ToDouble(&dval);
-	lvinfo.zspc = dval;
+	lvinfo.zspc = STOD(lvNode->Attribute("zspc"));
 
-	strValue = lvNode->Attribute("bitDepth");
-	strValue.ToLong(&ival);
-	lvinfo.bit_depth = ival;
+	lvinfo.bit_depth = STOI(lvNode->Attribute("bitDepth"));
 
 	strValue = lvNode->Attribute("FileType");
-	if(strValue == "RAW") lvinfo.file_type = BRICK_FILE_TYPE_RAW;
+	if (strValue == "RAW") lvinfo.file_type = BRICK_FILE_TYPE_RAW;
 	else if (strValue == "JPEG") lvinfo.file_type = BRICK_FILE_TYPE_JPEG;
 	else lvinfo.file_type = BRICK_FILE_TYPE_NONE;
 
@@ -311,17 +284,11 @@ void BRKXMLReader::ReadLevel(tinyxml2::XMLElement* lvNode, LevelInfo &lvinfo)
 	while (child)
 	{
 		if (strcmp(child->Name(), "Bricks") == 0){
-			strValue = child->Attribute("brick_baseW");
-			strValue.ToLong(&ival);
-			lvinfo.brick_baseW = ival;
+			lvinfo.brick_baseW = STOI(child->Attribute("brick_baseW"));
 
-			strValue = child->Attribute("brick_baseH");
-			strValue.ToLong(&ival);
-			lvinfo.brick_baseH = ival;
+			lvinfo.brick_baseH = STOI(child->Attribute("brick_baseH"));
 
-			strValue = child->Attribute("brick_baseD");
-			strValue.ToLong(&ival);
-			lvinfo.brick_baseD = ival;
+			lvinfo.brick_baseD = STOI(child->Attribute("brick_baseD"));
 
 			ReadPackedBricks(child, lvinfo.bricks);
 		}
@@ -332,8 +299,6 @@ void BRKXMLReader::ReadLevel(tinyxml2::XMLElement* lvNode, LevelInfo &lvinfo)
 
 void BRKXMLReader::ReadPackedBricks(tinyxml2::XMLElement* packNode, vector<BrickInfo *> &brks)
 {
-	wxString str;
-	long ival;
 	int id;
 	
 	tinyxml2::XMLElement *child = packNode->FirstChildElement();
@@ -341,9 +306,7 @@ void BRKXMLReader::ReadPackedBricks(tinyxml2::XMLElement* packNode, vector<Brick
 	{
 		if (strcmp(child->Name(), "Brick") == 0)
 		{
-			str = child->Attribute("id");
-			str.ToLong(&ival);
-			id = ival;
+			id = STOI(child->Attribute("id"));
 
 			if(id + 1 > brks.size())
 				brks.resize(id + 1, NULL);
@@ -357,46 +320,28 @@ void BRKXMLReader::ReadPackedBricks(tinyxml2::XMLElement* packNode, vector<Brick
 
 void BRKXMLReader::ReadBrick(tinyxml2::XMLElement* brickNode, BrickInfo &binfo)
 {
-	long ival;
+	int ival;
 	double dval;
 	
-	wxString strValue;
+	string strValue;
 		
-	strValue = brickNode->Attribute("id");
-	strValue.ToLong(&ival);
-	binfo.id = ival;
+	binfo.id = STOI(brickNode->Attribute("id"));
 
-	strValue = brickNode->Attribute("width");
-	strValue.ToLong(&ival);
-	binfo.x_size = ival;
+	binfo.x_size = STOI(brickNode->Attribute("width"));
 
-	strValue = brickNode->Attribute("height");
-	strValue.ToLong(&ival);
-	binfo.y_size = ival;
+	binfo.y_size = STOI(brickNode->Attribute("height"));
 
-	strValue = brickNode->Attribute("depth");
-	strValue.ToLong(&ival);
-	binfo.z_size = ival;
+	binfo.z_size = STOI(brickNode->Attribute("depth"));
 
-	strValue = brickNode->Attribute("st_x");
-	strValue.ToLong(&ival);
-	binfo.x_start = ival;
+	binfo.x_start = STOI(brickNode->Attribute("st_x"));
 
-	strValue = brickNode->Attribute("st_y");
-	strValue.ToLong(&ival);
-	binfo.y_start = ival;
+	binfo.y_start = STOI(brickNode->Attribute("st_y"));
 
-	strValue = brickNode->Attribute("st_z");
-	strValue.ToLong(&ival);
-	binfo.z_start = ival;
+	binfo.z_start = STOI(brickNode->Attribute("st_z"));
 
-	strValue = brickNode->Attribute("offset");
-	strValue.ToLong(&ival);
-	binfo.offset = ival;
+	binfo.offset = STOI(brickNode->Attribute("offset"));
 
-	strValue = brickNode->Attribute("size");
-	strValue.ToLong(&ival);
-	binfo.fsize = ival;
+	binfo.fsize = STOI(brickNode->Attribute("size"));
 
 	tinyxml2::XMLElement *child = brickNode->FirstChildElement();
 	while (child)
@@ -415,41 +360,22 @@ void BRKXMLReader::ReadBrick(tinyxml2::XMLElement* brickNode, BrickInfo &binfo)
 
 void BRKXMLReader::Readbox(tinyxml2::XMLElement* boxNode, double &x0, double &y0, double &z0, double &x1, double &y1, double &z1)
 {
-	double dval;
+	x0 = STOD(boxNode->Attribute("x0"));
 	
-	wxString strValue;
-	BrickInfo binfo;
-	
-	strValue = boxNode->Attribute("x0");
-	strValue.ToDouble(&dval);
-	x0 = dval;
-	
-	strValue = boxNode->Attribute("y0");
-	strValue.ToDouble(&dval);
-	y0 = dval;
+	y0 = STOD(boxNode->Attribute("y0"));
 
-	strValue = boxNode->Attribute("z0");
-	strValue.ToDouble(&dval);
-	z0 = dval;
+	z0 = STOD(boxNode->Attribute("z0"));
 
-	strValue = boxNode->Attribute("x1");
-	strValue.ToDouble(&dval);
-	x1 = dval;
-
-	strValue = boxNode->Attribute("y1");
-	strValue.ToDouble(&dval);
-	y1 = dval;
-
-	strValue = boxNode->Attribute("z1");
-	strValue.ToDouble(&dval);
-	z1 = dval;
-
+	x1 = STOD(boxNode->Attribute("x1"));
+    
+    y1 = STOD(boxNode->Attribute("y1"));
+    
+    z1 = STOD(boxNode->Attribute("z1"));
 }
 
 void BRKXMLReader::ReadFilenames(tinyxml2::XMLElement* fileRootNode, vector<vector<vector<wstring *>>> &filename)
 {
-	wxString str;
-	long ival;
+	string str;
 	int frame, channel, id;
 
 	tinyxml2::XMLElement *child = fileRootNode->FirstChildElement();
@@ -457,17 +383,11 @@ void BRKXMLReader::ReadFilenames(tinyxml2::XMLElement* fileRootNode, vector<vect
 	{
 		if (strcmp(child->Name(), "File") == 0)
 		{
-			str = child->Attribute("frame");
-			str.ToLong(&ival);
-			frame = ival;
+			frame = STOI(child->Attribute("frame"));
 
-			str = child->Attribute("channel");
-			str.ToLong(&ival);
-			channel = ival;
+			channel = STOI(child->Attribute("channel"));
 
-			str = child->Attribute("brickID");
-			str.ToLong(&ival);
-			id = ival;
+			id = STOI(child->Attribute("brickID"));
 
 			if(frame + 1 > filename.size())
 				filename.resize(frame + 1);
@@ -477,19 +397,18 @@ void BRKXMLReader::ReadFilenames(tinyxml2::XMLElement* fileRootNode, vector<vect
 				filename[frame][channel].resize(id + 1, NULL);
 
 			str = child->Attribute("filename");
-			if (!filename[frame][channel][id]) filename[frame][channel][id] = new wstring((m_isURL ? m_url_dir : m_dir_name) + str.ToStdWstring());
+			if (!filename[frame][channel][id]) filename[frame][channel][id] = new wstring((m_isURL ? m_url_dir : m_dir_name) + s2ws(str));
 		}
 		child = child->NextSiblingElement();
 	}
 }
 
-void BRKXMLReader::loadMetadata(wstring &file)
+void BRKXMLReader::loadMetadata(const wstring &file)
 {
-	wxString str;
+	string str;
 	double dval;
 
-	wxString fname(file);
-	if (m_md_doc.LoadFile(fname.ToStdString().c_str()) != 0){
+	if (m_md_doc.LoadFile(ws2s(file).c_str()) != 0){
 		return;
 	}
 		
@@ -498,7 +417,7 @@ void BRKXMLReader::loadMetadata(wstring &file)
 		return;
 
 	str = root->Attribute("ID");
-	m_metadata_id = str;
+	m_metadata_id = s2ws(str);
 
 	tinyxml2::XMLElement *child = root->FirstChildElement();
 	while (child)
@@ -508,27 +427,15 @@ void BRKXMLReader::loadMetadata(wstring &file)
 			Landmark lm;
 
 			str = child->Attribute("name");
-			lm.name = str;
+			lm.name = s2ws(str);
 			
-			str = child->Attribute("x");
-			str.ToDouble(&dval);
-			lm.x = dval;
-			str = child->Attribute("y");
-			str.ToDouble(&dval);
-			lm.y = dval;
-			str = child->Attribute("z");
-			str.ToDouble(&dval);
-			lm.z = dval;
+			lm.x = STOD(child->Attribute("x"));
+            lm.y = STOD(child->Attribute("y"));
+            lm.z = STOD(child->Attribute("z"));
 			
-			str = child->Attribute("spcx");
-			str.ToDouble(&dval);
-			lm.spcx = dval;
-			str = child->Attribute("spcy");
-			str.ToDouble(&dval);
-			lm.spcy = dval;
-			str = child->Attribute("spcz");
-			str.ToDouble(&dval);
-			lm.spcz = dval;
+			lm.spcx = STOD(child->Attribute("spcx"));
+            lm.spcy = STOD(child->Attribute("spcy"));
+            lm.spcz = STOD(child->Attribute("spcz"));
 
 			m_landmarks.push_back(lm);
 		}
@@ -846,7 +753,7 @@ void BRKXMLReader::OutputInfo()
 		for(int j = 0; j < m_pyramid[i].filename.size(); j++){
 			for(int k = 0; k < m_pyramid[i].filename[j].size(); k++){
 				for(int n = 0; n < m_pyramid[i].filename[j][k].size(); n++)
-					ofs << "\t<Frame = " << j << " Channel = " << k << " ID = " << n << " Filepath = " << *m_pyramid[i].filename[j][k][n] << ">\n";
+					ofs << "\t<Frame = " << j << " Channel = " << k << " ID = " << n << " Filepath = " << ws2s(*m_pyramid[i].filename[j][k][n]) << ">\n";
 			}
 		}
 		ofs << "\n";
@@ -854,7 +761,7 @@ void BRKXMLReader::OutputInfo()
 
 	ofs << "Landmarks\n";
 	for(int i = 0; i < m_landmarks.size(); i++){
-		ofs << "\tName: " << m_landmarks[i].name;
+		ofs << "\tName: " << ws2s(m_landmarks[i].name);
 		ofs << " X: " << m_landmarks[i].x;
 		ofs << " Y: " << m_landmarks[i].y;
 		ofs << " Z: " << m_landmarks[i].z;

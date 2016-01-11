@@ -174,7 +174,7 @@ private:
 	void Readbox(tinyxml2::XMLElement *boxNode, double &x0, double &y0, double &z0, double &x1, double &y1, double &z1);
 	void ReadPyramid(tinyxml2::XMLElement *lvRootNode, vector<LevelInfo> &pylamid);
 	
-	void loadMetadata(wstring &file);
+	void loadMetadata(const wstring &file);
 
 	void Clear();
 };

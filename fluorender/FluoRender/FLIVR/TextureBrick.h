@@ -40,6 +40,7 @@
 #include <string>
 #include <nrrd.h>
 #include <stdint.h>
+#include <curl/curl.h>
 
 namespace FLIVR {
 
@@ -208,6 +209,8 @@ namespace FLIVR {
 
 		void set_disp(bool disp) {disp_ = disp;}
 		bool get_disp() {return disp_;}
+        
+        static void setCURL(CURL *c) {s_curl_ = c;}
 
 	private:
 		void compute_edge_rays(BBox &bbox);
@@ -275,6 +278,8 @@ namespace FLIVR {
 		vector<int> size_integ_i_;
 
 		bool disp_;
+        
+        static CURL *s_curl_;
 	};
 
 	struct Pyramid_Level {

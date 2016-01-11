@@ -871,6 +871,8 @@ void SettingDlg::GetSettings()
 
 void SettingDlg::UpdateUI()
 {
+    wxCommandEvent empev;
+    
 	//update user interface
 	//save project
 	m_prj_save_chk->SetValue(m_prj_save);
@@ -878,9 +880,9 @@ void SettingDlg::UpdateUI()
 	m_realtime_cmp_chk->SetValue(m_realtime_compress);
 	//mouse interactions
 	m_mouse_int_chk->SetValue(m_mouse_int);
-	OnMouseIntCheck(wxCommandEvent());
+	OnMouseIntCheck(empev);
 	m_mouse_lv_chk->SetValue(m_mouse_lv);
-	OnMouseLvCheck(wxCommandEvent());
+	OnMouseLvCheck(empev);
 	//depth peeling
 	m_peeling_layers_sldr->SetValue(m_peeling_layers);
 	m_peeling_layers_text->ChangeValue(wxString::Format("%d", m_peeling_layers));

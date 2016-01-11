@@ -5,7 +5,7 @@
 #include <wx/msgdlg.h>
 #include <wx/wfstream.h>
 #include <wx/txtstrm.h>
-#include <libcurl\curl\curl.h>
+#include <curl/curl.h>
 #include <sstream>
 #include <wx/stdpaths.h>
 
@@ -675,13 +675,20 @@ m_view(0)
 	m_dbtree = new DBTreeCtrl(frame, this, wxID_ANY);
 	m_searchResult = new DBTreeCtrl(frame, this, wxID_ANY);
 
-	wxFileInputStream wfis(wxStandardPaths::Get().GetLocalDataDir() + wxFileName::GetPathSeparator() + "catalog_list.set");
-	if (wfis.IsOk())
+    wxString expath = wxStandardPaths::Get().GetExecutablePath();
+    expath = expath.BeforeLast(GETSLASH(),NULL);
+#ifdef _WIN32
+    wxString dft = expath + "\\" + "catalog_list.set";
+#else
+    wxString dft = expath + "/../Resources/" + "catalog_list.set";
+#endif
+    wxFileInputStream is(dft);
+	if (is.IsOk())
 	{
-		wxTextInputStream tis(wfis);
+		wxTextInputStream tis(is);
 		wxString str;
 
-		while (!wfis.Eof())
+		while (!is.Eof())
 		{
 			wxString sline = tis.ReadLine();
 			m_dbtree->LoadDatabase(sline);
@@ -734,10 +741,17 @@ DatabaseDlg::~DatabaseDlg()
 {
 	if (m_thread) m_thread->Delete();
 
-	wxFileOutputStream wfis(wxStandardPaths::Get().GetLocalDataDir() + wxFileName::GetPathSeparator() + "catalog_list.set");
-	if (wfis.IsOk())
+    wxString expath = wxStandardPaths::Get().GetExecutablePath();
+    expath = expath.BeforeLast(GETSLASH(),NULL);
+#ifdef _WIN32
+    wxString dft = expath + "\\" + "catalog_list.set";
+#else
+    wxString dft = expath + "/../Resources/" + "catalog_list.set";
+#endif
+	wxFileOutputStream os(dft);
+	if (os.IsOk())
 	{
-		wxTextOutputStream tout(wfis);
+		wxTextOutputStream tout(os);
 
 		std::vector<DBCatalog> *cat = m_dbtree->GetCatalogDataIndex();
 		if (cat)
