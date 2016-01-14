@@ -754,7 +754,7 @@ namespace FLIVR
 						glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format,
 							brick->tex_type(c), brick->tex_data(c));
 #else
-						if (bricks->size() > 1)
+//						if (bricks->size() > 1)
 						{
 							unsigned long long mem_size = (unsigned long long)nx*
 								(unsigned long long)ny*(unsigned long long)nz*nb;
@@ -777,9 +777,9 @@ namespace FLIVR
 								brick->tex_type(c), (GLvoid*)temp);
 							delete[]temp;
 						}
-						else
-							glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format,
-							brick->tex_type(c), brick->tex_data(c));
+//						else
+//							glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format,
+//							brick->tex_type(c), brick->tex_data(c));
 #endif
 					}
 
@@ -907,7 +907,7 @@ namespace FLIVR
 					glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format,
 					brick->tex_type(c), brick->tex_data(c));
 #else
-					if (bricks->size() > 1)
+//					if (bricks->size() > 1)
 					{
 						unsigned long long mem_size = (unsigned long long)nx*
 							(unsigned long long)ny*(unsigned long long)nz*nb;
@@ -930,9 +930,9 @@ namespace FLIVR
 							brick->tex_type(c), (GLvoid*)temp);
 						delete[]temp;
 					}
-					else
-						glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format,
-							brick->tex_type(c), brick->tex_data(c));
+//					else
+//						glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format,
+//							brick->tex_type(c), brick->tex_data(c));
 #endif
 			}
 			}
@@ -1049,7 +1049,7 @@ namespace FLIVR
 					glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format,
 					brick->tex_type(c), brick->tex_data(c));
 #else
-					if (bricks->size() > 1)
+//					if (bricks->size() > 1)
 					{
 						unsigned long long mem_size = (unsigned long long)nx*
 							(unsigned long long)ny*(unsigned long long)nz*nb;
@@ -1072,9 +1072,9 @@ namespace FLIVR
 							brick->tex_type(c), (GLvoid*)temp);
 						delete[]temp;
 					}
-					else
-						glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format,
-					brick->tex_type(c), brick->tex_data(c));
+//					else
+//						glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format,
+//					brick->tex_type(c), brick->tex_data(c));
 #endif
 				}
 			}

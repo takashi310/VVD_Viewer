@@ -104,7 +104,7 @@ namespace FLIVR
 		bool hiqual_;
 		int mask_;	//0-normal, 1-render with mask, 2-render with mask excluded
 					//3-random color with label, 4-random color with label+mask
-		int color_mode_;//0-normal; 1-rainbow; 2-depth
+		int color_mode_;//0-normal; 1-rainbow; 2-depth; 3-index; 255-index(depth mode)
 		int colormap_;//index
 		int colormap_proj_;//projection direction
 		bool solid_;//no transparency
@@ -126,7 +126,7 @@ namespace FLIVR
 								int color_mode, int colormap, int colormap_proj,
 								bool solid, int vertex_type);
 		//mask: 0-no mask, 1-segmentation mask, 2-labeling mask
-		//color_mode: 0-normal; 1-rainbow; 2-depth
+		//color_mode: 0-normal; 1-rainbow; 2-depth; 3-index; 255-index(depth mode)
 
 	protected:
 		std::vector<VolShader*> shader_;

@@ -207,6 +207,7 @@ namespace FLIVR
 #define FLV_CTYPE_RAINBOW 1
 #define FLV_CTYPE_DEPTH 2
 #define FLV_CTYPE_INDEX 3
+#define FLV_CTYPE_INDEX_D 255
 #define vr_stype(x, y) ((x)+(y)*FLV_COLORTYPE_NUM)
 
    void MultiVolumeRenderer::draw_volume(bool interactive_mode_p, bool orthographic_p, double zoom, bool intp)
@@ -517,12 +518,13 @@ namespace FLIVR
 		  {
 			  if (used_shadertype[vr_stype(i, j)])
 			  {
+                  int s_cm = (i != FLV_CTYPE_INDEX) ? i : FLV_CTYPE_INDEX_D;
 				  bool solid = (j == FLV_VR_SOLID) ? true : false; 
 				  shader[vr_stype(i, j)] = VolumeRenderer::vol_shader_factory_.shader(
 					  false, vr_list_[0]->tex_->nc(),
 					  use_shading, use_fog!=0,
 					  depth_peel_, true,
-					  hiqual_, 0, i, 0, 0, solid, 1);
+					  hiqual_, 0, s_cm, 0, 0, solid, 1);
 
 				  used_shader_n++;
 				  shader_id = vr_stype(i, j);
@@ -724,14 +726,9 @@ namespace FLIVR
 			  int vr_cmode = colormap_mode_ != FLV_CTYPE_DEPTH ? vr->colormap_mode_ : FLV_CTYPE_DEPTH;
 			  int vr_shader_id = vr_stype(vr_cmode, vr->solid_ ? FLV_VR_SOLID : FLV_VR_ALPHA);
 
-			  double id_mode = 0.0;
 			  if (blend_slices && colormap_mode_!=FLV_CTYPE_DEPTH)
 			  {
-				  if (vr_cmode == FLV_CTYPE_INDEX)
-				  {
-					  id_mode = 1.0f;
-					  glDrawBuffers(2, inv_draw_buffers);
-				  }
+				  if (vr_cmode == FLV_CTYPE_INDEX) glDrawBuffers(1, inv_draw_buffers);
 				  else glDrawBuffers(1, draw_buffers);
 			  }
 
@@ -853,7 +850,7 @@ namespace FLIVR
 			  case FLV_CTYPE_INDEX://indexed color
 				  HSVColor hsv(vr->color_);
 				  double luminance = hsv.val();
-				  shader[vr_shader_id]->setLocalParam(6, 1.0/double(w2), 1.0/double(h2), luminance, id_mode);
+				  shader[vr_shader_id]->setLocalParam(6, 1.0/double(w2), 1.0/double(h2), luminance, 0.0);
 				  break;
 			  }
 
@@ -898,7 +895,7 @@ namespace FLIVR
               glEnableVertexAttribArray(1);
               glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)12);
               glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vr->m_slices_ibo);
-              glDrawElements(GL_TRIANGLES, s_i*3, GL_UNSIGNED_INT, 0);
+              glDrawElements(GL_TRIANGLES, (s_v-2)*3, GL_UNSIGNED_INT, 0);
               glDisableVertexAttribArray(0);
               glDisableVertexAttribArray(1);
               glBindBuffer(GL_ARRAY_BUFFER, 0);

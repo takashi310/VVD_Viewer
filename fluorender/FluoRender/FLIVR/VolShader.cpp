@@ -215,6 +215,10 @@ VolShader::VolShader(
 		case 3://index color
 			z << VOL_UNIFORMS_INDEX_COLOR;
 			break;
+        case 255://index color (depth mode)
+            z << VOL_UNIFORMS_INDEX_COLOR_D;
+            break;
+                
 		}
 
 		// add uniform for depth peeling
@@ -281,6 +285,10 @@ VolShader::VolShader(
 		{
 			z << VOL_INDEX_COLOR_BODY;
 		}
+        else if (color_mode_ == 255)
+        {
+            z << VOL_INDEX_COLOR_D_BODY;
+        }
 		else if (shading_)
 		{
 			//no gradient volume, need to calculate in real-time
@@ -389,7 +397,7 @@ VolShader::VolShader(
 		switch (mask_)
 		{
 		case 0:
-			if (color_mode_ == 3)
+			if (color_mode_ == 3 || color_mode_ == 255)
 				z << VOL_RASTER_BLEND_ID;
 			else if (color_mode_ == 2)
 				z << VOL_RASTER_BLEND_DMAP;
@@ -402,7 +410,7 @@ VolShader::VolShader(
 			}
 			break;
 		case 1:
-			if (color_mode_ == 3)
+			if (color_mode_ == 3 || color_mode_ == 255)
 				z << VOL_RASTER_BLEND_MASK_ID;
 			else if (color_mode_ == 2)
 				z << VOL_RASTER_BLEND_MASK_DMAP;
@@ -415,7 +423,7 @@ VolShader::VolShader(
 			}
 			break;
 		case 2:
-			if (color_mode_ == 3)
+			if (color_mode_ == 3 || color_mode_ == 255)
 				z << VOL_RASTER_BLEND_NOMASK_ID;
 			else if (color_mode_ == 2)
 				z << VOL_RASTER_BLEND_NOMASK_DMAP;
