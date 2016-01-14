@@ -36,7 +36,6 @@
 #include <utility>
 #include <iostream>
 #include <jpeglib.h>
-#include <curl/curl.h>
 #include "../compatibility.h"
 #include <setjmp.h>
 
