@@ -288,7 +288,8 @@ float TextRenderer::RenderTextLen(wstring& text)
 			continue;
 
 		FT_GlyphSlot g = m_face->glyph;
-		len += g->bitmap.width;
+        len += (g->advance.x >> 6);
+		//len += g->bitmap.width;
 	}
 	return len;
 }

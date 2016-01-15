@@ -3218,7 +3218,7 @@ void RulerBalloon::SetAnnotationsFromDatabase(vector<AnnotationDB> ann, Point ne
 
 	//curl_easy_perform(m_curl);
 
-	/*
+/*
 	char a[]="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
 	m_annotations.Clear();
@@ -3233,7 +3233,50 @@ void RulerBalloon::SetAnnotationsFromDatabase(vector<AnnotationDB> ann, Point ne
 		}
 		m_annotations.Add(wxString(ss.str()));
 	}
-	*/
+*/
+}
+
+wxArrayString RulerBalloon::GetAnnotations()
+{
+    wxArrayString annotations;
+    
+    int stline = 0;
+    for(int a = 0; a < m_bufs.size(); a++)
+    {
+        stringstream ss(m_bufs[a]);
+        string temp, elem;
+        int i = 0;
+        while (getline(ss, temp))
+        {
+            std::stringstream ls(temp);
+            int j = stline;
+            while (getline(ls, elem, '\t'))
+            {
+                if(i == 0) annotations.Add(wxString(elem) + wxT(": "));
+                else if (j < annotations.size()) annotations.Item(j) += wxT(" ") + elem;
+                j++;
+            }
+            i++;
+        }
+        stline = annotations.size();
+    }
+/*
+    char a[]="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    
+    annotations.Clear();
+    int lines = 1 + rand() % 5;
+    for(int i = 0; i < lines; i++)
+    {
+        stringstream ss;
+        int char_num = rand() % 20;
+        for(int j = 0; j < char_num; j++)
+        {
+            ss << a[rand() % 62];
+        }
+        annotations.Add(wxString(ss.str()));
+    }
+*/    
+    return annotations;
 }
 
 void RulerBalloon::DrawBalloon(int nx, int ny, Point orig)
@@ -3467,6 +3510,15 @@ void Ruler::SetTransform(Transform *tform)
 void Ruler::Clear()
 {
 	m_ruler.clear();
+}
+
+wxArrayString Ruler::GetAnnotations(int index, vector<AnnotationDB> annotationdb, double spcx, double spcy, double spcz)
+{
+    if (index < 0 || (size_t)index >= m_ruler.size())
+        return wxArrayString();
+    
+    m_balloons[index].SetAnnotationsFromDatabase(annotationdb, m_ruler[index], spcx, spcy, spcz);
+    return m_balloons[index].GetAnnotations();
 }
 
 void Ruler::Draw(bool persp, int nx, int ny, glm::mat4 mv_mat, glm::mat4 proj_mat, vector<AnnotationDB> annotationdb, double spcx, double spcy, double spcz)
@@ -4513,7 +4565,13 @@ bool DataManager::DownloadToCurrentDir(wxString &filename)
 		count = in->LastRead();
 		if(count > 0) mem_buf.AppendData(buffer, count);
 	}
-	wxString tmpfname = wxStandardPaths::Get().GetLocalDataDir() + wxFileName::GetPathSeparator() + pathname.Mid(pathname.Find(wxT('/'), true)).Mid(1);
+    wxString expath = wxStandardPaths::Get().GetExecutablePath();
+    expath = expath.BeforeLast(GETSLASH(),NULL);
+#ifdef _WIN32
+    wxString tmpfname = expath + "\\" + pathname.Mid(pathname.Find(wxT('/'), true)).Mid(1);
+#else
+    wxString tmpfname = expath + "/../Resources/" + pathname.Mid(pathname.Find(wxT('/'), true)).Mid(1);
+#endif
 	wxFile of(tmpfname, wxFile::write);
 	of.Write(mem_buf.GetData(), mem_buf.GetDataLen());
 	of.Close();

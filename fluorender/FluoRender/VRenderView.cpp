@@ -10628,6 +10628,22 @@ void VRenderGLView::DrawRulers()
 	vector<unsigned int> nums;
 	Color color;
 	Color text_color = GetTextColor();
+    
+    double spcx = 1.0;
+    double spcy = 1.0;
+    double spcz = 1.0;
+    
+    if(m_cur_vol){
+        Texture *vtex = m_cur_vol->GetTexture();
+        if (vtex && vtex->isBrxml())
+        {
+            BRKXMLReader *br = (BRKXMLReader *)m_cur_vol->GetReader();
+            br->SetLevel(0);
+            spcx = br->GetXSpc();
+            spcy = br->GetYSpc();
+            spcz = br->GetZSpc();
+        }
+    }
 
 	for (size_t i=0; i<m_ruler_list.size(); i++)
 	{
@@ -10684,6 +10700,54 @@ void VRenderGLView::DrawRulers()
 					verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
 					num += 2;
 				}
+                
+                if(ruler->GetBalloonVisibility(j))
+                {
+                    wxArrayString ann = ruler->GetAnnotations(j,  m_cur_vol ? m_cur_vol->GetAnnotation() : vector<AnnotationDB>(), spcx, spcy, spcz);
+                    
+                    int lnum = ann.size();
+                    
+                    if(lnum > 0)
+                    {
+                        p2x = p2.x()*nx/2.0;
+                        p2y = p2.y()*ny/2.0;
+                        
+                        double asp = (double)nx / (double)ny;;
+                        double margin_x = 5+w;
+                        double margin_top = w;
+                        double margin_bottom = w;
+                        double line_spc = 2;
+                        double maxlw, lw, lh;
+                    
+                        lh = m_text_renderer->GetSize();
+                        margin_bottom += lh/2;//�e�L�X�g��Y���W��baseline�Ɉ��v���邽��
+                        maxlw = 0.0;
+                    
+                        for(int i = 0; i < lnum; i++)
+                        {
+                            wstring wstr_temp = ann.Item(i);
+                            m_text_renderer->RenderText(wstr_temp, color,
+                                                        p2x*sx+margin_x*sx, p2y*sy-(lh*(i+1)+line_spc*i+margin_top)*sy, sx, sy);
+                            lw = m_text_renderer->RenderTextLen(wstr_temp);
+                            if (lw > maxlw) maxlw = lw;
+                        }
+                    
+                        double bw = (margin_x*2 + maxlw);
+                        double bh = (margin_top + margin_bottom + lh*lnum + line_spc*(lnum-1));
+                        
+                        px = (p2.x()+1.0)*nx/2.0;
+                        py = (p2.y()+1.0)*ny/2.0;
+                        verts.push_back(px);    verts.push_back(py);    verts.push_back(0.0);
+                        verts.push_back(px+bw); verts.push_back(py);    verts.push_back(0.0);
+                        verts.push_back(px+bw); verts.push_back(py);    verts.push_back(0.0);
+                        verts.push_back(px+bw); verts.push_back(py-bh); verts.push_back(0.0);
+                        verts.push_back(px+bw); verts.push_back(py-bh); verts.push_back(0.0);
+                        verts.push_back(px);    verts.push_back(py-bh); verts.push_back(0.0);
+                        verts.push_back(px);    verts.push_back(py-bh); verts.push_back(0.0);
+                        verts.push_back(px);    verts.push_back(py);    verts.push_back(0.0);
+                        num += 8;
+                    }
+                }
 			}
 			if (ruler->GetRulerType() == 4 &&
 				ruler->GetNumPoint() >= 3)
@@ -10883,6 +10947,54 @@ void VRenderGLView::DrawRulers()
 						verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
 						num += 2;
 					}
+                    
+                    if(ruler->GetBalloonVisibility(j))
+                    {
+                        wxArrayString ann = ruler->GetAnnotations(j,  m_cur_vol ? m_cur_vol->GetAnnotation() : vector<AnnotationDB>(), spcx, spcy, spcz);
+                        
+                        int lnum = ann.size();
+                        
+                        if(lnum > 0)
+                        {
+                            p2x = p2.x()*nx/2.0;
+                            p2y = p2.y()*ny/2.0;
+                            
+                            double asp = (double)nx / (double)ny;;
+                            double margin_x = 5+w;
+                            double margin_top = w;
+                            double margin_bottom = w;
+                            double line_spc = 2;
+                            double maxlw, lw, lh;
+                            
+                            lh = m_text_renderer->GetSize();
+                            margin_bottom += lh/2;//�e�L�X�g��Y���W��baseline�Ɉ��v���邽��
+                            maxlw = 0.0;
+                            
+                            for(int i = 0; i < lnum; i++)
+                            {
+                                wstring wstr_temp = ann.Item(i);
+                                m_text_renderer->RenderText(wstr_temp, color,
+                                                            p2x*sx+margin_x*sx, p2y*sy-(lh*(i+1)+line_spc*i+margin_top)*sy, sx, sy);
+                                lw = m_text_renderer->RenderTextLen(wstr_temp);
+                                if (lw > maxlw) maxlw = lw;
+                            }
+                            
+                            double bw = (margin_x*2 + maxlw);
+                            double bh = (margin_top + margin_bottom + lh*lnum + line_spc*(lnum-1));
+                            
+                            px = (p2.x()+1.0)*nx/2.0;
+                            py = (p2.y()+1.0)*ny/2.0;
+                            verts.push_back(px);    verts.push_back(py);    verts.push_back(0.0);
+                            verts.push_back(px+bw); verts.push_back(py);    verts.push_back(0.0);
+                            verts.push_back(px+bw); verts.push_back(py);    verts.push_back(0.0);
+                            verts.push_back(px+bw); verts.push_back(py-bh); verts.push_back(0.0);
+                            verts.push_back(px+bw); verts.push_back(py-bh); verts.push_back(0.0);
+                            verts.push_back(px);    verts.push_back(py-bh); verts.push_back(0.0);
+                            verts.push_back(px);    verts.push_back(py-bh); verts.push_back(0.0);
+                            verts.push_back(px);    verts.push_back(py);    verts.push_back(0.0);
+                            num += 8;
+                        }
+                    }
 				}
 				if (ruler->GetRulerType() == 4 &&
 					ruler->GetNumPoint() >= 3)
@@ -10964,25 +11076,28 @@ void VRenderGLView::DrawRulers()
 				pos += nums[j-1];
 			}
 		}
-
-		for (size_t i=0; i<m_landmarks.size(); i++)
-		{
-			Ruler* ruler = m_landmarks[i];
-			if (!ruler) continue;
-			if (!ruler->GetTimeDep() ||
-				(ruler->GetTimeDep() &&
-				ruler->GetTime() == m_tseq_cur_num))
-			{
-				num = 0;
-				if (ruler->GetUseColor())
-					color = ruler->GetColor();
-				else
-					color = text_color;
-				shader->setLocalParam(0, color.r(), color.g(), color.b(), 1.0);
-				glDrawArrays(GL_LINES, pos, (GLsizei)(nums[j++]));
-				pos += nums[j-1];
-			}
-		}
+        
+        if(m_draw_landmarks)
+        {
+            for (size_t i=0; i<m_landmarks.size(); i++)
+            {
+                Ruler* ruler = m_landmarks[i];
+                if (!ruler) continue;
+                if (!ruler->GetTimeDep() ||
+                    (ruler->GetTimeDep() &&
+                     ruler->GetTime() == m_tseq_cur_num))
+                {
+                    num = 0;
+                    if (ruler->GetUseColor())
+                        color = ruler->GetColor();
+                    else
+                        color = text_color;
+                    shader->setLocalParam(0, color.r(), color.g(), color.b(), 1.0);
+                    glDrawArrays(GL_LINES, pos, (GLsizei)(nums[j++]));
+                    pos += nums[j-1];
+                }
+            }
+        }
 
 		glDisableVertexAttribArray(0);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);

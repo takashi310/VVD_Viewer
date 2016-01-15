@@ -778,7 +778,7 @@ public:
 
 	bool GetVisibility(){return m_visibility;}
 	Point GetPoint(){return m_point;}
-	wxArrayString GetAnnotations(){return m_annotations;}
+    wxArrayString GetAnnotations();
 	vector<AnnotationDB> GetAnnotationDB(){return m_annotationdb;}
 
 	void SetAnnotationsFromDatabase(vector<AnnotationDB> ann, Point new_p, double spcx = 1.0, double spcy = 1.0, double spcz = 1.0);
@@ -835,6 +835,8 @@ public:
 	double GetLengthObject(double spcx, double spcy, double spcz);
 	double GetAngle();
 	void Scale(double spcx, double spcy, double spcz);
+    
+    wxArrayString GetAnnotations(int index, vector<AnnotationDB> annotationdb, double spcx, double spcy, double spcz);
 
 	bool AddPoint(const Point &point);
 	void SetTransform(Transform *tform);
