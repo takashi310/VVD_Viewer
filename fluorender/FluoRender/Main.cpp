@@ -72,6 +72,7 @@ bool VRenderApp::OnInit()
 
 #ifdef WITH_DATABASE
 #ifdef _WIN32
+/*
    bool registered = true;
 
    wxString install = wxStandardPaths::Get().GetLocalDataDir() + wxFileName::GetPathSeparator() + "install";
@@ -121,6 +122,7 @@ bool VRenderApp::OnInit()
 	   of.Write(install);
 	   of.Close();
    }
+*/
 #endif
 #endif
    
@@ -184,7 +186,6 @@ bool VRenderApp::OnCmdLineParsed(wxCmdLineParser& parser)
 
    }
 
-#ifdef WITH_DATABASE
    {
 	   wxString message;
 
@@ -214,7 +215,6 @@ bool VRenderApp::OnCmdLineParsed(wxCmdLineParser& parser)
 	   }
 	   delete client;
    }
-#endif
 
    return true;
 }

@@ -879,13 +879,14 @@ void VRenderFrame::OnOpenVolume(wxCommandEvent& WXUNUSED(event))
 
 	wxFileDialog *fopendlg = new wxFileDialog(
 		this, "Choose the volume data file", "", "",
-		"All Supported|*.tif;*.tiff;*.oib;*.oif;*.lsm;*.xml;*.nrrd|"\
+		"All Supported|*.tif;*.tiff;*.oib;*.oif;*.lsm;*.xml;*.nrrd;*.vvd|"\
 		"Tiff Files (*.tif, *.tiff)|*.tif;*.tiff|"\
 		"Olympus Image Binary Files (*.oib)|*.oib|"\
 		"Olympus Original Imaging Format (*.oif)|*.oif|"\
 		"Zeiss Laser Scanning Microscope (*.lsm)|*.lsm|"\
 		"Prairie View XML (*.xml)|*.xml|"\
-		"Nrrd files (*.nrrd)|*.nrrd", wxFD_OPEN|wxFD_MULTIPLE);
+		"Nrrd files (*.nrrd)|*.nrrd|"\
+		"VVD files (*.vvd)|*.vvd", wxFD_OPEN|wxFD_MULTIPLE);
 	fopendlg->SetExtraControlCreator(CreateExtraControlVolume);
 
 	int rval = fopendlg->ShowModal();
@@ -965,6 +966,8 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
 			else if (suffix==".lsm")
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_LSM);
 			else if (suffix==".xml")
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_PVXML);
+			else if (suffix==".vvd")
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_BRKXML);
 
 			if (ch_num > 1)
@@ -1072,7 +1075,8 @@ void VRenderFrame::StartupLoad(wxArrayString files)
 			suffix == ".oib" ||
 			suffix == ".oif" ||
 			suffix == ".lsm" ||
-			suffix == ".xml")
+			suffix == ".xml" ||
+			suffix == ".vvd" )
 		{
 			LoadVolumes(files);
 		}
@@ -2957,6 +2961,8 @@ void VRenderFrame::OpenProject(wxString& filename)
 					else if (suffix == ".lsm")
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_LSM, cur_chan, cur_time);
 					else if (suffix == ".xml")
+						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_PVXML, cur_chan, cur_time);
+					else if (suffix == ".vvd")
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_BRKXML, cur_chan, cur_time);
 				}
 				VolumeData* vd = 0;

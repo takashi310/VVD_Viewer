@@ -649,15 +649,15 @@ void VMovieView::OnRun(wxCommandEvent& event) {
 	if (!vr_frame) return; 
 	VRenderView* vrv = vr_frame->GetView(str);
 	if (!vrv) return;
-/*	wxFileDialog *fopendlg = new wxFileDialog(
+	wxFileDialog *fopendlg = new wxFileDialog(
 		m_frame, "Save Movie Sequence", 
 		"", "output", "MOV file (*.mov)|*.mov|TIF files (*.tif)|*.tif", 
 		wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
-*/	wxFileDialog *fopendlg = new wxFileDialog(
+/*	wxFileDialog *fopendlg = new wxFileDialog(
 		m_frame, "Save Movie Sequence", 
 		"", "output", "TIF files (*.tif)|*.tif", 
 		wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
-	fopendlg->SetExtraControlCreator(CreateExtraCaptureControl);
+*/	fopendlg->SetExtraControlCreator(CreateExtraCaptureControl);
 	int rval = fopendlg->ShowModal();
 	if (rval == wxID_OK) {
 		wxCommandEvent e;
@@ -665,7 +665,7 @@ void VMovieView::OnRun(wxCommandEvent& event) {
 		m_filename = fopendlg->GetPath();
 		filetype_ = m_filename.SubString(m_filename.Len()-4,
 			m_filename.Len()-1);
-/*		if(filetype_.IsSameAs(wxString(".mov"))) {
+		if(filetype_.IsSameAs(wxString(".mov"))) {
 			int x, y, w, h;
 			if (m_frame_chk->GetValue())
 				vrv->GetFrame(x,y,w,h);
@@ -680,7 +680,7 @@ void VMovieView::OnRun(wxCommandEvent& event) {
 			encoder_.open(m_filename.ToStdString(),w,h,fps,
 				m_Mbitrate*1000000);
 		}
-*/		m_filename = m_filename.SubString(0,m_filename.Len()-5);
+		m_filename = m_filename.SubString(0,m_filename.Len()-5);
 		m_record = true;
 		delete fopendlg;
 	} else {
@@ -696,7 +696,7 @@ void VMovieView::OnStop(wxCommandEvent& event) {
 	m_timer.Stop();
 	m_running = false;
 	m_record = false;
-//	encoder_.close();
+	encoder_.close();
 }
 
 void VMovieView::OnRewind(wxCommandEvent& event){
@@ -1116,8 +1116,8 @@ void VMovieView::WriteFrameToFile(int total_frames) {
 		unsigned char *flip = new unsigned char[w*h*chann];
 		for(size_t yy = 0; yy < (size_t)h; yy++)
 			memcpy(flip + yy * 3 * w, image + 3 * w * (h - yy - 1),w * 3);
-//		bool worked = encoder_.set_frame_rgb_data(flip);
-//		worked = encoder_.write_video_frame(m_last_frame);
+		bool worked = encoder_.set_frame_rgb_data(flip);
+		worked = encoder_.write_video_frame(m_last_frame);
 		delete flip;
 		return;
 	}

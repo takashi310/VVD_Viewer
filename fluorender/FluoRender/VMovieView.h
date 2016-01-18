@@ -33,7 +33,7 @@ DEALINGS IN THE SOFTWARE.
 #include <cstring>
 #include "RecorderDlg.h"
 #include "compatibility.h"
-//#include "QVideoEncoder.h"
+#include "QVideoEncoder.h"
 
 #ifndef _VMovieView_H_
 #define _VMovieView_H_
@@ -179,7 +179,7 @@ private:
 	RecorderDlg * m_advanced_movie;
 	wxNotebook * m_notebook;
 	int m_current_page;
-//	QVideoEncoder encoder_;
+	QVideoEncoder encoder_;
 	wxString filetype_;
 	int m_rot_int_type;//0-linear; 1-smooth
 	bool m_delayed_stop;
