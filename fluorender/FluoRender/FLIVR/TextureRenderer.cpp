@@ -37,6 +37,8 @@
 #include <FLIVR/VolCalShader.h>
 #include <algorithm>
 #include <glm/gtc/type_ptr.hpp>
+#include <FLIVR/palettes.h>
+//#include <iomanip>
 
 using namespace std;
 
@@ -85,6 +87,11 @@ namespace FLIVR
 		blend_framebuffer_resize_(false),
 		blend_framebuffer_(0),
 		blend_tex_id_(0),
+		label_tex_id_(0),
+		palette_tex_id_(0),
+		base_palette_tex_id_(0),
+		desel_palette_mode_(0),
+		desel_col_fac_(0.1),
 		filter_buffer_resize_(false),
 		filter_buffer_(0),
 		filter_tex_id_(0),
@@ -102,6 +109,8 @@ namespace FLIVR
 		glGenVertexArrays(1, &m_slices_vao);
 		glGenBuffers(1, &m_quad_vbo);
 		glGenVertexArrays(1, &m_quad_vao);
+
+		init_palette();
 	}
 
 	TextureRenderer::TextureRenderer(const TextureRenderer& copy)
@@ -115,6 +124,11 @@ namespace FLIVR
 		blend_framebuffer_resize_(false),
 		blend_framebuffer_(0),
 		blend_tex_id_(0),
+		label_tex_id_(0),
+		palette_tex_id_(0),
+		base_palette_tex_id_(0),
+		desel_palette_mode_(copy.desel_palette_mode_),
+		desel_col_fac_(copy.desel_col_fac_),
 		filter_buffer_resize_(false),
 		filter_buffer_(0),
 		filter_tex_id_(0),
@@ -132,6 +146,31 @@ namespace FLIVR
 		glGenVertexArrays(1, &m_slices_vao);
 		glGenBuffers(1, &m_quad_vbo);
 		glGenVertexArrays(1, &m_quad_vao);
+
+		memcpy(palette_, copy.palette_, sizeof(unsigned char)*PALETTE_SIZE*PALETTE_ELEM_COMP); 
+		memcpy(base_palette_, copy.base_palette_, sizeof(unsigned char)*PALETTE_SIZE*PALETTE_ELEM_COMP); 
+		if (!glIsTexture(palette_tex_id_))
+			glGenTextures(1, &palette_tex_id_);
+		glBindTexture(GL_TEXTURE_2D, palette_tex_id_);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, PALETTE_W, PALETTE_H, 0,
+			GL_RGBA, GL_UNSIGNED_BYTE, (void *)palette_);//GL_RGBA16F
+		glBindTexture(GL_TEXTURE_2D, 0);
+
+		if (!glIsTexture(base_palette_tex_id_))
+			glGenTextures(1, &base_palette_tex_id_);
+		glBindTexture(GL_TEXTURE_2D, base_palette_tex_id_);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, PALETTE_W, PALETTE_H, 0,
+			GL_RGBA, GL_UNSIGNED_BYTE, (void *)base_palette_);//GL_RGBA16F
+		glBindTexture(GL_TEXTURE_2D, 0);
+
 	}
 
 	TextureRenderer::~TextureRenderer()
@@ -143,6 +182,12 @@ namespace FLIVR
 			glDeleteFramebuffers(1, &blend_framebuffer_);
 		if (glIsTexture(blend_tex_id_))
 			glDeleteTextures(1, &blend_tex_id_);
+		if (glIsTexture(label_tex_id_))
+			glDeleteTextures(1, &label_tex_id_);
+		if (glIsTexture(palette_tex_id_))
+			glDeleteTextures(1, &palette_tex_id_);
+		if (glIsTexture(base_palette_tex_id_))
+			glDeleteTextures(1, &base_palette_tex_id_);
 		if (glIsFramebuffer(filter_buffer_))
 			glDeleteFramebuffers(1, &filter_buffer_);
 		if (glIsTexture(filter_tex_id_))
@@ -158,6 +203,190 @@ namespace FLIVR
 			glDeleteBuffers(1, &m_quad_vbo);
 		if (glIsVertexArray(m_quad_vao))
 			glDeleteVertexArrays(1, &m_quad_vao);
+	}
+
+	void TextureRenderer::init_palette()
+	{
+/*
+		float hue;
+		unsigned char p2, p3;
+		unsigned char c[4];
+		
+		for (int i = 0; i < PALETTE_SIZE; i++)
+		{
+			hue = float(rand() % 360)/60.0;
+			p2 = (unsigned char)((1.0 - hue + floor(hue))*255);
+			p3 = (unsigned char)((hue - floor(hue))*255);
+			if (hue < 1.0)
+				{c[0] = 255; c[1] = p3; c[2] = 0; c[3] = 255;}
+			else if (hue < 2.0)
+				{c[0] = p2; c[1] = 255; c[2] = 0; c[3] = 255;}
+			else if (hue < 3.0)
+				{c[0] = 0; c[1] = 255; c[2] = p3; c[3] = 255;}
+			else if (hue < 4.0)
+				{c[0] = 0; c[1] = p2; c[2] = 255; c[3] = 255;}
+			else if (hue < 5.0)
+				{c[0] = p3; c[1] = 0; c[2] = 255; c[3] = 255;}
+			else
+				{c[0] = 255; c[1] = 0; c[2] = p2; c[3] = 255;}
+			
+			for (int j = 0; j < PALETTE_ELEM_COMP; j++)
+			{
+				if (j < 4) palette_[i*PALETTE_ELEM_COMP+j] = c[j];
+				else palette_[i*PALETTE_ELEM_COMP+j] = 0;
+			}
+		}
+*/
+		memcpy(palette_, (const void *)palettes::palette_random_256_256_4, sizeof(unsigned char)*PALETTE_SIZE*PALETTE_ELEM_COMP);
+		memcpy(base_palette_, (const void *)palettes::palette_random_256_256_4, sizeof(unsigned char)*PALETTE_SIZE*PALETTE_ELEM_COMP); 
+
+		if (!glIsTexture(palette_tex_id_))
+			glGenTextures(1, &palette_tex_id_);
+		glBindTexture(GL_TEXTURE_2D, palette_tex_id_);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, PALETTE_W, PALETTE_H, 0,
+			GL_RGBA, GL_UNSIGNED_BYTE, (void *)palette_);//GL_RGBA16F
+		glBindTexture(GL_TEXTURE_2D, 0);
+
+		if (!glIsTexture(base_palette_tex_id_))
+			glGenTextures(1, &base_palette_tex_id_);
+		glBindTexture(GL_TEXTURE_2D, base_palette_tex_id_);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, PALETTE_W, PALETTE_H, 0,
+			GL_RGBA, GL_UNSIGNED_BYTE, (void *)base_palette_);//GL_RGBA16F
+		glBindTexture(GL_TEXTURE_2D, 0);
+/*
+		ofstream ofs("random_palette.txt");
+		ofs << "const unsigned char palette_random[] = {\n";
+		for (int k = 0; k < PALETTE_SIZE*PALETTE_ELEM_COMP; k++)
+		{
+			ofs << " 0x"  << std::hex << std::setw(2) << std::setfill('0') << (int)palette_[k];
+			if (k != PALETTE_SIZE*PALETTE_ELEM_COMP-1) ofs << ",";
+			if ((k % 8) == 7) ofs << "\n";
+		}
+		ofs << "};";
+		ofs.close();
+*/
+	}
+
+	void TextureRenderer::update_palette_tex()
+	{
+		if (glIsTexture(palette_tex_id_))
+		{
+			glBindTexture(GL_TEXTURE_2D, palette_tex_id_);
+			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, PALETTE_W, PALETTE_H, GL_RGBA, GL_UNSIGNED_BYTE, (void *)palette_);
+			glBindTexture(GL_TEXTURE_2D, 0);
+		}
+	}
+
+	void TextureRenderer::set_desel_palette_mode_dark(float fac)
+	{
+		for (int i = 0; i < PALETTE_SIZE; i++)
+			for (int j = 0; j < 3; j++)
+				palette_[i*PALETTE_ELEM_COMP+j] = (unsigned char)(base_palette_[i*PALETTE_ELEM_COMP+j]*fac);
+
+		for(auto ite = sel_ids_.begin(); ite != sel_ids_.end(); ++ite)
+			for (int j = 0; j < PALETTE_ELEM_COMP; j++)
+			palette_[(*ite)*PALETTE_ELEM_COMP + j] = base_palette_[(*ite)*PALETTE_ELEM_COMP + j];
+/*
+		for (int i = 0; i < 256*64; i++)
+			for (int j = 0; j < PALETTE_ELEM_COMP; j++)
+				palette_[i*PALETTE_ELEM_COMP+j] = base_palette_[i*PALETTE_ELEM_COMP+j];
+*/
+		update_palette_tex();
+	}
+
+	void TextureRenderer::set_desel_palette_mode_gray(float fac)
+	{
+		for (int i = 0; i < PALETTE_SIZE; i++)
+			for (int j = 0; j < 3; j++)
+				palette_[i*PALETTE_ELEM_COMP+j] = (unsigned char)(255.0*fac);
+
+		for(auto ite = sel_ids_.begin(); ite != sel_ids_.end(); ++ite)
+			for (int j = 0; j < PALETTE_ELEM_COMP; j++)
+			palette_[(*ite)*PALETTE_ELEM_COMP + j] = base_palette_[(*ite)*PALETTE_ELEM_COMP + j];
+
+		update_palette_tex();
+	}
+
+	void TextureRenderer::set_desel_palette_mode_invisible()
+	{
+		for (int i = 0; i < PALETTE_SIZE; i++)
+			palette_[i] = 0;
+
+		for(auto ite = sel_ids_.begin(); ite != sel_ids_.end(); ++ite)
+			for (int j = 0; j < PALETTE_ELEM_COMP; j++)
+			palette_[(*ite)*PALETTE_ELEM_COMP + j] = base_palette_[(*ite)*PALETTE_ELEM_COMP + j];
+
+		update_palette_tex();
+	}
+
+	void TextureRenderer::set_desel_palette_mode(int mode, float fac)
+	{
+		switch(mode)
+		{
+		case 0:
+			set_desel_palette_mode_dark(fac);
+			break;
+		case 1:
+			set_desel_palette_mode_gray(fac);
+			break;
+		case 2:
+			set_desel_palette_mode_invisible();
+			break;
+		}
+
+		desel_palette_mode_ = mode;
+		desel_col_fac_ = fac;
+	}
+
+	GLuint TextureRenderer::get_palette()
+	{
+		if (!sel_ids_.empty()) return palette_tex_id_;
+		else return base_palette_tex_id_;
+	}
+
+	bool TextureRenderer::is_sel_id(int id)
+	{
+		auto ite = sel_ids_.find(id);
+		
+		if (ite != sel_ids_.end())
+			return true;
+		else
+			return false;
+	}
+
+	void TextureRenderer::add_sel_id(int id)
+	{
+		if (id < 0 || id >= PALETTE_SIZE) return;
+
+		sel_ids_.insert(id);
+
+		set_desel_palette_mode(desel_palette_mode_, desel_col_fac_);
+	}
+
+	void TextureRenderer::del_sel_id(int id)
+	{
+		if (id < 0 || id >= PALETTE_SIZE) return;
+		if (sel_ids_.empty()) return;
+
+		auto ite = sel_ids_.find(id);
+		if (ite != sel_ids_.end()) sel_ids_.erase(ite);
+
+		set_desel_palette_mode(desel_palette_mode_, desel_col_fac_);
+	}
+
+	void TextureRenderer::clear_sel_ids()
+	{
+		if (!sel_ids_.empty()) sel_ids_.clear();
+
+		set_desel_palette_mode(desel_palette_mode_, desel_col_fac_);
 	}
 
 	//set the texture for rendering

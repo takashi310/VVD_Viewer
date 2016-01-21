@@ -793,10 +793,15 @@ namespace FLIVR
 		if (colormap_mode_ == 3) glDisablei(GL_BLEND, 1);
 		
 
-		if(colormap_mode_ == 3 && glIsTexture(label_tex_id_)){
+		if(colormap_mode_ == 3 && glIsTexture(label_tex_id_) && glIsTexture(get_palette()))
+		{
 			glActiveTexture(GL_TEXTURE5);
 			glEnable(GL_TEXTURE_2D);
 			glBindTexture(GL_TEXTURE_2D, label_tex_id_);
+			glActiveTexture(GL_TEXTURE0);
+			glActiveTexture(GL_TEXTURE7);
+			glEnable(GL_TEXTURE_2D);
+			glBindTexture(GL_TEXTURE_2D, get_palette());
 			glActiveTexture(GL_TEXTURE0);
 		}
 
@@ -840,7 +845,13 @@ namespace FLIVR
 		//spacings
 		double spcx, spcy, spcz;
 		tex_->get_spacings(spcx, spcy, spcz);
-		shader->setLocalParam(5, spcx, spcy, spcz, 1.0);
+		if (colormap_mode_ == 3)
+		{
+			int max_id = ((*bricks)[0]->tex_type(0)==GL_SHORT||(*bricks)[0]->tex_type(0)==GL_UNSIGNED_SHORT) ? USHRT_MAX : UCHAR_MAX;
+			shader->setLocalParam(5, spcx, spcy, spcz, max_id);
+		}
+		else
+			shader->setLocalParam(5, spcx, spcy, spcz, 1.0);
 
 		//transfer function
 		shader->setLocalParam(2, inv_?-scalar_scale_:scalar_scale_, gm_scale_, lo_thresh_, hi_thresh_);
@@ -1094,6 +1105,13 @@ namespace FLIVR
 			if(glIsTexture(label_tex_id_))
 			{
 				glActiveTexture(GL_TEXTURE5);
+				glBindTexture(GL_TEXTURE_2D, 0);
+				glDisable(GL_TEXTURE_2D);
+				glActiveTexture(GL_TEXTURE0);
+			}
+			if(glIsTexture(get_palette()))
+			{
+				glActiveTexture(GL_TEXTURE7);
 				glBindTexture(GL_TEXTURE_2D, 0);
 				glDisable(GL_TEXTURE_2D);
 				glActiveTexture(GL_TEXTURE0);

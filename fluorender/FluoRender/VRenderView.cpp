@@ -4898,8 +4898,15 @@ void VRenderGLView::PickVolume()
 	for (int i=0; i<(int)m_vd_pop_list.size(); i++)
 	{
 		vd = m_vd_pop_list[i];
-		if (!vd) continue;
-		dist = GetPointVolume(p, old_mouse_X, old_mouse_Y, vd, 2, true, 0.5);
+		if (!vd || !vd->GetDisp()) continue;
+		
+		int cmode = vd->GetColormapMode();
+		double sel_id;
+		if (cmode == 3)
+			dist = GetPointAndIntVolume(p, sel_id, false, old_mouse_X, old_mouse_Y, vd);
+		else 
+			dist = GetPointVolume(p, old_mouse_X, old_mouse_Y, vd, 2, true, 0.5);
+
 		if (dist > 0.0)
 		{
 			if (min_dist < 0.0)
@@ -4936,6 +4943,82 @@ void VRenderGLView::PickVolume()
 		{
 			frame->GetTree()->SetFocus();
 			frame->GetTree()->Select(m_vrv->GetName(), picked_vd->GetName());
+		}
+	}
+}
+
+void VRenderGLView::SelSegVolume(int mode)
+{
+	double dist = 0.0;
+	double min_dist = -1.0;
+	Point p;
+	VolumeData* vd = 0;
+	VolumeData* picked_vd = 0;
+	int picked_sel_id = 0;
+	for (int i=0; i<(int)m_vd_pop_list.size(); i++)
+	{
+		vd = m_vd_pop_list[i];
+		if (!vd || !vd->GetDisp()) continue;
+		
+		int cmode = vd->GetColormapMode();
+		if (cmode != 3) continue;
+		double sel_id;
+		dist = GetPointAndIntVolume(p, sel_id, false, old_mouse_X, old_mouse_Y, vd);
+		
+		if (dist > 0.0)
+		{
+			if (min_dist < 0.0)
+			{
+				min_dist = dist;
+				picked_vd = vd;
+				picked_sel_id = sel_id;
+			}
+			else
+			{
+				if (m_persp)
+				{
+					if (dist < min_dist)
+					{
+						min_dist = dist;
+						picked_vd = vd;
+						picked_sel_id = sel_id;
+					}
+				}
+				else
+				{
+					if (dist > min_dist)
+					{
+						min_dist = dist;
+						picked_vd = vd;
+						picked_sel_id = sel_id;
+					}
+				}
+			}
+		}
+	}
+
+	if (picked_vd && picked_sel_id > 0)
+	{
+		switch(mode)
+		{
+		case 0:
+			if (picked_vd->isSelID(picked_sel_id))
+				picked_vd->DelSelID((int)picked_sel_id);
+			else
+				picked_vd->AddSelID((int)picked_sel_id);
+			break;
+		case 1:
+			if (picked_vd->isSelID(picked_sel_id))
+				picked_vd->DelSelID((int)picked_sel_id);
+			else
+			{
+				picked_vd->ClearSelIDs();
+				picked_vd->AddSelID((int)picked_sel_id);
+			}
+			break;
+		case 2:
+			picked_vd->DelSelID((int)picked_sel_id);
+			break;
 		}
 	}
 }
@@ -5180,7 +5263,7 @@ void VRenderGLView::OnIdle(wxIdleEvent& event)
 		//full screen
 		if (wxGetKeyState(WXK_ESCAPE))
 		{
-			if (GetParent() == m_vrv->m_full_frame)
+/*			if (GetParent() == m_vrv->m_full_frame)
 			{
 				Reparent(m_vrv);
 				m_vrv->m_view_sizer->Add(this, 1, wxEXPAND);
@@ -5193,7 +5276,7 @@ void VRenderGLView::OnIdle(wxIdleEvent& event)
 #endif
 				refresh = true;
 			}
-		}
+*/		}
 
 		if (wxGetKeyState(WXK_ALT) && wxGetKeyState(wxKeyCode('V')) && !m_key_lock)
 		{
@@ -9950,6 +10033,153 @@ double VRenderGLView::GetPointVolume(Point& mp, int mx, int my,
 	return return_val;
 }
 
+double VRenderGLView::GetPointAndIntVolume(Point& mp, double &intensity, bool normalize, int mx, int my, VolumeData* vd, double thresh)
+{
+	if (!vd)
+		return -1.0;
+	Texture* tex = vd->GetTexture();
+	if (!tex) return -1.0;
+	Nrrd* nrrd = tex->get_nrrd(0);
+	if (!nrrd) return -1.0;
+	void* data = nrrd->data;
+	if (!data) return -1.0;
+
+	int nx = GetSize().x;
+	int ny = GetSize().y;
+
+	if (nx <= 0 || ny <= 0)
+		return -1.0;
+
+	glm::mat4 cur_mv_mat = m_mv_mat;
+	glm::mat4 cur_proj_mat = m_proj_mat;
+
+	//projection
+	HandleProjection(nx, ny);
+	//Transformation
+	HandleCamera();
+	glm::mat4 mv_temp;
+	//translate object
+	mv_temp = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
+	//rotate object
+	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
+	//center object
+	mv_temp = glm::translate(mv_temp, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
+
+	Transform mv;
+	Transform p;
+	mv.set(glm::value_ptr(mv_temp));
+	p.set(glm::value_ptr(m_proj_mat));
+
+	double x, y;
+	x = double(mx) * 2.0 / double(nx) - 1.0;
+	y = 1.0 - double(my) * 2.0 / double(ny);
+	p.invert();
+	mv.invert();
+	//transform mp1 and mp2 to object space
+	Point mp1(x, y, 0.0);
+	mp1 = p.transform(mp1);
+	mp1 = mv.transform(mp1);
+	Point mp2(x, y, 1.0);
+	mp2 = p.transform(mp2);
+	mp2 = mv.transform(mp2);
+
+	//volume res
+	int xx = -1;
+	int yy = -1;
+	int zz = -1;
+	int tmp_xx, tmp_yy, tmp_zz;
+	Point nmp;
+	double spcx, spcy, spcz;
+	vd->GetSpacings(spcx, spcy, spcz);
+	int resx, resy, resz;
+	vd->GetResolution(resx, resy, resz);
+	//volume bounding box
+	BBox bbox = vd->GetBounds();
+	Vector vv = mp2 - mp1;
+	vv.normalize();
+	Point hit;
+	double p_int = 0.0;
+	double alpha = 0.0;
+	double value = 0.0;
+	vector<Plane*> *planes = 0;
+	double mspc = 1.0;
+	double return_val = -1.0;
+	if (vd->GetSampleRate() > 0.0)
+		mspc = sqrt(spcx*spcx + spcy*spcy + spcz*spcz)/vd->GetSampleRate();
+	if (vd->GetVR())
+		planes = vd->GetVR()->get_planes();
+	if (bbox.intersect(mp1, vv, hit))
+	{
+		while (true)
+		{
+			tmp_xx = int(hit.x() / spcx);
+			tmp_yy = int(hit.y() / spcy);
+			tmp_zz = int(hit.z() / spcz);
+			if (tmp_xx==xx && tmp_yy==yy && tmp_zz==zz)
+			{
+				//same, skip
+				hit += vv*mspc;
+				continue;
+			}
+			else
+			{
+				xx = tmp_xx;
+				yy = tmp_yy;
+				zz = tmp_zz;
+			}
+			//out of bound, stop
+			if (xx<0 || xx>resx ||
+				yy<0 || yy>resy ||
+				zz<0 || zz>resz)
+				break;
+			//normalize
+			nmp.x(hit.x() / bbox.max().x());
+			nmp.y(hit.y() / bbox.max().y());
+			nmp.z(hit.z() / bbox.max().z());
+			bool inside = true;
+			if (planes)
+			{
+				for (int i=0; i<6; i++)
+				{
+					if ((*planes)[i] &&
+						(*planes)[i]->eval_point(nmp)<0.0)
+					{
+						inside = false;
+						break;
+					}
+				}
+			}
+			if (inside)
+			{
+				xx = xx==resx?resx-1:xx;
+				yy = yy==resy?resy-1:yy;
+				zz = zz==resz?resz-1:zz;
+
+				value = vd->GetOriginalValue(xx, yy, zz, normalize);
+
+				if (value >= thresh)
+				{
+					mp = Point((xx+0.5)*spcx, (yy+0.5)*spcy, (zz+0.5)*spcz);
+					p_int = value;
+					break;
+				}
+			}
+			hit += vv*mspc;
+		}
+	}
+
+	if (p_int >= thresh)
+		return_val = (mp-mp1).length();
+
+	intensity = p_int;
+
+	m_mv_mat = cur_mv_mat;
+	m_proj_mat = cur_proj_mat;
+	return return_val;
+}
+
 double VRenderGLView::GetPointVolumeBox(Point &mp, int mx, int my, VolumeData* vd, bool calc_mats)
 {
 	if (!vd)
@@ -11374,6 +11604,10 @@ void VRenderGLView::OnMouse(wxMouseEvent& event)
             Point trans = Point(cx-p->x(), -(cy-p->y()), -(cz-p->z()));
 			StartManipulation(NULL, NULL, NULL, &trans, NULL);
 		}
+		SelSegVolume();
+
+		RefreshGL();
+		return;
 	}
 
 	//mouse button down operations
@@ -12517,7 +12751,7 @@ wxPanel(parent, id, pos, size, style),
 	};
 	m_glview = new VRenderGLView(frame, this, wxID_ANY, attriblist, sharedContext);
 	m_glview->SetCanFocus(false);
-	m_view_sizer->Add(m_glview, 1, wxEXPAND);
+	//m_view_sizer->Add(m_glview, 1, wxEXPAND);
 #ifdef _WIN32
 	//example Pixel format descriptor detailing each part
 	//PIXELFORMATDESCRIPTOR pfd = { 
@@ -12771,17 +13005,17 @@ void VRenderView::CreateBar()
 	sizer_h_2->Add(m_rot_reset_btn, 0, wxALIGN_CENTER);
 	sizer_h_2->Add(5, 5, 0);
 	sizer_h_2->Add(st1, 0, wxALIGN_CENTER, 0);
-	sizer_h_2->Add(m_x_rot_sldr, 1, wxEXPAND|wxALIGN_CENTER, 0);
+	sizer_h_2->Add(m_x_rot_sldr, 1, wxEXPAND, 0);
 	sizer_h_2->Add(m_x_rot_spin, 0, wxALIGN_CENTER, 0);
 	sizer_h_2->Add(m_x_rot_text, 0, wxALIGN_CENTER, 0);
 	sizer_h_2->Add(5, 5, 0);
 	sizer_h_2->Add(st2, 0, wxALIGN_CENTER, 0);
-	sizer_h_2->Add(m_y_rot_sldr, 1, wxEXPAND|wxALIGN_CENTER, 0);
+	sizer_h_2->Add(m_y_rot_sldr, 1, wxEXPAND, 0);
 	sizer_h_2->Add(m_y_rot_spin, 0, wxALIGN_CENTER, 0);
 	sizer_h_2->Add(m_y_rot_text, 0, wxALIGN_CENTER, 0);
 	sizer_h_2->Add(5, 5, 0);
 	sizer_h_2->Add(st3, 0, wxALIGN_CENTER, 0);
-	sizer_h_2->Add(m_z_rot_sldr, 1, wxEXPAND|wxALIGN_CENTER, 0);
+	sizer_h_2->Add(m_z_rot_sldr, 1, wxEXPAND, 0);
 	sizer_h_2->Add(m_z_rot_spin, 0, wxALIGN_CENTER, 0);
 	sizer_h_2->Add(m_z_rot_text, 0, wxALIGN_CENTER, 0);
 	sizer_h_2->Add(5, 5, 0);

@@ -886,7 +886,7 @@ Nrrd* VolumeData::GetLabel(bool ret)
 	return 0;
 }
 
-double VolumeData::GetOriginalValue(int i, int j, int k)
+double VolumeData::GetOriginalValue(int i, int j, int k, bool normalize)
 {
 	Nrrd* data = m_tex->get_nrrd(0);
 	if (!data) return 0.0;
@@ -904,13 +904,13 @@ double VolumeData::GetOriginalValue(int i, int j, int k)
 	{
 		uint64_t index = (nx)*(ny)*(kk) + (nx)*(jj) + (ii);
 		uint8 old_value = ((uint8*)(data->data))[index];
-		return double(old_value)/255.0;
+		return normalize ? double(old_value)/255.0 : double(old_value);
 	}
 	else if (bits == nrrdTypeUShort)
 	{
 		uint64_t index = (nx)*(ny)*(kk) + (nx)*(jj) + (ii);
 		uint16 old_value = ((uint16*)(data->data))[index];
-		return double(old_value)*m_scalar_scale/65535.0;
+		return normalize ? double(old_value)*m_scalar_scale/65535.0 : double(old_value);
 	}
 
 	return 0.0;

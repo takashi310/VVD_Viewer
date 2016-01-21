@@ -563,7 +563,6 @@ namespace FLIVR
 			  glBindFramebuffer(GL_FRAMEBUFFER, blend_fbo_);
 			  // Initialize texture color renderbuffer
 			  glBindTexture(GL_TEXTURE_2D, blend_tex_);
-			  glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
 			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -728,7 +727,17 @@ namespace FLIVR
 
 			  if (blend_slices && colormap_mode_!=FLV_CTYPE_DEPTH)
 			  {
-				  if (vr_cmode == FLV_CTYPE_INDEX) glDrawBuffers(1, inv_draw_buffers);
+				  if (vr_cmode == FLV_CTYPE_INDEX)
+				  {
+					  glDrawBuffers(1, inv_draw_buffers);
+					  if (glIsTexture(vr->get_palette()))
+					  {
+						  glActiveTexture(GL_TEXTURE7);
+						  glEnable(GL_TEXTURE_2D);
+						  glBindTexture(GL_TEXTURE_2D, vr->get_palette());
+						  glActiveTexture(GL_TEXTURE0);
+					  }
+				  }
 				  else glDrawBuffers(1, draw_buffers);
 			  }
 
@@ -833,7 +842,13 @@ namespace FLIVR
 				  sw_);
 			  double spcx, spcy, spcz;
 			  vr->tex_->get_spacings(spcx, spcy, spcz);
-			  shader[vr_shader_id]->setLocalParam(5, spcx, spcy, spcz, 1.0);
+			  if (vr_cmode == FLV_CTYPE_INDEX)
+			  {
+				  int max_id = (b->tex_type(0)==GL_SHORT||b->tex_type(0)==GL_UNSIGNED_SHORT) ? USHRT_MAX : UCHAR_MAX;
+				  shader[vr_shader_id]->setLocalParam(5, spcx, spcy, spcz, max_id);
+			  }
+			  else
+				  shader[vr_shader_id]->setLocalParam(5, spcx, spcy, spcz, 1.0);
 			  
 			  switch (vr_cmode)
 			  {
@@ -1018,6 +1033,14 @@ namespace FLIVR
 		  if(glIsTexture(blend_id_tex_))
 		  {
 			  glActiveTexture(GL_TEXTURE6);
+			  glBindTexture(GL_TEXTURE_2D, 0);
+			  glDisable(GL_TEXTURE_2D);
+			  glActiveTexture(GL_TEXTURE0);
+		  }
+
+		  if (use_id_color)
+		  {
+			  glActiveTexture(GL_TEXTURE7);
 			  glBindTexture(GL_TEXTURE_2D, 0);
 			  glDisable(GL_TEXTURE_2D);
 			  glActiveTexture(GL_TEXTURE0);

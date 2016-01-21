@@ -53,7 +53,7 @@ namespace FLIVR
 	"uniform vec4 loc2;//(scalar_scale, gm_scale, left_thresh, right_thresh)\n" \
 	"uniform vec4 loc3;//(gamma, gm_thresh, offset, sw)\n" \
 	"uniform vec4 loc4;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
-	"uniform vec4 loc5;//(spcx, spcy, spcz, 1.0)\n" \
+	"uniform vec4 loc5;//(spcx, spcy, spcz, max_id)\n" \
 	"\n" \
 	"uniform sampler3D tex0;//data volume\n" \
 	"uniform sampler3D tex1;//gm volume\n" \
@@ -79,12 +79,14 @@ namespace FLIVR
 #define VOL_UNIFORMS_INDEX_COLOR \
 	"//VOL_UNIFORMS_INDEX_COLOR\n" \
 	"uniform sampler2D tex5;\n" \
+	"uniform sampler2D tex7;\n" \
 	"uniform vec4 loc6;//(1/vx, 1/vy, luminance, depth_mode)\n" \
 	"\n"
 
 #define VOL_UNIFORMS_INDEX_COLOR_D \
     "//VOL_UNIFORMS_INDEX_COLOR_D\n" \
     "uniform sampler2D tex5;\n" \
+	"uniform sampler2D tex7;\n" \
     "uniform vec4 loc6;//(1/vx, 1/vy, luminance, depth_mode)\n" \
     "\n"
 
@@ -543,27 +545,8 @@ namespace FLIVR
 #define VOL_INDEX_COLOR_BODY \
 	"	//VOL_INDEX_COLOR_BODY\n" \
 	"	vec4 v;\n" \
-	"	uint label = uint(texture(tex0, t.stp).x*65535.0+0.5); //get mask value\n" \
-	"	vec4 c = vec4(0.0, 0.0, 0.0, 0.0);\n" \
-	"	float hue, p2, p3;\n" \
-	"	if (label > uint(0))\n" \
-	"	{\n" \
-	"		hue = float((label*uint(50))%uint(360))/60.0;\n" \
-	"		p2 = 1.0 - hue + floor(hue);\n" \
-	"		p3 = hue - floor(hue);\n" \
-	"		if (hue < 1.0)\n" \
-	"			c = vec4(1.0, p3, 0.0, 1.0);\n" \
-	"		else if (hue < 2.0)\n" \
-	"			c = vec4(p2, 1.0, 0.0, 1.0);\n" \
-	"		else if (hue < 3.0)\n" \
-	"			c = vec4(0.0, 1.0, p3, 1.0);\n" \
-	"		else if (hue < 4.0)\n" \
-	"			c = vec4(0.0, p2, 1.0, 1.0);\n" \
-	"		else if (hue < 5.0)\n" \
-	"			c = vec4(p3, 0.0, 1.0, 1.0);\n" \
-	"		else\n" \
-	"			c = vec4(1.0, 0.0, p2, 1.0);\n" \
-	"	}\n" \
+	"	uint label = uint(texture(tex0, t.stp).x*loc5.w+0.5); //get mask value\n" \
+	"	vec4 c = texture(tex7, vec2((float(label%uint(256))+0.5)/256.0, (float(label/256)+0.5)/256.0));\n" \
 	"	vec4 col = texture(tex5, gl_FragCoord.xy*loc6.xy);\n" \
 	"	if (c.rgb == vec3(0.0) || col.rgb == c.rgb)\n" \
 	"	{\n" \
@@ -575,31 +558,12 @@ namespace FLIVR
 	"\n"
     
 #define VOL_INDEX_COLOR_D_BODY \
-"	//VOL_INDEX_COLOR_D_BODY\n" \
-"	vec4 v;\n" \
-"	uint label = uint(texture(tex0, t.stp).x*65535.0+0.5); //get mask value\n" \
-"	vec4 c = vec4(0.0, 0.0, 0.0, 0.0);\n" \
-"	float hue, p2, p3;\n" \
-"	if (label > uint(0))\n" \
-"	{\n" \
-"		hue = float((label*uint(50))%uint(360))/60.0;\n" \
-"		p2 = 1.0 - hue + floor(hue);\n" \
-"		p3 = hue - floor(hue);\n" \
-"		if (hue < 1.0)\n" \
-"			c = vec4(1.0, p3, 0.0, 1.0);\n" \
-"		else if (hue < 2.0)\n" \
-"			c = vec4(p2, 1.0, 0.0, 1.0);\n" \
-"		else if (hue < 3.0)\n" \
-"			c = vec4(0.0, 1.0, p3, 1.0);\n" \
-"		else if (hue < 4.0)\n" \
-"			c = vec4(0.0, p2, 1.0, 1.0);\n" \
-"		else if (hue < 5.0)\n" \
-"			c = vec4(p3, 0.0, 1.0, 1.0);\n" \
-"		else\n" \
-"			c = vec4(1.0, 0.0, p2, 1.0);\n" \
-"	}\n" \
-"	c.rgb = c.rgb*loc6.z;\n" \
-"\n"
+	"	//VOL_INDEX_COLOR_D_BODY\n" \
+	"	vec4 v;\n" \
+	"	uint label = uint(texture(tex0, t.stp).x*loc5.w+0.5); //get mask value\n" \
+	"	vec4 c = texture(tex7, vec2((float(label%256)+0.5)/256.0, (float(label/256)+0.5)/256.0));\n" \
+	"	c.rgb = c.rgb*loc6.z;\n" \
+	"\n"
 
 #define VOL_COLOR_OUTPUT \
 	"	//VOL_COLOR_OUTPUT\n" \

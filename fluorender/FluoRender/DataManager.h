@@ -221,7 +221,7 @@ public:
 	bool SearchLabel(unsigned int label);
 
 	//save
-	double GetOriginalValue(int i, int j, int k);
+	double GetOriginalValue(int i, int j, int k, bool normalize=true);
 	double GetTransferedValue(int i, int j, int k);
 	void Save(wxString &filename, int mode=0, bool bake=false, bool compress=false);
 
@@ -418,6 +418,11 @@ public:
 	bool isBrxml();
 
 	void SetFog(bool use_fog, double fog_intensity, double fog_start, double fog_end);
+
+	bool isSelID(int id){ return m_vr->is_sel_id(id); }
+	void AddSelID(int id){ m_vr->add_sel_id(id); }
+	void DelSelID(int id){ m_vr->del_sel_id(id); }
+	void ClearSelIDs(){ m_vr->clear_sel_ids(); }
 
 private:
 	//duplication indicator and counter

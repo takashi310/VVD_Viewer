@@ -135,7 +135,7 @@ wxPanel(parent, id, pos, size,style, name),
 		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL|wxSL_INVERSE);
 	m_gamma_text = new wxTextCtrl(this, ID_GammaText, "1.00",
 		wxDefaultPosition, wxSize(40, 20), 0, vald_fp2);
-	sizer_l1->Add(m_gamma_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_l1->Add(m_gamma_sldr, 1, wxEXPAND);
 	sizer_l1->Add(m_gamma_text, 0, wxALIGN_CENTER);
 	sizer_l1->Add(st, 0, wxALIGN_CENTER);
 	//extract boundary
@@ -147,7 +147,7 @@ wxPanel(parent, id, pos, size,style, name),
 		wxDefaultPosition, wxSize(60, 20), 0, vald_fp4);
 	sizer_r1->Add(st, 0, wxALIGN_CENTER);
 	sizer_r1->Add(m_boundary_text, 0, wxALIGN_CENTER);
-	sizer_r1->Add(m_boundary_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_r1->Add(m_boundary_sldr, 1, wxEXPAND);
 
 	//2nd line
 	//saturation point
@@ -157,7 +157,7 @@ wxPanel(parent, id, pos, size,style, name),
 		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
 	m_contrast_text = new wxTextCtrl(this, ID_ContrastText, "50",
 		wxDefaultPosition, wxSize(40, 20), 0, vald_int);
-	sizer_l2->Add(m_contrast_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_l2->Add(m_contrast_sldr, 1, wxEXPAND);
 	sizer_l2->Add(m_contrast_text, 0, wxALIGN_CENTER);
 	sizer_l2->Add(st, 0, wxALIGN_CENTER);
 	//thresholds
@@ -173,9 +173,9 @@ wxPanel(parent, id, pos, size,style, name),
 		wxDefaultPosition, wxSize(60, 20), 0, vald_int);
 	sizer_r2->Add(m_threh_st, 0, wxALIGN_CENTER);
 	sizer_r2->Add(m_left_thresh_text, 0, wxALIGN_CENTER);
-	sizer_r2->Add(m_left_thresh_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_r2->Add(m_left_thresh_sldr, 1, wxEXPAND);
 	sizer_r2->Add(m_right_thresh_text, 0, wxALIGN_CENTER);
-	sizer_r2->Add(m_right_thresh_sldr,1, wxEXPAND|wxALIGN_CENTER);
+	sizer_r2->Add(m_right_thresh_sldr,1, wxEXPAND);
 
 	//3rd line
 	//luminance
@@ -185,7 +185,7 @@ wxPanel(parent, id, pos, size,style, name),
 		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
 	m_luminance_text = new wxTextCtrl(this, ID_LuminanceText, "128",
 		wxDefaultPosition, wxSize(40, 20), 0, vald_int);
-	sizer_l3->Add(m_luminance_sldr, 1, wxEXPAND|wxALIGN_CENTER, 0);
+	sizer_l3->Add(m_luminance_sldr, 1, wxEXPAND, 0);
 	sizer_l3->Add(m_luminance_text, 0, wxALIGN_CENTER, 0);
 	sizer_l3->Add(st, 0, wxALIGN_CENTER, 0);
 	//shadow
@@ -198,14 +198,14 @@ wxPanel(parent, id, pos, size,style, name),
 		wxDefaultPosition, wxSize(60, 20), 0, vald_fp2);
 	sizer_r3->Add(m_shadow_chk, 0, wxALIGN_CENTER);
 	sizer_r3->Add(m_shadow_text, 0, wxALIGN_CENTER);
-	sizer_r3->Add(m_shadow_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_r3->Add(m_shadow_sldr, 1, wxEXPAND);
 	//highlight
 	m_hi_shading_sldr = new wxSlider(this, ID_HiShadingSldr, 0, 0, 100,
 		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
 	m_hi_shading_text = new wxTextCtrl(this, ID_HiShadingText, "0.00",
 		wxDefaultPosition, wxSize(60, 20), 0, vald_fp2);
 	sizer_r3->Add(m_hi_shading_text, 0, wxALIGN_CENTER);
-	sizer_r3->Add(m_hi_shading_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_r3->Add(m_hi_shading_sldr, 1, wxEXPAND);
 
 	//4th line
 	//alpha
@@ -217,7 +217,7 @@ wxPanel(parent, id, pos, size,style, name),
 		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
 	m_alpha_text = new wxTextCtrl(this, ID_Alpha_Text, "127",
 		wxDefaultPosition, wxSize(40, 20), 0, vald_int);
-	sizer_l4->Add(m_alpha_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_l4->Add(m_alpha_sldr, 1, wxEXPAND);
 	sizer_l4->Add(m_alpha_text, 0, wxALIGN_CENTER);
 	sizer_l4->Add(st, 0, wxALIGN_CENTER);
 	sizer_l4->Add(m_alpha_chk, 0, wxALIGN_CENTER);
@@ -230,7 +230,7 @@ wxPanel(parent, id, pos, size,style, name),
 		wxDefaultPosition, wxSize(60, 20), 0, vald_fp2);
 	sizer_r4->Add(st, 0, wxALIGN_CENTER);
 	sizer_r4->Add(m_sample_text, 0, wxALIGN_CENTER);
-	sizer_r4->Add(m_sample_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_r4->Add(m_sample_sldr, 1, wxEXPAND);
 
 	//5th line
 	//shading
@@ -242,7 +242,7 @@ wxPanel(parent, id, pos, size,style, name),
 		wxDefaultPosition, wxSize(5, 20));
 	m_shading_enable_chk = new wxCheckBox(this, ID_ShadingEnableChk, "Shading",
 		wxDefaultPosition, wxSize(105, 20));
-	sizer_l5->Add(m_low_shading_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_l5->Add(m_low_shading_sldr, 1, wxEXPAND);
 	sizer_l5->Add(m_low_shading_text, 0, wxALIGN_CENTER);
 	sizer_l5->Add(st, 0, wxALIGN_CENTER);
 	sizer_l5->Add(m_shading_enable_chk, 0, wxALIGN_CENTER);
@@ -256,34 +256,34 @@ wxPanel(parent, id, pos, size,style, name),
 	sizer_r5->Add(m_colormap_low_value_text, 0, wxALIGN_CENTER);
 	m_colormap_low_value_sldr = new wxSlider(this, ID_ColormapLowValueSldr, 0, 0, 255,
 		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
-	sizer_r5->Add(m_colormap_low_value_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_r5->Add(m_colormap_low_value_sldr, 1, wxEXPAND);
 	m_colormap_high_value_text = new wxTextCtrl(this, ID_ColormapHighValueText, "255",
 		wxDefaultPosition + wxPoint(10,0), wxSize(50, 20), 0, vald_int);
 	sizer_r5->Add(m_colormap_high_value_text, 0, wxALIGN_CENTER);
 	m_colormap_high_value_sldr = new wxSlider(this, ID_ColormapHighValueSldr, 255, 0, 255,
 		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
-	sizer_r5->Add(m_colormap_high_value_sldr, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_r5->Add(m_colormap_high_value_sldr, 1, wxEXPAND);
 	st = new wxStaticText(this, 0, "High (R)");
 	sizer_r5->Add(st, 0, wxALIGN_CENTER);
 
 	//6th line
 	//left sliders
-	sizer_sl_left->Add(sizer_l1, 0, wxEXPAND|wxALIGN_CENTER);
-	sizer_sl_left->Add(sizer_l2, 0, wxEXPAND|wxALIGN_CENTER);
-	sizer_sl_left->Add(sizer_l3, 0, wxEXPAND|wxALIGN_CENTER);
-	sizer_sl_left->Add(sizer_l4, 0, wxEXPAND|wxALIGN_CENTER);
-	sizer_sl_left->Add(sizer_l5, 0, wxEXPAND|wxALIGN_CENTER);
+	sizer_sl_left->Add(sizer_l1, 0, wxEXPAND);
+	sizer_sl_left->Add(sizer_l2, 0, wxEXPAND);
+	sizer_sl_left->Add(sizer_l3, 0, wxEXPAND);
+	sizer_sl_left->Add(sizer_l4, 0, wxEXPAND);
+	sizer_sl_left->Add(sizer_l5, 0, wxEXPAND);
 
 	//right sliders
-	sizer_sl_righ->Add(sizer_r1, 0, wxEXPAND|wxALIGN_CENTER);
-	sizer_sl_righ->Add(sizer_r2, 0, wxEXPAND|wxALIGN_CENTER);
-	sizer_sl_righ->Add(sizer_r3, 0, wxEXPAND|wxALIGN_CENTER);
-	sizer_sl_righ->Add(sizer_r4, 0, wxEXPAND|wxALIGN_CENTER);
-	sizer_sl_righ->Add(sizer_r5, 0, wxEXPAND|wxALIGN_CENTER);
+	sizer_sl_righ->Add(sizer_r1, 0, wxEXPAND);
+	sizer_sl_righ->Add(sizer_r2, 0, wxEXPAND);
+	sizer_sl_righ->Add(sizer_r3, 0, wxEXPAND);
+	sizer_sl_righ->Add(sizer_r4, 0, wxEXPAND);
+	sizer_sl_righ->Add(sizer_r5, 0, wxEXPAND);
 
 	//all sliders
-	sizer_sliders->Add(sizer_sl_left, 1, wxEXPAND|wxALIGN_CENTER);
-	sizer_sliders->Add(sizer_sl_righ, 1, wxEXPAND|wxALIGN_CENTER);
+	sizer_sliders->Add(sizer_sl_left, 1, wxEXPAND);
+	sizer_sliders->Add(sizer_sl_righ, 1, wxEXPAND);
 
 	//bottom line
 	//color

@@ -34,6 +34,7 @@
 #include "Texture.h"
 #include <stdint.h>
 #include <glm/glm.hpp>
+#include <unordered_set>
 
 namespace FLIVR
 {
@@ -122,6 +123,11 @@ namespace FLIVR
       {}
    };
 
+#define PALETTE_W 256
+#define PALETTE_H 256
+#define PALETTE_SIZE (PALETTE_W*PALETTE_H)
+#define PALETTE_ELEM_COMP 4
+
    class TextureRenderer
    {
       public:
@@ -165,7 +171,20 @@ namespace FLIVR
 		bool test_against_view(const BBox &bbox, bool persp=false);
 
 		 void clear_brick_buf();
-		 
+
+		 void init_palette();
+		 void update_palette_tex();
+		 //0-dark; 1-gray; 2-invisible;
+		 void set_desel_palette_mode(int mode, float fac=0.2);
+		 void set_desel_palette_mode_dark(float fac=0.2);
+		 void set_desel_palette_mode_gray(float fac=0.2);
+		 void set_desel_palette_mode_invisible();
+		 GLuint get_palette();
+		 bool is_sel_id(int id);
+		 void add_sel_id(int id);
+		 void del_sel_id(int id);
+		 void clear_sel_ids();
+
          //memory swap
          static void set_mem_swap(bool val) {mem_swap_ = val;}
          static bool get_mem_swap() {return mem_swap_;}
@@ -268,6 +287,14 @@ namespace FLIVR
                bool filter_buffer_resize_;
                GLuint filter_buffer_;
                GLuint filter_tex_id_;
+
+			   GLuint palette_tex_id_;
+			   GLuint base_palette_tex_id_;
+			   unsigned char palette_[PALETTE_SIZE*PALETTE_ELEM_COMP];
+			   unsigned char base_palette_[PALETTE_SIZE*PALETTE_ELEM_COMP];
+			   unordered_set<int> sel_ids_;
+			   int desel_palette_mode_;
+			   float desel_col_fac_;
 
                //sahder for volume rendering
                static VolShaderFactory vol_shader_factory_;
