@@ -193,6 +193,9 @@ include_directories(${CURL_INCLUDE_DIR})
 #openssl
 find_package(OpenSSL REQUIRED)
 include_directories(${OPENSSL_INCLUDE_DIR})
+if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+file(GLOB SSL_DEP_LIBRARIES ${FluoRender_SOURCE_DIR}/fluorender/libcurl/OSX/*.a)
+endif()
 
 #libjpeg
 mark_as_advanced(CLEAR JPEG_INCLUDE_DIR)
@@ -415,6 +418,7 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 	   ${JPEG_LIBRARIES}
 	   ${ZLIB_LIBRARIES}
 	   ${OPENSSL_LIBRARIES}
+       ${SSL_DEP_LIBRARIES}
 	   ${ffmpeg_LIBRARIES}
 	   ${OPENGL_LIBRARIES}
 	   ${Boost_LIBRARIES}
