@@ -176,7 +176,15 @@ add_library(POLE_OBJ OBJECT ${pole_srcs} ${pole_hdrs})
 #ffmpeg
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
   include_directories(${FluoRender_SOURCE_DIR}/fluorender/ffmpeg/Win64/include)
-  file(GLOB ffmpeg_LIBRARIES ${FluoRender_SOURCE_DIR}/fluorender/ffmpeg/Win64/lib/*.lib)
+  file(GLOB ffmpeg_LIBS_D ${FluoRender_SOURCE_DIR}/fluorender/ffmpeg/Win64/lib/Debug/*.lib)
+  file(GLOB ffmpeg_LIBS_R ${FluoRender_SOURCE_DIR}/fluorender/ffmpeg/Win64/lib/Release/*.lib)
+  set(ffmpeg_LIBRARIES)
+  foreach (f ${ffmpeg_LIBS_D})
+    set(ffmpeg_LIBRARIES ${ffmpeg_LIBRARIES} debug ${f})
+  endforeach()
+  foreach (f ${ffmpeg_LIBS_R})
+    set(ffmpeg_LIBRARIES ${ffmpeg_LIBRARIES} optimized ${f})
+  endforeach()
   add_definitions(-D__STDC_CONSTANT_MACROS)
 else()
   include_directories(${FluoRender_SOURCE_DIR}/fluorender/ffmpeg/OSX/include)
@@ -344,6 +352,10 @@ elseif(NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 		  SET(CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO "/INCREMENTAL:NO /OPT:NOREF ${replacementFlags3}" )
 
 		  SET(CMAKE_EXE_LINKER_FLAGS_RELEASE "/INCREMENTAL:NO /OPT:NOREF" )
+		  SET(CMAKE_C_FLAGS_DEBUG "-MDd")
+		  SET(CMAKE_CXX_FLAGS_DEBUG "-MDd")
+		  SET(CMAKE_C_FLAGS_RELEASE "-MT")
+		  SET(CMAKE_CXX_FLAGS_RELEASE "-MT")
 	  endif()
       include_directories(${FluoRender_SOURCE_DIR}/fluorender/FluoRender/WacUtils)
       include_directories(${FluoRender_SOURCE_DIR}/fluorender/Wacom/Include)
@@ -406,7 +418,7 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	   ${JPEG_LIBRARIES}
 	   ${ZLIB_LIBRARIES}
 	   ${OPENSSL_LIBRARIES} ws2_32.lib Wldap32.lib
-	   ${ffmpeg_LIBRARIES}
+	   ${ffmpeg_LIBRARIES} Secur32.lib
 	   ${OPENGL_LIBRARIES}
 	   ${Boost_LIBRARIES}
 	   ${OPENCL_LIBRARIES}
@@ -418,7 +430,7 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 	   ${JPEG_LIBRARIES}
 	   ${ZLIB_LIBRARIES}
 	   ${OPENSSL_LIBRARIES}
-       ${SSL_DEP_LIBRARIES}
+	   ${SSL_DEP_LIBRARIES}
 	   ${ffmpeg_LIBRARIES}
 	   ${OPENGL_LIBRARIES}
 	   ${Boost_LIBRARIES}

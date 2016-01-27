@@ -73,7 +73,7 @@ BEGIN_EVENT_TABLE(VMovieView, wxPanel)
     EVT_TIMER(ID_Timer, VMovieView::OnTimer)
 END_EVENT_TABLE()
 
-double VMovieView::m_Mbitrate = 1;
+double VMovieView::m_Mbitrate = 10.0;
 wxTextCtrl * VMovieView::m_estimated_size_text = 0;
 wxTextCtrl * VMovieView::m_movie_time = 0;
 
@@ -1221,7 +1221,7 @@ wxWindow* VMovieView::CreateExtraCaptureControl(wxWindow* parent) {
 	//bitrate
 	wxStaticText *MOVopts = new wxStaticText(panel,wxID_ANY, "MOV Options:",
 		wxDefaultPosition,wxSize(95,-1));
-	wxTextCtrl *bitrate_text = new wxTextCtrl(panel, wxID_ANY, "1.0",
+	wxTextCtrl *bitrate_text = new wxTextCtrl(panel, wxID_ANY, "10.0",
 		wxDefaultPosition,wxSize(50,-1));
 	bitrate_text->Connect(bitrate_text->GetId(), wxEVT_TEXT ,
 		wxCommandEventHandler(VMovieView::OnMovieQuality), NULL, panel);
