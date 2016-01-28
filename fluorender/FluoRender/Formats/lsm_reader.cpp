@@ -29,6 +29,9 @@ DEALINGS IN THE SOFTWARE.
 #include "../compatibility.h"
 #include "lsm_reader.h"
 
+#include <fstream>
+#include <bitset>
+
 LSMReader::LSMReader()
 {
    m_time_num = 0;
@@ -740,10 +743,27 @@ Nrrd* LSMReader::Convert(int t, int c, bool get_max)
                   else if (m_compression==5)
                   {
                      unsigned char* tif = new (std::nothrow) unsigned char[(*cinfo)[i].size];
-                     fread(tif, sizeof(unsigned char), (*cinfo)[i].size, pfile);
-                     LZWDecode(tif, (tidata_t)(val+val_pos), (*cinfo)[i].size);
-                     for (j=0; j<m_y_size; j++)
-                        DecodeAcc16((tidata_t)(val+val_pos+j*m_x_size), m_x_size,1);
+					 fread(tif, sizeof(unsigned char), (*cinfo)[i].size, pfile);
+
+					 LZWDecode(tif, (tidata_t)(val+val_pos), (*cinfo)[i].size);
+/*
+					 ofstream ofs("lsm_c.txt");
+					 for (int k = 0; k < m_x_size; k++){
+						 ofs << ' ' << static_cast<std::bitset<8>>((val+val_pos)[k]);
+						 if (k % 16 == 15) ofs << '\n';
+					 }
+					 ofs.close();
+*/
+					 for (j=0; j<m_y_size; j++)
+                        DecodeAcc16((tidata_t)(val+val_pos+j*m_x_size), m_x_size*2,1);
+/*
+					 ofs.open("lsm_dec.txt");
+					 for (int k = 0; k < m_x_size; k++){
+						 ofs << ' ' << static_cast<std::bitset<8>>((val+val_pos)[k]);
+						 if (k % 16 == 15) ofs << '\n';
+					 }
+					 ofs.close();
+*/
                      delete []tif;
                   }
                }
