@@ -29,8 +29,8 @@ DEALINGS IN THE SOFTWARE.
 #include "../compatibility.h"
 #include "lsm_reader.h"
 
-#include <fstream>
-#include <bitset>
+//#include <fstream>
+//#include <bitset>
 
 LSMReader::LSMReader()
 {

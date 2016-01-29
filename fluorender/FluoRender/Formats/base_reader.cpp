@@ -202,6 +202,8 @@ int BaseReader::LZWDecode(tidata_t tif, tidata_t op0, tsize_t occ0)
 	return (1);
 }
 
+//Decode horizontal differencing
+//(Some image formats use horizontal differencing predictor for LZW compression)
 void BaseReader::DecodeAcc8(tidata_t cp0, tsize_t cc, tsize_t stride)
 {
     char* cp = (char*) cp0;
@@ -249,6 +251,8 @@ void BaseReader::DecodeAcc8(tidata_t cp0, tsize_t cc, tsize_t stride)
     }
 }
 
+//Decode horizontal differencing
+//(Some image formats use horizontal differencing predictor for LZW compression)
 void BaseReader::DecodeAcc16(tidata_t cp0, tsize_t cc, tsize_t stride)
 {
     uint16* wp = (uint16*) cp0;
