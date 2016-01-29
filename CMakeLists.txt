@@ -500,4 +500,9 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 			${f}
 			$<TARGET_FILE_DIR:FluoRender>)
 	endforeach()
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+	add_custom_command(TARGET FluoRender PRE_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy_directory
+		"${FluoRender_SOURCE_DIR}/Settings"
+		"$<TARGET_FILE_DIR:FluoRender>/../Resources")
 endif()
