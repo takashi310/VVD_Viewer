@@ -35,6 +35,8 @@
 #include <stdint.h>
 #include <glm/glm.hpp>
 #include <unordered_set>
+#include <unordered_map>
+#include <string>
 
 namespace FLIVR
 {
@@ -174,6 +176,10 @@ namespace FLIVR
 
 		 void init_palette();
 		 void update_palette_tex();
+		 void set_roi_name(wstring name, int id=-1);
+		 wstring get_roi_name(int id=-1);
+		 void set_id_color(unsigned char r, unsigned char g, unsigned char b, bool update_palette=true, int id=-1);
+		 void get_id_color(unsigned char &r, unsigned char &g, unsigned char &b, int id=-1);
 		 //0-dark; 1-gray; 2-invisible;
 		 void set_desel_palette_mode(int mode, float fac=0.2);
 		 void set_desel_palette_mode_dark(float fac=0.2);
@@ -186,7 +192,7 @@ namespace FLIVR
 		 void set_edit_sel_id(int id);
 		 int get_edit_sel_id(){ return edit_sel_id_; };
 		 void clear_sel_ids();
-
+		 
          //memory swap
          static void set_mem_swap(bool val) {mem_swap_ = val;}
          static bool get_mem_swap() {return mem_swap_;}
@@ -295,6 +301,7 @@ namespace FLIVR
 			   unsigned char palette_[PALETTE_SIZE*PALETTE_ELEM_COMP];
 			   unsigned char base_palette_[PALETTE_SIZE*PALETTE_ELEM_COMP];
 			   unordered_set<int> sel_ids_;
+			   unordered_map<int, wstring> roi_names_;
 			   int desel_palette_mode_;
 			   float desel_col_fac_;
 			   int edit_sel_id_;

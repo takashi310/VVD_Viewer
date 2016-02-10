@@ -45,6 +45,7 @@ BEGIN_EVENT_TABLE(VPropView, wxPanel)
 	EVT_COMMAND_SCROLL(ID_ColormapLowValueSldr, VPropView::OnColormapLowValueChange)
 	EVT_TEXT(ID_ColormapLowValueText, VPropView::OnColormapLowValueText)
 	//roi
+	EVT_TEXT_ENTER(ID_ROINameText, VPropView::OnEnterInROINameText)
 	EVT_COLOURPICKER_CHANGED(ID_ROIColorBtn, VPropView::OnROIColorBtn)
 	//6
 	//color
@@ -274,13 +275,12 @@ wxPanel(parent, id, pos, size,style, name),
 	m_sizer_r5->Add(st, 0, wxALIGN_CENTER);
 
 	st = new wxStaticText(this, 0, "Segment:", wxDefaultPosition,  wxSize(140, 20), wxALIGN_RIGHT);
-	m_roi_text = new myTextCtrl(frame, this, wxID_ANY, "",
+	m_roi_text = new myTextCtrl(frame, this, ID_ROINameText, "",
 		wxDefaultPosition, wxSize(200, 20), wxTE_PROCESS_ENTER);
-	m_roi_color_btn = new wxColourPickerCtrl(this, ID_ColorBtn, *wxRED,
+	m_roi_color_btn = new wxColourPickerCtrl(this, ID_ROIColorBtn, *wxRED,
 		wxDefaultPosition, wxDefaultSize);
 	m_sizer_r5->Add(10,5,0);
 	m_sizer_r6->Add(st, 0, wxALIGN_CENTER);
-	m_sizer_r6->Add(10, 10);
 	m_sizer_r6->Add(m_roi_text, 0, wxALIGN_CENTER);
 	m_sizer_r6->Add(10, 10);
 	m_sizer_r6->Add(m_roi_color_btn, 0, wxALIGN_CENTER);
@@ -785,6 +785,15 @@ VRenderView* VPropView::GetView()
 	return m_vrv;
 }
 
+void VPropView::SaveROIName()
+{
+	if (m_vd)
+	{
+		wxString name = m_roi_text->GetValue();
+		m_vd->SetROIName(name.ToStdWstring());
+	}
+}
+
 void VPropView::ShowUIsROI()
 {
 	if (m_sizer_sl_righ && m_sizer_r5 && m_sizer_r6)
@@ -812,7 +821,7 @@ void VPropView::UpdateUIsROI()
 	if (m_vd->GetColormapMode() == 3 && m_vd->GetEditSelID() > 0)
 	{
 		SetROIindex(m_vd->GetEditSelID());
-		//ShowUIsROI();
+		ShowUIsROI();
 	}
 	else 
 		HideUIsROI();
@@ -820,12 +829,23 @@ void VPropView::UpdateUIsROI()
 
 void VPropView::SetROIindex(int id)
 {
+	if (!m_vd) return; 
+
+	unsigned char r = 0, g = 0, b = 0;
+	
 	m_roi_id = id;
+	if (m_vd)
+		m_vd->GetIDColor(r, g, b);
+
+	wxColor wxc(r, g, b);
+	m_roi_color_btn->SetColour(wxc);
 
 	m_roi_text->SetValue(wxT(""));
 
 	wxString inistr = wxT("Segment ") + wxString::Format("%d", m_roi_id);
 	m_roi_text->SetHint(inistr);
+
+	m_roi_text->SetValue(m_vd->GetROIName());
 }
 
 
@@ -1372,14 +1392,18 @@ void VPropView::OnColormapLowValueText(wxCommandEvent &event)
 	RefreshVRenderViews(false, true);
 }
 
+void VPropView::OnEnterInROINameText(wxCommandEvent& event)
+{
+	SaveROIName();
+}
+
 void VPropView::OnROIColorBtn(wxColourPickerEvent& event)
 {
 	wxColor wxc = event.GetColour();
 
-	Color color(wxc.Red()/255.0, wxc.Green()/255.0, wxc.Blue()/255.0);
 	if (m_vd)
 	{
-		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+		m_vd->SetIDColor(wxc.Red(), wxc.Green(), wxc.Blue());
 
 		RefreshVRenderViews(true);
 	}

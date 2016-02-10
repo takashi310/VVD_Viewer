@@ -71,6 +71,7 @@ class VPropView: public wxPanel
 		ID_ColormapHighValueText,
 		ID_ColormapLowValueSldr,
 		ID_ColormapLowValueText,
+		ID_ROINameText,
 		ID_ROIColorBtn,
 		ID_InvChk,
 		ID_IDCLChk,
@@ -101,6 +102,7 @@ public:
 	void SetView(VRenderView* view);
 	VRenderView* GetView();
 
+	void SaveROIName();
 	void SetROIindex(int id);
 	void ShowUIsROI();
 	void HideUIsROI();
@@ -253,6 +255,7 @@ private:
 	void OnColormapLowValueChange(wxScrollEvent &event);
 	void OnColormapLowValueText(wxCommandEvent &event);
 	//roi
+	void OnEnterInROINameText(wxCommandEvent& event);
 	void OnROIColorBtn(wxColourPickerEvent& event);
 	//6
 	void OnColorChange(wxColor c);

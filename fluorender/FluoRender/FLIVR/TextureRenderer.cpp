@@ -288,6 +288,66 @@ namespace FLIVR
 		}
 	}
 
+	void TextureRenderer::set_roi_name(wstring name, int id)
+	{
+		int edid = (id == -1) ? edit_sel_id_ : id;
+		
+		if (edid < 0 || edid >= PALETTE_SIZE)
+			return;
+
+		if (!name.empty())
+			roi_names_[edid] = name;
+		else
+		{
+			auto itr = roi_names_.find(edid);
+			if( itr != roi_names_.end() )
+				roi_names_.erase(itr);
+		}
+	}
+
+	wstring TextureRenderer::get_roi_name(int id)
+	{
+		wstring rval;
+
+		int edid = (id == -1) ? edit_sel_id_ : id;
+		
+		if (edid >= 0 && edid < PALETTE_SIZE)
+		{
+			auto itr = roi_names_.find(edid);
+			if( itr != roi_names_.end() )
+				rval = itr->second;
+		}
+
+		return rval;
+	}
+
+	void TextureRenderer::set_id_color(unsigned char r, unsigned char g, unsigned char b, bool update_palette, int id)
+	{
+		int edid = (id == -1) ? edit_sel_id_ : id;
+		
+		if (edid < 0 || edid >= PALETTE_SIZE)
+			return;
+		
+		base_palette_[edid*PALETTE_ELEM_COMP+0] = r;
+		base_palette_[edid*PALETTE_ELEM_COMP+1] = g;
+		base_palette_[edid*PALETTE_ELEM_COMP+2] = b;
+
+		if (update_palette)
+			set_desel_palette_mode(desel_palette_mode_, desel_col_fac_);
+	}
+
+	void TextureRenderer::get_id_color(unsigned char &r, unsigned char &g, unsigned char &b, int id)
+	{
+		int edid = (id == -1) ? edit_sel_id_ : id;
+		
+		if (edid < 0 || edid >= PALETTE_SIZE)
+			return;
+		
+		r = base_palette_[edid*PALETTE_ELEM_COMP+0];
+		g = base_palette_[edid*PALETTE_ELEM_COMP+1];
+		b = base_palette_[edid*PALETTE_ELEM_COMP+2];
+	}
+
 	void TextureRenderer::set_desel_palette_mode_dark(float fac)
 	{
 		for (int i = 0; i < PALETTE_SIZE; i++)

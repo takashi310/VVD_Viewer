@@ -419,12 +419,22 @@ public:
 
 	void SetFog(bool use_fog, double fog_intensity, double fog_start, double fog_end);
 
-	bool isSelID(int id){ return m_vr->is_sel_id(id); }
-	void AddSelID(int id){ m_vr->add_sel_id(id); }
-	void DelSelID(int id){ m_vr->del_sel_id(id); }
-	int GetEditSelID(){ return m_vr->get_edit_sel_id(); }
-	void SetEditSelID(int id){ m_vr->set_edit_sel_id(id); }
-	void ClearSelIDs(){ m_vr->clear_sel_ids(); }
+	void SetROIName(wstring name, int id=-1){ if (m_vr) m_vr->set_roi_name(name, id); }
+	wstring GetROIName(int id=-1){ return m_vr ? m_vr->get_roi_name(id) : wstring(); }
+	void SetIDColor(unsigned char r, unsigned char g, unsigned char b, bool update_palette=true, int id=-1)
+	{
+		if (m_vr) m_vr->set_id_color(r, g, b, update_palette, id);
+	}
+	void GetIDColor(unsigned char &r, unsigned char &g, unsigned char &b, int id=-1)
+	{
+		if (m_vr) m_vr->get_id_color(r, g, b, id);
+	}
+	bool isSelID(int id){ return m_vr ? m_vr->is_sel_id(id) : false; }
+	void AddSelID(int id){ if (m_vr) m_vr->add_sel_id(id); }
+	void DelSelID(int id){ if (m_vr) m_vr->del_sel_id(id); }
+	int GetEditSelID(){ return m_vr ? m_vr->get_edit_sel_id() : -1; }
+	void SetEditSelID(int id){ if (m_vr) m_vr->set_edit_sel_id(id); }
+	void ClearSelIDs(){ if (m_vr) m_vr->clear_sel_ids(); }
 
 private:
 	//duplication indicator and counter
