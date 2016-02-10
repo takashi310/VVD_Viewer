@@ -30,6 +30,7 @@ DEALINGS IN THE SOFTWARE.
 #include "../compatibility.h"
 #include <fstream>
 #include <iostream>
+#include <sstream>
 
 PVXMLReader::PVXMLReader()
 {
@@ -262,6 +263,8 @@ void PVXMLReader::Preprocess()
 			}
 		}
 	}
+
+	SetInfo();
 }
 
 void PVXMLReader::ReadSystemConfig(wxXmlNode* systemNode)
@@ -1015,3 +1018,18 @@ wstring PVXMLReader::GetCurName(int t, int c)
 	return wstring(L"");
 }
 
+void PVXMLReader::SetInfo()
+{
+	wstringstream wss;
+
+	wss << L"------------------------\n";
+	wss << m_data_name << '\n';
+	wss << L"File type: PVXML\n";
+	wss << L"Width: " << m_x_size << L'\n';
+	wss << L"Height: " << m_y_size << L'\n';
+	wss << L"Depth: " << m_slice_num << L'\n';
+	wss << L"Channels: " << m_chan_num << L'\n';
+	wss << L"Frames: " << m_time_num << L'\n';
+
+	m_info = wss.str();
+}

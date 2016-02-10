@@ -28,6 +28,7 @@ DEALINGS IN THE SOFTWARE.
 #include <stdio.h>
 #include "../compatibility.h"
 #include "lsm_reader.h"
+#include <sstream>
 
 //#include <fstream>
 //#include <bitset>
@@ -325,6 +326,8 @@ void LSMReader::Preprocess()
 
    m_cur_time = 0;
    m_data_name = m_path_name.substr(m_path_name.find_last_of(GETSLASH())+1);
+
+   SetInfo();
 }
 
 void LSMReader::ReadLsmInfo(FILE* pfile, unsigned char* pdata, unsigned int size)
@@ -789,3 +792,20 @@ wstring LSMReader::GetCurName(int t, int c)
 {
    return wstring(L"");
 }
+
+void LSMReader::SetInfo()
+{
+	wstringstream wss;
+
+	wss << L"------------------------\n";
+	wss << m_data_name << '\n';
+	wss << L"File type: LSM\n";
+	wss << L"Width: " << m_x_size << L'\n';
+	wss << L"Height: " << m_y_size << L'\n';
+	wss << L"Depth: " << m_slice_num << L'\n';
+	wss << L"Channels: " << m_chan_num << L'\n';
+	wss << L"Frames: " << m_time_num << L'\n';
+
+	m_info = wss.str();
+}
+

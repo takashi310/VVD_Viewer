@@ -115,6 +115,15 @@ public:
 		return m_alignment;
 	}
 
+	wstring GetInfo()
+	{
+		return m_info;
+	}
+	void SetInfo(wstring info)
+	{
+		m_info = info;
+	}
+
 protected:
 	wstring m_id_string;	//the path and file name used to read files
 	//resizing
@@ -128,6 +137,8 @@ protected:
 	int m_cur_batch;
 	
 	wstring m_path_name;
+
+	wstring m_info;
 
 	//all the decoding stuff
 	#define MAXCODE(n)	((1L<<(n))-1)

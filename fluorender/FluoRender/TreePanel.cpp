@@ -46,7 +46,7 @@ BEGIN_EVENT_TABLE(DataTreeCtrl, wxTreeCtrl)
 	EVT_MENU(ID_AddMeshGroup, DataTreeCtrl::OnAddMeshGroup)
 	EVT_MENU(ID_Expand, DataTreeCtrl::OnExpand)
 	EVT_MENU(ID_Edit, DataTreeCtrl::OnEdit)
-	EVT_MENU(ID_Measurement, DataTreeCtrl::OnMeasurement)
+	EVT_MENU(ID_Info, DataTreeCtrl::OnInfo)
 	EVT_MENU(ID_Trace, DataTreeCtrl::OnTrace)
 	EVT_MENU(ID_NoiseCancelling, DataTreeCtrl::OnNoiseCancelling)
 	EVT_MENU(ID_Counting, DataTreeCtrl::OnCounting)
@@ -306,7 +306,7 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 				menu.Append(ID_RemoveData, "Delete");
 				menu.AppendSeparator();
 				menu.Append(ID_Edit, "Analyze...");
-				menu.Append(ID_Measurement, "Measurement...");
+				menu.Append(ID_Info, "Information...");
 				menu.Append(ID_Trace, "Components && Tracking...");
 				menu.Append(ID_NoiseCancelling, "Noise Reduction...");
 				menu.Append(ID_Counting, "Counting and Volume...");
@@ -806,11 +806,11 @@ void DataTreeCtrl::OnEdit(wxCommandEvent &event)
 }
 
 //measurement
-void DataTreeCtrl::OnMeasurement(wxCommandEvent &event)
+void DataTreeCtrl::OnInfo(wxCommandEvent &event)
 {
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (vr_frame)
-		vr_frame->ShowMeasureDlg();
+		vr_frame->ShowInfoDlg();
 }
 
 //trace
@@ -1979,6 +1979,46 @@ void DataTreeCtrl::BrushCreateInv()
 	}
 }
 
+VRenderView* DataTreeCtrl::GetCurrentView()
+{
+	VRenderView* vrv = NULL;
+
+	wxTreeItemId sel_item = GetSelection();
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	
+	if (!vr_frame) return NULL;
+	if (!sel_item.IsOk()) return NULL;
+	
+	if (sel_item.IsOk())
+	{
+		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+		if (item_data && item_data->type == 1)
+		{
+			//view
+			wxString name = GetItemText(sel_item);
+			vrv = vr_frame->GetView(name);
+		}
+		else if (item_data)
+		{
+			//volume
+			wxTreeItemId par_item = GetItemParent(sel_item);
+			while (par_item.IsOk())
+			{
+				LayerInfo* par_data = (LayerInfo*) GetItemData(par_item);
+				if (par_data && par_data->type == 1)
+				{
+					wxString name = GetItemText(par_item);
+					vrv = vr_frame->GetView(name);
+					break;
+				}
+				par_item = GetItemParent(par_item);
+			}
+		}
+	}
+
+	return vrv;
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 BEGIN_EVENT_TABLE(TreePanel, wxPanel)
@@ -2594,4 +2634,11 @@ void TreePanel::BrushCreate()
 
 	if (m_datatree)
 		m_datatree->BrushCreate();
+}
+
+VRenderView* TreePanel::GetCurrentView()
+{
+	if (!m_datatree) return NULL;
+
+	return m_datatree->GetCurrentView();
 }

@@ -353,4 +353,16 @@ const static unsigned char shade_png[16239];
 
 /* shadow.png - 16235 bytes */
 const static unsigned char shadow_png[16235];
+
+/* listicon_edit.png - 808 bytes */
+const static unsigned char listicon_edit_24x24_png[808];
+
+/* listicon_line.png - 390 bytes */
+const static unsigned char listicon_line_24x24_png[390];
+
+/* listicon_locator.png - 393 bytes */
+const static unsigned char listicon_locator_24x24_png[393];
+
+/* listicon_polyline.png - 611 bytes */
+const static unsigned char listicon_polyline_24x24_png[611];
 };

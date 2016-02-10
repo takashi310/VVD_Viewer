@@ -567,7 +567,7 @@ namespace FLIVR
 			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w2, h2, 0,
+			  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
 				  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
 			  glFramebufferTexture2D(GL_FRAMEBUFFER,
 				  GL_COLOR_ATTACHMENT0,
@@ -579,7 +579,7 @@ namespace FLIVR
 			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w2, h2, 0,
+			  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
 				  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
 			  glFramebufferTexture2D(GL_FRAMEBUFFER,
 			  GL_COLOR_ATTACHMENT1,
@@ -608,12 +608,12 @@ namespace FLIVR
 			  glBindFramebuffer(GL_FRAMEBUFFER, blend_fbo_);
 
 			  glBindTexture(GL_TEXTURE_2D, blend_tex_);
-			  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w2, h2, 0,
+			  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
 				  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
 			  glBindTexture(GL_TEXTURE_2D, 0);
 
 			  glBindTexture(GL_TEXTURE_2D, blend_id_tex_);
-			  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w2, h2, 0,
+			  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
 				  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
 			  glBindTexture(GL_TEXTURE_2D, 0);
 

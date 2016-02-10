@@ -68,6 +68,7 @@ public:
 	bool GetBatch() {return false;}
 	int GetBatchNum() {return 0;}
 	int GetCurBatch() {return 0;}
+	void SetInfo(){}
 };
 
 #endif//_MSK_READER_H_

@@ -72,6 +72,7 @@ public:
 	bool GetBatch() {return m_batch;}
 	int GetBatchNum() {return (int)m_batch_list.size();}
 	int GetCurBatch() {return m_cur_batch;}
+	void SetInfo();
 
 	//flipping
 	void SetFlipX(int flip) {m_user_flip_x = flip;}

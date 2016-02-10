@@ -27,6 +27,7 @@ DEALINGS IN THE SOFTWARE.
 */
 #include "tif_reader.h"
 #include "../compatibility.h"
+#include <sstream>
 
 TIFReader::TIFReader()
 {
@@ -904,9 +905,26 @@ Nrrd* TIFReader::ReadTiff(std::vector<SliceInfo> &filelist,
          }
       }
       if (m_max_value > 0.0) m_scalar_scale = 65535.0 / m_max_value;
-      else m_scalar_scale = 1.0;
+	  else m_scalar_scale = 1.0;
    } else m_max_value = 255.0;
+
+   SetInfo();
 
    return nrrdout;
 }
 
+void TIFReader::SetInfo()
+{
+	wstringstream wss;
+
+	wss << L"------------------------\n";
+	wss << m_data_name << '\n';
+	wss << L"File type: TIFF\n";
+	wss << L"Width: " << m_x_size << L'\n';
+	wss << L"Height: " << m_y_size << L'\n';
+	wss << L"Depth: " << m_slice_num << L'\n';
+	wss << L"Channels: " << m_chan_num << L'\n';
+	wss << L"Frames: " << m_time_num << L'\n';
+
+	m_info = wss.str();
+}

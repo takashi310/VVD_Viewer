@@ -92,6 +92,7 @@ namespace FLIVR
 		base_palette_tex_id_(0),
 		desel_palette_mode_(0),
 		desel_col_fac_(0.1),
+		edit_sel_id_(-1),
 		filter_buffer_resize_(false),
 		filter_buffer_(0),
 		filter_tex_id_(0),
@@ -129,6 +130,8 @@ namespace FLIVR
 		base_palette_tex_id_(0),
 		desel_palette_mode_(copy.desel_palette_mode_),
 		desel_col_fac_(copy.desel_col_fac_),
+		sel_ids_(copy.sel_ids_),
+		edit_sel_id_(copy.edit_sel_id_),
 		filter_buffer_resize_(false),
 		filter_buffer_(0),
 		filter_tex_id_(0),
@@ -304,9 +307,11 @@ namespace FLIVR
 
 	void TextureRenderer::set_desel_palette_mode_gray(float fac)
 	{
-		for (int i = 0; i < PALETTE_SIZE; i++)
+		for (int i = 1; i < PALETTE_SIZE; i++)
 			for (int j = 0; j < 3; j++)
 				palette_[i*PALETTE_ELEM_COMP+j] = (unsigned char)(255.0*fac);
+
+		palette_[0] = 0; palette_[1] = 0; palette_[2] = 0;
 
 		for(auto ite = sel_ids_.begin(); ite != sel_ids_.end(); ++ite)
 			for (int j = 0; j < PALETTE_ELEM_COMP; j++)
@@ -367,6 +372,7 @@ namespace FLIVR
 		if (id < 0 || id >= PALETTE_SIZE) return;
 
 		sel_ids_.insert(id);
+		edit_sel_id_ = id;
 
 		set_desel_palette_mode(desel_palette_mode_, desel_col_fac_);
 	}
@@ -377,14 +383,27 @@ namespace FLIVR
 		if (sel_ids_.empty()) return;
 
 		auto ite = sel_ids_.find(id);
-		if (ite != sel_ids_.end()) sel_ids_.erase(ite);
+		if (ite != sel_ids_.end())
+		{
+			sel_ids_.erase(ite);
+			if (edit_sel_id_ == id) edit_sel_id_ = -1;
+		}
 
 		set_desel_palette_mode(desel_palette_mode_, desel_col_fac_);
+	}
+
+	void TextureRenderer::set_edit_sel_id(int id)
+	{
+		if (id < 0 || id >= PALETTE_SIZE) return;
+
+		edit_sel_id_ = id;
 	}
 
 	void TextureRenderer::clear_sel_ids()
 	{
 		if (!sel_ids_.empty()) sel_ids_.clear();
+		
+		edit_sel_id_ = -1;
 
 		set_desel_palette_mode(desel_palette_mode_, desel_col_fac_);
 	}

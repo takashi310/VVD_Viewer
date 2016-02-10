@@ -399,7 +399,7 @@ BEGIN_EVENT_TABLE(VRenderGLView, wxGLCanvas)
 	EVT_MOUSE_EVENTS(VRenderGLView::OnMouse)
 	EVT_IDLE(VRenderGLView::OnIdle)
 	EVT_KEY_DOWN(VRenderGLView::OnKeyDown)
-	END_EVENT_TABLE()
+END_EVENT_TABLE()
 
 	VRenderGLView::VRenderGLView(wxWindow* frame,
 	wxWindow* parent,
@@ -4768,6 +4768,7 @@ void VRenderGLView::Pick()
 	if (m_draw_all)
 	{
 		PickVolume();
+		SelSegVolume(3);
 		PickMesh();
 	}
 }
@@ -4999,26 +5000,51 @@ void VRenderGLView::SelSegVolume(int mode)
 
 	if (picked_vd && picked_sel_id > 0)
 	{
+		bool sel_changed = false;
 		switch(mode)
 		{
 		case 0:
 			if (picked_vd->isSelID(picked_sel_id))
-				picked_vd->DelSelID((int)picked_sel_id);
+				picked_vd->DelSelID(picked_sel_id);
 			else
-				picked_vd->AddSelID((int)picked_sel_id);
+				picked_vd->AddSelID(picked_sel_id);
+			sel_changed = true;
 			break;
 		case 1:
 			if (picked_vd->isSelID(picked_sel_id))
-				picked_vd->DelSelID((int)picked_sel_id);
+				picked_vd->DelSelID(picked_sel_id);
 			else
 			{
 				picked_vd->ClearSelIDs();
-				picked_vd->AddSelID((int)picked_sel_id);
+				picked_vd->AddSelID(picked_sel_id);
 			}
+			sel_changed = true;
 			break;
 		case 2:
-			picked_vd->DelSelID((int)picked_sel_id);
+			picked_vd->DelSelID(picked_sel_id);
+			sel_changed = true;
 			break;
+		case 3:
+			if (picked_vd->isSelID(picked_sel_id))
+			{
+				picked_vd->SetEditSelID(picked_sel_id);
+				sel_changed = true;
+			}
+			break;
+		}
+
+		VRenderFrame* frame = (VRenderFrame*)m_frame;
+		if (frame)
+		{
+			VPropView *vprop_view = frame->GetPropView();
+			if (vprop_view)
+				vprop_view->UpdateUIsROI();
+
+			if (sel_changed && frame->GetTree())
+			{
+				frame->GetTree()->SetFocus();
+				frame->GetTree()->Select(m_vrv->GetName(), picked_vd->GetName());
+			}
 		}
 	}
 }
@@ -5055,25 +5081,16 @@ void VRenderGLView::OnIdle(wxIdleEvent& event)
 	wxRect view_reg = GetScreenRect();
 
 	wxWindow *window = wxWindow::FindFocus();
-	if (window && view_reg.Contains(mouse_pos) && !m_key_lock)
+	VRenderFrame* frame = (VRenderFrame*)m_frame;
+	VRenderGLView* cur_glview = NULL;
+	if (frame && frame->GetTree())
 	{
-		UpdateBrushState();
+		VRenderView *vrv = frame->GetTree()->GetCurrentView();
+		if (vrv) cur_glview = vrv->m_glview;
+	}
 
-		VRenderFrame* frame = (VRenderFrame*)m_frame;
-		//draw_mask
-		if (wxGetKeyState(wxKeyCode('V')) &&
-			m_draw_mask)
-		{
-			m_draw_mask = false;
-			refresh = true;
-		}
-		if (!wxGetKeyState(wxKeyCode('V')) &&
-			!m_draw_mask)
-		{
-			m_draw_mask = true;
-			refresh = true;
-		}
-
+	if (window && !m_key_lock)
+	{
 		//move view
 		//left
 		if (!m_move_left &&
@@ -5212,6 +5229,28 @@ void VRenderGLView::OnIdle(wxIdleEvent& event)
 			!wxGetKeyState(wxKeyCode('w')))
 			m_clip_down = false;
 
+		//draw_mask
+		if (wxGetKeyState(wxKeyCode('V')) &&
+			m_draw_mask)
+		{
+			m_draw_mask = false;
+			refresh = true;
+		}
+		if (!wxGetKeyState(wxKeyCode('V')) &&
+			!m_draw_mask)
+		{
+			m_draw_mask = true;
+			refresh = true;
+		}
+	}
+	
+	if (window && view_reg.Contains(mouse_pos) && !m_key_lock)
+	{
+		UpdateBrushState();
+	}
+
+	if (window && this == cur_glview && !m_key_lock)
+	{
 		//cell full
 		if (!m_cell_full &&
 			wxGetKeyState(wxKeyCode('f')))

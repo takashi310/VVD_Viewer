@@ -7,6 +7,7 @@
 #include <wx/valnum.h>
 #include <wx/wfstream.h>
 #include <wx/txtstrm.h>
+#include <wx/statline.h>
 #include "Formats/png_resource.h"
 #include "ruler.xpm"
 
@@ -695,37 +696,38 @@ BEGIN_EVENT_TABLE(MeasureDlg, wxPanel)
 	EVT_MENU(ID_DeleteBtn, MeasureDlg::OnDelete)
 	EVT_MENU(ID_DeleteAllBtn, MeasureDlg::OnDeleteAll)
 	EVT_MENU(ID_ExportBtn, MeasureDlg::OnExport)
-	EVT_RADIOBUTTON(ID_ViewPlaneRd, MeasureDlg::OnIntensityMethodCheck)
-	EVT_RADIOBUTTON(ID_MaxIntensityRd, MeasureDlg::OnIntensityMethodCheck)
-	EVT_RADIOBUTTON(ID_AccIntensityRd, MeasureDlg::OnIntensityMethodCheck)
+	EVT_COMBOBOX(ID_IntensityMethodsCombo, MeasureDlg::OnIntensityMethodsCombo)
 	EVT_CHECKBOX(ID_UseTransferChk, MeasureDlg::OnUseTransferCheck)
 	EVT_CHECKBOX(ID_TransientChk, MeasureDlg::OnTransientCheck)
 	END_EVENT_TABLE()
 
-	MeasureDlg::MeasureDlg(wxWindow* frame, wxWindow* parent)
-	: wxPanel(parent,wxID_ANY,
-	wxPoint(500, 150), wxSize(520, 600),
-	0, "MeasureDlg"),
+MeasureDlg::MeasureDlg(wxWindow* frame, wxWindow* parent,
+	wxWindowID id,
+	const wxPoint& pos,
+	const wxSize& size,
+	long style,
+	const wxString& name) :
+wxPanel(parent, id, pos, size, style, name),
 	m_frame(parent),
 	m_view(0)
 {
 	//toolbar
 	m_toolbar = new wxToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-		wxTB_FLAT|wxTB_TOP|wxTB_NODIVIDER|wxTB_TEXT);
+		wxTB_FLAT|wxTB_TOP|wxTB_NODIVIDER);
 	m_toolbar->AddCheckTool(ID_LocatorBtn, "Locator",
-		wxGetBitmapFromMemory(listicon_locator),
+		wxGetBitmapFromMemory(listicon_locator_24x24),
 		wxNullBitmap,
 		"Add locators to the render view by clicking");
 	m_toolbar->AddCheckTool(ID_RulerBtn, "2pt Ruler",
-		wxGetBitmapFromMemory(listicon_addruler),
+		wxGetBitmapFromMemory(listicon_line_24x24),
 		wxNullBitmap,
 		"Add rulers to the render view by clicking two end points");
 	m_toolbar->AddCheckTool(ID_RulerMPBtn, "2+pt Ruler",
-		wxGetBitmapFromMemory(listicon_addruler),
+		wxGetBitmapFromMemory(listicon_polyline_24x24),
 		wxNullBitmap,
 		"Add a polyline ruler to the render view by clicking its points");
 	m_toolbar->AddCheckTool(ID_RulerEditBtn, "Edit",
-		wxGetBitmapFromMemory(listicon_ruleredit),
+		wxGetBitmapFromMemory(listicon_edit_24x24),
 		wxNullBitmap,
 		"Select and move ruler points");
 	m_toolbar->AddTool(ID_DeleteBtn, "Delete",
@@ -739,23 +741,25 @@ BEGIN_EVENT_TABLE(MeasureDlg, wxPanel)
 		"Export rulers to a text file");
 	m_toolbar->Realize();
 
+	wxStaticLine *st_line = new wxStaticLine(this);
+
+	wxStaticText *st = new wxStaticText(this, 0, "Setting Method:",
+		wxDefaultPosition, wxSize(100, -1), wxALIGN_CENTER);
+
 	//options
 	wxBoxSizer* sizer_1 = new wxBoxSizer(wxHORIZONTAL);
-	m_view_plane_rd = new wxRadioButton(this, ID_ViewPlaneRd, "View Plane",
-		wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
-	m_max_intensity_rd = new wxRadioButton(this, ID_MaxIntensityRd, "Maximum Intensity",
-		wxDefaultPosition, wxDefaultSize);
-	m_acc_intensity_rd = new wxRadioButton(this, ID_AccIntensityRd, "Accumulated Intensity",
-		wxDefaultPosition, wxDefaultSize);
-	m_view_plane_rd->SetValue(false);
-	m_max_intensity_rd->SetValue(true);
-	m_acc_intensity_rd->SetValue(false);
+	m_int_method_combo = new wxComboBox(this, ID_IntensityMethodsCombo, "",
+		wxDefaultPosition, wxSize(155, 24), 0, NULL, wxCB_READONLY);
+	vector<string> int_method_list;
+	int_method_list.push_back("View Plane");
+	int_method_list.push_back("Maximum Intensity");
+	int_method_list.push_back("Accumulated Intensity");
+	for (size_t i=0; i<int_method_list.size(); ++i)
+		m_int_method_combo->Append(int_method_list[i]);
+	m_int_method_combo->SetSelection(0);
+	sizer_1->Add(st, 0, wxALIGN_CENTER);
 	sizer_1->Add(10, 10);
-	sizer_1->Add(m_view_plane_rd, 0, wxALIGN_CENTER);
-	sizer_1->Add(10, 10);
-	sizer_1->Add(m_max_intensity_rd, 0, wxALIGN_CENTER);
-	sizer_1->Add(10, 10);
-	sizer_1->Add(m_acc_intensity_rd, 0, wxALIGN_CENTER);
+	sizer_1->Add(m_int_method_combo, 0, wxALIGN_CENTER);
 
 	//more options
 	wxBoxSizer* sizer_2 = new wxBoxSizer(wxHORIZONTAL);
@@ -773,8 +777,8 @@ BEGIN_EVENT_TABLE(MeasureDlg, wxPanel)
 
 	//sizer
 	wxBoxSizer *sizerV = new wxBoxSizer(wxVERTICAL);
-	sizerV->Add(10, 10);
 	sizerV->Add(m_toolbar, 0, wxEXPAND);
+	sizerV->Add(st_line, 0, wxEXPAND);
 	sizerV->Add(10, 10);
 	sizerV->Add(sizer_1, 0, wxEXPAND);
 	sizerV->Add(10, 10);
@@ -815,24 +819,7 @@ void MeasureDlg::GetSettings(VRenderView* vrv)
 		else if (int_mode == 6)
 			m_toolbar->ToggleTool(ID_RulerEditBtn, true);
 
-		switch (m_view->m_glview->m_point_volume_mode)
-		{
-		case 0:
-			m_view_plane_rd->SetValue(true);
-			m_max_intensity_rd->SetValue(false);
-			m_acc_intensity_rd->SetValue(false);
-			break;
-		case 1:
-			m_view_plane_rd->SetValue(false);
-			m_max_intensity_rd->SetValue(true);
-			m_acc_intensity_rd->SetValue(false);
-			break;
-		case 2:
-			m_view_plane_rd->SetValue(false);
-			m_max_intensity_rd->SetValue(false);
-			m_acc_intensity_rd->SetValue(true);
-			break;
-		}
+		m_int_method_combo->SetSelection(m_view->m_glview->m_point_volume_mode);
 
 		m_use_transfer_chk->SetValue(m_view->m_glview->m_ruler_use_transf);
 		m_transient_chk->SetValue(m_view->m_glview->m_ruler_time_dep);
@@ -960,25 +947,12 @@ void MeasureDlg::OnExport(wxCommandEvent& event)
 		delete fopendlg;
 }
 
-void MeasureDlg::OnIntensityMethodCheck(wxCommandEvent& event)
+void MeasureDlg::OnIntensityMethodsCombo(wxCommandEvent& event)
 {
 	if (!m_view || !m_view->m_glview)
 		return;
 
-	int mode = 0;
-	int sender_id = event.GetId();
-	switch (sender_id)
-	{
-	case ID_ViewPlaneRd:
-		mode = 0;
-		break;
-	case ID_MaxIntensityRd:
-		mode = 1;
-		break;
-	case ID_AccIntensityRd:
-		mode = 2;
-		break;
-	}
+	int mode = m_int_method_combo->GetCurrentSelection();
 	m_view->SetPointVolumeMode(mode);
 	VRenderFrame* frame = (VRenderFrame*)m_frame;
 	if (frame && frame->GetSettingDlg())

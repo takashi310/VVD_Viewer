@@ -422,6 +422,8 @@ public:
 	bool isSelID(int id){ return m_vr->is_sel_id(id); }
 	void AddSelID(int id){ m_vr->add_sel_id(id); }
 	void DelSelID(int id){ m_vr->del_sel_id(id); }
+	int GetEditSelID(){ return m_vr->get_edit_sel_id(); }
+	void SetEditSelID(int id){ m_vr->set_edit_sel_id(id); }
 	void ClearSelIDs(){ m_vr->clear_sel_ids(); }
 
 private:
@@ -617,6 +619,8 @@ public:
 	void SetLimitNumer(int val);
 	int GetLimitNumber();
 
+	wstring GetInfo(){ return m_info; };
+
 private:
 	//wxString m_name;
 	wxString m_data_path;
@@ -649,6 +653,8 @@ private:
 
 	//legend
 	bool m_legend;
+
+	wstring m_info;
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

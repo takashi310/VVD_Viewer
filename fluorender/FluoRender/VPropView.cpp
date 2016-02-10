@@ -1,4 +1,5 @@
 #include "VPropView.h"
+#include "VAnnoView.h"
 #include "VRenderFrame.h"
 #include <wx/wfstream.h>
 #include <wx/fileconf.h>
@@ -43,6 +44,8 @@ BEGIN_EVENT_TABLE(VPropView, wxPanel)
 	EVT_TEXT(ID_ColormapHighValueText, VPropView::OnColormapHighValueText)
 	EVT_COMMAND_SCROLL(ID_ColormapLowValueSldr, VPropView::OnColormapLowValueChange)
 	EVT_TEXT(ID_ColormapLowValueText, VPropView::OnColormapLowValueText)
+	//roi
+	EVT_COLOURPICKER_CHANGED(ID_ROIColorBtn, VPropView::OnROIColorBtn)
 	//6
 	//color
 	EVT_TEXT(ID_ColorText, VPropView::OnColorTextChange)
@@ -92,12 +95,16 @@ wxPanel(parent, id, pos, size,style, name),
 	m_max_val(255.0),
 	m_space_x_text(0),
 	m_space_y_text(0),
-	m_space_z_text(0)
+	m_space_z_text(0),
+	m_sizer_sl_righ(0),
+	m_sizer_r5(0),
+	m_sizer_r6(0),
+	m_roi_id(-1)
 {
 	wxBoxSizer* sizer_all = new wxBoxSizer(wxVERTICAL);
 	wxBoxSizer* sizer_sliders = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* sizer_sl_left = new wxBoxSizer(wxVERTICAL);
-	wxBoxSizer* sizer_sl_righ = new wxBoxSizer(wxVERTICAL);
+	m_sizer_sl_righ = new wxBoxSizer(wxVERTICAL);
 
 	wxBoxSizer* sizer_l1 = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* sizer_l2 = new wxBoxSizer(wxHORIZONTAL);
@@ -109,8 +116,8 @@ wxPanel(parent, id, pos, size,style, name),
 	wxBoxSizer* sizer_r2 = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* sizer_r3 = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* sizer_r4 = new wxBoxSizer(wxHORIZONTAL);
-	wxBoxSizer* sizer_r5 = new wxBoxSizer(wxHORIZONTAL);
-	//wxBoxSizer* sizer_r6 = new wxBoxSizer(wxHORIZONTAL);
+	m_sizer_r5 = new wxBoxSizer(wxHORIZONTAL);
+	m_sizer_r6 = new wxBoxSizer(wxHORIZONTAL);
 
 	wxBoxSizer* sizer_b = new wxBoxSizer(wxHORIZONTAL);
 
@@ -247,24 +254,37 @@ wxPanel(parent, id, pos, size,style, name),
 	sizer_l5->Add(st, 0, wxALIGN_CENTER);
 	sizer_l5->Add(m_shading_enable_chk, 0, wxALIGN_CENTER);
 	//colormap
-	sizer_r5->Add(10,5,0);
+	m_sizer_r5->Add(10,5,0);
 	m_colormap_enable_chk = new wxCheckBox(this, ID_ColormapEnableChk, "Colormap: Low (B)",
 		wxDefaultPosition, wxSize(140, 20), wxALIGN_RIGHT);
-	sizer_r5->Add(m_colormap_enable_chk, 0, wxALIGN_CENTER);
+	m_sizer_r5->Add(m_colormap_enable_chk, 0, wxALIGN_CENTER);
 	m_colormap_low_value_text = new wxTextCtrl(this, ID_ColormapLowValueText, "0",
 		wxDefaultPosition, wxSize(50, 20), 0, vald_int);
-	sizer_r5->Add(m_colormap_low_value_text, 0, wxALIGN_CENTER);
+	m_sizer_r5->Add(m_colormap_low_value_text, 0, wxALIGN_CENTER);
 	m_colormap_low_value_sldr = new wxSlider(this, ID_ColormapLowValueSldr, 0, 0, 255,
 		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
-	sizer_r5->Add(m_colormap_low_value_sldr, 1, wxEXPAND);
+	m_sizer_r5->Add(m_colormap_low_value_sldr, 1, wxEXPAND);
 	m_colormap_high_value_text = new wxTextCtrl(this, ID_ColormapHighValueText, "255",
 		wxDefaultPosition + wxPoint(10,0), wxSize(50, 20), 0, vald_int);
-	sizer_r5->Add(m_colormap_high_value_text, 0, wxALIGN_CENTER);
+	m_sizer_r5->Add(m_colormap_high_value_text, 0, wxALIGN_CENTER);
 	m_colormap_high_value_sldr = new wxSlider(this, ID_ColormapHighValueSldr, 255, 0, 255,
 		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
-	sizer_r5->Add(m_colormap_high_value_sldr, 1, wxEXPAND);
+	m_sizer_r5->Add(m_colormap_high_value_sldr, 1, wxEXPAND);
 	st = new wxStaticText(this, 0, "High (R)");
-	sizer_r5->Add(st, 0, wxALIGN_CENTER);
+	m_sizer_r5->Add(st, 0, wxALIGN_CENTER);
+
+	st = new wxStaticText(this, 0, "Segment:", wxDefaultPosition,  wxSize(140, 20), wxALIGN_RIGHT);
+	m_roi_text = new myTextCtrl(frame, this, wxID_ANY, "",
+		wxDefaultPosition, wxSize(200, 20), wxTE_PROCESS_ENTER);
+	m_roi_color_btn = new wxColourPickerCtrl(this, ID_ColorBtn, *wxRED,
+		wxDefaultPosition, wxDefaultSize);
+	m_sizer_r5->Add(10,5,0);
+	m_sizer_r6->Add(st, 0, wxALIGN_CENTER);
+	m_sizer_r6->Add(10, 10);
+	m_sizer_r6->Add(m_roi_text, 0, wxALIGN_CENTER);
+	m_sizer_r6->Add(10, 10);
+	m_sizer_r6->Add(m_roi_color_btn, 0, wxALIGN_CENTER);
+	m_sizer_r6->Add(10, 10);
 
 	//6th line
 	//left sliders
@@ -275,15 +295,17 @@ wxPanel(parent, id, pos, size,style, name),
 	sizer_sl_left->Add(sizer_l5, 0, wxEXPAND);
 
 	//right sliders
-	sizer_sl_righ->Add(sizer_r1, 0, wxEXPAND);
-	sizer_sl_righ->Add(sizer_r2, 0, wxEXPAND);
-	sizer_sl_righ->Add(sizer_r3, 0, wxEXPAND);
-	sizer_sl_righ->Add(sizer_r4, 0, wxEXPAND);
-	sizer_sl_righ->Add(sizer_r5, 0, wxEXPAND);
+	m_sizer_sl_righ->Add(sizer_r1, 0, wxEXPAND);
+	m_sizer_sl_righ->Add(sizer_r2, 0, wxEXPAND);
+	m_sizer_sl_righ->Add(sizer_r3, 0, wxEXPAND);
+	m_sizer_sl_righ->Add(sizer_r4, 0, wxEXPAND);
+	m_sizer_sl_righ->Add(m_sizer_r5, 0, wxEXPAND);
+	m_sizer_sl_righ->Add(m_sizer_r6, 0, wxEXPAND);
+
 
 	//all sliders
 	sizer_sliders->Add(sizer_sl_left, 1, wxEXPAND);
-	sizer_sliders->Add(sizer_sl_righ, 1, wxEXPAND);
+	sizer_sliders->Add(m_sizer_sl_righ, 1, wxEXPAND);
 
 	//bottom line
 	//color
@@ -699,6 +721,8 @@ void VPropView::GetSettings()
 	else
 		m_depth_chk->SetValue(false);
 
+	UpdateUIsROI();
+
 	Layout();
 }
 
@@ -760,6 +784,50 @@ VRenderView* VPropView::GetView()
 {
 	return m_vrv;
 }
+
+void VPropView::ShowUIsROI()
+{
+	if (m_sizer_sl_righ && m_sizer_r5 && m_sizer_r6)
+	{
+		m_sizer_sl_righ->Hide(m_sizer_r5);
+		m_sizer_sl_righ->Show(m_sizer_r6);
+		Layout();
+	}
+}
+
+void VPropView::HideUIsROI()
+{
+	if (m_sizer_sl_righ && m_sizer_r5 && m_sizer_r6)
+	{
+		m_sizer_sl_righ->Hide(m_sizer_r6);
+		m_sizer_sl_righ->Show(m_sizer_r5);
+		Layout();
+	}
+}
+
+void VPropView::UpdateUIsROI()
+{
+	if (!m_vd) return;
+
+	if (m_vd->GetColormapMode() == 3 && m_vd->GetEditSelID() > 0)
+	{
+		SetROIindex(m_vd->GetEditSelID());
+		//ShowUIsROI();
+	}
+	else 
+		HideUIsROI();
+}
+
+void VPropView::SetROIindex(int id)
+{
+	m_roi_id = id;
+
+	m_roi_text->SetValue(wxT(""));
+
+	wxString inistr = wxT("Segment ") + wxString::Format("%d", m_roi_id);
+	m_roi_text->SetHint(inistr);
+}
+
 
 //1
 void VPropView::OnGammaChange(wxScrollEvent & event)
@@ -1304,6 +1372,20 @@ void VPropView::OnColormapLowValueText(wxCommandEvent &event)
 	RefreshVRenderViews(false, true);
 }
 
+void VPropView::OnROIColorBtn(wxColourPickerEvent& event)
+{
+	wxColor wxc = event.GetColour();
+
+	Color color(wxc.Red()/255.0, wxc.Green()/255.0, wxc.Blue()/255.0);
+	if (m_vd)
+	{
+		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+
+		RefreshVRenderViews(true);
+	}
+}
+
+
 //6
 void VPropView::OnColorChange(wxColor c)
 {
@@ -1501,6 +1583,8 @@ void VPropView::OnIDCLCheck(wxCommandEvent &event)
 		AdjustView *adjust_view = vr_frame->GetAdjustView();
 		if (adjust_view)
 			adjust_view->UpdateSync();
+		
+		UpdateUIsROI();
 	}
 
 	if (m_vd)

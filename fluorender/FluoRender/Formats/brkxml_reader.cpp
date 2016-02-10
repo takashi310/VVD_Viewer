@@ -6,6 +6,7 @@
 #include "../compatibility.h"
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <locale>
 #include <algorithm>
 
@@ -203,6 +204,8 @@ void BRKXMLReader::Preprocess()
 	m_cur_level = 0;
 
 	loadMetadata(m_dir_name + L"_metadata.xml");
+
+	SetInfo();
 
 	//OutputInfo();
 }
@@ -904,3 +907,18 @@ void BRKXMLReader::build_pyramid(vector<FLIVR::Pyramid_Level> &pyramid, vector<v
 
 }
 
+void BRKXMLReader::SetInfo()
+{
+	wstringstream wss;
+	
+	wss << L"------------------------\n";
+	wss << m_data_name << '\n';
+	wss << L"File type: VVD\n";
+	wss << L"Width: " << m_x_size << L'\n';
+	wss << L"Height: " << m_y_size << L'\n';
+	wss << L"Depth: " << m_slice_num << L'\n';
+	wss << L"Channels: " << m_chan_num << L'\n';
+	wss << L"Frames: " << m_time_num << L'\n';
+
+	m_info = wss.str();
+}

@@ -125,15 +125,18 @@ public:
 		ID_DeleteBtn,
 		ID_DeleteAllBtn,
 		ID_ExportBtn,
-		ID_ViewPlaneRd,
-		ID_MaxIntensityRd,
-		ID_AccIntensityRd,
+		ID_IntensityMethodsCombo,
 		ID_UseTransferChk,
 		ID_TransientChk
 	};
 
 	MeasureDlg(wxWindow* frame,
-		wxWindow* parent);
+		wxWindow* parent,
+		wxWindowID id,
+		const wxPoint& pos = wxDefaultPosition,
+		const wxSize& size = wxDefaultSize,
+		long style = 0,
+		const wxString& name = "MeasureDlg");
 	~MeasureDlg();
 
 	void GetSettings(VRenderView* vrv);
@@ -150,9 +153,7 @@ private:
 	//tool bar
 	wxToolBar *m_toolbar;
 	//options
-	wxRadioButton *m_view_plane_rd;
-	wxRadioButton *m_max_intensity_rd;
-	wxRadioButton *m_acc_intensity_rd;
+	wxComboBox *m_int_method_combo;
 	wxCheckBox *m_use_transfer_chk;
 	wxCheckBox *m_transient_chk;
 
@@ -164,7 +165,7 @@ private:
 	void OnDelete(wxCommandEvent& event);
 	void OnDeleteAll(wxCommandEvent& event);
 	void OnExport(wxCommandEvent& event);
-	void OnIntensityMethodCheck(wxCommandEvent& event);
+	void OnIntensityMethodsCombo(wxCommandEvent& event);
 	void OnUseTransferCheck(wxCommandEvent& event);
 	void OnTransientCheck(wxCommandEvent& event);
 

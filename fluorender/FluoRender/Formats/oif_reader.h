@@ -73,6 +73,7 @@ public:
 	bool GetBatch() {return m_batch;}
 	int GetBatchNum() {return (int)m_batch_list.size();}
 	int GetCurBatch() {return m_cur_batch;}
+	void SetInfo();
 
 private:
 	wstring m_data_name;

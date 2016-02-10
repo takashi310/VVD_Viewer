@@ -1106,7 +1106,7 @@ private:
 	void Pick();
 	void PickMesh();
 	void PickVolume();
-	//mode: 0-add selection; 1-single selection; 2-subtract selection
+	//mode: 0-add selection; 1-single selection; 2-subtract selection, 3-switch an editing segment
 	void SelSegVolume(int mode=0);
 
 	//get mouse point in 3D

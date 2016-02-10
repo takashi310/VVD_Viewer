@@ -28,6 +28,7 @@ DEALINGS IN THE SOFTWARE.
 #include "oif_reader.h"
 #include "../compatibility.h"
 #include <algorithm>
+#include <sstream>
 
 OIFReader::OIFReader()
 {
@@ -152,6 +153,8 @@ void OIFReader::Preprocess()
       m_cur_time = 0;
    m_chan_num = m_time_num>0?int(m_oif_info[0].dataset.size()):0;
    m_slice_num = m_chan_num>0?int(m_oif_info[0].dataset[0].size()):0;
+
+   SetInfo();
 }
 
 bool OIFReader::oif_sort(const TimeDataInfo& info1, const TimeDataInfo& info2)
@@ -797,4 +800,20 @@ void OIFReader::ReadTiff(char *pbyData, unsigned short *val, int z)
          val_pos += rows*m_x_size;
       }
    }
+}
+
+void OIFReader::SetInfo()
+{
+	wstringstream wss;
+
+	wss << L"------------------------\n";
+	wss << m_data_name << '\n';
+	wss << L"File type: OIF\n";
+	wss << L"Width: " << m_x_size << L'\n';
+	wss << L"Height: " << m_y_size << L'\n';
+	wss << L"Depth: " << m_slice_num << L'\n';
+	wss << L"Channels: " << m_chan_num << L'\n';
+	wss << L"Frames: " << m_time_num << L'\n';
+
+	m_info = wss.str();
 }

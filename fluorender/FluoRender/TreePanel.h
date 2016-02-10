@@ -36,6 +36,8 @@ DEALINGS IN THE SOFTWARE.
 #define icon_change	1
 #define icon_key	"None"
 
+class VRenderView;
+
 //tree item data
 class LayerInfo : public wxTreeItemData
 {
@@ -60,7 +62,7 @@ class DataTreeCtrl: public wxTreeCtrl
 		ID_AddMeshGroup,
 		ID_Expand,
 		ID_Edit,
-		ID_Measurement,
+		ID_Info,
 		ID_Trace,
 		ID_NoiseCancelling,
 		ID_Counting,
@@ -127,6 +129,8 @@ public:
 	void BrushCreate();
 	void BrushCreateInv();
 
+	VRenderView* GetCurrentView();
+
 	void SetFix(bool fix) { m_fixed = fix; }
 	bool isFixed() { return m_fixed; }
 
@@ -159,7 +163,7 @@ private:
 	void OnAddMeshGroup(wxCommandEvent& event);
 	void OnExpand(wxCommandEvent& event);
 	void OnEdit(wxCommandEvent& event);
-	void OnMeasurement(wxCommandEvent& event);
+	void OnInfo(wxCommandEvent& event);
 	void OnTrace(wxCommandEvent& event);
 	void OnNoiseCancelling(wxCommandEvent& event);
 	void OnCounting(wxCommandEvent& event);
@@ -253,6 +257,8 @@ public:
 	void BrushErase();
 	void BrushCreate();
 	void BrushSolid(bool state);
+
+	VRenderView* GetCurrentView();
 
 	void SetFix(bool fix) { if (m_datatree) m_datatree->SetFix(fix); }
 	bool isFixed() { return m_datatree ? m_datatree->isFixed() : false; }

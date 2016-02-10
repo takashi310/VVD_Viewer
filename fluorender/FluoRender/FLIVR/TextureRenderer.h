@@ -183,6 +183,8 @@ namespace FLIVR
 		 bool is_sel_id(int id);
 		 void add_sel_id(int id);
 		 void del_sel_id(int id);
+		 void set_edit_sel_id(int id);
+		 int get_edit_sel_id(){ return edit_sel_id_; };
 		 void clear_sel_ids();
 
          //memory swap
@@ -295,6 +297,7 @@ namespace FLIVR
 			   unordered_set<int> sel_ids_;
 			   int desel_palette_mode_;
 			   float desel_col_fac_;
+			   int edit_sel_id_;
 
                //sahder for volume rendering
                static VolShaderFactory vol_shader_factory_;

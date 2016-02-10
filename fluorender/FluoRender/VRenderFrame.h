@@ -34,6 +34,7 @@ DEALINGS IN THE SOFTWARE.
 #include "APropView.h"
 #include "MManipulator.h"
 #include "VMovieView.h"
+#include "VAnnoView.h"
 #include "ClippingView.h"
 #include "AdjustView.h"
 #include "SettingDlg.h"
@@ -96,6 +97,8 @@ using namespace std;
 #define UITEXT_DATAVIEW		"Datasets"
 #define UITEXT_TREEVIEW		"Workspace"
 #define UITEXT_MAKEMOVIE	"Record/Export"
+#define UITEXT_MEASUREMENT	"Measurement"
+#define UITEXT_ANNOTATION	"Info"
 #define UITEXT_ADJUST		"Output Adjustments"
 #define UITEXT_CLIPPING		"Clipping Planes"
 #define UITEXT_PROPERTIES	"Properties"
@@ -133,11 +136,12 @@ class VRenderFrame: public wxFrame
 		ID_Recorder,
 		ID_Measure,
 		ID_Trace,
+		ID_InfoDlg,
 		ID_Settings,
 		//UI menu
 		ID_UIListView,
 		ID_UITreeView,
-		ID_UIMovieView,
+		ID_UIMeasureView,
 		ID_UIAdjView,
 		ID_UIClipView,
 		ID_UIPropView,
@@ -209,6 +213,9 @@ public:
 	//movie view
 	VMovieView* GetMovieView()
 	{ return m_movie_view; }
+	//movie view
+	VAnnoView* GetAnnoView()
+	{ return m_anno_view; }
 	//system settings
 	SettingDlg* GetSettingDlg()
 	{ return m_setting_dlg; }
@@ -289,7 +296,7 @@ public:
 
 	//show dialogs
 	void ShowPaintTool();
-	void ShowMeasureDlg();
+	void ShowInfoDlg();
 	void ShowTraceDlg();
 	void ShowNoiseCancellingDlg();
 	void ShowCountingDlg();
@@ -313,6 +320,8 @@ public:
 
 	TextRenderer* GetTextRenderer()
 	{ return m_text_renderer; }
+
+	void SetKeyLock(bool lock);
 
 public: //public so export window can see it and set it. 
 	RecorderDlg* m_recorder_dlg;
@@ -347,6 +356,7 @@ private:
 	MeasureDlg* m_measure_dlg;
 	TraceDlg* m_trace_dlg;
 	DatabaseDlg *m_database_dlg;
+	VAnnoView *m_anno_view;
 	//prop panel children
 	wxBoxSizer* m_prop_sizer;
 	VPropView* m_volume_prop;
@@ -441,7 +451,7 @@ private:
 	void OnConvert(wxCommandEvent& WXUNUSED(event));
 	void OnRecorder(wxCommandEvent& WXUNUSED(event));
 	void OnColocalization(wxCommandEvent& WXUNUSED(event));
-	void OnMeasure(wxCommandEvent& WXUNUSED(event));
+	void OnInfoDlg(wxCommandEvent& WXUNUSED(event));
 	void OnTrace(wxCommandEvent& WXUNUSED(event));
 
 	void OnDraw(wxPaintEvent& event);

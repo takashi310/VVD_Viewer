@@ -71,6 +71,7 @@ class VPropView: public wxPanel
 		ID_ColormapHighValueText,
 		ID_ColormapLowValueSldr,
 		ID_ColormapLowValueText,
+		ID_ROIColorBtn,
 		ID_InvChk,
 		ID_IDCLChk,
 		ID_MipChk,
@@ -100,6 +101,11 @@ public:
 	void SetView(VRenderView* view);
 	VRenderView* GetView();
 
+	void SetROIindex(int id);
+	void ShowUIsROI();
+	void HideUIsROI();
+	void UpdateUIsROI();
+
 private:
 	wxWindow* m_frame;
 	VolumeData* m_vd;
@@ -109,6 +115,10 @@ private:
 	DataGroup* m_group;
 	VRenderView* m_vrv;
 	double m_max_val;
+
+	wxBoxSizer* m_sizer_sl_righ;
+	wxBoxSizer* m_sizer_r5;
+	wxBoxSizer* m_sizer_r6;
 
 	//1st line
 	//gamma
@@ -171,6 +181,11 @@ private:
 	wxTextCtrl *m_colormap_high_value_text;
 	wxSlider *m_colormap_low_value_sldr;
 	wxTextCtrl *m_colormap_low_value_text;
+	//roi
+	int m_roi_id;
+	wxTextCtrl *m_roi_text;
+	wxColourPickerCtrl *m_roi_color_btn;
+
 
 	//bottom line
 	//invert
@@ -237,6 +252,8 @@ private:
 	void OnColormapHighValueText(wxCommandEvent &event);
 	void OnColormapLowValueChange(wxScrollEvent &event);
 	void OnColormapLowValueText(wxCommandEvent &event);
+	//roi
+	void OnROIColorBtn(wxColourPickerEvent& event);
 	//6
 	void OnColorChange(wxColor c);
 	void OnColorTextChange(wxCommandEvent& event);

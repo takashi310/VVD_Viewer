@@ -70,7 +70,7 @@ BEGIN_EVENT_TABLE(VRenderFrame, wxFrame)
 	EVT_MENU(ID_Colocalization, VRenderFrame::OnColocalization)
 	EVT_MENU(ID_Convert, VRenderFrame::OnConvert)
 	EVT_MENU(ID_Recorder, VRenderFrame::OnRecorder)
-	EVT_MENU(ID_Measure, VRenderFrame::OnMeasure)
+	EVT_MENU(ID_InfoDlg, VRenderFrame::OnInfoDlg)
 	EVT_MENU(ID_Trace, VRenderFrame::OnTrace)
 	EVT_MENU(ID_Twitter, VRenderFrame::OnTwitter)
 	EVT_MENU(ID_Facebook, VRenderFrame::OnFacebook)
@@ -79,7 +79,7 @@ BEGIN_EVENT_TABLE(VRenderFrame, wxFrame)
 	//ui menu events
 	EVT_MENU(ID_UIListView, VRenderFrame::OnShowHideView)
 	EVT_MENU(ID_UITreeView, VRenderFrame::OnShowHideView)
-	EVT_MENU(ID_UIMovieView, VRenderFrame::OnShowHideView)
+	EVT_MENU(ID_UIMeasureView, VRenderFrame::OnShowHideView)
 	EVT_MENU(ID_UIAdjView, VRenderFrame::OnShowHideView)
 	EVT_MENU(ID_UIClipView, VRenderFrame::OnShowHideView)
 	EVT_MENU(ID_UIPropView, VRenderFrame::OnShowHideView)
@@ -113,6 +113,7 @@ VRenderFrame::VRenderFrame(
 	: wxFrame(frame, wxID_ANY, title, wxPoint(x, y), wxSize(w, h),wxDEFAULT_FRAME_STYLE),
 	m_mov_view(0),
 	m_movie_view(0),
+	m_anno_view(0),
 	m_tree_panel(0),
 	m_list_panel(0),
 	m_prop_panel(0),
@@ -148,8 +149,8 @@ VRenderFrame::VRenderFrame(
 		"Show/hide the data list panel", wxITEM_CHECK);
 	m_tb_menu_ui->Append(ID_UITreeView, UITEXT_TREEVIEW,
 		"Show/hide the workspace panel", wxITEM_CHECK);
-	m_tb_menu_ui->Append(ID_UIMovieView, UITEXT_MAKEMOVIE,
-		"Show/hide the movie export panel", wxITEM_CHECK);
+	m_tb_menu_ui->Append(ID_UIMeasureView, UITEXT_MEASUREMENT,
+		"Show/hide the measurement panel", wxITEM_CHECK);
 	m_tb_menu_ui->Append(ID_UIAdjView, UITEXT_ADJUST,
 		"Show/hide the output adjustment panel", wxITEM_CHECK);
 	m_tb_menu_ui->Append(ID_UIClipView, UITEXT_CLIPPING,
@@ -159,7 +160,7 @@ VRenderFrame::VRenderFrame(
 	//check all the items
 	m_tb_menu_ui->Check(ID_UIListView, true);
 	m_tb_menu_ui->Check(ID_UITreeView, true);
-	m_tb_menu_ui->Check(ID_UIMovieView, true);
+	m_tb_menu_ui->Check(ID_UIMeasureView, true);
 	m_tb_menu_ui->Check(ID_UIAdjView, true);
 	m_tb_menu_ui->Check(ID_UIClipView, true);
 	m_tb_menu_ui->Check(ID_UIPropView, true);
@@ -167,8 +168,6 @@ VRenderFrame::VRenderFrame(
 	m_tb_menu_edit = new wxMenu;
 	m_tb_menu_edit->Append(ID_PaintTool, "Analyze...",
 		"Show analysis tools for volume data");
-	m_tb_menu_edit->Append(ID_Measure, "Measurement...",
-		"Show measurement tools");
 	m_tb_menu_edit->Append(ID_Trace, "Components && Tracking...",
 		"Show tracking tools");
 	m_tb_menu_edit->Append(ID_NoiseCancelling, "Noise Reduction...",
@@ -179,6 +178,8 @@ VRenderFrame::VRenderFrame(
 		"Show colocalization analysis tools");
 	m_tb_menu_edit->Append(ID_Convert, "Convert...",
 		"Show tools for volume to mesh conversion");
+	m_tb_menu_edit->Append(ID_InfoDlg, "Infomation...",
+		"Display file information");
 	//build the main toolbar
 	//add tools
 	m_main_tb->AddTool(ID_OpenVolume, "Open Volume",
@@ -267,6 +268,14 @@ VRenderFrame::VRenderFrame(
 	m_movie_view = new VMovieView(this, this, wxID_ANY,
 		wxDefaultPosition, wxSize(350, 300));
 
+	//measure dialog
+	m_measure_dlg = new MeasureDlg(this, this, wxID_ANY,
+		wxDefaultPosition, wxSize(350, 300));
+
+	//create annotation panel
+	m_anno_view = new VAnnoView(this, this, wxID_ANY,
+		wxDefaultPosition, wxSize(350, 300));
+
 	//create prop panel
 	m_prop_panel = new wxPanel(this, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, 0, "PropPanel");
@@ -350,9 +359,6 @@ VRenderFrame::VRenderFrame(
 	//colocalization dialog
 	m_colocalization_dlg = new ColocalizationDlg(this, this);
 
-	//measure dialog
-	m_measure_dlg = new MeasureDlg(this, this);
-
 	//trace dialog
 	m_trace_dlg = new TraceDlg(this, this);
 
@@ -386,11 +392,11 @@ VRenderFrame::VRenderFrame(
 		Name("m_tree_panel").Caption(UITEXT_TREEVIEW).
 		Left().CloseButton(true).BestSize(wxSize(350, 300)).
 		FloatingSize(wxSize(350, 300)).Layer(3));
-/*	m_aui_mgr.AddPane(m_movie_view, wxAuiPaneInfo().
-		Name("m_movie_view").Caption(UITEXT_MAKEMOVIE).
+	m_aui_mgr.AddPane(m_measure_dlg, wxAuiPaneInfo().
+		Name("m_measure_dlg").Caption(UITEXT_MEASUREMENT).
 		Left().CloseButton(true).BestSize(wxSize(350, 320)).
 		FloatingSize(wxSize(350, 300)).Layer(3));
-*/	m_aui_mgr.AddPane(m_prop_panel, wxAuiPaneInfo().
+	m_aui_mgr.AddPane(m_prop_panel, wxAuiPaneInfo().
 		Name("m_prop_panel").Caption(UITEXT_PROPERTIES).
 		Bottom().CloseButton(true).MinSize(wxSize(300, 150)).
 		FloatingSize(wxSize(1100, 130)).Layer(2));
@@ -446,17 +452,23 @@ VRenderFrame::VRenderFrame(
 	m_aui_mgr.GetPane(m_movie_view).Float();
 	m_aui_mgr.GetPane(m_movie_view).Hide();
 	//measure dialog
-	m_aui_mgr.AddPane(m_measure_dlg, wxAuiPaneInfo().
+/*	m_aui_mgr.AddPane(m_measure_dlg, wxAuiPaneInfo().
 		Name("m_measure_dlg").Caption("Measurement").
 		Dockable(false).CloseButton(true));
 	m_aui_mgr.GetPane(m_measure_dlg).Float();
 	m_aui_mgr.GetPane(m_measure_dlg).Hide();
-	//trace dialog
+*/	//trace dialog
 	m_aui_mgr.AddPane(m_trace_dlg, wxAuiPaneInfo().
 		Name("m_trace_dlg").Caption("Components & Tracking").
 		Dockable(false).CloseButton(true));
 	m_aui_mgr.GetPane(m_trace_dlg).Float();
 	m_aui_mgr.GetPane(m_trace_dlg).Hide();
+	//information dialog
+	m_aui_mgr.AddPane(m_anno_view, wxAuiPaneInfo().
+		Name("m_anno_view").Caption("Information").
+		Dockable(false).CloseButton(true));
+	m_aui_mgr.GetPane(m_anno_view).Float();
+	m_aui_mgr.GetPane(m_anno_view).Hide();
 	//database dialog
 #ifdef WITH_DATABASE
 	m_aui_mgr.AddPane(m_database_dlg, wxAuiPaneInfo().
@@ -575,9 +587,9 @@ VRenderFrame::VRenderFrame(
 	m = new wxMenuItem(m_top_window,ID_UITreeView, wxT("&Workspace"), wxEmptyString, wxITEM_CHECK);
 	m_top_window->Append(m);
 	m_top_window->Check(ID_UITreeView, true);
-	m = new wxMenuItem(m_top_window,ID_UIMovieView, wxT("&Export"), wxEmptyString, wxITEM_CHECK);
+	m = new wxMenuItem(m_top_window,ID_UIMeasureView, wxT("&Measurement"), wxEmptyString, wxITEM_CHECK);
 	m_top_window->Append(m);
-	m_top_window->Check(ID_UIMovieView, true);
+	m_top_window->Check(ID_UIMeasureView, true);
 	m = new wxMenuItem(m_top_window,ID_UIAdjView, wxT("&Output Adjustments"), wxEmptyString, wxITEM_CHECK);
 	m_top_window->Append(m);
 	m_top_window->Check(ID_UIAdjView, true);
@@ -1786,6 +1798,9 @@ void VRenderFrame::OnSelection(int type,
 				m_mesh_manip->Show(false);
 			if (m_annotation_prop)
 				m_annotation_prop->Show(false);
+
+			if (m_anno_view)
+				m_anno_view->SetData((TreeLayer *)vd);
 		}
 		else
 		{
@@ -1817,6 +1832,9 @@ void VRenderFrame::OnSelection(int type,
 			wxString str = md->GetName();
 			m_cur_sel_mesh = m_data_mgr.GetMeshIndex(str);
 			md->SetDrawBounds(true);
+
+			if (m_anno_view)
+				m_anno_view->SetData((TreeLayer *)md);
 		}
 
 		if (m_volume_prop)
@@ -1907,6 +1925,15 @@ void VRenderFrame::OnSelection(int type,
 			m_annotation_prop->Show(false);
 		m_aui_mgr.GetPane(m_prop_panel).Caption(UITEXT_PROPERTIES);
 		m_aui_mgr.Update();
+	}
+}
+
+void VRenderFrame::SetKeyLock(bool lock)
+{
+	for (int i=0 ; i<(int)m_vrv_list.size() ; i++)
+	{
+		if (m_vrv_list[i])
+			m_vrv_list[i]->SetKeyLock(lock);
 	}
 }
 
@@ -2039,7 +2066,7 @@ void VRenderFrame::ToggleAllTools()
 		m_tb_menu_ui->Check(ID_UITreeView, false);
 		//movie view (float only)
 		m_aui_mgr.GetPane(m_movie_view).Hide();
-		m_tb_menu_ui->Check(ID_UIMovieView, false);
+		m_tb_menu_ui->Check(ID_UIMeasureView, false);
 		//properties
 		m_aui_mgr.GetPane(m_prop_panel).Hide();
 		m_tb_menu_ui->Check(ID_UIPropView, false);
@@ -2063,7 +2090,7 @@ void VRenderFrame::ToggleAllTools()
 		m_tb_menu_ui->Check(ID_UITreeView, true);
 		//movie view (float only)
 		m_aui_mgr.GetPane(m_movie_view).Show();
-		m_tb_menu_ui->Check(ID_UIMovieView, true);
+		m_tb_menu_ui->Check(ID_UIMeasureView, true);
 		//properties
 		m_aui_mgr.GetPane(m_prop_panel).Show();
 		m_tb_menu_ui->Check(ID_UIPropView, true);
@@ -2745,7 +2772,7 @@ void VRenderFrame::SaveProject(wxString& filename)
 	fconfig.Write("ui_main_tb", m_main_tb->IsShown());
 	fconfig.Write("ui_list_view", m_list_panel->IsShown());
 	fconfig.Write("ui_tree_view", m_tree_panel->IsShown());
-	fconfig.Write("ui_movie_view", m_movie_view->IsShown());
+	fconfig.Write("ui_measure_view", m_measure_dlg->IsShown());
 	fconfig.Write("ui_adjust_view", m_adjust_view->IsShown());
 	fconfig.Write("ui_clip_view", m_clip_view->IsShown());
 	fconfig.Write("ui_prop_view", m_prop_panel->IsShown());
@@ -2755,8 +2782,8 @@ void VRenderFrame::SaveProject(wxString& filename)
 		m_aui_mgr.GetPane(m_list_panel).IsFloating():false);
 	fconfig.Write("ui_tree_view_float", m_aui_mgr.GetPane(m_tree_panel).IsOk()?
 		m_aui_mgr.GetPane(m_tree_panel).IsFloating():false);
-	fconfig.Write("ui_movie_view_float", m_aui_mgr.GetPane(m_movie_view).IsOk()?
-		m_aui_mgr.GetPane(m_movie_view).IsFloating():false);
+	fconfig.Write("ui_measure_view_float", m_aui_mgr.GetPane(m_measure_dlg).IsOk()?
+		m_aui_mgr.GetPane(m_measure_dlg).IsFloating():false);
 	fconfig.Write("ui_adjust_view_float", m_aui_mgr.GetPane(m_adjust_view).IsOk()?
 		m_aui_mgr.GetPane(m_adjust_view).IsFloating():false);
 	fconfig.Write("ui_clip_view_float", m_aui_mgr.GetPane(m_clip_view).IsOk()?
@@ -4124,26 +4151,26 @@ void VRenderFrame::OpenProject(wxString& filename)
 				m_tb_menu_ui->Check(ID_UITreeView, false);
 			}
 		}
-		if (fconfig.Read("ui_movie_view", &bVal))
+		if (fconfig.Read("ui_measure_view", &bVal))
 		{
 			if (bVal)
 			{
-				m_aui_mgr.GetPane(m_movie_view).Show();
-				m_tb_menu_ui->Check(ID_UIMovieView, true);
+				m_aui_mgr.GetPane(m_measure_dlg).Show();
+				m_tb_menu_ui->Check(ID_UIMeasureView, true);
 				bool fl;
-				if (fconfig.Read("ui_movie_view_float", &fl))
+				if (fconfig.Read("ui_measure_view_float", &fl))
 				{
 					if (fl)
-						m_aui_mgr.GetPane(m_movie_view).Float();
+						m_aui_mgr.GetPane(m_measure_dlg).Float();
 					else
-						m_aui_mgr.GetPane(m_movie_view).Dock();
+						m_aui_mgr.GetPane(m_measure_dlg).Dock();
 				}
 			}
 			else
 			{
-				if (m_aui_mgr.GetPane(m_movie_view).IsOk())
-					m_aui_mgr.GetPane(m_movie_view).Hide();
-				m_tb_menu_ui->Check(ID_UIMovieView, false);
+				if (m_aui_mgr.GetPane(m_measure_dlg).IsOk())
+					m_aui_mgr.GetPane(m_measure_dlg).Hide();
+				m_tb_menu_ui->Check(ID_UIMeasureView, false);
 			}
 		}
 		if (fconfig.Read("ui_adjust_view", &bVal))
@@ -4373,15 +4400,15 @@ void VRenderFrame::ShowPaintTool()
 	m_aui_mgr.Update();
 }
 
-void VRenderFrame::OnMeasure(wxCommandEvent& WXUNUSED(event))
+void VRenderFrame::OnInfoDlg(wxCommandEvent& WXUNUSED(event))
 {
-	ShowMeasureDlg();
+	ShowInfoDlg();
 }
 
-void VRenderFrame::ShowMeasureDlg()
+void VRenderFrame::ShowInfoDlg()
 {
-	m_aui_mgr.GetPane(m_measure_dlg).Show();
-	m_aui_mgr.GetPane(m_measure_dlg).Float();
+	m_aui_mgr.GetPane(m_anno_view).Show();
+	m_aui_mgr.GetPane(m_anno_view).Float();
 	m_aui_mgr.Update();
 }
 
@@ -4561,17 +4588,17 @@ void VRenderFrame::OnShowHideView(wxCommandEvent &event)
 			m_tb_menu_ui->Check(ID_UITreeView, true);
 		}
 		break;
-	case ID_UIMovieView:
-		//movie view
-		if (m_aui_mgr.GetPane(m_movie_view).IsShown())
+	case ID_UIMeasureView:
+		//measurement view
+		if (m_aui_mgr.GetPane(m_measure_dlg).IsShown())
 		{
-			m_aui_mgr.GetPane(m_movie_view).Hide();
-			m_tb_menu_ui->Check(ID_UIMovieView, false);
+			m_aui_mgr.GetPane(m_measure_dlg).Hide();
+			m_tb_menu_ui->Check(ID_UIMeasureView, false);
 		}
 		else
 		{
-			m_aui_mgr.GetPane(m_movie_view).Show();
-			m_tb_menu_ui->Check(ID_UIMovieView, true);
+			m_aui_mgr.GetPane(m_measure_dlg).Show();
+			m_tb_menu_ui->Check(ID_UIMeasureView, true);
 		}
 		break;
 	case ID_UIAdjView:
@@ -4628,8 +4655,8 @@ void VRenderFrame::OnPaneClose(wxAuiManagerEvent& event)
 		m_tb_menu_ui->Check(ID_UIListView, false);
 	else if (name == "TreePanel")
 		m_tb_menu_ui->Check(ID_UITreeView, false);
-	else if (name == "VMovieView")
-		m_tb_menu_ui->Check(ID_UIMovieView, false);
+	else if (name == "MeasureDlg")
+		m_tb_menu_ui->Check(ID_UIMeasureView, false);
 	else if (name == "PropPanel")
 		m_tb_menu_ui->Check(ID_UIPropView, false);
 	else if (name == "AdjustView")

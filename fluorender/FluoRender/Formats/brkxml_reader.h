@@ -51,6 +51,7 @@ public:
 	int GetBatchNum() {return (int)m_batch_list.size();}
 	int GetCurBatch() {return m_cur_batch;}
 	bool isURL() {return m_isURL;}
+	void SetInfo();
 
 	wstring GetBrickFilePath(int fr, int ch, int id, int lv = -1);
 	wstring GetBrickFileName(int fr, int ch, int id, int lv = -1);
