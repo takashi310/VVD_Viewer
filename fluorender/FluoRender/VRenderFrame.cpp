@@ -2042,14 +2042,14 @@ void VRenderFrame::ToggleAllTools()
 {
 	if (m_aui_mgr.GetPane(m_list_panel).IsShown() &&
 		m_aui_mgr.GetPane(m_tree_panel).IsShown() &&
-		m_aui_mgr.GetPane(m_movie_view).IsShown() &&
+		m_aui_mgr.GetPane(m_measure_dlg).IsShown() &&
 		m_aui_mgr.GetPane(m_prop_panel).IsShown() &&
 		m_aui_mgr.GetPane(m_adjust_view).IsShown() &&
 		m_aui_mgr.GetPane(m_clip_view).IsShown())
 		m_ui_state = true;
 	else if (!m_aui_mgr.GetPane(m_list_panel).IsShown() &&
 		!m_aui_mgr.GetPane(m_tree_panel).IsShown() &&
-		!m_aui_mgr.GetPane(m_movie_view).IsShown() &&
+		!m_aui_mgr.GetPane(m_measure_dlg).IsShown() &&
 		!m_aui_mgr.GetPane(m_prop_panel).IsShown() &&
 		!m_aui_mgr.GetPane(m_adjust_view).IsShown() &&
 		!m_aui_mgr.GetPane(m_clip_view).IsShown())
@@ -2065,7 +2065,7 @@ void VRenderFrame::ToggleAllTools()
 		m_aui_mgr.GetPane(m_tree_panel).Hide();
 		m_tb_menu_ui->Check(ID_UITreeView, false);
 		//movie view (float only)
-		m_aui_mgr.GetPane(m_movie_view).Hide();
+		m_aui_mgr.GetPane(m_measure_dlg).Hide();
 		m_tb_menu_ui->Check(ID_UIMeasureView, false);
 		//properties
 		m_aui_mgr.GetPane(m_prop_panel).Hide();
@@ -2089,7 +2089,7 @@ void VRenderFrame::ToggleAllTools()
 		m_aui_mgr.GetPane(m_tree_panel).Show();
 		m_tb_menu_ui->Check(ID_UITreeView, true);
 		//movie view (float only)
-		m_aui_mgr.GetPane(m_movie_view).Show();
+		m_aui_mgr.GetPane(m_measure_dlg).Show();
 		m_tb_menu_ui->Check(ID_UIMeasureView, true);
 		//properties
 		m_aui_mgr.GetPane(m_prop_panel).Show();
