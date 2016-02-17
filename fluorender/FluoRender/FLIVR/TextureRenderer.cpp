@@ -38,8 +38,11 @@
 #include <algorithm>
 #include <glm/gtc/type_ptr.hpp>
 #include <FLIVR/palettes.h>
+#include <boost/foreach.hpp>
+#include <boost/lexical_cast.hpp>
 //#include <iomanip>
 
+using boost::property_tree::wptree;
 using namespace std;
 
 namespace FLIVR
@@ -112,6 +115,12 @@ namespace FLIVR
 		glGenVertexArrays(1, &m_quad_vao);
 
 		init_palette();
+
+		roi_tree_.add(L"-3", L"G3");
+		roi_tree_.add(L"-3.-2", L"G2");
+		roi_tree_.add(L"-3.-2.71", L"TEST71");
+		roi_tree_.add(L"-4", L"G4");
+		roi_tree_.add(L"-4.49", L"TEST49");
 	}
 
 	TextureRenderer::TextureRenderer(const TextureRenderer& copy)
@@ -132,6 +141,7 @@ namespace FLIVR
 		desel_col_fac_(copy.desel_col_fac_),
 		sel_ids_(copy.sel_ids_),
 		edit_sel_id_(copy.edit_sel_id_),
+		roi_tree_(copy.roi_tree_),
 		filter_buffer_resize_(false),
 		filter_buffer_(0),
 		filter_tex_id_(0),
@@ -288,7 +298,56 @@ namespace FLIVR
 		}
 	}
 
-	void TextureRenderer::set_roi_name(wstring name, int id)
+	boost::optional<wstring> TextureRenderer::find_roi_leaf(int id)
+	{
+		return find_roi_leaf(id, roi_tree_, L"");
+	}
+	boost::optional<wstring> TextureRenderer::find_roi_leaf(int id, const wptree& tree, wstring parent)
+	{
+		for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
+		{
+			wptree subtree = child->second;
+			wstring c_path = (parent.empty() ? L"" : parent + L".") + child->first;
+			try
+			{
+				int val = boost::lexical_cast<int>(child->first);
+				if (val == id)
+					return c_path;
+			}
+			catch (boost::bad_lexical_cast e)
+			{
+				cerr << "TextureRenderer::find_roi_leaf(int id, const wptree& tree): bad_lexical_cast" << endl;
+			}
+			if (auto rval = find_roi_leaf(id, subtree, c_path))
+				return rval;
+		}
+
+		return boost::none;
+	}
+
+	boost::optional<wstring> TextureRenderer::find_roi_leaf(wstring name)
+	{
+		return find_roi_leaf(name, roi_tree_, L"");
+	}
+	boost::optional<wstring> TextureRenderer::find_roi_leaf(wstring name, const wptree& tree, wstring parent)
+	{
+		for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
+		{
+			wptree subtree = child->second;
+			wstring c_path = parent + L"." + child->first;
+			if (const auto val = tree.get_optional<wstring>(child->first))
+			{
+				if (val == name)
+					return c_path;
+			}
+			if (auto rval = find_roi_leaf(name, subtree, c_path))
+				return rval;
+		}
+
+		return boost::none;
+	}
+
+	void TextureRenderer::set_roi_name(wstring name, int id, wstring parent)
 	{
 		int edid = (id == -1) ? edit_sel_id_ : id;
 		
@@ -296,12 +355,27 @@ namespace FLIVR
 			return;
 
 		if (!name.empty())
-			roi_names_[edid] = name;
+		{
+			if(auto path = find_roi_leaf(edid))
+				roi_tree_.put(*path, name);
+			else
+				roi_tree_.add(boost::lexical_cast<wstring>(edid), name);
+		}
 		else
 		{
-			auto itr = roi_names_.find(edid);
-			if( itr != roi_names_.end() )
-				roi_names_.erase(itr);
+			if(auto path = find_roi_leaf(edid))
+			{
+				auto pos = path->find_last_of(L'.');
+				wstring strid(L""), parent(L"");
+				if (pos != wstring::npos && pos+1 < path->length())
+				{
+					strid = path->substr(pos+1);
+					parent = path->substr(0, pos);
+				}
+				else
+					strid = *path;
+				roi_tree_.get_child(parent).erase(strid);
+			}
 		}
 	}
 
@@ -313,9 +387,33 @@ namespace FLIVR
 		
 		if (edid >= 0 && edid < PALETTE_SIZE)
 		{
-			auto itr = roi_names_.find(edid);
-			if( itr != roi_names_.end() )
-				rval = itr->second;
+			if(auto path = find_roi_leaf(edid))
+				rval = roi_tree_.get<wstring>(*path);
+		}
+
+		return rval;
+	}
+
+	int TextureRenderer::get_roi_id(wstring name)
+	{
+		int rval = -1;
+
+		if (auto path = find_roi_leaf(name))
+		{
+			auto pos = path->find_last_of(L'.');
+			wstring strid;
+			if (pos != wstring::npos && pos+1 < path->length())
+				strid = path->substr(pos+1);
+			else
+				strid = *path;
+			try
+			{
+				rval = boost::lexical_cast<int>(strid);
+			}
+			catch (boost::bad_lexical_cast e)
+			{
+				cerr << "TextureRenderer::get_roi_id(wstring name): bad_lexical_cast" << endl;
+			}
 		}
 
 		return rval;

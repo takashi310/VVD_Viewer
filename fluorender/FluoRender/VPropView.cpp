@@ -791,6 +791,10 @@ void VPropView::SaveROIName()
 	{
 		wxString name = m_roi_text->GetValue();
 		m_vd->SetROIName(name.ToStdWstring());
+
+		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+		if (vr_frame)
+			vr_frame->UpdateROITree(m_vd);
 	}
 }
 
@@ -1404,6 +1408,10 @@ void VPropView::OnROIColorBtn(wxColourPickerEvent& event)
 	if (m_vd)
 	{
 		m_vd->SetIDColor(wxc.Red(), wxc.Green(), wxc.Blue());
+		
+		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+		if (vr_frame)
+			vr_frame->UpdateROITree(m_vd);
 
 		RefreshVRenderViews(true);
 	}
@@ -1609,6 +1617,7 @@ void VPropView::OnIDCLCheck(wxCommandEvent &event)
 			adjust_view->UpdateSync();
 		
 		UpdateUIsROI();
+		vr_frame->UpdateROITree(m_vd);
 	}
 
 	if (m_vd)

@@ -30,9 +30,12 @@ DEALINGS IN THE SOFTWARE.
 #include "tick.xpm"
 #include "cross.xpm"
 #include "Formats/png_resource.h"
+#include <boost/lexical_cast.hpp>
 
 //resources
 #include "img/icons.h"
+
+using boost::property_tree::wptree;
 
 BEGIN_EVENT_TABLE(DataTreeCtrl, wxTreeCtrl)
 	EVT_CONTEXT_MENU(DataTreeCtrl::OnContextMenu)
@@ -1740,6 +1743,109 @@ wxTreeItemId DataTreeCtrl::AddVolItem(wxTreeItemId par_item, const wxString &tex
 	return item;
 }
 
+//volume data item
+wxTreeItemId DataTreeCtrl::AddVolItem(wxTreeItemId par_item, VolumeData *vd)
+{
+	wxTreeItemId item = AppendItem(par_item, vd->GetName(), 1);
+	LayerInfo* item_data = new LayerInfo;
+	item_data->type = 2;//volume data
+	SetItemData(item, item_data);
+
+	if (vd->GetColormapMode() == 3)
+		BuildROITree(item, *vd->getROITree(), vd);
+
+	return item;
+}
+
+void DataTreeCtrl::UpdateVolItem(wxTreeItemId item, VolumeData *vd)
+{
+	if (!item.IsOk() || !vd) return;
+
+	SetItemText(item, vd->GetName());
+
+	LayerInfo* item_data = (LayerInfo *)GetItemData(item);
+	item_data->type = 2;//volume data
+	
+	DeleteChildren(item);
+	if (vd->GetColormapMode() == 3)
+		BuildROITree(item, *vd->getROITree(), vd);
+
+	Expand(item);
+
+	return;
+}
+
+void DataTreeCtrl::BuildROITree(wxTreeItemId par_item, const boost::property_tree::wptree& tree, VolumeData *vd)
+{
+	for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
+	{
+		if (const auto val = tree.get_optional<wstring>(child->first))
+		{
+			try
+			{
+				wptree subtree = child->second;
+				int id = boost::lexical_cast<int>(child->first);
+				wxString name = *val;
+				wxTreeItemId item = AppendItem(par_item, name, 1);
+				LayerInfo* item_data = new LayerInfo;
+				item_data->type = (id > 0) ? 7 : 8;//7-volume segment : 8-segmnet group
+				item_data->id = id;
+				SetItemData(item, item_data);
+				if (item_data->type == 7 && vd)
+				{
+					AppendIcon();
+					unsigned char r,g,b;
+					vd->GetIDColor(r, g, b, id);
+					wxColor wxc(r, g, b);
+					int ii = GetIconNum()-1;
+					ChangeIconColor(ii, wxc);
+					SetItemImage(item, vd->isSelID(id)?2*ii+1:2*ii);
+				}
+
+				BuildROITree(item, subtree, vd);
+			}
+			catch (boost::bad_lexical_cast e)
+			{
+				cerr << "DataTreeCtrl::BuildROITree(wxTreeItemId par_item, const boost::property_tree::wptree& tree): bad_lexical_cast" << endl;
+			}
+			
+		}
+	}
+}
+
+wxTreeItemId DataTreeCtrl::FindTreeItem(wxString name)
+{
+	wxTreeItemId item = GetRootItem();
+	wxTreeItemId rval;
+	if (!item.IsOk()) return rval;
+
+	return FindTreeItem(item, name);
+}
+
+wxTreeItemId DataTreeCtrl::FindTreeItem(wxTreeItemId par_item, wxString name)
+{
+	wxTreeItemId item = par_item;
+	wxTreeItemId rval;
+	if (!item.IsOk()) return rval;
+
+	LayerInfo* item_data = (LayerInfo*)GetItemData(item);
+	if (item_data->type == 7 || item_data->type == 8)
+		return rval;
+
+	if (GetItemText(item) == name) return item;
+
+	wxTreeItemIdValue cookie;
+	wxTreeItemId child_item = GetFirstChild(item, cookie);
+	while (child_item.IsOk())
+	{
+		rval = FindTreeItem(child_item, name);
+		if (rval.IsOk()) return rval;
+		child_item = GetNextChild(item, cookie);
+	}
+
+	return rval;
+}
+
 void DataTreeCtrl::SetVolItemImage(const wxTreeItemId item, int image)
 {
 	SetItemImage(item, image);
@@ -2199,6 +2305,36 @@ wxTreeItemId TreePanel::AddVolItem(wxTreeItemId par_item, const wxString &text)
 	wxTreeItemId id;
 	if (m_datatree)
 		id = m_datatree->AddVolItem(par_item, text);
+	return id;
+}
+
+wxTreeItemId TreePanel::AddVolItem(wxTreeItemId par_item, VolumeData* vd)
+{
+	wxTreeItemId id;
+	if (m_datatree)
+		id = m_datatree->AddVolItem(par_item, vd);
+	return id;
+}
+
+void TreePanel::UpdateVolItem(wxTreeItemId item, VolumeData* vd)
+{
+	if (m_datatree)
+		m_datatree->UpdateVolItem(item, vd);
+}
+
+wxTreeItemId TreePanel::FindTreeItem(wxTreeItemId par_item, wxString name)
+{
+	wxTreeItemId id;
+	if (m_datatree)
+		id = m_datatree->FindTreeItem(par_item, name);
+	return id;
+}
+
+wxTreeItemId TreePanel::FindTreeItem(wxString name)
+{
+	wxTreeItemId id;
+	if (m_datatree)
+		id = m_datatree->FindTreeItem(name);
 	return id;
 }
 

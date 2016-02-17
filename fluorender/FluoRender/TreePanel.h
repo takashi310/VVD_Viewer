@@ -28,6 +28,8 @@ DEALINGS IN THE SOFTWARE.
 #include <wx/wx.h>
 #include <wx/treectrl.h>
 #include "compatibility.h"
+#include <boost/property_tree/ptree.hpp>
+#include <boost/optional.hpp>
 
 #ifndef _TREEPANEL_H_
 #define _TREEPANEL_H_
@@ -37,6 +39,7 @@ DEALINGS IN THE SOFTWARE.
 #define icon_key	"None"
 
 class VRenderView;
+class VolumeData;
 
 //tree item data
 class LayerInfo : public wxTreeItemData
@@ -45,6 +48,9 @@ public:
 	int type;	//0-root; 1-view; 
 				//2-volume data; 3-mesh data;
 				//5-group; 6-mesh group
+				//7-volume segment; 8-segment group
+
+	int id;		//for volume segments
 };
 
 class DataTreeCtrl: public wxTreeCtrl
@@ -105,6 +111,10 @@ public:
 	void SetViewItemImage(const wxTreeItemId& item, int image);
 	//volume data item
 	wxTreeItemId AddVolItem(wxTreeItemId par_item, const wxString &text);
+	wxTreeItemId AddVolItem(wxTreeItemId par_item, VolumeData* vd);
+	void UpdateVolItem(wxTreeItemId item, VolumeData* vd);
+	wxTreeItemId FindTreeItem(wxTreeItemId par_item, wxString name);
+	wxTreeItemId FindTreeItem(wxString name);
 	void SetVolItemImage(const wxTreeItemId item, int image);
 	//mesh data item
 	wxTreeItemId AddMeshItem(wxTreeItemId par_item, const wxString &text);
@@ -150,6 +160,8 @@ private:
 	//change the color of just one icon of the dual,
 	//either enable(type=0), or disable(type=1)
 	void ChangeIconColor(int which, wxColor c, int type);
+
+	void BuildROITree(wxTreeItemId par_item, const boost::property_tree::wptree& tree, VolumeData *vd);
 
 	void OnContextMenu(wxContextMenuEvent &event );
 
@@ -231,6 +243,10 @@ public:
 	wxTreeItemId AddViewItem(const wxString &text);
 	void SetViewItemImage(const wxTreeItemId& item, int image);
 	wxTreeItemId AddVolItem(wxTreeItemId par_item, const wxString &text);
+	wxTreeItemId AddVolItem(wxTreeItemId par_item, VolumeData* vd);
+	void UpdateVolItem(wxTreeItemId item, VolumeData* vd);
+	wxTreeItemId FindTreeItem(wxTreeItemId par_item, wxString name);
+	wxTreeItemId FindTreeItem(wxString name);
 	void SetVolItemImage(const wxTreeItemId item, int image);
 	wxTreeItemId AddMeshItem(wxTreeItemId par_item, const wxString &text);
 	void SetMeshItemImage(const wxTreeItemId item, int image);

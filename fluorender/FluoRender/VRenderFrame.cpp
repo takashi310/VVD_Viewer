@@ -386,7 +386,7 @@ VRenderFrame::VRenderFrame(
 		Top().CloseButton(false).Layer(4));
 	m_aui_mgr.AddPane(m_list_panel, wxAuiPaneInfo().
 		Name("m_list_panel").Caption(UITEXT_DATAVIEW).
-		Left().CloseButton(true).BestSize(wxSize(350, 280)).
+		Left().CloseButton(true).BestSize(wxSize(350, 250)).
 		FloatingSize(wxSize(350, 300)).Layer(3));
 	m_aui_mgr.AddPane(m_tree_panel, wxAuiPaneInfo().
 		Name("m_tree_panel").Caption(UITEXT_TREEVIEW).
@@ -394,7 +394,7 @@ VRenderFrame::VRenderFrame(
 		FloatingSize(wxSize(350, 300)).Layer(3));
 	m_aui_mgr.AddPane(m_measure_dlg, wxAuiPaneInfo().
 		Name("m_measure_dlg").Caption(UITEXT_MEASUREMENT).
-		Left().CloseButton(true).BestSize(wxSize(350, 320)).
+		Left().CloseButton(true).BestSize(wxSize(350, 400)).
 		FloatingSize(wxSize(350, 300)).Layer(3));
 	m_aui_mgr.AddPane(m_prop_panel, wxAuiPaneInfo().
 		Name("m_prop_panel").Caption(UITEXT_PROPERTIES).
@@ -413,6 +413,10 @@ VRenderFrame::VRenderFrame(
 		Dockable(true).CloseButton(false).
 		FloatingSize(wxSize(600, 400)).MinSize(wxSize(300, 200)).
 		Layer(0).Centre());
+
+	m_aui_mgr.GetPane("m_list_panel").dock_proportion  = 10;
+	m_aui_mgr.GetPane("m_tree_panel").dock_proportion  = 15;
+	m_aui_mgr.GetPane("m_measure_dlg").dock_proportion = 20;
 
 	//dialogs
 	//brush tool dialog
@@ -1524,7 +1528,7 @@ void VRenderFrame::UpdateTree(wxString name, bool set_calc)
 						(unsigned char)(c.b()*255));
 					int ii = m_tree_panel->GetIconNum()-1;
 					m_tree_panel->ChangeIconColor(ii, wxc);
-					wxTreeItemId item = m_tree_panel->AddVolItem(vrv_item, vd->GetName());
+					wxTreeItemId item = m_tree_panel->AddVolItem(vrv_item, vd);
 					m_tree_panel->SetVolItemImage(item, vd->GetDisp()?2*ii+1:2*ii);
 					if (name == vd->GetName())
 					{
@@ -1597,7 +1601,7 @@ void VRenderFrame::UpdateTree(wxString name, bool set_calc)
 							(unsigned char)(c.b()*255));
 						int ii = m_tree_panel->GetIconNum()-1;
 						m_tree_panel->ChangeIconColor(ii, wxc);
-						wxTreeItemId item = m_tree_panel->AddVolItem(group_item, vd->GetName());
+						wxTreeItemId item = m_tree_panel->AddVolItem(group_item, vd);
 						m_tree_panel->SetVolItemImage(item, vd->GetDisp()?2*ii+1:2*ii);
 						if (name == vd->GetName())
 						{
@@ -1652,6 +1656,18 @@ void VRenderFrame::UpdateTree(wxString name, bool set_calc)
 
 	m_tree_panel->ExpandAll();
 }
+
+void VRenderFrame::UpdateROITree(VolumeData *vd, bool set_calc)
+{
+	if (!vd) return;
+
+	wxTreeItemId item = m_tree_panel->FindTreeItem(vd->GetName());
+
+	if(!item.IsOk()) return;
+
+	m_tree_panel->UpdateVolItem(item, vd);
+}
+
 
 void VRenderFrame::UpdateList()
 {

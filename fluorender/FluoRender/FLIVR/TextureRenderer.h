@@ -36,6 +36,8 @@
 #include <glm/glm.hpp>
 #include <unordered_set>
 #include <unordered_map>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/optional.hpp>
 #include <string>
 
 namespace FLIVR
@@ -176,8 +178,15 @@ namespace FLIVR
 
 		 void init_palette();
 		 void update_palette_tex();
-		 void set_roi_name(wstring name, int id=-1);
+		 void set_roi_name(wstring name, int id=-1, wstring parent=wstring());
 		 wstring get_roi_name(int id=-1);
+		 bool erase_roi_leaf(int id);
+		 boost::property_tree::wptree *get_roi_tree(){ return &roi_tree_; }
+		 boost::optional<wstring> find_roi_leaf(int id);
+		 boost::optional<wstring> find_roi_leaf(int id, const boost::property_tree::wptree& tree, wstring parent);
+		 boost::optional<wstring> find_roi_leaf(wstring name);
+		 boost::optional<wstring> find_roi_leaf(wstring name, const boost::property_tree::wptree& tree, wstring parent);
+		 int get_roi_id(wstring name);
 		 void set_id_color(unsigned char r, unsigned char g, unsigned char b, bool update_palette=true, int id=-1);
 		 void get_id_color(unsigned char &r, unsigned char &g, unsigned char &b, int id=-1);
 		 //0-dark; 1-gray; 2-invisible;
@@ -301,7 +310,7 @@ namespace FLIVR
 			   unsigned char palette_[PALETTE_SIZE*PALETTE_ELEM_COMP];
 			   unsigned char base_palette_[PALETTE_SIZE*PALETTE_ELEM_COMP];
 			   unordered_set<int> sel_ids_;
-			   unordered_map<int, wstring> roi_names_;
+			   boost::property_tree::wptree roi_tree_;
 			   int desel_palette_mode_;
 			   float desel_col_fac_;
 			   int edit_sel_id_;

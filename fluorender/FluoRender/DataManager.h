@@ -58,6 +58,7 @@ DEALINGS IN THE SOFTWARE.
 #include "DatabaseDlg.h"
 
 #include <curl/curl.h>
+#include <boost/property_tree/ptree.hpp>
 
 #ifndef _DATAMANAGER_H_
 #define _DATAMANAGER_H_
@@ -421,6 +422,7 @@ public:
 
 	void SetROIName(wstring name, int id=-1){ if (m_vr) m_vr->set_roi_name(name, id); }
 	wstring GetROIName(int id=-1){ return m_vr ? m_vr->get_roi_name(id) : wstring(); }
+	int GetROIid(wstring name){ return m_vr ? m_vr->get_roi_id(name) : -1; }
 	void SetIDColor(unsigned char r, unsigned char g, unsigned char b, bool update_palette=true, int id=-1)
 	{
 		if (m_vr) m_vr->set_id_color(r, g, b, update_palette, id);
@@ -435,6 +437,7 @@ public:
 	int GetEditSelID(){ return m_vr ? m_vr->get_edit_sel_id() : -1; }
 	void SetEditSelID(int id){ if (m_vr) m_vr->set_edit_sel_id(id); }
 	void ClearSelIDs(){ if (m_vr) m_vr->clear_sel_ids(); }
+	boost::property_tree::wptree *getROITree(){ return m_vr ? m_vr->get_roi_tree() : NULL; };
 
 private:
 	//duplication indicator and counter
