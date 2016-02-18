@@ -136,13 +136,30 @@ void DataTreeCtrl::DeleteSelection()
 	if (sel_item.IsOk() && vr_frame)
 	{
 		wxString name_data = GetItemText(sel_item);
+		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+		if (!item_data)
+			return;
 		wxTreeItemId par_item = GetItemParent(sel_item);
 		if (!par_item.IsOk())
 			return;
 		wxString par_name = GetItemText(par_item);
 
 		LayerInfo* par_item_data = (LayerInfo*)GetItemData(par_item);
-		if (par_item_data)
+		if (item_data->type == 7 || item_data->type == 8)
+		{
+			wxTreeItemId vitem = GetParentVolItem(sel_item);
+			if (!vitem.IsOk()) return;
+			wxString vname = GetItemText(vitem);
+			LayerInfo* vitem_data = (LayerInfo*)GetItemData(vitem);
+			if (!vitem_data) return;
+			VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(vname);
+			if (!vd) return;
+
+			vd->EraseROITreeNode(name_data.ToStdWstring());
+			vr_frame->UpdateTree(GetItemText(vitem));
+			vr_frame->RefreshVRenderViews();
+		}
+		else if (par_item_data)
 		{
 			switch (par_item_data->type)
 			{
@@ -151,54 +168,51 @@ void DataTreeCtrl::DeleteSelection()
 					VRenderView* vrv = vr_frame->GetView(par_name);
 					if (!vrv)
 						break;
-					LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
-					if (item_data)
+					if (item_data->type == 2)//volume data
 					{
-						if (item_data->type == 2)//volume data
+						VolumeData* vd = vrv->GetVolumeData(name_data);
+						if (vd)
 						{
-							VolumeData* vd = vrv->GetVolumeData(name_data);
-							if (vd)
+							vd->SetDisp(true);
+							vrv->RemoveVolumeData(name_data);
+							if (vrv->GetVolMethod() == VOL_METHOD_MULTI)
 							{
-								vd->SetDisp(true);
-								vrv->RemoveVolumeData(name_data);
-								if (vrv->GetVolMethod() == VOL_METHOD_MULTI)
+								AdjustView* adjust_view = vr_frame->GetAdjustView();
+								if (adjust_view)
 								{
-									AdjustView* adjust_view = vr_frame->GetAdjustView();
-									if (adjust_view)
-									{
-										adjust_view->SetRenderView(vrv);
-										adjust_view->UpdateSync();
-									}
+									adjust_view->SetRenderView(vrv);
+									adjust_view->UpdateSync();
 								}
 							}
 						}
-						else if (item_data->type == 3)//mesh data
+					}
+					else if (item_data->type == 3)//mesh data
+					{
+						MeshData* md = vrv->GetMeshData(name_data);
+						if (md)
 						{
-							MeshData* md = vrv->GetMeshData(name_data);
-							if (md)
-							{
-								md->SetDisp(true);
-								vrv->RemoveMeshData(name_data);
-							}
-						}
-						else if (item_data->type == 4)//annotations
-						{
-							Annotations* ann = vrv->GetAnnotations(name_data);
-							if (ann)
-							{
-								ann->SetDisp(true);
-								vrv->RemoveAnnotations(name_data);
-							}
-						}
-						else if (item_data->type == 5)//group
-						{
-							vrv->RemoveGroup(name_data);
-						}
-						else if (item_data->type == 6)//mesh group
-						{
-							vrv->RemoveGroup(name_data);
+							md->SetDisp(true);
+							vrv->RemoveMeshData(name_data);
 						}
 					}
+					else if (item_data->type == 4)//annotations
+					{
+						Annotations* ann = vrv->GetAnnotations(name_data);
+						if (ann)
+						{
+							ann->SetDisp(true);
+							vrv->RemoveAnnotations(name_data);
+						}
+					}
+					else if (item_data->type == 5)//group
+					{
+						vrv->RemoveGroup(name_data);
+					}
+					else if (item_data->type == 6)//mesh group
+					{
+						vrv->RemoveGroup(name_data);
+					}
+
 					vr_frame->UpdateTree();
 					vr_frame->RefreshVRenderViews();
 					vr_frame->OnSelection(1);
@@ -211,8 +225,7 @@ void DataTreeCtrl::DeleteSelection()
 					VRenderView* vrv = vr_frame->GetView(gpar_name);
 					if (!vrv)
 						break;
-					LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
-					if (item_data && item_data->type == 2)
+					if (item_data->type == 2)
 						vrv->RemoveVolumeData(name_data);
 					vr_frame->UpdateTree();
 					vr_frame->RefreshVRenderViews();
@@ -236,8 +249,7 @@ void DataTreeCtrl::DeleteSelection()
 					VRenderView* vrv = vr_frame->GetView(gpar_name);
 					if (!vrv)
 						break;
-					LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
-					if (item_data && item_data->type==3)
+					if (item_data->type==3)
 						vrv->RemoveMeshData(name_data);
 					vr_frame->UpdateTree();
 					vr_frame->RefreshVRenderViews();

@@ -421,6 +421,8 @@ public:
 	void SetFog(bool use_fog, double fog_intensity, double fog_start, double fog_end);
 
 	void SetROIName(wstring name, int id=-1){ if (m_vr) m_vr->set_roi_name(name, id); }
+	void EraseROITreeNode(int id=-1){ if (m_vr) m_vr->erase_node(id); }
+	void EraseROITreeNode(wstring name){ if (m_vr) m_vr->erase_node(name); }
 	wstring GetROIName(int id=-1){ return m_vr ? m_vr->get_roi_name(id) : wstring(); }
 	int GetROIid(wstring name){ return m_vr ? m_vr->get_roi_id(name) : -1; }
 	void SetROISel(wstring name, bool select, bool traverse=false){ if (m_vr) m_vr->set_roi_select(name, select, traverse); }

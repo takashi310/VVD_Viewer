@@ -384,6 +384,44 @@ namespace FLIVR
 		}
 	}
 
+	void TextureRenderer::erase_node(int id)
+	{
+		int edid = (id == -1) ? edit_sel_id_ : id;
+		
+		if(auto path = find_roi_leaf(edid))
+		{
+			auto pos = path->find_last_of(L'.');
+			wstring strid(L""), parent(L"");
+			if (pos != wstring::npos && pos+1 < path->length())
+			{
+				strid = path->substr(pos+1);
+				parent = path->substr(0, pos);
+			}
+			else
+				strid = *path;
+			roi_tree_.get_child(parent).erase(strid);
+		}
+	}
+
+	void TextureRenderer::erase_node(wstring name)
+	{
+		int edid = get_roi_id(name);
+		
+		if(auto path = find_roi_leaf(edid))
+		{
+			auto pos = path->find_last_of(L'.');
+			wstring strid(L""), parent(L"");
+			if (pos != wstring::npos && pos+1 < path->length())
+			{
+				strid = path->substr(pos+1);
+				parent = path->substr(0, pos);
+			}
+			else
+				strid = *path;
+			roi_tree_.get_child(parent).erase(strid);
+		}
+	}
+
 	wstring TextureRenderer::get_roi_name(int id)
 	{
 		wstring rval;

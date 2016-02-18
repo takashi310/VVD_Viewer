@@ -179,6 +179,8 @@ namespace FLIVR
 		 void init_palette();
 		 void update_palette_tex();
 		 void set_roi_name(wstring name, int id=-1, wstring parent=wstring());
+		 void erase_node(int id=-1);
+		 void erase_node(wstring name);
 		 wstring get_roi_name(int id=-1);
 		 void set_roi_select(wstring name, bool select, bool traverse=false);
 		 void set_roi_select(boost::property_tree::wptree& tree, bool select);
