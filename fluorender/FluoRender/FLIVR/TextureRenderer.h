@@ -180,17 +180,20 @@ namespace FLIVR
 		 void update_palette_tex();
 		 void set_roi_name(wstring name, int id=-1, wstring parent=wstring());
 		 wstring get_roi_name(int id=-1);
-		 bool erase_roi_leaf(int id);
+		 void set_roi_select(wstring name, bool select, bool traverse=false);
+		 void set_roi_select(boost::property_tree::wptree& tree, bool select);
+		 void update_sel_segs();
+		 void update_sel_segs(const boost::property_tree::wptree& tree);
 		 boost::property_tree::wptree *get_roi_tree(){ return &roi_tree_; }
 		 boost::optional<wstring> find_roi_leaf(int id);
 		 boost::optional<wstring> find_roi_leaf(int id, const boost::property_tree::wptree& tree, wstring parent);
 		 boost::optional<wstring> find_roi_leaf(wstring name);
 		 boost::optional<wstring> find_roi_leaf(wstring name, const boost::property_tree::wptree& tree, wstring parent);
 		 int get_roi_id(wstring name);
-		 void set_id_color(unsigned char r, unsigned char g, unsigned char b, bool update_palette=true, int id=-1);
+		 void set_id_color(unsigned char r, unsigned char g, unsigned char b, bool update=true, int id=-1);
 		 void get_id_color(unsigned char &r, unsigned char &g, unsigned char &b, int id=-1);
 		 //0-dark; 1-gray; 2-invisible;
-		 void set_desel_palette_mode(int mode, float fac=0.2);
+		 void update_palette(int mode, float fac=0.2);
 		 void set_desel_palette_mode_dark(float fac=0.2);
 		 void set_desel_palette_mode_gray(float fac=0.2);
 		 void set_desel_palette_mode_invisible();
@@ -310,6 +313,7 @@ namespace FLIVR
 			   unsigned char palette_[PALETTE_SIZE*PALETTE_ELEM_COMP];
 			   unsigned char base_palette_[PALETTE_SIZE*PALETTE_ELEM_COMP];
 			   unordered_set<int> sel_ids_;
+			   unordered_set<int> sel_segs_;
 			   boost::property_tree::wptree roi_tree_;
 			   int desel_palette_mode_;
 			   float desel_col_fac_;

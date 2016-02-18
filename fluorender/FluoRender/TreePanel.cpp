@@ -42,6 +42,8 @@ BEGIN_EVENT_TABLE(DataTreeCtrl, wxTreeCtrl)
 	EVT_MENU(ID_ToggleDisp, DataTreeCtrl::OnToggleDisp)
 	EVT_MENU(ID_Isolate, DataTreeCtrl::OnIsolate)
 	EVT_MENU(ID_ShowAll, DataTreeCtrl::OnShowAll)
+	EVT_MENU(ID_ShowAllSeg, DataTreeCtrl::OnShowAllSeg)
+	EVT_MENU(ID_HideAllSeg, DataTreeCtrl::OnHideAllSeg)
 	EVT_MENU(ID_RemoveData, DataTreeCtrl::OnRemoveData)
 	EVT_MENU(ID_CloseView, DataTreeCtrl::OnCloseView)
 	EVT_MENU(ID_ManipulateData, DataTreeCtrl::OnManipulateData)
@@ -351,6 +353,14 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 				menu.Append(ID_AddMeshGroup, "Add Mesh Group");
 				menu.Append(ID_RemoveData, "Delete");
 				break;
+			case 7:
+				menu.Append(ID_ToggleDisp, "Toggle Visibility");
+				break;
+			case 8:
+				menu.Append(ID_ToggleDisp, "Toggle Visibility");
+				menu.Append(ID_ShowAllSeg, "Show All Children");
+				menu.Append(ID_HideAllSeg, "Hide All Children");
+				break;
 			}
 			PopupMenu( &menu, point.x, point.y );
 		}
@@ -480,6 +490,84 @@ void DataTreeCtrl::OnShowAll(wxCommandEvent& event)
 		}
 
 		UpdateSelection();
+	}
+}
+
+void DataTreeCtrl::OnShowAllSeg(wxCommandEvent& event)
+{
+	if (m_fixed)
+	return;
+
+	wxTreeItemId sel_item = GetSelection();
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+
+	if (sel_item.IsOk() && vr_frame)
+	{
+		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+		if (item_data)
+		{
+			int item_type = item_data->type;
+			wxString itemname = GetItemText(sel_item);
+			if (item_type == 8)
+			{
+
+				wxTreeItemId vol_item = GetParentVolItem(sel_item);
+				if (vol_item.IsOk())
+				{
+					wxString vname = GetItemText(vol_item);
+					VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(vname);
+					if (vd)
+					{
+						int id = vd->GetROIid(GetItemText(sel_item).ToStdWstring());
+						if (id != -1)
+							vd->SetROISel(GetItemText(sel_item).ToStdWstring(), true, true);
+
+						vr_frame->UpdateTreeIcons();
+						vr_frame->RefreshVRenderViews();
+					}
+				}
+			}
+
+		}
+	}
+}
+
+void DataTreeCtrl::OnHideAllSeg(wxCommandEvent& event)
+{
+	if (m_fixed)
+	return;
+
+	wxTreeItemId sel_item = GetSelection();
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+
+	if (sel_item.IsOk() && vr_frame)
+	{
+		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+		if (item_data)
+		{
+			int item_type = item_data->type;
+			wxString itemname = GetItemText(sel_item);
+			if (item_type == 8)
+			{
+
+				wxTreeItemId vol_item = GetParentVolItem(sel_item);
+				if (vol_item.IsOk())
+				{
+					wxString vname = GetItemText(vol_item);
+					VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(vname);
+					if (vd)
+					{
+						int id = vd->GetROIid(GetItemText(sel_item).ToStdWstring());
+						if (id != -1)
+							vd->SetROISel(GetItemText(sel_item).ToStdWstring(), false, true);
+
+						vr_frame->UpdateTreeIcons();
+						vr_frame->RefreshVRenderViews();
+					}
+				}
+			}
+
+		}
 	}
 }
 
@@ -1067,6 +1155,64 @@ void DataTreeCtrl::UpdateSelection()
 					}
 				}
 				break;
+			case 7://volume segments
+			case 8://segment group
+				{
+					wxTreeItemId vitem = GetParentVolItem(sel_item);
+					if (!vitem.IsOk()) break;
+					wxString vname = GetItemText(vitem);
+					LayerInfo* vitem_data = (LayerInfo*)GetItemData(vitem);
+					if (!vitem_data) break;
+					VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(vname);
+					if (!vd) break;
+					if (item_data->type == 7)
+					{
+						int id = vd->GetROIid(name.ToStdWstring());
+						vd->SetEditSelID(id);
+					}
+
+					if (vr_frame->GetAdjustView())
+					{
+						wxTreeItemId par_item = GetItemParent(vitem);
+						if (par_item.IsOk())
+						{
+							LayerInfo* par_item_data = (LayerInfo*)GetItemData(par_item);
+							if (par_item_data && par_item_data->type == 5)
+							{
+								//par is group
+								wxString str = GetItemText(GetItemParent(par_item));
+								VRenderView* vrv = vr_frame->GetView(str);
+								if (vrv)
+								{
+									str = GetItemText(par_item);
+									DataGroup* group = vrv->GetGroup(str);
+									vr_frame->GetAdjustView()->SetGroupLink(group);
+									vr_frame->OnSelection(2, vrv, group, vd, 0);
+									vrv->SetVolumeA(vd);
+									vr_frame->GetBrushToolDlg()->GetSettings(vrv);
+									vr_frame->GetMeasureDlg()->GetSettings(vrv);
+									vr_frame->GetTraceDlg()->GetSettings(vrv);
+								}
+							}
+							else if (par_item_data && par_item_data->type == 1)
+							{
+								//par is view
+								wxString str = GetItemText(par_item);
+								VRenderView* vrv = vr_frame->GetView(str);
+								if (vrv)
+								{
+									vr_frame->GetAdjustView()->SetGroupLink(0);
+									vr_frame->OnSelection(2, vrv, 0, vd);
+									vrv->SetVolumeA(vd);
+									vr_frame->GetBrushToolDlg()->GetSettings(vrv);
+									vr_frame->GetMeasureDlg()->GetSettings(vrv);
+									vr_frame->GetTraceDlg()->GetSettings(vrv);
+								}
+							}
+						}
+					}
+				}
+				break;
 			}
 
 			if (item_data->type == 2 ||
@@ -1164,6 +1310,31 @@ void DataTreeCtrl::Select(wxString view, wxString name)
 
 		if (!found)
 			SelectItem(GetRootItem());
+	}
+}
+
+void DataTreeCtrl::SelectROI(VolumeData* vd, int id)
+{
+	if (!vd)
+		return;
+	
+	wxString rname = vd->GetROIName(id);
+	wxTreeItemId vitem = FindTreeItem(vd->GetName());
+	if (!vitem.IsOk())
+			return;
+	
+	if (rname.IsEmpty())
+		SelectItem(vitem);
+	else
+	{
+		wxTreeItemId ritem = FindTreeItem(vitem, rname, true);
+		if (!ritem.IsOk())
+			SelectItem(vitem);
+		else
+		{
+			SelectItem(ritem);
+			TraversalExpand(ritem);
+		}
 	}
 }
 
@@ -1298,6 +1469,23 @@ void DataTreeCtrl::OnAct(wxTreeEvent &event)
 								group->ToggleDisp();
 								vrv->SetMeshPopDirty();
 							}
+						}
+					}
+				}
+				break;
+			case 7://volume segment
+			case 8://segment group
+				{
+					wxTreeItemId vol_item = GetParentVolItem(sel_item);
+					if (vol_item.IsOk())
+					{
+						wxString vname = GetItemText(vol_item);
+						VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(vname);
+						if (vd)
+						{
+							int id = vd->GetROIid(GetItemText(sel_item).ToStdWstring());
+							if (id != -1)
+								vd->SetROISel(GetItemText(sel_item).ToStdWstring(), !(vd->isSelID(id)));
 						}
 					}
 				}
@@ -1731,6 +1919,10 @@ wxTreeItemId DataTreeCtrl::AddViewItem(const wxString &text)
 void DataTreeCtrl::SetViewItemImage(const wxTreeItemId& item, int image)
 {
 	SetItemImage(item , image);
+
+	LayerInfo* item_data = (LayerInfo*)GetItemData(item);
+	if (item_data)
+		item_data->icon = image;
 }
 
 //volume data item
@@ -1755,6 +1947,71 @@ wxTreeItemId DataTreeCtrl::AddVolItem(wxTreeItemId par_item, VolumeData *vd)
 		BuildROITree(item, *vd->getROITree(), vd);
 
 	return item;
+}
+
+void DataTreeCtrl::UpdateROITreeIcons(VolumeData* vd)
+{
+	if (!vd) return;
+
+	wxTreeItemId v_item = FindTreeItem(vd->GetName());
+	if (!v_item.IsOk()) return;
+
+	UpdateROITreeIcons(v_item, vd);
+}
+
+void DataTreeCtrl::UpdateROITreeIcons(wxTreeItemId par_item, VolumeData* vd)
+{
+	if (!par_item.IsOk() || !vd) return;
+
+	wxTreeItemIdValue cookie;
+	wxTreeItemId child_item = GetFirstChild(par_item, cookie);
+	while (child_item.IsOk())
+	{
+		LayerInfo* item_data = (LayerInfo*)GetItemData(child_item);
+		if (!item_data)
+			continue;
+		int ii = item_data->icon / 2;
+		int id = item_data->id;
+		SetItemImage(child_item, vd->isSelID(id)?2*ii+1:2*ii);
+		item_data->icon = vd->isSelID(id)?2*ii+1:2*ii;
+
+		UpdateROITreeIcons(child_item, vd);
+		child_item = GetNextChild(par_item, cookie);
+	}
+}
+
+void DataTreeCtrl::UpdateROITreeIconColor(VolumeData* vd)
+{
+	if (!vd) return;
+
+	wxTreeItemId v_item = FindTreeItem(vd->GetName());
+	if (!v_item.IsOk()) return;
+
+	UpdateROITreeIconColor(v_item, vd);
+}
+
+void DataTreeCtrl::UpdateROITreeIconColor(wxTreeItemId par_item, VolumeData* vd)
+{
+	if (!par_item.IsOk() || !vd) return;
+
+	wxTreeItemIdValue cookie;
+	wxTreeItemId child_item = GetFirstChild(par_item, cookie);
+	while (child_item.IsOk())
+	{
+		LayerInfo* item_data = (LayerInfo*)GetItemData(child_item);
+		if (!item_data)
+			continue;
+		int ii = item_data->icon / 2;
+		int id = item_data->id;
+		unsigned char r = 255, g = 255, b = 255;
+		if (item_data->type == 7)
+			vd->GetIDColor(r, g, b, id);
+		wxColor wxc(r, g, b);
+		ChangeIconColor(ii, wxc);
+		
+		UpdateROITreeIconColor(child_item, vd);
+		child_item = GetNextChild(par_item, cookie);
+	}
 }
 
 void DataTreeCtrl::UpdateVolItem(wxTreeItemId item, VolumeData *vd)
@@ -1793,15 +2050,17 @@ void DataTreeCtrl::BuildROITree(wxTreeItemId par_item, const boost::property_tre
 				item_data->type = (id > 0) ? 7 : 8;//7-volume segment : 8-segmnet group
 				item_data->id = id;
 				SetItemData(item, item_data);
-				if (item_data->type == 7 && vd)
+				if (vd)
 				{
 					AppendIcon();
-					unsigned char r,g,b;
-					vd->GetIDColor(r, g, b, id);
+					unsigned char r = 255, g = 255, b = 255;
+					if (item_data->type == 7)
+						vd->GetIDColor(r, g, b, id);
 					wxColor wxc(r, g, b);
 					int ii = GetIconNum()-1;
 					ChangeIconColor(ii, wxc);
 					SetItemImage(item, vd->isSelID(id)?2*ii+1:2*ii);
+					item_data->icon = vd->isSelID(id)?2*ii+1:2*ii;
 				}
 
 				BuildROITree(item, subtree, vd);
@@ -1824,14 +2083,14 @@ wxTreeItemId DataTreeCtrl::FindTreeItem(wxString name)
 	return FindTreeItem(item, name);
 }
 
-wxTreeItemId DataTreeCtrl::FindTreeItem(wxTreeItemId par_item, wxString name)
+wxTreeItemId DataTreeCtrl::FindTreeItem(wxTreeItemId par_item, wxString name, bool roi_tree)
 {
 	wxTreeItemId item = par_item;
 	wxTreeItemId rval;
 	if (!item.IsOk()) return rval;
 
 	LayerInfo* item_data = (LayerInfo*)GetItemData(item);
-	if (item_data->type == 7 || item_data->type == 8)
+	if (!roi_tree && (item_data->type == 7 || item_data->type == 8))
 		return rval;
 
 	if (GetItemText(item) == name) return item;
@@ -1840,7 +2099,7 @@ wxTreeItemId DataTreeCtrl::FindTreeItem(wxTreeItemId par_item, wxString name)
 	wxTreeItemId child_item = GetFirstChild(item, cookie);
 	while (child_item.IsOk())
 	{
-		rval = FindTreeItem(child_item, name);
+		rval = FindTreeItem(child_item, name, roi_tree);
 		if (rval.IsOk()) return rval;
 		child_item = GetNextChild(item, cookie);
 	}
@@ -1851,6 +2110,10 @@ wxTreeItemId DataTreeCtrl::FindTreeItem(wxTreeItemId par_item, wxString name)
 void DataTreeCtrl::SetVolItemImage(const wxTreeItemId item, int image)
 {
 	SetItemImage(item, image);
+
+	LayerInfo* item_data = (LayerInfo*)GetItemData(item);
+	if (item_data)
+		item_data->icon = image;
 }
 
 //mesh data item
@@ -1866,6 +2129,10 @@ wxTreeItemId DataTreeCtrl::AddMeshItem(wxTreeItemId par_item, const wxString &te
 void DataTreeCtrl::SetMeshItemImage(const wxTreeItemId item, int image)
 {
 	SetItemImage(item, image);
+	
+	LayerInfo* item_data = (LayerInfo*)GetItemData(item);
+	if (item_data)
+		item_data->icon = image;
 }
 
 //annotation item
@@ -1881,6 +2148,10 @@ wxTreeItemId DataTreeCtrl::AddAnnotationItem(wxTreeItemId par_item, const wxStri
 void DataTreeCtrl::SetAnnotationItemImage(const wxTreeItemId item, int image)
 {
 	SetItemImage(item, image);
+
+	LayerInfo* item_data = (LayerInfo*)GetItemData(item);
+	if (item_data)
+		item_data->icon = image;
 }
 
 //group item
@@ -1896,6 +2167,10 @@ wxTreeItemId DataTreeCtrl::AddGroupItem(wxTreeItemId par_item, const wxString &t
 void DataTreeCtrl::SetGroupItemImage(const wxTreeItemId item, int image)
 {
 	SetItemImage(item, image);
+
+	LayerInfo* item_data = (LayerInfo*)GetItemData(item);
+	if (item_data)
+		item_data->icon = image;
 }
 
 //mesh group item
@@ -1911,6 +2186,10 @@ wxTreeItemId DataTreeCtrl::AddMGroupItem(wxTreeItemId par_item, const wxString &
 void DataTreeCtrl::SetMGroupItemImage(const wxTreeItemId item, int image)
 {
 	SetItemImage(item, image);
+
+	LayerInfo* item_data = (LayerInfo*)GetItemData(item);
+	if (item_data)
+		item_data->icon = image;
 }
 
 //brush commands (from the panel)
@@ -2178,7 +2457,7 @@ void DataTreeCtrl::LoadExpState(wxTreeItemId node, wxString prefix)
 			Collapse(item);
 	}
 	else
-		TravasalExpand(item);
+		TraversalExpand(item);
 
 	wxTreeItemIdValue cookie;
 	wxTreeItemId child_item = GetFirstChild(item, cookie);
@@ -2192,7 +2471,7 @@ void DataTreeCtrl::LoadExpState(wxTreeItemId node, wxString prefix)
 	}
 }
 
-void DataTreeCtrl::TravasalExpand(wxTreeItemId item)
+void DataTreeCtrl::TraversalExpand(wxTreeItemId item)
 {
 	if (!item.IsOk()) return;
 
@@ -2202,6 +2481,30 @@ void DataTreeCtrl::TravasalExpand(wxTreeItemId item)
 		Expand(parent);
 		parent = GetItemParent(parent);
 	}
+}
+
+wxTreeItemId DataTreeCtrl::GetParentVolItem(wxTreeItemId item)
+{
+	wxTreeItemId rval;
+
+	if (!item.IsOk()) return rval;
+
+	LayerInfo* item_data = (LayerInfo*)GetItemData(item);
+	if (item_data->type != 7 && item_data->type != 8)
+		return rval;
+
+	wxTreeItemId parent = GetItemParent(item);
+	while (parent.IsOk())
+	{
+		item_data = (LayerInfo*)GetItemData(parent);
+		if (item_data->type == 2)
+		{
+			rval = parent;
+			break;
+		}
+		parent = GetItemParent(parent);
+	}
+	return rval;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2395,6 +2698,17 @@ wxTreeItemId TreePanel::AddVolItem(wxTreeItemId par_item, VolumeData* vd)
 	return id;
 }
 
+void TreePanel::UpdateROITreeIcons(VolumeData* vd)
+{
+	if (m_datatree)
+		m_datatree->UpdateROITreeIcons(vd);
+}
+void TreePanel::UpdateROITreeIconColor(VolumeData* vd)
+{
+	if (m_datatree)
+		m_datatree->UpdateROITreeIconColor(vd);
+}
+
 void TreePanel::UpdateVolItem(wxTreeItemId item, VolumeData* vd)
 {
 	if (m_datatree)
@@ -2497,6 +2811,12 @@ void TreePanel::Select(wxString view, wxString name)
 {
 	if (m_datatree)
 		m_datatree->Select(view, name);
+}
+
+void TreePanel::SelectROI(VolumeData* vd, int id)
+{
+	if (m_datatree)
+		m_datatree->SelectROI(vd, id);
 }
 
 void TreePanel::SelectBrush(int id)
@@ -2868,4 +3188,12 @@ void TreePanel::LoadExpState()
 {
 	if (m_datatree) 
 		m_datatree->LoadExpState();
+}
+
+wxTreeItemId TreePanel::GetParentVolItem(wxTreeItemId item)
+{
+	if (m_datatree) 
+		return m_datatree->GetParentVolItem(item);
+	else
+		return wxTreeItemId();
 }

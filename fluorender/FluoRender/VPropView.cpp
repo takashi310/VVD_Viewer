@@ -795,6 +795,9 @@ void VPropView::SaveROIName()
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 		if (vr_frame)
 			vr_frame->UpdateTree();
+		TreePanel* tree_panel = vr_frame->GetTree();
+		if (tree_panel)
+			tree_panel->SelectROI(m_vd, m_vd->GetEditSelID());
 	}
 }
 
@@ -1410,8 +1413,6 @@ void VPropView::OnROIColorBtn(wxColourPickerEvent& event)
 		m_vd->SetIDColor(wxc.Red(), wxc.Green(), wxc.Blue());
 		
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-		if (vr_frame)
-			vr_frame->UpdateTree();
 
 		RefreshVRenderViews(true);
 	}

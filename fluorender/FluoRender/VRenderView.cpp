@@ -4767,9 +4767,20 @@ void VRenderGLView::Pick()
 {
 	if (m_draw_all)
 	{
+		VRenderFrame* frame = (VRenderFrame*)m_frame;
+		if (!frame) return;
+		TreePanel *tree_panel = frame->GetTree();
+		if (!tree_panel) return;
+
+		tree_panel->SetEvtHandlerEnabled(false);
+		tree_panel->Freeze();
+
 		PickVolume();
 		SelSegVolume(3);
 		PickMesh();
+
+		tree_panel->Thaw();
+		tree_panel->SetEvtHandlerEnabled(true);
 	}
 }
 
@@ -5040,11 +5051,11 @@ void VRenderGLView::SelSegVolume(int mode)
 			if (vprop_view)
 				vprop_view->UpdateUIsROI();
 
-			if (sel_changed && frame->GetTree())
+			if (/*sel_changed && */frame->GetTree())
 			{
 				frame->UpdateTree();
 				frame->GetTree()->SetFocus();
-				frame->GetTree()->Select(m_vrv->GetName(), picked_vd->GetName());
+				frame->GetTree()->SelectROI(picked_vd, picked_sel_id);
 			}
 		}
 	}

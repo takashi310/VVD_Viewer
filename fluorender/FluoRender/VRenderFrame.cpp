@@ -1260,10 +1260,13 @@ void VRenderFrame::UpdateTreeIcons()
 	if (!m_tree_panel || !m_tree_panel->GetTreeCtrl())
 		return;
 
+	m_tree_panel->SetEvtHandlerEnabled(false);
+	m_tree_panel->Freeze();
+
 	DataTreeCtrl* treectrl = m_tree_panel->GetTreeCtrl();
 	wxTreeItemId root = treectrl->GetRootItem();
 	wxTreeItemIdValue ck_view;
-	int counter = 0;
+	
 	for (i=0; i<(int)m_vrv_list.size(); i++)
 	{
 		VRenderView *vrv = m_vrv_list[i];
@@ -1291,6 +1294,12 @@ void VRenderFrame::UpdateTreeIcons()
 			if (!layer_item.IsOk())
 				continue;
 
+			LayerInfo* item_data = (LayerInfo*)treectrl->GetItemData(layer_item);
+			if (!item_data)
+				continue;
+
+			int iconid = item_data->icon / 2;
+
 			switch (layer->IsA())
 			{
 			case 2://volume
@@ -1298,8 +1307,9 @@ void VRenderFrame::UpdateTreeIcons()
 					VolumeData* vd = (VolumeData*)layer;
 					if (!vd)
 						break;
-					counter++;
-					m_tree_panel->SetVolItemImage(layer_item, vd->GetDisp()?2*counter+1:2*counter);
+					m_tree_panel->SetVolItemImage(layer_item, vd->GetDisp()?2*iconid+1:2*iconid);
+					if (vd->GetColormapMode() == 3)
+						m_tree_panel->UpdateROITreeIcons(vd);
 				}
 				break;
 			case 3://mesh
@@ -1307,8 +1317,7 @@ void VRenderFrame::UpdateTreeIcons()
 					MeshData* md = (MeshData*)layer;
 					if (!md)
 						break;
-					counter++;
-					m_tree_panel->SetMeshItemImage(layer_item, md->GetDisp()?2*counter+1:2*counter);
+					m_tree_panel->SetMeshItemImage(layer_item, md->GetDisp()?2*iconid+1:2*iconid);
 				}
 				break;
 			case 4://annotations
@@ -1316,8 +1325,7 @@ void VRenderFrame::UpdateTreeIcons()
 					Annotations* ann = (Annotations*)layer;
 					if (!ann)
 						break;
-					counter++;
-					m_tree_panel->SetAnnotationItemImage(layer_item, ann->GetDisp()?2*counter+1:2*counter);
+					m_tree_panel->SetAnnotationItemImage(layer_item, ann->GetDisp()?2*iconid+1:2*iconid);
 				}
 				break;
 			case 5://volume group
@@ -1339,8 +1347,13 @@ void VRenderFrame::UpdateTreeIcons()
 							volume_item = treectrl->GetNextChild(layer_item, ck_volume);
 						if (!volume_item.IsOk())
 							continue;
-						counter++;
-						m_tree_panel->SetVolItemImage(volume_item, vd->GetDisp()?2*counter+1:2*counter);
+						item_data = (LayerInfo*)treectrl->GetItemData(volume_item);
+						if (!item_data)
+							continue;
+						int iconid = item_data->icon / 2;
+						m_tree_panel->SetVolItemImage(volume_item, vd->GetDisp()?2*iconid+1:2*iconid);
+						if (vd->GetColormapMode() == 3)
+							m_tree_panel->UpdateROITreeIcons(vd);
 					}
 				}
 				break;
@@ -1363,21 +1376,31 @@ void VRenderFrame::UpdateTreeIcons()
 							mesh_item = treectrl->GetNextChild(layer_item, ck_mesh);
 						if (!mesh_item.IsOk())
 							continue;
-						counter++;
-						m_tree_panel->SetMeshItemImage(mesh_item, md->GetDisp()?2*counter+1:2*counter);
+						m_tree_panel->SetMeshItemImage(mesh_item, md->GetDisp()?2*iconid+1:2*iconid);
 					}
 				}
 				break;
 			}
 		}
 	}
+
+	m_tree_panel->Thaw();
+	m_tree_panel->SetEvtHandlerEnabled(true);
+
 	m_tree_panel->Refresh(false);
 }
 
 void VRenderFrame::UpdateTreeColors()
 {
 	int i, j, k;
-	int counter = 0;
+	if (!m_tree_panel || !m_tree_panel->GetTreeCtrl())
+		return;
+
+	m_tree_panel->SetEvtHandlerEnabled(false);
+	m_tree_panel->Freeze();
+
+	DataTreeCtrl* treectrl = m_tree_panel->GetTreeCtrl();
+
 	for (i=0 ; i<(int)m_vrv_list.size() ; i++)
 	{
 		VRenderView *vrv = m_vrv_list[i];
@@ -1385,6 +1408,21 @@ void VRenderFrame::UpdateTreeColors()
 		for (j=0; j<vrv->GetLayerNum(); j++)
 		{
 			TreeLayer* layer = vrv->GetLayer(j);
+			if (!layer)
+				continue;
+
+			wxString name = layer->GetName();
+			
+			wxTreeItemId layer_item = m_tree_panel->FindTreeItem(name);
+			if (!layer_item.IsOk())
+				continue;
+			
+			LayerInfo* item_data = (LayerInfo*)treectrl->GetItemData(layer_item);
+			if (!item_data)
+				continue;
+			
+			int iconid = item_data->icon / 2;
+
 			switch (layer->IsA())
 			{
 			case 0://root
@@ -1401,8 +1439,9 @@ void VRenderFrame::UpdateTreeColors()
 						(unsigned char)(c.r()*255),
 						(unsigned char)(c.g()*255),
 						(unsigned char)(c.b()*255));
-					m_tree_panel->ChangeIconColor(counter+1, wxc);
-					counter++;
+					m_tree_panel->ChangeIconColor(iconid, wxc);
+					if (vd->GetColormapMode() == 3)
+						m_tree_panel->UpdateROITreeIconColor(vd);
 				}
 				break;
 			case 3://mesh
@@ -1417,8 +1456,7 @@ void VRenderFrame::UpdateTreeColors()
 						(unsigned char)(diff.r()*255),
 						(unsigned char)(diff.g()*255),
 						(unsigned char)(diff.b()*255));
-					m_tree_panel->ChangeIconColor(counter+1, wxc);
-					counter++;
+					m_tree_panel->ChangeIconColor(iconid, wxc);
 				}
 				break;
 			case 4://annotations
@@ -1427,8 +1465,7 @@ void VRenderFrame::UpdateTreeColors()
 					if (!ann)
 						break;
 					wxColor wxc(255, 255, 255);
-					m_tree_panel->ChangeIconColor(counter+1, wxc);
-					counter++;
+					m_tree_panel->ChangeIconColor(iconid, wxc);
 				}
 				break;
 			case 5://group
@@ -1441,13 +1478,24 @@ void VRenderFrame::UpdateTreeColors()
 						VolumeData* vd = group->GetVolumeData(k);
 						if (!vd)
 							break;
+						
+						wxString v_name = vd->GetName();
+						wxTreeItemId v_item = m_tree_panel->FindTreeItem(v_name);
+						if (!v_item.IsOk())
+							continue;
+						LayerInfo* vitem_data = (LayerInfo*)treectrl->GetItemData(v_item);
+						if (!vitem_data)
+							continue;
+						iconid = vitem_data->icon / 2;
+
 						Color c = vd->GetColor();
 						wxColor wxc(
 							(unsigned char)(c.r()*255),
 							(unsigned char)(c.g()*255),
 							(unsigned char)(c.b()*255));
-						m_tree_panel->ChangeIconColor(counter+1, wxc);
-						counter++;
+						m_tree_panel->ChangeIconColor(iconid, wxc);
+						if (vd->GetColormapMode() == 3)
+							m_tree_panel->UpdateROITreeIconColor(vd);
 					}
 				}
 				break;
@@ -1468,14 +1516,17 @@ void VRenderFrame::UpdateTreeColors()
 							(unsigned char)(diff.r()*255),
 							(unsigned char)(diff.g()*255),
 							(unsigned char)(diff.b()*255));
-						m_tree_panel->ChangeIconColor(counter+1, wxc);
-						counter++;
+						m_tree_panel->ChangeIconColor(iconid, wxc);
 					}
 				}
 				break;
 			}
 		}
 	}
+	
+	m_tree_panel->Thaw();
+	m_tree_panel->SetEvtHandlerEnabled(true);
+
 	m_tree_panel->Refresh(false);
 }
 

@@ -46,12 +46,21 @@ class VolumeData;
 class LayerInfo : public wxTreeItemData
 {
 public:
+	LayerInfo()
+	{
+		type = -1;
+		id = -1;
+		icon = -1;
+	}
+
 	int type;	//0-root; 1-view; 
 				//2-volume data; 3-mesh data;
 				//5-group; 6-mesh group
 				//7-volume segment; 8-segment group
 
 	int id;		//for volume segments
+
+	int icon;
 };
 
 class DataTreeCtrl: public wxTreeCtrl
@@ -62,6 +71,8 @@ class DataTreeCtrl: public wxTreeCtrl
 		ID_ToggleDisp,
 		ID_Isolate,
 		ID_ShowAll,
+		ID_ShowAllSeg,
+		ID_HideAllSeg,
 		ID_RemoveData,
 		ID_CloseView,
 		ID_ManipulateData,
@@ -114,8 +125,10 @@ public:
 	wxTreeItemId AddVolItem(wxTreeItemId par_item, const wxString &text);
 	wxTreeItemId AddVolItem(wxTreeItemId par_item, VolumeData* vd);
 	void UpdateVolItem(wxTreeItemId item, VolumeData* vd);
-	wxTreeItemId FindTreeItem(wxTreeItemId par_item, wxString name);
+	void UpdateROITreeIcons(VolumeData* vd);
+	void UpdateROITreeIconColor(VolumeData* vd);
 	wxTreeItemId FindTreeItem(wxString name);
+	wxTreeItemId FindTreeItem(wxTreeItemId par_item, wxString name, bool roi_tree=false);
 	void SetVolItemImage(const wxTreeItemId item, int image);
 	//mesh data item
 	wxTreeItemId AddMeshItem(wxTreeItemId par_item, const wxString &text);
@@ -134,6 +147,7 @@ public:
 	wxString GetCurrentSel();
 	int TraversalSelect(wxTreeItemId item, wxString name);
 	void Select(wxString view, wxString name);
+	void SelectROI(VolumeData* vd, int id);
 
 	//brush commands (from the panel)
 	void BrushClear();
@@ -150,7 +164,8 @@ public:
 	void LoadExpState();
 	void LoadExpState(wxTreeItemId node, wxString prefix=wxT(""));
 
-	void TravasalExpand(wxTreeItemId item);
+	void TraversalExpand(wxTreeItemId item);
+	wxTreeItemId GetParentVolItem(wxTreeItemId item);
 
 	friend class TreePanel;
 
@@ -171,6 +186,8 @@ private:
 	//either enable(type=0), or disable(type=1)
 	void ChangeIconColor(int which, wxColor c, int type);
 
+	void UpdateROITreeIcons(wxTreeItemId par_item, VolumeData* vd);
+	void UpdateROITreeIconColor(wxTreeItemId par_item, VolumeData* vd);
 	void BuildROITree(wxTreeItemId par_item, const boost::property_tree::wptree& tree, VolumeData *vd);
 
 	void OnContextMenu(wxContextMenuEvent &event );
@@ -178,6 +195,8 @@ private:
 	void OnToggleDisp(wxCommandEvent& event);
 	void OnIsolate(wxCommandEvent& event);
 	void OnShowAll(wxCommandEvent& event);
+	void OnShowAllSeg(wxCommandEvent& event);
+	void OnHideAllSeg(wxCommandEvent& event);
 	void OnRemoveData(wxCommandEvent& event);
 	void OnCloseView(wxCommandEvent& event);
 	void OnManipulateData(wxCommandEvent& event);
@@ -254,6 +273,8 @@ public:
 	void SetViewItemImage(const wxTreeItemId& item, int image);
 	wxTreeItemId AddVolItem(wxTreeItemId par_item, const wxString &text);
 	wxTreeItemId AddVolItem(wxTreeItemId par_item, VolumeData* vd);
+	void UpdateROITreeIcons(VolumeData* vd);
+	void UpdateROITreeIconColor(VolumeData* vd);
 	void UpdateVolItem(wxTreeItemId item, VolumeData* vd);
 	wxTreeItemId FindTreeItem(wxTreeItemId par_item, wxString name);
 	wxTreeItemId FindTreeItem(wxString name);
@@ -271,6 +292,7 @@ public:
 	void UpdateSelection();
 	wxString GetCurrentSel();
 	void Select(wxString view, wxString name);
+	void SelectROI(VolumeData* vd, int id);
 
 	//set the brush icon down
 	void SelectBrush(int id);
@@ -291,6 +313,8 @@ public:
 
 	void SaveExpState();
 	void LoadExpState();
+
+	wxTreeItemId GetParentVolItem(wxTreeItemId item);
 
 private:
 	wxWindow* m_frame;
