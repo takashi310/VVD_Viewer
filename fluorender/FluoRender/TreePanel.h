@@ -28,6 +28,7 @@ DEALINGS IN THE SOFTWARE.
 #include <wx/wx.h>
 #include <wx/treectrl.h>
 #include "compatibility.h"
+#include <unordered_map>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/optional.hpp>
 
@@ -144,6 +145,13 @@ public:
 	void SetFix(bool fix) { m_fixed = fix; }
 	bool isFixed() { return m_fixed; }
 
+	void SaveExpState();
+	void SaveExpState(wxTreeItemId node, wxString prefix=wxT(""));
+	void LoadExpState();
+	void LoadExpState(wxTreeItemId node, wxString prefix=wxT(""));
+
+	void TravasalExpand(wxTreeItemId item);
+
 	friend class TreePanel;
 
 private:
@@ -155,6 +163,8 @@ private:
 	bool m_fixed;
 	//remember the pos
 	int m_scroll_pos;
+
+	std::unordered_map<wxString, bool> m_exp_state;
 
 private:
 	//change the color of just one icon of the dual,
@@ -278,6 +288,9 @@ public:
 
 	void SetFix(bool fix) { if (m_datatree) m_datatree->SetFix(fix); }
 	bool isFixed() { return m_datatree ? m_datatree->isFixed() : false; }
+
+	void SaveExpState();
+	void LoadExpState();
 
 private:
 	wxWindow* m_frame;

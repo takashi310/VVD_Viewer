@@ -5042,7 +5042,7 @@ void VRenderGLView::SelSegVolume(int mode)
 
 			if (sel_changed && frame->GetTree())
 			{
-				frame->UpdateROITree(picked_vd);
+				frame->UpdateTree();
 				frame->GetTree()->SetFocus();
 				frame->GetTree()->Select(m_vrv->GetName(), picked_vd->GetName());
 			}

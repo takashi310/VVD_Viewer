@@ -1761,6 +1761,8 @@ void DataTreeCtrl::UpdateVolItem(wxTreeItemId item, VolumeData *vd)
 {
 	if (!item.IsOk() || !vd) return;
 
+	SaveExpState();
+
 	SetItemText(item, vd->GetName());
 
 	LayerInfo* item_data = (LayerInfo *)GetItemData(item);
@@ -1770,7 +1772,7 @@ void DataTreeCtrl::UpdateVolItem(wxTreeItemId item, VolumeData *vd)
 	if (vd->GetColormapMode() == 3)
 		BuildROITree(item, *vd->getROITree(), vd);
 
-	Expand(item);
+	LoadExpState();
 
 	return;
 }
@@ -2123,6 +2125,83 @@ VRenderView* DataTreeCtrl::GetCurrentView()
 	}
 
 	return vrv;
+}
+
+void DataTreeCtrl::SaveExpState()
+{
+	wxTreeItemId item = GetRootItem();
+	if (!item.IsOk()) return;
+
+	m_exp_state.clear();
+
+	SaveExpState(item);
+}
+
+void DataTreeCtrl::SaveExpState(wxTreeItemId node, wxString prefix)
+{
+	wxTreeItemId item = node;
+	if (!item.IsOk()) return;
+	
+	m_exp_state[prefix + GetItemText(item)] = IsExpanded(item);
+
+	wxTreeItemIdValue cookie;
+	wxTreeItemId child_item = GetFirstChild(item, cookie);
+	LayerInfo* item_data = (LayerInfo*)GetItemData(item);
+	if (item_data->type == 2)
+		prefix = GetItemText(item) + wxT(".");
+	while (child_item.IsOk())
+	{
+		SaveExpState(child_item, prefix);
+		child_item = GetNextChild(item, cookie);
+	}
+}
+
+void DataTreeCtrl::LoadExpState()
+{
+	wxTreeItemId item = GetRootItem();
+	if (!item.IsOk()) return;
+
+	LoadExpState(item);
+}
+
+void DataTreeCtrl::LoadExpState(wxTreeItemId node, wxString prefix)
+{
+	wxTreeItemId item = node;
+	if (!item.IsOk()) return;
+	
+	wxString name = prefix + GetItemText(item);
+	if (m_exp_state.find(name) != m_exp_state.end())
+	{
+		if (m_exp_state[name])
+			Expand(item);
+		else
+			Collapse(item);
+	}
+	else
+		TravasalExpand(item);
+
+	wxTreeItemIdValue cookie;
+	wxTreeItemId child_item = GetFirstChild(item, cookie);
+	LayerInfo* item_data = (LayerInfo*)GetItemData(item);
+	if (item_data->type == 2)
+		prefix = GetItemText(item) + wxT(".");
+	while (child_item.IsOk())
+	{
+		LoadExpState(child_item, prefix);
+		child_item = GetNextChild(item, cookie);
+	}
+}
+
+void DataTreeCtrl::TravasalExpand(wxTreeItemId item)
+{
+	if (!item.IsOk()) return;
+
+	wxTreeItemId parent = GetItemParent(item);
+	while (parent.IsOk())
+	{
+		Expand(parent);
+		parent = GetItemParent(parent);
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2777,4 +2856,16 @@ VRenderView* TreePanel::GetCurrentView()
 	if (!m_datatree) return NULL;
 
 	return m_datatree->GetCurrentView();
+}
+
+void TreePanel::SaveExpState()
+{
+	if (m_datatree) 
+		m_datatree->SaveExpState();
+}
+
+void TreePanel::LoadExpState()
+{
+	if (m_datatree) 
+		m_datatree->LoadExpState();
 }

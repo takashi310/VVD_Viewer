@@ -115,12 +115,13 @@ namespace FLIVR
 		glGenVertexArrays(1, &m_quad_vao);
 
 		init_palette();
-
+/*
 		roi_tree_.add(L"-3", L"G3");
 		roi_tree_.add(L"-3.-2", L"G2");
 		roi_tree_.add(L"-3.-2.71", L"TEST71");
 		roi_tree_.add(L"-4", L"G4");
 		roi_tree_.add(L"-4.49", L"TEST49");
+*/
 	}
 
 	TextureRenderer::TextureRenderer(const TextureRenderer& copy)

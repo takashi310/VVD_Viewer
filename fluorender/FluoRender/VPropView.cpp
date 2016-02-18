@@ -794,7 +794,7 @@ void VPropView::SaveROIName()
 
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 		if (vr_frame)
-			vr_frame->UpdateROITree(m_vd);
+			vr_frame->UpdateTree();
 	}
 }
 
@@ -1411,7 +1411,7 @@ void VPropView::OnROIColorBtn(wxColourPickerEvent& event)
 		
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 		if (vr_frame)
-			vr_frame->UpdateROITree(m_vd);
+			vr_frame->UpdateTree();
 
 		RefreshVRenderViews(true);
 	}
@@ -1617,7 +1617,7 @@ void VPropView::OnIDCLCheck(wxCommandEvent &event)
 			adjust_view->UpdateSync();
 		
 		UpdateUIsROI();
-		vr_frame->UpdateROITree(m_vd);
+		vr_frame->UpdateTree();
 	}
 
 	if (m_vd)

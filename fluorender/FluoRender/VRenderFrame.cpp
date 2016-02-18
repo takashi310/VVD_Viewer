@@ -634,6 +634,7 @@ VRenderFrame::VRenderFrame(
 	SetMenuBar(m_top_menu);
 #endif
 
+	m_tree_panel->ExpandAll();
 }
 
 VRenderFrame::~VRenderFrame()
@@ -1480,6 +1481,11 @@ void VRenderFrame::UpdateTreeColors()
 
 void VRenderFrame::UpdateTree(wxString name, bool set_calc)
 {
+	m_tree_panel->SaveExpState();
+
+	m_tree_panel->SetEvtHandlerEnabled(false);
+	m_tree_panel->Freeze();
+
 	m_tree_panel->DeleteAll();
 	m_tree_panel->ClearIcons();
 
@@ -1654,7 +1660,10 @@ void VRenderFrame::UpdateTree(wxString name, bool set_calc)
 		}
 	}
 
-	m_tree_panel->ExpandAll();
+	m_tree_panel->LoadExpState();
+
+	m_tree_panel->Thaw();
+	m_tree_panel->SetEvtHandlerEnabled(true);
 }
 
 void VRenderFrame::UpdateROITree(VolumeData *vd, bool set_calc)
