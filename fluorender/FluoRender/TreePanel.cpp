@@ -2579,30 +2579,43 @@ void DataTreeCtrl::LoadExpState()
 	LoadExpState(item);
 }
 
-void DataTreeCtrl::LoadExpState(wxTreeItemId node, wxString prefix)
+void DataTreeCtrl::LoadExpState(wxTreeItemId node, wxString prefix, bool expand_newitem)
 {
 	wxTreeItemId item = node;
 	if (!item.IsOk()) return;
 	
+	bool is_new = false;
 	wxString name = prefix + GetItemText(item);
 	if (m_exp_state.find(name) != m_exp_state.end())
 	{
+		is_new = false;
 		if (m_exp_state[name])
 			Expand(item);
 		else
 			Collapse(item);
 	}
 	else
-		TraversalExpand(item);
+	{
+		is_new = true;
+		if (expand_newitem)
+			TraversalExpand(item);
+		else
+			Collapse(item);
+	}
 
 	wxTreeItemIdValue cookie;
 	wxTreeItemId child_item = GetFirstChild(item, cookie);
 	LayerInfo* item_data = (LayerInfo*)GetItemData(item);
-	if (item_data->type == 2)
+	bool expand_newitem_child = expand_newitem;
+	if (item_data && item_data->type == 2)
+	{
 		prefix = GetItemText(item) + wxT(".");
+		if (is_new)
+			expand_newitem_child = false;
+	}
 	while (child_item.IsOk())
 	{
-		LoadExpState(child_item, prefix);
+		LoadExpState(child_item, prefix, expand_newitem_child);
 		child_item = GetNextChild(item, cookie);
 	}
 }
@@ -2641,6 +2654,28 @@ wxTreeItemId DataTreeCtrl::GetParentVolItem(wxTreeItemId item)
 		parent = GetItemParent(parent);
 	}
 	return rval;
+}
+
+void DataTreeCtrl::ExpandDataTreeItem(wxString name, bool expand_children)
+{
+	wxTreeItemId item = FindTreeItem(name);
+	if (!item.IsOk()) return;
+
+	if (expand_children)
+		ExpandAllChildren(item);
+	else
+		Expand(item);
+}
+
+void DataTreeCtrl::CollapseDataTreeItem(wxString name, bool collapse_children)
+{
+	wxTreeItemId item = FindTreeItem(name);
+	if (!item.IsOk()) return;
+
+	if (collapse_children)
+		CollapseAllChildren(item);
+	else
+		Collapse(item);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3340,4 +3375,16 @@ wxTreeItemId TreePanel::GetNextSibling_loop(wxTreeItemId item)
 		return m_datatree->GetNextSibling_loop(item);
 	else
 		return wxTreeItemId();
+}
+
+void TreePanel::ExpandDataTreeItem(wxString name, bool expand_children)
+{
+	if (m_datatree) 
+		m_datatree->ExpandDataTreeItem(name, expand_children);
+}
+
+void TreePanel::CollapseDataTreeItem(wxString name, bool collapse_children)
+{
+	if (m_datatree) 
+		m_datatree->CollapseDataTreeItem(name, collapse_children);
 }

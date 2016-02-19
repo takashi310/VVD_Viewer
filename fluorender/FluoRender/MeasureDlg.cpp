@@ -743,7 +743,7 @@ wxPanel(parent, id, pos, size, style, name),
 
 	wxStaticLine *st_line = new wxStaticLine(this);
 
-	wxStaticText *st = new wxStaticText(this, 0, "Setting Method:",
+	wxStaticText *st = new wxStaticText(this, 0, "Pointing Method:",
 		wxDefaultPosition, wxSize(100, -1), wxALIGN_CENTER);
 
 	//options

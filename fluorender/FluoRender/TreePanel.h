@@ -164,10 +164,12 @@ public:
 	void SaveExpState();
 	void SaveExpState(wxTreeItemId node, wxString prefix=wxT(""));
 	void LoadExpState();
-	void LoadExpState(wxTreeItemId node, wxString prefix=wxT(""));
+	void LoadExpState(wxTreeItemId node, wxString prefix=wxT(""), bool expand_newitem=true);
 
 	void TraversalExpand(wxTreeItemId item);
 	wxTreeItemId GetParentVolItem(wxTreeItemId item);
+	void ExpandDataTreeItem(wxString name, bool expand_children=false);
+	void CollapseDataTreeItem(wxString name, bool collapse_children=false);
 
 	friend class TreePanel;
 
@@ -319,6 +321,8 @@ public:
 
 	wxTreeItemId GetParentVolItem(wxTreeItemId item);
 	wxTreeItemId GetNextSibling_loop(wxTreeItemId item);
+	void ExpandDataTreeItem(wxString name, bool expand_children=false);
+	void CollapseDataTreeItem(wxString name, bool collapse_children=false);
 
 private:
 	wxWindow* m_frame;
