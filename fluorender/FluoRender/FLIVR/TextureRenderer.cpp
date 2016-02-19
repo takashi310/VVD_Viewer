@@ -116,14 +116,14 @@ namespace FLIVR
 		glGenVertexArrays(1, &m_quad_vao);
 
 		init_palette();
-
+/*
 		roi_tree_.add(L"-3", L"G3");
 		roi_tree_.add(L"-3.-2", L"G2");
 		roi_tree_.add(L"-3.-2.71", L"TEST71");
 		roi_tree_.add(L"-3.-2.25", L"TEST25");
 		roi_tree_.add(L"-4", L"G4");
 		roi_tree_.add(L"-4.49", L"TEST49");
-
+*/
 		set_roi_select_r(roi_tree_, true);
 
 		update_palette(desel_palette_mode_, desel_col_fac_);
@@ -308,11 +308,10 @@ namespace FLIVR
 	{
 		return get_roi_path(id, roi_tree_, L"");
 	}
-	boost::optional<wstring> TextureRenderer::get_roi_path(int id, const wptree& tree, wstring parent)
+	boost::optional<wstring> TextureRenderer::get_roi_path(int id, const wptree& tree, const wstring &parent)
 	{
 		for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
 		{
-			wptree subtree = child->second;
 			wstring c_path = (parent.empty() ? L"" : parent + L".") + child->first;
 			try
 			{
@@ -324,7 +323,7 @@ namespace FLIVR
 			{
 				cerr << "TextureRenderer::get_roi_path(int id, const wptree& tree): bad_lexical_cast" << endl;
 			}
-			if (auto rval = get_roi_path(id, subtree, c_path))
+			if (auto rval = get_roi_path(id, child->second, c_path))
 				return rval;
 		}
 
@@ -335,18 +334,17 @@ namespace FLIVR
 	{
 		return get_roi_path(name, roi_tree_, L"");
 	}
-	boost::optional<wstring> TextureRenderer::get_roi_path(wstring name, const wptree& tree, wstring parent)
+	boost::optional<wstring> TextureRenderer::get_roi_path(wstring name, const wptree& tree, const wstring& parent)
 	{
 		for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
 		{
-			wptree subtree = child->second;
 			wstring c_path = (parent.empty() ? L"" : parent + L".") + child->first;
 			if (const auto val = tree.get_optional<wstring>(child->first))
 			{
 				if (val == name)
 					return c_path;
 			}
-			if (auto rval = get_roi_path(name, subtree, c_path))
+			if (auto rval = get_roi_path(name, child->second, c_path))
 				return rval;
 		}
 
@@ -501,6 +499,72 @@ namespace FLIVR
 		return -1;
 	}
 
+	void TextureRenderer::move_roi_node(int src_id, int dst_id)
+	{
+		auto path = get_roi_path(src_id);
+		if (!path) return;
+		
+		wptree subtree = roi_tree_.get_child(*path);
+		erase_node(src_id);
+
+		if (dst_id > 0)
+			insert_roi_node(roi_tree_, dst_id, subtree, src_id);
+		else if (dst_id < -1) 
+		{
+			if (auto dst_par_path = get_roi_path(dst_id))
+			{
+				try
+				{
+					wstring dst_path = *dst_par_path + L"." + boost::lexical_cast<wstring>(src_id);
+					roi_tree_.put_child(dst_path, subtree);
+				}
+				catch (boost::bad_lexical_cast e)
+				{
+					cerr << "TextureRenderer::move_roi_node(int src_id, int dst_id): bad_lexical_cast" << endl;
+				}
+			}
+		}
+		else if (dst_id == -1)
+		{
+			try
+			{
+				roi_tree_.put_child(boost::lexical_cast<wstring>(src_id), subtree);
+			}
+			catch (boost::bad_lexical_cast e)
+			{
+				cerr << "TextureRenderer::move_roi_node(int src_id, int dst_id): bad_lexical_cast 2" << endl;
+			}
+		}
+	}
+	
+	bool TextureRenderer::insert_roi_node(wptree& tree, int dst_id, const wptree& node, int id)
+	{
+		for (wptree::iterator child = tree.begin(); child != tree.end(); ++child)
+		{
+			wstring strid = child->first;
+			int cid = -1;
+			try
+			{
+				cid = boost::lexical_cast<int>(strid);
+				if (dst_id == cid)
+				{
+					wptree::value_type v(boost::lexical_cast<wstring>(id), node);
+					tree.insert(child, v); 
+					return true;
+				}
+			}
+			catch (boost::bad_lexical_cast e)
+			{
+				cerr << "TextureRenderer::insert_roi_node(wptree& tree, int dst_id, const wptree& node, int id): bad_lexical_cast" << endl;
+			}
+			
+			if (insert_roi_node(child->second, dst_id, node, id))
+				return true;
+		}
+
+		return false;
+	}
+
 	void TextureRenderer::erase_node(int id)
 	{
 		int edid = (id == -1) ? edit_sel_id_ : id;
@@ -638,7 +702,7 @@ namespace FLIVR
 		}
 	}
 
-	void TextureRenderer::set_roi_select_r(boost::property_tree::wptree& tree, bool select)
+	void TextureRenderer::set_roi_select_r(const boost::property_tree::wptree& tree, bool select)
 	{
 		for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
 		{
@@ -664,8 +728,7 @@ namespace FLIVR
 				cerr << "TextureRenderer::toggle_roi_select(boost::property_tree::wptree& tree, bool select): bad_lexical_cast" << endl;
 			}
 
-			wptree subtree = child->second;
-			set_roi_select_r(subtree, select);
+			set_roi_select_r(child->second, select);
 		}
 	}
 
@@ -698,8 +761,7 @@ namespace FLIVR
 					{
 						if (*ite >= 0)
 							sel_segs_.insert(*ite);
-						wptree subtree = child->second;
-						update_sel_segs(subtree);
+						update_sel_segs(child->second);
 					}
 				}
 			}

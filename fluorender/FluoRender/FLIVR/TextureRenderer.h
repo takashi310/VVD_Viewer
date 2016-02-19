@@ -183,18 +183,20 @@ namespace FLIVR
 		 int add_roi_group_node(wstring parent_name=L"", wstring name=L"");
 		 int get_available_group_id();
 		 int get_next_sibling_roi(int id);
+		 void move_roi_node(int src_id, int dst_id);
+		 bool insert_roi_node(boost::property_tree::wptree& tree, int dst_id, const boost::property_tree::wptree& node, int id);
 		 void erase_node(int id=-1);
 		 void erase_node(wstring name);
 		 wstring get_roi_name(int id=-1);
 		 void set_roi_select(wstring name, bool select, bool traverse=false);
-		 void set_roi_select_r(boost::property_tree::wptree& tree, bool select);
+		 void set_roi_select_r(const boost::property_tree::wptree& tree, bool select);
 		 void update_sel_segs();
 		 void update_sel_segs(const boost::property_tree::wptree& tree);
 		 boost::property_tree::wptree *get_roi_tree(){ return &roi_tree_; }
 		 boost::optional<wstring> get_roi_path(int id);
-		 boost::optional<wstring> get_roi_path(int id, const boost::property_tree::wptree& tree, wstring parent);
+		 boost::optional<wstring> get_roi_path(int id, const boost::property_tree::wptree& tree, const wstring& parent);
 		 boost::optional<wstring> get_roi_path(wstring name);
-		 boost::optional<wstring> get_roi_path(wstring name, const boost::property_tree::wptree& tree, wstring parent);
+		 boost::optional<wstring> get_roi_path(wstring name, const boost::property_tree::wptree& tree, const wstring& parent);
 		 int get_roi_id(wstring name);
 		 void set_id_color(unsigned char r, unsigned char g, unsigned char b, bool update=true, int id=-1);
 		 void get_id_color(unsigned char &r, unsigned char &g, unsigned char &b, int id=-1);

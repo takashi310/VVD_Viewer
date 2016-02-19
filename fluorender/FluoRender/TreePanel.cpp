@@ -1639,13 +1639,13 @@ void DataTreeCtrl::OnBeginDrag(wxTreeEvent& event)
 			case 6://mesh group
 				event.Allow();
 				break;
-/*			case 7://volume segment
+			case 7://volume segment
 				event.Allow();
 				break;
 			case 8://segment group
 				event.Allow();
 				break;
-*/			}
+			}
 		}
 	}
 }
@@ -1664,214 +1664,261 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 
 	if (src_item.IsOk() && dst_item.IsOk() &&
 		src_par_item.IsOk() &&
-		dst_par_item.IsOk() && vr_frame)
+		dst_par_item.IsOk() &&
+		vr_frame)
 	{
-		int src_type = ((LayerInfo*)GetItemData(src_item))->type;
-		int src_par_type = ((LayerInfo*)GetItemData(src_par_item))->type;
-		int dst_type = ((LayerInfo*)GetItemData(dst_item))->type;
-		int dst_par_type = ((LayerInfo*)GetItemData(dst_par_item))->type;
+		LayerInfo* src_item_data = (LayerInfo*)GetItemData(src_item);
+		LayerInfo* src_par_item_data = (LayerInfo*)GetItemData(src_par_item);
+		LayerInfo* dst_item_data = (LayerInfo*)GetItemData(dst_item);
+		LayerInfo* dst_par_item_data = (LayerInfo*)GetItemData(dst_par_item);
 
-		wxString src_name = GetItemText(src_item);
-		wxString src_par_name = GetItemText(src_par_item);
-		wxString dst_name = GetItemText(dst_item);
-		wxString dst_par_name = GetItemText(dst_par_item);
-
-		if (src_par_type == 1 &&
-			dst_par_type == 1 &&
-			src_par_name == dst_par_name &&
-			src_name != dst_name)
+		if (src_item_data && src_par_item_data &&
+			dst_item_data && dst_par_item_data)
 		{
-			//move within the same view
-			if (src_type == 2 && dst_type == 5)
+
+			int src_type = src_item_data->type;
+			int src_par_type = src_par_item_data->type;
+			int dst_type = dst_item_data->type;
+			int dst_par_type = dst_par_item_data->type;
+
+			wxString src_name = GetItemText(src_item);
+			wxString src_par_name = GetItemText(src_par_item);
+			wxString dst_name = GetItemText(dst_item);
+			wxString dst_par_name = GetItemText(dst_par_item);
+
+			VolumeData *vd = NULL;
+
+			if (src_par_type == 1 &&
+				dst_par_type == 1 &&
+				src_par_name == dst_par_name &&
+				src_name != dst_name)
 			{
-				//move volume to the group in the same view
+				//move within the same view
+				if (src_type == 2 && dst_type == 5)
+				{
+					//move volume to the group in the same view
+					VRenderView* vrv = vr_frame->GetView(src_par_name);
+					if (vrv)
+					{
+						wxString str("");
+						vrv->MoveLayertoGroup(dst_name, src_name, str);
+					}
+				}
+				else if (src_type==3 && dst_type==6)
+				{
+					//move mesh into a group
+					VRenderView* vrv = vr_frame->GetView(src_par_name);
+					if (vrv)
+					{
+						wxString str("");
+						vrv->MoveMeshtoGroup(dst_name, src_name, str);
+					}
+				}
+				else
+				{
+					VRenderView* vrv = vr_frame->GetView(src_par_name);
+					if (vrv)
+						vrv->MoveLayerinView(src_name, dst_name);
+				}
+			}
+			else if (src_par_type == 5 &&
+				dst_par_type == 5 &&
+				src_par_name == dst_par_name &&
+				src_name != dst_name)
+			{
+				//move volume within the same group
+				wxString str = GetItemText(GetItemParent(src_par_item));
+				VRenderView* vrv = vr_frame->GetView(str);
+				if (vrv)
+					vrv->MoveLayerinGroup(src_par_name, src_name, dst_name);
+			}
+			else if (src_par_type == 5 && //par is group
+				src_type == 2 && //src is volume
+				dst_par_type == 1 && //dst's par is view
+				dst_par_name == GetItemText(GetItemParent(src_par_item))) //in same view
+			{
+				//move volume outside of the group
+				if (dst_type == 5) //dst is group
+				{
+					VRenderView* vrv = vr_frame->GetView(dst_par_name);
+					if (vrv)
+					{
+						wxString str("");
+						vrv->MoveLayerfromtoGroup(src_par_name, dst_name, src_name, str);
+					}
+				}
+				else
+				{
+					VRenderView *vrv = vr_frame->GetView(dst_par_name);
+					if (vrv)
+						vrv->MoveLayertoView(src_par_name, src_name, dst_name);
+				}
+			}
+			else if (src_par_type == 1 && //src's par is view
+				src_type == 2 && //src is volume
+				dst_par_type == 5 && //dst's par is group
+				src_par_name == GetItemText(GetItemParent(dst_par_item))) //in the same view
+			{
+				//move volume into group
 				VRenderView* vrv = vr_frame->GetView(src_par_name);
 				if (vrv)
+					vrv->MoveLayertoGroup(dst_par_name, src_name, dst_name);
+			}
+			else if (src_par_type == 5 && //src's par is group
+				src_type == 2 && // src is volume
+				dst_par_type == 5 && //dst's par is group
+				dst_type == 2 && //dst is volume
+				GetItemText(GetItemParent(src_par_item)) == GetItemText(GetItemParent(dst_par_item)) && // in the same view
+				GetItemText(src_par_item) != GetItemText(dst_par_item))// par groups are different
+			{
+				//move volume from one group to another
+				wxString str = GetItemText(GetItemParent(src_par_item));
+				VRenderView* vrv = vr_frame->GetView(str);
+				if (vrv)
+					vrv->MoveLayerfromtoGroup(src_par_name, dst_par_name, src_name, dst_name);
+			}
+			else if (src_type == 2 && //src is volume
+				src_par_type == 5 && //src's par is group
+				dst_type == 1 && //dst is view
+				GetItemText(GetItemParent(src_par_item)) == dst_name) //in the same view
+			{
+				//move volume outside of the group
+				VRenderView* vrv = vr_frame->GetView(dst_name);
+				if (vrv)
 				{
 					wxString str("");
-					vrv->MoveLayertoGroup(dst_name, src_name, str);
+					vrv->MoveLayertoView(src_par_name, src_name, str);
 				}
 			}
-			else if (src_type==3 && dst_type==6)
+			else if (src_par_type == 6 &&
+				dst_par_type == 6 &&
+				src_par_name == dst_par_name &&
+				src_name != dst_name)
 			{
-				//move mesh into a group
+				//move mesh within the same group
+				wxString str = GetItemText(GetItemParent(src_par_item));
+				VRenderView* vrv = vr_frame->GetView(str);
+				if (vrv)
+					vrv->MoveMeshinGroup(src_par_name, src_name, dst_name);
+			}
+			else if (src_par_type == 6 && //par is group
+				src_type == 3 && //src is mesh
+				dst_par_type == 1 && //dst's par is view
+				dst_par_name == GetItemText(GetItemParent(src_par_item))) //in same view
+			{
+				//move mesh outside of the group
+				if (dst_type == 6) //dst is group
+				{
+					VRenderView* vrv = vr_frame->GetView(dst_par_name);
+					if (vrv)
+					{
+						wxString str("");
+						vrv->MoveMeshfromtoGroup(src_par_name, dst_name, src_name, str);
+					}
+				}
+				else
+				{
+					VRenderView *vrv = vr_frame->GetView(dst_par_name);
+					if (vrv)
+						vrv->MoveMeshtoView(src_par_name, src_name, dst_name);
+				}
+			}
+			else if (src_par_type == 1 && //src's par is view
+				src_type == 3 && //src is mesh
+				dst_par_type == 6 && //dst's par is group
+				src_par_name == GetItemText(GetItemParent(dst_par_item))) //in the same view
+			{
+				//move mesh into group
 				VRenderView* vrv = vr_frame->GetView(src_par_name);
 				if (vrv)
-				{
-					wxString str("");
-					vrv->MoveMeshtoGroup(dst_name, src_name, str);
-				}
+					vrv->MoveMeshtoGroup(dst_par_name, src_name, dst_name);
 			}
-			else
+			else if (src_par_type == 6 && //src's par is group
+				src_type == 3 && // src is mesh
+				dst_par_type == 6 && //dst's par is group
+				dst_type == 3 && //dst is mesh
+				GetItemText(GetItemParent(src_par_item)) == GetItemText(GetItemParent(dst_par_item)) && // in the same view
+				GetItemText(src_par_item) != GetItemText(dst_par_item))// par groups are different
 			{
-				VRenderView* vrv = vr_frame->GetView(src_par_name);
+				//move mesh from one group to another
+				wxString str = GetItemText(GetItemParent(src_par_item));
+				VRenderView* vrv = vr_frame->GetView(str);
 				if (vrv)
-					vrv->MoveLayerinView(src_name, dst_name);
+					vrv->MoveMeshfromtoGroup(src_par_name, dst_par_name, src_name, dst_name);
 			}
-		}
-		else if (src_par_type == 5 &&
-			dst_par_type == 5 &&
-			src_par_name == dst_par_name &&
-			src_name != dst_name)
-		{
-			//move volume within the same group
-			wxString str = GetItemText(GetItemParent(src_par_item));
-			VRenderView* vrv = vr_frame->GetView(str);
-			if (vrv)
-				vrv->MoveLayerinGroup(src_par_name, src_name, dst_name);
-		}
-		else if (src_par_type == 5 && //par is group
-			src_type == 2 && //src is volume
-			dst_par_type == 1 && //dst's par is view
-			dst_par_name == GetItemText(GetItemParent(src_par_item))) //in same view
-		{
-			//move volume outside of the group
-			if (dst_type == 5) //dst is group
+			else if (src_type == 3 && //src is mesh
+				src_par_type == 6 && //src's par is group
+				dst_type == 1 && //dst is view
+				GetItemText(GetItemParent(src_par_item)) == dst_name) //in the same view
 			{
-				VRenderView* vrv = vr_frame->GetView(dst_par_name);
+				//move mesh outside of the group
+				VRenderView* vrv = vr_frame->GetView(dst_name);
 				if (vrv)
 				{
 					wxString str("");
-					vrv->MoveLayerfromtoGroup(src_par_name, dst_name, src_name, str);
+					vrv->MoveMeshtoView(src_par_name, src_name, str);
 				}
 			}
-			else
+			else if ( (src_type == 7 || src_type == 8) && (dst_type == 7 || dst_type == 8))
 			{
-				VRenderView *vrv = vr_frame->GetView(dst_par_name);
-				if (vrv)
-					vrv->MoveLayertoView(src_par_name, src_name, dst_name);
-			}
-		}
-		else if (src_par_type == 1 && //src's par is view
-			src_type == 2 && //src is volume
-			dst_par_type == 5 && //dst's par is group
-			src_par_name == GetItemText(GetItemParent(dst_par_item))) //in the same view
-		{
-			//move volume into group
-			VRenderView* vrv = vr_frame->GetView(src_par_name);
-			if (vrv)
-				vrv->MoveLayertoGroup(dst_par_name, src_name, dst_name);
-		}
-		else if (src_par_type == 5 && //src's par is group
-			src_type == 2 && // src is volume
-			dst_par_type == 5 && //dst's par is group
-			dst_type == 2 && //dst is volume
-			GetItemText(GetItemParent(src_par_item)) == GetItemText(GetItemParent(dst_par_item)) && // in the same view
-			GetItemText(src_par_item) != GetItemText(dst_par_item))// par groups are different
-		{
-			//move volume from one group to another
-			wxString str = GetItemText(GetItemParent(src_par_item));
-			VRenderView* vrv = vr_frame->GetView(str);
-			if (vrv)
-				vrv->MoveLayerfromtoGroup(src_par_name, dst_par_name, src_name, dst_name);
-		}
-		else if (src_type == 2 && //src is volume
-			src_par_type == 5 && //src's par is group
-			dst_type == 1 && //dst is view
-			GetItemText(GetItemParent(src_par_item)) == dst_name) //in the same view
-		{
-			//move volume outside of the group
-			VRenderView* vrv = vr_frame->GetView(dst_name);
-			if (vrv)
-			{
-				wxString str("");
-				vrv->MoveLayertoView(src_par_name, src_name, str);
-			}
-		}
-		else if (src_par_type == 6 &&
-			dst_par_type == 6 &&
-			src_par_name == dst_par_name &&
-			src_name != dst_name)
-		{
-			//move mesh within the same group
-			wxString str = GetItemText(GetItemParent(src_par_item));
-			VRenderView* vrv = vr_frame->GetView(str);
-			if (vrv)
-				vrv->MoveMeshinGroup(src_par_name, src_name, dst_name);
-		}
-		else if (src_par_type == 6 && //par is group
-			src_type == 3 && //src is mesh
-			dst_par_type == 1 && //dst's par is view
-			dst_par_name == GetItemText(GetItemParent(src_par_item))) //in same view
-		{
-			//move mesh outside of the group
-			if (dst_type == 6) //dst is group
-			{
-				VRenderView* vrv = vr_frame->GetView(dst_par_name);
-				if (vrv)
+				wxTreeItemId s_vitem = GetParentVolItem(src_item);
+				wxTreeItemId d_vitem = GetParentVolItem(dst_item);
+				if (s_vitem.IsOk() && d_vitem.IsOk() && s_vitem == d_vitem && vr_frame->GetDataManager())
 				{
-					wxString str("");
-					vrv->MoveMeshfromtoGroup(src_par_name, dst_name, src_name, str);
+					vd = vr_frame->GetDataManager()->GetVolumeData(GetItemText(s_vitem));
+					if (vd)
+						vd->MoveROINode(src_item_data->id, dst_item_data->id);
 				}
 			}
-			else
+			else if ( (src_type == 7 || src_type == 8) && (dst_type == 2))
 			{
-				VRenderView *vrv = vr_frame->GetView(dst_par_name);
-				if (vrv)
-					vrv->MoveMeshtoView(src_par_name, src_name, dst_name);
+				wxTreeItemId s_vitem = GetParentVolItem(src_item);
+				if (s_vitem.IsOk() && s_vitem == dst_item && vr_frame->GetDataManager())
+				{
+					vd = vr_frame->GetDataManager()->GetVolumeData(GetItemText(s_vitem));
+					if (vd)
+						vd->MoveROINode(src_item_data->id, -1);
+				}
 			}
-		}
-		else if (src_par_type == 1 && //src's par is view
-			src_type == 3 && //src is mesh
-			dst_par_type == 6 && //dst's par is group
-			src_par_name == GetItemText(GetItemParent(dst_par_item))) //in the same view
-		{
-			//move mesh into group
-			VRenderView* vrv = vr_frame->GetView(src_par_name);
-			if (vrv)
-				vrv->MoveMeshtoGroup(dst_par_name, src_name, dst_name);
-		}
-		else if (src_par_type == 6 && //src's par is group
-			src_type == 3 && // src is mesh
-			dst_par_type == 6 && //dst's par is group
-			dst_type == 3 && //dst is mesh
-			GetItemText(GetItemParent(src_par_item)) == GetItemText(GetItemParent(dst_par_item)) && // in the same view
-			GetItemText(src_par_item) != GetItemText(dst_par_item))// par groups are different
-		{
-			//move mesh from one group to another
-			wxString str = GetItemText(GetItemParent(src_par_item));
-			VRenderView* vrv = vr_frame->GetView(str);
-			if (vrv)
-				vrv->MoveMeshfromtoGroup(src_par_name, dst_par_name, src_name, dst_name);
-		}
-		else if (src_type == 3 && //src is mesh
-			src_par_type == 6 && //src's par is group
-			dst_type == 1 && //dst is view
-			GetItemText(GetItemParent(src_par_item)) == dst_name) //in the same view
-		{
-			//move mesh outside of the group
-			VRenderView* vrv = vr_frame->GetView(dst_name);
-			if (vrv)
-			{
-				wxString str("");
-				vrv->MoveMeshtoView(src_par_name, src_name, str);
-			}
-		}
 
-		vr_frame->UpdateTree(src_name);
-		vr_frame->RefreshVRenderViews();
+			if ((src_type == 7 || src_type == 8) && vd)
+			{
+				int roi_id = src_item_data->id;
+				vr_frame->UpdateTree();
+				SelectROI(vd, roi_id);
+			}
+			else
+				vr_frame->UpdateTree(src_name);
+			vr_frame->RefreshVRenderViews();
+		}
 	}
 	else if (src_item.IsOk() && src_par_item.IsOk() &&
 		!dst_item.IsOk() && vr_frame)
 	{
-		//move volume out of the group
-		int src_type = ((LayerInfo*)GetItemData(src_item))->type;
-		int src_par_type = ((LayerInfo*)GetItemData(src_par_item))->type;
+		LayerInfo* src_item_data = (LayerInfo*)GetItemData(src_item);
+		LayerInfo* src_par_item_data = (LayerInfo*)GetItemData(src_par_item);
 
-		wxString src_name = GetItemText(src_item);
-		wxString src_par_name = GetItemText(src_par_item);
-
-		if (src_type == 2 && src_par_type == 5)
+		if (src_item_data && src_par_item_data)
 		{
-			wxString str = GetItemText(GetItemParent(src_par_item));
-			VRenderView* vrv = vr_frame->GetView(str);
-			if (vrv)
-			{
-				wxString str("");
-				vrv->MoveLayertoView(src_par_name, src_name, str);
+			//move volume out of the group
+			int src_type = src_item_data->type;
+			int src_par_type = src_par_item_data->type;
 
-				vr_frame->UpdateTree(src_name);
-				vr_frame->RefreshVRenderViews();
+			wxString src_name = GetItemText(src_item);
+			wxString src_par_name = GetItemText(src_par_item);
+
+			if (src_type == 2 && src_par_type == 5)
+			{
+				wxString str = GetItemText(GetItemParent(src_par_item));
+				VRenderView* vrv = vr_frame->GetView(str);
+				if (vrv)
+				{
+					wxString str("");
+					vrv->MoveLayertoView(src_par_name, src_name, str);
+
+					vr_frame->UpdateTree(src_name);
+					vr_frame->RefreshVRenderViews();
+				}
 			}
 		}
 	}
@@ -2219,7 +2266,7 @@ wxTreeItemId DataTreeCtrl::FindTreeItem(wxString name)
 	return FindTreeItem(item, name);
 }
 
-wxTreeItemId DataTreeCtrl::FindTreeItem(wxTreeItemId par_item, wxString name, bool roi_tree)
+wxTreeItemId DataTreeCtrl::FindTreeItem(wxTreeItemId par_item, const wxString& name, bool roi_tree)
 {
 	wxTreeItemId item = par_item;
 	wxTreeItemId rval;
@@ -2552,7 +2599,7 @@ void DataTreeCtrl::SaveExpState()
 	SaveExpState(item);
 }
 
-void DataTreeCtrl::SaveExpState(wxTreeItemId node, wxString prefix)
+void DataTreeCtrl::SaveExpState(wxTreeItemId node, const wxString& prefix)
 {
 	wxTreeItemId item = node;
 	if (!item.IsOk()) return;
@@ -2562,11 +2609,12 @@ void DataTreeCtrl::SaveExpState(wxTreeItemId node, wxString prefix)
 	wxTreeItemIdValue cookie;
 	wxTreeItemId child_item = GetFirstChild(item, cookie);
 	LayerInfo* item_data = (LayerInfo*)GetItemData(item);
+	wxString child_prefix = prefix;
 	if (item_data->type == 2)
-		prefix = GetItemText(item) + wxT(".");
+		child_prefix = GetItemText(item) + wxT(".");
 	while (child_item.IsOk())
 	{
-		SaveExpState(child_item, prefix);
+		SaveExpState(child_item, child_prefix);
 		child_item = GetNextChild(item, cookie);
 	}
 }
@@ -2579,7 +2627,7 @@ void DataTreeCtrl::LoadExpState()
 	LoadExpState(item);
 }
 
-void DataTreeCtrl::LoadExpState(wxTreeItemId node, wxString prefix, bool expand_newitem)
+void DataTreeCtrl::LoadExpState(wxTreeItemId node, const wxString& prefix, bool expand_newitem)
 {
 	wxTreeItemId item = node;
 	if (!item.IsOk()) return;
@@ -2607,15 +2655,16 @@ void DataTreeCtrl::LoadExpState(wxTreeItemId node, wxString prefix, bool expand_
 	wxTreeItemId child_item = GetFirstChild(item, cookie);
 	LayerInfo* item_data = (LayerInfo*)GetItemData(item);
 	bool expand_newitem_child = expand_newitem;
+	wxString child_prefix = prefix;
 	if (item_data && item_data->type == 2)
 	{
-		prefix = GetItemText(item) + wxT(".");
+		child_prefix = GetItemText(item) + wxT(".");
 		if (is_new)
 			expand_newitem_child = false;
 	}
 	while (child_item.IsOk())
 	{
-		LoadExpState(child_item, prefix, expand_newitem_child);
+		LoadExpState(child_item, child_prefix, expand_newitem_child);
 		child_item = GetNextChild(item, cookie);
 	}
 }

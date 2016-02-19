@@ -130,7 +130,7 @@ public:
 	void UpdateROITreeIconColor(VolumeData* vd);
 	wxTreeItemId GetNextSibling_loop(wxTreeItemId item);
 	wxTreeItemId FindTreeItem(wxString name);
-	wxTreeItemId FindTreeItem(wxTreeItemId par_item, wxString name, bool roi_tree=false);
+	wxTreeItemId FindTreeItem(wxTreeItemId par_item, const wxString& name, bool roi_tree=false);
 	void SetVolItemImage(const wxTreeItemId item, int image);
 	//mesh data item
 	wxTreeItemId AddMeshItem(wxTreeItemId par_item, const wxString &text);
@@ -162,9 +162,9 @@ public:
 	bool isFixed() { return m_fixed; }
 
 	void SaveExpState();
-	void SaveExpState(wxTreeItemId node, wxString prefix=wxT(""));
+	void SaveExpState(wxTreeItemId node, const wxString& prefix=wxT(""));
 	void LoadExpState();
-	void LoadExpState(wxTreeItemId node, wxString prefix=wxT(""), bool expand_newitem=true);
+	void LoadExpState(wxTreeItemId node, const wxString& prefix=wxT(""), bool expand_newitem=true);
 
 	void TraversalExpand(wxTreeItemId item);
 	wxTreeItemId GetParentVolItem(wxTreeItemId item);
