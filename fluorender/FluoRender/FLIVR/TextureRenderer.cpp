@@ -429,7 +429,8 @@ namespace FLIVR
 		return add_roi_group_node(pid, name);
 	}
 
-	int TextureRenderer::get_next_child_roi(int id)
+	//return the parent if there is no sibling.
+	int TextureRenderer::get_next_sibling_roi(int id)
 	{
 		if(auto path = get_roi_path(id))
 		{
@@ -442,7 +443,8 @@ namespace FLIVR
 			if (subtree)
 			{
 				bool found_myself = false;
-				int first_id = -1;
+				int prev_id = -1;
+				int temp_id = -1;
 				for (wptree::const_iterator child = subtree->begin(); child != subtree->end(); ++child)
 				{
 					wstring strid = child->first;
@@ -456,20 +458,21 @@ namespace FLIVR
 						cerr << "TextureRenderer::get_next_child_roi(int id): bad_lexical_cast" << endl;
 					}
 
-					if (child == subtree->begin())
-						first_id = cid;
-
 					if (found_myself)
 						return cid;
 
 					if (id == cid)
+					{
 						found_myself = true;
+						prev_id = temp_id;
+					}
+					temp_id = cid;
 				}
 
 				if (found_myself)
 				{
-					if (first_id != id)
-						return first_id;
+					if (prev_id != -1)
+						return prev_id;
 					else if (!prefix.empty())
 					{
 						auto pos = prefix.find_last_of(L'.');

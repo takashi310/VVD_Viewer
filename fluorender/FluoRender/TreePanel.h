@@ -128,6 +128,7 @@ public:
 	void UpdateVolItem(wxTreeItemId item, VolumeData* vd);
 	void UpdateROITreeIcons(VolumeData* vd);
 	void UpdateROITreeIconColor(VolumeData* vd);
+	wxTreeItemId GetNextSibling_loop(wxTreeItemId item);
 	wxTreeItemId FindTreeItem(wxString name);
 	wxTreeItemId FindTreeItem(wxTreeItemId par_item, wxString name, bool roi_tree=false);
 	void SetVolItemImage(const wxTreeItemId item, int image);
@@ -317,6 +318,7 @@ public:
 	void LoadExpState();
 
 	wxTreeItemId GetParentVolItem(wxTreeItemId item);
+	wxTreeItemId GetNextSibling_loop(wxTreeItemId item);
 
 private:
 	wxWindow* m_frame;

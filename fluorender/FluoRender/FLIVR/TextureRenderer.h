@@ -182,7 +182,7 @@ namespace FLIVR
 		 int add_roi_group_node(int parent_id, wstring name=L"");
 		 int add_roi_group_node(wstring parent_name=L"", wstring name=L"");
 		 int get_available_group_id();
-		 int get_next_child_roi(int id);
+		 int get_next_sibling_roi(int id);
 		 void erase_node(int id=-1);
 		 void erase_node(wstring name);
 		 wstring get_roi_name(int id=-1);

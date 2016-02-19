@@ -156,7 +156,7 @@ void DataTreeCtrl::DeleteSelection()
 			VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(vname);
 			if (!vd) return;
 
-			int next_id = vd->GetNextChildROI(item_data->id);
+			int next_id = vd->GetNextSiblingROI(item_data->id);
 			vd->EraseROITreeNode(name_data.ToStdWstring());
 			vr_frame->UpdateTree();
 			SelectROI(vd, next_id);
@@ -2180,6 +2180,36 @@ void DataTreeCtrl::BuildROITree(wxTreeItemId par_item, const boost::property_tre
 	}
 }
 
+//return the item's parent if there is no sibling.
+wxTreeItemId DataTreeCtrl::GetNextSibling_loop(wxTreeItemId item)
+{
+	wxTreeItemId def_rval;
+
+	if (!item.IsOk())
+		return def_rval;
+
+	wxTreeItemId next_sib = GetNextSibling(item);
+
+	if (next_sib.IsOk())
+		return next_sib;
+	else
+	{
+		wxTreeItemId prev_sib = GetPrevSibling(item);
+		if (prev_sib.IsOk())
+			return prev_sib;
+		else
+		{
+			wxTreeItemId pitem = GetItemParent(item);
+			if (pitem.IsOk())
+				return pitem;
+			else
+				return def_rval;
+		}
+	}
+
+	return def_rval;
+}
+
 wxTreeItemId DataTreeCtrl::FindTreeItem(wxString name)
 {
 	wxTreeItemId item = GetRootItem();
@@ -3300,6 +3330,14 @@ wxTreeItemId TreePanel::GetParentVolItem(wxTreeItemId item)
 {
 	if (m_datatree) 
 		return m_datatree->GetParentVolItem(item);
+	else
+		return wxTreeItemId();
+}
+
+wxTreeItemId TreePanel::GetNextSibling_loop(wxTreeItemId item)
+{
+	if (m_datatree) 
+		return m_datatree->GetNextSibling_loop(item);
 	else
 		return wxTreeItemId();
 }
