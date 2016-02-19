@@ -49,6 +49,7 @@ BEGIN_EVENT_TABLE(DataTreeCtrl, wxTreeCtrl)
 	EVT_MENU(ID_ManipulateData, DataTreeCtrl::OnManipulateData)
 	EVT_MENU(ID_AddDataGroup, DataTreeCtrl::OnAddDataGroup)
 	EVT_MENU(ID_AddMeshGroup, DataTreeCtrl::OnAddMeshGroup)
+	EVT_MENU(ID_AddSegGroup, DataTreeCtrl::OnAddSegGroup)
 	EVT_MENU(ID_Expand, DataTreeCtrl::OnExpand)
 	EVT_MENU(ID_Edit, DataTreeCtrl::OnEdit)
 	EVT_MENU(ID_Info, DataTreeCtrl::OnInfo)
@@ -155,8 +156,10 @@ void DataTreeCtrl::DeleteSelection()
 			VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(vname);
 			if (!vd) return;
 
+			int next_id = vd->GetNextChildROI(item_data->id);
 			vd->EraseROITreeNode(name_data.ToStdWstring());
-			vr_frame->UpdateTree(GetItemText(vitem));
+			vr_frame->UpdateTree();
+			SelectROI(vd, next_id);
 			vr_frame->RefreshVRenderViews();
 		}
 		else if (par_item_data)
@@ -314,21 +317,30 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 				}
 				break;
 			case 2:  //volume data
-				menu.Append(ID_ToggleDisp, "Toggle Visibility");
-				menu.Append(ID_Isolate, "Isolate");
-				menu.Append(ID_ShowAll, "Show All");
-				menu.AppendSeparator();
-				menu.Append(ID_RandomizeColor, "Randomize Colors");
-				menu.Append(ID_AddDataGroup, "Add Volume Group");
-				menu.Append(ID_RemoveData, "Delete");
-				menu.AppendSeparator();
-				menu.Append(ID_Edit, "Analyze...");
-				menu.Append(ID_Info, "Information...");
-				menu.Append(ID_Trace, "Components && Tracking...");
-				menu.Append(ID_NoiseCancelling, "Noise Reduction...");
-				menu.Append(ID_Counting, "Counting and Volume...");
-				menu.Append(ID_Colocalization, "Colocalization Analysis...");
-				menu.Append(ID_Convert, "Convert...");
+				{
+					wxString name = GetItemText(sel_item);
+					DataManager *d_manage = vr_frame->GetDataManager();
+					if (!d_manage) break;
+					VolumeData* vd = d_manage->GetVolumeData(name);
+					if (!vd) break;
+					menu.Append(ID_ToggleDisp, "Toggle Visibility");
+					menu.Append(ID_Isolate, "Isolate");
+					menu.Append(ID_ShowAll, "Show All");
+					menu.AppendSeparator();
+					menu.Append(ID_RandomizeColor, "Randomize Colors");
+					menu.Append(ID_AddDataGroup, "Add Volume Group");
+					if (vd->GetColormapMode() == 3)
+						menu.Append(ID_AddSegGroup, "Add Segment Group");
+					menu.Append(ID_RemoveData, "Delete");
+					menu.AppendSeparator();
+					menu.Append(ID_Edit, "Analyze...");
+					menu.Append(ID_Info, "Information...");
+					menu.Append(ID_Trace, "Components && Tracking...");
+					menu.Append(ID_NoiseCancelling, "Noise Reduction...");
+					menu.Append(ID_Counting, "Counting and Volume...");
+					menu.Append(ID_Colocalization, "Colocalization Analysis...");
+					menu.Append(ID_Convert, "Convert...");
+				}
 				break;
 			case 3:  //mesh data
 				menu.Append(ID_ToggleDisp, "Toggle Visibility");
@@ -367,11 +379,13 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 				break;
 			case 7:
 				menu.Append(ID_ToggleDisp, "Toggle Visibility");
+				menu.Append(ID_AddSegGroup, "Add Segment Group");
 				break;
 			case 8:
 				menu.Append(ID_ToggleDisp, "Toggle Visibility");
 				menu.Append(ID_ShowAllSeg, "Show All Children");
 				menu.Append(ID_HideAllSeg, "Hide All Children");
+				menu.Append(ID_AddSegGroup, "Add Segment Group");
 				break;
 			}
 			PopupMenu( &menu, point.x, point.y );
@@ -891,6 +905,67 @@ void DataTreeCtrl::OnAddDataGroup(wxCommandEvent& event)
 	}
 }
 
+void DataTreeCtrl::OnAddSegGroup(wxCommandEvent& event)
+{
+	if (m_fixed)
+		return;
+
+	wxTreeItemId sel_item = GetSelection();
+	if (!sel_item.IsOk())
+		return;
+
+	LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+	if (!item_data)
+		return;
+
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+	DataManager *d_manage = vr_frame->GetDataManager();
+	if (!d_manage) return;
+	
+	if (item_data->type == 2)
+	{
+		wxString vname = GetItemText(sel_item);
+		VolumeData* vd = d_manage->GetVolumeData(vname);
+		if (!vd) return;
+		int gid = vd->AddROIGroup();
+		vd->AddSelID(gid);
+		vr_frame->UpdateTree();
+		TreePanel* tree_panel = vr_frame->GetTree();
+		if (tree_panel)
+			tree_panel->SelectROI(vd, gid);
+	}
+	else if (item_data->type == 7 || item_data->type == 8)
+	{
+		wxTreeItemId vitem = GetParentVolItem(sel_item);
+		if (!vitem.IsOk()) return;
+		wxString vname = GetItemText(vitem);
+		VolumeData* vd = d_manage->GetVolumeData(vname);
+		if (!vd) return;
+
+		wxTreeItemId pitem = GetItemParent(sel_item);
+		if (!pitem.IsOk()) return;
+		LayerInfo* pitem_data = (LayerInfo*)GetItemData(pitem);
+		if (!pitem_data) return;
+
+		wxString parent_name(wxT(""));
+		if (item_data->type == 7)
+		{
+			if (pitem_data->type == 8)
+				parent_name = GetItemText(pitem);
+		}
+		else if (item_data->type == 8)
+			parent_name = GetItemText(sel_item);
+
+		int gid = vd->AddROIGroup(parent_name.ToStdWstring());
+		vd->AddSelID(gid);
+		vr_frame->UpdateTree();
+		TreePanel* tree_panel = vr_frame->GetTree();
+		if (tree_panel)
+			tree_panel->SelectROI(vd, gid);
+	}
+}
+
 void DataTreeCtrl::OnExpand(wxCommandEvent &event)
 {
 	wxTreeItemId sel_item = GetSelection();
@@ -1177,12 +1252,9 @@ void DataTreeCtrl::UpdateSelection()
 					if (!vitem_data) break;
 					VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(vname);
 					if (!vd) break;
-					if (item_data->type == 7)
-					{
-						int id = vd->GetROIid(name.ToStdWstring());
-						vd->SetEditSelID(id);
-					}
-
+					int id = vd->GetROIid(name.ToStdWstring());
+					vd->SetEditSelID(id);
+					
 					if (vr_frame->GetAdjustView())
 					{
 						wxTreeItemId par_item = GetItemParent(vitem);
@@ -1336,7 +1408,23 @@ void DataTreeCtrl::SelectROI(VolumeData* vd, int id)
 			return;
 	
 	if (rname.IsEmpty())
-		SelectItem(vitem);
+	{
+		wxTreeItemId sel_item = GetSelection();
+		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+		bool sel_sgroup = false;
+		if (sel_item.IsOk() && vr_frame)
+		{
+			LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+			wxTreeItemId sel_vitem = GetParentVolItem(sel_item);
+			if (item_data && sel_vitem.IsOk())
+			{
+				if (GetItemText(vitem) == GetItemText(sel_vitem) && item_data->id < -1)
+					sel_sgroup = true;
+			}
+		}
+
+		if (!sel_sgroup) SelectItem(vitem);
+	}
 	else
 	{
 		wxTreeItemId ritem = FindTreeItem(vitem, rname, true);
@@ -1551,7 +1639,13 @@ void DataTreeCtrl::OnBeginDrag(wxTreeEvent& event)
 			case 6://mesh group
 				event.Allow();
 				break;
-			}
+/*			case 7://volume segment
+				event.Allow();
+				break;
+			case 8://segment group
+				event.Allow();
+				break;
+*/			}
 		}
 	}
 }

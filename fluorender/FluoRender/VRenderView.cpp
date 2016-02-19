@@ -4775,9 +4775,11 @@ void VRenderGLView::Pick()
 		tree_panel->SetEvtHandlerEnabled(false);
 		tree_panel->Freeze();
 
-		PickVolume();
-		SelSegVolume(3);
-		PickMesh();
+		if (!SelSegVolume(3))
+		{
+			PickVolume();
+			PickMesh();
+		}
 
 		tree_panel->Thaw();
 		tree_panel->SetEvtHandlerEnabled(true);
@@ -4959,7 +4961,7 @@ void VRenderGLView::PickVolume()
 	}
 }
 
-void VRenderGLView::SelSegVolume(int mode)
+bool VRenderGLView::SelSegVolume(int mode)
 {
 	double dist = 0.0;
 	double min_dist = -1.0;
@@ -4967,6 +4969,7 @@ void VRenderGLView::SelSegVolume(int mode)
 	VolumeData* vd = 0;
 	VolumeData* picked_vd = 0;
 	int picked_sel_id = 0;
+	bool rval = false;
 	for (int i=0; i<(int)m_vd_pop_list.size(); i++)
 	{
 		vd = m_vd_pop_list[i];
@@ -5011,7 +5014,6 @@ void VRenderGLView::SelSegVolume(int mode)
 
 	if (picked_vd && picked_sel_id > 0)
 	{
-		bool sel_changed = false;
 		switch(mode)
 		{
 		case 0:
@@ -5019,7 +5021,6 @@ void VRenderGLView::SelSegVolume(int mode)
 				picked_vd->DelSelID(picked_sel_id);
 			else
 				picked_vd->AddSelID(picked_sel_id);
-			sel_changed = true;
 			break;
 		case 1:
 			if (picked_vd->isSelID(picked_sel_id))
@@ -5029,17 +5030,14 @@ void VRenderGLView::SelSegVolume(int mode)
 				picked_vd->ClearSelIDs();
 				picked_vd->AddSelID(picked_sel_id);
 			}
-			sel_changed = true;
 			break;
 		case 2:
 			picked_vd->DelSelID(picked_sel_id);
-			sel_changed = true;
 			break;
 		case 3:
 			if (picked_vd->isSelID(picked_sel_id))
 			{
 				picked_vd->SetEditSelID(picked_sel_id);
-				sel_changed = true;
 			}
 			break;
 		}
@@ -5051,14 +5049,17 @@ void VRenderGLView::SelSegVolume(int mode)
 			if (vprop_view)
 				vprop_view->UpdateUIsROI();
 
-			if (/*sel_changed && */frame->GetTree())
+			if (frame->GetTree())
 			{
-				frame->UpdateTree();
+				if (mode != 3) frame->UpdateTreeIcons();
 				frame->GetTree()->SetFocus();
 				frame->GetTree()->SelectROI(picked_vd, picked_sel_id);
 			}
 		}
+		rval = true;
 	}
+
+	return rval;
 }
 
 void VRenderGLView::OnIdle(wxIdleEvent& event)

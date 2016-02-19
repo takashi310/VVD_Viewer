@@ -420,7 +420,9 @@ public:
 
 	void SetFog(bool use_fog, double fog_intensity, double fog_start, double fog_end);
 
-	void SetROIName(wstring name, int id=-1){ if (m_vr) m_vr->set_roi_name(name, id); }
+	void SetROIName(wstring name, int id=-1, wstring parent_name=L""){ if (m_vr) m_vr->set_roi_name(name, id, parent_name); }
+	int AddROIGroup(wstring parent_name=L"", wstring name=L""){ return m_vr ? m_vr->add_roi_group_node(parent_name, name) : -1; }
+	int GetNextChildROI(int id){ return m_vr ? m_vr->get_next_child_roi(id) : -1; }
 	void EraseROITreeNode(int id=-1){ if (m_vr) m_vr->erase_node(id); }
 	void EraseROITreeNode(wstring name){ if (m_vr) m_vr->erase_node(name); }
 	wstring GetROIName(int id=-1){ return m_vr ? m_vr->get_roi_name(id) : wstring(); }

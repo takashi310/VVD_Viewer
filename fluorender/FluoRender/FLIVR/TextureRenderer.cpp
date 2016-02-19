@@ -40,6 +40,7 @@
 #include <FLIVR/palettes.h>
 #include <boost/foreach.hpp>
 #include <boost/lexical_cast.hpp>
+#include <sstream>
 //#include <iomanip>
 
 using boost::property_tree::wptree;
@@ -123,7 +124,7 @@ namespace FLIVR
 		roi_tree_.add(L"-4", L"G4");
 		roi_tree_.add(L"-4.49", L"TEST49");
 */
-		set_roi_select(roi_tree_, true);
+		set_roi_select_r(roi_tree_, true);
 
 		update_palette(desel_palette_mode_, desel_col_fac_);
 	}
@@ -303,11 +304,11 @@ namespace FLIVR
 		}
 	}
 
-	boost::optional<wstring> TextureRenderer::find_roi_leaf(int id)
+	boost::optional<wstring> TextureRenderer::get_roi_path(int id)
 	{
-		return find_roi_leaf(id, roi_tree_, L"");
+		return get_roi_path(id, roi_tree_, L"");
 	}
-	boost::optional<wstring> TextureRenderer::find_roi_leaf(int id, const wptree& tree, wstring parent)
+	boost::optional<wstring> TextureRenderer::get_roi_path(int id, const wptree& tree, wstring parent)
 	{
 		for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
 		{
@@ -321,20 +322,20 @@ namespace FLIVR
 			}
 			catch (boost::bad_lexical_cast e)
 			{
-				cerr << "TextureRenderer::find_roi_leaf(int id, const wptree& tree): bad_lexical_cast" << endl;
+				cerr << "TextureRenderer::get_roi_path(int id, const wptree& tree): bad_lexical_cast" << endl;
 			}
-			if (auto rval = find_roi_leaf(id, subtree, c_path))
+			if (auto rval = get_roi_path(id, subtree, c_path))
 				return rval;
 		}
 
 		return boost::none;
 	}
 
-	boost::optional<wstring> TextureRenderer::find_roi_leaf(wstring name)
+	boost::optional<wstring> TextureRenderer::get_roi_path(wstring name)
 	{
-		return find_roi_leaf(name, roi_tree_, L"");
+		return get_roi_path(name, roi_tree_, L"");
 	}
-	boost::optional<wstring> TextureRenderer::find_roi_leaf(wstring name, const wptree& tree, wstring parent)
+	boost::optional<wstring> TextureRenderer::get_roi_path(wstring name, const wptree& tree, wstring parent)
 	{
 		for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
 		{
@@ -345,50 +346,163 @@ namespace FLIVR
 				if (val == name)
 					return c_path;
 			}
-			if (auto rval = find_roi_leaf(name, subtree, c_path))
+			if (auto rval = get_roi_path(name, subtree, c_path))
 				return rval;
 		}
 
 		return boost::none;
 	}
 
-	void TextureRenderer::set_roi_name(wstring name, int id, wstring parent)
+	void TextureRenderer::set_roi_name(wstring name, int id, wstring parent_name)
 	{
 		int edid = (id == -1) ? edit_sel_id_ : id;
 		
-		if (edid < 0 || edid >= PALETTE_SIZE)
+		if (edid == -1)
 			return;
 
 		if (!name.empty())
 		{
-			if(auto path = find_roi_leaf(edid))
+			if(auto path = get_roi_path(edid))
 				roi_tree_.put(*path, name);
 			else
-				roi_tree_.add(boost::lexical_cast<wstring>(edid), name);
+			{
+				wstring prefix(L"");
+				if(auto path = get_roi_path(parent_name))
+					prefix = *path + L".";
+				roi_tree_.add(prefix + boost::lexical_cast<wstring>(edid), name);
+			}
 		}
 		else
 		{
-			if(auto path = find_roi_leaf(edid))
+			if(auto path = get_roi_path(edid))
 			{
 				auto pos = path->find_last_of(L'.');
-				wstring strid(L""), parent(L"");
+				wstring strid(L""), prefix(L"");
 				if (pos != wstring::npos && pos+1 < path->length())
 				{
 					strid = path->substr(pos+1);
-					parent = path->substr(0, pos);
+					prefix = path->substr(0, pos);
 				}
 				else
 					strid = *path;
-				roi_tree_.get_child(parent).erase(strid);
+				roi_tree_.get_child(prefix).erase(strid);
 			}
 		}
+	}
+
+	int TextureRenderer::get_available_group_id()
+	{
+		int id = -2;
+		while (1)
+		{
+			if (!get_roi_path(id))
+				break;
+			id--;
+		}
+		return id;
+	}
+
+	int TextureRenderer::add_roi_group_node(int parent_id, wstring name)
+	{
+		int gid = get_available_group_id();
+		wstring prefix(L"");
+
+		if (name.empty())
+		{
+			wstringstream wss;
+			wss << L"Seg Group " << (gid*-1)-1;
+			name = wss.str();
+		}
+
+		if(auto path = get_roi_path(parent_id))
+			prefix = *path + L".";
+
+		roi_tree_.add(prefix + boost::lexical_cast<wstring>(gid), name);
+
+		return gid;
+	}
+
+	int TextureRenderer::add_roi_group_node(wstring parent_name, wstring name)
+	{
+		int pid = parent_name.empty() ? -1 : get_roi_id(parent_name);
+		
+		return add_roi_group_node(pid, name);
+	}
+
+	int TextureRenderer::get_next_child_roi(int id)
+	{
+		if(auto path = get_roi_path(id))
+		{
+			auto pos = path->find_last_of(L'.');
+			wstring prefix(L"");
+			if (pos != wstring::npos && pos+1 < path->length())
+				prefix = path->substr(0, pos);
+			
+			auto subtree = roi_tree_.get_child_optional(prefix);
+			if (subtree)
+			{
+				bool found_myself = false;
+				int first_id = -1;
+				for (wptree::const_iterator child = subtree->begin(); child != subtree->end(); ++child)
+				{
+					wstring strid = child->first;
+					int cid = -1;
+					try
+					{
+						cid = boost::lexical_cast<int>(strid);
+					}
+					catch (boost::bad_lexical_cast e)
+					{
+						cerr << "TextureRenderer::get_next_child_roi(int id): bad_lexical_cast" << endl;
+					}
+
+					if (child == subtree->begin())
+						first_id = cid;
+
+					if (found_myself)
+						return cid;
+
+					if (id == cid)
+						found_myself = true;
+				}
+
+				if (found_myself)
+				{
+					if (first_id != id)
+						return first_id;
+					else if (!prefix.empty())
+					{
+						auto pos = prefix.find_last_of(L'.');
+						wstring parent_strid(L"");
+						if (pos != wstring::npos && pos+1 < prefix.length())
+							parent_strid = prefix.substr(pos+1);
+						else
+							parent_strid = prefix;
+
+						int pid = -1;
+						try
+						{
+							pid = boost::lexical_cast<int>(parent_strid);
+						}
+						catch (boost::bad_lexical_cast e)
+						{
+							cerr << "TextureRenderer::get_next_child_roi(int id): bad_lexical_cast 2" << endl;
+						}
+
+						return pid;
+					}
+				}
+			}
+		}
+
+		return -1;
 	}
 
 	void TextureRenderer::erase_node(int id)
 	{
 		int edid = (id == -1) ? edit_sel_id_ : id;
 		
-		if(auto path = find_roi_leaf(edid))
+		if(auto path = get_roi_path(edid))
 		{
 			auto pos = path->find_last_of(L'.');
 			wstring strid(L""), parent(L"");
@@ -416,9 +530,9 @@ namespace FLIVR
 
 		int edid = (id == -1) ? edit_sel_id_ : id;
 		
-		if (edid >= 0 && edid < PALETTE_SIZE)
+		if (edid != -1)
 		{
-			if(auto path = find_roi_leaf(edid))
+			if(auto path = get_roi_path(edid))
 				rval = roi_tree_.get<wstring>(*path);
 		}
 
@@ -429,7 +543,7 @@ namespace FLIVR
 	{
 		int rval = -1;
 
-		if (auto path = find_roi_leaf(name))
+		if (auto path = get_roi_path(name))
 		{
 			auto pos = path->find_last_of(L'.');
 			wstring strid;
@@ -452,7 +566,7 @@ namespace FLIVR
 
 	void TextureRenderer::set_roi_select(wstring name, bool select, bool traverse)
 	{
-		if (auto path = find_roi_leaf(name))
+		if (auto path = get_roi_path(name))
 		{
 			auto pos = path->find_last_of(L'.');
 			wstring strid;
@@ -483,7 +597,7 @@ namespace FLIVR
 			if (traverse)
 			{
 				if (auto subtree = roi_tree_.get_child_optional(*path))
-					set_roi_select(*subtree, select);
+					set_roi_select_r(*subtree, select);
 			}
 /*
 			if (select)
@@ -521,7 +635,7 @@ namespace FLIVR
 		}
 	}
 
-	void TextureRenderer::set_roi_select(boost::property_tree::wptree& tree, bool select)
+	void TextureRenderer::set_roi_select_r(boost::property_tree::wptree& tree, bool select)
 	{
 		for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
 		{
@@ -548,7 +662,7 @@ namespace FLIVR
 			}
 
 			wptree subtree = child->second;
-			set_roi_select(subtree, select);
+			set_roi_select_r(subtree, select);
 		}
 	}
 
@@ -560,7 +674,7 @@ namespace FLIVR
 		//add unnamed visible segments
 		for(auto ite = sel_ids_.begin(); ite != sel_ids_.end(); ++ite)
 		{
-			if(!find_roi_leaf(*ite) && (*ite >= 0))
+			if(!get_roi_path(*ite) && (*ite >= 0))
 				sel_segs_.insert(*ite);
 		}
 	}
@@ -705,7 +819,8 @@ namespace FLIVR
 
 	void TextureRenderer::add_sel_id(int id)
 	{
-		if (id < 0 || id >= PALETTE_SIZE) return;
+		if (id == -1)
+			return;
 
 		sel_ids_.insert(id);
 		edit_sel_id_ = id;
@@ -715,7 +830,6 @@ namespace FLIVR
 
 	void TextureRenderer::del_sel_id(int id)
 	{
-		if (id < 0 || id >= PALETTE_SIZE) return;
 		if (sel_ids_.empty()) return;
 
 		auto ite = sel_ids_.find(id);
@@ -730,8 +844,6 @@ namespace FLIVR
 
 	void TextureRenderer::set_edit_sel_id(int id)
 	{
-		if (id < 0 || id >= PALETTE_SIZE) return;
-
 		edit_sel_id_ = id;
 	}
 

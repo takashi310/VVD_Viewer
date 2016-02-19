@@ -274,13 +274,13 @@ wxPanel(parent, id, pos, size,style, name),
 	st = new wxStaticText(this, 0, "High (R)");
 	m_sizer_r5->Add(st, 0, wxALIGN_CENTER);
 
-	st = new wxStaticText(this, 0, "Segment:", wxDefaultPosition,  wxSize(140, 20), wxALIGN_RIGHT);
+	m_roi_st = new wxStaticText(this, 0, "Segment:", wxDefaultPosition,  wxSize(140, 20), wxALIGN_RIGHT);
 	m_roi_text = new myTextCtrl(frame, this, ID_ROINameText, "",
 		wxDefaultPosition, wxSize(200, 20), wxTE_PROCESS_ENTER);
 	m_roi_color_btn = new wxColourPickerCtrl(this, ID_ROIColorBtn, *wxRED,
 		wxDefaultPosition, wxDefaultSize);
 	m_sizer_r5->Add(10,5,0);
-	m_sizer_r6->Add(st, 0, wxALIGN_CENTER);
+	m_sizer_r6->Add(m_roi_st, 0, wxALIGN_CENTER);
 	m_sizer_r6->Add(m_roi_text, 0, wxALIGN_CENTER);
 	m_sizer_r6->Add(10, 10);
 	m_sizer_r6->Add(m_roi_color_btn, 0, wxALIGN_CENTER);
@@ -789,15 +789,39 @@ void VPropView::SaveROIName()
 {
 	if (m_vd)
 	{
-		wxString name = m_roi_text->GetValue();
-		m_vd->SetROIName(name.ToStdWstring());
-
+		wxString parent(wxT(""));
+		int parent_id = -1;
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-		if (vr_frame)
-			vr_frame->UpdateTree();
+		if (!vr_frame) return;
 		TreePanel* tree_panel = vr_frame->GetTree();
-		if (tree_panel)
-			tree_panel->SelectROI(m_vd, m_vd->GetEditSelID());
+		if (!tree_panel) return;
+		
+		if (m_vd->GetROIName(m_vd->GetEditSelID()).empty())
+		{
+			DataTreeCtrl* tree_ctrl = tree_panel->GetTreeCtrl();
+			if (!tree_ctrl) return;
+
+			wxTreeItemId sel_item = tree_ctrl->GetSelection();
+			if (sel_item.IsOk())
+			{
+				LayerInfo* item_data = (LayerInfo*)tree_ctrl->GetItemData(sel_item);
+				if (item_data && item_data->type == 8)
+				{
+					wxTreeItemId vitem = tree_ctrl->GetParentVolItem(sel_item);
+					if (vitem.IsOk() && tree_ctrl->GetItemText(vitem) == m_vd->GetName())
+					{
+						parent = tree_ctrl->GetItemText(sel_item);
+						parent_id = item_data->id;
+					}
+				}
+			}
+		}
+
+		wxString name = m_roi_text->GetValue();
+		m_vd->SetROIName(name.ToStdWstring(), -1, parent.ToStdWstring());
+		
+		vr_frame->UpdateTree();
+		tree_panel->SelectROI(m_vd, parent_id);
 	}
 }
 
@@ -807,6 +831,16 @@ void VPropView::ShowUIsROI()
 	{
 		m_sizer_sl_righ->Hide(m_sizer_r5);
 		m_sizer_sl_righ->Show(m_sizer_r6);
+		if (m_vd->GetEditSelID() < -1)
+		{
+			m_roi_color_btn->Hide();
+			m_roi_st->SetLabel(wxT("Segment Group:"));
+		}
+		else 
+		{
+			m_roi_color_btn->Show();
+			m_roi_st->SetLabel(wxT("Segment:"));
+		}
 		Layout();
 	}
 }
@@ -825,7 +859,7 @@ void VPropView::UpdateUIsROI()
 {
 	if (!m_vd) return;
 
-	if (m_vd->GetColormapMode() == 3 && m_vd->GetEditSelID() > 0)
+	if (m_vd->GetColormapMode() == 3 && m_vd->GetEditSelID() != -1)
 	{
 		SetROIindex(m_vd->GetEditSelID());
 		ShowUIsROI();
@@ -841,16 +875,18 @@ void VPropView::SetROIindex(int id)
 	unsigned char r = 0, g = 0, b = 0;
 	
 	m_roi_id = id;
-	if (m_vd)
-		m_vd->GetIDColor(r, g, b);
-
-	wxColor wxc(r, g, b);
-	m_roi_color_btn->SetColour(wxc);
-
 	m_roi_text->SetValue(wxT(""));
 
-	wxString inistr = wxT("Segment ") + wxString::Format("%d", m_roi_id);
-	m_roi_text->SetHint(inistr);
+	if (m_roi_id > 0)
+	{
+		m_vd->GetIDColor(r, g, b);
+
+		wxColor wxc(r, g, b);
+		m_roi_color_btn->SetColour(wxc);
+
+		wxString inistr = wxT("Segment ") + wxString::Format("%d", m_roi_id);
+		m_roi_text->SetHint(inistr);
+	}
 
 	m_roi_text->SetValue(m_vd->GetROIName());
 }

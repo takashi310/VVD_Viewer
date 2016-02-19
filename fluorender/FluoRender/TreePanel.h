@@ -78,6 +78,7 @@ class DataTreeCtrl: public wxTreeCtrl
 		ID_ManipulateData,
 		ID_AddDataGroup,
 		ID_AddMeshGroup,
+		ID_AddSegGroup,
 		ID_Expand,
 		ID_Edit,
 		ID_Info,
@@ -202,6 +203,7 @@ private:
 	void OnManipulateData(wxCommandEvent& event);
 	void OnAddDataGroup(wxCommandEvent& event);
 	void OnAddMeshGroup(wxCommandEvent& event);
+	void OnAddSegGroup(wxCommandEvent& event);
 	void OnExpand(wxCommandEvent& event);
 	void OnEdit(wxCommandEvent& event);
 	void OnInfo(wxCommandEvent& event);

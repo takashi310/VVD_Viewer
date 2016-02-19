@@ -178,19 +178,23 @@ namespace FLIVR
 
 		 void init_palette();
 		 void update_palette_tex();
-		 void set_roi_name(wstring name, int id=-1, wstring parent=wstring());
+		 void set_roi_name(wstring name, int id=-1, wstring parent_name=wstring());
+		 int add_roi_group_node(int parent_id, wstring name=L"");
+		 int add_roi_group_node(wstring parent_name=L"", wstring name=L"");
+		 int get_available_group_id();
+		 int get_next_child_roi(int id);
 		 void erase_node(int id=-1);
 		 void erase_node(wstring name);
 		 wstring get_roi_name(int id=-1);
 		 void set_roi_select(wstring name, bool select, bool traverse=false);
-		 void set_roi_select(boost::property_tree::wptree& tree, bool select);
+		 void set_roi_select_r(boost::property_tree::wptree& tree, bool select);
 		 void update_sel_segs();
 		 void update_sel_segs(const boost::property_tree::wptree& tree);
 		 boost::property_tree::wptree *get_roi_tree(){ return &roi_tree_; }
-		 boost::optional<wstring> find_roi_leaf(int id);
-		 boost::optional<wstring> find_roi_leaf(int id, const boost::property_tree::wptree& tree, wstring parent);
-		 boost::optional<wstring> find_roi_leaf(wstring name);
-		 boost::optional<wstring> find_roi_leaf(wstring name, const boost::property_tree::wptree& tree, wstring parent);
+		 boost::optional<wstring> get_roi_path(int id);
+		 boost::optional<wstring> get_roi_path(int id, const boost::property_tree::wptree& tree, wstring parent);
+		 boost::optional<wstring> get_roi_path(wstring name);
+		 boost::optional<wstring> get_roi_path(wstring name, const boost::property_tree::wptree& tree, wstring parent);
 		 int get_roi_id(wstring name);
 		 void set_id_color(unsigned char r, unsigned char g, unsigned char b, bool update=true, int id=-1);
 		 void get_id_color(unsigned char &r, unsigned char &g, unsigned char &b, int id=-1);

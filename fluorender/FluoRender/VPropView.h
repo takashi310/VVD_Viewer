@@ -185,6 +185,7 @@ private:
 	wxTextCtrl *m_colormap_low_value_text;
 	//roi
 	int m_roi_id;
+	wxStaticText *m_roi_st;
 	wxTextCtrl *m_roi_text;
 	wxColourPickerCtrl *m_roi_color_btn;
 
