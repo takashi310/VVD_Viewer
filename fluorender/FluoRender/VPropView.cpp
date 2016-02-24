@@ -278,13 +278,13 @@ wxPanel(parent, id, pos, size,style, name),
 	//roi
 	m_roi_st = new wxStaticText(this, 0, "Segment:", wxDefaultPosition,  wxSize(140, 20), wxALIGN_RIGHT);
 	m_roi_text = new myTextCtrl(frame, this, ID_ROINameText, "",
-		wxDefaultPosition, wxSize(200, 20), wxTE_PROCESS_ENTER);
+		wxDefaultPosition, wxSize(150, 20), wxTE_PROCESS_ENTER);
 	m_roi_color_btn = new wxColourPickerCtrl(this, ID_ROIColorBtn, *wxRED,
 		wxDefaultPosition, wxDefaultSize);
 	st = new wxStaticText(this, 0, "Display Mode:",
 		wxDefaultPosition, wxSize(100, -1), wxALIGN_CENTER);
 	m_roi_disp_mode_combo = new wxComboBox(this, ID_ROIDispModesCombo, "",
-		wxDefaultPosition, wxSize(150, 24), 0, NULL, wxCB_READONLY);
+		wxDefaultPosition, wxSize(140, 24), 0, NULL, wxCB_READONLY);
 	vector<string>dispmode_list;
 	dispmode_list.push_back("Highlight/Dark");
 	dispmode_list.push_back("Highlight/DarkGray");

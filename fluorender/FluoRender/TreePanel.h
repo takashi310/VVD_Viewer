@@ -71,7 +71,8 @@ class DataTreeCtrl: public wxTreeCtrl
 		ID_ToggleDisp,
 		ID_Isolate,
 		ID_ShowAll,
-		ID_ShowAllSeg,
+		ID_ShowAllNamedSeg,
+		ID_HideAllNamedSeg,
 		ID_HideAllSeg,
 		ID_RemoveData,
 		ID_CloseView,
@@ -199,7 +200,8 @@ private:
 	void OnToggleDisp(wxCommandEvent& event);
 	void OnIsolate(wxCommandEvent& event);
 	void OnShowAll(wxCommandEvent& event);
-	void OnShowAllSeg(wxCommandEvent& event);
+	void OnShowAllNamedSeg(wxCommandEvent& event);
+	void OnHideAllNamedSeg(wxCommandEvent& event);
 	void OnHideAllSeg(wxCommandEvent& event);
 	void OnRemoveData(wxCommandEvent& event);
 	void OnCloseView(wxCommandEvent& event);

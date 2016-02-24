@@ -190,8 +190,9 @@ namespace FLIVR
 		 wstring get_roi_name(int id=-1);
 		 void set_roi_select(wstring name, bool select, bool traverse=false);
 		 void set_roi_select_r(const boost::property_tree::wptree& tree, bool select);
-		 void select_all_roi_tree(){ set_roi_select_r(roi_tree_, true); }
-		 void deselect_all_roi_tree(){ set_roi_select_r(roi_tree_, false); }
+		 void select_all_roi_tree(){ set_roi_select_r(roi_tree_, true); update_palette(desel_palette_mode_, desel_col_fac_); }
+		 void deselect_all_roi_tree(){ set_roi_select_r(roi_tree_, false); update_palette(desel_palette_mode_, desel_col_fac_); }
+		 void deselect_all_roi(){ clear_sel_ids(); update_palette(desel_palette_mode_, desel_col_fac_); }
 		 void update_sel_segs();
 		 void update_sel_segs(const boost::property_tree::wptree& tree);
 		 boost::property_tree::wptree *get_roi_tree(){ return &roi_tree_; }
