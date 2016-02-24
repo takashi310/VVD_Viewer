@@ -326,6 +326,11 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 					menu.Append(ID_ToggleDisp, "Toggle Visibility");
 					menu.Append(ID_Isolate, "Isolate");
 					menu.Append(ID_ShowAll, "Show All");
+					if (vd->GetColormapMode() == 3)
+					{
+						menu.Append(ID_ShowAllSeg, "Select All Named Segments");
+						menu.Append(ID_HideAllSeg, "Deselect All Segments");
+					}
 					menu.AppendSeparator();
 					menu.Append(ID_RandomizeColor, "Randomize Colors");
 					menu.Append(ID_AddDataGroup, "Add Volume Group");
@@ -383,8 +388,8 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 				break;
 			case 8:
 				menu.Append(ID_ToggleDisp, "Toggle Visibility");
-				menu.Append(ID_ShowAllSeg, "Show All Children");
-				menu.Append(ID_HideAllSeg, "Hide All Children");
+				menu.Append(ID_ShowAllSeg, "Select All Children");
+				menu.Append(ID_HideAllSeg, "Deselect All Children");
 				menu.Append(ID_AddSegGroup, "Add Segment Group");
 				break;
 			}
@@ -526,8 +531,11 @@ void DataTreeCtrl::OnShowAllSeg(wxCommandEvent& event)
 
 	wxTreeItemId sel_item = GetSelection();
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-
-	if (sel_item.IsOk() && vr_frame)
+	if (!vr_frame) return;
+	DataManager* d_manager = vr_frame->GetDataManager();
+	if (!d_manager) return;
+	
+	if (sel_item.IsOk())
 	{
 		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
 		if (item_data)
@@ -541,7 +549,7 @@ void DataTreeCtrl::OnShowAllSeg(wxCommandEvent& event)
 				if (vol_item.IsOk())
 				{
 					wxString vname = GetItemText(vol_item);
-					VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(vname);
+					VolumeData* vd = d_manager->GetVolumeData(vname);
 					if (vd)
 					{
 						int id = vd->GetROIid(GetItemText(sel_item).ToStdWstring());
@@ -553,7 +561,12 @@ void DataTreeCtrl::OnShowAllSeg(wxCommandEvent& event)
 					}
 				}
 			}
-
+			if (item_type == 2)
+			{
+				VolumeData* vd = d_manager->GetVolumeData(GetItemText(sel_item));
+				if (vd)
+					vd->SelectAllROI();
+			}
 		}
 	}
 }
@@ -565,8 +578,11 @@ void DataTreeCtrl::OnHideAllSeg(wxCommandEvent& event)
 
 	wxTreeItemId sel_item = GetSelection();
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+	DataManager* d_manager = vr_frame->GetDataManager();
+	if (!d_manager) return;
 
-	if (sel_item.IsOk() && vr_frame)
+	if (sel_item.IsOk())
 	{
 		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
 		if (item_data)
@@ -580,7 +596,7 @@ void DataTreeCtrl::OnHideAllSeg(wxCommandEvent& event)
 				if (vol_item.IsOk())
 				{
 					wxString vname = GetItemText(vol_item);
-					VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(vname);
+					VolumeData* vd = d_manager->GetVolumeData(vname);
 					if (vd)
 					{
 						int id = vd->GetROIid(GetItemText(sel_item).ToStdWstring());
@@ -592,7 +608,12 @@ void DataTreeCtrl::OnHideAllSeg(wxCommandEvent& event)
 					}
 				}
 			}
-
+			if (item_type == 2)
+			{
+				VolumeData* vd = d_manager->GetVolumeData(GetItemText(sel_item));
+				if (vd)
+					vd->DeselectAllROI();
+			}
 		}
 	}
 }
@@ -1655,6 +1676,8 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 	if (m_fixed)
 		return;
 
+	int mouse_pos_y = event.GetPoint().y;
+
 	wxTreeItemId src_item = m_drag_item,
 		dst_item = event.GetItem(),
 		src_par_item = src_item.IsOk()?GetItemParent(src_item):0,
@@ -1672,6 +1695,15 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 		LayerInfo* dst_item_data = (LayerInfo*)GetItemData(dst_item);
 		LayerInfo* dst_par_item_data = (LayerInfo*)GetItemData(dst_par_item);
 
+		wxRect dst_item_rect;
+		double dst_center_y = -1.0;
+		if (GetBoundingRect(dst_item, dst_item_rect))
+			dst_center_y = (dst_item_rect.GetTop() + dst_item_rect.GetBottom()) / 2.0;
+		//insert_mode: 0-before dst; 1-after dst;
+		int insert_mode = 0;
+		if (dst_center_y >= 0.0 && mouse_pos_y > dst_center_y)
+			insert_mode = 1;
+		
 		if (src_item_data && src_par_item_data &&
 			dst_item_data && dst_par_item_data)
 		{
@@ -1730,7 +1762,7 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 				wxString str = GetItemText(GetItemParent(src_par_item));
 				VRenderView* vrv = vr_frame->GetView(str);
 				if (vrv)
-					vrv->MoveLayerinGroup(src_par_name, src_name, dst_name);
+					vrv->MoveLayerinGroup(src_par_name, src_name, dst_name, insert_mode);
 			}
 			else if (src_par_type == 5 && //par is group
 				src_type == 2 && //src is volume
@@ -1775,7 +1807,7 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 				wxString str = GetItemText(GetItemParent(src_par_item));
 				VRenderView* vrv = vr_frame->GetView(str);
 				if (vrv)
-					vrv->MoveLayerfromtoGroup(src_par_name, dst_par_name, src_name, dst_name);
+					vrv->MoveLayerfromtoGroup(src_par_name, dst_par_name, src_name, dst_name, insert_mode);
 			}
 			else if (src_type == 2 && //src is volume
 				src_par_type == 5 && //src's par is group
@@ -1799,7 +1831,7 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 				wxString str = GetItemText(GetItemParent(src_par_item));
 				VRenderView* vrv = vr_frame->GetView(str);
 				if (vrv)
-					vrv->MoveMeshinGroup(src_par_name, src_name, dst_name);
+					vrv->MoveMeshinGroup(src_par_name, src_name, dst_name, insert_mode);
 			}
 			else if (src_par_type == 6 && //par is group
 				src_type == 3 && //src is mesh
@@ -1844,7 +1876,7 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 				wxString str = GetItemText(GetItemParent(src_par_item));
 				VRenderView* vrv = vr_frame->GetView(str);
 				if (vrv)
-					vrv->MoveMeshfromtoGroup(src_par_name, dst_par_name, src_name, dst_name);
+					vrv->MoveMeshfromtoGroup(src_par_name, dst_par_name, src_name, dst_name, insert_mode);
 			}
 			else if (src_type == 3 && //src is mesh
 				src_par_type == 6 && //src's par is group
@@ -1867,7 +1899,7 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 				{
 					vd = vr_frame->GetDataManager()->GetVolumeData(GetItemText(s_vitem));
 					if (vd)
-						vd->MoveROINode(src_item_data->id, dst_item_data->id);
+						vd->MoveROINode(src_item_data->id, dst_item_data->id, insert_mode);
 				}
 			}
 			else if ( (src_type == 7 || src_type == 8) && (dst_type == 2))

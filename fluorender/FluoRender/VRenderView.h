@@ -264,15 +264,15 @@ public:
 	//move
 	void MoveLayerinView(wxString &src_name, wxString &dst_name);
 	//move volume
-	void MoveLayerinGroup(wxString &group_name, wxString &src_name, wxString &dst_name);
+	void MoveLayerinGroup(wxString &group_name, wxString &src_name, wxString &dst_name, int insert_mode=0);
 	void MoveLayertoView(wxString &group_name, wxString &src_name, wxString &dst_name);
 	void MoveLayertoGroup(wxString &group_name, wxString &src_name, wxString &dst_name);
-	void MoveLayerfromtoGroup(wxString &src_group_name, wxString &dst_group_name, wxString &src_name, wxString &dst_name);
+	void MoveLayerfromtoGroup(wxString &src_group_name, wxString &dst_group_name, wxString &src_name, wxString &dst_name, int insert_mode=0);
 	//move mesh
-	void MoveMeshinGroup(wxString &group_name, wxString &src_name, wxString &dst_name);
+	void MoveMeshinGroup(wxString &group_name, wxString &src_name, wxString &dst_name, int insert_mode=0);
 	void MoveMeshtoView(wxString &group_name, wxString &src_name, wxString &dst_name);
 	void MoveMeshtoGroup(wxString &group_name, wxString &src_name, wxString &dst_name);
-	void MoveMeshfromtoGroup(wxString &src_group_name, wxString &dst_group_name, wxString &src_name, wxString &dst_name);
+	void MoveMeshfromtoGroup(wxString &src_group_name, wxString &dst_group_name, wxString &src_name, wxString &dst_name, int insert_mode=0);
 	//
 	void PopVolumeList();
 	void PopMeshList();
@@ -1229,15 +1229,15 @@ public:
 	//move
 	void MoveLayerinView(wxString &src_name, wxString &dst_name);
 	//move volume
-	void MoveLayerinGroup(wxString &group_name, wxString &src_name, wxString &dst_name);
+	void MoveLayerinGroup(wxString &group_name, wxString &src_name, wxString &dst_name, int insert_mode=0);
 	void MoveLayertoView(wxString &group_name, wxString &src_name, wxString &dst_name);
 	void MoveLayertoGroup(wxString &group_name, wxString &src_name, wxString &dst_name);
-	void MoveLayerfromtoGroup(wxString &src_group_name, wxString &dst_group_name, wxString &src_name, wxString &dst_name);
+	void MoveLayerfromtoGroup(wxString &src_group_name, wxString &dst_group_name, wxString &src_name, wxString &dst_name, int insert_mode=0);
 	//move mesh
-	void MoveMeshinGroup(wxString &group_name, wxString &src_name, wxString &dst_name);
+	void MoveMeshinGroup(wxString &group_name, wxString &src_name, wxString &dst_name, int insert_mode=0);
 	void MoveMeshtoView(wxString &group_name, wxString &src_name, wxString &dst_name);
 	void MoveMeshtoGroup(wxString &group_name, wxString &src_name, wxString &dst_name);
-	void MoveMeshfromtoGroup(wxString &src_group_name, wxString &dst_group_name, wxString &src_name, wxString &dst_name);
+	void MoveMeshfromtoGroup(wxString &src_group_name, wxString &dst_group_name, wxString &src_name, wxString &dst_name, int insert_mode=0);
 	//reorganize layers in view
 	void OrganizeLayers();
 	//randomize color

@@ -47,6 +47,7 @@ BEGIN_EVENT_TABLE(VPropView, wxPanel)
 	//roi
 	EVT_TEXT_ENTER(ID_ROINameText, VPropView::OnEnterInROINameText)
 	EVT_COLOURPICKER_CHANGED(ID_ROIColorBtn, VPropView::OnROIColorBtn)
+	EVT_COMBOBOX(ID_ROIDispModesCombo, VPropView::OnROIDispModesCombo)
 	//6
 	//color
 	EVT_TEXT(ID_ColorText, VPropView::OnColorTextChange)
@@ -274,17 +275,30 @@ wxPanel(parent, id, pos, size,style, name),
 	st = new wxStaticText(this, 0, "High (R)");
 	m_sizer_r5->Add(st, 0, wxALIGN_CENTER);
 
+	//roi
 	m_roi_st = new wxStaticText(this, 0, "Segment:", wxDefaultPosition,  wxSize(140, 20), wxALIGN_RIGHT);
 	m_roi_text = new myTextCtrl(frame, this, ID_ROINameText, "",
 		wxDefaultPosition, wxSize(200, 20), wxTE_PROCESS_ENTER);
 	m_roi_color_btn = new wxColourPickerCtrl(this, ID_ROIColorBtn, *wxRED,
 		wxDefaultPosition, wxDefaultSize);
+	st = new wxStaticText(this, 0, "Display Mode:",
+		wxDefaultPosition, wxSize(100, -1), wxALIGN_CENTER);
+	m_roi_disp_mode_combo = new wxComboBox(this, ID_ROIDispModesCombo, "",
+		wxDefaultPosition, wxSize(150, 24), 0, NULL, wxCB_READONLY);
+	vector<string>dispmode_list;
+	dispmode_list.push_back("Highlight/Dark");
+	dispmode_list.push_back("Highlight/DarkGray");
+	dispmode_list.push_back("Highlight/Invisible");
+	for (size_t i=0; i<dispmode_list.size(); ++i)
+		m_roi_disp_mode_combo->Append(dispmode_list[i]);
+	m_roi_disp_mode_combo->SetSelection(0);
 	m_sizer_r5->Add(10,5,0);
 	m_sizer_r6->Add(m_roi_st, 0, wxALIGN_CENTER);
 	m_sizer_r6->Add(m_roi_text, 0, wxALIGN_CENTER);
 	m_sizer_r6->Add(10, 10);
 	m_sizer_r6->Add(m_roi_color_btn, 0, wxALIGN_CENTER);
 	m_sizer_r6->Add(10, 10);
+	m_sizer_r6->Add(m_roi_disp_mode_combo, 0, wxALIGN_CENTER);
 
 	//6th line
 	//left sliders
@@ -829,19 +843,33 @@ void VPropView::ShowUIsROI()
 {
 	if (m_sizer_sl_righ && m_sizer_r5 && m_sizer_r6)
 	{
+		SetEvtHandlerEnabled(false);
+		Freeze();
+
 		m_sizer_sl_righ->Hide(m_sizer_r5);
 		m_sizer_sl_righ->Show(m_sizer_r6);
 		if (m_vd->GetEditSelID() < -1)
 		{
 			m_roi_color_btn->Hide();
+			m_roi_text->Show();
 			m_roi_st->SetLabel(wxT("Segment Group:"));
 		}
-		else 
+		else if (m_vd->GetEditSelID() >= 0) 
 		{
 			m_roi_color_btn->Show();
+			m_roi_text->Show();
+			m_roi_st->SetLabel(wxT("Segment:"));
+		}
+		else
+		{
+			m_roi_color_btn->Hide();
+			m_roi_text->Hide();
 			m_roi_st->SetLabel(wxT("Segment:"));
 		}
 		Layout();
+
+		Thaw();
+		SetEvtHandlerEnabled(true);
 	}
 }
 
@@ -849,9 +877,15 @@ void VPropView::HideUIsROI()
 {
 	if (m_sizer_sl_righ && m_sizer_r5 && m_sizer_r6)
 	{
+		SetEvtHandlerEnabled(false);
+		Freeze();
+
 		m_sizer_sl_righ->Hide(m_sizer_r6);
 		m_sizer_sl_righ->Show(m_sizer_r5);
 		Layout();
+
+		Thaw();
+		SetEvtHandlerEnabled(true);
 	}
 }
 
@@ -859,9 +893,10 @@ void VPropView::UpdateUIsROI()
 {
 	if (!m_vd) return;
 
-	if (m_vd->GetColormapMode() == 3 && m_vd->GetEditSelID() != -1)
+	if (m_vd->GetColormapMode() == 3)
 	{
 		SetROIindex(m_vd->GetEditSelID());
+		m_roi_disp_mode_combo->SetSelection(m_vd->GetIDColDispMode());
 		ShowUIsROI();
 	}
 	else 
@@ -1448,12 +1483,20 @@ void VPropView::OnROIColorBtn(wxColourPickerEvent& event)
 	{
 		m_vd->SetIDColor(wxc.Red(), wxc.Green(), wxc.Blue());
 		
-		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-
 		RefreshVRenderViews(true);
 	}
 }
 
+void VPropView::OnROIDispModesCombo(wxCommandEvent &event)
+{
+	if (m_vd)
+	{
+		int mode = m_roi_disp_mode_combo->GetCurrentSelection();
+		m_vd->SetIDColDispMode(mode);
+		
+		RefreshVRenderViews();
+	}
+}
 
 //6
 void VPropView::OnColorChange(wxColor c)

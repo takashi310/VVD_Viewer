@@ -183,13 +183,15 @@ namespace FLIVR
 		 int add_roi_group_node(wstring parent_name=L"", wstring name=L"");
 		 int get_available_group_id();
 		 int get_next_sibling_roi(int id);
-		 void move_roi_node(int src_id, int dst_id);
-		 bool insert_roi_node(boost::property_tree::wptree& tree, int dst_id, const boost::property_tree::wptree& node, int id);
+		 void move_roi_node(int src_id, int dst_id, int insert_mode=0);
+		 bool insert_roi_node(boost::property_tree::wptree& tree, int dst_id, const boost::property_tree::wptree& node, int id, int insert_mode=0);
 		 void erase_node(int id=-1);
 		 void erase_node(wstring name);
 		 wstring get_roi_name(int id=-1);
 		 void set_roi_select(wstring name, bool select, bool traverse=false);
 		 void set_roi_select_r(const boost::property_tree::wptree& tree, bool select);
+		 void select_all_roi_tree(){ set_roi_select_r(roi_tree_, true); }
+		 void deselect_all_roi_tree(){ set_roi_select_r(roi_tree_, false); }
 		 void update_sel_segs();
 		 void update_sel_segs(const boost::property_tree::wptree& tree);
 		 boost::property_tree::wptree *get_roi_tree(){ return &roi_tree_; }
@@ -200,10 +202,12 @@ namespace FLIVR
 		 int get_roi_id(wstring name);
 		 void set_id_color(unsigned char r, unsigned char g, unsigned char b, bool update=true, int id=-1);
 		 void get_id_color(unsigned char &r, unsigned char &g, unsigned char &b, int id=-1);
+		 void get_rendered_id_color(unsigned char &r, unsigned char &g, unsigned char &b, int id=-1);
 		 //0-dark; 1-gray; 2-invisible;
-		 void update_palette(int mode, float fac=0.2);
-		 void set_desel_palette_mode_dark(float fac=0.2);
-		 void set_desel_palette_mode_gray(float fac=0.2);
+		 void update_palette(int mode, float fac=0.1);
+		 int get_roi_disp_mode(){ return desel_palette_mode_; }
+		 void set_desel_palette_mode_dark(float fac=0.1);
+		 void set_desel_palette_mode_gray(float fac=0.1);
 		 void set_desel_palette_mode_invisible();
 		 GLuint get_palette();
 		 bool is_sel_id(int id);

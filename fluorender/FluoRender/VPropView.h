@@ -73,6 +73,7 @@ class VPropView: public wxPanel
 		ID_ColormapLowValueText,
 		ID_ROINameText,
 		ID_ROIColorBtn,
+		ID_ROIDispModesCombo,
 		ID_InvChk,
 		ID_IDCLChk,
 		ID_MipChk,
@@ -188,6 +189,7 @@ private:
 	wxStaticText *m_roi_st;
 	wxTextCtrl *m_roi_text;
 	wxColourPickerCtrl *m_roi_color_btn;
+	wxComboBox *m_roi_disp_mode_combo;
 
 
 	//bottom line
@@ -258,6 +260,7 @@ private:
 	//roi
 	void OnEnterInROINameText(wxCommandEvent& event);
 	void OnROIColorBtn(wxColourPickerEvent& event);
+	void OnROIDispModesCombo(wxCommandEvent &event);
 	//6
 	void OnColorChange(wxColor c);
 	void OnColorTextChange(wxCommandEvent& event);

@@ -128,6 +128,97 @@ namespace FLIVR
 		}
 	}
 
+	int Texture::get_brick_id_point(int ix, int iy, int iz)
+	{
+		for (unsigned int i = 0; i < (*bricks_).size(); i++)
+		{
+			int ox = (*bricks_)[i]->ox();
+			int oy = (*bricks_)[i]->oy();
+			int oz = (*bricks_)[i]->oz();
+			int ex = ox + (*bricks_)[i]->nx();
+			int ey = oy + (*bricks_)[i]->ny();
+			int ez = oz + (*bricks_)[i]->nz();
+			
+			if (ix >= ox && iy >= oy && iz >= oz &&
+				ix < ex && iy < ey && iz < ez)
+				return i;
+		}
+
+		return -1;
+	}
+
+	double Texture::get_brick_original_value(int brick_id, int i, int j, int k, bool normalize)
+	{
+		if (brick_id < 0 || brick_id >= (*bricks_).size())
+			return 0.0;
+
+		TextureBrick *b = (*bricks_)[brick_id];
+
+		Nrrd* data = get_nrrd(0);
+		if (!data) return 0.0;
+		int bits = data->type;
+		int64_t nx = (int64_t)(b->nx());
+		int64_t ny = (int64_t)(b->ny());
+		int64_t nz = (int64_t)(b->nz());
+		int64_t ox = (int64_t)(b->ox());
+		int64_t oy = (int64_t)(b->oy());
+		int64_t oz = (int64_t)(b->oz());
+
+		if (i<0 || i>=nx || j<0 || j>=ny || k<0 || k>=nz)
+		return 0.0;
+		uint64_t ii = i, jj = j, kk = k;
+
+		uint64_t index = 0;
+		bool tmp_load = false;
+		void *d_ptr = NULL;
+		if (isBrxml()) 
+		{
+			index = (nx)*(ny)*(kk) + (nx)*(jj) + (ii);
+			tmp_load = !b->isLoaded();
+			wstring *fname = GetFileName(b->getID());
+			d_ptr = b->tex_data_brk(0, fname, GetFileType(), isURL());
+		}
+		else
+		{
+			index = (nx)*(ny)*(oz+kk) + (nx)*(oy+jj) + (ox+ii);
+			d_ptr = data->data;
+		}
+
+		if (!d_ptr)
+			return 0.0;
+
+		double rval = 0.0;
+		if (bits == nrrdTypeUChar)
+		{
+			unsigned char old_value = ((unsigned char*)(d_ptr))[index];
+			rval =  normalize ? double(old_value)/255.0 : double(old_value);
+		}
+		else if (bits == nrrdTypeUShort)
+		{
+			unsigned short old_value = ((unsigned short*)(d_ptr))[index];
+			rval = normalize ? double(old_value)/65535.0 : double(old_value);
+		}
+		
+		if (tmp_load)
+			b->freeBrkData();
+
+		return rval;
+	}
+
+	double Texture::get_brick_original_value(int i, int j, int k, bool normalize)
+	{
+		int bid = get_brick_id_point(i, j, k);
+		if (bid < 0 || bid >= get_brick_num())
+			return 0.0;
+
+		TextureBrick *b = (*bricks_)[bid];
+		int ii = i - b->ox();
+		int jj = j - b->oy();
+		int kk = k - b->oz();
+		
+		return get_brick_original_value(bid, ii, jj, kk, normalize);
+	}
+
 	vector<TextureBrick*>* Texture::get_sorted_bricks(
 		Ray& view, bool is_orthographic)
 	{

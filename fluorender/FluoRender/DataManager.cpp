@@ -107,6 +107,7 @@ VolumeData::VolumeData()
 	m_colormap_hi_value = 1.0;
 	m_colormap = 0;
 	m_colormap_proj = 0;
+	m_id_col_disp_mode = 0;
 
 	//blend mode
 	m_blend_mode = 0;
@@ -215,6 +216,7 @@ VolumeData::VolumeData(VolumeData &copy)
 	m_colormap_hi_value = copy.m_colormap_hi_value;
 	m_colormap = copy.m_colormap;
 	m_colormap_proj = copy.m_colormap_proj;
+	m_id_col_disp_mode = copy.m_id_col_disp_mode;
 
 	//blend mode
 	m_blend_mode = copy.m_blend_mode;
@@ -900,17 +902,29 @@ double VolumeData::GetOriginalValue(int i, int j, int k, bool normalize)
 		return 0.0;
 	uint64_t ii = i, jj = j, kk = k;
 
-	if (bits == nrrdTypeUChar)
+	if (!m_tex->isBrxml())
 	{
-		uint64_t index = (nx)*(ny)*(kk) + (nx)*(jj) + (ii);
-		uint8 old_value = ((uint8*)(data->data))[index];
-		return normalize ? double(old_value)/255.0 : double(old_value);
+		if (!data->data) return 0.0;
+		if (bits == nrrdTypeUChar)
+		{
+			uint64_t index = (nx)*(ny)*(kk) + (nx)*(jj) + (ii);
+			uint8 old_value = ((uint8*)(data->data))[index];
+			return normalize ? double(old_value)/255.0 : double(old_value);
+		}
+		else if (bits == nrrdTypeUShort)
+		{
+			uint64_t index = (nx)*(ny)*(kk) + (nx)*(jj) + (ii);
+			uint16 old_value = ((uint16*)(data->data))[index];
+			return normalize ? double(old_value)*m_scalar_scale/65535.0 : double(old_value);
+		}
 	}
-	else if (bits == nrrdTypeUShort)
+	else
 	{
-		uint64_t index = (nx)*(ny)*(kk) + (nx)*(jj) + (ii);
-		uint16 old_value = ((uint16*)(data->data))[index];
-		return normalize ? double(old_value)*m_scalar_scale/65535.0 : double(old_value);
+		double rval = 0.0;
+		rval = m_tex->get_brick_original_value(ii, jj, kk, normalize);
+		if (bits == nrrdTypeUShort && normalize)
+			rval *= m_scalar_scale;
+		return rval;
 	}
 
 	return 0.0;
@@ -929,24 +943,45 @@ double VolumeData::GetTransferedValue(int i, int j, int k)
 		return 0.0;
 	int64_t ii = i, jj = j, kk = k;
 
+	double v1, v2, v3, v4, v5, v6;
 	if (bits == nrrdTypeUChar)
 	{
-		uint64_t index = nx*ny*kk + nx*jj + ii;
-		uint8 old_value = ((uint8*)(data->data))[index];
+		double old_value;
+		if (!m_tex->isBrxml())
+		{
+			if (!data->data) return 0.0;
+			uint64_t index = nx*ny*kk + nx*jj + ii;
+			old_value = (double)((uint8*)(data->data))[index];
+		}
+		else
+			old_value = m_tex->get_brick_original_value(ii, jj, kk, false);
+
 		double gm = 0.0;
-		double new_value = double(old_value)/255.0;
+		double new_value = old_value/255.0;
 		if (m_vr->get_inversion())
 			new_value = 1.0-new_value;
 		if (i>0 && i<nx-1 &&
 			j>0 && j<ny-1 &&
 			k>0 && k<nz-1)
 		{
-			double v1 = ((uint8*)(data->data))[nx*ny*kk + nx*jj + ii-1];
-			double v2 = ((uint8*)(data->data))[nx*ny*kk + nx*jj + ii+1];
-			double v3 = ((uint8*)(data->data))[nx*ny*kk + nx*(jj-1) + ii];
-			double v4 = ((uint8*)(data->data))[nx*ny*kk + nx*(jj+1) + ii];
-			double v5 = ((uint8*)(data->data))[nx*ny*(kk-1) + nx*jj + ii];
-			double v6 = ((uint8*)(data->data))[nx*ny*(kk+1) + nx*jj + ii];
+			if (!m_tex->isBrxml())
+			{
+				v1 = ((uint8*)(data->data))[nx*ny*kk + nx*jj + ii-1];
+				v2 = ((uint8*)(data->data))[nx*ny*kk + nx*jj + ii+1];
+				v3 = ((uint8*)(data->data))[nx*ny*kk + nx*(jj-1) + ii];
+				v4 = ((uint8*)(data->data))[nx*ny*kk + nx*(jj+1) + ii];
+				v5 = ((uint8*)(data->data))[nx*ny*(kk-1) + nx*jj + ii];
+				v6 = ((uint8*)(data->data))[nx*ny*(kk+1) + nx*jj + ii];
+			}
+			else
+			{
+				v1 = m_tex->get_brick_original_value(ii-1, jj, kk, false);
+				v2 = m_tex->get_brick_original_value(ii+1, jj, kk, false);
+				v3 = m_tex->get_brick_original_value(ii, jj-1, kk, false);
+				v4 = m_tex->get_brick_original_value(ii, jj+1, kk, false);
+				v5 = m_tex->get_brick_original_value(ii, jj, kk-1, false);
+				v6 = m_tex->get_brick_original_value(ii, jj, kk+1, false);
+			}
 			double normal_x, normal_y, normal_z;
 			normal_x = (v2 - v1) / 255.0;
 			normal_y = (v4 - v3) / 255.0;
@@ -975,7 +1010,16 @@ double VolumeData::GetTransferedValue(int i, int j, int k)
 	else if (bits == nrrdTypeUShort)
 	{
 		uint64_t index = nx*ny*kk + nx*jj + ii;
-		uint16 old_value = ((uint16*)(data->data))[index];
+		double old_value;
+		if (!m_tex->isBrxml())
+		{
+			if (!data->data) return 0.0;
+			uint64_t index = nx*ny*kk + nx*jj + ii;
+			old_value = (double)((uint16*)(data->data))[index];
+		}
+		else
+			old_value = m_tex->get_brick_original_value(ii, jj, kk, false);
+
 		double gm = 0.0;
 		double new_value = double(old_value)*m_scalar_scale/65535.0;
 		if (m_vr->get_inversion())
@@ -984,12 +1028,24 @@ double VolumeData::GetTransferedValue(int i, int j, int k)
 			jj>0 && jj<ny-1 &&
 			kk>0 && kk<nz-1)
 		{
-			double v1 = ((uint8*)(data->data))[nx*ny*kk + nx*jj + ii-1];
-			double v2 = ((uint8*)(data->data))[nx*ny*kk + nx*jj + ii+1];
-			double v3 = ((uint8*)(data->data))[nx*ny*kk + nx*(jj-1) + ii];
-			double v4 = ((uint8*)(data->data))[nx*ny*kk + nx*(jj+1) + ii];
-			double v5 = ((uint8*)(data->data))[nx*ny*(kk-1) + nx*jj + ii];
-			double v6 = ((uint8*)(data->data))[nx*ny*(kk+1) + nx*jj + ii];
+			if (!m_tex->isBrxml())
+			{
+				v1 = ((uint16*)(data->data))[nx*ny*kk + nx*jj + ii-1];
+				v2 = ((uint16*)(data->data))[nx*ny*kk + nx*jj + ii+1];
+				v3 = ((uint16*)(data->data))[nx*ny*kk + nx*(jj-1) + ii];
+				v4 = ((uint16*)(data->data))[nx*ny*kk + nx*(jj+1) + ii];
+				v5 = ((uint16*)(data->data))[nx*ny*(kk-1) + nx*jj + ii];
+				v6 = ((uint16*)(data->data))[nx*ny*(kk+1) + nx*jj + ii];
+			}
+			else
+			{
+				v1 = m_tex->get_brick_original_value(ii-1, jj, kk, false);
+				v2 = m_tex->get_brick_original_value(ii+1, jj, kk, false);
+				v3 = m_tex->get_brick_original_value(ii, jj-1, kk, false);
+				v4 = m_tex->get_brick_original_value(ii, jj+1, kk, false);
+				v5 = m_tex->get_brick_original_value(ii, jj, kk-1, false);
+				v6 = m_tex->get_brick_original_value(ii, jj, kk+1, false);
+			}
 			double normal_x, normal_y, normal_z;
 			normal_x = (v2 - v1)*m_scalar_scale/65535.0;
 			normal_y = (v4 - v3)*m_scalar_scale/65535.0;

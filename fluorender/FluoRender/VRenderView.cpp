@@ -7431,7 +7431,7 @@ void VRenderGLView::ShowAll()
 
 //move layer (volume) of the same level within the given group
 //source is after the destination
-void VRenderGLView::MoveLayerinGroup(wxString &group_name, wxString &src_name, wxString &dst_name)
+void VRenderGLView::MoveLayerinGroup(wxString &group_name, wxString &src_name, wxString &dst_name, int insert_mode)
 {
 	DataGroup* group = GetGroup(group_name);
 	if (!group)
@@ -7457,10 +7457,8 @@ void VRenderGLView::MoveLayerinGroup(wxString &group_name, wxString &src_name, w
 		wxString name = group->GetVolumeData(i)->GetName();
 		if (name == dst_name)
 		{
-			if (i>=src_index)
-				group->InsertVolumeData(i, src_vd);
-			else
-				group->InsertVolumeData(i-1, src_vd);
+			int insert_offset = (insert_mode == 0) ? -1 : 0; 
+			group->InsertVolumeData(i+insert_offset, src_vd);
 			break;
 		}
 	}
@@ -7567,7 +7565,7 @@ void VRenderGLView::MoveLayertoGroup(wxString &group_name, wxString &src_name, w
 
 //move layer (volume from one group to another different group
 //sourece is after the destination
-void VRenderGLView::MoveLayerfromtoGroup(wxString &src_group_name, wxString &dst_group_name, wxString &src_name, wxString &dst_name)
+void VRenderGLView::MoveLayerfromtoGroup(wxString &src_group_name, wxString &dst_group_name, wxString &src_name, wxString &dst_name, int insert_mode)
 {
 	DataGroup* src_group = GetGroup(src_group_name);
 	if (!src_group)
@@ -7598,7 +7596,8 @@ void VRenderGLView::MoveLayerfromtoGroup(wxString &src_group_name, wxString &dst
 			wxString name = dst_group->GetVolumeData(i)->GetName();
 			if (name == dst_name)
 			{
-				dst_group->InsertVolumeData(i, src_vd);
+				int insert_offset = (insert_mode == 0) ? -1 : 0; 
+				dst_group->InsertVolumeData(i+insert_offset, src_vd);
 				break;
 			}
 		}
@@ -7638,7 +7637,7 @@ void VRenderGLView::MoveLayerfromtoGroup(wxString &src_group_name, wxString &dst
 }
 
 //move mesh within a group
-void VRenderGLView::MoveMeshinGroup(wxString &group_name, wxString &src_name, wxString &dst_name)
+void VRenderGLView::MoveMeshinGroup(wxString &group_name, wxString &src_name, wxString &dst_name, int insert_mode)
 {
 	MeshGroup* group = GetMGroup(group_name);
 	if (!group)
@@ -7664,10 +7663,8 @@ void VRenderGLView::MoveMeshinGroup(wxString &group_name, wxString &src_name, wx
 		wxString name = group->GetMeshData(i)->GetName();
 		if (name == dst_name)
 		{
-			if (i>=src_index)
-				group->InsertMeshData(i, src_md);
-			else
-				group->InsertMeshData(i-1, src_md);
+			int insert_offset = (insert_mode == 0) ? -1 : 0; 
+				group->InsertMeshData(i+insert_offset, src_md);
 			break;
 		}
 	}
@@ -7753,7 +7750,7 @@ void VRenderGLView::MoveMeshtoGroup(wxString &group_name, wxString &src_name, wx
 }
 
 //move mesh out of then into a group
-void VRenderGLView::MoveMeshfromtoGroup(wxString &src_group_name, wxString &dst_group_name, wxString &src_name, wxString &dst_name)
+void VRenderGLView::MoveMeshfromtoGroup(wxString &src_group_name, wxString &dst_group_name, wxString &src_name, wxString &dst_name, int insert_mode)
 {
 	MeshGroup* src_group = GetMGroup(src_group_name);
 	if (!src_group)
@@ -7782,7 +7779,8 @@ void VRenderGLView::MoveMeshfromtoGroup(wxString &src_group_name, wxString &dst_
 			wxString name = dst_group->GetMeshData(i)->GetName();
 			if (name == dst_name)
 			{
-				dst_group->InsertMeshData(i, src_md);
+				int insert_offset = (insert_mode == 0) ? -1 : 0; 
+				dst_group->InsertMeshData(i+insert_offset, src_md);
 				break;
 			}
 		}
@@ -9927,7 +9925,7 @@ double VRenderGLView::GetPointVolume(Point& mp, int mx, int my,
 	Nrrd* nrrd = tex->get_nrrd(0);
 	if (!nrrd) return -1.0;
 	void* data = nrrd->data;
-	if (!data) return -1.0;
+	if (!data && !tex->isBrxml()) return -1.0;
 
 	int nx = GetSize().x;
 	int ny = GetSize().y;
@@ -10094,7 +10092,7 @@ double VRenderGLView::GetPointAndIntVolume(Point& mp, double &intensity, bool no
 	Nrrd* nrrd = tex->get_nrrd(0);
 	if (!nrrd) return -1.0;
 	void* data = nrrd->data;
-	if (!data) return -1.0;
+	if (!data && !tex->isBrxml()) return -1.0;
 
 	int nx = GetSize().x;
 	int ny = GetSize().y;
@@ -10210,6 +10208,17 @@ double VRenderGLView::GetPointAndIntVolume(Point& mp, double &intensity, bool no
 				zz = zz==resz?resz-1:zz;
 
 				value = vd->GetOriginalValue(xx, yy, zz, normalize);
+
+				if (vd->GetColormapMode() == 3)
+				{
+					unsigned char r=0, g=0, b=0;
+					vd->GetRenderedIDColor(r, g, b, (int)value);
+					if (r == 0 && g == 0 && b == 0)
+					{
+						hit += vv*mspc;
+						continue;
+					}
+				}
 
 				if (value >= thresh)
 				{
@@ -13312,10 +13321,10 @@ void VRenderView::MoveLayerinView(wxString &src_name, wxString &dst_name)
 }
 
 //move volume
-void VRenderView::MoveLayerinGroup(wxString &group_name, wxString &src_name, wxString &dst_name)
+void VRenderView::MoveLayerinGroup(wxString &group_name, wxString &src_name, wxString &dst_name, int insert_mode)
 {
 	if (m_glview)
-		m_glview->MoveLayerinGroup(group_name, src_name, dst_name);
+		m_glview->MoveLayerinGroup(group_name, src_name, dst_name, insert_mode);
 }
 
 void VRenderView::MoveLayertoView(wxString &group_name, wxString &src_name, wxString &dst_name)
@@ -13332,18 +13341,19 @@ void VRenderView::MoveLayertoGroup(wxString &group_name, wxString &src_name, wxS
 
 void VRenderView::MoveLayerfromtoGroup(wxString &src_group_name,
 									   wxString &dst_group_name,
-									   wxString &src_name, wxString &dst_name)
+									   wxString &src_name, wxString &dst_name,
+									   int insert_mode)
 {
 	if (m_glview)
 		m_glview->MoveLayerfromtoGroup(src_group_name,
-		dst_group_name, src_name, dst_name);
+		dst_group_name, src_name, dst_name, insert_mode);
 }
 
 //move mesh
-void VRenderView::MoveMeshinGroup(wxString &group_name, wxString &src_name, wxString &dst_name)
+void VRenderView::MoveMeshinGroup(wxString &group_name, wxString &src_name, wxString &dst_name, int insert_mode)
 {
 	if (m_glview)
-		m_glview->MoveMeshinGroup(group_name, src_name, dst_name);
+		m_glview->MoveMeshinGroup(group_name, src_name, dst_name, insert_mode);
 }
 
 void VRenderView::MoveMeshtoView(wxString &group_name, wxString &src_name, wxString &dst_name)
@@ -13360,11 +13370,12 @@ void VRenderView::MoveMeshtoGroup(wxString &group_name, wxString &src_name, wxSt
 
 void VRenderView::MoveMeshfromtoGroup(wxString &src_group_name,
 									  wxString &dst_group_name,
-									  wxString &src_name, wxString &dst_name)
+									  wxString &src_name, wxString &dst_name
+									  , int insert_mode)
 {
 	if (m_glview)
 		m_glview->MoveMeshfromtoGroup(src_group_name,
-		dst_group_name, src_name, dst_name);
+		dst_group_name, src_name, dst_name, insert_mode);
 }
 
 //reorganize layers in view

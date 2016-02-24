@@ -131,6 +131,12 @@ namespace FLIVR
 		//quota bricks
 		vector<TextureBrick*>* get_quota_bricks();
 
+		int get_brick_id_point(int ix, int iy, int iz);
+		//relative coordinate
+		double get_brick_original_value(int brick_id, int i, int j, int k, bool normalize);
+		//absolute coordinate
+		double get_brick_original_value(int i, int j, int k, bool normalize);
+
 		inline int nlevels(){ return int((*bricks_).size()); }
 
 		inline double vmin() const { return vmin_; }

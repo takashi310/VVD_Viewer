@@ -423,12 +423,15 @@ public:
 	void SetROIName(wstring name, int id=-1, wstring parent_name=L""){ if (m_vr) m_vr->set_roi_name(name, id, parent_name); }
 	int AddROIGroup(wstring parent_name=L"", wstring name=L""){ return m_vr ? m_vr->add_roi_group_node(parent_name, name) : -1; }
 	int GetNextSiblingROI(int id){ return m_vr ? m_vr->get_next_sibling_roi(id) : -1; }
-	void MoveROINode(int src_id, int dst_id){ if (m_vr) m_vr->move_roi_node(src_id, dst_id); }
+	//insert_mode: 0-before dst; 1-after dst;
+	void MoveROINode(int src_id, int dst_id, int insert_mode=0){ if (m_vr) m_vr->move_roi_node(src_id, dst_id, insert_mode); }
 	void EraseROITreeNode(int id=-1){ if (m_vr) m_vr->erase_node(id); }
 	void EraseROITreeNode(wstring name){ if (m_vr) m_vr->erase_node(name); }
 	wstring GetROIName(int id=-1){ return m_vr ? m_vr->get_roi_name(id) : wstring(); }
 	int GetROIid(wstring name){ return m_vr ? m_vr->get_roi_id(name) : -1; }
 	void SetROISel(wstring name, bool select, bool traverse=false){ if (m_vr) m_vr->set_roi_select(name, select, traverse); }
+	void SelectAllROI(){ if (m_vr) m_vr->select_all_roi_tree(); }
+	void DeselectAllROI(){ if (m_vr) m_vr->clear_sel_ids(); }
 	void SetIDColor(unsigned char r, unsigned char g, unsigned char b, bool update_palette=true, int id=-1)
 	{
 		if (m_vr) m_vr->set_id_color(r, g, b, update_palette, id);
@@ -437,12 +440,18 @@ public:
 	{
 		if (m_vr) m_vr->get_id_color(r, g, b, id);
 	}
+	void GetRenderedIDColor(unsigned char &r, unsigned char &g, unsigned char &b, int id=-1)
+	{
+		if (m_vr) m_vr->get_rendered_id_color(r, g, b, id);
+	}
 	bool isSelID(int id){ return m_vr ? m_vr->is_sel_id(id) : false; }
 	void AddSelID(int id){ if (m_vr) m_vr->add_sel_id(id); }
 	void DelSelID(int id){ if (m_vr) m_vr->del_sel_id(id); }
 	int GetEditSelID(){ return m_vr ? m_vr->get_edit_sel_id() : -1; }
 	void SetEditSelID(int id){ if (m_vr) m_vr->set_edit_sel_id(id); }
 	void ClearSelIDs(){ if (m_vr) m_vr->clear_sel_ids(); }
+	void SetIDColDispMode(int mode){ if (m_vr) m_vr->update_palette(mode); }
+	int GetIDColDispMode(){ return m_vr ? m_vr->get_roi_disp_mode() : 0; }
 	boost::property_tree::wptree *getROITree(){ return m_vr ? m_vr->get_roi_tree() : NULL; };
 
 private:
@@ -512,6 +521,7 @@ private:
 	double m_colormap_hi_value;
 	int m_colormap;//index to a colormap
 	int m_colormap_proj;//index to a way of projection
+	int m_id_col_disp_mode;
 
 	//save the mode for restoring
 	int m_saved_mode;

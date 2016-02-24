@@ -2458,6 +2458,7 @@ void VRenderFrame::SaveProject(wxString& filename)
 			vd->GetColormapValues(low, high);
 			fconfig.Write("colormap_lo_value", low);
 			fconfig.Write("colormap_hi_value", high);
+			fconfig.Write("id_color_disp_mode", vd->GetIDColDispMode());
 
 			//inversion
 			fconfig.Write("inv", vd->GetInvert());
@@ -3312,6 +3313,8 @@ void VRenderFrame::OpenProject(wxString& filename)
 						{
 							vd->SetColormapValues(low, high);
 						}
+						if (fconfig.Read("id_color_disp_mode", &iVal))
+							vd->SetIDColDispMode(iVal);
 
 						//inversion
 						if (fconfig.Read("inv", &bVal))
