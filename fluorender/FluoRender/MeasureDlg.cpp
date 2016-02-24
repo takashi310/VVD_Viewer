@@ -28,6 +28,7 @@ BEGIN_EVENT_TABLE(RulerListCtrl, wxListCtrl)
 	EVT_LIST_COL_DRAGGING(wxID_ANY, RulerListCtrl::OnColumnSizeChanged)
     EVT_SCROLLWIN(RulerListCtrl::OnScroll)
 	EVT_MOUSEWHEEL(RulerListCtrl::OnScroll)
+	EVT_LEFT_DCLICK(RulerListCtrl::OnLeftDClick)
 END_EVENT_TABLE()
 
 RulerListCtrl::RulerListCtrl(
@@ -481,9 +482,23 @@ void RulerListCtrl::OnAct(wxListEvent &event)
 		wxLIST_NEXT_ALL,
 		wxLIST_STATE_SELECTED);
 	m_editing_item = item;
+	if (item != -1 && !m_name_disp->IsShown())
+	{
+		//wxPoint pos = this->ScreenToClient(::wxGetMousePosition());
+		ShowTextCtrls(item);
+		m_name_disp->SetFocus();
+	}
+}
+
+void RulerListCtrl::OnLeftDClick(wxMouseEvent& event)
+{
+	long item = GetNextItem(-1,
+		wxLIST_NEXT_ALL,
+		wxLIST_STATE_SELECTED);
+	m_editing_item = item;
 	if (item != -1)
 	{
-		wxPoint pos = this->ScreenToClient(::wxGetMousePosition());
+		wxPoint pos = event.GetPosition();
 		ShowTextCtrls(item);
 		wxRect rect;
 		GetSubItemRect(item, 6, rect);
@@ -515,6 +530,8 @@ void RulerListCtrl::EndEdit()
 				//(*ruler_list)[m_editing_item]->SetColor(color);
 				str = m_description_text->GetValue();
 				(*ruler_list)[m_editing_item]->SetDesc(str);
+				SetItemState(m_editing_item, wxLIST_STATE_SELECTED|wxLIST_STATE_FOCUSED, wxLIST_STATE_SELECTED|wxLIST_STATE_FOCUSED);
+				m_editing_item = -1;
 			}
 		}
 

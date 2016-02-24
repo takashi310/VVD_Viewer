@@ -98,6 +98,7 @@ private:
 	void OnBeginDrag(wxListEvent& event);
 	void OnDragging(wxMouseEvent& event);
 	void OnEndDrag(wxMouseEvent& event);
+	void OnLeftDClick(wxMouseEvent& event);
 
 	void OnColumnSizeChanged(wxListEvent &event);
 
