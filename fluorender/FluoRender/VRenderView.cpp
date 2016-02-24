@@ -11665,7 +11665,8 @@ void VRenderGLView::OnMouse(wxMouseEvent& event)
             Point trans = Point(cx-p->x(), -(cy-p->y()), -(cz-p->z()));
 			StartManipulation(NULL, NULL, NULL, &trans, NULL);
 		}
-		SelSegVolume();
+		else
+			SelSegVolume();
 
 		RefreshGL();
 		return;
