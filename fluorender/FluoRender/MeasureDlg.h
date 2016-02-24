@@ -83,10 +83,11 @@ private:
 
 	long m_editing_item;
 	long m_dragging_to_item;
+	long m_dragging_item;
 
 private:
 	void EndEdit();
-	void OnSelection(wxListEvent &event);
+	void OnAct(wxListEvent &event);
 	void OnEndSelection(wxListEvent &event);
 	void OnNameDispText(wxCommandEvent& event);
 	void OnDescriptionText(wxCommandEvent& event);

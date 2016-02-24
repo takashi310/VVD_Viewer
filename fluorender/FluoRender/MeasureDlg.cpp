@@ -15,8 +15,8 @@
 #include "img/icons.h"
 
 BEGIN_EVENT_TABLE(RulerListCtrl, wxListCtrl)
-	EVT_LIST_ITEM_SELECTED(wxID_ANY, RulerListCtrl::OnSelection)
 	EVT_LIST_ITEM_DESELECTED(wxID_ANY, RulerListCtrl::OnEndSelection)
+	EVT_LIST_ITEM_ACTIVATED(wxID_ANY, RulerListCtrl::OnAct)
 	EVT_TEXT(ID_RulerNameDispText, RulerListCtrl::OnNameDispText)
 	EVT_TEXT_ENTER(ID_RulerNameDispText, RulerListCtrl::OnEnterInTextCtrl)
 	EVT_TEXT(ID_RulerDescriptionText, RulerListCtrl::OnDescriptionText)
@@ -40,7 +40,8 @@ RulerListCtrl::RulerListCtrl(
 wxListCtrl(parent, id, pos, size, style),
 	//m_frame(frame),
 	m_editing_item(-1),
-	m_dragging_to_item(-1)
+	m_dragging_to_item(-1),
+	m_dragging_item(-1)
 {
 	wxListItem itemCol;
 	itemCol.SetText("Name");
@@ -438,6 +439,8 @@ void RulerListCtrl::ShowTextCtrls(long item)
 		//add frame text
 		GetSubItemRect(item, 0, rect);
 		str = GetText(item, 0);
+		rect.SetLeft(rect.GetLeft()+20);
+		rect.SetRight(rect.GetRight()-20);
 		m_name_disp->SetPosition(rect.GetTopLeft());
 		m_name_disp->SetSize(rect.GetSize());
 		m_name_disp->SetValue(str);
@@ -472,7 +475,7 @@ void RulerListCtrl::ShowTextCtrls(long item)
 	}
 }
 
-void RulerListCtrl::OnSelection(wxListEvent &event)
+void RulerListCtrl::OnAct(wxListEvent &event)
 {
 	long item = GetNextItem(-1,
 		wxLIST_NEXT_ALL,
@@ -480,7 +483,14 @@ void RulerListCtrl::OnSelection(wxListEvent &event)
 	m_editing_item = item;
 	if (item != -1)
 	{
+		wxPoint pos = this->ScreenToClient(::wxGetMousePosition());
 		ShowTextCtrls(item);
+		wxRect rect;
+		GetSubItemRect(item, 6, rect);
+		if (rect.Contains(pos))
+			m_description_text->SetFocus();
+		else
+			m_name_disp->SetFocus();
 	}
 }
 
@@ -593,9 +603,14 @@ void RulerListCtrl::OnColorChange(wxColourPickerEvent& event)
 
 void RulerListCtrl::OnBeginDrag(wxListEvent& event)
 {
-	if (m_editing_item == -1)
+	long item = GetNextItem(-1,
+		wxLIST_NEXT_ALL,
+		wxLIST_STATE_SELECTED);
+	if (item ==-1)
 		return;
 
+	m_editing_item = -1;
+	m_dragging_item = item;
 	m_dragging_to_item = -1;
 	// trigger when user releases left button (drop)
 	Connect(wxEVT_MOTION, wxMouseEventHandler(RulerListCtrl::OnDragging), NULL, this);
@@ -605,6 +620,7 @@ void RulerListCtrl::OnBeginDrag(wxListEvent& event)
 
 	m_name_disp->Hide();
 	m_description_text->Hide();
+	m_color_picker->Hide();
 }
 
 void RulerListCtrl::OnDragging(wxMouseEvent& event)
@@ -612,7 +628,7 @@ void RulerListCtrl::OnDragging(wxMouseEvent& event)
 	wxPoint pos = event.GetPosition();
 	int flags = wxLIST_HITTEST_ONITEM;
 	long index = HitTest(pos, flags, NULL); // got to use it at last
-	if (index >=0 && index != m_editing_item && index != m_dragging_to_item)
+	if (index >=0 && index != m_dragging_item && index != m_dragging_to_item)
 	{
 		if (!m_view) return;
 		vector<Ruler*>* ruler_list = m_view->GetRulerList();
@@ -621,16 +637,20 @@ void RulerListCtrl::OnDragging(wxMouseEvent& event)
 		m_dragging_to_item = index;
 
 		//change the content in the ruler list
-		swap((*ruler_list)[m_editing_item], (*ruler_list)[m_dragging_to_item]);
+		swap((*ruler_list)[m_dragging_item], (*ruler_list)[m_dragging_to_item]);
 
-		DeleteItem(m_editing_item);
+		DeleteItem(m_dragging_item);
 		InsertItem(m_dragging_to_item, "", 0);
 
 		//Update();
 		UpdateText();
-
-		m_editing_item = m_dragging_to_item;
-		SetItemState(m_editing_item, wxLIST_STATE_SELECTED|wxLIST_STATE_FOCUSED, wxLIST_STATE_SELECTED|wxLIST_STATE_FOCUSED);
+		m_dragging_item = m_dragging_to_item;
+		
+		SetEvtHandlerEnabled(false);
+		Freeze();
+		SetItemState(m_dragging_item, wxLIST_STATE_SELECTED|wxLIST_STATE_FOCUSED, wxLIST_STATE_SELECTED|wxLIST_STATE_FOCUSED);
+		Thaw();
+		SetEvtHandlerEnabled(true);
 	}
 }
 
@@ -640,7 +660,6 @@ void RulerListCtrl::OnEndDrag(wxMouseEvent& event)
 	Disconnect(wxEVT_MOTION, wxMouseEventHandler(RulerListCtrl::OnDragging));
 	Disconnect(wxEVT_LEFT_UP, wxMouseEventHandler(RulerListCtrl::OnEndDrag));
 	Disconnect(wxEVT_LEAVE_WINDOW, wxMouseEventHandler(RulerListCtrl::OnEndDrag));
-	if(m_dragging_to_item >= 0 )ShowTextCtrls(m_dragging_to_item);
 	m_dragging_to_item = -1;
 }
 
@@ -677,6 +696,8 @@ void RulerListCtrl::OnColumnSizeChanged(wxListEvent &event)
 	wxRect rect;
 	wxString str;
 	GetSubItemRect(m_editing_item, 0, rect);
+	rect.SetLeft(rect.GetLeft()+20);
+	rect.SetRight(rect.GetRight()-20);
 	m_name_disp->SetPosition(rect.GetTopLeft());
 	m_name_disp->SetSize(rect.GetSize());
 	GetSubItemRect(m_editing_item, 1, rect);
