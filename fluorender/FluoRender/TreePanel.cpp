@@ -42,9 +42,11 @@ BEGIN_EVENT_TABLE(DataTreeCtrl, wxTreeCtrl)
 	EVT_MENU(ID_ToggleDisp, DataTreeCtrl::OnToggleDisp)
 	EVT_MENU(ID_Isolate, DataTreeCtrl::OnIsolate)
 	EVT_MENU(ID_ShowAll, DataTreeCtrl::OnShowAll)
+	EVT_MENU(ID_ShowAllSegChildren, DataTreeCtrl::OnShowAllSegChildren)
+	EVT_MENU(ID_HideAllSegChildren, DataTreeCtrl::OnHideAllSegChildren)
 	EVT_MENU(ID_ShowAllNamedSeg, DataTreeCtrl::OnShowAllNamedSeg)
-	EVT_MENU(ID_HideAllNamedSeg, DataTreeCtrl::OnHideAllNamedSeg)
 	EVT_MENU(ID_HideAllSeg, DataTreeCtrl::OnHideAllSeg)
+	EVT_MENU(ID_DeleteAllSeg, DataTreeCtrl::OnDeleteAllSeg)
 	EVT_MENU(ID_RemoveData, DataTreeCtrl::OnRemoveData)
 	EVT_MENU(ID_CloseView, DataTreeCtrl::OnCloseView)
 	EVT_MENU(ID_ManipulateData, DataTreeCtrl::OnManipulateData)
@@ -158,6 +160,7 @@ void DataTreeCtrl::DeleteSelection()
 			if (!vd) return;
 
 			int next_id = vd->GetNextSiblingROI(item_data->id);
+			vd->SetROISel(name_data.ToStdWstring(), false, true);
 			vd->EraseROITreeNode(name_data.ToStdWstring());
 			vr_frame->UpdateTree();
 			SelectROI(vd, next_id);
@@ -331,9 +334,11 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 					{
 						menu.AppendSeparator();
 						menu.Append(ID_AddSegGroup, "Add Segment Group");
+						menu.Append(ID_ShowAllSegChildren, "Select Children");
+						menu.Append(ID_HideAllSegChildren, "Deselect Children");
 						menu.Append(ID_ShowAllNamedSeg, "Select All Named Segments");
-						menu.Append(ID_HideAllNamedSeg, "Deselect All Named Segments");
 						menu.Append(ID_HideAllSeg, "Deselect All Segments");
+						menu.Append(ID_DeleteAllSeg, "Delete All Segments");
 					}
 					menu.AppendSeparator();
 					menu.Append(ID_RandomizeColor, "Randomize Colors");
@@ -387,12 +392,14 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 			case 7:
 				menu.Append(ID_ToggleDisp, "Toggle Visibility");
 				menu.Append(ID_AddSegGroup, "Add Segment Group");
+				menu.Append(ID_RemoveData, "Delete");
 				break;
 			case 8:
 				menu.Append(ID_ToggleDisp, "Toggle Visibility");
 				menu.Append(ID_AddSegGroup, "Add Segment Group");
-				menu.Append(ID_ShowAllNamedSeg, "Select All Children");
-				menu.Append(ID_HideAllNamedSeg, "Deselect All Children");
+				menu.Append(ID_ShowAllSegChildren, "Select Children");
+				menu.Append(ID_HideAllSegChildren, "Deselect Children");
+				menu.Append(ID_RemoveData, "Delete");
 				break;
 			}
 			PopupMenu( &menu, point.x, point.y );
@@ -526,7 +533,7 @@ void DataTreeCtrl::OnShowAll(wxCommandEvent& event)
 	}
 }
 
-void DataTreeCtrl::OnShowAllNamedSeg(wxCommandEvent& event)
+void DataTreeCtrl::OnShowAllSegChildren(wxCommandEvent& event)
 {
 	if (m_fixed)
 	return;
@@ -556,7 +563,10 @@ void DataTreeCtrl::OnShowAllNamedSeg(wxCommandEvent& event)
 					{
 						int id = vd->GetROIid(GetItemText(sel_item).ToStdWstring());
 						if (id != -1)
-							vd->SetROISel(GetItemText(sel_item).ToStdWstring(), true, true);
+						{
+							vd->SetROISel(GetItemText(sel_item).ToStdWstring(), true);
+							vd->SetROISelChildren(GetItemText(sel_item).ToStdWstring(), true);
+						}
 
 						vr_frame->UpdateTreeIcons();
 						vr_frame->RefreshVRenderViews();
@@ -568,7 +578,7 @@ void DataTreeCtrl::OnShowAllNamedSeg(wxCommandEvent& event)
 				VolumeData* vd = d_manager->GetVolumeData(GetItemText(sel_item));
 				if (vd)
 				{
-					vd->SelectAllNamedROI();
+					vd->SetROISelChildren(wstring(), true);
 					vr_frame->UpdateTreeIcons();
 					vr_frame->RefreshVRenderViews();
 				}
@@ -577,7 +587,7 @@ void DataTreeCtrl::OnShowAllNamedSeg(wxCommandEvent& event)
 	}
 }
 
-void DataTreeCtrl::OnHideAllNamedSeg(wxCommandEvent& event)
+void DataTreeCtrl::OnHideAllSegChildren(wxCommandEvent& event)
 {
 	if (m_fixed)
 	return;
@@ -607,7 +617,7 @@ void DataTreeCtrl::OnHideAllNamedSeg(wxCommandEvent& event)
 					{
 						int id = vd->GetROIid(GetItemText(sel_item).ToStdWstring());
 						if (id != -1)
-							vd->SetROISel(GetItemText(sel_item).ToStdWstring(), false, true);
+							vd->SetROISelChildren(GetItemText(sel_item).ToStdWstring(), false);
 
 						vr_frame->UpdateTreeIcons();
 						vr_frame->RefreshVRenderViews();
@@ -619,10 +629,52 @@ void DataTreeCtrl::OnHideAllNamedSeg(wxCommandEvent& event)
 				VolumeData* vd = d_manager->GetVolumeData(GetItemText(sel_item));
 				if (vd)
 				{
-					vd->DeselectAllNamedROI();
+					vd->SetROISelChildren(wstring(), false);
 					vr_frame->UpdateTreeIcons();
 					vr_frame->RefreshVRenderViews();
 				}
+			}
+		}
+	}
+}
+
+void DataTreeCtrl::OnShowAllNamedSeg(wxCommandEvent& event)
+{
+	if (m_fixed)
+	return;
+
+	wxTreeItemId sel_item = GetSelection();
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+	DataManager* d_manager = vr_frame->GetDataManager();
+	if (!d_manager) return;
+
+	if (sel_item.IsOk())
+	{
+		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+		if (item_data)
+		{
+			int item_type = item_data->type;
+			wxString itemname = GetItemText(sel_item);
+			VolumeData* vd = NULL;
+			if (item_type == 8)
+			{
+
+				wxTreeItemId vol_item = GetParentVolItem(sel_item);
+				if (vol_item.IsOk())
+				{
+					wxString vname = GetItemText(vol_item);
+					vd = d_manager->GetVolumeData(vname);
+				}
+			}
+			if (item_type == 2)
+				vd = d_manager->GetVolumeData(GetItemText(sel_item));
+
+			if (vd)
+			{
+				vd->SelectAllNamedROI();
+				vr_frame->UpdateTreeIcons();
+				vr_frame->RefreshVRenderViews();
 			}
 		}
 	}
@@ -664,6 +716,54 @@ void DataTreeCtrl::OnHideAllSeg(wxCommandEvent& event)
 			{
 				vd->DeselectAllROI();
 				vr_frame->UpdateTreeIcons();
+				vr_frame->RefreshVRenderViews();
+			}
+		}
+	}
+}
+
+void DataTreeCtrl::OnDeleteAllSeg(wxCommandEvent& event)
+{
+	if (m_fixed)
+	return;
+
+	wxTreeItemId sel_item = GetSelection();
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+	DataManager* d_manager = vr_frame->GetDataManager();
+	if (!d_manager) return;
+
+	if (sel_item.IsOk())
+	{
+		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+		if (item_data)
+		{
+			int item_type = item_data->type;
+			wxString itemname = GetItemText(sel_item);
+			VolumeData* vd = NULL;
+			wxString vname;
+			if (item_type == 8)
+			{
+
+				wxTreeItemId vol_item = GetParentVolItem(sel_item);
+				if (vol_item.IsOk())
+				{
+					vname = GetItemText(vol_item);
+					vd = d_manager->GetVolumeData(vname);
+				}
+			}
+			if (item_type == 2)
+			{
+				vname = GetItemText(sel_item);
+				vd = d_manager->GetVolumeData(vname);
+			}
+
+			if (vd)
+			{
+				vd->ClearROIs();
+				vr_frame->UpdateTree();
+				wxTreeItemId vitem = FindTreeItem(vname);
+				if (vitem.IsOk()) SelectItem(vitem);
 				vr_frame->RefreshVRenderViews();
 			}
 		}

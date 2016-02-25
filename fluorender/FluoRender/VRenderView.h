@@ -254,6 +254,7 @@ public:
 	wxString AddMGroup(wxString str);
 	//remove
 	void RemoveVolumeData(wxString &name);
+	void RemoveVolumeDataset(BaseReader *reader, int channel);
 	void ReplaceVolumeData(wxString &name, VolumeData *dst);
 	void RemoveMeshData(wxString &name);
 	void RemoveAnnotations(wxString &name);
@@ -1221,6 +1222,7 @@ public:
 	wxString AddMGroup(wxString str = "");
 	MeshGroup* GetMGroup(wxString &name);
 	void RemoveVolumeData(wxString &name);
+	void RemoveVolumeDataset(BaseReader *reader, int channel);
 	void RemoveMeshData(wxString &name);
 	void RemoveAnnotations(wxString &name);
 	void RemoveGroup(wxString &name);

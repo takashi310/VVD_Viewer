@@ -287,7 +287,6 @@ Nrrd* NRRDReader::Convert(int t, int c, bool get_max)
 			if (get_max)
 				m_max_value = (n > m_max_value)?n:m_max_value;
 		}
-		output->type = nrrdTypeUShort;
 	}
 	//find max value
 	if (output->type == nrrdTypeUChar)
@@ -296,13 +295,26 @@ Nrrd* NRRDReader::Convert(int t, int c, bool get_max)
 		m_max_value = 255.0;
 		m_scalar_scale = 1.0;
 	}
-	else if (output->type == nrrdTypeUShort)
+	else if (output->type == nrrdTypeShort)
 	{
 		m_max_value -= min_value;
 		//16 bit
 		for (i=0; i<m_slice_num*m_x_size*m_y_size; i++) {
 			((unsigned short*)output->data)[i] =
 				((unsigned short*)output->data)[i] - min_value;
+		}
+		if (m_max_value > 0.0)
+			m_scalar_scale = 65535.0 / m_max_value;
+		else
+			m_scalar_scale = 1.0;
+		output->type = nrrdTypeUShort;
+	}
+	else if (output->type == nrrdTypeUShort)
+	{
+		//16 bit
+		for (i=0; i<m_slice_num*m_x_size*m_y_size; i++) {
+			((unsigned short*)output->data)[i] =
+				((unsigned short*)output->data)[i];
 		}
 		if (m_max_value > 0.0)
 			m_scalar_scale = 65535.0 / m_max_value;

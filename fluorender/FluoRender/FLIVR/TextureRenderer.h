@@ -189,10 +189,11 @@ namespace FLIVR
 		 void erase_node(wstring name);
 		 wstring get_roi_name(int id=-1);
 		 void set_roi_select(wstring name, bool select, bool traverse=false);
-		 void set_roi_select_r(const boost::property_tree::wptree& tree, bool select);
+		 void set_roi_select_children(wstring name, bool select, bool traverse=false);
+		 void set_roi_select_r(const boost::property_tree::wptree& tree, bool select, bool recursive=true);
 		 void select_all_roi_tree(){ set_roi_select_r(roi_tree_, true); update_palette(desel_palette_mode_, desel_col_fac_); }
 		 void deselect_all_roi_tree(){ set_roi_select_r(roi_tree_, false); update_palette(desel_palette_mode_, desel_col_fac_); }
-		 void deselect_all_roi(){ clear_sel_ids(); update_palette(desel_palette_mode_, desel_col_fac_); }
+		 void deselect_all_roi(){ clear_sel_ids_roi_only(); update_palette(desel_palette_mode_, desel_col_fac_); }
 		 void update_sel_segs();
 		 void update_sel_segs(const boost::property_tree::wptree& tree);
 		 boost::property_tree::wptree *get_roi_tree(){ return &roi_tree_; }
@@ -217,6 +218,8 @@ namespace FLIVR
 		 void set_edit_sel_id(int id);
 		 int get_edit_sel_id(){ return edit_sel_id_; };
 		 void clear_sel_ids();
+		 void clear_sel_ids_roi_only();
+		 void clear_roi();
 		 
          //memory swap
          static void set_mem_swap(bool val) {mem_swap_ = val;}

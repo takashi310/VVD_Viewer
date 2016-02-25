@@ -34,6 +34,7 @@ NRRDWriter::NRRDWriter()
    m_spcy = 0.0;
    m_spcz = 0.0;
    m_use_spacings = false;
+   m_compression = false;
 }
 
 NRRDWriter::~NRRDWriter()
@@ -55,26 +56,48 @@ void NRRDWriter::SetSpacings(double spcx, double spcy, double spcz)
 
 void NRRDWriter::SetCompression(bool value)
 {
+	m_compression = value;
 }
 
 void NRRDWriter::Save(wstring filename, int mode)
 {
-   if (!m_data)
-      return;
+	if (!m_data)
+		return;
 
-   if (m_use_spacings &&
-         m_data->dim == 3)
-   {
-      nrrdAxisInfoSet(m_data, nrrdAxisInfoSpacing, m_spcx, m_spcy, m_spcz);
-      nrrdAxisInfoSet(m_data, nrrdAxisInfoMax,
-            m_spcx*m_data->axis[0].size,
-            m_spcy*m_data->axis[1].size,
-            m_spcz*m_data->axis[2].size);
-   }
+	NrrdIoState *nio = nrrdIoStateNew();
+	if (!nio)
+		return;
 
-   string str;
-   str.assign(filename.length(), 0);
-   for (int i=0; i<(int)filename.length(); i++)
-      str[i] = (char)filename[i];
-   nrrdSave(str.c_str(), m_data, NULL);
+	if (m_compression)
+		nrrdIoStateEncodingSet(nio, nrrdEncodingGzip);
+	nio->format = nrrdFormatNRRD;
+
+	if (m_use_spacings &&
+		m_data->dim == 3)
+	{
+		double val[NRRD_DIM_MAX][NRRD_SPACE_DIM_MAX];
+		val[0][0] = AIR_QNAN;
+		val[0][1] = AIR_QNAN;
+		val[0][2] = AIR_QNAN;
+		val[1][0] = AIR_QNAN;
+		val[1][1] = AIR_QNAN;
+		val[1][2] = AIR_QNAN;
+		val[2][0] = AIR_QNAN;
+		val[2][1] = AIR_QNAN;
+		val[2][2] = AIR_QNAN;
+		nrrdAxisInfoSet(m_data, nrrdAxisInfoSpaceDirection, val[0], val[1], val[2]);
+		nrrdAxisInfoSet(m_data, nrrdAxisInfoSpacing, m_spcx, m_spcy, m_spcz);
+		nrrdAxisInfoSet(m_data, nrrdAxisInfoMax,
+			m_spcx*m_data->axis[0].size,
+			m_spcy*m_data->axis[1].size,
+			m_spcz*m_data->axis[2].size);
+	}
+
+	string str;
+	str.assign(filename.length(), 0);
+	for (int i=0; i<(int)filename.length(); i++)
+		str[i] = (char)filename[i];
+	nrrdSave(str.c_str(), m_data, nio);
+
+	nrrdIoStateNix(nio);
 }

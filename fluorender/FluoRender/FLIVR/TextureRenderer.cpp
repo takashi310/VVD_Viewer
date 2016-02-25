@@ -124,9 +124,7 @@ namespace FLIVR
 		roi_tree_.add(L"-4", L"G4");
 		roi_tree_.add(L"-4.49", L"TEST49");
 */
-		set_roi_select_r(roi_tree_, true);
-
-		update_palette(desel_palette_mode_, desel_col_fac_);
+		select_all_roi_tree();
 	}
 
 	TextureRenderer::TextureRenderer(const TextureRenderer& copy)
@@ -190,6 +188,7 @@ namespace FLIVR
 			GL_RGBA, GL_UNSIGNED_BYTE, (void *)base_palette_);//GL_RGBA16F
 		glBindTexture(GL_TEXTURE_2D, 0);
 
+		update_palette_tex();
 	}
 
 	TextureRenderer::~TextureRenderer()
@@ -669,43 +668,27 @@ namespace FLIVR
 				if (auto subtree = roi_tree_.get_child_optional(*path))
 					set_roi_select_r(*subtree, select);
 			}
-/*
-			if (select)
-			{
-				wstring p = *path;
-				bool end = false;
-				while(!end)
-				{
-					auto pos2 = p.find_last_of(L'.');
-					wstring strid;
-					if (pos2 != wstring::npos && pos2+1 < path->length())
-						strid = p.substr(pos2+1);
-					else
-					{
-						strid = p;
-						end = true;
-					}
 
-					try
-					{
-						int id = boost::lexical_cast<int>(strid);
-						if (id != -1)
-							sel_ids_.insert(id);
-					}
-					catch (boost::bad_lexical_cast e)
-					{
-						cerr << "TextureRenderer::set_roi_select(wstring name, bool select): bad_lexical_cast2" << endl;
-					}
-
-					p = p.substr(0, pos2);
-				}
-			}
-*/
 			update_palette(desel_palette_mode_, desel_col_fac_);
 		}
 	}
 
-	void TextureRenderer::set_roi_select_r(const boost::property_tree::wptree& tree, bool select)
+	void TextureRenderer::set_roi_select_children(wstring name, bool select, bool traverse)
+	{
+		if (name.empty())
+		{
+			set_roi_select_r(roi_tree_, select, traverse);
+		}
+		else if (auto path = get_roi_path(name))
+		{
+			if (auto subtree = roi_tree_.get_child_optional(*path))
+				set_roi_select_r(*subtree, select, traverse);
+		}
+		
+		update_palette(desel_palette_mode_, desel_col_fac_);
+	}
+
+	void TextureRenderer::set_roi_select_r(const boost::property_tree::wptree& tree, bool select, bool recursive)
 	{
 		for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
 		{
@@ -731,7 +714,7 @@ namespace FLIVR
 				cerr << "TextureRenderer::toggle_roi_select(boost::property_tree::wptree& tree, bool select): bad_lexical_cast" << endl;
 			}
 
-			set_roi_select_r(child->second, select);
+			if (recursive) set_roi_select_r(child->second, select, recursive);
 		}
 	}
 
@@ -811,7 +794,7 @@ namespace FLIVR
 		if (edid < 0 || edid >= PALETTE_SIZE)
 			return;
 		
-		if (sel_ids_.empty())
+		if (sel_ids_.empty() && roi_tree_.empty())
 		{
 			r = base_palette_[edid*PALETTE_ELEM_COMP+0];
 			g = base_palette_[edid*PALETTE_ELEM_COMP+1];
@@ -895,8 +878,8 @@ namespace FLIVR
 	{
 		update_sel_segs();
 
-		if (!sel_segs_.empty()) return palette_tex_id_;
-		else return base_palette_tex_id_;
+		if (sel_ids_.empty() && roi_tree_.empty()) return base_palette_tex_id_;
+		else return palette_tex_id_;
 	}
 
 	bool TextureRenderer::is_sel_id(int id)
@@ -946,6 +929,29 @@ namespace FLIVR
 		edit_sel_id_ = -1;
 
 		update_palette(desel_palette_mode_, desel_col_fac_);
+	}
+
+	void TextureRenderer::clear_sel_ids_roi_only()
+	{
+		auto ite = sel_ids_.begin();
+		while (ite != sel_ids_.end())
+		{
+			if ((*ite) >= 0)
+				ite = sel_ids_.erase(ite);
+			else
+				++ite;
+		}
+		
+		if (edit_sel_id_ >= 0) edit_sel_id_ = -1;
+
+		update_palette(desel_palette_mode_, desel_col_fac_);
+	}
+
+	void TextureRenderer::clear_roi()
+	{
+		if (!roi_tree_.empty()) roi_tree_.clear();
+
+		clear_sel_ids();
 	}
 
 	//set the texture for rendering

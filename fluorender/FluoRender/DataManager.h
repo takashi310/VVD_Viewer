@@ -175,6 +175,8 @@ struct VD_Landmark
 	double spcx, spcy, spcz;
 };
 
+class DataManager;
+
 class VolumeData : public TreeLayer
 {
 public:
@@ -182,7 +184,7 @@ public:
 	VolumeData(VolumeData &copy);
 	virtual ~VolumeData();
 
-	static VolumeData* DeepCopy(VolumeData &copy);
+	static VolumeData* DeepCopy(VolumeData &copy, bool use_default_settings=false, DataManager *d_manager=NULL);
 
 	//duplication
 	bool GetDup();
@@ -430,9 +432,11 @@ public:
 	wstring GetROIName(int id=-1){ return m_vr ? m_vr->get_roi_name(id) : wstring(); }
 	int GetROIid(wstring name){ return m_vr ? m_vr->get_roi_id(name) : -1; }
 	void SetROISel(wstring name, bool select, bool traverse=false){ if (m_vr) m_vr->set_roi_select(name, select, traverse); }
+	void SetROISelChildren(wstring name, bool select, bool traverse=false){ if (m_vr) m_vr->set_roi_select_children(name, select, traverse); }
 	void SelectAllNamedROI(){ if (m_vr) m_vr->select_all_roi_tree(); }
 	void DeselectAllNamedROI(){ if (m_vr) m_vr->deselect_all_roi_tree(); }
 	void DeselectAllROI(){ if (m_vr) m_vr->deselect_all_roi(); }
+	void ClearROIs(){ if (m_vr) m_vr->clear_roi(); }
 	void SetIDColor(unsigned char r, unsigned char g, unsigned char b, bool update_palette=true, int id=-1)
 	{
 		if (m_vr) m_vr->set_id_color(r, g, b, update_palette, id);
@@ -1375,13 +1379,15 @@ public:
 	//load volume options
 	void SetSliceSequence(bool ss) {m_sliceSequence = ss;}
 	void SetCompression(bool compression) {m_compression = compression;}
+	bool GetCompression(){ return m_compression; }
 	void SetSkipBrick(bool skip) {m_skip_brick = skip;}
 	void SetTimeId(wxString str) {m_timeId = str;}
 	void SetLoadMask(bool load_mask) {m_load_mask = load_mask;}
 	void AddVolumeData(VolumeData* vd);
-	VolumeData* DuplicateVolumeData(VolumeData* vd);
+	VolumeData* DuplicateVolumeData(VolumeData* vd, bool use_default_settings=false);
 	void ReplaceVolumeData(int index, VolumeData *vd);
 	void RemoveVolumeData(int index);
+	void RemoveVolumeDataset(BaseReader *reader, int channel);
 	int GetVolumeNum();
 	VolumeData* GetVolumeData(int index);
 	VolumeData* GetVolumeData(const wxString &name);

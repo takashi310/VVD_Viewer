@@ -281,8 +281,6 @@ wxPanel(parent, id, pos, size,style, name),
 		wxDefaultPosition, wxSize(150, 20), wxTE_PROCESS_ENTER);
 	m_roi_color_btn = new wxColourPickerCtrl(this, ID_ROIColorBtn, *wxRED,
 		wxDefaultPosition, wxDefaultSize);
-	st = new wxStaticText(this, 0, "Display Mode:",
-		wxDefaultPosition, wxSize(100, -1), wxALIGN_CENTER);
 	m_roi_disp_mode_combo = new wxComboBox(this, ID_ROIDispModesCombo, "",
 		wxDefaultPosition, wxSize(140, 24), 0, NULL, wxCB_READONLY);
 	vector<string>dispmode_list;

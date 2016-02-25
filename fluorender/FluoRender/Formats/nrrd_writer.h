@@ -45,6 +45,7 @@ private:
 	Nrrd* m_data;
 	double m_spcx, m_spcy, m_spcz;
 	bool m_use_spacings;
+	bool m_compression;
 };
 
 #endif//_NRRD_WRITER_H_

@@ -7129,6 +7129,46 @@ void VRenderGLView::RemoveVolumeData(wxString &name)
 	}
 }
 
+void VRenderGLView::RemoveVolumeDataset(BaseReader *reader, int channel)
+{
+	int i, j;
+
+	for (i=(int)m_layer_list.size()-1; i>=0; i--)
+	{
+		if (!m_layer_list[i])
+			continue;
+		switch (m_layer_list[i]->IsA())
+		{
+		case 2://volume data
+			{
+				VolumeData* vd = (VolumeData*)m_layer_list[i];
+				if (vd && vd->GetReader() == reader && vd->GetCurChannel() == channel)
+				{
+					m_layer_list.erase(m_layer_list.begin()+i);
+					m_vd_pop_dirty = true;
+					if (vd == m_cur_vol) m_cur_vol = NULL;
+				}
+			}
+			break;
+		case 5://group
+			{
+				DataGroup* group = (DataGroup*)m_layer_list[i];
+				for (j=group->GetVolumeNum()-1; j >= 0; j--)
+				{
+					VolumeData* vd = group->GetVolumeData(j);
+					if (vd && vd->GetReader() == reader && vd->GetCurChannel() == channel)
+					{
+						group->RemoveVolumeData(j);
+						m_vd_pop_dirty = true;
+						if (vd == m_cur_vol) m_cur_vol = NULL;
+					}
+				}
+			}
+			break;
+		}
+	}
+}
+
 void VRenderGLView::RemoveMeshData(wxString &name)
 {
 	int i, j;
@@ -13282,6 +13322,12 @@ void VRenderView::RemoveVolumeData(wxString &name)
 {
 	if (m_glview)
 		m_glview->RemoveVolumeData(name);
+}
+
+void VRenderView::RemoveVolumeDataset(BaseReader *reader, int channel)
+{
+	if (m_glview)
+		m_glview->RemoveVolumeDataset(reader, channel);
 }
 
 void VRenderView::RemoveMeshData(wxString &name)

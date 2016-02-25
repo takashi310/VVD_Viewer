@@ -133,6 +133,7 @@ VolumeData::VolumeData()
 	m_brick_num = 0;
 }
 
+/*
 VolumeData::VolumeData(VolumeData &copy)
 {
 	m_reader = copy.m_reader;
@@ -252,18 +253,19 @@ VolumeData::VolumeData(VolumeData &copy)
 
 	m_landmarks = copy.m_landmarks;
 }
+*/
 
 VolumeData::~VolumeData()
 {
 	//m_vr�̊J�������ɂ��Ȃ���loadedbrks���̗v�f�N���A���ł��Ȃ�
 	if (m_vr)
 		delete m_vr;
-	if (m_tex && !m_dup)
+	if (m_tex)
 		delete m_tex;
 }
 
 //without mask and label
-VolumeData* VolumeData::DeepCopy(VolumeData &copy)
+VolumeData* VolumeData::DeepCopy(VolumeData &copy, bool use_default_settings, DataManager *d_manager)
 {
 	VolumeData* vd = new VolumeData();
 
@@ -279,119 +281,172 @@ VolumeData* VolumeData::DeepCopy(VolumeData &copy)
 		delete(vd);
 		return NULL;
 	}
-	Nrrd *nv = tex->get_nrrd(0);
+	bool is_brxml = tex->isBrxml();
+	int time = is_brxml ? 0 : copy.GetCurTime();
+	Nrrd *nv = vd->m_reader->Convert(time, copy.GetCurChannel(), true);
 	if (!nv)
 	{
 		delete(vd);
 		return NULL;
 	}
 
-	if (tex->isBrxml())	vd->Load(nv, copy.GetName()+wxString::Format("_%d", vd->m_dup_counter), wxString(""), (BRKXMLReader*)vd->m_reader);
+	if (is_brxml)	vd->Load(nv, copy.GetName()+wxString::Format("_%d", vd->m_dup_counter), wxString(""), (BRKXMLReader*)vd->m_reader);
 	else vd->Load(nv, copy.GetName()+wxString::Format("_%d", vd->m_dup_counter), wxString(""));
-	
-	//layer properties
-	vd->type = 2;//volume
-	vd->SetGamma(copy.GetGamma());
-	vd->SetBrightness(copy.GetBrightness());
-	vd->SetHdr(copy.GetHdr());
-	vd->SetSyncR(copy.GetSyncR());
-	vd->SetSyncG(copy.GetSyncG());
-	vd->SetSyncB(copy.GetSyncB());
-	
-	double spc[3];
-	if (tex->isBrxml())
+
+	if (use_default_settings && d_manager)
 	{
-		copy.GetBaseSpacings(spc[0], spc[1], spc[2]);
-		vd->SetBaseSpacings(spc[0], spc[1], spc[2]);
-		copy.GetSpacingScales(spc[0], spc[1], spc[2]);
-		vd->SetSpacingScales(spc[0], spc[1], spc[2]);
+		if (is_brxml) ((BRKXMLReader*)vd->m_reader)->SetLevel(0);
+		vd->SetBaseSpacings(vd->m_reader->GetXSpc(),
+			vd->m_reader->GetYSpc(),
+			vd->m_reader->GetZSpc());
+		bool valid_spc = vd->m_reader->IsSpcInfoValid();
+		vd->SetSpcFromFile(valid_spc);
+		vd->SetScalarScale(vd->m_reader->GetScalarScale());
+		vd->SetMaxValue(vd->m_reader->GetMaxValue());
+		vd->SetCurTime(time);
+		vd->SetCurChannel(copy.GetCurChannel());
+
+		vd->SetCompression(d_manager->GetCompression());
+		d_manager->SetVolumeDefault(vd);
+
+		//get excitation wavelength
+		double wavelength = vd->m_reader->GetExcitationWavelength(copy.GetCurChannel());
+		if (wavelength > 0.0) {
+			FLIVR::Color col = d_manager->GetWavelengthColor(wavelength);
+			vd->SetColor(col);
+		}
+		else if (wavelength < 0.) {
+			FLIVR::Color white = Color(1.0, 1.0, 1.0);
+			vd->SetColor(white);
+		}
+		else
+		{
+			FLIVR::Color white = Color(1.0, 1.0, 1.0);
+			FLIVR::Color red   = Color(1.0, 0.0, 0.0);
+			FLIVR::Color green = Color(0.0, 1.0, 0.0);
+			FLIVR::Color blue  = Color(0.0, 0.0, 1.0);
+			if (vd->m_reader->GetChanNum() == 1) {
+				vd->SetColor(white);
+			}
+			else
+			{
+				if (copy.GetCurChannel() == 0)
+					vd->SetColor(red);
+				else if (copy.GetCurChannel() == 1)
+					vd->SetColor(green);
+				else if (copy.GetCurChannel() == 2)
+					vd->SetColor(blue);
+				else
+					vd->SetColor(white);
+			}
+		}
 	}
 	else
 	{
-		copy.GetSpacings(spc[0], spc[1], spc[2]);
-		vd->SetSpacings(spc[0], spc[1], spc[2]);
+		//layer properties
+		vd->type = 2;//volume
+		vd->SetGamma(copy.GetGamma());
+		vd->SetBrightness(copy.GetBrightness());
+		vd->SetHdr(copy.GetHdr());
+		vd->SetSyncR(copy.GetSyncR());
+		vd->SetSyncG(copy.GetSyncG());
+		vd->SetSyncB(copy.GetSyncB());
+
+		double spc[3];
+		if (tex->isBrxml())
+		{
+			copy.GetBaseSpacings(spc[0], spc[1], spc[2]);
+			vd->SetBaseSpacings(spc[0], spc[1], spc[2]);
+			copy.GetSpacingScales(spc[0], spc[1], spc[2]);
+			vd->SetSpacingScales(spc[0], spc[1], spc[2]);
+		}
+		else
+		{
+			copy.GetSpacings(spc[0], spc[1], spc[2]);
+			vd->SetSpacings(spc[0], spc[1], spc[2]);
+		}
+		double scl[3];
+		copy.GetScalings(scl[0], scl[1], scl[2]);
+		vd->SetScalings(scl[0], scl[1], scl[2]);
+
+		vd->SetColor(copy.GetColor());
+		bool bval = copy.GetEnableAlpha();
+		vd->SetEnableAlpha(copy.GetEnableAlpha());
+		vd->SetShading(copy.GetShading());
+		vd->SetShadow(copy.GetShadow());
+		double darkness;
+		copy.GetShadowParams(darkness);
+		vd->SetShadowParams(darkness);
+		//other settings
+		double amb, diff, spec, shine;
+		copy.GetMaterial(amb, diff, spec, shine);
+		vd->Set3DGamma(copy.Get3DGamma());
+		vd->SetBoundary(copy.GetBoundary());
+		vd->SetOffset(copy.GetOffset());
+		vd->SetLeftThresh(copy.GetLeftThresh());
+		vd->SetRightThresh(copy.GetRightThresh());
+		vd->SetAlpha(copy.GetAlpha());
+		vd->SetSampleRate(copy.GetSampleRate());
+		vd->SetMaterial(amb, diff, spec, shine);
+
+		//current channel index
+		vd->m_chan = copy.m_chan;
+		vd->m_time = time;
+
+		//modes
+		vd->SetMode(copy.GetMode());
+		//stream modes
+		vd->SetStreamMode(copy.GetStreamMode());
+
+		//volume properties
+		vd->SetScalarScale(copy.GetScalarScale());
+		vd->SetGMScale(copy.GetGMScale());
+		vd->SetHSV();
+
+		//noise reduction
+		vd->SetNR(copy.GetNR());
+
+		//display control
+		vd->SetDisp(copy.GetDisp());
+		vd->SetDrawBounds(copy.GetDrawBounds());
+		vd->m_test_wiref = copy.m_test_wiref;
+
+		//colormap mode
+		vd->SetColormapMode(copy.GetColormapMode());
+		vd->SetColormapDisp(copy.GetColormapDisp());
+		vd->SetColormapValues(copy.m_colormap_low_value, copy.m_colormap_hi_value);
+		vd->m_colormap = copy.m_colormap;
+		vd->m_colormap_proj = copy.m_colormap_proj;
+
+		//blend mode
+		vd->SetBlendMode(copy.GetBlendMode());
+
+		vd->m_2d_mask = 0;
+		vd->m_2d_weight1 = 0;
+		vd->m_2d_weight2 = 0;
+		vd->m_2d_dmap = 0;
+
+		//clip distance
+		int dists[3];
+		copy.GetClipDistance(dists[0], dists[1], dists[2]);
+		vd->SetClipDistance(dists[0], dists[1], dists[2]);
+
+		//compression
+		vd->m_compression = false;
+
+		//skip brick
+		vd->m_skip_brick = false;
+
+		//legend
+		vd->m_legend = true;
+
+		//interpolate
+		vd->m_interpolate = copy.m_interpolate;
+
+		vd->m_annotation = copy.m_annotation;
+
+		vd->m_landmarks = copy.m_landmarks;
 	}
-	double scl[3];
-	copy.GetScalings(scl[0], scl[1], scl[2]);
-	vd->SetScalings(scl[0], scl[1], scl[2]);
-	
-	vd->SetColor(copy.GetColor());
-	bool bval = copy.GetEnableAlpha();
-	vd->SetEnableAlpha(copy.GetEnableAlpha());
-	vd->SetShading(copy.GetShading());
-	vd->SetShadow(copy.GetShadow());
-	double darkness;
-	copy.GetShadowParams(darkness);
-	vd->SetShadowParams(darkness);
-	//other settings
-	double amb, diff, spec, shine;
-	copy.GetMaterial(amb, diff, spec, shine);
-	vd->Set3DGamma(copy.Get3DGamma());
-	vd->SetBoundary(copy.GetBoundary());
-	vd->SetOffset(copy.GetOffset());
-	vd->SetLeftThresh(copy.GetLeftThresh());
-	vd->SetRightThresh(copy.GetRightThresh());
-	vd->SetAlpha(copy.GetAlpha());
-	vd->SetSampleRate(copy.GetSampleRate());
-	vd->SetMaterial(amb, diff, spec, shine);
-
-	//current channel index
-	vd->m_chan = copy.m_chan;
-	vd->m_time = 0;
-
-	//modes
-	vd->SetMode(copy.GetMode());
-	//stream modes
-	vd->SetStreamMode(copy.GetStreamMode());
-	
-	//volume properties
-	vd->SetScalarScale(copy.GetScalarScale());
-	vd->SetGMScale(copy.GetGMScale());
-	vd->SetHSV();
-
-	//noise reduction
-	vd->SetNR(copy.GetNR());
-	
-	//display control
-	vd->SetDisp(copy.GetDisp());
-	vd->SetDrawBounds(copy.GetDrawBounds());
-	vd->m_test_wiref = copy.m_test_wiref;
-
-	//colormap mode
-	vd->SetColormapMode(copy.GetColormapMode());
-	vd->SetColormapDisp(copy.GetColormapDisp());
-	vd->SetColormapValues(copy.m_colormap_low_value, copy.m_colormap_hi_value);
-	vd->m_colormap = copy.m_colormap;
-	vd->m_colormap_proj = copy.m_colormap_proj;
-	
-	//blend mode
-	vd->SetBlendMode(copy.GetBlendMode());
-
-	vd->m_2d_mask = 0;
-	vd->m_2d_weight1 = 0;
-	vd->m_2d_weight2 = 0;
-	vd->m_2d_dmap = 0;
-
-	//clip distance
-	int dists[3];
-	copy.GetClipDistance(dists[0], dists[1], dists[2]);
-	vd->SetClipDistance(dists[0], dists[1], dists[2]);
-	
-	//compression
-	vd->m_compression = false;
-
-	//skip brick
-	vd->m_skip_brick = false;
-
-	//legend
-	vd->m_legend = true;
-	
-	//interpolate
-	vd->m_interpolate = copy.m_interpolate;
-
-	vd->m_annotation = copy.m_annotation;
-
-	vd->m_landmarks = copy.m_landmarks;
 
 	return vd;
 }
@@ -4750,103 +4805,118 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 	for (i=(ch_num>=0?ch_num:0);
 		i<(ch_num>=0?ch_num+1:chan); i++)
 	{
-		VolumeData *vd = new VolumeData();
-		vd->SetSkipBrick(m_skip_brick);
-		Nrrd* data = reader->Convert(t_num>=0?t_num:reader->GetCurTime(), i, true);
-		if (!data)
-			continue;
-		
-		wxString name;
-		if (type != LOAD_TYPE_BRKXML)
+		VolumeData *found_vd = NULL;
+		VolumeData *vd;
+		for (int j = 0; j < m_vd_list.size(); j++)
+			if (m_vd_list[j] && m_vd_list[j]->GetReader() == reader && !m_vd_list[j]->GetDup() &&
+				m_vd_list[j]->GetCurChannel() == i)
+				found_vd = m_vd_list[j];
+		if (found_vd)
 		{
-			name = wxString(reader->GetDataName());
-			if (chan > 1)
-				name += wxString::Format("_Ch%d", i+1);
-		}
-		else 
-		{
-			BRKXMLReader* breader = (BRKXMLReader*)reader;
-			name = reader->GetDataName();
-			name = name.Mid(0, name.find_last_of(wxT('.')));
-			if(ch_num > 1) name = wxT("_Ch") + wxString::Format("%i", i);
-			pathname = filename;
-			breader->SetCurChan(i);
-			breader->SetCurTime(0);
-		}
-
-		bool valid_spc = reader->IsSpcInfoValid();
-		if (vd && vd->Load(data, name, pathname, (type == LOAD_TYPE_BRKXML) ? (BRKXMLReader*)reader : NULL))
-		{
-			if (m_load_mask)
-			{
-				//mask
-				MSKReader msk_reader;
-				std::wstring str = reader->GetPathName();
-				msk_reader.SetFile(str);
-				Nrrd* mask = msk_reader.Convert(t_num>=0?t_num:reader->GetCurTime(), i, true);
-				if (mask)
-					vd->LoadMask(mask);
-				//label mask
-				LBLReader lbl_reader;
-				str = reader->GetPathName();
-				lbl_reader.SetFile(str);
-
-				Nrrd* label = lbl_reader.Convert(t_num>=0?t_num:reader->GetCurTime(), i, true);
-				if (label)
-					vd->LoadLabel(label);
-			}
-			if (type == LOAD_TYPE_BRKXML) ((BRKXMLReader*)reader)->SetLevel(0);
-			vd->SetBaseSpacings(reader->GetXSpc(),
-				reader->GetYSpc(),
-				reader->GetZSpc());
-			vd->SetSpcFromFile(valid_spc);
-			vd->SetScalarScale(reader->GetScalarScale());
-			vd->SetMaxValue(reader->GetMaxValue());
-			vd->SetCurTime(reader->GetCurTime());
-			vd->SetCurChannel(i);
-			//++
+			vd = VolumeData::DeepCopy(*found_vd, true, this);
+			AddVolumeData(vd);
 			result++;
 		}
 		else
 		{
-			delete vd;
-			continue;
-		}
-		vd->SetReader(reader);
-		vd->SetCompression(m_compression);
-		AddVolumeData(vd);
+			VolumeData *vd = new VolumeData();
+			vd->SetSkipBrick(m_skip_brick);
+			Nrrd* data = reader->Convert(t_num>=0?t_num:reader->GetCurTime(), i, true);
+			if (!data)
+				continue;
 
-		SetVolumeDefault(vd);
+			wxString name;
+			if (type != LOAD_TYPE_BRKXML)
+			{
+				name = wxString(reader->GetDataName());
+				if (chan > 1)
+					name += wxString::Format("_Ch%d", i+1);
+			}
+			else 
+			{
+				BRKXMLReader* breader = (BRKXMLReader*)reader;
+				name = reader->GetDataName();
+				name = name.Mid(0, name.find_last_of(wxT('.')));
+				if(ch_num > 1) name = wxT("_Ch") + wxString::Format("%i", i);
+				pathname = filename;
+				breader->SetCurChan(i);
+				breader->SetCurTime(0);
+			}
 
-		//get excitation wavelength
-		double wavelength = reader->GetExcitationWavelength(i);
-		if (wavelength > 0.0) {
-			FLIVR::Color col = GetWavelengthColor(wavelength);
-			vd->SetColor(col);
-		}
-		else if (wavelength < 0.) {
-			FLIVR::Color white = Color(1.0, 1.0, 1.0);
-			vd->SetColor(white);
-		}
-		else
-		{
-			FLIVR::Color white = Color(1.0, 1.0, 1.0);
-			FLIVR::Color red   = Color(1.0, 0.0, 0.0);
-			FLIVR::Color green = Color(0.0, 1.0, 0.0);
-			FLIVR::Color blue  = Color(0.0, 0.0, 1.0);
-			if (chan == 1) {
+			bool valid_spc = reader->IsSpcInfoValid();
+			if (vd && vd->Load(data, name, pathname, (type == LOAD_TYPE_BRKXML) ? (BRKXMLReader*)reader : NULL))
+			{
+				if (m_load_mask)
+				{
+					//mask
+					MSKReader msk_reader;
+					std::wstring str = reader->GetPathName();
+					msk_reader.SetFile(str);
+					Nrrd* mask = msk_reader.Convert(t_num>=0?t_num:reader->GetCurTime(), i, true);
+					if (mask)
+						vd->LoadMask(mask);
+					//label mask
+					LBLReader lbl_reader;
+					str = reader->GetPathName();
+					lbl_reader.SetFile(str);
+
+					Nrrd* label = lbl_reader.Convert(t_num>=0?t_num:reader->GetCurTime(), i, true);
+					if (label)
+						vd->LoadLabel(label);
+				}
+				if (type == LOAD_TYPE_BRKXML) ((BRKXMLReader*)reader)->SetLevel(0);
+				vd->SetBaseSpacings(reader->GetXSpc(),
+					reader->GetYSpc(),
+					reader->GetZSpc());
+				vd->SetSpcFromFile(valid_spc);
+				vd->SetScalarScale(reader->GetScalarScale());
+				vd->SetMaxValue(reader->GetMaxValue());
+				vd->SetCurTime(reader->GetCurTime());
+				vd->SetCurChannel(i);
+				//++
+				result++;
+			}
+			else
+			{
+				delete vd;
+				continue;
+			}
+			vd->SetReader(reader);
+			vd->SetCompression(m_compression);
+			AddVolumeData(vd);
+
+			SetVolumeDefault(vd);
+
+			//get excitation wavelength
+			double wavelength = reader->GetExcitationWavelength(i);
+			if (wavelength > 0.0) {
+				FLIVR::Color col = GetWavelengthColor(wavelength);
+				vd->SetColor(col);
+			}
+			else if (wavelength < 0.) {
+				FLIVR::Color white = Color(1.0, 1.0, 1.0);
 				vd->SetColor(white);
 			}
 			else
 			{
-				if (i == 0)
-					vd->SetColor(red);
-				else if (i == 1)
-					vd->SetColor(green);
-				else if (i == 2)
-					vd->SetColor(blue);
-				else
+				FLIVR::Color white = Color(1.0, 1.0, 1.0);
+				FLIVR::Color red   = Color(1.0, 0.0, 0.0);
+				FLIVR::Color green = Color(0.0, 1.0, 0.0);
+				FLIVR::Color blue  = Color(0.0, 0.0, 1.0);
+				if (chan == 1) {
 					vd->SetColor(white);
+				}
+				else
+				{
+					if (i == 0)
+						vd->SetColor(red);
+					else if (i == 1)
+						vd->SetColor(green);
+					else if (i == 2)
+						vd->SetColor(blue);
+					else
+						vd->SetColor(white);
+				}
 			}
 		}
 
@@ -4970,6 +5040,9 @@ int DataManager::GetMeshIndex(wxString &name)
 
 void DataManager::ReplaceVolumeData(int index, VolumeData *vd)
 {
+	if (index < 0 || index >= m_vd_list.size())
+		return;
+
 	VolumeData* data = m_vd_list[index];
 	if (data)
 	{
@@ -4981,6 +5054,9 @@ void DataManager::ReplaceVolumeData(int index, VolumeData *vd)
 
 void DataManager::RemoveVolumeData(int index)
 {
+	if (index < 0 || index >= m_vd_list.size())
+		return;
+
 	VolumeData* data = m_vd_list[index];
 	if (data)
 	{
@@ -4988,6 +5064,23 @@ void DataManager::RemoveVolumeData(int index)
 		delete data;
 		data = 0;
 	}	
+}
+
+void DataManager::RemoveVolumeDataset(BaseReader *reader, int channel)
+{
+	if (!reader || channel < 0)
+		return;
+
+	for (int i = m_vd_list.size()-1; i >= 0; i--)
+	{
+		VolumeData* data = m_vd_list[i];
+		if (data && data->GetReader() == reader && data->GetCurChannel() == channel)
+		{
+			m_vd_list.erase(m_vd_list.begin()+i);
+			delete data;
+			data = 0;
+		}
+	}
 }
 
 void DataManager::RemoveMeshData(int index)
@@ -5040,13 +5133,13 @@ void DataManager::AddVolumeData(VolumeData* vd)
 	m_vd_list.push_back(vd);
 }
 
-VolumeData* DataManager::DuplicateVolumeData(VolumeData* vd)
+VolumeData* DataManager::DuplicateVolumeData(VolumeData* vd, bool use_default_settings)
 {
 	VolumeData* vd_new = 0;
 
 	if (vd)
 	{
-		vd_new = VolumeData::DeepCopy(*vd);
+		vd_new = VolumeData::DeepCopy(*vd, use_default_settings, this);
 		if (vd_new) AddVolumeData(vd_new);
 	}
 

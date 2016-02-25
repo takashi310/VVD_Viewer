@@ -1168,7 +1168,6 @@ void SettingDlg::OnMouseIntCheck(wxCommandEvent &event)
 			if (vrv)
 			{
 				vrv->SetAdaptive(m_mouse_int);
-				vrv->RefreshGL();
 			}
 		}
 	}
@@ -1190,7 +1189,6 @@ void SettingDlg::OnMouseLvCheck(wxCommandEvent &event)
 			if (vrv)
 			{
 				vrv->SetAdaptiveRes(m_mouse_lv);
-				vrv->RefreshGL();
 			}
 		}
 	}

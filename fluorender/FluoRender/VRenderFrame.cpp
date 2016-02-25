@@ -43,6 +43,7 @@ DEALINGS IN THE SOFTWARE.
 #include <iostream>
 #include <sstream>
 #include <cctype>
+#include <algorithm>
 #include <curl/curl.h>
 
 //resources
@@ -1532,6 +1533,9 @@ void VRenderFrame::UpdateTreeColors()
 
 void VRenderFrame::UpdateTree(wxString name, bool set_calc)
 {
+	if (!m_tree_panel)
+		return;
+
 	m_tree_panel->SaveExpState();
 
 	m_tree_panel->SetEvtHandlerEnabled(false);
@@ -1548,6 +1552,10 @@ void VRenderFrame::UpdateTree(wxString name, bool set_calc)
 	m_tree_panel->AppendIcon();
 	m_tree_panel->Expand(root_item);
 	m_tree_panel->ChangeIconColor(0, wxColor(255, 255, 255));
+
+	vector<int> used_vols;
+	int dm_vnum = m_data_mgr.GetVolumeNum();
+	if (dm_vnum > 0) used_vols.resize(dm_vnum, 0);
 
 	for (int i=0 ; i<(int)m_vrv_list.size() ; i++)
 	{
@@ -1576,6 +1584,8 @@ void VRenderFrame::UpdateTree(wxString name, bool set_calc)
 					VolumeData* vd = (VolumeData*)layer;
 					if (!vd)
 						break;
+					int mvid = m_data_mgr.GetVolumeIndex(vd->GetName());
+					if (mvid >= 0) used_vols.at(mvid) = 1;
 					//append icon for volume
 					m_tree_panel->AppendIcon();
 					Color c = vd->GetColor();
@@ -1649,6 +1659,8 @@ void VRenderFrame::UpdateTree(wxString name, bool set_calc)
 						VolumeData* vd = group->GetVolumeData(k);
 						if (!vd)
 							continue;
+						int mvid = m_data_mgr.GetVolumeIndex(vd->GetName());
+						if (mvid >= 0) used_vols.at(mvid) = 1;
 						//add icon
 						m_tree_panel->AppendIcon();
 						Color c = vd->GetColor();
@@ -1708,6 +1720,16 @@ void VRenderFrame::UpdateTree(wxString name, bool set_calc)
 				}
 				break;
 			}
+		}
+	}
+
+	for (int j = dm_vnum-1; j >= 0; j--)
+	{
+		if (used_vols.at(j) == 0)
+		{
+			VolumeData *testvd = m_data_mgr.GetVolumeData(j);
+			if (testvd && testvd->GetDup())
+				m_data_mgr.RemoveVolumeData(j);
 		}
 	}
 
@@ -2225,7 +2247,7 @@ wxWindow* VRenderFrame::CreateExtraControlProjectSave(wxWindow* parent)
 
 	//compressed
 	wxCheckBox* ch_cmp = new wxCheckBox(panel, wxID_HIGHEST+3004,
-		"Lempel-Ziv-Welch Compression");
+		"Compression");
 	ch_cmp->Connect(ch_cmp->GetId(), wxEVT_COMMAND_CHECKBOX_CLICKED,
 		wxCommandEventHandler(VRenderFrame::OnChSaveCmpCheck), NULL, panel);
 	if (ch_cmp)
@@ -2335,8 +2357,8 @@ void VRenderFrame::SaveProject(wxString& filename)
 				wxString new_folder;
 				new_folder = filename + "_files";
 				CREATE_DIR(new_folder.fn_str());
-				str = new_folder + GETSLASH() + vd->GetName() + ".tif";
-				vd->Save(str, 0, false, VRenderFrame::GetCompression());
+				str = new_folder + GETSLASH() + vd->GetName() + ".nrrd";
+				vd->Save(str, 2, false, VRenderFrame::GetCompression());
 				fconfig.Write("path", str);
 			}
 			else
@@ -2955,7 +2977,10 @@ void VRenderFrame::OpenProject(wxString& filename)
 	m_adjust_view->SetVolumeData(0);
 	m_adjust_view->SetGroup(0);
 	m_adjust_view->SetGroupLink(0);
-
+	m_vrv_list[0]->Clear();
+	for (i=m_vrv_list.size()-1; i>0; i--)
+		DeleteVRenderView(i);
+	
 	wxFileInputStream is(filename);
 	if (!is.IsOk())
 		return;
@@ -3501,9 +3526,9 @@ void VRenderFrame::OpenProject(wxString& filename)
 		fconfig.SetPath("/views");
 		int num = fconfig.Read("num", 0l);
 
-		m_vrv_list[0]->Clear();
-		for (i=m_vrv_list.size()-1; i>0; i--)
-			DeleteVRenderView(i);
+		//m_vrv_list[0]->Clear();
+		//for (i=m_vrv_list.size()-1; i>0; i--)
+		//	DeleteVRenderView(i);
 		//VRenderView::ResetID();
 		DataGroup::ResetID();
 		MeshGroup::ResetID();

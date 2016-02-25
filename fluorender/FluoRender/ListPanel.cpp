@@ -258,8 +258,9 @@ void DataListCtrl::AddToView(int menu_index, long item)
             VRenderView* view = (*vr_frame->GetViewList())[menu_index];
             if (view)
             {
+			   /*
                VolumeData* vd_add = vd;
-
+			   
                for (int i=0; i<(int)vr_frame->GetViewList()->size(); i++)
                {
                   VRenderView* vrv = (*vr_frame->GetViewList())[i];
@@ -269,6 +270,8 @@ void DataListCtrl::AddToView(int menu_index, long item)
                      break;
                   }
                }
+			   */
+			   VolumeData* vd_add = vr_frame->GetDataManager()->DuplicateVolumeData(vd, true);
 
                int chan_num = view->GetAny();
                view_empty = chan_num>0?false:view_empty;
@@ -400,7 +403,7 @@ wxWindow* DataListCtrl::CreateExtraControl(wxWindow* parent)
 
    //compressed
    wxCheckBox* ch1 = new wxCheckBox(panel, wxID_HIGHEST+3004,
-         "Lempel-Ziv-Welch Compression");
+         "Compression");
    ch1->Connect(ch1->GetId(), wxEVT_COMMAND_CHECKBOX_CLICKED,
          wxCommandEventHandler(DataListCtrl::OnCh1Check), NULL, panel);
    if (ch1)
@@ -677,26 +680,28 @@ void DataListCtrl::DeleteSelection()
          if (GetItemText(item) == "Volume")
          {
             name = GetText(item, 1);
+			DataManager* mgr = vr_frame->GetDataManager();
+			BaseReader *reader = NULL;
+			int chan = -1;
+			if (mgr)
+			{
+				VolumeData *vd = mgr->GetVolumeData(name);
+				reader = vd->GetReader();
+				chan = vd->GetCurChannel();
+			}
+
             int i;
             //from view
             for (i=0; i<(int)vr_frame->GetViewList()->size(); i++)
             {
                VRenderView* view = (*vr_frame->GetViewList())[i];
                if (view)
-               {
-                  view->RemoveVolumeData(name);
-               }
+                  view->RemoveVolumeDataset(reader, chan);
             }
             //from datamanager
-            DataManager* mgr = vr_frame->GetDataManager();
             if (mgr)
-            {
-               int index = mgr->GetVolumeIndex(name);
-               if (index != -1)
-               {
-                  mgr->RemoveVolumeData(index);
-               }
-            }
+               mgr->RemoveVolumeDataset(reader, chan);
+
          }
          else if (GetItemText(item) == "Mesh")
          {
@@ -758,25 +763,30 @@ void DataListCtrl::DeleteAll()
    while (item != -1 && vr_frame)
    {
       if (GetItemText(item) == "Volume")
-      {
-         name = GetText(item, 1);
-         int i;
-         //from view
-         for (i=0; i<(int)vr_frame->GetViewList()->size(); i++)
-         {
-            VRenderView* view = (*vr_frame->GetViewList())[i];
-            if (view)
-               view->RemoveVolumeData(name);
-         }
-         //from datamanager
-         DataManager* mgr = vr_frame->GetDataManager();
-         if (mgr)
-         {
-            int index = mgr->GetVolumeIndex(name);
-            if (index != -1)
-               mgr->RemoveVolumeData(index);
-         }
-      }
+	  {
+		  name = GetText(item, 1);
+		  DataManager* mgr = vr_frame->GetDataManager();
+		  BaseReader *reader = NULL;
+		  int chan = -1;
+		  if (mgr)
+		  {
+			  VolumeData *vd = mgr->GetVolumeData(name);
+			  reader = vd->GetReader();
+			  chan = vd->GetCurChannel();
+		  }
+
+		  int i;
+		  //from view
+		  for (i=0; i<(int)vr_frame->GetViewList()->size(); i++)
+		  {
+			  VRenderView* view = (*vr_frame->GetViewList())[i];
+			  if (view)
+				  view->RemoveVolumeDataset(reader, chan);
+		  }
+		  //from datamanager
+		  if (mgr)
+			  mgr->RemoveVolumeDataset(reader, chan);
+	  }
       else if (GetItemText(item) == "Mesh")
       {
          name = GetText(item, 1);
