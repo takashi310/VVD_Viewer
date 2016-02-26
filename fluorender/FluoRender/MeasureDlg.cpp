@@ -79,8 +79,8 @@ wxListCtrl(parent, id, pos, size, style),
 	m_name_disp = new wxTextCtrl(this, ID_RulerNameDispText, "",
 		wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
 	m_name_disp->Hide();
-    m_color_picker = new wxColourPickerCtrl(this, 
-		ID_ColorPicker);
+    m_color_picker = new wxColourPickerCtrl(this, ID_ColorPicker,
+        *wxBLACK, wxDefaultPosition, wxDefaultSize);
 	m_color_picker->Hide();
 	//description edit
 	m_description_text = new wxTextCtrl(this, ID_RulerDescriptionText, "",
@@ -781,13 +781,24 @@ wxPanel(parent, id, pos, size, style, name),
 
 	wxStaticLine *st_line = new wxStaticLine(this);
 
+#ifdef _DARWIN
+    wxStaticText *st = new wxStaticText(this, 0, "Pointing Method:",
+        wxDefaultPosition, wxSize(110, -1), wxALIGN_CENTER);
+#else
 	wxStaticText *st = new wxStaticText(this, 0, "Pointing Method:",
 		wxDefaultPosition, wxSize(100, -1), wxALIGN_CENTER);
+#endif
 
 	//options
-	wxBoxSizer* sizer_1 = new wxBoxSizer(wxHORIZONTAL);
-	m_int_method_combo = new wxComboBox(this, ID_IntensityMethodsCombo, "",
-		wxDefaultPosition, wxSize(155, 24), 0, NULL, wxCB_READONLY);
+#ifdef _DARWIN
+    wxBoxSizer* sizer_1 = new wxBoxSizer(wxHORIZONTAL);
+    m_int_method_combo = new wxComboBox(this, ID_IntensityMethodsCombo, "",
+        wxDefaultPosition, wxSize(162, 30), 0, NULL, wxCB_READONLY);
+#else
+    wxBoxSizer* sizer_1 = new wxBoxSizer(wxHORIZONTAL);
+    m_int_method_combo = new wxComboBox(this, ID_IntensityMethodsCombo, "",
+        wxDefaultPosition, wxSize(155, 24), 0, NULL, wxCB_READONLY);
+#endif
 	vector<string> int_method_list;
 	int_method_list.push_back("View Plane");
 	int_method_list.push_back("Maximum Intensity");

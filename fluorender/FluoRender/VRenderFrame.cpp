@@ -2989,6 +2989,9 @@ void VRenderFrame::SaveProject(wxString& filename)
 void VRenderFrame::OpenProject(wxString& filename)
 {
 	m_data_mgr.SetProjectPath(filename);
+    
+    SetEvtHandlerEnabled(false);
+    Freeze();
 
 	int iVal;
 	int i, j, k;
@@ -4523,6 +4526,9 @@ void VRenderFrame::OpenProject(wxString& filename)
 	if (m_movie_view)
 		m_movie_view->SetView(0);
 	delete prg_diag;
+    
+    Thaw();
+    SetEvtHandlerEnabled(true);
 }
 
 void VRenderFrame::OnSettings(wxCommandEvent& WXUNUSED(event))
