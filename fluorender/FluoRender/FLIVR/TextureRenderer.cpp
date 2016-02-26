@@ -221,6 +221,11 @@ namespace FLIVR
 			glDeleteBuffers(1, &m_quad_vbo);
 		if (glIsVertexArray(m_quad_vao))
 			glDeleteVertexArrays(1, &m_quad_vao);
+
+		if (!glIsTexture(palette_tex_id_))
+			glDeleteTextures(1, &palette_tex_id_);
+		if (!glIsTexture(base_palette_tex_id_))
+			glDeleteTextures(1, &base_palette_tex_id_);
 	}
 
 	void TextureRenderer::init_palette()
@@ -953,6 +958,108 @@ namespace FLIVR
 
 		clear_sel_ids();
 	}
+
+	wstring TextureRenderer::export_roi_tree()
+	{
+		wstring str;
+
+		export_roi_tree_r(str, roi_tree_, wstring(L""));
+
+		return str;
+	}
+
+	void TextureRenderer::export_roi_tree_r(wstring &buf, const wptree& tree, const wstring& parent)
+	{
+		for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
+		{
+			wstring c_path = (parent.empty() ? L"" : parent + L".") + child->first;
+			wstring strid = child->first;
+			int id = -1;
+			try
+			{
+				id = boost::lexical_cast<int>(strid);
+				if (id != -1)
+				{
+					if (const auto val = tree.get_optional<wstring>(child->first))
+					{
+						buf += c_path + L"\n";	//path
+						buf += *val + L"\n";	//name
+						
+						//id and color
+						wstringstream wss;
+						unsigned char r, g, b;
+						get_id_color(r, g, b, id);
+						wss << id << L" " << (int)r << L" " << (int)g << L" " << (int)b << L"\n";
+						buf += wss.str();
+					}
+				}
+			}
+			catch (boost::bad_lexical_cast e)
+			{
+				cerr << "TextureRenderer::update_sel_segs(const wptree& tree): bad_lexical_cast" << endl;
+			}
+			export_roi_tree_r(buf, child->second, c_path);
+		}
+	}
+
+	string TextureRenderer::exprot_selected_roi_ids()
+	{
+		stringstream ss;
+		for(auto ite = sel_ids_.begin(); ite != sel_ids_.end(); ++ite)
+			ss << *ite << " ";
+
+		return ss.str();
+	}
+
+	void TextureRenderer::import_roi_tree(const wstring &tree)
+	{
+		wistringstream wiss(tree);
+		
+		init_palette();
+
+		while (1)
+		{
+			wstring path, name, strcol;
+			
+			if (!getline(wiss, path))
+				break;
+			if (!getline(wiss, name))
+				break;
+			if (!getline(wiss, strcol))
+				break;
+			
+			vector<int> col;
+			int ival;
+			std::wistringstream ls(strcol);
+			while (ls >> ival)
+				col.push_back(ival);
+			
+			if (col.size() < 4)
+				break;
+
+			roi_tree_.add(path, name);
+			set_id_color((unsigned char)col[1], (unsigned char)col[2], (unsigned char)col[3], false, col[0]); 
+		}
+
+		update_palette(desel_palette_mode_, desel_col_fac_);
+	}
+
+	void TextureRenderer::import_selected_ids(const string &sel_ids_str)
+	{
+		istringstream iss(sel_ids_str);
+
+		clear_sel_ids();
+
+		int id;
+		while (iss >> id)
+		{
+			if (id != 0 && id != -1)
+				add_sel_id(id);
+		}
+
+		update_palette(desel_palette_mode_, desel_col_fac_);
+	}
+
 
 	//set the texture for rendering
 	void TextureRenderer::set_texture(Texture* tex)

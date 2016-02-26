@@ -132,7 +132,7 @@ namespace FLIVR
 	"{\n" \
 	"	vec4 t = vec4(OutTexCoord, 1.0);\n" \
 	"	vec4 c = texture(tex0, t.xy);\n" \
-	"	FragColor = c;\n" \
+	"	FragColor = clamp(c, vec4(0.0), vec4(1.0));\n" \
 	"}\n"
 
 #define IMG_SHADER_CODE_BRIGHTNESS_CONTRAST \

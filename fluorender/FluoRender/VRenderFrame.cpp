@@ -1584,7 +1584,8 @@ void VRenderFrame::UpdateTree(wxString name, bool set_calc)
 					VolumeData* vd = (VolumeData*)layer;
 					if (!vd)
 						break;
-					int mvid = m_data_mgr.GetVolumeIndex(vd->GetName());
+					wxString vname = vd->GetName();
+					int mvid = m_data_mgr.GetVolumeIndex(vname);
 					if (mvid >= 0) used_vols.at(mvid) = 1;
 					//append icon for volume
 					m_tree_panel->AppendIcon();
@@ -1659,7 +1660,8 @@ void VRenderFrame::UpdateTree(wxString name, bool set_calc)
 						VolumeData* vd = group->GetVolumeData(k);
 						if (!vd)
 							continue;
-						int mvid = m_data_mgr.GetVolumeIndex(vd->GetName());
+						wxString vname = vd->GetName();
+						int mvid = m_data_mgr.GetVolumeIndex(vname);
 						if (mvid >= 0) used_vols.at(mvid) = 1;
 						//add icon
 						m_tree_panel->AppendIcon();

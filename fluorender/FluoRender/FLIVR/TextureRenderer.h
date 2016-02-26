@@ -220,6 +220,11 @@ namespace FLIVR
 		 void clear_sel_ids();
 		 void clear_sel_ids_roi_only();
 		 void clear_roi();
+		 wstring export_roi_tree();
+		 void export_roi_tree_r(wstring &buf, const boost::property_tree::wptree& tree, const wstring& parent);
+		 string exprot_selected_roi_ids();
+		 void import_roi_tree(const wstring &tree);
+		 void import_selected_ids(const string &sel_ids_str);
 		 
          //memory swap
          static void set_mem_swap(bool val) {mem_swap_ = val;}
