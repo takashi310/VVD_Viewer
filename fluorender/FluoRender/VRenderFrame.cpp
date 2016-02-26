@@ -1584,8 +1584,7 @@ void VRenderFrame::UpdateTree(wxString name, bool set_calc)
 					VolumeData* vd = (VolumeData*)layer;
 					if (!vd)
 						break;
-                    wxString vname = vd->GetName();
-					int mvid = m_data_mgr.GetVolumeIndex(vname);
+					int mvid = m_data_mgr.GetVolumeIndex(vd->GetName());
 					if (mvid >= 0) used_vols.at(mvid) = 1;
 					//append icon for volume
 					m_tree_panel->AppendIcon();
@@ -1660,9 +1659,7 @@ void VRenderFrame::UpdateTree(wxString name, bool set_calc)
 						VolumeData* vd = group->GetVolumeData(k);
 						if (!vd)
 							continue;
-                        wxString vname;
-                        vname = vd->GetName();
-						int mvid = m_data_mgr.GetVolumeIndex(vname);
+						int mvid = m_data_mgr.GetVolumeIndex(vd->GetName());
 						if (mvid >= 0) used_vols.at(mvid) = 1;
 						//add icon
 						m_tree_panel->AppendIcon();
@@ -2366,6 +2363,7 @@ void VRenderFrame::SaveProject(wxString& filename)
 			}
 			else
 				fconfig.Write("path", str);
+
 			if (vd->GetReader())
 			{
 				fconfig.Write("slice_seq", vd->GetReader()->GetSliceSeq());
@@ -2503,6 +2501,31 @@ void VRenderFrame::SaveProject(wxString& filename)
 
 			//legend
 			fconfig.Write("legend", vd->GetLegend());
+
+			//roi
+			wstring tree_str = vd->ExportROITree();
+			if (!tree_str.empty())
+			{
+				wxString new_folder;
+				new_folder = filename + "_files";
+				CREATE_DIR(new_folder.fn_str());
+				str = new_folder + GETSLASH() + vd->GetName() + ".pal";
+				wxFile *wf = new wxFile(str, wxFile::write);
+				if (wf->IsOpened())
+				{
+					wxString wxstr(tree_str);
+					wf->Write(wxstr);
+					fconfig.Write("exported_tree_path", str);
+					delete wf;
+				}
+			}
+			string roi_ids_str = vd->ExportSelIDs();
+			if (!roi_ids_str.empty())
+			{
+				wxString wxstr(roi_ids_str);
+				fconfig.Write("selected_rois", wxstr);
+			}
+			fconfig.Write("roi_disp_mode", vd->GetIDColDispMode());
 
 			//mask
 			Nrrd* mask = vd->GetMask(true);
@@ -3367,6 +3390,22 @@ void VRenderFrame::OpenProject(wxString& filename)
 						//legend
 						if (fconfig.Read("legend", &bVal))
 							vd->SetLegend(bVal);
+
+						//roi
+						if (fconfig.Read("exported_tree_path", &str))
+						{
+							wxFile *rf = new wxFile(str, wxFile::read);
+							if (rf->IsOpened())
+							{
+								wxString wxstr;
+								rf->ReadAll(&wxstr);
+								vd->ImportROITree(wxstr.ToStdWstring());
+							}
+						}
+						if (fconfig.Read("selected_rois", &str))
+							vd->ImportSelIDs(str.ToStdString());
+						if (fconfig.Read("roi_disp_mode", &iVal))
+							vd->SetIDColDispMode(iVal);
 
 						//mask
 						if (fconfig.Read("mask", &str))
