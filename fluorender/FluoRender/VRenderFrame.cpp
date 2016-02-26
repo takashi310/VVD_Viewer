@@ -2508,18 +2508,8 @@ void VRenderFrame::SaveProject(wxString& filename)
 			wstring tree_str = vd->ExportROITree();
 			if (!tree_str.empty())
 			{
-				wxString new_folder;
-				new_folder = filename + "_files";
-				CREATE_DIR(new_folder.fn_str());
-				str = new_folder + GETSLASH() + vd->GetName() + ".pal";
-				wxFile *wf = new wxFile(str, wxFile::write);
-				if (wf->IsOpened())
-				{
-					wxString wxstr(tree_str);
-					wf->Write(wxstr);
-					fconfig.Write("exported_tree_path", str);
-					delete wf;
-				}
+				wxString wxstr(tree_str);
+				fconfig.Write("roi_tree", wxstr);
 			}
 			string roi_ids_str = vd->ExportSelIDs();
 			if (!roi_ids_str.empty())
@@ -2894,6 +2884,10 @@ void VRenderFrame::SaveProject(wxString& filename)
 	fconfig.Write("ca_thresh", m_brush_tool_dlg->GetDftCAThresh());
 	fconfig.Write("nr_thresh", m_brush_tool_dlg->GetDftNRThresh());
 	fconfig.Write("nr_size", m_brush_tool_dlg->GetDftNRSize());
+	//tree_panel
+	fconfig.SetPath("/tree_panel");
+	wxString item_states = m_tree_panel->ExportExpState();
+	fconfig.Write("exp_states", item_states);
 	//ui layout
 	fconfig.SetPath("/ui_layout");
 	fconfig.Write("ui_main_tb", m_main_tb->IsShown());
@@ -3394,16 +3388,8 @@ void VRenderFrame::OpenProject(wxString& filename)
 							vd->SetLegend(bVal);
 
 						//roi
-						if (fconfig.Read("exported_tree_path", &str))
-						{
-							wxFile *rf = new wxFile(str, wxFile::read);
-							if (rf->IsOpened())
-							{
-								wxString wxstr;
-								rf->ReadAll(&wxstr);
-								vd->ImportROITree(wxstr.ToStdWstring());
-							}
-						}
+						if (fconfig.Read("roi_tree", &str))
+							vd->ImportROITree(str.ToStdWstring());
 						if (fconfig.Read("selected_rois", &str))
 							vd->ImportSelIDs(str.ToStdString());
 						if (fconfig.Read("roi_disp_mode", &iVal))
@@ -4229,6 +4215,13 @@ void VRenderFrame::OpenProject(wxString& filename)
 		}
 	}
 
+	wxString expstate;
+	if (fconfig.Exists("/tree_panel"))
+	{
+		fconfig.SetPath("/tree_panel");
+		fconfig.Read("exp_states", &expstate);
+	}
+
 	//ui layout
 	if (fconfig.Exists("/ui_layout"))
 	{
@@ -4522,6 +4515,9 @@ void VRenderFrame::OpenProject(wxString& filename)
 	}
 	else
 		UpdateTree();
+
+	if (!expstate.IsEmpty())
+		m_tree_panel->ImportExpState(expstate.ToStdString());
 	RefreshVRenderViews();
 
 	if (m_movie_view)

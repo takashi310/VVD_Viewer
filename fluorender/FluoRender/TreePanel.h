@@ -168,6 +168,8 @@ public:
 	void SaveExpState(wxTreeItemId node, const wxString& prefix=wxT(""));
 	void LoadExpState();
 	void LoadExpState(wxTreeItemId node, const wxString& prefix=wxT(""), bool expand_newitem=true);
+	std::string ExportExpState();
+	void ImportExpState(const std::string &state);
 
 	void TraversalExpand(wxTreeItemId item);
 	wxTreeItemId GetParentVolItem(wxTreeItemId item);
@@ -324,6 +326,8 @@ public:
 
 	void SaveExpState();
 	void LoadExpState();
+	std::string ExportExpState();
+	void ImportExpState(const std::string &state);
 
 	wxTreeItemId GetParentVolItem(wxTreeItemId item);
 	wxTreeItemId GetNextSibling_loop(wxTreeItemId item);

@@ -2853,6 +2853,47 @@ void DataTreeCtrl::LoadExpState(wxTreeItemId node, const wxString& prefix, bool 
 	}
 }
 
+string DataTreeCtrl::ExportExpState()
+{
+	string rval;
+
+	SaveExpState();
+
+	for (auto ite : m_exp_state)
+	{
+		rval += ite.first + "\n";
+		if (ite.second) rval += "1";
+		else rval += "0";
+		rval += "\n";
+	}
+
+	return rval;
+}
+
+void DataTreeCtrl::ImportExpState(const string &state)
+{
+	stringstream ss(state);
+
+	m_exp_state.clear();
+
+	while (1)
+	{
+		string key, strval;
+		if (!getline(ss, key))
+			break;
+		if (!getline(ss, strval))
+			break;
+		
+		if (strval == "1")
+			m_exp_state[key] = true;
+		else if (strval == "0")
+			m_exp_state[key] = false;
+	}
+
+	LoadExpState();
+}
+
+
 void DataTreeCtrl::TraversalExpand(wxTreeItemId item)
 {
 	if (!item.IsOk()) return;
@@ -3592,6 +3633,18 @@ void TreePanel::LoadExpState()
 {
 	if (m_datatree) 
 		m_datatree->LoadExpState();
+}
+
+string TreePanel::ExportExpState()
+{
+	if (!m_datatree) return string();
+	return m_datatree->ExportExpState();
+}
+
+void TreePanel::ImportExpState(const string &state)
+{
+	if (m_datatree) 
+		m_datatree->ImportExpState(state);
 }
 
 wxTreeItemId TreePanel::GetParentVolItem(wxTreeItemId item)
