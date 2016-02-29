@@ -631,10 +631,14 @@ VRenderFrame::VRenderFrame(
 	m_top_menu->Append(m_top_tools,wxT("&Tools"));
 	m_top_menu->Append(m_top_window,wxT("&Windows"));
 	m_top_menu->Append(m_top_help,wxT("&Help"));
-#ifdef _DARWIN
+//#ifdef _DARWIN
 	SetMenuBar(m_top_menu);
-#endif
-
+//#endif
+/*
+	m_aui_mgr.GetPane(m_main_tb).Hide();
+	m_top_window->Check(ID_ShowHideToolbar,false);
+	m_aui_mgr.Update();
+*/
 	m_tree_panel->ExpandAll();
 }
 
@@ -2991,7 +2995,7 @@ void VRenderFrame::OpenProject(wxString& filename)
 	m_data_mgr.SetProjectPath(filename);
     
     SetEvtHandlerEnabled(false);
-    Freeze();
+    //Freeze();
 
 	int iVal;
 	int i, j, k;
@@ -4527,7 +4531,7 @@ void VRenderFrame::OpenProject(wxString& filename)
 		m_movie_view->SetView(0);
 	delete prg_diag;
     
-    Thaw();
+    //Thaw();
     SetEvtHandlerEnabled(true);
 }
 
