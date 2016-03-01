@@ -341,9 +341,9 @@ wxPanel(parent, id, pos, size,style, name),
 
 	sizer_b->Add(10, 5, 0);
 	sizer_b->Add(st, 0, wxALIGN_CENTER, 0);
-	//sizer_b->Add(m_color_text, 0, wxALIGN_CENTER, 0);
+	sizer_b->Add(m_color_text, 0, wxALIGN_CENTER, 0);
 	sizer_b->Add(m_color_btn, 0, wxALIGN_CENTER, 0);
-	m_color_text->Hide();
+	//m_color_text->Hide();
 
 	//spaceings
 	//x
