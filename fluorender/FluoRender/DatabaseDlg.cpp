@@ -318,7 +318,17 @@ void DBTreeCtrl::OnKeyDown(wxKeyEvent& event)
 {
 	if ( event.GetKeyCode() == WXK_DELETE ||
 		event.GetKeyCode() == WXK_BACK)
+	{
 		DeleteSelectedCatalog();
+
+		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+		if (!vr_frame)
+			return;
+
+		DatabaseDlg *db_dlg = vr_frame->GetDatabaseDlg();
+		if (db_dlg)
+			db_dlg->SaveDefault();
+	}
 	//event.Skip();
 }
 
@@ -741,6 +751,13 @@ DatabaseDlg::~DatabaseDlg()
 {
 	if (m_thread) m_thread->Delete();
 
+	//SaveDefault();
+}
+
+void DatabaseDlg::SaveDefault()
+{	
+	if (!m_dbtree) return;
+
     wxString expath = wxStandardPaths::Get().GetExecutablePath();
     expath = expath.BeforeLast(GETSLASH(),NULL);
 #ifdef _WIN32
@@ -754,7 +771,7 @@ DatabaseDlg::~DatabaseDlg()
 		wxTextOutputStream tout(os);
 
 		std::vector<DBCatalog> *cat = m_dbtree->GetCatalogDataIndex();
-		if (cat)
+		if (cat && !cat->empty())
 		{
 			for (int i = 0; i < cat->size(); i++)
 				tout << (*cat)[i].path << "\n";
@@ -981,4 +998,6 @@ void DatabaseDlg::OnAddDB(wxCommandEvent &event)
 	m_db_text->Clear();
 	
 	prg_diag->Destroy();
+
+	SaveDefault();
 }

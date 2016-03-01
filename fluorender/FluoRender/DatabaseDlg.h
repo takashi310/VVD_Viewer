@@ -256,6 +256,8 @@ public:
 		wxWindow* parent);
 	~DatabaseDlg();
 
+	void SaveDefault();
+
 	void StopSearch();
 
 private:
