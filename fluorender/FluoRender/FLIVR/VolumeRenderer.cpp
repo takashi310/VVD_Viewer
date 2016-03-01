@@ -637,7 +637,7 @@ namespace FLIVR
 			diag.y() / tex_->ny(),
 			diag.z() / tex_->nz());
 		double dt = cell_diag.length()/compute_rate_scale()/rate;
-*/		double dt = 0.0025/rate * compute_dt_fac(sampling_frq_fac, &rate_fac);
+*/		double dt = 0.0020/rate * compute_dt_fac(sampling_frq_fac, &rate_fac);
 		num_slices_ = (int)(diag.length()/dt);
 
 		vector<float> vertex;

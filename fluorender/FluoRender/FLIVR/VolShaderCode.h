@@ -291,6 +291,46 @@ namespace FLIVR
 	"	p.y = 0.5 * (loc2.x<0.0?(1.0+p.y*loc2.x):p.y*loc2.x); \n" \
 	"\n"
 
+#define VOL_ID_GRAD_COMPUTE_HI \
+	"	// VOL_GRAD_COMPUTE_HI\n" \
+	"	vec4 dir = loc4;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
+	"	vec4 r, p; \n" \
+	"	v = vec4(v.x); \n" \
+	"	n = vec4(0.0); \n" \
+	"	w = vec4(0.0);\n" \
+	"	w.x = dir.x; \n" \
+	"	p = clamp(TexCoord + w, 0.0, 1.0); \n" \
+	"	r = texture(tex0, p.stp); \n" \
+	"	r.x = (v.x==r.x?1.0:0.0) ; \n" \
+	"	n.x = r.x + n.x; \n" \
+	"	p = clamp(TexCoord - w, 0.0, 1.0); \n" \
+	"	r = texture(tex0, p.stp); \n" \
+	"	r.x = (v.x==r.x?1.0:0.0) ; \n" \
+	"	n.x = r.x - n.x; \n" \
+	"	w = vec4(0.0); \n" \
+	"	w.y = dir.y; \n" \
+	"	p = clamp(TexCoord + w, 0.0, 1.0); \n" \
+	"	r = texture(tex0, p.stp); \n" \
+	"	r.x = (v.x==r.x?1.0:0.0) ; \n" \
+	"	n.y = r.x + n.y; \n" \
+	"	p = clamp(TexCoord - w, 0.0, 1.0); \n" \
+	"	r = texture(tex0, p.stp); \n" \
+	"	r.x = (v.x==r.x?1.0:0.0) ; \n" \
+	"	n.y = r.x - n.y; \n" \
+	"	w = vec4(0.0); \n" \
+	"	w.z = dir.x<dir.z?dir.x:dir.z; \n" \
+	"	p = clamp(TexCoord + w, 0.0, 1.0); \n" \
+	"	r = texture(tex0, p.stp); \n" \
+	"	r.x = (v.x==r.x?1.0:0.0) ; \n" \
+	"	n.z = r.x + n.z; \n" \
+	"	p = clamp(TexCoord - w, 0.0, 1.0); \n" \
+	"	r = texture(tex0, p.stp); \n" \
+	"	r.x = (v.x==r.x?1.0:0.0) ; \n" \
+	"	n.z = r.x - n.z; \n" \
+	"	p.y = length(n.xyz); \n" \
+	"	p.y = 0.5 * (loc2.x<0.0?(1.0+p.y*loc2.x):p.y*loc2.x); \n" \
+	"\n"
+
 #define VOL_GRAD_COMPUTE_FUNC \
 	"// VOL_GRAD_COMPUTE_FUNC\n" \
 	"vec4 vol_grad_func(vec4 pos, vec4 dir)\n" \
@@ -554,6 +594,76 @@ namespace FLIVR
 	"		return;\n" \
 	"	}\n" \
 	"	IDColor = c;\n" \
+	"	c.rgb = c.rgb*loc6.z;\n" \
+	"\n"
+
+#define VOL_INDEX_COLOR_BODY_SHADE \
+	"	//VOL_INDEX_COLOR_BODY\n" \
+	"	vec4 v;\n" \
+	"	uint id = uint(texture(tex0, t.stp).x*loc5.w+0.5); //get mask value\n" \
+	"	vec4 c = texture(tex7, vec2((float(id%uint(256))+0.5)/256.0, (float(id/256)+0.5)/256.0));\n" \
+	"	vec4 col = texture(tex5, gl_FragCoord.xy*loc6.xy);\n" \
+	"	if (col.rgb == c.rgb)\n" \
+	"	{\n" \
+	"		discard;\n" \
+	"		return;\n" \
+	"	}\n" \
+	"	IDColor = c;\n" \
+	"	// VOL_GRAD_COMPUTE_HI\n" \
+	"	vec4 dir = loc4*3.0;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
+	"	vec4 p; \n" \
+	"	uint r; \n" \
+	"	v = vec4(0.0); \n" \
+	"	n = vec4(0.0); \n" \
+	"	w = vec4(0.0);\n" \
+	"	w.x = dir.x; \n" \
+	"	p = clamp(TexCoord + w, 0.0, 1.0); \n" \
+	"	r = uint(texture(tex0, p.stp).x*loc5.w+0.5); \n" \
+	"	v.x = (id==r?0.5:0.0) ; \n" \
+	"	n.x = v.x + n.x; \n" \
+	"	p = clamp(TexCoord - w, 0.0, 1.0); \n" \
+	"	r = uint(texture(tex0, p.stp).x*loc5.w+0.5); \n" \
+	"	v.x = (id==r?0.5:0.0) ; \n" \
+	"	n.x = v.x - n.x; \n" \
+	"	w = vec4(0.0); \n" \
+	"	w.y = dir.y; \n" \
+	"	p = clamp(TexCoord + w, 0.0, 1.0); \n" \
+	"	r = uint(texture(tex0, p.stp).x*loc5.w+0.5); \n" \
+	"	v.x = (id==r?0.5:0.0) ; \n" \
+	"	n.y = v.x + n.y; \n" \
+	"	p = clamp(TexCoord - w, 0.0, 1.0); \n" \
+	"	r = uint(texture(tex0, p.stp).x*loc5.w+0.5); \n" \
+	"	v.x = (id==r?0.5:0.0) ; \n" \
+	"	n.y = v.x - n.y; \n" \
+	"	w = vec4(0.0); \n" \
+	"	w.z = dir.x<dir.z?dir.x:dir.z; \n" \
+	"	p = clamp(TexCoord + w, 0.0, 1.0); \n" \
+	"	r = uint(texture(tex0, p.stp).x*loc5.w+0.5); \n" \
+	"	v.x = (id==r?0.5:0.0) ; \n" \
+	"	n.z = v.x + n.z; \n" \
+	"	r = uint(texture(tex0, p.stp).x*loc5.w+0.5); \n" \
+	"	v.x = (id==r?0.5:0.0) ; \n" \
+	"	n.z = v.x - n.z; \n" \
+	"	p.y = length(n.xyz); \n" \
+	"	p.y = 0.5 * (loc2.x<0.0?(1.0+p.y*loc2.x):p.y*loc2.x); \n" \
+	"\n" \
+	"	//VOL_BODY_SHADING\n" \
+	"	n.xyz = normalize(n.xyz);\n" \
+	"	n.w = dot(l.xyz, n.xyz); // calculate angle between light and normal. \n" \
+	"	n.w = clamp(abs(n.w), 0.0, 1.0); // two-sided lighting, n.w = abs(cos(angle))  \n" \
+	"	w = k; // w.x = weight*ka, w.y = weight*kd, w.z = weight*ks \n" \
+	"	w.x = k.x - w.y; // w.x = ka - kd*weight \n" \
+	"	w.x = w.x + k.y; // w.x = ka + kd - kd*weight \n" \
+	"	n.z = pow(n.w, k.w); // n.z = abs(cos(angle))^ns \n" \
+	"	n.w = (n.w * w.y) + w.x; // n.w = abs(cos(angle))*kd+ka\n" \
+	"	n.z = w.z * n.z; // n.z = weight*ks*abs(cos(angle))^ns \n" \
+	"\n" \
+	"	//VOL_COMPUTED_GM_LOOKUP\n" \
+	"	v.y = p.y;\n" \
+	"\n" \
+	"	//VOL_COLOR_OUTPUT\n" \
+	"	c.xyz = (c.xyz+col.xyz)*clamp(1.0-loc1.x, 0.0, 1.0) + loc1.x*(c.xyz+col.xyz)*(loc1.y > 0.0?(n.w + n.z):1.0);\n" \
+	"	c.xyz *= pow(1.0 - loc1.x/2.0, 2.0) + 1.0;\n" \
 	"	c.rgb = c.rgb*loc6.z;\n" \
 	"\n"
     

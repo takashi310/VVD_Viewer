@@ -283,7 +283,10 @@ VolShader::VolShader(
 		//bodies
 		if (color_mode_ == 3)
 		{
-			z << VOL_INDEX_COLOR_BODY;
+			if (shading_)
+				z << VOL_INDEX_COLOR_BODY_SHADE;
+			else
+				z << VOL_INDEX_COLOR_BODY;
 		}
         else if (color_mode_ == 255)
         {

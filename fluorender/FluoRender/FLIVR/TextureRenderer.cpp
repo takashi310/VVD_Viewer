@@ -124,6 +124,28 @@ namespace FLIVR
 		roi_tree_.add(L"-4", L"G4");
 		roi_tree_.add(L"-4.49", L"TEST49");
 */
+/*		int segid = 1;
+		for (int i = 2; i <= 86; i++)
+		{
+			if (i != 21 &&
+				i != 41 &&
+				i != 42 &&
+				i != 43 &&
+				i != 44 &&
+				i != 45 &&
+				i != 46 &&
+				i != 47 &&
+				i != 48 &&
+				i != 68 )
+			{
+				wstringstream wsskey, wssname;
+				wsskey << i;
+				wssname << L"Segment" << segid;
+				roi_tree_.add(wsskey.str(), wssname.str());
+				segid++;
+			}
+		}
+*/
 		select_all_roi_tree();
 	}
 
