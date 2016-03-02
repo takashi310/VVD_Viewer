@@ -610,7 +610,7 @@ namespace FLIVR
 	"	}\n" \
 	"	IDColor = c;\n" \
 	"	// VOL_GRAD_COMPUTE_HI\n" \
-	"	vec4 dir = loc4*3.0;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
+	"	vec4 dir = loc4*2.0;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
 	"	vec4 p; \n" \
 	"	uint r; \n" \
 	"	v = vec4(0.0); \n" \
@@ -641,6 +641,7 @@ namespace FLIVR
 	"	r = uint(texture(tex0, p.stp).x*loc5.w+0.5); \n" \
 	"	v.x = (id==r?0.5:0.0) ; \n" \
 	"	n.z = v.x + n.z; \n" \
+	"	p = clamp(TexCoord - w, 0.0, 1.0); \n" \
 	"	r = uint(texture(tex0, p.stp).x*loc5.w+0.5); \n" \
 	"	v.x = (id==r?0.5:0.0) ; \n" \
 	"	n.z = v.x - n.z; \n" \
