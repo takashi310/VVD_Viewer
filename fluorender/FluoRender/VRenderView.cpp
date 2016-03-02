@@ -898,6 +898,7 @@ void VRenderGLView::Clear()
 			delete group;
 		}
 	}
+	m_cur_vol = NULL;
 
 	m_layer_list.clear();
 }
