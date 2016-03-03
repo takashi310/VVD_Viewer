@@ -425,7 +425,7 @@ public:
 	void SetROIName(wstring name, int id=-1, wstring parent_name=L""){ if (m_vr) m_vr->set_roi_name(name, id, parent_name); }
 	int AddROIGroup(wstring parent_name=L"", wstring name=L""){ return m_vr ? m_vr->add_roi_group_node(parent_name, name) : -1; }
 	int GetNextSiblingROI(int id){ return m_vr ? m_vr->get_next_sibling_roi(id) : -1; }
-	//insert_mode: 0-before dst; 1-after dst;
+	//insert_mode: 0-before dst; 1-after dst; 2-into group
 	void MoveROINode(int src_id, int dst_id, int insert_mode=0){ if (m_vr) m_vr->move_roi_node(src_id, dst_id, insert_mode); }
 	void EraseROITreeNode(int id=-1){ if (m_vr) m_vr->erase_node(id); }
 	void EraseROITreeNode(wstring name){ if (m_vr) m_vr->erase_node(name); }
@@ -1262,6 +1262,16 @@ public:
 		return m_sync_volume_prop;
 	}
 
+	//sync spc
+	void SetVolumeSyncSpc(bool bVal)
+	{
+		m_sync_volume_spc = bVal;
+	}
+	bool GetVolumeSyncSpc()
+	{
+		return m_sync_volume_spc;
+	}
+
 	//randomize color
 	void RandomizeColor();
 
@@ -1270,6 +1280,7 @@ private:
 	//wxString m_name;
 	vector <VolumeData*> m_vd_list;
 	bool m_sync_volume_prop;
+	bool m_sync_volume_spc;
 
 	bool m_disp;
 };

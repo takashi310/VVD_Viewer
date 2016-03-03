@@ -4016,6 +4016,7 @@ DataGroup::DataGroup()
 	m_name = wxString::Format("Group %d", m_num);
 	m_disp = true;
 	m_sync_volume_prop = false;
+	m_sync_volume_spc = false;
 }
 
 DataGroup::~DataGroup()

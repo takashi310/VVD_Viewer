@@ -183,6 +183,8 @@ private:
 
 	//drag
 	wxTreeItemId m_drag_item;
+	wxTreeItemId m_drag_nb_item;
+	int m_insert_mode;
 	//fix current selection
 	bool m_fixed;
 	//remember the pos
@@ -231,6 +233,8 @@ private:
 	void OnAct(wxTreeEvent &event);
 	void OnBeginDrag(wxTreeEvent& event);
 	void OnEndDrag(wxTreeEvent& event);
+
+	void OnDragging(wxMouseEvent& event);
 
 	void OnKeyDown(wxKeyEvent& event);
 	void OnKeyUp(wxKeyEvent& event);

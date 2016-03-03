@@ -6,6 +6,7 @@
 #include <wx/colordlg.h>
 #include <wx/valnum.h>
 #include <wx/stdpaths.h>
+#include <wx/statline.h>
 
 BEGIN_EVENT_TABLE(VPropView, wxPanel)
 	//1
@@ -65,6 +66,7 @@ BEGIN_EVENT_TABLE(VPropView, wxPanel)
 	EVT_CHECKBOX(ID_LegendChk, VPropView::OnLegendCheck)
 	//sync within group
 	EVT_CHECKBOX(ID_SyncGroupChk, VPropView::OnSyncGroupCheck)
+	EVT_CHECKBOX(ID_SyncGroupSpcChk, VPropView::OnSyncGroupSpcCheck)
 	//save default
 	EVT_BUTTON(ID_SaveDefault, VPropView::OnSaveDefault)
 	EVT_BUTTON(ID_ResetDefault, VPropView::OnResetDefault)
@@ -92,6 +94,7 @@ wxPanel(parent, id, pos, size,style, name),
 	m_vd(0),
 	m_lumi_change(false),
 	m_sync_group(false),
+	m_sync_group_spc(false),
 	m_group(0),
 	m_vrv(0),
 	m_max_val(255.0),
@@ -103,10 +106,13 @@ wxPanel(parent, id, pos, size,style, name),
 	m_sizer_r6(0),
 	m_roi_id(-1)
 {
-	wxBoxSizer* sizer_all = new wxBoxSizer(wxVERTICAL);
+	wxBoxSizer* sizer_all = new wxBoxSizer(wxHORIZONTAL);
+	wxBoxSizer* sizer_sl_b = new wxBoxSizer(wxVERTICAL);
 	wxBoxSizer* sizer_sliders = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* sizer_sl_left = new wxBoxSizer(wxVERTICAL);
 	m_sizer_sl_righ = new wxBoxSizer(wxVERTICAL);
+	wxBoxSizer* sizer_checks = new wxBoxSizer(wxVERTICAL);
+
 
 	wxBoxSizer* sizer_l1 = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* sizer_l2 = new wxBoxSizer(wxHORIZONTAL);
@@ -323,10 +329,9 @@ wxPanel(parent, id, pos, size,style, name),
 	m_sizer_sl_righ->Add(m_sizer_r5, 0, wxEXPAND);
 	m_sizer_sl_righ->Add(m_sizer_r6, 0, wxEXPAND);
 
-
 	//all sliders
-	sizer_sliders->Add(sizer_sl_left, 1, wxEXPAND);
-	sizer_sliders->Add(m_sizer_sl_righ, 1, wxEXPAND);
+	sizer_sliders->Add(sizer_sl_left, 4, wxEXPAND);
+	sizer_sliders->Add(m_sizer_sl_righ, 5, wxEXPAND);
 
 	//bottom line
 	//color
@@ -398,24 +403,7 @@ wxPanel(parent, id, pos, size,style, name),
 
 	//stretcher
 	sizer_b->AddStretchSpacer(1);
-	//inversion
-	m_inv_chk = new wxCheckBox(this, ID_InvChk, ":Inv",
-		wxDefaultPosition, wxDefaultSize);
-	sizer_b->Add(m_inv_chk, 0, wxALIGN_CENTER, 0);
-	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-	//Index color
-	m_idcl_chk = new wxCheckBox(this, ID_IDCLChk, ":Index",
-		wxDefaultPosition, wxDefaultSize);
-	sizer_b->Add(m_idcl_chk, 0, wxALIGN_CENTER, 0);
-	//MIP
-	m_mip_chk = new wxCheckBox(this, ID_MipChk, ":MIP",
-		wxDefaultPosition, wxDefaultSize);
-	sizer_b->Add(m_mip_chk, 0, wxALIGN_CENTER, 0);
-	//noise reduction
-	m_nr_chk = new wxCheckBox(this, ID_NRChk, ":Smoothing",
-		wxDefaultPosition, wxDefaultSize);
-	sizer_b->Add(5, 5, 0);
-	sizer_b->Add(m_nr_chk, 0, wxALIGN_CENTER, 0);
+
 	//group
 	st = new wxStaticText(this, 0, "Group:");
 	//sync group
@@ -424,21 +412,57 @@ wxPanel(parent, id, pos, size,style, name),
 	sizer_b->Add(st, 0, wxALIGN_CENTER);
 	sizer_b->Add(5, 5, 0);
 	sizer_b->Add(m_sync_group_chk, 0, wxALIGN_CENTER);
+	m_sync_g_spc_chk = new wxCheckBox(this, ID_SyncGroupSpcChk, "Sync Spc");
+	sizer_b->Add(5, 5, 0);
+	sizer_b->Add(m_sync_g_spc_chk, 0, wxALIGN_CENTER);
 	//depth mode
 	m_depth_chk = new wxCheckBox(this, ID_DepthChk, "Depth",
 		wxDefaultPosition, wxDefaultSize);
 	sizer_b->Add(5, 5, 0);
 	sizer_b->Add(m_depth_chk, 0, wxALIGN_CENTER, 0);
+
+	wxSize csize = wxSize(90, -1);
+	//inversion
+	m_inv_chk = new wxCheckBox(this, ID_InvChk, ":Inv",
+		wxDefaultPosition, csize);
+	sizer_checks->Add(5,7,0);
+	sizer_checks->Add(m_inv_chk, 0, wxALIGN_LEFT, 0);
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	//Index color
+	m_idcl_chk = new wxCheckBox(this, ID_IDCLChk, ":Index",
+		wxDefaultPosition, csize);
+	sizer_checks->Add(5,7,0);
+	sizer_checks->Add(m_idcl_chk, 0, wxALIGN_LEFT, 0);
+	//MIP
+	m_mip_chk = new wxCheckBox(this, ID_MipChk, ":MIP",
+		wxDefaultPosition, csize);
+	sizer_checks->Add(5,7,0);
+	sizer_checks->Add(m_mip_chk, 0, wxALIGN_LEFT, 0);
+	//noise reduction
+	m_nr_chk = new wxCheckBox(this, ID_NRChk, ":Smoothing",
+		wxDefaultPosition, csize);
+	sizer_checks->Add(5,7,0);
+	sizer_checks->Add(m_nr_chk, 0, wxALIGN_LEFT, 0);
+	sizer_checks->AddStretchSpacer(1);
 	//buttons
 	m_reset_default = new wxButton(this, ID_ResetDefault, "Reset",
-		wxDefaultPosition, wxSize(55, 20));
+		wxDefaultPosition, wxSize(115, 20));
 	m_save_default = new wxButton(this, ID_SaveDefault, "Save as Default",
 		wxDefaultPosition, wxSize(115, 20));
-	sizer_b->Add(m_reset_default, 0, wxALIGN_CENTER);
-	sizer_b->Add(m_save_default, 0, wxALIGN_CENTER);
+	sizer_checks->Add(10,5,0);
+	sizer_checks->Add(m_reset_default, 0, wxALIGN_CENTER);
+	sizer_checks->Add(10,5,0);
+	sizer_checks->Add(m_save_default, 0, wxALIGN_CENTER);
+	sizer_checks->Add(10,5,0);
 
-	sizer_all->Add(sizer_sliders, 0, wxEXPAND);
-	sizer_all->Add(sizer_b, 0, wxEXPAND);
+	sizer_sl_b->Add(sizer_sliders, 0, wxEXPAND);
+	sizer_sl_b->Add(sizer_b, 0, wxEXPAND);
+	
+	wxStaticLine *st_line = new wxStaticLine(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLI_VERTICAL);
+
+	sizer_all->Add(sizer_sl_b, 1, wxEXPAND);
+	sizer_all->AddSpacer(20);
+	sizer_all->Add(sizer_checks, 0, wxEXPAND);
 
 	SetSizer(sizer_all);
 	Layout();
@@ -631,6 +655,9 @@ void VPropView::GetSettings()
 	if (m_group)
 		m_sync_group = m_group->GetVolumeSyncProp();
 	m_sync_group_chk->SetValue(m_sync_group);
+	if (m_group)
+		m_sync_group_spc = m_group->GetVolumeSyncSpc();
+	m_sync_g_spc_chk->SetValue(m_sync_group_spc);
 
 	//colormap
 	double low, high;
@@ -1911,7 +1938,7 @@ bool VPropView::SetSpacings()
 	if (spcz<=0.0)
 		return false;
 
-	if (m_sync_group && m_group)
+	if ((m_sync_group || m_sync_group_spc) && m_group)
 	{
 		for (int i=0; i<m_group->GetVolumeNum(); i++)
 			m_group->GetVolumeData(i)->SetSpacings(spcx, spcy, spcz);
@@ -2235,6 +2262,21 @@ void VPropView::OnSyncGroupCheck(wxCommandEvent& event)
 		//noise reduction
 		bVal = m_nr_chk->GetValue();
 		m_group->SetNR(bVal);
+	}
+
+	RefreshVRenderViews();
+}
+
+//sync within group
+void VPropView::OnSyncGroupSpcCheck(wxCommandEvent& event)
+{
+	m_sync_group_spc = m_sync_g_spc_chk->GetValue();
+	if (m_group)
+		m_group->SetVolumeSyncSpc(m_sync_group_spc);
+
+	if (m_sync_group_spc && m_group)
+	{
+		SetSpacings();
 	}
 
 	RefreshVRenderViews();

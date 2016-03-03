@@ -588,13 +588,13 @@ namespace FLIVR
 	"	uint label = uint(texture(tex0, t.stp).x*loc5.w+0.5); //get mask value\n" \
 	"	vec4 c = texture(tex7, vec2((float(label%uint(256))+0.5)/256.0, (float(label/256)+0.5)/256.0));\n" \
 	"	vec4 col = texture(tex5, gl_FragCoord.xy*loc6.xy);\n" \
-	"	if (c.rgb == vec3(0.0) || col.rgb == c.rgb)\n" \
+	"	if (col.rgb == c.rgb)\n" \
 	"	{\n" \
 	"		discard;\n" \
 	"		return;\n" \
 	"	}\n" \
 	"	IDColor = c;\n" \
-	"	c.rgb = c.rgb*loc6.z;\n" \
+	"	c.rgb = (c.rgb+col.rgb)*loc6.z;\n" \
 	"\n"
 
 #define VOL_INDEX_COLOR_BODY_SHADE \

@@ -1604,9 +1604,13 @@ void DataTreeCtrl::SelectROI(VolumeData* vd, int id)
 		if (!ritem.IsOk())
 			SelectItem(vitem);
 		else
-		{
-			SelectItem(ritem);
+		{		
+			int old_sposy = GetScrollPos(wxVERTICAL);
 			TraversalExpand(ritem);
+			SelectItem(ritem);
+			int new_sposy = GetScrollPos(wxVERTICAL);
+			if (old_sposy < new_sposy)
+				SetScrollPos(wxVERTICAL, new_sposy-1);
 		}
 	}
 }
@@ -1786,6 +1790,8 @@ void DataTreeCtrl::OnBeginDrag(wxTreeEvent& event)
 	m_scroll_pos = GetScrollPos(wxVERTICAL);
 
 	m_drag_item = event.GetItem();
+	m_drag_nb_item = wxTreeItemId();
+	m_insert_mode = -1;
 	if (m_drag_item.IsOk())
 	{
 		LayerInfo* item_data = (LayerInfo*)GetItemData(m_drag_item);
@@ -1821,6 +1827,7 @@ void DataTreeCtrl::OnBeginDrag(wxTreeEvent& event)
 			}
 		}
 	}
+	Connect(wxEVT_MOTION, wxMouseEventHandler(DataTreeCtrl::OnDragging), NULL, this);
 }
 
 void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
@@ -1836,6 +1843,9 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 		dst_par_item = dst_item.IsOk()?GetItemParent(dst_item):0;
 	m_drag_item = (wxTreeItemId)0l;
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+
+	SetEvtHandlerEnabled(false);
+	Freeze();
 
 	if (src_item.IsOk() && dst_item.IsOk() &&
 		src_par_item.IsOk() &&
@@ -2050,8 +2060,8 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 				if (s_vitem.IsOk() && d_vitem.IsOk() && s_vitem == d_vitem && vr_frame->GetDataManager())
 				{
 					vd = vr_frame->GetDataManager()->GetVolumeData(GetItemText(s_vitem));
-					if (vd)
-						vd->MoveROINode(src_item_data->id, dst_item_data->id, insert_mode);
+					if (vd && m_insert_mode != -1)
+						vd->MoveROINode(src_item_data->id, dst_item_data->id, m_insert_mode);
 				}
 			}
 			else if ( (src_type == 7 || src_type == 8) && (dst_type == 2))
@@ -2108,6 +2118,125 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 	}
 
 	SetScrollPos(wxVERTICAL, m_scroll_pos);
+	Disconnect(wxEVT_MOTION, wxMouseEventHandler(DataTreeCtrl::OnDragging));
+
+	Thaw();
+	SetEvtHandlerEnabled(true);
+}
+
+void DataTreeCtrl::OnDragging(wxMouseEvent& event)
+{
+	wxPoint pos = event.GetPosition();
+	int flags = wxTREE_HITTEST_ONITEM;
+	wxTreeItemId item = HitTest(pos, flags); // got to use it at last
+	if (item.IsOk() && m_drag_item.IsOk() && item != m_drag_item)
+	{
+		LayerInfo *item_data = (LayerInfo *)GetItemData(item);
+		LayerInfo *d_item_data = (LayerInfo *)GetItemData(m_drag_item);
+
+		if (!item_data || !d_item_data)
+			return;
+
+		if (d_item_data->type != 7 && d_item_data->type != 8)
+		{
+			if (item_data->type == 7 || item_data->type == 8)
+				SetItemDropHighlight(item, false);
+		}
+		else
+		{
+			wxTreeItemId vitem = GetParentVolItem(item);
+			wxTreeItemId vditem = GetParentVolItem(m_drag_item);
+			if ((item_data->type != 7 && item_data->type != 8) ||
+				!vitem.IsOk() || !vditem.IsOk() || vitem != vditem)
+			{
+//				SetItemDropHighlight(m_drag_nb_item, false);
+				SetItemDropHighlight(item, false);
+				m_drag_nb_item = wxTreeItemId();
+				return;
+			}
+
+			SetEvtHandlerEnabled(false);
+			//Freeze();
+
+			wxRect rect;
+			int center_y = -1;
+			if (GetBoundingRect(item, rect))
+				center_y = (rect.GetTop() + rect.GetBottom()) / 2.0;
+			wxTreeItemId nb;
+			int nexty = rect.GetHeight() * 2 / 3;
+			//insert_mode: 0-before dst; 1-after dst; 2-into group;
+			if (center_y >= 0)
+			{
+				if (item_data->type == 7)
+				{
+					if (pos.y > center_y)
+					{
+						nb = HitTest(wxPoint(pos.x, pos.y+nexty), flags);
+						m_insert_mode = 1;
+					}
+					else
+					{
+						nb = HitTest(wxPoint(pos.x, pos.y-nexty), flags);
+						m_insert_mode = 0;
+					}
+				}
+				else if (item_data->type == 8)
+				{
+					if (pos.y > center_y+rect.GetHeight()/4)
+					{
+						nb = HitTest(wxPoint(pos.x, pos.y+nexty), flags);
+						m_insert_mode = 1;
+						SetItemDropHighlight(item, false);
+					}
+					else if (pos.y < center_y-rect.GetHeight()/4)
+					{
+						nb = HitTest(wxPoint(pos.x, pos.y-nexty), flags);
+						m_insert_mode = 0;
+						SetItemDropHighlight(item, false);
+					}
+					else
+					{
+						m_insert_mode = 2;
+						SetItemDropHighlight(item, true);
+					}
+				}
+			}
+
+			bool found = false;
+			wxTreeItemId par = GetItemParent(item);
+			if (par.IsOk() && nb.IsOk())
+			{
+				wxTreeItemIdValue cookie;
+				wxTreeItemId child_item = GetFirstChild(par, cookie);
+				if (child_item.IsOk() && child_item == nb)
+					found = true;
+				else
+				{
+					child_item = GetNextChild(par, cookie);
+					while (child_item.IsOk() && !found)
+					{
+						if (child_item == nb)
+							found = true;
+						child_item = GetNextChild(par, cookie);
+					}
+				}
+			}
+
+//			if (m_drag_nb_item.IsOk() && m_drag_nb_item != item)
+//				SetItemDropHighlight(m_drag_nb_item, false);
+
+			if(nb.IsOk() && found)
+			{
+//				SetItemDropHighlight(nb);
+				m_drag_nb_item = nb;
+			}
+			else
+				m_drag_nb_item = wxTreeItemId();
+
+			//Thaw();
+			SetEvtHandlerEnabled(true);
+		}
+	}
 }
 
 void DataTreeCtrl::OnKeyDown(wxKeyEvent& event)

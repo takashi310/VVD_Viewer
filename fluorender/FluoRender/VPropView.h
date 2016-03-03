@@ -64,6 +64,7 @@ class VPropView: public wxPanel
 		ID_ScaleTextChk,
 		ID_LegendChk,
 		ID_SyncGroupChk,
+		ID_SyncGroupSpcChk,
 		ID_SaveDefault,
 		ID_ResetDefault,
 		ID_ColormapEnableChk,
@@ -115,6 +116,7 @@ private:
 
 	bool m_lumi_change;
 	bool m_sync_group;
+	bool m_sync_group_spc;
 	DataGroup* m_group;
 	VRenderView* m_vrv;
 	double m_max_val;
@@ -212,6 +214,7 @@ private:
 	wxCheckBox *m_legend_chk;
 	//sync
 	wxCheckBox *m_sync_group_chk;
+	wxCheckBox *m_sync_g_spc_chk;
 	//default
 	wxButton *m_save_default;
 	wxButton *m_reset_default;
@@ -277,6 +280,7 @@ private:
 	void OnLegendCheck(wxCommandEvent& event);
 	//sync within group
 	void OnSyncGroupCheck(wxCommandEvent& event);
+	void OnSyncGroupSpcCheck(wxCommandEvent& event);
 	//save as default
 	void OnSaveDefault(wxCommandEvent& event);
 	void OnResetDefault(wxCommandEvent& event);

@@ -1541,6 +1541,8 @@ void VRenderFrame::UpdateTree(wxString name, bool set_calc)
 		return;
 
 	m_tree_panel->SaveExpState();
+	int scroll_pos;
+	scroll_pos = m_tree_panel->GetScrollPos(wxVERTICAL);
 
 	m_tree_panel->SetEvtHandlerEnabled(false);
 	m_tree_panel->Freeze();
@@ -1740,6 +1742,7 @@ void VRenderFrame::UpdateTree(wxString name, bool set_calc)
 	}
 
 	m_tree_panel->LoadExpState();
+	m_tree_panel->SetScrollPos(wxVERTICAL, scroll_pos);
 
 	m_tree_panel->Thaw();
 	m_tree_panel->SetEvtHandlerEnabled(true);
@@ -2697,6 +2700,8 @@ void VRenderFrame::SaveProject(wxString& filename)
 						fconfig.Write("sync_b", group->GetSyncB());
 						//sync volume properties
 						fconfig.Write("sync_vp", group->GetVolumeSyncProp());
+						//sync volume spacings
+						fconfig.Write("sync_vspc", group->GetVolumeSyncSpc());
 						//volumes
 						str = wxString::Format("/views/%d/layers/%d/volumes", i, j);
 						fconfig.SetPath(str);
@@ -3717,6 +3722,9 @@ void VRenderFrame::OpenProject(wxString& filename)
 											//sync volume properties
 											if (fconfig.Read("sync_vp", &bVal))
 												group->SetVolumeSyncProp(bVal);
+											//sync volume properties
+											if (fconfig.Read("sync_vspc", &bVal))
+												group->SetVolumeSyncSpc(bVal);
 											//volumes
 											if (fconfig.Exists(wxString::Format("/views/%d/layers/%d/volumes", i, j)))
 											{

@@ -525,7 +525,7 @@ namespace FLIVR
 		return -1;
 	}
 
-	//insert_mode: 0-before dst; 1-after dst;
+	//insert_mode: 0-before dst; 1-after dst; 2-into group
 	void TextureRenderer::move_roi_node(int src_id, int dst_id, int insert_mode)
 	{
 		auto path = get_roi_path(src_id);
@@ -534,24 +534,27 @@ namespace FLIVR
 		wptree subtree = roi_tree_.get_child(*path);
 		erase_node(src_id);
 
-		if (dst_id > 0)
-			insert_roi_node(roi_tree_, dst_id, subtree, src_id, insert_mode);
-		else if (dst_id < -1) 
+		if (dst_id != -1)
 		{
-			if (auto dst_par_path = get_roi_path(dst_id))
+			if (insert_mode == 0 || insert_mode == 1)
+				insert_roi_node(roi_tree_, dst_id, subtree, src_id, insert_mode);
+			else if (insert_mode == 2 && dst_id < -1) 
 			{
-				try
+				if (auto dst_par_path = get_roi_path(dst_id))
 				{
-					wstring dst_path = *dst_par_path + L"." + boost::lexical_cast<wstring>(src_id);
-					roi_tree_.put_child(dst_path, subtree);
-				}
-				catch (boost::bad_lexical_cast e)
-				{
-					cerr << "TextureRenderer::move_roi_node(int src_id, int dst_id): bad_lexical_cast" << endl;
+					try
+					{
+						wstring dst_path = *dst_par_path + L"." + boost::lexical_cast<wstring>(src_id);
+						roi_tree_.put_child(dst_path, subtree);
+					}
+					catch (boost::bad_lexical_cast e)
+					{
+						cerr << "TextureRenderer::move_roi_node(int src_id, int dst_id): bad_lexical_cast" << endl;
+					}
 				}
 			}
 		}
-		else if (dst_id == -1)
+		else
 		{
 			try
 			{
@@ -838,8 +841,11 @@ namespace FLIVR
 	void TextureRenderer::set_desel_palette_mode_dark(float fac)
 	{
 		for (int i = 0; i < PALETTE_SIZE; i++)
+		{
 			for (int j = 0; j < 3; j++)
 				palette_[i*PALETTE_ELEM_COMP+j] = (unsigned char)(base_palette_[i*PALETTE_ELEM_COMP+j]*fac);
+			palette_[i*PALETTE_ELEM_COMP+3] = base_palette_[i*PALETTE_ELEM_COMP+3];
+		}
 
 		for(auto ite = sel_segs_.begin(); ite != sel_segs_.end(); ++ite)
 			for (int j = 0; j < PALETTE_ELEM_COMP; j++)
@@ -855,8 +861,11 @@ namespace FLIVR
 	void TextureRenderer::set_desel_palette_mode_gray(float fac)
 	{
 		for (int i = 1; i < PALETTE_SIZE; i++)
+		{
 			for (int j = 0; j < 3; j++)
 				palette_[i*PALETTE_ELEM_COMP+j] = (unsigned char)(128.0*fac);
+			palette_[i*PALETTE_ELEM_COMP+3] = base_palette_[i*PALETTE_ELEM_COMP+3];
+		}
 
 		palette_[0] = 0; palette_[1] = 0; palette_[2] = 0;
 
@@ -870,7 +879,7 @@ namespace FLIVR
 	void TextureRenderer::set_desel_palette_mode_invisible()
 	{
 		for (int i = 0; i < PALETTE_SIZE; i++)
-			for (int j = 0; j < 3; j++)
+			for (int j = 0; j < 4; j++)
 				palette_[i*PALETTE_ELEM_COMP+j] = 0;
 
 		for(auto ite = sel_segs_.begin(); ite != sel_segs_.end(); ++ite)
