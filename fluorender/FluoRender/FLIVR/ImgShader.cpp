@@ -132,6 +132,7 @@ namespace FLIVR
 	"{\n" \
 	"	vec4 t = vec4(OutTexCoord, 1.0);\n" \
 	"	vec4 c = texture(tex0, t.xy);\n" \
+	"	c.a = clamp(c.a, 0.0, 1.0);\n" \
 	"	FragColor = c;\n" \
 	"}\n"
 
