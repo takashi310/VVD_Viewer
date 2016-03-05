@@ -4478,7 +4478,27 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 	{
 		TextureRenderer::reset_save_final_buffer();
 
-		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_temp);
+		if (glIsFramebuffer(m_fbo_temp)!=GL_TRUE)
+		{
+			glGenFramebuffers(1, &m_fbo_temp);
+			if (glIsTexture(m_tex_temp)!=GL_TRUE)
+				glGenTextures(1, &m_tex_temp);
+			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_temp);
+			//color buffer for each volume
+			glBindTexture(GL_TEXTURE_2D, m_tex_temp);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
+				GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+			glFramebufferTexture2D(GL_FRAMEBUFFER,
+				GL_COLOR_ATTACHMENT0,
+				GL_TEXTURE_2D, m_tex_temp, 0);
+		}
+		else
+			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_temp);
+
 		glClearColor(0.0, 0.0, 0.0, 0.0);
 		glClear(GL_COLOR_BUFFER_BIT);
 		glActiveTexture(GL_TEXTURE0);

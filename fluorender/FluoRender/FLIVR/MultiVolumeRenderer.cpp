@@ -222,6 +222,31 @@ namespace FLIVR
 				  !TextureRenderer::get_done_update_loop());
 
 	  int mode = (colormap_mode_ != FLV_CTYPE_DEPTH) ? 0 : 3;
+	  
+	  GLint vp[4];
+      glGetIntegerv(GL_VIEWPORT, vp);
+	  int w = vp[2];
+	  int h = vp[3];
+	  int w2 = w;
+	  int h2 = h;
+
+	  double sf = vr_list_[0]->CalcScaleFactor(w, h, res_.x(), res_.y(), zoom);
+	  if (fabs(sf-sfactor_)>0.05)
+	  {
+		  sfactor_ = sf;
+		  blend_framebuffer_resize_ = true;
+		  filter_buffer_resize_ = true;
+		  blend_fbo_resize_ = true;
+	  }
+	  else if (sf==1.0 && sfactor_!=1.0)
+	  {
+		  sfactor_ = sf;
+		  blend_framebuffer_resize_ = true;
+		  filter_buffer_resize_ = true;
+		  blend_fbo_resize_ = true;
+	  }
+	  w2 = int(w*sfactor_+0.5);
+	  h2 = int(h*sfactor_+0.5);
 
 	  int i;
 	  vector<bool> used_colortype(FLV_COLORTYPE_NUM, false);
@@ -245,7 +270,7 @@ namespace FLIVR
 			  {
 				  use_id_color = true;
 				  if (blend_framebuffer_resize_)
-					  vr->blend_framebuffer_resize_ = true;
+					  vr->resize();
 			  }
 		  }
 		  else
@@ -280,7 +305,7 @@ namespace FLIVR
 	  // Set sampling rate based on interaction.
       double rate = imode_ ? irate_ : sampling_rate_;
 	  Vector diag = vr_list_[0]->tex_->bbox()->diagonal();
-	  double dt = 0.0025/rate;
+	  double dt = 0.0020/rate;
 	  num_slices_ = (int)(diag.length()/dt);
 
 	  vector<TextureBrick*> bs;
@@ -342,8 +367,6 @@ namespace FLIVR
 	  GLboolean use_fog = glIsEnabled(GL_FOG) && colormap_mode_!=FLV_CTYPE_DEPTH;
       GLfloat clear_color[4];
       glGetFloatv(GL_COLOR_CLEAR_VALUE, clear_color);
-      GLint vp[4];
-      glGetIntegerv(GL_VIEWPORT, vp);
 
       // set up blending
  	  glEnablei(GL_BLEND, 0);
@@ -375,31 +398,6 @@ namespace FLIVR
 	  glGetIntegerv(GL_READ_BUFFER, &cur_read_buffer);
 
 	  glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-	  int w = vp[2];
-	  int h = vp[3];
-	  int w2 = w;
-	  int h2 = h;
-
-	  double sf = vr_list_[0]->CalcScaleFactor(w, h, res_.x(), res_.y(), zoom);
-	  if (fabs(sf-sfactor_)>0.05)
-	  {
-		  sfactor_ = sf;
-		  blend_framebuffer_resize_ = true;
-		  filter_buffer_resize_ = true;
-		  blend_fbo_resize_ = true;
-	  }
-	  else if (sf==1.0 && sfactor_!=1.0)
-	  {
-		  sfactor_ = sf;
-		  blend_framebuffer_resize_ = true;
-		  filter_buffer_resize_ = true;
-		  blend_fbo_resize_ = true;
-	  }
-
-	  w2 = int(w*sfactor_+0.5);
-	  h2 = int(h*sfactor_+0.5);
-
 
 	  static const GLenum draw_buffers[] =
 	  {
@@ -439,9 +437,6 @@ namespace FLIVR
 				  GL_COLOR_ATTACHMENT0,
 				  GL_TEXTURE_2D, blend_tex_id_, 0);
 			  glBindTexture(GL_TEXTURE_2D, 0);
-
-			  glBindTexture(GL_TEXTURE_2D, 0);
-			  glDisable(GL_TEXTURE_2D);
 		  }
 		  else
 		  {
@@ -463,7 +458,6 @@ namespace FLIVR
 			  blend_framebuffer_resize_ = false;
 
 			  glBindTexture(GL_TEXTURE_2D, 0);
-			  glDisable(GL_TEXTURE_2D);
 		  }
 
 		  glDrawBuffers(1, draw_buffers);
@@ -471,11 +465,7 @@ namespace FLIVR
 		  glClearColor(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
 		  glClear(GL_COLOR_BUFFER_BIT);
 
-		  glDrawBuffers(1, draw_buffers);
-
 		  glViewport(vp[0], vp[1], w2, h2);
-
-		  glBindTexture(GL_TEXTURE_2D, 0);
 	  }
 
 	  GLint draw_buffer;
@@ -572,8 +562,6 @@ namespace FLIVR
 
 			  blend_fbo_resize_ = false;
 		  }
-
-		  glViewport(vp[0], vp[1], w2, h2);
 	  }
 
 	  //--------------------------------------------------------------------------
@@ -650,8 +638,6 @@ namespace FLIVR
 				  glClear(GL_COLOR_BUFFER_BIT);
 
 				  glDrawBuffers(1, draw_buffers);
-
-				  //glViewport(vp[0], vp[1], w2, h2);
 			  }
 		  }
 	  }
@@ -703,10 +689,10 @@ namespace FLIVR
 
 		  if (blend_slices && colormap_mode_!=FLV_CTYPE_DEPTH)
 		  {
-			  //glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			  glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			  
 			  //set blend buffer
-			  //glBindFramebuffer(GL_FRAMEBUFFER, blend_fbo_);
+			  glBindFramebuffer(GL_FRAMEBUFFER, blend_fbo_);
 			  glDrawBuffers(1, draw_buffers);
 
 			  glClearColor(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
@@ -931,7 +917,6 @@ namespace FLIVR
 			  if (vr_cmode == FLV_CTYPE_DEPTH)
 				  vr->release_texture(4, GL_TEXTURE_2D);
 
-			  if (vr_cmode == FLV_CTYPE_INDEX) glFlush();
 		  }//for (int j = 0; j < cur_brs.size(); j++)
 
 		  glFinish();
@@ -1457,6 +1442,7 @@ namespace FLIVR
    void MultiVolumeRenderer::resize()
    {
       blend_framebuffer_resize_ = true;
+	  filter_buffer_resize_ = true;
 	  blend_fbo_resize_ = true;
    }
 
