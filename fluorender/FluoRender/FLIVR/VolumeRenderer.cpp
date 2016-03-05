@@ -694,8 +694,10 @@ namespace FLIVR
 			if (!glIsFramebuffer(blend_framebuffer_))
 			{
 				glGenFramebuffers(1, &blend_framebuffer_);
-				glGenTextures(1, &blend_tex_id_);
-				glGenTextures(1, &label_tex_id_);
+				if (!glIsTexture(blend_tex_id_))
+					glGenTextures(1, &blend_tex_id_);
+				if (!glIsTexture(label_tex_id_))
+					glGenTextures(1, &label_tex_id_);
 
 				glBindFramebuffer(GL_FRAMEBUFFER, blend_framebuffer_);
 
