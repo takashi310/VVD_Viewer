@@ -253,6 +253,9 @@ namespace FLIVR
 	  vector<bool> used_shadertype(FLV_COLORTYPE_NUM*FLV_VRMODE_NUM, false);
 	  bool blend_slices = blend_slices_;
 	  bool use_id_color = false;
+	  bool multi_id_image = false;
+	  int id_image_num = 0;
+	  VolumeRenderer *idvr = NULL;
 	  
 	  double sampling_frq_fac = -1.0;
 	  for (i=0; i<(int)vr_list_.size(); i++)
@@ -269,6 +272,8 @@ namespace FLIVR
 			  if (cmode == FLV_CTYPE_INDEX)
 			  {
 				  use_id_color = true;
+				  id_image_num++;
+				  idvr = vr;
 				  if (blend_framebuffer_resize_)
 					  vr->resize();
 			  }
@@ -301,6 +306,7 @@ namespace FLIVR
 	  }
 
 	  if (use_id_color) blend_slices = true;
+	  if (id_image_num > 1) multi_id_image = true;
 
 	  // Set sampling rate based on interaction.
       double rate = imode_ ? irate_ : sampling_rate_;
@@ -583,65 +589,130 @@ namespace FLIVR
 
 	  if (used_colortype[FLV_CTYPE_INDEX] && start_i == (order ? all_timin : all_timax))
 	  {
-		  for (int k=0; k<(int)vr_list_.size(); k++)
+		  if (!multi_id_image && idvr)
 		  {
-			  VolumeRenderer* vr = vr_list_[k];
-			  if (!vr)
-				  continue;
-			  if (vr->colormap_mode_ == FLV_CTYPE_INDEX)
+			  if (!glIsTexture(idvr->label_tex_id_))
 			  {
-				  if (!glIsTexture(vr->label_tex_id_))
-				  {
-					  glGenTextures(1, &vr->label_tex_id_);
+				  glGenTextures(1, &idvr->label_tex_id_);
 
-					  glBindTexture(GL_TEXTURE_2D, vr->label_tex_id_);
-					  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-					  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-					  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-					  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+				  glBindTexture(GL_TEXTURE_2D, idvr->label_tex_id_);
+				  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+				  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+				  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+				  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+				  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
+					  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+				  glFramebufferTexture2D(GL_FRAMEBUFFER,
+					  GL_COLOR_ATTACHMENT1,
+					  GL_TEXTURE_2D, idvr->label_tex_id_, 0);
+				  glBindTexture(GL_TEXTURE_2D, 0);
+			  }
+			  else
+			  {
+				  glFramebufferTexture2D(GL_FRAMEBUFFER,
+					  GL_COLOR_ATTACHMENT1,
+					  GL_TEXTURE_2D, idvr->label_tex_id_, 0);
+			  }
+
+			  if (idvr->blend_framebuffer_resize_)
+			  {
+				  // resize texture color renderbuffer
+				  if (!glIsTexture(idvr->blend_tex_id_))
+				  {
+					  glBindTexture(GL_TEXTURE_2D, idvr->blend_tex_id_);
 					  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
 						  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-					  glFramebufferTexture2D(GL_FRAMEBUFFER,
-						  GL_COLOR_ATTACHMENT1,
-						  GL_TEXTURE_2D, vr->label_tex_id_, 0);
 					  glBindTexture(GL_TEXTURE_2D, 0);
 				  }
-				  else
-				  {
-					  glFramebufferTexture2D(GL_FRAMEBUFFER,
-						  GL_COLOR_ATTACHMENT1,
-						  GL_TEXTURE_2D, vr->label_tex_id_, 0);
-				  }
 
-				  if (vr->blend_framebuffer_resize_)
+				  glBindTexture(GL_TEXTURE_2D, idvr->label_tex_id_);
+				  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
+					  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+				  glBindTexture(GL_TEXTURE_2D, 0);
+
+				  idvr->blend_framebuffer_resize_ = false;
+			  }
+
+			  glDrawBuffers(1, draw_id_buffer);
+
+			  glClearColor(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
+			  glClear(GL_COLOR_BUFFER_BIT);
+
+			  glDrawBuffers(1, draw_buffers);
+		  }
+		  else
+		  {
+			  for (int k=0; k<(int)vr_list_.size(); k++)
+			  {
+				  VolumeRenderer* vr = vr_list_[k];
+				  if (!vr)
+					  continue;
+				  if (vr->colormap_mode_ == FLV_CTYPE_INDEX)
 				  {
-					  // resize texture color renderbuffer
-					  if (!glIsTexture(vr->blend_tex_id_))
+					  if (!glIsTexture(vr->label_tex_id_))
 					  {
-						  glBindTexture(GL_TEXTURE_2D, vr->blend_tex_id_);
+						  glGenTextures(1, &vr->label_tex_id_);
+
+						  glBindTexture(GL_TEXTURE_2D, vr->label_tex_id_);
+						  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+						  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+						  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+						  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+						  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
+							  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+						  glFramebufferTexture2D(GL_FRAMEBUFFER,
+							  GL_COLOR_ATTACHMENT1,
+							  GL_TEXTURE_2D, vr->label_tex_id_, 0);
+						  glBindTexture(GL_TEXTURE_2D, 0);
+					  }
+					  else
+					  {
+						  glFramebufferTexture2D(GL_FRAMEBUFFER,
+							  GL_COLOR_ATTACHMENT1,
+							  GL_TEXTURE_2D, vr->label_tex_id_, 0);
+					  }
+
+					  if (vr->blend_framebuffer_resize_)
+					  {
+						  // resize texture color renderbuffer
+						  if (!glIsTexture(vr->blend_tex_id_))
+						  {
+							  glBindTexture(GL_TEXTURE_2D, vr->blend_tex_id_);
+							  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
+								  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+							  glBindTexture(GL_TEXTURE_2D, 0);
+						  }
+
+						  glBindTexture(GL_TEXTURE_2D, vr->label_tex_id_);
 						  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
 							  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
 						  glBindTexture(GL_TEXTURE_2D, 0);
+
+						  vr->blend_framebuffer_resize_ = false;
 					  }
 
-					  glBindTexture(GL_TEXTURE_2D, vr->label_tex_id_);
-					  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
-						  GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-					  glBindTexture(GL_TEXTURE_2D, 0);
+					  glDrawBuffers(1, draw_id_buffer);
 
-					  vr->blend_framebuffer_resize_ = false;
+					  glClearColor(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
+					  glClear(GL_COLOR_BUFFER_BIT);
+
+					  glDrawBuffers(1, draw_buffers);
 				  }
-
-				  glDrawBuffers(1, draw_id_buffer);
-
-				  glClearColor(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
-				  glClear(GL_COLOR_BUFFER_BIT);
-
-				  glDrawBuffers(1, draw_buffers);
 			  }
 		  }
 	  }
 
+	  if (!multi_id_image && idvr && glIsTexture(idvr->get_palette()))
+	  {
+		  glActiveTexture(GL_TEXTURE5);
+		  glEnable(GL_TEXTURE_2D);
+		  glBindTexture(GL_TEXTURE_2D, idvr->label_tex_id_);
+		  glActiveTexture(GL_TEXTURE0);
+		  glActiveTexture(GL_TEXTURE7);
+		  glEnable(GL_TEXTURE_2D);
+		  glBindTexture(GL_TEXTURE_2D, idvr->get_palette());
+		  glActiveTexture(GL_TEXTURE0);
+	  }
 
 	  std::sort(bs.begin(), bs.end(), order?TextureBrick::less_timin:TextureBrick::high_timax);
 	  cur_bid = 0;
@@ -722,7 +793,7 @@ namespace FLIVR
 						  GL_TEXTURE_2D, vr->label_tex_id_, 0);
 					  glDrawBuffers(2, draw_buffers);
 					  glDisablei(GL_BLEND, 1);
-					  if (glIsTexture(vr->get_palette()))
+					  if (multi_id_image && glIsTexture(vr->get_palette()))
 					  {
 						  glActiveTexture(GL_TEXTURE5);
 						  glEnable(GL_TEXTURE_2D);
