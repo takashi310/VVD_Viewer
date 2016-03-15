@@ -33,6 +33,8 @@ DEALINGS IN THE SOFTWARE.
 #include <wx/stdpaths.h>
 #include <wx/filefn.h>
 #include <wx/tokenzr.h>
+#include <wx/wfstream.h>
+#include <wx/txtstrm.h>
 #include "VRenderFrame.h"
 #include "compatibility.h"
 // -- application --
@@ -62,13 +64,13 @@ bool VRenderApp::OnInit()
    std::string title =  std::string(FLUORENDER_TITLE) + std::string(" ") +
       std::string(VERSION_MAJOR_TAG) +  std::string(".") +
       std::string(VERSION_MINOR_TAG);
-   wxFrame* frame = new VRenderFrame(
+   m_frame = new VRenderFrame(
          (wxFrame*) NULL,
          wxString(title),
          50,50,1024,768);
    
    if(m_server)
-	   m_server->SetFrame((VRenderFrame *)frame);
+	   m_server->SetFrame((VRenderFrame *)m_frame);
 
 #ifdef WITH_DATABASE
 #ifdef _WIN32
@@ -126,19 +128,19 @@ bool VRenderApp::OnInit()
 #endif
 #endif
    
-   SetTopWindow(frame);
-   frame->Show();
+   SetTopWindow(m_frame);
+   m_frame->Show();
 
-   SettingDlg *setting_dlg = ((VRenderFrame *)frame)->GetSettingDlg();
+   SettingDlg *setting_dlg = ((VRenderFrame *)m_frame)->GetSettingDlg();
    if (setting_dlg)
-	   ((VRenderFrame *)frame)->SetRealtimeCompression(setting_dlg->GetRealtimeCompress());
+	   ((VRenderFrame *)m_frame)->SetRealtimeCompression(setting_dlg->GetRealtimeCompress());
 
    if (m_files.Count()>0)
-      ((VRenderFrame*)frame)->StartupLoad(m_files);
+      ((VRenderFrame*)m_frame)->StartupLoad(m_files);
 
    if (setting_dlg)
    {
-	   setting_dlg->SetRealtimeCompress(((VRenderFrame *)frame)->GetRealtimeCompression());
+	   setting_dlg->SetRealtimeCompress(((VRenderFrame *)m_frame)->GetRealtimeCompression());
 	   setting_dlg->UpdateUI();
    }
    return true;
@@ -163,7 +165,6 @@ bool VRenderApp::OnCmdLineParsed(wxCmdLineParser& parser)
    for (i = 0; i < (int)parser.GetParamCount(); i++)
    {
       wxString file = parser.GetParam(i);
-	  //ofs << file.ToStdString() << endl;
 
 	  if (file.StartsWith(wxT("vvd:")))
 	  {
@@ -176,7 +177,6 @@ bool VRenderApp::OnCmdLineParsed(wxCmdLineParser& parser)
 			  {
 				  wxString path = tkz.GetNextToken();
 				  m_files.Add(path);
-				  //ofs << path.ToStdString() << endl;
 			  }
 		  }
 		  break;
@@ -185,7 +185,8 @@ bool VRenderApp::OnCmdLineParsed(wxCmdLineParser& parser)
 	  m_files.Add(file);
 
    }
-
+    
+#ifdef _WIN32
    {
 	   wxString message;
 
@@ -215,6 +216,16 @@ bool VRenderApp::OnCmdLineParsed(wxCmdLineParser& parser)
 	   }
 	   delete client;
    }
-
+#endif
+    
    return true;
 }
+
+
+#ifdef _DARWIN
+void VRenderApp::MacOpenFiles(const wxArrayString& fileNames)
+{
+    if (m_frame)
+        ((VRenderFrame*)m_frame)->StartupLoad(fileNames);
+}
+#endif

@@ -11077,7 +11077,7 @@ void VRenderGLView::DrawRulers()
                     
                         for(int i = 0; i < lnum; i++)
                         {
-                            wstring wstr_temp = ann.Item(i);
+                            wstring wstr_temp = ann.Item(i).ToStdWstring();
                             m_text_renderer->RenderText(wstr_temp, color,
                                                         p2x*sx+margin_x*sx, p2y*sy-(lh*(i+1)+line_spc*i+margin_top)*sy, sx, sy);
                             lw = m_text_renderer->RenderTextLen(wstr_temp);
@@ -11324,7 +11324,7 @@ void VRenderGLView::DrawRulers()
                             
                             for(int i = 0; i < lnum; i++)
                             {
-                                wstring wstr_temp = ann.Item(i);
+                                wstring wstr_temp = ann.Item(i).ToStdWstring();
                                 m_text_renderer->RenderText(wstr_temp, color,
                                                             p2x*sx+margin_x*sx, p2y*sy-(lh*(i+1)+line_spc*i+margin_top)*sy, sx, sy);
                                 lw = m_text_renderer->RenderTextLen(wstr_temp);

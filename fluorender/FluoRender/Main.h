@@ -35,14 +35,19 @@ DEALINGS IN THE SOFTWARE.
 class VRenderApp : public wxApp
 {
    public:
-	  VRenderApp(void) : wxApp() { m_server = NULL;}
+      VRenderApp(void) : wxApp() { m_server = NULL; m_frame = NULL;}
 	  virtual bool OnInit();
 	  virtual int OnExit(); 
       void OnInitCmdLine(wxCmdLineParser& parser);
       bool OnCmdLineParsed(wxCmdLineParser& parser);
+    
+#ifdef _DARWIN
+      virtual void MacOpenFiles(const wxArrayString& fileNames);
+#endif
 
    private:
       wxArrayString m_files;
+      wxFrame *m_frame;
 	  MyServer *m_server;
 };
 

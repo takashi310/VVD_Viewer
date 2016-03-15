@@ -1597,7 +1597,7 @@ void SettingDlg::OnFontChange(wxCommandEvent &event)
 		m_font_file = str + ".ttf";
 		std::string exePath = wxStandardPaths::Get().GetExecutablePath().ToStdString();
 		exePath = exePath.substr(0,exePath.find_last_of(std::string()+GETSLASH()));
-		std::string loc = exePath + GETSLASH() + wxString("Fonts") +
+		std::string loc = exePath + GETSLASH() + "Fonts" +
 			GETSLASH() + str.ToStdString() + ".ttf";
 
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
