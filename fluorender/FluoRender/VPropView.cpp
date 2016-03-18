@@ -2180,8 +2180,12 @@ void VPropView::OnLegendCheck(wxCommandEvent& event)
 void VPropView::OnSyncGroupCheck(wxCommandEvent& event)
 {
 	m_sync_group = m_sync_group_chk->GetValue();
+	m_sync_group_spc = m_sync_g_spc_chk->GetValue();
 	if (m_group)
+	{
 		m_group->SetVolumeSyncProp(m_sync_group);
+		m_group->SetVolumeSyncSpc(m_sync_group|m_sync_group_spc);
+	}
 
 	if (m_sync_group && m_group)
 	{
@@ -2214,10 +2218,10 @@ void VPropView::OnSyncGroupCheck(wxCommandEvent& event)
 		dVal = double(iVal) / m_max_val;
 		m_group->SetRightThresh(dVal);
 		//luminance
-		//str = m_luminance_text->GetValue();
-		//str.ToLong(&iVal);
-		//dVal = double(iVal)/m_max_val;
-		//m_group->SetLuminance(dVal);
+		str = m_luminance_text->GetValue();
+		str.ToLong(&iVal);
+		dVal = double(iVal)/m_max_val;
+		m_group->SetLuminance(dVal);
 		//shadow
 		bVal = m_shadow_chk->GetValue();
 		m_group->SetShadow(bVal);
@@ -2262,6 +2266,11 @@ void VPropView::OnSyncGroupCheck(wxCommandEvent& event)
 		//noise reduction
 		bVal = m_nr_chk->GetValue();
 		m_group->SetNR(bVal);
+	}
+
+	if ((m_sync_group_spc|m_sync_group) && m_group)
+	{
+		SetSpacings();
 	}
 
 	RefreshVRenderViews();

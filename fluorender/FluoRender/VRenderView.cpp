@@ -13845,8 +13845,8 @@ void VRenderView::OnVolumeMethodCheck(wxCommandEvent& event)
 	//0 - didn't change
 	//1 - to depth mode
 	//2 - from depth mode
-	//int mode_switch_type = 0;
-	//int old_mode = GetVolMethod();
+	int mode_switch_type = 0;
+	int old_mode = GetVolMethod();
 
 	int sender_id = event.GetId();
 	switch (sender_id)
@@ -13862,7 +13862,7 @@ void VRenderView::OnVolumeMethodCheck(wxCommandEvent& event)
 		break;
 	}
 
-	/*   int new_mode = GetVolMethod();
+	int new_mode = GetVolMethod();
 
 	if (new_mode == VOL_METHOD_MULTI &&
 		(old_mode == VOL_METHOD_SEQ || old_mode == VOL_METHOD_COMP))
@@ -13988,7 +13988,7 @@ void VRenderView::OnVolumeMethodCheck(wxCommandEvent& event)
 		}
 
 		vr_frame->GetTree()->UpdateSelection();
-	}*/
+	}
 
 	RefreshGL();
 }

@@ -239,6 +239,29 @@ Nrrd* NRRDReader::Convert(int t, int c, bool get_max)
 	m_xspc = output->axis[0].spacing;
 	m_yspc = output->axis[1].spacing;
 	m_zspc = output->axis[2].spacing;
+	
+	if (!(m_xspc>0.0 && m_xspc<100.0))
+	{
+		double n = output->axis[0].spaceDirection[0]*output->axis[0].spaceDirection[0] +
+				   output->axis[0].spaceDirection[1]*output->axis[0].spaceDirection[1] + 
+				   output->axis[0].spaceDirection[2]*output->axis[0].spaceDirection[2];
+		m_xspc = sqrt(n);
+	}
+	if (!(m_yspc>0.0 && m_yspc<100.0))
+	{
+		double n = output->axis[1].spaceDirection[0]*output->axis[1].spaceDirection[0] +
+				   output->axis[1].spaceDirection[1]*output->axis[1].spaceDirection[1] + 
+				   output->axis[1].spaceDirection[2]*output->axis[1].spaceDirection[2];
+		m_yspc = sqrt(n);
+	}
+	if (!(m_zspc>0.0 && m_zspc<100.0))
+	{
+		double n = output->axis[2].spaceDirection[0]*output->axis[2].spaceDirection[0] +
+				   output->axis[2].spaceDirection[1]*output->axis[2].spaceDirection[1] + 
+				   output->axis[2].spaceDirection[2]*output->axis[2].spaceDirection[2];
+		m_zspc = sqrt(n);
+	}
+
 	if (m_xspc>0.0 && m_xspc<100.0 &&
 		m_yspc>0.0 && m_yspc<100.0 &&
 		m_zspc>0.0 && m_zspc<100.0)
