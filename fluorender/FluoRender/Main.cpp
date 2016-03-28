@@ -61,9 +61,12 @@ bool VRenderApp::OnInit()
    //add png handler
    wxImage::AddHandler(new wxPNGHandler);
    //the frame
-   std::string title =  std::string(FLUORENDER_TITLE) + std::string(" ") +
+/*   std::string title =  std::string(FLUORENDER_TITLE) + std::string(" ") +
       std::string(VERSION_MAJOR_TAG) +  std::string(".") +
       std::string(VERSION_MINOR_TAG);
+*/   
+   std::string title =  std::string(FLUORENDER_TITLE) + "1.00";
+
    m_frame = new VRenderFrame(
          (wxFrame*) NULL,
          wxString(title),

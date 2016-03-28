@@ -2419,14 +2419,18 @@ void VPropView::OnSaveDefault(wxCommandEvent& event)
 	double swi = val;
 	fconfig.Write("shadow_intensity", swi);
 	mgr->m_vol_swi = swi;
-#ifdef _DARWIN
-	wxString dft = wxString(getenv("HOME")) + "/Fluorender.settings/";
-	mkdir(dft.ToStdString().c_str(),0777);
-	chmod(dft.ToStdString().c_str(),0777);
-	dft = dft + "default_volume_settings.dft";
+
+	wxString expath = wxStandardPaths::Get().GetExecutablePath();
+	expath = expath.BeforeLast(GETSLASH(),NULL);
+#ifdef _WIN32
+	wxString dft = expath + "\\default_volume_settings.dft";
+	wxString dft2 = wxStandardPaths::Get().GetUserConfigDir() + "\\default_volume_settings.dft";
+	if (!wxFileExists(dft) && wxFileExists(dft2))
+		dft = dft2;
 #else
-	wxString dft = wxStandardPaths::Get().GetLocalDataDir() + wxFileName::GetPathSeparator() + "default_volume_settings.dft";
+	wxString dft = expath + "/../Resources/default_volume_settings.dft";
 #endif
+
 	wxFileOutputStream os(dft);
 	fconfig.Save(os);
 }

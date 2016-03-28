@@ -232,7 +232,7 @@ VRenderFrame::VRenderFrame(
 		"Settings of FluoRender",
 		"Settings of FluoRender");
 	m_main_tb->AddStretchableSpace();
-	m_main_tb->AddTool(ID_CheckUpdates, "Update",
+/*	m_main_tb->AddTool(ID_CheckUpdates, "Update",
 		wxGetBitmapFromMemory(icon_check_updates), wxNullBitmap, wxITEM_NORMAL,
 		"Check if there is a new release",
 		"Check if there is a new release (requires Internet connection)");
@@ -248,7 +248,7 @@ VRenderFrame::VRenderFrame(
 		wxGetBitmapFromMemory(icon_about), wxNullBitmap, wxITEM_NORMAL,
 		"FluoRender information",
 		"FluoRender information");
-
+*/
 	m_main_tb->Realize();
 
 	//create render view
@@ -614,7 +614,7 @@ VRenderFrame::VRenderFrame(
 	m_top_window->Append(m);
 #endif
 	//help menu
-	m = new wxMenuItem(m_top_help,ID_CheckUpdates, wxT("&Check for Updates"));
+/*	m = new wxMenuItem(m_top_help,ID_CheckUpdates, wxT("&Check for Updates"));
 	m->SetBitmap(wxGetBitmapFromMemory(icon_check_updates_mini));
 	m_top_help->Append(m);
 	m = new wxMenuItem(m_top_help,ID_Twitter, wxT("&Twitter"));
@@ -626,11 +626,11 @@ VRenderFrame::VRenderFrame(
 	m = new wxMenuItem(m_top_help,ID_Info, wxT("&About FluoRender..."));
 	m->SetBitmap(wxGetBitmapFromMemory(icon_about_mini));
 	m_top_help->Append(m);
-	//add the menus
+*/	//add the menus
 	m_top_menu->Append(m_top_file,wxT("&File"));
 	m_top_menu->Append(m_top_tools,wxT("&Tools"));
 	m_top_menu->Append(m_top_window,wxT("&Windows"));
-	m_top_menu->Append(m_top_help,wxT("&Help"));
+//	m_top_menu->Append(m_top_help,wxT("&Help"));
 //#ifdef _DARWIN
 	SetMenuBar(m_top_menu);
 //#endif

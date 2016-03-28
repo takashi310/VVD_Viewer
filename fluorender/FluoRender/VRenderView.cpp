@@ -2688,6 +2688,8 @@ void VRenderGLView::LoadDefaultBrushSettings()
 	expath = expath.BeforeLast(GETSLASH(),NULL);
 #ifdef _WIN32
 	wxString dft = expath + "\\default_brush_settings.dft";
+	if (!wxFileExists(dft))
+		dft = wxStandardPaths::Get().GetUserConfigDir() + "\\default_brush_settings.dft";
 #else
 	wxString dft = expath + "/../Resources/default_brush_settings.dft";
 #endif
@@ -14632,6 +14634,9 @@ void VRenderView::SaveDefault(unsigned int mask)
 	expath = expath.BeforeLast(GETSLASH(),NULL);
 #ifdef _WIN32
 	wxString dft = expath + "\\default_view_settings.dft";
+	wxString dft2 = wxStandardPaths::Get().GetUserConfigDir() + "\\default_view_settings.dft";
+	if (!wxFileExists(dft) && wxFileExists(dft2))
+		dft = dft2;
 #else
 	wxString dft = expath + "/../Resources/default_view_settings.dft";
 #endif
@@ -14652,6 +14657,8 @@ void VRenderView::LoadSettings()
 	expath = expath.BeforeLast(GETSLASH(),NULL);
 #ifdef _WIN32
 	wxString dft = expath + "\\default_view_settings.dft";
+	if (!wxFileExists(dft))
+		dft = wxStandardPaths::Get().GetUserConfigDir() + "\\default_view_settings.dft";
 #else
 	wxString dft = expath + "/../Resources/default_view_settings.dft";
 #endif

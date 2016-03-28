@@ -688,7 +688,9 @@ m_view(0)
     wxString expath = wxStandardPaths::Get().GetExecutablePath();
     expath = expath.BeforeLast(GETSLASH(),NULL);
 #ifdef _WIN32
-    wxString dft = expath + "\\" + "catalog_list.set";
+    wxString dft = expath + "\\catalog_list.set";
+	if (!wxFileExists(dft))
+		dft = wxStandardPaths::Get().GetUserConfigDir() + "\\catalog_list.set";
 #else
     wxString dft = expath + "/../Resources/" + "catalog_list.set";
 #endif
@@ -758,10 +760,13 @@ void DatabaseDlg::SaveDefault()
 {	
 	if (!m_dbtree) return;
 
-    wxString expath = wxStandardPaths::Get().GetExecutablePath();
-    expath = expath.BeforeLast(GETSLASH(),NULL);
+	wxString expath = wxStandardPaths::Get().GetExecutablePath();
+	expath = expath.BeforeLast(GETSLASH(),NULL);
 #ifdef _WIN32
-    wxString dft = expath + "\\" + "catalog_list.set";
+	wxString dft = expath + "\\catalog_list.set";
+	wxString dft2 = wxStandardPaths::Get().GetUserConfigDir() + "\\catalog_list.set";
+	if (!wxFileExists(dft) && wxFileExists(dft2))
+		dft = dft2;
 #else
     wxString dft = expath + "/../Resources/" + "catalog_list.set";
 #endif

@@ -1183,6 +1183,9 @@ void AdjustView::OnSaveDefault(wxCommandEvent &event)
 	expath = expath.BeforeLast(GETSLASH(),NULL);
 #ifdef _WIN32
     wxString dft = expath + "\\default_2d_adjustment_settings.dft";
+	wxString dft2 = wxStandardPaths::Get().GetUserConfigDir() + "\\default_2d_adjustment_settings.dft";
+	if (!wxFileExists(dft) && wxFileExists(dft2))
+		dft = dft2;
 #else
     wxString dft = expath + "/../Resources/default_2d_adjustment_settings.dft";
 #endif
@@ -1196,6 +1199,8 @@ void AdjustView::LoadSettings()
 	expath = expath.BeforeLast(GETSLASH(),NULL);
 #ifdef _WIN32
     wxString dft = expath + "\\default_2d_adjustment_settings.dft";
+	if (!wxFileExists(dft))
+		dft = wxStandardPaths::Get().GetUserConfigDir() + "\\default_2d_adjustment_settings.dft";
 #else
     wxString dft = expath + "/../Resources/default_2d_adjustment_settings.dft";
 #endif
