@@ -69,6 +69,7 @@ bool DBTreeCtrl::LoadDatabase(wxString path)
 		}
 		curl_easy_reset(_g_curl);
 		curl_easy_setopt(_g_curl, CURLOPT_URL, path.ToStdString().c_str());
+		curl_easy_setopt(_g_curl, CURLOPT_TIMEOUT, 10L);
 		curl_easy_setopt(_g_curl, CURLOPT_USERAGENT, "libcurl-agent/1.0");
 		curl_easy_setopt(_g_curl, CURLOPT_WRITEFUNCTION, callbackWrite);
 		curl_easy_setopt(_g_curl, CURLOPT_WRITEDATA, &catalogdata);
@@ -201,6 +202,7 @@ void DBTreeCtrl::ReadAnnotations(wxString url, vector<AnnotationDB> &annotations
 		}
 		curl_easy_reset(_g_curl);
 		curl_easy_setopt(_g_curl, CURLOPT_URL, url.ToStdString().c_str());
+		curl_easy_setopt(_g_curl, CURLOPT_TIMEOUT, 10L);
 		curl_easy_setopt(_g_curl, CURLOPT_USERAGENT, "libcurl-agent/1.0");
 		curl_easy_setopt(_g_curl, CURLOPT_WRITEFUNCTION, callbackWrite);
 		curl_easy_setopt(_g_curl, CURLOPT_WRITEDATA, &anndata);

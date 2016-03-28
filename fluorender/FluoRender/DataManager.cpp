@@ -520,7 +520,7 @@ int VolumeData::Load(Nrrd* data, const wxString &name, const wxString &path, BRK
 	if(breader)
 	{
 		vector<Pyramid_Level> pyramid;
-		vector<vector<vector<vector<wstring *>>>> fnames;
+		vector<vector<vector<vector<FileLocInfo *>>>> fnames;
 		int ftype = BRICK_FILE_TYPE_NONE;
 
 		breader->build_pyramid(pyramid, fnames, 0, breader->GetCurChan());
@@ -3313,6 +3313,7 @@ void RulerBalloon::SetAnnotationsFromDatabase(vector<AnnotationDB> ann, Point ne
 		}
 		curl_easy_reset(m_curl[i]);
 		curl_easy_setopt(m_curl[i], CURLOPT_URL, url.ToStdString().c_str());
+		curl_easy_setopt(m_curl[i], CURLOPT_TIMEOUT, 10L);
 		curl_easy_setopt(m_curl[i], CURLOPT_USERAGENT, "libcurl-agent/1.0");
 		curl_easy_setopt(m_curl[i], CURLOPT_WRITEFUNCTION, callbackWriteAnnotation);
 		m_annotations.Clear();
@@ -4665,6 +4666,7 @@ bool DataManager::DownloadToCurrentDir(wxString &filename)
 {
 	wxString pathname = filename;
 	wxURL url(pathname);
+	url.GetProtocol().SetTimeout(10);
 	wxString suffix = pathname.Mid(pathname.Find('.', true)).MakeLower();
 	if(url.GetError() != wxURL_NOERR) return false;
 	wxInputStream *in = url.GetInputStream();
@@ -4679,13 +4681,13 @@ bool DataManager::DownloadToCurrentDir(wxString &filename)
 		count = in->LastRead();
 		if(count > 0) mem_buf.AppendData(buffer, count);
 	}
-    wxString expath = wxStandardPaths::Get().GetExecutablePath();
-    expath = expath.BeforeLast(GETSLASH(),NULL);
+
 #ifdef _WIN32
-    wxString tmpfname = expath + "\\" + pathname.Mid(pathname.Find(wxT('/'), true)).Mid(1);
+	wxString tmpfname = wxStandardPaths::Get().GetTempDir() + "\\" + pathname.Mid(pathname.Find(wxT('/'), true)).Mid(1);
 #else
-    wxString tmpfname = expath + "/../Resources/" + pathname.Mid(pathname.Find(wxT('/'), true)).Mid(1);
+    wxString tmpfname = wxStandardPaths::Get().GetTempDir() + "/" + pathname.Mid(pathname.Find(wxT('/'), true)).Mid(1);
 #endif
+
 	wxFile of(tmpfname, wxFile::write);
 	of.Write(mem_buf.GetData(), mem_buf.GetDataLen());
 	of.Close();
@@ -4795,6 +4797,17 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 		}
 
 		reader->Preprocess();
+
+		if (type == LOAD_TYPE_BRKXML && !((BRKXMLReader *)reader)->GetExMetadataURL().empty())
+		{
+			wxString metadatapath = ((BRKXMLReader *)reader)->GetExMetadataURL();
+			if (DownloadToCurrentDir(metadatapath))
+			{
+				downloaded_metadata = true;
+				downloaded_metadatafilepath = metadatapath;
+				((BRKXMLReader *)reader)->loadMetadata(metadatapath.ToStdWstring());
+			}
+		}
 	}
 
 	//align data for compression if vtc is not supported

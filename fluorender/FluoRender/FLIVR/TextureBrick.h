@@ -282,8 +282,13 @@ namespace FLIVR {
         static CURL *s_curl_;
 	};
 
+	struct FileLocInfo {
+		std::wstring filename;
+		bool isurl;
+	};
+
 	struct Pyramid_Level {
-			std::vector<std::wstring *> *filenames;
+			std::vector<FileLocInfo *> *filenames;
 			int filetype;
 			Nrrd* data;
 			std::vector<TextureBrick *> bricks;

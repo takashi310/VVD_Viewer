@@ -1128,6 +1128,7 @@ z
 	   }
 	   curl_easy_reset(s_curl_);
 	   curl_easy_setopt(s_curl_, CURLOPT_URL, wxString::wxString(*fname).ToStdString().c_str());
+	   curl_easy_setopt(s_curl_, CURLOPT_TIMEOUT, 10L);
 	   curl_easy_setopt(s_curl_, CURLOPT_USERAGENT, "libcurl-agent/1.0");
 	   curl_easy_setopt(s_curl_, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
 	   curl_easy_setopt(s_curl_, CURLOPT_WRITEDATA, &chunk);
@@ -1228,6 +1229,7 @@ z
 	   }
 	   curl_easy_reset(s_curl_);
 	   curl_easy_setopt(s_curl_, CURLOPT_URL, wxString::wxString(*fname).ToStdString().c_str());
+	   curl_easy_setopt(s_curl_, CURLOPT_TIMEOUT, 10L);
 	   curl_easy_setopt(s_curl_, CURLOPT_USERAGENT, "libcurl-agent/1.0");
 	   curl_easy_setopt(s_curl_, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
 	   curl_easy_setopt(s_curl_, CURLOPT_WRITEDATA, &chunk);

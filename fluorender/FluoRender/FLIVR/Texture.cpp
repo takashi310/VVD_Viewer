@@ -175,8 +175,8 @@ namespace FLIVR
 		{
 			index = (nx)*(ny)*(kk) + (nx)*(jj) + (ii);
 			tmp_load = !b->isLoaded();
-			wstring *fname = GetFileName(b->getID());
-			d_ptr = b->tex_data_brk(0, fname, GetFileType(), isURL());
+			FileLocInfo *fname = GetFileName(b->getID());
+			d_ptr = b->tex_data_brk(0, &fname->filename, GetFileType(), fname->isurl);
 		}
 		else
 		{
@@ -757,13 +757,13 @@ namespace FLIVR
 		}
 	}
 
-	void Texture::set_data_file(vector<wstring *> *fname, int type)
+	void Texture::set_data_file(vector<FileLocInfo *> *fname, int type)
 	{
 		filename_ = fname;
 		filetype_ = type; 
 	}
 
-	wstring *Texture::GetFileName(int id)
+	FileLocInfo *Texture::GetFileName(int id)
 	{
 		if (id < 0 || id >= filename_->size()) return NULL;
 		return (*filename_)[id];
@@ -807,7 +807,7 @@ namespace FLIVR
 		set_transform(tform);
 	}
 
-	bool Texture::buildPyramid(vector<Pyramid_Level> &pyramid, vector<vector<vector<vector<wstring *>>>> &filenames, bool useURL)
+	bool Texture::buildPyramid(vector<Pyramid_Level> &pyramid, vector<vector<vector<vector<FileLocInfo *>>>> &filenames, bool useURL)
 	{
 		if (pyramid.empty()) return false;
 		if (pyramid.size() != filenames.size()) return false;
@@ -863,7 +863,7 @@ namespace FLIVR
 					for (int n=0; n<(int)filenames_[i][j][k].size(); n++)
 						if (filenames_[i][j][k][n]) delete filenames_[i][j][k][n];
 		
-		vector<vector<vector<vector<wstring *>>>>().swap(filenames_);
+		vector<vector<vector<vector<FileLocInfo *>>>>().swap(filenames_);
 
 		pyramid_lv_num_ = 0;
 		pyramid_cur_lv_ = -1;
@@ -920,8 +920,8 @@ namespace FLIVR
 			bool tmp = false;
 			if(!(*bricks)[i]->isLoaded())
 			{
-				wstring *fname = filenames_[level][pyramid_cur_fr_][pyramid_cur_ch_][(*bricks)[i]->getID()];
-				(*bricks)[i]->tex_data_brk(0, fname, GetFileType(), isURL());
+				FileLocInfo *fname = filenames_[level][pyramid_cur_fr_][pyramid_cur_ch_][(*bricks)[i]->getID()];
+				(*bricks)[i]->tex_data_brk(0, &fname->filename, GetFileType(), fname->isurl);
 				tmp = true;
 			}
 

@@ -51,9 +51,10 @@ public:
 	int GetBatchNum() {return (int)m_batch_list.size();}
 	int GetCurBatch() {return m_cur_batch;}
 	bool isURL() {return m_isURL;}
+	wstring GetExMetadataURL() {return m_ex_metadata_url;}
 	void SetInfo();
 
-	wstring GetBrickFilePath(int fr, int ch, int id, int lv = -1);
+	FLIVR::FileLocInfo* GetBrickFilePath(int fr, int ch, int id, int lv = -1);
 	wstring GetBrickFileName(int fr, int ch, int id, int lv = -1);
 	int GetFileType(int lv = -1);
 
@@ -62,18 +63,22 @@ public:
 	int GetCopyableLevel() {return m_copy_lv;}
 
 	void build_bricks(vector<FLIVR::TextureBrick*> &tbrks, int lv = -1);
-	void build_pyramid(vector<FLIVR::Pyramid_Level> &pyramid, vector<vector<vector<vector<wstring *>>>> &filenames, int t, int c);
+	void build_pyramid(vector<FLIVR::Pyramid_Level> &pyramid, vector<vector<vector<vector<FLIVR::FileLocInfo *>>>> &filenames, int t, int c);
 	void OutputInfo();
 
 	void GetLandmark(int index, wstring &name, double &x, double &y, double &z, double &spcx, double &spcy, double &spcz);
 	int GetLandmarkNum() {return m_landmarks.size();}
 	void GetMetadataID(wstring &mid) {mid = m_metadata_id;}
 
+	bool loadMetadata(const wstring &file = wstring());
+
 private:
 	wstring m_path_name;
 	wstring m_data_name;
 	wstring m_dir_name;
 	wstring m_url_dir;
+	wstring m_ex_metadata_path;
+	wstring m_ex_metadata_url;
 
 	struct BrickInfo
 	{
@@ -108,7 +113,7 @@ private:
 		int brick_baseD;
 		int bit_depth;
 		int file_type;
-		vector<vector<vector<wstring *>>> filename;//Frame->Channel->BrickID->Filename
+		vector<vector<vector<FLIVR::FileLocInfo *>>> filename;//Frame->Channel->BrickID->Filename
 		vector<BrickInfo *> bricks;
 	};
 	vector<LevelInfo> m_pyramid;
@@ -170,12 +175,10 @@ private:
 	ImageInfo ReadImageInfo(tinyxml2::XMLElement *seqNode);
 	void ReadBrick(tinyxml2::XMLElement *brickNode, BrickInfo &binfo);
 	void ReadLevel(tinyxml2::XMLElement* lvNode, LevelInfo &lvinfo);
-	void ReadFilenames(tinyxml2::XMLElement* fileRootNode, vector<vector<vector<wstring *>>> &filename);
+	void ReadFilenames(tinyxml2::XMLElement* fileRootNode, vector<vector<vector<FLIVR::FileLocInfo *>>> &filename);
 	void ReadPackedBricks(tinyxml2::XMLElement* packNode, vector<BrickInfo *> &brks);
 	void Readbox(tinyxml2::XMLElement *boxNode, double &x0, double &y0, double &z0, double &x1, double &y1, double &z1);
 	void ReadPyramid(tinyxml2::XMLElement *lvRootNode, vector<LevelInfo> &pylamid);
-	
-	void loadMetadata(const wstring &file);
 
 	void Clear();
 };

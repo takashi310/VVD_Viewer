@@ -181,12 +181,12 @@ namespace FLIVR
 		{if (use_priority_) return n_p0_; else return int((*bricks_).size());}
 
 		//for brkxml file
-		void set_data_file(vector<wstring *> *fname, int type);
+		void set_data_file(vector<FileLocInfo *> *fname, int type);
 		int GetFileType() {return filetype_;}
-		wstring *GetFileName(int id);
+		FileLocInfo *GetFileName(int id);
 		bool isBrxml() {return brkxml_;}
 		bool isURL() {return useURL_;}
-		bool buildPyramid(vector<Pyramid_Level> &pyramid, vector<vector<vector<vector<wstring *>>>> &filenames, bool useURL = false);
+		bool buildPyramid(vector<Pyramid_Level> &pyramid, vector<vector<vector<vector<FileLocInfo *>>>> &filenames, bool useURL = false);
 		void set_FrameAndChannel(int fr, int ch);
 		void setLevel(int lv);
 		Nrrd * loadData(int &lv);
@@ -249,7 +249,7 @@ namespace FLIVR
 		int n_p0_;
 
 		//for brkxml
-		vector<wstring *> *filename_;
+		vector<FileLocInfo *> *filename_;
 		int filetype_;
 		ifstream ifs_;
 		bool brkxml_;
@@ -260,7 +260,7 @@ namespace FLIVR
 		int pyramid_cur_ch_;
 		int pyramid_lv_num_;
 		vector<Pyramid_Level> pyramid_;
-		vector<vector<vector<vector<wstring *>>>> filenames_;
+		vector<vector<vector<vector<FileLocInfo *>>>> filenames_;
 
 		int pyramid_copy_lv_;
 
