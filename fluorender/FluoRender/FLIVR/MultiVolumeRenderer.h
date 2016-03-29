@@ -63,10 +63,10 @@ namespace FLIVR
 		void draw(bool draw_wireframe_p, 
 			bool interactive_mode_p, 
 			bool orthographic_p,
-			double zoom, bool intp);
+			double zoom, bool intp, double sampling_frq_fac);
 
 		void draw_wireframe(bool orthographic_p);
-		void draw_volume(bool interactive_mode_p, bool orthographic_p, double zoom, bool intp);
+		void draw_volume(bool interactive_mode_p, bool orthographic_p, double zoom, bool intp, double sampling_frq_fac);
 
 		double num_slices_to_rate(int slices);
 

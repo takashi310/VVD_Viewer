@@ -192,9 +192,9 @@ namespace FLIVR
    void MultiVolumeRenderer::draw(bool draw_wireframe_p,
          bool interactive_mode_p,
          bool orthographic_p,
-         double zoom, bool intp)
+         double zoom, bool intp, double sampling_frq_fac)
    {
-      draw_volume(interactive_mode_p, orthographic_p, zoom, intp);
+      draw_volume(interactive_mode_p, orthographic_p, zoom, intp, sampling_frq_fac);
       if(draw_wireframe_p)
          draw_wireframe(orthographic_p);
    }
@@ -210,7 +210,7 @@ namespace FLIVR
 #define FLV_CTYPE_INDEX_D 255
 #define vr_stype(x, y) ((x)+(y)*FLV_COLORTYPE_NUM)
 
-   void MultiVolumeRenderer::draw_volume(bool interactive_mode_p, bool orthographic_p, double zoom, bool intp)
+   void MultiVolumeRenderer::draw_volume(bool interactive_mode_p, bool orthographic_p, double zoom, bool intp, double sampling_frq_fac)
    {
       if (get_vr_num()<=0 || !(vr_list_[0]))
          return;
@@ -257,7 +257,6 @@ namespace FLIVR
 	  int id_image_num = 0;
 	  VolumeRenderer *idvr = NULL;
 	  
-	  double sampling_frq_fac = -1.0;
 	  for (i=0; i<(int)vr_list_.size(); i++)
 	  {
 		  VolumeRenderer* vr = vr_list_[i];
@@ -283,26 +282,6 @@ namespace FLIVR
 			  used_colortype[FLV_CTYPE_DEFAULT] = true;
 			  used_shadertype[vr_stype(FLV_CTYPE_DEFAULT, FLV_VR_ALPHA)] = true;
 		  }
-
-		  Texture *tex = vr->tex_;
-		  if (tex)
-		  {
-			  Transform *field_trans = tex->transform();
-			  Vector spcv[3] = {Vector(1.0, 0.0, 0.0), Vector(0.0, 1.0, 0.0), Vector(0.0, 0.0, 1.0)};
-			  double maxlen = -1;
-			  for(int j = 0; j < 3 ; j++)
-			  {
-				  // index space view direction
-				  Vector v;
-				  v = field_trans->project(spcv[j]);
-				  v.safe_normalize();
-				  v = field_trans->project(spcv[j]);
-
-				  double len = Dot(spcv[j], v);;
-				  if(len > maxlen) maxlen = len;
-			  }
-			  if (maxlen > sampling_frq_fac) sampling_frq_fac = maxlen;
-		  }
 	  }
 
 	  if (use_id_color) blend_slices = true;
@@ -326,8 +305,7 @@ namespace FLIVR
 	  {
 		  Texture *tex = vr_list_[i]->tex_;
 		  
-		  double rate_fac = 1.0;
-		  double vr_dt = dt * vr_list_[i]->compute_dt_fac(sampling_frq_fac, &rate_fac);
+		  double vr_dt = vr_list_[i]->compute_dt_fac_1px(sampling_frq_fac)/rate;
 
 		  vector<TextureBrick *> *brs = tex->get_bricks();
 		  Ray view_ray = vr_list_[i]->compute_view();
@@ -344,7 +322,6 @@ namespace FLIVR
 			  if (b->compute_t_index_min_max(view_ray, vr_dt))
 			  {
 				  b->set_vr(vr_list_[i]);
-				  b->set_rate_fac(rate_fac);
 
 				  int tmp = b->timin();
 				  all_timin = (all_timin > tmp) ? tmp : all_timin;
@@ -863,7 +840,7 @@ namespace FLIVR
 			  if (depth_peel_ || vr_cmode == FLV_CTYPE_DEPTH)
 				  shader[vr_shader_id]->setLocalParam(7, 1.0/double(w2), 1.0/double(h2), 0.0, 0.0);
 
-			  shader[vr_shader_id]->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(), 1.0/rate*b->rate_fac());
+			  shader[vr_shader_id]->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(), 1.0/(rate*zoom*2.0));
 
 			  //for brick transformation
 			  float matrix[16];

@@ -4666,6 +4666,8 @@ bool DataManager::DownloadToCurrentDir(wxString &filename)
 {
 	wxString pathname = filename;
 	wxURL url(pathname);
+	if (!url.IsOk())
+		return false;
 	url.GetProtocol().SetTimeout(10);
 	wxString suffix = pathname.Mid(pathname.Find('.', true)).MakeLower();
 	if(url.GetError() != wxURL_NOERR) return false;

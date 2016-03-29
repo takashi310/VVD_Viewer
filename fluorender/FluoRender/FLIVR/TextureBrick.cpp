@@ -625,6 +625,17 @@ z
 
 	   bool order = TextureRenderer::get_update_order();
 	   int id = (order ? tid - timin_ : timax_ - tid);
+
+	   if (id < 0 || id >= size_integ_v_.size() || id >= size_integ_i_.size())
+	   {
+		   size_v = 0;
+		   size_i = 0;
+		   v = nullptr;
+		   i = nullptr;
+
+		   return;
+	   }
+
 	   unsigned int offset_v = size_integ_v_[id];
 	   unsigned int offset_i = size_integ_i_[id];
 	   

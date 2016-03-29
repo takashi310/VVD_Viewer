@@ -129,6 +129,7 @@ namespace FLIVR
 		int get_depth_peel() {return depth_peel_;}
 
 		double compute_dt_fac(double sampling_frq_fac=-1.0, double *rate_fac=nullptr);
+		double compute_dt_fac_1px(double sclfac);
 
 		//draw
 		void eval_ml_mode();

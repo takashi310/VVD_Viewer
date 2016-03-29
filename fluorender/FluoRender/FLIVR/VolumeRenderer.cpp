@@ -536,6 +536,38 @@ namespace FLIVR
 		return maxlen / l;
 	}
 
+	//sclfac: m_proj_mat[0][0] (ortho)
+	double VolumeRenderer::compute_dt_fac_1px(double sclfac)
+	{
+		if (sclfac <= 0.0)
+			return 1.0;
+
+		double maxlen;
+		double vdmaxlen;
+		Transform *field_trans = tex_->transform();
+
+		double mvmat[16] =
+			{m_mv_mat[0][0], m_mv_mat[0][1], m_mv_mat[0][2], m_mv_mat[0][3],
+			 m_mv_mat[1][0], m_mv_mat[1][1], m_mv_mat[1][2], m_mv_mat[1][3],
+			 m_mv_mat[2][0], m_mv_mat[2][1], m_mv_mat[2][2], m_mv_mat[2][3],
+			 m_mv_mat[3][0], m_mv_mat[3][1], m_mv_mat[3][2], m_mv_mat[3][3]};
+
+		GLint vp[4];
+		glGetIntegerv(GL_VIEWPORT, vp);
+		int w = vp[2];
+
+		double pxlen = 1.0 / w / sclfac;
+		
+		// index space view direction
+		Vector mv_ray = Vector(-mvmat[2], -mvmat[6], -mvmat[10]);//normalized
+		Vector v = field_trans->project(Vector(-mvmat[2], -mvmat[6], -mvmat[10]));
+		double f_e_len = v.length();
+		v = field_trans->project(v);
+
+		double dt = (pxlen * f_e_len) / Dot(mv_ray, v);
+		return dt;
+	}
+
 	void VolumeRenderer::eval_ml_mode()
 	{
 		//reassess the mask/label mode
@@ -637,7 +669,8 @@ namespace FLIVR
 			diag.y() / tex_->ny(),
 			diag.z() / tex_->nz());
 		double dt = cell_diag.length()/compute_rate_scale()/rate;
-*/		double dt = 0.0020/rate * compute_dt_fac(sampling_frq_fac, &rate_fac);
+*/		//double dt = 0.0020/rate * compute_dt_fac(sampling_frq_fac, &rate_fac);
+		double dt = compute_dt_fac_1px(sampling_frq_fac)/rate;
 		num_slices_ = (int)(diag.length()/dt);
 
 		vector<float> vertex;
@@ -1033,7 +1066,7 @@ namespace FLIVR
 				load_brick_label(bricks, i);
 
 			shader->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(),
-				mode_==MODE_OVER?1.0/rate*rate_fac:1.0);
+				mode_==MODE_OVER?1.0/(rate*zoom*2.0):1.0);
 
 			//for brick transformation
 			float matrix[16];

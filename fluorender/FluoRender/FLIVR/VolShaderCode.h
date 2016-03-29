@@ -249,7 +249,7 @@ namespace FLIVR
 	"	r = texture(tex0, p.stp); \n" \
 	"	n.y = v.y - r.x; \n" \
 	"	w = vec4(0.0); \n" \
-	"	w.z = dir.x<dir.z?dir.x:dir.z; \n" \
+	"	w.z = dir.z; \n" \
 	"	p = clamp(TexCoord + w, 0.0, 1.0); \n" \
 	"	r = texture(tex0, p.stp); \n" \
 	"	n.z = v.z - r.x; \n" \
@@ -280,7 +280,7 @@ namespace FLIVR
 	"	r = texture(tex0, p.stp); \n" \
 	"	n.y = r.x - n.y; \n" \
 	"	w = vec4(0.0); \n" \
-	"	w.z = dir.x<dir.z?dir.x:dir.z; \n" \
+	"	w.z = dir.z; \n" \
 	"	p = clamp(TexCoord + w, 0.0, 1.0); \n" \
 	"	r = texture(tex0, p.stp); \n" \
 	"	n.z = r.x + n.z; \n" \
@@ -318,7 +318,7 @@ namespace FLIVR
 	"	r.x = (v.x==r.x?1.0:0.0) ; \n" \
 	"	n.y = r.x - n.y; \n" \
 	"	w = vec4(0.0); \n" \
-	"	w.z = dir.x<dir.z?dir.x:dir.z; \n" \
+	"	w.z = dir.z; \n" \
 	"	p = clamp(TexCoord + w, 0.0, 1.0); \n" \
 	"	r = texture(tex0, p.stp); \n" \
 	"	r.x = (v.x==r.x?1.0:0.0) ; \n" \
@@ -354,7 +354,7 @@ namespace FLIVR
 	"	r = texture(tex0, p.stp);\n" \
 	"	n.y = r.x - n.y;\n" \
 	"	w = vec4(0.0);\n" \
-	"	w.z = dir.x<dir.z?dir.x:dir.z;\n" \
+	"	w.z = dir.z;\n" \
 	"	p = clamp(pos+w, 0.0, 1.0);\n" \
 	"	r = texture(tex0, p.stp);\n" \
 	"	n.z = r.x + n.z;\n" \
@@ -636,7 +636,7 @@ namespace FLIVR
 	"	v.x = (id==r?0.5:0.0) ; \n" \
 	"	n.y = v.x - n.y; \n" \
 	"	w = vec4(0.0); \n" \
-	"	w.z = dir.x<dir.z?dir.x:dir.z; \n" \
+	"	w.z = dir.z; \n" \
 	"	p = clamp(TexCoord + w, 0.0, 1.0); \n" \
 	"	r = uint(texture(tex0, p.stp).x*loc5.w+0.5); \n" \
 	"	v.x = (id==r?0.5:0.0) ; \n" \

@@ -3210,7 +3210,7 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int pe
 	//calculate sampling frequency factor
 	int cnt_mask = 0;
 	bool use_tex_wt2 = false;
-	double sampling_frq_fac = -1.0;
+	double sampling_frq_fac = 2 / (m_ortho_right - m_ortho_left);
 	for (i=0; i<(int)list.size(); i++)
 	{
 		VolumeData* vd = list[i];
@@ -3219,7 +3219,7 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int pe
 		Texture *tex = vd->GetTexture();
 		if (tex)
 		{
-			Transform *field_trans = tex->transform();
+/*			Transform *field_trans = tex->transform();
 			Vector spcv[3] = {Vector(1.0, 0.0, 0.0), Vector(0.0, 1.0, 0.0), Vector(0.0, 0.0, 1.0)};
 			double maxlen = -1;
 			for(int i = 0; i < 3 ; i++)
@@ -3234,7 +3234,7 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int pe
 				if(len > maxlen) maxlen = len;
 			}
 			if (maxlen > sampling_frq_fac) sampling_frq_fac = maxlen;
-
+*/
 			if (tex->nmask()!=-1)
 			{
 				cnt_mask++;
@@ -3921,7 +3921,8 @@ void VRenderGLView::DrawOLShading(VolumeData* vd)
 	vd->SetStreamMode(2);
 	vd->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
 	vd->SetFog(m_use_fog, m_fog_intensity, m_fog_start, m_fog_end);
-	vd->Draw(!m_persp, m_interactive, m_scale_factor);
+	double sampling_frq_fac = 2 / (m_ortho_right - m_ortho_left);
+	vd->Draw(!m_persp, m_interactive, m_scale_factor, sampling_frq_fac);
 	vd->RestoreMode();
 	vd->SetColormapMode(colormode);
 
@@ -4118,6 +4119,8 @@ void VRenderGLView::DrawOLShadows(vector<VolumeData*> &vlist, GLuint tex)
 				return;
 	}
 
+	double sampling_frq_fac = 2 / (m_ortho_right - m_ortho_left);
+
 	int nx, ny;
 	nx = GetSize().x;
 	ny = GetSize().y;
@@ -4184,7 +4187,7 @@ void VRenderGLView::DrawOLShadows(vector<VolumeData*> &vlist, GLuint tex)
 			vd->GetTexture()->set_sort_bricks();
 			vd->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
 			vd->SetFog(m_use_fog, m_fog_intensity, m_fog_start, m_fog_end);
-			vd->Draw(!m_persp, m_interactive, m_scale_factor, m_intp);
+			vd->Draw(!m_persp, m_interactive, m_scale_factor, sampling_frq_fac);
 			//restore
 			vd->RestoreMode();
 			vd->SetColormapMode(colormode);
@@ -4239,7 +4242,7 @@ void VRenderGLView::DrawOLShadows(vector<VolumeData*> &vlist, GLuint tex)
 			}
 			m_mvr->set_colormap_mode(2);
 			//draw
-			m_mvr->draw(m_test_wiref, m_interactive, !m_persp, m_scale_factor, m_intp);
+			m_mvr->draw(m_test_wiref, m_interactive, !m_persp, m_scale_factor, m_intp, sampling_frq_fac);
 			//restore
 			m_mvr->set_colormap_mode(0);
 			for (i=0; i<(int)list.size(); i++)
@@ -4537,7 +4540,8 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 	}
 
 	//draw multiple volumes at the same time
-	m_mvr->draw(m_test_wiref, m_interactive, !m_persp, m_scale_factor, m_intp);
+	double sampling_frq_fac = 2 / (m_ortho_right - m_ortho_left);
+	m_mvr->draw(m_test_wiref, m_interactive, !m_persp, m_scale_factor, m_intp, sampling_frq_fac);
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
