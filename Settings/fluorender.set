@@ -11,7 +11,7 @@ mode=1
 [realtime\ compress]
 mode=0
 [mouse\ int]
-mode=0
+mode=1
 res_mode=0
 [dir\ shadow]
 mode=1
