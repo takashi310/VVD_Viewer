@@ -330,7 +330,7 @@ namespace FLIVR
 	{
 		sampling_rate_ = rate;
 		//irate_ = rate>1.0 ? max(rate / 2.0, 1.0) : rate;
-		irate_ = max(rate / 2.0, 0.1);
+		irate_ = max(rate / 2.0, 0.01);
 	}
 
 	double VolumeRenderer::get_sampling_rate()
