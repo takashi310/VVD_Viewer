@@ -1066,7 +1066,7 @@ namespace FLIVR
 				load_brick_label(bricks, i);
 
 			shader->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(),
-				mode_==MODE_OVER?1.0/(rate*zoom*2.0):1.0);
+				mode_==MODE_OVER?1.0/(rate*zoom*5.0):1.0);
 
 			//for brick transformation
 			float matrix[16];

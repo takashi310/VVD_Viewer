@@ -407,7 +407,7 @@ namespace FLIVR
 	"		tf_alp = pow(clamp(v.x/loc3.z,\n" \
 	"			loc3.x<1.0?-(loc3.x-1.0)*0.00001:0.0,\n" \
 	"			loc3.x>1.0?0.9999:1.0), loc3.x);\n" \
-	"		alpha = 1.0 - pow(clamp(1.0-tf_alp, 0.0, 1.0), loc4.w);\n" \
+	"		alpha = (1.0 - pow(clamp(1.0-tf_alp*l.w, 0.0, 1.0), loc4.w)) / l.w;\n" \
 	"		c = vec4(loc6.rgb*alpha*tf_alp, alpha);\n" \
 	"	}\n" \
 	"\n"
@@ -539,7 +539,7 @@ namespace FLIVR
 
 #define VOL_TRANSFER_FUNCTION_COLORMAP_RESULT \
 	"		//VOL_TRANSFER_FUNCTION_COLORMAP_RESULT\n" \
-	"		float alpha = 1.0 - pow(1.0-tf_alp, loc4.w);\n" \
+	"		float alpha = (1.0 - pow(clamp(1.0-tf_alp*l.w, 0.0, 1.0), loc4.w)) / l.w;\n" \
 	"		c = vec4(rb.rgb*alpha*tf_alp, alpha);\n" \
 	"	}\n" \
 	"\n"

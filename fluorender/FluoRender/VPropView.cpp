@@ -239,7 +239,7 @@ wxPanel(parent, id, pos, size,style, name),
 	//sample rate
 	st = new wxStaticText(this, 0, "Sample Rate:",
 		wxDefaultPosition, wxSize(140, 20), wxALIGN_RIGHT);
-	m_sample_sldr = new wxSlider(this, ID_SampleSldr, 10, 0, 50,
+	m_sample_sldr = new wxSlider(this, ID_SampleSldr, 100, 0, 500,
 		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
 	m_sample_text = new wxTextCtrl(this, ID_SampleText, "1.0",
 		wxDefaultPosition, wxSize(60, 20), 0, vald_fp2);
@@ -601,8 +601,8 @@ void VPropView::GetSettings()
 	if ((vald_fp = (wxFloatingPointValidator<double>*)m_sample_text->GetValidator()))
 		vald_fp->SetRange(0.0, 100.0);
 	double sr = m_vd->GetSampleRate();
-	m_sample_sldr->SetValue(sr*10.0);
-	str = wxString::Format("%.1f", sr);
+	m_sample_sldr->SetValue(int(sr*100.0+0.5));
+	str = wxString::Format("%.2f", sr);
 	m_sample_text->ChangeValue(str);
 
 	//spacings
@@ -1298,8 +1298,8 @@ void VPropView::OnAlphaText(wxCommandEvent& event)
 
 void VPropView::OnSampleChange(wxScrollEvent & event)
 {
-	double val = event.GetPosition() / 10.0;
-	wxString str = wxString::Format("%.1f", val);
+	double val = event.GetPosition() / 100.0;
+	wxString str = wxString::Format("%.2f", val);
 	m_sample_text->SetValue(str);
 }
 
@@ -1308,7 +1308,7 @@ void VPropView::OnSampleText(wxCommandEvent& event)
 	wxString str = m_sample_text->GetValue();
 	double srate = 0.0;
 	str.ToDouble(&srate);
-	double val = srate*10.0;
+	double val = srate*100.0;
 	m_sample_sldr->SetValue(int(val));
 
 	//set sample rate value
@@ -2512,9 +2512,9 @@ void VPropView::OnResetDefault(wxCommandEvent &event)
 	m_vd->SetAlpha(dval);
 	//sample rate
 	dval = mgr->m_vol_spr;
-	str = wxString::Format("%.1f", dval);
+	str = wxString::Format("%.2f", dval);
 	m_sample_text->ChangeValue(str);
-	ival = int(dval*10.0+0.5);
+	ival = int(dval*100.0+0.5);
 	m_sample_sldr->SetValue(ival);
 	m_vd->SetSampleRate(dval);
 	////x spacing
