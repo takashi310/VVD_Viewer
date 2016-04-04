@@ -1646,8 +1646,19 @@ namespace FLIVR
 						}
 						
 						FileLocInfo *test = tex_->GetFileName(brick->getID());
-						glTexImage3D(GL_TEXTURE_3D, 0, internal_format, nx, ny, nz, 0, format, brick->tex_type(c), 0);
-						glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format, brick->tex_type(c), brick->tex_data_brk(c, &test->filename, tex_->GetFileType(), test->isurl));
+						void *texdata = brick->tex_data_brk(c, &test->filename, tex_->GetFileType(), test->isurl);
+						if (texdata)
+						{
+							glTexImage3D(GL_TEXTURE_3D, 0, internal_format, nx, ny, nz, 0, format, brick->tex_type(c), 0);
+							glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format, brick->tex_type(c), texdata);
+						}
+						else 
+						{
+							glDeleteTextures(1, (GLuint*)&tex_pool_[idx].id);
+							tex_pool_.erase(tex_pool_.begin()+idx);
+							brkerror = true;
+							result = -1;
+						}
 						
 						if (mainmem_buf_size_ == 0.0) brick->freeBrkData();
 						else 
