@@ -3186,18 +3186,10 @@ void VRenderGLView::DrawFinalBuffer()
 		img_shader->bind();
 	}
 
-	if (m_vol_method == VOL_METHOD_MULTI)
-	{
-		img_shader->setLocalParam(0, m_gamma.r(), m_gamma.g(), m_gamma.b(), 1.0);
-		img_shader->setLocalParam(1, m_brightness.r(), m_brightness.g(), m_brightness.b(), 1.0);
-		img_shader->setLocalParam(2, m_hdr.r(), m_hdr.g(), m_hdr.b(), 0.0);
-	}
-	else
-	{
-		img_shader->setLocalParam(0, 1.0, 1.0, 1.0, 1.0);
-		img_shader->setLocalParam(1, 1.0, 1.0, 1.0, 1.0);
-		img_shader->setLocalParam(2, 0.0, 0.0, 0.0, 0.0);
-	}
+	img_shader->setLocalParam(0, 1.0, 1.0, 1.0, 1.0);
+	img_shader->setLocalParam(1, 1.0, 1.0, 1.0, 1.0);
+	img_shader->setLocalParam(2, 0.0, 0.0, 0.0, 0.0);
+
 	//2d adjustment
 
 	DrawViewQuad();
