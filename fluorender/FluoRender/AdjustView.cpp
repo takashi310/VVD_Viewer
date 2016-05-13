@@ -103,7 +103,7 @@ m_dft_sync_b(false)
 
 	//fourth line: sliders
 	wxBoxSizer *sizer_h_3 = new wxBoxSizer(wxHORIZONTAL);
-	m_r_gamma_sldr = new wxSlider(this, ID_RGammaSldr, 100, 10, 400,
+	m_r_gamma_sldr = new wxSlider(this, ID_RGammaSldr, 100, 10, 999,
 		wxDefaultPosition, wxSize(25,-1), wxSL_VERTICAL);
 	sizer_h_3->Add(m_r_gamma_sldr, 1, wxEXPAND);
 	m_r_brightness_sldr = new wxSlider(this, ID_RBrightnessSldr, 0, -256, 256,
@@ -161,7 +161,7 @@ m_dft_sync_b(false)
 
 	//9th line: sliders
 	wxBoxSizer *sizer_h_7 = new wxBoxSizer(wxHORIZONTAL);
-	m_g_gamma_sldr = new wxSlider(this, ID_GGammaSldr, 100, 10, 400,
+	m_g_gamma_sldr = new wxSlider(this, ID_GGammaSldr, 100, 10, 999,
 		wxDefaultPosition, wxSize(25,-1), wxSL_VERTICAL);
 	sizer_h_7->Add(m_g_gamma_sldr, 1, wxEXPAND);
 	m_g_brightness_sldr = new wxSlider(this, ID_GBrightnessSldr, 0, -256, 256,
@@ -217,7 +217,7 @@ m_dft_sync_b(false)
 
 	//14th line: sliders
 	wxBoxSizer *sizer_h_11 = new wxBoxSizer(wxHORIZONTAL);
-	m_b_gamma_sldr = new wxSlider(this, ID_BGammaSldr, 100, 10, 400,
+	m_b_gamma_sldr = new wxSlider(this, ID_BGammaSldr, 100, 10, 999,
 		wxDefaultPosition, wxSize(25,-1), wxSL_VERTICAL);
 	sizer_h_11->Add(m_b_gamma_sldr, 1, wxEXPAND);
 	m_b_brightness_sldr = new wxSlider(this, ID_BBrightnessSldr, 0, -256, 256,

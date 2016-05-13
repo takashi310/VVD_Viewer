@@ -1590,8 +1590,8 @@ namespace FLIVR
 				if (nb < 3)
 				{
 					if (compression && GLEW_ARB_texture_compression_rgtc &&
-						brick->ntype(c)==TextureBrick::TYPE_INT)
-						internal_format = GL_COMPRESSED_RGB_S3TC_DXT1_EXT;
+						brick->ntype(c)==TextureBrick::TYPE_INT && (brick->tex_type(c)==GL_BYTE||brick->tex_type(c)==GL_UNSIGNED_BYTE))
+						internal_format = GL_COMPRESSED_RED;
 					else
 						internal_format = (brick->tex_type(c)==GL_SHORT||
 							brick->tex_type(c)==GL_UNSIGNED_SHORT)?
@@ -1601,8 +1601,8 @@ namespace FLIVR
 				else
 				{
 					if (compression && GLEW_ARB_texture_compression_rgtc &&
-						brick->ntype(c)==TextureBrick::TYPE_INT)
-						internal_format = GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
+						brick->ntype(c)==TextureBrick::TYPE_INT && (brick->tex_type(c)==GL_BYTE||brick->tex_type(c)==GL_UNSIGNED_BYTE))
+						internal_format = GL_COMPRESSED_RED;
 					else
 						internal_format = (brick->tex_type(c)==GL_SHORT||
 							brick->tex_type(c)==GL_UNSIGNED_SHORT)?

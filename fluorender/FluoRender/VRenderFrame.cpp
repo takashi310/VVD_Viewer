@@ -2740,6 +2740,7 @@ void VRenderFrame::SaveProject(wxString& filename)
 			fconfig.Write("free", vrv->GetFree());
 			fconfig.Write("aov", vrv->GetAov());
 			fconfig.Write("min_dpi", vrv->GetMinPPI());
+			fconfig.Write("res_mode", vrv->GetResMode());
 			fconfig.Write("nearclip", vrv->GetNearClip());
 			fconfig.Write("farclip", vrv->GetFarClip());
 			Color bkcolor;
@@ -3813,6 +3814,9 @@ void VRenderFrame::OpenProject(wxString& filename)
 				double dpi;
 				if (fconfig.Read("min_dpi", &dpi))
 					vrv->SetMinPPI(dpi);
+				int res_mode;
+				if (fconfig.Read("res_mode", &res_mode))
+					vrv->SetResMode(res_mode);
 				double nearclip;
 				if (fconfig.Read("nearclip", &nearclip))
 					vrv->SetNearClip(nearclip);

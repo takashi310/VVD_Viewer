@@ -988,6 +988,7 @@ private:
 	int m_manip_end_frame;
 
 	int m_min_ppi;
+	int m_res_mode;
 
 	LMSeacher *m_searcher;
 	vector<VolumeData *> m_lm_vdlist;
@@ -1178,6 +1179,7 @@ public:
 		ID_AovSldr,
 		ID_AovText,
 		ID_FreeChk,
+		ID_ResCombo,
 		ID_PPISldr,
 		ID_PPIText,
 		ID_Searcher,
@@ -1708,6 +1710,17 @@ public:
 	void SetMinPPI(double ppi);
 	double GetMinPPI();
 
+	void SetResMode(int mode)
+	{
+		int elem_num = m_res_mode_combo->GetStrings().size();
+		if (mode < 0 || mode >= elem_num) return;
+		
+		m_res_mode = mode;
+		if (m_glview) m_glview->m_res_mode = mode;
+		m_res_mode_combo->SetSelection(mode);
+	}
+	int GetResMode() {if (m_glview) return m_glview->m_res_mode; else return 0;}
+
 public:
 	wxWindow* m_frame;
 	static int m_id;
@@ -1735,6 +1748,8 @@ public:
 
 	wxSlider* m_ppi_sldr;
 	wxTextCtrl* m_ppi_text;
+	int m_res_mode;
+	wxComboBox *m_res_mode_combo;
 
 	//bottom bar///////////////////////////////////////////////////
 	wxPanel* m_panel_2;
@@ -1805,6 +1820,7 @@ private:
 	void OnFreeChk(wxCommandEvent& event);
 	void OnPPIChange(wxScrollEvent& event);
 	void OnPPIEdit(wxCommandEvent &event);
+	void OnResModesCombo(wxCommandEvent &event);
 	//bar left
 	void OnDepthAttenCheck(wxCommandEvent& event);
 	void OnDepthAttenFactorChange(wxScrollEvent& event);

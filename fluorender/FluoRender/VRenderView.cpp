@@ -660,6 +660,7 @@ wxGLCanvas(parent, id, attriblist, pos, size, style),
 	m_manip_fps(20.0),
 	m_manip_time(300),
 	m_min_ppi(20),
+	m_res_mode(0),
 	m_draw_landmarks(false),
 	m_draw_overlays_only(false),
 	m_enhance_sel(false),
@@ -3438,6 +3439,8 @@ void VRenderGLView::switchLevel(VolumeData *vd)
 	if(disp_ppi.GetX() > 0)disp_ppi_x = disp_ppi.GetX();
 	if(disp_ppi.GetY() > 0)disp_ppi_y = disp_ppi.GetY();
 
+	int res_scale = (m_res_mode == 0) ? 1 : m_res_mode*4;
+
 	Texture *vtex = vd->GetTexture();
 	if (vtex && vtex->isBrxml())
 	{
@@ -3461,9 +3464,9 @@ void VRenderGLView::switchLevel(VolumeData *vd)
 
 			double sf;
 			if (aspect > 1.0)
-				sf = 2.0*m_radius*disp_ppi_y/spc_y/double(ny)/m_min_ppi;
+				sf = 2.0*m_radius*res_scale/spc_y/double(ny);
 			else
-				sf = 2.0*m_radius*disp_ppi_x/spc_x/double(nx)/m_min_ppi;
+				sf = 2.0*m_radius*res_scale/spc_x/double(nx);
 			sfs.push_back(sf);
 		}
 
@@ -12782,6 +12785,7 @@ BEGIN_EVENT_TABLE(VRenderView, wxPanel)
 	EVT_CHECKBOX(ID_FreeChk, VRenderView::OnFreeChk)
 	EVT_COMMAND_SCROLL(ID_PPISldr, VRenderView::OnPPIChange)
 	EVT_TEXT(ID_PPIText, VRenderView::OnPPIEdit)
+	EVT_COMBOBOX(ID_ResCombo, VRenderView::OnResModesCombo)
 	//bar left
 	EVT_CHECKBOX(ID_DepthAttenChk, VRenderView::OnDepthAttenCheck)
 	EVT_COMMAND_SCROLL(ID_DepthAttenFactorSldr, VRenderView::OnDepthAttenFactorChange)
@@ -12829,7 +12833,8 @@ wxPanel(parent, id, pos, size, style),
 	m_default_saved(false),
 	m_frame(frame),
 	m_draw_clip(false),
-	m_use_dft_settings(false)
+	m_use_dft_settings(false),
+	m_res_mode(0)
 {
 	//full frame
 	m_full_frame = new wxFrame((wxFrame*)NULL, wxID_ANY, "FluoRender");
@@ -12996,6 +13001,7 @@ void VRenderView::CreateBar()
 	m_search_chk = new wxCheckBox(this, ID_SearchChk, "Search",
 		wxDefaultPosition, wxSize(-1, 20));
 	m_search_chk->SetValue(false);
+	m_search_chk->Hide();
 #ifndef WITH_DATABASE
 	m_search_chk->Hide();
 #endif // !WITH_DATABASE
@@ -13017,11 +13023,23 @@ void VRenderView::CreateBar()
 	else
 		m_free_chk->SetValue(false);
 
-	st3 = new wxStaticText(this, 0, "Min dpi:");
 	m_ppi_sldr = new wxSlider(this, ID_PPISldr, 20, 5, 100,
 		wxDefaultPosition, wxSize(120, 20), wxSL_HORIZONTAL);
+	m_ppi_sldr->Hide();
 	m_ppi_text = new wxTextCtrl(this, ID_PPIText, "20",
 		wxDefaultPosition, wxSize(40, 20), 0, vald_int);
+	m_ppi_text->Hide();
+
+	st3 = new wxStaticText(this, 0, "Streaming:");
+	m_res_mode_combo = new wxComboBox(this, ID_ResCombo, "",
+		wxDefaultPosition, wxSize(80, 24), 0, NULL, wxCB_READONLY);
+	vector<string>mode_list;
+	mode_list.push_back("Fine");
+	mode_list.push_back("Standard");
+	mode_list.push_back("Coarse");
+	for (size_t i=0; i<mode_list.size(); ++i)
+		m_res_mode_combo->Append(mode_list[i]);
+	m_res_mode_combo->SetSelection(m_res_mode);
 
 	//
 	sizer_h_1->Add(10, 5, 0);
@@ -13042,15 +13060,17 @@ void VRenderView::CreateBar()
 	sizer_h_1->Add(5, 5, 0);
 	sizer_h_1->Add(m_intp_chk, 0, wxALIGN_CENTER);
 	sizer_h_1->Add(5, 5, 0);
-	sizer_h_1->Add(m_search_chk, 0, wxALIGN_CENTER);
-	sizer_h_1->Add(5, 5, 0);
+//	sizer_h_1->Add(m_search_chk, 0, wxALIGN_CENTER);
+//	sizer_h_1->Add(5, 5, 0);
+	sizer_h_1->Add(st3, 0, wxALIGN_CENTER, 0);
+	sizer_h_1->Add(m_res_mode_combo, 0, wxALIGN_CENTER);
+	sizer_h_1->Add(10, 5, 0);
 	sizer_h_1->Add(st2, 0, wxALIGN_CENTER, 0);
 	sizer_h_1->Add(m_aov_sldr, 0, wxALIGN_CENTER);
 	sizer_h_1->Add(m_aov_text, 0, wxALIGN_CENTER);
 	sizer_h_1->Add(5, 5, 0);
 	sizer_h_1->Add(m_free_chk, 0, wxALIGN_CENTER);
 	sizer_h_1->Add(5, 5, 0);
-	sizer_h_1->Add(st3, 0, wxALIGN_CENTER, 0);
 	sizer_h_1->Add(m_ppi_sldr, 0, wxALIGN_CENTER);
 	sizer_h_1->Add(m_ppi_text, 0, wxALIGN_CENTER);
 
@@ -14086,6 +14106,12 @@ void VRenderView::OnCapture(wxCommandEvent& event)
 	}
 }
 
+void VRenderView::OnResModesCombo(wxCommandEvent &event)
+{
+	SetResMode(m_res_mode_combo->GetCurrentSelection());
+	
+	RefreshGL();
+}
 
 //bar left
 void VRenderView::OnDepthAttenCheck(wxCommandEvent& event)
@@ -14610,6 +14636,7 @@ void VRenderView::SaveDefault(unsigned int mask)
 	fconfig.Write("free_rd", bVal);
 	//min dpi
 	fconfig.Write("min_dpi", m_glview->m_min_ppi);
+	fconfig.Write("res_mode", m_glview->m_res_mode);
 	//rotations
 	str = m_x_rot_text->GetValue();
 	fconfig.Write("x_rot", str);
@@ -14678,6 +14705,7 @@ void VRenderView::LoadSettings()
 
 	bool bVal;
 	double dVal;
+	int iVal;
 	if (fconfig.Read("volume_seq_rd", &bVal))
 	{
 		m_volume_seq_rd->SetValue(bVal);
@@ -14756,6 +14784,12 @@ void VRenderView::LoadSettings()
 	{
 		SetMinPPI(dVal);
 	}
+	if (fconfig.Read("res_mode", &iVal))
+	{
+		SetResMode(iVal);
+	}
+	else
+		SetResMode(0);
 	if (fconfig.Read("free_rd", &bVal))
 	{
 		m_free_chk->SetValue(bVal);
