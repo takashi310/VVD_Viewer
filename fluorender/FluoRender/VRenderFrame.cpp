@@ -2033,6 +2033,9 @@ void VRenderFrame::OnSelection(int type,
 		m_aui_mgr.GetPane(m_prop_panel).Caption(UITEXT_PROPERTIES);
 		m_aui_mgr.Update();
 	}
+
+	if (m_adjust_view && vrv && vrv->GetVolMethod() == VOL_METHOD_MULTI)
+		m_adjust_view->SetRenderView(vrv);
 }
 
 void VRenderFrame::SetKeyLock(bool lock)

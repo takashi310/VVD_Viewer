@@ -3185,9 +3185,19 @@ void VRenderGLView::DrawFinalBuffer()
 			img_shader->create();
 		img_shader->bind();
 	}
-	img_shader->setLocalParam(0, m_gamma.r(), m_gamma.g(), m_gamma.b(), 1.0);
-	img_shader->setLocalParam(1, m_brightness.r(), m_brightness.g(), m_brightness.b(), 1.0);
-	img_shader->setLocalParam(2, m_hdr.r(), m_hdr.g(), m_hdr.b(), 0.0);
+
+	if (m_vol_method == VOL_METHOD_MULTI)
+	{
+		img_shader->setLocalParam(0, m_gamma.r(), m_gamma.g(), m_gamma.b(), 1.0);
+		img_shader->setLocalParam(1, m_brightness.r(), m_brightness.g(), m_brightness.b(), 1.0);
+		img_shader->setLocalParam(2, m_hdr.r(), m_hdr.g(), m_hdr.b(), 0.0);
+	}
+	else
+	{
+		img_shader->setLocalParam(0, 1.0, 1.0, 1.0, 1.0);
+		img_shader->setLocalParam(1, 1.0, 1.0, 1.0, 1.0);
+		img_shader->setLocalParam(2, 0.0, 0.0, 0.0, 0.0);
+	}
 	//2d adjustment
 
 	DrawViewQuad();
@@ -13903,13 +13913,13 @@ void VRenderView::OnVolumeMethodCheck(wxCommandEvent& event)
 		if (mode_switch_type == 1)
 		{
 			int cnt = 0;
-			bool r = false;
-			bool g = false;
-			bool b = false;
+			bool r = m_glview->GetSyncR();
+			bool g = m_glview->GetSyncG();
+			bool b = m_glview->GetSyncB();
 			Color gamma = m_glview->GetGamma();
 			Color brightness = m_glview->GetBrightness();
 			Color hdr = m_glview->GetHdr();
-			for (int i=0; i<GetLayerNum(); i++)
+/*			for (int i=0; i<GetLayerNum(); i++)
 			{
 				TreeLayer* layer = GetLayer(i);
 				if (layer && layer->IsA() == 5)
@@ -13960,6 +13970,7 @@ void VRenderView::OnVolumeMethodCheck(wxCommandEvent& event)
 					hdr[2] = hdr[1];
 				}
 			}
+*/
 			m_glview->SetGamma(gamma);
 			m_glview->SetBrightness(brightness);
 			m_glview->SetHdr(hdr);
@@ -13990,7 +14001,7 @@ void VRenderView::OnVolumeMethodCheck(wxCommandEvent& event)
 		}
 		else if (mode_switch_type == 2)
 		{
-			if (GetGroupNum() == 1)
+/*			if (GetGroupNum() == 1)
 			{
 				for (int i=0; i<GetLayerNum(); i++)
 				{
@@ -14011,7 +14022,7 @@ void VRenderView::OnVolumeMethodCheck(wxCommandEvent& event)
 					}
 				}
 			}
-		}
+*/		}
 
 		vr_frame->GetTree()->UpdateSelection();
 	}

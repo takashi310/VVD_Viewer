@@ -2120,6 +2120,8 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 	SetScrollPos(wxVERTICAL, m_scroll_pos);
 	Disconnect(wxEVT_MOTION, wxMouseEventHandler(DataTreeCtrl::OnDragging));
 
+	UpdateSelection();
+
 	Thaw();
 	SetEvtHandlerEnabled(true);
 }

@@ -382,7 +382,12 @@ void AdjustView::GetSettings()
 		m_b_gamma_text->ChangeValue(wxString::Format("%.2f", b_gamma));
 		m_b_brightness_text->ChangeValue(wxString::Format("%d", Brightness2UIP(b_brightness)));
 		m_b_hdr_text->ChangeValue(wxString::Format("%.2f", b_hdr));
-		EnableAll();
+		
+		if (m_type == 2 || m_type == 5 ||
+			(m_type == 1 && m_glview && m_glview->GetVolMethod() == VOL_METHOD_MULTI))
+			EnableAll();
+		else
+			DisableAll();
 	}
 	else
 		DisableAll();
