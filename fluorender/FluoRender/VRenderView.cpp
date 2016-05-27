@@ -13032,7 +13032,7 @@ void VRenderView::CreateBar()
 		wxDefaultPosition, wxSize(40, 20), 0, vald_int);
 	m_ppi_text->Hide();
 
-	st3 = new wxStaticText(this, 0, "Streaming:");
+	st3 = new wxStaticText(this, 0, "Quality:");
 	m_res_mode_combo = new wxComboBox(this, ID_ResCombo, "",
 		wxDefaultPosition, wxSize(80, 24), 0, NULL, wxCB_READONLY);
 	vector<string>mode_list;
@@ -13911,7 +13911,7 @@ void VRenderView::OnVolumeMethodCheck(wxCommandEvent& event)
 			Color gamma = m_glview->GetGamma();
 			Color brightness = m_glview->GetBrightness();
 			Color hdr = m_glview->GetHdr();
-/*			for (int i=0; i<GetLayerNum(); i++)
+			for (int i=0; i<GetLayerNum(); i++)
 			{
 				TreeLayer* layer = GetLayer(i);
 				if (layer && layer->IsA() == 5)
@@ -13962,7 +13962,7 @@ void VRenderView::OnVolumeMethodCheck(wxCommandEvent& event)
 					hdr[2] = hdr[1];
 				}
 			}
-*/
+
 			m_glview->SetGamma(gamma);
 			m_glview->SetBrightness(brightness);
 			m_glview->SetHdr(hdr);
