@@ -53,6 +53,7 @@ DEALINGS IN THE SOFTWARE.
 #include "Formats/lbl_reader.h"
 #include "Formats/pvxml_reader.h"
 #include "Formats/brkxml_reader.h"
+#include "Formats/swc_reader.h"
 
 #include "Tracking/TrackMap.h"
 #include "DatabaseDlg.h"

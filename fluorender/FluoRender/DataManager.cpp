@@ -2378,23 +2378,35 @@ int MeshData::Load(wxString &filename)
 {
 	m_data_path = filename;
 	m_name = m_data_path.Mid(m_data_path.Find(GETSLASH(), true)+1);
+	wxString suffix = m_data_path.Mid(m_data_path.Find('.', true)).MakeLower();
 
 	if (m_data)
-		delete m_data;
+		glmDelete(m_data);
 
-	string str_fn = filename.ToStdString();
-	bool no_fail = true;
-	m_data = glmReadOBJ(str_fn.c_str(),&no_fail);
-	while (!no_fail) {
-		wxMessageDialog *dial = new wxMessageDialog(NULL, 
-			wxT("A part of the OBJ file failed to load. Would you like to try re-loading?"), 
-			wxT("OBJ Load Failure"), 
-			wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION);
-		if (dial->ShowModal() == wxID_YES) {
-			if (m_data)
-				delete m_data;
-			m_data = glmReadOBJ(str_fn.c_str(),&no_fail);
-		} else break;
+	if (suffix == ".obj")
+	{
+		string str_fn = filename.ToStdString();
+		bool no_fail = true;
+		m_data = glmReadOBJ(str_fn.c_str(),&no_fail);
+		while (!no_fail) {
+			wxMessageDialog *dial = new wxMessageDialog(NULL, 
+				wxT("A part of the OBJ file failed to load. Would you like to try re-loading?"), 
+				wxT("OBJ Load Failure"), 
+				wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION);
+			if (dial->ShowModal() == wxID_YES) {
+				if (m_data)
+					delete m_data;
+				m_data = glmReadOBJ(str_fn.c_str(),&no_fail);
+			} else break;
+		}
+	}
+	if (suffix == ".swc")
+	{
+		SWCReader swcreader;
+		wstring wstr = m_data_path.ToStdWstring();
+		swcreader.SetFile(wstr);
+		swcreader.Preprocess();
+		m_data = swcreader.GenerateSolidModel(0.5, 0.5, 1);
 	}
 
 	if (!m_data)

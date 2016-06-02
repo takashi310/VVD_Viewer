@@ -1167,7 +1167,7 @@ void VRenderFrame::OnOpenMesh(wxCommandEvent& WXUNUSED(event))
 {
 	wxFileDialog *fopendlg = new wxFileDialog(
 		this, "Choose the mesh data file",
-		"", "", "*.obj", wxFD_OPEN|wxFD_MULTIPLE);
+		"", "", "*.obj;*.swc", wxFD_OPEN|wxFD_MULTIPLE);
 
 	int rval = fopendlg->ShowModal();
 	if (rval == wxID_OK)

@@ -682,6 +682,17 @@ void VMovieView::OnRun(wxCommandEvent& event) {
 		}
 		m_filename = m_filename.SubString(0,m_filename.Len()-5);
 		m_record = true;
+
+		if (vr_frame && vr_frame->GetSettingDlg() &&
+			vr_frame->GetSettingDlg()->GetProjSave())
+		{
+			wxString new_folder;
+			new_folder = m_filename + "_project";
+			CREATE_DIR(new_folder.fn_str());
+			wxString prop_file = new_folder + "/" + fopendlg->GetFilename() + "_project.vrp";
+			vr_frame->SaveProject(prop_file);
+		}
+
 		delete fopendlg;
 	} else {
 		delete fopendlg;
