@@ -240,15 +240,27 @@ void SWCReader::AddSolidCylinder(glm::vec3 p1, glm::vec3 p2, double radius1, dou
 	}
 
 	vector<GLfloat>::iterator v = vertices.begin();
+	vector<GLfloat>::iterator n = normals.begin();
+	double nz = (radius1 - radius2) / (half_length*2.0);
+	double nd = sqrt(1.0 + nz*nz);
+	nz /= nd;
 	for(int s = 0; s < sectors; s++) {
 		*v++ *= radius1;
 		*v++ *= radius1;
 		*v++ *= half_length;
+
+		*n++ /= nd;
+		*n++ /= nd;
+		*n++ = nz;
 	}
 	for(int s = 0; s < sectors; s++) {
 		*v++ *= radius2;
 		*v++ *= radius2;
 		*v++ *= half_length;
+
+		*n++ /= nd;
+		*n++ /= nd;
+		*n++ = nz;
 	}
 
 	glm::dvec3 dd = glm::normalize(glm::dvec3(p2-p1));
@@ -339,6 +351,13 @@ GLMmodel *SWCReader::GenerateSolidModel(double def_r, double r_scale, unsigned i
 	if (!m_model_norms.empty()) m_model_norms.clear();
 	if (!m_model_tris.empty()) m_model_tris.clear();
 
+	m_model_verts.push_back(0.0);
+	m_model_verts.push_back(0.0);
+	m_model_verts.push_back(0.0);
+	m_model_norms.push_back(0.0);
+	m_model_norms.push_back(0.0);
+	m_model_norms.push_back(0.0);
+
 	//generate solid spheres
 	for (auto vr : m_vertices)
 	{
@@ -364,8 +383,8 @@ GLMmodel *SWCReader::GenerateSolidModel(double def_r, double r_scale, unsigned i
 	}
 
 	GLMmodel *model = (GLMmodel*)malloc(sizeof(GLMmodel));
-	GLfloat *verts = (GLfloat*)malloc(sizeof(GLfloat)*(m_model_verts.size()+3));
-	GLfloat *norms = (GLfloat*)malloc(sizeof(GLfloat)*(m_model_norms.size()+3));
+	GLfloat *verts = (GLfloat*)malloc(sizeof(GLfloat)*m_model_verts.size());
+	GLfloat *norms = (GLfloat*)malloc(sizeof(GLfloat)*m_model_norms.size());
 	GLMtriangle *tris = (GLMtriangle*)malloc(sizeof(GLMtriangle)*m_model_tris.size()/3);
 	GLuint *gtris = (GLuint*)malloc(sizeof(GLuint)*m_model_tris.size()/3);
 
@@ -385,7 +404,7 @@ GLMmodel *SWCReader::GenerateSolidModel(double def_r, double r_scale, unsigned i
 		gtris[i] = i;
 	}
 
-	model->pathname    = STRDUP("default");
+	model->pathname    = STRDUP(ws2s(m_path_name).c_str());
 	model->mtllibname    = NULL;
 	model->numvertices   = m_model_verts.size()/3-1;
 	model->vertices    = verts;
