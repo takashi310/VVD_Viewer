@@ -1089,6 +1089,7 @@ void VRenderGLView::Draw()
 				DrawClippingPlanes(false, BACK_FACE);
 
 			//setup
+			glDisable(GL_DEPTH_TEST);
 			glEnable(GL_BLEND);
 			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -1485,6 +1486,86 @@ void VRenderGLView::DrawVolumes(int peel)
 		}
 		else
 			ClearFinalBuffer();
+
+		if (TextureRenderer::get_cur_brick_num() == 0)
+		{
+			int nx = GetSize().x;
+			int ny = GetSize().y;
+
+			if (m_dp_fbo_list.empty())
+			{
+				GLuint fbo_id;
+				GLuint tex_id;
+				glGenFramebuffers(1, &fbo_id);
+				glGenTextures(1, &tex_id);
+				//glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
+				glBindTexture(GL_TEXTURE_2D, tex_id);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
+					GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
+				glFramebufferTexture2D(GL_FRAMEBUFFER,
+					GL_DEPTH_ATTACHMENT,
+					GL_TEXTURE_2D, tex_id, 0);
+				m_dp_fbo_list.push_back(fbo_id);
+				m_dp_tex_list.push_back(tex_id);
+			}
+			else if (!glIsFramebuffer(m_dp_fbo_list[0]))
+			{
+				GLuint fbo_id;
+				GLuint tex_id;
+				glGenFramebuffers(1, &fbo_id);
+				glGenTextures(1, &tex_id);
+				//glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
+				glBindTexture(GL_TEXTURE_2D, tex_id);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
+					GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
+				glFramebufferTexture2D(GL_FRAMEBUFFER,
+					GL_DEPTH_ATTACHMENT,
+					GL_TEXTURE_2D, tex_id, 0);
+				m_dp_fbo_list[0] = fbo_id;
+				m_dp_tex_list[0] = tex_id;
+			}
+			else
+			{
+				glBindFramebuffer(GL_FRAMEBUFFER, m_dp_fbo_list[0]);
+
+				glFramebufferTexture2D(GL_FRAMEBUFFER,
+					GL_DEPTH_ATTACHMENT,
+				GL_TEXTURE_2D, m_dp_tex_list[0], 0);
+			}
+			if (m_resize)
+			{
+				glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[0]);
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
+					GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
+				//m_resize = false;
+			}
+
+			//setup
+			glDisable(GL_BLEND);
+			glEnable(GL_DEPTH_TEST);
+			glDepthFunc(GL_LEQUAL);
+			m_use_fog = false;
+
+			glClearDepth(1.0);
+			glClear(GL_DEPTH_BUFFER_BIT);
+
+			DrawMeshes(0);
+
+			glFinish();
+		}
+
+		//setup
+		glDisable(GL_DEPTH_TEST);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 		GLboolean bCull = glIsEnabled(GL_CULL_FACE);
 		glDisable(GL_CULL_FACE);
@@ -3149,8 +3230,6 @@ void VRenderGLView::PrepFinalBuffer()
 		//m_resize = false;
 	}
 
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void VRenderGLView::ClearFinalBuffer()
@@ -3159,7 +3238,6 @@ void VRenderGLView::ClearFinalBuffer()
 	//clear color buffer to black for compositing
 	glClearColor(0.0, 0.0, 0.0, 0.0);
 	glClear(GL_COLOR_BUFFER_BIT);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void VRenderGLView::DrawFinalBuffer()
@@ -3196,6 +3274,8 @@ void VRenderGLView::DrawFinalBuffer()
 
 	if (img_shader && img_shader->valid())
 		img_shader->release();
+
+	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 //Draw the volmues with compositing
@@ -6436,7 +6516,7 @@ void VRenderGLView::OnDraw(wxPaintEvent& event)
 	int ny = GetSize().y;
 
 	PopMeshList();
-	if (m_md_pop_list.size()>0)
+	if (m_md_pop_list.size()>0 && m_vd_pop_list.size()>0 && m_vol_method == VOL_METHOD_MULTI)
 		m_draw_type = 2;
 	else
 		m_draw_type = 1;
@@ -9952,6 +10032,8 @@ void VRenderGLView::StartLoopUpdate()
 			TextureRenderer::set_total_brick_num(total_num);
 			TextureRenderer::reset_done_current_chan();
 		}
+		else
+			TextureRenderer::set_total_brick_num(0);
 	}
 }
 
