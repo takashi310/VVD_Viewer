@@ -4555,6 +4555,7 @@ m_vol_exb(0.0),
 
 	//slice sequence
 	m_sliceSequence = false;
+	m_timeSequence = false;
 	//compression
 	m_compression = false;
 	//skip brick
@@ -4770,6 +4771,11 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 			reader->SetSliceSeq(m_sliceSequence);
 			preprocess = true;
 		}
+		if (reader->GetSliceSeq() != m_timeSequence)
+		{
+			reader->SetTimeSeq(m_timeSequence);
+			preprocess = true;
+		}
 		if (reader->GetTimeId() != m_timeId.ToStdWstring())
 		{
 			wstring str_w = m_timeId.ToStdWstring();
@@ -4801,6 +4807,7 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 		wstring str_w = pathname.ToStdWstring();
 		reader->SetFile(str_w);
 		reader->SetSliceSeq(m_sliceSequence);
+		reader->SetTimeSeq(m_timeSequence);
 		str_w = m_timeId.ToStdWstring();
 		reader->SetTimeId(str_w);
 
@@ -5148,7 +5155,7 @@ void DataManager::AddVolumeData(VolumeData* vd)
 
 	if (i>1)
 		vd->SetName(new_name);
-	/*
+	
 	if (m_override_vox)
 	{
 		if (m_vd_list.size() > 0)
@@ -5159,7 +5166,7 @@ void DataManager::AddVolumeData(VolumeData* vd)
 			vd->SetSpcFromFile(true);
 		}
 	}
-	*/
+	
 	m_vd_list.push_back(vd);
 }
 

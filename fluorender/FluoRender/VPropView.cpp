@@ -239,7 +239,7 @@ wxPanel(parent, id, pos, size,style, name),
 	//sample rate
 	st = new wxStaticText(this, 0, "Sample Rate:",
 		wxDefaultPosition, wxSize(140, 20), wxALIGN_RIGHT);
-	m_sample_sldr = new wxSlider(this, ID_SampleSldr, 100, 0, 500,
+	m_sample_sldr = new wxSlider(this, ID_SampleSldr, 50, 0, 100,
 		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
 	m_sample_text = new wxTextCtrl(this, ID_SampleText, "1.0",
 		wxDefaultPosition, wxSize(60, 20), 0, vald_fp2);

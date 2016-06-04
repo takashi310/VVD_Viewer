@@ -95,6 +95,7 @@ BEGIN_EVENT_TABLE(VRenderFrame, wxFrame)
 END_EVENT_TABLE()
 
 bool VRenderFrame::m_sliceSequence = false;
+bool VRenderFrame::m_timeSequence = false;
 bool VRenderFrame::m_compression = false;
 bool VRenderFrame::m_skip_brick = false;
 wxString VRenderFrame::m_time_id = "_T";
@@ -808,9 +809,56 @@ void VRenderFrame::OnFullScreen(wxCommandEvent& WXUNUSED(event))
 //open dialog options
 void VRenderFrame::OnCh1Check(wxCommandEvent &event)
 {
-	wxCheckBox* ch1 = (wxCheckBox*)event.GetEventObject();
+	wxRadioButton* ch1 = (wxRadioButton*)event.GetEventObject();
 	if (ch1)
-		m_sliceSequence = ch1->GetValue();
+		ch1->SetValue(m_sliceSequence);
+}
+
+void VRenderFrame::OnCh4Check(wxCommandEvent &event)
+{
+	wxRadioButton* ch4 = (wxRadioButton*)event.GetEventObject();
+	if (ch4)
+		ch4->SetValue(m_timeSequence);
+}
+
+void VRenderFrame::OnCh1Click(wxEvent &event)
+{
+	wxRadioButton* ch1 = (wxRadioButton*)event.GetEventObject();
+	if (ch1)
+	{
+		bool bval = ch1->GetValue();
+		if (bval)
+		{
+			ch1->SetValue(false);
+			m_sliceSequence = false;
+		}
+		else
+		{
+			ch1->SetValue(true);
+			m_sliceSequence = true;
+			m_timeSequence = false;
+		}
+	}
+}
+
+void VRenderFrame::OnCh4Click(wxEvent &event)
+{
+	wxRadioButton* ch4 = (wxRadioButton*)event.GetEventObject();
+	if (ch4)
+	{
+		bool bval = ch4->GetValue();
+		if (bval)
+		{
+			ch4->SetValue(false);
+			m_timeSequence = false;
+		}
+		else
+		{
+			ch4->SetValue(true);
+			m_sliceSequence = false;
+			m_timeSequence = true;
+		}
+	}
 }
 
 void VRenderFrame::OnTxt1Change(wxCommandEvent &event)
@@ -842,11 +890,25 @@ wxWindow* VRenderFrame::CreateExtraControlVolume(wxWindow* parent)
 		new wxStaticBox(panel, wxID_ANY, "Additional Options"), wxVERTICAL );
 
 	//slice sequence check box
-	wxCheckBox* ch1 = new wxCheckBox(panel, wxID_HIGHEST+3001,
-		"Read a sequence as Z slices (the last digits in filenames are used to identify the sequence)");
-	ch1->Connect(ch1->GetId(), wxEVT_COMMAND_CHECKBOX_CLICKED,
+	wxRadioButton* ch1 = new wxRadioButton(panel, wxID_HIGHEST+3001,
+		"Read a sequence as Z slices (the last digits in filenames are used to identify the sequence)",
+		wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
+	//time sequence check box
+	wxRadioButton* ch4 = new wxRadioButton(panel, wxID_HIGHEST+3007,
+		"Read a sequence as time series (the last digits in filenames are used to identify the sequence)",
+		wxDefaultPosition, wxDefaultSize);
+
+	ch1->Connect(ch1->GetId(), wxEVT_COMMAND_RADIOBUTTON_SELECTED,
 		wxCommandEventHandler(VRenderFrame::OnCh1Check), NULL, panel);
+	ch1->Connect(ch1->GetId(), wxEVT_LEFT_DOWN,
+		wxEventHandler(VRenderFrame::OnCh1Click), NULL, panel);
 	ch1->SetValue(m_sliceSequence);
+
+	ch4->Connect(ch4->GetId(), wxEVT_COMMAND_RADIOBUTTON_SELECTED,
+		wxCommandEventHandler(VRenderFrame::OnCh4Check), NULL, panel);
+	ch4->Connect(ch4->GetId(), wxEVT_LEFT_DOWN,
+		wxEventHandler(VRenderFrame::OnCh4Click), NULL, panel);
+	ch4->SetValue(m_timeSequence);
 
 	//compression
 	wxCheckBox* ch2 = new wxCheckBox(panel, wxID_HIGHEST+3002,
@@ -870,13 +932,15 @@ wxWindow* VRenderFrame::CreateExtraControlVolume(wxWindow* parent)
 	txt1->Connect(txt1->GetId(), wxEVT_COMMAND_TEXT_UPDATED,
 		wxCommandEventHandler(VRenderFrame::OnTxt1Change), NULL, panel);
 	wxStaticText* st = new wxStaticText(panel, 0,
-		"Time sequence identifier (digits after the identifier in filenames are used as time index)");
+		"Sequence identifier (digits after the identifier in filenames are used as index)");
 	sizer1->Add(txt1);
 	sizer1->Add(10, 10);
 	sizer1->Add(st);
 
 	group1->Add(10, 10);
 	group1->Add(ch1);
+	group1->Add(10, 10);
+	group1->Add(ch4);
 	group1->Add(10, 10);
 	group1->Add(ch2);
 	group1->Add(10, 10);
@@ -960,6 +1024,7 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
 			100, 0, wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);
 
 		m_data_mgr.SetSliceSequence(m_sliceSequence);
+		m_data_mgr.SetTimeSequence(m_timeSequence);
 		m_data_mgr.SetCompression(m_compression);
 		m_data_mgr.SetSkipBrick(m_skip_brick);
 		m_data_mgr.SetTimeId(m_time_id);

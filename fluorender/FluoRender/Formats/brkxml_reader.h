@@ -20,6 +20,8 @@ public:
 	void SetURL(wstring &url);
 	void SetSliceSeq(bool ss);
 	bool GetSliceSeq();
+	void SetTimeSeq(bool ss);
+	bool GetTimeSeq();
 	void SetTimeId(wstring &id);
 	void SetCurTime(int t);
 	void SetCurChan(int c);

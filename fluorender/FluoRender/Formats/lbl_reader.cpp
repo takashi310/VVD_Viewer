@@ -68,6 +68,15 @@ bool LBLReader::GetSliceSeq()
 	return false;
 }
 
+void LBLReader::SetTimeSeq(bool ss)
+{
+}
+
+bool LBLReader::GetTimeSeq()
+{
+	return false;
+}
+
 void LBLReader::SetTimeId(wstring &id)
 {
 }

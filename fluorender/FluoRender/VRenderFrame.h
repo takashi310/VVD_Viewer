@@ -383,6 +383,7 @@ private:
 
 	//if slices are sequence
 	static bool m_sliceSequence;
+	static bool m_timeSequence;
 	//compression
 	static bool m_compression;
 	//brick skipping
@@ -413,6 +414,9 @@ private:
 
 	//open dialog options
 	void OnCh1Check(wxCommandEvent &event);
+	void OnCh4Check(wxCommandEvent &event);
+	void OnCh1Click(wxEvent &event);
+	void OnCh4Click(wxEvent &event);
 	void OnTxt1Change(wxCommandEvent &event);
 	void OnCh2Check(wxCommandEvent &event);
 	void OnCh3Check(wxCommandEvent &event);

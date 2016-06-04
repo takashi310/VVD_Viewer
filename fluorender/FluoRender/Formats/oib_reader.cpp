@@ -220,6 +220,16 @@ bool OIBReader::GetSliceSeq()
    return false;
 }
 
+void OIBReader::SetTimeSeq(bool ts)
+{
+   //do nothing
+}
+
+bool OIBReader::GetTimeSeq()
+{
+   return false;
+}
+
 void OIBReader::SetTimeId(wstring &id)
 {
    m_time_id = id;

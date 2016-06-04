@@ -118,7 +118,7 @@ void TIFReader::Preprocess()
          begin = -1;
    }
    //build 4d sequence
-   if (begin == -1)
+   if (begin == -1 || !m_time_seq)
    {
       TimeDataInfo info;
       SliceInfo sliceinfo;
@@ -433,6 +433,17 @@ void TIFReader::SetSliceSeq(bool ss)
 bool TIFReader::GetSliceSeq()
 {
    return m_slice_seq;
+}
+
+void TIFReader::SetTimeSeq(bool ts)
+{
+   //enable searching for slices
+   m_time_seq = ts;
+}
+
+bool TIFReader::GetTimeSeq()
+{
+   return m_time_seq;
 }
 
 void TIFReader::SetTimeId(wstring &id)

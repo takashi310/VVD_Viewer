@@ -68,6 +68,15 @@ bool MSKReader::GetSliceSeq()
 	return false;
 }
 
+void MSKReader::SetTimeSeq(bool ss)
+{
+}
+
+bool MSKReader::GetTimeSeq()
+{
+	return false;
+}
+
 void MSKReader::SetTimeId(wstring &id)
 {
 }

@@ -49,6 +49,8 @@ public:
 	virtual void SetFile(wstring &file) = 0;//set the file name in wide string
 	virtual void SetSliceSeq(bool ss) = 0;	//slices are stored as a file sequence
 	virtual bool GetSliceSeq() = 0;			//get slice sequence
+	virtual void SetTimeSeq(bool ts) = 0;	//time seties are stored as a file sequence
+	virtual bool GetTimeSeq() = 0;			//get time sequence
 	virtual void SetTimeId(wstring &id) = 0;	//time sequence identifier
 	virtual wstring GetTimeId() = 0;			//get time id
 	virtual void Preprocess() = 0;			//preprocess

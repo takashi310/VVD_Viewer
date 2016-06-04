@@ -202,6 +202,16 @@ bool OIFReader::GetSliceSeq()
    return false;
 }
 
+void OIFReader::SetTimeSeq(bool ts)
+{
+   //do nothing
+}
+
+bool OIFReader::GetTimeSeq()
+{
+   return false;
+}
+
 void OIFReader::SetTimeId(wstring &id)
 {
    m_time_id = id;

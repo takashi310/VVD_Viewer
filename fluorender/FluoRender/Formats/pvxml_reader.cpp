@@ -608,6 +608,16 @@ bool PVXMLReader::GetSliceSeq()
 	return false;
 }
 
+void PVXMLReader::SetTimeSeq(bool ss)
+{
+	//do nothing
+}
+
+bool PVXMLReader::GetTimeSeq()
+{
+	return false;
+}
+
 void PVXMLReader::SetTimeId(wstring &id)
 {
 	m_time_id = id;

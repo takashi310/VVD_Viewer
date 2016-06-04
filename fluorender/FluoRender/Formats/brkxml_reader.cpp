@@ -532,6 +532,16 @@ bool BRKXMLReader::GetSliceSeq()
    return false;
 }
 
+void BRKXMLReader::SetTimeSeq(bool ts)
+{
+   //do nothing
+}
+
+bool BRKXMLReader::GetTimeSeq()
+{
+   return false;
+}
+
 void BRKXMLReader::SetTimeId(wstring &id)
 {
    m_time_id = id;

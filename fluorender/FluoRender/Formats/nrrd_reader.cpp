@@ -51,6 +51,8 @@ NRRDReader::NRRDReader()
 	m_cur_time = -1;
 
 	m_time_id = L"_T";
+
+	m_enable_4d_seq = false;
 }
 
 NRRDReader::~NRRDReader()
@@ -107,7 +109,7 @@ void NRRDReader::Preprocess()
 			begin = -1;
 	}
 	//build 4d sequence
-	if (begin == -1)
+	if (begin == -1 || !m_enable_4d_seq)
 	{
 		TimeDataInfo info;
 		info.filenumber = 0;
@@ -161,6 +163,16 @@ void NRRDReader::SetSliceSeq(bool ss)
 bool NRRDReader::GetSliceSeq()
 {
 	return false;
+}
+
+void NRRDReader::SetTimeSeq(bool ts)
+{
+	m_enable_4d_seq = ts;
+}
+
+bool NRRDReader::GetTimeSeq()
+{
+	return m_enable_4d_seq;
 }
 
 void NRRDReader::SetTimeId(wstring &id)

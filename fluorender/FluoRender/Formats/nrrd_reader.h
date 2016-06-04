@@ -45,6 +45,8 @@ public:
 	void SetFile(wstring &file);
 	void SetSliceSeq(bool ss);
 	bool GetSliceSeq();
+	void SetTimeSeq(bool ts);
+	bool GetTimeSeq();
 	void SetTimeId(wstring &id);
 	wstring GetTimeId();
 	void Preprocess();
@@ -99,6 +101,8 @@ private:
 
 	//time sequence id
 	wstring m_time_id;
+
+	bool m_enable_4d_seq;
 
 private:
 	static bool nrrd_sort(const TimeDataInfo& info1, const TimeDataInfo& info2);

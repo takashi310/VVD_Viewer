@@ -1394,6 +1394,7 @@ public:
 	void SetVolumeDefault(VolumeData* vd);
 	//load volume options
 	void SetSliceSequence(bool ss) {m_sliceSequence = ss;}
+	void SetTimeSequence(bool ts) {m_timeSequence = ts;}
 	void SetCompression(bool compression) {m_compression = compression;}
 	bool GetCompression(){ return m_compression; }
 	void SetSkipBrick(bool skip) {m_skip_brick = skip;}
@@ -1512,6 +1513,7 @@ private:
 
 	//slice sequence
 	bool m_sliceSequence;
+	bool m_timeSequence;
 	//compression
 	bool m_compression;
 	//skip brick

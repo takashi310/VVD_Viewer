@@ -49,6 +49,8 @@ public:
 	void SetFile(wstring &file);
 	void SetSliceSeq(bool ss);
 	bool GetSliceSeq();
+	void SetTimeSeq(bool ts);
+	bool GetTimeSeq();
 	void SetTimeId(wstring &id);
 	wstring GetTimeId();
 	void Preprocess();
@@ -171,6 +173,7 @@ private:
 	vector<TimeDataInfo> m_4d_seq;
 
 	bool m_slice_seq;
+	bool m_time_seq;
 	int m_time_num;
 	int m_cur_time;
 	int m_chan_num;

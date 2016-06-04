@@ -624,6 +624,16 @@ bool LSMReader::GetSliceSeq()
    return false;
 }
 
+void LSMReader::SetTimeSeq(bool ss)
+{
+   //do nothing
+}
+
+bool LSMReader::GetTimeSeq()
+{
+   return false;
+}
+
 void LSMReader::SetTimeId(wstring &id)
 {
    //do nothing
