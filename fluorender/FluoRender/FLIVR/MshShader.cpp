@@ -138,12 +138,17 @@ namespace FLIVR
 	"uniform vec4 loc1;//diffuse color\n" \
 	"uniform vec4 loc2;//specular color\n" \
 	"uniform vec4 loc3;//(shine, alpha, 0, 0)\n"
-
+/*
 #define MSH_FRAG_UNIFORMS_DP \
 	"// MSH_FRAG_UNIFORMS_DP\n" \
 	"uniform vec4 loc7;//(1/vx, 1/vy, 0, 0)\n" \
 	"uniform sampler2D tex13;\n" \
 	"uniform sampler2D tex14;\n" \
+	"uniform sampler2D tex15;\n"
+*/
+#define MSH_FRAG_UNIFORMS_DP \
+	"// MSH_FRAG_UNIFORMS_DP\n" \
+	"uniform vec4 loc7;//(1/vx, 1/vy, 0, 0)\n" \
 	"uniform sampler2D tex15;\n"
 
 #define MSH_FRAG_UNIFORMS_INT \

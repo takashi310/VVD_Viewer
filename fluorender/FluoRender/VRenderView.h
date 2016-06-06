@@ -812,6 +812,7 @@ private:
 	//depth peeling buffers
 	vector<GLuint> m_dp_fbo_list;
 	vector<GLuint> m_dp_tex_list;
+	vector<GLuint> m_dp_ctex_list;
 	//vert buffer
 	GLuint m_quad_vbo, m_quad_vao;
 	GLuint m_misc_vbo, m_misc_ibo, m_misc_vao;

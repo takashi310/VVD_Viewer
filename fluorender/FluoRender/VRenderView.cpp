@@ -1487,79 +1487,182 @@ void VRenderGLView::DrawVolumes(int peel)
 		else
 			ClearFinalBuffer();
 
-		if (TextureRenderer::get_cur_brick_num() == 0)
+		if (TextureRenderer::get_cur_brick_num() == 0 && m_md_pop_list.size() > 0)
 		{
 			int nx = GetSize().x;
 			int ny = GetSize().y;
 
-			if (m_dp_fbo_list.empty())
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+			for (int i = 0; i < m_peeling_layers; i++)
 			{
-				GLuint fbo_id;
-				GLuint tex_id;
-				glGenFramebuffers(1, &fbo_id);
-				glGenTextures(1, &tex_id);
-				//glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
-				glBindTexture(GL_TEXTURE_2D, tex_id);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-				glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
-					GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
-				glFramebufferTexture2D(GL_FRAMEBUFFER,
-					GL_DEPTH_ATTACHMENT,
-					GL_TEXTURE_2D, tex_id, 0);
-				m_dp_fbo_list.push_back(fbo_id);
-				m_dp_tex_list.push_back(tex_id);
+				if (i >= (int)m_dp_fbo_list.size())
+				{
+					GLuint fbo_id;
+					GLuint tex_id;
+					GLuint ctex_id;
+					glGenFramebuffers(1, &fbo_id);
+					glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
+
+					glGenTextures(1, &ctex_id);
+					glBindTexture(GL_TEXTURE_2D, ctex_id);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
+						GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+					glFramebufferTexture2D(GL_FRAMEBUFFER,
+						GL_COLOR_ATTACHMENT0,
+						GL_TEXTURE_2D, ctex_id, 0);
+					m_dp_ctex_list.push_back(ctex_id);
+					
+					glGenTextures(1, &tex_id);
+					glBindTexture(GL_TEXTURE_2D, tex_id);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+					glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
+						GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
+					glFramebufferTexture2D(GL_FRAMEBUFFER,
+						GL_DEPTH_ATTACHMENT,
+						GL_TEXTURE_2D, tex_id, 0);
+					m_dp_tex_list.push_back(tex_id);
+
+					m_dp_fbo_list.push_back(fbo_id);
+				}
+				else if (i >= 0 && !glIsFramebuffer(m_dp_fbo_list[i]))
+				{
+					GLuint fbo_id;
+					GLuint tex_id;
+					GLuint ctex_id;
+					glGenFramebuffers(1, &fbo_id);
+					glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
+
+					if (!glIsTexture(m_dp_ctex_list[i]))
+						glGenTextures(1, &ctex_id);
+					else
+						ctex_id = m_dp_ctex_list[i];
+					glBindTexture(GL_TEXTURE_2D, ctex_id);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
+						GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+					glFramebufferTexture2D(GL_FRAMEBUFFER,
+						GL_COLOR_ATTACHMENT0,
+						GL_TEXTURE_2D, ctex_id, 0);
+					m_dp_ctex_list[i] = ctex_id;
+
+					if (!glIsTexture(m_dp_tex_list[i]))
+						glGenTextures(1, &tex_id);
+					else
+						tex_id = m_dp_tex_list[i];
+					glBindTexture(GL_TEXTURE_2D, tex_id);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+					glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
+						GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
+					glFramebufferTexture2D(GL_FRAMEBUFFER,
+						GL_DEPTH_ATTACHMENT,
+						GL_TEXTURE_2D, tex_id, 0);
+					m_dp_tex_list[i] = tex_id;
+
+					m_dp_fbo_list[i] = fbo_id;
+					
+				}
+				else
+				{
+					glBindFramebuffer(GL_FRAMEBUFFER, m_dp_fbo_list[i]);
+					glFramebufferTexture2D(GL_FRAMEBUFFER,
+						GL_COLOR_ATTACHMENT0,
+						GL_TEXTURE_2D, m_dp_ctex_list[i], 0);
+					glFramebufferTexture2D(GL_FRAMEBUFFER,
+						GL_DEPTH_ATTACHMENT,
+						GL_TEXTURE_2D, m_dp_tex_list[i], 0);
+				}
+
+				if (m_resize)
+				{
+					glBindTexture(GL_TEXTURE_2D, m_dp_ctex_list[i]);
+					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
+					GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+
+					glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[i]);
+					glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
+						GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
+					//m_resize = false;
+				}
+
+				glBindTexture(GL_TEXTURE_2D, 0);
+
+				glActiveTexture(GL_TEXTURE15);
+				glEnable(GL_TEXTURE_2D);
+				glActiveTexture(GL_TEXTURE0);
+				glEnable(GL_TEXTURE_2D);
+				glEnable(GL_BLEND);
+				glBlendFunc(GL_SRC_ALPHA, GL_ZERO);
+				glEnable(GL_DEPTH_TEST);
+				glDepthFunc(GL_LEQUAL);
+
+				glClearColor(0.0, 0.0, 0.0, 0.0);
+				glClearDepth(1.0);
+				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+				if (i==0)
+				{
+					DrawMeshes(0);
+				}
+				else
+				{
+					glActiveTexture(GL_TEXTURE15);
+					glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[i-1]);
+					glActiveTexture(GL_TEXTURE0);
+					DrawMeshes(1);
+					glActiveTexture(GL_TEXTURE15);
+					glBindTexture(GL_TEXTURE_2D, 0);
+					glActiveTexture(GL_TEXTURE0);
+				}
+				
+				glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			}
-			else if (!glIsFramebuffer(m_dp_fbo_list[0]))
+
+			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_final);
+			glFramebufferTexture2D(GL_FRAMEBUFFER,
+				GL_COLOR_ATTACHMENT0,
+				GL_TEXTURE_2D, m_tex_final, 0);
+
+			glActiveTexture(GL_TEXTURE0);
+			glEnable(GL_TEXTURE_2D);
+			glEnable(GL_BLEND);
+			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+			glDisable(GL_DEPTH_TEST);
+
+			ShaderProgram* img_shader = m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
+			if (img_shader)
 			{
-				GLuint fbo_id;
-				GLuint tex_id;
-				glGenFramebuffers(1, &fbo_id);
-				glGenTextures(1, &tex_id);
-				//glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
-				glBindTexture(GL_TEXTURE_2D, tex_id);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-				glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
-					GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
-				glFramebufferTexture2D(GL_FRAMEBUFFER,
-					GL_DEPTH_ATTACHMENT,
-					GL_TEXTURE_2D, tex_id, 0);
-				m_dp_fbo_list[0] = fbo_id;
-				m_dp_tex_list[0] = tex_id;
+				if (!img_shader->valid())
+					img_shader->create();
+				img_shader->bind();
 			}
-			else
+
+			for (int i = m_peeling_layers-1; i >= 0; i--)
 			{
-				glBindFramebuffer(GL_FRAMEBUFFER, m_dp_fbo_list[0]);
-
-				glFramebufferTexture2D(GL_FRAMEBUFFER,
-					GL_DEPTH_ATTACHMENT,
-				GL_TEXTURE_2D, m_dp_tex_list[0], 0);
-			}
-			if (m_resize)
-			{
-				glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[0]);
-				glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
-					GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
-				//m_resize = false;
+				glActiveTexture(GL_TEXTURE0);
+				glBindTexture(GL_TEXTURE_2D, m_dp_ctex_list[i]);
+				DrawViewQuad();
+				glBindTexture(GL_TEXTURE_2D, 0);
 			}
 
-			//setup
-			glDisable(GL_BLEND);
-			glEnable(GL_DEPTH_TEST);
-			glDepthFunc(GL_LEQUAL);
-			m_use_fog = false;
+			if (img_shader && img_shader->valid())
+				img_shader->release();
 
-			glClearDepth(1.0);
-			glClear(GL_DEPTH_BUFFER_BIT);
+			glBindTexture(GL_TEXTURE_2D, 0);
 
-			DrawMeshes(0);
-
-			glFinish();
 		}
 
 		//setup
@@ -6516,9 +6619,9 @@ void VRenderGLView::OnDraw(wxPaintEvent& event)
 	int ny = GetSize().y;
 
 	PopMeshList();
-	if (m_md_pop_list.size()>0 && m_vd_pop_list.size()>0 && m_vol_method == VOL_METHOD_MULTI)
-		m_draw_type = 2;
-	else
+//	if (m_md_pop_list.size()>0 && m_vd_pop_list.size()>0 && m_vol_method == VOL_METHOD_MULTI)
+//		m_draw_type = 2;
+//	else
 		m_draw_type = 1;
 
 	PreDraw();

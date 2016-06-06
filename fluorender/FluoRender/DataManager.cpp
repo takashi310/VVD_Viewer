@@ -2523,7 +2523,7 @@ void MeshData::Draw(int peel)
 	glDisable(GL_CULL_FACE);
 	m_mr->set_depth_peel(peel);
 	m_mr->draw();
-	if (m_draw_bounds && (peel==4 || peel==5))
+	if (m_draw_bounds)
 		DrawBounds();
 	glEnable(GL_CULL_FACE);
 }

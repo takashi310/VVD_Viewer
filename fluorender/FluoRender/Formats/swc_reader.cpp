@@ -384,12 +384,12 @@ GLMmodel *SWCReader::GenerateSolidModel(double def_r, double r_scale, unsigned i
 
 	GLMmodel *model = (GLMmodel*)malloc(sizeof(GLMmodel));
 	GLfloat *verts = (GLfloat*)malloc(sizeof(GLfloat)*m_model_verts.size());
-	//GLfloat *norms = (GLfloat*)malloc(sizeof(GLfloat)*m_model_norms.size());
+	GLfloat *norms = (GLfloat*)malloc(sizeof(GLfloat)*m_model_norms.size());
 	GLMtriangle *tris = (GLMtriangle*)malloc(sizeof(GLMtriangle)*m_model_tris.size()/3);
 	GLuint *gtris = (GLuint*)malloc(sizeof(GLuint)*m_model_tris.size()/3);
 
 	memcpy(verts, m_model_verts.data(), sizeof(GLfloat)*m_model_verts.size());
-	//memcpy(norms, m_model_norms.data(), sizeof(GLfloat)*m_model_norms.size());
+	memcpy(norms, m_model_norms.data(), sizeof(GLfloat)*m_model_norms.size());
 	
 	int numtris = m_model_tris.size()/3;
 	vector<GLuint>::iterator t_ite = m_model_tris.begin();
@@ -408,8 +408,8 @@ GLMmodel *SWCReader::GenerateSolidModel(double def_r, double r_scale, unsigned i
 	model->mtllibname    = NULL;
 	model->numvertices   = m_model_verts.size()/3-1;
 	model->vertices    = verts;
-	model->numnormals    = NULL;//m_model_norms.size()/3-1;
-	model->normals     = 0;//norms;
+	model->numnormals    = m_model_norms.size()/3-1;
+	model->normals     = norms;
 	model->numtexcoords  = 0;
 	model->texcoords       = NULL;
 	model->numfacetnorms = 0;
