@@ -159,6 +159,9 @@ namespace FLIVR
 				glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (const GLvoid*)12);
 			}
 		}
+		glDisableVertexAttribArray(0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
 	}
 
 	void MeshRenderer::draw()
@@ -179,6 +182,9 @@ namespace FLIVR
 		ShaderProgram* shader = 0;
 
 		glBindVertexArray(m_vao);
+		glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+        glEnableVertexAttribArray(0);
+
 		GLMgroup* group = data_->groups;
 		GLint pos = 0;
 		bool tex = data_->hastexture==GL_TRUE;
@@ -245,7 +251,9 @@ namespace FLIVR
 			pos += group->numtriangles*3;
 			group = group->next;
 		}
-		glBindVertexArray(0);
+		glDisableVertexAttribArray(0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
 
 		// Release shader.
 		if (shader && shader->valid())
@@ -272,6 +280,9 @@ namespace FLIVR
 		ShaderProgram* shader = 0;
 
 		glBindVertexArray(m_vao);
+		glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+        glEnableVertexAttribArray(0);
+
 		GLMgroup* group = data_->groups;
 		GLint pos = 0;
 		int peel = 0;
@@ -313,7 +324,9 @@ namespace FLIVR
 			pos += group->numtriangles*3;
 			group = group->next;
 		}
-		glBindVertexArray(0);
+		glDisableVertexAttribArray(0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
 
 		// Release shader.
 		if (shader && shader->valid())
@@ -336,6 +349,9 @@ namespace FLIVR
 		ShaderProgram* shader = 0;
 
 		glBindVertexArray(m_vao);
+		glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+        glEnableVertexAttribArray(0);
+
 		GLMgroup* group = data_->groups;
 		GLint pos = 0;
 
@@ -366,7 +382,9 @@ namespace FLIVR
 			pos += group->numtriangles*3;
 			group = group->next;
 		}
-		glBindVertexArray(0);
+		glDisableVertexAttribArray(0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
 
 		// Release shader.
 		if (shader && shader->valid())

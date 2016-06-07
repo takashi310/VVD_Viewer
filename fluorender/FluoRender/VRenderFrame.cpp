@@ -541,7 +541,7 @@ VRenderFrame::VRenderFrame(
 	m_top_file = new wxMenu;
 	m_top_tools = new wxMenu;
 	m_top_window = new wxMenu;
-	m_top_help = new wxMenu;
+	//m_top_help = new wxMenu;
 	//file options
 	wxMenuItem *m = new wxMenuItem(m_top_file,ID_OpenVolume, wxT("Open &Volume"));
 	m->SetBitmap(wxGetBitmapFromMemory(icon_open_volume_mini));
@@ -646,6 +646,7 @@ VRenderFrame::VRenderFrame(
 VRenderFrame::~VRenderFrame()
 {
 	curl_easy_cleanup(_g_curl);//add by takashi
+	curl_multi_cleanup(_g_curlm);
 	curl_global_cleanup();//add by takashi
 
 	for (int i=0; i<(int)m_vrv_list.size(); i++)
@@ -1167,7 +1168,7 @@ void VRenderFrame::StartupLoad(wxArrayString files)
 		{
 			LoadVolumes(files);
 		}
-		else if (suffix == ".obj")
+		else if (suffix == ".obj" || suffix == ".swc")
 		{
 			LoadMeshes(files);
 		}
@@ -1231,21 +1232,24 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv)
 void VRenderFrame::OnOpenMesh(wxCommandEvent& WXUNUSED(event))
 {
 	wxFileDialog *fopendlg = new wxFileDialog(
-		this, "Choose the mesh data file",
-		"", "", "*.obj;*.swc", wxFD_OPEN|wxFD_MULTIPLE);
+		this, "Choose the volume data file", "", "",
+		"All Supported|*.obj;*.swc|OBJ files (*.obj)|*.obj|SWC files (*.swc)|*.swc",
+		wxFD_OPEN|wxFD_MULTIPLE);
+//	fopendlg->SetExtraControlCreator(CreateExtraControlVolume);
 
 	int rval = fopendlg->ShowModal();
 	if (rval == wxID_OK)
 	{
 		VRenderView* vrv = GetView(0);
 		wxArrayString files;
+//		wxString swcf = wxT("D:\\download\\p1s.swc\\ChaMARCM-F000274_seg001.swc");
+//		files.Add(swcf);
 		fopendlg->GetPaths(files);
 
 		LoadMeshes(files, vrv);
 	}
 
-	if (fopendlg)
-		delete fopendlg;
+	fopendlg->Destroy();
 }
 
 void VRenderFrame::OnOrganize(wxCommandEvent& WXUNUSED(event))

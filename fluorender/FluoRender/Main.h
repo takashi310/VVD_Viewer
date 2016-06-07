@@ -40,6 +40,12 @@ class VRenderApp : public wxApp
 	  virtual int OnExit(); 
       void OnInitCmdLine(wxCmdLineParser& parser);
       bool OnCmdLineParsed(wxCmdLineParser& parser);
+
+	  bool Initialize( int& argc, wxChar **argv ) 
+      { 
+         ::CoUninitialize(); 
+         return wxApp::Initialize( argc, argv ); 
+      }
     
 #ifdef _DARWIN
       virtual void MacOpenFiles(const wxArrayString& fileNames);

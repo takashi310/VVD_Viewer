@@ -3,7 +3,7 @@ ver_minor=14
 [gm\ calculation]
 mode=2
 [peeling\ layers]
-value=2
+value=10
 [micro\ blend]
 mode=0
 [save\ project]
