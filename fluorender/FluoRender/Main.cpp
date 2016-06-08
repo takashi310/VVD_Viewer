@@ -52,7 +52,7 @@ static const wxCmdLineEntryDesc g_cmdLineDesc [] =
 
 bool VRenderApp::OnInit()
 {
-	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF|_CRTDBG_LEAK_CHECK_DF);
+	//_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF|_CRTDBG_LEAK_CHECK_DF);
 
    char cpath[FILENAME_MAX];
    GETCURRENTDIR(cpath, sizeof(cpath));

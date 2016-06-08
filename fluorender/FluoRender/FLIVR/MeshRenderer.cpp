@@ -160,8 +160,8 @@ namespace FLIVR
 			}
 		}
 		glDisableVertexAttribArray(0);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindVertexArray(0);
 	}
 
 	void MeshRenderer::draw()
@@ -183,7 +183,7 @@ namespace FLIVR
 
 		glBindVertexArray(m_vao);
 		glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-        glEnableVertexAttribArray(0);
+		glEnableVertexAttribArray(0);
 
 		GLMgroup* group = data_->groups;
 		GLint pos = 0;
@@ -252,8 +252,8 @@ namespace FLIVR
 			group = group->next;
 		}
 		glDisableVertexAttribArray(0);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindVertexArray(0);
 
 		// Release shader.
 		if (shader && shader->valid())
@@ -281,7 +281,7 @@ namespace FLIVR
 
 		glBindVertexArray(m_vao);
 		glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-        glEnableVertexAttribArray(0);
+		glEnableVertexAttribArray(0);
 
 		GLMgroup* group = data_->groups;
 		GLint pos = 0;
@@ -325,8 +325,8 @@ namespace FLIVR
 			group = group->next;
 		}
 		glDisableVertexAttribArray(0);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindVertexArray(0);
 
 		// Release shader.
 		if (shader && shader->valid())
@@ -350,7 +350,7 @@ namespace FLIVR
 
 		glBindVertexArray(m_vao);
 		glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-        glEnableVertexAttribArray(0);
+		glEnableVertexAttribArray(0);
 
 		GLMgroup* group = data_->groups;
 		GLint pos = 0;
@@ -383,8 +383,8 @@ namespace FLIVR
 			group = group->next;
 		}
 		glDisableVertexAttribArray(0);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindVertexArray(0);
 
 		// Release shader.
 		if (shader && shader->valid())

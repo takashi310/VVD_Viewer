@@ -993,7 +993,7 @@ void VRenderFrame::OnOpenVolume(wxCommandEvent& WXUNUSED(event))
 		}
 	}
 
-	delete fopendlg;
+	fopendlg->Destroy();
 }
 
 void VRenderFrame::OnDownloadVolume(wxCommandEvent& WXUNUSED(event))
@@ -1235,15 +1235,12 @@ void VRenderFrame::OnOpenMesh(wxCommandEvent& WXUNUSED(event))
 		this, "Choose the volume data file", "", "",
 		"All Supported|*.obj;*.swc|OBJ files (*.obj)|*.obj|SWC files (*.swc)|*.swc",
 		wxFD_OPEN|wxFD_MULTIPLE);
-//	fopendlg->SetExtraControlCreator(CreateExtraControlVolume);
 
 	int rval = fopendlg->ShowModal();
 	if (rval == wxID_OK)
 	{
 		VRenderView* vrv = GetView(0);
 		wxArrayString files;
-//		wxString swcf = wxT("D:\\download\\p1s.swc\\ChaMARCM-F000274_seg001.swc");
-//		files.Add(swcf);
 		fopendlg->GetPaths(files);
 
 		LoadMeshes(files, vrv);

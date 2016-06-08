@@ -38,6 +38,40 @@ DEALINGS IN THE SOFTWARE.
 
 using namespace std;
 
+
+class mpTextCtrl : public wxTextCtrl
+{
+public:
+	mpTextCtrl(wxWindow* frame,
+		wxWindow* parent,
+		wxWindowID id,
+		const wxString& text = wxT(""),
+		const wxPoint& pos = wxDefaultPosition,
+		const wxSize& size = wxDefaultSize,
+		long style=0,
+		const wxValidator& valid = wxDefaultValidator);
+	~mpTextCtrl();
+
+private:
+	wxWindow *m_frame;
+	wxButton *m_dummy;
+	long m_style;
+
+private:
+	void OnSetChildFocus(wxChildFocusEvent& event);
+	void OnSetFocus(wxFocusEvent& event);
+	void OnKillFocus(wxFocusEvent& event);
+
+	void OnKeyDown(wxKeyEvent& event);
+	void OnKeyUp(wxKeyEvent& event);
+
+	void OnText(wxCommandEvent& event);
+	void OnEnter(wxCommandEvent& event);
+
+	DECLARE_EVENT_TABLE()
+};
+
+
 class MPropView: public wxPanel
 {
 	enum
@@ -56,7 +90,9 @@ class MPropView: public wxPanel
 		ID_shadow_text,
 		ID_size_chk,
 		ID_size_sldr,
-		ID_size_text
+		ID_size_text,
+		ID_r_text,
+		ID_sync_chk
 	};
 
 public:
@@ -73,6 +109,8 @@ public:
 	void RefreshVRenderViews(bool tree=false);
 
 	void GetSettings();
+
+	void UpdateRadScale();
 
 private:
 	wxWindow* m_frame;
@@ -98,6 +136,12 @@ private:
 	wxSlider *m_size_sldr;
 	wxTextCtrl *m_size_text;
 
+	wxStaticText *m_r_st;
+	mpTextCtrl *m_r_text;
+
+	wxCheckBox *m_sync_chk;
+	bool m_sync;
+
 private:
 	//lighting
 	void OnLightingCheck(wxCommandEvent& event);
@@ -117,6 +161,12 @@ private:
 	void OnSizeCheck(wxCommandEvent& event);
 	void OnSizeChange(wxScrollEvent& event);
 	void OnSizeText(wxCommandEvent& event);
+
+	void OnEnterInRadScaleText(wxCommandEvent& event);
+
+	void OnSyncCheck(wxCommandEvent& event);
+
+	void UpdateSync();
 
 	DECLARE_EVENT_TABLE();
 };

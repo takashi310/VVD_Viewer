@@ -29,6 +29,92 @@ DEALINGS IN THE SOFTWARE.
 #include "VRenderFrame.h"
 #include <wx/valnum.h>
 
+////////////////////////////////////////////////////////////////////////
+
+BEGIN_EVENT_TABLE(mpTextCtrl, wxTextCtrl)
+	EVT_SET_FOCUS(mpTextCtrl::OnSetFocus)
+	EVT_KILL_FOCUS(mpTextCtrl::OnKillFocus)
+	EVT_TEXT(wxID_ANY, mpTextCtrl::OnText)
+	EVT_TEXT_ENTER(wxID_ANY, mpTextCtrl::OnEnter)
+	EVT_KEY_DOWN(mpTextCtrl::OnKeyDown)
+	EVT_KEY_UP(mpTextCtrl::OnKeyUp)
+END_EVENT_TABLE()
+
+	mpTextCtrl::mpTextCtrl(
+	wxWindow* frame,
+	wxWindow* parent,
+	wxWindowID id,
+	const wxString& text,
+	const wxPoint& pos,
+	const wxSize& size,
+	long style,
+	const wxValidator& valid) :
+wxTextCtrl(parent, id, text, pos, size, style, valid),
+	m_frame(frame),
+	m_style(style)
+{
+	SetHint(text);
+
+	m_dummy = new wxButton(parent, id, text, pos, size);
+	m_dummy->Hide();
+}
+
+mpTextCtrl::~mpTextCtrl()
+{
+
+}
+
+void mpTextCtrl::OnSetChildFocus(wxChildFocusEvent& event)
+{
+	VRenderFrame *vrf = (VRenderFrame *)m_frame;
+	if (vrf) vrf->SetKeyLock(true);
+	event.Skip();
+}
+
+void mpTextCtrl::OnSetFocus(wxFocusEvent& event)
+{
+	VRenderFrame *vrf = (VRenderFrame *)m_frame;
+	if (vrf) vrf->SetKeyLock(true);
+	event.Skip();
+}
+
+void mpTextCtrl::OnKillFocus(wxFocusEvent& event)
+{
+	VRenderFrame *vrf = (VRenderFrame *)m_frame;
+	if (vrf) vrf->SetKeyLock(false);
+	wxCommandEvent ev(wxEVT_COMMAND_TEXT_ENTER);
+	if (this->GetParent())
+		((MPropView *)this->GetParent())->UpdateRadScale();
+	event.Skip();
+}
+
+void mpTextCtrl::OnText(wxCommandEvent &event)
+{
+	VRenderFrame *vrf = (VRenderFrame *)m_frame;
+	if (vrf) vrf->SetKeyLock(true);
+}
+
+void mpTextCtrl::OnEnter(wxCommandEvent &event)
+{
+	if (m_style & wxTE_PROCESS_ENTER)
+		m_dummy->SetFocus();
+
+//	event.Skip();
+}
+
+void mpTextCtrl::OnKeyDown(wxKeyEvent& event)
+{
+	event.Skip();
+}
+
+void mpTextCtrl::OnKeyUp(wxKeyEvent& event)
+{
+	event.Skip();
+}
+
+/////////////////////////////////////////////////////////////////////////
+
+
 BEGIN_EVENT_TABLE(MPropView, wxPanel)
 	//lighting
 	EVT_CHECKBOX(ID_light_chk, MPropView::OnLightingCheck)
@@ -48,6 +134,8 @@ BEGIN_EVENT_TABLE(MPropView, wxPanel)
 	EVT_CHECKBOX(ID_size_chk, MPropView::OnSizeCheck)
 	EVT_COMMAND_SCROLL(ID_size_sldr, MPropView::OnSizeChange)
 	EVT_TEXT(ID_size_text, MPropView::OnSizeText)
+	EVT_TEXT_ENTER(ID_r_text, MPropView::OnEnterInRadScaleText)
+	EVT_CHECKBOX(ID_sync_chk, MPropView::OnSyncCheck)
 END_EVENT_TABLE()
 
 MPropView::MPropView(wxWindow* frame, wxWindow* parent,
@@ -59,7 +147,8 @@ MPropView::MPropView(wxWindow* frame, wxWindow* parent,
 wxPanel(parent, id, pos, size,style, name),
 m_frame(frame),
 m_md(0),
-m_vrv(0)
+m_vrv(0),
+m_sync(false)
 {
 	wxBoxSizer* sizer_v1 = new wxBoxSizer(wxVERTICAL);
 	wxBoxSizer* sizer_1 = new wxBoxSizer(wxHORIZONTAL);
@@ -164,18 +253,40 @@ m_vrv(0)
 	sizer_8->Add(m_size_sldr, 0, wxALIGN_CENTER);
 	sizer_8->Add(m_size_text, 0, wxALIGN_CENTER);
 
+	wxBoxSizer* sizer_9 = new wxBoxSizer(wxHORIZONTAL);
+	m_r_st = new wxStaticText(this, 0, " Radius Scale: ",
+		wxDefaultPosition, wxSize(100, 20));
+	m_r_text = new mpTextCtrl(m_frame, this, ID_r_text, "1.00",
+		wxDefaultPosition, wxSize(50, 20), wxTE_PROCESS_ENTER, vald_fp2);
+	sizer_9->Add(20, 5, 0);
+	sizer_9->Add(m_r_st, 0, wxALIGN_CENTER);
+	sizer_9->Add(m_r_text, 0, wxALIGN_CENTER);
+
+	wxBoxSizer* sizer_10 = new wxBoxSizer(wxHORIZONTAL);
+	m_sync_chk = new wxCheckBox(this, ID_sync_chk, " Sync",
+		wxDefaultPosition, wxSize(100, 20));
+
+	sizer_10->Add(20, 5, 0);
+	sizer_10->Add(m_sync_chk, 0, wxALIGN_CENTER);
+
 	sizer_v2->Add(5,5);
 	sizer_v2->Add(sizer_1, 0, wxALIGN_LEFT);
 	sizer_v2->Add(sizer_2, 0, wxALIGN_LEFT);
 	sizer_v2->Add(sizer_3, 0, wxALIGN_LEFT);
 	sizer_v2->Add(sizer_7, 0, wxALIGN_LEFT);
 	sizer_v2->Add(sizer_8, 0, wxALIGN_LEFT);
+	sizer_v2->Add(sizer_9, 0, wxALIGN_LEFT);
+	sizer_v2->Add(sizer_10, 0, wxALIGN_RIGHT);
 
 	wxBoxSizer* sizer_all = new wxBoxSizer(wxHORIZONTAL);
 	sizer_all->Add(sizer_v1, 0, wxALIGN_TOP);
 	sizer_all->Add(sizer_v2, 0, wxALIGN_TOP);
 
 	SetSizer(sizer_all);
+
+	m_r_st->Disable();
+	m_r_text->Disable();
+
 	Layout();
 }
 
@@ -227,6 +338,60 @@ void MPropView::GetSettings()
 	int limit = m_md->GetLimitNumber();
 	m_size_sldr->SetValue(limit);
 	m_size_text->SetValue(wxString::Format("%d", limit));
+	//swc
+	if (m_md->isSWC())
+	{
+		m_r_st->Enable();
+		m_r_text->Enable();
+		str = wxString::Format("%.2f", m_md->GetRadScale());
+		m_r_text->ChangeValue(str);
+	}
+}
+
+void MPropView::UpdateSync()
+{
+	if (!m_vrv)
+		return;
+
+	wxString str;
+	Color amb, diff, spec;
+	double shine, alpha;
+	m_md->GetMaterial(amb, diff, spec, shine, alpha);
+
+	bool lighting = m_md->GetLighting();
+	//scaling
+	double sx, sy, sz;
+	m_md->GetScaling(sx, sy, sz);
+	
+	//shadow
+	double darkness;
+	bool shadow = m_md->GetShadow();
+	m_md->GetShadowParams(darkness);
+	
+	//size limiter
+	bool limit = m_md->GetLimit();
+	int limitnum = m_md->GetLimitNumber();
+	
+	double rs = m_md->GetRadScale();
+	
+	int mesh_num = m_vrv->GetMeshNum();
+	for (int i = 0; i < mesh_num; i++)
+	{
+		MeshData *md = m_vrv->GetMeshData(i);
+		if (!md) continue;
+
+		double dummy1, dummy2;
+		md->GetMaterial(amb, diff, spec, dummy1, dummy2);
+		
+		md->SetMaterial(amb, diff, spec, shine, alpha);
+		md->SetFloat(alpha, MESH_FLOAT_ALPHA);
+		md->SetLighting(lighting);
+		md->SetScaling(sx, sy, sz);
+		md->SetShadow(shadow);
+		md->SetLimit(limit);
+		md->SetLimitNumer(limitnum);
+		md->SetRadScale(rs);
+	}
 }
 
 void MPropView::SetMeshData(MeshData* md, VRenderView* vrv)
@@ -240,6 +405,32 @@ void MPropView::SetMeshData(MeshData* md, VRenderView* vrv)
 MeshData* MPropView::GetMeshData()
 {
 	return m_md;
+}
+
+void MPropView::OnSyncCheck(wxCommandEvent& event)
+{
+	m_sync = m_sync_chk->GetValue();
+
+	if (m_sync) UpdateSync();
+}
+
+void MPropView::OnEnterInRadScaleText(wxCommandEvent& event)
+{
+//	UpdateRadScale();
+}
+
+void MPropView::UpdateRadScale()
+{
+	wxString str = m_r_text->GetValue();
+	double r;
+	str.ToDouble(&r);
+	
+	if (m_md)
+	{
+		m_md->SetRadScale(r);
+		if (m_sync) UpdateSync();
+		RefreshVRenderViews();
+	}
 }
 
 void MPropView::RefreshVRenderViews(bool tree)
@@ -307,6 +498,7 @@ void MPropView::OnShineText(wxCommandEvent& event)
 	if (m_md)
 	{
 		m_md->SetFloat(shine, MESH_FLOAT_SHN);
+		if (m_sync) UpdateSync();
 		RefreshVRenderViews();
 	}
 }
@@ -328,6 +520,7 @@ void MPropView::OnAlphaText(wxCommandEvent& event)
 	if (m_md)
 	{
 		m_md->SetFloat(alpha, MESH_FLOAT_ALPHA);
+		if (m_sync) UpdateSync();
 		RefreshVRenderViews();
 	}
 }
@@ -349,6 +542,7 @@ void MPropView::OnScaleText(wxCommandEvent& event)
 	if (m_md)
 	{
 		m_md->SetScaling(dval, dval, dval);
+		if (m_sync) UpdateSync();
 		RefreshVRenderViews();
 	}
 }
@@ -404,6 +598,7 @@ void MPropView::OnSizeCheck(wxCommandEvent& event)
 	if (m_md)
 	{
 		m_md->SetLimit(bval);
+		if (m_sync) UpdateSync();
 		RefreshVRenderViews();
 	}
 }
@@ -425,7 +620,7 @@ void MPropView::OnSizeText(wxCommandEvent& event)
 	if (m_md)
 	{
 		m_md->SetLimitNumer(val);
-		if (m_md->GetLimit())
-			RefreshVRenderViews();
+		if (m_sync) UpdateSync();
+		RefreshVRenderViews();
 	}
 }

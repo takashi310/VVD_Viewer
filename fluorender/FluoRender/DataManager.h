@@ -660,6 +660,18 @@ public:
 
 	wstring GetInfo(){ return m_info; };
 
+	bool isSWC(){ return m_swc; }
+	void SetRadScale(double rs)
+	{
+		if (m_r_scale != rs)
+		{
+			m_r_scale = rs;
+			UpdateModelSWC();
+		}
+	}
+	bool UpdateModelSWC();
+	double GetRadScale(){ return m_r_scale; }
+
 private:
 	//wxString m_name;
 	wxString m_data_path;
@@ -692,6 +704,12 @@ private:
 
 	//legend
 	bool m_legend;
+
+	bool m_swc;
+	double m_r_scale;
+	double m_def_r;
+	int m_subdiv;
+	SWCReader *m_swc_reader;
 
 	wstring m_info;
 };

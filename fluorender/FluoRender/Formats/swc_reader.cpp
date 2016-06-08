@@ -365,7 +365,7 @@ GLMmodel *SWCReader::GenerateSolidModel(double def_r, double r_scale, unsigned i
 		double r = vr.w;
 
 		if (r <= 0.0) r = def_r;
-		AddSolidSphere(v, r, subdiv);
+		AddSolidSphere(v, r*r_scale, subdiv);
 	}
 
 	//generate solid cylinders
@@ -379,7 +379,7 @@ GLMmodel *SWCReader::GenerateSolidModel(double def_r, double r_scale, unsigned i
 		if (r1 <= 0.0) r1 = def_r;
 		if (r2 <= 0.0) r2 = def_r;
 		int cy_subdiv = (int)pow(2.0, subdiv+2);
-		AddSolidCylinder(p1, p2, r1, r2, cy_subdiv);
+		AddSolidCylinder(p1, p2, r1*r_scale, r2*r_scale, cy_subdiv);
 	}
 
 	GLMmodel *model = (GLMmodel*)malloc(sizeof(GLMmodel));

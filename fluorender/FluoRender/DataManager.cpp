@@ -2298,6 +2298,12 @@ m_data(0),
 	m_mat_diff = color;
 
 	m_legend = true;
+
+	m_swc = false;
+	m_r_scale = 1.0;
+	m_def_r = 0.25;
+	m_subdiv = 1;
+	m_swc_reader = NULL;
 }
 
 MeshData::~MeshData()
@@ -2306,6 +2312,8 @@ MeshData::~MeshData()
 		delete m_mr;
 	if (m_data)
 		glmDelete(m_data);
+	if (m_swc_reader)
+		delete m_swc_reader;
 }
 
 int MeshData::Load(GLMmodel* mesh)
@@ -2402,11 +2410,12 @@ int MeshData::Load(wxString &filename)
 	}
 	if (suffix == ".swc")
 	{
-		SWCReader swcreader;
+		if (!m_swc_reader) m_swc_reader = new SWCReader();
 		wstring wstr = m_data_path.ToStdWstring();
-		swcreader.SetFile(wstr);
-		swcreader.Preprocess();
-		m_data = swcreader.GenerateSolidModel(0.5, 0.5, 1);
+		m_swc_reader->SetFile(wstr);
+		m_swc_reader->Preprocess();
+		m_data = m_swc_reader->GenerateSolidModel(m_def_r, m_r_scale, m_subdiv);
+		m_swc = true;
 	}
 
 	if (!m_data)
@@ -2479,6 +2488,74 @@ void MeshData::Save(wxString& filename)
 		delete []str;
 		m_data_path = filename;
 	}
+}
+
+bool MeshData::UpdateModelSWC()
+{
+	if (!m_swc || !m_swc_reader)
+		return false;
+
+	if (m_data)
+		glmDelete(m_data);
+
+	m_data = m_swc_reader->GenerateSolidModel(m_def_r, m_r_scale, m_subdiv);
+
+	if (!m_data)
+		return false;
+
+	if (!m_data->normals && m_data->numtriangles)
+	{
+		if (!m_data->facetnorms)
+			glmFacetNormals(m_data);
+		glmVertexNormals(m_data, 89.0);
+	}
+
+	if (!m_data->materials)
+	{
+		m_data->materials = new GLMmaterial;
+		m_data->nummaterials = 1;
+	}
+
+	/* set the default material */
+	m_data->materials[0].name = NULL;
+	m_data->materials[0].ambient[0] = m_mat_amb.r();
+	m_data->materials[0].ambient[1] = m_mat_amb.g();
+	m_data->materials[0].ambient[2] = m_mat_amb.b();
+	m_data->materials[0].ambient[3] = m_mat_alpha;
+	m_data->materials[0].diffuse[0] = m_mat_diff.r();
+	m_data->materials[0].diffuse[1] = m_mat_diff.g();
+	m_data->materials[0].diffuse[2] = m_mat_diff.b();
+	m_data->materials[0].diffuse[3] = m_mat_alpha;
+	m_data->materials[0].specular[0] = m_mat_spec.r();
+	m_data->materials[0].specular[1] = m_mat_spec.g();
+	m_data->materials[0].specular[2] = m_mat_spec.b();
+	m_data->materials[0].specular[3] = m_mat_alpha;
+	m_data->materials[0].shininess = m_mat_shine;
+	m_data->materials[0].emmissive[0] = 0.0;
+	m_data->materials[0].emmissive[1] = 0.0;
+	m_data->materials[0].emmissive[2] = 0.0;
+	m_data->materials[0].emmissive[3] = 0.0;
+	m_data->materials[0].havetexture = GL_FALSE;
+	m_data->materials[0].textureID = 0;
+
+	//bounds
+	GLfloat fbounds[6];
+	glmBoundingBox(m_data, fbounds);
+	BBox bounds;
+	Point pmin(fbounds[0], fbounds[2], fbounds[4]);
+	Point pmax(fbounds[1], fbounds[3], fbounds[5]);
+	bounds.extend(pmin);
+	bounds.extend(pmax);
+	m_bounds = bounds;
+	m_center = Point((m_bounds.min().x()+m_bounds.max().x())*0.5,
+		(m_bounds.min().y()+m_bounds.max().y())*0.5,
+		(m_bounds.min().z()+m_bounds.max().z())*0.5);
+
+	if (m_mr)
+		delete m_mr;
+	m_mr = new FLIVR::MeshRenderer(m_data);
+
+	return true;
 }
 
 //MR
