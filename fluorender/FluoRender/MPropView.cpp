@@ -299,6 +299,8 @@ void MPropView::GetSettings()
 	if (!m_md)
 		return;
 
+	SetEvtHandlerEnabled(false);
+
 	wxString str;
 	Color amb, diff, spec;
 	double shine, alpha;
@@ -353,6 +355,8 @@ void MPropView::GetSettings()
 		str = wxString::Format("%.2f", m_md->GetRadScale());
 		m_r_text->ChangeValue(str);
 	}
+
+	SetEvtHandlerEnabled(true);
 }
 
 void MPropView::UpdateSync()
