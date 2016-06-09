@@ -411,7 +411,11 @@ void MPropView::OnSyncCheck(wxCommandEvent& event)
 {
 	m_sync = m_sync_chk->GetValue();
 
-	if (m_sync) UpdateSync();
+	if (m_sync)
+	{
+		UpdateSync();
+		RefreshVRenderViews();
+	}
 }
 
 void MPropView::OnEnterInRadScaleText(wxCommandEvent& event)

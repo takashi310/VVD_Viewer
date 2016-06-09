@@ -665,7 +665,8 @@ wxGLCanvas(parent, id, attriblist, pos, size, style),
 	m_draw_overlays_only(false),
 	m_enhance_sel(false),
 	m_adaptive_res(false),
-	m_int_res(false)
+	m_int_res(false),
+	m_dpeel(false)
 {
 	//create context
 	if (sharedContext)
@@ -1494,7 +1495,12 @@ void VRenderGLView::DrawVolumes(int peel)
 
 			glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-			for (int i = 0; i < m_peeling_layers; i++)
+			int peeling_layers;
+
+			if (!m_dpeel) peeling_layers = 1;
+			else peeling_layers = m_peeling_layers;
+
+			for (int i = 0; i < peeling_layers; i++)
 			{
 				if (i >= (int)m_dp_fbo_list.size())
 				{
@@ -1650,7 +1656,7 @@ void VRenderGLView::DrawVolumes(int peel)
 				img_shader->bind();
 			}
 
-			for (int i = m_peeling_layers-1; i >= 0; i--)
+			for (int i = peeling_layers-1; i >= 0; i--)
 			{
 				glActiveTexture(GL_TEXTURE0);
 				glBindTexture(GL_TEXTURE_2D, m_dp_ctex_list[i]);
@@ -10053,13 +10059,27 @@ void VRenderGLView::StartLoopUpdate()
 	//center object
 	m_mv_mat = glm::translate(m_mv_mat, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
 
+	PopMeshList();
+
+	unsigned int i, j;
+	m_dpeel = false;
+	for (i=0; i<m_md_pop_list.size(); i++)
+	{
+		MeshData *md = m_md_pop_list[i];
+		if (!md) continue;
+		Color amb, diff, spec;
+		double shine, alpha;
+		md->GetMaterial(amb, diff, spec, shine, alpha);
+		if (alpha < 1.0) m_dpeel = true;
+	}
+
 	//	if (TextureRenderer::get_mem_swap())
 	{
 		PopVolumeList();
 		int total_num = 0;
 		int num_chan;
 		//reset drawn status for all bricks
-		unsigned int i, j;
+		
 		for (i=0; i<m_vd_pop_list.size(); i++)
 		{
 			VolumeData* vd = m_vd_pop_list[i];

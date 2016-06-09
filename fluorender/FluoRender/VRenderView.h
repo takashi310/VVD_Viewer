@@ -932,6 +932,8 @@ private:
 	Quaternion m_q_cl_zero;
 	double m_rotx_cl, m_roty_cl, m_rotz_cl;
 
+	bool m_dpeel;
+
 	//volume selector for segmentation
 	VolumeSelector m_selector;
 

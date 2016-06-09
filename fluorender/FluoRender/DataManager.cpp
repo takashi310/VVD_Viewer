@@ -2554,6 +2554,7 @@ bool MeshData::UpdateModelSWC()
 	if (m_mr)
 		delete m_mr;
 	m_mr = new FLIVR::MeshRenderer(m_data);
+	m_mr->set_alpha(m_mat_alpha);
 
 	return true;
 }
