@@ -175,8 +175,8 @@ namespace FLIVR
 		{
 			index = (nx)*(ny)*(kk) + (nx)*(jj) + (ii);
 			tmp_load = !b->isLoaded();
-			FileLocInfo *fname = GetFileName(b->getID());
-			d_ptr = b->tex_data_brk(0, &fname->filename, GetFileType(), fname->isurl);
+			FileLocInfo *finfo = GetFileName(b->getID());
+			d_ptr = b->tex_data_brk(0, finfo);
 		}
 		else
 		{
@@ -920,8 +920,8 @@ namespace FLIVR
 			bool tmp = false;
 			if(!(*bricks)[i]->isLoaded())
 			{
-				FileLocInfo *fname = filenames_[level][pyramid_cur_fr_][pyramid_cur_ch_][(*bricks)[i]->getID()];
-				(*bricks)[i]->tex_data_brk(0, &fname->filename, GetFileType(), fname->isurl);
+				FileLocInfo *finfo = filenames_[level][pyramid_cur_fr_][pyramid_cur_ch_][(*bricks)[i]->getID()];
+				(*bricks)[i]->tex_data_brk(0, finfo);
 				tmp = true;
 			}
 

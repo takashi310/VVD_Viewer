@@ -38,6 +38,7 @@
 #include <jpeglib.h>
 #include "../compatibility.h"
 #include <setjmp.h>
+#include <zlib.h>
 
 using namespace std;
 
@@ -891,7 +892,7 @@ z
 	   return NULL;
    }
 
-   void *TextureBrick::tex_data_brk(int c, wstring *fname, int filetype, bool useURL)
+   void *TextureBrick::tex_data_brk(int c, const FileLocInfo* finfo)
    {
 	   unsigned char *ptr = NULL;
 	   if(brkdata_) ptr = (unsigned char *)(brkdata_);
@@ -899,7 +900,7 @@ z
 	   {
 		   int bd = tex_type_size(tex_type(c));
 		   ptr = new unsigned char[nx_*ny_*nz_*bd];
-		   if (!read_brick((char *)ptr, nx_*ny_*nz_*bd, fname, filetype, useURL))
+		   if (!read_brick((char *)ptr, nx_*ny_*nz_*bd, finfo))
 		   {
 			   delete [] ptr;
 			   return NULL;
@@ -1029,32 +1030,36 @@ z
       }
 */   }
 
-   bool TextureBrick::read_brick(char* data, size_t size, std::wstring* fname, int filetype, bool useURL)
+   bool TextureBrick::read_brick(char* data, size_t size, const FileLocInfo* finfo)
    {
-	   if (!fname) return false;
+	   if (!finfo) return false;
 	   
-	   if (useURL)
+	   if (finfo->isurl)
 	   {
-		   if (filetype == BRICK_FILE_TYPE_RAW)  return raw_brick_reader_url(data, size, fname);
-		   if (filetype == BRICK_FILE_TYPE_JPEG) return jpeg_brick_reader_url(data, size, fname);
+		   if (finfo->type == BRICK_FILE_TYPE_RAW)  return raw_brick_reader_url(data, size, finfo);
+		   if (finfo->type == BRICK_FILE_TYPE_JPEG) return jpeg_brick_reader_url(data, size, finfo);
+		   if (finfo->type == BRICK_FILE_TYPE_ZLIB) return zlib_brick_reader_url(data, size, finfo);
 	   }
 	   else
 	   {
-		   if (filetype == BRICK_FILE_TYPE_RAW)  return raw_brick_reader(data, size, fname);
-		   if (filetype == BRICK_FILE_TYPE_JPEG) return jpeg_brick_reader(data, size, fname);
+		   if (finfo->type == BRICK_FILE_TYPE_RAW)  return raw_brick_reader(data, size, finfo);
+		   if (finfo->type == BRICK_FILE_TYPE_JPEG) return jpeg_brick_reader(data, size, finfo);
+		   if (finfo->type == BRICK_FILE_TYPE_ZLIB) return zlib_brick_reader(data, size, finfo);
 	   }
 
 	   return false;
    }
 
-   bool TextureBrick::raw_brick_reader(char* data, size_t size, std::wstring* fname)
+   bool TextureBrick::raw_brick_reader(char* data, size_t size, const FileLocInfo* finfo)
    {
 	   try
 	   {
 		   ifstream ifs;
-		   ifs.open(ws2s(*fname), ios::binary);
+		   ifs.open(ws2s(finfo->filename), ios::binary);
 		   if (!ifs) return false;
-		   ifs.read(data, size);
+		   if (finfo->datasize > 0 && size != finfo->datasize) return false;
+		   ifs.seekg(finfo->offset, ios_base::beg); 
+		   ifs.read(data, finfo->datasize);
 		   if (ifs) ifs.close();
 /*		   
 		   ofstream ofs1;
@@ -1104,30 +1109,8 @@ z
    }
 
 
-   bool TextureBrick::raw_brick_reader_url(char* data, size_t size, std::wstring* fname)
+   bool TextureBrick::raw_brick_reader_url(char* data, size_t size, const FileLocInfo* finfo)
    {
-	   /*
-	   wxURL url(wxString::wxString(*fname));
-	   if(url.GetError() != wxURL_NOERR) return false;
-	   wxInputStream *in = url.GetInputStream();
-	   if(!in || !in->IsOk()) return false;
-	   unsigned char buffer[DOWNLOAD_BUFSIZE];
-	   size_t count = -1;
-	   wxMemoryBuffer mem_buf;
-	   char *cur = data;
-	   size_t total = 0;
-	   while(!in->Eof() && count != 0 && total < size)
-	   {
-		   in->Read(buffer, DOWNLOAD_BUFSIZE-1);
-		   count = in->LastRead();
-		   if(count > 0){
-			   memcpy(cur, buffer, count);
-			   cur += count;
-			   total += count;
-		   }
-	   }
-	   if(total != size)return false;
-	   */
 	   CURLcode ret;
 	   struct MemoryStruct chunk;
 	   chunk.memory = (char *)malloc(1);  /* will be grown as needed by the realloc above */ 
@@ -1138,7 +1121,7 @@ z
 		   return false;
 	   }
 	   curl_easy_reset(s_curl_);
-	   curl_easy_setopt(s_curl_, CURLOPT_URL, wxString::wxString(*fname).ToStdString().c_str());
+	   curl_easy_setopt(s_curl_, CURLOPT_URL, wxString::wxString(finfo->filename).ToStdString().c_str());
 	   curl_easy_setopt(s_curl_, CURLOPT_TIMEOUT, 10L);
 	   curl_easy_setopt(s_curl_, CURLOPT_USERAGENT, "libcurl-agent/1.0");
 	   curl_easy_setopt(s_curl_, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
@@ -1182,13 +1165,13 @@ z
 	   longjmp(myerr->setjmp_buffer, 1);
    }
 
-   bool TextureBrick::jpeg_brick_reader(char* data, size_t size, std::wstring* fname)
+   bool TextureBrick::jpeg_brick_reader(char* data, size_t size, const FileLocInfo* finfo)
    {
 	   jpeg_decompress_struct cinfo;
 	   struct my_error_mgr jerr;
 	   
        FILE *fp = 0;
-       if (!WFOPEN(&fp, fname->c_str(), L"rb"))
+	   if (!WFOPEN(&fp, finfo->filename.c_str(), L"rb"))
            return false;
 
 	   cinfo.err = jpeg_std_error(&jerr.pub);
@@ -1203,6 +1186,8 @@ z
 		   return false;
 	   }
 	   jpeg_create_decompress(&cinfo);
+
+	   fseek(fp, finfo->offset, SEEK_SET);
 	   jpeg_stdio_src(&cinfo, fp);
 	   jpeg_read_header(&cinfo, TRUE);
 	   jpeg_start_decompress(&cinfo);
@@ -1224,7 +1209,7 @@ z
 	   return true;
    }
 
-   bool TextureBrick::jpeg_brick_reader_url(char* data, size_t size, std::wstring* fname)
+   bool TextureBrick::jpeg_brick_reader_url(char* data, size_t size, const FileLocInfo* finfo)
    {
 	   jpeg_decompress_struct cinfo;
 	   struct my_error_mgr jerr;
@@ -1239,7 +1224,7 @@ z
 		   return false;
 	   }
 	   curl_easy_reset(s_curl_);
-	   curl_easy_setopt(s_curl_, CURLOPT_URL, wxString::wxString(*fname).ToStdString().c_str());
+	   curl_easy_setopt(s_curl_, CURLOPT_URL, wxString::wxString(finfo->filename).ToStdString().c_str());
 	   curl_easy_setopt(s_curl_, CURLOPT_TIMEOUT, 10L);
 	   curl_easy_setopt(s_curl_, CURLOPT_USERAGENT, "libcurl-agent/1.0");
 	   curl_easy_setopt(s_curl_, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
@@ -1252,22 +1237,6 @@ z
 		   return false;
 	   }
 	   
-	   /*
-	   wxURL url(wxString::wxString(*fname));
-	   if(url.GetError() != wxURL_NOERR) return false;
-	   wxInputStream *in = url.GetInputStream();
-	   if(!in || !in->IsOk()) return false;
-	   unsigned char buffer[DOWNLOAD_BUFSIZE];
-	   size_t count = -1;
-	   wxMemoryBuffer mem_buf;
-	   while(!in->Eof() && count != 0)
-	   {
-		   in->Read(buffer, DOWNLOAD_BUFSIZE-1);
-		   count = in->LastRead();
-		   if(count > 0) mem_buf.AppendData(buffer, count);
-	   }
-	   */
-
 	   cinfo.err = jpeg_std_error(&jerr.pub);
 	   jerr.pub.error_exit = my_error_exit;
 	   /* Establish the setjmp return context for my_error_exit to use. */
@@ -1300,6 +1269,56 @@ z
 	   if(chunk.memory)
 		   free(chunk.memory);
 	   	   
+	   return true;
+   }
+
+   bool TextureBrick::zlib_brick_reader(char* data, size_t size, const FileLocInfo* finfo)
+   {
+	   try
+	   {
+		   ifstream ifs;
+		   ifs.open(ws2s(finfo->filename), ios::binary);
+		   if (!ifs) return false;
+		   
+		   size_t zsize = finfo->datasize;
+		   if (zsize <= 0) zsize = (size_t)ifs.seekg(0, std::ios::end).tellg();
+		   
+		   BYTE *zdata = new BYTE[finfo->datasize];
+		   ifs.seekg(finfo->offset, ios_base::beg); 
+		   ifs.read((char*)zdata, zsize);
+		   if (ifs) ifs.close();
+
+		   z_stream zInfo = {0};
+		   zInfo.total_in  = zInfo.avail_in  = zsize;
+		   zInfo.total_out = zInfo.avail_out = size;
+		   zInfo.next_in  = zdata;
+		   zInfo.next_out = (BYTE*)data;
+
+		   int nErr, nOut = -1;
+		   nErr = inflateInit( &zInfo );
+		   if ( nErr == Z_OK ) {
+			   nErr = inflate( &zInfo, Z_FINISH );
+			   if ( nErr == Z_STREAM_END ) {
+				   nOut = zInfo.total_out;
+			   }
+		   }
+		   inflateEnd( &zInfo );
+		   delete zdata;
+
+		   if (nOut != size || nErr != Z_STREAM_END)
+			   return false;
+	   }
+	   catch (std::exception &e)
+	   {
+		   cerr << typeid(e).name() << "\n" << e.what() << endl;
+		   return false;
+	   }
+
+	   return true;
+   }
+
+   bool TextureBrick::zlib_brick_reader_url(char* data, size_t size, const FileLocInfo* finfo)
+   {
 	   return true;
    }
 

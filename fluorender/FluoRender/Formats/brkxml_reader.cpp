@@ -434,29 +434,52 @@ void BRKXMLReader::ReadFilenames(tinyxml2::XMLElement* fileRootNode, vector<vect
 				if(id + 1 > filename[frame][channel].size())
 					filename[frame][channel].resize(id + 1, NULL);
 
+				if (!filename[frame][channel][id])
+						filename[frame][channel][id] = new FLIVR::FileLocInfo();
+
 				if (child->Attribute("filename"))
 				{
 					str = child->Attribute("filename");
-					if (!filename[frame][channel][id])
-						filename[frame][channel][id] = new FLIVR::FileLocInfo();
 					filename[frame][channel][id]->filename = wstring((m_isURL ? m_url_dir : m_dir_name) + s2ws(str));
 					filename[frame][channel][id]->isurl = m_isURL;
 				}
 				else if (child->Attribute("filepath"))
 				{
 					str = child->Attribute("filepath");
-					if (!filename[frame][channel][id])
-						filename[frame][channel][id] = new FLIVR::FileLocInfo();
 					filename[frame][channel][id]->filename = s2ws(str);
 					filename[frame][channel][id]->isurl = false;
 				}
 				else if (child->Attribute("url"))
 				{
 					str = child->Attribute("url");
-					if (!filename[frame][channel][id])
-						filename[frame][channel][id] = new FLIVR::FileLocInfo();
 					filename[frame][channel][id]->filename = s2ws(str);
 					filename[frame][channel][id]->isurl = true;
+				}
+
+				filename[frame][channel][id]->offset = 0;
+				if (child->Attribute("offset"))
+					filename[frame][channel][id]->offset = STOI(child->Attribute("offset"));
+				filename[frame][channel][id]->datasize = 0;
+				if (child->Attribute("datasize"))
+					filename[frame][channel][id]->datasize = STOI(child->Attribute("datasize"));
+				
+				if (child->Attribute("filetype"))
+				{
+					str = child->Attribute("filetype");
+					if (str == "RAW") filename[frame][channel][id]->type = BRICK_FILE_TYPE_RAW;
+					else if (str == "JPEG") filename[frame][channel][id]->type = BRICK_FILE_TYPE_JPEG;
+					else if (str == "ZLIB") filename[frame][channel][id]->type = BRICK_FILE_TYPE_ZLIB;
+				}
+				else
+				{
+					wstring ext = m_path_name.substr(m_path_name.find_last_of(L".")+1);
+					transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+					if (ext == L"jpg" || ext == L"jpeg")
+						filename[frame][channel][id]->type = BRICK_FILE_TYPE_JPEG;
+					if (ext == L"zip")
+						filename[frame][channel][id]->type = BRICK_FILE_TYPE_ZLIB;
+					else
+						filename[frame][channel][id]->type = BRICK_FILE_TYPE_RAW;
 				}
 			}
 		}

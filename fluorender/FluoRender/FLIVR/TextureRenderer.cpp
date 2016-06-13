@@ -1645,8 +1645,8 @@ namespace FLIVR
 							}
 						}
 						
-						FileLocInfo *test = tex_->GetFileName(brick->getID());
-						void *texdata = brick->tex_data_brk(c, &test->filename, tex_->GetFileType(), test->isurl);
+						FileLocInfo *finfo = tex_->GetFileName(brick->getID());
+						void *texdata = brick->tex_data_brk(c, finfo);
 						if (texdata)
 						{
 							glTexImage3D(GL_TEXTURE_3D, 0, internal_format, nx, ny, nz, 0, format, brick->tex_type(c), 0);

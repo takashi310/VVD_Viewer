@@ -61,6 +61,16 @@ namespace FLIVR {
 #define BRICK_FILE_TYPE_NONE	0
 #define BRICK_FILE_TYPE_RAW		1
 #define BRICK_FILE_TYPE_JPEG	2
+#define BRICK_FILE_TYPE_ZLIB	3
+
+	
+	struct FileLocInfo {
+		std::wstring filename;
+		int offset;
+		int datasize;
+		int type; //1-raw; 2-jpeg; 3-zlib;
+		bool isurl;
+	};
 
 	class TextureBrick
 	{
@@ -139,7 +149,7 @@ namespace FLIVR {
 
 		virtual GLenum tex_type(int c);
 		virtual void* tex_data(int c);
-		virtual void* tex_data_brk(int c, std::wstring* fname, int filetype, bool useURL);
+		virtual void* tex_data_brk(int c, const FileLocInfo* finfo);
 		
 		bool compute_t_index_min_max(Ray& view, double dt);
 
@@ -218,11 +228,13 @@ namespace FLIVR {
 		size_t tex_type_size(GLenum t);
 		GLenum tex_type_aux(Nrrd* n);
 
-		bool read_brick(char* data, size_t size, std::wstring* fname, int filetype, bool useURL = false);
-		bool raw_brick_reader(char* data, size_t size, std::wstring* fname);
-		bool jpeg_brick_reader(char* data, size_t size, std::wstring* fname);
-		bool raw_brick_reader_url(char* data, size_t size, std::wstring* fname);
-		bool jpeg_brick_reader_url(char* data, size_t size, std::wstring* fname);
+		bool read_brick(char* data, size_t size, const FileLocInfo* finfo);
+		bool raw_brick_reader(char* data, size_t size, const FileLocInfo* finfo);
+		bool jpeg_brick_reader(char* data, size_t size, const FileLocInfo* finfo);
+		bool zlib_brick_reader(char* data, size_t size, const FileLocInfo* finfo);
+		bool raw_brick_reader_url(char* data, size_t size, const FileLocInfo* finfo);
+		bool jpeg_brick_reader_url(char* data, size_t size, const FileLocInfo* finfo);
+		bool zlib_brick_reader_url(char* data, size_t size, const FileLocInfo* finfo);
 
 		//! bbox edges
 		Ray edge_[12]; 
@@ -280,11 +292,6 @@ namespace FLIVR {
 		bool disp_;
         
         static CURL *s_curl_;
-	};
-
-	struct FileLocInfo {
-		std::wstring filename;
-		bool isurl;
 	};
 
 	struct Pyramid_Level {
