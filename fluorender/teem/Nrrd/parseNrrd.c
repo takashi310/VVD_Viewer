@@ -464,11 +464,11 @@ _nrrdSpaceVectorParse(double val[NRRD_SPACE_DIM_MAX],
     if (ret > spaceDim) {
       sprintf(err, "%s: space dimension is %d, but seem to have %d "
               "coefficients", me, spaceDim, ret);
-      biffMaybeAdd(NRRD, err, useBiff); airMopError(mop); return 1;
+      //biffMaybeAdd(NRRD, err, useBiff); airMopError(mop); return 1;
     }
     /* try to parse the values */
     ret = airParseStrD(val, buff+1, ",", spaceDim);
-    if (spaceDim != ret) {
+    if (spaceDim > ret) {
       sprintf(err, "%s: parsed %d values, but space dimension is %d",
               me, ret, spaceDim);
       biffMaybeAdd(NRRD, err, useBiff); airMopError(mop); return 1;

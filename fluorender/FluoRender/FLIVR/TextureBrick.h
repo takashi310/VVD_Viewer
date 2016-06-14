@@ -236,6 +236,8 @@ namespace FLIVR {
 		bool jpeg_brick_reader_url(char* data, size_t size, const FileLocInfo* finfo);
 		bool zlib_brick_reader_url(char* data, size_t size, const FileLocInfo* finfo);
 
+		static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp);
+
 		//! bbox edges
 		Ray edge_[12]; 
 		//! tbox edges

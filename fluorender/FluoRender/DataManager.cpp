@@ -4691,14 +4691,23 @@ void DataManager::SetVolumeDefault(VolumeData* vd)
 		vd->SetLeftThresh(m_vol_lth);
 		vd->SetRightThresh(m_vol_hth);
 		vd->SetAlpha(m_vol_alf);
-		vd->SetSampleRate(m_vol_spr);
 		double amb, diff, spec, shine;
 		vd->GetMaterial(amb, diff, spec, shine);
 		vd->SetMaterial(m_vol_lsh, diff, spec, m_vol_hsh);
-		if (!vd->GetSpcFromFile())
-			vd->SetSpacings(m_vol_xsp, m_vol_ysp, m_vol_zsp);
 		vd->SetColormap(m_vol_cmp);
 		vd->SetColormapValues(m_vol_lcm, m_vol_hcm);
+
+		int xres, yres, zres;
+		vd->GetResolution(xres, yres, zres);
+		if (zres == 1) vd->SetSampleRate(1.0);
+		else vd->SetSampleRate(m_vol_spr);
+		if (!vd->GetSpcFromFile())
+		{
+			double zspcfac = (double)Max(xres,yres)/256.0;
+			if (zspcfac < 1.0) zspcfac = 1.0;
+			if (zres == 1) vd->SetSpacings(m_vol_xsp, m_vol_ysp, m_vol_xsp*zspcfac);
+			else vd->SetSpacings(m_vol_xsp, m_vol_ysp, m_vol_zsp);
+		}
 
 		vd->SetEnableAlpha(m_vol_eap);
 		int resx, resy, resz;
@@ -4980,9 +4989,13 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 						vd->LoadLabel(label);
 				}
 				if (type == LOAD_TYPE_BRKXML) ((BRKXMLReader*)reader)->SetLevel(0);
-				vd->SetBaseSpacings(reader->GetXSpc(),
-					reader->GetYSpc(),
-					reader->GetZSpc());
+				//for 2D data
+				int xres, yres, zres;
+				vd->GetResolution(xres, yres, zres);
+				double zspcfac = (double)Max(xres,yres)/256.0;
+				if (zspcfac < 1.0) zspcfac = 1.0;
+				if (zres == 1) vd->SetBaseSpacings(reader->GetXSpc(), reader->GetYSpc(), reader->GetXSpc()*zspcfac);
+				else vd->SetBaseSpacings(reader->GetXSpc(), reader->GetYSpc(), reader->GetZSpc());
 				vd->SetSpcFromFile(valid_spc);
 				vd->SetScalarScale(reader->GetScalarScale());
 				vd->SetMaxValue(reader->GetMaxValue());

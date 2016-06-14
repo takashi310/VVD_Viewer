@@ -238,13 +238,25 @@ Nrrd* NRRDReader::Convert(int t, int c, bool get_max)
 	}
 	nio = nrrdIoStateNix(nio);
 	rewind(nrrd_file);
-	if (output->dim != 3)
+	if (!(output->dim == 3 || output->dim == 2))
 	{
 		delete []output->data;
 		nrrdNix(output);
 		fclose(nrrd_file);
 		return 0;
 	}
+
+	if (output->dim == 2)
+	{
+		output->axis[2].size = 1;
+		output->axis[2].spacing = 1.0;
+		output->axis[0].spaceDirection[2] = 0.0;
+		output->axis[1].spaceDirection[2] = 0.0;
+		output->axis[2].spaceDirection[0] = 0.0;
+		output->axis[2].spaceDirection[1] = 0.0;
+		output->axis[2].spaceDirection[2] = 1.0;
+	}
+
 	m_slice_num = int(output->axis[2].size);
 	m_x_size = int(output->axis[0].size);
 	m_y_size = int(output->axis[1].size);
@@ -297,6 +309,19 @@ Nrrd* NRRDReader::Convert(int t, int c, bool get_max)
 		fclose(nrrd_file);
 		return 0;
 	}
+	
+	if (output->dim == 2)
+	{
+		output->dim = 3;
+		output->axis[2].size = 1;
+		output->axis[2].spacing = 1.0;
+		output->axis[0].spaceDirection[2] = 0.0;
+		output->axis[1].spaceDirection[2] = 0.0;
+		output->axis[2].spaceDirection[0] = 0.0;
+		output->axis[2].spaceDirection[1] = 0.0;
+		output->axis[2].spaceDirection[2] = 1.0;
+	}
+
 	// turn signed into unsigned
 	if (output->type == nrrdTypeChar) {
 		for (i=0; i<m_slice_num*m_x_size*m_y_size; i++) {
