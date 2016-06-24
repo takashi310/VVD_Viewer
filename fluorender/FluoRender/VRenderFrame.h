@@ -142,6 +142,7 @@ class VRenderFrame: public wxFrame
 		ID_UIListView,
 		ID_UITreeView,
 		ID_UIMeasureView,
+		ID_UIMovieView,
 		ID_UIAdjView,
 		ID_UIClipView,
 		ID_UIPropView,
@@ -304,6 +305,7 @@ public:
 	void ShowColocalizationDlg();
 	void ShowConvertDlg();
 	void ShowRecorderDlg();
+	void ShowMeasureDlg();
 	
 	//get interpolator
 	Interpolator* GetInterpolator()
@@ -405,6 +407,8 @@ private:
 	//draw text
 	TextRenderer *m_text_renderer;
 
+	map<wxString, bool> m_ui_state_cache;
+
 private:
 	//views
 	wxString CreateView(int row=1);
@@ -458,6 +462,7 @@ private:
 	void OnColocalization(wxCommandEvent& WXUNUSED(event));
 	void OnInfoDlg(wxCommandEvent& WXUNUSED(event));
 	void OnTrace(wxCommandEvent& WXUNUSED(event));
+	void OnMeasure(wxCommandEvent& WXUNUSED(event));
 
 	void OnDraw(wxPaintEvent& event);
 	void OnKeyDown(wxKeyEvent& event);

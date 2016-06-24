@@ -472,11 +472,12 @@ void BRKXMLReader::ReadFilenames(tinyxml2::XMLElement* fileRootNode, vector<vect
 				}
 				else
 				{
-					wstring ext = m_path_name.substr(m_path_name.find_last_of(L".")+1);
+					wstring fname = filename[frame][channel][id]->filename;
+					wstring ext = fname.substr(fname.find_last_of(L".")+1);
 					transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 					if (ext == L"jpg" || ext == L"jpeg")
 						filename[frame][channel][id]->type = BRICK_FILE_TYPE_JPEG;
-					if (ext == L"zip")
+					else if (ext == L"zip")
 						filename[frame][channel][id]->type = BRICK_FILE_TYPE_ZLIB;
 					else
 						filename[frame][channel][id]->type = BRICK_FILE_TYPE_RAW;

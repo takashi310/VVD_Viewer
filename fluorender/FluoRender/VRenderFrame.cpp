@@ -73,6 +73,7 @@ BEGIN_EVENT_TABLE(VRenderFrame, wxFrame)
 	EVT_MENU(ID_Recorder, VRenderFrame::OnRecorder)
 	EVT_MENU(ID_InfoDlg, VRenderFrame::OnInfoDlg)
 	EVT_MENU(ID_Trace, VRenderFrame::OnTrace)
+	EVT_MENU(ID_Measure, VRenderFrame::OnMeasure)
 	EVT_MENU(ID_Twitter, VRenderFrame::OnTwitter)
 	EVT_MENU(ID_Facebook, VRenderFrame::OnFacebook)
 	EVT_MENU(ID_ShowHideUI, VRenderFrame::OnShowHideUI)
@@ -81,6 +82,7 @@ BEGIN_EVENT_TABLE(VRenderFrame, wxFrame)
 	EVT_MENU(ID_UIListView, VRenderFrame::OnShowHideView)
 	EVT_MENU(ID_UITreeView, VRenderFrame::OnShowHideView)
 	EVT_MENU(ID_UIMeasureView, VRenderFrame::OnShowHideView)
+	EVT_MENU(ID_UIMovieView, VRenderFrame::OnShowHideView)
 	EVT_MENU(ID_UIAdjView, VRenderFrame::OnShowHideView)
 	EVT_MENU(ID_UIClipView, VRenderFrame::OnShowHideView)
 	EVT_MENU(ID_UIPropView, VRenderFrame::OnShowHideView)
@@ -153,6 +155,8 @@ VRenderFrame::VRenderFrame(
 		"Show/hide the workspace panel", wxITEM_CHECK);
 	m_tb_menu_ui->Append(ID_UIMeasureView, UITEXT_MEASUREMENT,
 		"Show/hide the measurement panel", wxITEM_CHECK);
+	m_tb_menu_ui->Append(ID_UIMovieView, UITEXT_MAKEMOVIE,
+		"Show/hide the movie panel", wxITEM_CHECK);
 	m_tb_menu_ui->Append(ID_UIAdjView, UITEXT_ADJUST,
 		"Show/hide the output adjustment panel", wxITEM_CHECK);
 	m_tb_menu_ui->Append(ID_UIClipView, UITEXT_CLIPPING,
@@ -162,7 +166,8 @@ VRenderFrame::VRenderFrame(
 	//check all the items
 	m_tb_menu_ui->Check(ID_UIListView, true);
 	m_tb_menu_ui->Check(ID_UITreeView, true);
-	m_tb_menu_ui->Check(ID_UIMeasureView, true);
+	m_tb_menu_ui->Check(ID_UIMeasureView, false);
+	m_tb_menu_ui->Check(ID_UIMovieView, true);
 	m_tb_menu_ui->Check(ID_UIAdjView, true);
 	m_tb_menu_ui->Check(ID_UIClipView, true);
 	m_tb_menu_ui->Check(ID_UIPropView, true);
@@ -170,6 +175,8 @@ VRenderFrame::VRenderFrame(
 	m_tb_menu_edit = new wxMenu;
 	m_tb_menu_edit->Append(ID_PaintTool, "Analyze...",
 		"Show analysis tools for volume data");
+	m_tb_menu_edit->Append(ID_Measure, "Measurement...",
+		"Show measurement tools");
 	m_tb_menu_edit->Append(ID_Trace, "Components && Tracking...",
 		"Show tracking tools");
 	m_tb_menu_edit->Append(ID_NoiseCancelling, "Noise Reduction...",
@@ -260,23 +267,23 @@ VRenderFrame::VRenderFrame(
 
 	//create list view
 	m_list_panel = new ListPanel(this, this, wxID_ANY,
-		wxDefaultPosition, wxSize(350, 300));
+		wxDefaultPosition, wxSize(320, 300));
 
 	//create tree view
 	m_tree_panel = new TreePanel(this, this, wxID_ANY,
-		wxDefaultPosition, wxSize(350, 300));
+		wxDefaultPosition, wxSize(320, 300));
 
 	//create movie view (sets the m_recorder_dlg)
 	m_movie_view = new VMovieView(this, this, wxID_ANY,
-		wxDefaultPosition, wxSize(350, 300));
+		wxDefaultPosition, wxSize(320, 300));
 
 	//measure dialog
 	m_measure_dlg = new MeasureDlg(this, this, wxID_ANY,
-		wxDefaultPosition, wxSize(350, 300));
+		wxDefaultPosition, wxSize(320, 300));
 
 	//create annotation panel
 	m_anno_view = new VAnnoView(this, this, wxID_ANY,
-		wxDefaultPosition, wxSize(350, 300));
+		wxDefaultPosition, wxSize(320, 300));
 
 	//create prop panel
 	m_prop_panel = new wxPanel(this, wxID_ANY,
@@ -388,16 +395,20 @@ VRenderFrame::VRenderFrame(
 		Top().CloseButton(false).Layer(4));
 	m_aui_mgr.AddPane(m_list_panel, wxAuiPaneInfo().
 		Name("m_list_panel").Caption(UITEXT_DATAVIEW).
-		Left().CloseButton(true).BestSize(wxSize(350, 250)).
-		FloatingSize(wxSize(350, 300)).Layer(3));
+		Left().CloseButton(true).BestSize(wxSize(320, 250)).
+		FloatingSize(wxSize(320, 300)).Layer(3));
 	m_aui_mgr.AddPane(m_tree_panel, wxAuiPaneInfo().
 		Name("m_tree_panel").Caption(UITEXT_TREEVIEW).
-		Left().CloseButton(true).BestSize(wxSize(350, 300)).
-		FloatingSize(wxSize(350, 300)).Layer(3));
+		Left().CloseButton(true).BestSize(wxSize(320, 300)).
+		FloatingSize(wxSize(320, 300)).Layer(3));
 	m_aui_mgr.AddPane(m_measure_dlg, wxAuiPaneInfo().
 		Name("m_measure_dlg").Caption(UITEXT_MEASUREMENT).
-		Left().CloseButton(true).BestSize(wxSize(350, 400)).
-		FloatingSize(wxSize(350, 300)).Layer(3));
+		Left().CloseButton(true).BestSize(wxSize(320, 400)).
+		FloatingSize(wxSize(320, 300)).Layer(3));
+	m_aui_mgr.AddPane(m_movie_view, wxAuiPaneInfo().
+		Name("m_movie_view").Caption(UITEXT_MAKEMOVIE).
+		Left().CloseButton(true).MinSize(wxSize(320, 300)).
+		FloatingSize(wxSize(320, 300)).Layer(3));
 	m_aui_mgr.AddPane(m_prop_panel, wxAuiPaneInfo().
 		Name("m_prop_panel").Caption(UITEXT_PROPERTIES).
 		Bottom().CloseButton(true).MinSize(wxSize(300, 150)).
@@ -419,6 +430,10 @@ VRenderFrame::VRenderFrame(
 	m_aui_mgr.GetPane("m_list_panel").dock_proportion  = 10;
 	m_aui_mgr.GetPane("m_tree_panel").dock_proportion  = 15;
 	m_aui_mgr.GetPane("m_measure_dlg").dock_proportion = 20;
+	m_aui_mgr.GetPane("m_movie_view").dock_proportion = 12;
+
+	m_aui_mgr.GetPane(m_measure_dlg).Float();
+	m_aui_mgr.GetPane(m_measure_dlg).Hide();
 
 	//dialogs
 	//brush tool dialog
@@ -451,19 +466,7 @@ VRenderFrame::VRenderFrame(
 		Dockable(false).CloseButton(true));
 	m_aui_mgr.GetPane(m_colocalization_dlg).Float();
 	m_aui_mgr.GetPane(m_colocalization_dlg).Hide();
-	//recorder dialog
-	m_aui_mgr.AddPane(m_movie_view, wxAuiPaneInfo().
-		Name("m_movie_view").Caption("Record/Export").
-		Dockable(false).CloseButton(true));
-	m_aui_mgr.GetPane(m_movie_view).Float();
-	m_aui_mgr.GetPane(m_movie_view).Hide();
-	//measure dialog
-/*	m_aui_mgr.AddPane(m_measure_dlg, wxAuiPaneInfo().
-		Name("m_measure_dlg").Caption("Measurement").
-		Dockable(false).CloseButton(true));
-	m_aui_mgr.GetPane(m_measure_dlg).Float();
-	m_aui_mgr.GetPane(m_measure_dlg).Hide();
-*/	//trace dialog
+	//trace dialog
 	m_aui_mgr.AddPane(m_trace_dlg, wxAuiPaneInfo().
 		Name("m_trace_dlg").Caption("Components & Tracking").
 		Dockable(false).CloseButton(true));
@@ -596,6 +599,9 @@ VRenderFrame::VRenderFrame(
 	m = new wxMenuItem(m_top_window,ID_UIMeasureView, wxT("&Measurement"), wxEmptyString, wxITEM_CHECK);
 	m_top_window->Append(m);
 	m_top_window->Check(ID_UIMeasureView, true);
+	m = new wxMenuItem(m_top_window,ID_UIMovieView, wxT("&Recorder"), wxEmptyString, wxITEM_CHECK);
+	m_top_window->Append(m);
+	m_top_window->Check(ID_UIMovieView, true);
 	m = new wxMenuItem(m_top_window,ID_UIAdjView, wxT("&Output Adjustments"), wxEmptyString, wxITEM_CHECK);
 	m_top_window->Append(m);
 	m_top_window->Check(ID_UIAdjView, true);
@@ -2221,16 +2227,18 @@ void VRenderFrame::OrganizeVRenderViews(int mode)
 //hide/show tools
 void VRenderFrame::ToggleAllTools()
 {
-	if (m_aui_mgr.GetPane(m_list_panel).IsShown() &&
-		m_aui_mgr.GetPane(m_tree_panel).IsShown() &&
-		m_aui_mgr.GetPane(m_measure_dlg).IsShown() &&
-		m_aui_mgr.GetPane(m_prop_panel).IsShown() &&
-		m_aui_mgr.GetPane(m_adjust_view).IsShown() &&
+	if (m_aui_mgr.GetPane(m_list_panel).IsShown() ||
+		m_aui_mgr.GetPane(m_tree_panel).IsShown() ||
+		m_aui_mgr.GetPane(m_measure_dlg).IsShown() ||
+		m_aui_mgr.GetPane(m_movie_view).IsShown() ||
+		m_aui_mgr.GetPane(m_prop_panel).IsShown() ||
+		m_aui_mgr.GetPane(m_adjust_view).IsShown() ||
 		m_aui_mgr.GetPane(m_clip_view).IsShown())
 		m_ui_state = true;
 	else if (!m_aui_mgr.GetPane(m_list_panel).IsShown() &&
 		!m_aui_mgr.GetPane(m_tree_panel).IsShown() &&
 		!m_aui_mgr.GetPane(m_measure_dlg).IsShown() &&
+		!m_aui_mgr.GetPane(m_movie_view).IsShown() &&
 		!m_aui_mgr.GetPane(m_prop_panel).IsShown() &&
 		!m_aui_mgr.GetPane(m_adjust_view).IsShown() &&
 		!m_aui_mgr.GetPane(m_clip_view).IsShown())
@@ -2238,6 +2246,15 @@ void VRenderFrame::ToggleAllTools()
 
 	if (m_ui_state)
 	{
+		if (!m_ui_state_cache.empty()) m_ui_state_cache.clear();
+		m_ui_state_cache[m_list_panel->GetName()]  = m_aui_mgr.GetPane(m_list_panel).IsShown();
+		m_ui_state_cache[m_tree_panel->GetName()]  = m_aui_mgr.GetPane(m_tree_panel).IsShown();
+		m_ui_state_cache[m_movie_view->GetName()]  = m_aui_mgr.GetPane(m_movie_view).IsShown();
+		m_ui_state_cache[m_measure_dlg->GetName()] = m_aui_mgr.GetPane(m_measure_dlg).IsShown();
+		m_ui_state_cache[m_prop_panel->GetName()]  = m_aui_mgr.GetPane(m_prop_panel).IsShown();
+		m_ui_state_cache[m_adjust_view->GetName()] = m_aui_mgr.GetPane(m_adjust_view).IsShown();
+		m_ui_state_cache[m_clip_view->GetName()]   = m_aui_mgr.GetPane(m_clip_view).IsShown();
+
 		//hide all
 		//data view
 		m_aui_mgr.GetPane(m_list_panel).Hide();
@@ -2245,7 +2262,10 @@ void VRenderFrame::ToggleAllTools()
 		//scene view
 		m_aui_mgr.GetPane(m_tree_panel).Hide();
 		m_tb_menu_ui->Check(ID_UITreeView, false);
-		//movie view (float only)
+		//movie view 
+		m_aui_mgr.GetPane(m_movie_view).Hide();
+		m_tb_menu_ui->Check(ID_UIMovieView, false);
+		//measurement
 		m_aui_mgr.GetPane(m_measure_dlg).Hide();
 		m_tb_menu_ui->Check(ID_UIMeasureView, false);
 		//properties
@@ -2262,25 +2282,76 @@ void VRenderFrame::ToggleAllTools()
 	}
 	else
 	{
-		//show all
-		//data view
-		m_aui_mgr.GetPane(m_list_panel).Show();
-		m_tb_menu_ui->Check(ID_UIListView, true);
-		//scene view
-		m_aui_mgr.GetPane(m_tree_panel).Show();
-		m_tb_menu_ui->Check(ID_UITreeView, true);
-		//movie view (float only)
-		m_aui_mgr.GetPane(m_measure_dlg).Show();
-		m_tb_menu_ui->Check(ID_UIMeasureView, true);
-		//properties
-		m_aui_mgr.GetPane(m_prop_panel).Show();
-		m_tb_menu_ui->Check(ID_UIPropView, true);
-		//adjust view
-		m_aui_mgr.GetPane(m_adjust_view).Show();
-		m_tb_menu_ui->Check(ID_UIAdjView, true);
-		//clipping view
-		m_aui_mgr.GetPane(m_clip_view).Show();
-		m_tb_menu_ui->Check(ID_UIClipView, true);
+		if (m_ui_state_cache.empty())
+		{
+			//show all
+			//data view
+			m_aui_mgr.GetPane(m_list_panel).Show();
+			m_tb_menu_ui->Check(ID_UIListView, true);
+			//scene view
+			m_aui_mgr.GetPane(m_tree_panel).Show();
+			m_tb_menu_ui->Check(ID_UITreeView, true);
+			//movie view 
+			m_aui_mgr.GetPane(m_movie_view).Show();
+			m_tb_menu_ui->Check(ID_UIMovieView, true);
+			//measurement
+			m_aui_mgr.GetPane(m_measure_dlg).Show();
+			m_tb_menu_ui->Check(ID_UIMeasureView, true);
+			//properties
+			m_aui_mgr.GetPane(m_prop_panel).Show();
+			m_tb_menu_ui->Check(ID_UIPropView, true);
+			//adjust view
+			m_aui_mgr.GetPane(m_adjust_view).Show();
+			m_tb_menu_ui->Check(ID_UIAdjView, true);
+			//clipping view
+			m_aui_mgr.GetPane(m_clip_view).Show();
+			m_tb_menu_ui->Check(ID_UIClipView, true);
+		}
+		else
+		{
+			//data view
+			if (m_ui_state_cache[m_list_panel->GetName()])
+			{
+				m_aui_mgr.GetPane(m_list_panel).Show();
+				m_tb_menu_ui->Check(ID_UIListView, true);
+			}
+			//scene view
+			if (m_ui_state_cache[m_tree_panel->GetName()])
+			{
+				m_aui_mgr.GetPane(m_tree_panel).Show();
+				m_tb_menu_ui->Check(ID_UITreeView, true);
+			}
+			//movie view 
+			if (m_ui_state_cache[m_movie_view->GetName()])
+			{
+				m_aui_mgr.GetPane(m_movie_view).Show();
+				m_tb_menu_ui->Check(ID_UIMovieView, true);
+			}
+			//measurement
+			if (m_ui_state_cache[m_measure_dlg->GetName()])
+			{
+				m_aui_mgr.GetPane(m_measure_dlg).Show();
+				m_tb_menu_ui->Check(ID_UIMeasureView, true);
+			}
+			//properties
+			if (m_ui_state_cache[m_prop_panel->GetName()])
+			{
+				m_aui_mgr.GetPane(m_prop_panel).Show();
+				m_tb_menu_ui->Check(ID_UIPropView, true);
+			}
+			//adjust view
+			if (m_ui_state_cache[m_adjust_view->GetName()])
+			{
+				m_aui_mgr.GetPane(m_adjust_view).Show();
+				m_tb_menu_ui->Check(ID_UIAdjView, true);
+			}
+			//clipping view
+			if (m_ui_state_cache[m_clip_view->GetName()])
+			{
+				m_aui_mgr.GetPane(m_clip_view).Show();
+				m_tb_menu_ui->Check(ID_UIClipView, true);
+			}
+		}
 
 		m_ui_state = true;
 	}
@@ -4407,6 +4478,28 @@ void VRenderFrame::OpenProject(wxString& filename)
 				m_tb_menu_ui->Check(ID_UIMeasureView, false);
 			}
 		}
+		if (fconfig.Read("ui_movie_view", &bVal))
+		{
+			if (bVal)
+			{
+				m_aui_mgr.GetPane(m_movie_view).Show();
+				m_tb_menu_ui->Check(ID_UIMovieView, true);
+				bool fl;
+				if (fconfig.Read("ui_movie_view_float", &fl))
+				{
+					if (fl)
+						m_aui_mgr.GetPane(m_movie_view).Float();
+					else
+						m_aui_mgr.GetPane(m_movie_view).Dock();
+				}
+			}
+			else
+			{
+				if (m_aui_mgr.GetPane(m_movie_view).IsOk())
+					m_aui_mgr.GetPane(m_movie_view).Hide();
+				m_tb_menu_ui->Check(ID_UIMovieView, false);
+			}
+		}
 		if (fconfig.Read("ui_adjust_view", &bVal))
 		{
 			if (bVal)
@@ -4712,6 +4805,18 @@ void VRenderFrame::ShowTraceDlg()
 	m_aui_mgr.Update();
 }
 
+void VRenderFrame::OnMeasure(wxCommandEvent& WXUNUSED(event))
+{
+	ShowMeasureDlg();
+}
+
+void VRenderFrame::ShowMeasureDlg()
+{
+	m_tb_menu_ui->Check(ID_UIMeasureView, true);
+	m_aui_mgr.GetPane(m_measure_dlg).Show();
+	m_aui_mgr.Update();
+}
+
 void VRenderFrame::OnRecorder(wxCommandEvent& WXUNUSED(event))
 {
 	ShowRecorderDlg();
@@ -4719,8 +4824,9 @@ void VRenderFrame::OnRecorder(wxCommandEvent& WXUNUSED(event))
 
 void VRenderFrame::ShowRecorderDlg()
 {
+	m_tb_menu_ui->Check(ID_UIMovieView, true);
 	m_aui_mgr.GetPane(m_movie_view).Show();
-	m_aui_mgr.GetPane(m_movie_view).Float();
+	//m_aui_mgr.GetPane(m_movie_view).Float();
 	m_aui_mgr.Update();
 }
 
@@ -4828,6 +4934,19 @@ void VRenderFrame::OnShowHideView(wxCommandEvent &event)
 			m_tb_menu_ui->Check(ID_UITreeView, true);
 		}
 		break;
+	case ID_UIMovieView:
+		//measurement view
+		if (m_aui_mgr.GetPane(m_movie_view).IsShown())
+		{
+			m_aui_mgr.GetPane(m_movie_view).Hide();
+			m_tb_menu_ui->Check(ID_UIMovieView, false);
+		}
+		else
+		{
+			m_aui_mgr.GetPane(m_movie_view).Show();
+			m_tb_menu_ui->Check(ID_UIMovieView, true);
+		}
+		break;
 	case ID_UIMeasureView:
 		//measurement view
 		if (m_aui_mgr.GetPane(m_measure_dlg).IsShown())
@@ -4897,6 +5016,8 @@ void VRenderFrame::OnPaneClose(wxAuiManagerEvent& event)
 		m_tb_menu_ui->Check(ID_UITreeView, false);
 	else if (name == "MeasureDlg")
 		m_tb_menu_ui->Check(ID_UIMeasureView, false);
+	else if (name == "VMovieView")
+		m_tb_menu_ui->Check(ID_UIMovieView, false);
 	else if (name == "PropPanel")
 		m_tb_menu_ui->Check(ID_UIPropView, false);
 	else if (name == "AdjustView")
