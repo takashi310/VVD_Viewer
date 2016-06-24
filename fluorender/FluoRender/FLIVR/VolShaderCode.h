@@ -215,6 +215,7 @@ namespace FLIVR
 	"	vec4 k = loc1; // {ka, kd, ks, ns}\n" \
 	"	k.x = k.x>1.0?log2(3.0-k.x):k.x;\n" \
 	"	vec4 n, w;\n" \
+	"	if (l.w == 0.0) { discard; return; }\n" \
 	"\n"
 
 #define VOL_TAIL \
