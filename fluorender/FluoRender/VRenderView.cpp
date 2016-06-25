@@ -6304,6 +6304,8 @@ void VRenderGLView::RunNoiseReduction(wxFileConfig &fconfig)
 	wxString str;
 	wxString pathname;
 	double thresh, size;
+	if (!m_cur_vol || !m_cur_vol->GetReader())
+		return;
 	fconfig.Read("threshold", &thresh, 0.0);
 	fconfig.Read("voxelsize", &size, 0.0);
 	int mode;
@@ -6331,12 +6333,12 @@ void VRenderGLView::RunNoiseReduction(wxFileConfig &fconfig)
 	VolumeData* vd = m_calculator.GetResult();
 	if (vd)
 	{
-		int time_num = vd->GetReader()->GetTimeNum();
+		int time_num = m_cur_vol->GetReader()->GetTimeNum();
 		wxString format = wxString::Format("%d", time_num);
 		m_fr_length = format.Length();
 		format = wxString::Format("_T%%0%dd", m_fr_length);
 		str = pathname +
-			wxString::Format(format, m_tseq_cur_num) + ".tif";
+			wxString::Format(format, m_tseq_cur_num) + "_NR.tif";
 		vd->Save(str, mode, bake, compression);
 		delete vd;
 	}
