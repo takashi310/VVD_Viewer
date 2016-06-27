@@ -354,7 +354,8 @@ m_running(false),
 m_record(false),
 m_current_page(0),
 m_rot_int_type(0),
-m_delayed_stop(false)
+m_delayed_stop(false),
+m_batch_mode(false)
 {
 	//notebook
 	m_notebook = new wxNotebook(this, wxID_ANY);
@@ -543,7 +544,7 @@ void VMovieView::OnTimer(wxTimerEvent& event) {
 
 	if (TextureRenderer::get_mem_swap() &&
 		TextureRenderer::get_start_update_loop() &&
-		!TextureRenderer::get_done_update_loop())
+		!TextureRenderer::get_done_update_loop() && !m_batch_mode)
 	{
 		wxString str = m_views_cmb->GetValue();
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
@@ -570,11 +571,30 @@ void VMovieView::OnTimer(wxTimerEvent& event) {
 			WriteFrameToFile(int(fps*len+0.5));
 		m_last_frame = frame;
 		SetRendering(m_cur_time/len);
+		
+		//run script for current frame
+		if (m_batch_mode)
+		{
+			m_timer.Stop();
+			wxString str = m_views_cmb->GetValue();
+			VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+			if (vr_frame)
+			{
+				VRenderView* vrv = vr_frame->GetView(str);
+				if (vrv && m_prv_fr != vrv->m_glview->m_tseq_cur_num)
+				{
+					vrv->m_glview->Run4DScript();
+					m_prv_fr = vrv->m_glview->m_tseq_cur_num;
+				}
+			}
+			m_timer.Start(int(1000.0/double(fps)+0.5));
+		}
 	}
 	if (len - m_cur_time < 0.1 / double(fps) || m_cur_time > len)
 	{
-		if (!m_repeat_chk->GetValue() || m_record) m_delayed_stop = true;
+		if (!m_repeat_chk->GetValue() || m_record || m_batch_mode) m_delayed_stop = true;
 		else m_cur_time = 0.0;
+		m_batch_mode = false;
 	}
 }
 
@@ -640,7 +660,19 @@ void VMovieView::OnPrev(wxCommandEvent& event) {
 	m_timer.Start(int(1000.0/double(fps)+0.5));
 
 	//run script for current frame
-	vrv->m_glview->Run4DScript();
+	SettingDlg* stg = vr_frame->GetSettingDlg();
+	if (stg && stg->GetRunScript())
+	{
+		m_batch_mode = true;
+		if (!m_vol_fr.empty()) m_vol_fr.clear();
+		
+		m_timer.Stop();
+
+		m_prv_fr = vrv->m_glview->m_tseq_cur_num;
+		vrv->m_glview->Run4DScript();
+
+		m_timer.Start(int(1000.0/double(fps)+0.5));
+	}
 }
 
 void VMovieView::OnRun(wxCommandEvent& event) {
@@ -1015,7 +1047,7 @@ void VMovieView::SetRendering(double pcnt) {
 		int first, sec, tmp;
 		vrv->Get4DSeqFrames(first, sec, tmp);
 		if (sec - first > 0) {
-			vrv->Set4DSeqFrame(time ,true);
+			vrv->Set4DSeqFrame(time, false);
 		} else {
 			vrv->Set3DBatFrame(time);
 		}

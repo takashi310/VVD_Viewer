@@ -31,6 +31,7 @@ DEALINGS IN THE SOFTWARE.
 #include <wx/clrpicker.h>
 #include <wx/notebook.h>
 #include <cstring>
+#include <map>
 #include "RecorderDlg.h"
 #include "compatibility.h"
 #include "QVideoEncoder.h"
@@ -183,6 +184,10 @@ private:
 	wxString filetype_;
 	int m_rot_int_type;//0-linear; 1-smooth
 	bool m_delayed_stop;
+
+	bool m_batch_mode;
+	int m_prv_fr;
+	std::map<wxString, int> m_vol_fr;
 
 private:
 	void GetSettings(int view=0);
