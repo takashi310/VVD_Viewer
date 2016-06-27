@@ -6337,7 +6337,7 @@ void VRenderGLView::RunNoiseReduction(wxFileConfig &fconfig)
 		wxString format = wxString::Format("%d", time_num);
 		m_fr_length = format.Length();
 		format = wxString::Format("_T%%0%dd", m_fr_length);
-		str = pathname +
+		str = pathname + vd->GetName() +
 			wxString::Format(format, m_tseq_cur_num) + "_NR" + (mode == 2 ? ".nrrd" : ".tif");
 		vd->Save(str, mode, bake, compression);
 		delete vd;
@@ -6515,7 +6515,7 @@ void VRenderGLView::RunRandomColors(wxFileConfig &fconfig)
 			wxString format = wxString::Format("%d", time_num);
 			m_fr_length = format.Length();
 			format = wxString::Format("_T%%0%dd", m_fr_length);
-			str = pathname +
+			str = pathname + vd->GetName() +
 				wxString::Format(format, m_tseq_cur_num) +
 				wxString::Format("_COMP%d", ii + 1) + ".tif";
 			vd->Save(str);
@@ -6556,7 +6556,7 @@ void VRenderGLView::RunSeparateChannels(wxFileConfig &fconfig)
 			wxString format = wxString::Format("%d", time_num);
 			m_fr_length = format.Length();
 			format = wxString::Format("_T%%0%dd", m_fr_length);
-			str = pathname +
+			str = pathname + vd->GetName() +
 				wxString::Format(format, m_tseq_cur_num) + (mode == 2 ? ".nrrd" : ".tif");;
 			vd->Save(str, mode, bake, compression);
 		}
