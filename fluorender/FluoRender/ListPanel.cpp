@@ -872,6 +872,9 @@ ListPanel::ListPanel(wxWindow *frame,
 wxPanel(parent, id, pos, size, style, name)//,
 //m_frame(frame)
 {
+	SetEvtHandlerEnabled(false);
+	Freeze();
+
    //create data list
    m_datalist = new DataListCtrl(frame, this, wxID_ANY);
 
@@ -906,6 +909,9 @@ wxPanel(parent, id, pos, size, style, name)//,
 
    SetSizer(sizer_v);
    Layout();
+
+	Thaw();
+	SetEvtHandlerEnabled(true);
 }
 
 ListPanel::~ListPanel()

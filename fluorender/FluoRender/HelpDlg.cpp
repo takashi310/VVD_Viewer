@@ -37,12 +37,18 @@ wxPanel(parent, wxID_ANY,
 		 0, "HelpDlg"),
 m_html(0)
 {
+	SetEvtHandlerEnabled(false);
+	Freeze();
+
 	m_name = "";
 	wxBoxSizer *sizer = new wxBoxSizer(wxVERTICAL);
 	m_html = new wxHtmlWindow(this);
 	sizer->Add(m_html, 1, wxEXPAND);
 	SetSizer(sizer);
 	Layout();
+
+	Thaw();
+	SetEvtHandlerEnabled(true);
 }
 
 HelpDlg::~HelpDlg()

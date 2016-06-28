@@ -21,6 +21,9 @@ wxPanel(parent, wxID_ANY,
 	0, "ConvertDlg"),
 	m_frame(parent)
 {
+	SetEvtHandlerEnabled(false);
+	Freeze();
+
 	//validator: floating point 2
 	wxFloatingPointValidator<double> vald_fp2(2);
 	//validator: integer
@@ -124,6 +127,9 @@ wxPanel(parent, wxID_ANY,
 
 	SetSizer(sizerV);
 	Layout();
+
+	Thaw();
+	SetEvtHandlerEnabled(true);
 }
 
 ConvertDlg::~ConvertDlg()

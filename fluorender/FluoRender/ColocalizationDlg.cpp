@@ -23,6 +23,9 @@ m_view(0),
 m_vol_a(0),
 m_vol_b(0)
 {
+	SetEvtHandlerEnabled(false);
+	Freeze();
+
 	//validator: integer
 	wxIntegerValidator<unsigned int> vald_int;
 
@@ -106,6 +109,9 @@ m_vol_b(0)
 	
 	SetSizer(sizerV);
 	Layout();
+
+	Thaw();
+	SetEvtHandlerEnabled(true);
 }
 
 ColocalizationDlg::~ColocalizationDlg()

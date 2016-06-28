@@ -233,6 +233,9 @@ BEGIN_EVENT_TABLE(LMSeacher, wxTextCtrl)
 wxTextCtrl(parent, id, "", pos, size, style),
 	m_glview(glview)
 {
+	SetEvtHandlerEnabled(false);
+	Freeze();
+
 	SetHint(text);
 
 	m_dummy = new wxButton(parent, id, text, pos, size);
@@ -245,6 +248,8 @@ wxTextCtrl(parent, id, "", pos, size, style),
 
 	m_list->Hide();
 
+	Thaw();
+	SetEvtHandlerEnabled(true);
 }
 
 LMSeacher::~LMSeacher()
@@ -668,6 +673,9 @@ wxGLCanvas(parent, id, attriblist, pos, size, style),
 	m_int_res(false),
 	m_dpeel(false)
 {
+	SetEvtHandlerEnabled(false);
+	Freeze();
+
 	//create context
 	if (sharedContext)
 	{
@@ -694,6 +702,9 @@ wxGLCanvas(parent, id, attriblist, pos, size, style),
 
 	m_searcher = new LMSeacher(this, (wxWindow *)this, ID_Searcher, wxT("Search"), wxPoint(20, 20), wxSize(200, -1), wxTE_PROCESS_ENTER);
 	m_searcher->Hide();
+
+	Thaw();
+	SetEvtHandlerEnabled(true);
 }
 
 void VRenderGLView::SetSearcherVisibility(bool visibility)
@@ -13045,6 +13056,9 @@ wxPanel(parent, id, pos, size, style),
 	m_use_dft_settings(false),
 	m_res_mode(0)
 {
+	SetEvtHandlerEnabled(false);
+	Freeze();
+
 	//full frame
 	m_full_frame = new wxFrame((wxFrame*)NULL, wxID_ANY, "FluoRender");
 	m_view_sizer = new wxBoxSizer(wxVERTICAL);
@@ -13127,6 +13141,9 @@ wxPanel(parent, id, pos, size, style),
 		m_glview->SetScaleBarLen(1.);
 	}
 	LoadSettings();
+
+	Thaw();
+	SetEvtHandlerEnabled(true);
 }
 
 #ifdef _WIN32

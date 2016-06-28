@@ -103,6 +103,9 @@ wxPanel(parent, id, pos, size, style, name),
 m_frame(frame),
 m_data(0)
 {
+	SetEvtHandlerEnabled(false);
+	Freeze();
+
 	m_root_sizer = new wxBoxSizer(wxVERTICAL);
 	wxStaticText* st = 0;
 
@@ -129,6 +132,9 @@ m_data(0)
 	
 	SetSizer(m_root_sizer);
 	Layout();
+
+	Thaw();
+	SetEvtHandlerEnabled(true);
 }
 
 VAnnoView::~VAnnoView()

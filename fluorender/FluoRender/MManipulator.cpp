@@ -44,6 +44,9 @@ wxPanel(parent, id, pos, size, style, name),
 m_frame(frame),
 m_md(0)
 {
+	SetEvtHandlerEnabled(false);
+	Freeze();
+
 	wxBoxSizer* sizer_v = new wxBoxSizer(wxVERTICAL);
 	wxBoxSizer* sizer_1 = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* sizer_2 = new wxBoxSizer(wxHORIZONTAL);
@@ -129,6 +132,9 @@ m_md(0)
 	sizer_v->Add(sizer_3, 0, wxALIGN_LEFT);
 	SetSizer(sizer_v);
 	Layout();
+
+	Thaw();
+	SetEvtHandlerEnabled(true);
 }
 
 MManipulator::~MManipulator()

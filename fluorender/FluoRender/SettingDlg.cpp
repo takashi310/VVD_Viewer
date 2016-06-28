@@ -565,6 +565,9 @@ wxPanel(parent, wxID_ANY,
 		 0, "SettingDlg"),
 m_frame(frame)
 {
+	SetEvtHandlerEnabled(false);
+	Freeze();
+
 	//notebook
 	wxNotebook *notebook = new wxNotebook(this, wxID_ANY);
 	notebook->AddPage(CreateProjectPage(notebook), "Project");
@@ -590,6 +593,9 @@ m_frame(frame)
 	Layout();
 
 	GetSettings();
+
+	Thaw();
+	SetEvtHandlerEnabled(true);
 }
 
 SettingDlg::~SettingDlg()

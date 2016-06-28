@@ -106,6 +106,9 @@ wxPanel(parent, id, pos, size,style, name),
 	m_sizer_r6(0),
 	m_roi_id(-1)
 {
+	SetEvtHandlerEnabled(false);
+	Freeze();
+
 	wxBoxSizer* sizer_all = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* sizer_sl_b = new wxBoxSizer(wxVERTICAL);
 	wxBoxSizer* sizer_sliders = new wxBoxSizer(wxHORIZONTAL);
@@ -466,6 +469,9 @@ wxPanel(parent, id, pos, size,style, name),
 
 	SetSizer(sizer_all);
 	Layout();
+
+	Thaw();
+	SetEvtHandlerEnabled(true);
 }
 
 VPropView::~VPropView()

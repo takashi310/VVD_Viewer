@@ -44,6 +44,9 @@ wxListCtrl(parent, id, pos, size, style),
 	m_dragging_to_item(-1),
 	m_dragging_item(-1)
 {
+	SetEvtHandlerEnabled(false);
+	Freeze();
+
 	wxListItem itemCol;
 	itemCol.SetText("Name");
 	this->InsertColumn(0, itemCol);
@@ -86,6 +89,9 @@ wxListCtrl(parent, id, pos, size, style),
 	m_description_text = new wxTextCtrl(this, ID_RulerDescriptionText, "",
 		wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
 	m_description_text->Hide();
+
+	Thaw();
+	SetEvtHandlerEnabled(true);
 }
 
 RulerListCtrl::~RulerListCtrl()
@@ -749,6 +755,9 @@ wxPanel(parent, id, pos, size, style, name),
 	m_frame(parent),
 	m_view(0)
 {
+	SetEvtHandlerEnabled(false);
+	Freeze();
+
 	//toolbar
 	m_toolbar = new wxToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTB_FLAT|wxTB_TOP|wxTB_NODIVIDER);
@@ -837,6 +846,9 @@ wxPanel(parent, id, pos, size, style, name),
 
 	SetSizer(sizerV);
 	Layout();
+
+	Thaw();
+	SetEvtHandlerEnabled(true);
 }
 
 MeasureDlg::~MeasureDlg()

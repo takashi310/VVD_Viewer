@@ -127,6 +127,9 @@ VRenderFrame::VRenderFrame(
 	m_cur_sel_vol(-1),
 	m_cur_sel_mesh(-1)
 {
+	SetEvtHandlerEnabled(false);
+	Freeze();
+
 	curl_global_init(CURL_GLOBAL_ALL);//add by takashi
 	_g_curlm = curl_multi_init();//add by takashi
 	_g_curl = curl_easy_init();//add by takashi
@@ -647,6 +650,9 @@ VRenderFrame::VRenderFrame(
 	m_aui_mgr.Update();
 */
 	m_tree_panel->ExpandAll();
+
+	Thaw();
+	SetEvtHandlerEnabled(true);
 }
 
 VRenderFrame::~VRenderFrame()

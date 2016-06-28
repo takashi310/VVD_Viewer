@@ -17,6 +17,9 @@ m_frame(frame),
 m_ann(0),
 m_vrv(0)
 {
+	SetEvtHandlerEnabled(false);
+	Freeze();
+
 	wxBoxSizer* sizer_v1 = new wxBoxSizer(wxVERTICAL);
 	wxStaticText* st = 0;
 
@@ -43,6 +46,9 @@ m_vrv(0)
 
 	SetSizer(sizer_v1);
 	Layout();
+
+	Thaw();
+	SetEvtHandlerEnabled(true);
 }
 
 APropView::~APropView()

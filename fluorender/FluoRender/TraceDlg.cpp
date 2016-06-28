@@ -670,6 +670,9 @@ TraceDlg::TraceDlg(wxWindow* frame, wxWindow* parent)
 	m_manual_assist(false),
 	m_auto_id(false)
 {
+	SetEvtHandlerEnabled(false);
+	Freeze();
+
 	//validator: integer
 	wxIntegerValidator<unsigned int> vald_int;
 
@@ -757,6 +760,9 @@ TraceDlg::TraceDlg(wxWindow* frame, wxWindow* parent)
 
 	SetSizer(sizer_v);
 	Layout();
+
+	Thaw();
+	SetEvtHandlerEnabled(true);
 }
 
 TraceDlg::~TraceDlg()

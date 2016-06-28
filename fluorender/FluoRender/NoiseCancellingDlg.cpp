@@ -51,6 +51,9 @@ NoiseCancellingDlg::NoiseCancellingDlg(wxWindow *frame, wxWindow *parent)
 			m_dft_thresh(0.0),
 			m_previewed(false)
 {
+	SetEvtHandlerEnabled(false);
+	Freeze();
+
 	//validator: floating point 1
 	wxFloatingPointValidator<double> vald_fp1(1);
 	//validator: integer
@@ -116,6 +119,9 @@ NoiseCancellingDlg::NoiseCancellingDlg(wxWindow *frame, wxWindow *parent)
 
 	SetSizer(sizerV);
 	Layout();
+
+	Thaw();
+	SetEvtHandlerEnabled(true);
 }
 
 NoiseCancellingDlg::~NoiseCancellingDlg()

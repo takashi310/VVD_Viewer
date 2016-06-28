@@ -98,6 +98,9 @@ m_link_x(false),
 m_link_y(false),
 m_link_z(false)
 {
+	SetEvtHandlerEnabled(false);
+	Freeze();
+
 	//validator: floating point 1
 	wxFloatingPointValidator<double> vald_fp1(1);
 	vald_fp1.SetRange(-180.0, 180.0);
@@ -439,6 +442,9 @@ m_link_z(false)
 	LoadDefault();
 
 	DisableAll();
+
+	Thaw();
+	SetEvtHandlerEnabled(true);
 }
 
 ClippingView::~ClippingView()

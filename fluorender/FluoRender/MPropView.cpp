@@ -150,6 +150,9 @@ m_md(0),
 m_vrv(0),
 m_sync(false)
 {
+	SetEvtHandlerEnabled(false);
+	Freeze();
+
 	wxBoxSizer* sizer_v1 = new wxBoxSizer(wxVERTICAL);
 	wxBoxSizer* sizer_1 = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* sizer_2 = new wxBoxSizer(wxHORIZONTAL);
@@ -288,6 +291,9 @@ m_sync(false)
 	m_r_text->Disable();
 
 	Layout();
+
+	Thaw();
+	SetEvtHandlerEnabled(true);
 }
 
 MPropView::~MPropView()

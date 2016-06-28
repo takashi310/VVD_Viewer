@@ -58,6 +58,9 @@ m_p3(0.0),
 m_p4(0.0)//,
 //m_frame(frame)
 {
+	SetEvtHandlerEnabled(false);
+	Freeze();
+
 /*	wxStaticText *st;
 
 	//p1
@@ -145,6 +148,8 @@ m_p4(0.0)//,
 	SetSizer(sizer_v);
 	Layout();
 
+	Thaw();
+	SetEvtHandlerEnabled(true);
 }
 
 TesterDlg::~TesterDlg()

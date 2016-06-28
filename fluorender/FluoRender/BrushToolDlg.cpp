@@ -499,6 +499,9 @@ BrushToolDlg::BrushToolDlg(wxWindow *frame, wxWindow *parent)
    m_dft_nr_thresh(0.0),
    m_dft_nr_size(0.0)
 {
+	SetEvtHandlerEnabled(false);
+	Freeze();
+
    //notebook
 	m_notebook = new wxNotebook(this, wxID_ANY);
 	m_notebook->AddPage(CreateBrushPage(m_notebook), "Paint Brush");
@@ -515,6 +518,9 @@ BrushToolDlg::BrushToolDlg(wxWindow *frame, wxWindow *parent)
 	Layout();
 
 	LoadDefault();
+
+	Thaw();
+	SetEvtHandlerEnabled(true);
 }
 
 BrushToolDlg::~BrushToolDlg()

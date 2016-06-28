@@ -62,6 +62,9 @@ m_dft_sync_r(false),
 m_dft_sync_g(false),
 m_dft_sync_b(false)
 {
+	SetEvtHandlerEnabled(false);
+	Freeze();
+
 	this->SetSize(75,-1);
 	//validator: floating point 2
 	wxFloatingPointValidator<double> vald_fp2(2);
@@ -270,6 +273,9 @@ m_dft_sync_b(false)
 	DisableAll();
 
 	LoadSettings();
+
+	Thaw();
+	SetEvtHandlerEnabled(true);
 }
 
 AdjustView::~AdjustView()

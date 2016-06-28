@@ -667,6 +667,9 @@ wxPoint(500, 150), wxSize(440, 700),
 m_frame(parent),
 m_view(0)
 {
+	SetEvtHandlerEnabled(false);
+	Freeze();
+
 	wxBoxSizer *group1 = new wxBoxSizer(wxHORIZONTAL);
 	m_url_text = new DBSearcher(parent, this, ID_SearchTextCtrl, wxT("Search"),
 		wxDefaultPosition, wxSize(300, 23), wxTE_PROCESS_ENTER);
@@ -749,6 +752,9 @@ m_view(0)
 
 	m_thread = NULL;
 	m_th_del = NULL;
+
+	Thaw();
+	SetEvtHandlerEnabled(true);
 }
 
 DatabaseDlg::~DatabaseDlg()

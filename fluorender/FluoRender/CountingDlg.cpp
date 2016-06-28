@@ -52,6 +52,9 @@ m_view(0),
 m_max_value(255.0),
 m_dft_thresh(0.0)
 {
+	SetEvtHandlerEnabled(false);
+	Freeze();
+
 	//validator: floating point 1
 	wxFloatingPointValidator<double> vald_fp1(1);
 	//validator: integer
@@ -152,6 +155,9 @@ m_dft_thresh(0.0)
 	Layout();
 
 	LoadDefault();
+
+	Thaw();
+	SetEvtHandlerEnabled(true);
 }
 
 CountingDlg::~CountingDlg()
