@@ -727,6 +727,54 @@ namespace FLIVR
 			return false;
 	}
 
+	void Texture::delete_mask()
+	{
+		if (nmask_ > 0)
+		{
+			nb_[nmask_] = 0;
+
+			int i;
+			for (i=0; i<(int)(*bricks_).size(); i++)
+			{
+				(*bricks_)[i]->nmask(-1);
+				(*bricks_)[i]->nb(0, nmask_);
+				(*bricks_)[i]->ntype(TextureBrick::TYPE_NONE, nmask_);
+			}
+
+			if (data_[nmask_])
+			{
+				delete [] data_[nmask_]->data;
+				data_[nmask_] = NULL;
+			}
+
+			nmask_ = -1; 
+		}
+	}
+
+	void Texture::delete_label()
+	{
+		if (nlabel_ > 0)
+		{
+			nb_[nlabel_] = 0;
+
+			int i;
+			for (i=0; i<(int)(*bricks_).size(); i++)
+			{
+				(*bricks_)[i]->nlabel(-1);
+				(*bricks_)[i]->nb(0, nlabel_);
+				(*bricks_)[i]->ntype(TextureBrick::TYPE_NONE, nlabel_);
+			}
+
+			if (data_[nlabel_])
+			{
+				delete [] data_[nlabel_]->data;
+				data_[nlabel_] = NULL;
+			}
+
+			nlabel_ = -1; 
+		}
+	}
+
 	//set nrrd
 	void Texture::set_nrrd(Nrrd* data, int index)
 	{

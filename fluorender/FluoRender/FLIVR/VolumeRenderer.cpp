@@ -1670,7 +1670,7 @@ namespace FLIVR
 
 		//transfer function
 		seg_shader->setLocalParam(2, inv_?-scalar_scale_:scalar_scale_, gm_scale_, lo_thresh_, hi_thresh_);
-		seg_shader->setLocalParam(3, 1.0/gamma3d_, gm_thresh_, offset_, sw_);
+		seg_shader->setLocalParam(3, 1.0, gm_thresh_, offset_, sw_);
 		seg_shader->setLocalParam(6, color_.r(), color_.g(), color_.b(), 0.0);
 
 		if (type == 0)

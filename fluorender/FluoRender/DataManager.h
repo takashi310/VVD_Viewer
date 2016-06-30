@@ -213,11 +213,13 @@ public:
 		double spcx, double spcy, double spcz);
 	//load mask
 	void LoadMask(Nrrd* mask);
+	void DeleteMask();
 	Nrrd* GetMask(bool ret);
 	//empty mask
 	void AddEmptyMask();
 	//load label
 	void LoadLabel(Nrrd* label);
+	void DeleteLabel();
 	Nrrd* GetLabel(bool ret);
 	//empty label
 	//mode: 0-zeros;1-ordered; 2-shuffled

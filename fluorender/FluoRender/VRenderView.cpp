@@ -6341,11 +6341,13 @@ void VRenderGLView::RunNoiseReduction(wxFileConfig &fconfig)
 	} while (true);
 
 	CompAnalysis(0.0, size, thresh, false, false);
-	m_selector.NoiseRemoval(size, thresh, 1);
+	Calculate(6, "", false);
+	VolumeData* vd = m_calculator.GetResult();
+/*	m_selector.NoiseRemoval(size, thresh, 1);
 	vector<VolumeData*> *vol_list = m_selector.GetResultVols();
 	if(!vol_list || vol_list->empty()) return;
 	VolumeData* vd = (*vol_list)[0];
-	if (vd)
+*/	if (vd)
 	{
 		int time_num = m_cur_vol->GetReader()->GetTimeNum();
 		wxString format = wxString::Format("%d", time_num);
@@ -6356,6 +6358,8 @@ void VRenderGLView::RunNoiseReduction(wxFileConfig &fconfig)
 		vd->Save(str, mode, bake, compression, false, false);
 		delete vd;
 	}
+	m_cur_vol->DeleteMask();
+	m_cur_vol->DeleteLabel();
 }
 
 void VRenderGLView::RunSelectionTracking(wxFileConfig &fconfig)

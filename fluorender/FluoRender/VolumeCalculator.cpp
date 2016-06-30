@@ -123,9 +123,16 @@ void VolumeCalculator::CreateVolumeResult1()
    m_vd_a->GetResolution(res_x, res_y, res_z);
    m_vd_a->GetSpacings(spc_x, spc_y, spc_z);
 
-   //int bits = (m_vd_a->GetMaxValue()>255.0)?
-   //  16:8;
-   int bits = 8;  //it has an unknown problem with 16 bit data
+   int bits = 8;
+   Texture* tex_a = m_vd_a->GetTexture();
+   if (!tex_a) return;
+   Nrrd* nrrd_a = tex_a->get_nrrd(0);
+   if (!nrrd_a) return;
+   
+   if (nrrd_a->type == nrrdTypeUChar)
+	   bits = 8;
+   else if (nrrd_a->type == nrrdTypeUShort)
+	   bits = 16;
 
    m_vd_r = new VolumeData();
    m_vd_r->AddEmptyData(bits,
@@ -165,9 +172,17 @@ void VolumeCalculator::CreateVolumeResult2()
    m_vd_a->GetSpacings(spc_x_a, spc_y_a, spc_z_a);
    m_vd_b->GetSpacings(spc_x_b, spc_y_b, spc_z_b);
 
-   //int bits = (m_vd_a->GetMaxValue()>255.0||m_vd_b->GetMaxValue()>255.0)?
-   //  16:8;
-   int bits = 8;  //it has an unknown problem with 16 bit data
+   int bits = 8;
+   Texture* tex_a = m_vd_a->GetTexture();
+   if (!tex_a) return;
+   Nrrd* nrrd_a = tex_a->get_nrrd(0);
+   if (!nrrd_a) return;
+   
+   if (nrrd_a->type == nrrdTypeUChar)
+	   bits = 8;
+   else if (nrrd_a->type == nrrdTypeUShort)
+	   bits = 16;
+
    int res_x, res_y, res_z;
    double spc_x, spc_y, spc_z;
 

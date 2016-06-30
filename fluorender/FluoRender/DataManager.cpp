@@ -743,6 +743,14 @@ void VolumeData::LoadMask(Nrrd* mask)
 	m_tex->set_nrrd(mask, m_tex->nmask());
 }
 
+void VolumeData::DeleteMask()
+{
+	if (!m_tex || !m_vr)
+		return;
+
+	m_tex->delete_mask();
+}
+
 void VolumeData::AddEmptyMask()
 {
 	if (!m_tex || !m_vr)
@@ -782,6 +790,14 @@ void VolumeData::LoadLabel(Nrrd* label)
 
 	m_tex->add_empty_label();
 	m_tex->set_nrrd(label, m_tex->nlabel());
+}
+
+void VolumeData::DeleteLabel()
+{
+	if (!m_tex || !m_vr)
+		return;
+
+	m_tex->delete_label();
 }
 
 void VolumeData::SetOrderedID(unsigned int* val)
@@ -1599,6 +1615,20 @@ void VolumeData::Calculate(int type, VolumeData *vd_a, VolumeData *vd_b)
 			m_vr->set_hi_thresh(vd_a->GetRightThresh());
 		m_vr->calculate(type, vd_a?vd_a->GetVR():0, vd_b?vd_b->GetVR():0);
 		m_vr->return_volume();
+		if (m_tex && m_tex->get_nrrd(0))
+		{
+			Nrrd* nrrd_data = m_tex->get_nrrd(0);
+			uint8 *val8nr = (uint8*)nrrd_data->data;
+			int max_val = 255;
+			int bytes = 1;
+			if (nrrd_data->type == nrrdTypeUShort) bytes = 2;
+			int mem_size = (unsigned long long)m_res_x * (unsigned long long)m_res_y * (unsigned long long)m_res_z * bytes;
+			if (nrrd_data->type == nrrdTypeUChar)
+				max_val = *std::max_element(val8nr, val8nr+mem_size);
+			else if (nrrd_data->type == nrrdTypeUShort)
+				max_val = *std::max_element((uint16*)val8nr, (uint16*)val8nr+mem_size/2);
+			SetMaxValue(max_val);
+		}
 	}
 }
 
@@ -5196,9 +5226,7 @@ void DataManager::RemoveVolumeData(int index)
 
 void DataManager::RemoveVolumeDataset(BaseReader *reader, int channel)
 {
-	if (!reader || channel < 0)
-		return;
-
+	
 	for (int i = m_vd_list.size()-1; i >= 0; i--)
 	{
 		VolumeData* data = m_vd_list[i];
