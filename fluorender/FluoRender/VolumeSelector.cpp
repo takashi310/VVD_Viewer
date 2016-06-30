@@ -29,6 +29,7 @@ DEALINGS IN THE SOFTWARE.
 #include "VRenderFrame.h"
 #include "utility.h"
 #include <wx/wx.h>
+#include <algorithm>
 
 VolumeSelector::VolumeSelector() :
 	m_vd(0),
@@ -1100,11 +1101,13 @@ void VolumeSelector::NoiseRemoval(int iter, double thresh, int mode)
 		unsigned long long mem_size = (unsigned long long)res_x*
 			(unsigned long long)res_y*(unsigned long long)res_z*(unsigned long long)bytes;
 		uint8 *val8 = new (std::nothrow) uint8[mem_size];
+
 		memcpy(val8, nrrd_mvd->data, mem_size);
 		if (nrrd_mvd->type == nrrdTypeUChar)
 			nrrdWrap(nrrd_new, val8, nrrdTypeUChar, 3, (size_t)res_x, (size_t)res_y, (size_t)res_z);
 		else if (nrrd_mvd->type == nrrdTypeUShort)
 			nrrdWrap(nrrd_new, val8, nrrdTypeUShort, 3, (size_t)res_x, (size_t)res_y, (size_t)res_z);
+
 		nrrdAxisInfoSet(nrrd_new, nrrdAxisInfoSpacing, spc_x, spc_y, spc_z);
 		nrrdAxisInfoSet(nrrd_new, nrrdAxisInfoMax, spc_x*res_x, spc_y*res_y, spc_z*res_z);
 		nrrdAxisInfoSet(nrrd_new, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
@@ -1176,6 +1179,17 @@ void VolumeSelector::NoiseRemoval(int iter, double thresh, int mode)
 		}
 		vd_new->DrawMask(0, 6, 0, ini_thresh, gm_falloff, scl_falloff, thresh, m_w2d, 0.0);
 		vd_new->GetVR()->return_volume();
+
+		if (nrrd_new)
+		{
+			uint8 *val8nr = (uint8*)nrrd_new->data;
+			int max_val = 255;
+			if (nrrd_new->type == nrrdTypeUChar)
+				max_val = *std::max_element(val8nr, val8nr+mem_size);
+			else if (nrrd_new->type == nrrdTypeUShort)
+				max_val = *std::max_element((uint16*)val8nr, (uint16*)val8nr+mem_size/2);
+			vd_new->SetMaxValue(max_val);
+		}
 
 		m_result_vols.push_back(vd_new);
 	}
