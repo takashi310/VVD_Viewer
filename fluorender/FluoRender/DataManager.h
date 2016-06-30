@@ -227,7 +227,7 @@ public:
 	//save
 	double GetOriginalValue(int i, int j, int k, bool normalize=true);
 	double GetTransferedValue(int i, int j, int k);
-	void Save(wxString &filename, int mode=0, bool bake=false, bool compress=false);
+	void Save(wxString &filename, int mode=0, bool bake=false, bool compress=false, bool save_msk=true, bool save_label=true);
 
 	//volumerenderer
 	VolumeRenderer *GetVR();

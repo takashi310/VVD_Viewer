@@ -1095,18 +1095,16 @@ void VolumeSelector::NoiseRemoval(int iter, double thresh, int mode)
 		VolumeData* vd_new = new VolumeData();
 		//add data and mask
 		Nrrd *nrrd_new = nrrdNew();
+		int bytes = 1;
+		if (nrrd_mvd->type == nrrdTypeUShort) bytes = 2;
 		unsigned long long mem_size = (unsigned long long)res_x*
-			(unsigned long long)res_y*(unsigned long long)res_z;
+			(unsigned long long)res_y*(unsigned long long)res_z*(unsigned long long)bytes;
 		uint8 *val8 = new (std::nothrow) uint8[mem_size];
+		memcpy(val8, nrrd_mvd->data, mem_size);
 		if (nrrd_mvd->type == nrrdTypeUChar)
-			memcpy(val8, nrrd_mvd->data, res_x*res_y*res_z);
+			nrrdWrap(nrrd_new, val8, nrrdTypeUChar, 3, (size_t)res_x, (size_t)res_y, (size_t)res_z);
 		else if (nrrd_mvd->type == nrrdTypeUShort)
-		{
-			for (unsigned long long index = 0; index < mem_size; ++index)
-				val8[index] = uint8(double(((uint16*)nrrd_mvd->data)[index]) *
-					m_vd->GetScalarScale()/257.0);
-		}
-		nrrdWrap(nrrd_new, val8, nrrdTypeUChar, 3, (size_t)res_x, (size_t)res_y, (size_t)res_z);
+			nrrdWrap(nrrd_new, val8, nrrdTypeUShort, 3, (size_t)res_x, (size_t)res_y, (size_t)res_z);
 		nrrdAxisInfoSet(nrrd_new, nrrdAxisInfoSpacing, spc_x, spc_y, spc_z);
 		nrrdAxisInfoSet(nrrd_new, nrrdAxisInfoMax, spc_x*res_x, spc_y*res_y, spc_z*res_z);
 		nrrdAxisInfoSet(nrrd_new, nrrdAxisInfoMin, 0.0, 0.0, 0.0);

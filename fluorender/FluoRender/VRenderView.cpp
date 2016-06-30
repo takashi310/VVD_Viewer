@@ -6318,6 +6318,7 @@ void VRenderGLView::RunNoiseReduction(wxFileConfig &fconfig)
 	if (!m_cur_vol || !m_cur_vol->GetReader())
 		return;
 	fconfig.Read("threshold", &thresh, 0.0);
+	thresh /= m_cur_vol->GetMaxValue();
 	fconfig.Read("voxelsize", &size, 0.0);
 	int mode;
 	fconfig.Read("format", &mode, 0);
@@ -6340,8 +6341,10 @@ void VRenderGLView::RunNoiseReduction(wxFileConfig &fconfig)
 	} while (true);
 
 	CompAnalysis(0.0, size, thresh, false, false);
-	Calculate(6, "", false);
-	VolumeData* vd = m_calculator.GetResult();
+	m_selector.NoiseRemoval(size, thresh, 1);
+	vector<VolumeData*> *vol_list = m_selector.GetResultVols();
+	if(!vol_list || vol_list->empty()) return;
+	VolumeData* vd = (*vol_list)[0];
 	if (vd)
 	{
 		int time_num = m_cur_vol->GetReader()->GetTimeNum();
@@ -6349,8 +6352,8 @@ void VRenderGLView::RunNoiseReduction(wxFileConfig &fconfig)
 		m_fr_length = format.Length();
 		format = wxString::Format("_T%%0%dd", m_fr_length);
 		str = pathname + vd->GetName() +
-			wxString::Format(format, m_tseq_cur_num) + "_NR" + (mode == 2 ? ".nrrd" : ".tif");
-		vd->Save(str, mode, bake, compression);
+			wxString::Format(format, m_tseq_cur_num) + (mode == 2 ? ".nrrd" : ".tif");
+		vd->Save(str, mode, bake, compression, false, false);
 		delete vd;
 	}
 }

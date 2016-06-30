@@ -1131,7 +1131,7 @@ double VolumeData::GetTransferedValue(int i, int j, int k)
 }
 
 //save
-void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress)
+void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bool save_msk, bool save_label)
 {
 	if (m_vr && m_tex)
 	{
@@ -1283,7 +1283,7 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress)
 		delete writer;
 
 		//save mask
-		if (m_tex->nmask() != -1)
+		if (m_tex->nmask() != -1 && save_msk)
 		{
 			m_vr->return_mask();
 			data = m_tex->get_nrrd(m_tex->nmask());
@@ -1297,7 +1297,7 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress)
 		}
 
 		//save label
-		if (m_tex->nlabel() != -1)
+		if (m_tex->nlabel() != -1 && save_label)
 		{
 			data = m_tex->get_nrrd(m_tex->nlabel());
 			if (data)

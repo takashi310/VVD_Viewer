@@ -7,16 +7,16 @@ value=10
 [micro\ blend]
 mode=0
 [save\ project]
-mode=1
+mode=0
 [realtime\ compress]
 mode=0
 [mouse\ int]
-mode=1
+mode=0
 res_mode=0
 [dir\ shadow]
-mode=1
-x=0.707107
-y=-0.707107
+mode=0
+x=0
+y=0
 [test\ mode]
 speed=0
 param=0
@@ -31,7 +31,7 @@ value=_T
 [grad\ bg]
 value=0
 [override\ vox]
-value=0
+value=1
 [soft\ threshold]
 value=0
 [save\ cmp]
@@ -48,12 +48,12 @@ mem\ swap=1
 graphics\ mem=2000
 large\ data\ size=100
 force\ brick\ size=128
-up\ time=150
+up\ time=200
 main\ memory\ buffer\ size=4000
 [update\ order]
 value=1
 [point\ volume\ mode]
-value=0
+value=1
 [ruler\ use\ transf]
 value=0
 [ruler\ time\ dependent]
