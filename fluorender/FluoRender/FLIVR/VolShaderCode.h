@@ -430,7 +430,7 @@ namespace FLIVR
 	"		c = vec4(loc6.rgb*tf_alp, 1.0);\n" \
 	"	}\n" \
 	"\n"
-
+/*
 #define VOL_TRANSFER_FUNCTION_SIN_COLOR_L \
 	"	//VOL_TRANSFER_FUNCTION_SIN_COLOR_L\n" \
 	"	vec4 c;\n" \
@@ -447,6 +447,15 @@ namespace FLIVR
 	"			loc3.x>1.0?0.9999:1.0), loc3.x);\n" \
 	"		c = vec4(tf_alp);\n" \
 	"	}\n" \
+	"\n"
+*/
+#define VOL_TRANSFER_FUNCTION_SIN_COLOR_L \
+	"	//VOL_TRANSFER_FUNCTION_SIN_COLOR_L\n" \
+	"	vec4 c;\n" \
+	"	float tf_alp = 0.0;\n" \
+	"	float alpha = 0.0;\n" \
+	"	v.x = loc2.x<0.0?(1.0+v.x*loc2.x):v.x*loc2.x;\n" \
+	"	c = vec4(v.x);\n" \
 	"\n"
 
 #define VOL_TRANSFER_FUNCTION_SIN_COLOR_L_FUNC \
