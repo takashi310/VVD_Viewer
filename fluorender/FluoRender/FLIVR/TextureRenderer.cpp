@@ -109,12 +109,6 @@ namespace FLIVR
 		blend_num_bits_(32),
 		clear_pool_(false)
 	{
-		glGenBuffers(1, &m_slices_vbo);
-		glGenBuffers(1, &m_slices_ibo);
-		glGenVertexArrays(1, &m_slices_vao);
-		glGenBuffers(1, &m_quad_vbo);
-		glGenVertexArrays(1, &m_quad_vao);
-
 		init_palette();
 /*
 		roi_tree_.add(L"-3", L"G3");
@@ -180,12 +174,6 @@ namespace FLIVR
 		blend_num_bits_(copy.blend_num_bits_),
 		clear_pool_(copy.clear_pool_)
 	{
-		glGenBuffers(1, &m_slices_vbo);
-		glGenBuffers(1, &m_slices_ibo);
-		glGenVertexArrays(1, &m_slices_vao);
-		glGenBuffers(1, &m_quad_vbo);
-		glGenVertexArrays(1, &m_quad_vao);
-
 		memcpy(palette_, copy.palette_, sizeof(unsigned char)*PALETTE_SIZE*PALETTE_ELEM_COMP); 
 		memcpy(base_palette_, copy.base_palette_, sizeof(unsigned char)*PALETTE_SIZE*PALETTE_ELEM_COMP); 
 		if (!glIsTexture(palette_tex_id_))
@@ -220,6 +208,10 @@ namespace FLIVR
 		clear_tex_current();
 		if (glIsFramebuffer(blend_framebuffer_))
 			glDeleteFramebuffers(1, &blend_framebuffer_);
+		if (glIsFramebuffer(fbo_label_))
+			glDeleteFramebuffers(1, &fbo_label_);
+		if (glIsFramebuffer(fbo_mask_))
+			glDeleteFramebuffers(1, &fbo_mask_);
 		if (glIsTexture(blend_tex_id_))
 			glDeleteTextures(1, &blend_tex_id_);
 		if (glIsTexture(label_tex_id_))
@@ -243,11 +235,6 @@ namespace FLIVR
 			glDeleteBuffers(1, &m_quad_vbo);
 		if (glIsVertexArray(m_quad_vao))
 			glDeleteVertexArrays(1, &m_quad_vao);
-
-		if (!glIsTexture(palette_tex_id_))
-			glDeleteTextures(1, &palette_tex_id_);
-		if (!glIsTexture(base_palette_tex_id_))
-			glDeleteTextures(1, &base_palette_tex_id_);
 	}
 
 	void TextureRenderer::init_palette()
@@ -1131,6 +1118,7 @@ namespace FLIVR
 		}
 		tex_pool_.clear();
 		clear_pool_ = false;
+		available_mem_ = mem_limit_;
 	}
 
 	void TextureRenderer::clear_tex_current()
@@ -1139,22 +1127,24 @@ namespace FLIVR
 			return;
 		vector<TextureBrick*>* bricks = tex_->get_bricks();
 		TextureBrick* brick = 0;
+		double est_avlb_mem = available_mem_;
 		for (int i = tex_pool_.size() - 1; i >= 0; --i)
 		{
 			for (size_t j = 0; j < bricks->size(); ++j)
 			{
 				brick = (*bricks)[j];
-				if (tex_pool_[i].brick == brick/* &&
-					(tex_pool_[i].comp == 0 ||
-					tex_pool_[i].comp == brick->nmask() ||
-					tex_pool_[i].comp == brick->nlabel())*/)
+				if (tex_pool_[i].brick == brick)
 				{
+					if (tex_pool_[i].comp >= 0 && tex_pool_[i].comp < TEXTURE_MAX_COMPONENTS && brick->nb(tex_pool_[i].comp) > 0)
+						est_avlb_mem += brick->nx()*brick->ny()*brick->nz()*brick->nb(tex_pool_[i].comp)/1.04e6;
 					glDeleteTextures(1, (GLuint*)&tex_pool_[i].id);
 					tex_pool_.erase(tex_pool_.begin() + i);
 					break;
 				}
 			}
 		}
+		if (use_mem_limit_)
+			available_mem_ = est_avlb_mem;
 	}
 
 	//resize the fbo texture
@@ -2146,6 +2136,11 @@ namespace FLIVR
 			-1.0f, 1.0f, 0.0f, 0.0f, 1.0f, float(d),
 			1.0f, 1.0f, 0.0f, 1.0f, 1.0f, float(d)};
 
+		if (!glIsBuffer(m_quad_vbo))
+			glGenBuffers(1, &m_quad_vbo);
+		if (!glIsVertexArray(m_quad_vao))
+			glGenVertexArrays(1, &m_quad_vao);
+
 		glBindBuffer(GL_ARRAY_BUFFER, m_quad_vbo);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(float)*24, points, GL_STREAM_DRAW);
 
@@ -2229,6 +2224,13 @@ namespace FLIVR
 		if (vertex.empty() || triangle_verts.empty())
 			return;
 
+		if (!glIsBuffer(m_slices_vbo))
+			glGenBuffers(1, &m_slices_vbo);
+		if (!glIsBuffer(m_slices_ibo))
+			glGenBuffers(1, &m_slices_ibo);
+		if (!glIsVertexArray(m_slices_vao))
+			glGenVertexArrays(1, &m_slices_vao);
+
 		//link to the new data
 		glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_STREAM_DRAW);
@@ -2259,6 +2261,13 @@ namespace FLIVR
 	{
         if (vertex.empty() || triangle_verts.empty())
             return;
+
+		if (!glIsBuffer(m_slices_vbo))
+			glGenBuffers(1, &m_slices_vbo);
+		if (!glIsBuffer(m_slices_ibo))
+			glGenBuffers(1, &m_slices_ibo);
+		if (!glIsVertexArray(m_slices_vao))
+			glGenVertexArrays(1, &m_slices_vao);
         
         //link to the new data
         glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
@@ -2300,6 +2309,13 @@ namespace FLIVR
 	{
 		if (vertex.empty() || index.empty())
 			return;
+
+		if (!glIsBuffer(m_slices_vbo))
+			glGenBuffers(1, &m_slices_vbo);
+		if (!glIsBuffer(m_slices_ibo))
+			glGenBuffers(1, &m_slices_ibo);
+		if (!glIsVertexArray(m_slices_vao))
+			glGenVertexArrays(1, &m_slices_vao);
 
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 

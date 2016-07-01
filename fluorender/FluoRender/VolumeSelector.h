@@ -89,7 +89,7 @@ public:
 	void Select(double radius);
 	//mode: 0-nomral; 1-posterized
 	void Label(int mode=0);
-	int CompAnalysis(double min_voxels, double max_voxels, double thresh, double falloff, bool select, bool gen_ann);
+	int CompAnalysis(double min_voxels, double max_voxels, double thresh, double falloff, bool select, bool gen_ann, int iter_limit = -1);
 	int SetLabelBySize();
 	int NoiseAnalysis(double min_voxels, double max_voxels, double bins, double thresh);
 	int CompIslandCount(double min_voxels, double max_voxels);

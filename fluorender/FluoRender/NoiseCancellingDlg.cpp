@@ -213,7 +213,7 @@ void NoiseCancellingDlg::OnPreviewBtn(wxCommandEvent &event)
 {
 	if (m_view)
 	{
-		int comps = m_view->CompAnalysis(0.0, m_dft_size, m_dft_thresh, false, false);
+		int comps = m_view->CompAnalysis(0.0, m_dft_size, m_dft_thresh, false, false, (int)m_dft_size+1);
 		//int volume = m_view->GetVolumeSelector()->GetVolumeNum();
 		//change mask threshold
 		VolumeData* sel_vol = 0;

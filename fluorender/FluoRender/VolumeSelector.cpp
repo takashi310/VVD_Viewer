@@ -209,7 +209,7 @@ void VolumeSelector::Label(int mode)
 	}
 }
 
-int VolumeSelector::CompAnalysis(double min_voxels, double max_voxels, double thresh, double falloff, bool select, bool gen_ann)
+int VolumeSelector::CompAnalysis(double min_voxels, double max_voxels, double thresh, double falloff, bool select, bool gen_ann, int iter_limit)
 {
 	int return_val = 0;
 	m_label_thresh = thresh;
@@ -242,6 +242,7 @@ int VolumeSelector::CompAnalysis(double min_voxels, double max_voxels, double th
 		int nx, ny, nz;
 		m_vd->GetResolution(nx, ny, nz);
 		m_iter_label = Max(nx, Max(ny, nz));
+		if (iter_limit > 0) m_iter_label = Min(iter_limit, m_iter_label);
 		m_total_pr = m_iter_label+nx*2;
 		//first, grow in the whole volume
 		m_vd->AddEmptyMask();

@@ -116,6 +116,7 @@ public:
 	void UpFrame();
 	void DownFrame();
 	void SetCurrentTime(size_t t);
+	bool IsRunningScript() {return m_batch_mode;}
 
 public:
 	//controls

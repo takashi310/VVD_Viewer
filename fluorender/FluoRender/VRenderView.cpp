@@ -2693,7 +2693,7 @@ void VRenderGLView::Label()
 }
 
 //remove noise
-int VRenderGLView::CompAnalysis(double min_voxels, double max_voxels, double thresh, bool select, bool gen_ann)
+int VRenderGLView::CompAnalysis(double min_voxels, double max_voxels, double thresh, bool select, bool gen_ann, int iter_limit)
 {
 	int return_val = 0;
 
@@ -2711,12 +2711,12 @@ int VRenderGLView::CompAnalysis(double min_voxels, double max_voxels, double thr
 		m_selector.Set2DMask(m_tex_paint);
 		m_selector.Set2DWeight(m_tex_final, glIsTexture(m_tex_wt2)?m_tex_wt2:m_tex);
 		m_selector.SetSizeMap(false);
-		return_val = m_selector.CompAnalysis(min_voxels, max_voxels, thresh, 1.0, select, gen_ann);
+		return_val = m_selector.CompAnalysis(min_voxels, max_voxels, thresh, 1.0, select, gen_ann, iter_limit);
 	}
 	else
 	{
 		m_selector.SetSizeMap(false);
-		return_val = m_selector.CompAnalysis(min_voxels, max_voxels, thresh, 1.0, select, gen_ann);
+		return_val = m_selector.CompAnalysis(min_voxels, max_voxels, thresh, 1.0, select, gen_ann, iter_limit);
 	}
 
 	Annotations* ann = m_selector.GetAnnotations();
@@ -3545,8 +3545,8 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int pe
 			//when run script
 			VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 			if (vr_frame &&
-				vr_frame->GetSettingDlg() &&
-				vr_frame->GetSettingDlg()->GetRunScript() &&
+				vr_frame->GetMovieView() &&
+				vr_frame->GetMovieView()->IsRunningScript() &&
 				vd->GetMask(false) &&
 				vd->GetLabel(false))
 				continue;
@@ -3602,8 +3602,8 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int pe
 				//when run script
 				VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 				if (vr_frame &&
-					vr_frame->GetSettingDlg() &&
-					vr_frame->GetSettingDlg()->GetRunScript() &&
+					vr_frame->GetMovieView() &&
+					vr_frame->GetMovieView()->IsRunningScript() &&
 					vd->GetMask(false) &&
 					vd->GetLabel(false))
 					vd->SetMaskMode(4);
@@ -6340,7 +6340,7 @@ void VRenderGLView::RunNoiseReduction(wxFileConfig &fconfig)
 			wxMkdir(str);
 	} while (true);
 
-	CompAnalysis(0.0, size, thresh, false, false);
+	CompAnalysis(0.0, size, thresh, false, false, (int)size+1);
 	Calculate(6, "", false);
 	VolumeData* vd = m_calculator.GetResult();
 /*	m_selector.NoiseRemoval(size, thresh, 1);

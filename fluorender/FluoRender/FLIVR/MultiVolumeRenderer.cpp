@@ -943,6 +943,12 @@ namespace FLIVR
               vector<TextureBrick *> tempbv(1, b);
 			  vr->load_brick(0, 0, &tempbv, 0, filter, vr->compression_, 0, false);
 			  
+			  if (!glIsBuffer(vr->m_slices_vbo))
+				  glGenBuffers(1, &vr->m_slices_vbo);
+			  if (!glIsBuffer(vr->m_slices_ibo))
+				  glGenBuffers(1, &vr->m_slices_ibo);
+			  if (!glIsVertexArray(vr->m_slices_vao))
+				  glGenVertexArrays(1, &vr->m_slices_vao);
               glBindVertexArray(vr->m_slices_vao);
               glBindBuffer(GL_ARRAY_BUFFER, vr->m_slices_vbo);
               glBufferData(GL_ARRAY_BUFFER, sizeof(float)*s_v*6, vert, GL_DYNAMIC_DRAW);

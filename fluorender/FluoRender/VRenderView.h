@@ -512,7 +512,7 @@ public:
 	//label volumes in current view
 	void Label();
 	//noise removal
-	int CompAnalysis(double min_voxels, double max_voxels, double thresh, bool select, bool gen_ann);
+	int CompAnalysis(double min_voxels, double max_voxels, double thresh, bool select, bool gen_ann, int iter_limit=-1);
 	void CompExport(int mode, bool select);//mode: 0-multi channels; 1-random colors
 	void ShowAnnotations();
 	int NoiseAnalysis(double min_voxels, double max_voxels, double thresh);
@@ -1495,10 +1495,10 @@ public:
 	{if (m_glview) m_glview->Label();}
 	//remove noise
 
-	int CompAnalysis(double min_voxels, double max_voxels, double thresh, bool select, bool gen_ann)
+	int CompAnalysis(double min_voxels, double max_voxels, double thresh, bool select, bool gen_ann, int iter_limit=-1)
 	{
 		if (m_glview) 
-			return m_glview->CompAnalysis(min_voxels, max_voxels, thresh, select, gen_ann); 
+			return m_glview->CompAnalysis(min_voxels, max_voxels, thresh, select, gen_ann, iter_limit); 
 		else 
 			return 0;
 	}
