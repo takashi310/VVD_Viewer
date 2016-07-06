@@ -1,102 +1,153 @@
-VVD_Viewer
+VVD Viewer
 ========
 
-VVD_Viewer Source Code
+VVD Viewer Source Code
 
-This is the open-source repository for VVD_Viewer, an interactive rendering tool for confocal microscopy data visualization. It combines the renderings of multi-channel volume data and polygon mesh data, where the properties of each dataset can be adjusted independently and quickly. The tool is designed especially for neurobiologists, and it helps them better visualize the fluorescent-stained confocal samples.
+This is the open-source repository for VVD Viewer, an interactive rendering tool for confocal microscopy data visualization. It combines the renderings of multi-channel volume data and polygon mesh data, where the properties of each dataset can be adjusted independently and quickly. The tool is designed especially for neurobiologists, and it helps them better visualize the fluorescent-stained confocal samples.
 This is a branch of Fluorender (https://github.com/SCIInstitute/fluorender)
 
 Aknowledgements
 ========
-If you use VVD_Viewer in work that leads to published research, we humbly ask that you add the following to the 'Acknowledgments' section of your paper: 
-"This work was made possible in part by software funded by the NIH: VVD_Viewer: An Imaging Tool for Visualization and Analysis of Confocal Data as Applied to Zebrafish Research, R01-GM098151-01."
+If you use VVD Viewer in work that leads to published research, we humbly ask that you add the following to the 'Acknowledgments' section of your paper: 
+"This work was made possible in part by software funded by the NIH: Fluorender: An Imaging Tool for Visualization and Analysis of Confocal Data as Applied to Zebrafish Research, R01-GM098151-01."
 
 <strong>Author: </strong>Takashi Kawase, Yong Wan<br/>
 <strong>Developer: </strong> Brig Bagley<br/>
 
-Building VVD_Viewer
+Requirements
 ========
-Requirements: Git, CMake, wxWidgets 3.0<br/>
-We recommend building VVD_Viewer outside of the source tree. <br/>
+ * Git (https://git-scm.com/)
+ * CMake 2.6+ (http://www.cmake.org/)
+ * wxWidgets (https://github.com/wxWidgets/wxWidgets)
+ * Windows 7+ : Visual Studio 11.0 2012+
+ * OSX 10.9+  : Latest Xcode and command line tools, homebrew
+ * Other platforms may work, but are not officially supported.
+ * Boost 1.55.0+ (http://www.boost.org/users/download/#live)
 
+
+Building VVD Viewer
+========
+We recommend building VVD Viewer outside of the source tree. <br/>
 <h4>OSX</h4> 
 
-1) Download and install "Homebrew", found at "http://brew.sh"
+1) Clone the latest wxWidgets using GIT (<code>git clone https://github.com/wxWidgets/wxWidgets.git</code>).
+   
+   * The steps following will assume the wxWidgets root directory is at <code>~/wxWidgets</code>
 
-2) Install WxWidgets using Homebrew on the command line.
+2) Build wxWidgets from the command line.
+   * <code>cd ~/wxWidgets/</code>
+   
+   * <code>mkdir mybuild</code>
+   
+   * <code>cd mybuild</code>
+   
+   * <code>../configure --disable-shared --enable-macosx_arch=x86_64 --enable-unicode --with-cocoa --enable-debug --with-macosx-version-min=10.9 --enable-stl --enable-std_containers --enable-std_iostreams --enable-std_string --enable-std_string_conv_in_wxstring --with-libpng --with-libtiff --with-libjpeg</code>
+   
+   * <code>make</code>
 
-   * Type <code>brew edit wxmac</code> and change <code>--enable-shared</code> to <code>--disable-shared</code><br/>
-  
-   * Type <code>brew install --build-from-source --devel wxwidgets</code><br/>
+   * <code>make install</code>
 
-   * You may need root pivileges to link the libraries if brew asks you to.<br/>
+4) Get homebrew, boost, freetype, xz, libtiff, libjpeg, zlib, openssl and curl.
 
-3) In the main VVD_Viewer directory, (containing "CMakeLists.txt" & "VVD_Viewer" folder):
+   * <code>ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"</code>
+
+   * <code>brew install boost</code>
+
+   * <code>brew install freetype</code>
+
+   * <code>brew install xz</code>
+   
+   * <code>brew install libtiff</code>
+   * <code>brew link libtiff --force</code>
+
+   * <code>brew install jpeg</code>
+   * <code>brew link jpeg --force</code>
+
+   * <code>brew install zlib</code>
+   * <code>brew link zlib --force</code>
+   
+   * <code>brew install openssl</code>
+   * <code>brew link openssl --force</code>
+
+   * <code>brew install curl --with-openssl</code>
+   * <code>brew link curl --force</code>
+
+5) Get and build VVD Viewer
+
+   * <code>git clone https://github.com/takashi310/VVD_Viewer.git</code><br/>
    
    * <code>mkdir build</code><br/>
    
    * <code>cd build</code><br/>
 
-   * <code>cmake ..</code><br/>
+   * <code>cmake ../VVD_Viewer -G Xcode</code><br/>
 
-   * <code>ccmake ..</code> (To configure build properties)<br/>
+5) Open the Xcode file generated to build and run VVD Viewer.
 
-   * <code>make</code><br/><br/>
+<h4>Windows</h4> 
 
-4) Using cmake, you can generate XCode (MacOS X). Simply type "cmake" to find the proper options.
+1) Clone the latest wxWidgets using GIT (<code>git clone git@github.com:wxWidgets/wxWidgets.git</code>).
+   
+   * The steps following will assume the wxWidgets repository is at <code>C:\wxWidgets</code>
 
-   * <code>cmake -G Xcode</code><br/>
+2) Open a 64 bit Visual Studio command prompt to build wxWidgets. (make sure you use the prompt version you wish to build all dependencies, IE , MSVC 14.0 2015 x64)
 
-   * You may need to clear old cmake files. Type <code>./clear.sh</code> to remove unneccessary files.<br/> 
+   * Go to directory <code>C:\wxWidgets\build\msw</code>
+  
+   * Type <code>nmake /f makefile.vc TARGET_CPU=x64 BUILD=debug</code> to build debug libraries.
 
-<h4>Windows</h4>
+   * Type <code>nmake /f makefile.vc TARGET_CPU=x64 BUILD=release</code> to build release libraries.
+   
+3) Download and build boost.
 
-1) Download the latest wxWidgets (currently 3.0.0).
+   * Download boost (http://www.boost.org/users/download/#live) and extract onto your machine.
+   
+   * Build boost using <code>bootstrap.exe</code> and <code>b2.exe --toolset=msvc-14.0 --build-type=complete architecture=x86 address-model=64 stage</code> in the boost directory in a MSVC prompt. (change the toolset to the version of MSVC you are using, and omit address-model and architecture for 32-bit)
+   
+   * The steps following will assume the boost root directory is at <code>C:\boost_1_55_0</code> (your version might differ).
 
-2) Install the headers and libraries to your system.
+   * In a separate directory, checkout a separate boost process library : <code>git clone git@github.com:basisunus/boost_process.git</code> and merge the contents into the boost directory you built in.
 
-    * Download and install using the installer.
+4) You may need to add lines to <code>C:\Program Files (x86)\CMake X.X\share\cmake-x.x\Modules\FindwxWidgets.cmake</code> (x's are your version) for wxWidgets 3.* if it still complains that you haven't installed wxWidgets.
+   
+   * Starting about line 277, you will have listed a few sets of library versions to search for like <code>wxbase29${_UCD}${_DBG}</code> <br/>
+   
+   * In 4 places, you will need to add above each line with a "29" a new line that is exactly the same, but with a "31" instead, assuming your version of wxWidgets is 3.1.*). <br/>
 
-    * Compile using Visual Studio (<code>C:/wxWidgets-3.0.0/build/msw/wx_vc7.sln</code>)
+5) Download VVD Viewer using Git <code>git clone https://github.com/takashi310/VVD_Viewer.git</code>
 
-    * Be sure to compile the same configuration (Debug/Release) as you do for VVD_Viewer below.
+6) Use the <code>C:\Program Files(x86)\CMake2.8\bin\cmake-gui.exe</code> program to configure build properties and generate your Visual Studio Solution file. (Remember to keep your MSVC version consistent)
+   
+   * Build or Download libjpeg, libtiff, openssl, ffmpeg, zlib, openssl and curl.
 
-3) You will need to add lines to C:/Program Files (x86)/CMake X.X/share/cmake-x.x/Modules (x's are your version) 
-    for wxWidgets 3.0.
+   * Select your VVD Viewer source and build directories (create a new folder for building), and add the locations of boost and wxWidgets. <br/>
+   	- Choose the VVD Viewer main folder for source and create a new folder for the build. <br/>
+   	
+   	- Click Configure.  NOTE: You may need to display advanced options to set below options. <br/>
+   	
+   	- Choose the build type <code>CMAKE_BUILD_TYPE</code> to be "Debug" or "Release" <br/>
 
-    * Starting about line 277, you will have listed a few sets of library versions to search for like "wxbase29${_UCD}${_DBG}"
+   	- Be sure to set <code>wxWidgets_LIB_DIR</code> to <code>C:\wxWidgets\lib\vc_x64_lib</code>. (this will differ from 32 bit)
+   	
+   	- Be sure to set <code>wxWidgets_ROOT_DIR</code> to <code>C:\wxWidgets</code>.
+   	
+   	- Be sure to set <code>Boost_INCLUDE_DIR</code> to <code>C:\boost_1_55_0</code> (assuming this is your boost dir). <br/>
+   	
+   	- Click Generate. 
 
-    * In 4 places, you will need to add above each line with a "29" a new line that is exactly the same, but with a "30" instead.
-
-4) In the main VVD_Viewer directory, (containing "CMakeLists.txt" & "VVD_Viewer" folder):
-
-    * Use the C:\Program Files(x86)\CMake2.8\bin\cmake-gui.exe in the CMake install folder to configure build properties.
-
-         - Choose the VVD_Viewer main folder for both browse options (source and build)
-
-         - Edit the values as necessary, Click Configure, then Click Generate.
-              Be sure to set wxWidgets_LIB_DIR to C:/wxWidgets-3.0.0/lib/vc_lib (C:/wxWidgets-3.0.0/lib/vc_x64_lib for 64 bit)
-              Be sure to set wxWidgets_ROOT_DIR to C:/wxWidgets-3.0.0 (assuming these are your wxWidget dirs)<br/>
-
-    * If all properties are set as desired, type "cmake ." in the terminal. 
-
-	     - To specify 32/64 bit or Visual Studio versions for making the solution file, type "cmake --help" for options.
-
-		 - Example: "cmake -G "Visual Studio 10 Win64"
-
-    * Open the Visual Studio SLN file generated by CMake.
-
-    * Build the solution.<br/>
-	   
-	     - Visual Studio may not set the correct machine target when building 64 bit.
-		   Check Project Properties -> Configuration Properties -> Linker -> Command line.
-		   Make sure "Additional Options" should is "/machine:X64" NOT "/machine:X86"
-
-         - You may need to right-click VVD_Viewer project on the left to "Set as StarUp Project" for it to run.
-
-         - You may also need to add additional dependencies in the VVD_Viewer properties.
-    
-    * NOTE: There are known issues with rendering XML stitched TIFF files when in "Debug" Configuration.
-
-
---------------------------------------------------------------------------------------------------
+   * You may also generate using the command prompt, but you must explicitly type the paths for the cmake command. <br/>
+   
+    - Open Visual Studio Command Prompt. Go to the CMakeLists.txt directory. <br/>
+    	
+    - Type <code> cmake -G "Visual Studio 14 2015 Win64" -DwxWidgets_LIB_DIR="C:\wxWidgets\lib\vc_x64_lib" -DwxWidgets_ROOT_DIR="C:\wxWidgets" -DBoost_INCLUDE_DIR="C:\boost_1_55_0" -DCMAKE_BUILD_TYPE="Debug" ..</code> in your build directory (again assuming these are your directory locations / Generator versions, and the build folder is in the VVD Viewer root directory). <br/>
+    	
+   * Open the Visual Studio SLN file generated by CMake (found in your "build" directory). <br/>
+   
+   * Build the solution. Use CMake to generate both "Release" and "Debug" configurations if you wish to build both in Visual Studio.<br/><br/>
+    	**Notes for Visual Studio**
+    - Visual Studio may not set the correct machine target when building 64 bit. 
+     Check <code>Project Properties -> Configuration Properties -> Linker -> Command line</code>. Make sure "Additional Options" is <code>/machine:X64</code> NOT <code>/machine:X86</code>. <br/>
+    	
+    - You may need to right-click VVD_Viewer project on the Solution Explorer to "Set as StartUp Project" for it to run. <br/>
+    - If you are building on Windows 8 or later, you will need to set a Visual Studio Graphics Option. This enables the application to build in higher definition.<br/>
+      <code>Project Properties -> Manifest Tool -> Input and Output -> Enable DPI Awareness -> Yes </code> <br/>
