@@ -5280,8 +5280,8 @@ void DataManager::AddVolumeData(VolumeData* vd)
 		if (m_vd_list.size() > 0)
 		{
 			double spcx, spcy, spcz;
-			m_vd_list[0]->GetSpacings(spcx, spcy, spcz);
-			vd->SetSpacings(spcx, spcy, spcz);
+			m_vd_list[0]->GetBaseSpacings(spcx, spcy, spcz);
+			vd->SetBaseSpacings(spcx, spcy, spcz);
 			vd->SetSpcFromFile(true);
 		}
 	}

@@ -1282,8 +1282,8 @@ z
 		   size_t zsize = finfo->datasize;
 		   if (zsize <= 0) zsize = (size_t)ifs.seekg(0, std::ios::end).tellg();
 		   
-		   BYTE *zdata = new BYTE[finfo->datasize];
-		   ifs.seekg(finfo->offset, ios_base::beg); 
+		   unsigned char *zdata = new unsigned char[finfo->datasize];
+		   ifs.seekg(finfo->offset, ios_base::beg);
 		   ifs.read((char*)zdata, zsize);
 		   if (ifs) ifs.close();
 
@@ -1291,7 +1291,7 @@ z
 		   zInfo.total_in  = zInfo.avail_in  = zsize;
 		   zInfo.total_out = zInfo.avail_out = size;
 		   zInfo.next_in  = zdata;
-		   zInfo.next_out = (BYTE*)data;
+		   zInfo.next_out = (Bytef *)data;
 
 		   int nErr, nOut = -1;
 		   nErr = inflateInit( &zInfo );
