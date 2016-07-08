@@ -1058,8 +1058,9 @@ z
 		   ifs.open(ws2s(finfo->filename), ios::binary);
 		   if (!ifs) return false;
 		   if (finfo->datasize > 0 && size != finfo->datasize) return false;
+		   size_t read_size = finfo->datasize > 0 ? finfo->datasize : size;
 		   ifs.seekg(finfo->offset, ios_base::beg); 
-		   ifs.read(data, finfo->datasize);
+		   ifs.read(data, read_size);
 		   if (ifs) ifs.close();
 /*		   
 		   ofstream ofs1;
