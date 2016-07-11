@@ -1066,7 +1066,7 @@ namespace FLIVR
 				load_brick_label(bricks, i);
 
 			shader->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(),
-				mode_==MODE_OVER?1.0/(rate*zoom*5.0):1.0);
+				mode_==MODE_OVER?1.0/(rate*(w*sampling_frq_fac)*3.0):1.0);
 
 			//for brick transformation
 			float matrix[16];
@@ -1094,8 +1094,8 @@ namespace FLIVR
 //			QueryPerformanceCounter(&liBegin);
 
 			//draw_polygons(vertex, texcoord, size, use_fog, shader);
-			if (colormap_mode_ == 3) draw_polygons(vertex, index, size);
-			else draw_polygons(vertex, index);
+/*			if (colormap_mode_ == 3) draw_polygons(vertex, index, size);
+			else */draw_polygons(vertex, index);
 			
 			if (mem_swap_){
 				finished_bricks_++;
