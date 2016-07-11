@@ -831,7 +831,7 @@ namespace FLIVR
 		{
 			for (int j = 0; j < 3; j++)
 				palette_[i*PALETTE_ELEM_COMP+j] = (unsigned char)(base_palette_[i*PALETTE_ELEM_COMP+j]*fac);
-			palette_[i*PALETTE_ELEM_COMP+3] = base_palette_[i*PALETTE_ELEM_COMP+3];
+			palette_[i*PALETTE_ELEM_COMP+3] = base_palette_[i*PALETTE_ELEM_COMP+3]*fac;
 		}
 
 		for(auto ite = sel_segs_.begin(); ite != sel_segs_.end(); ++ite)
@@ -851,7 +851,7 @@ namespace FLIVR
 		{
 			for (int j = 0; j < 3; j++)
 				palette_[i*PALETTE_ELEM_COMP+j] = (unsigned char)(128.0*fac);
-			palette_[i*PALETTE_ELEM_COMP+3] = base_palette_[i*PALETTE_ELEM_COMP+3];
+			palette_[i*PALETTE_ELEM_COMP+3] = base_palette_[i*PALETTE_ELEM_COMP+3]*fac;
 		}
 
 		palette_[0] = 0; palette_[1] = 0; palette_[2] = 0;

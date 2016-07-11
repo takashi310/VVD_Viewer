@@ -1094,8 +1094,8 @@ namespace FLIVR
 //			QueryPerformanceCounter(&liBegin);
 
 			//draw_polygons(vertex, texcoord, size, use_fog, shader);
-/*			if (colormap_mode_ == 3) draw_polygons(vertex, index, size);
-			else */draw_polygons(vertex, index);
+			if (colormap_mode_ == 3) draw_polygons(vertex, index, size);
+			else draw_polygons(vertex, index);
 			
 			if (mem_swap_){
 				finished_bricks_++;

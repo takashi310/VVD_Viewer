@@ -606,7 +606,7 @@ namespace FLIVR
 	"	IDColor = c;\n" \
 	"	c.rgb = (c.rgb+col.rgb)*loc6.z;\n" \
 	"\n"
-/*
+
 #define VOL_INDEX_COLOR_BODY_SHADE \
 	"	//VOL_INDEX_COLOR_BODY\n" \
 	"	vec4 v;\n" \
@@ -677,14 +677,14 @@ namespace FLIVR
 	"	c.xyz *= pow(1.0 - loc1.x/2.0, 2.0) + 1.0;\n" \
 	"	c.rgb = c.rgb*loc6.z;\n" \
 	"\n"
-*/
+/*
  #define VOL_INDEX_COLOR_BODY_SHADE \
 	"	//VOL_INDEX_COLOR_BODY\n" \
 	"	vec4 v;\n" \
 	"	uint id = uint(texture(tex0, t.stp).x*loc5.w+0.5); //get mask value\n" \
 	"	vec4 c = texture(tex7, vec2((float(id%uint(256))+0.5)/256.0, (float(id/256)+0.5)/256.0));\n" \
 	"	IDColor = c;\n" \
-	"	if (id == 0)\n" \
+	"	if (id == 0 || c.rgb == vec3(0.0))\n" \
 	"	{\n" \
 	"		discard;\n" \
 	"		return;\n" \
@@ -757,6 +757,7 @@ namespace FLIVR
 	"	//VOL_ALPHA\n" \
 	"	float alpha = 0.0;\n" \
 	"	alpha = (1.0 - pow(clamp(1.0-l.w, 0.0, 1.0), loc4.w)) / l.w;\n" \
+	"	alpha =alpha * c.w ;\n" \
 	"	c = vec4(c.rgb*alpha, alpha);\n" \
 	"\n" \
 	"	//VOL_COLOR_OUTPUT\n" \
@@ -764,7 +765,7 @@ namespace FLIVR
 	"	c.xyz *= pow(1.0 - loc1.x/2.0, 2.0) + 1.0;\n" \
 	"	c.rgb = c.rgb*loc6.z;\n" \
 	"\n"
-
+*/
 #define VOL_INDEX_COLOR_D_BODY \
 	"	//VOL_INDEX_COLOR_D_BODY\n" \
 	"	vec4 v;\n" \
