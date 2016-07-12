@@ -3632,7 +3632,7 @@ void VRenderGLView::switchLevel(VolumeData *vd)
 	int nx, ny;
 	nx = GetSize().x;
 	ny = GetSize().y;
-
+/*
 	if(m_min_ppi < 0)m_min_ppi = 60;
 	//wxDisplay disp(wxDisplay::GetFromWindow(m_frame));
 	wxSize disp_ppi = wxGetDisplayPPI();
@@ -3640,51 +3640,55 @@ void VRenderGLView::switchLevel(VolumeData *vd)
 	double disp_ppi_y = m_min_ppi;
 	if(disp_ppi.GetX() > 0)disp_ppi_x = disp_ppi.GetX();
 	if(disp_ppi.GetY() > 0)disp_ppi_y = disp_ppi.GetY();
-
-	int res_scale = (m_res_mode == 0) ? 1 : m_res_mode*4;
-
+*/
 	Texture *vtex = vd->GetTexture();
 	if (vtex && vtex->isBrxml())
 	{
-		vector<double> sfs;
-		vector<double> spx, spy, spz;
-		int lvnum = vtex->GetLevelNum();
-		for (int i = 0; i < lvnum; i++)
+		if (m_res_mode > 0)
 		{
-			double aspect = (double)nx / (double)ny;
-
-			double spc_x;
-			double spc_y;
-			double spc_z;
-			vtex->get_spacings(spc_x, spc_y, spc_z, i);
-			spc_x = spc_x<EPS?1.0:spc_x;
-			spc_y = spc_y<EPS?1.0:spc_y;
-
-			spx.push_back(spc_x);
-			spy.push_back(spc_y);
-			spz.push_back(spc_z);
-
-			double sf;
-			if (aspect > 1.0)
-				sf = 2.0*m_radius*res_scale/spc_y/double(ny);
-			else
-				sf = 2.0*m_radius*res_scale/spc_x/double(nx);
-			sfs.push_back(sf);
-		}
-
-		int lv = lvnum - 1;
-		if (!m_manip)
-		{
-			for (int i = lvnum - 1; i >= 0; i--)
+			int res_scale = (m_res_mode-1 == 0) ? 1 : (m_res_mode-1)*4;
+			vector<double> sfs;
+			vector<double> spx, spy, spz;
+			int lvnum = vtex->GetLevelNum();
+			for (int i = 0; i < lvnum; i++)
 			{
-				if (m_scale_factor > ( m_int_res ? sfs[i]*16.0 : sfs[i])) lv = i - 1;
+				double aspect = (double)nx / (double)ny;
+
+				double spc_x;
+				double spc_y;
+				double spc_z;
+				vtex->get_spacings(spc_x, spc_y, spc_z, i);
+				spc_x = spc_x<EPS?1.0:spc_x;
+				spc_y = spc_y<EPS?1.0:spc_y;
+
+				spx.push_back(spc_x);
+				spy.push_back(spc_y);
+				spz.push_back(spc_z);
+
+				double sf;
+				if (aspect > 1.0)
+					sf = 2.0*m_radius*res_scale/spc_y/double(ny);
+				else
+					sf = 2.0*m_radius*res_scale/spc_x/double(nx);
+				sfs.push_back(sf);
 			}
+
+			int lv = lvnum - 1;
+			if (!m_manip)
+			{
+				for (int i = lvnum - 1; i >= 0; i--)
+				{
+					if (m_scale_factor > ( m_int_res ? sfs[i]*16.0 : sfs[i])) lv = i - 1;
+				}
+			}
+			if (lv < 0) lv = 0;
+			//if (m_interactive) lv += 2;
+			if (lv >= lvnum) lv = lvnum - 1;
+			vd->SetLevel(lv);
+			//vd->GetVR()->set_scalar_scale();
 		}
-		if (lv < 0) lv = 0;
-		//if (m_interactive) lv += 2;
-		if (lv >= lvnum) lv = lvnum - 1;
-		vd->SetLevel(lv);
-		//vd->GetVR()->set_scalar_scale();
+		else
+			vd->SetLevel(0);
 	}
 }
 
@@ -13267,6 +13271,7 @@ void VRenderView::CreateBar()
 	m_res_mode_combo = new wxComboBox(this, ID_ResCombo, "",
 		wxDefaultPosition, wxSize(80, 24), 0, NULL, wxCB_READONLY);
 	vector<string>mode_list;
+	mode_list.push_back("Max");
 	mode_list.push_back("Fine");
 	mode_list.push_back("Standard");
 	mode_list.push_back("Coarse");
