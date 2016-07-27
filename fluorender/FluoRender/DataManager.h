@@ -423,20 +423,6 @@ public:
 	void GetMetadataID(wstring &mid){mid = m_metadata_id;}
 
 	VolumeData* CopyLevel(int lv = -1);
-	int GetCurLevel()
-	{
-		if(m_tex && isBrxml())
-			return m_tex->GetCurLevel();
-		else
-			return -1;
-	}
-	int GetLevelNum()
-	{
-		if(m_tex && isBrxml())
-			return m_tex->GetLevelNum();
-		else
-			return 0;
-	}
 	bool isBrxml();
 
 	void SetFog(bool use_fog, double fog_intensity, double fog_start, double fog_end);
