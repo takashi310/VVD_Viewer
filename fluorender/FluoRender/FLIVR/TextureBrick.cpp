@@ -1054,7 +1054,7 @@ z
    {
 	   try
 	   {
-		   ifstream ifs;
+/*		   ifstream ifs;
 		   ifs.open(ws2s(finfo->filename), ios::binary);
 		   if (!ifs) return false;
 		   if (finfo->datasize > 0 && size != finfo->datasize) return false;
@@ -1062,6 +1062,15 @@ z
 		   ifs.seekg(finfo->offset, ios_base::beg); 
 		   ifs.read(data, read_size);
 		   if (ifs) ifs.close();
+*/
+		   FILE* fp = fopen(ws2s(finfo->filename).c_str(), "rb");
+		   if (!fp) return false;
+		   if (finfo->datasize > 0 && size != finfo->datasize) return false;
+		   size_t read_size = finfo->datasize > 0 ? finfo->datasize : size;
+		   setvbuf(fp, NULL, _IONBF, 0);
+		   fseek(fp, finfo->offset, SEEK_SET); 
+		   fread(data, 0x1, read_size, fp);
+		   if (fp) fclose(fp);
 /*		   
 		   ofstream ofs1;
 		   wstring str = *fname + wstring(L".txt");
