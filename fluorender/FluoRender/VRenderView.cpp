@@ -9610,6 +9610,10 @@ void VRenderGLView::DrawInfo(int nx, int ny)
 	}
 	else
 		str = wxString::Format("FPS: %.2f", fps_>=0.0&&fps_<300.0?fps_:0.0);
+
+	if (m_cur_vol && m_cur_vol->isBrxml())
+		str += wxString::Format(" VVD_Level: %d/%d,", m_cur_vol->GetLevel(), m_cur_vol->GetLevelNum()-1);
+
 	wstring wstr_temp = str.ToStdWstring();
 	px = gapw-nx/2;
 	py = ny/2-gaph/2;

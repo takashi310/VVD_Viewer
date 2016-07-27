@@ -22,7 +22,7 @@ Requirements
  * Windows 7+ : Visual Studio 11.0 2012+
  * OSX 10.9+  : Latest Xcode and command line tools, homebrew
  * Other platforms may work, but are not officially supported.
- * Boost 1.55.0+ (http://www.boost.org/users/download/#live)
+ * Boost 1.59.0+ (http://www.boost.org/users/download/#live)
 
 
 Building VVD Viewer
@@ -102,27 +102,28 @@ We recommend building VVD Viewer outside of the source tree. <br/>
 
    * Download boost (http://www.boost.org/users/download/#live) and extract onto your machine.
    
-   * Build boost using <code>bootstrap.exe</code> and <code>b2.exe --toolset=msvc-14.0 --build-type=complete architecture=x86 address-model=64 stage</code> in the boost directory in a MSVC prompt. (change the toolset to the version of MSVC you are using, and omit address-model and architecture for 32-bit)
+   * Build boost using <code>bootstrap.exe</code> and <code>b2.exe --toolset=msvc-11.0 --build-type=complete architecture=x86 address-model=64 stage</code> in the boost directory in a MSVC prompt. (change the toolset to the version of MSVC you are using, and omit address-model and architecture for 32-bit)
    
-   * The steps following will assume the boost root directory is at <code>C:\boost_1_55_0</code> (your version might differ).
+   * The steps following will assume the boost root directory is at <code>C:\boost_1_59_0</code> (your version might differ).
 
    * In a separate directory, checkout a separate boost process library : <code>git clone git@github.com:basisunus/boost_process.git</code> and merge the contents into the boost directory you built in.
 
-4) You may need to add lines to <code>C:\Program Files (x86)\CMake X.X\share\cmake-x.x\Modules\FindwxWidgets.cmake</code> (x's are your version) for wxWidgets 3.* if it still complains that you haven't installed wxWidgets.
+4) Build or Download libjpeg, libtiff, openssl, zlib, openssl and curl.
+   * If you use Visual Studio 12.0 2013+, also build ffmpeg.
+
+5) You may need to add lines to <code>C:\Program Files (x86)\CMake X.X\share\cmake-x.x\Modules\FindwxWidgets.cmake</code> (x's are your version) for wxWidgets 3.* if it still complains that you haven't installed wxWidgets.
    
    * Starting about line 277, you will have listed a few sets of library versions to search for like <code>wxbase29${_UCD}${_DBG}</code> <br/>
    
    * In 4 places, you will need to add above each line with a "29" a new line that is exactly the same, but with a "31" instead, assuming your version of wxWidgets is 3.1.*). <br/>
 
-5) Download VVD Viewer using Git <code>git clone https://github.com/takashi310/VVD_Viewer.git</code>
+6) Download VVD Viewer using Git <code>git clone https://github.com/takashi310/VVD_Viewer.git</code>
 
-6) Use the <code>C:\Program Files(x86)\CMake2.8\bin\cmake-gui.exe</code> program to configure build properties and generate your Visual Studio Solution file. (Remember to keep your MSVC version consistent)
+7) Use the <code>C:\Program Files(x86)\CMake2.8\bin\cmake-gui.exe</code> program to configure build properties and generate your Visual Studio Solution file. (Remember to keep your MSVC version consistent)
    
-   * Build or Download libjpeg, libtiff, openssl, ffmpeg, zlib, openssl and curl.
-
    * Select your VVD Viewer source and build directories (create a new folder for building), and add the locations of boost and wxWidgets. <br/>
    	- Choose the VVD Viewer main folder for source and create a new folder for the build. <br/>
-   	
+
    	- Click Configure.  NOTE: You may need to display advanced options to set below options. <br/>
    	
    	- Choose the build type <code>CMAKE_BUILD_TYPE</code> to be "Debug" or "Release" <br/>
@@ -131,7 +132,35 @@ We recommend building VVD Viewer outside of the source tree. <br/>
    	
    	- Be sure to set <code>wxWidgets_ROOT_DIR</code> to <code>C:\wxWidgets</code>.
    	
-   	- Be sure to set <code>Boost_INCLUDE_DIR</code> to <code>C:\boost_1_55_0</code> (assuming this is your boost dir). <br/>
+   	- Be sure to set <code>Boost_INCLUDE_DIR</code> to <code>C:\boost_1_59_0</code> (assuming this is your boost dir). <br/>
+
+	- Be sure to set <code>Boost_INCLUDE_DIR</code> to <code>C:\boost_1_59_0</code> (assuming this is your boost dir). <br/>
+
+	- Be sure to set <code>Boost_CHRONO_LIBRARY_DEBUG</code> to <code>C:\boost_1_59_0\x64\lib\libboost_chrono-vc110-mt-gd-1_59.lib</code> (assuming this is your boost dir). <br/>
+
+	- Be sure to set <code>Boost_CHRONO_LIBRARY_RELEASE</code> to <code>C:\boost_1_59_0\x64\lib\libboost_chrono-vc110-mt-s-1_59.lib</code> (assuming this is your boost dir). <br/>
+
+	- Be sure to set <code>Boost_SYSTEM_LIBRARY_DEBUG</code> to <code>C:\boost_1_59_0\x64\lib\libboost_system-vc110-mt-gd-1_59.lib</code> (assuming this is your boost dir). <br/>
+
+	- Be sure to set <code>Boost_SYSTEM_LIBRARY_RELEASE</code> to <code>C:\boost_1_59_0\x64\lib\libboost_system-vc110-mt-s-1_59.lib</code> (assuming this is your boost dir). <br/>
+
+	- Be sure to set <code>CURL_INCLUDE_DIR</code> to <code>C:\libcurl</code> (assuming this is your libcurl dir). <br/>
+
+	- Be sure to set <code>CURL_LIBRARY</code> to <code>C:\libcurl\libcurl.lib</code> (assuming this is your libcurl dir). <br/>
+
+	- Be sure to set <code>JPEG_INCLUDE_DIR</code> to <code>C:\libjpeg</code> (assuming this is your libjpeg dir). <br/>
+
+	- Be sure to set <code>JPEG_LIBRARY</code> to <code>C:\libjpeg\jpeg.lib</code> (assuming this is your libjpeg dir). <br/>
+
+	- Be sure to set <code>ZLIB_INCLUDE_DIR</code> to <code>C:\zlib</code> (assuming this is your zlib dir). <br/>
+
+	- Be sure to set <code>ZLIB_LIBRARY</code> to <code>C:\zlib\zlib.lib</code> (assuming this is your zlib dir). <br/>
+
+	- Be sure to set <code>LIB_EAY_DEBUG</code> and <code>LIB_EAY_RELEASE</code> to <code>C:\openssl\lib\libeay32.lib</code> (assuming this is your openssl dir). <br/>
+
+	- Be sure to set <code>SSL_EAY_DEBUG</code> and <code>SSL_EAY_RELEASE</code> to <code>C:\openssl\lib\ssleay32.lib</code> (assuming this is your openssl dir). <br/>
+
+	- If you use Visual Studio 12.0 2013+, delete all files in <code>VVD_Viewer\fluorender\ffmpeg\Win64</code> and copy your ffmpeg files in <code>C:\ffmpeg</code> (assuming this is your ffmpeg dir). <br/>
    	
    	- Click Generate. 
 

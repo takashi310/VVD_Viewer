@@ -2060,6 +2060,22 @@ void VolumeData::SetLevel(int lv)
 	}
 }
 
+int VolumeData::GetLevel()
+{
+	if (GetTexture() && isBrxml())
+		return GetTexture()->GetCurLevel();
+	else
+		return -1;
+}
+
+int VolumeData::GetLevelNum()
+{
+	if (GetTexture() && isBrxml())
+		return GetTexture()->GetLevelNum();
+	else
+		return -1;
+}
+
 void VolumeData::GetFileSpacings(double &spcx, double &spcy, double &spcz)
 {
 	spcx = m_spcx; spcy = m_spcy; spcz = m_spcz;

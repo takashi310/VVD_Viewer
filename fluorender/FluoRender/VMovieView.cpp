@@ -532,16 +532,6 @@ void VMovieView::OnTimer(wxTimerEvent& event) {
 	m_movie_time->GetValue().ToDouble(&len);
 	m_fps_text->GetValue().ToLong(&fps);
 
-	if (m_delayed_stop)
-	{
-		if (m_record)
-			WriteFrameToFile(int(fps*len + 0.5));
-		m_delayed_stop = false;
-		wxCommandEvent e;
-		OnStop(e);
-		return;
-	}
-
 	if (TextureRenderer::get_mem_swap() &&
 		TextureRenderer::get_start_update_loop() &&
 		!TextureRenderer::get_done_update_loop() && !m_batch_mode)
@@ -552,6 +542,16 @@ void VMovieView::OnTimer(wxTimerEvent& event) {
 		VRenderView* vrv = vr_frame->GetView(str);
 		if (!vrv) return;
 		vrv->RefreshGL(false, false);
+		return;
+	}
+
+	if (m_delayed_stop)
+	{
+		if (m_record)
+			WriteFrameToFile(int(fps*len + 0.5));
+		m_delayed_stop = false;
+		wxCommandEvent e;
+		OnStop(e);
 		return;
 	}
 
@@ -661,7 +661,7 @@ void VMovieView::OnPrev(wxCommandEvent& event) {
 
 	//run script for current frame
 	SettingDlg* stg = vr_frame->GetSettingDlg();
-	if (stg && stg->GetRunScript())
+	if (stg && stg->GetRunScript() && wxFileExists(stg->GetScriptFile()))
 	{
 		m_batch_mode = true;
 		if (!m_vol_fr.empty()) m_vol_fr.clear();

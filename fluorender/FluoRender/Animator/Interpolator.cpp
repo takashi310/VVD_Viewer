@@ -295,7 +295,7 @@ void Interpolator::MoveKeyAfter(int from_idx, int to_idx)
 
 void Interpolator::ChangeTime(int index, double time)
 {
-	if (index<=0 || index>=(int)m_key_list.size())
+	if (index<0 || index>=(int)m_key_list.size())
 		return;
 
 	double dura = 0.0;
@@ -308,7 +308,12 @@ void Interpolator::ChangeTime(int index, double time)
 		if (i==index)
 			m_key_list[i]->t = time;
 		else
-			m_key_list[i]->t = m_key_list[i-1]->t + dura;
+		{
+			if (i > 0)
+				m_key_list[i]->t = m_key_list[i-1]->t + dura;
+			else
+				m_key_list[i]->t = dura;
+		}
 		dura = dura_tmp;
 	}
 }
@@ -325,7 +330,11 @@ void Interpolator::ChangeDuration(int index, double duration)
 		if (i < (int)m_key_list.size() - 1)
 			dura_tmp = m_key_list[i+1]->t -
 					   m_key_list[i]->t;
-		m_key_list[i]->t = m_key_list[i-1]->t + dura;
+		if (i > 0)
+			m_key_list[i]->t = m_key_list[i-1]->t + dura;
+		else
+			m_key_list[i]->t = dura;
+
 		dura = dura_tmp;
 	}
 }

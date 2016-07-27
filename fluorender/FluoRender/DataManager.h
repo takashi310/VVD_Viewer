@@ -345,6 +345,8 @@ public:
 	void SetSpacingScales(double s_spcx, double s_spcy, double s_spcz);
 	void GetSpacingScales(double &s_spcx, double &s_spcy, double &s_spcz);
 	void SetLevel(int lv);
+	int GetLevel();
+	int GetLevelNum();
 	void GetFileSpacings(double &spcx, double &spcy, double &spcz);
 	//read resolutions from file
 	void SetSpcFromFile(bool val=true) {m_spc_from_file = val;}
