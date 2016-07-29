@@ -71,6 +71,8 @@ class DataTreeCtrl: public wxTreeCtrl
 		ID_ToggleDisp,
 		ID_Isolate,
 		ID_ShowAll,
+		ID_ExportMetadata,
+		ID_ImportMetadata,
 		ID_ShowAllSegChildren,
 		ID_HideAllSegChildren,
 		ID_ShowAllNamedSeg,
@@ -190,9 +192,15 @@ private:
 	//remember the pos
 	int m_scroll_pos;
 
+	static bool m_md_save_indv;
+
 	std::unordered_map<wxString, bool> m_exp_state;
 
 private:
+
+	static wxWindow* CreateExtraControl(wxWindow* parent);
+	void OnCh1Check(wxCommandEvent &event);
+
 	//change the color of just one icon of the dual,
 	//either enable(type=0), or disable(type=1)
 	void ChangeIconColor(int which, wxColor c, int type);
@@ -206,6 +214,8 @@ private:
 	void OnToggleDisp(wxCommandEvent& event);
 	void OnIsolate(wxCommandEvent& event);
 	void OnShowAll(wxCommandEvent& event);
+	void OnExportMetadata(wxCommandEvent& event);
+	void OnImportMetadata(wxCommandEvent& event);
 	void OnShowAllSegChildren(wxCommandEvent& event);
 	void OnHideAllSegChildren(wxCommandEvent& event);
 	void OnShowAllNamedSeg(wxCommandEvent& event);

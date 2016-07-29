@@ -30,6 +30,7 @@ DEALINGS IN THE SOFTWARE.
 #include "tick.xpm"
 #include "cross.xpm"
 #include "Formats/png_resource.h"
+#include "Formats/brkxml_writer.h"
 #include <boost/lexical_cast.hpp>
 
 //resources
@@ -42,6 +43,8 @@ BEGIN_EVENT_TABLE(DataTreeCtrl, wxTreeCtrl)
 	EVT_MENU(ID_ToggleDisp, DataTreeCtrl::OnToggleDisp)
 	EVT_MENU(ID_Isolate, DataTreeCtrl::OnIsolate)
 	EVT_MENU(ID_ShowAll, DataTreeCtrl::OnShowAll)
+	EVT_MENU(ID_ExportMetadata, DataTreeCtrl::OnExportMetadata)
+	EVT_MENU(ID_ImportMetadata, DataTreeCtrl::OnImportMetadata)
 	EVT_MENU(ID_ShowAllSegChildren, DataTreeCtrl::OnShowAllSegChildren)
 	EVT_MENU(ID_HideAllSegChildren, DataTreeCtrl::OnHideAllSegChildren)
 	EVT_MENU(ID_ShowAllNamedSeg, DataTreeCtrl::OnShowAllNamedSeg)
@@ -70,7 +73,9 @@ BEGIN_EVENT_TABLE(DataTreeCtrl, wxTreeCtrl)
 	EVT_TREE_END_DRAG(wxID_ANY, DataTreeCtrl::OnEndDrag)
 	EVT_KEY_DOWN(DataTreeCtrl::OnKeyDown)
 	EVT_KEY_UP(DataTreeCtrl::OnKeyUp)
-	END_EVENT_TABLE()
+END_EVENT_TABLE()
+
+bool DataTreeCtrl::m_md_save_indv = false;
 
 DataTreeCtrl::DataTreeCtrl(
 	wxWindow* frame,
@@ -333,6 +338,8 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 					if (vd->GetColormapMode() == 3)
 					{
 						menu.AppendSeparator();
+						menu.Append(ID_ExportMetadata, "Export Metadata");
+						menu.Append(ID_ImportMetadata, "Import Metadata");
 						menu.Append(ID_AddSegGroup, "Add Segment Group");
 						menu.Append(ID_ShowAllSegChildren, "Select Children");
 						menu.Append(ID_HideAllSegChildren, "Deselect Children");
@@ -531,6 +538,165 @@ void DataTreeCtrl::OnShowAll(wxCommandEvent& event)
 
 		UpdateSelection();
 	}
+}
+
+void DataTreeCtrl::OnImportMetadata(wxCommandEvent& event)
+{
+	if (m_fixed)
+	return;
+
+	wxTreeItemId sel_item = GetSelection();
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+	DataManager* d_manager = vr_frame->GetDataManager();
+	if (!d_manager) return;
+	
+	if (sel_item.IsOk())
+	{
+		wxString viewname = "";
+		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+		if (item_data)
+		{
+			int item_type = item_data->type;
+			wxString itemname = GetItemText(sel_item);
+			if (item_type == 2)
+			{
+				VolumeData* vd = d_manager->GetVolumeData(GetItemText(sel_item));
+				if (vd)
+				{
+					wxFileDialog *fopendlg = new wxFileDialog(
+						m_frame, "Open Metadata", "", "",
+						"XML file (*.xml)|*.xml",
+						wxFD_OPEN);
+
+					int rval = fopendlg->ShowModal();
+
+					if (rval == wxID_OK)
+					{
+						wxString filename = fopendlg->GetPath();
+						vd->ImportROITreeXML(filename.ToStdWstring());
+					}
+					delete fopendlg;
+				}
+			}
+		}
+		wxCommandEvent ev;
+		OnShowAllNamedSeg(ev);
+
+		vr_frame->UpdateTree();
+	}
+}
+
+void DataTreeCtrl::OnExportMetadata(wxCommandEvent& event)
+{
+	if (m_fixed)
+	return;
+
+	wxTreeItemId sel_item = GetSelection();
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+	DataManager* d_manager = vr_frame->GetDataManager();
+	if (!d_manager) return;
+	
+	if (sel_item.IsOk())
+	{
+		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+		if (item_data)
+		{
+			int item_type = item_data->type;
+			wxString itemname = GetItemText(sel_item);
+			if (item_type == 2)
+			{
+				VolumeData* vd = d_manager->GetVolumeData(GetItemText(sel_item));
+				if (vd && vd->isBrxml())
+				{
+					wxFileDialog *fopendlg = new wxFileDialog(
+						m_frame, "Save a VVD file with Metadata", "", "",
+						"VVD file (*.vvd)|*.vvd",
+						wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
+					fopendlg->SetExtraControlCreator(CreateExtraControl);
+
+					int rval = fopendlg->ShowModal();
+
+					if (rval == wxID_OK)
+					{
+						wxString filename = fopendlg->GetPath();
+						BRKXMLReader *br = (BRKXMLReader *)vd->GetReader();
+						tinyxml2::XMLDocument *doc = br->GetVVDXMLDoc();
+
+						BRKXMLWriter bw;
+						wstring rtree = vd->ExportROITree();
+						if (rtree.empty())
+						{
+							bw.AddROITreeToMetadata(rtree);
+							if (m_md_save_indv)
+								bw.SaveVVDXML_ExternalMetadata(filename.ToStdWstring(), doc);
+							else
+								bw.SaveVVDXML_Metadata(filename.ToStdWstring(), doc);
+						}
+					}
+					delete fopendlg;
+				}
+				else
+				{
+					wxFileDialog *fopendlg = new wxFileDialog(
+						m_frame, "Save Metadata", "", "_metadata.xml",
+						"XML file (*.xml)|*.xml",
+						wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
+					
+					int rval = fopendlg->ShowModal();
+
+					if (rval == wxID_OK)
+					{
+						wxString filename = fopendlg->GetPath();
+						BRKXMLReader *br = (BRKXMLReader *)vd->GetReader();
+						
+						BRKXMLWriter bw;
+						wstring rtree = vd->ExportROITree();
+						if (!rtree.empty())
+						{
+							bw.AddROITreeToMetadata(rtree);
+							bw.SaveMetadataXML(filename.ToStdWstring());
+						}
+					}
+					delete fopendlg;
+				}
+			}
+		}
+	}
+}
+
+void DataTreeCtrl::OnCh1Check(wxCommandEvent &event)
+{
+   wxCheckBox* ch1 = (wxCheckBox*)event.GetEventObject();
+   if (ch1)
+      m_md_save_indv = ch1->GetValue();
+}
+
+wxWindow* DataTreeCtrl::CreateExtraControl(wxWindow* parent)
+{
+   wxPanel* panel = new wxPanel(parent, 0, wxDefaultPosition, wxSize(400, 90));
+
+   wxBoxSizer *group1 = new wxStaticBoxSizer(
+         new wxStaticBox(panel, wxID_ANY, "Additional Options"), wxVERTICAL);
+
+   //compressed
+   wxCheckBox* ch1 = new wxCheckBox(panel, wxID_HIGHEST+3004,
+         "Save metadata as an individual file");
+   ch1->Connect(ch1->GetId(), wxEVT_COMMAND_CHECKBOX_CLICKED,
+         wxCommandEventHandler(DataTreeCtrl::OnCh1Check), NULL, panel);
+   if (ch1)
+      ch1->SetValue(m_md_save_indv);
+
+   //group
+   group1->Add(10, 10);
+   group1->Add(ch1);
+   group1->Add(10, 10);
+
+   panel->SetSizer(group1);
+   panel->Layout();
+
+   return panel;
 }
 
 void DataTreeCtrl::OnShowAllSegChildren(wxCommandEvent& event)

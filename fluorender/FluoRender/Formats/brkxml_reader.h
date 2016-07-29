@@ -74,6 +74,9 @@ public:
 
 	bool loadMetadata(const wstring &file = wstring());
 
+	tinyxml2::XMLDocument *GetVVDXMLDoc() {return &m_doc;}
+	tinyxml2::XMLDocument *GetMetadataXMLDoc() {return &m_md_doc;}
+
 private:
 	wstring m_path_name;
 	wstring m_data_name;

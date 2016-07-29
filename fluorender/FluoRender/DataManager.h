@@ -466,6 +466,7 @@ public:
 	wstring ExportROITree(){ return m_vr ? m_vr->export_roi_tree() : wstring(); }
 	string ExportSelIDs(){ return m_vr ? m_vr->exprot_selected_roi_ids() : string(); }
 	void ImportROITree(const wstring &tree){ if (m_vr) m_vr->import_roi_tree(tree); }
+	void ImportROITreeXML(const wstring &filepath){ if (m_vr) m_vr->import_roi_tree_xml(filepath); }
 	void ImportSelIDs(const string &sel_ids_str){ if (m_vr) m_vr->import_selected_ids(sel_ids_str); }
 
 private:

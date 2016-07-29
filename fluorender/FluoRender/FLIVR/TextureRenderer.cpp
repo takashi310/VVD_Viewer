@@ -41,6 +41,7 @@
 #include <boost/foreach.hpp>
 #include <boost/lexical_cast.hpp>
 #include <sstream>
+#include "compatibility.h"
 //#include <iomanip>
 
 using boost::property_tree::wptree;
@@ -379,6 +380,43 @@ namespace FLIVR
 			{
 				wstring prefix(L"");
 				if(auto path = get_roi_path(parent_name))
+					prefix = *path + L".";
+				roi_tree_.add(prefix + boost::lexical_cast<wstring>(edid), name);
+			}
+		}
+		else
+		{
+			if(auto path = get_roi_path(edid))
+			{
+				auto pos = path->find_last_of(L'.');
+				wstring strid(L""), prefix(L"");
+				if (pos != wstring::npos && pos+1 < path->length())
+				{
+					strid = path->substr(pos+1);
+					prefix = path->substr(0, pos);
+				}
+				else
+					strid = *path;
+				roi_tree_.get_child(prefix).erase(strid);
+			}
+		}
+	}
+
+	void TextureRenderer::set_roi_name(wstring name, int id, int parent_id)
+	{
+		int edid = (id == -1) ? edit_sel_id_ : id;
+		
+		if (edid == -1)
+			return;
+
+		if (!name.empty())
+		{
+			if(auto path = get_roi_path(edid))
+				roi_tree_.put(*path, name);
+			else
+			{
+				wstring prefix(L"");
+				if(auto path = get_roi_path(parent_id))
 					prefix = *path + L".";
 				roi_tree_.add(prefix + boost::lexical_cast<wstring>(edid), name);
 			}
@@ -1027,6 +1065,75 @@ namespace FLIVR
 			ss << *ite << " ";
 
 		return ss.str();
+	}
+
+	void TextureRenderer::import_roi_tree_xml(const wstring &filepath)
+	{
+		tinyxml2::XMLDocument doc; 
+		if (doc.LoadFile(ws2s(filepath).c_str()) != 0){
+			return;
+		}
+
+		tinyxml2::XMLElement *root = doc.RootElement();
+		if (!root || strcmp(root->Name(), "Metadata"))
+			return;
+
+		init_palette();
+		roi_tree_.clear();
+
+		tinyxml2::XMLElement *child = root->FirstChildElement();
+		while (child)
+		{
+			if (child->Name())
+			{
+				if (strcmp(child->Name(), "ROI_Tree") == 0)
+				{
+					import_roi_tree_xml_r(child, roi_tree_, wstring(L""));
+				}
+			}
+			child = child->NextSiblingElement();
+		}
+		
+		update_palette(desel_palette_mode_, desel_col_fac_);
+	}
+
+	void TextureRenderer::import_roi_tree_xml_r(tinyxml2::XMLElement *lvNode, const wptree& tree, const wstring& parent)
+	{
+		tinyxml2::XMLElement *child = lvNode->FirstChildElement();
+		while (child)
+		{
+			if (child->Name() && child->Attribute("name") && child->Attribute("id"))
+			{
+				try
+				{
+					wstring name = s2ws(child->Attribute("name"));
+					string strid = child->Attribute("id");
+					int id = boost::lexical_cast<int>(strid);
+					wstring c_path = (parent.empty() ? L"" : parent + L".") + s2ws(strid);
+					if (strcmp(child->Name(), "Group") == 0 && id < -1)
+					{
+						roi_tree_.add(c_path, name);
+						import_roi_tree_xml_r(child, tree, c_path);
+					}
+					if (strcmp(child->Name(), "ROI") == 0 && id >= 0 && id < PALETTE_SIZE)
+					{
+						string strR = child->Attribute("r");
+						string strG = child->Attribute("g");
+						string strB = child->Attribute("b");
+						int r = boost::lexical_cast<int>(strR);
+						int g = boost::lexical_cast<int>(strG);
+						int b = boost::lexical_cast<int>(strB);
+						roi_tree_.add(c_path, name);
+						set_id_color(r, g, b, false, id);
+					}
+				}
+				catch (boost::bad_lexical_cast e)
+				{
+					cerr << "TextureRenderer::import_roi_tree_xml_r(XMLElement *lvNode, const wptree& tree, const wstring& parent): bad_lexical_cast" << endl;
+				}
+			}
+			child = child->NextSiblingElement();
+		}
 	}
 
 	void TextureRenderer::import_roi_tree(const wstring &tree)

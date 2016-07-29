@@ -39,6 +39,7 @@
 #include <boost/property_tree/ptree.hpp>
 #include <boost/optional.hpp>
 #include <string>
+#include <tinyxml2.h>
 
 namespace FLIVR
 {
@@ -179,6 +180,7 @@ namespace FLIVR
 		 void init_palette();
 		 void update_palette_tex();
 		 void set_roi_name(wstring name, int id=-1, wstring parent_name=wstring());
+		 void set_roi_name(wstring name, int id, int parent_id);
 		 int add_roi_group_node(int parent_id, wstring name=L"");
 		 int add_roi_group_node(wstring parent_name=L"", wstring name=L"");
 		 int get_available_group_id();
@@ -220,6 +222,8 @@ namespace FLIVR
 		 void clear_sel_ids();
 		 void clear_sel_ids_roi_only();
 		 void clear_roi();
+		 void import_roi_tree_xml(const wstring &filepath);
+		 void import_roi_tree_xml_r(tinyxml2::XMLElement *lvNode, const boost::property_tree::wptree& tree, const wstring& parent);
 		 wstring export_roi_tree();
 		 void export_roi_tree_r(wstring &buf, const boost::property_tree::wptree& tree, const wstring& parent);
 		 string exprot_selected_roi_ids();
