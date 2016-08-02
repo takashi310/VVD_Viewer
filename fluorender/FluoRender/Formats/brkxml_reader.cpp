@@ -9,6 +9,8 @@
 #include <sstream>
 #include <locale>
 #include <algorithm>
+#include <boost/foreach.hpp>
+#include <boost/lexical_cast.hpp>
 
 template <typename _T> void clear2DVector(std::vector<std::vector<_T>> &vec2d)
 {
@@ -96,6 +98,7 @@ void BRKXMLReader::Clear()
 	vector<Landmark>().swap(m_landmarks);
 }
 
+//Use Before Preprocess()
 void BRKXMLReader::SetFile(string &file)
 {
    if (!file.empty())
@@ -116,12 +119,13 @@ void BRKXMLReader::SetFile(string &file)
    m_id_string = m_path_name;
 }
 
+//Use Before Preprocess()
 void BRKXMLReader::SetFile(wstring &file)
 {
    m_path_name = file;
 #ifdef _WIN32
    wchar_t slash = L'\\';
-   std::replace(m_path_name.begin(), m_path_name.end(), '/', '\\');
+   std::replace(m_path_name.begin(), m_path_name.end(), L'/', L'\\');
 #else
    wchar_t slash = L'/';
 #endif
@@ -130,30 +134,47 @@ void BRKXMLReader::SetFile(wstring &file)
    m_id_string = m_path_name;
 }
 
-
-void BRKXMLReader::SetURL(string &url)
+//Use Before Preprocess()
+void BRKXMLReader::SetDir(string &dir)
 {
-	if (!url.empty())
+	if (!dir.empty())
 	{
-		if (!m_url_dir.empty())
-			m_url_dir.clear();
-		m_url_dir.assign(url.length(), L' ');
-		copy(url.begin(), url.end(), m_url_dir.begin());
-		
-		wchar_t slash = L'/';
-		m_url_dir = m_url_dir.substr(0, m_url_dir.find_last_of(slash)+1);
-		m_isURL = true;
+		if (!m_dir_name.empty())
+			m_dir_name.clear();
+		m_dir_name.assign(dir.length(), L' ');
+		copy(dir.begin(), dir.end(), m_dir_name.begin());
+		size_t pos = m_dir_name.find(L"://");
+		if (pos != wstring::npos)
+			m_isURL = true;
+
+#ifdef _WIN32
+		if (!m_isURL)
+		{
+			wchar_t slash = L'\\';
+			std::replace(m_dir_name.begin(), m_dir_name.end(), L'/', L'\\');
+		}
+#endif
 	}
 }
 
-void BRKXMLReader::SetURL(wstring &url)
+//Use Before Preprocess()
+void BRKXMLReader::SetDir(wstring &dir)
 {
-   m_url_dir = url;
+	if (!dir.empty())
+	{
+		m_dir_name = dir;
+		size_t pos = m_dir_name.find(L"://");
+		if (pos != wstring::npos)
+			m_isURL = true;
 
-   wchar_t slash = L'/';
-   m_url_dir = m_url_dir.substr(0, m_url_dir.find_last_of(slash)+1);
-
-   m_isURL = true;
+#ifdef _WIN32
+		if (!m_isURL)
+		{
+			wchar_t slash = L'\\';
+			std::replace(m_dir_name.begin(), m_dir_name.end(), L'/', L'\\');
+		}
+#endif
+	}
 }
 
 
@@ -217,11 +238,24 @@ void BRKXMLReader::Preprocess()
 	m_level_num = m_pyramid.size();
 	m_cur_level = 0;
 
-	if (m_ex_metadata_url.empty())
+	wstring cur_dir_name = m_path_name.substr(0, m_path_name.find_last_of(slash)+1);
+	loadMetadata(m_path_name);
+	loadMetadata(cur_dir_name + L"_metadata.xml");
+
+	if (!m_ex_metadata_path.empty())
 	{
-		if (m_ex_metadata_path.empty())
-			m_ex_metadata_path = m_dir_name + L"_metadata.xml";
-		loadMetadata(m_ex_metadata_path);
+		bool is_rel = false;
+#ifdef _WIN32
+		if (m_ex_metadata_path.length() > 2 && m_ex_metadata_path[1] != L':')
+			is_rel = true;
+#else
+		if (m_ex_metadata_path[0] != L'/')
+			is_rel = true;
+#endif
+		if (is_rel)
+			loadMetadata(cur_dir_name + m_ex_metadata_path);
+		else
+			loadMetadata(m_ex_metadata_path);
 	}
 
 	SetInfo();
@@ -437,23 +471,43 @@ void BRKXMLReader::ReadFilenames(tinyxml2::XMLElement* fileRootNode, vector<vect
 				if (!filename[frame][channel][id])
 						filename[frame][channel][id] = new FLIVR::FileLocInfo();
 
-				if (child->Attribute("filename"))
-				{
+				if (child->Attribute("filename")) //this option will be deprecated
 					str = child->Attribute("filename");
-					filename[frame][channel][id]->filename = wstring((m_isURL ? m_url_dir : m_dir_name) + s2ws(str));
-					filename[frame][channel][id]->isurl = m_isURL;
-				}
-				else if (child->Attribute("filepath"))
-				{
+				else if (child->Attribute("filepath")) //use this
 					str = child->Attribute("filepath");
-					filename[frame][channel][id]->filename = s2ws(str);
-					filename[frame][channel][id]->isurl = false;
-				}
-				else if (child->Attribute("url"))
-				{
+				else if (child->Attribute("url")) //this option will be deprecated
 					str = child->Attribute("url");
+
+				bool url = false;
+				bool rel = false;
+				auto pos_u = str.find("://");
+				if (pos_u != string::npos)
+					url = true;
+				if (!url)
+				{
+#ifdef _WIN32
+					if (str.length() >= 2 && str[1] != L':')
+						rel = true;
+#else
+					if (m_ex_metadata_path[0] != L'/')
+						rel = true;
+#endif
+				}
+
+				if (url) //url
+				{
 					filename[frame][channel][id]->filename = s2ws(str);
 					filename[frame][channel][id]->isurl = true;
+				}
+				else if (rel) //relative path
+				{
+					filename[frame][channel][id]->filename = m_dir_name + s2ws(str);
+					filename[frame][channel][id]->isurl = m_isURL;
+				}
+				else //absolute path
+				{
+					filename[frame][channel][id]->filename = s2ws(str);
+					filename[frame][channel][id]->isurl = false;
 				}
 
 				filename[frame][channel][id]->offset = 0;
@@ -501,13 +555,33 @@ bool BRKXMLReader::loadMetadata(const wstring &file)
 	}
 		
 	tinyxml2::XMLElement *root = m_md_doc.RootElement();
-	if (!root || strcmp(root->Name(), "Metadata"))
-		return false;
+	if (!root) return false;
 
-	str = root->Attribute("ID");
-	m_metadata_id = s2ws(str);
+	tinyxml2::XMLElement *md_node = NULL;
+	if (strcmp(root->Name(), "Metadata") == 0)
+		md_node = root;
+	else
+	{
+		tinyxml2::XMLElement *child = root->FirstChildElement();
+		while (child)
+		{
+			if (child->Name() && strcmp(child->Name(), "Metadata") == 0)
+			{
+				md_node = child;
+			}
+			child = child->NextSiblingElement();
+		}
+	}
 
-	tinyxml2::XMLElement *child = root->FirstChildElement();
+	if (!md_node) return false;
+
+	if (md_node->Attribute("ID"))
+	{
+		str = md_node->Attribute("ID");
+		m_metadata_id = s2ws(str);
+	}
+
+	tinyxml2::XMLElement *child = md_node->FirstChildElement();
 	while (child)
 	{
 		if (child->Name())
@@ -529,11 +603,87 @@ bool BRKXMLReader::loadMetadata(const wstring &file)
 
 				m_landmarks.push_back(lm);
 			}
+			if (strcmp(child->Name(), "ROI_Tree") == 0)
+			{
+				LoadROITree(child);
+			}
 		}
 		child = child->NextSiblingElement();
 	}
 
 	return true;
+}
+
+void BRKXMLReader::LoadROITree(tinyxml2::XMLElement *lvNode)
+{
+	if (!lvNode || strcmp(lvNode->Name(), "ROI_Tree"))
+		return;
+
+	if (!m_roi_tree.empty()) m_roi_tree.clear();
+
+	int gid = -2;
+	LoadROITree_r(lvNode, m_roi_tree, wstring(L""), gid);
+}
+
+void BRKXMLReader::LoadROITree_r(tinyxml2::XMLElement *lvNode, wstring& tree, const wstring& parent, int& gid)
+{
+	tinyxml2::XMLElement *child = lvNode->FirstChildElement();
+	while (child)
+	{
+		if (child->Name() && child->Attribute("name"))
+		{
+			try
+			{
+				wstring name = s2ws(child->Attribute("name"));
+				int r=0, g=0, b=0;
+				if (strcmp(child->Name(), "Group") == 0)
+				{
+					wstringstream wss;
+					wss << (parent.empty() ? L"" : parent + L".") << gid;
+					wstring c_path = wss.str();
+
+					tree += c_path + L"\n";
+					tree += s2ws(child->Attribute("name")) + L"\n";
+						
+					//id and color
+					wstringstream wss2;
+					wss2 << gid << L" " << r << L" " << g << L" " << b << L"\n";
+					tree += wss2.str();
+					
+					LoadROITree_r(child, tree, c_path, --gid);
+				}
+				if (strcmp(child->Name(), "ROI") == 0 && child->Attribute("id"))
+				{
+					string strid = child->Attribute("id");
+					int id = boost::lexical_cast<int>(strid);
+					if (id >= 0 && id < PALETTE_SIZE && child->Attribute("r") && child->Attribute("g") && child->Attribute("b"))
+					{
+						wstring c_path = (parent.empty() ? L"" : parent + L".") + s2ws(strid);
+
+						tree += c_path + L"\n";
+						tree += s2ws(child->Attribute("name")) + L"\n";
+
+						string strR = child->Attribute("r");
+						string strG = child->Attribute("g");
+						string strB = child->Attribute("b");
+						r = boost::lexical_cast<int>(strR);
+						g = boost::lexical_cast<int>(strG);
+						b = boost::lexical_cast<int>(strB);
+
+						//id and color
+						wstringstream wss;
+						wss << id << L" " << r << L" " << g << L" " << b << L"\n";
+						tree += wss.str();
+					}
+				}
+			}
+			catch (boost::bad_lexical_cast e)
+			{
+				cerr << "BRKXMLReader::LoadROITree_r(XMLElement *lvNode, wstring& tree, const wstring& parent): bad_lexical_cast" << endl;
+			}
+		}
+		child = child->NextSiblingElement();
+	}
 }
 
 void BRKXMLReader::GetLandmark(int index, wstring &name, double &x, double &y, double &z, double &spcx, double &spcy, double &spcz)

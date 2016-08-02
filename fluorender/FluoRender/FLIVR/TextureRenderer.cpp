@@ -869,7 +869,7 @@ namespace FLIVR
 		{
 			for (int j = 0; j < 3; j++)
 				palette_[i*PALETTE_ELEM_COMP+j] = (unsigned char)(base_palette_[i*PALETTE_ELEM_COMP+j]*fac);
-			palette_[i*PALETTE_ELEM_COMP+3] = base_palette_[i*PALETTE_ELEM_COMP+3]*fac;
+			//palette_[i*PALETTE_ELEM_COMP+3] = base_palette_[i*PALETTE_ELEM_COMP+3]*fac;
 		}
 
 		for(auto ite = sel_segs_.begin(); ite != sel_segs_.end(); ++ite)
@@ -889,7 +889,7 @@ namespace FLIVR
 		{
 			for (int j = 0; j < 3; j++)
 				palette_[i*PALETTE_ELEM_COMP+j] = (unsigned char)(128.0*fac);
-			palette_[i*PALETTE_ELEM_COMP+3] = base_palette_[i*PALETTE_ELEM_COMP+3]*fac;
+			//palette_[i*PALETTE_ELEM_COMP+3] = base_palette_[i*PALETTE_ELEM_COMP+3]*fac;
 		}
 
 		palette_[0] = 0; palette_[1] = 0; palette_[2] = 0;
@@ -1043,7 +1043,7 @@ namespace FLIVR
 						
 						//id and color
 						wstringstream wss;
-						unsigned char r, g, b;
+						unsigned char r=0, g=0, b=0;
 						get_id_color(r, g, b, id);
 						wss << id << L" " << (int)r << L" " << (int)g << L" " << (int)b << L"\n";
 						buf += wss.str();
@@ -1088,7 +1088,8 @@ namespace FLIVR
 			{
 				if (strcmp(child->Name(), "ROI_Tree") == 0)
 				{
-					import_roi_tree_xml_r(child, roi_tree_, wstring(L""));
+					int gid = -2;
+					import_roi_tree_xml_r(child, roi_tree_, wstring(L""), gid);
 				}
 			}
 			child = child->NextSiblingElement();
@@ -1097,34 +1098,41 @@ namespace FLIVR
 		update_palette(desel_palette_mode_, desel_col_fac_);
 	}
 
-	void TextureRenderer::import_roi_tree_xml_r(tinyxml2::XMLElement *lvNode, const wptree& tree, const wstring& parent)
+	void TextureRenderer::import_roi_tree_xml_r(tinyxml2::XMLElement *lvNode, const wptree& tree, const wstring& parent, int& gid)
 	{
 		tinyxml2::XMLElement *child = lvNode->FirstChildElement();
 		while (child)
 		{
-			if (child->Name() && child->Attribute("name") && child->Attribute("id"))
+			if (child->Name() && child->Attribute("name"))
 			{
 				try
 				{
 					wstring name = s2ws(child->Attribute("name"));
-					string strid = child->Attribute("id");
-					int id = boost::lexical_cast<int>(strid);
-					wstring c_path = (parent.empty() ? L"" : parent + L".") + s2ws(strid);
-					if (strcmp(child->Name(), "Group") == 0 && id < -1)
+					if (strcmp(child->Name(), "Group") == 0)
 					{
+						wstringstream wss;
+						wss << (parent.empty() ? L"" : parent + L".") << gid;
+						wstring c_path = wss.str();
+
 						roi_tree_.add(c_path, name);
-						import_roi_tree_xml_r(child, tree, c_path);
+						import_roi_tree_xml_r(child, tree, c_path, --gid);
 					}
-					if (strcmp(child->Name(), "ROI") == 0 && id >= 0 && id < PALETTE_SIZE)
+					if (strcmp(child->Name(), "ROI") == 0 && child->Attribute("id"))
 					{
-						string strR = child->Attribute("r");
-						string strG = child->Attribute("g");
-						string strB = child->Attribute("b");
-						int r = boost::lexical_cast<int>(strR);
-						int g = boost::lexical_cast<int>(strG);
-						int b = boost::lexical_cast<int>(strB);
-						roi_tree_.add(c_path, name);
-						set_id_color(r, g, b, false, id);
+						string strid = child->Attribute("id");
+						int id = boost::lexical_cast<int>(strid);
+						if (id >= 0 && id < PALETTE_SIZE && child->Attribute("r") && child->Attribute("g") && child->Attribute("b"))
+						{
+							wstring c_path = (parent.empty() ? L"" : parent + L".") + s2ws(strid);
+							string strR = child->Attribute("r");
+							string strG = child->Attribute("g");
+							string strB = child->Attribute("b");
+							int r = boost::lexical_cast<int>(strR);
+							int g = boost::lexical_cast<int>(strG);
+							int b = boost::lexical_cast<int>(strB);
+							roi_tree_.add(c_path, name);
+							set_id_color(r, g, b, false, id);
+						}
 					}
 				}
 				catch (boost::bad_lexical_cast e)

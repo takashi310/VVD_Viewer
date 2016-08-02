@@ -335,11 +335,11 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 					menu.Append(ID_ToggleDisp, "Toggle Visibility");
 					menu.Append(ID_Isolate, "Isolate");
 					menu.Append(ID_ShowAll, "Show All");
+					menu.Append(ID_ImportMetadata, "Import Metadata");
 					if (vd->GetColormapMode() == 3)
 					{
 						menu.AppendSeparator();
 						menu.Append(ID_ExportMetadata, "Export Metadata");
-						menu.Append(ID_ImportMetadata, "Import Metadata");
 						menu.Append(ID_AddSegGroup, "Add Segment Group");
 						menu.Append(ID_ShowAllSegChildren, "Select Children");
 						menu.Append(ID_HideAllSegChildren, "Deselect Children");
@@ -575,6 +575,8 @@ void DataTreeCtrl::OnImportMetadata(wxCommandEvent& event)
 					{
 						wxString filename = fopendlg->GetPath();
 						vd->ImportROITreeXML(filename.ToStdWstring());
+						if (!vd->ExportROITree().empty())
+							vd->SetColormapMode(3);
 					}
 					delete fopendlg;
 				}
@@ -583,6 +585,7 @@ void DataTreeCtrl::OnImportMetadata(wxCommandEvent& event)
 		wxCommandEvent ev;
 		OnShowAllNamedSeg(ev);
 
+		vr_frame->RefreshVRenderViews();
 		vr_frame->UpdateTree();
 	}
 }
@@ -626,7 +629,7 @@ void DataTreeCtrl::OnExportMetadata(wxCommandEvent& event)
 
 						BRKXMLWriter bw;
 						wstring rtree = vd->ExportROITree();
-						if (rtree.empty())
+						if (!rtree.empty())
 						{
 							bw.AddROITreeToMetadata(rtree);
 							if (m_md_save_indv)

@@ -16,8 +16,8 @@ public:
 
 	void SetFile(string &file);
 	void SetFile(wstring &file);
-	void SetURL(string &url);
-	void SetURL(wstring &url);
+	void SetDir(string &dir);
+	void SetDir(wstring &dir);
 	void SetSliceSeq(bool ss);
 	bool GetSliceSeq();
 	void SetTimeSeq(bool ss);
@@ -70,9 +70,12 @@ public:
 
 	void GetLandmark(int index, wstring &name, double &x, double &y, double &z, double &spcx, double &spcy, double &spcz);
 	int GetLandmarkNum() {return m_landmarks.size();}
+	wstring GetROITree() {return m_roi_tree;}
 	void GetMetadataID(wstring &mid) {mid = m_metadata_id;}
 
 	bool loadMetadata(const wstring &file = wstring());
+	void LoadROITree(tinyxml2::XMLElement *lvNode);
+	void LoadROITree_r(tinyxml2::XMLElement *lvNode, wstring& tree, const wstring& parent, int& gid);
 
 	tinyxml2::XMLDocument *GetVVDXMLDoc() {return &m_doc;}
 	tinyxml2::XMLDocument *GetMetadataXMLDoc() {return &m_md_doc;}
@@ -84,6 +87,7 @@ private:
 	wstring m_url_dir;
 	wstring m_ex_metadata_path;
 	wstring m_ex_metadata_url;
+	wstring m_roi_tree;
 
 	struct BrickInfo
 	{

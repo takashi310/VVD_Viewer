@@ -4,6 +4,7 @@
 #include <boost/lexical_cast.hpp>
 #include <string>
 #include <sstream>
+#include <stack>
 
 BRKXMLWriter::BRKXMLWriter()
 {
@@ -33,6 +34,58 @@ void BRKXMLWriter::SetCompression(bool value)
 
 void BRKXMLWriter::Save(wstring filename, int mode)
 {
+}
+
+class MyXMLVisitor: public tinyxml2::XMLVisitor
+{
+public:
+    MyXMLVisitor(tinyxml2::XMLDocument *doc)
+        : m_doc(doc)
+    {
+    }
+
+    virtual bool VisitEnter (const tinyxml2::XMLElement &el, const tinyxml2::XMLAttribute *attr)
+    {
+		tinyxml2::XMLElement *new_el = m_doc->NewElement(el.Name());
+		
+		for( const tinyxml2::XMLAttribute* a = el.FirstAttribute(); a; a=a->Next())
+			new_el->SetAttribute(a->Name(), a->Value());
+
+		m_elementStack.push(new_el);
+        return true;
+    }
+
+    virtual bool Visit(const tinyxml2::XMLText &txt)
+    {
+        m_elementStack.top()->SetText(txt.Value());
+        return true;
+    }
+
+    virtual bool VisitExit (const tinyxml2::XMLElement &el)
+    {
+        tinyxml2::XMLElement *top_el = m_elementStack.top();
+        m_elementStack.pop();
+        if (m_elementStack.empty()) {
+            m_element = top_el;
+            return false;
+        }
+        else {
+            m_elementStack.top()->InsertEndChild(top_el);
+            return true;
+        }
+    }
+	
+    std::stack<tinyxml2::XMLElement*> m_elementStack;
+    tinyxml2::XMLDocument *m_doc;
+    tinyxml2::XMLElement *m_element;
+};
+
+tinyxml2::XMLElement* DeepCopyElement(tinyxml2::XMLDocument *doc, const tinyxml2::XMLElement *el)
+{
+	if (!doc) return NULL;
+    MyXMLVisitor my_visitor(doc);
+    el->Accept(&my_visitor);
+    return my_visitor.m_element;
 }
 
 //save only a vvd_xml file with metadata
@@ -70,29 +123,17 @@ void BRKXMLWriter::SaveVVDXML_Metadata(wstring filepath, tinyxml2::XMLDocument *
 	}
 
 	if (!md_node)
-		root->InsertEndChild(md_root);
+	{
+		root->InsertEndChild(DeepCopyElement(vvd, md_root));
+	}
 	else
 	{
-		tinyxml2::XMLElement *child = md_node->FirstChildElement();
-		map<string, tinyxml2::XMLElement*> clist;
-		while (child)
+		tinyxml2::XMLElement *childm = md_root->FirstChildElement();
+		while (childm)
 		{
-			if (child->Name())
-				clist[child->Name()] = child;
-			child = child->NextSiblingElement();
-		}
-
-		tinyxml2::XMLElement *mchild = md_root->FirstChildElement();
-		while (mchild)
-		{
-			if (mchild->Name())
-			{
-				auto ite = clist.find(mchild->Name());
-				if (ite != clist.end())
-					md_root->DeleteChild(clist[mchild->Name()]);
-				md_root->InsertEndChild(mchild);
-			}
-			mchild = mchild->NextSiblingElement();
+			if (childm->Name())
+				md_node->InsertEndChild(DeepCopyElement(vvd, childm));
+			childm = childm->NextSiblingElement();
 		}
 	}
 
@@ -121,9 +162,9 @@ void BRKXMLWriter::SaveVVDXML_ExternalMetadata(wstring filepath, tinyxml2::XMLDo
 	pos = name.find_last_of('.');
 	wstring mname;
 	if (pos != wstring::npos)
-		mname = name.substr(0, pos+1) + ".xml";
+		mname = name.substr(0, pos+1) + "xml";
 	else
-		mname = name + ".xml";
+		mname = name + "xml";
 
 	if (!md_doc)
 		md_doc = &m_md_doc;
@@ -142,7 +183,7 @@ void BRKXMLWriter::SaveVVDXML_ExternalMetadata(wstring filepath, tinyxml2::XMLDo
 
 	string ex_metadata_paths;
 
-	if (root->Attribute("exMetadataPath"))
+/*	if (root->Attribute("exMetadataPath"))
 	{
 		ex_metadata_paths = root->Attribute("exMetadataPath");
 		size_t ppos = ex_metadata_paths.find(ws2s(mname));
@@ -153,7 +194,7 @@ void BRKXMLWriter::SaveVVDXML_ExternalMetadata(wstring filepath, tinyxml2::XMLDo
 		}
 	}
 	else
-		root->SetAttribute("exMetadataPath", ws2s(mname).c_str());
+*/		root->SetAttribute("exMetadataPath", ws2s(mname).c_str());
 
 	FILE *fp = NULL;
 	fp = WFOPEN(&fp, filepath.c_str(), L"w");
@@ -225,11 +266,14 @@ void BRKXMLWriter::buildROITreeXML(const boost::property_tree::wptree& tree, con
 				if (const auto val = tree.get_optional<wstring>(child->first))
 				{
 					if (id >= 0)
+					{
 						elem = m_md_doc.NewElement("ROI");
+						elem->SetAttribute("id", id);
+					}
 					else if (id < -1)
 						elem = m_md_doc.NewElement("Group");
+
 					elem->SetAttribute("name", ws2s(*val).c_str());
-					elem->SetAttribute("id", id);
 					auto ite = palette.find(id);
 					if (ite != palette.end() && ite->second.size()==4)
 					{

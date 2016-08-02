@@ -570,6 +570,17 @@ int VolumeData::Load(Nrrd* data, const wxString &name, const wxString &path, BRK
 		m_vr->set_gm_scale(m_scalar_scale);
 
 		SetMode(m_mode);
+
+		if (breader)
+		{
+			wstring tree = breader->GetROITree();
+			if (!tree.empty())
+			{
+				ImportROITree(tree);
+				SetColormapMode(3);//ID color mode
+				SelectAllNamedROI();
+			}
+		}
 	}
 
 	return 1;
@@ -4947,7 +4958,13 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 		if(isURL && type == LOAD_TYPE_BRKXML)
 		{
 			str_w = filename.ToStdWstring();
-			((BRKXMLReader *)reader)->SetURL(str_w);
+#ifdef _WIN32
+			wchar_t slash = L'\\';
+#else
+			wchar_t slash = L'/';
+#endif
+			wstring dir_name = str_w.substr(0, str_w.find_last_of(slash)+1);
+			((BRKXMLReader *)reader)->SetDir(str_w);
 		}
 
 		reader->Preprocess();

@@ -223,7 +223,7 @@ namespace FLIVR
 		 void clear_sel_ids_roi_only();
 		 void clear_roi();
 		 void import_roi_tree_xml(const wstring &filepath);
-		 void import_roi_tree_xml_r(tinyxml2::XMLElement *lvNode, const boost::property_tree::wptree& tree, const wstring& parent);
+		 void import_roi_tree_xml_r(tinyxml2::XMLElement *lvNode, const boost::property_tree::wptree& tree, const wstring& parent, int& gid);
 		 wstring export_roi_tree();
 		 void export_roi_tree_r(wstring &buf, const boost::property_tree::wptree& tree, const wstring& parent);
 		 string exprot_selected_roi_ids();
