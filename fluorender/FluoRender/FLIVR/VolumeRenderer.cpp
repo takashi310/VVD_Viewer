@@ -32,6 +32,8 @@
 #include <FLIVR/VolCalShader.h>
 #include <FLIVR/ShaderProgram.h>
 #include <FLIVR/TextureBrick.h>
+#include <FLIVR/KernelProgram.h>
+#include <FLIVR/VolKernel.h>
 #include "utility.h"
 #include "../compatibility.h"
 #include <fstream>
@@ -53,6 +55,7 @@ namespace FLIVR
 	SegShaderFactory TextureRenderer::seg_shader_factory_;
 	VolCalShaderFactory TextureRenderer::cal_shader_factory_;
 	ImgShaderFactory VolumeRenderer::m_img_shader_factory;
+	VolKernelFactory TextureRenderer::vol_kernel_factory_;
 	double VolumeRenderer::sw_ = 0.0;
 
 	VolumeRenderer::VolumeRenderer(Texture* tex,

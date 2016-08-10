@@ -31,6 +31,7 @@ DEALINGS IN THE SOFTWARE.
 #include "VolumeCalculator.h"
 #include "Animator/Interpolator.h"
 #include "TextRenderer.h"
+#include "KernelExecutor.h"
 
 #include "FLIVR/Color.h"
 #include "FLIVR/ShaderProgram.h"

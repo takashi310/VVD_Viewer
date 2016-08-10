@@ -102,6 +102,7 @@ namespace FLIVR
    class VolShaderFactory;
    class SegShaderFactory;
    class VolCalShaderFactory;
+   class VolKernelFactory;
 
    struct TexParam
    {
@@ -308,6 +309,7 @@ namespace FLIVR
                static void set_update_order(int val) {update_order_ = val;}
                static int get_update_order() {return update_order_;}
 
+			   static VolKernelFactory vol_kernel_factory_;
 
       public:
                struct BrickDist
