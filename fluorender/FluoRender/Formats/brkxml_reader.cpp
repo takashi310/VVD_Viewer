@@ -535,7 +535,7 @@ void BRKXMLReader::ReadFilenames(tinyxml2::XMLElement* fileRootNode, vector<vect
 						transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 						if (ext == L"jpg" || ext == L"jpeg")
 							filename[frame][channel][id]->type = BRICK_FILE_TYPE_JPEG;
-						else if (ext == L"zip")
+						else if (ext == L"zlib")
 							filename[frame][channel][id]->type = BRICK_FILE_TYPE_ZLIB;
 					}
 				}

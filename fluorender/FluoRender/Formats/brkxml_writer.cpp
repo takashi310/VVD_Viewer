@@ -162,9 +162,9 @@ void BRKXMLWriter::SaveVVDXML_ExternalMetadata(wstring filepath, tinyxml2::XMLDo
 	pos = name.find_last_of('.');
 	wstring mname;
 	if (pos != wstring::npos)
-		mname = name.substr(0, pos+1) + "xml";
+		mname = name.substr(0, pos+1) + L"xml";
 	else
-		mname = name + "xml";
+		mname = name + L"xml";
 
 	if (!md_doc)
 		md_doc = &m_md_doc;

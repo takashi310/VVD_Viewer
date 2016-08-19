@@ -1054,7 +1054,7 @@ z
    {
 	   try
 	   {
-/*		   ifstream ifs;
+		   ifstream ifs;
 		   ifs.open(ws2s(finfo->filename), ios::binary);
 		   if (!ifs) return false;
 		   if (finfo->datasize > 0 && size != finfo->datasize) return false;
@@ -1062,7 +1062,7 @@ z
 		   ifs.seekg(finfo->offset, ios_base::beg); 
 		   ifs.read(data, read_size);
 		   if (ifs) ifs.close();
-*/
+/*
 		   FILE* fp = fopen(ws2s(finfo->filename).c_str(), "rb");
 		   if (!fp) return false;
 		   if (finfo->datasize > 0 && size != finfo->datasize) return false;
@@ -1071,7 +1071,7 @@ z
 		   fseek(fp, finfo->offset, SEEK_SET); 
 		   fread(data, 0x1, read_size, fp);
 		   if (fp) fclose(fp);
-/*		   
+*//*		   
 		   ofstream ofs1;
 		   wstring str = *fname + wstring(L".txt");
 		   ofs1.open(str);
@@ -1292,7 +1292,7 @@ z
 		   size_t zsize = finfo->datasize;
 		   if (zsize <= 0) zsize = (size_t)ifs.seekg(0, std::ios::end).tellg();
 		   
-		   unsigned char *zdata = new unsigned char[finfo->datasize];
+		   unsigned char *zdata = new unsigned char[zsize];
 		   ifs.seekg(finfo->offset, ios_base::beg);
 		   ifs.read((char*)zdata, zsize);
 		   if (ifs) ifs.close();
