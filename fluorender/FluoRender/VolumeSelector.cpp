@@ -140,15 +140,6 @@ void VolumeSelector::Select(double radius)
 		m_vd->GetTexture())
 		m_vd->GetTexture()->push_mask();
 
-	//there is some unknown problem of clearing the mask
-	if (m_mode == 1)
-	{
-		m_vd->DrawMask(0, 6, 0, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0);
-		m_vd->DrawMask(0, 6, 0, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0);
-	}
-	else if (m_mode == 6)
-		m_vd->DrawMask(0, 6, 0, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0);
-
 	//initialization
 	int hr_mode = m_hidden_removal?(m_ortho?1:2):0;
 /*	if ((m_mode==1 || m_mode==2) && m_estimate_threshold)
@@ -163,7 +154,7 @@ void VolumeSelector::Select(double radius)
 	m_vd->DrawMask(0, m_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0);
 
 	//grow the selection when paint mode is select, append, erase, or invert
-	if (m_mode==1 ||
+/*	if (m_mode==1 ||
 		m_mode==2 ||
 		m_mode==3 ||
 		m_mode==4)
@@ -173,7 +164,7 @@ void VolumeSelector::Select(double radius)
 		for (int i=0; i<iter; i++)
 			m_vd->DrawMask(1, m_mode, 0, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0);
 	}
-
+*/
 	if (m_mode == 6)
 		m_vd->SetUseMaskThreshold(false);
 

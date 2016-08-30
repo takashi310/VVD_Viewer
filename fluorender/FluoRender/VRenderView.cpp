@@ -870,6 +870,8 @@ void VRenderGLView::Init()
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 		SetCurrent(*m_glRC);
 		ShaderProgram::init_shaders_supported();
+		if (vr_frame && vr_frame->GetSettingDlg()) KernelProgram::set_device_id(vr_frame->GetSettingDlg()->GetCLDeviceID());
+		KernelProgram::init_kernels_supported();
 		if (vr_frame)
 		{
 			vr_frame->SetTextureRendererSettings();
@@ -3646,7 +3648,7 @@ void VRenderGLView::switchLevel(VolumeData *vd)
 	{
 		if (m_res_mode > 0)
 		{
-			int res_scale = (m_res_mode-1 == 0) ? 1 : (m_res_mode-1)*4;
+			int res_scale = (m_res_mode-1 == 0) ? 1 : (m_res_mode-1)*2;
 			vector<double> sfs;
 			vector<double> spx, spy, spz;
 			int lvnum = vtex->GetLevelNum();
@@ -9612,7 +9614,7 @@ void VRenderGLView::DrawInfo(int nx, int ny)
 		str = wxString::Format("FPS: %.2f", fps_>=0.0&&fps_<300.0?fps_:0.0);
 
 	if (m_cur_vol && m_cur_vol->isBrxml())
-		str += wxString::Format(" VVD_Level: %d/%d,", m_cur_vol->GetLevel(), m_cur_vol->GetLevelNum()-1);
+		str += wxString::Format(" VVD_Level: %d/%d,", m_cur_vol->GetLevel()+1, m_cur_vol->GetLevelNum());
 
 	wstring wstr_temp = str.ToStdWstring();
 	px = gapw-nx/2;
@@ -14688,7 +14690,7 @@ void VRenderView::OnCamCtrCheck(wxCommandEvent& event)
 void VRenderView::OnFpsCheck(wxCommandEvent& event)
 {
 	m_glview->m_draw_info = m_fps_chk->GetValue();
-	m_glview->m_draw_coord = m_glview->m_draw_info;
+	//m_glview->m_draw_coord = m_glview->m_draw_info;
 	RefreshGL();
 }
 

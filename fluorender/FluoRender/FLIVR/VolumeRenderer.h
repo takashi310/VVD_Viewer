@@ -34,6 +34,8 @@
 #include "Texture.h"
 #include "TextureRenderer.h"
 #include "ImgShader.h"
+#include <FLIVR/KernelProgram.h>
+#include <FLIVR/VolKernel.h>
 
 namespace FLIVR
 {
@@ -148,6 +150,10 @@ namespace FLIVR
 		void draw_mask(int type, int paint_mode, int hr_mode,
 			double ini_thresh, double gm_falloff, double scl_falloff,
 			double scl_translate, double w2d, double bins, bool ortho, bool estimate);
+		void draw_mask_dslt(int type, int paint_mode, int hr_mode,
+			double ini_thresh, double gm_falloff, double scl_falloff,
+			double scl_translate, double w2d, double bins, bool ortho, bool estimate, int dslt_r, int dslt_q, double dslt_c);
+		void dslt_mask(int rmax, int quality, double c);
 		//generate the labeling assuming the mask is already generated
 		//type: 0-initialization; 1-maximum intensity filtering
 		//mode: 0-normal; 1-posterized
@@ -276,6 +282,11 @@ namespace FLIVR
 		double m_fog_intensity;
 		double m_fog_start;
 		double m_fog_end;
+
+		KernelProgram* m_dslt_kernel;
+		KernelProgram* m_dslt_l2_kernel;
+		KernelProgram* m_dslt_b_kernel;
+		KernelProgram* m_dslt_em_kernel;
 
 		//calculating scaling factor, etc
 		double CalcScaleFactor(double w, double h, double tex_w, double tex_h, double zoom);

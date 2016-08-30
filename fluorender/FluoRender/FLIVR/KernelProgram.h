@@ -14,6 +14,7 @@
 #endif
 #include <string>
 #include <vector>
+#include <map>
 
 namespace FLIVR
 {
@@ -25,10 +26,10 @@ namespace FLIVR
 		~KernelProgram();
 
 		bool create(std::string &name);
-		bool valid();
+		bool valid(std::string name=std::string());
 		void destroy();
 
-		void execute(cl_uint, size_t*, size_t*);
+		void execute(cl_uint, size_t*, size_t*, std::string name=std::string());
 
 		typedef struct
 		{
@@ -36,15 +37,20 @@ namespace FLIVR
 			size_t size;
 			GLuint texture;
 			cl_mem buffer;
+			void *buf_src;
 		} Argument;
 		bool matchArg(Argument*, unsigned int&);
-		void setKernelArgConst(int, size_t, void*);
-		void setKernelArgBuf(int, cl_mem_flags, size_t, void*);
-		void setKernelArgBufWrite(int, cl_mem_flags, size_t, void*);
-		void setKernelArgTex2D(int, cl_mem_flags, GLuint);
-		void setKernelArgTex3D(int, cl_mem_flags, GLuint);
+		bool delBuf(void*);
+		bool delTex(GLuint);
+		void setKernelArgConst(int, size_t, void*, std::string name=std::string());
+		void setKernelArgBuf(int, cl_mem_flags, size_t, void*, std::string name=std::string());
+		void setKernelArgBufWrite(int, cl_mem_flags, size_t, void*, std::string name=std::string());
+		void setKernelArgTex2D(int, cl_mem_flags, GLuint, std::string name=std::string());
+		void setKernelArgTex3D(int, cl_mem_flags, GLuint, std::string name=std::string());
 		void readBuffer(int, void*);
+		void readBuffer(void*);
 		void writeBuffer(int, void*, size_t, size_t, size_t);
+		void writeBuffer(void *buf_ptr, void* pattern, size_t pattern_size, size_t offset, size_t size);
 
 		//initialization
 		static void init_kernels_supported();
@@ -64,7 +70,7 @@ namespace FLIVR
 	protected:
 		std::string source_;
 		cl_program program_;
-		cl_kernel kernel_;
+		std::map<std::string, cl_kernel> kernel_;
 		cl_command_queue queue_;
 
 		std::string info_;

@@ -39,6 +39,10 @@
 #include <fstream>
 #include <iostream>
 #include <glm/gtc/type_ptr.hpp>
+#include <wx/wfstream.h>
+#include <wx/txtstrm.h>
+//#include <boost/thread.hpp>
+//#include <boost/bind.hpp>
 
 #ifdef _WIN32
 #include <windows.h>//added by takashi
@@ -112,7 +116,11 @@ namespace FLIVR
 		filter_size_max_(0.0),
 		filter_size_shp_(0.0),
 		inv_(false),
-		compression_(false)
+		compression_(false),
+		m_dslt_kernel(NULL),
+		m_dslt_l2_kernel(NULL),
+		m_dslt_b_kernel(NULL),
+		m_dslt_em_kernel(NULL)
 	{
 		//mode
 		mode_ = MODE_OVER;
@@ -1500,8 +1508,6 @@ namespace FLIVR
 			seg_shader->setLocalParamMatrix(3, glm::value_ptr(mv_inv));
 		}
 
-		glDisable(GL_DEPTH_TEST);
-
 		//bind 2d mask texture
 		bind_2d_mask();
 		//bind 2d weight map
@@ -1509,6 +1515,9 @@ namespace FLIVR
 
 		GLint vp[4];
 		glGetIntegerv(GL_VIEWPORT, vp);
+
+		glDisable(GL_DEPTH_TEST);
+		glDisable(GL_BLEND);
 
 		float matrix[16];
 		for (unsigned int i=0; i < bricks->size(); i++)
@@ -1609,6 +1618,1092 @@ namespace FLIVR
 
 		//enable depth test
 		glEnable(GL_DEPTH_TEST);
+	}
+
+	wxString readCLcode(wxString filename)
+	{
+		wxString code = "";
+		if (wxFileExists(filename))
+		{
+			wxFileInputStream input(filename);
+			wxTextInputStream cl_file(input);
+			if (input.IsOk())
+			{
+				while (!input.Eof())
+				{
+					code += cl_file.ReadLine();
+					code += "\n";
+				}
+			}
+		}
+		return code;
+	}
+
+	//type: 0-initial; 1-diffusion-based growing; 2-masked filtering
+	//paint_mode: 1-select; 2-append; 3-erase; 4-diffuse; 5-flood; 6-clear; 7-all;
+	//			  11-posterize
+	//hr_mode (hidden removal): 0-none; 1-ortho; 2-persp
+	void VolumeRenderer::draw_mask_dslt(int type, int paint_mode, int hr_mode,
+		double ini_thresh, double gm_falloff, double scl_falloff,
+		double scl_translate, double w2d, double bins, bool orthographic_p,
+		bool estimate, int dslt_r, int dslt_q, double dslt_c)
+	{
+		if (estimate && type==0)
+			est_thresh_ = 0.0;
+		bool use_2d = glIsTexture(tex_2d_weight1_)&&
+			glIsTexture(tex_2d_weight2_)?true:false;
+
+		Ray view_ray = compute_view();
+
+		vector<TextureBrick*> *bricks = tex_->get_sorted_bricks(view_ray, orthographic_p);
+		if (!bricks || bricks->size() == 0)
+			return;
+
+		//mask frame buffer object
+		if (!glIsFramebuffer(fbo_mask_))
+			glGenFramebuffers(1, &fbo_mask_);
+		GLint cur_framebuffer_id;
+		glGetIntegerv(GL_FRAMEBUFFER_BINDING, &cur_framebuffer_id);
+		glBindFramebuffer(GL_FRAMEBUFFER, fbo_mask_);
+
+		//--------------------------------------------------------------------------
+		// Set up shaders
+		//seg shader
+		ShaderProgram* seg_shader = 0;
+
+		seg_shader = seg_shader_factory_.shader(
+						SEG_SHDR_INITIALIZE, 2, hr_mode,
+						use_2d, true, depth_peel_, true, hiqual_);
+
+		if (seg_shader)
+		{
+			if (!seg_shader->valid())
+				seg_shader->create();
+			seg_shader->bind();
+		}
+
+		//set uniforms
+		//set up shading
+		Vector light = compute_view().direction();
+		light.safe_normalize();
+		seg_shader->setLocalParam(0, light.x(), light.y(), light.z(), alpha_);
+		if (shading_)
+			seg_shader->setLocalParam(1, 2.0 - ambient_, diffuse_, specular_, shine_);
+		else
+			seg_shader->setLocalParam(1, 2.0 - ambient_, 0.0, specular_, shine_);
+
+		//spacings
+		double spcx, spcy, spcz;
+		tex_->get_spacings(spcx, spcy, spcz);
+		seg_shader->setLocalParam(5, spcx, spcy, spcz, 1.0);
+
+		//transfer function
+		seg_shader->setLocalParam(2, inv_?-scalar_scale_:scalar_scale_, gm_scale_, lo_thresh_, hi_thresh_);
+		seg_shader->setLocalParam(3, 1.0/gamma3d_, gm_thresh_, offset_, sw_);
+		seg_shader->setLocalParam(6, color_.r(), color_.g(), color_.b(), 0.0);
+
+		//setup depth peeling
+		//if (depth_peel_)
+		//	seg_shader->setLocalParam(7, 1.0/double(w2), 1.0/double(h2), 0.0, 0.0);
+
+		//thresh1
+		seg_shader->setLocalParam(7, ini_thresh, gm_falloff, scl_falloff, scl_translate);
+		//w2d
+		seg_shader->setLocalParam(8, w2d, bins, 0.0, 0.0);
+
+		//set clipping planes
+		double abcd[4];
+		planes_[0]->get(abcd);
+		seg_shader->setLocalParam(10, abcd[0], abcd[1], abcd[2], abcd[3]);
+		planes_[1]->get(abcd);
+		seg_shader->setLocalParam(11, abcd[0], abcd[1], abcd[2], abcd[3]);
+		planes_[2]->get(abcd);
+		seg_shader->setLocalParam(12, abcd[0], abcd[1], abcd[2], abcd[3]);
+		planes_[3]->get(abcd);
+		seg_shader->setLocalParam(13, abcd[0], abcd[1], abcd[2], abcd[3]);
+		planes_[4]->get(abcd);
+		seg_shader->setLocalParam(14, abcd[0], abcd[1], abcd[2], abcd[3]);
+		planes_[5]->get(abcd);
+		seg_shader->setLocalParam(15, abcd[0], abcd[1], abcd[2], abcd[3]);
+
+		////////////////////////////////////////////////////////
+		// render bricks
+		// Set up transform
+		Transform *tform = tex_->transform();
+		double mvmat[16];
+		tform->get_trans(mvmat);
+		m_mv_mat2 = glm::mat4(
+			mvmat[0], mvmat[4], mvmat[8], mvmat[12],
+			mvmat[1], mvmat[5], mvmat[9], mvmat[13],
+			mvmat[2], mvmat[6], mvmat[10], mvmat[14],
+			mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
+		m_mv_mat2 = m_mv_mat * m_mv_mat2;
+		seg_shader->setLocalParamMatrix(0, glm::value_ptr(m_mv_mat2));
+		seg_shader->setLocalParamMatrix(1, glm::value_ptr(m_proj_mat));
+		if (hr_mode > 0)
+		{
+			glm::mat4 mv_inv = glm::inverse(m_mv_mat2);
+			seg_shader->setLocalParamMatrix(3, glm::value_ptr(mv_inv));
+		}
+
+		//bind 2d mask texture
+		bind_2d_mask();
+		//bind 2d weight map
+		if (use_2d) bind_2d_weight();
+
+		glDisable(GL_DEPTH_TEST);
+		glDisable(GL_BLEND);
+
+		GLint vp[4];
+		glGetIntegerv(GL_VIEWPORT, vp);
+
+
+
+		////////////////////////////////
+		if(dslt_q < 1) return;
+		if(dslt_r < 1) return;
+
+		float cf = (float)dslt_c;
+		
+		if (!m_dslt_kernel)
+		{
+#ifdef _WIN32
+			wxString pref = L".\\CL_code\\";
+#else
+			wxString pref = L"./CL_code/";
+#endif
+			wxString code = "";
+			wxString filepath;
+			
+			filepath = pref + wxString("dslt2.cl");
+			code = readCLcode(filepath);
+			m_dslt_kernel = vol_kernel_factory_.kernel(code.ToStdString());
+			if (!m_dslt_kernel)
+				return;
+		}
+
+		string kn_max = "dslt_max";
+		string kn_l2  = "dslt_l2";
+		string kn_b   = "dslt_binarize";
+		string kn_em  = "dslt_elem_min";
+		string kn_ap  = "dslt_ap_mask";
+		if (!m_dslt_kernel->valid())
+		{
+			if (!m_dslt_kernel->create(kn_max))
+				return;
+			if (!m_dslt_kernel->create(kn_l2))
+				return;
+			if (!m_dslt_kernel->create(kn_b))
+				return;
+			if (!m_dslt_kernel->create(kn_em))
+				return;
+			if (!m_dslt_kernel->create(kn_ap))
+				return;
+		}
+
+		int rd = dslt_q;
+	    double a_interval = (PI / 2.0) / (double)rd;
+		double *slatitable  = new double [rd*2*(rd*2-1)+1];
+		double *clatitable  = new double [rd*2*(rd*2-1)+1];
+		double *slongitable = new double [rd*2*(rd*2-1)+1];
+		double *clongitable = new double [rd*2*(rd*2-1)+1];
+		double *sintable = new double [rd*2];
+		double *costable = new double [rd*2];
+		int knum = rd*2*(rd*2-1)+1;
+
+		int sc_tablesize = (rd*2*(rd*2-1)+1)*4;
+		float *sctptr = new float [sc_tablesize];
+
+		slatitable[0] = 0.0; clatitable[0] = 1.0; slongitable[0] = 0.0; clongitable[0] = 0.0;
+		for(int b = 0; b < rd*2; b++){
+			for(int a = 1; a < rd*2; a++){
+				int id = b*(rd*2-1) + (a-1) + 1;
+				slatitable[id] = sin(a_interval*a);
+				clatitable[id] = cos(a_interval*a);
+				slongitable[id] = sin(a_interval*b);
+				clongitable[id] = cos(a_interval*b);
+
+				sctptr[4*id]   = (float)slatitable[id];
+				sctptr[4*id+1] = (float)clatitable[id];
+				sctptr[4*id+2] = (float)slongitable[id];
+				sctptr[4*id+3] = (float)clongitable[id];
+			}
+		}
+		
+		for(int a = 0; a < rd*2; a++){
+			sintable[a] = sin(a_interval*a);
+			costable[a] = cos(a_interval*a);
+		}
+
+		Nrrd *mask = tex_->get_nrrd(tex_->nmask());
+		if (!mask || !mask->data) return;
+
+		////////////////////
+
+
+
+		float matrix[16];
+		for (unsigned int i=0; i < bricks->size(); i++)
+		{
+			TextureBrick* b = (*bricks)[i];
+
+			BBox bbox = b->bbox();
+			matrix[0] = float(bbox.max().x()-bbox.min().x());
+			matrix[1] = 0.0f;
+			matrix[2] = 0.0f;
+			matrix[3] = 0.0f;
+			matrix[4] = 0.0f;
+			matrix[5] = float(bbox.max().y()-bbox.min().y());
+			matrix[6] = 0.0f;
+			matrix[7] = 0.0f;
+			matrix[8] = 0.0f;
+			matrix[9] = 0.0f;
+			matrix[10] = float(bbox.max().z()-bbox.min().z());
+			matrix[11] = 0.0f;
+			matrix[12] = float(bbox.min().x());
+			matrix[13] = float(bbox.min().y());
+			matrix[14] = float(bbox.min().z());
+			matrix[15] = 1.0f;
+			seg_shader->setLocalParamMatrix(2, matrix);
+
+			//set viewport size the same as the texture
+			glViewport(0, 0, b->nx(), b->ny());
+
+			//load the texture
+			GLint tex_id = -1;
+			GLint vd_id = load_brick(0, 0, bricks, i, GL_NEAREST, compression_);
+
+			//generate temporary mask texture
+			int c = b->nmask();
+			int nb = b->nb(c);
+			int nx = b->nx();
+			int ny = b->ny();
+			int nz = b->nz();
+			GLenum textype = b->tex_type(c);
+
+			GLuint temp_tex;
+			unsigned char *tmp_data = new unsigned char[nx*ny*nz*nb];
+			memset(tmp_data, 0, nx*ny*nz*nb);
+			
+			glActiveTexture(GL_TEXTURE0+c);
+			glGenTextures(1, &temp_tex);
+			glEnable(GL_TEXTURE_3D);
+			glBindTexture(GL_TEXTURE_3D, temp_tex);
+			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+#ifdef _WIN32
+			glPixelStorei(GL_UNPACK_ROW_LENGTH, nx);
+			glPixelStorei(GL_UNPACK_IMAGE_HEIGHT, ny);
+#else
+			glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+			glPixelStorei(GL_UNPACK_IMAGE_HEIGHT, 0);
+#endif
+			glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+			GLint internal_format = GL_R8;
+			GLenum format = (nb == 1 ? GL_RED : GL_RGBA);
+			if (ShaderProgram::shaders_supported())
+			{
+				if (glTexImage3D)
+				{
+					glTexImage3D(GL_TEXTURE_3D, 0, internal_format, nx, ny, nz, 0, format, b->tex_type(c), 0);
+					glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format, b->tex_type(c), tmp_data);
+				}
+			}
+#ifdef _WIN32
+			glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+			glPixelStorei(GL_UNPACK_IMAGE_HEIGHT, 0);
+#endif
+			glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+			glActiveTexture(GL_TEXTURE0);
+
+			GLint mask_id = load_brick_mask(bricks, i, GL_NEAREST);
+			glActiveTexture(GL_TEXTURE0+c);
+			glBindTexture(GL_TEXTURE_3D, mask_id);
+			glPixelStorei(GL_PACK_ROW_LENGTH, nx);
+			glPixelStorei(GL_PACK_IMAGE_HEIGHT, ny);
+			glPixelStorei(GL_PACK_ALIGNMENT, 1);
+			glGetTexImage(GL_TEXTURE_3D, 0, format, b->tex_type(c), tmp_data);
+			glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+			glPixelStorei(GL_PACK_IMAGE_HEIGHT, 0);
+			glPixelStorei(GL_PACK_ALIGNMENT, 4);
+			glBindTexture(GL_TEXTURE_3D, 0);
+			glActiveTexture(GL_TEXTURE0);
+			
+			//size and sample rate
+			seg_shader->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(),
+				mode_==MODE_OVER?1.0/sampling_rate_:1.0);
+
+			//draw each slice
+			for (int z=0; z<b->nz(); z++)
+			{
+				glFramebufferTexture3D(GL_FRAMEBUFFER, 
+					GL_COLOR_ATTACHMENT0,
+					GL_TEXTURE_3D,
+					temp_tex,
+					0,
+					z);
+
+				draw_view_quad(double(z+0.5) / double(b->nz()));
+			}
+
+			glFinish();
+/*			
+			glActiveTexture(GL_TEXTURE0+c);
+			glBindTexture(GL_TEXTURE_3D, temp_tex);
+			glPixelStorei(GL_PACK_ROW_LENGTH, nx);
+			glPixelStorei(GL_PACK_IMAGE_HEIGHT, ny);
+			glPixelStorei(GL_PACK_ALIGNMENT, 1);
+			glGetTexImage(GL_TEXTURE_3D, 0, format, b->tex_type(c), tmp_data);
+			glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+			glPixelStorei(GL_PACK_IMAGE_HEIGHT, 0);
+			glPixelStorei(GL_PACK_ALIGNMENT, 4);
+			glBindTexture(GL_TEXTURE_3D, 0);
+			glActiveTexture(GL_TEXTURE0);
+			glDeleteTextures(1, (GLuint*)&temp_tex);
+
+			long long mask_offset = (long long)(b->oz()) * (long long)(b->sx()) * (long long)(b->sy()) +
+									(long long)(b->oy()) * (long long)(b->sx()) +
+									(long long)(b->ox());
+			uint8 *mask_offset_pointer = (uint8 *)mask->data + mask_offset;
+			uint8* dst_p = mask_offset_pointer; 
+			uint8* src_p = tmp_data;
+			int ypitch = nx;
+			int zpitch = nx*ny;
+			int mask_ypitch = b->sx();
+			int mask_zpitch = b->sx()*b->sy();
+			for (int z = 0; z < nz; z++)
+			{
+				uint8* z_st_dst_p = dst_p;
+				for (int y = 0; y < ny; y++)
+				{
+					memcpy(dst_p, src_p, nx*sizeof(uint8));
+					dst_p += mask_ypitch;
+					src_p += nx;
+				}
+				dst_p = z_st_dst_p + mask_zpitch;
+			}
+*/
+			
+			///////////////////////////dslt_line
+			{
+				GLint data_id = load_brick(0, 0, bricks, i);
+				glActiveTexture(GL_TEXTURE0+c);
+				glBindTexture(GL_TEXTURE_3D, temp_tex);
+				glActiveTexture(GL_TEXTURE0);
+				unsigned char *mask_data = tmp_data;
+				int brick_x = b->nx();
+				int brick_y = b->ny();
+				int brick_z = b->nz();
+				int bsize = brick_x*brick_y*brick_z;
+				float* out_cl_buf = new float[bsize];
+				std::fill(out_cl_buf, out_cl_buf+bsize, 0.0f);
+				float* out_cl_final_buf = new float[bsize];
+				std::fill(out_cl_final_buf, out_cl_final_buf+bsize, FLT_MAX);
+				int* n_cl_buf = new int[bsize];
+				uint8* mask_temp_buf = new uint8[bsize];
+				int ypitch = brick_x;
+				int zpitch = brick_x*brick_y;
+
+				long long mask_offset = (long long)(b->oz()) * (long long)(b->sx()) * (long long)(b->sy()) +
+										(long long)(b->oy()) * (long long)(b->sx()) +
+										(long long)(b->ox());
+				uint8 *mask_offset_pointer = (uint8 *)mask->data + mask_offset;
+				int mask_ypitch = b->sx();
+				int mask_zpitch = b->sx()*b->sy();
+
+				size_t global_size[3] = { brick_x, brick_y, brick_z };
+				//size_t local_size[3] = { 1, 1, 1 }; //too slow
+				size_t *local_size = NULL;
+				float pattern_zero = 0.0f;
+				float pattern_max = FLT_MAX;
+
+				int r = dslt_r;
+				do{
+
+					int ksize = 2*r + 1;
+					double *filter = new double[ksize];
+					float *cl_filter = new float[ksize];
+					{
+						double sigma = 0.3*(ksize/2 - 1) + 0.8;
+						double denominator = 2.0*sigma*sigma;
+						double sum;
+						double xx, d;
+						int x;
+
+						sum = 0.0;
+						for(x = 0; x < ksize; x++){
+							xx = x - (ksize - 1)/2;
+							d = xx*xx;
+							filter[x] = exp(-1.0*d/denominator);
+							sum += filter[x];
+						}
+						for(x = 0; x < ksize; x++) cl_filter[x] = filter[x] / sum;
+					}
+					delete[] filter;
+					m_dslt_kernel->setKernelArgTex3D(0, CL_MEM_READ_ONLY, data_id, kn_max);
+					m_dslt_kernel->setKernelArgTex3D(1, CL_MEM_READ_ONLY, temp_tex, kn_max);
+					m_dslt_kernel->setKernelArgBuf(2, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(float), out_cl_buf, kn_max);
+					m_dslt_kernel->setKernelArgBuf(3, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(int), n_cl_buf, kn_max);
+					m_dslt_kernel->setKernelArgBuf(4, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, ksize*sizeof(float), cl_filter, kn_max);
+					m_dslt_kernel->setKernelArgConst(5, sizeof(int), (void*)(&r), kn_max);
+					m_dslt_kernel->setKernelArgConst(10, sizeof(int), (void*)(&ypitch), kn_max);
+					m_dslt_kernel->setKernelArgConst(11, sizeof(int), (void*)(&zpitch), kn_max);
+					m_dslt_kernel->writeBuffer(out_cl_buf, &pattern_zero, sizeof(float), 0, bsize*sizeof(float));
+
+					for(int n = 0; n < knum; n++){
+						float drx = (float)(slatitable[n]*clongitable[n]);
+						float dry = (float)(slatitable[n]*slongitable[n]);
+						float drz = (float)clatitable[n];
+
+						m_dslt_kernel->setKernelArgConst(6, sizeof(int), (void*)(&n), kn_max);
+						m_dslt_kernel->setKernelArgConst(7, sizeof(float), (void*)(&drx), kn_max);
+						m_dslt_kernel->setKernelArgConst(8, sizeof(float), (void*)(&dry), kn_max);
+						m_dslt_kernel->setKernelArgConst(9, sizeof(float), (void*)(&drz), kn_max);
+						m_dslt_kernel->execute(3, global_size, local_size, kn_max);
+					}
+
+					int l2knum = rd*2;
+					m_dslt_kernel->setKernelArgTex3D(0, CL_MEM_READ_ONLY, data_id, kn_l2);
+					m_dslt_kernel->setKernelArgTex3D(1, CL_MEM_READ_ONLY, temp_tex, kn_l2);
+					m_dslt_kernel->setKernelArgBuf(2, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(float), out_cl_buf, kn_l2);
+					m_dslt_kernel->setKernelArgBuf(3, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(int), n_cl_buf, kn_l2);
+					m_dslt_kernel->setKernelArgBuf(4, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, ksize*sizeof(float), cl_filter, kn_l2);
+					m_dslt_kernel->setKernelArgBuf(5, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sc_tablesize*sizeof(float), sctptr, kn_l2);
+					m_dslt_kernel->setKernelArgConst(6, sizeof(int), (void*)(&r), kn_l2);
+					m_dslt_kernel->setKernelArgConst(7, sizeof(int), (void*)(&l2knum), kn_l2);
+					m_dslt_kernel->setKernelArgConst(10, sizeof(int), (void*)(&ypitch), kn_l2);
+					m_dslt_kernel->setKernelArgConst(11, sizeof(int), (void*)(&zpitch), kn_l2);
+					m_dslt_kernel->writeBuffer(out_cl_buf, &pattern_zero, sizeof(float), 0, bsize*sizeof(float));
+
+					for(int a = 0; a < rd*2; a++){
+						float bx = (float)costable[a];
+						float by = (float)sintable[a];
+
+						m_dslt_kernel->setKernelArgConst(8, sizeof(float), (void*)(&bx), kn_l2);
+						m_dslt_kernel->setKernelArgConst(9, sizeof(float), (void*)(&by), kn_l2);
+						m_dslt_kernel->execute(3, global_size, local_size, kn_l2);
+					}
+
+					m_dslt_kernel->setKernelArgBuf(0, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(float), out_cl_buf, kn_em);
+					m_dslt_kernel->setKernelArgBuf(1, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(float), out_cl_final_buf, kn_em);
+					m_dslt_kernel->setKernelArgTex3D(2, CL_MEM_READ_ONLY, temp_tex, kn_em);
+					m_dslt_kernel->setKernelArgConst(3, sizeof(int), (void*)(&ypitch), kn_em);
+					m_dslt_kernel->setKernelArgConst(4, sizeof(int), (void*)(&zpitch), kn_em);
+					m_dslt_kernel->execute(3, global_size, local_size, kn_em);
+
+					m_dslt_kernel->delBuf(cl_filter);
+					delete[] cl_filter;
+					r /= 2;
+				} while (r >= 3);
+
+				m_dslt_kernel->readBuffer(out_cl_final_buf);
+
+				m_dslt_kernel->setKernelArgTex3D(0, CL_MEM_READ_ONLY, data_id, kn_b);
+				m_dslt_kernel->setKernelArgTex3D(1, CL_MEM_READ_ONLY, temp_tex, kn_b);
+				m_dslt_kernel->setKernelArgBuf(2, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(float), out_cl_final_buf, kn_b);
+				m_dslt_kernel->setKernelArgBuf(3, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(uint8), mask_temp_buf, kn_b);
+				m_dslt_kernel->setKernelArgConst(4, sizeof(float), (void*)(&cf), kn_b);
+				m_dslt_kernel->setKernelArgConst(5, sizeof(int), (void*)(&ypitch), kn_b);
+				m_dslt_kernel->setKernelArgConst(6, sizeof(int), (void*)(&zpitch), kn_b);
+				m_dslt_kernel->execute(3, global_size, local_size, kn_b);
+
+				m_dslt_kernel->setKernelArgBuf(0, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(uint8), mask_temp_buf, kn_ap);
+				m_dslt_kernel->setKernelArgTex3D(1, CL_MEM_READ_ONLY, temp_tex, kn_ap);
+				m_dslt_kernel->setKernelArgBuf(2, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(uint8), mask_data, kn_ap);
+				m_dslt_kernel->setKernelArgConst(3, sizeof(int), (void*)(&ypitch), kn_ap);
+				m_dslt_kernel->setKernelArgConst(4, sizeof(int), (void*)(&zpitch), kn_ap);
+				m_dslt_kernel->execute(3, global_size, local_size, kn_ap);
+
+				m_dslt_kernel->readBuffer(mask_data);
+				
+				if (bricks->size() == 1)
+					memcpy(mask->data, mask_data, bsize*sizeof(uint8));
+				else
+				{
+					uint8* dst_p = mask_offset_pointer; 
+					uint8* src_p = mask_data;
+					for (int z = 0; z < brick_z; z++)
+					{
+						uint8* z_st_dst_p = dst_p;
+						for (int y = 0; y < brick_y; y++)
+						{
+							memcpy(dst_p, src_p, brick_x*sizeof(uint8));
+							dst_p += mask_ypitch;
+							src_p += brick_x;
+						}
+						dst_p = z_st_dst_p + mask_zpitch;
+					}
+				}
+
+				delete[] out_cl_buf;
+				delete[] out_cl_final_buf;
+				delete[] n_cl_buf;
+				delete[] mask_temp_buf;
+
+				m_dslt_kernel->delBuf(out_cl_buf);
+				m_dslt_kernel->delBuf(n_cl_buf);
+				m_dslt_kernel->delBuf(sctptr);
+				m_dslt_kernel->delBuf(out_cl_final_buf);
+				m_dslt_kernel->delBuf(mask_temp_buf);
+				m_dslt_kernel->delBuf(mask_data);
+				m_dslt_kernel->delTex(data_id);
+				m_dslt_kernel->delTex(temp_tex);
+			}
+			/////////////////////////
+
+			glActiveTexture(GL_TEXTURE0+c);
+			glBindTexture(GL_TEXTURE_3D, 0);
+			glActiveTexture(GL_TEXTURE0);
+			if (glIsTexture(temp_tex))
+				glDeleteTextures(1, (GLuint*)&temp_tex);
+			delete[] tmp_data;
+		}
+
+		glViewport(vp[0], vp[1], vp[2], vp[3]);
+
+		//release 2d mask
+		release_texture(6, GL_TEXTURE_2D);
+		//release 2d weight map
+		if (use_2d)
+		{
+			release_texture(4, GL_TEXTURE_2D);
+			release_texture(5, GL_TEXTURE_2D);
+		}
+
+		//release 3d mask
+		release_texture((*bricks)[0]->nmask(), GL_TEXTURE_3D);
+
+		//unbind framebuffer
+		glBindFramebuffer(GL_FRAMEBUFFER, cur_framebuffer_id);
+
+		//release seg shader
+		if (seg_shader && seg_shader->valid())
+			seg_shader->release();
+
+		// Release texture
+		release_texture(0, GL_TEXTURE_3D);
+
+		// Reset the blend functions after MIP
+		glBlendEquation(GL_FUNC_ADD);
+		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+		glDisable(GL_BLEND);
+
+		//enable depth test
+		glEnable(GL_DEPTH_TEST);
+
+
+		delete[] slatitable;
+		delete[] clatitable;
+		delete[] slongitable;
+		delete[] clongitable;
+		delete[] sintable;
+		delete[] costable;
+		delete[] sctptr;
+
+		clear_tex_pool();
+	}
+/*
+	void VolumeRenderer::dslt_mask(int rmax, int quality, double c)
+	{
+		if(quality < 1) return;
+		if(rmax < 1) return;
+
+		float cf = (float)c;
+		
+		if (!m_dslt_kernel)
+		{
+#ifdef _WIN32
+			wxString pref = L".\\CL_code\\";
+#else
+			wxString pref = L"./CL_code/";
+#endif
+			wxString code = "";
+			wxString filepath;
+			
+			filepath = pref + wxString("dslt_min.cl");
+			code = readCLcode(filepath);
+			m_dslt_kernel = vol_kernel_factory_.kernel(code.ToStdString());
+			if (!m_dslt_kernel)
+				return;
+			
+			filepath = pref + wxString("dslt_l2.cl");
+			code = readCLcode(filepath);
+			m_dslt_l2_kernel = vol_kernel_factory_.kernel(code.ToStdString());
+			if (!m_dslt_l2_kernel)
+				return;
+
+			filepath = pref + wxString("dslt_binarize.cl");
+			code = readCLcode(filepath);
+			m_dslt_b_kernel = vol_kernel_factory_.kernel(code.ToStdString());
+			if (!m_dslt_b_kernel)
+				return;
+
+			filepath = pref + wxString("dslt_elem_min.cl");
+			code = readCLcode(filepath);
+			m_dslt_em_kernel = vol_kernel_factory_.kernel(code.ToStdString());
+			if (!m_dslt_em_kernel)
+				return;
+		}
+
+		if (!m_dslt_kernel->valid())
+		{
+			string name = "kernel_main";
+			if (!m_dslt_kernel->create(name))
+				return;
+			if (!m_dslt_l2_kernel->create(name))
+				return;
+			if (!m_dslt_b_kernel->create(name))
+				return;
+			if (!m_dslt_em_kernel->create(name))
+				return;
+		}
+
+		int rd = quality;
+	    double a_interval = (PI / 2.0) / (double)rd;
+		double *slatitable  = new double [rd*2*(rd*2-1)+1];
+		double *clatitable  = new double [rd*2*(rd*2-1)+1];
+		double *slongitable = new double [rd*2*(rd*2-1)+1];
+		double *clongitable = new double [rd*2*(rd*2-1)+1];
+		double *sintable = new double [rd*2];
+		double *costable = new double [rd*2];
+		int knum = rd*2*(rd*2-1)+1;
+
+		int sc_tablesize = (rd*2*(rd*2-1)+1)*4;
+		float *sctptr = new float [sc_tablesize];
+
+		slatitable[0] = 0.0; clatitable[0] = 1.0; slongitable[0] = 0.0; clongitable[0] = 0.0;
+		for(int b = 0; b < rd*2; b++){
+			for(int a = 1; a < rd*2; a++){
+				int id = b*(rd*2-1) + (a-1) + 1;
+				slatitable[id] = sin(a_interval*a);
+				clatitable[id] = cos(a_interval*a);
+				slongitable[id] = sin(a_interval*b);
+				clongitable[id] = cos(a_interval*b);
+
+				sctptr[4*id]   = (float)slatitable[id];
+				sctptr[4*id+1] = (float)clatitable[id];
+				sctptr[4*id+2] = (float)slongitable[id];
+				sctptr[4*id+3] = (float)clongitable[id];
+			}
+		}
+		
+		for(int a = 0; a < rd*2; a++){
+			sintable[a] = sin(a_interval*a);
+			costable[a] = cos(a_interval*a);
+		}
+
+		//get bricks
+		Ray view_ray(Point(0.802, 0.267, 0.534), Vector(0.802, 0.267, 0.534));
+		tex_->set_sort_bricks();
+		vector<TextureBrick*> *bricks = tex_->get_sorted_bricks(view_ray);
+		if (!bricks || bricks->size() == 0)
+			return;
+
+		Nrrd *mask = tex_->get_nrrd(tex_->nmask());
+		if (!mask || !mask->data) return;
+
+		for (unsigned int i = 0; i<bricks->size(); ++i)
+		{
+			TextureBrick* b = (*bricks)[i];
+			GLint data_id = load_brick(0, 0, bricks, i);
+			GLint mask_data_id = load_brick_mask(bricks, i);
+			int brick_x = b->nx();
+			int brick_y = b->ny();
+			int brick_z = b->nz();
+			int bsize = brick_x*brick_y*brick_z;
+			float* out_cl_buf = new float[bsize];
+			std::fill(out_cl_buf, out_cl_buf+bsize, 0.0f);
+			float* out_cl_final_buf = new float[bsize];
+			std::fill(out_cl_final_buf, out_cl_final_buf+bsize, FLT_MAX);
+			int* n_cl_buf = new int[bsize];
+			uint8* mask_temp_buf = new uint8[bsize];
+			int ypitch = brick_x;
+			int zpitch = brick_x*brick_y;
+
+			long long mask_offset = (long long)(b->oz()) * (long long)(b->sx()) * (long long)(b->sy()) +
+									(long long)(b->oy()) * (long long)(b->sx()) +
+									(long long)(b->ox());
+			uint8 *mask_offset_pointer = (uint8 *)mask->data + mask_offset;
+			int mask_ypitch = b->sx();
+			int mask_zpitch = b->sx()*b->sy();
+
+			size_t global_size[3] = { brick_x, brick_y, brick_z };
+			size_t local_size[3] = { 1, 1, 1 };
+			float pattern_zero = 0.0f;
+			float pattern_max = FLT_MAX;
+
+			int r = rmax;
+			do{
+
+				int ksize = 2*r + 1;
+				double *filter = new double[ksize];
+				float *cl_filter = new float[ksize];
+				{
+					double sigma = 0.3*(ksize/2 - 1) + 0.8;
+					double denominator = 2.0*sigma*sigma;
+					double sum;
+					double xx, d;
+					int x;
+
+					sum = 0.0;
+					for(x = 0; x < ksize; x++){
+						xx = x - (ksize - 1)/2;
+						d = xx*xx;
+						filter[x] = exp(-1.0*d/denominator);
+						sum += filter[x];
+					}
+					for(x = 0; x < ksize; x++) cl_filter[x] = filter[x] / sum;
+				}
+				delete[] filter;
+
+				m_dslt_kernel->setKernelArgBuf(1, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(float), out_cl_buf);
+				m_dslt_kernel->writeBuffer(1, &pattern_max, sizeof(float), 0, bsize*sizeof(float));
+
+				for(int n = 0; n < knum; n++){
+					float drx = (float)(slatitable[n]*clongitable[n]);
+					float dry = (float)(slatitable[n]*slongitable[n]);
+					float drz = (float)clatitable[n];
+
+					m_dslt_kernel->setKernelArgTex3D(0, CL_MEM_READ_ONLY, data_id);
+					m_dslt_kernel->setKernelArgBuf(1, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(float), out_cl_buf);
+					m_dslt_kernel->setKernelArgBuf(2, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(int), n_cl_buf);
+					m_dslt_kernel->setKernelArgBuf(3, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, ksize*sizeof(float), cl_filter);
+					m_dslt_kernel->setKernelArgConst(4, sizeof(int), (void*)(&r));
+					m_dslt_kernel->setKernelArgConst(5, sizeof(int), (void*)(&n));
+					m_dslt_kernel->setKernelArgConst(6, sizeof(float), (void*)(&drx));
+					m_dslt_kernel->setKernelArgConst(7, sizeof(float), (void*)(&dry));
+					m_dslt_kernel->setKernelArgConst(8, sizeof(float), (void*)(&drz));
+					m_dslt_kernel->setKernelArgConst(9, sizeof(int), (void*)(&ypitch));
+					m_dslt_kernel->setKernelArgConst(10, sizeof(int), (void*)(&zpitch));
+					m_dslt_kernel->execute(3, global_size, local_size);
+				}
+
+				m_dslt_kernel->readBuffer(1, out_cl_buf);
+
+				m_dslt_em_kernel->setKernelArgBuf(0, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(float), out_cl_buf);
+				m_dslt_em_kernel->setKernelArgBuf(1, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(float), out_cl_final_buf);
+				m_dslt_em_kernel->setKernelArgConst(2, sizeof(int), (void*)(&ypitch));
+				m_dslt_em_kernel->setKernelArgConst(3, sizeof(int), (void*)(&zpitch));
+				m_dslt_em_kernel->execute(3, global_size, local_size);
+
+				delete[] cl_filter;
+				
+				r /= 2;
+				break;
+
+			} while (r >= 4);
+
+			m_dslt_kernel->readBuffer(1, out_cl_final_buf);
+
+			m_dslt_b_kernel->setKernelArgTex3D(0, CL_MEM_READ_ONLY, data_id);
+			m_dslt_b_kernel->setKernelArgBuf(1, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(float), out_cl_final_buf);
+			m_dslt_b_kernel->setKernelArgBuf(2, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(uint8), mask_temp_buf);
+			m_dslt_b_kernel->setKernelArgConst(3, sizeof(float), (void*)(&cf));
+			m_dslt_b_kernel->setKernelArgConst(4, sizeof(int), (void*)(&ypitch));
+			m_dslt_b_kernel->setKernelArgConst(5, sizeof(int), (void*)(&zpitch));
+			m_dslt_b_kernel->execute(3, global_size, local_size);
+			m_dslt_b_kernel->readBuffer(2, mask_temp_buf);
+		
+
+			if (bricks->size() == 1)
+				memcpy(mask->data, mask_temp_buf, bsize*sizeof(uint8));
+			else
+			{
+				uint8* dst_p = mask_offset_pointer; 
+				uint8* src_p = mask_temp_buf;
+				for (int z = 0; z < brick_z; z++)
+				{
+					uint8* z_st_dst_p = dst_p;
+					for (int y = 0; y < brick_y; y++)
+					{
+						memcpy(dst_p, src_p, brick_x*sizeof(uint8));
+						dst_p += mask_ypitch;
+						src_p += brick_x;
+					}
+					dst_p = z_st_dst_p + mask_zpitch;
+				}
+			}
+
+			delete[] out_cl_buf;
+			delete[] out_cl_final_buf;
+			delete[] n_cl_buf;
+			delete[] mask_temp_buf;
+		}
+
+		delete[] slatitable;
+		delete[] clatitable;
+		delete[] slongitable;
+		delete[] clongitable;
+		delete[] sintable;
+		delete[] costable;
+		delete[] sctptr;
+
+		clear_tex_pool();
+	}
+*/
+
+	void VolumeRenderer::dslt_mask(int rmax, int quality, double c)
+	{
+		if(quality < 1) return;
+		if(rmax < 1) return;
+
+		float cf = (float)c;
+		
+		if (!m_dslt_kernel)
+		{
+#ifdef _WIN32
+			wxString pref = L".\\CL_code\\";
+#else
+			wxString pref = L"./CL_code/";
+#endif
+			wxString code = "";
+			wxString filepath;
+			
+			filepath = pref + wxString("dslt.cl");
+			code = readCLcode(filepath);
+			m_dslt_kernel = vol_kernel_factory_.kernel(code.ToStdString());
+			if (!m_dslt_kernel)
+				return;
+		}
+
+		string kn_max = "dslt_max";
+		string kn_l2  = "dslt_l2";
+		string kn_b   = "dslt_binarize";
+		string kn_em  = "dslt_elem_min";
+		if (!m_dslt_kernel->valid())
+		{
+			if (!m_dslt_kernel->create(kn_max))
+				return;
+			if (!m_dslt_kernel->create(kn_l2))
+				return;
+			if (!m_dslt_kernel->create(kn_b))
+				return;
+			if (!m_dslt_kernel->create(kn_em))
+				return;
+		}
+
+		int rd = quality;
+	    double a_interval = (PI / 2.0) / (double)rd;
+		double *slatitable  = new double [rd*2*(rd*2-1)+1];
+		double *clatitable  = new double [rd*2*(rd*2-1)+1];
+		double *slongitable = new double [rd*2*(rd*2-1)+1];
+		double *clongitable = new double [rd*2*(rd*2-1)+1];
+		double *sintable = new double [rd*2];
+		double *costable = new double [rd*2];
+		int knum = rd*2*(rd*2-1)+1;
+
+		int sc_tablesize = (rd*2*(rd*2-1)+1)*4;
+		float *sctptr = new float [sc_tablesize];
+
+		slatitable[0] = 0.0; clatitable[0] = 1.0; slongitable[0] = 0.0; clongitable[0] = 0.0;
+		for(int b = 0; b < rd*2; b++){
+			for(int a = 1; a < rd*2; a++){
+				int id = b*(rd*2-1) + (a-1) + 1;
+				slatitable[id] = sin(a_interval*a);
+				clatitable[id] = cos(a_interval*a);
+				slongitable[id] = sin(a_interval*b);
+				clongitable[id] = cos(a_interval*b);
+
+				sctptr[4*id]   = (float)slatitable[id];
+				sctptr[4*id+1] = (float)clatitable[id];
+				sctptr[4*id+2] = (float)slongitable[id];
+				sctptr[4*id+3] = (float)clongitable[id];
+			}
+		}
+		
+		for(int a = 0; a < rd*2; a++){
+			sintable[a] = sin(a_interval*a);
+			costable[a] = cos(a_interval*a);
+		}
+
+		//get bricks
+		Ray view_ray(Point(0.802, 0.267, 0.534), Vector(0.802, 0.267, 0.534));
+		tex_->set_sort_bricks();
+		vector<TextureBrick*> *bricks = tex_->get_sorted_bricks(view_ray);
+		if (!bricks || bricks->size() == 0)
+			return;
+
+		Nrrd *mask = tex_->get_nrrd(tex_->nmask());
+		if (!mask || !mask->data) return;
+
+		for (unsigned int i = 0; i<bricks->size(); ++i)
+		{
+			TextureBrick* b = (*bricks)[i];
+			GLint data_id = load_brick(0, 0, bricks, i);
+			GLint mask_data_id = load_brick_mask(bricks, i);
+			int brick_x = b->nx();
+			int brick_y = b->ny();
+			int brick_z = b->nz();
+			int bsize = brick_x*brick_y*brick_z;
+			float* out_cl_buf = new float[bsize];
+			std::fill(out_cl_buf, out_cl_buf+bsize, 0.0f);
+			float* out_cl_final_buf = new float[bsize];
+			std::fill(out_cl_final_buf, out_cl_final_buf+bsize, FLT_MAX);
+			int* n_cl_buf = new int[bsize];
+			uint8* mask_temp_buf = new uint8[bsize];
+			int ypitch = brick_x;
+			int zpitch = brick_x*brick_y;
+
+			long long mask_offset = (long long)(b->oz()) * (long long)(b->sx()) * (long long)(b->sy()) +
+									(long long)(b->oy()) * (long long)(b->sx()) +
+									(long long)(b->ox());
+			uint8 *mask_offset_pointer = (uint8 *)mask->data + mask_offset;
+			int mask_ypitch = b->sx();
+			int mask_zpitch = b->sx()*b->sy();
+
+			size_t global_size[3] = { brick_x, brick_y, brick_z };
+			//size_t local_size[3] = { 1, 1, 1 }; //too slow
+			size_t *local_size = NULL;
+			float pattern_zero = 0.0f;
+			float pattern_max = FLT_MAX;
+
+			int r = rmax;
+			do{
+
+				int ksize = 2*r + 1;
+				double *filter = new double[ksize];
+				float *cl_filter = new float[ksize];
+				{
+					double sigma = 0.3*(ksize/2 - 1) + 0.8;
+					double denominator = 2.0*sigma*sigma;
+					double sum;
+					double xx, d;
+					int x;
+
+					sum = 0.0;
+					for(x = 0; x < ksize; x++){
+						xx = x - (ksize - 1)/2;
+						d = xx*xx;
+						filter[x] = exp(-1.0*d/denominator);
+						sum += filter[x];
+					}
+					for(x = 0; x < ksize; x++) cl_filter[x] = filter[x] / sum;
+				}
+				delete[] filter;
+				m_dslt_kernel->setKernelArgTex3D(0, CL_MEM_READ_ONLY, data_id, kn_max);
+				m_dslt_kernel->setKernelArgBuf(1, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(float), out_cl_buf, kn_max);
+				m_dslt_kernel->setKernelArgBuf(2, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(int), n_cl_buf, kn_max);
+				m_dslt_kernel->setKernelArgBuf(3, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, ksize*sizeof(float), cl_filter, kn_max);
+				m_dslt_kernel->setKernelArgConst(4, sizeof(int), (void*)(&r), kn_max);
+				m_dslt_kernel->setKernelArgConst(9, sizeof(int), (void*)(&ypitch), kn_max);
+				m_dslt_kernel->setKernelArgConst(10, sizeof(int), (void*)(&zpitch), kn_max);
+				m_dslt_kernel->writeBuffer(out_cl_buf, &pattern_zero, sizeof(float), 0, bsize*sizeof(float));
+
+				for(int n = 0; n < knum; n++){
+					float drx = (float)(slatitable[n]*clongitable[n]);
+					float dry = (float)(slatitable[n]*slongitable[n]);
+					float drz = (float)clatitable[n];
+
+					m_dslt_kernel->setKernelArgConst(5, sizeof(int), (void*)(&n), kn_max);
+					m_dslt_kernel->setKernelArgConst(6, sizeof(float), (void*)(&drx), kn_max);
+					m_dslt_kernel->setKernelArgConst(7, sizeof(float), (void*)(&dry), kn_max);
+					m_dslt_kernel->setKernelArgConst(8, sizeof(float), (void*)(&drz), kn_max);
+					m_dslt_kernel->execute(3, global_size, local_size, kn_max);
+				}
+
+				int l2knum = rd*2;
+				m_dslt_kernel->setKernelArgTex3D(0, CL_MEM_READ_ONLY, data_id, kn_l2);
+				m_dslt_kernel->setKernelArgBuf(1, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(float), out_cl_buf, kn_l2);
+				m_dslt_kernel->setKernelArgBuf(2, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(int), n_cl_buf, kn_l2);
+				m_dslt_kernel->setKernelArgBuf(3, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, ksize*sizeof(float), cl_filter, kn_l2);
+				m_dslt_kernel->setKernelArgBuf(4, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sc_tablesize*sizeof(float), sctptr, kn_l2);
+				m_dslt_kernel->setKernelArgConst(5, sizeof(int), (void*)(&r), kn_l2);
+				m_dslt_kernel->setKernelArgConst(6, sizeof(int), (void*)(&l2knum), kn_l2);
+				m_dslt_kernel->setKernelArgConst(9, sizeof(int), (void*)(&ypitch), kn_l2);
+				m_dslt_kernel->setKernelArgConst(10, sizeof(int), (void*)(&zpitch), kn_l2);
+				m_dslt_kernel->writeBuffer(out_cl_buf, &pattern_zero, sizeof(float), 0, bsize*sizeof(float));
+
+				for(int a = 0; a < rd*2; a++){
+					float bx = (float)costable[a];
+					float by = (float)sintable[a];
+										
+					m_dslt_kernel->setKernelArgConst(7, sizeof(float), (void*)(&bx), kn_l2);
+					m_dslt_kernel->setKernelArgConst(8, sizeof(float), (void*)(&by), kn_l2);
+					m_dslt_kernel->execute(3, global_size, local_size, kn_l2);
+				}
+				
+				m_dslt_kernel->setKernelArgBuf(0, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(float), out_cl_buf, kn_em);
+				m_dslt_kernel->setKernelArgBuf(1, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(float), out_cl_final_buf, kn_em);
+				m_dslt_kernel->setKernelArgConst(2, sizeof(int), (void*)(&ypitch), kn_em);
+				m_dslt_kernel->setKernelArgConst(3, sizeof(int), (void*)(&zpitch), kn_em);
+				m_dslt_kernel->execute(3, global_size, local_size, kn_em);
+							
+				delete[] cl_filter;
+				r /= 2;
+			} while (r >= 3);
+
+			m_dslt_kernel->readBuffer(out_cl_final_buf);
+
+			m_dslt_kernel->setKernelArgTex3D(0, CL_MEM_READ_ONLY, data_id, kn_b);
+			m_dslt_kernel->setKernelArgBuf(1, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(float), out_cl_final_buf, kn_b);
+			m_dslt_kernel->setKernelArgBuf(2, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(uint8), mask_temp_buf, kn_b);
+			m_dslt_kernel->setKernelArgConst(3, sizeof(float), (void*)(&cf), kn_b);
+			m_dslt_kernel->setKernelArgConst(4, sizeof(int), (void*)(&ypitch), kn_b);
+			m_dslt_kernel->setKernelArgConst(5, sizeof(int), (void*)(&zpitch), kn_b);
+			m_dslt_kernel->execute(3, global_size, local_size, kn_b);
+			m_dslt_kernel->readBuffer(mask_temp_buf);
+/*
+			uint8* dst_p = mask_offset_pointer; 
+			float* src_p = out_cl_final_buf;
+			double vmax = 0.0;
+			for (int z = 0; z < brick_z; z++)
+			{
+					uint8* z_st_dst_p = dst_p;
+					for (int y = 0; y < brick_y; y++)
+					{
+						uint8* y_st_dst_p = dst_p;
+						for (int x = 0; x < brick_x; x++)
+						{
+							*dst_p = (uint8)(*src_p*255);
+							if (vmax < *src_p)
+								vmax = *src_p;
+							dst_p++;
+							src_p++;
+						}
+						dst_p = y_st_dst_p + mask_ypitch;
+					}
+					dst_p = z_st_dst_p + mask_zpitch;
+			}
+			vmax *= 65535.0;
+*/
+			if (bricks->size() == 1)
+				memcpy(mask->data, mask_temp_buf, bsize*sizeof(uint8));
+			else
+			{
+				uint8* dst_p = mask_offset_pointer; 
+				uint8* src_p = mask_temp_buf;
+				for (int z = 0; z < brick_z; z++)
+				{
+					uint8* z_st_dst_p = dst_p;
+					for (int y = 0; y < brick_y; y++)
+					{
+						memcpy(dst_p, src_p, brick_x*sizeof(uint8));
+						dst_p += mask_ypitch;
+						src_p += brick_x;
+					}
+					dst_p = z_st_dst_p + mask_zpitch;
+				}
+			}
+
+			delete[] out_cl_buf;
+			delete[] out_cl_final_buf;
+			delete[] n_cl_buf;
+			delete[] mask_temp_buf;
+		}
+
+		delete[] slatitable;
+		delete[] clatitable;
+		delete[] slongitable;
+		delete[] clongitable;
+		delete[] sintable;
+		delete[] costable;
+		delete[] sctptr;
+
+		clear_tex_pool();
 	}
 
 	//generate the labeling assuming the mask is already generated

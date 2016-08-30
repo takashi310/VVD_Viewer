@@ -286,6 +286,7 @@ void AdjustView::RefreshVRenderViews(bool interactive)
 {
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	vr_frame->RefreshVRenderViews(false, interactive);
+	//vr_frame->RefreshVRenderViewsOverlay(false);
 }
 
 void AdjustView::GetSettings()
