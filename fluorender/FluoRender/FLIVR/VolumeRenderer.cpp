@@ -1707,7 +1707,7 @@ namespace FLIVR
 		//	seg_shader->setLocalParam(7, 1.0/double(w2), 1.0/double(h2), 0.0, 0.0);
 
 		//thresh1
-		seg_shader->setLocalParam(7, ini_thresh, gm_falloff, scl_falloff, scl_translate);
+		seg_shader->setLocalParam(7, 0.0, gm_falloff, scl_falloff, 0.0);
 		//w2d
 		seg_shader->setLocalParam(8, w2d, bins, 0.0, 0.0);
 
@@ -1763,8 +1763,6 @@ namespace FLIVR
 		if(dslt_q < 1) return;
 		if(dslt_r < 1) return;
 
-		float cf = (float)dslt_c;
-		
 		if (!m_dslt_kernel)
 		{
 #ifdef _WIN32
@@ -1880,6 +1878,9 @@ namespace FLIVR
 			int ny = b->ny();
 			int nz = b->nz();
 			GLenum textype = b->tex_type(c);
+
+			double bmax = (b->nb(0) == 2) ? 65535.0 : 255.0;
+			float cf = (float)(dslt_c / bmax);
 
 			GLuint temp_tex;
 			unsigned char *tmp_data = new unsigned char[nx*ny*nz*nb];
@@ -2206,245 +2207,6 @@ namespace FLIVR
 
 		clear_tex_pool();
 	}
-/*
-	void VolumeRenderer::dslt_mask(int rmax, int quality, double c)
-	{
-		if(quality < 1) return;
-		if(rmax < 1) return;
-
-		float cf = (float)c;
-		
-		if (!m_dslt_kernel)
-		{
-#ifdef _WIN32
-			wxString pref = L".\\CL_code\\";
-#else
-			wxString pref = L"./CL_code/";
-#endif
-			wxString code = "";
-			wxString filepath;
-			
-			filepath = pref + wxString("dslt_min.cl");
-			code = readCLcode(filepath);
-			m_dslt_kernel = vol_kernel_factory_.kernel(code.ToStdString());
-			if (!m_dslt_kernel)
-				return;
-			
-			filepath = pref + wxString("dslt_l2.cl");
-			code = readCLcode(filepath);
-			m_dslt_l2_kernel = vol_kernel_factory_.kernel(code.ToStdString());
-			if (!m_dslt_l2_kernel)
-				return;
-
-			filepath = pref + wxString("dslt_binarize.cl");
-			code = readCLcode(filepath);
-			m_dslt_b_kernel = vol_kernel_factory_.kernel(code.ToStdString());
-			if (!m_dslt_b_kernel)
-				return;
-
-			filepath = pref + wxString("dslt_elem_min.cl");
-			code = readCLcode(filepath);
-			m_dslt_em_kernel = vol_kernel_factory_.kernel(code.ToStdString());
-			if (!m_dslt_em_kernel)
-				return;
-		}
-
-		if (!m_dslt_kernel->valid())
-		{
-			string name = "kernel_main";
-			if (!m_dslt_kernel->create(name))
-				return;
-			if (!m_dslt_l2_kernel->create(name))
-				return;
-			if (!m_dslt_b_kernel->create(name))
-				return;
-			if (!m_dslt_em_kernel->create(name))
-				return;
-		}
-
-		int rd = quality;
-	    double a_interval = (PI / 2.0) / (double)rd;
-		double *slatitable  = new double [rd*2*(rd*2-1)+1];
-		double *clatitable  = new double [rd*2*(rd*2-1)+1];
-		double *slongitable = new double [rd*2*(rd*2-1)+1];
-		double *clongitable = new double [rd*2*(rd*2-1)+1];
-		double *sintable = new double [rd*2];
-		double *costable = new double [rd*2];
-		int knum = rd*2*(rd*2-1)+1;
-
-		int sc_tablesize = (rd*2*(rd*2-1)+1)*4;
-		float *sctptr = new float [sc_tablesize];
-
-		slatitable[0] = 0.0; clatitable[0] = 1.0; slongitable[0] = 0.0; clongitable[0] = 0.0;
-		for(int b = 0; b < rd*2; b++){
-			for(int a = 1; a < rd*2; a++){
-				int id = b*(rd*2-1) + (a-1) + 1;
-				slatitable[id] = sin(a_interval*a);
-				clatitable[id] = cos(a_interval*a);
-				slongitable[id] = sin(a_interval*b);
-				clongitable[id] = cos(a_interval*b);
-
-				sctptr[4*id]   = (float)slatitable[id];
-				sctptr[4*id+1] = (float)clatitable[id];
-				sctptr[4*id+2] = (float)slongitable[id];
-				sctptr[4*id+3] = (float)clongitable[id];
-			}
-		}
-		
-		for(int a = 0; a < rd*2; a++){
-			sintable[a] = sin(a_interval*a);
-			costable[a] = cos(a_interval*a);
-		}
-
-		//get bricks
-		Ray view_ray(Point(0.802, 0.267, 0.534), Vector(0.802, 0.267, 0.534));
-		tex_->set_sort_bricks();
-		vector<TextureBrick*> *bricks = tex_->get_sorted_bricks(view_ray);
-		if (!bricks || bricks->size() == 0)
-			return;
-
-		Nrrd *mask = tex_->get_nrrd(tex_->nmask());
-		if (!mask || !mask->data) return;
-
-		for (unsigned int i = 0; i<bricks->size(); ++i)
-		{
-			TextureBrick* b = (*bricks)[i];
-			GLint data_id = load_brick(0, 0, bricks, i);
-			GLint mask_data_id = load_brick_mask(bricks, i);
-			int brick_x = b->nx();
-			int brick_y = b->ny();
-			int brick_z = b->nz();
-			int bsize = brick_x*brick_y*brick_z;
-			float* out_cl_buf = new float[bsize];
-			std::fill(out_cl_buf, out_cl_buf+bsize, 0.0f);
-			float* out_cl_final_buf = new float[bsize];
-			std::fill(out_cl_final_buf, out_cl_final_buf+bsize, FLT_MAX);
-			int* n_cl_buf = new int[bsize];
-			uint8* mask_temp_buf = new uint8[bsize];
-			int ypitch = brick_x;
-			int zpitch = brick_x*brick_y;
-
-			long long mask_offset = (long long)(b->oz()) * (long long)(b->sx()) * (long long)(b->sy()) +
-									(long long)(b->oy()) * (long long)(b->sx()) +
-									(long long)(b->ox());
-			uint8 *mask_offset_pointer = (uint8 *)mask->data + mask_offset;
-			int mask_ypitch = b->sx();
-			int mask_zpitch = b->sx()*b->sy();
-
-			size_t global_size[3] = { brick_x, brick_y, brick_z };
-			size_t local_size[3] = { 1, 1, 1 };
-			float pattern_zero = 0.0f;
-			float pattern_max = FLT_MAX;
-
-			int r = rmax;
-			do{
-
-				int ksize = 2*r + 1;
-				double *filter = new double[ksize];
-				float *cl_filter = new float[ksize];
-				{
-					double sigma = 0.3*(ksize/2 - 1) + 0.8;
-					double denominator = 2.0*sigma*sigma;
-					double sum;
-					double xx, d;
-					int x;
-
-					sum = 0.0;
-					for(x = 0; x < ksize; x++){
-						xx = x - (ksize - 1)/2;
-						d = xx*xx;
-						filter[x] = exp(-1.0*d/denominator);
-						sum += filter[x];
-					}
-					for(x = 0; x < ksize; x++) cl_filter[x] = filter[x] / sum;
-				}
-				delete[] filter;
-
-				m_dslt_kernel->setKernelArgBuf(1, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(float), out_cl_buf);
-				m_dslt_kernel->writeBuffer(1, &pattern_max, sizeof(float), 0, bsize*sizeof(float));
-
-				for(int n = 0; n < knum; n++){
-					float drx = (float)(slatitable[n]*clongitable[n]);
-					float dry = (float)(slatitable[n]*slongitable[n]);
-					float drz = (float)clatitable[n];
-
-					m_dslt_kernel->setKernelArgTex3D(0, CL_MEM_READ_ONLY, data_id);
-					m_dslt_kernel->setKernelArgBuf(1, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(float), out_cl_buf);
-					m_dslt_kernel->setKernelArgBuf(2, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(int), n_cl_buf);
-					m_dslt_kernel->setKernelArgBuf(3, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, ksize*sizeof(float), cl_filter);
-					m_dslt_kernel->setKernelArgConst(4, sizeof(int), (void*)(&r));
-					m_dslt_kernel->setKernelArgConst(5, sizeof(int), (void*)(&n));
-					m_dslt_kernel->setKernelArgConst(6, sizeof(float), (void*)(&drx));
-					m_dslt_kernel->setKernelArgConst(7, sizeof(float), (void*)(&dry));
-					m_dslt_kernel->setKernelArgConst(8, sizeof(float), (void*)(&drz));
-					m_dslt_kernel->setKernelArgConst(9, sizeof(int), (void*)(&ypitch));
-					m_dslt_kernel->setKernelArgConst(10, sizeof(int), (void*)(&zpitch));
-					m_dslt_kernel->execute(3, global_size, local_size);
-				}
-
-				m_dslt_kernel->readBuffer(1, out_cl_buf);
-
-				m_dslt_em_kernel->setKernelArgBuf(0, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(float), out_cl_buf);
-				m_dslt_em_kernel->setKernelArgBuf(1, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(float), out_cl_final_buf);
-				m_dslt_em_kernel->setKernelArgConst(2, sizeof(int), (void*)(&ypitch));
-				m_dslt_em_kernel->setKernelArgConst(3, sizeof(int), (void*)(&zpitch));
-				m_dslt_em_kernel->execute(3, global_size, local_size);
-
-				delete[] cl_filter;
-				
-				r /= 2;
-				break;
-
-			} while (r >= 4);
-
-			m_dslt_kernel->readBuffer(1, out_cl_final_buf);
-
-			m_dslt_b_kernel->setKernelArgTex3D(0, CL_MEM_READ_ONLY, data_id);
-			m_dslt_b_kernel->setKernelArgBuf(1, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(float), out_cl_final_buf);
-			m_dslt_b_kernel->setKernelArgBuf(2, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, bsize*sizeof(uint8), mask_temp_buf);
-			m_dslt_b_kernel->setKernelArgConst(3, sizeof(float), (void*)(&cf));
-			m_dslt_b_kernel->setKernelArgConst(4, sizeof(int), (void*)(&ypitch));
-			m_dslt_b_kernel->setKernelArgConst(5, sizeof(int), (void*)(&zpitch));
-			m_dslt_b_kernel->execute(3, global_size, local_size);
-			m_dslt_b_kernel->readBuffer(2, mask_temp_buf);
-		
-
-			if (bricks->size() == 1)
-				memcpy(mask->data, mask_temp_buf, bsize*sizeof(uint8));
-			else
-			{
-				uint8* dst_p = mask_offset_pointer; 
-				uint8* src_p = mask_temp_buf;
-				for (int z = 0; z < brick_z; z++)
-				{
-					uint8* z_st_dst_p = dst_p;
-					for (int y = 0; y < brick_y; y++)
-					{
-						memcpy(dst_p, src_p, brick_x*sizeof(uint8));
-						dst_p += mask_ypitch;
-						src_p += brick_x;
-					}
-					dst_p = z_st_dst_p + mask_zpitch;
-				}
-			}
-
-			delete[] out_cl_buf;
-			delete[] out_cl_final_buf;
-			delete[] n_cl_buf;
-			delete[] mask_temp_buf;
-		}
-
-		delete[] slatitable;
-		delete[] clatitable;
-		delete[] slongitable;
-		delete[] clongitable;
-		delete[] sintable;
-		delete[] costable;
-		delete[] sctptr;
-
-		clear_tex_pool();
-	}
-*/
 
 	void VolumeRenderer::dslt_mask(int rmax, int quality, double c)
 	{

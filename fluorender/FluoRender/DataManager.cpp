@@ -1604,8 +1604,19 @@ void VolumeData::DrawMask(int type, int paint_mode, int hr_mode,
 	{
 		m_vr->set_2d_mask(m_2d_mask);
 		m_vr->set_2d_weight(m_2d_weight1, m_2d_weight2);
-		//m_vr->draw_mask(type, paint_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, scl_translate, w2d, bins, ortho, false);
-		m_vr->draw_mask_dslt(type, paint_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, scl_translate, w2d, bins, ortho, false, 20, 2, 400.0/65535.0);
+		m_vr->draw_mask(type, paint_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, scl_translate, w2d, bins, ortho, false);
+	}
+}
+
+void VolumeData::DrawMaskDSLT(int type, int paint_mode, int hr_mode,
+							  double ini_thresh, double gm_falloff, double scl_falloff, double scl_translate,
+							  double w2d, double bins, int dslt_r, int dslt_q, double dslt_c, bool ortho)
+{
+	if (m_vr)
+	{
+		m_vr->set_2d_mask(m_2d_mask);
+		m_vr->set_2d_weight(m_2d_weight1, m_2d_weight2);
+		m_vr->draw_mask_dslt(type, paint_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, scl_translate, w2d, bins, ortho, false, dslt_r, dslt_q, dslt_c*GetMaxValue());
 	}
 }
 

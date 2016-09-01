@@ -51,6 +51,14 @@ public:
 		ID_BrushIterWRd,
 		ID_BrushIterSRd,
 		ID_BrushIterSSRd,
+		//dslt brush
+		ID_DSLTBrushChk,
+		ID_DSLTBrushRadSldr,
+		ID_DSLTBrushRadText,
+		ID_DSLTBrushQualitySldr,
+		ID_DSLTBrushQualityText,
+		ID_DSLTBrushCSldr,
+		ID_DSLTBrushCText,
 		//component analyze
 		ID_CASelectOnlyChk,
 		ID_CAMinText,
@@ -146,6 +154,8 @@ private:
 	double m_dft_nr_thresh;
 	double m_dft_nr_size;
 
+	double m_dft_dslt_c;
+	
 	//tab control
 	wxNotebook *m_notebook;
 	//paint tools
@@ -172,6 +182,17 @@ private:
 	wxCheckBox* m_brush_size2_chk;
 	wxSlider* m_brush_size2_sldr;
 	wxTextCtrl* m_brush_size2_text;
+	//dslt
+	wxCheckBox* m_dslt_chk;
+	wxStaticText *st_dslt_r;
+	wxSlider* m_dslt_r_sldr;
+	wxTextCtrl* m_dslt_r_text;
+	wxStaticText *st_dslt_q;
+	wxSlider* m_dslt_q_sldr;
+	wxTextCtrl* m_dslt_q_text;
+	wxStaticText *st_dslt_c;
+	wxSlider* m_dslt_c_sldr;
+	wxTextCtrl* m_dslt_c_text;
 	//growth
 	wxRadioButton* m_brush_iterw_rb;
 	wxRadioButton* m_brush_iters_rb;
@@ -251,6 +272,14 @@ private:
 	void OnBrushSize2Chk(wxCommandEvent &event);
 	void OnBrushSize2Change(wxScrollEvent &event);
 	void OnBrushSize2Text(wxCommandEvent &event);
+	//dslt
+	void OnDSLTBrushChk(wxCommandEvent &event);
+	void OnDSLTBrushRadChange(wxScrollEvent &event);
+	void OnDSLTBrushRadText(wxCommandEvent &event);
+	void OnDSLTBrushQualityChange(wxScrollEvent &event);
+	void OnDSLTBrushQualityText(wxCommandEvent &event);
+	void OnDSLTBrushCChange(wxScrollEvent &event);
+	void OnDSLTBrushCText(wxCommandEvent &event);
 	//brush iterations
 	void OnBrushIterCheck(wxCommandEvent& event);
 	//component analyzer

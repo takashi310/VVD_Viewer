@@ -57,6 +57,16 @@ public:
 	void SetBrushSclTranslate(double val) {m_scl_translate = val;}
 	double GetBrushSclTranslate() {return m_scl_translate;}
 	void SetUseBrushSize2(bool val) {m_use_brush_size2 = val;}
+	
+	void SetUseDSLTBrush(bool value) {m_use_dslt = value;}
+	bool GetUseDSLTBrush() {return m_use_dslt;}
+	void SetBrushDSLT_R(int rad) {m_dslt_r = rad;}
+	int GetBrushDSLT_R() {return m_dslt_r;}
+	void SetBrushDSLT_Q(int quality) {m_dslt_q = quality;}
+	int GetBrushDSLT_Q() {return m_dslt_q;}
+	void SetBrushDSLT_C(double c) {m_dslt_c = c;}
+	double GetBrushDSLT_C() {return m_dslt_c;}
+
 	//w2d
 	void SetW2d(double val) {m_w2d = val;}
 	double GetW2d() {return m_w2d;}
@@ -145,6 +155,10 @@ private:
 	bool m_edge_detect;
 	bool m_hidden_removal;
 	bool m_ortho;
+	bool m_use_dslt;
+	int m_dslt_r;
+	int m_dslt_q;
+	double m_dslt_c;
 	//w2d
 	double m_w2d;
 	//iteration for labeling

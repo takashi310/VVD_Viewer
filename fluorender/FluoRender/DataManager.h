@@ -260,6 +260,9 @@ public:
 	void DrawMask(int type, int paint_mode, int hr_mode,
 		double ini_thresh, double gm_falloff, double scl_falloff, double scl_translate,
 		double w2d, double bins, bool ortho = false);
+	void DrawMaskDSLT(int type, int paint_mode, int hr_mode,
+		double ini_thresh, double gm_falloff, double scl_falloff, double scl_translate,
+		double w2d, double bins, int dslt_r, int dslt_q, double dslt_c, bool ortho = false);
 	//draw label (create the label)
 	//type: 0-initialize; 1-maximum intensity filtering
 	//mode: 0-normal; 1-posterized, 2-copy values

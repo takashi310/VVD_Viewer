@@ -43,6 +43,14 @@ EVT_TEXT(ID_BrushSize1Text, BrushToolDlg::OnBrushSize1Text)
 EVT_CHECKBOX(ID_BrushSize2Chk, BrushToolDlg::OnBrushSize2Chk)
 EVT_COMMAND_SCROLL(ID_BrushSize2Sldr, BrushToolDlg::OnBrushSize2Change)
 EVT_TEXT(ID_BrushSize2Text, BrushToolDlg::OnBrushSize2Text)
+//dslt
+EVT_CHECKBOX(ID_DSLTBrushChk, BrushToolDlg::OnDSLTBrushChk)
+EVT_COMMAND_SCROLL(ID_DSLTBrushRadSldr, BrushToolDlg::OnDSLTBrushRadChange)
+EVT_TEXT(ID_DSLTBrushRadText, BrushToolDlg::OnDSLTBrushRadText)
+EVT_COMMAND_SCROLL(ID_DSLTBrushQualitySldr, BrushToolDlg::OnDSLTBrushQualityChange)
+EVT_TEXT(ID_DSLTBrushQualityText, BrushToolDlg::OnDSLTBrushQualityText)
+EVT_COMMAND_SCROLL(ID_DSLTBrushCSldr, BrushToolDlg::OnDSLTBrushCChange)
+EVT_TEXT(ID_DSLTBrushCText, BrushToolDlg::OnDSLTBrushCText)
 //brush iterrations
 EVT_RADIOBUTTON(ID_BrushIterWRd, BrushToolDlg::OnBrushIterCheck)
 EVT_RADIOBUTTON(ID_BrushIterSRd, BrushToolDlg::OnBrushIterCheck)
@@ -221,7 +229,9 @@ wxWindow* BrushToolDlg::CreateBrushPage(wxWindow *parent)
 	sizer2_3->Add(m_brush_size2_text, 0, wxALIGN_CENTER);
 	st = new wxStaticText(page, 0, "px",
 		wxDefaultPosition, wxSize(25, 15));
+
 	st->Hide();
+
 	sizer2_3->Add(st, 0, wxALIGN_CENTER);
 	//iterations
 	wxBoxSizer *sizer2_4 = new wxBoxSizer(wxHORIZONTAL);
@@ -236,6 +246,11 @@ wxWindow* BrushToolDlg::CreateBrushPage(wxWindow *parent)
 	m_brush_iterw_rb->SetValue(false);
 	m_brush_iters_rb->SetValue(true);
 	m_brush_iterss_rb->SetValue(false);
+
+	m_brush_iterw_rb->Hide();
+	m_brush_iters_rb->Hide();
+	m_brush_iterss_rb->Hide();
+
 	sizer2_4->Add(5, 5);
 	sizer2_4->Add(st, 0, wxALIGN_CENTER);
 	sizer2_4->Add(m_brush_iterw_rb, 0, wxALIGN_CENTER);
@@ -243,6 +258,43 @@ wxWindow* BrushToolDlg::CreateBrushPage(wxWindow *parent)
 	sizer2_4->Add(m_brush_iters_rb, 0, wxALIGN_CENTER);
 	sizer2_4->Add(15, 15);
 	sizer2_4->Add(m_brush_iterss_rb, 0, wxALIGN_CENTER);
+
+	m_dslt_chk = new wxCheckBox(page, ID_DSLTBrushChk, "Use DSLT",
+		wxDefaultPosition, wxDefaultSize, wxALIGN_LEFT);
+	st_dslt_r = new wxStaticText(page, 0, "Radius:",
+		wxDefaultPosition, wxSize(70, 20));
+	m_dslt_r_sldr = new wxSlider(page, ID_DSLTBrushRadSldr, 10, 1, 100,
+		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
+	m_dslt_r_text = new wxTextCtrl(page, ID_DSLTBrushRadText, "10",
+		wxDefaultPosition, wxSize(50, 20), 0, vald_int);
+	wxBoxSizer *sizer2_5 = new wxBoxSizer(wxHORIZONTAL);
+	sizer2_5->Add(5, 5);
+	sizer2_5->Add(st_dslt_r, 0, wxALIGN_CENTER);
+	sizer2_5->Add(m_dslt_r_sldr, 1, wxEXPAND);
+	sizer2_5->Add(m_dslt_r_text, 0, wxALIGN_CENTER);
+	st_dslt_q = new wxStaticText(page, 0, "Quality:",
+		wxDefaultPosition, wxSize(70, 20));
+	m_dslt_q_sldr = new wxSlider(page, ID_DSLTBrushQualitySldr, 3, 1, 10,
+		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
+	m_dslt_q_text = new wxTextCtrl(page, ID_DSLTBrushQualityText, "3",
+		wxDefaultPosition, wxSize(50, 20), 0, vald_int);
+	wxBoxSizer *sizer2_6 = new wxBoxSizer(wxHORIZONTAL);
+	sizer2_6->Add(5, 5);
+	sizer2_6->Add(st_dslt_q, 0, wxALIGN_CENTER);
+	sizer2_6->Add(m_dslt_q_sldr, 1, wxEXPAND);
+	sizer2_6->Add(m_dslt_q_text, 0, wxALIGN_CENTER);
+	st_dslt_c = new wxStaticText(page, 0, "C:",
+		wxDefaultPosition, wxSize(70, 20));
+	m_dslt_c_sldr = new wxSlider(page, ID_DSLTBrushCSldr, 0, 0, 2550,
+		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
+	m_dslt_c_text = new wxTextCtrl(page, ID_DSLTBrushCText, "0.0",
+		wxDefaultPosition, wxSize(50, 20), 0, vald_fp1);
+	wxBoxSizer *sizer2_7 = new wxBoxSizer(wxHORIZONTAL);
+	sizer2_7->Add(5, 5);
+	sizer2_7->Add(st_dslt_c, 0, wxALIGN_CENTER);
+	sizer2_7->Add(m_dslt_c_sldr, 1, wxEXPAND);
+	sizer2_7->Add(m_dslt_c_text, 0, wxALIGN_CENTER);
+
 	//sizer2
 	sizer2->Add(sizer2_4, 0, wxEXPAND);
 	sizer2->Add(10, 10);
@@ -250,6 +302,12 @@ wxWindow* BrushToolDlg::CreateBrushPage(wxWindow *parent)
 	sizer2->Add(sizer2_3, 0, wxEXPAND);
 	sizer2->Add(10, 10);
 	sizer2->Add(sizer2_1, 0, wxEXPAND);
+	sizer2->Add(10, 10);
+	sizer2->Add(m_dslt_chk, 0, wxALIGN_LEFT);
+	sizer2->Add(5, 5);
+	sizer2->Add(sizer2_5, 0, wxEXPAND);
+	sizer2->Add(sizer2_6, 0, wxEXPAND);
+	sizer2->Add(sizer2_7, 0, wxEXPAND);
 
 	//vertical sizer
 	wxBoxSizer* sizer_v = new wxBoxSizer(wxVERTICAL);
@@ -260,6 +318,16 @@ wxWindow* BrushToolDlg::CreateBrushPage(wxWindow *parent)
 	sizer_v->Add(10, 30);
 	sizer_v->Add(sizer2, 0, wxEXPAND);
 	sizer_v->Add(10, 30);
+
+	st_dslt_r->Disable();
+	m_dslt_r_sldr->Disable();
+	m_dslt_r_text->Disable();
+	st_dslt_q->Disable();
+	m_dslt_q_sldr->Disable();
+	m_dslt_q_text->Disable();
+	st_dslt_c->Disable();
+	m_dslt_c_sldr->Disable();
+	m_dslt_c_text->Disable();
 
 	//set the page
 	page->SetSizer(sizer_v);
@@ -497,7 +565,8 @@ BrushToolDlg::BrushToolDlg(wxWindow *frame, wxWindow *parent)
    m_dft_ca_thresh(0.0),
 	m_dft_ca_falloff(1.0),
    m_dft_nr_thresh(0.0),
-   m_dft_nr_size(0.0)
+   m_dft_nr_size(0.0),
+   m_dft_dslt_c(0.0)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -608,6 +677,17 @@ void BrushToolDlg::GetSettings(VRenderView* vrv)
       m_brush_iterss_rb->SetValue(true);
    }
 
+   bval = vrv->GetUseDSLTBrush();
+   m_dslt_chk->SetValue(bval);
+   ival = vrv->GetBrushDSLT_R();
+   m_dslt_r_sldr->SetValue(ival);
+   m_dslt_r_text->ChangeValue(wxString::Format("%d", ival));
+   ival = vrv->GetBrushDSLT_Q();
+   m_dslt_q_sldr->SetValue(ival);
+   m_dslt_q_text->ChangeValue(wxString::Format("%d", ival));
+   dval = vrv->GetBrushDSLT_C();
+   m_dft_dslt_c = dval;
+
    //threshold range
    if (sel_vol)
    {
@@ -618,6 +698,10 @@ void BrushToolDlg::GetSettings(VRenderView* vrv)
       m_ca_thresh_sldr->SetRange(0, int(m_max_value*10.0));
       m_ca_thresh_sldr->SetValue(int(m_dft_ca_thresh*m_max_value*10.0+0.5));
       m_ca_thresh_text->ChangeValue(wxString::Format("%.1f", m_dft_ca_thresh*m_max_value));
+	  
+	  m_dslt_c_sldr->SetRange(0, int(m_max_value*10.0));
+      m_dslt_c_sldr->SetValue(int(m_dft_dslt_c*m_max_value*10.0+0.5));
+	  m_dslt_c_text->ChangeValue(wxString::Format("%.1f", m_dft_dslt_c*m_max_value));
    }
 
 	UpdateUndoRedo();
@@ -942,6 +1026,96 @@ void BrushToolDlg::OnBrushIterCheck(wxCommandEvent& event)
    }
 }
 
+void BrushToolDlg::OnDSLTBrushChk(wxCommandEvent &event)
+{
+	bool dslt = m_dslt_chk->GetValue();
+
+   //set hidden removal
+   if (m_cur_view)
+	   m_cur_view->SetUseDSLTBrush(dslt);
+
+   if (dslt)
+   {
+	   st_dslt_r->Enable();
+	   m_dslt_r_sldr->Enable();
+	   m_dslt_r_text->Enable();
+	   st_dslt_q->Enable();
+	   m_dslt_q_sldr->Enable();
+	   m_dslt_q_text->Enable();
+	   st_dslt_c->Enable();
+	   m_dslt_c_sldr->Enable();
+	   m_dslt_c_text->Enable();
+   }
+   else
+   {
+	   st_dslt_r->Disable();
+	   m_dslt_r_sldr->Disable();
+	   m_dslt_r_text->Disable();
+	   st_dslt_q->Disable();
+	   m_dslt_q_sldr->Disable();
+	   m_dslt_q_text->Disable();
+	   st_dslt_c->Disable();
+	   m_dslt_c_sldr->Disable();
+	   m_dslt_c_text->Disable();
+   }
+}
+
+void BrushToolDlg::OnDSLTBrushRadChange(wxScrollEvent &event)
+{
+   int ival = event.GetPosition();
+   wxString str = wxString::Format("%d", ival);
+   m_dslt_r_text->SetValue(str);
+}
+
+void BrushToolDlg::OnDSLTBrushRadText(wxCommandEvent &event)
+{
+   wxString str = m_dslt_r_text->GetValue();
+   double val;
+   str.ToDouble(&val);
+   m_dslt_r_sldr->SetValue(int(val));
+
+   if (m_cur_view)
+	   m_cur_view->SetBrushDSLT_R(val);
+}
+
+void BrushToolDlg::OnDSLTBrushQualityChange(wxScrollEvent &event)
+{
+   int ival = event.GetPosition();
+   wxString str = wxString::Format("%d", ival);
+   m_dslt_q_text->SetValue(str);
+}
+void BrushToolDlg::OnDSLTBrushQualityText(wxCommandEvent &event)
+{
+   wxString str = m_dslt_q_text->GetValue();
+   double val;
+   str.ToDouble(&val);
+   m_dslt_q_sldr->SetValue(int(val));
+
+   if (m_cur_view)
+	   m_cur_view->SetBrushDSLT_Q(val);
+}
+
+void BrushToolDlg::OnDSLTBrushCChange(wxScrollEvent &event)
+{
+   int ival = event.GetPosition();
+   double val = double(ival)/10.0;
+   wxString str = wxString::Format("%.1f", val);
+   m_dslt_c_text->SetValue(str);
+}
+
+void BrushToolDlg::OnDSLTBrushCText(wxCommandEvent &event)
+{
+   wxString str = m_dslt_c_text->GetValue();
+   double val;
+   str.ToDouble(&val);
+   m_dft_dslt_c = val/m_max_value;
+   m_dslt_c_sldr->SetValue(int(val*10.0+0.5));
+
+	//set translate
+   if (m_cur_view)
+	   m_cur_view->SetBrushDSLT_C(m_dft_dslt_c);
+}
+
 //component analyze
 void BrushToolDlg::OnCAThreshChange(wxScrollEvent &event)
 {
@@ -1130,6 +1304,16 @@ void BrushToolDlg::SaveDefault()
       m_brush_iters_rb->GetValue()?2:
       m_brush_iterss_rb->GetValue()?3:0;
    fconfig.Write("brush_iters", ival);
+
+   fconfig.Write("use_dslt", m_dslt_chk->GetValue());
+   str = m_dslt_r_text->GetValue();
+   str.ToDouble(&val);
+   fconfig.Write("dslt_r", val);
+   str = m_dslt_q_text->GetValue();
+   str.ToDouble(&val);
+   fconfig.Write("dslt_q", val);
+   fconfig.Write("dslt_c", m_dft_dslt_c);
+
    //component analyzer
    //selected only
    fconfig.Write("ca_select_only", m_ca_select_only_chk->GetValue());
@@ -1260,6 +1444,52 @@ void BrushToolDlg::LoadDefault()
          break;
       }
    }
+
+   if (fconfig.Read("use_dslt", &bval))
+   {
+	   m_dslt_chk->SetValue(bval);
+	   if (bval)
+	   {
+		   st_dslt_r->Enable();
+		   m_dslt_r_sldr->Enable();
+		   m_dslt_r_text->Enable();
+		   st_dslt_q->Enable();
+		   m_dslt_q_sldr->Enable();
+		   m_dslt_q_text->Enable();
+		   st_dslt_c->Enable();
+		   m_dslt_c_sldr->Enable();
+		   m_dslt_c_text->Enable();
+	   }
+	   else
+	   {
+		   st_dslt_r->Disable();
+		   m_dslt_r_sldr->Disable();
+		   m_dslt_r_text->Disable();
+		   st_dslt_q->Disable();
+		   m_dslt_q_sldr->Disable();
+		   m_dslt_q_text->Disable();
+		   st_dslt_c->Disable();
+		   m_dslt_c_sldr->Disable();
+		   m_dslt_c_text->Disable();
+	   }
+   }
+   if (fconfig.Read("dslt_r", &val) && val>0.0)
+   {
+      str = wxString::Format("%d", (int)val);
+      m_dslt_r_text->SetValue(str);
+   }
+   if (fconfig.Read("dslt_q", &val) && val>0.0)
+   {
+      str = wxString::Format("%d", (int)val);
+      m_dslt_q_text->SetValue(str);
+   }
+   if (fconfig.Read("dslt_c", &m_dft_dslt_c))
+   {
+      str = wxString::Format("%.1f", m_dft_dslt_c*m_max_value);
+      m_dslt_c_sldr->SetRange(0, int(m_max_value*10.0));
+      m_dslt_c_text->SetValue(str);
+   }
+
    //component analyzer
    //selected only
    if (fconfig.Read("ca_select_only", &bval))

@@ -2961,6 +2961,14 @@ void VRenderGLView::LoadDefaultBrushSettings()
 			break;
 		}
 	}
+	if (fconfig.Read("use_dslt", &bval))
+		m_selector.SetUseDSLTBrush(bval);
+	if (fconfig.Read("dslt_r", &val) && val>0.0)
+		m_selector.SetBrushDSLT_R(val);
+	if (fconfig.Read("dslt_q", &val) && val>0.0)
+		m_selector.SetBrushDSLT_Q(val);
+	if (fconfig.Read("dslt_c", &val))
+		m_selector.SetBrushDSLT_C(val);
 }
 
 void VRenderGLView::SetBrushUsePres(bool pres)
@@ -3114,6 +3122,47 @@ bool VRenderGLView::GetSelectBoth()
 {
 	return m_selector.GetSelectBoth();
 }
+
+void VRenderGLView::SetUseDSLTBrush(bool value)
+{
+	m_selector.SetUseDSLTBrush(value);
+}
+
+bool VRenderGLView::GetUseDSLTBrush()
+{
+	return m_selector.GetUseDSLTBrush();
+}
+
+void VRenderGLView::SetBrushDSLT_R(int rad)
+{
+	m_selector.SetBrushDSLT_R(rad);
+}
+
+int VRenderGLView::GetBrushDSLT_R()
+{
+	return m_selector.GetBrushDSLT_R();
+}
+
+void VRenderGLView::SetBrushDSLT_Q(int quality)
+{
+	m_selector.SetBrushDSLT_Q(quality);
+}
+
+int VRenderGLView::GetBrushDSLT_Q()
+{
+	return m_selector.GetBrushDSLT_Q();
+}
+
+void VRenderGLView::SetBrushDSLT_C(double c)
+{
+	m_selector.SetBrushDSLT_C(c);
+}
+
+double VRenderGLView::GetBrushDSLT_C()
+{
+	return m_selector.GetBrushDSLT_C();
+}
+
 
 //calculations
 void VRenderGLView::SetVolumeA(VolumeData* vd)
@@ -4974,11 +5023,8 @@ void VRenderGLView::UpdateBrushState()
 			!wxGetKeyState(wxKeyCode('Z')) &&
 			!wxGetKeyState(wxKeyCode('X')))
 		{
-			if (wxGetMouseState().LeftIsDown())
-			{
-				//         Segment();
-				m_clear_paint = true;
-			}
+			m_clear_paint = true;
+			
 			if (m_int_mode == 7)
 				m_int_mode = 5;
 			else
@@ -6696,7 +6742,7 @@ void VRenderGLView::OnDraw(wxPaintEvent& event)
 		{
 			DrawBrush();
 		}
-		if (m_paint_enable)
+		if (m_paint_enable || m_clear_paint)
 		{
 			//paiting mode
 			//for volume segmentation
@@ -12004,7 +12050,7 @@ void VRenderGLView::OnMouse(wxMouseEvent& event)
 			prv_mouse_X = old_mouse_X;
 			prv_mouse_Y = old_mouse_Y;
 			m_paint_enable = true;
-			//m_clear_paint = true;
+//			m_clear_paint = true;
 			RefreshGLOverlays();
 		}
 		return;

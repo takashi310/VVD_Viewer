@@ -561,6 +561,15 @@ public:
 	//select both
 	void SetSelectBoth(bool value);
 	bool GetSelectBoth();
+	
+	void SetUseDSLTBrush(bool value);
+	bool GetUseDSLTBrush();
+	void SetBrushDSLT_R(int rad);
+	int GetBrushDSLT_R();
+	void SetBrushDSLT_Q(int quality);
+	int GetBrushDSLT_Q();
+	void SetBrushDSLT_C(double c);
+	double GetBrushDSLT_C();
 
 	//set clip mode
 	void SetClipMode(int mode);
@@ -1591,6 +1600,23 @@ public:
 	{ if (m_glview) m_glview->SetSelectBoth(value); }
 	bool GetSelectBoth()
 	{ if (m_glview) return m_glview->GetSelectBoth(); else return false;}
+	
+	void SetUseDSLTBrush(bool value)
+	{ if (m_glview) m_glview->SetUseDSLTBrush(value); }
+	bool GetUseDSLTBrush()
+	{ if (m_glview) return m_glview->GetUseDSLTBrush(); else return false;}
+	void SetBrushDSLT_R(int rad)
+	{ if (m_glview) m_glview->SetBrushDSLT_R(rad); }
+	int GetBrushDSLT_R()
+	{ if (m_glview) return m_glview->GetBrushDSLT_R(); else return 0; }
+	void SetBrushDSLT_Q(int quality)
+	{ if (m_glview) m_glview->SetBrushDSLT_Q(quality); }
+	int GetBrushDSLT_Q()
+	{ if (m_glview) return m_glview->GetBrushDSLT_Q(); else return 0; }
+	void SetBrushDSLT_C(double c)
+	{ if (m_glview) m_glview->SetBrushDSLT_C(c); }
+	double GetBrushDSLT_C()
+	{ if (m_glview) return m_glview->GetBrushDSLT_C(); else return 0.0; }
 
 	//set clip mode
 	void SetClipMode(int mode)
