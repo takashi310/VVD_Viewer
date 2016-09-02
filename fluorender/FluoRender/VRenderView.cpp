@@ -836,6 +836,8 @@ VRenderGLView::~VRenderGLView()
 
 	if (m_trace_group)
 		delete m_trace_group;
+    
+    KernelProgram::clear();
 }
 
 void VRenderGLView::OnResize(wxSizeEvent& event)
@@ -870,8 +872,6 @@ void VRenderGLView::Init()
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 		SetCurrent(*m_glRC);
 		ShaderProgram::init_shaders_supported();
-		if (vr_frame && vr_frame->GetSettingDlg()) KernelProgram::set_device_id(vr_frame->GetSettingDlg()->GetCLDeviceID());
-		KernelProgram::init_kernels_supported();
 		if (vr_frame)
 		{
 			vr_frame->SetTextureRendererSettings();
@@ -885,7 +885,10 @@ void VRenderGLView::Init()
 		glGenBuffers(1, &m_misc_ibo);
 		glGenVertexArrays(1, &m_misc_vao);
 		glEnable( GL_MULTISAMPLE );
-
+        
+        if (vr_frame && vr_frame->GetSettingDlg()) KernelProgram::set_device_id(vr_frame->GetSettingDlg()->GetCLDeviceID());
+        KernelProgram::init_kernels_supported();
+        
 		m_initialized = true;
 	}
 

@@ -41,6 +41,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <wx/wfstream.h>
 #include <wx/txtstrm.h>
+#include <wx/stdpaths.h>
 //#include <boost/thread.hpp>
 //#include <boost/bind.hpp>
 
@@ -1765,11 +1766,10 @@ namespace FLIVR
 
 		if (!m_dslt_kernel)
 		{
-#ifdef _WIN32
-			wxString pref = L".\\CL_code\\";
-#else
-			wxString pref = L"./CL_code/";
-#endif
+            std::wstring exePath = wxStandardPaths::Get().GetExecutablePath().ToStdWstring();
+            exePath = exePath.substr(0,exePath.find_last_of(std::wstring()+GETSLASH()));
+            std::wstring pref = exePath + GETSLASH() + L"CL_code" + GETSLASH();
+
 			wxString code = "";
 			wxString filepath;
 			
@@ -2016,7 +2016,7 @@ namespace FLIVR
 				int mask_ypitch = b->sx();
 				int mask_zpitch = b->sx()*b->sy();
 
-				size_t global_size[3] = { brick_x, brick_y, brick_z };
+				size_t global_size[3] = { (size_t)brick_x, (size_t)brick_y, (size_t)brick_z };
 				//size_t local_size[3] = { 1, 1, 1 }; //too slow
 				size_t *local_size = NULL;
 				float pattern_zero = 0.0f;
@@ -2317,7 +2317,7 @@ namespace FLIVR
 			int mask_ypitch = b->sx();
 			int mask_zpitch = b->sx()*b->sy();
 
-			size_t global_size[3] = { brick_x, brick_y, brick_z };
+			size_t global_size[3] = { (size_t)brick_x, (size_t)brick_y, (size_t)brick_z };
 			//size_t local_size[3] = { 1, 1, 1 }; //too slow
 			size_t *local_size = NULL;
 			float pattern_zero = 0.0f;

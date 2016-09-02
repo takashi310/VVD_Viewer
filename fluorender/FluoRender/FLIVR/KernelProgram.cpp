@@ -31,6 +31,10 @@ namespace FLIVR
 		cl_int err;
 		cl_uint ret_num_platforms;
 		cl_platform_id platforms[4];
+        int best_pid = -1;
+        int best_devid = -1;
+        cl_device_id best_dev = 0;
+        long best_spec = 0;
 		
 		err = clGetPlatformIDs(4, platforms, &ret_num_platforms);
 		if (err != CL_SUCCESS)
@@ -47,33 +51,54 @@ namespace FLIVR
 				device_ = devices[device_id_];
 			else
 				device_ = devices[0];
-			char buffer[10240];
-			clGetDeviceInfo(device_, CL_DEVICE_NAME, sizeof(buffer), buffer, NULL);
-			device_name_ = std::string(buffer);
-#ifdef _DARWIN
-			gl_context_ =CGLGetCurrentContext();
-#endif
-			cl_context_properties properties[] =
-			{
-#ifdef _WIN32
-				CL_GL_CONTEXT_KHR, (cl_context_properties)wglGetCurrentContext(),
-				CL_WGL_HDC_KHR, (cl_context_properties)wglGetCurrentDC(),
-#endif
-#ifdef _DARWIN
-				CL_CONTEXT_PROPERTY_USE_CGL_SHAREGROUP_APPLE,
-				(cl_context_properties) CGLGetShareGroup( gl_context_),
-#endif
-				CL_CONTEXT_PLATFORM, (cl_context_properties)platforms[pidx],
-				0
-			};
-			context_ = clCreateContext(properties, 1, &device_, NULL, NULL, &err);
-			if (err != CL_SUCCESS)
-				continue;
 			
-			init_ = true;
-			break;
-		}
-		
+            
+            for (int didx = 0; didx < dev_num; didx++)
+            {
+                char buffer[10240];
+                clGetDeviceInfo(device_, CL_DEVICE_NAME, sizeof(buffer), buffer, NULL);
+                device_name_ = std::string(buffer);
+            
+                cl_uint freq = 0;
+                clGetDeviceInfo(device_, CL_DEVICE_MAX_CLOCK_FREQUENCY, sizeof(freq), &freq, NULL);
+                cl_uint units = 0;
+                clGetDeviceInfo(device_, CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(units), &units, NULL);
+                if (best_spec < freq * units)
+                {
+                    best_pid = pidx;
+                    best_devid = didx;
+                    best_dev = devices[didx];
+                    best_spec = freq * units;
+                }
+            }
+        }
+        
+        if (best_pid < 0 || best_devid < 0)
+            return;
+        device_id_ = best_devid;
+        device_ = best_dev;
+        
+#ifdef _DARWIN
+        gl_context_ =CGLGetCurrentContext();
+#endif
+        cl_context_properties properties[] =
+        {
+#ifdef _WIN32
+            CL_GL_CONTEXT_KHR, (cl_context_properties)wglGetCurrentContext(),
+            CL_WGL_HDC_KHR, (cl_context_properties)wglGetCurrentDC(),
+#endif
+#ifdef _DARWIN
+            CL_CONTEXT_PROPERTY_USE_CGL_SHAREGROUP_APPLE,
+            (cl_context_properties) CGLGetShareGroup( gl_context_),
+#endif
+            CL_CONTEXT_PLATFORM, (cl_context_properties)platforms[best_pid],
+            0
+        };
+        context_ = clCreateContext(properties, 1, &device_, NULL, NULL, &err);
+        if (err != CL_SUCCESS)
+            return;
+			
+        init_ = true;
 	}
 
 	bool KernelProgram::init()
@@ -122,7 +147,7 @@ namespace FLIVR
 			if (err != CL_SUCCESS)
 			{
 				char *program_log;
-				size_t log_size;
+				size_t log_size = 0;
 				clGetProgramBuildInfo(program_, device_, CL_PROGRAM_BUILD_LOG,
 					0, NULL, &log_size);
 				program_log = new char[log_size+1];
@@ -140,6 +165,8 @@ namespace FLIVR
 		{
 			return false;
 		}
+        if (kernel_.find(name) != kernel_.end())
+            clReleaseKernel(kernel_[name]);
 		kernel_[name] = kl;
 
 		if (!queue_)
