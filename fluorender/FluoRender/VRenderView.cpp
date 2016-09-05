@@ -3700,7 +3700,24 @@ void VRenderGLView::switchLevel(VolumeData *vd)
 	{
 		if (m_res_mode > 0)
 		{
-			int res_scale = (m_res_mode-1 == 0) ? 1 : (m_res_mode-1)*2;
+			double res_scale = 1.0;
+			switch(m_res_mode)
+			{
+			case 1:
+				res_scale = 1;
+				break;
+			case 2:
+				res_scale = 1.5;
+				break;
+			case 3:
+				res_scale = 2.0;
+				break;
+			case 4:
+				res_scale = 3.0;
+				break;
+			default:
+				res_scale = 1.0;
+			}
 			vector<double> sfs;
 			vector<double> spx, spy, spz;
 			int lvnum = vtex->GetLevelNum();
@@ -13324,12 +13341,13 @@ void VRenderView::CreateBar()
 
 	st3 = new wxStaticText(this, 0, "Quality:");
 	m_res_mode_combo = new wxComboBox(this, ID_ResCombo, "",
-		wxDefaultPosition, wxSize(80, 24), 0, NULL, wxCB_READONLY);
+		wxDefaultPosition, wxSize(100, 24), 0, NULL, wxCB_READONLY);
 	vector<string>mode_list;
 	mode_list.push_back("Max");
-	mode_list.push_back("Fine");
-	mode_list.push_back("Standard");
-	mode_list.push_back("Coarse");
+	mode_list.push_back("Best(x1)");
+	mode_list.push_back("Fine(x1.5)");
+	mode_list.push_back("Standard(x2)");
+	mode_list.push_back("Coarse(x3)");
 	for (size_t i=0; i<mode_list.size(); ++i)
 		m_res_mode_combo->Append(mode_list[i]);
 	m_res_mode_combo->SetSelection(m_res_mode);
