@@ -220,7 +220,7 @@ Nrrd* NRRDReader::Convert(int t, int c, bool get_max)
 	if (t<0 || t>=m_time_num)
 		return 0;
 
-	int i;
+	size_t i;
 
 	wstring str_name = m_4d_seq[t].filename;
 	m_data_name = str_name.substr(str_name.find_last_of(GETSLASH())+1);
@@ -297,7 +297,8 @@ Nrrd* NRRDReader::Convert(int t, int c, bool get_max)
 		m_yspc = 1.0;
 		m_zspc = 1.0;
 	}
-	int data_size = m_slice_num * m_x_size * m_y_size;
+	size_t voxelnum = (size_t)m_slice_num * (size_t)m_x_size * (size_t)m_y_size;
+    size_t data_size = voxelnum;
 	if (output->type == nrrdTypeUShort || output->type == nrrdTypeShort)
 		data_size *= 2;
 	output->data = new unsigned char[data_size];
@@ -324,7 +325,7 @@ Nrrd* NRRDReader::Convert(int t, int c, bool get_max)
 
 	// turn signed into unsigned
 	if (output->type == nrrdTypeChar) {
-		for (i=0; i<m_slice_num*m_x_size*m_y_size; i++) {
+		for (i=0; i<voxelnum; i++) {
 			char val = ((char*)output->data)[i];
 			unsigned char n = val + 128;
 			((unsigned char*)output->data)[i] = n;
@@ -335,7 +336,7 @@ Nrrd* NRRDReader::Convert(int t, int c, bool get_max)
 	// turn signed into unsigned
 	unsigned short min_value = 32768, n;
 	if (output->type == nrrdTypeShort || output->type == nrrdTypeUShort) {
-		for (i=0; i<m_slice_num*m_x_size*m_y_size; i++) {
+		for (i=0; i<voxelnum; i++) {
 			if (output->type == nrrdTypeShort) {
 				short val = ((short*)output->data)[i];
 				n = val + 32768;
@@ -359,7 +360,7 @@ Nrrd* NRRDReader::Convert(int t, int c, bool get_max)
 	{
 		m_max_value -= min_value;
 		//16 bit
-		for (i=0; i<m_slice_num*m_x_size*m_y_size; i++) {
+		for (i=0; i<voxelnum; i++) {
 			((unsigned short*)output->data)[i] =
 				((unsigned short*)output->data)[i] - min_value;
 		}
@@ -372,7 +373,7 @@ Nrrd* NRRDReader::Convert(int t, int c, bool get_max)
 	else if (output->type == nrrdTypeUShort)
 	{
 		//16 bit
-		for (i=0; i<m_slice_num*m_x_size*m_y_size; i++) {
+		for (i=0; i<voxelnum; i++) {
 			((unsigned short*)output->data)[i] =
 				((unsigned short*)output->data)[i];
 		}
