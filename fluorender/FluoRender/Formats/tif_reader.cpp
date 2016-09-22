@@ -858,12 +858,12 @@ Nrrd* TIFReader::ReadTiff(std::vector<SliceInfo> &filelist,
                   memcpy((uint8_t*)val+valindex,
                         (uint8_t*)buf+samples*i+c,sizeof(uint8_t));
                else
-                  memcpy((uint16_t*)val+valindex*2,
+                  memcpy((uint16_t*)val+valindex,
                         (uint16_t*)buf+samples*i+c,sizeof(uint16_t));
                if (!eight_bit && get_max &&
                      *((uint16_t*)val+valindex) > max_value)
                   max_value = *((uint16_t*)val+valindex);
-               if(eight_bit) valindex ++;
+               valindex++;
             }
          } else {
             valindex = pageindex*pagepixels +
