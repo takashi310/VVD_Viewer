@@ -303,8 +303,8 @@ Nrrd* NRRDReader::Convert(int t, int c, bool get_max)
 		data_size *= 2;
 	output->data = new unsigned char[data_size];
 
-	if (data_size >= 1073741824UL)
-		get_max = false;
+	//if (data_size >= 1073741824UL)
+	//	get_max = false;
 
 	if (nrrdRead(output, nrrd_file, NULL))
 	{
@@ -378,7 +378,10 @@ Nrrd* NRRDReader::Convert(int t, int c, bool get_max)
 		if (m_max_value > 0.0)
 			m_scalar_scale = 65535.0 / m_max_value;
 		else
+        {
+            m_max_value = 65535.0;
 			m_scalar_scale = 1.0;
+        }
 	}
 	else
 	{
