@@ -303,6 +303,9 @@ Nrrd* NRRDReader::Convert(int t, int c, bool get_max)
 		data_size *= 2;
 	output->data = new unsigned char[data_size];
 
+	if (data_size >= 1073741824UL)
+		get_max = false;
+
 	if (nrrdRead(output, nrrd_file, NULL))
 	{
 		delete []output->data;
@@ -335,7 +338,7 @@ Nrrd* NRRDReader::Convert(int t, int c, bool get_max)
 	m_max_value = 0.0;
 	// turn signed into unsigned
 	unsigned short min_value = 32768, n;
-	if (output->type == nrrdTypeShort || output->type == nrrdTypeUShort) {
+	if (output->type == nrrdTypeShort || (output->type == nrrdTypeUShort && get_max)) {
 		for (i=0; i<voxelnum; i++) {
 			if (output->type == nrrdTypeShort) {
 				short val = ((short*)output->data)[i];
@@ -372,11 +375,6 @@ Nrrd* NRRDReader::Convert(int t, int c, bool get_max)
 	}
 	else if (output->type == nrrdTypeUShort)
 	{
-		//16 bit
-		for (i=0; i<voxelnum; i++) {
-			((unsigned short*)output->data)[i] =
-				((unsigned short*)output->data)[i];
-		}
 		if (m_max_value > 0.0)
 			m_scalar_scale = 65535.0 / m_max_value;
 		else
