@@ -858,12 +858,12 @@ Nrrd* TIFReader::ReadTiff(std::vector<SliceInfo> &filelist,
                   memcpy((uint8_t*)val+valindex,
                         (uint8_t*)buf+samples*i+c,sizeof(uint8_t));
                else
-                  memcpy((uint16_t*)val+valindex*2,
+                  memcpy((uint16_t*)val+valindex,
                         (uint16_t*)buf+samples*i+c,sizeof(uint16_t));
                if (!eight_bit && get_max &&
                      *((uint16_t*)val+valindex) > max_value)
                   max_value = *((uint16_t*)val+valindex);
-               if(eight_bit) valindex ++;
+               valindex++;
             }
          } else {
             valindex = pageindex*pagepixels +
@@ -909,7 +909,7 @@ Nrrd* TIFReader::ReadTiff(std::vector<SliceInfo> &filelist,
             m_max_value = max_value;
          else {
             double value;
-            for (int i=0; i<m_slice_num*m_x_size*m_y_size; i++) {
+            for (size_t i=0; i<(size_t)m_slice_num*(size_t)m_x_size*(size_t)m_y_size; i++) {
                value= ((unsigned short*)nrrdout->data)[i];
                m_max_value = value>m_max_value ? value : m_max_value;
             }

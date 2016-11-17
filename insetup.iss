@@ -34,6 +34,7 @@ Source: "build\bin\Release\VVDViewer.exe"; DestDir: "{app}"; Flags: ignoreversio
 Source: "VVD_Viewer\Settings\*"; DestDir: "{app}"; Flags: ignoreversion touch; Permissions: users-modify
 Source: "VVD_Viewer\Fonts\*"; DestDir: "{app}\Fonts"; Flags: ignoreversion touch
 Source: "VVD_Viewer\Scripts\*"; DestDir: "{app}\Scripts"; Flags: ignoreversion touch
+Source: "VVD_Viewer\CL_code\*"; DestDir: "{app}\CL_code"; Flags: ignoreversion touch
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
