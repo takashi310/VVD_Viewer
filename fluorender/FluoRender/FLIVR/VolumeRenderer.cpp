@@ -580,6 +580,201 @@ namespace FLIVR
 		return dt;
 	}
 
+	bool VolumeRenderer::test_against_view_clip(const BBox &bbox, const BBox &tbox, const BBox &dbox, bool persp)
+	{
+		if (!test_against_view(bbox, persp))
+			return false;
+
+		Transform *tform = tex_->transform();
+		if (!tform)
+			return true;
+		
+		Vector b_u[3];
+		b_u[0] = Vector(1.0, 0.0, 0.0);
+		b_u[1] = Vector(0.0, 1.0, 0.0);
+		b_u[2] = Vector(0.0, 0.0, 1.0);
+		
+		Point bmax = bbox.max();
+		Point bmin = bbox.min();
+
+		bmax = tform->transform(bmax);
+		bmin = tform->transform(bmin);
+
+		float b_e[3];
+		b_e[0] = abs(bmax.x() - bmin.x()) * 0.5f;
+		b_e[1] = abs(bmax.y() - bmin.y()) * 0.5f;
+		b_e[2] = abs(bmax.z() - bmin.z()) * 0.5f;
+
+		Vector b_c = (bmax + bmin) * 0.5f;
+		
+		Plane* px1 = planes_[0];
+		Plane* px2 = planes_[1];
+		Plane* py1 = planes_[2];
+		Plane* py2 = planes_[3];
+		Plane* pz1 = planes_[4];
+		Plane* pz2 = planes_[5];
+
+		//calculate 4 lines
+		Vector lv_x1z1, lv_x1z2, lv_x2z1, lv_x2z2;
+		Point lp_x1z1, lp_x1z2, lp_x2z1, lp_x2z2;
+		//x1z1
+		if (!px1->Intersect(*pz1, lp_x1z1, lv_x1z1))
+			return true;
+		//x1z2
+		if (!px1->Intersect(*pz2, lp_x1z2, lv_x1z2))
+			return true;
+		//x2z1
+		if (!px2->Intersect(*pz1, lp_x2z1, lv_x2z1))
+			return true;
+		//x2z2
+		if (!px2->Intersect(*pz2, lp_x2z2, lv_x2z2))
+			return true;
+
+		//calculate 8 points
+		Point pp[8];
+		//p0 = l_x1z1 * py1
+		if (!py1->Intersect(lp_x1z1, lv_x1z1, pp[0]))
+			return true;
+		//p1 = l_x1z2 * py1
+		if (!py1->Intersect(lp_x1z2, lv_x1z2, pp[1]))
+			return true;
+		//p2 = l_x2z1 *py1
+		if (!py1->Intersect(lp_x2z1, lv_x2z1, pp[2]))
+			return true;
+		//p3 = l_x2z2 * py1
+		if (!py1->Intersect(lp_x2z2, lv_x2z2, pp[3]))
+			return true;
+		//p4 = l_x1z1 * py2
+		if (!py2->Intersect(lp_x1z1, lv_x1z1, pp[4]))
+			return true;
+		//p5 = l_x1z2 * py2
+		if (!py2->Intersect(lp_x1z2, lv_x1z2, pp[5]))
+			return true;
+		//p6 = l_x2z1 * py2
+		if (!py2->Intersect(lp_x2z1, lv_x2z1, pp[6]))
+			return true;
+		//p7 = l_x2z2 * py2
+		if (!py2->Intersect(lp_x2z2, lv_x2z2, pp[7]))
+			return true;
+
+		for (int i = 0; i < 8; i++)
+			pp[i] = tform->transform(pp[i]);
+		
+		Vector a_u[3];
+		Vector scv(tform->get_mat_val(0,0), tform->get_mat_val(1,1), tform->get_mat_val(2,2));
+		Vector n;
+		n = px1->normal();
+		a_u[0] = Vector(n.x()/scv.x(), n.y()/scv.y(), n.z()/scv.z());
+		a_u[0].safe_normalize();
+		n = py1->normal();
+		a_u[1] = Vector(n.x()/scv.x(), n.y()/scv.y(), n.z()/scv.z());
+		a_u[1].safe_normalize();
+		n = pz1->normal();
+		a_u[2] = Vector(n.x()/scv.x(), n.y()/scv.y(), n.z()/scv.z());
+		a_u[2].safe_normalize();
+
+		Vector xx = pp[2] - pp[0];
+		Vector yy = pp[4] - pp[0];
+		Vector zz = pp[1] - pp[0];
+		
+		float a_e[3];
+		a_e[0] = xx.length() * 0.5f;
+		a_e[1] = yy.length() * 0.5f;
+		a_e[2] = zz.length() * 0.5f;
+
+		Vector a_c = Vector(pp[0].x(),pp[0].y(),pp[0].z()) + (xx + yy + zz) * 0.5f;
+		
+		const float EPSILON = 1.175494e-37;
+
+		float R[3][3], AbsR[3][3];
+		for(int i = 0; i < 3; i++)
+		{
+			for(int j = 0; j < 3; j++)
+			{
+				R[i][j] = Dot(a_u[i], b_u[j]);
+				AbsR[i][j] = fabsf(R[i][j]) + EPSILON;
+			}
+		}
+
+		Vector t = b_c - a_c;
+		t = Vector(Dot(t, a_u[0]), Dot(t, a_u[1]), Dot(t, a_u[2]));
+
+		//L=A0, L=A1, L=A2
+		float ra, rb;
+
+		for(int i = 0; i < 3; i++)
+		{
+			ra = a_e[i];
+			rb = b_e[0] * AbsR[i][0] + b_e[1] * AbsR[i][1] + b_e[2] * AbsR[i][2];
+			if(fabsf(t[i]) > ra + rb)
+				return false;
+		}
+		//L=B0, L=B1, L=B2
+		for(int i = 0; i < 3; i++)
+		{
+			ra = a_e[0] * AbsR[0][i] + a_e[1] * AbsR[1][i] + a_e[2] * AbsR[2][i];
+			rb = b_e[i];
+			if(fabsf(t[0] * R[0][i] + t[1] * R[1][i] + t[2] * R[2][i]) > ra + rb)
+				return false;
+		}
+
+		//L=A0 X B0
+		ra = a_e[1] * AbsR[2][0] + a_e[2] * AbsR[1][0];
+		rb = b_e[1] * AbsR[0][2] + b_e[2] * AbsR[0][1];
+		if(fabsf(t[2] * R[1][0] - t[1] * R[2][0]) > ra + rb)
+			return false;
+
+		//L=A0 X B1
+		ra = a_e[1] * AbsR[2][1] + a_e[2] * AbsR[1][1];
+		rb = b_e[0] * AbsR[0][2] + b_e[2] * AbsR[0][0];
+		if(fabsf(t[2] * R[1][1] - t[1] * R[2][1]) > ra + rb)
+			return false;
+
+		//L=A0 X B2
+		ra = a_e[1] * AbsR[2][2] + a_e[2] * AbsR[1][2];
+		rb = b_e[0] * AbsR[0][1] + b_e[1] * AbsR[0][0];
+		if(fabsf(t[2] * R[1][2] - t[1] * R[2][2]) > ra + rb)
+			return false;
+
+		//L=A1 X B0
+		ra = a_e[0] * AbsR[2][0] + a_e[2] * AbsR[0][0];
+		rb = b_e[1] * AbsR[1][2] + b_e[2] * AbsR[1][1];
+		if(fabsf(t[0] * R[2][0] - t[2] * R[0][0]) > ra + rb)
+			return false;
+
+		//L=A1 X B1
+		ra = a_e[0] * AbsR[2][1] + a_e[2] * AbsR[0][1];
+		rb = b_e[0] * AbsR[1][2] + b_e[2] * AbsR[1][0];
+		if(fabsf(t[0] * R[2][1] - t[2] * R[0][1]) > ra + rb)
+			return false;
+
+		//L=A1 X B2
+		ra = a_e[0] * AbsR[2][2] + a_e[2] * AbsR[0][2];
+		rb = b_e[0] * AbsR[1][1] + b_e[1] * AbsR[1][0];
+		if(fabsf(t[0] * R[2][2] - t[2] * R[0][2]) > ra + rb)
+			return false;
+
+		//L=A2 X B0
+		ra = a_e[0] * AbsR[1][0] + a_e[1] * AbsR[0][0];
+		rb = b_e[1] * AbsR[2][2] + b_e[2] * AbsR[2][1];
+		if(fabsf(t[1] * R[0][0] - t[0] * R[1][0]) > ra + rb)
+			return false;
+
+		//L=A2 X B1
+		ra = a_e[0] * AbsR[1][1] + a_e[1] * AbsR[0][1];
+		rb = b_e[0] * AbsR[2][2] + b_e[2] * AbsR[2][0];
+		if(fabsf(t[1] * R[0][1] - t[0] * R[1][1]) > ra + rb)
+			return false;
+
+		//L=A2 X B2
+		ra = a_e[0] * AbsR[1][2] + a_e[1] * AbsR[0][2];
+		rb = b_e[0] * AbsR[2][1] + b_e[1] * AbsR[2][0];
+		if(fabsf(t[1] * R[0][2] - t[0] * R[1][2]) > ra + rb)
+			return false;
+
+		return true;
+	}
+
 	void VolumeRenderer::eval_ml_mode()
 	{
 		//reassess the mask/label mode
@@ -1031,7 +1226,7 @@ namespace FLIVR
 					continue;
 			}
 
-			if (!test_against_view(b->bbox(), !orthographic_p) || // Clip against view
+			if (!b->get_disp() || // Clip against view
 				b->get_priority()>0) //nothing to draw
 			{
 				if (mem_swap_ && start_update_loop_ && !done_update_loop_)
@@ -1370,7 +1565,7 @@ namespace FLIVR
 			for (unsigned int i=0; i<bricks->size(); i++)
 			{
 				TextureBrick* b = (*bricks)[i];
-				if (!test_against_view(b->bbox(), !orthographic_p)) continue;
+				if (!b->get_disp()) continue;
 
 				vertex.clear();
 				index.clear();

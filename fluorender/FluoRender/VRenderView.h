@@ -197,6 +197,47 @@ private:
 	DECLARE_EVENT_TABLE()
 };
 
+struct VolumeLoaderData
+{
+	FileLocInfo *finfo;
+	TextureBrick *brick;
+};
+
+class VolumeLoader;
+
+class VolumeLoaderThread : public wxThread
+{
+    public:
+		VolumeLoaderThread(VolumeLoader* vl);
+		~VolumeLoaderThread();
+		void SetTimeLimit(unsigned int time_limit) { m_time_limit = time_limit; }
+    private:
+		unsigned int m_time_limit;
+    protected:
+		virtual ExitCode Entry();
+        VolumeLoader* m_vl;
+		vector<VolumeLoaderData> *m_queues;
+};
+
+class VolumeLoader
+{
+	public:
+		VolumeLoader();
+		~VolumeLoader();
+		void Queue(VolumeLoaderData brick);
+		void ClearQueues();
+		void Set(vector<VolumeLoaderData> vld);
+		void Abort();
+		bool Run();
+	protected:
+		VolumeLoaderThread *m_thread;
+		wxCriticalSection m_pThreadCS;
+		vector<VolumeLoaderData> m_queues;
+		bool m_valid;
+
+		friend class VolumeLoaderThread;
+};
+
 
 class VRenderGLView: public wxGLCanvas
 {

@@ -86,6 +86,7 @@ namespace FLIVR {
 		virtual ~TextureBrick();
 
 		inline BBox &bbox() { return bbox_; }
+		inline BBox &tbox() { return tbox_; }
 		inline BBox &dbox() { return dbox_; }
 
 		inline int nx() { return nx_; }

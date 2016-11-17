@@ -36,6 +36,7 @@
 #include "ImgShader.h"
 #include <FLIVR/KernelProgram.h>
 #include <FLIVR/VolKernel.h>
+#include "FLIVR/Quaternion.h"
 
 namespace FLIVR
 {
@@ -209,6 +210,9 @@ namespace FLIVR
 		void set_fog(bool use_fog, double fog_intensity, double fog_start, double fog_end)
 		{ m_use_fog = use_fog; m_fog_intensity = fog_intensity; m_fog_start = fog_start; m_fog_end = fog_end; }
 
+		bool test_against_view_clip(const BBox &bbox, const BBox &tbox, const BBox &dbox, bool persp);
+		void set_clip_quaternion(Quaternion q){ m_q_cl = q; }
+
 		friend class MultiVolumeRenderer;
 
 	protected:
@@ -287,6 +291,8 @@ namespace FLIVR
 		KernelProgram* m_dslt_l2_kernel;
 		KernelProgram* m_dslt_b_kernel;
 		KernelProgram* m_dslt_em_kernel;
+
+		Quaternion m_q_cl;
 
 		//calculating scaling factor, etc
 		double CalcScaleFactor(double w, double h, double tex_w, double tex_h, double zoom);

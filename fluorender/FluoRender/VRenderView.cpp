@@ -396,6 +396,103 @@ void LMSeacher::OnMouse(wxMouseEvent& event)
 }
 
 /////////////////////////////////////////////////////////////////////////
+/*
+wxDEFINE_EVENT(wxEVT_VLTHREAD_COMPLETED, wxCommandEvent);
+wxDEFINE_EVENT(wxEVT_VLTHREAD_PAUSED, wxCommandEvent);
+*/
+VolumeLoaderThread::VolumeLoaderThread(VolumeLoader* vl)
+	: wxThread(wxTHREAD_JOINABLE), m_vl(vl)
+{
+
+}
+
+VolumeLoaderThread::~VolumeLoaderThread()
+{
+	wxCriticalSectionLocker enter(m_vl->m_pThreadCS);
+    // the thread is being destroyed; make sure not to leave dangling pointers around
+    m_vl->m_thread = NULL;
+	m_vl->m_queues.clear();
+}
+
+wxThread::ExitCode VolumeLoaderThread::Entry()
+{
+	unsigned int st_time = GET_TICK_COUNT();
+
+	for (auto b : m_vl->m_queues)
+	{
+		if (TestDestroy())
+			break;
+		if (!b.brick->isLoaded())
+		{
+			b.brick->tex_data_brk(0, b.finfo);
+		}
+	}
+
+/*
+	wxCommandEvent evt(wxEVT_VLTHREAD_COMPLETED, GetId());
+	VolumeLoaderData *data = new VolumeLoaderData;
+	data->m_cur_cat = 0;
+	data->m_cur_item = 0;
+	data->m_progress = 0;
+	evt.SetClientData(data);
+	wxPostEvent(m_pParent, evt);
+*/
+	return 0;
+}
+
+VolumeLoader::VolumeLoader()
+{
+	m_thread = NULL;
+}
+
+VolumeLoader::~VolumeLoader()
+{
+	if (m_thread)
+	{
+		m_thread->Delete();
+		m_thread->Wait();
+		delete m_thread;
+	}
+}
+
+void VolumeLoader::Queue(VolumeLoaderData brick)
+{
+	m_queues.push_back(brick);
+}
+
+void VolumeLoader::ClearQueues()
+{
+	if (!m_queues.empty())
+		m_queues.clear();
+}
+
+void VolumeLoader::Set(vector<VolumeLoaderData> vld)
+{
+	m_queues = vld;
+}
+
+void VolumeLoader::Abort()
+{
+	if (m_thread)
+	{
+		m_thread->Delete();
+		m_thread->Wait();
+		delete m_thread;
+		m_thread = NULL;
+	}
+}
+
+bool VolumeLoader::Run()
+{
+	Abort();
+
+	m_thread = new VolumeLoaderThread(this);
+	if (m_thread->Create() != wxTHREAD_NO_ERROR)
+		return false;
+	m_thread->Run();
+}
+
+//////////////////////////////////////////////////////////////////////////
 
 
 BEGIN_EVENT_TABLE(VRenderGLView, wxGLCanvas)
@@ -9872,6 +9969,7 @@ void VRenderGLView::Q2A()
 				planes = m_vd_pop_list[i]->GetVR()->get_planes();
 			if (planes && planes->size()==6)
 			{
+				m_vd_pop_list[i]->GetVR()->set_clip_quaternion(m_q_cl);
 				double x1, x2, y1, y2, z1, z2;
 				double abcd[4];
 				(*planes)[0]->get_copy(abcd);
@@ -9965,6 +10063,7 @@ void VRenderGLView::A2Q()
 				planes = m_vd_pop_list[i]->GetVR()->get_planes();
 			if (planes && planes->size()==6)
 			{
+				m_vd_pop_list[i]->GetVR()->set_clip_quaternion(m_q_cl);
 				double x1, x2, y1, y2, z1, z2;
 				double abcd[4];
 
@@ -10208,7 +10307,7 @@ void VRenderGLView::StartLoopUpdate()
 					{
 						(*bricks)[j]->set_drawn(false);
 						if ((*bricks)[j]->get_priority()>0 ||
-							!vd->GetVR()->test_against_view((*bricks)[j]->bbox(), m_persp))//changed by takashi
+							!vd->GetVR()->test_against_view_clip((*bricks)[j]->bbox(), (*bricks)[j]->tbox(), (*bricks)[j]->dbox(), m_persp))//changed by takashi
 						{
 							(*bricks)[j]->set_disp(false);
 							continue;
@@ -10244,7 +10343,57 @@ void VRenderGLView::StartLoopUpdate()
 					vd->GetVR()->set_done_loop(false);
 			}
 		}
-
+/*
+		if (m_vol_method == VOL_METHOD_MULTI)
+		{
+			
+		}
+		else
+		{
+			int i, j;
+			vector<VolumeData*> list;
+			for (i=(int)m_layer_list.size()-1; i>=0; i--)
+			{
+				if (!m_layer_list[i])
+					continue;
+				switch (m_layer_list[i]->IsA())
+				{
+				case 2://volume data (this won't happen now)
+					{
+						VolumeData* vd = (VolumeData*)m_layer_list[i];
+						if (vd && vd->GetDisp())
+						{
+							list.push_back(vd);
+						}
+					}
+					break;
+				case 5://group
+					{
+						DataGroup* group = (DataGroup*)m_layer_list[i];
+						if (!group->GetDisp())
+							continue;
+						for (j=group->GetVolumeNum()-1; j>=0; j--)
+						{
+							VolumeData* vd = group->GetVolumeData(j);
+							if (vd && vd->GetDisp())
+							{
+								list.push_back(vd);
+							}
+						}
+						if (!list.empty())
+						{
+							if (group->GetBlendMode() == VOL_METHOD_MULTI)
+								DrawVolumesMulti(list, peel);
+							else
+								DrawVolumesComp(list, false, peel);
+							list.clear();
+						}
+					}
+					break;
+				}
+			}
+		}
+*/
 		if (total_num > 0)
 		{
 			TextureRenderer::set_update_loop();
