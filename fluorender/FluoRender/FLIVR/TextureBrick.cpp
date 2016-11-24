@@ -39,6 +39,7 @@
 #include "../compatibility.h"
 #include <setjmp.h>
 #include <zlib.h>
+#include <wx/stdpaths.h>
 
 using namespace std;
 
@@ -1050,6 +1051,148 @@ z
 	   return false;
    }
 
+#define DOWNLOAD_BUFSIZE 8192
+   
+   struct MemoryStruct {
+	   char *memory;
+	   size_t size;
+   };
+   
+   size_t TextureBrick::WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
+   {
+	   size_t realsize = size * nmemb;
+	   struct MemoryStruct *mem = (struct MemoryStruct *)userp;
+
+	   mem->memory = (char *)realloc(mem->memory, mem->size + realsize + 1);
+	   if(mem->memory == NULL) {
+		   /* out of memory! */ 
+		   printf("not enough memory (realloc returned NULL)\n");
+		   return 0;
+	   }
+
+	   memcpy(&(mem->memory[mem->size]), contents, realsize);
+	   mem->size += realsize;
+	   mem->memory[mem->size] = 0;
+
+	   return realsize;
+   }
+
+   size_t TextureBrick::WriteFileCallback(void *contents, size_t size, size_t nmemb, void *userp)
+   {
+	   ofstream *out = static_cast<std::ofstream *>(userp);
+	   size_t nbytes = size * nmemb;
+	   out->write((char *)contents, nbytes);
+	   return nbytes;
+   }
+
+   bool TextureBrick::read_brick_without_decomp(char* data, size_t &readsize, FileLocInfo* finfo)
+   {
+	   readsize = -1;
+
+	   if (!finfo) return false;
+	   
+	   if (finfo->isurl)
+	   {
+		   bool found_cache = false;
+
+		   if (finfo->cached)
+			   found_cache = true;
+		   else
+		   {
+			   wstring fcname;
+
+			   //search cache
+
+			   if (found_cache)
+			   {
+				   finfo->cached = true;
+				   finfo->cache_filename = fcname;
+			   }
+		   }
+
+		   if (!found_cache)
+		   {
+			   CURLcode ret;
+
+			   if (s_curl_ == NULL) {
+				   cerr << "curl_easy_init() failed" << endl;
+				   return false;
+			   }
+			   curl_easy_reset(s_curl_);
+			   curl_easy_setopt(s_curl_, CURLOPT_URL, wxString::wxString(finfo->filename).ToStdString().c_str());
+			   curl_easy_setopt(s_curl_, CURLOPT_TIMEOUT, 10L);
+			   curl_easy_setopt(s_curl_, CURLOPT_USERAGENT, "libcurl-agent/1.0");
+			   curl_easy_setopt(s_curl_, CURLOPT_WRITEFUNCTION, WriteFileCallback);
+			   //ÉsÉAèÿñæèëåüèÿÇ»Çµ
+			   curl_easy_setopt(s_curl_, CURLOPT_SSL_VERIFYPEER, 0);
+
+			   wxString expath = wxStandardPaths::Get().GetExecutablePath();
+			   expath = expath.BeforeLast(GETSLASH(),NULL);
+#ifdef _WIN32
+			   wxString dft = expath + "\\vvd_cache";
+			   wxString dft2 = wxStandardPaths::Get().GetUserDataDir() + "\\vvd_cache";
+			   if (!wxDirExists(dft) && wxDirExists(dft2))
+				   dft = dft2;
+			   else if (!wxDirExists(dft))
+				   wxMkdir(dft);
+			   dft += L"\\";
+#else
+			   wxString dft = expath + "/../Resources/vvd_cache";
+			   if (!wxDirExists(dft))
+				   wxMkdir(dft);
+			   dft += L"/";
+#endif
+			   wstring randname;
+			   int len = 16;
+			   char s[17];
+			   wxString test;
+			   do {
+				   const char alphanum[] =
+					   "0123456789"
+					   "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+					   "abcdefghijklmnopqrstuvwxyz";
+
+				   for (int i = 0; i < len; ++i) {
+					   s[i] = alphanum[rand() % (sizeof(alphanum) - 1)];
+				   }
+				   s[len] = 0;
+				   test = dft;
+				   test += s;
+			   } while (wxFileExists(test));
+			   dft += s;
+
+			   wstring cfname = dft.ToStdWstring();
+			   ofstream ofs(ws2s(cfname), ios::binary);
+			   curl_easy_setopt(s_curl_, CURLOPT_WRITEDATA, &ofs);
+			   ret = curl_easy_perform(s_curl_);
+			   if (ret != CURLE_OK) {
+				   cerr << "curl_easy_perform() failed." << curl_easy_strerror(ret) << endl;
+				   return false;
+			   }
+
+			   ofs.close();
+
+			   finfo->cached = true;
+			   finfo->cache_filename = cfname;
+		   }
+	   }
+
+	   ifstream ifs;
+	   wstring fn = finfo->cached ? finfo->cache_filename : finfo->filename;
+	   ifs.open(ws2s(fn), ios::binary);
+	   if (!ifs) return false;
+	   size_t zsize = finfo->datasize;
+	   if (zsize <= 0) zsize = (size_t)ifs.seekg(0, std::ios::end).tellg();
+	   char *zdata = new char[zsize];
+	   ifs.seekg(finfo->offset, ios_base::beg);
+	   ifs.read((char*)zdata, zsize);
+	   if (ifs) ifs.close();
+	   data = zdata;
+	   readsize = zsize;
+
+	   return true;
+   }
+
    bool TextureBrick::raw_brick_reader(char* data, size_t size, const FileLocInfo* finfo)
    {
 	   try
@@ -1089,34 +1232,6 @@ z
 
 	   return true;
    }
-
-   #define DOWNLOAD_BUFSIZE 8192
-
-   
-   struct MemoryStruct {
-	   char *memory;
-	   size_t size;
-   };
-   
-   size_t TextureBrick::WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
-   {
-	   size_t realsize = size * nmemb;
-	   struct MemoryStruct *mem = (struct MemoryStruct *)userp;
-
-	   mem->memory = (char *)realloc(mem->memory, mem->size + realsize + 1);
-	   if(mem->memory == NULL) {
-		   /* out of memory! */ 
-		   printf("not enough memory (realloc returned NULL)\n");
-		   return 0;
-	   }
-
-	   memcpy(&(mem->memory[mem->size]), contents, realsize);
-	   mem->size += realsize;
-	   mem->memory[mem->size] = 0;
-
-	   return realsize;
-   }
-
 
    bool TextureBrick::raw_brick_reader_url(char* data, size_t size, const FileLocInfo* finfo)
    {

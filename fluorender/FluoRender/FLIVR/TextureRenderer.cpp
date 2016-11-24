@@ -42,6 +42,7 @@
 #include <boost/lexical_cast.hpp>
 #include <sstream>
 #include "compatibility.h"
+#include <time.h>
 //#include <iomanip>
 
 using boost::property_tree::wptree;
@@ -77,6 +78,7 @@ namespace FLIVR
 	int TextureRenderer::quota_bricks_ = 0;
 	Point TextureRenderer::quota_center_;
 	int TextureRenderer::update_order_ = 0;
+	bool TextureRenderer::load_on_main_thread_ = false;
 
 	vector<TextureRenderer::LoadedBrick> TextureRenderer::loadedbrks;
 	int TextureRenderer::del_id = 0;
@@ -1719,79 +1721,136 @@ namespace FLIVR
 				{
 					if(tex_->isBrxml())
 					{
-						bool brkerror = false;
-						bool lb_swapped = false;
-						if (brick->isLoaded())
+						if (load_on_main_thread_)
 						{
-							if (brick->get_id_in_loadedbrks() >= 0 && brick->get_id_in_loadedbrks() < loadedbrks.size())
+							bool brkerror = false;
+							bool lb_swapped = false;
+							if (brick->isLoaded())
 							{
-								loadedbrks[brick->get_id_in_loadedbrks()].swapped = true;
-								lb_swapped = true;
-							}
-							else
-								brkerror = true;
-						}
-						else if(mainmem_buf_size_ >= 1.0)
-						{
-							double bsize = brick->nx()*brick->ny()*brick->nz()*brick->nb(c)/1.04e6;
-							if(available_mainmem_buf_size_ - bsize < 0.0)
-							{
-								double free_mem_size = 0.0;
-								while (free_mem_size < bsize && del_id < loadedbrks.size() )
+								if (brick->get_id_in_loadedbrks() >= 0 && brick->get_id_in_loadedbrks() < loadedbrks.size())
 								{
-									TextureBrick* b = loadedbrks[del_id].brk;
-									if(!loadedbrks[del_id].swapped && b->isLoaded()){
-										b->freeBrkData();
-										free_mem_size += b->nx() * b->ny() * b->nz() * b->nb(0) / 1.04e6;
+									loadedbrks[brick->get_id_in_loadedbrks()].swapped = true;
+									lb_swapped = true;
+								}
+								else
+									brkerror = true;
+							}
+							else if(mainmem_buf_size_ >= 1.0)
+							{
+								double bsize = brick->nx()*brick->ny()*brick->nz()*brick->nb(c)/1.04e6;
+								if(available_mainmem_buf_size_ - bsize < 0.0)
+								{
+									double free_mem_size = 0.0;
+									while (free_mem_size < bsize && del_id < loadedbrks.size() )
+									{
+										TextureBrick* b = loadedbrks[del_id].brk;
+										if(!loadedbrks[del_id].swapped && b->isLoaded()){
+											b->freeBrkData();
+											free_mem_size += b->nx() * b->ny() * b->nz() * b->nb(0) / 1.04e6;
+										}
+										del_id++;
 									}
-									del_id++;
+									available_mainmem_buf_size_ += free_mem_size;
 								}
-								available_mainmem_buf_size_ += free_mem_size;
+							}
+
+							FileLocInfo *finfo = tex_->GetFileName(brick->getID());
+							void *texdata = brick->tex_data_brk(c, finfo);
+							if (texdata)
+							{
+								glTexImage3D(GL_TEXTURE_3D, 0, internal_format, nx, ny, nz, 0, format, brick->tex_type(c), 0);
+								glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format, brick->tex_type(c), texdata);
+							}
+							else 
+							{
+								glDeleteTextures(1, (GLuint*)&tex_pool_[idx].id);
+								tex_pool_.erase(tex_pool_.begin()+idx);
+								brkerror = true;
+								result = -1;
+							}
+
+							if (mainmem_buf_size_ == 0.0) brick->freeBrkData();
+							else 
+							{
+								if (brkerror)
+								{
+									brick->freeBrkData();
+
+									double new_mem = brick->nx()*brick->ny()*brick->nz()*brick->nb(c)/1.04e6;
+									available_mainmem_buf_size_ += new_mem;
+								}
+								else
+								{
+									if(!lb_swapped)
+									{
+										double new_mem = brick->nx()*brick->ny()*brick->nz()*brick->nb(c)/1.04e6;
+										available_mainmem_buf_size_ -= new_mem;
+									}
+
+									LoadedBrick lb;
+									lb.swapped = false;
+									lb.size = brick->nx()*brick->ny()*brick->nz()*brick->nb(c)/1.04e6;
+									lb.brk = brick;
+									lb.brk->set_id_in_loadedbrks(loadedbrks.size());
+									loadedbrks.push_back(lb);
+
+								}
+
 							}
 						}
-						
-						FileLocInfo *finfo = tex_->GetFileName(brick->getID());
-						void *texdata = brick->tex_data_brk(c, finfo);
-						if (texdata)
-						{
-							glTexImage3D(GL_TEXTURE_3D, 0, internal_format, nx, ny, nz, 0, format, brick->tex_type(c), 0);
-							glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format, brick->tex_type(c), texdata);
-						}
 						else 
 						{
-							glDeleteTextures(1, (GLuint*)&tex_pool_[idx].id);
-							tex_pool_.erase(tex_pool_.begin()+idx);
-							brkerror = true;
-							result = -1;
-						}
-						
-						if (mainmem_buf_size_ == 0.0) brick->freeBrkData();
-						else 
-						{
-							if (brkerror)
+							if (brick->isLoaded())
 							{
-								brick->freeBrkData();
-
-								double new_mem = brick->nx()*brick->ny()*brick->nz()*brick->nb(c)/1.04e6;
-								available_mainmem_buf_size_ += new_mem;
+								bool brkerror = false;
+								void *texdata = brick->tex_data_brk(c, NULL);
+								if (texdata)
+								{
+									glTexImage3D(GL_TEXTURE_3D, 0, internal_format, nx, ny, nz, 0, format, brick->tex_type(c), 0);
+									glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format, brick->tex_type(c), texdata);
+								}
+								else 
+								{
+									glDeleteTextures(1, (GLuint*)&tex_pool_[idx].id);
+									tex_pool_.erase(tex_pool_.begin()+idx);
+									brkerror = true;
+									result = -1;
+								}
 							}
 							else
 							{
-								if(!lb_swapped)
+								uint32_t rn_time;
+								unsigned long elapsed;
+								do {
+									rn_time = GET_TICK_COUNT();
+									elapsed = rn_time - st_time_;
+									wxMilliSleep(elapsed+4);
+								} while (elapsed <= up_time_);
+								
+								if (brick->isLoaded())
 								{
-									double new_mem = brick->nx()*brick->ny()*brick->nz()*brick->nb(c)/1.04e6;
-									available_mainmem_buf_size_ -= new_mem;
+									bool brkerror = false;
+									void *texdata = brick->tex_data_brk(c, NULL);
+									if (texdata)
+									{
+										glTexImage3D(GL_TEXTURE_3D, 0, internal_format, nx, ny, nz, 0, format, brick->tex_type(c), 0);
+										glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format, brick->tex_type(c), texdata);
+									}
+									else 
+									{
+										glDeleteTextures(1, (GLuint*)&tex_pool_[idx].id);
+										tex_pool_.erase(tex_pool_.begin()+idx);
+										brkerror = true;
+										result = -1;
+									}
 								}
-
-								LoadedBrick lb;
-								lb.swapped = false;
-								lb.size = brick->nx()*brick->ny()*brick->nz()*brick->nb(c)/1.04e6;
-								lb.brk = brick;
-								lb.brk->set_id_in_loadedbrks(loadedbrks.size());
-								loadedbrks.push_back(lb);
-
+								else
+								{
+									glDeleteTextures(1, (GLuint*)&tex_pool_[idx].id);
+									tex_pool_.erase(tex_pool_.begin()+idx);
+									result = -1;
+								}
 							}
-
 						}
 					}
 					else

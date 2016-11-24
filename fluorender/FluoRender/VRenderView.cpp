@@ -408,18 +408,17 @@ VolumeLoaderThread::VolumeLoaderThread(VolumeLoader* vl)
 
 VolumeLoaderThread::~VolumeLoaderThread()
 {
-	wxCriticalSectionLocker enter(m_vl->m_pThreadCS);
+//	wxCriticalSectionLocker enter(m_vl->m_pThreadCS);
     // the thread is being destroyed; make sure not to leave dangling pointers around
-    m_vl->m_thread = NULL;
-	m_vl->m_queues.clear();
 }
 
 wxThread::ExitCode VolumeLoaderThread::Entry()
 {
 	unsigned int st_time = GET_TICK_COUNT();
 
-	for (auto b : m_vl->m_queues)
+	for (int i = 0; i < m_vl->m_queues.size(); i++)
 	{
+		VolumeLoaderData b = m_vl->m_queues[i];
 		if (TestDestroy())
 			break;
 		if (!b.brick->isLoaded())
@@ -437,7 +436,7 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 	evt.SetClientData(data);
 	wxPostEvent(m_pParent, evt);
 */
-	return 0;
+	return (wxThread::ExitCode)0;
 }
 
 VolumeLoader::VolumeLoader()
@@ -449,8 +448,11 @@ VolumeLoader::~VolumeLoader()
 {
 	if (m_thread)
 	{
-		m_thread->Delete();
-		m_thread->Wait();
+		if (m_thread->IsAlive())
+		{
+			m_thread->Delete();
+			if (m_thread->IsAlive()) m_thread->Wait();
+		}
 		delete m_thread;
 	}
 }
@@ -463,11 +465,15 @@ void VolumeLoader::Queue(VolumeLoaderData brick)
 void VolumeLoader::ClearQueues()
 {
 	if (!m_queues.empty())
+	{
+		Abort();
 		m_queues.clear();
+	}
 }
 
 void VolumeLoader::Set(vector<VolumeLoaderData> vld)
 {
+	Abort();
 	m_queues = vld;
 }
 
@@ -475,8 +481,11 @@ void VolumeLoader::Abort()
 {
 	if (m_thread)
 	{
-		m_thread->Delete();
-		m_thread->Wait();
+		if (m_thread->IsAlive())
+		{
+			m_thread->Delete();
+			if (m_thread->IsAlive()) m_thread->Wait();
+		}
 		delete m_thread;
 		m_thread = NULL;
 	}
@@ -488,8 +497,14 @@ bool VolumeLoader::Run()
 
 	m_thread = new VolumeLoaderThread(this);
 	if (m_thread->Create() != wxTHREAD_NO_ERROR)
+	{
+		delete m_thread;
+		m_thread = NULL;
 		return false;
+	}
 	m_thread->Run();
+
+	return true;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -768,7 +783,8 @@ wxGLCanvas(parent, id, attriblist, pos, size, style),
 	m_enhance_sel(false),
 	m_adaptive_res(false),
 	m_int_res(false),
-	m_dpeel(false)
+	m_dpeel(false),
+	m_load_in_main_thread(true)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -10256,7 +10272,7 @@ void VRenderGLView::StartLoopUpdate()
 
 	PopMeshList();
 
-	unsigned int i, j;
+	int i, j, k;
 	m_dpeel = false;
 	for (i=0; i<m_md_pop_list.size(); i++)
 	{
@@ -10343,15 +10359,54 @@ void VRenderGLView::StartLoopUpdate()
 					vd->GetVR()->set_done_loop(false);
 			}
 		}
-/*
+
+		vector<VolumeLoaderData> queues;
 		if (m_vol_method == VOL_METHOD_MULTI)
 		{
-			
-		}
-		else
-		{
-			int i, j;
+			int max_bricknum = 0;
 			vector<VolumeData*> list;
+			vector<int> checked;
+			for (i=0; i<m_vd_pop_list.size(); i++)
+			{
+				VolumeData* vd = m_vd_pop_list[i];
+				if (!vd || !vd->GetDisp() || !vd->isBrxml())
+					continue;
+				Texture* tex = vd->GetTexture();
+				if (!tex)
+					continue;
+				vector<TextureBrick*> *bricks = tex->get_bricks();
+				if (!bricks || bricks->size()==0)
+					continue;
+				if (bricks->size() > max_bricknum)
+					max_bricknum = bricks->size();
+				list.push_back(vd);
+				checked.push_back(0);
+			}
+
+			for (j = 0; j < max_bricknum; j++)
+			{
+				for (i = 0; i < list.size(); i++)
+				{
+					VolumeData* vd = list[i];
+					Texture* tex = vd->GetTexture();
+					vector<TextureBrick*> *bricks = tex->get_bricks();
+					if (j*((float)bricks->size()/(float)max_bricknum) >= checked[i])
+					{
+						VolumeLoaderData d;
+						TextureBrick* b = (*bricks)[checked[i]];
+						if (b->get_disp() && !b->isLoaded())
+						{
+							d.brick = b;
+							d.finfo = tex->GetFileName(b->getID());
+							queues.push_back(d);
+						}
+						checked[i]++;
+					}
+				}
+			}
+		}
+		else if (m_layer_list.size() > 0)
+		{
 			for (i=(int)m_layer_list.size()-1; i>=0; i--)
 			{
 				if (!m_layer_list[i])
@@ -10361,39 +10416,113 @@ void VRenderGLView::StartLoopUpdate()
 				case 2://volume data (this won't happen now)
 					{
 						VolumeData* vd = (VolumeData*)m_layer_list[i];
-						if (vd && vd->GetDisp())
+						if (vd && vd->GetDisp() && vd->isBrxml())
 						{
-							list.push_back(vd);
+							Texture* tex = vd->GetTexture();
+							if (!tex)
+								continue;
+							vector<TextureBrick*> *bricks = tex->get_bricks();
+							if (!bricks || bricks->size()==0)
+								continue;
+							for (j=0; j<bricks->size(); j++)
+							{
+								VolumeLoaderData d;
+								TextureBrick* b = (*bricks)[j];
+								if (b->get_disp() && !b->isLoaded())
+								{
+									d.brick = b;
+									d.finfo = tex->GetFileName(b->getID());
+									queues.push_back(d);
+								}
+							}
 						}
 					}
 					break;
 				case 5://group
 					{
+						int max_bricknum = 0;
+						vector<VolumeData*> list;
+						vector<int> checked;
 						DataGroup* group = (DataGroup*)m_layer_list[i];
 						if (!group->GetDisp())
 							continue;
 						for (j=group->GetVolumeNum()-1; j>=0; j--)
 						{
 							VolumeData* vd = group->GetVolumeData(j);
-							if (vd && vd->GetDisp())
-							{
-								list.push_back(vd);
-							}
+							if (!vd || !vd->GetDisp() || !vd->isBrxml())
+								continue;
+							Texture* tex = vd->GetTexture();
+							if (!tex)
+								continue;
+							vector<TextureBrick*> *bricks = tex->get_bricks();
+							if (!bricks || bricks->size()==0)
+								continue;
+							if (bricks->size() > max_bricknum)
+								max_bricknum = bricks->size();
+							list.push_back(vd);
+							checked.push_back(0);
 						}
 						if (!list.empty())
 						{
 							if (group->GetBlendMode() == VOL_METHOD_MULTI)
-								DrawVolumesMulti(list, peel);
+							{
+								for (j = 0; j < max_bricknum; j++)
+								{
+									for (k = 0; k < list.size(); k++)
+									{
+										VolumeData* vd = list[k];
+										Texture* tex = vd->GetTexture();
+										vector<TextureBrick*> *bricks = tex->get_bricks();
+										if (j*((float)bricks->size()/(float)max_bricknum) >= checked[k])
+										{
+											VolumeLoaderData d;
+											TextureBrick* b = (*bricks)[checked[k]];
+											if (b->get_disp() && !b->isLoaded())
+											{
+												d.brick = b;
+												d.finfo = tex->GetFileName(b->getID());
+												queues.push_back(d);
+											}
+											checked[k]++;
+										}
+									}
+								}
+							}
 							else
-								DrawVolumesComp(list, false, peel);
-							list.clear();
+							{
+								for (j = 0; j < list.size(); j++)
+								{
+									VolumeData* vd = list[j];
+									Texture* tex = vd->GetTexture();
+									vector<TextureBrick*> *bricks = tex->get_bricks();
+									for (k=0; k<bricks->size(); k++)
+									{
+										VolumeLoaderData d;
+										TextureBrick* b = (*bricks)[k];
+										if (b->get_disp() && !b->isLoaded())
+										{
+											d.brick = b;
+											d.finfo = tex->GetFileName(b->getID());
+											queues.push_back(d);
+										}
+									}
+								}
+							}
 						}
+
 					}
 					break;
 				}
 			}
 		}
-*/
+
+		if (queues.size() > 0)
+		{
+			m_loader.Set(queues);
+			//TextureRenderer::set_load_on_main_thread(false);
+			TextureRenderer::set_load_on_main_thread(!m_loader.Run());
+		}
+
 		if (total_num > 0)
 		{
 			TextureRenderer::set_update_loop();

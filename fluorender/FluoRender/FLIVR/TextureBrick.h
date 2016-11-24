@@ -64,12 +64,46 @@ namespace FLIVR {
 #define BRICK_FILE_TYPE_ZLIB	3
 
 	
-	struct FileLocInfo {
+	class FileLocInfo {
+	public:
+		FileLocInfo()
+		{
+			filename = L"";
+			offset = 0;
+			datasize = 0;
+			type = 0;
+			isurl = false;
+			cached = false;
+			cache_filename = L"";
+		}
+		FileLocInfo(std::wstring filename_, int offset_, int datasize_, int type_, bool isurl_)
+		{
+			filename = filename_;
+			offset = offset_;
+			datasize = datasize_;
+			type = type_;
+			isurl = isurl_;
+			cached = false;
+			cache_filename = L"";
+		}
+		FileLocInfo(const FileLocInfo &copy)
+		{
+			filename = copy.filename;
+			offset = copy.offset;
+			datasize = copy.datasize;
+			type = copy.type;
+			isurl = copy.isurl;
+			cached = copy.cached;
+			cache_filename = copy.cache_filename;
+		}
+
 		std::wstring filename;
 		int offset;
 		int datasize;
 		int type; //1-raw; 2-jpeg; 3-zlib;
 		bool isurl;
+		bool cached;
+		std::wstring cache_filename;
 	};
 
 	class TextureBrick
@@ -223,13 +257,14 @@ namespace FLIVR {
         
         static void setCURL(CURL *c) {s_curl_ = c;}
 
+		size_t tex_type_size(GLenum t);
+		GLenum tex_type_aux(Nrrd* n);
+		bool read_brick(char* data, size_t size, const FileLocInfo* finfo);
+		static bool read_brick_without_decomp(char* data, size_t &readsize, FileLocInfo* finfo);
 	private:
 		void compute_edge_rays(BBox &bbox);
 		void compute_edge_rays_tex(BBox &bbox);
-		size_t tex_type_size(GLenum t);
-		GLenum tex_type_aux(Nrrd* n);
-
-		bool read_brick(char* data, size_t size, const FileLocInfo* finfo);
+		
 		bool raw_brick_reader(char* data, size_t size, const FileLocInfo* finfo);
 		bool jpeg_brick_reader(char* data, size_t size, const FileLocInfo* finfo);
 		bool zlib_brick_reader(char* data, size_t size, const FileLocInfo* finfo);
@@ -238,6 +273,7 @@ namespace FLIVR {
 		bool zlib_brick_reader_url(char* data, size_t size, const FileLocInfo* finfo);
 
 		static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp);
+		static size_t WriteFileCallback(void *contents, size_t size, size_t nmemb, void *userp);
 
 		//! bbox edges
 		Ray edge_[12]; 

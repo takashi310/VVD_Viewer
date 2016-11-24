@@ -218,7 +218,22 @@ class VolumeLoaderThread : public wxThread
         VolumeLoader* m_vl;
 		vector<VolumeLoaderData> *m_queues;
 };
-
+/*
+class VolumeDecompressorThread : public wxThread
+{
+    public:
+		VolumeDecompressorThread(char* in_data, TextureBrick *b, const FileLocInfo* finfo);
+		~VolumeDecompressorThread();
+		void SetTimeLimit(unsigned int time_limit) { m_time_limit = time_limit; }
+    private:
+		unsigned int m_time_limit;
+    protected:
+		virtual ExitCode Entry();
+        char* m_in_data;
+		TextureBrick* m_brick;
+		const FileLocInfo* m_finfo;
+};
+*/
 class VolumeLoader
 {
 	public:
@@ -1063,6 +1078,9 @@ private:
 
 	//text renderer
 	TextRenderer* m_text_renderer;
+
+	VolumeLoader m_loader;
+	bool m_load_in_main_thread;
 
 private:
 #ifdef _WIN32

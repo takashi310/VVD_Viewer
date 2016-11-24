@@ -68,7 +68,8 @@ namespace FLIVR
 		s_spcx_(1.0),
 		s_spcy_(1.0),
 		s_spcz_(1.0),
-        mask_undo_pointer_(-1)
+        mask_undo_pointer_(-1),
+		filename_(NULL)
 	{
 		for (size_t i = 0; i < TEXTURE_MAX_COMPONENTS; i++)
 		{
@@ -82,6 +83,8 @@ namespace FLIVR
 
 	Texture::~Texture()
 	{
+		DeleteCacheFiles();
+
 		if(bricks_){
 			for (int i=0; i<(int)(*bricks_).size(); i++)
 			{
@@ -114,6 +117,28 @@ namespace FLIVR
 		//if (ifs_) ifs_.close();
 
 		clearPyramid();
+	}
+
+	void Texture::DeleteCacheFiles()
+	{
+		for (int i=0; i<(int)filenames_.size(); i++){
+			for (int j=0; j<(int)filenames_[i].size(); j++){
+				for (int k=0; k<(int)filenames_[i][j].size(); k++){
+					for (int n=0; n<(int)filenames_[i][j][k].size(); n++){
+						if (filenames_[i][j][k][n] && !filenames_[i][j][k][n]->cache_filename.empty())
+						{
+							wxString fpath = filenames_[i][j][k][n]->cache_filename;
+							if(wxFileExists(fpath))
+							{
+								wxRemoveFile(fpath);
+								filenames_[i][j][k][n]->cached = false;
+								filenames_[i][j][k][n]->cache_filename = L"";
+							}
+						}
+					}
+				}
+			}
+		}
 	}
 
 	void Texture::clear_undos()
@@ -813,7 +838,7 @@ namespace FLIVR
 
 	FileLocInfo *Texture::GetFileName(int id)
 	{
-		if (id < 0 || id >= filename_->size()) return NULL;
+		if (id < 0 || !filename_ || id >= filename_->size()) return NULL;
 		return (*filename_)[id];
 	}
 
