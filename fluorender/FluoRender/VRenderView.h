@@ -201,39 +201,44 @@ struct VolumeLoaderData
 {
 	FileLocInfo *finfo;
 	TextureBrick *brick;
+	VolumeData *vd;
+	unsigned long long datasize;
+	int mode;
+};
+
+struct VolumeDecompressorData
+{
+	char *in_data;
+	size_t in_size;
+	TextureBrick *b;
+	FileLocInfo *finfo;
+	VolumeData *vd;
+	unsigned long long datasize;
+	int mode;
 };
 
 class VolumeLoader;
 
-class VolumeLoaderThread : public wxThread
-{
-    public:
-		VolumeLoaderThread(VolumeLoader* vl);
-		~VolumeLoaderThread();
-		void SetTimeLimit(unsigned int time_limit) { m_time_limit = time_limit; }
-    private:
-		unsigned int m_time_limit;
-    protected:
-		virtual ExitCode Entry();
-        VolumeLoader* m_vl;
-		vector<VolumeLoaderData> *m_queues;
-};
-/*
 class VolumeDecompressorThread : public wxThread
 {
     public:
-		VolumeDecompressorThread(char* in_data, TextureBrick *b, const FileLocInfo* finfo);
+		VolumeDecompressorThread(VolumeLoader *vl);
 		~VolumeDecompressorThread();
-		void SetTimeLimit(unsigned int time_limit) { m_time_limit = time_limit; }
-    private:
-		unsigned int m_time_limit;
     protected:
 		virtual ExitCode Entry();
-        char* m_in_data;
-		TextureBrick* m_brick;
-		const FileLocInfo* m_finfo;
+        VolumeLoader* m_vl;
 };
-*/
+
+class VolumeLoaderThread : public wxThread
+{
+    public:
+		VolumeLoaderThread(VolumeLoader *vl);
+		~VolumeLoaderThread();
+    protected:
+		virtual ExitCode Entry();
+        VolumeLoader* m_vl;
+};
+
 class VolumeLoader
 {
 	public:
@@ -243,16 +248,34 @@ class VolumeLoader
 		void ClearQueues();
 		void Set(vector<VolumeLoaderData> vld);
 		void Abort();
+		void StopAll();
 		bool Run();
+		void SetMaxThreadNum(int num) {m_max_decomp_th = num;}
+		static void SetMemoryLimitByte(long long limit) {m_memory_limit = limit;}
+		void CleanupLoadedBrick();
 	protected:
 		VolumeLoaderThread *m_thread;
 		wxCriticalSection m_pThreadCS;
 		vector<VolumeLoaderData> m_queues;
+		vector<VolumeDecompressorData> m_decomp_queues;
+		vector<VolumeDecompressorThread *> m_decomp_threads;
+		vector<VolumeLoaderData> m_loaded;
+		int m_running_decomp_th;
+		int m_max_decomp_th;
 		bool m_valid;
 
-		friend class VolumeLoaderThread;
-};
+		static long long m_memory_limit;
+		static long long m_used_memory;
 
+		inline void AddLoadedBrick(VolumeLoaderData lbd)
+		{
+			m_loaded.push_back(lbd);
+			m_used_memory += lbd.datasize;
+		}
+
+		friend class VolumeLoaderThread;
+		friend class VolumeDecompressorThread;
+};
 
 class VRenderGLView: public wxGLCanvas
 {

@@ -46,6 +46,7 @@ using namespace std;
 namespace FLIVR
 {
     CURL* TextureBrick::s_curl_ = NULL;
+	map<wstring, wstring> TextureBrick::cache_table_ = map<wstring, wstring>();
     
    TextureBrick::TextureBrick (Nrrd* n0, Nrrd* n1,
          int nx, int ny, int nz, int nc, int* nb,
@@ -900,8 +901,8 @@ z
 	   else
 	   {
 		   int bd = tex_type_size(tex_type(c));
-		   ptr = new unsigned char[nx_*ny_*nz_*bd];
-		   if (!read_brick((char *)ptr, nx_*ny_*nz_*bd, finfo))
+		   ptr = new unsigned char[(size_t)nx_*(size_t)ny_*(size_t)nz_*(size_t)bd];
+		   if (!read_brick((char *)ptr, (size_t)nx_*(size_t)ny_*(size_t)nz_*(size_t)bd, finfo))
 		   {
 			   delete [] ptr;
 			   return NULL;
@@ -1085,7 +1086,7 @@ z
 	   return nbytes;
    }
 
-   bool TextureBrick::read_brick_without_decomp(char* data, size_t &readsize, FileLocInfo* finfo)
+   bool TextureBrick::read_brick_without_decomp(char* &data, size_t &readsize, FileLocInfo* finfo)
    {
 	   readsize = -1;
 
@@ -1094,14 +1095,20 @@ z
 	   if (finfo->isurl)
 	   {
 		   bool found_cache = false;
-
-		   if (finfo->cached)
+		   wxString wxcfname = finfo->cache_filename;
+		   if (finfo->cached && wxFileExists(wxcfname))
 			   found_cache = true;
 		   else
 		   {
 			   wstring fcname;
 
-			   //search cache
+			   auto itr = cache_table_.find(fcname);
+			   if (itr != cache_table_.end())
+			   {
+				   wxcfname = itr->second;
+				   if (wxFileExists(wxcfname))
+						found_cache = true;
+			   }
 
 			   if (found_cache)
 			   {
@@ -1174,6 +1181,7 @@ z
 
 			   finfo->cached = true;
 			   finfo->cache_filename = cfname;
+			   cache_table_[finfo->filename] = cfname;
 		   }
 	   }
 
@@ -1191,6 +1199,115 @@ z
 	   readsize = zsize;
 
 	   return true;
+   }
+
+   bool TextureBrick::decompress_brick(char *out, char* in, size_t out_size, size_t in_size, int type)
+   {
+	   if (type == BRICK_FILE_TYPE_JPEG) return jpeg_decompressor(out, in, out_size, in_size);
+	   if (type == BRICK_FILE_TYPE_ZLIB) return zlib_decompressor(out, in, out_size, in_size);
+
+	   return false;
+   }
+
+   struct my_error_mgr {
+	   struct jpeg_error_mgr pub;	/* "public" fields */
+
+	   jmp_buf setjmp_buffer;	/* for return to caller */
+   };
+
+   typedef struct my_error_mgr * my_error_ptr;
+
+   METHODDEF(void)
+	   my_error_exit (j_common_ptr cinfo)
+   {
+	   /* cinfo->err really points to a my_error_mgr struct, so coerce pointer */
+	   my_error_ptr myerr = (my_error_ptr) cinfo->err;
+
+	   /* Always display the message. */
+	   /* We could postpone this until after returning, if we chose. */
+	   (*cinfo->err->output_message) (cinfo);
+
+	   /* Return control to the setjmp point */
+	   longjmp(myerr->setjmp_buffer, 1);
+   }
+
+   
+   bool TextureBrick::jpeg_decompressor(char *out, char* in, size_t out_size, size_t in_size)
+   {
+	   jpeg_decompress_struct cinfo;
+	   struct my_error_mgr jerr;
+	   
+	   cinfo.err = jpeg_std_error(&jerr.pub);
+	   jerr.pub.error_exit = my_error_exit;
+	   /* Establish the setjmp return context for my_error_exit to use. */
+	   if (setjmp(jerr.setjmp_buffer)) {
+		   /* If we get here, the JPEG code has signaled an error.
+		   * We need to clean up the JPEG object, close the input file, and return.
+		   */
+		   jpeg_destroy_decompress(&cinfo);
+		   return false;
+	   }
+	   jpeg_create_decompress(&cinfo);
+	   jpeg_mem_src(&cinfo, (unsigned char *)in, in_size);
+	   jpeg_read_header(&cinfo, TRUE);
+	   jpeg_start_decompress(&cinfo);
+	   
+	   if(cinfo.jpeg_color_space != JCS_GRAYSCALE || cinfo.output_components != 1) longjmp(jerr.setjmp_buffer, 1);
+	   
+	   size_t jpgsize = cinfo.output_width * cinfo.output_height;
+	   if (jpgsize != out_size) longjmp(jerr.setjmp_buffer, 1);
+	   unsigned char *ptr[1];
+	   ptr[0] = (unsigned char *)out;
+	   while (cinfo.output_scanline < cinfo.output_height) {
+		   ptr[0] = (unsigned char *)out + cinfo.output_scanline * cinfo.output_width;
+		   jpeg_read_scanlines(&cinfo, ptr, 1);
+	   }
+
+	   jpeg_destroy_decompress(&cinfo);
+	   
+	   return true;
+   }
+
+   bool TextureBrick::zlib_decompressor(char *out, char* in, size_t out_size, size_t in_size)
+   {
+	   try
+	   {
+		   z_stream zInfo = {0};
+		   zInfo.total_in  = zInfo.avail_in  = in_size;
+		   zInfo.total_out = zInfo.avail_out = out_size;
+		   zInfo.next_in  = (Bytef *)in;
+		   zInfo.next_out = (Bytef *)out;
+
+		   int nErr, nOut = -1;
+		   nErr = inflateInit( &zInfo );
+		   if ( nErr == Z_OK ) {
+			   nErr = inflate( &zInfo, Z_FINISH );
+			   if ( nErr == Z_STREAM_END ) {
+				   nOut = zInfo.total_out;
+			   }
+		   }
+		   inflateEnd( &zInfo );
+
+		   if (nOut != out_size || nErr != Z_STREAM_END)
+			   return false;
+	   }
+	   catch (std::exception &e)
+	   {
+		   cerr << typeid(e).name() << "\n" << e.what() << endl;
+		   return false;
+	   }
+
+	   return true;
+   }
+
+   void TextureBrick::delete_all_cache_files()
+   {
+	   for(auto itr = cache_table_.begin(); itr != cache_table_.end(); ++itr)
+	   {
+		   wxString tmp = itr->second;
+		   if(wxFileExists(tmp)) wxRemoveFile(tmp);
+	   }
+	   if (!cache_table_.empty()) cache_table_.clear();
    }
 
    bool TextureBrick::raw_brick_reader(char* data, size_t size, const FileLocInfo* finfo)
@@ -1265,28 +1382,6 @@ z
 		   free(chunk.memory);
 
 	   return true;
-   }
-
-   struct my_error_mgr {
-	   struct jpeg_error_mgr pub;	/* "public" fields */
-
-	   jmp_buf setjmp_buffer;	/* for return to caller */
-   };
-
-   typedef struct my_error_mgr * my_error_ptr;
-
-   METHODDEF(void)
-	   my_error_exit (j_common_ptr cinfo)
-   {
-	   /* cinfo->err really points to a my_error_mgr struct, so coerce pointer */
-	   my_error_ptr myerr = (my_error_ptr) cinfo->err;
-
-	   /* Always display the message. */
-	   /* We could postpone this until after returning, if we chose. */
-	   (*cinfo->err->output_message) (cinfo);
-
-	   /* Return control to the setjmp point */
-	   longjmp(myerr->setjmp_buffer, 1);
    }
 
    bool TextureBrick::jpeg_brick_reader(char* data, size_t size, const FileLocInfo* finfo)

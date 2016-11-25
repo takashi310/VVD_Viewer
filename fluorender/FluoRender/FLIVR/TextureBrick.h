@@ -40,6 +40,7 @@
 #include <string>
 #include <nrrd.h>
 #include <stdint.h>
+#include <map>
 #include <curl/curl.h>
 
 namespace FLIVR {
@@ -260,7 +261,12 @@ namespace FLIVR {
 		size_t tex_type_size(GLenum t);
 		GLenum tex_type_aux(Nrrd* n);
 		bool read_brick(char* data, size_t size, const FileLocInfo* finfo);
-		static bool read_brick_without_decomp(char* data, size_t &readsize, FileLocInfo* finfo);
+		void set_brkdata(void *brkdata) {brkdata_ = brkdata;}
+		static bool read_brick_without_decomp(char* &data, size_t &readsize, FileLocInfo* finfo);
+		static bool decompress_brick(char *out, char* in, size_t out_size, size_t in_size, int type);
+		static bool jpeg_decompressor(char *out, char* in, size_t out_size, size_t in_size);
+		static bool zlib_decompressor(char *out, char* in, size_t out_size, size_t in_size);
+		static void delete_all_cache_files();
 	private:
 		void compute_edge_rays(BBox &bbox);
 		void compute_edge_rays_tex(BBox &bbox);
@@ -331,6 +337,7 @@ namespace FLIVR {
 		bool disp_;
         
         static CURL *s_curl_;
+		static std::map<std::wstring, std::wstring> cache_table_;
 	};
 
 	struct Pyramid_Level {

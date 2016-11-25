@@ -396,11 +396,71 @@ void LMSeacher::OnMouse(wxMouseEvent& event)
 }
 
 /////////////////////////////////////////////////////////////////////////
+
+VolumeDecompressorThread::VolumeDecompressorThread(VolumeLoader *vl)
+	: wxThread(wxTHREAD_JOINABLE), m_vl(vl)
+{
+
+}
+
+VolumeDecompressorThread::~VolumeDecompressorThread()
+{
+	wxCriticalSectionLocker enter(m_vl->m_pThreadCS);
+    // the thread is being destroyed; make sure not to leave dangling pointers around
+	m_vl->m_running_decomp_th--;
+}
+
+wxThread::ExitCode VolumeDecompressorThread::Entry()
+{
+	unsigned int st_time = GET_TICK_COUNT();
+
+	m_vl->m_pThreadCS.Enter();
+	m_vl->m_running_decomp_th++;
+	m_vl->m_pThreadCS.Leave();
+
+	while(1)
+	{
+		if (m_vl->m_decomp_queues.size() == 0) break;
+
+		m_vl->m_pThreadCS.Enter();
+
+		VolumeDecompressorData q = m_vl->m_decomp_queues[0];
+		m_vl->m_decomp_queues.erase(m_vl->m_decomp_queues.begin());
+
+		m_vl->m_pThreadCS.Leave();
+		
+
+		size_t bsize = (size_t)q.b->nx()*(size_t)q.b->ny()*(size_t)q.b->nz()*(size_t)q.b->nb(0);
+		char *result = new char[bsize];
+		if (TextureBrick::decompress_brick(result, q.in_data, bsize, q.in_size, q.finfo->type))
+		{
+			m_vl->m_pThreadCS.Enter();
+
+			delete q.in_data;
+			q.b->set_brkdata(result);
+			VolumeLoaderData b;
+			b.brick = q.b;
+			b.finfo = q.finfo;
+			b.vd = q.vd;
+			b.mode = q.mode;
+			b.datasize = bsize;
+			m_vl->AddLoadedBrick(b);
+
+			m_vl->m_pThreadCS.Leave();
+		}
+
+		if (TestDestroy())
+			break;
+	}
+
+	return (wxThread::ExitCode)0;
+}
+
 /*
 wxDEFINE_EVENT(wxEVT_VLTHREAD_COMPLETED, wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_VLTHREAD_PAUSED, wxCommandEvent);
 */
-VolumeLoaderThread::VolumeLoaderThread(VolumeLoader* vl)
+VolumeLoaderThread::VolumeLoaderThread(VolumeLoader *vl)
 	: wxThread(wxTHREAD_JOINABLE), m_vl(vl)
 {
 
@@ -423,7 +483,89 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 			break;
 		if (!b.brick->isLoaded())
 		{
-			b.brick->tex_data_brk(0, b.finfo);
+			if (VolumeLoader::m_used_memory >= VolumeLoader::m_memory_limit)
+			{
+				m_vl->m_pThreadCS.Enter();
+				while(1)
+				{
+					m_vl->CleanupLoadedBrick();
+					if (VolumeLoader::m_used_memory < VolumeLoader::m_memory_limit || TestDestroy())
+						break;
+					Sleep(10);
+				}
+				m_vl->m_pThreadCS.Leave();
+			}
+
+			char *ptr = NULL;
+			size_t readsize;
+			TextureBrick::read_brick_without_decomp(ptr, readsize, b.finfo);
+			if (!ptr) continue;
+
+			if (b.finfo->type == BRICK_FILE_TYPE_RAW)
+			{
+				m_vl->m_pThreadCS.Enter();
+				b.brick->set_brkdata(ptr);
+				b.datasize = readsize;
+				m_vl->AddLoadedBrick(b);
+				m_vl->m_pThreadCS.Leave();
+			}
+			else
+			{
+				bool decomp_in_this_thread = false;
+				VolumeDecompressorData dq;
+				dq.b = b.brick;
+				dq.finfo = b.finfo;
+				dq.vd = b.vd;
+				dq.mode = b.mode;
+				dq.in_data = ptr;
+				dq.in_size = readsize;
+
+				if (m_vl->m_max_decomp_th <= 0 || 
+					m_vl->m_running_decomp_th < m_vl->m_max_decomp_th)
+				{
+					VolumeDecompressorThread *dthread = new VolumeDecompressorThread(m_vl);
+					if (dthread->Create() == wxTHREAD_NO_ERROR)
+					{
+						m_vl->m_pThreadCS.Enter();
+						m_vl->m_decomp_queues.push_back(dq);
+						m_vl->m_pThreadCS.Leave();
+						dthread->Run();
+					}
+					else
+					{
+						if (m_vl->m_running_decomp_th <= 0)
+							decomp_in_this_thread = true;
+						else
+						{
+							m_vl->m_pThreadCS.Enter();
+							m_vl->m_decomp_queues.push_back(dq);
+							m_vl->m_pThreadCS.Leave();
+						}
+					}
+				}
+				else
+				{
+					m_vl->m_pThreadCS.Enter();
+					m_vl->m_decomp_queues.push_back(dq);
+					m_vl->m_pThreadCS.Leave();
+				}
+
+				if (decomp_in_this_thread)
+				{
+					size_t bsize = (size_t)b.brick->nx()*(size_t)b.brick->ny()*(size_t)b.brick->nz()*(size_t)b.brick->nb(0);
+					char *result = new char[bsize];
+					if (TextureBrick::decompress_brick(result, dq.in_data, bsize, dq.in_size, dq.finfo->type))
+					{
+						m_vl->m_pThreadCS.Enter();
+						delete dq.in_data;
+						b.brick->set_brkdata(result);
+						b.datasize = bsize;
+						m_vl->AddLoadedBrick(b);
+						m_vl->m_pThreadCS.Leave();
+					}
+				}
+			}
+			//b.brick->tex_data_brk(0, b.finfo);
 		}
 	}
 
@@ -439,9 +581,14 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 	return (wxThread::ExitCode)0;
 }
 
+long long VolumeLoader::m_memory_limit = 10000000LL;
+long long VolumeLoader::m_used_memory = 0LL;
+
 VolumeLoader::VolumeLoader()
 {
 	m_thread = NULL;
+	m_running_decomp_th = 0;
+	m_max_decomp_th = -1;
 }
 
 VolumeLoader::~VolumeLoader()
@@ -491,6 +638,16 @@ void VolumeLoader::Abort()
 	}
 }
 
+void VolumeLoader::StopAll()
+{
+	Abort();
+
+	while(m_running_decomp_th > 0)
+	{
+		Sleep(10);
+	}
+}
+
 bool VolumeLoader::Run()
 {
 	Abort();
@@ -505,6 +662,63 @@ bool VolumeLoader::Run()
 	m_thread->Run();
 
 	return true;
+}
+
+void VolumeLoader::CleanupLoadedBrick()
+{
+	long long required = 0;
+
+	for(int i = 0; i < m_queues.size(); i++)
+	{
+		TextureBrick *b = m_queues[i].brick;
+		required += (size_t)b->nx()*(size_t)b->ny()*(size_t)b->nz()*(size_t)b->nb(0);
+	}
+
+	vector<VolumeLoaderData*> vd_undisp;
+	vector<VolumeLoaderData*> b_undisp;
+	vector<VolumeLoaderData*> b_drawn;
+	for (int i = 0; i < m_loaded.size(); i++)
+	{
+		if (!m_loaded[i].vd->GetDisp())
+			vd_undisp.push_back(&m_loaded[i]);
+		else if(!m_loaded[i].brick->get_disp())
+			b_undisp.push_back(&m_loaded[i]);
+		else if (m_loaded[i].brick->drawn(m_loaded[i].mode))
+			b_drawn.push_back(&m_loaded[i]);
+	}
+	if (required > 0)
+	{
+		for (int i = 0; i < vd_undisp.size(); i++)
+		{
+			vd_undisp[i]->brick->freeBrkData();
+			required -= vd_undisp[i]->datasize;
+			m_used_memory -= vd_undisp[i]->datasize;
+			if (required <= 0)
+				break;
+		}
+	}
+	if (required > 0)
+	{
+		for (int i = 0; i < b_undisp.size(); i++)
+		{
+			b_undisp[i]->brick->freeBrkData();
+			required -= b_undisp[i]->datasize;
+			m_used_memory -= vd_undisp[i]->datasize;
+			if (required <= 0)
+				break;
+		}
+	}
+	if (required > 0)
+	{
+		for (int i = 0; i < b_drawn.size(); i++)
+		{
+			b_drawn[i]->brick->freeBrkData();
+			required -= b_drawn[i]->datasize;
+			m_used_memory -= vd_undisp[i]->datasize;
+			if (required <= 0)
+				break;
+		}
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -10385,11 +10599,16 @@ void VRenderGLView::StartLoopUpdate()
 
 			for (j = 0; j < max_bricknum; j++)
 			{
+				vector<VolumeLoaderData> tmp_shade;
+				vector<VolumeLoaderData> tmp_shadow;
 				for (i = 0; i < list.size(); i++)
 				{
 					VolumeData* vd = list[i];
 					Texture* tex = vd->GetTexture();
 					vector<TextureBrick*> *bricks = tex->get_bricks();
+					int mode = vd->GetMode() == 1 ? 1 : 0;
+					bool shade = (mode == 1 && vd->GetShading());
+					bool shadow = vd->GetShadow();
 					if (j*((float)bricks->size()/(float)max_bricknum) >= checked[i])
 					{
 						VolumeLoaderData d;
@@ -10398,11 +10617,28 @@ void VRenderGLView::StartLoopUpdate()
 						{
 							d.brick = b;
 							d.finfo = tex->GetFileName(b->getID());
-							queues.push_back(d);
+							d.vd = vd;
+							if (!b->drawn(mode))
+							{
+								d.mode = mode;
+								queues.push_back(d);
+							}
+							if (shade && !b->drawn(2))
+							{
+								d.mode = 2;
+								tmp_shade.push_back(d);
+							}
+							if (shade && !b->drawn(3))
+							{
+								d.mode = 3;
+								tmp_shadow.push_back(d);
+							}
 						}
 						checked[i]++;
 					}
 				}
+				if (!tmp_shade.empty()) queues.insert(queues.begin(), tmp_shade.begin(), tmp_shade.end());
+				if (!tmp_shadow.empty()) queues.insert(queues.begin(), tmp_shadow.begin(), tmp_shadow.end());
 			}
 		}
 		else if (m_layer_list.size() > 0)
@@ -10416,6 +10652,8 @@ void VRenderGLView::StartLoopUpdate()
 				case 2://volume data (this won't happen now)
 					{
 						VolumeData* vd = (VolumeData*)m_layer_list[i];
+						vector<VolumeLoaderData> tmp_shade;
+						vector<VolumeLoaderData> tmp_shadow;
 						if (vd && vd->GetDisp() && vd->isBrxml())
 						{
 							Texture* tex = vd->GetTexture();
@@ -10424,6 +10662,9 @@ void VRenderGLView::StartLoopUpdate()
 							vector<TextureBrick*> *bricks = tex->get_bricks();
 							if (!bricks || bricks->size()==0)
 								continue;
+							int mode = vd->GetMode() == 1 ? 1 : 0;
+							bool shade = (mode == 1 && vd->GetShading());
+							bool shadow = vd->GetShadow();
 							for (j=0; j<bricks->size(); j++)
 							{
 								VolumeLoaderData d;
@@ -10432,9 +10673,26 @@ void VRenderGLView::StartLoopUpdate()
 								{
 									d.brick = b;
 									d.finfo = tex->GetFileName(b->getID());
-									queues.push_back(d);
+									d.vd = vd;
+									if (!b->drawn(mode))
+									{
+										d.mode = mode;
+										queues.push_back(d);
+									}
+									if (shade && !b->drawn(2))
+									{
+										d.mode = 2;
+										tmp_shade.push_back(d);
+									}
+									if (shade && !b->drawn(3))
+									{
+										d.mode = 3;
+										tmp_shadow.push_back(d);
+									}
 								}
 							}
+							if (!tmp_shade.empty()) queues.insert(queues.begin(), tmp_shade.begin(), tmp_shade.end());
+							if (!tmp_shadow.empty()) queues.insert(queues.begin(), tmp_shadow.begin(), tmp_shadow.end());
 						}
 					}
 					break;
@@ -10464,6 +10722,8 @@ void VRenderGLView::StartLoopUpdate()
 						}
 						if (!list.empty())
 						{
+							vector<VolumeLoaderData> tmp_shade;
+							vector<VolumeLoaderData> tmp_shadow;
 							if (group->GetBlendMode() == VOL_METHOD_MULTI)
 							{
 								for (j = 0; j < max_bricknum; j++)
@@ -10473,6 +10733,9 @@ void VRenderGLView::StartLoopUpdate()
 										VolumeData* vd = list[k];
 										Texture* tex = vd->GetTexture();
 										vector<TextureBrick*> *bricks = tex->get_bricks();
+										int mode = vd->GetMode() == 1 ? 1 : 0;
+										bool shade = (mode == 1 && vd->GetShading());
+										bool shadow = vd->GetShadow();
 										if (j*((float)bricks->size()/(float)max_bricknum) >= checked[k])
 										{
 											VolumeLoaderData d;
@@ -10481,7 +10744,22 @@ void VRenderGLView::StartLoopUpdate()
 											{
 												d.brick = b;
 												d.finfo = tex->GetFileName(b->getID());
-												queues.push_back(d);
+												d.vd = vd;
+												if (!b->drawn(mode))
+												{
+													d.mode = mode;
+													queues.push_back(d);
+												}
+												if (shade && !b->drawn(2))
+												{
+													d.mode = 2;
+													tmp_shade.push_back(d);
+												}
+												if (shade && !b->drawn(3))
+												{
+													d.mode = 3;
+													tmp_shadow.push_back(d);
+												}
 											}
 											checked[k]++;
 										}
@@ -10495,6 +10773,9 @@ void VRenderGLView::StartLoopUpdate()
 									VolumeData* vd = list[j];
 									Texture* tex = vd->GetTexture();
 									vector<TextureBrick*> *bricks = tex->get_bricks();
+									int mode = vd->GetMode() == 1 ? 1 : 0;
+									bool shade = (mode == 1 && vd->GetShading());
+									bool shadow = vd->GetShadow();
 									for (k=0; k<bricks->size(); k++)
 									{
 										VolumeLoaderData d;
@@ -10503,11 +10784,28 @@ void VRenderGLView::StartLoopUpdate()
 										{
 											d.brick = b;
 											d.finfo = tex->GetFileName(b->getID());
-											queues.push_back(d);
+											d.vd = vd;
+											if (!b->drawn(mode))
+											{
+												d.mode = mode;
+												queues.push_back(d);
+											}
+											if (shade && !b->drawn(2))
+											{
+												d.mode = 2;
+												tmp_shade.push_back(d);
+											}
+											if (shade && !b->drawn(3))
+											{
+												d.mode = 3;
+												tmp_shadow.push_back(d);
+											}
 										}
 									}
 								}
 							}
+							if (!tmp_shade.empty()) queues.insert(queues.begin(), tmp_shade.begin(), tmp_shade.end());
+							if (!tmp_shadow.empty()) queues.insert(queues.begin(), tmp_shadow.begin(), tmp_shadow.end());
 						}
 
 					}
@@ -10519,6 +10817,7 @@ void VRenderGLView::StartLoopUpdate()
 		if (queues.size() > 0)
 		{
 			m_loader.Set(queues);
+			m_loader.SetMemoryLimitByte((long long)TextureRenderer::mainmem_buf_size_*1024LL*1024LL);
 			//TextureRenderer::set_load_on_main_thread(false);
 			TextureRenderer::set_load_on_main_thread(!m_loader.Run());
 		}
