@@ -398,7 +398,7 @@ void LMSeacher::OnMouse(wxMouseEvent& event)
 /////////////////////////////////////////////////////////////////////////
 
 VolumeDecompressorThread::VolumeDecompressorThread(VolumeLoader *vl)
-	: wxThread(wxTHREAD_JOINABLE), m_vl(vl)
+	: wxThread(wxTHREAD_DETACHED), m_vl(vl)
 {
 
 }
@@ -420,17 +420,20 @@ wxThread::ExitCode VolumeDecompressorThread::Entry()
 
 	while(1)
 	{
-		if (m_vl->m_decomp_queues.size() == 0) break;
-
 		m_vl->m_pThreadCS.Enter();
 
+		if (m_vl->m_decomp_queues.size() == 0)
+		{
+			m_vl->m_pThreadCS.Leave();
+			break;
+		}
 		VolumeDecompressorData q = m_vl->m_decomp_queues[0];
 		m_vl->m_decomp_queues.erase(m_vl->m_decomp_queues.begin());
 
 		m_vl->m_pThreadCS.Leave();
 		
 
-		size_t bsize = (size_t)q.b->nx()*(size_t)q.b->ny()*(size_t)q.b->nz()*(size_t)q.b->nb(0);
+		size_t bsize = (size_t)(q.b->nx())*(size_t)(q.b->ny())*(size_t)(q.b->nz())*(size_t)(q.b->nb(0));
 		char *result = new char[bsize];
 		if (TextureBrick::decompress_brick(result, q.in_data, bsize, q.in_size, q.finfo->type))
 		{
@@ -449,8 +452,8 @@ wxThread::ExitCode VolumeDecompressorThread::Entry()
 			m_vl->m_pThreadCS.Leave();
 		}
 
-		if (TestDestroy())
-			break;
+//		if (TestDestroy())
+//			break;
 	}
 
 	return (wxThread::ExitCode)0;
@@ -468,7 +471,9 @@ VolumeLoaderThread::VolumeLoaderThread(VolumeLoader *vl)
 
 VolumeLoaderThread::~VolumeLoaderThread()
 {
-//	wxCriticalSectionLocker enter(m_vl->m_pThreadCS);
+	wxCriticalSectionLocker enter(m_vl->m_pThreadCS);
+	if (!m_vl->m_decomp_queues.empty())
+		m_vl->m_decomp_queues.clear();
     // the thread is being destroyed; make sure not to leave dangling pointers around
 }
 
@@ -476,11 +481,23 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 {
 	unsigned int st_time = GET_TICK_COUNT();
 
-	for (int i = 0; i < m_vl->m_queues.size(); i++)
+	while(1)
 	{
-		VolumeLoaderData b = m_vl->m_queues[i];
 		if (TestDestroy())
 			break;
+
+		m_vl->m_pThreadCS.Enter();
+
+		if (m_vl->m_queues.size() == 0)
+		{
+			m_vl->m_pThreadCS.Leave();
+			break;
+		}
+		VolumeLoaderData b = m_vl->m_queues[0];
+		m_vl->m_queues.erase(m_vl->m_queues.begin());
+
+		m_vl->m_pThreadCS.Leave();
+
 		if (!b.brick->isLoaded())
 		{
 			if (VolumeLoader::m_used_memory >= VolumeLoader::m_memory_limit)
@@ -620,7 +637,8 @@ void VolumeLoader::ClearQueues()
 
 void VolumeLoader::Set(vector<VolumeLoaderData> vld)
 {
-	Abort();
+	//Abort();
+	StopAll();
 	m_queues = vld;
 }
 
@@ -650,7 +668,8 @@ void VolumeLoader::StopAll()
 
 bool VolumeLoader::Run()
 {
-	Abort();
+	//Abort();
+	StopAll();
 
 	m_thread = new VolumeLoaderThread(this);
 	if (m_thread->Create() != wxTHREAD_NO_ERROR)
@@ -671,7 +690,8 @@ void VolumeLoader::CleanupLoadedBrick()
 	for(int i = 0; i < m_queues.size(); i++)
 	{
 		TextureBrick *b = m_queues[i].brick;
-		required += (size_t)b->nx()*(size_t)b->ny()*(size_t)b->nz()*(size_t)b->nb(0);
+		if (!m_queues[i].brick->isLoaded())
+			required += (size_t)b->nx()*(size_t)b->ny()*(size_t)b->nz()*(size_t)b->nb(0);
 	}
 
 	vector<VolumeLoaderData*> vd_undisp;
@@ -686,39 +706,75 @@ void VolumeLoader::CleanupLoadedBrick()
 		else if (m_loaded[i].brick->drawn(m_loaded[i].mode))
 			b_drawn.push_back(&m_loaded[i]);
 	}
-	if (required > 0)
+	if (required > 0 || m_used_memory >= m_memory_limit)
 	{
 		for (int i = 0; i < vd_undisp.size(); i++)
 		{
+			if (!vd_undisp[i]->brick->isLoaded())
+				continue;
 			vd_undisp[i]->brick->freeBrkData();
 			required -= vd_undisp[i]->datasize;
 			m_used_memory -= vd_undisp[i]->datasize;
-			if (required <= 0)
+			if (required <= 0 && m_used_memory < m_memory_limit)
 				break;
 		}
 	}
-	if (required > 0)
+	if (required > 0 || m_used_memory >= m_memory_limit)
 	{
 		for (int i = 0; i < b_undisp.size(); i++)
 		{
+			if (!b_undisp[i]->brick->isLoaded())
+				continue;
 			b_undisp[i]->brick->freeBrkData();
 			required -= b_undisp[i]->datasize;
-			m_used_memory -= vd_undisp[i]->datasize;
-			if (required <= 0)
+			m_used_memory -= b_undisp[i]->datasize;
+			if (required <= 0 && m_used_memory < m_memory_limit)
 				break;
 		}
 	}
-	if (required > 0)
+	if (required > 0 || m_used_memory >= m_memory_limit)
 	{
 		for (int i = 0; i < b_drawn.size(); i++)
 		{
+			if (!b_drawn[i]->brick->isLoaded())
+				continue;
 			b_drawn[i]->brick->freeBrkData();
 			required -= b_drawn[i]->datasize;
-			m_used_memory -= vd_undisp[i]->datasize;
-			if (required <= 0)
+			m_used_memory -= b_drawn[i]->datasize;
+			if (required <= 0 && m_used_memory < m_memory_limit)
 				break;
 		}
 	}
+	if (m_used_memory >= m_memory_limit)
+	{
+		for(int i = m_queues.size()-1; i >= 0; i--)
+		{
+			TextureBrick *b = m_queues[i].brick;
+			if (b->isLoaded())
+			{
+				b->freeBrkData();
+				long long datasize = (size_t)b->nx()*(size_t)b->ny()*(size_t)b->nz()*(size_t)b->nb(0);
+				required -= datasize;
+				m_used_memory -= datasize;
+				if (m_used_memory < m_memory_limit)
+					break;
+			}
+		}
+	}
+
+	auto ite = m_loaded.begin();
+	while(ite != m_loaded.end())
+	{
+		if (!ite->brick->isLoaded())
+			ite = m_loaded.erase(ite);
+		else
+			ite++;
+	}
+}
+
+void VolumeLoader::RemoveBrickVD(VolumeData *vd)
+{
+
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -4025,6 +4081,9 @@ void VRenderGLView::switchLevel(VolumeData *vd)
 	Texture *vtex = vd->GetTexture();
 	if (vtex && vtex->isBrxml())
 	{
+		int prev_lv = vd->GetLevel();
+		int new_lv = 0;
+
 		if (m_res_mode > 0)
 		{
 			double res_scale = 1.0;
@@ -4082,11 +4141,19 @@ void VRenderGLView::switchLevel(VolumeData *vd)
 			if (lv < 0) lv = 0;
 			//if (m_interactive) lv += 2;
 			if (lv >= lvnum) lv = lvnum - 1;
-			vd->SetLevel(lv);
+			new_lv = lv;
 			//vd->GetVR()->set_scalar_scale();
 		}
-		else
-			vd->SetLevel(0);
+		if (prev_lv != new_lv)
+		{
+			vector<TextureBrick*> *bricks = vtex->get_bricks();
+			if (bricks)
+			{
+				for (int i = 0; i < bricks->size(); i++)
+					(*bricks)[i]->set_disp(false);
+			}
+			vd->SetLevel(new_lv);
+		}
 	}
 }
 
@@ -10613,7 +10680,7 @@ void VRenderGLView::StartLoopUpdate()
 					{
 						VolumeLoaderData d;
 						TextureBrick* b = (*bricks)[checked[i]];
-						if (b->get_disp() && !b->isLoaded())
+						if (b->get_disp())
 						{
 							d.brick = b;
 							d.finfo = tex->GetFileName(b->getID());
@@ -10669,7 +10736,7 @@ void VRenderGLView::StartLoopUpdate()
 							{
 								VolumeLoaderData d;
 								TextureBrick* b = (*bricks)[j];
-								if (b->get_disp() && !b->isLoaded())
+								if (b->get_disp())
 								{
 									d.brick = b;
 									d.finfo = tex->GetFileName(b->getID());
@@ -10740,7 +10807,7 @@ void VRenderGLView::StartLoopUpdate()
 										{
 											VolumeLoaderData d;
 											TextureBrick* b = (*bricks)[checked[k]];
-											if (b->get_disp() && !b->isLoaded())
+											if (b->get_disp())
 											{
 												d.brick = b;
 												d.finfo = tex->GetFileName(b->getID());
@@ -10780,7 +10847,7 @@ void VRenderGLView::StartLoopUpdate()
 									{
 										VolumeLoaderData d;
 										TextureBrick* b = (*bricks)[k];
-										if (b->get_disp() && !b->isLoaded())
+										if (b->get_disp())
 										{
 											d.brick = b;
 											d.finfo = tex->GetFileName(b->getID());
@@ -10818,7 +10885,7 @@ void VRenderGLView::StartLoopUpdate()
 		{
 			m_loader.Set(queues);
 			m_loader.SetMemoryLimitByte((long long)TextureRenderer::mainmem_buf_size_*1024LL*1024LL);
-			//TextureRenderer::set_load_on_main_thread(false);
+			//TextureRenderer::set_load_on_main_thread(true);
 			TextureRenderer::set_load_on_main_thread(!m_loader.Run());
 		}
 

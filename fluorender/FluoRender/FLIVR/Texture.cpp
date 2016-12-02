@@ -196,10 +196,10 @@ namespace FLIVR
 		uint64_t index = 0;
 		bool tmp_load = false;
 		void *d_ptr = NULL;
-		if (isBrxml()) 
+		if (isBrxml() && b->isLoaded()) 
 		{
 			index = (nx)*(ny)*(kk) + (nx)*(jj) + (ii);
-			tmp_load = !b->isLoaded();
+			//tmp_load = !b->isLoaded();
 			FileLocInfo *finfo = GetFileName(b->getID());
 			d_ptr = b->tex_data_brk(0, finfo);
 		}
@@ -224,8 +224,8 @@ namespace FLIVR
 			rval = normalize ? double(old_value)/65535.0 : double(old_value);
 		}
 		
-		if (tmp_load)
-			b->freeBrkData();
+//		if (tmp_load)
+//			b->freeBrkData();
 
 		return rval;
 	}

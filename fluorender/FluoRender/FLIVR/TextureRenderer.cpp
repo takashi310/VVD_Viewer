@@ -1821,10 +1821,12 @@ namespace FLIVR
 							{
 								uint32_t rn_time;
 								unsigned long elapsed;
+								long t;
 								do {
 									rn_time = GET_TICK_COUNT();
 									elapsed = rn_time - st_time_;
-									wxMilliSleep(elapsed+4);
+									t = up_time_ - elapsed;
+									if (t > 0) wxMilliSleep(t);
 								} while (elapsed <= up_time_);
 								
 								if (brick->isLoaded())
@@ -1890,7 +1892,7 @@ namespace FLIVR
 #endif
 					}
 
-					if (mem_swap_)
+					if (mem_swap_ && result >= 0 && get_load_on_main_thread())
 					{
 						double new_mem = brick->nx()*brick->ny()*brick->nz()*brick->nb(c)/1.04e6;
 						available_mem_ -= new_mem;
@@ -1909,7 +1911,7 @@ namespace FLIVR
 		if (mem_swap_ &&
 			start_update_loop_ &&
 			!done_update_loop_ &&
-			set_drawn)
+			set_drawn && result >= 0)
 		{
 			if (!brick->drawn(mode))
 			{

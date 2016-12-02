@@ -253,6 +253,7 @@ class VolumeLoader
 		void SetMaxThreadNum(int num) {m_max_decomp_th = num;}
 		static void SetMemoryLimitByte(long long limit) {m_memory_limit = limit;}
 		void CleanupLoadedBrick();
+		static void RemoveBrickVD(VolumeData *vd);
 	protected:
 		VolumeLoaderThread *m_thread;
 		wxCriticalSection m_pThreadCS;
