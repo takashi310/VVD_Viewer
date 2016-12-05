@@ -4848,7 +4848,7 @@ void VRenderFrame::SetTextureRendererSettings()
 		return;
 
 	TextureRenderer::set_mem_swap(m_setting_dlg->GetMemSwap());
-	bool use_mem_limit = false;
+	bool use_mem_limit = true;
 	GLenum error = glGetError();
 	GLint mem_info[4] = {0, 0, 0, 0};
 	glGetIntegerv(GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX, mem_info);
@@ -4860,8 +4860,8 @@ void VRenderFrame::SetTextureRendererSettings()
 		if (error == GL_INVALID_ENUM)
 			use_mem_limit = true;
 	}
-	if (m_setting_dlg->GetGraphicsMem() < mem_info[0]/1024.0)
-		use_mem_limit = true;
+//	if (m_setting_dlg->GetGraphicsMem() < mem_info[0]/1024.0)
+//		use_mem_limit = true;
 
 	double mem_size = use_mem_limit ? m_setting_dlg->GetGraphicsMem() : mem_info[0]/1024.0;
 

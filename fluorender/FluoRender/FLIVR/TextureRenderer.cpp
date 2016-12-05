@@ -1817,7 +1817,7 @@ namespace FLIVR
 									result = -1;
 								}
 							}
-							else
+							else if (!interactive_)
 							{
 								uint32_t rn_time;
 								unsigned long elapsed;
@@ -1852,6 +1852,12 @@ namespace FLIVR
 									tex_pool_.erase(tex_pool_.begin()+idx);
 									result = -1;
 								}
+							}
+							else
+							{
+								glDeleteTextures(1, (GLuint*)&tex_pool_[idx].id);
+								tex_pool_.erase(tex_pool_.begin()+idx);
+								result = -1;
 							}
 						}
 					}
@@ -1892,7 +1898,7 @@ namespace FLIVR
 #endif
 					}
 
-					if (mem_swap_ && result >= 0 && get_load_on_main_thread())
+					if (mem_swap_ && result >= 0)
 					{
 						double new_mem = brick->nx()*brick->ny()*brick->nz()*brick->nb(c)/1.04e6;
 						available_mem_ -= new_mem;

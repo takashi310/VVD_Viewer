@@ -856,12 +856,12 @@ namespace FLIVR
 		Ray snapview = compute_snapview(0.4);
 
 		vector<TextureBrick*> *bricks = 0;
-		if (mem_swap_ && interactive_)
+/*		if (mem_swap_ && interactive_)
 			bricks = tex_->get_closest_bricks(
 			quota_center_, quota_bricks_chan_, true,
 			view_ray, orthographic_p);
 		else
-			bricks = tex_->get_sorted_bricks(view_ray, orthographic_p);
+*/			bricks = tex_->get_sorted_bricks(view_ray, orthographic_p);
 		if (!bricks || bricks->size() == 0)
 			return;
 

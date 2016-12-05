@@ -439,7 +439,7 @@ wxThread::ExitCode VolumeDecompressorThread::Entry()
 		{
 			m_vl->m_pThreadCS.Enter();
 
-			delete q.in_data;
+			delete [] q.in_data;
 			q.b->set_brkdata(result);
 			VolumeLoaderData b;
 			b.brick = q.b;
@@ -447,10 +447,12 @@ wxThread::ExitCode VolumeDecompressorThread::Entry()
 			b.vd = q.vd;
 			b.mode = q.mode;
 			b.datasize = bsize;
-			m_vl->AddLoadedBrick(b);
-
+			m_vl->m_loaded.push_back(b);
+			//m_vl->AddLoadedBrick(b);
 			m_vl->m_pThreadCS.Leave();
 		}
+		else
+			delete [] result;
 
 //		if (TestDestroy())
 //			break;
@@ -473,13 +475,18 @@ VolumeLoaderThread::~VolumeLoaderThread()
 {
 	wxCriticalSectionLocker enter(m_vl->m_pThreadCS);
 	if (!m_vl->m_decomp_queues.empty())
+	{
+		for (int i = 0; i < m_vl->m_decomp_queues.size(); i++)
+			VolumeLoader::m_used_memory -= m_vl->m_decomp_queues[i].datasize;
 		m_vl->m_decomp_queues.clear();
+	}
     // the thread is being destroyed; make sure not to leave dangling pointers around
 }
 
 wxThread::ExitCode VolumeLoaderThread::Entry()
 {
 	unsigned int st_time = GET_TICK_COUNT();
+	m_vl->m_max_decomp_th = 6;
 
 	while(1)
 	{
@@ -537,14 +544,20 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 				dq.in_data = ptr;
 				dq.in_size = readsize;
 
-				if (m_vl->m_max_decomp_th <= 0 || 
-					m_vl->m_running_decomp_th < m_vl->m_max_decomp_th)
+				size_t bsize = (size_t)(b.brick->nx())*(size_t)(b.brick->ny())*(size_t)(b.brick->nz())*(size_t)(b.brick->nb(0));
+				dq.datasize = bsize;
+				
+				if (m_vl->m_max_decomp_th == 0)
+					decomp_in_this_thread = true;
+				else if (m_vl->m_max_decomp_th < 0 || 
+						 m_vl->m_running_decomp_th <= m_vl->m_max_decomp_th)
 				{
 					VolumeDecompressorThread *dthread = new VolumeDecompressorThread(m_vl);
 					if (dthread->Create() == wxTHREAD_NO_ERROR)
 					{
 						m_vl->m_pThreadCS.Enter();
 						m_vl->m_decomp_queues.push_back(dq);
+						VolumeLoader::m_used_memory += bsize;
 						m_vl->m_pThreadCS.Leave();
 						dthread->Run();
 					}
@@ -556,6 +569,7 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 						{
 							m_vl->m_pThreadCS.Enter();
 							m_vl->m_decomp_queues.push_back(dq);
+							VolumeLoader::m_used_memory += bsize;
 							m_vl->m_pThreadCS.Leave();
 						}
 					}
@@ -564,17 +578,17 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 				{
 					m_vl->m_pThreadCS.Enter();
 					m_vl->m_decomp_queues.push_back(dq);
+					VolumeLoader::m_used_memory += bsize;
 					m_vl->m_pThreadCS.Leave();
 				}
 
 				if (decomp_in_this_thread)
 				{
-					size_t bsize = (size_t)b.brick->nx()*(size_t)b.brick->ny()*(size_t)b.brick->nz()*(size_t)b.brick->nb(0);
 					char *result = new char[bsize];
 					if (TextureBrick::decompress_brick(result, dq.in_data, bsize, dq.in_size, dq.finfo->type))
 					{
 						m_vl->m_pThreadCS.Enter();
-						delete dq.in_data;
+						delete [] dq.in_data;
 						b.brick->set_brkdata(result);
 						b.datasize = bsize;
 						m_vl->AddLoadedBrick(b);
@@ -753,7 +767,7 @@ void VolumeLoader::CleanupLoadedBrick()
 			if (b->isLoaded())
 			{
 				b->freeBrkData();
-				long long datasize = (size_t)b->nx()*(size_t)b->ny()*(size_t)b->nz()*(size_t)b->nb(0);
+				long long datasize = (size_t)(b->nx())*(size_t)(b->ny())*(size_t)(b->nz())*(size_t)(b->nb(0));
 				required -= datasize;
 				m_used_memory -= datasize;
 				if (m_used_memory < m_memory_limit)
@@ -1138,6 +1152,9 @@ VRenderGLView::~VRenderGLView()
 	if (m_hTab)
 		gpWTClose(m_hTab);
 #endif
+
+	m_loader.StopAll();
+
 	int i;
 	//delete groups
 	for (i=0; i<(int)m_layer_list.size(); i++)
@@ -1283,6 +1300,8 @@ void VRenderGLView::Init()
 
 void VRenderGLView::Clear()
 {
+	m_loader.StopAll();
+
 	//delete groups
 	for (int i=0; i<(int)m_layer_list.size(); i++)
 	{
@@ -2088,7 +2107,7 @@ void VRenderGLView::DrawVolumes(int peel)
 
 			TextureRenderer::set_interactive(m_interactive);
 			//if in interactive mode, do interactive bricking also
-			if (m_interactive && !(m_vol_method == VOL_METHOD_MULTI))
+/*			if (m_interactive && !(m_vol_method == VOL_METHOD_MULTI))
 			{
 				//calculate quota
 				int total_bricks = TextureRenderer::get_total_brick_num();
@@ -2176,7 +2195,7 @@ void VRenderGLView::DrawVolumes(int peel)
 				else
 					TextureRenderer::set_interactive(false);
 			}
-		}
+*/		}
 
 		//handle intermixing modes
 		if (m_vol_method == VOL_METHOD_MULTI)
@@ -10582,7 +10601,7 @@ void VRenderGLView::StartLoopUpdate()
 				if (!TextureRenderer::get_mem_swap()) continue;
 
 				vd->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
-
+				
 				num_chan = 0;
 				Texture* tex = vd->GetTexture();
 				if (tex)
@@ -10596,8 +10615,10 @@ void VRenderGLView::StartLoopUpdate()
 						mvmat[2], mvmat[6], mvmat[10], mvmat[14],
 						mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
 					vd->GetVR()->m_mv_mat2 = vd->GetVR()->m_mv_mat * vd->GetVR()->m_mv_mat2;
-
-					vector<TextureBrick*> *bricks = tex->get_bricks();
+					
+					Ray view_ray = vd->GetVR()->compute_view();
+					
+					vector<TextureBrick*> *bricks = tex->get_sorted_bricks(view_ray, !m_persp);
 					if (!bricks || bricks->size()==0)
 						continue;
 					for (j=0; j<bricks->size(); j++)
@@ -10881,7 +10902,7 @@ void VRenderGLView::StartLoopUpdate()
 			}
 		}
 
-		if (queues.size() > 0)
+		if (queues.size() > 0 && !m_interactive)
 		{
 			m_loader.Set(queues);
 			m_loader.SetMemoryLimitByte((long long)TextureRenderer::mainmem_buf_size_*1024LL*1024LL);

@@ -1522,7 +1522,7 @@ z
 			   }
 		   }
 		   inflateEnd( &zInfo );
-		   delete zdata;
+		   delete [] zdata;
 
 		   if (nOut != size || nErr != Z_STREAM_END)
 			   return false;
