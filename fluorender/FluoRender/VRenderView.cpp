@@ -500,6 +500,13 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 {
 	unsigned int st_time = GET_TICK_COUNT();
 
+	while(m_vl->m_running_decomp_th > 0)
+	{
+		if (TestDestroy())
+			return (wxThread::ExitCode)0;
+		Sleep(10);
+	}
+
 	while(1)
 	{
 		if (TestDestroy())
@@ -679,8 +686,8 @@ void VolumeLoader::ClearQueues()
 
 void VolumeLoader::Set(vector<VolumeLoaderData> vld)
 {
-	//Abort();
-	StopAll();
+	Abort();
+	//StopAll();
 	m_queues = vld;
 }
 
@@ -710,8 +717,8 @@ void VolumeLoader::StopAll()
 
 bool VolumeLoader::Run()
 {
-	//Abort();
-	StopAll();
+	Abort();
+	//StopAll();
 
 	m_thread = new VolumeLoaderThread(this);
 	if (m_thread->Create() != wxTHREAD_NO_ERROR)
@@ -10171,7 +10178,7 @@ void VRenderGLView::DrawInfo(int nx, int ny)
 		long long used_mem;
 		int dtnum, qnum, dqnum;
 		m_loader.GetPalams(used_mem, dtnum, qnum, dqnum);
-		str += wxString::Format(" US: %lld DT: %d Q: %d DQ: %d,", used_mem, dtnum, qnum, dqnum);
+		str += wxString::Format(" Mem: %lld Th: %d Q: %d DQ: %d,", used_mem, dtnum, qnum, dqnum);
 	}
 
 	wstring wstr_temp = str.ToStdWstring();
