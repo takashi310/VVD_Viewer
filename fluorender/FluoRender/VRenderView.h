@@ -48,6 +48,7 @@ DEALINGS IN THE SOFTWARE.
 #include <wx/glcanvas.h>
 #include <wx/event.h>
 #include <wx/srchctrl.h>
+#include <wx/thread.h>
 
 #include <vector>
 #include <stdarg.h>

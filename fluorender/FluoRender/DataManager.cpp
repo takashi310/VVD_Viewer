@@ -3478,7 +3478,6 @@ void RulerBalloon::SetAnnotationsFromDatabase(vector<AnnotationDB> ann, Point ne
 		m_annotations.Clear();
 		m_bufs[i] = "";
 		curl_easy_setopt(m_curl[i], CURLOPT_WRITEDATA, &m_bufs[i]);
-		//�s�A�ؖ������؂Ȃ�
 		curl_easy_setopt(m_curl[i], CURLOPT_SSL_VERIFYPEER, 0);
 
 		curl_multi_add_handle(_g_curlm, m_curl[i]);

@@ -46,6 +46,7 @@ using namespace std;
 namespace FLIVR
 {
     CURL* TextureBrick::s_curl_ = NULL;
+	CURL* TextureBrick::s_curlm_ = NULL;
 	map<wstring, wstring> TextureBrick::cache_table_ = map<wstring, wstring>();
     
    TextureBrick::TextureBrick (Nrrd* n0, Nrrd* n1,
@@ -1086,7 +1087,15 @@ z
 	   return nbytes;
    }
 
-   bool TextureBrick::read_brick_without_decomp(char* &data, size_t &readsize, FileLocInfo* finfo)
+   int TextureBrick::xferinfo(void *p, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow)
+   {
+	   wxThread *wxth = (wxThread *)p;
+	   if (wxth && wxth->TestDestroy())
+		   return 1;
+	   return 0;
+   }
+
+   bool TextureBrick::read_brick_without_decomp(char* &data, size_t &readsize, FileLocInfo* finfo, wxThread *th)
    {
 	   readsize = -1;
 
@@ -1130,8 +1139,13 @@ z
 			   curl_easy_setopt(s_curl_, CURLOPT_TIMEOUT, 10L);
 			   curl_easy_setopt(s_curl_, CURLOPT_USERAGENT, "libcurl-agent/1.0");
 			   curl_easy_setopt(s_curl_, CURLOPT_WRITEFUNCTION, WriteFileCallback);
-			   //ÉsÉAèÿñæèëåüèÿÇ»Çµ
 			   curl_easy_setopt(s_curl_, CURLOPT_SSL_VERIFYPEER, 0);
+			   curl_easy_setopt(s_curl_, CURLOPT_NOSIGNAL, 1);
+			   curl_easy_setopt(s_curl_, CURLOPT_FAILONERROR, 1);
+			   curl_easy_setopt(s_curl_, CURLOPT_FILETIME, 1);
+			   curl_easy_setopt(s_curl_, CURLOPT_XFERINFOFUNCTION, xferinfo);
+			   curl_easy_setopt(s_curl_, CURLOPT_XFERINFODATA, th);
+			   curl_easy_setopt(s_curl_, CURLOPT_NOPROGRESS, 0L);
 
 			   wxString expath = wxStandardPaths::Get().GetExecutablePath();
 			   expath = expath.BeforeLast(GETSLASH(),NULL);
@@ -1170,18 +1184,26 @@ z
 
 			   wstring cfname = dft.ToStdWstring();
 			   ofstream ofs(ws2s(cfname), ios::binary);
+			   if (!ofs) return false;
 			   curl_easy_setopt(s_curl_, CURLOPT_WRITEDATA, &ofs);
 			   ret = curl_easy_perform(s_curl_);
-			   if (ret != CURLE_OK) {
-				   cerr << "curl_easy_perform() failed." << curl_easy_strerror(ret) << endl;
-				   return false;
-			   }
+			   bool succeeded = false;
+			   if (ret == CURLE_OK)
+				   succeeded = true;
 
 			   ofs.close();
 
-			   finfo->cached = true;
-			   finfo->cache_filename = cfname;
-			   cache_table_[finfo->filename] = cfname;
+			   if (succeeded)
+			   {
+				   finfo->cached = true;
+				   finfo->cache_filename = cfname;
+				   cache_table_[finfo->filename] = cfname;
+			   }
+			   else
+			   {
+				   if(wxFileExists(cfname)) wxRemoveFile(cfname);
+				   return false;
+			   }
 		   }
 	   }
 
@@ -1297,7 +1319,6 @@ z
 		   return false;
 	   }
 
-	   wxMilliSleep(50);
 	   return true;
    }
 

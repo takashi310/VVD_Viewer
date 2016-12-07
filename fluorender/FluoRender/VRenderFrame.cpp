@@ -106,7 +106,7 @@ bool VRenderFrame::m_save_compress = true;
 bool VRenderFrame::m_vrp_embed = false;
 bool VRenderFrame::m_save_project = false;
 
-CURL *_g_curlm;//add by takashi
+CURLM *_g_curlm;//add by takashi
 CURL *_g_curl;//add by takashi
 
 VRenderFrame::VRenderFrame(
@@ -136,6 +136,7 @@ VRenderFrame::VRenderFrame(
 	_g_curl = curl_easy_init();//add by takashi
     
     FLIVR::TextureBrick::setCURL(_g_curl);
+	FLIVR::TextureBrick::setCURL_Multi(_g_curlm);
 
 	//create this first to read the settings
 	m_setting_dlg = new SettingDlg(this, this);
@@ -658,10 +659,6 @@ VRenderFrame::VRenderFrame(
 
 VRenderFrame::~VRenderFrame()
 {
-	curl_easy_cleanup(_g_curl);//add by takashi
-	curl_multi_cleanup(_g_curlm);
-	curl_global_cleanup();//add by takashi
-
 	for (int i=0; i<(int)m_vrv_list.size(); i++)
 	{
 		VRenderView* vrv = m_vrv_list[i];
@@ -670,6 +667,12 @@ VRenderFrame::~VRenderFrame()
 	if (m_text_renderer)
 		delete m_text_renderer;
 	m_aui_mgr.UnInit();
+
+	curl_easy_cleanup(_g_curl);//add by takashi
+	curl_multi_cleanup(_g_curlm);
+	curl_global_cleanup();//add by takashi
+
+	TextureBrick::delete_all_cache_files();
 }
 
 void VRenderFrame::OnExit(wxCommandEvent& WXUNUSED(event))

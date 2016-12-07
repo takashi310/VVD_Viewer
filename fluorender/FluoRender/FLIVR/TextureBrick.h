@@ -35,6 +35,8 @@
 #include "BBox.h"
 #include "Plane.h"
 
+#include <wx/thread.h>
+
 #include <vector>
 #include <fstream>
 #include <string>
@@ -257,12 +259,13 @@ namespace FLIVR {
 		bool get_disp() {return disp_;}
         
         static void setCURL(CURL *c) {s_curl_ = c;}
+		static void setCURL_Multi(CURLM *c) {s_curlm_ = c;}
 
 		size_t tex_type_size(GLenum t);
 		GLenum tex_type_aux(Nrrd* n);
 		bool read_brick(char* data, size_t size, const FileLocInfo* finfo);
 		void set_brkdata(void *brkdata) {brkdata_ = brkdata;}
-		static bool read_brick_without_decomp(char* &data, size_t &readsize, FileLocInfo* finfo);
+		static bool read_brick_without_decomp(char* &data, size_t &readsize, FileLocInfo* finfo, wxThread *th=NULL);
 		static bool decompress_brick(char *out, char* in, size_t out_size, size_t in_size, int type);
 		static bool jpeg_decompressor(char *out, char* in, size_t out_size, size_t in_size);
 		static bool zlib_decompressor(char *out, char* in, size_t out_size, size_t in_size);
@@ -280,6 +283,7 @@ namespace FLIVR {
 
 		static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp);
 		static size_t WriteFileCallback(void *contents, size_t size, size_t nmemb, void *userp);
+		static int xferinfo(void *p, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow);
 
 		//! bbox edges
 		Ray edge_[12]; 
@@ -337,6 +341,7 @@ namespace FLIVR {
 		bool disp_;
         
         static CURL *s_curl_;
+		static CURLM *s_curlm_;
 		static std::map<std::wstring, std::wstring> cache_table_;
 	};
 

@@ -543,7 +543,7 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 
 			char *ptr = NULL;
 			size_t readsize;
-			TextureBrick::read_brick_without_decomp(ptr, readsize, b.finfo);
+			TextureBrick::read_brick_without_decomp(ptr, readsize, b.finfo, this);
 			if (!ptr) continue;
 
 			if (b.finfo->type == BRICK_FILE_TYPE_RAW)
