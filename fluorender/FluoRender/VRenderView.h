@@ -251,9 +251,11 @@ class VolumeLoader
 		void StopAll();
 		bool Run();
 		void SetMaxThreadNum(int num) {m_max_decomp_th = num;}
-		static void SetMemoryLimitByte(long long limit) {m_memory_limit = limit;}
+		void SetMemoryLimitByte(long long limit) {m_memory_limit = limit;}
 		void CleanupLoadedBrick();
-		static void RemoveBrickVD(VolumeData *vd);
+		void RemoveAllLoadedBrick();
+		void RemoveBrickVD(VolumeData *vd);
+		void GetPalams(long long &used_mem, int &running_decomp_th, int &queue_num, int &decomp_queue_num);
 	protected:
 		VolumeLoaderThread *m_thread;
 		wxCriticalSection m_pThreadCS;
@@ -265,8 +267,8 @@ class VolumeLoader
 		int m_max_decomp_th;
 		bool m_valid;
 
-		static long long m_memory_limit;
-		static long long m_used_memory;
+		long long m_memory_limit;
+		long long m_used_memory;
 
 		inline void AddLoadedBrick(VolumeLoaderData lbd)
 		{

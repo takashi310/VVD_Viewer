@@ -409,6 +409,8 @@ private:
 
 	map<wxString, bool> m_ui_state_cache;
 
+	double m_gpu_max_mem;
+
 private:
 	//views
 	wxString CreateView(int row=1);

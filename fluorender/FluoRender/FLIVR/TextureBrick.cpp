@@ -1297,6 +1297,7 @@ z
 		   return false;
 	   }
 
+	   wxMilliSleep(50);
 	   return true;
    }
 

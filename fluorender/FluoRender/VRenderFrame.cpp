@@ -125,7 +125,8 @@ VRenderFrame::VRenderFrame(
 	m_ui_state(true),
 	m_cur_sel_type(-1),
 	m_cur_sel_vol(-1),
-	m_cur_sel_mesh(-1)
+	m_cur_sel_mesh(-1),
+	m_gpu_max_mem(-1.0)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -4849,32 +4850,35 @@ void VRenderFrame::SetTextureRendererSettings()
 
 	TextureRenderer::set_mem_swap(m_setting_dlg->GetMemSwap());
 	bool use_mem_limit = true;
-	GLenum error = glGetError();
-	GLint mem_info[4] = {0, 0, 0, 0};
-	glGetIntegerv(GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX, mem_info);
-	error = glGetError();
-	if (error == GL_INVALID_ENUM)
+
+	//check amount of graphic memory
+	if (m_gpu_max_mem <= 0.0)
 	{
-		glGetIntegerv(GL_TEXTURE_FREE_MEMORY_ATI, mem_info);
+		GLenum error = glGetError();
+		GLint mem_info[4] = {0, 0, 0, 0};
+		glGetIntegerv(GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX, mem_info);
 		error = glGetError();
 		if (error == GL_INVALID_ENUM)
-			use_mem_limit = true;
+		{
+			glGetIntegerv(GL_TEXTURE_FREE_MEMORY_ATI, mem_info);
+			error = glGetError();
+		}
+		if (error != GL_INVALID_ENUM)
+			m_gpu_max_mem = mem_info[0]/1024.0;
 	}
-//	if (m_setting_dlg->GetGraphicsMem() < mem_info[0]/1024.0)
-//		use_mem_limit = true;
-
-	double mem_size = use_mem_limit ? m_setting_dlg->GetGraphicsMem() : mem_info[0]/1024.0;
+	double mem_size = m_gpu_max_mem > m_setting_dlg->GetGraphicsMem() ? m_setting_dlg->GetGraphicsMem() : m_gpu_max_mem;
 
 	//reserve a memory area for 2D textures
 	//(TextureRenderer takes no account of 2D textures in calculating allocated memory size)
 	if (mem_size > 1024.0) mem_size -= 300.0;
 	else mem_size *= 0.7;
 
+	double mem_delta = mem_size - TextureRenderer::get_mem_limit();
+	double prev_available_mem = TextureRenderer::get_available_mem();
+
 	TextureRenderer::set_use_mem_limit(use_mem_limit);
-	TextureRenderer::set_mem_limit(use_mem_limit?
-		m_setting_dlg->GetGraphicsMem():mem_info[0]/1024.0);
-	TextureRenderer::set_available_mem(use_mem_limit?
-		m_setting_dlg->GetGraphicsMem():mem_info[0]/1024.0);
+	TextureRenderer::set_mem_limit(mem_size);
+	TextureRenderer::set_available_mem(mem_delta + prev_available_mem);
 	TextureRenderer::set_large_data_size(m_setting_dlg->GetLargeDataSize());
 	TextureRenderer::set_force_brick_size(m_setting_dlg->GetForceBrickSize());
 	TextureRenderer::set_up_time(m_setting_dlg->GetResponseTime());

@@ -440,6 +440,7 @@ wxThread::ExitCode VolumeDecompressorThread::Entry()
 			m_vl->m_pThreadCS.Enter();
 
 			delete [] q.in_data;
+			q.b->freeBrkData();
 			q.b->set_brkdata(result);
 			VolumeLoaderData b;
 			b.brick = q.b;
@@ -452,7 +453,15 @@ wxThread::ExitCode VolumeDecompressorThread::Entry()
 			m_vl->m_pThreadCS.Leave();
 		}
 		else
+		{
 			delete [] result;
+			
+			m_vl->m_pThreadCS.Enter();
+			delete [] q.in_data;
+			m_vl->m_used_memory -= bsize;
+			q.b->set_drawn(q.mode, true);
+			m_vl->m_pThreadCS.Leave();
+		}
 
 //		if (TestDestroy())
 //			break;
@@ -477,7 +486,11 @@ VolumeLoaderThread::~VolumeLoaderThread()
 	if (!m_vl->m_decomp_queues.empty())
 	{
 		for (int i = 0; i < m_vl->m_decomp_queues.size(); i++)
-			VolumeLoader::m_used_memory -= m_vl->m_decomp_queues[i].datasize;
+		{
+			if (m_vl->m_decomp_queues[i].in_data != NULL)
+				delete [] m_vl->m_decomp_queues[i].in_data;
+			m_vl->m_used_memory -= m_vl->m_decomp_queues[i].datasize;
+		}
 		m_vl->m_decomp_queues.clear();
 	}
     // the thread is being destroyed; make sure not to leave dangling pointers around
@@ -486,7 +499,6 @@ VolumeLoaderThread::~VolumeLoaderThread()
 wxThread::ExitCode VolumeLoaderThread::Entry()
 {
 	unsigned int st_time = GET_TICK_COUNT();
-	m_vl->m_max_decomp_th = 6;
 
 	while(1)
 	{
@@ -507,15 +519,17 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 
 		if (!b.brick->isLoaded())
 		{
-			if (VolumeLoader::m_used_memory >= VolumeLoader::m_memory_limit)
+			if (m_vl->m_used_memory >= m_vl->m_memory_limit)
 			{
 				m_vl->m_pThreadCS.Enter();
 				while(1)
 				{
 					m_vl->CleanupLoadedBrick();
-					if (VolumeLoader::m_used_memory < VolumeLoader::m_memory_limit || TestDestroy())
+					if (m_vl->m_used_memory < m_vl->m_memory_limit || TestDestroy())
 						break;
+					m_vl->m_pThreadCS.Leave();
 					Sleep(10);
+					m_vl->m_pThreadCS.Enter();
 				}
 				m_vl->m_pThreadCS.Leave();
 			}
@@ -550,14 +564,14 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 				if (m_vl->m_max_decomp_th == 0)
 					decomp_in_this_thread = true;
 				else if (m_vl->m_max_decomp_th < 0 || 
-						 m_vl->m_running_decomp_th <= m_vl->m_max_decomp_th)
+						 m_vl->m_running_decomp_th < m_vl->m_max_decomp_th)
 				{
 					VolumeDecompressorThread *dthread = new VolumeDecompressorThread(m_vl);
 					if (dthread->Create() == wxTHREAD_NO_ERROR)
 					{
 						m_vl->m_pThreadCS.Enter();
 						m_vl->m_decomp_queues.push_back(dq);
-						VolumeLoader::m_used_memory += bsize;
+						m_vl->m_used_memory += bsize;
 						m_vl->m_pThreadCS.Leave();
 						dthread->Run();
 					}
@@ -569,7 +583,7 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 						{
 							m_vl->m_pThreadCS.Enter();
 							m_vl->m_decomp_queues.push_back(dq);
-							VolumeLoader::m_used_memory += bsize;
+							m_vl->m_used_memory += bsize;
 							m_vl->m_pThreadCS.Leave();
 						}
 					}
@@ -578,7 +592,7 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 				{
 					m_vl->m_pThreadCS.Enter();
 					m_vl->m_decomp_queues.push_back(dq);
-					VolumeLoader::m_used_memory += bsize;
+					m_vl->m_used_memory += bsize;
 					m_vl->m_pThreadCS.Leave();
 				}
 
@@ -589,14 +603,25 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 					{
 						m_vl->m_pThreadCS.Enter();
 						delete [] dq.in_data;
+						b.brick->freeBrkData();
 						b.brick->set_brkdata(result);
 						b.datasize = bsize;
 						m_vl->AddLoadedBrick(b);
 						m_vl->m_pThreadCS.Leave();
 					}
+					else
+					{
+						delete [] result;
+
+						m_vl->m_pThreadCS.Enter();
+						delete [] dq.in_data;
+						m_vl->m_used_memory -= bsize;
+						dq.b->set_drawn(dq.mode, true);
+						m_vl->m_pThreadCS.Leave();
+					}
 				}
 			}
-			//b.brick->tex_data_brk(0, b.finfo);
+
 		}
 	}
 
@@ -612,14 +637,15 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 	return (wxThread::ExitCode)0;
 }
 
-long long VolumeLoader::m_memory_limit = 10000000LL;
-long long VolumeLoader::m_used_memory = 0LL;
-
 VolumeLoader::VolumeLoader()
 {
 	m_thread = NULL;
 	m_running_decomp_th = 0;
-	m_max_decomp_th = -1;
+	m_max_decomp_th = wxThread::GetCPUCount()-1;
+	if (m_max_decomp_th < 0)
+		m_max_decomp_th = -1;
+	m_memory_limit = 10000000LL;
+	m_used_memory = 0LL;
 }
 
 VolumeLoader::~VolumeLoader()
@@ -633,10 +659,12 @@ VolumeLoader::~VolumeLoader()
 		}
 		delete m_thread;
 	}
+	RemoveAllLoadedBrick();
 }
 
 void VolumeLoader::Queue(VolumeLoaderData brick)
 {
+	wxCriticalSectionLocker enter(m_pThreadCS);
 	m_queues.push_back(brick);
 }
 
@@ -786,9 +814,49 @@ void VolumeLoader::CleanupLoadedBrick()
 	}
 }
 
+void VolumeLoader::RemoveAllLoadedBrick()
+{
+	StopAll();
+	for (int i = 0; i < m_loaded.size(); i++)
+	{
+		if (m_loaded[i].brick->isLoaded())
+		{
+			m_loaded[i].brick->freeBrkData();
+			m_used_memory -= m_loaded[i].datasize;
+		}
+	}
+	m_loaded.clear();
+}
+
 void VolumeLoader::RemoveBrickVD(VolumeData *vd)
 {
+	StopAll();
+	auto ite = m_loaded.begin();
+	while(ite != m_loaded.end())
+	{
+		if (ite->vd == vd && ite->brick->isLoaded())
+		{
+			ite->brick->freeBrkData();
+			m_used_memory -= ite->datasize;
+			ite = m_loaded.erase(ite);
+		}
+		else
+			ite++;
+	}
+}
 
+void VolumeLoader::GetPalams(long long &used_mem, int &running_decomp_th, int &queue_num, int &decomp_queue_num)
+{
+	long long us = 0;
+	for (int i = 0; i < m_loaded.size(); i++)
+	{
+		if (m_loaded[i].brick->isLoaded())
+			us += m_loaded[i].datasize;
+	}
+	used_mem = us;
+	running_decomp_th = m_running_decomp_th;
+	queue_num = m_queues.size();
+	decomp_queue_num = m_decomp_queues.size();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -1300,7 +1368,7 @@ void VRenderGLView::Init()
 
 void VRenderGLView::Clear()
 {
-	m_loader.StopAll();
+	m_loader.RemoveAllLoadedBrick();
 
 	//delete groups
 	for (int i=0; i<(int)m_layer_list.size(); i++)
@@ -2537,6 +2605,7 @@ void VRenderGLView::RandomizeColor()
 
 void VRenderGLView::ClearVolList()
 {
+	m_loader.RemoveAllLoadedBrick();
 	m_vd_pop_list.clear();
 }
 
@@ -7831,6 +7900,7 @@ void VRenderGLView::RemoveVolumeData(wxString &name)
 					m_layer_list.erase(m_layer_list.begin()+i);
 					m_vd_pop_dirty = true;
 					m_cur_vol = NULL;
+					m_loader.RemoveBrickVD(vd);
 					return;
 				}
 			}
@@ -7846,6 +7916,7 @@ void VRenderGLView::RemoveVolumeData(wxString &name)
 						group->RemoveVolumeData(j);
 						m_vd_pop_dirty = true;
 						m_cur_vol = NULL;
+						m_loader.RemoveBrickVD(vd);
 						return;
 					}
 				}
@@ -7873,6 +7944,7 @@ void VRenderGLView::RemoveVolumeDataset(BaseReader *reader, int channel)
 					m_layer_list.erase(m_layer_list.begin()+i);
 					m_vd_pop_dirty = true;
 					if (vd == m_cur_vol) m_cur_vol = NULL;
+					m_loader.RemoveBrickVD(vd);
 				}
 			}
 			break;
@@ -7887,6 +7959,7 @@ void VRenderGLView::RemoveVolumeDataset(BaseReader *reader, int channel)
 						group->RemoveVolumeData(j);
 						m_vd_pop_dirty = true;
 						if (vd == m_cur_vol) m_cur_vol = NULL;
+						m_loader.RemoveBrickVD(vd);
 					}
 				}
 			}
@@ -10093,7 +10166,13 @@ void VRenderGLView::DrawInfo(int nx, int ny)
 		str = wxString::Format("FPS: %.2f", fps_>=0.0&&fps_<300.0?fps_:0.0);
 
 	if (m_cur_vol && m_cur_vol->isBrxml())
+	{
 		str += wxString::Format(" VVD_Level: %d/%d,", m_cur_vol->GetLevel()+1, m_cur_vol->GetLevelNum());
+		long long used_mem;
+		int dtnum, qnum, dqnum;
+		m_loader.GetPalams(used_mem, dtnum, qnum, dqnum);
+		str += wxString::Format(" US: %lld DT: %d Q: %d DQ: %d,", used_mem, dtnum, qnum, dqnum);
+	}
 
 	wstring wstr_temp = str.ToStdWstring();
 	px = gapw-nx/2;
