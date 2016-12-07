@@ -4248,6 +4248,7 @@ void VRenderGLView::switchLevel(VolumeData *vd)
 					(*bricks)[i]->set_disp(false);
 			}
 			vd->SetLevel(new_lv);
+			vtex->set_sort_bricks();
 		}
 	}
 }
@@ -10802,7 +10803,7 @@ void VRenderGLView::StartLoopUpdate()
 								d.mode = 2;
 								tmp_shade.push_back(d);
 							}
-							if (shade && !b->drawn(3))
+							if (shadow && !b->drawn(3))
 							{
 								d.mode = 3;
 								tmp_shadow.push_back(d);
@@ -10858,7 +10859,7 @@ void VRenderGLView::StartLoopUpdate()
 										d.mode = 2;
 										tmp_shade.push_back(d);
 									}
-									if (shade && !b->drawn(3))
+									if (shadow && !b->drawn(3))
 									{
 										d.mode = 3;
 										tmp_shadow.push_back(d);
@@ -10929,7 +10930,7 @@ void VRenderGLView::StartLoopUpdate()
 													d.mode = 2;
 													tmp_shade.push_back(d);
 												}
-												if (shade && !b->drawn(3))
+												if (shadow && !b->drawn(3))
 												{
 													d.mode = 3;
 													tmp_shadow.push_back(d);
@@ -10969,7 +10970,7 @@ void VRenderGLView::StartLoopUpdate()
 												d.mode = 2;
 												tmp_shade.push_back(d);
 											}
-											if (shade && !b->drawn(3))
+											if (shadow && !b->drawn(3))
 											{
 												d.mode = 3;
 												tmp_shadow.push_back(d);
