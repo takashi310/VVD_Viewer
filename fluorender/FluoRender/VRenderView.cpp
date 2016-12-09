@@ -38,6 +38,7 @@ DEALINGS IN THE SOFTWARE.
 #include <wx/stdpaths.h>
 #include <algorithm>
 #include <limits>
+#include <unordered_set>
 #include "GL/mywgl.h"
 #include "png_resource.h"
 #include <glm/gtc/type_ptr.hpp>
@@ -440,16 +441,8 @@ wxThread::ExitCode VolumeDecompressorThread::Entry()
 			m_vl->m_pThreadCS.Enter();
 
 			delete [] q.in_data;
-			q.b->freeBrkData();
 			q.b->set_brkdata(result);
-			VolumeLoaderData b;
-			b.brick = q.b;
-			b.finfo = q.finfo;
-			b.vd = q.vd;
-			b.mode = q.mode;
-			b.datasize = bsize;
-			m_vl->m_loaded.push_back(b);
-			//m_vl->AddLoadedBrick(b);
+			q.b->set_loading_state(false);
 			m_vl->m_pThreadCS.Leave();
 		}
 		else
@@ -460,11 +453,9 @@ wxThread::ExitCode VolumeDecompressorThread::Entry()
 			delete [] q.in_data;
 			m_vl->m_used_memory -= bsize;
 			q.b->set_drawn(q.mode, true);
+			q.b->set_loading_state(false);
 			m_vl->m_pThreadCS.Leave();
 		}
-
-//		if (TestDestroy())
-//			break;
 	}
 
 	return (wxThread::ExitCode)0;
@@ -507,24 +498,37 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 		Sleep(10);
 	}
 
+	m_vl->m_pThreadCS.Enter();
+	auto ite = m_vl->m_loaded.begin();
+	while(ite != m_vl->m_loaded.end())
+	{
+		if (!ite->brick->isLoaded() && ite->brick->isLoading())
+		{
+			ite->brick->set_loading_state(false);
+			ite = m_vl->m_loaded.erase(ite);
+		}
+		else
+			ite++;
+	}
+	m_vl->m_pThreadCS.Leave();
+
 	while(1)
 	{
 		if (TestDestroy())
 			break;
 
 		m_vl->m_pThreadCS.Enter();
-
 		if (m_vl->m_queues.size() == 0)
 		{
 			m_vl->m_pThreadCS.Leave();
 			break;
 		}
 		VolumeLoaderData b = m_vl->m_queues[0];
+		b.brick->set_loading_state(false);
 		m_vl->m_queues.erase(m_vl->m_queues.begin());
-
 		m_vl->m_pThreadCS.Leave();
 
-		if (!b.brick->isLoaded())
+		if (!b.brick->isLoaded() && !b.brick->isLoading())
 		{
 			if (m_vl->m_used_memory >= m_vl->m_memory_limit)
 			{
@@ -566,6 +570,7 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 				dq.in_size = readsize;
 
 				size_t bsize = (size_t)(b.brick->nx())*(size_t)(b.brick->ny())*(size_t)(b.brick->nz())*(size_t)(b.brick->nb(0));
+				b.datasize = bsize;
 				dq.datasize = bsize;
 				
 				if (m_vl->m_max_decomp_th == 0)
@@ -579,7 +584,10 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 						m_vl->m_pThreadCS.Enter();
 						m_vl->m_decomp_queues.push_back(dq);
 						m_vl->m_used_memory += bsize;
+						b.brick->set_loading_state(true);
+						m_vl->m_loaded.push_back(b);
 						m_vl->m_pThreadCS.Leave();
+						
 						dthread->Run();
 					}
 					else
@@ -591,6 +599,8 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 							m_vl->m_pThreadCS.Enter();
 							m_vl->m_decomp_queues.push_back(dq);
 							m_vl->m_used_memory += bsize;
+							b.brick->set_loading_state(true);
+							m_vl->m_loaded.push_back(b);
 							m_vl->m_pThreadCS.Leave();
 						}
 					}
@@ -600,6 +610,8 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 					m_vl->m_pThreadCS.Enter();
 					m_vl->m_decomp_queues.push_back(dq);
 					m_vl->m_used_memory += bsize;
+					b.brick->set_loading_state(true);
+					m_vl->m_loaded.push_back(b);
 					m_vl->m_pThreadCS.Leave();
 				}
 
@@ -610,10 +622,10 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 					{
 						m_vl->m_pThreadCS.Enter();
 						delete [] dq.in_data;
-						b.brick->freeBrkData();
 						b.brick->set_brkdata(result);
 						b.datasize = bsize;
-						m_vl->AddLoadedBrick(b);
+						m_vl->m_used_memory += bsize;
+						m_vl->m_loaded.push_back(b);
 						m_vl->m_pThreadCS.Leave();
 					}
 					else
@@ -629,6 +641,27 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 				}
 			}
 
+		}
+		else
+		{
+			size_t bsize = (size_t)(b.brick->nx())*(size_t)(b.brick->ny())*(size_t)(b.brick->nz())*(size_t)(b.brick->nb(0));
+			b.datasize = bsize;
+
+			bool sw = false;
+			m_vl->m_pThreadCS.Enter();
+			auto ite2 = m_vl->m_loaded.begin();
+			while(ite2 != m_vl->m_loaded.end())
+			{
+				if (ite2->brick == b.brick)
+				{
+					ite2 = m_vl->m_loaded.erase(ite2);
+					sw = true;
+				}
+				else
+					ite2++;
+			}
+			if (sw) m_vl->m_loaded.push_back(b);
+			m_vl->m_pThreadCS.Leave();
 		}
 	}
 
@@ -801,23 +834,38 @@ void VolumeLoader::CleanupLoadedBrick()
 			TextureBrick *b = m_queues[i].brick;
 			if (b->isLoaded())
 			{
-				b->freeBrkData();
-				long long datasize = (size_t)(b->nx())*(size_t)(b->ny())*(size_t)(b->nz())*(size_t)(b->nb(0));
-				required -= datasize;
-				m_used_memory -= datasize;
-				if (m_used_memory < m_memory_limit)
-					break;
+				bool skip = false;
+				auto ite = m_loaded.begin();
+				while(ite != m_loaded.end())
+				{
+					if (ite->brick == b && !ite->brick->drawn(ite->mode))
+					{
+						skip = true;
+						break;
+					}
+					else
+						ite++;
+				}
+				if (!skip)
+				{
+					b->freeBrkData();
+					long long datasize = (size_t)(b->nx())*(size_t)(b->ny())*(size_t)(b->nz())*(size_t)(b->nb(0));
+					required -= datasize;
+					m_used_memory -= datasize;
+					if (m_used_memory < m_memory_limit)
+						break;
+				}
 			}
 		}
 	}
 
-	auto ite = m_loaded.begin();
-	while(ite != m_loaded.end())
+	auto ite2 = m_loaded.begin();
+	while(ite2 != m_loaded.end())
 	{
-		if (!ite->brick->isLoaded())
-			ite = m_loaded.erase(ite);
+		if (!ite2->brick->isLoaded() && !ite2->brick->isLoading())
+			ite2 = m_loaded.erase(ite2);
 		else
-			ite++;
+			ite2++;
 	}
 }
 
@@ -855,10 +903,13 @@ void VolumeLoader::RemoveBrickVD(VolumeData *vd)
 void VolumeLoader::GetPalams(long long &used_mem, int &running_decomp_th, int &queue_num, int &decomp_queue_num)
 {
 	long long us = 0;
+	int ll = 0;
 	for (int i = 0; i < m_loaded.size(); i++)
 	{
 		if (m_loaded[i].brick->isLoaded())
 			us += m_loaded[i].datasize;
+		if (!m_loaded[i].brick->get_disp())
+			ll++;
 	}
 	used_mem = us;
 	running_decomp_th = m_running_decomp_th;
@@ -10812,8 +10863,13 @@ void VRenderGLView::StartLoopUpdate()
 						checked[i]++;
 					}
 				}
-				if (!tmp_shade.empty()) queues.insert(queues.begin(), tmp_shade.begin(), tmp_shade.end());
-				if (!tmp_shadow.empty()) queues.insert(queues.begin(), tmp_shadow.begin(), tmp_shadow.end());
+				if (!tmp_shade.empty()) queues.insert(queues.end(), tmp_shade.begin(), tmp_shade.end());
+				if (!tmp_shadow.empty())
+				{
+					if (TextureRenderer::get_update_order() == 1)
+						std::sort(tmp_shadow.begin(), tmp_shadow.end(), VolumeLoader::sort_data_asc);
+					queues.insert(queues.end(), tmp_shadow.begin(), tmp_shadow.end());
+				}
 			}
 		}
 		else if (m_layer_list.size() > 0)
@@ -10866,8 +10922,13 @@ void VRenderGLView::StartLoopUpdate()
 									}
 								}
 							}
-							if (!tmp_shade.empty()) queues.insert(queues.begin(), tmp_shade.begin(), tmp_shade.end());
-							if (!tmp_shadow.empty()) queues.insert(queues.begin(), tmp_shadow.begin(), tmp_shadow.end());
+							if (!tmp_shade.empty()) queues.insert(queues.end(), tmp_shade.begin(), tmp_shade.end());
+							if (!tmp_shadow.empty())
+							{
+								if (TextureRenderer::get_update_order() == 1)
+									std::sort(tmp_shadow.begin(), tmp_shadow.end(), VolumeLoader::sort_data_asc);
+								queues.insert(queues.end(), tmp_shadow.begin(), tmp_shadow.end());
+							}
 						}
 					}
 					break;
@@ -10979,8 +11040,13 @@ void VRenderGLView::StartLoopUpdate()
 									}
 								}
 							}
-							if (!tmp_shade.empty()) queues.insert(queues.begin(), tmp_shade.begin(), tmp_shade.end());
-							if (!tmp_shadow.empty()) queues.insert(queues.begin(), tmp_shadow.begin(), tmp_shadow.end());
+							if (!tmp_shade.empty()) queues.insert(queues.end(), tmp_shade.begin(), tmp_shade.end());
+							if (!tmp_shadow.empty())
+							{
+								if (TextureRenderer::get_update_order() == 1)
+									std::sort(tmp_shadow.begin(), tmp_shadow.end(), VolumeLoader::sort_data_asc);
+								queues.insert(queues.end(), tmp_shadow.begin(), tmp_shadow.end());
+							}
 						}
 
 					}
@@ -10993,8 +11059,8 @@ void VRenderGLView::StartLoopUpdate()
 		{
 			m_loader.Set(queues);
 			m_loader.SetMemoryLimitByte((long long)TextureRenderer::mainmem_buf_size_*1024LL*1024LL);
-			//TextureRenderer::set_load_on_main_thread(true);
-			TextureRenderer::set_load_on_main_thread(!m_loader.Run());
+			TextureRenderer::set_load_on_main_thread(false);
+			m_loader.Run();
 		}
 
 		if (total_num > 0)

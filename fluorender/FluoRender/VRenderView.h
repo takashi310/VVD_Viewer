@@ -257,6 +257,12 @@ class VolumeLoader
 		void RemoveAllLoadedBrick();
 		void RemoveBrickVD(VolumeData *vd);
 		void GetPalams(long long &used_mem, int &running_decomp_th, int &queue_num, int &decomp_queue_num);
+
+		static bool sort_data_dsc(const VolumeLoaderData b1, const VolumeLoaderData b2)
+		{ return b2.brick->get_d() > b1.brick->get_d(); }
+		static bool sort_data_asc(const VolumeLoaderData b1, const VolumeLoaderData b2)
+		{ return b2.brick->get_d() < b1.brick->get_d(); }
+
 	protected:
 		VolumeLoaderThread *m_thread;
 		wxCriticalSection m_pThreadCS;

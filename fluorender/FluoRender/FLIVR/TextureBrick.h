@@ -222,6 +222,8 @@ namespace FLIVR {
 		static bool sort_dsc(const TextureBrick* b1, const TextureBrick* b2)
 		{ return b2->d_ > b1->d_; }
 
+		double get_d() {return d_;}
+
 		static bool less_timin(const TextureBrick* b1, const TextureBrick* b2) { return b1->timin_ < b2->timin_; }
 		static bool high_timin(const TextureBrick* b1, const TextureBrick* b2) { return b1->timin_ > b2->timin_; }
 		static bool less_timax(const TextureBrick* b1, const TextureBrick* b2) { return b1->timax_ < b2->timax_; }
@@ -233,6 +235,8 @@ namespace FLIVR {
 
 		void freeBrkData();
 		bool isLoaded() {return brkdata_ ? true : false;};
+		bool isLoading() {return loading_;}
+		void set_loading_state(bool val) {loading_ = val;}
 		void set_id_in_loadedbrks(int id) {id_in_loadedbrks = id;};
 		int get_id_in_loadedbrks() {return id_in_loadedbrks;}
 		int getID() {return findex_;}
@@ -322,6 +326,7 @@ namespace FLIVR {
 		long long offset_;
 		long long fsize_;
 		void *brkdata_;
+		bool loading_;
 		int id_in_loadedbrks;
 
 		int findex_;

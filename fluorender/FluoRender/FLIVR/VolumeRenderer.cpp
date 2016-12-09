@@ -1330,7 +1330,15 @@ namespace FLIVR
 
 		if (mem_swap_ &&
 			cur_brick_num_ == total_brick_num_)
+		{
 			done_update_loop_ = true;
+			done_current_chan_ = true;
+			clear_chan_buffer_ = true;
+			save_final_buffer_ = true;
+			cur_chan_brick_num_ = 0;
+			done_loop_[bmode] = true;
+		}
+
 		if (mem_swap_ &&
 			(size_t)cur_chan_brick_num_ == (*bricks).size())
 		{
