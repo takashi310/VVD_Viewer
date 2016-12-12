@@ -502,9 +502,9 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 	auto ite = m_vl->m_loaded.begin();
 	while(ite != m_vl->m_loaded.end())
 	{
-		if (!ite->brick->isLoaded() && ite->brick->isLoading())
+		if (!ite->second.brick->isLoaded() && ite->second.brick->isLoading())
 		{
-			ite->brick->set_loading_state(false);
+			ite->second.brick->set_loading_state(false);
 			ite = m_vl->m_loaded.erase(ite);
 		}
 		else
@@ -526,6 +526,7 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 		VolumeLoaderData b = m_vl->m_queues[0];
 		b.brick->set_loading_state(false);
 		m_vl->m_queues.erase(m_vl->m_queues.begin());
+		m_vl->m_queued.push_back(b);
 		m_vl->m_pThreadCS.Leave();
 
 		if (!b.brick->isLoaded() && !b.brick->isLoading())
@@ -585,7 +586,7 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 						m_vl->m_decomp_queues.push_back(dq);
 						m_vl->m_used_memory += bsize;
 						b.brick->set_loading_state(true);
-						m_vl->m_loaded.push_back(b);
+						m_vl->m_loaded[b.brick] = b;
 						m_vl->m_pThreadCS.Leave();
 						
 						dthread->Run();
@@ -600,7 +601,7 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 							m_vl->m_decomp_queues.push_back(dq);
 							m_vl->m_used_memory += bsize;
 							b.brick->set_loading_state(true);
-							m_vl->m_loaded.push_back(b);
+							m_vl->m_loaded[b.brick] = b;
 							m_vl->m_pThreadCS.Leave();
 						}
 					}
@@ -611,7 +612,7 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 					m_vl->m_decomp_queues.push_back(dq);
 					m_vl->m_used_memory += bsize;
 					b.brick->set_loading_state(true);
-					m_vl->m_loaded.push_back(b);
+					m_vl->m_loaded[b.brick] = b;
 					m_vl->m_pThreadCS.Leave();
 				}
 
@@ -625,7 +626,7 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 						b.brick->set_brkdata(result);
 						b.datasize = bsize;
 						m_vl->m_used_memory += bsize;
-						m_vl->m_loaded.push_back(b);
+						m_vl->m_loaded[b.brick] = b;
 						m_vl->m_pThreadCS.Leave();
 					}
 					else
@@ -647,20 +648,9 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 			size_t bsize = (size_t)(b.brick->nx())*(size_t)(b.brick->ny())*(size_t)(b.brick->nz())*(size_t)(b.brick->nb(0));
 			b.datasize = bsize;
 
-			bool sw = false;
 			m_vl->m_pThreadCS.Enter();
-			auto ite2 = m_vl->m_loaded.begin();
-			while(ite2 != m_vl->m_loaded.end())
-			{
-				if (ite2->brick == b.brick)
-				{
-					ite2 = m_vl->m_loaded.erase(ite2);
-					sw = true;
-				}
-				else
-					ite2++;
-			}
-			if (sw) m_vl->m_loaded.push_back(b);
+			if (m_vl->m_loaded.find(b.brick) != m_vl->m_loaded.end())
+				m_vl->m_loaded[b.brick] = b;
 			m_vl->m_pThreadCS.Leave();
 		}
 	}
@@ -752,6 +742,8 @@ bool VolumeLoader::Run()
 {
 	Abort();
 	//StopAll();
+	if (!m_queued.empty())
+		m_queued.clear();
 
 	m_thread = new VolumeLoaderThread(this);
 	if (m_thread->Create() != wxTHREAD_NO_ERROR)
@@ -776,27 +768,28 @@ void VolumeLoader::CleanupLoadedBrick()
 			required += (size_t)b->nx()*(size_t)b->ny()*(size_t)b->nz()*(size_t)b->nb(0);
 	}
 
-	vector<VolumeLoaderData*> vd_undisp;
-	vector<VolumeLoaderData*> b_undisp;
-	vector<VolumeLoaderData*> b_drawn;
-	for (int i = 0; i < m_loaded.size(); i++)
+	vector<VolumeLoaderData> vd_undisp;
+	vector<VolumeLoaderData> b_undisp;
+	vector<VolumeLoaderData> b_drawn;
+	for(auto elem : m_loaded)
 	{
-		if (!m_loaded[i].vd->GetDisp())
-			vd_undisp.push_back(&m_loaded[i]);
-		else if(!m_loaded[i].brick->get_disp())
-			b_undisp.push_back(&m_loaded[i]);
-		else if (m_loaded[i].brick->drawn(m_loaded[i].mode))
-			b_drawn.push_back(&m_loaded[i]);
+		if (!elem.second.vd->GetDisp())
+			vd_undisp.push_back(elem.second);
+		else if(!elem.second.brick->get_disp())
+			b_undisp.push_back(elem.second);
+		else if (elem.second.brick->drawn(elem.second.mode))
+			b_drawn.push_back(elem.second);
 	}
 	if (required > 0 || m_used_memory >= m_memory_limit)
 	{
 		for (int i = 0; i < vd_undisp.size(); i++)
 		{
-			if (!vd_undisp[i]->brick->isLoaded())
+			if (!vd_undisp[i].brick->isLoaded())
 				continue;
-			vd_undisp[i]->brick->freeBrkData();
-			required -= vd_undisp[i]->datasize;
-			m_used_memory -= vd_undisp[i]->datasize;
+			vd_undisp[i].brick->freeBrkData();
+			required -= vd_undisp[i].datasize;
+			m_used_memory -= vd_undisp[i].datasize;
+			m_loaded.erase(vd_undisp[i].brick);
 			if (required <= 0 && m_used_memory < m_memory_limit)
 				break;
 		}
@@ -805,11 +798,12 @@ void VolumeLoader::CleanupLoadedBrick()
 	{
 		for (int i = 0; i < b_undisp.size(); i++)
 		{
-			if (!b_undisp[i]->brick->isLoaded())
+			if (!b_undisp[i].brick->isLoaded())
 				continue;
-			b_undisp[i]->brick->freeBrkData();
-			required -= b_undisp[i]->datasize;
-			m_used_memory -= b_undisp[i]->datasize;
+			b_undisp[i].brick->freeBrkData();
+			required -= b_undisp[i].datasize;
+			m_used_memory -= b_undisp[i].datasize;
+			m_loaded.erase(b_undisp[i].brick);
 			if (required <= 0 && m_used_memory < m_memory_limit)
 				break;
 		}
@@ -818,11 +812,12 @@ void VolumeLoader::CleanupLoadedBrick()
 	{
 		for (int i = 0; i < b_drawn.size(); i++)
 		{
-			if (!b_drawn[i]->brick->isLoaded())
+			if (!b_drawn[i].brick->isLoaded())
 				continue;
-			b_drawn[i]->brick->freeBrkData();
-			required -= b_drawn[i]->datasize;
-			m_used_memory -= b_drawn[i]->datasize;
+			b_drawn[i].brick->freeBrkData();
+			required -= b_drawn[i].datasize;
+			m_used_memory -= b_drawn[i].datasize;
+			m_loaded.erase(b_drawn[i].brick);
 			if (required <= 0 && m_used_memory < m_memory_limit)
 				break;
 		}
@@ -832,19 +827,13 @@ void VolumeLoader::CleanupLoadedBrick()
 		for(int i = m_queues.size()-1; i >= 0; i--)
 		{
 			TextureBrick *b = m_queues[i].brick;
-			if (b->isLoaded())
+			if (b->isLoaded() && m_loaded.find(b) != m_loaded.end())
 			{
 				bool skip = false;
-				auto ite = m_loaded.begin();
-				while(ite != m_loaded.end())
+				for (int j = m_queued.size()-1; j >= 0; j--)
 				{
-					if (ite->brick == b && !ite->brick->drawn(ite->mode))
-					{
+					if (m_queued[j].brick == b && !b->drawn(m_queued[j].mode))
 						skip = true;
-						break;
-					}
-					else
-						ite++;
 				}
 				if (!skip)
 				{
@@ -852,6 +841,7 @@ void VolumeLoader::CleanupLoadedBrick()
 					long long datasize = (size_t)(b->nx())*(size_t)(b->ny())*(size_t)(b->nz())*(size_t)(b->nb(0));
 					required -= datasize;
 					m_used_memory -= datasize;
+					m_loaded.erase(b);
 					if (m_used_memory < m_memory_limit)
 						break;
 				}
@@ -859,25 +849,17 @@ void VolumeLoader::CleanupLoadedBrick()
 		}
 	}
 
-	auto ite2 = m_loaded.begin();
-	while(ite2 != m_loaded.end())
-	{
-		if (!ite2->brick->isLoaded() && !ite2->brick->isLoading())
-			ite2 = m_loaded.erase(ite2);
-		else
-			ite2++;
-	}
 }
 
 void VolumeLoader::RemoveAllLoadedBrick()
 {
 	StopAll();
-	for (int i = 0; i < m_loaded.size(); i++)
+	for(auto e : m_loaded)
 	{
-		if (m_loaded[i].brick->isLoaded())
+		if (e.second.brick->isLoaded())
 		{
-			m_loaded[i].brick->freeBrkData();
-			m_used_memory -= m_loaded[i].datasize;
+			e.second.brick->freeBrkData();
+			m_used_memory -= e.second.datasize;
 		}
 	}
 	m_loaded.clear();
@@ -889,10 +871,10 @@ void VolumeLoader::RemoveBrickVD(VolumeData *vd)
 	auto ite = m_loaded.begin();
 	while(ite != m_loaded.end())
 	{
-		if (ite->vd == vd && ite->brick->isLoaded())
+		if (ite->second.vd == vd && ite->second.brick->isLoaded())
 		{
-			ite->brick->freeBrkData();
-			m_used_memory -= ite->datasize;
+			ite->second.brick->freeBrkData();
+			m_used_memory -= ite->second.datasize;
 			ite = m_loaded.erase(ite);
 		}
 		else
@@ -904,14 +886,14 @@ void VolumeLoader::GetPalams(long long &used_mem, int &running_decomp_th, int &q
 {
 	long long us = 0;
 	int ll = 0;
-	for (int i = 0; i < m_loaded.size(); i++)
+	for(auto e : m_loaded)
 	{
-		if (m_loaded[i].brick->isLoaded())
-			us += m_loaded[i].datasize;
-		if (!m_loaded[i].brick->get_disp())
+		if (e.second.brick->isLoaded())
+			us += e.second.datasize;
+		if (!e.second.brick->get_disp())
 			ll++;
 	}
-	used_mem = us;
+	used_mem = m_used_memory;
 	running_decomp_th = m_running_decomp_th;
 	queue_num = m_queues.size();
 	decomp_queue_num = m_decomp_queues.size();

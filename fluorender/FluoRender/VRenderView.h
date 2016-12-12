@@ -52,6 +52,7 @@ DEALINGS IN THE SOFTWARE.
 
 #include <vector>
 #include <stdarg.h>
+#include <unordered_map>
 #include "nv/timer.h"
 
 #include <glm/glm.hpp>
@@ -267,9 +268,10 @@ class VolumeLoader
 		VolumeLoaderThread *m_thread;
 		wxCriticalSection m_pThreadCS;
 		vector<VolumeLoaderData> m_queues;
+		vector<VolumeLoaderData> m_queued;
 		vector<VolumeDecompressorData> m_decomp_queues;
 		vector<VolumeDecompressorThread *> m_decomp_threads;
-		vector<VolumeLoaderData> m_loaded;
+		unordered_map<TextureBrick*, VolumeLoaderData> m_loaded;
 		int m_running_decomp_th;
 		int m_max_decomp_th;
 		bool m_valid;
@@ -279,7 +281,7 @@ class VolumeLoader
 
 		inline void AddLoadedBrick(VolumeLoaderData lbd)
 		{
-			m_loaded.push_back(lbd);
+			m_loaded[lbd.brick] = lbd;
 			m_used_memory += lbd.datasize;
 		}
 
