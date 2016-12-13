@@ -279,7 +279,10 @@ namespace FLIVR
 						// perspective: sort bricks based on distance to the eye point
 						dd = (corner[c] - view.origin()).length();
 					}
-					if (c == 0 || dd < d) d = dd;
+					if (c == 0 ||
+						(TextureRenderer::get_update_order() == 1 && dd < d) ||
+						(TextureRenderer::get_update_order() == 0 && dd > d))
+						d = dd;
 				}
 				(*bricks_)[i]->set_d(d);
 			}
