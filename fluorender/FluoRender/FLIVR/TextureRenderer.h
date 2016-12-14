@@ -157,7 +157,7 @@ namespace FLIVR
          void set_blend_num_bits(int b);
 
          //clear the opengl textures from the texture pool
-         void clear_tex_pool();
+         static void clear_tex_pool();
 		void clear_tex_current();
 
          //resize the fbo texture
@@ -369,7 +369,7 @@ namespace FLIVR
                GLuint tex_2d_dmap_;
 
                int blend_num_bits_;
-               bool clear_pool_;
+               static bool clear_pool_;
 
 			   struct LoadedBrick {
 				   bool swapped;

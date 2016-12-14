@@ -1409,6 +1409,7 @@ void VRenderGLView::Init()
 void VRenderGLView::Clear()
 {
 	m_loader.RemoveAllLoadedBrick();
+	TextureRenderer::clear_tex_pool();
 
 	//delete groups
 	for (int i=0; i<(int)m_layer_list.size(); i++)
@@ -2646,6 +2647,7 @@ void VRenderGLView::RandomizeColor()
 void VRenderGLView::ClearVolList()
 {
 	m_loader.RemoveAllLoadedBrick();
+	TextureRenderer::clear_tex_pool();
 	m_vd_pop_list.clear();
 }
 
@@ -7942,6 +7944,7 @@ void VRenderGLView::RemoveVolumeData(wxString &name)
 					m_vd_pop_dirty = true;
 					m_cur_vol = NULL;
 					m_loader.RemoveBrickVD(vd);
+					vd->GetVR()->clear_tex_current();
 					return;
 				}
 			}
@@ -7958,6 +7961,7 @@ void VRenderGLView::RemoveVolumeData(wxString &name)
 						m_vd_pop_dirty = true;
 						m_cur_vol = NULL;
 						m_loader.RemoveBrickVD(vd);
+						vd->GetVR()->clear_tex_current();
 						return;
 					}
 				}
@@ -7986,6 +7990,7 @@ void VRenderGLView::RemoveVolumeDataset(BaseReader *reader, int channel)
 					m_vd_pop_dirty = true;
 					if (vd == m_cur_vol) m_cur_vol = NULL;
 					m_loader.RemoveBrickVD(vd);
+					vd->GetVR()->clear_tex_current();
 				}
 			}
 			break;
@@ -8001,6 +8006,7 @@ void VRenderGLView::RemoveVolumeDataset(BaseReader *reader, int channel)
 						m_vd_pop_dirty = true;
 						if (vd == m_cur_vol) m_cur_vol = NULL;
 						m_loader.RemoveBrickVD(vd);
+						vd->GetVR()->clear_tex_current();
 					}
 				}
 			}

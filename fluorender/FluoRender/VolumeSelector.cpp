@@ -179,7 +179,7 @@ void VolumeSelector::Select(double radius)
 		m_vd->GetVR())
 	{
 		m_vd->GetVR()->return_mask();
-		m_vd->GetVR()->clear_tex_pool();
+		TextureRenderer::clear_tex_pool();
 	}
 }
 
@@ -461,7 +461,7 @@ int VolumeSelector::CompIslandCount(double min_voxels, double max_voxels)
 				m_prog_diag->Update(95*(m_progress+1)/m_total_pr);
 			}
 	}
-	m_vd->GetVR()->clear_tex_pool();
+	TextureRenderer::clear_tex_pool();
 
 	//count
 	for (comp_iter=m_comps.begin(); comp_iter!=m_comps.end(); comp_iter++)

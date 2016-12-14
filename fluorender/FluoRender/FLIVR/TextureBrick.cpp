@@ -98,6 +98,7 @@ namespace FLIVR
 	  loading_ = false;
 	  
 	  disp_ = true;
+	  prevent_tex_deletion_ = false;
    }
 
    TextureBrick::~TextureBrick()

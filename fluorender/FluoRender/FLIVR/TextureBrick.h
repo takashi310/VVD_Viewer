@@ -274,6 +274,9 @@ namespace FLIVR {
 		static bool jpeg_decompressor(char *out, char* in, size_t out_size, size_t in_size);
 		static bool zlib_decompressor(char *out, char* in, size_t out_size, size_t in_size);
 		static void delete_all_cache_files();
+
+		void prevent_tex_deletion(bool val) {prevent_tex_deletion_ = val;}
+		bool is_tex_deletion_prevented() {return prevent_tex_deletion_;}
 	private:
 		void compute_edge_rays(BBox &bbox);
 		void compute_edge_rays_tex(BBox &bbox);
@@ -328,6 +331,8 @@ namespace FLIVR {
 		void *brkdata_;
 		bool loading_;
 		int id_in_loadedbrks;
+
+		bool prevent_tex_deletion_;
 
 		int findex_;
 

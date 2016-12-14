@@ -79,6 +79,7 @@ namespace FLIVR
 	Point TextureRenderer::quota_center_;
 	int TextureRenderer::update_order_ = 0;
 	bool TextureRenderer::load_on_main_thread_ = false;
+	bool TextureRenderer::clear_pool_ = false;
 
 	vector<TextureRenderer::LoadedBrick> TextureRenderer::loadedbrks;
 	int TextureRenderer::del_id = 0;
@@ -109,8 +110,7 @@ namespace FLIVR
 		tex_2d_weight1_(0),
 		tex_2d_weight2_(0),
 		tex_2d_dmap_(0),
-		blend_num_bits_(32),
-		clear_pool_(false)
+		blend_num_bits_(32)
 	{
 		init_palette();
 /*
@@ -174,8 +174,7 @@ namespace FLIVR
 		tex_2d_weight1_(0),
 		tex_2d_weight2_(0),
 		tex_2d_dmap_(0),
-		blend_num_bits_(copy.blend_num_bits_),
-		clear_pool_(copy.clear_pool_)
+		blend_num_bits_(copy.blend_num_bits_)
 	{
 		memcpy(palette_, copy.palette_, sizeof(unsigned char)*PALETTE_SIZE*PALETTE_ELEM_COMP); 
 		memcpy(base_palette_, copy.base_palette_, sizeof(unsigned char)*PALETTE_SIZE*PALETTE_ELEM_COMP); 
@@ -2272,15 +2271,54 @@ namespace FLIVR
 			//sort from farthest to closest
 			std::sort(bd_list.begin(), bd_list.end(), TextureRenderer::brick_sort);
 
-			//remove
+			vector<BrickDist> bd_undisp;
+			vector<BrickDist> bd_saved;
+			vector<BrickDist> bd_others;
 			for (i=0; i<bd_list.size(); i++)
 			{
-				TextureBrick* btemp = bd_list[i].brick;
-				tex_pool_[bd_list[i].index].delayed_del = true;
+				TextureBrick* b = bd_list[i].brick;
+				if (!b->get_disp())
+					bd_undisp.push_back(bd_list[i]);
+				else if (b->is_tex_deletion_prevented())
+					bd_saved.push_back(bd_list[i]);
+				else
+					bd_others.push_back(bd_list[i]);
+			}
+
+
+			//remove
+			for (i=0; i<bd_undisp.size(); i++)
+			{
+				TextureBrick* btemp = bd_undisp[i].brick;
+				tex_pool_[bd_undisp[i].index].delayed_del = true;
 				double released_mem = btemp->nx()*btemp->ny()*btemp->nz()*btemp->nb(c)/1.04e6;
 				est_avlb_mem += released_mem;
 				if (est_avlb_mem >= new_mem)
 					break;
+			}
+			if (est_avlb_mem < new_mem)
+			{
+				for (i=0; i<bd_others.size(); i++)
+				{
+					TextureBrick* btemp = bd_others[i].brick;
+					tex_pool_[bd_others[i].index].delayed_del = true;
+					double released_mem = btemp->nx()*btemp->ny()*btemp->nz()*btemp->nb(c)/1.04e6;
+					est_avlb_mem += released_mem;
+					if (est_avlb_mem >= new_mem)
+						break;
+				}
+			}
+			if (est_avlb_mem < new_mem)
+			{
+				for (i=0; i<bd_saved.size(); i++)
+				{
+					TextureBrick* btemp = bd_saved[i].brick;
+					tex_pool_[bd_saved[i].index].delayed_del = true;
+					double released_mem = btemp->nx()*btemp->ny()*btemp->nz()*btemp->nb(c)/1.04e6;
+					est_avlb_mem += released_mem;
+					if (est_avlb_mem >= new_mem)
+						break;
+				}
 			}
 
 			//delete from pool

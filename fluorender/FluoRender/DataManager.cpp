@@ -2109,6 +2109,8 @@ void VolumeData::SetDisp(bool disp)
 {
 	m_disp = disp;
 	GetTexture()->set_sort_bricks();
+	if (!disp)
+		GetVR()->clear_tex_current();
 }
 
 bool VolumeData::GetDisp()
@@ -2120,6 +2122,8 @@ void VolumeData::ToggleDisp()
 {
 	m_disp = !m_disp;
 	GetTexture()->set_sort_bricks();
+	if (!m_disp)
+		GetVR()->clear_tex_current();
 }
 
 //bounding box
