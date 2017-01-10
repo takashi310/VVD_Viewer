@@ -92,6 +92,7 @@ wxWindow* VMovieView::CreateSimplePage(wxWindow *parent) {
 	wxBoxSizer* sizer_5 = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* sizer_6 = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* sizer_7 = new wxBoxSizer(wxHORIZONTAL);
+	wxBoxSizer* sizer_8 = new wxBoxSizer(wxHORIZONTAL);
 	//vertical sizer
 	wxBoxSizer* sizer_v = new wxBoxSizer(wxVERTICAL);
 	m_seq_chk = new wxCheckBox(page,ID_SeqChk,
@@ -185,6 +186,13 @@ wxWindow* VMovieView::CreateSimplePage(wxWindow *parent) {
 	sizer_7->Add(m_movie_time, 0, wxALIGN_CENTER);
 	sizer_7->Add(5, 5, 0);
 	sizer_7->Add(st2, 0, wxALIGN_CENTER);
+
+	//rewind
+	m_rewind_chk = new wxCheckBox(page, wxID_ANY, "Rewind");
+	m_rewind_chk->SetValue(false);
+	sizer_8->AddStretchSpacer();
+	sizer_8->Add(m_rewind_chk, 0, wxALIGN_CENTER);
+
 	//all sizers
 	sizer_v->Add(5, 5, 0);
 	sizer_v->Add(sizer_3, 0, wxEXPAND);
@@ -200,6 +208,8 @@ wxWindow* VMovieView::CreateSimplePage(wxWindow *parent) {
 	sizer_v->Add(sizer_2, 0, wxEXPAND);
 	sizer_v->Add(5, 10, 0);
 	sizer_v->Add(sizer_7, 0, wxEXPAND);
+	sizer_v->Add(5, 10, 0);
+	sizer_v->Add(sizer_8, 0, wxEXPAND);
 	sizer_v->AddStretchSpacer();
 	//set the page
 	page->SetSizer(sizer_v);
@@ -1061,12 +1071,43 @@ void VMovieView::SetRendering(double pcnt) {
 			val = y;
 		if (m_z_rd->GetValue())
 			val = z;
+
 		double deg = STOD(m_degree_end->GetValue().fn_str());
-		if (m_rot_int_type == 0)
-			val = m_starting_rot + pcnt * deg;
-		else if (m_rot_int_type == 1)
-			val = m_starting_rot +
-			(-2.0*pcnt*pcnt*pcnt+3.0*pcnt*pcnt) * deg;
+
+		if (!m_rewind_chk->GetValue())
+		{
+			if (m_rot_int_type == 0)
+				val = m_starting_rot + pcnt * deg;
+			else if (m_rot_int_type == 1)
+				val = m_starting_rot +
+				(-2.0*pcnt*pcnt*pcnt+3.0*pcnt*pcnt) * deg;
+		}
+		else
+		{
+			if (0.25 <= pcnt && pcnt < 0.75)
+			{
+				pcnt = (pcnt - 0.25) * 2.0;
+				if (m_rot_int_type == 0)
+					val = m_starting_rot + (1.0 - 2.0*pcnt) * deg;
+				else if (m_rot_int_type == 1)
+					val = m_starting_rot +
+					(4.0*pcnt*pcnt*pcnt-6.0*pcnt*pcnt + 1.0) * deg;
+			}
+			else
+			{
+				if (0.0 <= pcnt && pcnt < 0.25)
+					pcnt = (pcnt + 0.25) * 2.0;
+				else if (0.75 <= pcnt && pcnt <= 1.0)
+					pcnt = (pcnt - 0.75) * 2.0;
+				
+				if (m_rot_int_type == 0)
+					val = m_starting_rot + (2.0*pcnt - 1.0) * deg;
+				else if (m_rot_int_type == 1)
+					val = m_starting_rot +
+					(-4.0*pcnt*pcnt*pcnt+6.0*pcnt*pcnt - 1.0) * deg;
+			}
+		}
+
 		if (m_x_rd->GetValue())
 			vrv->SetRotations(val,y,z);
 		else if (m_y_rd->GetValue())

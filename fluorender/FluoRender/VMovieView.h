@@ -58,6 +58,7 @@ class VMovieView : public wxPanel
 		ID_ZRd,
 		ID_DegreeEndText,
 		ID_RotIntCmb,
+		ID_RewindChk,
 
 		//movie time
 		ID_MovieTimeText,
@@ -145,6 +146,7 @@ public:
 	wxRadioButton *m_z_rd;
 	wxTextCtrl *m_degree_end;
 	wxComboBox *m_rot_int_cmb;
+	wxCheckBox *m_rewind_chk;
 
 	static wxTextCtrl *m_movie_time;
 	wxTextCtrl *m_bitrate_text;
