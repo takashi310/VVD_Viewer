@@ -886,14 +886,14 @@ void VolumeLoader::GetPalams(long long &used_mem, int &running_decomp_th, int &q
 {
 	long long us = 0;
 	int ll = 0;
-	for(auto e : m_loaded)
+/*	for(auto e : m_loaded)
 	{
 		if (e.second.brick->isLoaded())
 			us += e.second.datasize;
 		if (!e.second.brick->get_disp())
 			ll++;
 	}
-	used_mem = m_used_memory;
+*/	used_mem = m_used_memory;
 	running_decomp_th = m_running_decomp_th;
 	queue_num = m_queues.size();
 	decomp_queue_num = m_decomp_queues.size();
