@@ -734,7 +734,7 @@ void VolumeLoader::StopAll()
 
 	while(m_running_decomp_th > 0)
 	{
-		Sleep(10);
+		wxMilliSleep(10);
 	}
 }
 

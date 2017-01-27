@@ -43,6 +43,7 @@
 #include <sstream>
 #include "compatibility.h"
 #include <time.h>
+#include <wx/utils.h>
 //#include <iomanip>
 
 using boost::property_tree::wptree;
