@@ -198,6 +198,8 @@ namespace FLIVR
 		void SetCopyableLevel(int lv) {pyramid_copy_lv_ = lv;}
 		int GetCopyableLevel() {return pyramid_copy_lv_;}
 
+		void DeleteCacheFiles();
+
 	protected:
 		void build_bricks(vector<TextureBrick*> &bricks,
 			int nx, int ny, int nz,

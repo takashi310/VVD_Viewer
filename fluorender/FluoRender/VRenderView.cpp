@@ -38,6 +38,7 @@ DEALINGS IN THE SOFTWARE.
 #include <wx/stdpaths.h>
 #include <algorithm>
 #include <limits>
+#include <unordered_set>
 #include "GL/mywgl.h"
 #include "png_resource.h"
 #include <glm/gtc/type_ptr.hpp>
@@ -180,7 +181,7 @@ void LMTreeCtrl::OnSelectChanged(wxTreeEvent &event)
 			{
 				Point p = itemdata->p;
 				m_glview->GetObjCenters(cx, cy, cz);
-                Point trans = Point(cx-p.x(), -(cy-p.y()), -(cz-p.z()));
+				Point trans = Point(cx-p.x(), -(cy-p.y()), -(cz-p.z()));
 				m_glview->StartManipulation(NULL, NULL, NULL, &trans, NULL);
 			}
 		}
@@ -315,7 +316,7 @@ void LMSeacher::OnEnterInSearcher(wxCommandEvent &event)
 					double cx, cy, cz;
 					Point *p = (*landmarks)[i]->GetPoint(0);
 					m_glview->GetObjCenters(cx, cy, cz);
-                    Point trans = Point(cx-p->x(), -(cy-p->y()), -(cz-p->z()));
+					Point trans = Point(cx-p->x(), -(cy-p->y()), -(cz-p->z()));
 					m_glview->StartManipulation(NULL, NULL, NULL, &trans, NULL);
 					break;
 				}
@@ -396,11 +397,75 @@ void LMSeacher::OnMouse(wxMouseEvent& event)
 }
 
 /////////////////////////////////////////////////////////////////////////
+
+VolumeDecompressorThread::VolumeDecompressorThread(VolumeLoader *vl)
+	: wxThread(wxTHREAD_DETACHED), m_vl(vl)
+{
+
+}
+
+VolumeDecompressorThread::~VolumeDecompressorThread()
+{
+	wxCriticalSectionLocker enter(m_vl->m_pThreadCS);
+	// the thread is being destroyed; make sure not to leave dangling pointers around
+	m_vl->m_running_decomp_th--;
+}
+
+wxThread::ExitCode VolumeDecompressorThread::Entry()
+{
+	unsigned int st_time = GET_TICK_COUNT();
+
+	m_vl->m_pThreadCS.Enter();
+	m_vl->m_running_decomp_th++;
+	m_vl->m_pThreadCS.Leave();
+
+	while(1)
+	{
+		m_vl->m_pThreadCS.Enter();
+
+		if (m_vl->m_decomp_queues.size() == 0)
+		{
+			m_vl->m_pThreadCS.Leave();
+			break;
+		}
+		VolumeDecompressorData q = m_vl->m_decomp_queues[0];
+		m_vl->m_decomp_queues.erase(m_vl->m_decomp_queues.begin());
+
+		m_vl->m_pThreadCS.Leave();
+
+
+		size_t bsize = (size_t)(q.b->nx())*(size_t)(q.b->ny())*(size_t)(q.b->nz())*(size_t)(q.b->nb(0));
+		char *result = new char[bsize];
+		if (TextureBrick::decompress_brick(result, q.in_data, bsize, q.in_size, q.finfo->type))
+		{
+			m_vl->m_pThreadCS.Enter();
+
+			delete [] q.in_data;
+			q.b->set_brkdata(result);
+			q.b->set_loading_state(false);
+			m_vl->m_pThreadCS.Leave();
+		}
+		else
+		{
+			delete [] result;
+
+			m_vl->m_pThreadCS.Enter();
+			delete [] q.in_data;
+			m_vl->m_used_memory -= bsize;
+			q.b->set_drawn(q.mode, true);
+			q.b->set_loading_state(false);
+			m_vl->m_pThreadCS.Leave();
+		}
+	}
+
+	return (wxThread::ExitCode)0;
+}
+
 /*
 wxDEFINE_EVENT(wxEVT_VLTHREAD_COMPLETED, wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_VLTHREAD_PAUSED, wxCommandEvent);
 */
-VolumeLoaderThread::VolumeLoaderThread(VolumeLoader* vl)
+VolumeLoaderThread::VolumeLoaderThread(VolumeLoader *vl)
 	: wxThread(wxTHREAD_JOINABLE), m_vl(vl)
 {
 
@@ -409,26 +474,188 @@ VolumeLoaderThread::VolumeLoaderThread(VolumeLoader* vl)
 VolumeLoaderThread::~VolumeLoaderThread()
 {
 	wxCriticalSectionLocker enter(m_vl->m_pThreadCS);
-    // the thread is being destroyed; make sure not to leave dangling pointers around
-    m_vl->m_thread = NULL;
-	m_vl->m_queues.clear();
+	if (!m_vl->m_decomp_queues.empty())
+	{
+		for (int i = 0; i < m_vl->m_decomp_queues.size(); i++)
+		{
+			if (m_vl->m_decomp_queues[i].in_data != NULL)
+				delete [] m_vl->m_decomp_queues[i].in_data;
+			m_vl->m_used_memory -= m_vl->m_decomp_queues[i].datasize;
+		}
+		m_vl->m_decomp_queues.clear();
+	}
+	// the thread is being destroyed; make sure not to leave dangling pointers around
 }
 
 wxThread::ExitCode VolumeLoaderThread::Entry()
 {
 	unsigned int st_time = GET_TICK_COUNT();
 
-	for (auto b : m_vl->m_queues)
+	while(m_vl->m_running_decomp_th > 0)
+	{
+		if (TestDestroy())
+			return (wxThread::ExitCode)0;
+		Sleep(10);
+	}
+
+	m_vl->m_pThreadCS.Enter();
+	auto ite = m_vl->m_loaded.begin();
+	while(ite != m_vl->m_loaded.end())
+	{
+		if (!ite->second.brick->isLoaded() && ite->second.brick->isLoading())
+		{
+			ite->second.brick->set_loading_state(false);
+			ite = m_vl->m_loaded.erase(ite);
+		}
+		else
+			ite++;
+	}
+	m_vl->m_pThreadCS.Leave();
+
+	while(1)
 	{
 		if (TestDestroy())
 			break;
-		if (!b.brick->isLoaded())
+
+		m_vl->m_pThreadCS.Enter();
+		if (m_vl->m_queues.size() == 0)
 		{
-			b.brick->tex_data_brk(0, b.finfo);
+			m_vl->m_pThreadCS.Leave();
+			break;
+		}
+		VolumeLoaderData b = m_vl->m_queues[0];
+		b.brick->set_loading_state(false);
+		m_vl->m_queues.erase(m_vl->m_queues.begin());
+		m_vl->m_queued.push_back(b);
+		m_vl->m_pThreadCS.Leave();
+
+		if (!b.brick->isLoaded() && !b.brick->isLoading())
+		{
+			if (m_vl->m_used_memory >= m_vl->m_memory_limit)
+			{
+				m_vl->m_pThreadCS.Enter();
+				while(1)
+				{
+					m_vl->CleanupLoadedBrick();
+					if (m_vl->m_used_memory < m_vl->m_memory_limit || TestDestroy())
+						break;
+					m_vl->m_pThreadCS.Leave();
+					Sleep(10);
+					m_vl->m_pThreadCS.Enter();
+				}
+				m_vl->m_pThreadCS.Leave();
+			}
+
+			char *ptr = NULL;
+			size_t readsize;
+			TextureBrick::read_brick_without_decomp(ptr, readsize, b.finfo, this);
+			if (!ptr) continue;
+
+			if (b.finfo->type == BRICK_FILE_TYPE_RAW)
+			{
+				m_vl->m_pThreadCS.Enter();
+				b.brick->set_brkdata(ptr);
+				b.datasize = readsize;
+				m_vl->AddLoadedBrick(b);
+				m_vl->m_pThreadCS.Leave();
+			}
+			else
+			{
+				bool decomp_in_this_thread = false;
+				VolumeDecompressorData dq;
+				dq.b = b.brick;
+				dq.finfo = b.finfo;
+				dq.vd = b.vd;
+				dq.mode = b.mode;
+				dq.in_data = ptr;
+				dq.in_size = readsize;
+
+				size_t bsize = (size_t)(b.brick->nx())*(size_t)(b.brick->ny())*(size_t)(b.brick->nz())*(size_t)(b.brick->nb(0));
+				b.datasize = bsize;
+				dq.datasize = bsize;
+
+				if (m_vl->m_max_decomp_th == 0)
+					decomp_in_this_thread = true;
+				else if (m_vl->m_max_decomp_th < 0 || 
+					m_vl->m_running_decomp_th < m_vl->m_max_decomp_th)
+				{
+					VolumeDecompressorThread *dthread = new VolumeDecompressorThread(m_vl);
+					if (dthread->Create() == wxTHREAD_NO_ERROR)
+					{
+						m_vl->m_pThreadCS.Enter();
+						m_vl->m_decomp_queues.push_back(dq);
+						m_vl->m_used_memory += bsize;
+						b.brick->set_loading_state(true);
+						m_vl->m_loaded[b.brick] = b;
+						m_vl->m_pThreadCS.Leave();
+
+						dthread->Run();
+					}
+					else
+					{
+						if (m_vl->m_running_decomp_th <= 0)
+							decomp_in_this_thread = true;
+						else
+						{
+							m_vl->m_pThreadCS.Enter();
+							m_vl->m_decomp_queues.push_back(dq);
+							m_vl->m_used_memory += bsize;
+							b.brick->set_loading_state(true);
+							m_vl->m_loaded[b.brick] = b;
+							m_vl->m_pThreadCS.Leave();
+						}
+					}
+				}
+				else
+				{
+					m_vl->m_pThreadCS.Enter();
+					m_vl->m_decomp_queues.push_back(dq);
+					m_vl->m_used_memory += bsize;
+					b.brick->set_loading_state(true);
+					m_vl->m_loaded[b.brick] = b;
+					m_vl->m_pThreadCS.Leave();
+				}
+
+				if (decomp_in_this_thread)
+				{
+					char *result = new char[bsize];
+					if (TextureBrick::decompress_brick(result, dq.in_data, bsize, dq.in_size, dq.finfo->type))
+					{
+						m_vl->m_pThreadCS.Enter();
+						delete [] dq.in_data;
+						b.brick->set_brkdata(result);
+						b.datasize = bsize;
+						m_vl->m_used_memory += bsize;
+						m_vl->m_loaded[b.brick] = b;
+						m_vl->m_pThreadCS.Leave();
+					}
+					else
+					{
+						delete [] result;
+
+						m_vl->m_pThreadCS.Enter();
+						delete [] dq.in_data;
+						m_vl->m_used_memory -= bsize;
+						dq.b->set_drawn(dq.mode, true);
+						m_vl->m_pThreadCS.Leave();
+					}
+				}
+			}
+
+		}
+		else
+		{
+			size_t bsize = (size_t)(b.brick->nx())*(size_t)(b.brick->ny())*(size_t)(b.brick->nz())*(size_t)(b.brick->nb(0));
+			b.datasize = bsize;
+
+			m_vl->m_pThreadCS.Enter();
+			if (m_vl->m_loaded.find(b.brick) != m_vl->m_loaded.end())
+				m_vl->m_loaded[b.brick] = b;
+			m_vl->m_pThreadCS.Leave();
 		}
 	}
 
-/*
+	/*
 	wxCommandEvent evt(wxEVT_VLTHREAD_COMPLETED, GetId());
 	VolumeLoaderData *data = new VolumeLoaderData;
 	data->m_cur_cat = 0;
@@ -436,38 +663,54 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 	data->m_progress = 0;
 	evt.SetClientData(data);
 	wxPostEvent(m_pParent, evt);
-*/
-	return 0;
+	*/
+	return (wxThread::ExitCode)0;
 }
 
 VolumeLoader::VolumeLoader()
 {
 	m_thread = NULL;
+	m_running_decomp_th = 0;
+	m_max_decomp_th = wxThread::GetCPUCount()-1;
+	if (m_max_decomp_th < 0)
+		m_max_decomp_th = -1;
+	m_memory_limit = 10000000LL;
+	m_used_memory = 0LL;
 }
 
 VolumeLoader::~VolumeLoader()
 {
 	if (m_thread)
 	{
-		m_thread->Delete();
-		m_thread->Wait();
+		if (m_thread->IsAlive())
+		{
+			m_thread->Delete();
+			if (m_thread->IsAlive()) m_thread->Wait();
+		}
 		delete m_thread;
 	}
+	RemoveAllLoadedBrick();
 }
 
 void VolumeLoader::Queue(VolumeLoaderData brick)
 {
+	wxCriticalSectionLocker enter(m_pThreadCS);
 	m_queues.push_back(brick);
 }
 
 void VolumeLoader::ClearQueues()
 {
 	if (!m_queues.empty())
+	{
+		Abort();
 		m_queues.clear();
+	}
 }
 
 void VolumeLoader::Set(vector<VolumeLoaderData> vld)
 {
+	Abort();
+	//StopAll();
 	m_queues = vld;
 }
 
@@ -475,21 +718,185 @@ void VolumeLoader::Abort()
 {
 	if (m_thread)
 	{
-		m_thread->Delete();
-		m_thread->Wait();
+		if (m_thread->IsAlive())
+		{
+			m_thread->Delete();
+			if (m_thread->IsAlive()) m_thread->Wait();
+		}
 		delete m_thread;
 		m_thread = NULL;
+	}
+}
+
+void VolumeLoader::StopAll()
+{
+	Abort();
+
+	while(m_running_decomp_th > 0)
+	{
+		wxMilliSleep(10);
 	}
 }
 
 bool VolumeLoader::Run()
 {
 	Abort();
+	//StopAll();
+	if (!m_queued.empty())
+		m_queued.clear();
 
 	m_thread = new VolumeLoaderThread(this);
 	if (m_thread->Create() != wxTHREAD_NO_ERROR)
+	{
+		delete m_thread;
+		m_thread = NULL;
 		return false;
+	}
 	m_thread->Run();
+
+	return true;
+}
+
+void VolumeLoader::CleanupLoadedBrick()
+{
+	long long required = 0;
+
+	for(int i = 0; i < m_queues.size(); i++)
+	{
+		TextureBrick *b = m_queues[i].brick;
+		if (!m_queues[i].brick->isLoaded())
+			required += (size_t)b->nx()*(size_t)b->ny()*(size_t)b->nz()*(size_t)b->nb(0);
+	}
+
+	vector<VolumeLoaderData> vd_undisp;
+	vector<VolumeLoaderData> b_undisp;
+	vector<VolumeLoaderData> b_drawn;
+	for(auto elem : m_loaded)
+	{
+		if (!elem.second.vd->GetDisp())
+			vd_undisp.push_back(elem.second);
+		else if(!elem.second.brick->get_disp())
+			b_undisp.push_back(elem.second);
+		else if (elem.second.brick->drawn(elem.second.mode))
+			b_drawn.push_back(elem.second);
+	}
+	if (required > 0 || m_used_memory >= m_memory_limit)
+	{
+		for (int i = 0; i < vd_undisp.size(); i++)
+		{
+			if (!vd_undisp[i].brick->isLoaded())
+				continue;
+			vd_undisp[i].brick->freeBrkData();
+			required -= vd_undisp[i].datasize;
+			m_used_memory -= vd_undisp[i].datasize;
+			m_loaded.erase(vd_undisp[i].brick);
+			if (required <= 0 && m_used_memory < m_memory_limit)
+				break;
+		}
+	}
+	if (required > 0 || m_used_memory >= m_memory_limit)
+	{
+		for (int i = 0; i < b_undisp.size(); i++)
+		{
+			if (!b_undisp[i].brick->isLoaded())
+				continue;
+			b_undisp[i].brick->freeBrkData();
+			required -= b_undisp[i].datasize;
+			m_used_memory -= b_undisp[i].datasize;
+			m_loaded.erase(b_undisp[i].brick);
+			if (required <= 0 && m_used_memory < m_memory_limit)
+				break;
+		}
+	}
+	if (required > 0 || m_used_memory >= m_memory_limit)
+	{
+		for (int i = 0; i < b_drawn.size(); i++)
+		{
+			if (!b_drawn[i].brick->isLoaded())
+				continue;
+			b_drawn[i].brick->freeBrkData();
+			required -= b_drawn[i].datasize;
+			m_used_memory -= b_drawn[i].datasize;
+			m_loaded.erase(b_drawn[i].brick);
+			if (required <= 0 && m_used_memory < m_memory_limit)
+				break;
+		}
+	}
+	if (m_used_memory >= m_memory_limit)
+	{
+		for(int i = m_queues.size()-1; i >= 0; i--)
+		{
+			TextureBrick *b = m_queues[i].brick;
+			if (b->isLoaded() && m_loaded.find(b) != m_loaded.end())
+			{
+				bool skip = false;
+				for (int j = m_queued.size()-1; j >= 0; j--)
+				{
+					if (m_queued[j].brick == b && !b->drawn(m_queued[j].mode))
+						skip = true;
+				}
+				if (!skip)
+				{
+					b->freeBrkData();
+					long long datasize = (size_t)(b->nx())*(size_t)(b->ny())*(size_t)(b->nz())*(size_t)(b->nb(0));
+					required -= datasize;
+					m_used_memory -= datasize;
+					m_loaded.erase(b);
+					if (m_used_memory < m_memory_limit)
+						break;
+				}
+			}
+		}
+	}
+
+}
+
+void VolumeLoader::RemoveAllLoadedBrick()
+{
+	StopAll();
+	for(auto e : m_loaded)
+	{
+		if (e.second.brick->isLoaded())
+		{
+			e.second.brick->freeBrkData();
+			m_used_memory -= e.second.datasize;
+		}
+	}
+	m_loaded.clear();
+}
+
+void VolumeLoader::RemoveBrickVD(VolumeData *vd)
+{
+	StopAll();
+	auto ite = m_loaded.begin();
+	while(ite != m_loaded.end())
+	{
+		if (ite->second.vd == vd && ite->second.brick->isLoaded())
+		{
+			ite->second.brick->freeBrkData();
+			m_used_memory -= ite->second.datasize;
+			ite = m_loaded.erase(ite);
+		}
+		else
+			ite++;
+	}
+}
+
+void VolumeLoader::GetPalams(long long &used_mem, int &running_decomp_th, int &queue_num, int &decomp_queue_num)
+{
+	long long us = 0;
+	int ll = 0;
+/*	for(auto e : m_loaded)
+	{
+		if (e.second.brick->isLoaded())
+			us += e.second.datasize;
+		if (!e.second.brick->get_disp())
+			ll++;
+	}
+*/	used_mem = m_used_memory;
+	running_decomp_th = m_running_decomp_th;
+	queue_num = m_queues.size();
+	decomp_queue_num = m_decomp_queues.size();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -501,7 +908,7 @@ BEGIN_EVENT_TABLE(VRenderGLView, wxGLCanvas)
 	EVT_MOUSE_EVENTS(VRenderGLView::OnMouse)
 	EVT_IDLE(VRenderGLView::OnIdle)
 	EVT_KEY_DOWN(VRenderGLView::OnKeyDown)
-END_EVENT_TABLE()
+	END_EVENT_TABLE()
 
 	VRenderGLView::VRenderGLView(wxWindow* frame,
 	wxWindow* parent,
@@ -768,7 +1175,8 @@ wxGLCanvas(parent, id, attriblist, pos, size, style),
 	m_enhance_sel(false),
 	m_adaptive_res(false),
 	m_int_res(false),
-	m_dpeel(false)
+	m_dpeel(false),
+	m_load_in_main_thread(true)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -852,6 +1260,9 @@ VRenderGLView::~VRenderGLView()
 	if (m_hTab)
 		gpWTClose(m_hTab);
 #endif
+
+	m_loader.StopAll();
+
 	int i;
 	//delete groups
 	for (i=0; i<(int)m_layer_list.size(); i++)
@@ -933,8 +1344,8 @@ VRenderGLView::~VRenderGLView()
 
 	if (m_trace_group)
 		delete m_trace_group;
-    
-    KernelProgram::clear();
+
+	KernelProgram::clear();
 }
 
 void VRenderGLView::OnResize(wxSizeEvent& event)
@@ -982,10 +1393,10 @@ void VRenderGLView::Init()
 		glGenBuffers(1, &m_misc_ibo);
 		glGenVertexArrays(1, &m_misc_vao);
 		glEnable( GL_MULTISAMPLE );
-        
-        if (vr_frame && vr_frame->GetSettingDlg()) KernelProgram::set_device_id(vr_frame->GetSettingDlg()->GetCLDeviceID());
-        KernelProgram::init_kernels_supported();
-        
+
+		if (vr_frame && vr_frame->GetSettingDlg()) KernelProgram::set_device_id(vr_frame->GetSettingDlg()->GetCLDeviceID());
+		KernelProgram::init_kernels_supported();
+
 		m_initialized = true;
 	}
 
@@ -997,6 +1408,9 @@ void VRenderGLView::Init()
 
 void VRenderGLView::Clear()
 {
+	m_loader.RemoveAllLoadedBrick();
+	TextureRenderer::clear_tex_pool();
+
 	//delete groups
 	for (int i=0; i<(int)m_layer_list.size(); i++)
 	{
@@ -1635,7 +2049,7 @@ void VRenderGLView::DrawVolumes(int peel)
 						GL_COLOR_ATTACHMENT0,
 						GL_TEXTURE_2D, ctex_id, 0);
 					m_dp_ctex_list.push_back(ctex_id);
-					
+
 					glGenTextures(1, &tex_id);
 					glBindTexture(GL_TEXTURE_2D, tex_id);
 					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -1692,7 +2106,7 @@ void VRenderGLView::DrawVolumes(int peel)
 					m_dp_tex_list[i] = tex_id;
 
 					m_dp_fbo_list[i] = fbo_id;
-					
+
 				}
 				else
 				{
@@ -1709,7 +2123,7 @@ void VRenderGLView::DrawVolumes(int peel)
 				{
 					glBindTexture(GL_TEXTURE_2D, m_dp_ctex_list[i]);
 					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-					GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+						GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
 
 					glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[i]);
 					glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
@@ -1746,7 +2160,7 @@ void VRenderGLView::DrawVolumes(int peel)
 					glBindTexture(GL_TEXTURE_2D, 0);
 					glActiveTexture(GL_TEXTURE0);
 				}
-				
+
 				glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			}
 
@@ -1802,95 +2216,95 @@ void VRenderGLView::DrawVolumes(int peel)
 
 			TextureRenderer::set_interactive(m_interactive);
 			//if in interactive mode, do interactive bricking also
-			if (m_interactive && !(m_vol_method == VOL_METHOD_MULTI))
+			/*			if (m_interactive && !(m_vol_method == VOL_METHOD_MULTI))
 			{
-				//calculate quota
-				int total_bricks = TextureRenderer::get_total_brick_num();
-				int quota_bricks = 0;
-				if (finished_bricks < total_bricks)
-					quota_bricks = TextureRenderer::get_est_bricks(3);
-				else
-					quota_bricks = total_bricks;
-				quota_bricks = Min(total_bricks, int(double(quota_bricks) *
-					double(TextureRenderer::get_cor_up_time()) /
-					double(TextureRenderer::get_up_time())));
-				TextureRenderer::set_quota_bricks(quota_bricks);
-				int quota_bricks_chan = 0;
-				if (m_vd_pop_list.size() > 1)
-				{
-					//priority: 1-selected channel; 2-group contains selected channel; 3-linear distance to above
-					//not considering mask for now
-					vector<VolumeData*>::iterator cur_iter;
-					cur_iter = find(m_vd_pop_list.begin(), m_vd_pop_list.end(), m_cur_vol);
-					size_t cur_index = distance(m_vd_pop_list.begin(), cur_iter);
-					int vd_index;
-					if (cur_iter != m_vd_pop_list.end())
-					{
-						VolumeData* vd;
-						vd = *cur_iter;
-						quota_vd_list.push_back(vd);
-						int count_bricks = vd->GetBrickNum();
-						quota_bricks_chan = Min(count_bricks, quota_bricks);
-						vd->GetVR()->set_quota_bricks_chan(quota_bricks_chan);
-						int count = 0;
-						while (count_bricks < quota_bricks &&
-							quota_vd_list.size() < m_vd_pop_list.size())
-						{
-							if (count % 2 == 0)
-								vd_index = cur_index + count/2 + 1;
-							else
-								vd_index = cur_index - count/2 - 1;
-							count++;
-							if (vd_index<0 ||
-								(size_t)vd_index>=m_vd_pop_list.size())
-								continue;
-							vd = m_vd_pop_list[vd_index];
-							int brick_num = vd->GetBrickNum();
-							quota_vd_list.push_back(vd);
-							if (count_bricks+brick_num > quota_bricks)
-								quota_bricks_chan = quota_bricks - count_bricks;
-							else
-								quota_bricks_chan = brick_num;
-							vd->GetVR()->set_quota_bricks_chan(quota_bricks_chan);
-							count_bricks += quota_bricks_chan;
-						}
-					}
-				}
-				else if (m_vd_pop_list.size() == 1)
-				{
-					quota_bricks_chan = quota_bricks;
-					VolumeData* vd = m_vd_pop_list[0];
-					if (vd)
-						vd->GetVR()->set_quota_bricks_chan(quota_bricks_chan);
-				}
-
-				//get and set center point
-				VolumeData* vd = m_cur_vol;
-				if (!vd)
-					if (m_vd_pop_list.size())
-						vd = m_vd_pop_list[0];
-				Point p;
-				if (vd && (GetPointVolumeBox(p,
-					GetSize().x/2, GetSize().y/2,
-					vd, false)>0.0 ||
-					GetPointPlane(p, GetSize().x/2,
-					GetSize().y/2, 0, false)>0.0))
-				{
-					int resx, resy, resz;
-					double sclx, scly, sclz;
-					double spcx, spcy, spcz;
-					vd->GetResolution(resx, resy, resz);
-					vd->GetScalings(sclx, scly, sclz);
-					vd->GetSpacings(spcx, spcy, spcz);
-					p = Point(p.x()/(resx*sclx*spcx),
-						p.y()/(resy*scly*spcy),
-						p.z()/(resz*sclz*spcz));
-					TextureRenderer::set_qutoa_center(p);
-				}
-				else
-					TextureRenderer::set_interactive(false);
+			//calculate quota
+			int total_bricks = TextureRenderer::get_total_brick_num();
+			int quota_bricks = 0;
+			if (finished_bricks < total_bricks)
+			quota_bricks = TextureRenderer::get_est_bricks(3);
+			else
+			quota_bricks = total_bricks;
+			quota_bricks = Min(total_bricks, int(double(quota_bricks) *
+			double(TextureRenderer::get_cor_up_time()) /
+			double(TextureRenderer::get_up_time())));
+			TextureRenderer::set_quota_bricks(quota_bricks);
+			int quota_bricks_chan = 0;
+			if (m_vd_pop_list.size() > 1)
+			{
+			//priority: 1-selected channel; 2-group contains selected channel; 3-linear distance to above
+			//not considering mask for now
+			vector<VolumeData*>::iterator cur_iter;
+			cur_iter = find(m_vd_pop_list.begin(), m_vd_pop_list.end(), m_cur_vol);
+			size_t cur_index = distance(m_vd_pop_list.begin(), cur_iter);
+			int vd_index;
+			if (cur_iter != m_vd_pop_list.end())
+			{
+			VolumeData* vd;
+			vd = *cur_iter;
+			quota_vd_list.push_back(vd);
+			int count_bricks = vd->GetBrickNum();
+			quota_bricks_chan = Min(count_bricks, quota_bricks);
+			vd->GetVR()->set_quota_bricks_chan(quota_bricks_chan);
+			int count = 0;
+			while (count_bricks < quota_bricks &&
+			quota_vd_list.size() < m_vd_pop_list.size())
+			{
+			if (count % 2 == 0)
+			vd_index = cur_index + count/2 + 1;
+			else
+			vd_index = cur_index - count/2 - 1;
+			count++;
+			if (vd_index<0 ||
+			(size_t)vd_index>=m_vd_pop_list.size())
+			continue;
+			vd = m_vd_pop_list[vd_index];
+			int brick_num = vd->GetBrickNum();
+			quota_vd_list.push_back(vd);
+			if (count_bricks+brick_num > quota_bricks)
+			quota_bricks_chan = quota_bricks - count_bricks;
+			else
+			quota_bricks_chan = brick_num;
+			vd->GetVR()->set_quota_bricks_chan(quota_bricks_chan);
+			count_bricks += quota_bricks_chan;
 			}
-		}
+			}
+			}
+			else if (m_vd_pop_list.size() == 1)
+			{
+			quota_bricks_chan = quota_bricks;
+			VolumeData* vd = m_vd_pop_list[0];
+			if (vd)
+			vd->GetVR()->set_quota_bricks_chan(quota_bricks_chan);
+			}
+
+			//get and set center point
+			VolumeData* vd = m_cur_vol;
+			if (!vd)
+			if (m_vd_pop_list.size())
+			vd = m_vd_pop_list[0];
+			Point p;
+			if (vd && (GetPointVolumeBox(p,
+			GetSize().x/2, GetSize().y/2,
+			vd, false)>0.0 ||
+			GetPointPlane(p, GetSize().x/2,
+			GetSize().y/2, 0, false)>0.0))
+			{
+			int resx, resy, resz;
+			double sclx, scly, sclz;
+			double spcx, spcy, spcz;
+			vd->GetResolution(resx, resy, resz);
+			vd->GetScalings(sclx, scly, sclz);
+			vd->GetSpacings(spcx, spcy, spcz);
+			p = Point(p.x()/(resx*sclx*spcx),
+			p.y()/(resy*scly*spcy),
+			p.z()/(resz*sclz*spcz));
+			TextureRenderer::set_qutoa_center(p);
+			}
+			else
+			TextureRenderer::set_interactive(false);
+			}
+			*/		}
 
 		//handle intermixing modes
 		if (m_vol_method == VOL_METHOD_MULTI)
@@ -1901,9 +2315,9 @@ void VRenderGLView::DrawVolumes(int peel)
 			DrawVolumesMulti(quota_vd_list, peel);
 			else
 			*/            DrawVolumesMulti(m_vd_pop_list, peel);
-			//draw masks
-			if (m_draw_mask)
-				DrawVolumesComp(m_vd_pop_list, true, peel);
+		//draw masks
+		if (m_draw_mask)
+			DrawVolumesComp(m_vd_pop_list, true, peel);
 		}
 		else
 		{
@@ -2232,6 +2646,8 @@ void VRenderGLView::RandomizeColor()
 
 void VRenderGLView::ClearVolList()
 {
+	m_loader.RemoveAllLoadedBrick();
+	TextureRenderer::clear_tex_pool();
 	m_vd_pop_list.clear();
 }
 
@@ -2280,7 +2696,7 @@ int VRenderGLView::GetPaintMode()
 }
 
 void VRenderGLView::DrawCircle(double cx, double cy,
-	double radius, Color &color, glm::mat4 &matrix)
+							   double radius, Color &color, glm::mat4 &matrix)
 {
 	int secs = 60;
 	double deg = 0.0;
@@ -3573,22 +3989,22 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int pe
 		Texture *tex = vd->GetTexture();
 		if (tex)
 		{
-/*			Transform *field_trans = tex->transform();
+			/*			Transform *field_trans = tex->transform();
 			Vector spcv[3] = {Vector(1.0, 0.0, 0.0), Vector(0.0, 1.0, 0.0), Vector(0.0, 0.0, 1.0)};
 			double maxlen = -1;
 			for(int i = 0; i < 3 ; i++)
 			{
-				// index space view direction
-				Vector v;
-				v = field_trans->project(spcv[i]);
-				v.safe_normalize();
-				v = field_trans->project(spcv[i]);
+			// index space view direction
+			Vector v;
+			v = field_trans->project(spcv[i]);
+			v.safe_normalize();
+			v = field_trans->project(spcv[i]);
 
-				double len = Dot(spcv[i], v);
-				if(len > maxlen) maxlen = len;
+			double len = Dot(spcv[i], v);
+			if(len > maxlen) maxlen = len;
 			}
 			if (maxlen > sampling_frq_fac) sampling_frq_fac = maxlen;
-*/
+			*/
 			if (tex->nmask()!=-1)
 			{
 				cnt_mask++;
@@ -3783,7 +4199,7 @@ void VRenderGLView::switchLevel(VolumeData *vd)
 	int nx, ny;
 	nx = GetSize().x;
 	ny = GetSize().y;
-/*
+	/*
 	if(m_min_ppi < 0)m_min_ppi = 60;
 	//wxDisplay disp(wxDisplay::GetFromWindow(m_frame));
 	wxSize disp_ppi = wxGetDisplayPPI();
@@ -3791,10 +4207,13 @@ void VRenderGLView::switchLevel(VolumeData *vd)
 	double disp_ppi_y = m_min_ppi;
 	if(disp_ppi.GetX() > 0)disp_ppi_x = disp_ppi.GetX();
 	if(disp_ppi.GetY() > 0)disp_ppi_y = disp_ppi.GetY();
-*/
+	*/
 	Texture *vtex = vd->GetTexture();
 	if (vtex && vtex->isBrxml())
 	{
+		int prev_lv = vd->GetLevel();
+		int new_lv = 0;
+
 		if (m_res_mode > 0)
 		{
 			double res_scale = 1.0;
@@ -3852,11 +4271,20 @@ void VRenderGLView::switchLevel(VolumeData *vd)
 			if (lv < 0) lv = 0;
 			//if (m_interactive) lv += 2;
 			if (lv >= lvnum) lv = lvnum - 1;
-			vd->SetLevel(lv);
+			new_lv = lv;
 			//vd->GetVR()->set_scalar_scale();
 		}
-		else
-			vd->SetLevel(0);
+		if (prev_lv != new_lv)
+		{
+			vector<TextureBrick*> *bricks = vtex->get_bricks();
+			if (bricks)
+			{
+				for (int i = 0; i < bricks->size(); i++)
+					(*bricks)[i]->set_disp(false);
+			}
+			vd->SetLevel(new_lv);
+			vtex->set_sort_bricks();
+		}
 	}
 }
 
@@ -5141,7 +5569,7 @@ void VRenderGLView::UpdateBrushState()
 			!wxGetKeyState(wxKeyCode('X')))
 		{
 			m_clear_paint = true;
-			
+
 			if (m_int_mode == 7)
 				m_int_mode = 5;
 			else
@@ -5314,7 +5742,7 @@ void VRenderGLView::PickVolume()
 	{
 		vd = m_vd_pop_list[i];
 		if (!vd || !vd->GetDisp()) continue;
-		
+
 		int cmode = vd->GetColormapMode();
 		double sel_id;
 		if (cmode == 3)
@@ -5375,12 +5803,12 @@ bool VRenderGLView::SelSegVolume(int mode)
 	{
 		vd = m_vd_pop_list[i];
 		if (!vd || !vd->GetDisp()) continue;
-		
+
 		int cmode = vd->GetColormapMode();
 		if (cmode != 3) continue;
 		double sel_id;
 		dist = GetPointAndIntVolume(p, sel_id, false, old_mouse_X, old_mouse_Y, vd);
-		
+
 		if (dist > 0.0)
 		{
 			if (min_dist < 0.0)
@@ -5469,8 +5897,8 @@ void VRenderGLView::OnIdle(wxIdleEvent& event)
 	bool ref_stat = false;
 	bool start_loop = true;
 	m_drawing_coord = false;
-    
-    event.RequestMore(true);
+
+	event.RequestMore(true);
 
 	//check memory swap status
 	if (TextureRenderer::get_mem_swap() &&
@@ -5657,7 +6085,7 @@ void VRenderGLView::OnIdle(wxIdleEvent& event)
 			refresh = true;
 		}
 	}
-	
+
 	if (window && view_reg.Contains(mouse_pos) && !m_key_lock)
 	{
 		UpdateBrushState();
@@ -5716,20 +6144,20 @@ void VRenderGLView::OnIdle(wxIdleEvent& event)
 		//full screen
 		if (wxGetKeyState(WXK_ESCAPE))
 		{
-/*			if (GetParent() == m_vrv->m_full_frame)
+			/*			if (GetParent() == m_vrv->m_full_frame)
 			{
-				Reparent(m_vrv);
-				m_vrv->m_view_sizer->Add(this, 1, wxEXPAND);
-				m_vrv->Layout();
-				m_vrv->m_full_frame->Hide();
-#ifdef _WIN32
-				if (frame && frame->GetSettingDlg() &&
-					!frame->GetSettingDlg()->GetShowCursor())
-					ShowCursor(true);
-#endif
-				refresh = true;
+			Reparent(m_vrv);
+			m_vrv->m_view_sizer->Add(this, 1, wxEXPAND);
+			m_vrv->Layout();
+			m_vrv->m_full_frame->Hide();
+			#ifdef _WIN32
+			if (frame && frame->GetSettingDlg() &&
+			!frame->GetSettingDlg()->GetShowCursor())
+			ShowCursor(true);
+			#endif
+			refresh = true;
 			}
-*/		}
+			*/		}
 
 		if (wxGetKeyState(WXK_ALT) && wxGetKeyState(wxKeyCode('V')) && !m_key_lock)
 		{
@@ -5764,13 +6192,13 @@ void VRenderGLView::OnKeyDown(wxKeyEvent& event)
 }
 
 void VRenderGLView::Set3DRotCapture(double start_angle,
-	double end_angle,
-	double step,
-	int frames,
-	int rot_axis,
-	wxString &cap_file,
-	bool rewind,
-	int len)
+									double end_angle,
+									double step,
+									int frames,
+									int rot_axis,
+									wxString &cap_file,
+									bool rewind,
+									int len)
 {
 	double x, y, z;
 	GetRotations(x, y, z);
@@ -6141,22 +6569,22 @@ void VRenderGLView::Set4DSeqFrame(int frame, bool run_script)
 				{
 					double spcx, spcy, spcz;
 					vd->GetSpacings(spcx, spcy, spcz);
-	
+
 					Nrrd* data = reader->Convert(frame, vd->GetCurChannel(), false);
 					if (!vd->Replace(data, false))
 						continue;
-	
+
 					vd->SetCurTime(reader->GetCurTime());
 					vd->SetSpacings(spcx, spcy, spcz);
-	
+
 					//update rulers
 					if (vframe && vframe->GetMeasureDlg())
 						vframe->GetMeasureDlg()->UpdateList();
-	
+
 					//run script
 					if (run_script)
 						Run4DScript(m_script_file, vd);
-	
+
 					clear_pool = true;
 				}
 			}
@@ -6512,11 +6940,11 @@ void VRenderGLView::RunNoiseReduction(wxFileConfig &fconfig)
 	CompAnalysis(0.0, size, thresh, false, false, (int)size+1);
 	Calculate(6, "", false);
 	VolumeData* vd = m_calculator.GetResult();
-/*	m_selector.NoiseRemoval(size, thresh, 1);
+	/*	m_selector.NoiseRemoval(size, thresh, 1);
 	vector<VolumeData*> *vol_list = m_selector.GetResultVols();
 	if(!vol_list || vol_list->empty()) return;
 	VolumeData* vd = (*vol_list)[0];
-*/	if (vd)
+	*/	if (vd)
 	{
 		int time_num = m_cur_vol->GetReader()->GetTimeNum();
 		wxString format = wxString::Format("%d", time_num);
@@ -6570,88 +6998,88 @@ void VRenderGLView::RunSelectionTracking(wxFileConfig &fconfig)
 	FL::CellList sel_labels;
 	FL::CellListIter label_iter;
 	for (ii = 0; ii<nx; ii++)
-	for (jj = 0; jj<ny; jj++)
-	for (kk = 0; kk<nz; kk++)
-	{
-		int index = nx*ny*kk + nx*jj + ii;
-		unsigned int label_value = label_data[index];
-		if (mask_data[index] && label_value)
-		{
-			label_iter = sel_labels.find(label_value);
-			if (label_iter == sel_labels.end())
+		for (jj = 0; jj<ny; jj++)
+			for (kk = 0; kk<nz; kk++)
 			{
-				FL::pCell cell(new FL::Cell(label_value));
-				cell->SetSizeUi(1);
-				sel_labels.insert(pair<unsigned int, FL::pCell>
-					(label_value, cell));
+				int index = nx*ny*kk + nx*jj + ii;
+				unsigned int label_value = label_data[index];
+				if (mask_data[index] && label_value)
+				{
+					label_iter = sel_labels.find(label_value);
+					if (label_iter == sel_labels.end())
+					{
+						FL::pCell cell(new FL::Cell(label_value));
+						cell->SetSizeUi(1);
+						sel_labels.insert(pair<unsigned int, FL::pCell>
+							(label_value, cell));
+					}
+					else
+						label_iter->second->Inc();
+				}
+			}
+			//clean label list according to the size limit
+			label_iter = sel_labels.begin();
+			while (label_iter != sel_labels.end())
+			{
+				if (label_iter->second->GetSizeUi() < (unsigned int)slimit)
+					label_iter = sel_labels.erase(label_iter);
+				else
+					++label_iter;
+			}
+			if (m_trace_group &&
+				m_trace_group->GetTrackMap().GetFrameNum())
+			{
+				//create new id list
+				m_trace_group->SetCurTime(m_tseq_cur_num);
+				m_trace_group->SetPrvTime(m_tseq_prv_num);
+				m_trace_group->UpdateCellList(sel_labels);
+			}
+			//load and replace the label
+			BaseReader* reader = m_cur_vol->GetReader();
+			if (!reader)
+				return;
+			wxString data_name = reader->GetCurName(m_tseq_cur_num, m_cur_vol->GetCurChannel());
+			wxString label_name = data_name.Left(data_name.find_last_of('.')) + ".lbl";
+			LBLReader lbl_reader;
+			wstring lblname = label_name.ToStdWstring();
+			lbl_reader.SetFile(lblname);
+			Nrrd* label_nrrd_new = lbl_reader.Convert(m_tseq_cur_num, m_cur_vol->GetCurChannel(), true);
+			if (!label_nrrd_new)
+			{
+				m_cur_vol->AddEmptyLabel();
+				label_nrrd_new = m_cur_vol->GetLabel(false);
 			}
 			else
-				label_iter->second->Inc();
-		}
-	}
-	//clean label list according to the size limit
-	label_iter = sel_labels.begin();
-	while (label_iter != sel_labels.end())
-	{
-		if (label_iter->second->GetSizeUi() < (unsigned int)slimit)
-			label_iter = sel_labels.erase(label_iter);
-		else
-			++label_iter;
-	}
-	if (m_trace_group &&
-		m_trace_group->GetTrackMap().GetFrameNum())
-	{
-		//create new id list
-		m_trace_group->SetCurTime(m_tseq_cur_num);
-		m_trace_group->SetPrvTime(m_tseq_prv_num);
-		m_trace_group->UpdateCellList(sel_labels);
-	}
-	//load and replace the label
-	BaseReader* reader = m_cur_vol->GetReader();
-	if (!reader)
-		return;
-	wxString data_name = reader->GetCurName(m_tseq_cur_num, m_cur_vol->GetCurChannel());
-	wxString label_name = data_name.Left(data_name.find_last_of('.')) + ".lbl";
-	LBLReader lbl_reader;
-	wstring lblname = label_name.ToStdWstring();
-	lbl_reader.SetFile(lblname);
-	Nrrd* label_nrrd_new = lbl_reader.Convert(m_tseq_cur_num, m_cur_vol->GetCurChannel(), true);
-	if (!label_nrrd_new)
-	{
-		m_cur_vol->AddEmptyLabel();
-		label_nrrd_new = m_cur_vol->GetLabel(false);
-	}
-	else
-		m_cur_vol->LoadLabel(label_nrrd_new);
-	label_data = (unsigned int*)(label_nrrd_new->data);
-	if (!label_data)
-		return;
-	//update the mask according to the new label
-	memset((void*)mask_data, 0, sizeof(uint8)*nx*ny*nz);
-	for (ii = 0; ii<nx; ii++)
-	for (jj = 0; jj<ny; jj++)
-	for (kk = 0; kk<nz; kk++)
-	{
-		int index = nx*ny*kk + nx*jj + ii;
-		unsigned int label_value = label_data[index];
-		if (m_trace_group &&
-			m_trace_group->GetTrackMap().GetFrameNum())
-		{
-			if (m_trace_group->FindCell(label_value))
-				mask_data[index] = 255;
-		}
-		else
-		{
-			label_iter = sel_labels.find(label_value);
-			if (label_iter != sel_labels.end())
-				mask_data[index] = 255;
-		}
-	}
+				m_cur_vol->LoadLabel(label_nrrd_new);
+			label_data = (unsigned int*)(label_nrrd_new->data);
+			if (!label_data)
+				return;
+			//update the mask according to the new label
+			memset((void*)mask_data, 0, sizeof(uint8)*nx*ny*nz);
+			for (ii = 0; ii<nx; ii++)
+				for (jj = 0; jj<ny; jj++)
+					for (kk = 0; kk<nz; kk++)
+					{
+						int index = nx*ny*kk + nx*jj + ii;
+						unsigned int label_value = label_data[index];
+						if (m_trace_group &&
+							m_trace_group->GetTrackMap().GetFrameNum())
+						{
+							if (m_trace_group->FindCell(label_value))
+								mask_data[index] = 255;
+						}
+						else
+						{
+							label_iter = sel_labels.find(label_value);
+							if (label_iter != sel_labels.end())
+								mask_data[index] = 255;
+						}
+					}
 
-	//add traces to trace dialog
-	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-	if (m_vrv && vr_frame && vr_frame->GetTraceDlg())
-		vr_frame->GetTraceDlg()->GetSettings(m_vrv);
+					//add traces to trace dialog
+					VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+					if (m_vrv && vr_frame && vr_frame->GetTraceDlg())
+						vr_frame->GetTraceDlg()->GetSettings(m_vrv);
 }
 
 void VRenderGLView::RunRandomColors(wxFileConfig &fconfig)
@@ -6752,28 +7180,28 @@ void VRenderGLView::RunSeparateChannels(wxFileConfig &fconfig)
 
 void VRenderGLView::RunExternalExe(wxFileConfig &fconfig)
 {
-/*	wxString pathname;
+	/*	wxString pathname;
 	fconfig.Read("exepath", &pathname);
 	if (!wxFileExists(pathname))
-		return;
+	return;
 	VolumeData* vd = m_cur_vol;
 	if (!vd)
-		return;
+	return;
 	BaseReader* reader = vd->GetReader();
 	if (!reader)
-		return;
+	return;
 	wxString data_name = reader->GetCurName(m_tseq_cur_num, vd->GetCurChannel());
-	
+
 	vector<string> args;
 	args.push_back(pathname.ToStdString());
 	args.push_back(data_name.ToStdString());
 	boost::process::context ctx;
 	ctx.stdout_behavior = boost::process::silence_stream();
 	boost::process::child c =
-		boost::process::launch(pathname.ToStdString(),
-		args, ctx);
+	boost::process::launch(pathname.ToStdString(),
+	args, ctx);
 	c.wait();
-*/
+	*/
 }
 
 void VRenderGLView::RunFetchMask(wxFileConfig &fconfig)
@@ -6814,10 +7242,10 @@ void VRenderGLView::OnDraw(wxPaintEvent& event)
 	int ny = GetSize().y;
 
 	PopMeshList();
-//	if (m_md_pop_list.size()>0 && m_vd_pop_list.size()>0 && m_vol_method == VOL_METHOD_MULTI)
-//		m_draw_type = 2;
-//	else
-		m_draw_type = 1;
+	//	if (m_md_pop_list.size()>0 && m_vd_pop_list.size()>0 && m_vol_method == VOL_METHOD_MULTI)
+	//		m_draw_type = 2;
+	//	else
+	m_draw_type = 1;
 
 	PreDraw();
 
@@ -7369,13 +7797,13 @@ DataGroup* VRenderGLView::AddVolumeData(VolumeData* vd, wxString group_name)
 	/*
 	for (i=0; i<1; i++)
 	{
-		VolumeData* vol_data = group->GetVolumeData(i);
-		if (vol_data)
-		{
-			double spcx, spcy, spcz;
-			vol_data->GetSpacings(spcx, spcy, spcz);
-			vd->SetSpacings(spcx, spcy, spcz);
-		}
+	VolumeData* vol_data = group->GetVolumeData(i);
+	if (vol_data)
+	{
+	double spcx, spcy, spcz;
+	vol_data->GetSpacings(spcx, spcy, spcz);
+	vd->SetSpacings(spcx, spcy, spcz);
+	}
 	}
 	*/
 	group->InsertVolumeData(group->GetVolumeNum()-1, vd);
@@ -7515,6 +7943,8 @@ void VRenderGLView::RemoveVolumeData(wxString &name)
 					m_layer_list.erase(m_layer_list.begin()+i);
 					m_vd_pop_dirty = true;
 					m_cur_vol = NULL;
+					m_loader.RemoveBrickVD(vd);
+					vd->GetVR()->clear_tex_current();
 					return;
 				}
 			}
@@ -7530,6 +7960,8 @@ void VRenderGLView::RemoveVolumeData(wxString &name)
 						group->RemoveVolumeData(j);
 						m_vd_pop_dirty = true;
 						m_cur_vol = NULL;
+						m_loader.RemoveBrickVD(vd);
+						vd->GetVR()->clear_tex_current();
 						return;
 					}
 				}
@@ -7557,6 +7989,8 @@ void VRenderGLView::RemoveVolumeDataset(BaseReader *reader, int channel)
 					m_layer_list.erase(m_layer_list.begin()+i);
 					m_vd_pop_dirty = true;
 					if (vd == m_cur_vol) m_cur_vol = NULL;
+					m_loader.RemoveBrickVD(vd);
+					vd->GetVR()->clear_tex_current();
 				}
 			}
 			break;
@@ -7571,6 +8005,8 @@ void VRenderGLView::RemoveVolumeDataset(BaseReader *reader, int channel)
 						group->RemoveVolumeData(j);
 						m_vd_pop_dirty = true;
 						if (vd == m_cur_vol) m_cur_vol = NULL;
+						m_loader.RemoveBrickVD(vd);
+						vd->GetVR()->clear_tex_current();
 					}
 				}
 			}
@@ -8114,7 +8550,7 @@ void VRenderGLView::MoveMeshinGroup(wxString &group_name, wxString &src_name, wx
 		if (name == dst_name)
 		{
 			int insert_offset = (insert_mode == 0) ? -1 : 0; 
-				group->InsertMeshData(i+insert_offset, src_md);
+			group->InsertMeshData(i+insert_offset, src_md);
 			break;
 		}
 	}
@@ -9804,14 +10240,20 @@ void VRenderGLView::DrawInfo(int nx, int ny)
 		str = wxString::Format("FPS: %.2f", fps_>=0.0&&fps_<300.0?fps_:0.0);
 
 	if (m_cur_vol && m_cur_vol->isBrxml())
+	{
 		str += wxString::Format(" VVD_Level: %d/%d,", m_cur_vol->GetLevel()+1, m_cur_vol->GetLevelNum());
+		long long used_mem;
+		int dtnum, qnum, dqnum;
+		m_loader.GetPalams(used_mem, dtnum, qnum, dqnum);
+		str += wxString::Format(" Mem: %lld Th: %d Q: %d DQ: %d,", used_mem, dtnum, qnum, dqnum);
+	}
 
 	wstring wstr_temp = str.ToStdWstring();
 	px = gapw-nx/2;
 	py = ny/2-gaph/2;
 	m_text_renderer->RenderText(
-	wstr_temp, text_color,
-	px*sx, py*sy, sx, sy);
+		wstr_temp, text_color,
+		px*sx, py*sy, sx, sy);
 
 	if (m_draw_coord)
 	{
@@ -9826,8 +10268,8 @@ void VRenderGLView::DrawInfo(int nx, int ny)
 			px = gapw-nx/2;
 			py = ny/2-gaph;
 			m_text_renderer->RenderText(
-			wstr_temp, text_color,
-			px*sx, py*sy, sx, sy);
+				wstr_temp, text_color,
+				px*sx, py*sy, sx, sy);
 		}
 	}
 	else
@@ -9837,8 +10279,8 @@ void VRenderGLView::DrawInfo(int nx, int ny)
 		px = gapw-nx/2;
 		py = ny/2-gaph;
 		m_text_renderer->RenderText(
-		wstr_temp, text_color,
-		px*sx, py*sy, sx, sy);
+			wstr_temp, text_color,
+			px*sx, py*sy, sx, sy);
 	}
 
 	if (m_test_wiref)
@@ -9850,8 +10292,8 @@ void VRenderGLView::DrawInfo(int nx, int ny)
 			px = gapw-nx/2;
 			py = ny/2-gaph*1.5;
 			m_text_renderer->RenderText(
-			wstr_temp, text_color,
-			px*sx, py*sy, sx, sy);
+				wstr_temp, text_color,
+				px*sx, py*sy, sx, sy);
 		}
 		else
 		{
@@ -10283,7 +10725,7 @@ void VRenderGLView::StartLoopUpdate()
 
 	PopMeshList();
 
-	unsigned int i, j;
+	int i, j, k;
 	m_dpeel = false;
 	for (i=0; i<m_md_pop_list.size(); i++)
 	{
@@ -10301,7 +10743,7 @@ void VRenderGLView::StartLoopUpdate()
 		int total_num = 0;
 		int num_chan;
 		//reset drawn status for all bricks
-		
+
 		for (i=0; i<m_vd_pop_list.size(); i++)
 		{
 			VolumeData* vd = m_vd_pop_list[i];
@@ -10327,7 +10769,9 @@ void VRenderGLView::StartLoopUpdate()
 						mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
 					vd->GetVR()->m_mv_mat2 = vd->GetVR()->m_mv_mat * vd->GetVR()->m_mv_mat2;
 
-					vector<TextureBrick*> *bricks = tex->get_bricks();
+					Ray view_ray = vd->GetVR()->compute_view();
+
+					vector<TextureBrick*> *bricks = tex->get_sorted_bricks(view_ray, !m_persp);
 					if (!bricks || bricks->size()==0)
 						continue;
 					for (j=0; j<bricks->size(); j++)
@@ -10370,15 +10814,99 @@ void VRenderGLView::StartLoopUpdate()
 					vd->GetVR()->set_done_loop(false);
 			}
 		}
-/*
+
+		vector<VolumeLoaderData> queues;
 		if (m_vol_method == VOL_METHOD_MULTI)
 		{
-			
-		}
-		else
-		{
-			int i, j;
 			vector<VolumeData*> list;
+			for (i=0; i<m_vd_pop_list.size(); i++)
+			{
+				VolumeData* vd = m_vd_pop_list[i];
+				if (!vd || !vd->GetDisp() || !vd->isBrxml())
+					continue;
+				Texture* tex = vd->GetTexture();
+				if (!tex)
+					continue;
+				vector<TextureBrick*> *bricks = tex->get_bricks();
+				if (!bricks || bricks->size()==0)
+					continue;
+				list.push_back(vd);
+			}
+
+			vector<VolumeLoaderData> tmp_shade;
+			vector<VolumeLoaderData> tmp_shadow;
+			for (i = 0; i < list.size(); i++)
+			{
+				VolumeData* vd = list[i];
+				Texture* tex = vd->GetTexture();
+				Ray view_ray = vd->GetVR()->compute_view();
+				vector<TextureBrick*> *bricks = tex->get_sorted_bricks(view_ray, !m_persp);
+				int mode = vd->GetMode() == 1 ? 1 : 0;
+				bool shade = (mode == 1 && vd->GetShading());
+				bool shadow = vd->GetShadow();
+				for (j = 0; j < bricks->size(); j++)
+				{
+					VolumeLoaderData d;
+					TextureBrick* b = (*bricks)[j];
+					if (b->get_disp())
+					{
+						d.brick = b;
+						d.finfo = tex->GetFileName(b->getID());
+						d.vd = vd;
+						if (!b->drawn(mode))
+						{
+							d.mode = mode;
+							queues.push_back(d);
+						}
+						if (shade && !b->drawn(2))
+						{
+							d.mode = 2;
+							tmp_shade.push_back(d);
+						}
+						if (shadow && !b->drawn(3))
+						{
+							d.mode = 3;
+							tmp_shadow.push_back(d);
+						}
+					}
+				}
+			}
+			if (TextureRenderer::get_update_order() == 1)
+				std::sort(queues.begin(), queues.end(), VolumeLoader::sort_data_dsc);
+			else if (TextureRenderer::get_update_order() == 0)
+				std::sort(queues.begin(), queues.end(), VolumeLoader::sort_data_asc);
+
+			if (!tmp_shade.empty())
+			{
+				if (TextureRenderer::get_update_order() == 1)
+					std::sort(tmp_shade.begin(), tmp_shade.end(), VolumeLoader::sort_data_dsc);
+				else if (TextureRenderer::get_update_order() == 0)
+					std::sort(tmp_shade.begin(), tmp_shade.end(), VolumeLoader::sort_data_asc);
+				queues.insert(queues.end(), tmp_shade.begin(), tmp_shade.end());
+			}
+			if (!tmp_shadow.empty())
+			{
+				if (TextureRenderer::get_update_order() == 1)
+				{
+					int order = TextureRenderer::get_update_order();
+					TextureRenderer::set_update_order(0);
+					for (i = 0; i < list.size(); i++)
+					{
+						Ray view_ray = list[i]->GetVR()->compute_view();
+						list[i]->GetTexture()->set_sort_bricks();
+						list[i]->GetTexture()->get_sorted_bricks(view_ray, !m_persp); //recalculate brick.d_
+						list[i]->GetTexture()->set_sort_bricks();
+					}
+					TextureRenderer::set_update_order(order);
+					std::sort(tmp_shadow.begin(), tmp_shadow.end(), VolumeLoader::sort_data_asc);
+				}
+				else if (TextureRenderer::get_update_order() == 0)
+					std::sort(tmp_shadow.begin(), tmp_shadow.end(), VolumeLoader::sort_data_asc);
+				queues.insert(queues.end(), tmp_shadow.begin(), tmp_shadow.end());
+			}
+		}
+		else if (m_layer_list.size() > 0)
+		{
 			for (i=(int)m_layer_list.size()-1; i>=0; i--)
 			{
 				if (!m_layer_list[i])
@@ -10388,39 +10916,236 @@ void VRenderGLView::StartLoopUpdate()
 				case 2://volume data (this won't happen now)
 					{
 						VolumeData* vd = (VolumeData*)m_layer_list[i];
-						if (vd && vd->GetDisp())
+						vector<VolumeLoaderData> tmp_shade;
+						vector<VolumeLoaderData> tmp_shadow;
+						if (vd && vd->GetDisp() && vd->isBrxml())
 						{
-							list.push_back(vd);
+							Texture* tex = vd->GetTexture();
+							if (!tex)
+								continue;
+							Ray view_ray = vd->GetVR()->compute_view();
+							vector<TextureBrick*> *bricks = tex->get_sorted_bricks(view_ray, !m_persp);
+							if (!bricks || bricks->size()==0)
+								continue;
+							int mode = vd->GetMode() == 1 ? 1 : 0;
+							bool shade = (mode == 1 && vd->GetShading());
+							bool shadow = vd->GetShadow();
+							for (j=0; j<bricks->size(); j++)
+							{
+								VolumeLoaderData d;
+								TextureBrick* b = (*bricks)[j];
+								if (b->get_disp())
+								{
+									d.brick = b;
+									d.finfo = tex->GetFileName(b->getID());
+									d.vd = vd;
+									if (!b->drawn(mode))
+									{
+										d.mode = mode;
+										queues.push_back(d);
+									}
+									if (shade && !b->drawn(2))
+									{
+										d.mode = 2;
+										tmp_shade.push_back(d);
+									}
+									if (shadow && !b->drawn(3))
+									{
+										d.mode = 3;
+										tmp_shadow.push_back(d);
+									}
+								}
+							}
+							if (!tmp_shade.empty()) queues.insert(queues.end(), tmp_shade.begin(), tmp_shade.end());
+							if (!tmp_shadow.empty())
+							{
+								if (TextureRenderer::get_update_order() == 1)
+								{
+									int order = TextureRenderer::get_update_order();
+									TextureRenderer::set_update_order(0);
+									Ray view_ray = vd->GetVR()->compute_view();
+									tex->set_sort_bricks();
+									tex->get_sorted_bricks(view_ray, !m_persp); //recalculate brick.d_
+									tex->set_sort_bricks();
+									TextureRenderer::set_update_order(order);
+									std::sort(tmp_shadow.begin(), tmp_shadow.end(), VolumeLoader::sort_data_asc);
+								}
+								queues.insert(queues.end(), tmp_shadow.begin(), tmp_shadow.end());
+							}
 						}
 					}
 					break;
 				case 5://group
 					{
+						vector<VolumeData*> list;
 						DataGroup* group = (DataGroup*)m_layer_list[i];
 						if (!group->GetDisp())
 							continue;
 						for (j=group->GetVolumeNum()-1; j>=0; j--)
 						{
 							VolumeData* vd = group->GetVolumeData(j);
-							if (vd && vd->GetDisp())
+							if (!vd || !vd->GetDisp() || !vd->isBrxml())
+								continue;
+							Texture* tex = vd->GetTexture();
+							if (!tex)
+								continue;
+							Ray view_ray = vd->GetVR()->compute_view();
+							vector<TextureBrick*> *bricks = tex->get_sorted_bricks(view_ray, !m_persp);
+							if (!bricks || bricks->size()==0)
+								continue;
+							list.push_back(vd);
+						}
+						if (list.empty())
+							continue;
+
+						vector<VolumeLoaderData> tmp_q;
+						vector<VolumeLoaderData> tmp_shade;
+						vector<VolumeLoaderData> tmp_shadow;
+						if (group->GetBlendMode() == VOL_METHOD_MULTI)
+						{
+							for (k = 0; k < list.size(); k++)
 							{
-								list.push_back(vd);
+								VolumeData* vd = list[k];
+								Texture* tex = vd->GetTexture();
+								Ray view_ray = vd->GetVR()->compute_view();
+								vector<TextureBrick*> *bricks = tex->get_sorted_bricks(view_ray, !m_persp);
+								int mode = vd->GetMode() == 1 ? 1 : 0;
+								bool shade = (mode == 1 && vd->GetShading());
+								bool shadow = vd->GetShadow();
+								for (j = 0; j < bricks->size(); j++)
+								{
+									VolumeLoaderData d;
+									TextureBrick* b = (*bricks)[j];
+									if (b->get_disp())
+									{
+										d.brick = b;
+										d.finfo = tex->GetFileName(b->getID());
+										d.vd = vd;
+										if (!b->drawn(mode))
+										{
+											d.mode = mode;
+											tmp_q.push_back(d);
+										}
+										if (shade && !b->drawn(2))
+										{
+											d.mode = 2;
+											tmp_shade.push_back(d);
+										}
+										if (shadow && !b->drawn(3))
+										{
+											d.mode = 3;
+											tmp_shadow.push_back(d);
+										}
+									}
+								}
+							}
+							if (!tmp_q.empty())
+							{
+								if (TextureRenderer::get_update_order() == 1)
+									std::sort(tmp_q.begin(), tmp_q.end(), VolumeLoader::sort_data_dsc);
+								else if (TextureRenderer::get_update_order() == 0)
+									std::sort(tmp_q.begin(), tmp_q.end(), VolumeLoader::sort_data_asc);
+								queues.insert(queues.end(), tmp_q.begin(), tmp_q.end());
+							}
+							if (!tmp_shade.empty())
+							{
+								if (TextureRenderer::get_update_order() == 1)
+									std::sort(tmp_shade.begin(), tmp_shade.end(), VolumeLoader::sort_data_dsc);
+								else if (TextureRenderer::get_update_order() == 0)
+									std::sort(tmp_shade.begin(), tmp_shade.end(), VolumeLoader::sort_data_asc);
+								queues.insert(queues.end(), tmp_shade.begin(), tmp_shade.end());
+							}
+							if (!tmp_shadow.empty())
+							{
+								if (TextureRenderer::get_update_order() == 1)
+								{
+									int order = TextureRenderer::get_update_order();
+									TextureRenderer::set_update_order(0);
+									for (k = 0; k < list.size(); k++)
+									{
+										Ray view_ray = list[k]->GetVR()->compute_view();
+										list[i]->GetTexture()->set_sort_bricks();
+										list[i]->GetTexture()->get_sorted_bricks(view_ray, !m_persp); //recalculate brick.d_
+										list[i]->GetTexture()->set_sort_bricks();
+									}
+									TextureRenderer::set_update_order(order);
+									std::sort(tmp_shadow.begin(), tmp_shadow.end(), VolumeLoader::sort_data_asc);
+								}
+								else if (TextureRenderer::get_update_order() == 0)
+									std::sort(tmp_shadow.begin(), tmp_shadow.end(), VolumeLoader::sort_data_asc);
+								queues.insert(queues.end(), tmp_shadow.begin(), tmp_shadow.end());
 							}
 						}
-						if (!list.empty())
+						else
 						{
-							if (group->GetBlendMode() == VOL_METHOD_MULTI)
-								DrawVolumesMulti(list, peel);
-							else
-								DrawVolumesComp(list, false, peel);
-							list.clear();
+							for (j = 0; j < list.size(); j++)
+							{
+								VolumeData* vd = list[j];
+								Texture* tex = vd->GetTexture();
+								Ray view_ray = vd->GetVR()->compute_view();
+								vector<TextureBrick*> *bricks = tex->get_sorted_bricks(view_ray, !m_persp);
+								int mode = vd->GetMode() == 1 ? 1 : 0;
+								bool shade = (mode == 1 && vd->GetShading());
+								bool shadow = vd->GetShadow();
+								for (k=0; k<bricks->size(); k++)
+								{
+									VolumeLoaderData d;
+									TextureBrick* b = (*bricks)[k];
+									if (b->get_disp())
+									{
+										d.brick = b;
+										d.finfo = tex->GetFileName(b->getID());
+										d.vd = vd;
+										if (!b->drawn(mode))
+										{
+											d.mode = mode;
+											queues.push_back(d);
+										}
+										if (shade && !b->drawn(2))
+										{
+											d.mode = 2;
+											tmp_shade.push_back(d);
+										}
+										if (shadow && !b->drawn(3))
+										{
+											d.mode = 3;
+											tmp_shadow.push_back(d);
+										}
+									}
+								}
+								if (!tmp_shade.empty()) queues.insert(queues.end(), tmp_shade.begin(), tmp_shade.end());
+								if (!tmp_shadow.empty())
+								{
+									if (TextureRenderer::get_update_order() == 1)
+									{
+										int order = TextureRenderer::get_update_order();
+										TextureRenderer::set_update_order(0);
+										Ray view_ray = vd->GetVR()->compute_view();
+										tex->set_sort_bricks();
+										tex->get_sorted_bricks(view_ray, !m_persp); //recalculate brick.d_
+										tex->set_sort_bricks();
+										TextureRenderer::set_update_order(order);
+										std::sort(tmp_shadow.begin(), tmp_shadow.end(), VolumeLoader::sort_data_asc);
+									}
+									queues.insert(queues.end(), tmp_shadow.begin(), tmp_shadow.end());
+								}
+							}
 						}
+
 					}
 					break;
 				}
 			}
 		}
-*/
+
+		if (queues.size() > 0 && !m_interactive)
+		{
+			m_loader.Set(queues);
+			m_loader.SetMemoryLimitByte((long long)TextureRenderer::mainmem_buf_size_*1024LL*1024LL);
+			TextureRenderer::set_load_on_main_thread(false);
+			m_loader.Run();
+		}
+
 		if (total_num > 0)
 		{
 			TextureRenderer::set_update_loop();
@@ -11468,22 +12193,22 @@ void VRenderGLView::DrawRulers()
 	vector<unsigned int> nums;
 	Color color;
 	Color text_color = GetTextColor();
-    
-    double spcx = 1.0;
-    double spcy = 1.0;
-    double spcz = 1.0;
-    
-    if(m_cur_vol){
-        Texture *vtex = m_cur_vol->GetTexture();
-        if (vtex && vtex->isBrxml())
-        {
-            BRKXMLReader *br = (BRKXMLReader *)m_cur_vol->GetReader();
-            br->SetLevel(0);
-            spcx = br->GetXSpc();
-            spcy = br->GetYSpc();
-            spcz = br->GetZSpc();
-        }
-    }
+
+	double spcx = 1.0;
+	double spcy = 1.0;
+	double spcz = 1.0;
+
+	if(m_cur_vol){
+		Texture *vtex = m_cur_vol->GetTexture();
+		if (vtex && vtex->isBrxml())
+		{
+			BRKXMLReader *br = (BRKXMLReader *)m_cur_vol->GetReader();
+			br->SetLevel(0);
+			spcx = br->GetXSpc();
+			spcy = br->GetYSpc();
+			spcz = br->GetZSpc();
+		}
+	}
 
 	for (size_t i=0; i<m_ruler_list.size(); i++)
 	{
@@ -11522,9 +12247,9 @@ void VRenderGLView::DrawRulers()
 					p2x = p2.x()*nx/2.0;
 					p2y = p2.y()*ny/2.0;
 					m_text_renderer->RenderText(
-					ruler->GetNameDisp().ToStdWstring(),
-					color,
-					(p2x+w)*sx, (p2y+w)*sy, sx, sy);
+						ruler->GetNameDisp().ToStdWstring(),
+						color,
+						(p2x+w)*sx, (p2y+w)*sy, sx, sy);
 				}
 				if (j > 0)
 				{
@@ -11540,54 +12265,54 @@ void VRenderGLView::DrawRulers()
 					verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
 					num += 2;
 				}
-                
-                if(ruler->GetBalloonVisibility(j))
-                {
-                    wxArrayString ann = ruler->GetAnnotations(j,  m_cur_vol ? m_cur_vol->GetAnnotation() : vector<AnnotationDB>(), spcx, spcy, spcz);
-                    
-                    int lnum = ann.size();
-                    
-                    if(lnum > 0)
-                    {
-                        p2x = p2.x()*nx/2.0;
-                        p2y = p2.y()*ny/2.0;
-                        
-                        double asp = (double)nx / (double)ny;;
-                        double margin_x = 5+w;
-                        double margin_top = w;
-                        double margin_bottom = w;
-                        double line_spc = 2;
-                        double maxlw, lw, lh;
-                    
-                        lh = m_text_renderer->GetSize();
-                        margin_bottom += lh/2;//�e�L�X�g��Y���W��baseline�Ɉ��v���邽��
-                        maxlw = 0.0;
-                    
-                        for(int i = 0; i < lnum; i++)
-                        {
-                            wstring wstr_temp = ann.Item(i).ToStdWstring();
-                            m_text_renderer->RenderText(wstr_temp, color,
-                                                        p2x*sx+margin_x*sx, p2y*sy-(lh*(i+1)+line_spc*i+margin_top)*sy, sx, sy);
-                            lw = m_text_renderer->RenderTextLen(wstr_temp);
-                            if (lw > maxlw) maxlw = lw;
-                        }
-                    
-                        double bw = (margin_x*2 + maxlw);
-                        double bh = (margin_top + margin_bottom + lh*lnum + line_spc*(lnum-1));
-                        
-                        px = (p2.x()+1.0)*nx/2.0;
-                        py = (p2.y()+1.0)*ny/2.0;
-                        verts.push_back(px);    verts.push_back(py);    verts.push_back(0.0);
-                        verts.push_back(px+bw); verts.push_back(py);    verts.push_back(0.0);
-                        verts.push_back(px+bw); verts.push_back(py);    verts.push_back(0.0);
-                        verts.push_back(px+bw); verts.push_back(py-bh); verts.push_back(0.0);
-                        verts.push_back(px+bw); verts.push_back(py-bh); verts.push_back(0.0);
-                        verts.push_back(px);    verts.push_back(py-bh); verts.push_back(0.0);
-                        verts.push_back(px);    verts.push_back(py-bh); verts.push_back(0.0);
-                        verts.push_back(px);    verts.push_back(py);    verts.push_back(0.0);
-                        num += 8;
-                    }
-                }
+
+				if(ruler->GetBalloonVisibility(j))
+				{
+					wxArrayString ann = ruler->GetAnnotations(j,  m_cur_vol ? m_cur_vol->GetAnnotation() : vector<AnnotationDB>(), spcx, spcy, spcz);
+
+					int lnum = ann.size();
+
+					if(lnum > 0)
+					{
+						p2x = p2.x()*nx/2.0;
+						p2y = p2.y()*ny/2.0;
+
+						double asp = (double)nx / (double)ny;;
+						double margin_x = 5+w;
+						double margin_top = w;
+						double margin_bottom = w;
+						double line_spc = 2;
+						double maxlw, lw, lh;
+
+						lh = m_text_renderer->GetSize();
+						margin_bottom += lh/2;//�e�L�X�g��Y���W��baseline�Ɉ��v���邽��
+						maxlw = 0.0;
+
+						for(int i = 0; i < lnum; i++)
+						{
+							wstring wstr_temp = ann.Item(i).ToStdWstring();
+							m_text_renderer->RenderText(wstr_temp, color,
+								p2x*sx+margin_x*sx, p2y*sy-(lh*(i+1)+line_spc*i+margin_top)*sy, sx, sy);
+							lw = m_text_renderer->RenderTextLen(wstr_temp);
+							if (lw > maxlw) maxlw = lw;
+						}
+
+						double bw = (margin_x*2 + maxlw);
+						double bh = (margin_top + margin_bottom + lh*lnum + line_spc*(lnum-1));
+
+						px = (p2.x()+1.0)*nx/2.0;
+						py = (p2.y()+1.0)*ny/2.0;
+						verts.push_back(px);    verts.push_back(py);    verts.push_back(0.0);
+						verts.push_back(px+bw); verts.push_back(py);    verts.push_back(0.0);
+						verts.push_back(px+bw); verts.push_back(py);    verts.push_back(0.0);
+						verts.push_back(px+bw); verts.push_back(py-bh); verts.push_back(0.0);
+						verts.push_back(px+bw); verts.push_back(py-bh); verts.push_back(0.0);
+						verts.push_back(px);    verts.push_back(py-bh); verts.push_back(0.0);
+						verts.push_back(px);    verts.push_back(py-bh); verts.push_back(0.0);
+						verts.push_back(px);    verts.push_back(py);    verts.push_back(0.0);
+						num += 8;
+					}
+				}
 			}
 			if (ruler->GetRulerType() == 4 &&
 				ruler->GetNumPoint() >= 3)
@@ -11787,54 +12512,54 @@ void VRenderGLView::DrawRulers()
 						verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
 						num += 2;
 					}
-                    
-                    if(ruler->GetBalloonVisibility(j))
-                    {
-                        wxArrayString ann = ruler->GetAnnotations(j,  m_cur_vol ? m_cur_vol->GetAnnotation() : vector<AnnotationDB>(), spcx, spcy, spcz);
-                        
-                        int lnum = ann.size();
-                        
-                        if(lnum > 0)
-                        {
-                            p2x = p2.x()*nx/2.0;
-                            p2y = p2.y()*ny/2.0;
-                            
-                            double asp = (double)nx / (double)ny;;
-                            double margin_x = 5+w;
-                            double margin_top = w;
-                            double margin_bottom = w;
-                            double line_spc = 2;
-                            double maxlw, lw, lh;
-                            
-                            lh = m_text_renderer->GetSize();
-                            margin_bottom += lh/2;//�e�L�X�g��Y���W��baseline�Ɉ��v���邽��
-                            maxlw = 0.0;
-                            
-                            for(int i = 0; i < lnum; i++)
-                            {
-                                wstring wstr_temp = ann.Item(i).ToStdWstring();
-                                m_text_renderer->RenderText(wstr_temp, color,
-                                                            p2x*sx+margin_x*sx, p2y*sy-(lh*(i+1)+line_spc*i+margin_top)*sy, sx, sy);
-                                lw = m_text_renderer->RenderTextLen(wstr_temp);
-                                if (lw > maxlw) maxlw = lw;
-                            }
-                            
-                            double bw = (margin_x*2 + maxlw);
-                            double bh = (margin_top + margin_bottom + lh*lnum + line_spc*(lnum-1));
-                            
-                            px = (p2.x()+1.0)*nx/2.0;
-                            py = (p2.y()+1.0)*ny/2.0;
-                            verts.push_back(px);    verts.push_back(py);    verts.push_back(0.0);
-                            verts.push_back(px+bw); verts.push_back(py);    verts.push_back(0.0);
-                            verts.push_back(px+bw); verts.push_back(py);    verts.push_back(0.0);
-                            verts.push_back(px+bw); verts.push_back(py-bh); verts.push_back(0.0);
-                            verts.push_back(px+bw); verts.push_back(py-bh); verts.push_back(0.0);
-                            verts.push_back(px);    verts.push_back(py-bh); verts.push_back(0.0);
-                            verts.push_back(px);    verts.push_back(py-bh); verts.push_back(0.0);
-                            verts.push_back(px);    verts.push_back(py);    verts.push_back(0.0);
-                            num += 8;
-                        }
-                    }
+
+					if(ruler->GetBalloonVisibility(j))
+					{
+						wxArrayString ann = ruler->GetAnnotations(j,  m_cur_vol ? m_cur_vol->GetAnnotation() : vector<AnnotationDB>(), spcx, spcy, spcz);
+
+						int lnum = ann.size();
+
+						if(lnum > 0)
+						{
+							p2x = p2.x()*nx/2.0;
+							p2y = p2.y()*ny/2.0;
+
+							double asp = (double)nx / (double)ny;;
+							double margin_x = 5+w;
+							double margin_top = w;
+							double margin_bottom = w;
+							double line_spc = 2;
+							double maxlw, lw, lh;
+
+							lh = m_text_renderer->GetSize();
+							margin_bottom += lh/2;//�e�L�X�g��Y���W��baseline�Ɉ��v���邽��
+							maxlw = 0.0;
+
+							for(int i = 0; i < lnum; i++)
+							{
+								wstring wstr_temp = ann.Item(i).ToStdWstring();
+								m_text_renderer->RenderText(wstr_temp, color,
+									p2x*sx+margin_x*sx, p2y*sy-(lh*(i+1)+line_spc*i+margin_top)*sy, sx, sy);
+								lw = m_text_renderer->RenderTextLen(wstr_temp);
+								if (lw > maxlw) maxlw = lw;
+							}
+
+							double bw = (margin_x*2 + maxlw);
+							double bh = (margin_top + margin_bottom + lh*lnum + line_spc*(lnum-1));
+
+							px = (p2.x()+1.0)*nx/2.0;
+							py = (p2.y()+1.0)*ny/2.0;
+							verts.push_back(px);    verts.push_back(py);    verts.push_back(0.0);
+							verts.push_back(px+bw); verts.push_back(py);    verts.push_back(0.0);
+							verts.push_back(px+bw); verts.push_back(py);    verts.push_back(0.0);
+							verts.push_back(px+bw); verts.push_back(py-bh); verts.push_back(0.0);
+							verts.push_back(px+bw); verts.push_back(py-bh); verts.push_back(0.0);
+							verts.push_back(px);    verts.push_back(py-bh); verts.push_back(0.0);
+							verts.push_back(px);    verts.push_back(py-bh); verts.push_back(0.0);
+							verts.push_back(px);    verts.push_back(py);    verts.push_back(0.0);
+							num += 8;
+						}
+					}
 				}
 				if (ruler->GetRulerType() == 4 &&
 					ruler->GetNumPoint() >= 3)
@@ -11916,28 +12641,28 @@ void VRenderGLView::DrawRulers()
 				pos += nums[j-1];
 			}
 		}
-        
-        if(m_draw_landmarks)
-        {
-            for (size_t i=0; i<m_landmarks.size(); i++)
-            {
-                Ruler* ruler = m_landmarks[i];
-                if (!ruler) continue;
-                if (!ruler->GetTimeDep() ||
-                    (ruler->GetTimeDep() &&
-                     ruler->GetTime() == m_tseq_cur_num))
-                {
-                    num = 0;
-                    if (ruler->GetUseColor())
-                        color = ruler->GetColor();
-                    else
-                        color = text_color;
-                    shader->setLocalParam(0, color.r(), color.g(), color.b(), 1.0);
-                    glDrawArrays(GL_LINES, pos, (GLsizei)(nums[j++]));
-                    pos += nums[j-1];
-                }
-            }
-        }
+
+		if(m_draw_landmarks)
+		{
+			for (size_t i=0; i<m_landmarks.size(); i++)
+			{
+				Ruler* ruler = m_landmarks[i];
+				if (!ruler) continue;
+				if (!ruler->GetTimeDep() ||
+					(ruler->GetTimeDep() &&
+					ruler->GetTime() == m_tseq_cur_num))
+				{
+					num = 0;
+					if (ruler->GetUseColor())
+						color = ruler->GetColor();
+					else
+						color = text_color;
+					shader->setLocalParam(0, color.r(), color.g(), color.b(), 1.0);
+					glDrawArrays(GL_LINES, pos, (GLsizei)(nums[j++]));
+					pos += nums[j-1];
+				}
+			}
+		}
 
 		glDisableVertexAttribArray(0);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -12073,37 +12798,37 @@ void VRenderGLView::GetTraces()
 	FL::CellList sel_labels;
 	FL::CellListIter label_iter;
 	for (ii=0; ii<nx; ii++)
-	for (jj=0; jj<ny; jj++)
-	for (kk=0; kk<nz; kk++)
-	{
-		int index = nx*ny*kk + nx*jj + ii;
-		unsigned int label_value = label_data[index];
-		if (mask_data[index] && label_value)
-		{
-			label_iter = sel_labels.find(label_value);
-			if (label_iter == sel_labels.end())
+		for (jj=0; jj<ny; jj++)
+			for (kk=0; kk<nz; kk++)
 			{
-				FL::pCell cell(new FL::Cell(label_value));
-				cell->Inc(ii, jj, kk, 1.0f);
-				sel_labels.insert(pair<unsigned int, FL::pCell>
-					(label_value, cell));
+				int index = nx*ny*kk + nx*jj + ii;
+				unsigned int label_value = label_data[index];
+				if (mask_data[index] && label_value)
+				{
+					label_iter = sel_labels.find(label_value);
+					if (label_iter == sel_labels.end())
+					{
+						FL::pCell cell(new FL::Cell(label_value));
+						cell->Inc(ii, jj, kk, 1.0f);
+						sel_labels.insert(pair<unsigned int, FL::pCell>
+							(label_value, cell));
+					}
+					else
+					{
+						label_iter->second->Inc(ii, jj, kk, 1.0f);
+					}
+				}
 			}
-			else
-			{
-				label_iter->second->Inc(ii, jj, kk, 1.0f);
-			}
-		}
-	}
 
-	//create id list
-	m_trace_group->SetCurTime(m_tseq_cur_num);
-	m_trace_group->SetPrvTime(m_tseq_cur_num);
-	m_trace_group->UpdateCellList(sel_labels);
+			//create id list
+			m_trace_group->SetCurTime(m_tseq_cur_num);
+			m_trace_group->SetPrvTime(m_tseq_cur_num);
+			m_trace_group->UpdateCellList(sel_labels);
 
-	//add traces to trace dialog
-	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-	if (m_vrv && vr_frame && vr_frame->GetTraceDlg())
-		vr_frame->GetTraceDlg()->GetSettings(m_vrv);
+			//add traces to trace dialog
+			VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+			if (m_vrv && vr_frame && vr_frame->GetTraceDlg())
+				vr_frame->GetTraceDlg()->GetSettings(m_vrv);
 }
 
 /*WXLRESULT VRenderGLView::MSWWindowProc(WXUINT message, WXWPARAM wParam, WXLPARAM lParam)
@@ -12186,9 +12911,9 @@ return wxWindow::MSWWindowProc(message, wParam, lParam);
 void VRenderGLView::OnMouse(wxMouseEvent& event)
 {
 	wxWindow *window = wxWindow::FindFocus();
-//	if (window &&
-//		window->GetClassInfo()->IsKindOf(CLASSINFO(wxTextCtrl)))
-//		SetFocus();
+	//	if (window &&
+	//		window->GetClassInfo()->IsKindOf(CLASSINFO(wxTextCtrl)))
+	//		SetFocus();
 	//mouse interactive flag
 	//m_interactive = false; //deleted by takashi
 	m_paint_enable = false;
@@ -12211,7 +12936,7 @@ void VRenderGLView::OnMouse(wxMouseEvent& event)
 		{
 			double cx, cy, cz;
 			GetObjCenters(cx, cy, cz);
-            Point trans = Point(cx-p->x(), -(cy-p->y()), -(cz-p->z()));
+			Point trans = Point(cx-p->x(), -(cy-p->y()), -(cz-p->z()));
 			StartManipulation(NULL, NULL, NULL, &trans, NULL);
 		}
 		else
@@ -12246,7 +12971,7 @@ void VRenderGLView::OnMouse(wxMouseEvent& event)
 			prv_mouse_X = old_mouse_X;
 			prv_mouse_Y = old_mouse_Y;
 			m_paint_enable = true;
-//			m_clear_paint = true;
+			//			m_clear_paint = true;
 			RefreshGLOverlays();
 		}
 		return;
@@ -13547,8 +14272,8 @@ void VRenderView::CreateBar()
 	sizer_h_1->Add(5, 5, 0);
 	sizer_h_1->Add(m_intp_chk, 0, wxALIGN_CENTER);
 	sizer_h_1->Add(5, 5, 0);
-//	sizer_h_1->Add(m_search_chk, 0, wxALIGN_CENTER);
-//	sizer_h_1->Add(5, 5, 0);
+	//	sizer_h_1->Add(m_search_chk, 0, wxALIGN_CENTER);
+	//	sizer_h_1->Add(5, 5, 0);
 	sizer_h_1->Add(st3, 0, wxALIGN_CENTER, 0);
 	sizer_h_1->Add(m_res_mode_combo, 0, wxALIGN_CENTER);
 	sizer_h_1->Add(10, 5, 0);
@@ -13809,8 +14534,8 @@ DataGroup* VRenderView::AddVolumeData(VolumeData* vd, wxString group_name)
 {
 	if (m_glview) {
 		double val = 50.;
-//		m_scale_text->GetValue().ToDouble(&val);
-//		m_glview->SetScaleBarLen(val);
+		//		m_scale_text->GetValue().ToDouble(&val);
+		//		m_glview->SetScaleBarLen(val);
 		return m_glview->AddVolumeData(vd, group_name);
 	}
 	else
@@ -14478,28 +15203,28 @@ void VRenderView::OnVolumeMethodCheck(wxCommandEvent& event)
 		}
 		else if (mode_switch_type == 2)
 		{
-/*			if (GetGroupNum() == 1)
+			/*			if (GetGroupNum() == 1)
 			{
-				for (int i=0; i<GetLayerNum(); i++)
-				{
-					TreeLayer* layer = GetLayer(i);
-					if (layer && layer->IsA() == 5)
-					{
-						DataGroup* group = (DataGroup*)layer;
-						FLIVR::Color col = m_glview->GetGamma();
-						group->SetGammaAll(col);
-						col = m_glview->GetBrightness();
-						group->SetBrightnessAll(col);
-						col = m_glview->GetHdr();
-						group->SetHdrAll(col);
-						group->SetSyncRAll(m_glview->GetSyncR());
-						group->SetSyncGAll(m_glview->GetSyncG());
-						group->SetSyncBAll(m_glview->GetSyncB());
-						break;
-					}
-				}
+			for (int i=0; i<GetLayerNum(); i++)
+			{
+			TreeLayer* layer = GetLayer(i);
+			if (layer && layer->IsA() == 5)
+			{
+			DataGroup* group = (DataGroup*)layer;
+			FLIVR::Color col = m_glview->GetGamma();
+			group->SetGammaAll(col);
+			col = m_glview->GetBrightness();
+			group->SetBrightnessAll(col);
+			col = m_glview->GetHdr();
+			group->SetHdrAll(col);
+			group->SetSyncRAll(m_glview->GetSyncR());
+			group->SetSyncGAll(m_glview->GetSyncG());
+			group->SetSyncBAll(m_glview->GetSyncB());
+			break;
 			}
-*/		}
+			}
+			}
+			*/		}
 
 		vr_frame->GetTree()->UpdateSelection();
 	}
@@ -14597,7 +15322,7 @@ void VRenderView::OnCapture(wxCommandEvent& event)
 void VRenderView::OnResModesCombo(wxCommandEvent &event)
 {
 	SetResMode(m_res_mode_combo->GetCurrentSelection());
-	
+
 	RefreshGL();
 }
 

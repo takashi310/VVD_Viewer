@@ -308,7 +308,7 @@ Nrrd* NRRDReader::Convert(int t, int c, bool get_max)
 
 	if (nrrdRead(output, nrrd_file, NULL))
 	{
-		delete []output->data;
+		delete [] output->data;
 		nrrdNix(output);
 		fclose(nrrd_file);
 		return 0;

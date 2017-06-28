@@ -755,6 +755,9 @@ namespace FLIVR
 		  }
 
 		  for (int j = 0; j < cur_brs.size(); j++)
+			  cur_brs[j]->prevent_tex_deletion(true);
+
+		  for (int j = 0; j < cur_brs.size(); j++)
 		  {
 			  TextureBrick *b = cur_brs[j];
 			  VolumeRenderer *vr = b->get_vr();
@@ -974,6 +977,9 @@ namespace FLIVR
 		  }//for (int j = 0; j < cur_brs.size(); j++)
 
 		  glFinish();
+
+		  for (int j = 0; j < cur_brs.size(); j++)
+			  cur_brs[j]->prevent_tex_deletion(false);
 
 		  if (blend_slices && colormap_mode_!=FLV_CTYPE_DEPTH)
 		  {

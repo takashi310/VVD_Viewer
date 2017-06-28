@@ -35,11 +35,14 @@
 #include "BBox.h"
 #include "Plane.h"
 
+#include <wx/thread.h>
+
 #include <vector>
 #include <fstream>
 #include <string>
 #include <nrrd.h>
 #include <stdint.h>
+#include <map>
 #include <curl/curl.h>
 
 namespace FLIVR {
@@ -64,12 +67,46 @@ namespace FLIVR {
 #define BRICK_FILE_TYPE_ZLIB	3
 
 	
-	struct FileLocInfo {
+	class FileLocInfo {
+	public:
+		FileLocInfo()
+		{
+			filename = L"";
+			offset = 0;
+			datasize = 0;
+			type = 0;
+			isurl = false;
+			cached = false;
+			cache_filename = L"";
+		}
+		FileLocInfo(std::wstring filename_, int offset_, int datasize_, int type_, bool isurl_)
+		{
+			filename = filename_;
+			offset = offset_;
+			datasize = datasize_;
+			type = type_;
+			isurl = isurl_;
+			cached = false;
+			cache_filename = L"";
+		}
+		FileLocInfo(const FileLocInfo &copy)
+		{
+			filename = copy.filename;
+			offset = copy.offset;
+			datasize = copy.datasize;
+			type = copy.type;
+			isurl = copy.isurl;
+			cached = copy.cached;
+			cache_filename = copy.cache_filename;
+		}
+
 		std::wstring filename;
 		int offset;
 		int datasize;
 		int type; //1-raw; 2-jpeg; 3-zlib;
 		bool isurl;
+		bool cached;
+		std::wstring cache_filename;
 	};
 
 	class TextureBrick
@@ -185,6 +222,8 @@ namespace FLIVR {
 		static bool sort_dsc(const TextureBrick* b1, const TextureBrick* b2)
 		{ return b2->d_ > b1->d_; }
 
+		double get_d() {return d_;}
+
 		static bool less_timin(const TextureBrick* b1, const TextureBrick* b2) { return b1->timin_ < b2->timin_; }
 		static bool high_timin(const TextureBrick* b1, const TextureBrick* b2) { return b1->timin_ > b2->timin_; }
 		static bool less_timax(const TextureBrick* b1, const TextureBrick* b2) { return b1->timax_ < b2->timax_; }
@@ -196,6 +235,8 @@ namespace FLIVR {
 
 		void freeBrkData();
 		bool isLoaded() {return brkdata_ ? true : false;};
+		bool isLoading() {return loading_;}
+		void set_loading_state(bool val) {loading_ = val;}
 		void set_id_in_loadedbrks(int id) {id_in_loadedbrks = id;};
 		int get_id_in_loadedbrks() {return id_in_loadedbrks;}
 		int getID() {return findex_;}
@@ -222,14 +263,24 @@ namespace FLIVR {
 		bool get_disp() {return disp_;}
         
         static void setCURL(CURL *c) {s_curl_ = c;}
+		static void setCURL_Multi(CURLM *c) {s_curlm_ = c;}
 
+		size_t tex_type_size(GLenum t);
+		GLenum tex_type_aux(Nrrd* n);
+		bool read_brick(char* data, size_t size, const FileLocInfo* finfo);
+		void set_brkdata(void *brkdata) {brkdata_ = brkdata;}
+		static bool read_brick_without_decomp(char* &data, size_t &readsize, FileLocInfo* finfo, wxThread *th=NULL);
+		static bool decompress_brick(char *out, char* in, size_t out_size, size_t in_size, int type);
+		static bool jpeg_decompressor(char *out, char* in, size_t out_size, size_t in_size);
+		static bool zlib_decompressor(char *out, char* in, size_t out_size, size_t in_size);
+		static void delete_all_cache_files();
+
+		void prevent_tex_deletion(bool val) {prevent_tex_deletion_ = val;}
+		bool is_tex_deletion_prevented() {return prevent_tex_deletion_;}
 	private:
 		void compute_edge_rays(BBox &bbox);
 		void compute_edge_rays_tex(BBox &bbox);
-		size_t tex_type_size(GLenum t);
-		GLenum tex_type_aux(Nrrd* n);
-
-		bool read_brick(char* data, size_t size, const FileLocInfo* finfo);
+		
 		bool raw_brick_reader(char* data, size_t size, const FileLocInfo* finfo);
 		bool jpeg_brick_reader(char* data, size_t size, const FileLocInfo* finfo);
 		bool zlib_brick_reader(char* data, size_t size, const FileLocInfo* finfo);
@@ -238,6 +289,8 @@ namespace FLIVR {
 		bool zlib_brick_reader_url(char* data, size_t size, const FileLocInfo* finfo);
 
 		static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp);
+		static size_t WriteFileCallback(void *contents, size_t size, size_t nmemb, void *userp);
+		static int xferinfo(void *p, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow);
 
 		//! bbox edges
 		Ray edge_[12]; 
@@ -276,7 +329,10 @@ namespace FLIVR {
 		long long offset_;
 		long long fsize_;
 		void *brkdata_;
+		bool loading_;
 		int id_in_loadedbrks;
+
+		bool prevent_tex_deletion_;
 
 		int findex_;
 
@@ -295,6 +351,8 @@ namespace FLIVR {
 		bool disp_;
         
         static CURL *s_curl_;
+		static CURLM *s_curlm_;
+		static std::map<std::wstring, std::wstring> cache_table_;
 	};
 
 	struct Pyramid_Level {

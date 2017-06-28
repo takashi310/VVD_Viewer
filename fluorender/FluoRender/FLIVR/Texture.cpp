@@ -68,7 +68,8 @@ namespace FLIVR
 		s_spcx_(1.0),
 		s_spcy_(1.0),
 		s_spcz_(1.0),
-        mask_undo_pointer_(-1)
+        mask_undo_pointer_(-1),
+		filename_(NULL)
 	{
 		for (size_t i = 0; i < TEXTURE_MAX_COMPONENTS; i++)
 		{
@@ -82,6 +83,8 @@ namespace FLIVR
 
 	Texture::~Texture()
 	{
+		DeleteCacheFiles();
+
 		if(bricks_){
 			for (int i=0; i<(int)(*bricks_).size(); i++)
 			{
@@ -114,6 +117,28 @@ namespace FLIVR
 		//if (ifs_) ifs_.close();
 
 		clearPyramid();
+	}
+
+	void Texture::DeleteCacheFiles()
+	{
+		for (int i=0; i<(int)filenames_.size(); i++){
+			for (int j=0; j<(int)filenames_[i].size(); j++){
+				for (int k=0; k<(int)filenames_[i][j].size(); k++){
+					for (int n=0; n<(int)filenames_[i][j][k].size(); n++){
+						if (filenames_[i][j][k][n] && !filenames_[i][j][k][n]->cache_filename.empty())
+						{
+							wxString fpath = filenames_[i][j][k][n]->cache_filename;
+							if(wxFileExists(fpath))
+							{
+								wxRemoveFile(fpath);
+								filenames_[i][j][k][n]->cached = false;
+								filenames_[i][j][k][n]->cache_filename = L"";
+							}
+						}
+					}
+				}
+			}
+		}
 	}
 
 	void Texture::clear_undos()
@@ -171,10 +196,10 @@ namespace FLIVR
 		uint64_t index = 0;
 		bool tmp_load = false;
 		void *d_ptr = NULL;
-		if (isBrxml()) 
+		if (isBrxml() && b->isLoaded()) 
 		{
 			index = (nx)*(ny)*(kk) + (nx)*(jj) + (ii);
-			tmp_load = !b->isLoaded();
+			//tmp_load = !b->isLoaded();
 			FileLocInfo *finfo = GetFileName(b->getID());
 			d_ptr = b->tex_data_brk(0, finfo);
 		}
@@ -199,8 +224,8 @@ namespace FLIVR
 			rval = normalize ? double(old_value)/65535.0 : double(old_value);
 		}
 		
-		if (tmp_load)
-			b->freeBrkData();
+//		if (tmp_load)
+//			b->freeBrkData();
 
 		return rval;
 	}
@@ -254,7 +279,10 @@ namespace FLIVR
 						// perspective: sort bricks based on distance to the eye point
 						dd = (corner[c] - view.origin()).length();
 					}
-					if (c == 0 || dd < d) d = dd;
+					if (c == 0 ||
+						(TextureRenderer::get_update_order() == 1 && dd < d) ||
+						(TextureRenderer::get_update_order() == 0 && dd > d))
+						d = dd;
 				}
 				(*bricks_)[i]->set_d(d);
 			}
@@ -813,7 +841,7 @@ namespace FLIVR
 
 	FileLocInfo *Texture::GetFileName(int id)
 	{
-		if (id < 0 || id >= filename_->size()) return NULL;
+		if (id < 0 || !filename_ || id >= filename_->size()) return NULL;
 		return (*filename_)[id];
 	}
 

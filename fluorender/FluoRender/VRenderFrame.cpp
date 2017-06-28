@@ -106,7 +106,7 @@ bool VRenderFrame::m_save_compress = true;
 bool VRenderFrame::m_vrp_embed = false;
 bool VRenderFrame::m_save_project = false;
 
-CURL *_g_curlm;//add by takashi
+CURLM *_g_curlm;//add by takashi
 CURL *_g_curl;//add by takashi
 
 VRenderFrame::VRenderFrame(
@@ -125,7 +125,8 @@ VRenderFrame::VRenderFrame(
 	m_ui_state(true),
 	m_cur_sel_type(-1),
 	m_cur_sel_vol(-1),
-	m_cur_sel_mesh(-1)
+	m_cur_sel_mesh(-1),
+	m_gpu_max_mem(-1.0)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -135,6 +136,7 @@ VRenderFrame::VRenderFrame(
 	_g_curl = curl_easy_init();//add by takashi
     
     FLIVR::TextureBrick::setCURL(_g_curl);
+	FLIVR::TextureBrick::setCURL_Multi(_g_curlm);
 
 	//create this first to read the settings
 	m_setting_dlg = new SettingDlg(this, this);
@@ -657,10 +659,6 @@ VRenderFrame::VRenderFrame(
 
 VRenderFrame::~VRenderFrame()
 {
-	curl_easy_cleanup(_g_curl);//add by takashi
-	curl_multi_cleanup(_g_curlm);
-	curl_global_cleanup();//add by takashi
-
 	for (int i=0; i<(int)m_vrv_list.size(); i++)
 	{
 		VRenderView* vrv = m_vrv_list[i];
@@ -669,6 +667,12 @@ VRenderFrame::~VRenderFrame()
 	if (m_text_renderer)
 		delete m_text_renderer;
 	m_aui_mgr.UnInit();
+
+	curl_easy_cleanup(_g_curl);//add by takashi
+	curl_multi_cleanup(_g_curlm);
+	curl_global_cleanup();//add by takashi
+
+	TextureBrick::delete_all_cache_files();
 }
 
 void VRenderFrame::OnExit(wxCommandEvent& WXUNUSED(event))
@@ -4848,33 +4852,36 @@ void VRenderFrame::SetTextureRendererSettings()
 		return;
 
 	TextureRenderer::set_mem_swap(m_setting_dlg->GetMemSwap());
-	bool use_mem_limit = false;
-	GLenum error = glGetError();
-	GLint mem_info[4] = {0, 0, 0, 0};
-	glGetIntegerv(GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX, mem_info);
-	error = glGetError();
-	if (error == GL_INVALID_ENUM)
+	bool use_mem_limit = true;
+
+	//check amount of graphic memory
+	if (m_gpu_max_mem <= 0.0)
 	{
-		glGetIntegerv(GL_TEXTURE_FREE_MEMORY_ATI, mem_info);
+		GLenum error = glGetError();
+		GLint mem_info[4] = {0, 0, 0, 0};
+		glGetIntegerv(GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX, mem_info);
 		error = glGetError();
 		if (error == GL_INVALID_ENUM)
-			use_mem_limit = true;
+		{
+			glGetIntegerv(GL_TEXTURE_FREE_MEMORY_ATI, mem_info);
+			error = glGetError();
+		}
+		if (error != GL_INVALID_ENUM)
+			m_gpu_max_mem = mem_info[0]/1024.0;
 	}
-	if (m_setting_dlg->GetGraphicsMem() < mem_info[0]/1024.0)
-		use_mem_limit = true;
-
-	double mem_size = use_mem_limit ? m_setting_dlg->GetGraphicsMem() : mem_info[0]/1024.0;
+	double mem_size = m_gpu_max_mem > m_setting_dlg->GetGraphicsMem() ? m_setting_dlg->GetGraphicsMem() : m_gpu_max_mem;
 
 	//reserve a memory area for 2D textures
 	//(TextureRenderer takes no account of 2D textures in calculating allocated memory size)
 	if (mem_size > 1024.0) mem_size -= 300.0;
 	else mem_size *= 0.7;
 
+	double mem_delta = mem_size - TextureRenderer::get_mem_limit();
+	double prev_available_mem = TextureRenderer::get_available_mem();
+
 	TextureRenderer::set_use_mem_limit(use_mem_limit);
-	TextureRenderer::set_mem_limit(use_mem_limit?
-		m_setting_dlg->GetGraphicsMem():mem_info[0]/1024.0);
-	TextureRenderer::set_available_mem(use_mem_limit?
-		m_setting_dlg->GetGraphicsMem():mem_info[0]/1024.0);
+	TextureRenderer::set_mem_limit(mem_size);
+	TextureRenderer::set_available_mem(mem_delta + prev_available_mem);
 	TextureRenderer::set_large_data_size(m_setting_dlg->GetLargeDataSize());
 	TextureRenderer::set_force_brick_size(m_setting_dlg->GetForceBrickSize());
 	TextureRenderer::set_up_time(m_setting_dlg->GetResponseTime());

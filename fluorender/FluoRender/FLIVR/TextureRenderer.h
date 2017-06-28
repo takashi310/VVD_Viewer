@@ -157,7 +157,7 @@ namespace FLIVR
          void set_blend_num_bits(int b);
 
          //clear the opengl textures from the texture pool
-         void clear_tex_pool();
+         static void clear_tex_pool();
 		void clear_tex_current();
 
          //resize the fbo texture
@@ -310,6 +310,9 @@ namespace FLIVR
                static void set_update_order(int val) {update_order_ = val;}
                static int get_update_order() {return update_order_;}
 
+			   static void set_load_on_main_thread(bool val) {load_on_main_thread_ = val;}
+			   static bool get_load_on_main_thread() {return load_on_main_thread_;}
+
 			   static VolKernelFactory vol_kernel_factory_;
 
       public:
@@ -367,7 +370,7 @@ namespace FLIVR
                GLuint tex_2d_dmap_;
 
                int blend_num_bits_;
-               bool clear_pool_;
+               static bool clear_pool_;
 
 			   struct LoadedBrick {
 				   bool swapped;
@@ -413,6 +416,8 @@ namespace FLIVR
                static Point quota_center_;
                //update order
                static int update_order_;
+
+			   static bool load_on_main_thread_;
 
                //for view testing
                float mvmat_[16];

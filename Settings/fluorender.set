@@ -11,7 +11,7 @@ mode=0
 [realtime\ compress]
 mode=0
 [mouse\ int]
-mode=0
+mode=1
 res_mode=0
 [dir\ shadow]
 mode=0
@@ -45,7 +45,7 @@ file=FreeMonoBold.ttf
 color=0
 [memory\ settings]
 mem\ swap=1
-graphics\ mem=2000
+graphics\ mem=3500
 large\ data\ size=100
 force\ brick\ size=128
 up\ time=200
