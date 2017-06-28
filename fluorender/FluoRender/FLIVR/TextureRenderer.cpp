@@ -375,7 +375,10 @@ namespace FLIVR
 		if (!name.empty())
 		{
 			if(auto path = get_roi_path(edid))
-				roi_tree_.put(*path, name);
+			{
+				wstring newname = check_new_roi_name(name);
+				roi_tree_.put(*path, newname);
+			}
 			else
 			{
 				wstring prefix(L"");
@@ -412,7 +415,10 @@ namespace FLIVR
 		if (!name.empty())
 		{
 			if(auto path = get_roi_path(edid))
-				roi_tree_.put(*path, name);
+			{
+				wstring newname = check_new_roi_name(name);
+				roi_tree_.put(*path, newname);
+			}
 			else
 			{
 				wstring prefix(L"");
@@ -437,6 +443,17 @@ namespace FLIVR
 				roi_tree_.get_child(prefix).erase(strid);
 			}
 		}
+	}
+
+	wstring TextureRenderer::check_new_roi_name(wstring name)
+	{
+		wstring result = name;
+
+		int i;
+		for (i=1; get_roi_path(name); i++)
+			result = name+wxString::Format("_%d", i);
+
+		return result;
 	}
 
 	int TextureRenderer::get_available_group_id()

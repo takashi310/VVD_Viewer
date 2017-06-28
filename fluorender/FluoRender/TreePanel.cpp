@@ -41,6 +41,10 @@ using boost::property_tree::wptree;
 BEGIN_EVENT_TABLE(DataTreeCtrl, wxTreeCtrl)
 	EVT_CONTEXT_MENU(DataTreeCtrl::OnContextMenu)
 	EVT_MENU(ID_ToggleDisp, DataTreeCtrl::OnToggleDisp)
+	EVT_MENU(ID_Rename, DataTreeCtrl::OnRenameMenu)
+	EVT_MENU(ID_Duplicate, DataTreeCtrl::OnDuplicate)
+	EVT_MENU(ID_Save, DataTreeCtrl::OnSave)
+	EVT_MENU(ID_BakeVolume, DataTreeCtrl::OnBakeVolume)
 	EVT_MENU(ID_Isolate, DataTreeCtrl::OnIsolate)
 	EVT_MENU(ID_ShowAll, DataTreeCtrl::OnShowAll)
 	EVT_MENU(ID_ExportMetadata, DataTreeCtrl::OnExportMetadata)
@@ -73,6 +77,8 @@ BEGIN_EVENT_TABLE(DataTreeCtrl, wxTreeCtrl)
 	EVT_TREE_END_DRAG(wxID_ANY, DataTreeCtrl::OnEndDrag)
 	EVT_KEY_DOWN(DataTreeCtrl::OnKeyDown)
 	EVT_KEY_UP(DataTreeCtrl::OnKeyUp)
+	EVT_TREE_BEGIN_LABEL_EDIT(wxID_ANY, DataTreeCtrl::OnRename)
+	EVT_TREE_END_LABEL_EDIT(wxID_ANY, DataTreeCtrl::OnRenamed)
 END_EVENT_TABLE()
 
 bool DataTreeCtrl::m_md_save_indv = false;
@@ -312,6 +318,7 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 			case 1:  //view
 				{
 					menu.Append(ID_ToggleDisp, "Toggle Visibility");
+					menu.Append(ID_Rename, "Rename");
 					if (IsExpanded(sel_item))
 						menu.Append(ID_Expand, "Collapse");
 					else
@@ -333,6 +340,10 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 					VolumeData* vd = d_manage->GetVolumeData(name);
 					if (!vd) break;
 					menu.Append(ID_ToggleDisp, "Toggle Visibility");
+					menu.Append(ID_Rename, "Rename");
+					menu.Append(ID_Duplicate, "Duplicate");
+					menu.Append(ID_Save, "Save");
+					menu.Append(ID_BakeVolume, "Bake");
 					menu.Append(ID_Isolate, "Isolate");
 					menu.Append(ID_ShowAll, "Show All");
 					menu.Append(ID_ImportMetadata, "Import Metadata");
@@ -363,6 +374,9 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 				break;
 			case 3:  //mesh data
 				menu.Append(ID_ToggleDisp, "Toggle Visibility");
+				menu.Append(ID_Rename, "Rename");
+				menu.Append(ID_Save, "Save");
+				menu.Append(ID_Duplicate, "Duplicate");
 				menu.Append(ID_Isolate, "Isolate");
 				menu.Append(ID_ShowAll, "Show All");
 				menu.AppendSeparator();
@@ -373,9 +387,14 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 				menu.Append(ID_ManipulateData, "Manipulate");
 				break;
 			case 4:  //annotations
+				menu.Append(ID_Rename, "Rename");
+				menu.Append(ID_Save, "Save");
+				menu.Append(ID_Duplicate, "Duplicate");
 				break;
 			case 5:  //data group
 				menu.Append(ID_ToggleDisp, "Toggle Visibility");
+				menu.Append(ID_Rename, "Rename");
+				menu.Append(ID_Duplicate, "Duplicate");
 				if (IsExpanded(sel_item))
 					menu.Append(ID_Expand, "Collapse");
 				else
@@ -387,6 +406,8 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 				break;
 			case 6:  //mesh group
 				menu.Append(ID_ToggleDisp, "Toggle Visibility");
+				menu.Append(ID_Rename, "Rename");
+				menu.Append(ID_Duplicate, "Duplicate");
 				if (IsExpanded(sel_item))
 					menu.Append(ID_Expand, "Collapse");
 				else
@@ -418,6 +439,344 @@ void DataTreeCtrl::OnToggleDisp(wxCommandEvent& event)
 {
 	wxTreeEvent tevent;
 	OnAct(tevent);
+}
+
+void DataTreeCtrl::OnDuplicate(wxCommandEvent& event)
+{
+	if (m_fixed)
+		return;
+
+	wxTreeItemId sel_item = GetSelection();
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+
+	if (sel_item.IsOk() && vr_frame)
+	{
+		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+		if (item_data)
+		{
+			switch (item_data->type)
+			{
+			case 2:  //volume data
+				{
+					wxString name = GetItemText(sel_item);
+					DataManager *d_manage = vr_frame->GetDataManager();
+					if (!d_manage) break;
+					VolumeData* vd = d_manage->GetVolumeData(name);
+					if (!vd) break;
+				}
+				break;
+			case 3:  //mesh data
+				{
+					wxString name = GetItemText(sel_item);
+					DataManager *d_manage = vr_frame->GetDataManager();
+					if (!d_manage) break;
+					MeshData* md = d_manage->GetMeshData(name);
+					if (!md) break;
+				}
+				break;
+			}
+		}
+	}
+}
+
+void DataTreeCtrl::OnRenameMenu(wxCommandEvent& event)
+{
+	if (m_fixed)
+		return;
+
+	wxTreeItemId sel_item = GetSelection();
+	if (sel_item.IsOk())
+		EditLabel(sel_item);
+}
+
+void DataTreeCtrl::OnRename(wxTreeEvent& event)
+{
+	if (m_fixed)
+		return;
+
+	wxTreeItemId sel_item = GetSelection();
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+
+	if (sel_item.IsOk() && vr_frame)
+	{
+		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+		if (item_data)
+		{
+			switch (item_data->type)
+			{
+			case 0:  //root
+				event.Veto();
+				break;
+			case 1:  //view
+				event.Veto();
+				break;
+			case 2:  //volume data
+				
+				break;
+			case 3:  //mesh data
+				
+				break;
+			case 4:  //annotations
+
+				break;
+			case 5:  //data group
+
+				break;
+			case 6:  //mesh group
+
+				break;
+			case 7: //segment group
+
+				break;
+			case 8: //segment
+
+				break;
+			}
+		}
+	}
+}
+
+void DataTreeCtrl::OnRenamed(wxTreeEvent& event)
+{
+	if (m_fixed)
+		return;
+
+	wxTreeItemId sel_item = GetSelection();
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	wxString prev_name = GetItemText(sel_item);
+	wxString name = event.GetLabel();
+
+	if (sel_item.IsOk() && vr_frame && prev_name != name && name != wxString(""))
+	{
+		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+		if (item_data)
+		{
+			switch (item_data->type)
+			{
+			case 0:  //root
+
+				break;
+			case 1:  //view
+
+				break;
+			case 2:  //volume data
+				{
+					DataManager *d_manage = vr_frame->GetDataManager();
+					if (!d_manage) break;
+					VolumeData* vd = d_manage->GetVolumeData(prev_name);
+					if (!vd) break;
+					name = d_manage->CheckNewName(name, DATA_VOLUME);
+					vd->SetName(name);
+					SetItemText(sel_item, name);
+					vr_frame->UpdateTree(name, item_data->type);
+					vr_frame->OnSelection(2, 0, 0, vd);
+				}
+				break;
+			case 3:  //mesh data
+				{
+					DataManager *d_manage = vr_frame->GetDataManager();
+					if (!d_manage) break;
+					MeshData* md = d_manage->GetMeshData(prev_name);
+					if (!md) break;
+					name = d_manage->CheckNewName(name, DATA_MESH);
+					md->SetName(name);
+					SetItemText(sel_item, name);
+					vr_frame->UpdateTree(name, item_data->type);
+					vr_frame->OnSelection(3, 0, 0, 0, md);
+
+				}
+				break;
+			case 4:  //annotations
+				{
+					DataManager *d_manage = vr_frame->GetDataManager();
+					if (!d_manage) break;
+					Annotations* an = d_manage->GetAnnotations(prev_name);
+					if (!an) break;
+					name = d_manage->CheckNewName(name, DATA_ANNOTATIONS);
+					an->SetName(name);
+					if (vr_frame->GetPropView()) vr_frame->GetPropView()->SetLabel(name);
+					SetItemText(sel_item, name);
+					vr_frame->UpdateTree(name, item_data->type);
+					vr_frame->OnSelection(4, 0, 0, 0, 0, an);
+				}
+				break;
+			case 5:  //data group
+			case 6:  //mesh group
+				{
+					wxTreeItemId par_item = GetItemParent(sel_item);
+					if (par_item.IsOk())
+					{
+						LayerInfo* par_data = (LayerInfo*)GetItemData(par_item);
+						if (par_data && par_data->type == 1)
+						{
+							//group in view
+							wxString vname = GetItemText(par_item);
+							VRenderView* vrv = vr_frame->GetView(vname);
+							if (vrv)
+							{
+								if (item_data->type == 5)
+								{
+									DataGroup *group = vrv->GetGroup(prev_name);
+									if (!group) break;
+									name = vrv->CheckNewGroupName(name, LAYER_DATAGROUP);
+									group->SetName(name);
+									SetItemText(sel_item, name);
+									vr_frame->UpdateTree(name, item_data->type);
+								}
+								else if (item_data->type == 6)
+								{
+									MeshGroup *mgroup = vrv->GetMGroup(prev_name);
+									if (!mgroup) break;
+									name = vrv->CheckNewGroupName(name, LAYER_MESHGROUP);
+									mgroup->SetName(name);
+									SetItemText(sel_item, name);
+									vr_frame->UpdateTree(name, item_data->type);
+								}
+							}
+						}
+					}
+				}
+				break;
+			case 7: //segment group
+			case 8: //segment
+				{
+					DataManager *d_manage = vr_frame->GetDataManager();
+					wxTreeItemId vol_item = GetParentVolItem(sel_item);
+					if (vol_item.IsOk())
+					{
+						wxString vname = GetItemText(vol_item);
+						VolumeData* vd = d_manage->GetVolumeData(vname);
+						if (vd && item_data->id != -1)
+						{
+							vd->SetROIName(name.ToStdWstring(), item_data->id);
+							UpdateVolItem(vol_item, vd);
+							if (vr_frame->GetPropView()) vr_frame->GetPropView()->UpdateUIsROI();
+						}
+					}
+					SetItemText(sel_item, name);
+					vr_frame->UpdateTree(name, item_data->type);
+				}
+				break;
+			}
+		}
+	}
+}
+
+void DataTreeCtrl::OnSave(wxCommandEvent& event)
+{
+	if (m_fixed)
+		return;
+
+	wxTreeItemId sel_item = GetSelection();
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+
+	if (!sel_item.IsOk() || !vr_frame)
+		return;
+	LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+	if (!item_data)
+		return;
+
+	wxString name = GetItemText(sel_item);
+
+	if (item_data->type == 2) //volume
+	{
+		wxFileDialog *fopendlg = new wxFileDialog(
+			m_frame, "Save Volume Data", "", "",
+			"Muti-page Tiff file (*.tif, *.tiff)|*.tif;*.tiff|"\
+			"Single-page Tiff sequence (*.tif)|*.tif;*.tiff|"\
+			"Nrrd file (*.nrrd)|*.nrrd",
+			wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
+		fopendlg->SetExtraControlCreator(CreateExtraControl);
+
+		int rval = fopendlg->ShowModal();
+
+		if (rval == wxID_OK)
+		{
+			wxString filename = fopendlg->GetPath();
+			VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
+			if (vd)
+				vd->Save(filename, fopendlg->GetFilterIndex(), false, VRenderFrame::GetCompression());
+		}
+		delete fopendlg;
+	}
+	else if (item_data->type == 3) //mesh
+	{
+		wxFileDialog *fopendlg = new wxFileDialog(
+			m_frame, "Save Mesh Data", "", "",
+			"OBJ file (*.obj)|*.obj",
+			wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
+
+		int rval = fopendlg->ShowModal();
+
+		if (rval == wxID_OK)
+		{
+			wxString filename = fopendlg->GetPath();
+
+			VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+			MeshData* md = vr_frame->GetDataManager()->GetMeshData(name);
+			if (md)
+				md->Save(filename);
+		}
+		delete fopendlg;
+	}
+	else if (item_data->type == 4) //annotation
+	{
+		wxFileDialog *fopendlg = new wxFileDialog(
+			m_frame, "Save Annotations", "", "",
+			"Text file (*.txt)|*.txt",
+			wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
+
+		int rval = fopendlg->ShowModal();
+
+		if (rval == wxID_OK)
+		{
+			wxString filename = fopendlg->GetPath();
+			Annotations* ann = vr_frame->GetDataManager()->GetAnnotations(name);
+			if (ann)
+				ann->Save(filename);
+		}
+		delete fopendlg;
+	}
+}
+
+void DataTreeCtrl::OnBakeVolume(wxCommandEvent& event)
+{
+	if (m_fixed)
+		return;
+
+	wxTreeItemId sel_item = GetSelection();
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+
+	if (!sel_item.IsOk() || !vr_frame)
+		return;
+	LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+	if (!item_data)
+		return;
+
+	wxString name = GetItemText(sel_item);
+
+	if (item_data->type == 2) //volume
+	{
+		wxFileDialog *fopendlg = new wxFileDialog(
+			m_frame, "Bake Volume Data", "", "",
+			"Muti-page Tiff file (*.tif, *.tiff)|*.tif;*.tiff|"\
+			"Single-page Tiff sequence (*.tif)|*.tif;*.tiff|"\
+			"Nrrd file (*.nrrd)|*.nrrd",
+			wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
+		fopendlg->SetExtraControlCreator(CreateExtraControl);
+
+		int rval = fopendlg->ShowModal();
+
+		if (rval == wxID_OK)
+		{
+			wxString filename = fopendlg->GetPath();
+			VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
+			if (vd)
+				vd->Save(filename, fopendlg->GetFilterIndex(), true, VRenderFrame::GetCompression());
+		}
+
+		delete fopendlg;
+	}
 }
 
 void DataTreeCtrl::OnIsolate(wxCommandEvent& event)
@@ -1447,6 +1806,8 @@ void DataTreeCtrl::UpdateSelection()
 	wxTreeItemId sel_item = GetSelection();
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 
+	notifyAll(0);
+
 	if (!vr_frame)
 		return;
 
@@ -1668,6 +2029,19 @@ wxString DataTreeCtrl::GetCurrentSel()
 	}
 
 	return "";
+}
+
+int DataTreeCtrl::GetCurrentSelType()
+{
+	wxTreeItemId sel_item = GetSelection();
+	if (sel_item.IsOk())
+	{
+		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+		if (item_data)
+			return item_data->type;
+	}
+
+	return -1;
 }
 
 int DataTreeCtrl::TraversalSelect(wxTreeItemId item, wxString name)
@@ -1941,7 +2315,7 @@ void DataTreeCtrl::OnAct(wxTreeEvent &event)
 
 		m_scroll_pos = GetScrollPos(wxVERTICAL);
 		if (rc)
-			vr_frame->UpdateTree(name);
+			vr_frame->UpdateTree(name, item_data->type);
 		else
 			vr_frame->UpdateTreeIcons();
 		SetScrollPos(wxVERTICAL, m_scroll_pos);
@@ -2251,7 +2625,7 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 				SelectROI(vd, roi_id);
 			}
 			else
-				vr_frame->UpdateTree(src_name);
+				vr_frame->UpdateTree(src_name, src_type);
 			vr_frame->RefreshVRenderViews();
 		}
 	}
@@ -2279,7 +2653,7 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 					wxString str("");
 					vrv->MoveLayertoView(src_par_name, src_name, str);
 
-					vr_frame->UpdateTree(src_name);
+					vr_frame->UpdateTree(src_name, src_type);
 					vr_frame->RefreshVRenderViews();
 				}
 			}
@@ -3256,8 +3630,8 @@ void DataTreeCtrl::CollapseDataTreeItem(wxString name, bool collapse_children)
 
 BEGIN_EVENT_TABLE(TreePanel, wxPanel)
 	EVT_TOOL(ID_ToggleView, TreePanel::OnToggleView)
-	EVT_TOOL(ID_AddGroup, TreePanel::OnAddGroup)
-	EVT_TOOL(ID_AddMGroup, TreePanel::OnAddMGroup)
+	EVT_TOOL(ID_Save, TreePanel::OnSave)
+	EVT_TOOL(ID_BakeVolume, TreePanel::OnBakeVolume)
 	EVT_TOOL(ID_RemoveData, TreePanel::OnRemoveData)
 	//brush commands
 	EVT_TOOL(ID_BrushAppend, TreePanel::OnBrushAppend)
@@ -3283,6 +3657,7 @@ wxPanel(parent, id, pos, size, style, name),
 
 	//create data tree
 	m_datatree = new DataTreeCtrl(frame, this, wxID_ANY);
+	m_datatree->addObserver(this);
 
 	//create tool bar
 	m_toolbar = new wxToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
@@ -3290,12 +3665,14 @@ wxPanel(parent, id, pos, size, style, name),
 	m_toolbar->AddTool(ID_ToggleView, "Toggle View",
 		wxGetBitmapFromMemory(listicon_toggle),
 		"Toggle the visibility of current selection");
-	m_toolbar->AddTool(ID_AddGroup, "Add Group",
-		wxGetBitmapFromMemory(listicon_addgroup),
-		"Add a volume data group to the selected view");
-	m_toolbar->AddTool(ID_AddMGroup, "Add Mesh Group",
-		wxGetBitmapFromMemory(listicon_addmgroup),
-		"Add a mesh data group to the selected view");
+	m_toolbar->AddTool(ID_Save, "Save As",
+         wxGetBitmapFromMemory(listicon_save),
+         "Save: Save the selected volume dataset");
+	m_toolbar->EnableTool(ID_Save, false);
+	m_toolbar->AddTool(ID_BakeVolume, "Bake",
+         wxGetBitmapFromMemory(listicon_bake),
+         "Bake: Apply the volume properties and save");
+	m_toolbar->EnableTool(ID_BakeVolume, false);
 	m_toolbar->AddTool(ID_RemoveData, "Delete",
 		wxGetBitmapFromMemory(listicon_delete),
 		"Delete current selection");
@@ -3606,6 +3983,36 @@ int TreePanel::GetBrushSelected()
 		return 0;
 }
 
+void TreePanel::doAction(ActionInfo *info)
+{
+	if (m_datatree)
+	{
+		int type = m_datatree->GetCurrentSelType();
+		if (type == 2)
+		{
+			m_toolbar->EnableTool(ID_Save, true);
+			m_toolbar->EnableTool(ID_BakeVolume, true);
+		}
+		else
+		{
+			m_toolbar->EnableTool(ID_Save, false);
+			m_toolbar->EnableTool(ID_BakeVolume, false);
+		}
+	}
+}
+
+void TreePanel::OnSave(wxCommandEvent& event)
+{
+	if (m_datatree)
+		m_datatree->OnSave(event);
+}
+
+void TreePanel::OnBakeVolume(wxCommandEvent& event)
+{
+	if (m_datatree)
+		m_datatree->OnBakeVolume(event);
+}
+
 void TreePanel::OnToggleView(wxCommandEvent &event)
 {
 	if (m_datatree)
@@ -3613,18 +4020,6 @@ void TreePanel::OnToggleView(wxCommandEvent &event)
 		wxTreeEvent tree_event;
 		m_datatree->OnAct(tree_event);
 	}
-}
-
-void TreePanel::OnAddGroup(wxCommandEvent &event)
-{
-	if (m_datatree)
-		m_datatree->OnAddDataGroup(event);
-}
-
-void TreePanel::OnAddMGroup(wxCommandEvent &event)
-{
-	if (m_datatree)
-		m_datatree->OnAddMeshGroup(event);
 }
 
 void TreePanel::OnRemoveData(wxCommandEvent &event)

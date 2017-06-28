@@ -1478,7 +1478,9 @@ public:
 			return 0;
 	}
 
-	bool CheckNames(wxString &str);
+	bool CheckNames(const wxString &str);
+	bool CheckNames(const wxString &str, int type);
+	wxString CheckNewName(const wxString &name, int type);
 
 	//wavelength to color
 	void SetWavelengthColor(int c1, int c2, int c3, int c4);

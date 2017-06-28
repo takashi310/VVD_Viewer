@@ -1138,7 +1138,7 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
 		}
 		UpdateList();
 		if (vd_sel)
-			UpdateTree(vd_sel->GetName());
+			UpdateTree(vd_sel->GetName(), 2);
 		else
 			UpdateTree();
 
@@ -1231,7 +1231,7 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv)
 
 	UpdateList();
 	if (md_sel)
-		UpdateTree(md_sel->GetName());
+		UpdateTree(md_sel->GetName(), 3);
 	else
 		UpdateTree();
 
@@ -1613,7 +1613,7 @@ void VRenderFrame::UpdateTreeColors()
 	m_tree_panel->Refresh(false);
 }
 
-void VRenderFrame::UpdateTree(wxString name, bool set_calc)
+void VRenderFrame::UpdateTree(wxString name, int type, bool set_calc)
 {
 	if (!m_tree_panel)
 		return;
@@ -1653,7 +1653,7 @@ void VRenderFrame::UpdateTree(wxString name, bool set_calc)
 		vrv->OrganizeLayers();
 		wxTreeItemId vrv_item = m_tree_panel->AddViewItem(vrv->GetName());
 		m_tree_panel->SetViewItemImage(vrv_item, vrv->GetDraw());
-		if (name == vrv->GetName())
+		if (name == vrv->GetName() && (type == 1 || type < 0))
 			m_tree_panel->SelectItem(vrv_item);
 
 		for (j=0; j<vrv->GetLayerNum(); j++)
@@ -1684,7 +1684,7 @@ void VRenderFrame::UpdateTree(wxString name, bool set_calc)
 					m_tree_panel->ChangeIconColor(ii, wxc);
 					wxTreeItemId item = m_tree_panel->AddVolItem(vrv_item, vd);
 					m_tree_panel->SetVolItemImage(item, vd->GetDisp()?2*ii+1:2*ii);
-					if (name == vd->GetName())
+					if (name == vd->GetName() && (type == 2 || type < 0))
 					{
 						sel_item = item;
 						if (set_calc) vrv->SetVolumeA(vd);
@@ -1712,7 +1712,7 @@ void VRenderFrame::UpdateTree(wxString name, bool set_calc)
 					m_tree_panel->ChangeIconColor(ii, wxc);
 					wxTreeItemId item = m_tree_panel->AddMeshItem(vrv_item, md->GetName());
 					m_tree_panel->SetMeshItemImage(item, md->GetDisp()?2*ii+1:2*ii);
-					if (name == md->GetName())
+					if (name == md->GetName() && (type == 3 || type < 0))
 						sel_item = item;//m_tree_panel->SelectItem(item);
 				}
 				break;
@@ -1728,7 +1728,7 @@ void VRenderFrame::UpdateTree(wxString name, bool set_calc)
 					m_tree_panel->ChangeIconColor(ii, wxc);
 					wxTreeItemId item = m_tree_panel->AddAnnotationItem(vrv_item, ann->GetName());
 					m_tree_panel->SetAnnotationItemImage(item, ann->GetDisp()?2*ii+1:2*ii);
-					if (name == ann->GetName())
+					if (name == ann->GetName() && (type == 4 || type < 0))
 						sel_item = item;
 				}
 				break;
@@ -1760,7 +1760,7 @@ void VRenderFrame::UpdateTree(wxString name, bool set_calc)
 						m_tree_panel->ChangeIconColor(ii, wxc);
 						wxTreeItemId item = m_tree_panel->AddVolItem(group_item, vd);
 						m_tree_panel->SetVolItemImage(item, vd->GetDisp()?2*ii+1:2*ii);
-						if (name == vd->GetName())
+						if (name == vd->GetName() && (type == 2 || type < 0))
 						{
 							sel_item = item;
 							if (set_calc) vrv->SetVolumeA(vd);
@@ -1769,7 +1769,7 @@ void VRenderFrame::UpdateTree(wxString name, bool set_calc)
 							GetTraceDlg()->GetSettings(vrv);
 						}
 					}
-					if (name == group->GetName())
+					if (name == group->GetName() && (type == 5 || type < 0))
 						sel_item = group_item;
 				}
 				break;
@@ -1800,10 +1800,10 @@ void VRenderFrame::UpdateTree(wxString name, bool set_calc)
 						m_tree_panel->ChangeIconColor(ii, wxc);
 						wxTreeItemId item = m_tree_panel->AddMeshItem(group_item, md->GetName());
 						m_tree_panel->SetMeshItemImage(item, md->GetDisp()?2*ii+1:2*ii);
-						if (name == md->GetName())
+						if (name == md->GetName() && (type == 3 || type < 0))
 							sel_item = item;
 					}
-					if (name == group->GetName())
+					if (name == group->GetName() && (type == 6 || type < 0))
 						sel_item = group_item;
 				}
 				break;
@@ -4684,13 +4684,13 @@ void VRenderFrame::OpenProject(wxString& filename)
 		{
 		case 2:  //volume
 			if (m_data_mgr.GetVolumeData(m_cur_sel_vol))
-				UpdateTree(m_data_mgr.GetVolumeData(m_cur_sel_vol)->GetName());
+				UpdateTree(m_data_mgr.GetVolumeData(m_cur_sel_vol)->GetName(), 2);
 			else
 				UpdateTree();
 			break;
 		case 3:  //mesh
 			if (m_data_mgr.GetMeshData(m_cur_sel_mesh))
-				UpdateTree(m_data_mgr.GetMeshData(m_cur_sel_mesh)->GetName());
+				UpdateTree(m_data_mgr.GetMeshData(m_cur_sel_mesh)->GetName(), 3);
 			else
 				UpdateTree();
 			break;
@@ -4701,7 +4701,7 @@ void VRenderFrame::OpenProject(wxString& filename)
 	else if (m_cur_sel_vol != -1)
 	{
 		if (m_data_mgr.GetVolumeData(m_cur_sel_vol))
-			UpdateTree(m_data_mgr.GetVolumeData(m_cur_sel_vol)->GetName());
+			UpdateTree(m_data_mgr.GetVolumeData(m_cur_sel_vol)->GetName(), 2);
 		else
 			UpdateTree();
 	}

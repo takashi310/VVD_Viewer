@@ -2628,7 +2628,7 @@ VolumeData *VRenderGLView::CopyLevel(VolumeData *src, int lv)
 			bool fix;
 			fix = tree->isFixed();
 			tree->SetFix(false);
-			vr_frame->UpdateTree(select, false); //UpdateTree line1: m_tree_panel->DeleteAll(); <- buffer overrun
+			vr_frame->UpdateTree(select, 2, false); //UpdateTree line1: m_tree_panel->DeleteAll(); <- buffer overrun
 			tree->SetFix(fix);
 		}
 		if (swap_selection) vr_frame->OnSelection(2, m_vrv, group, vd_new);
@@ -2909,7 +2909,7 @@ void VRenderGLView::CompExport(int mode, bool select)
 			}
 		}
 		vr_frame->UpdateList();
-		vr_frame->UpdateTree(m_selector.GetVolume()->GetName());
+		vr_frame->UpdateTree(m_selector.GetVolume()->GetName(), 2);
 		RefreshGL();
 	}
 }
@@ -2922,7 +2922,7 @@ void VRenderGLView::ShowAnnotations()
 		AddAnnotations(ann);
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 		if (vr_frame)
-			vr_frame->UpdateTree(vr_frame->GetCurSelVol()->GetName());
+			vr_frame->UpdateTree(vr_frame->GetCurSelVol()->GetName(), 2);
 	}
 }
 
@@ -2977,7 +2977,7 @@ void VRenderGLView::NoiseRemoval(int iter, double thresh)
 			AddVolumeData(vd_new, group_name);
 			vd->SetDisp(false);
 			vr_frame->UpdateList();
-			vr_frame->UpdateTree(vd_new->GetName());
+			vr_frame->UpdateTree(vd_new->GetName(), 2);
 		}
 	}
 	else
@@ -3376,7 +3376,7 @@ void VRenderGLView::CalculateSingle(int type, wxString prev_group, bool add)
 							vd_b->SetDisp(false);
 					}
 					vr_frame->UpdateList();
-					vr_frame->UpdateTree(vd->GetName(), false); //UpdateTree line1: m_tree_panel->DeleteAll(); <- buffer overrun
+					vr_frame->UpdateTree(vd->GetName(), 2, false); //UpdateTree line1: m_tree_panel->DeleteAll(); <- buffer overrun
 					m_calculator.SetVolumeA(vd_A);
 				}
 			}
@@ -6024,7 +6024,7 @@ void VRenderGLView::SetParams(double t)
 		clip_view->SetVolumeData(vr_frame->GetCurSelVol());
 	if (vr_frame)
 	{
-		vr_frame->UpdateTree(m_cur_vol?m_cur_vol->GetName():"");
+		vr_frame->UpdateTree(m_cur_vol?m_cur_vol->GetName():"", 2);
 		int index = interpolator->GetKeyIndexFromTime(t);
 		vr_frame->GetRecorderDlg()->SetSelection(index);
 	}
@@ -8264,6 +8264,33 @@ TreeLayer* VRenderGLView::GetLayer(int index)
 		return m_layer_list[index];
 	else
 		return 0;
+}
+
+wxString VRenderGLView::CheckNewGroupName(const wxString &name, int type)
+{
+	wxString result = name;
+
+	int i;
+	for (i=1; CheckGroupNames(result, type); i++)
+		result = name+wxString::Format("_%d", i);
+
+	return result;
+}
+
+bool VRenderGLView::CheckGroupNames(const wxString &name, int type)
+{
+	bool result = false;
+	for (unsigned int i=0; i<m_layer_list.size(); i++)
+	{
+		if (!m_layer_list[i])
+			continue;
+		if (m_layer_list[i]->IsA() == type && m_layer_list[i]->GetName() == name)
+		{
+			result = true;
+			break;
+		}
+	}
+	return result;
 }
 
 wxString VRenderGLView::AddGroup(wxString str, wxString prev_group)

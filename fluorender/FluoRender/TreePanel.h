@@ -28,6 +28,7 @@ DEALINGS IN THE SOFTWARE.
 #include <wx/wx.h>
 #include <wx/treectrl.h>
 #include "compatibility.h"
+#include "utility.h"
 #include <unordered_map>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/optional.hpp>
@@ -41,6 +42,10 @@ DEALINGS IN THE SOFTWARE.
 
 class VRenderView;
 class VolumeData;
+
+//---------------------------------------
+
+//-------------------------------------
 
 //tree item data
 class LayerInfo : public wxTreeItemData
@@ -63,12 +68,16 @@ public:
 	int icon;
 };
 
-class DataTreeCtrl: public wxTreeCtrl
+class DataTreeCtrl: public wxTreeCtrl, Notifier
 {
 	enum
 	{
 		ID_TreeCtrl = wxID_HIGHEST+501,
 		ID_ToggleDisp,
+		ID_Rename,
+		ID_Duplicate,
+		ID_Save,
+		ID_BakeVolume,
 		ID_Isolate,
 		ID_ShowAll,
 		ID_ExportMetadata,
@@ -105,7 +114,8 @@ public:
 		wxTR_TWIST_BUTTONS|
 		wxTR_LINES_AT_ROOT|
 		wxTR_NO_LINES|
-		wxTR_FULL_ROW_HIGHLIGHT);
+		wxTR_FULL_ROW_HIGHLIGHT|
+		wxTR_EDIT_LABELS);
 	~DataTreeCtrl();
 
 	//icon operations
@@ -152,6 +162,7 @@ public:
 
 	void UpdateSelection();
 	wxString GetCurrentSel();
+	int GetCurrentSelType();
 	int TraversalSelect(wxTreeItemId item, wxString name);
 	void Select(wxString view, wxString name);
 	void SelectROI(VolumeData* vd, int id);
@@ -212,6 +223,10 @@ private:
 	void OnContextMenu(wxContextMenuEvent &event );
 
 	void OnToggleDisp(wxCommandEvent& event);
+	void OnDuplicate(wxCommandEvent& event);
+	void OnSave(wxCommandEvent& event);
+	void OnBakeVolume(wxCommandEvent& event);
+	void OnRenameMenu(wxCommandEvent& event);
 	void OnIsolate(wxCommandEvent& event);
 	void OnShowAll(wxCommandEvent& event);
 	void OnExportMetadata(wxCommandEvent& event);
@@ -243,6 +258,8 @@ private:
 	void OnAct(wxTreeEvent &event);
 	void OnBeginDrag(wxTreeEvent& event);
 	void OnEndDrag(wxTreeEvent& event);
+	void OnRename(wxTreeEvent& event);
+	void OnRenamed(wxTreeEvent& event);
 
 	void OnDragging(wxMouseEvent& event);
 
@@ -254,14 +271,14 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-class TreePanel : public wxPanel
+class TreePanel : public wxPanel, Observer
 {
 public:
 	enum
 	{
 		ID_ToggleView = wxID_HIGHEST+551,
-		ID_AddGroup,
-		ID_AddMGroup,
+		ID_Save,
+		ID_BakeVolume,
 		ID_RemoveData,
 		ID_BrushAppend,
 		ID_BrushDesel,
@@ -348,14 +365,16 @@ public:
 	void ExpandDataTreeItem(wxString name, bool expand_children=false);
 	void CollapseDataTreeItem(wxString name, bool collapse_children=false);
 
+	void doAction(ActionInfo *info);
+
 private:
 	wxWindow* m_frame;
 	DataTreeCtrl* m_datatree;
 	wxToolBar *m_toolbar;
 
+	void OnSave(wxCommandEvent& event);
+	void OnBakeVolume(wxCommandEvent& event);
 	void OnToggleView(wxCommandEvent& event);
-	void OnAddGroup(wxCommandEvent& event);
-	void OnAddMGroup(wxCommandEvent& event);
 	void OnRemoveData(wxCommandEvent& event);
 	//brush commands
 	void OnBrushAppend(wxCommandEvent& event);

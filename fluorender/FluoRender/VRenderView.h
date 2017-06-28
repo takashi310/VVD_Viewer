@@ -80,6 +80,9 @@ DEALINGS IN THE SOFTWARE.
 #define FRONT_FACE  1
 #define BACK_FACE  2
 
+#define LAYER_DATAGROUP 5
+#define LAYER_MESHGROUP 6 
+
 using namespace std;
 
 class VRenderView;
@@ -293,6 +296,8 @@ public:
 	void AddMeshData(MeshData* md);
 	void AddAnnotations(Annotations* ann);
 	wxString AddGroup(wxString str, wxString prev_group="");
+	wxString CheckNewGroupName(const wxString &name, int type);
+	bool CheckGroupNames(const wxString &name, int type);
 	wxString AddMGroup(wxString str);
 	//remove
 	void RemoveVolumeData(wxString &name);
@@ -1275,6 +1280,12 @@ public:
 	void AddMeshData(MeshData* md);
 	void AddAnnotations(Annotations* ann);
 	wxString AddGroup(wxString str = "", wxString prev_group="");
+	wxString CheckNewGroupName(const wxString &name, int type)
+	{
+		if (m_glview)
+			return m_glview->CheckNewGroupName(name, type);
+		return wxString();
+	}
 	wxString AddMGroup(wxString str = "");
 	MeshGroup* GetMGroup(wxString &name);
 	void RemoveVolumeData(wxString &name);

@@ -182,6 +182,7 @@ namespace FLIVR
 		 void update_palette_tex();
 		 void set_roi_name(wstring name, int id=-1, wstring parent_name=wstring());
 		 void set_roi_name(wstring name, int id, int parent_id);
+		 wstring check_new_roi_name(wstring name);
 		 int add_roi_group_node(int parent_id, wstring name=L"");
 		 int add_roi_group_node(wstring parent_name=L"", wstring name=L"");
 		 int get_available_group_id();

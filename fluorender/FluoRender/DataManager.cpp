@@ -5147,7 +5147,7 @@ int DataManager::LoadMeshData(wxString &filename)
 	wxString name = md->GetName();
 	wxString new_name = name;
 	int i;
-	for (i=1; CheckNames(new_name); i++)
+	for (i=1; CheckNames(new_name, DATA_MESH); i++)
 		new_name = name+wxString::Format("_%d", i);
 	if (i>1)
 		md->SetName(new_name);
@@ -5166,7 +5166,7 @@ int DataManager::LoadMeshData(GLMmodel* mesh)
 	wxString name = md->GetName();
 	wxString new_name = name;
 	int i;
-	for (i=1; CheckNames(new_name); i++)
+	for (i=1; CheckNames(new_name, DATA_MESH); i++)
 		new_name = name+wxString::Format("_%d", i);
 	if (i>1)
 		md->SetName(new_name);
@@ -5314,7 +5314,7 @@ void DataManager::AddVolumeData(VolumeData* vd)
 	wxString new_name = name;
 
 	int i;
-	for (i=1; CheckNames(new_name); i++)
+	for (i=1; CheckNames(new_name, DATA_VOLUME); i++)
 		new_name = name+wxString::Format("_%d", i);
 
 	if (i>1)
@@ -5363,7 +5363,7 @@ int DataManager::LoadAnnotations(wxString &filename)
 	wxString name = ann->GetName();
 	wxString new_name = name;
 	int i;
-	for (i=1; CheckNames(new_name); i++)
+	for (i=1; CheckNames(new_name, DATA_ANNOTATIONS); i++)
 		new_name = name+wxString::Format("_%d", i);
 	if (i>1)
 		ann->SetName(new_name);
@@ -5381,7 +5381,7 @@ void DataManager::AddAnnotations(Annotations* ann)
 	wxString new_name = name;
 
 	int i;
-	for (i=1; CheckNames(new_name); i++)
+	for (i=1; CheckNames(new_name, DATA_ANNOTATIONS); i++)
 		new_name = name+wxString::Format("_%d", i);
 
 	if (i>1)
@@ -5436,7 +5436,64 @@ int DataManager::GetAnnotationIndex(wxString &name)
 	return -1;
 }
 
-bool DataManager::CheckNames(wxString &str)
+wxString DataManager::CheckNewName(const wxString &name, int type)
+{
+	wxString result = name;
+
+	int i;
+	for (i=1; CheckNames(result, type); i++)
+		result = name+wxString::Format("_%d", i);
+
+	return result;
+}
+
+bool DataManager::CheckNames(const wxString &str, int type)
+{
+	bool result = false;
+
+	switch(type)
+	{
+	case DATA_VOLUME:
+		for (unsigned int i=0; i<m_vd_list.size(); i++)
+		{
+			VolumeData* vd = m_vd_list[i];
+			if (vd && vd->GetName()==str)
+			{
+				result = true;
+				break;
+			}
+		}
+		break;
+
+	case DATA_MESH:
+		for (unsigned int i=0; i<m_md_list.size(); i++)
+		{
+			MeshData* md = m_md_list[i];
+			if (md && md->GetName()==str)
+			{
+				result = true;
+				break;
+			}
+		}
+		break;
+
+	case DATA_ANNOTATIONS:
+		for (unsigned int i=0; i<m_annotation_list.size(); i++)
+		{
+			Annotations* ann = m_annotation_list[i];
+			if (ann && ann->GetName()==str)
+			{
+				result = true;
+				break;
+			}
+		}
+		break;
+	}
+
+	return result;
+}
+
+bool DataManager::CheckNames(const wxString &str)
 {
 	bool result = false;
 	for (unsigned int i=0; i<m_vd_list.size(); i++)

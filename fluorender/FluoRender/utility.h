@@ -28,6 +28,8 @@ DEALINGS IN THE SOFTWARE.
 #ifndef _UTILITY_H_
 #define _UTILITY_H_
 
+#include <vector>
+
 #define PI_2 1.5707963267948966192313216916398
 #define PI 3.1415926535897932384626433832795
 #define EPS 1e-6
@@ -63,5 +65,49 @@ unsigned int bit_reverse(unsigned int v);
 unsigned int reverse_bit(unsigned int val, unsigned int len);
 
 float nCr(int n,int r);
+
+// Just a class to be passed in the action class
+class ActionInfo {
+public:
+	int id;
+	ActionInfo() {id = -1;}
+	ActionInfo(int evid) {id = evid;}
+};
+
+// The observer class
+class Observer {
+public:
+	virtual void doAction(ActionInfo *info) = 0;
+};
+   
+class Notifier {
+private:
+   // an array containing all observer classes
+   std::vector<Observer*> m_observers;
+
+public:
+   // setters/getters
+   std::vector<Observer*> getObservers() {
+      return m_observers;
+   }
+
+   // add observer to our list 
+   virtual void addObserver(Observer *observer) {
+      m_observers.push_back(observer);
+   }
+
+   // Override this method to implement your own notify
+   virtual void notifyAll(int evid) {
+      for( size_t i=0; i<getObservers().size(); i++ ){
+         Observer *obsvr = getObservers()[i];
+         
+         // Create an information object and pass it to the callback function
+         ActionInfo *ai = new ActionInfo(evid);
+         obsvr->doAction(ai);
+      }
+   }
+   
+};
+
 
 #endif//_UTILITY_H_
