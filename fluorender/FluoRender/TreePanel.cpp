@@ -622,6 +622,7 @@ void DataTreeCtrl::OnRenamed(wxTreeEvent& event)
 									group->SetName(name);
 									SetItemText(sel_item, name);
 									vr_frame->UpdateTree(name, item_data->type);
+									vr_frame->OnSelection(5, 0, group);
 								}
 								else if (item_data->type == 6)
 								{
@@ -631,6 +632,7 @@ void DataTreeCtrl::OnRenamed(wxTreeEvent& event)
 									mgroup->SetName(name);
 									SetItemText(sel_item, name);
 									vr_frame->UpdateTree(name, item_data->type);
+									vr_frame->OnSelection(6);
 								}
 							}
 						}
@@ -651,15 +653,22 @@ void DataTreeCtrl::OnRenamed(wxTreeEvent& event)
 							vd->SetROIName(name.ToStdWstring(), item_data->id);
 							UpdateVolItem(vol_item, vd);
 							if (vr_frame->GetPropView()) vr_frame->GetPropView()->UpdateUIsROI();
+							SetItemText(sel_item, name);
+							vr_frame->UpdateTree(name, item_data->type);
+							vr_frame->OnSelection(2, 0, 0, vd);
 						}
 					}
-					SetItemText(sel_item, name);
-					vr_frame->UpdateTree(name, item_data->type);
 				}
 				break;
 			}
 		}
 	}
+	if (name == wxString(""))
+	{
+		SetItemText(sel_item, prev_name);
+	}
+
+	event.Veto();
 }
 
 void DataTreeCtrl::OnSave(wxCommandEvent& event)
@@ -3461,12 +3470,12 @@ void DataTreeCtrl::SaveExpState(wxTreeItemId node, const wxString& prefix)
 {
 	wxTreeItemId item = node;
 	if (!item.IsOk()) return;
-	
-	m_exp_state[prefix + GetItemText(item)] = IsExpanded(item);
+	LayerInfo* item_data = (LayerInfo*)GetItemData(item);
+	if (!item_data) return;
+	m_exp_state[prefix + GetItemText(item) + wxString::Format(wxT("#%i"),item_data->type)] = IsExpanded(item);
 
 	wxTreeItemIdValue cookie;
 	wxTreeItemId child_item = GetFirstChild(item, cookie);
-	LayerInfo* item_data = (LayerInfo*)GetItemData(item);
 	wxString child_prefix = prefix;
 	if (item_data->type == 2)
 		child_prefix = GetItemText(item) + wxT(".");
@@ -3489,9 +3498,11 @@ void DataTreeCtrl::LoadExpState(wxTreeItemId node, const wxString& prefix, bool 
 {
 	wxTreeItemId item = node;
 	if (!item.IsOk()) return;
+	LayerInfo* item_data = (LayerInfo*)GetItemData(item);
+	if (!item_data) return;
 	
 	bool is_new = false;
-	wxString name = prefix + GetItemText(item);
+	wxString name = prefix + GetItemText(item) + wxString::Format(wxT("#%i"),item_data->type);
 	if (m_exp_state.find(name) != m_exp_state.end())
 	{
 		is_new = false;
@@ -3511,7 +3522,6 @@ void DataTreeCtrl::LoadExpState(wxTreeItemId node, const wxString& prefix, bool 
 
 	wxTreeItemIdValue cookie;
 	wxTreeItemId child_item = GetFirstChild(item, cookie);
-	LayerInfo* item_data = (LayerInfo*)GetItemData(item);
 	bool expand_newitem_child = expand_newitem;
 	wxString child_prefix = prefix;
 	if (item_data && item_data->type == 2)
