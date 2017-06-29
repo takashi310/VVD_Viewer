@@ -619,6 +619,8 @@ public:
 	int Load(GLMmodel* mesh);
 	void Save(wxString &filename);
 
+	static MeshData* DeepCopy(MeshData &copy, bool use_default_settings=false, DataManager *d_manager=NULL);
+
 	//MR
 	MeshRenderer* GetMR();
 
@@ -1427,7 +1429,9 @@ public:
 	void SetTimeId(wxString str) {m_timeId = str;}
 	void SetLoadMask(bool load_mask) {m_load_mask = load_mask;}
 	void AddVolumeData(VolumeData* vd);
+	void AddMeshData(MeshData* md);
 	VolumeData* DuplicateVolumeData(VolumeData* vd, bool use_default_settings=false);
+	MeshData* DuplicateMeshData(MeshData* vd, bool use_default_settings=false);
 	void ReplaceVolumeData(int index, VolumeData *vd);
 	void RemoveVolumeData(int index);
 	void RemoveVolumeDataset(BaseReader *reader, int channel);

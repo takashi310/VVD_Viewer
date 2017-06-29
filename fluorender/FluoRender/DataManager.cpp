@@ -264,7 +264,6 @@ VolumeData::~VolumeData()
 		delete m_tex;
 }
 
-//without mask and label
 VolumeData* VolumeData::DeepCopy(VolumeData &copy, bool use_default_settings, DataManager *d_manager)
 {
 	VolumeData* vd = new VolumeData();
@@ -292,6 +291,22 @@ VolumeData* VolumeData::DeepCopy(VolumeData &copy, bool use_default_settings, Da
 
 	if (is_brxml)	vd->Load(nv, copy.GetName()+wxString::Format("_%d", vd->m_dup_counter), wxString(""), (BRKXMLReader*)vd->m_reader);
 	else vd->Load(nv, copy.GetName()+wxString::Format("_%d", vd->m_dup_counter), wxString(""));
+
+	if (copy.GetMask(true))
+	{
+		Nrrd *mask;
+		mask = nrrdNew();
+		nrrdCopy(mask, copy.GetMask(false));
+		vd->LoadMask(mask);
+	}
+
+	if (copy.GetLabel(true))
+	{
+		Nrrd *label;
+		label = nrrdNew();
+		nrrdCopy(label, copy.GetLabel(false));
+		vd->LoadLabel(label);
+	}
 
 	if (use_default_settings && d_manager)
 	{
@@ -2547,6 +2562,216 @@ int MeshData::Load(wxString &filename)
 	m_mr = new FLIVR::MeshRenderer(m_data);
 
 	return 1;
+}
+
+MeshData* MeshData::DeepCopy(MeshData &copy, bool use_default_settings, DataManager *d_manager)
+{
+	if (!d_manager || !copy.m_data || !copy.m_mr) return NULL;
+
+	MeshData* md = new MeshData();
+	md->m_data_path = copy.m_data_path;
+	md->m_name = copy.m_name;
+	
+	GLMmodel* mi = copy.m_data;
+	GLMmodel* model = (GLMmodel*)malloc(sizeof(GLMmodel));
+	model = (GLMmodel*)malloc(sizeof(GLMmodel));
+	model->pathname    = STRDUP(mi->pathname);
+	model->mtllibname  = STRDUP(mi->mtllibname);
+	model->numvertices = mi->numvertices;
+	model->vertices =  NULL;
+	if (model->numvertices)
+	{
+		model->vertices = (GLfloat*)malloc(sizeof(GLfloat) * 3 * (model->numvertices + 1));
+		memcpy(model->vertices, mi->vertices, sizeof(GLfloat) * 3 * (model->numvertices + 1));
+	}
+	model->numnormals = mi->numnormals;
+	model->normals = NULL;
+	if (model->numnormals)
+	{
+		model->normals = (GLfloat*)malloc(sizeof(GLfloat) * 3 * (model->numnormals + 1));
+		memcpy(model->normals, mi->normals, sizeof(GLfloat) * 3 * (model->numnormals + 1));
+	}
+	model->numtexcoords = mi->numtexcoords;
+	model->texcoords = NULL;
+	if (model->numtexcoords)
+	{
+		model->texcoords = (GLfloat*)malloc(sizeof(GLfloat) * 2 * (model->numtexcoords + 1));
+		memcpy(model->texcoords, mi->texcoords, sizeof(GLfloat) * 2 * (model->numtexcoords + 1));
+	}
+	model->numfacetnorms = mi->numfacetnorms;
+	model->facetnorms = NULL;
+	if (model->numfacetnorms)
+	{
+		model->facetnorms = (GLfloat*)malloc(sizeof(GLfloat) * 3 * (model->numfacetnorms + 1));
+		memcpy(model->facetnorms, mi->facetnorms, sizeof(GLfloat) * 3 * (model->numfacetnorms + 1));
+	}
+	model->numtriangles = mi->numtriangles;
+	model->triangles = NULL;
+	if (model->numtriangles)
+	{
+		model->triangles = (GLMtriangle*)malloc(sizeof(GLMtriangle) * model->numtriangles);
+		memcpy(model->triangles, mi->triangles, sizeof(GLMtriangle) * model->numtriangles);
+	}
+	model->numlines = mi->numlines;
+	model->lines = NULL;
+	if (model->numlines)
+	{
+		model->lines = (GLMline*)malloc(sizeof(GLMline) * model->numlines);
+		memcpy(model->lines, mi->lines, sizeof(GLMline) * model->numlines);
+	}
+	model->nummaterials = mi->nummaterials;
+	model->materials = NULL;
+	if (model->nummaterials)
+	{
+		model->materials = (GLMmaterial*)malloc(sizeof(GLMmaterial) * model->nummaterials);
+		for (int i = 0; i < model->nummaterials; i++)
+		{
+			model->materials[i].name = STRDUP(mi->materials[i].name);
+			model->materials[i].shininess = mi->materials[i].shininess;
+			model->materials[i].diffuse[0] = mi->materials[i].diffuse[0];
+			model->materials[i].diffuse[1] = mi->materials[i].diffuse[1];
+			model->materials[i].diffuse[2] = mi->materials[i].diffuse[2];
+			model->materials[i].diffuse[3] = mi->materials[i].diffuse[3];
+			model->materials[i].ambient[0] = mi->materials[i].ambient[0];
+			model->materials[i].ambient[1] = mi->materials[i].ambient[1];
+			model->materials[i].ambient[2] = mi->materials[i].ambient[2];
+			model->materials[i].ambient[3] = mi->materials[i].ambient[3];
+			model->materials[i].specular[0] = mi->materials[i].specular[0];
+			model->materials[i].specular[1] = mi->materials[i].specular[1];
+			model->materials[i].specular[2] = mi->materials[i].specular[2];
+			model->materials[i].specular[3] = mi->materials[i].specular[3];
+			model->materials[i].emmissive[0] = mi->materials[i].emmissive[0];
+			model->materials[i].emmissive[1] = mi->materials[i].emmissive[1];
+			model->materials[i].emmissive[2] = mi->materials[i].emmissive[2];
+			model->materials[i].emmissive[3] = mi->materials[i].emmissive[3];
+			model->materials[i].havetexture = mi->materials[i].havetexture;
+			model->materials[i].textureID = mi->materials[i].textureID;
+		}
+	}
+	model->numgroups = mi->numgroups;
+	GLMgroup* group = mi->groups;
+	GLMgroup* og = NULL;
+	GLMgroup* tmpg = NULL;
+	model->groups = NULL;
+	while(group)
+	{
+		og = (GLMgroup*)malloc(sizeof(GLMgroup));
+		og->name = STRDUP(group->name);
+		og->material = group->material;
+		og->numtriangles = group->numtriangles;
+		og->next = NULL;
+		if (group->numtriangles)
+		{
+			og->triangles = (GLuint*)malloc(sizeof(GLuint) * group->numtriangles);
+			memcpy(og->triangles, group->triangles, sizeof(GLuint) * group->numtriangles);
+		}
+		if (!model->groups) 
+		{
+			model->groups = og;
+			tmpg = og;
+		}
+		else 
+		{
+			tmpg->next = og;
+			tmpg = tmpg->next;
+		}
+		group = group->next;
+	}
+	model->position[0]   = mi->position[0];
+	model->position[1]   = mi->position[1];
+	model->position[2]   = mi->position[2];
+	model->hastexture = mi->hastexture;
+	md->m_data = model;
+
+	md->m_swc = copy.m_swc;
+	if (copy.m_swc)
+	{
+		md->m_swc_reader = new SWCReader();
+		SWCReader::DeepCopy(copy.m_swc_reader, md->m_swc_reader);
+	}
+
+	if (use_default_settings)
+	{
+		/* set the default material */
+		md->m_data->materials[0].name = NULL;
+		md->m_data->materials[0].ambient[0] = md->m_mat_amb.r();
+		md->m_data->materials[0].ambient[1] = md->m_mat_amb.g();
+		md->m_data->materials[0].ambient[2] = md->m_mat_amb.b();
+		md->m_data->materials[0].ambient[3] = md->m_mat_alpha;
+		md->m_data->materials[0].diffuse[0] = md->m_mat_diff.r();
+		md->m_data->materials[0].diffuse[1] = md->m_mat_diff.g();
+		md->m_data->materials[0].diffuse[2] = md->m_mat_diff.b();
+		md->m_data->materials[0].diffuse[3] = md->m_mat_alpha;
+		md->m_data->materials[0].specular[0] = md->m_mat_spec.r();
+		md->m_data->materials[0].specular[1] = md->m_mat_spec.g();
+		md->m_data->materials[0].specular[2] = md->m_mat_spec.b();
+		md->m_data->materials[0].specular[3] = md->m_mat_alpha;
+		md->m_data->materials[0].shininess = md->m_mat_shine;
+		md->m_data->materials[0].emmissive[0] = 0.0;
+		md->m_data->materials[0].emmissive[1] = 0.0;
+		md->m_data->materials[0].emmissive[2] = 0.0;
+		md->m_data->materials[0].emmissive[3] = 0.0;
+		md->m_data->materials[0].havetexture = GL_FALSE;
+		md->m_data->materials[0].textureID = 0;
+
+		//bounds
+		GLfloat fbounds[6];
+		glmBoundingBox(md->m_data, fbounds);
+		BBox bounds;
+		Point pmin(fbounds[0], fbounds[2], fbounds[4]);
+		Point pmax(fbounds[1], fbounds[3], fbounds[5]);
+		bounds.extend(pmin);
+		bounds.extend(pmax);
+		md->m_bounds = bounds;
+		md->m_center = Point((md->m_bounds.min().x()+md->m_bounds.max().x())*0.5,
+			(md->m_bounds.min().y()+md->m_bounds.max().y())*0.5,
+			(md->m_bounds.min().z()+md->m_bounds.max().z())*0.5);
+	}
+	else
+	{
+		md->m_mat_alpha = copy.m_mat_alpha;
+		md->m_mat_amb = copy.m_mat_amb;
+		md->m_mat_diff = copy.m_mat_diff;
+		md->m_mat_spec = copy.m_mat_spec;
+		md->m_mat_shine = copy.m_mat_shine;
+
+		md->m_bounds = copy.m_bounds;
+		md->m_center = copy.m_center;
+
+		md->m_disp = copy.m_disp;
+		md->m_draw_bounds = copy.m_draw_bounds;
+		md->m_light = copy.m_light;
+		md->m_fog = copy.m_fog;
+		md->m_shadow = copy.m_shadow;
+		md->m_shadow_darkness = copy.m_shadow_darkness;
+		md->m_enable_limit = copy.m_enable_limit;
+		md->m_limit = copy.m_limit;
+		md->m_legend = copy.m_legend;
+		md->m_r_scale = copy.m_r_scale;
+		md->m_def_r = copy.m_def_r;
+		md->m_subdiv = copy.m_subdiv;
+
+		memcpy(md->m_trans, copy.m_trans, sizeof(double)*3);
+		memcpy(md->m_rot, copy.m_rot, sizeof(double)*3);
+		memcpy(md->m_scale, copy.m_scale, sizeof(double)*3);
+
+		md->m_info = copy.m_info;
+
+		md->m_gamma = copy.m_gamma;
+		md->m_brightness = copy.m_brightness;
+		md->m_hdr = copy.m_hdr;
+		md->m_sync_r = copy.m_sync_r;
+		md->m_sync_g = copy.m_sync_g;
+		md->m_sync_b = copy.m_sync_b;
+	}
+	
+	md->m_mr = new FLIVR::MeshRenderer(md->m_data);
+	md->m_mr->set_alpha(copy.m_mr->get_alpha());
+	md->m_mr->set_depth_peel(copy.m_mr->get_depth_peel());
+	md->m_mr->set_lighting(copy.m_mr->get_lighting());
+	md->m_mr->set_limit(copy.m_mr->get_limit());
+	
+	return md;
 }
 
 void MeshData::Save(wxString& filename)
@@ -5337,6 +5562,20 @@ void DataManager::AddVolumeData(VolumeData* vd)
 	m_vd_list.push_back(vd);
 }
 
+void DataManager::AddMeshData(MeshData *md)
+{
+	wxString name = md->GetName();
+	wxString new_name = name;
+	int i;
+	for (i=1; CheckNames(new_name, DATA_MESH); i++)
+		new_name = name+wxString::Format("_%d", i);
+	if (i>1)
+		md->SetName(new_name);
+	m_md_list.push_back(md);
+
+	return;
+}
+
 VolumeData* DataManager::DuplicateVolumeData(VolumeData* vd, bool use_default_settings)
 {
 	VolumeData* vd_new = 0;
@@ -5348,6 +5587,19 @@ VolumeData* DataManager::DuplicateVolumeData(VolumeData* vd, bool use_default_se
 	}
 
 	return vd_new;
+}
+
+MeshData* DataManager::DuplicateMeshData(MeshData* md, bool use_default_settings)
+{
+	MeshData* md_new = 0;
+
+	if (md)
+	{
+		md_new = MeshData::DeepCopy(*md, use_default_settings, this);
+		if (md_new) AddMeshData(md_new);
+	}
+
+	return md_new;
 }
 
 int DataManager::LoadAnnotations(wxString &filename)

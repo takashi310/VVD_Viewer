@@ -535,3 +535,30 @@ void SWCReader::Preprocess()
 
 	return;
 }
+
+bool SWCReader::DeepCopy(SWCReader *in, SWCReader *out)
+{
+	if (in == nullptr || out == nullptr)
+		return false;
+
+	out->m_data_name = in->m_data_name;
+	out->m_path_name = in->m_path_name;
+	out->m_vertices = in->m_vertices; //4th element: radius
+	out->m_edges = in->m_edges;
+	out->m_model_verts = in->m_model_verts;
+	out->m_model_norms = in->m_model_norms;
+	out->m_model_tris = in->m_model_tris;
+
+	out->m_sphere_verts_cache = in->m_sphere_verts_cache;
+	out->m_sphere_tris_cache = in->m_sphere_tris_cache;
+	out->m_before_sp_subdiv = in->m_before_sp_subdiv;
+
+	out->m_cylinder_verts_cache = in->m_cylinder_verts_cache;
+	out->m_cylinder_norms_cache = in->m_cylinder_norms_cache;
+	out->m_cylinder_tris_cache = in->m_cylinder_tris_cache;
+	out->m_before_cy_subdiv = in->m_before_cy_subdiv;
+	out->m_before_cy_r1 = in->m_before_cy_r1;
+	out->m_before_cy_r2 = in->m_before_cy_r2;
+
+	return true;
+}

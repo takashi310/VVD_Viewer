@@ -26,6 +26,8 @@ public:
 	GLMmodel *GenerateSolidModel(double def_r, double r_scale, unsigned int subdiv);
 	GLMmodel *GenerateWireModel();
 
+	static bool DeepCopy(SWCReader *in, SWCReader *out);
+
 private:
 	wstring m_data_name;
 	wstring m_path_name;

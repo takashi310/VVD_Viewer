@@ -318,7 +318,6 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 			case 1:  //view
 				{
 					menu.Append(ID_ToggleDisp, "Toggle Visibility");
-					menu.Append(ID_Rename, "Rename");
 					if (IsExpanded(sel_item))
 						menu.Append(ID_Expand, "Collapse");
 					else
@@ -343,6 +342,7 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 					menu.Append(ID_Rename, "Rename");
 					menu.Append(ID_Duplicate, "Duplicate");
 					menu.Append(ID_Save, "Save");
+
 					menu.Append(ID_BakeVolume, "Bake");
 					menu.Append(ID_Isolate, "Isolate");
 					menu.Append(ID_ShowAll, "Show All");
@@ -389,12 +389,12 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 			case 4:  //annotations
 				menu.Append(ID_Rename, "Rename");
 				menu.Append(ID_Save, "Save");
-				menu.Append(ID_Duplicate, "Duplicate");
+				//menu.Append(ID_Duplicate, "Duplicate");
 				break;
 			case 5:  //data group
 				menu.Append(ID_ToggleDisp, "Toggle Visibility");
 				menu.Append(ID_Rename, "Rename");
-				menu.Append(ID_Duplicate, "Duplicate");
+				//menu.Append(ID_Duplicate, "Duplicate");
 				if (IsExpanded(sel_item))
 					menu.Append(ID_Expand, "Collapse");
 				else
@@ -407,7 +407,7 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 			case 6:  //mesh group
 				menu.Append(ID_ToggleDisp, "Toggle Visibility");
 				menu.Append(ID_Rename, "Rename");
-				menu.Append(ID_Duplicate, "Duplicate");
+				//menu.Append(ID_Duplicate, "Duplicate");
 				if (IsExpanded(sel_item))
 					menu.Append(ID_Expand, "Collapse");
 				else
@@ -452,26 +452,50 @@ void DataTreeCtrl::OnDuplicate(wxCommandEvent& event)
 	if (sel_item.IsOk() && vr_frame)
 	{
 		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+		wxString name = GetItemText(sel_item);
 		if (item_data)
 		{
 			switch (item_data->type)
 			{
 			case 2:  //volume data
 				{
-					wxString name = GetItemText(sel_item);
 					DataManager *d_manage = vr_frame->GetDataManager();
 					if (!d_manage) break;
 					VolumeData* vd = d_manage->GetVolumeData(name);
 					if (!vd) break;
+					VRenderView* view = GetCurrentView();
+					if (view)
+					{
+						VolumeData* vd_add = vr_frame->GetDataManager()->DuplicateVolumeData(vd, false);
+						DataGroup *group = view->AddVolumeData(vd_add);
+						vr_frame->OnSelection(2, view, group, vd_add, 0);
+						vr_frame->UpdateTree(vd->GetName());
+						if (view->GetVolMethod() == VOL_METHOD_MULTI)
+						{
+							AdjustView* adjust_view = vr_frame->GetAdjustView();
+							if (adjust_view)
+							{
+								adjust_view->SetRenderView(view);
+								adjust_view->UpdateSync();
+							}
+						}
+					}
 				}
 				break;
 			case 3:  //mesh data
 				{
-					wxString name = GetItemText(sel_item);
 					DataManager *d_manage = vr_frame->GetDataManager();
 					if (!d_manage) break;
 					MeshData* md = d_manage->GetMeshData(name);
 					if (!md) break;
+					VRenderView* view = GetCurrentView();
+					if (view)
+					{
+						MeshData* md_add = vr_frame->GetDataManager()->DuplicateMeshData(md, false);
+						view->AddMeshData(md_add);
+						vr_frame->OnSelection(3, 0, 0, 0, md_add);
+						vr_frame->UpdateTree(md_add->GetName());
+					}
 				}
 				break;
 			}
