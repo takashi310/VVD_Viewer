@@ -748,7 +748,6 @@ void DataListCtrl::DeleteSelection()
             }
          }
       }
-      vr_frame->UpdateList();
       vr_frame->UpdateTree(name);
       vr_frame->RefreshVRenderViews();
    }

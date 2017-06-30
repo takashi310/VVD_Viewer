@@ -273,7 +273,6 @@ void ConvertDlg::OnCnvVolMeshConvert(wxCommandEvent& event)
 			vr_frame->GetView(0)->AddMeshData(md);
 			vr_frame->GetView(0)->RefreshGL();
 		}
-		vr_frame->UpdateList();
 		vr_frame->UpdateTree();
 		(*m_stat_text) <<
 			"The surface area of mesh object " <<

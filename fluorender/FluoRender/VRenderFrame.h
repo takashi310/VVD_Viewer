@@ -162,13 +162,11 @@ public:
 	~VRenderFrame();
 
 	TreePanel *GetTree();
-	ListPanel *GetList();
 	void UpdateTree(wxString name = "", int type=-1, bool set_calc=true);
 	void UpdateROITree(VolumeData *vd, bool set_calc=true);
 	void UpdateTreeColors();
 	void UpdateTreeIcons();
-	void UpdateList();
-
+	
 	//data manager
 	DataManager* GetDataManager();
 	
@@ -343,7 +341,7 @@ private:
 	wxMenu* m_top_help;
 
 	TreePanel *m_tree_panel;
-	ListPanel *m_list_panel;
+	//ListPanel *m_list_panel;
 	vector <VRenderView*> m_vrv_list;
 	DataManager m_data_mgr;
 	wxPanel *m_prop_panel;

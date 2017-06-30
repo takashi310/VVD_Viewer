@@ -2579,7 +2579,7 @@ void VRenderGLView::PopVolumeList()
 void VRenderGLView::OrganizeLayers()
 {
 	DataGroup* le_group = 0;
-	int i;
+	int i, j, k;
 
 	//find last empty group
 	for (i=GetLayerNum()-1; i>=0; i--)
@@ -2607,7 +2607,42 @@ void VRenderGLView::OrganizeLayers()
 			wxString name = vd->GetName();
 			if (le_group)
 			{
-				RemoveVolumeData(name);
+				for (j=0; j<(int)m_layer_list.size(); j++)
+				{
+					if (!m_layer_list[j])
+						continue;
+					if (m_layer_list[j]->IsA() == 2)
+					{
+
+						VolumeData* vd = (VolumeData*)m_layer_list[j];
+						if (vd && vd->GetName() == name)
+						{
+							m_layer_list.erase(m_layer_list.begin()+j);
+							m_vd_pop_dirty = true;
+							m_cur_vol = NULL;
+							break;
+						}
+					}
+					else if(m_layer_list[j]->IsA() == 5)
+					{
+
+						DataGroup* group = (DataGroup*)m_layer_list[j];
+						bool found = false;
+						for (k=0; k<group->GetVolumeNum(); k++)
+						{
+							VolumeData* vd = group->GetVolumeData(k);
+							if (vd && vd->GetName() == name)
+							{
+								group->RemoveVolumeData(k);
+								m_vd_pop_dirty = true;
+								m_cur_vol = NULL;
+								found = true;
+								break;
+							}
+						}
+						if (found) break;
+					}
+				}
 				le_group->InsertVolumeData(le_group->GetVolumeNum(), vd);
 			}
 			else
@@ -2616,7 +2651,42 @@ void VRenderGLView::OrganizeLayers()
 				le_group = GetGroup(group_name);
 				if (le_group)
 				{
-					RemoveVolumeData(name);
+					for (j=0; j<(int)m_layer_list.size(); j++)
+					{
+						if (!m_layer_list[j])
+							continue;
+						if (m_layer_list[j]->IsA() == 2)
+						{
+
+							VolumeData* vd = (VolumeData*)m_layer_list[j];
+							if (vd && vd->GetName() == name)
+							{
+								m_layer_list.erase(m_layer_list.begin()+j);
+								m_vd_pop_dirty = true;
+								m_cur_vol = NULL;
+								break;
+							}
+						}
+						else if(m_layer_list[j]->IsA() == 5)
+						{
+
+							DataGroup* group = (DataGroup*)m_layer_list[j];
+							bool found = false;
+							for (k=0; k<group->GetVolumeNum(); k++)
+							{
+								VolumeData* vd = group->GetVolumeData(k);
+								if (vd && vd->GetName() == name)
+								{
+									group->RemoveVolumeData(k);
+									m_vd_pop_dirty = true;
+									m_cur_vol = NULL;
+									found = true;
+									break;
+								}
+							}
+							if (found) break;
+						}
+					}
 					le_group->InsertVolumeData(le_group->GetVolumeNum(), vd);
 				}
 			}
@@ -3037,7 +3107,6 @@ VolumeData *VRenderGLView::CopyLevel(VolumeData *src, int lv)
 		SetVolPopDirty();
 		PopVolumeList();
 		wxString select = swap_selection ? vd_new->GetName() : m_cur_vol->GetName();
-		vr_frame->UpdateList();
 		TreePanel *tree = vr_frame->GetTree();
 		if (tree)
 		{
@@ -3246,7 +3315,6 @@ int VRenderGLView::CompAnalysis(double min_voxels, double max_voxels, double thr
 			DataManager* mgr = vr_frame->GetDataManager();
 			if (mgr)
 				mgr->AddAnnotations(ann);
-			vr_frame->UpdateList();
 		}
 	}
 
@@ -3324,7 +3392,6 @@ void VRenderGLView::CompExport(int mode, bool select)
 				group->SetHdrAll(col);
 			}
 		}
-		vr_frame->UpdateList();
 		vr_frame->UpdateTree(m_selector.GetVolume()->GetName(), 2);
 		RefreshGL();
 	}
@@ -3392,7 +3459,6 @@ void VRenderGLView::NoiseRemoval(int iter, double thresh)
 			group->SetSyncB(vd->GetSyncB());
 			AddVolumeData(vd_new, group_name);
 			vd->SetDisp(false);
-			vr_frame->UpdateList();
 			vr_frame->UpdateTree(vd_new->GetName(), 2);
 		}
 	}
@@ -3791,7 +3857,6 @@ void VRenderGLView::CalculateSingle(int type, wxString prev_group, bool add)
 						if (vd_b)
 							vd_b->SetDisp(false);
 					}
-					vr_frame->UpdateList();
 					vr_frame->UpdateTree(vd->GetName(), 2, false); //UpdateTree line1: m_tree_panel->DeleteAll(); <- buffer overrun
 					m_calculator.SetVolumeA(vd_A);
 				}
@@ -6751,7 +6816,6 @@ void VRenderGLView::Set3DBatFrame(int offset)
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (vr_frame)
 	{
-		vr_frame->UpdateList();
 		vr_frame->UpdateTree(
 			vr_frame->GetCurSelVol()?
 			vr_frame->GetCurSelVol()->GetName():
@@ -7868,6 +7932,11 @@ void VRenderGLView::ReplaceVolumeData(wxString &name, VolumeData *dst)
 
 	bool found = false;
 	DataGroup* group = 0;
+	
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+	DataManager *dm = vr_frame->GetDataManager();
+	if (!dm) return;
 
 	for (i=0; i<(int)m_layer_list.size(); i++)
 	{
@@ -7881,9 +7950,12 @@ void VRenderGLView::ReplaceVolumeData(wxString &name, VolumeData *dst)
 				if (vd && vd->GetName() == name)
 				{
 					if (m_cur_vol == vd) m_cur_vol = dst;
+					m_loader.RemoveBrickVD(vd);
+					vd->GetVR()->clear_tex_current();
 					m_layer_list[i] = dst;
 					m_vd_pop_dirty = true;
 					found = true;
+					dm->RemoveVolumeData(name);
 					break;
 				}
 			}
@@ -7897,10 +7969,13 @@ void VRenderGLView::ReplaceVolumeData(wxString &name, VolumeData *dst)
 					if (vd && vd->GetName() == name)
 					{
 						if (m_cur_vol == vd) m_cur_vol = dst;
+						m_loader.RemoveBrickVD(vd);
+						vd->GetVR()->clear_tex_current();
 						tmpgroup->ReplaceVolumeData(j, dst);
 						m_vd_pop_dirty = true;
 						found = true;
 						group = tmpgroup;
+						dm->RemoveVolumeData(name);
 						break;
 					}
 				}
@@ -7928,6 +8003,11 @@ void VRenderGLView::ReplaceVolumeData(wxString &name, VolumeData *dst)
 void VRenderGLView::RemoveVolumeData(wxString &name)
 {
 	int i, j;
+	
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+	DataManager *dm = vr_frame->GetDataManager();
+	if (!dm) return;
 
 	for (i=0; i<(int)m_layer_list.size(); i++)
 	{
@@ -7945,6 +8025,7 @@ void VRenderGLView::RemoveVolumeData(wxString &name)
 					m_cur_vol = NULL;
 					m_loader.RemoveBrickVD(vd);
 					vd->GetVR()->clear_tex_current();
+					dm->RemoveVolumeData(name);
 					return;
 				}
 			}
@@ -7962,6 +8043,7 @@ void VRenderGLView::RemoveVolumeData(wxString &name)
 						m_cur_vol = NULL;
 						m_loader.RemoveBrickVD(vd);
 						vd->GetVR()->clear_tex_current();
+						dm->RemoveVolumeData(name);
 						return;
 					}
 				}
@@ -7974,6 +8056,11 @@ void VRenderGLView::RemoveVolumeData(wxString &name)
 void VRenderGLView::RemoveVolumeDataset(BaseReader *reader, int channel)
 {
 	int i, j;
+
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+	DataManager *dm = vr_frame->GetDataManager();
+	if (!dm) return;
 
 	for (i=(int)m_layer_list.size()-1; i>=0; i--)
 	{
@@ -7991,6 +8078,7 @@ void VRenderGLView::RemoveVolumeDataset(BaseReader *reader, int channel)
 					if (vd == m_cur_vol) m_cur_vol = NULL;
 					m_loader.RemoveBrickVD(vd);
 					vd->GetVR()->clear_tex_current();
+					dm->RemoveVolumeData(vd->GetName());
 				}
 			}
 			break;
@@ -8007,6 +8095,7 @@ void VRenderGLView::RemoveVolumeDataset(BaseReader *reader, int channel)
 						if (vd == m_cur_vol) m_cur_vol = NULL;
 						m_loader.RemoveBrickVD(vd);
 						vd->GetVR()->clear_tex_current();
+						dm->RemoveVolumeData(vd->GetName());
 					}
 				}
 			}
@@ -8018,6 +8107,11 @@ void VRenderGLView::RemoveVolumeDataset(BaseReader *reader, int channel)
 void VRenderGLView::RemoveMeshData(wxString &name)
 {
 	int i, j;
+
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+	DataManager *dm = vr_frame->GetDataManager();
+	if (!dm) return;
 
 	for (i=0; i<(int)m_layer_list.size(); i++)
 	{
@@ -8032,6 +8126,7 @@ void VRenderGLView::RemoveMeshData(wxString &name)
 				{
 					m_layer_list.erase(m_layer_list.begin()+i);
 					m_md_pop_dirty = true;
+					dm->RemoveMeshData(name);
 					return;
 				}
 			}
@@ -8047,6 +8142,7 @@ void VRenderGLView::RemoveMeshData(wxString &name)
 					{
 						group->RemoveMeshData(j);
 						m_md_pop_dirty = true;
+						dm->RemoveMeshData(name);
 						return;
 					}
 				}
@@ -8075,6 +8171,11 @@ void VRenderGLView::RemoveAnnotations(wxString &name)
 
 void VRenderGLView::RemoveGroup(wxString &name)
 {
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+	DataManager *dm = vr_frame->GetDataManager();
+	if (!dm) return;
+
 	int i, j;
 	for (i=0; i<(int)m_layer_list.size(); i++)
 	{
@@ -8093,7 +8194,9 @@ void VRenderGLView::RemoveGroup(wxString &name)
 						if (vd)
 						{
 							group->RemoveVolumeData(j);
-							//if add back to view
+							m_loader.RemoveBrickVD(vd);
+							vd->GetVR()->clear_tex_current();
+							dm->RemoveVolumeData(vd->GetName());
 						}
 					}
 					m_layer_list.erase(m_layer_list.begin()+i);
@@ -8113,6 +8216,7 @@ void VRenderGLView::RemoveGroup(wxString &name)
 						if (md)
 						{
 							group->RemoveMeshData(j);
+							dm->RemoveMeshData(md->GetName());
 						}
 					}
 					m_layer_list.erase(m_layer_list.begin()+i);

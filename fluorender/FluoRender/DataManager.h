@@ -1434,6 +1434,7 @@ public:
 	MeshData* DuplicateMeshData(MeshData* vd, bool use_default_settings=false);
 	void ReplaceVolumeData(int index, VolumeData *vd);
 	void RemoveVolumeData(int index);
+	void RemoveVolumeData(const wxString &name);
 	void RemoveVolumeDataset(BaseReader *reader, int channel);
 	int GetVolumeNum();
 	VolumeData* GetVolumeData(int index);
@@ -1464,11 +1465,13 @@ public:
 			return 0;
 	};
 	void RemoveMeshData(int index);
+	void RemoveMeshData(const wxString &name);
 
 	//annotations
 	int LoadAnnotations(wxString &filename);
 	void AddAnnotations(Annotations* ann);
 	void RemoveAnnotations(int index);
+	void RemoveAnnotations(const wxString &name);
 	int GetAnnotationNum();
 	Annotations* GetAnnotations(int index);
 	Annotations* GetAnnotations(wxString &name);

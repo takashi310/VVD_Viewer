@@ -79,7 +79,6 @@ BEGIN_EVENT_TABLE(VRenderFrame, wxFrame)
 	EVT_MENU(ID_ShowHideUI, VRenderFrame::OnShowHideUI)
 	EVT_MENU(ID_ShowHideToolbar, VRenderFrame::OnShowHideToolbar)
 	//ui menu events
-	EVT_MENU(ID_UIListView, VRenderFrame::OnShowHideView)
 	EVT_MENU(ID_UITreeView, VRenderFrame::OnShowHideView)
 	EVT_MENU(ID_UIMeasureView, VRenderFrame::OnShowHideView)
 	EVT_MENU(ID_UIMovieView, VRenderFrame::OnShowHideView)
@@ -119,7 +118,6 @@ VRenderFrame::VRenderFrame(
 	m_movie_view(0),
 	m_anno_view(0),
 	m_tree_panel(0),
-	m_list_panel(0),
 	m_prop_panel(0),
 	m_setting_dlg(0),
 	m_ui_state(true),
@@ -154,8 +152,6 @@ VRenderFrame::VRenderFrame(
 		wxTB_FLAT|wxTB_TOP|wxTB_NODIVIDER);
 	//create the menu for UI management
 	m_tb_menu_ui = new wxMenu;
-	m_tb_menu_ui->Append(ID_UIListView, UITEXT_DATAVIEW,
-		"Show/hide the data list panel", wxITEM_CHECK);
 	m_tb_menu_ui->Append(ID_UITreeView, UITEXT_TREEVIEW,
 		"Show/hide the workspace panel", wxITEM_CHECK);
 	m_tb_menu_ui->Append(ID_UIMeasureView, UITEXT_MEASUREMENT,
@@ -169,7 +165,6 @@ VRenderFrame::VRenderFrame(
 	m_tb_menu_ui->Append(ID_UIPropView, UITEXT_PROPERTIES,
 		"Show/hide the property panel", wxITEM_CHECK);
 	//check all the items
-	m_tb_menu_ui->Check(ID_UIListView, true);
 	m_tb_menu_ui->Check(ID_UITreeView, true);
 	m_tb_menu_ui->Check(ID_UIMeasureView, false);
 	m_tb_menu_ui->Check(ID_UIMovieView, true);
@@ -269,10 +264,6 @@ VRenderFrame::VRenderFrame(
 	vrv->SetDropTarget(new DnDFile(this, vrv));
 	vrv->InitView();
 	m_vrv_list.push_back(vrv);
-
-	//create list view
-	m_list_panel = new ListPanel(this, this, wxID_ANY,
-		wxDefaultPosition, wxSize(320, 300));
 
 	//create tree view
 	m_tree_panel = new TreePanel(this, this, wxID_ANY,
@@ -398,10 +389,6 @@ VRenderFrame::VRenderFrame(
 		Name("m_main_tb").Caption("Toolbar").CaptionVisible(false).
 		MinSize(wxSize(-1, 49)).MaxSize(wxSize(-1, 50)).
 		Top().CloseButton(false).Layer(4));
-	m_aui_mgr.AddPane(m_list_panel, wxAuiPaneInfo().
-		Name("m_list_panel").Caption(UITEXT_DATAVIEW).
-		Left().CloseButton(true).BestSize(wxSize(320, 250)).
-		FloatingSize(wxSize(320, 300)).Layer(3));
 	m_aui_mgr.AddPane(m_tree_panel, wxAuiPaneInfo().
 		Name("m_tree_panel").Caption(UITEXT_TREEVIEW).
 		Left().CloseButton(true).BestSize(wxSize(320, 300)).
@@ -1140,7 +1127,6 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
 				}
 			}
 		}
-		UpdateList();
 		if (vd_sel)
 			UpdateTree(vd_sel->GetName(), 2);
 		else
@@ -1233,7 +1219,6 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv)
 		}
 	}
 
-	UpdateList();
 	if (md_sel)
 		UpdateTree(md_sel->GetName(), 3);
 	else
@@ -1847,44 +1832,6 @@ void VRenderFrame::UpdateROITree(VolumeData *vd, bool set_calc)
 }
 
 
-void VRenderFrame::UpdateList()
-{
-	m_list_panel->DeleteAllItems();
-
-	for (int i=0 ; i<m_data_mgr.GetVolumeNum() ; i++)
-	{
-		VolumeData* vd = m_data_mgr.GetVolumeData(i);
-		if (vd && !vd->GetDup())
-		{
-			wxString name = vd->GetName();
-			wxString path = vd->GetPath();
-			m_list_panel->Append(DATA_VOLUME, name, path);
-		}
-	}
-
-	for (int i=0 ; i<m_data_mgr.GetMeshNum() ; i++)
-	{
-		MeshData* md = m_data_mgr.GetMeshData(i);
-		if (md)
-		{
-			wxString name = md->GetName();
-			wxString path = md->GetPath();
-			m_list_panel->Append(DATA_MESH, name, path);
-		}
-	}
-
-	for (int i=0; i<m_data_mgr.GetAnnotationNum(); i++)
-	{
-		Annotations* ann = m_data_mgr.GetAnnotations(i);
-		if (ann)
-		{
-			wxString name = ann->GetName();
-			wxString path = ann->GetPath();
-			m_list_panel->Append(DATA_ANNOTATIONS, name, path);
-		}
-	}
-}
-
 DataManager* VRenderFrame::GetDataManager()
 {
 	return &m_data_mgr;
@@ -1893,11 +1840,6 @@ DataManager* VRenderFrame::GetDataManager()
 TreePanel *VRenderFrame::GetTree()
 {
 	return m_tree_panel;
-}
-
-ListPanel *VRenderFrame::GetList()
-{
-	return m_list_panel;
 }
 
 //on selections
@@ -2237,16 +2179,14 @@ void VRenderFrame::OrganizeVRenderViews(int mode)
 //hide/show tools
 void VRenderFrame::ToggleAllTools()
 {
-	if (m_aui_mgr.GetPane(m_list_panel).IsShown() ||
-		m_aui_mgr.GetPane(m_tree_panel).IsShown() ||
+	if (m_aui_mgr.GetPane(m_tree_panel).IsShown() ||
 		m_aui_mgr.GetPane(m_measure_dlg).IsShown() ||
 		m_aui_mgr.GetPane(m_movie_view).IsShown() ||
 		m_aui_mgr.GetPane(m_prop_panel).IsShown() ||
 		m_aui_mgr.GetPane(m_adjust_view).IsShown() ||
 		m_aui_mgr.GetPane(m_clip_view).IsShown())
 		m_ui_state = true;
-	else if (!m_aui_mgr.GetPane(m_list_panel).IsShown() &&
-		!m_aui_mgr.GetPane(m_tree_panel).IsShown() &&
+	else if (!m_aui_mgr.GetPane(m_tree_panel).IsShown() &&
 		!m_aui_mgr.GetPane(m_measure_dlg).IsShown() &&
 		!m_aui_mgr.GetPane(m_movie_view).IsShown() &&
 		!m_aui_mgr.GetPane(m_prop_panel).IsShown() &&
@@ -2257,7 +2197,6 @@ void VRenderFrame::ToggleAllTools()
 	if (m_ui_state)
 	{
 		if (!m_ui_state_cache.empty()) m_ui_state_cache.clear();
-		m_ui_state_cache[m_list_panel->GetName()]  = m_aui_mgr.GetPane(m_list_panel).IsShown();
 		m_ui_state_cache[m_tree_panel->GetName()]  = m_aui_mgr.GetPane(m_tree_panel).IsShown();
 		m_ui_state_cache[m_movie_view->GetName()]  = m_aui_mgr.GetPane(m_movie_view).IsShown();
 		m_ui_state_cache[m_measure_dlg->GetName()] = m_aui_mgr.GetPane(m_measure_dlg).IsShown();
@@ -2266,9 +2205,6 @@ void VRenderFrame::ToggleAllTools()
 		m_ui_state_cache[m_clip_view->GetName()]   = m_aui_mgr.GetPane(m_clip_view).IsShown();
 
 		//hide all
-		//data view
-		m_aui_mgr.GetPane(m_list_panel).Hide();
-		m_tb_menu_ui->Check(ID_UIListView, false);
 		//scene view
 		m_aui_mgr.GetPane(m_tree_panel).Hide();
 		m_tb_menu_ui->Check(ID_UITreeView, false);
@@ -2295,9 +2231,6 @@ void VRenderFrame::ToggleAllTools()
 		if (m_ui_state_cache.empty())
 		{
 			//show all
-			//data view
-			m_aui_mgr.GetPane(m_list_panel).Show();
-			m_tb_menu_ui->Check(ID_UIListView, true);
 			//scene view
 			m_aui_mgr.GetPane(m_tree_panel).Show();
 			m_tb_menu_ui->Check(ID_UITreeView, true);
@@ -2319,12 +2252,6 @@ void VRenderFrame::ToggleAllTools()
 		}
 		else
 		{
-			//data view
-			if (m_ui_state_cache[m_list_panel->GetName()])
-			{
-				m_aui_mgr.GetPane(m_list_panel).Show();
-				m_tb_menu_ui->Check(ID_UIListView, true);
-			}
 			//scene view
 			if (m_ui_state_cache[m_tree_panel->GetName()])
 			{
@@ -3056,7 +2983,6 @@ void VRenderFrame::SaveProject(wxString& filename)
 	//ui layout
 	fconfig.SetPath("/ui_layout");
 	fconfig.Write("ui_main_tb", m_main_tb->IsShown());
-	fconfig.Write("ui_list_view", m_list_panel->IsShown());
 	fconfig.Write("ui_tree_view", m_tree_panel->IsShown());
 	fconfig.Write("ui_measure_view", m_measure_dlg->IsShown());
 	fconfig.Write("ui_adjust_view", m_adjust_view->IsShown());
@@ -3064,8 +2990,6 @@ void VRenderFrame::SaveProject(wxString& filename)
 	fconfig.Write("ui_prop_view", m_prop_panel->IsShown());
 	fconfig.Write("ui_main_tb_float", m_aui_mgr.GetPane(m_main_tb).IsOk()?
 		m_aui_mgr.GetPane(m_main_tb).IsFloating():false);
-	fconfig.Write("ui_list_view_float", m_aui_mgr.GetPane(m_list_panel).IsOk()?
-		m_aui_mgr.GetPane(m_list_panel).IsFloating():false);
 	fconfig.Write("ui_tree_view_float", m_aui_mgr.GetPane(m_tree_panel).IsOk()?
 		m_aui_mgr.GetPane(m_tree_panel).IsFloating():false);
 	fconfig.Write("ui_measure_view_float", m_aui_mgr.GetPane(m_measure_dlg).IsOk()?
@@ -3146,8 +3070,7 @@ void VRenderFrame::SaveProject(wxString& filename)
 
 	wxFileOutputStream os(filename);
 	fconfig.Save(os);
-	UpdateList();
-
+	
 	delete prg_diag;
 }
 
@@ -4422,28 +4345,6 @@ void VRenderFrame::OpenProject(wxString& filename)
 					m_aui_mgr.GetPane(m_main_tb).Hide();
 			}
 		}
-		if (fconfig.Read("ui_list_view", &bVal))
-		{
-			if (bVal)
-			{
-				m_aui_mgr.GetPane(m_list_panel).Show();
-				m_tb_menu_ui->Check(ID_UIListView, true);
-				bool fl;
-				if (fconfig.Read("ui_list_view_float", &fl))
-				{
-					if (fl)
-						m_aui_mgr.GetPane(m_list_panel).Float();
-					else
-						m_aui_mgr.GetPane(m_list_panel).Dock();
-				}
-			}
-			else
-			{
-				if (m_aui_mgr.GetPane(m_list_panel).IsOk())
-					m_aui_mgr.GetPane(m_list_panel).Hide();
-				m_tb_menu_ui->Check(ID_UIListView, false);
-			}
-		}
 		if (fconfig.Read("ui_tree_view", &bVal))
 		{
 			if (bVal)
@@ -4681,7 +4582,6 @@ void VRenderFrame::OpenProject(wxString& filename)
 		m_recorder_dlg->UpdateList();
 	}
 
-	UpdateList();
 	if (m_cur_sel_type != -1)
 	{
 		switch (m_cur_sel_type)
@@ -4921,19 +4821,6 @@ void VRenderFrame::OnShowHideView(wxCommandEvent &event)
 
 	switch (id)
 	{
-	case ID_UIListView:
-		//data view
-		if (m_aui_mgr.GetPane(m_list_panel).IsShown())
-		{
-			m_aui_mgr.GetPane(m_list_panel).Hide();
-			m_tb_menu_ui->Check(ID_UIListView, false);
-		}
-		else
-		{
-			m_aui_mgr.GetPane(m_list_panel).Show();
-			m_tb_menu_ui->Check(ID_UIListView, true);
-		}
-		break;
 	case ID_UITreeView:
 		//scene view
 		if (m_aui_mgr.GetPane(m_tree_panel).IsShown())
@@ -5023,9 +4910,7 @@ void VRenderFrame::OnPaneClose(wxAuiManagerEvent& event)
 	wxWindow* wnd = event.pane->window;
 	wxString name = wnd->GetName();
 
-	if (name == "ListPanel")
-		m_tb_menu_ui->Check(ID_UIListView, false);
-	else if (name == "TreePanel")
+	if (name == "TreePanel")
 		m_tb_menu_ui->Check(ID_UITreeView, false);
 	else if (name == "MeasureDlg")
 		m_tb_menu_ui->Check(ID_UIMeasureView, false);

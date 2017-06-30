@@ -2035,20 +2035,7 @@ void DataTreeCtrl::UpdateSelection()
 				break;
 			}
 
-			if (item_data->type == 2 ||
-				item_data->type == 3 ||
-				item_data->type == 4)
-			{
-				int list_type = 0;
-				if (item_data->type == 2)
-					list_type = DATA_VOLUME;
-				else if (item_data->type == 3)
-					list_type = DATA_MESH;
-				else if (item_data->type == 4)
-					list_type = DATA_ANNOTATIONS;
-				if (vr_frame->GetList())
-					vr_frame->GetList()->SetSelection(list_type, name);
-			}
+			
 		}
 	}
 }

@@ -2125,7 +2125,10 @@ void VolumeData::SetDisp(bool disp)
 	m_disp = disp;
 	GetTexture()->set_sort_bricks();
 	if (!disp)
+	{
+		GetMask(true);
 		GetVR()->clear_tex_current();
+	}
 }
 
 bool VolumeData::GetDisp()
@@ -2138,7 +2141,10 @@ void VolumeData::ToggleDisp()
 	m_disp = !m_disp;
 	GetTexture()->set_sort_bricks();
 	if (!m_disp)
+	{
+		GetMask(true);
 		GetVR()->clear_tex_current();
+	}
 }
 
 //bounding box
@@ -5497,6 +5503,17 @@ void DataManager::RemoveVolumeData(int index)
 	}	
 }
 
+void DataManager::RemoveVolumeData(const wxString &name)
+{
+	for (int i=0 ; i<(int)m_vd_list.size() ; i++)
+	{
+		if (name == m_vd_list[i]->GetName())
+		{
+			RemoveVolumeData(i);
+		}
+	}
+}
+
 void DataManager::RemoveVolumeDataset(BaseReader *reader, int channel)
 {
 	
@@ -5520,6 +5537,17 @@ void DataManager::RemoveMeshData(int index)
 		m_md_list.erase(m_md_list.begin()+index);
 		delete data;
 		data = 0;
+	}
+}
+
+void DataManager::RemoveMeshData(const wxString &name)
+{
+	for (int i=0 ; i<(int)m_md_list.size() ; i++)
+	{
+		if (name == m_md_list[i]->GetName())
+		{
+			RemoveMeshData(i);
+		}
 	}
 }
 
@@ -5653,6 +5681,17 @@ void DataManager::RemoveAnnotations(int index)
 		m_annotation_list.erase(m_annotation_list.begin()+index);
 		delete ann;
 		ann = 0;
+	}
+}
+
+void DataManager::RemoveAnnotations(const wxString &name)
+{
+	for (int i=0 ; i<(int)m_annotation_list.size() ; i++)
+	{
+		if (name == m_annotation_list[i]->GetName())
+		{
+			RemoveAnnotations(i);
+		}
 	}
 }
 
