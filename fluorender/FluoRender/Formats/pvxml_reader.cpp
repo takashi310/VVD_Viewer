@@ -1033,7 +1033,7 @@ void PVXMLReader::SetInfo()
 	wstringstream wss;
 
 	wss << L"------------------------\n";
-	wss << m_data_name << '\n';
+	wss << m_path_name << '\n';
 	wss << L"File type: PVXML\n";
 	wss << L"Width: " << m_x_size << L'\n';
 	wss << L"Height: " << m_y_size << L'\n';

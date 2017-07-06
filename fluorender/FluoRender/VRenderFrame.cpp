@@ -419,10 +419,9 @@ VRenderFrame::VRenderFrame(
 		FloatingSize(wxSize(600, 400)).MinSize(wxSize(300, 200)).
 		Layer(0).Centre());
 
-	m_aui_mgr.GetPane("m_list_panel").dock_proportion  = 10;
-	m_aui_mgr.GetPane("m_tree_panel").dock_proportion  = 15;
+	m_aui_mgr.GetPane("m_tree_panel").dock_proportion  = 30;
 	m_aui_mgr.GetPane("m_measure_dlg").dock_proportion = 20;
-	m_aui_mgr.GetPane("m_movie_view").dock_proportion = 12;
+	m_aui_mgr.GetPane("m_movie_view").dock_proportion = 10;
 
 	m_aui_mgr.GetPane(m_measure_dlg).Float();
 	m_aui_mgr.GetPane(m_measure_dlg).Hide();
