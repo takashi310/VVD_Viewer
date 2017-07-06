@@ -7306,10 +7306,10 @@ void VRenderGLView::OnDraw(wxPaintEvent& event)
 	int ny = GetSize().y;
 
 	PopMeshList();
-	//	if (m_md_pop_list.size()>0 && m_vd_pop_list.size()>0 && m_vol_method == VOL_METHOD_MULTI)
-	//		m_draw_type = 2;
-	//	else
-	m_draw_type = 1;
+	if (m_md_pop_list.size()>0 && m_vd_pop_list.size()>0 && m_vol_method == VOL_METHOD_MULTI)
+		m_draw_type = 2;
+	else
+		m_draw_type = 1;
 
 	PreDraw();
 
