@@ -202,6 +202,7 @@ private:
 	bool m_fixed;
 	//remember the pos
 	int m_scroll_pos;
+	int m_rename;
 
 	static bool m_md_save_indv;
 

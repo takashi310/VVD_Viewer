@@ -93,7 +93,8 @@ DataTreeCtrl::DataTreeCtrl(
 wxTreeCtrl(parent, id, pos, size, style),
 	m_frame(frame),
 	m_fixed(false),
-	m_scroll_pos(-1)
+	m_scroll_pos(-1),
+	m_rename(false)
 {
 	wxImageList *images = new wxImageList(16, 16, true);
 	wxIcon icons[2];
@@ -510,13 +511,19 @@ void DataTreeCtrl::OnRenameMenu(wxCommandEvent& event)
 
 	wxTreeItemId sel_item = GetSelection();
 	if (sel_item.IsOk())
+	{
+		m_rename = true;
 		EditLabel(sel_item);
+	}
 }
 
 void DataTreeCtrl::OnRename(wxTreeEvent& event)
 {
-	if (m_fixed)
+	if (m_fixed || !m_rename)
+	{
+		event.Veto();
 		return;
+	}
 
 	wxTreeItemId sel_item = GetSelection();
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
@@ -564,6 +571,8 @@ void DataTreeCtrl::OnRenamed(wxTreeEvent& event)
 {
 	if (m_fixed)
 		return;
+
+	m_rename = false;
 
 	wxTreeItemId sel_item = GetSelection();
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
