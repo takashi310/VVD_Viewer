@@ -3073,30 +3073,14 @@ void VRenderFrame::SaveProject(wxString& filename)
 	delete prg_diag;
 }
 
-void VRenderFrame::OpenProject(wxString& filename)
+VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fconfig)
 {
-	m_data_mgr.SetProjectPath(filename);
-    
-    SetEvtHandlerEnabled(false);
-    //Freeze();
-
 	int iVal;
-	int i, j, k;
-	//clear
-	m_data_mgr.ClearAll();
-	DataGroup::ResetID();
-	MeshGroup::ResetID();
-	m_adjust_view->SetVolumeData(0);
-	m_adjust_view->SetGroup(0);
-	m_adjust_view->SetGroupLink(0);
-	m_vrv_list[0]->Clear();
-	for (i=m_vrv_list.size()-1; i>0; i--)
-		DeleteVRenderView(i);
+	VolumeData *vd = NULL;
 	
-	wxFileInputStream is(filename);
-	if (!is.IsOk())
-		return;
-	wxFileConfig fconfig(is);
+	wxString tmp_path = fconfig.GetPath();
+	fconfig.SetPath("/");
+
 	wxString ver_major, ver_minor;
 	long l_major, l_minor;
 	l_major = 1;
@@ -3105,70 +3089,25 @@ void VRenderFrame::OpenProject(wxString& filename)
 	{
 		ver_major.ToLong(&l_major);
 		ver_minor.ToLong(&l_minor);
-
-		if (l_major>VERSION_MAJOR)
-			::wxMessageBox("The project file is saved by a newer version of FluoRender.\n" \
-			"Please check update and download the new version.");
-		else if (l_minor>VERSION_MINOR)
-			::wxMessageBox("The project file is saved by a newer version of FluoRender.\n" \
-			"Please check update and download the new version.");
 	}
 
-	int ticks = 0;
-	int tick_cnt = 1;
-	fconfig.Read("ticks", &ticks);
-	wxProgressDialog *prg_diag = 0;
-	prg_diag = new wxProgressDialog(
-		"FluoRender: Loading project...",
-		"Reading project file. Please wait.",
-		100, 0, wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);
-
-	//read streaming mode
-	if (fconfig.Exists("/memory settings"))
-	{
-		fconfig.SetPath("/memory settings");
-		bool mem_swap = false;
-		fconfig.Read("mem swap", &mem_swap);
-		double graphics_mem = 1000.0;
-		fconfig.Read("graphics mem", &graphics_mem);
-		double large_data_size = 1000.0;
-		fconfig.Read("large data size", &large_data_size);
-		int force_brick_size = 128;
-		fconfig.Read("force brick size", &force_brick_size);
-		int up_time = 100;
-		fconfig.Read("up time", &up_time);
-		int update_order = 0;
-		fconfig.Read("update order", &update_order);
-
-		m_setting_dlg->SetMemSwap(mem_swap);
-		m_setting_dlg->SetGraphicsMem(graphics_mem);
-		m_setting_dlg->SetLargeDataSize(large_data_size);
-		m_setting_dlg->SetForceBrickSize(force_brick_size);
-		m_setting_dlg->SetResponseTime(up_time);
-		m_setting_dlg->SetUpdateOrder(update_order);
-		m_setting_dlg->UpdateUI();
-
-		SetTextureRendererSettings();
-	}
-
-	//read data list
-	//volume
 	if (fconfig.Exists("/data/volume"))
 	{
 		fconfig.SetPath("/data/volume");
 		int num = fconfig.Read("num", 0l);
-		for (i=0; i<num; i++)
+		for (int i=0; i<num; i++)
 		{
-			if (ticks && prg_diag)
-				prg_diag->Update(90*tick_cnt/ticks,
-				"Reading and processing volume data. Please wait.");
-
 			wxString str;
 			str = wxString::Format("/data/volume/%d", i);
 			if (fconfig.Exists(str))
 			{
 				int loaded_num = 0;
 				fconfig.SetPath(str);
+				if (!fconfig.Read("name", &str))
+					continue;
+				if (str != name)
+					continue;
+				
 				bool compression = false;
 				fconfig.Read("compression", &compression);
 				m_data_mgr.SetCompression(compression);
@@ -3206,7 +3145,6 @@ void VRenderFrame::OpenProject(wxString& filename)
 					else if (suffix == ".vvd")
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_BRKXML, cur_chan, cur_time);
 				}
-				VolumeData* vd = 0;
 				if (loaded_num)
 					vd = m_data_mgr.GetLastVolumeData();
 				if (vd)
@@ -3499,25 +3437,35 @@ void VRenderFrame::OpenProject(wxString& filename)
 					}
 				}
 			}
-			tick_cnt++;
 		}
 	}
-	//mesh
+	fconfig.SetPath(tmp_path);
+	return vd;
+}
+
+MeshData* VRenderFrame::OpenMeshFromProject(wxString name, wxFileConfig &fconfig)
+{
+	MeshData *md = NULL;
+
+	wxString tmp_path = fconfig.GetPath();
+	fconfig.SetPath("/");
+
 	if (fconfig.Exists("/data/mesh"))
 	{
 		fconfig.SetPath("/data/mesh");
 		int num = fconfig.Read("num", 0l);
-		for (i=0; i<num; i++)
+		for (int i=0; i<num; i++)
 		{
-			if (ticks && prg_diag)
-				prg_diag->Update(90*tick_cnt/ticks,
-				"Reading and processing mesh data. Please wait.");
-
 			wxString str;
 			str = wxString::Format("/data/mesh/%d", i);
 			if (fconfig.Exists(str))
 			{
 				fconfig.SetPath(str);
+				if (!fconfig.Read("name", &str))
+					continue;
+				if (str != name)
+					continue;
+
 				if (fconfig.Read("path", &str))
 				{
 					m_data_mgr.LoadMeshData(str);
@@ -3616,9 +3564,90 @@ void VRenderFrame::OpenProject(wxString& filename)
 					}
 				}
 			}
-			tick_cnt++;
 		}
 	}
+	fconfig.SetPath(tmp_path);
+	return md;
+}
+
+void VRenderFrame::OpenProject(wxString& filename)
+{
+	m_data_mgr.SetProjectPath(filename);
+    
+    SetEvtHandlerEnabled(false);
+    //Freeze();
+
+	int iVal;
+	int i, j, k;
+	//clear
+	m_data_mgr.ClearAll();
+	DataGroup::ResetID();
+	MeshGroup::ResetID();
+	m_adjust_view->SetVolumeData(0);
+	m_adjust_view->SetGroup(0);
+	m_adjust_view->SetGroupLink(0);
+	m_vrv_list[0]->Clear();
+	for (i=m_vrv_list.size()-1; i>0; i--)
+		DeleteVRenderView(i);
+	
+	wxFileInputStream is(filename);
+	if (!is.IsOk())
+		return;
+	wxFileConfig fconfig(is);
+	wxString ver_major, ver_minor;
+	long l_major, l_minor;
+	l_major = 1;
+	if (fconfig.Read("ver_major", &ver_major) &&
+		fconfig.Read("ver_minor", &ver_minor))
+	{
+		ver_major.ToLong(&l_major);
+		ver_minor.ToLong(&l_minor);
+
+		if (l_major>VERSION_MAJOR)
+			::wxMessageBox("The project file is saved by a newer version of FluoRender.\n" \
+			"Please check update and download the new version.");
+		else if (l_minor>VERSION_MINOR)
+			::wxMessageBox("The project file is saved by a newer version of FluoRender.\n" \
+			"Please check update and download the new version.");
+	}
+
+	int ticks = 0;
+	int tick_cnt = 1;
+	fconfig.Read("ticks", &ticks);
+	wxProgressDialog *prg_diag = 0;
+	prg_diag = new wxProgressDialog(
+		"FluoRender: Loading project...",
+		"Reading project file. Please wait.",
+		100, 0, wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);
+
+	//read streaming mode
+	if (fconfig.Exists("/memory settings"))
+	{
+		fconfig.SetPath("/memory settings");
+		bool mem_swap = false;
+		fconfig.Read("mem swap", &mem_swap);
+		double graphics_mem = 1000.0;
+		fconfig.Read("graphics mem", &graphics_mem);
+		double large_data_size = 1000.0;
+		fconfig.Read("large data size", &large_data_size);
+		int force_brick_size = 128;
+		fconfig.Read("force brick size", &force_brick_size);
+		int up_time = 100;
+		fconfig.Read("up time", &up_time);
+		int update_order = 0;
+		fconfig.Read("update order", &update_order);
+
+		m_setting_dlg->SetMemSwap(mem_swap);
+		m_setting_dlg->SetGraphicsMem(graphics_mem);
+		m_setting_dlg->SetLargeDataSize(large_data_size);
+		m_setting_dlg->SetForceBrickSize(force_brick_size);
+		m_setting_dlg->SetResponseTime(up_time);
+		m_setting_dlg->SetUpdateOrder(update_order);
+		m_setting_dlg->UpdateUI();
+
+		SetTextureRendererSettings();
+	}
+
 	//annotations
 	if (fconfig.Exists("/data/annotations"))
 	{
@@ -3666,6 +3695,10 @@ void VRenderFrame::OpenProject(wxString& filename)
 			if (i==0 && m_setting_dlg && m_setting_dlg->GetTestMode(1))
 				vrv->m_glview->m_test_speed = true;
 
+			if (ticks && prg_diag)
+				prg_diag->Update(90*tick_cnt/ticks,
+				"Reading project file. Please wait.");
+
 			wxString str;
 			//old
 			//volumes
@@ -3678,9 +3711,11 @@ void VRenderFrame::OpenProject(wxString& filename)
 				{
 					if (fconfig.Read(wxString::Format("name%d", j), &str))
 					{
-						VolumeData* vd = m_data_mgr.GetVolumeData(str);
+						
+						VolumeData* vd = OpenVolumeFromProject(str, fconfig);
 						if (vd)
 							vrv->AddVolumeData(vd);
+						tick_cnt++;
 					}
 				}
 				vrv->SetVolPopDirty();
@@ -3695,9 +3730,10 @@ void VRenderFrame::OpenProject(wxString& filename)
 				{
 					if (fconfig.Read(wxString::Format("name%d", j), &str))
 					{
-						MeshData* md = m_data_mgr.GetMeshData(str);
+						MeshData* md = OpenMeshFromProject(str, fconfig);
 						if (md)
 							vrv->AddMeshData(md);
+						tick_cnt++;
 					}
 				}
 			}
@@ -3724,9 +3760,10 @@ void VRenderFrame::OpenProject(wxString& filename)
 								{
 									if (fconfig.Read("name", &str))
 									{
-										VolumeData* vd = m_data_mgr.GetVolumeData(str);
+										VolumeData* vd = OpenVolumeFromProject(str, fconfig);
 										if (vd)
 											vrv->AddVolumeData(vd);
+										tick_cnt++;
 									}
 								}
 								break;
@@ -3734,9 +3771,10 @@ void VRenderFrame::OpenProject(wxString& filename)
 								{
 									if (fconfig.Read("name", &str))
 									{
-										MeshData* md = m_data_mgr.GetMeshData(str);
+										MeshData* md = OpenMeshFromProject(str, fconfig);
 										if (md)
 											vrv->AddMeshData(md);
+										tick_cnt++;
 									}
 								}
 								break;
@@ -3812,9 +3850,10 @@ void VRenderFrame::OpenProject(wxString& filename)
 												{
 													if (fconfig.Read(wxString::Format("vol_%d", k), &str))
 													{
-														VolumeData* vd = m_data_mgr.GetVolumeData(str);
+														VolumeData* vd = OpenVolumeFromProject(str, fconfig);
 														if (vd)
 															group->InsertVolumeData(k-1, vd);
+														tick_cnt++;
 													}
 												}
 											}
@@ -3849,9 +3888,10 @@ void VRenderFrame::OpenProject(wxString& filename)
 												{
 													if (fconfig.Read(wxString::Format("mesh_%d", k), &str))
 													{
-														MeshData* md = m_data_mgr.GetMeshData(str);
+														MeshData* md = OpenMeshFromProject(str, fconfig);
 														if (md)
 															group->InsertMeshData(k-1, md);
+														tick_cnt++;
 													}
 												}
 											}
@@ -4368,7 +4408,7 @@ void VRenderFrame::OpenProject(wxString& filename)
 		}
 		if (fconfig.Read("ui_measure_view", &bVal))
 		{
-			if (bVal)
+/*			if (bVal)
 			{
 				m_aui_mgr.GetPane(m_measure_dlg).Show();
 				m_tb_menu_ui->Check(ID_UIMeasureView, true);
@@ -4382,7 +4422,7 @@ void VRenderFrame::OpenProject(wxString& filename)
 				}
 			}
 			else
-			{
+*/			{
 				if (m_aui_mgr.GetPane(m_measure_dlg).IsOk())
 					m_aui_mgr.GetPane(m_measure_dlg).Hide();
 				m_tb_menu_ui->Check(ID_UIMeasureView, false);

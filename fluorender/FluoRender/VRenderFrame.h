@@ -263,6 +263,8 @@ public:
 	{ return m_data_mgr.GetMeshData(m_cur_sel_mesh); }
 
 	void StartupLoad(wxArrayString files);
+	VolumeData* OpenVolumeFromProject(wxString name, wxFileConfig &fconfig);
+	MeshData* OpenMeshFromProject(wxString name, wxFileConfig &fconfig);
 	void OpenProject(wxString& filename);
 	void SaveProject(wxString& filename);
 	void LoadVolumes(wxArrayString files, VRenderView* view = 0, vector<vector<AnnotationDB>> annotations = vector<vector<AnnotationDB>>());

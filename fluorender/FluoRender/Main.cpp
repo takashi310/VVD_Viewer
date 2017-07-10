@@ -201,7 +201,7 @@ bool VRenderApp::OnCmdLineParsed(wxCmdLineParser& parser)
 	   wxLogNull lognull;
 
 	   wxString server = "50001";
-	   wxString hostName = "VVDClient";
+	   wxString hostName = "localhost";
 
 	   MyClient *client = new MyClient;
 	   ClientConnection *connection = (ClientConnection *)client->MakeConnection(hostName, server, "IPC TEST");

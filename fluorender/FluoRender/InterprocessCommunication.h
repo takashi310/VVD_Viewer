@@ -1,8 +1,10 @@
-#include <wx/wx.h>
-#include <wx/ipc.h>
-
 #ifndef _FL_IPC_H_
 #define _FL_IPC_H_
+
+#define wxUSE_DDE_FOR_IPC 0
+
+#include <wx/wx.h>
+#include <wx/ipc.h>
 
 class VRenderFrame;
 
