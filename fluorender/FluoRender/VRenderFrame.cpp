@@ -78,6 +78,7 @@ BEGIN_EVENT_TABLE(VRenderFrame, wxFrame)
 	EVT_MENU(ID_Facebook, VRenderFrame::OnFacebook)
 	EVT_MENU(ID_ShowHideUI, VRenderFrame::OnShowHideUI)
 	EVT_MENU(ID_ShowHideToolbar, VRenderFrame::OnShowHideToolbar)
+	EVT_MENU(ID_Plugins, VRenderFrame::OnPlugins)
 	//ui menu events
 	EVT_MENU(ID_UITreeView, VRenderFrame::OnShowHideView)
 	EVT_MENU(ID_UIMeasureView, VRenderFrame::OnShowHideView)
@@ -93,6 +94,7 @@ BEGIN_EVENT_TABLE(VRenderFrame, wxFrame)
 	EVT_KEY_DOWN(VRenderFrame::OnKeyDown)
 	//close
 	EVT_CLOSE(VRenderFrame::OnClose)
+	EVT_TIMER(ID_Timer, VRenderFrame::OnTimer)
 END_EVENT_TABLE()
 
 bool VRenderFrame::m_sliceSequence = false;
@@ -124,7 +126,8 @@ VRenderFrame::VRenderFrame(
 	m_cur_sel_type(-1),
 	m_cur_sel_vol(-1),
 	m_cur_sel_mesh(-1),
-	m_gpu_max_mem(-1.0)
+	m_gpu_max_mem(-1.0),
+	m_timer(this,ID_Timer)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -135,6 +138,11 @@ VRenderFrame::VRenderFrame(
     
     FLIVR::TextureBrick::setCURL(_g_curl);
 	FLIVR::TextureBrick::setCURL_Multi(_g_curlm);
+
+	m_plugin_manager = new PluginManager;
+	if(m_plugin_manager)
+		m_plugin_manager->LoadAllPlugins(true);
+
 
 	//create this first to read the settings
 	m_setting_dlg = new SettingDlg(this, this);
@@ -234,6 +242,17 @@ VRenderFrame::VRenderFrame(
 		wxGetBitmapFromMemory(icon_recorder), wxNullBitmap, wxITEM_NORMAL,
 		"Recorder: Record actions by key frames and play back",
 		"Recorder: Record actions by key frames and play back");
+	m_main_tb->AddSeparator();
+
+	m_tb_menu_plugin = new wxMenu;
+	m_plugin_manager->GetGuiPlugins();
+	m_tb_menu_plugin->Append(ID_Plugins+1, "Plugin1",
+		"Plugin1");
+	m_main_tb->AddTool(ID_Plugins, "Plugins",
+		wxGetBitmapFromMemory(icon_settings), wxNullBitmap, wxITEM_NORMAL,
+		"Plugins",
+		"Plugins");
+    
 	m_main_tb->AddSeparator();
 	m_main_tb->AddTool(ID_Settings, "Settings",
 		wxGetBitmapFromMemory(icon_settings), wxNullBitmap, wxITEM_NORMAL,
@@ -641,6 +660,8 @@ VRenderFrame::VRenderFrame(
 
 	Thaw();
 	SetEvtHandlerEnabled(true);
+
+	m_timer.Start(100);
 }
 
 VRenderFrame::~VRenderFrame()
@@ -661,8 +682,14 @@ VRenderFrame::~VRenderFrame()
 	TextureBrick::delete_all_cache_files();
 }
 
+void VRenderFrame::OnTimer(wxTimerEvent& event)
+{
+	event.Skip();
+}
+
 void VRenderFrame::OnExit(wxCommandEvent& WXUNUSED(event))
 {
+	wxDELETE(m_plugin_manager);
 	Close(true);
 }
 
@@ -4941,6 +4968,11 @@ void VRenderFrame::OnShowHideView(wxCommandEvent &event)
 	}
 
 	m_aui_mgr.Update();
+}
+
+void VRenderFrame::OnPlugins(wxCommandEvent& WXUNUSED(event))
+{
+	PopupMenu(m_tb_menu_plugin);
 }
 
 //panes

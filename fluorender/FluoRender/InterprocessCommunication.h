@@ -15,18 +15,10 @@ public:
     ~ServerConnection(void) { }
 
     bool OnAdvise(const wxString& topic, const wxString& item, char *data,
-                  int size, wxIPCFormat format)
-    {
-        //wxMessageBox(topic, data);
-    }
-
+                  int size, wxIPCFormat format);
 	bool OnStartAdvise(const wxString& topic, const wxString& item);
 	bool OnStopAdvise(const wxString& topic,
-		const wxString& item)
-	{
-		//wxMessageBox(wxString::Format("OnStopAdvise(\"%s\",\"%s\")", topic.c_str(), item.c_str()));
-		return true;
-	}
+		const wxString& item);
 
 	void SetFrame(VRenderFrame *vframe){ m_vframe = vframe; }
 
@@ -42,10 +34,7 @@ public:
     ~ClientConnection(void) { }
 
     bool OnAdvise(const wxString& topic, const wxString& item, char *data,
-                  int size, wxIPCFormat format)
-    {
-        //wxMessageBox(topic, data);
-    }
+                  int size, wxIPCFormat format);
 };
 
 class MyClient: public wxClient

@@ -200,11 +200,13 @@ bool VRenderApp::OnCmdLineParsed(wxCmdLineParser& parser)
 
 	   wxLogNull lognull;
 
-	   wxString server = "50001";
+	   wxString server = "8001";
 	   wxString hostName = "localhost";
 
 	   MyClient *client = new MyClient;
 	   ClientConnection *connection = (ClientConnection *)client->MakeConnection(hostName, server, "IPC TEST");
+//	   ClientConnection *connection = (ClientConnection *)client->MakeConnection(hostName, "50001", "IPC TEST");
+//	   connection->StartAdvise(wxString("test"));
 
 	   if (!connection)
 	   {

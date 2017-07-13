@@ -20,9 +20,17 @@ MyServer::~MyServer(void)
 	}
 }
 
+bool ServerConnection::OnAdvise(const wxString& topic, const wxString& item, char *data,
+				                int size, wxIPCFormat format)
+{
+	wxMessageBox(topic, data);
+
+	return true;
+}
+
 bool ServerConnection::OnStartAdvise(const wxString& topic, const wxString& item)
 {
-	//wxMessageBox(wxString::Format("OnStartAdvise(\"%s\",\"%s\")", topic.c_str(), item.c_str()));
+	wxMessageBox(wxString::Format("OnStartAdvise(\"%s\",\"%s\")", topic.c_str(), item.c_str()));
 	if (!m_vframe) return false;
 
 	SettingDlg *setting_dlg = m_vframe->GetSettingDlg();
@@ -46,3 +54,17 @@ bool ServerConnection::OnStartAdvise(const wxString& topic, const wxString& item
 
 	return true;
 }
+
+bool ServerConnection::OnStopAdvise(const wxString& topic, const wxString& item)
+{
+	//wxMessageBox(wxString::Format("OnStopAdvise(\"%s\",\"%s\")", topic.c_str(), item.c_str()));
+	return true;
+}
+
+bool ClientConnection::OnAdvise(const wxString& topic, const wxString& item, char *data,
+				                int size, wxIPCFormat format)
+{
+	//wxMessageBox(topic, data);
+	return true;
+}
+

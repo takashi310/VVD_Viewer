@@ -51,6 +51,7 @@ DEALINGS IN THE SOFTWARE.
 #include "Tester.h"
 #include "Animator/Interpolator.h"
 #include "TextRenderer.h"
+#include "PluginManager.h"
 #include "compatibility.h"
 
 #include <wx/wx.h>
@@ -102,6 +103,7 @@ using namespace std;
 #define UITEXT_ADJUST		"Output Adjustments"
 #define UITEXT_CLIPPING		"Clipping Planes"
 #define UITEXT_PROPERTIES	"Properties"
+#define UITEXT_PLUGINS		"Plugins"
 
 class VRenderFrame: public wxFrame
 {
@@ -151,7 +153,9 @@ class VRenderFrame: public wxFrame
 		ID_Facebook,
 		ID_Twitter,
 		ID_Info,
-		ID_ShowHideToolbar
+		ID_ShowHideToolbar,
+		ID_Timer,
+		ID_Plugins
 	};
 
 public:
@@ -326,6 +330,8 @@ public:
 
 	void SetKeyLock(bool lock);
 
+	PluginManager* GetPluginManager() const { return m_plugin_manager ; }
+	
 public: //public so export window can see it and set it. 
 	RecorderDlg* m_recorder_dlg;
 	VMovieView* m_movie_view;
@@ -334,6 +340,7 @@ private:
 	wxAuiManager m_aui_mgr;
 	wxMenu* m_tb_menu_ui;
 	wxMenu* m_tb_menu_edit;
+	wxMenu* m_tb_menu_plugin;
 	wxToolBar* m_main_tb;
 	//main top menu
 	wxMenuBar* m_top_menu;
@@ -411,6 +418,10 @@ private:
 
 	double m_gpu_max_mem;
 
+	wxTimer m_timer;
+
+	PluginManager* m_plugin_manager;
+
 private:
 	//views
 	wxString CreateView(int row=1);
@@ -443,6 +454,7 @@ private:
 	void OnShowHideUI(wxCommandEvent& WXUNUSED(event));
 	void OnShowHideToolbar(wxCommandEvent& WXUNUSED(event));
 	void OnShowHideView(wxCommandEvent &event);
+	void OnPlugins(wxCommandEvent& WXUNUSED(event));
 
 	//panes
 	void OnPaneClose(wxAuiManagerEvent& event);
@@ -468,6 +480,8 @@ private:
 
 	void OnDraw(wxPaintEvent& event);
 	void OnKeyDown(wxKeyEvent& event);
+
+	void OnTimer(wxTimerEvent& event);
 
 	DECLARE_EVENT_TABLE()
 };

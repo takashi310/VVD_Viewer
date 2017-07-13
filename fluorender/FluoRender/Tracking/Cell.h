@@ -144,6 +144,7 @@ namespace FL
 		m_size_f += value;
 	}
 
+
 	inline void Cell::Inc(pCell &cell)
 	{
 		m_center = FLIVR::Point(
