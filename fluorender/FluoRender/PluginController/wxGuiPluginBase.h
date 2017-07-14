@@ -6,17 +6,21 @@ class DEMO_API wxGuiPluginBase : public wxObject
 {
 	DECLARE_ABSTRACT_CLASS(wxGuiPluginBase)
 public:
-	wxGuiPluginBase(wxEvtHandler * handler);
+	wxGuiPluginBase(wxEvtHandler * handler, wxWindow * vvd);
 	virtual ~wxGuiPluginBase();
 	
 	virtual wxString GetName() const = 0;
 	virtual wxString GetId() const = 0;
 	virtual wxWindow * CreatePanel(wxWindow * parent) = 0;
-
+	
 	wxEvtHandler * GetEventHandler();
 	virtual void SetEventHandler(wxEvtHandler * handler);
+	virtual void SetVVDMainFrame(wxWindow * vvd);
+	virtual wxWindow * GetVVDMainFrame();
+
 protected:
 	wxEvtHandler * m_Handler;
+	wxWindow *m_vvd;
 };
 
 DECLARE_EXPORTED_EVENT_TYPE(DEMO_API, wxEVT_GUI_PLUGIN_INTEROP, wxEVT_USER_FIRST + 100)

@@ -21,8 +21,11 @@ public:
 	virtual bool LoadAllPlugins(bool forceProgramPath);
 	virtual bool UnloadAllPlugins();
 
-	const wxNonGuiPluginBaseList & GetNonGuiPlugins() const;
-	const wxGuiPluginBaseList & GetGuiPlugins() const;
+	const wxNonGuiPluginBaseList& GetNonGuiPlugins() const;
+	const wxGuiPluginBaseList& GetGuiPlugins() const;
+
+	wxNonGuiPluginBase* GetNonGuiPlugin(wxString name) const;
+	wxGuiPluginBase* GetGuiPlugin(wxString name) const;
 private:
 	wxNonGuiPluginToDllDictionary m_MapNonGuiPluginsDll;
 	wxNonGuiPluginBaseList m_NonGuiPlugins;

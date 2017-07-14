@@ -139,11 +139,6 @@ VRenderFrame::VRenderFrame(
     FLIVR::TextureBrick::setCURL(_g_curl);
 	FLIVR::TextureBrick::setCURL_Multi(_g_curlm);
 
-	m_plugin_manager = new PluginManager;
-	if(m_plugin_manager)
-		m_plugin_manager->LoadAllPlugins(true);
-
-
 	//create this first to read the settings
 	m_setting_dlg = new SettingDlg(this, this);
 
@@ -244,10 +239,32 @@ VRenderFrame::VRenderFrame(
 		"Recorder: Record actions by key frames and play back");
 	m_main_tb->AddSeparator();
 
+	m_plugin_manager = new PluginManager;
+	if(m_plugin_manager)
+		m_plugin_manager->LoadAllPlugins(true);
 	m_tb_menu_plugin = new wxMenu;
-	m_plugin_manager->GetGuiPlugins();
-	m_tb_menu_plugin->Append(ID_Plugins+1, "Plugin1",
-		"Plugin1");
+	if (!m_plugin_list.IsEmpty()) m_plugin_list.Clear();
+	wxGuiPluginBaseList gplist = m_plugin_manager->GetGuiPlugins();
+	for(wxGuiPluginBaseList::Node * node = gplist.GetFirst(); node; node = node->GetNext())
+	{
+		wxString gpname = node->GetData()->GetName();
+		if (!gpname.IsEmpty())
+			m_plugin_list.Add(gpname);
+	}
+	wxNonGuiPluginBaseList ngplist = m_plugin_manager->GetNonGuiPlugins();
+	for(wxNonGuiPluginBaseList::Node * node = ngplist.GetFirst(); node; node = node->GetNext())
+	{
+		wxString ngpname = node->GetData()->GetName();
+		if (!ngpname.IsEmpty())
+			m_plugin_list.Add(ngpname);
+	}
+	m_plugin_list.Sort();
+	for (int i = 0; i < m_plugin_list.size(); i++)
+		m_tb_menu_plugin->Append(ID_Plugin+i, m_plugin_list[i]);
+	if (!m_plugin_list.IsEmpty())
+		m_tb_menu_plugin->Bind(wxEVT_COMMAND_MENU_SELECTED, &VRenderFrame::OnPluginMenuSelect, this, ID_Plugin, ID_Plugin+m_plugin_list.size()-1);
+
+
 	m_main_tb->AddTool(ID_Plugins, "Plugins",
 		wxGetBitmapFromMemory(icon_settings), wxNullBitmap, wxITEM_NORMAL,
 		"Plugins",
@@ -4973,6 +4990,34 @@ void VRenderFrame::OnShowHideView(wxCommandEvent &event)
 void VRenderFrame::OnPlugins(wxCommandEvent& WXUNUSED(event))
 {
 	PopupMenu(m_tb_menu_plugin);
+}
+
+void VRenderFrame::OnPluginMenuSelect(wxCommandEvent& event)
+{
+	int pid = event.GetId() - ID_Plugin;
+	if (pid < m_plugin_list.size())
+	{
+		if (auto gp = m_plugin_manager->GetGuiPlugin(m_plugin_list[pid]))
+		{
+			if (!m_aui_mgr.GetPane(gp->GetName()).IsOk())
+			{
+				SetEvtHandlerEnabled(false);
+				wxWindow* pp = gp->CreatePanel(m_help_dlg);//dummy parent window
+				wxSize wsize = pp->GetVirtualSize();
+				m_aui_mgr.AddPane(pp, wxAuiPaneInfo().
+					Name(gp->GetName()).Caption(gp->GetName()).
+					Dockable(false).CloseButton(true).DestroyOnClose(true));
+				m_aui_mgr.GetPane(pp).Float();
+				m_aui_mgr.Update();
+				SetEvtHandlerEnabled(true);
+			}
+		}
+		else if (auto ngp = m_plugin_manager->GetNonGuiPlugin(m_plugin_list[pid]))
+		{
+			ngp->Work();
+			return;
+		}
+	}
 }
 
 //panes

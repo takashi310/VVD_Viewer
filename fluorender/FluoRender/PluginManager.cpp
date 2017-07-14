@@ -61,3 +61,29 @@ const wxGuiPluginBaseList & PluginManager::GetGuiPlugins() const
 {
 	return m_GuiPlugins;
 }
+
+wxNonGuiPluginBase* PluginManager::GetNonGuiPlugin(wxString name) const
+{
+	for(wxNonGuiPluginBaseList::Node * node = m_NonGuiPlugins.GetFirst(); 
+		node; node = node->GetNext())
+	{
+		wxNonGuiPluginBase *plugin = node->GetData();
+		if (plugin->GetName() == name)
+			return plugin;
+	}
+
+	return NULL;
+}
+
+wxGuiPluginBase* PluginManager::GetGuiPlugin(wxString name) const
+{
+	for(wxGuiPluginBaseList::Node * node = m_GuiPlugins.GetFirst(); 
+		node; node = node->GetNext())
+	{
+		wxGuiPluginBase *plugin = node->GetData();
+		if (plugin->GetName() == name)
+			return plugin;
+	}
+
+	return NULL;
+}

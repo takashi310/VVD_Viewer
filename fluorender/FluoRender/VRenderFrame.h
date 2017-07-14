@@ -155,7 +155,8 @@ class VRenderFrame: public wxFrame
 		ID_Info,
 		ID_ShowHideToolbar,
 		ID_Timer,
-		ID_Plugins
+		ID_Plugins,
+		ID_Plugin = wxID_HIGHEST+10001
 	};
 
 public:
@@ -421,6 +422,7 @@ private:
 	wxTimer m_timer;
 
 	PluginManager* m_plugin_manager;
+	wxArrayString m_plugin_list;
 
 private:
 	//views
@@ -455,6 +457,7 @@ private:
 	void OnShowHideToolbar(wxCommandEvent& WXUNUSED(event));
 	void OnShowHideView(wxCommandEvent &event);
 	void OnPlugins(wxCommandEvent& WXUNUSED(event));
+	void OnPluginMenuSelect(wxCommandEvent& event);
 
 	//panes
 	void OnPaneClose(wxAuiManagerEvent& event);
