@@ -35,11 +35,12 @@ DEALINGS IN THE SOFTWARE.
 #include "RecorderDlg.h"
 #include "compatibility.h"
 #include "QVideoEncoder.h"
+#include "DLLExport.h"
 
 #ifndef _VMovieView_H_
 #define _VMovieView_H_
 
-class VMovieView : public wxPanel
+class EXPORT_API VMovieView : public wxPanel
 {
 	enum
 	{

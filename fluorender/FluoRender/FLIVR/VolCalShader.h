@@ -32,6 +32,8 @@
 #include <string>
 #include <vector>
 
+#include "DLLExport.h"
+
 namespace FLIVR
 {
 	#define CAL_SUBSTRACTION	1	//initialize the segmentation fragment shader
@@ -45,7 +47,7 @@ namespace FLIVR
 
 	class ShaderProgram;
 
-	class VolCalShader
+	class EXPORT_API VolCalShader
 	{
 	public:
 		VolCalShader(int type);
@@ -70,7 +72,7 @@ namespace FLIVR
 		ShaderProgram* program_;
 	};
 
-	class VolCalShaderFactory
+	class EXPORT_API VolCalShaderFactory
 	{
 	public:
 		VolCalShaderFactory();

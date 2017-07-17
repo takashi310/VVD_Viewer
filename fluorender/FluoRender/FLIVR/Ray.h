@@ -31,11 +31,12 @@
 
 #include "Point.h"
 #include "Vector.h"
+#include "DLLExport.h"
 
 namespace FLIVR
 {
 
-   class Ray
+   class EXPORT_API Ray
    {
       Point o_;
       Vector d_;

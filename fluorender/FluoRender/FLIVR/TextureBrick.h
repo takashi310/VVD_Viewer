@@ -45,6 +45,8 @@
 #include <map>
 #include <curl/curl.h>
 
+#include "DLLExport.h"
+
 namespace FLIVR {
 
 	using std::vector;
@@ -67,7 +69,7 @@ namespace FLIVR {
 #define BRICK_FILE_TYPE_ZLIB	3
 
 	
-	class FileLocInfo {
+	class EXPORT_API FileLocInfo {
 	public:
 		FileLocInfo()
 		{
@@ -109,7 +111,7 @@ namespace FLIVR {
 		std::wstring cache_filename;
 	};
 
-	class TextureBrick
+	class EXPORT_API TextureBrick
 	{
 	public:
 		enum CompType

@@ -32,6 +32,7 @@ DEALINGS IN THE SOFTWARE.
 #include <unordered_map>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/optional.hpp>
+#include "DLLExport.h"
 
 #ifndef _TREEPANEL_H_
 #define _TREEPANEL_H_
@@ -48,7 +49,7 @@ class VolumeData;
 //-------------------------------------
 
 //tree item data
-class LayerInfo : public wxTreeItemData
+class EXPORT_API LayerInfo : public wxTreeItemData
 {
 public:
 	LayerInfo()
@@ -68,7 +69,7 @@ public:
 	int icon;
 };
 
-class DataTreeCtrl: public wxTreeCtrl, Notifier
+class EXPORT_API DataTreeCtrl: public wxTreeCtrl, Notifier
 {
 	enum
 	{
@@ -272,7 +273,7 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-class TreePanel : public wxPanel, Observer
+class EXPORT_API TreePanel : public wxPanel, Observer
 {
 public:
 	enum

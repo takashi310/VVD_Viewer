@@ -26,6 +26,7 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 */
 #include <wx/wx.h>
+#include "DLLExport.h"
 
 #ifndef _SETTINGDLG_H_
 #define _SETTINGDLG_H_
@@ -33,7 +34,7 @@ DEALINGS IN THE SOFTWARE.
 #define SETTING_FILE_NAME "fluorender.set"
 
 //enum BitmapFontType;
-class SettingDlg : public wxPanel
+class EXPORT_API SettingDlg : public wxPanel
 {
 	enum
 	{

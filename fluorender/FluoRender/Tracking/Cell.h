@@ -35,6 +35,7 @@ DEALINGS IN THE SOFTWARE.
 #include <boost/graph/graph_traits.hpp>
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/adjacency_iterator.hpp>
+#include "DLLExport.h"
 
 namespace FL
 {
@@ -65,7 +66,7 @@ namespace FL
 	typedef boost::graph_traits<IntraGraph>::adjacency_iterator IntraAdjIter;
 	typedef boost::graph_traits<IntraGraph>::edge_iterator IntraEdgeIter;
 
-	class Cell
+	class EXPORT_API Cell
 	{
 	public:
 		Cell(unsigned int id) :

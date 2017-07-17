@@ -1,6 +1,7 @@
 #ifndef _APROPVIEW_H_
 #define _APROPVIEW_H_
 
+#include "DLLExport.h"
 #include "DataManager.h"
 #include "VRenderView.h"
 #include <wx/wx.h>
@@ -11,7 +12,7 @@
 
 using namespace std;
 
-class APropView : public wxPanel
+class EXPORT_API APropView : public wxPanel
 {
 	enum
 	{

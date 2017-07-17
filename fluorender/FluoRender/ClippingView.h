@@ -25,6 +25,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 */
+#include "DLLExport.h"
 #include "DataManager.h"
 #include <wx/wx.h>
 #include <wx/panel.h>
@@ -42,7 +43,7 @@ DEALINGS IN THE SOFTWARE.
 #define PM_LOWTRANSBACK 3
 #define PM_NORMALBACK 4
 
-class ClippingView: public wxPanel
+class EXPORT_API ClippingView: public wxPanel
 {
 	enum
 	{

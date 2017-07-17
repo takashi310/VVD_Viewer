@@ -25,6 +25,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 */
+#include "DLLExport.h"
 #include "DataManager.h"
 #include "utility.h"
 #include "VolumeSelector.h"
@@ -92,7 +93,7 @@ class VRenderGLView;
 class LMSeacher;
 
 //tree item data
-class LMItemInfo : public wxTreeItemData
+class EXPORT_API LMItemInfo : public wxTreeItemData
 {
 public:
 	LMItemInfo()
@@ -108,7 +109,7 @@ public:
 	Point p;
 };
 
-class LMTreeCtrl : public wxTreeCtrl
+class EXPORT_API LMTreeCtrl : public wxTreeCtrl
 {
 	enum
 	{
@@ -164,7 +165,7 @@ protected: //Possible TODO
 };
 
 
-class LMSeacher : public wxTextCtrl
+class EXPORT_API LMSeacher : public wxTextCtrl
 {
 public:
 	LMSeacher(VRenderGLView* glview,
@@ -224,7 +225,7 @@ struct VolumeDecompressorData
 
 class VolumeLoader;
 
-class VolumeDecompressorThread : public wxThread
+class EXPORT_API VolumeDecompressorThread : public wxThread
 {
     public:
 		VolumeDecompressorThread(VolumeLoader *vl);
@@ -234,7 +235,7 @@ class VolumeDecompressorThread : public wxThread
         VolumeLoader* m_vl;
 };
 
-class VolumeLoaderThread : public wxThread
+class EXPORT_API VolumeLoaderThread : public wxThread
 {
     public:
 		VolumeLoaderThread(VolumeLoader *vl);
@@ -244,7 +245,7 @@ class VolumeLoaderThread : public wxThread
         VolumeLoader* m_vl;
 };
 
-class VolumeLoader
+class EXPORT_API VolumeLoader
 {
 	public:
 		VolumeLoader();
@@ -292,7 +293,7 @@ class VolumeLoader
 		friend class VolumeDecompressorThread;
 };
 
-class VRenderGLView: public wxGLCanvas
+class EXPORT_API VRenderGLView: public wxGLCanvas
 {
 	enum
 	{
@@ -1251,7 +1252,7 @@ private:
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class VRenderView: public wxPanel
+class EXPORT_API VRenderView: public wxPanel
 {
 public:
 	enum

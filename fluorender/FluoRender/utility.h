@@ -30,6 +30,8 @@ DEALINGS IN THE SOFTWARE.
 
 #include <vector>
 
+#include "DLLExport.h"
+
 #define PI_2 1.5707963267948966192313216916398
 #define PI 3.1415926535897932384626433832795
 #define EPS 1e-6
@@ -67,7 +69,7 @@ unsigned int reverse_bit(unsigned int val, unsigned int len);
 float nCr(int n,int r);
 
 // Just a class to be passed in the action class
-class ActionInfo {
+class EXPORT_API ActionInfo {
 public:
 	int id;
 	ActionInfo() {id = -1;}
@@ -75,12 +77,12 @@ public:
 };
 
 // The observer class
-class Observer {
+class EXPORT_API Observer {
 public:
 	virtual void doAction(ActionInfo *info) = 0;
 };
    
-class Notifier {
+class EXPORT_API Notifier {
 private:
    // an array containing all observer classes
    std::vector<Observer*> m_observers;

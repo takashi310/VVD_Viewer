@@ -27,11 +27,12 @@ DEALINGS IN THE SOFTWARE.
 */
 #include <wx/wx.h>
 #include <wx/html/htmlwin.h>
+#include "DLLExport.h"
 
 #ifndef _HELPDLG_H_
 #define _HELPDLG_H_
 
-class HelpDlg : public wxPanel
+class EXPORT_API HelpDlg : public wxPanel
 {
 public:
 	HelpDlg(wxWindow* frame,

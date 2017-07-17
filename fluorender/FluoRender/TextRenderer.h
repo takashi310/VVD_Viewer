@@ -34,11 +34,12 @@ DEALINGS IN THE SOFTWARE.
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include <FLIVR/Color.h>
+#include "DLLExport.h"
 
 using namespace std;
 using namespace FLIVR;
 
-class TextRenderer
+class EXPORT_API TextRenderer
 {
 public:
 	TextRenderer(const string &lib_name);

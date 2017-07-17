@@ -27,11 +27,12 @@ DEALINGS IN THE SOFTWARE.
 */
 #include <wx/wx.h>
 #include <wx/listctrl.h>
+#include "DLLExport.h"
 
 #ifndef _LISTPANEL_H_
 #define _LISTPANEL_H_
 
-class DataListCtrl: public wxListCtrl
+class EXPORT_API DataListCtrl: public wxListCtrl
 {
    enum
    {
@@ -100,7 +101,7 @@ class DataListCtrl: public wxListCtrl
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-class ListPanel : public wxPanel
+class EXPORT_API ListPanel : public wxPanel
 {
    enum
    {

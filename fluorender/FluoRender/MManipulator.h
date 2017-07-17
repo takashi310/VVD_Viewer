@@ -30,11 +30,12 @@ DEALINGS IN THE SOFTWARE.
 #include <wx/panel.h>
 #include <wx/spinbutt.h>
 #include "compatibility.h"
+#include "DLLExport.h"
 
 #ifndef _MMANIPULATOR_H_
 #define _MMANIPULATOR_H_
 
-class MManipulator: public wxPanel
+class EXPORT_API MManipulator: public wxPanel
 {
 	enum
 	{

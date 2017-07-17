@@ -30,11 +30,12 @@
 #define ShaderProgram_h
 
 #include <string>
+#include "DLLExport.h"
 
 namespace FLIVR
 {
 
-	class ShaderProgram
+	class EXPORT_API ShaderProgram
 	{
 	public:
 		ShaderProgram(const std::string& vert_shader,const std::string& frag_shader);

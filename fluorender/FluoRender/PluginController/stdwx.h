@@ -9,6 +9,8 @@
 #define PLUGIN_EXPORTED_API	extern "C"
 #endif
 
+#include "DLLExport.h"
+
 // SYSTEM INCLUDES
 // For compilers that support precompilation, includes "wx/wx.h".
 #include "wx/wxprec.h"

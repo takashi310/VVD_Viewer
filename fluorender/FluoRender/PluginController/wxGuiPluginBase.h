@@ -11,12 +11,19 @@ public:
 	
 	virtual wxString GetName() const = 0;
 	virtual wxString GetId() const = 0;
+
+	//This method is called when the plugin is starting.
 	virtual wxWindow * CreatePanel(wxWindow * parent) = 0;
+
+	//This method is called when the application is starting.
+	virtual void OnInit() = 0;
+	//This method is called when the application is closing.
+	virtual void OnDestroy() = 0;
 	
 	wxEvtHandler * GetEventHandler();
 	virtual void SetEventHandler(wxEvtHandler * handler);
 	virtual void SetVVDMainFrame(wxWindow * vvd);
-	virtual wxWindow * GetVVDMainFrame();
+	wxWindow * GetVVDMainFrame();
 
 protected:
 	wxEvtHandler * m_Handler;

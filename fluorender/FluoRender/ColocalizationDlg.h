@@ -2,13 +2,14 @@
 #define _COLOCALIZATIONDLG_H_
 
 #include <wx/wx.h>
+#include "DLLExport.h"
 
 class VRenderView;
 class VolumeData;
 class DataGroup;
 class Annotations;
 
-class ColocalizationDlg : public wxPanel
+class EXPORT_API ColocalizationDlg : public wxPanel
 {
 public:
 	enum

@@ -28,11 +28,12 @@ DEALINGS IN THE SOFTWARE.
 #include "DataManager.h"
 #include <FLIVR/KernelProgram.h>
 #include <FLIVR/VolKernel.h>
+#include "DLLExport.h"
 
 #ifndef _KERNELEXECUTOR_H_
 #define _KERNELEXECUTOR_H_
 
-class KernelExecutor
+class EXPORT_API KernelExecutor
 {
 public:
 	KernelExecutor();

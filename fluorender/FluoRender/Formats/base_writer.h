@@ -30,6 +30,7 @@ DEALINGS IN THE SOFTWARE.
 
 #include <string>
 #include <nrrd.h>
+#include "DLLExport.h"
 
 using namespace std;
 
@@ -38,7 +39,7 @@ using namespace std;
 	#define nrrdAxisInfoSet nrrdAxisInfoSet_va
 #endif
 
-class BaseWriter
+class EXPORT_API BaseWriter
 {
 public:
 	//BaseWriter();

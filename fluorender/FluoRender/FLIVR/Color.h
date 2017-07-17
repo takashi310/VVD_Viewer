@@ -30,11 +30,12 @@ DEALINGS IN THE SOFTWARE.
 #define SLIVR_Color_h
 
 #include <stdlib.h>
+#include "DLLExport.h"
 
 namespace FLIVR
 {
 	class Color;
-	class HSVColor
+	class EXPORT_API HSVColor
 	{
 		double hue_;
 		double sat_;
@@ -71,7 +72,7 @@ namespace FLIVR
 		friend class Color;
 	};
 
-	class Color
+	class EXPORT_API Color
 	{
 	protected:
 		double r_, g_, b_;
@@ -147,7 +148,7 @@ namespace FLIVR
 		friend class HSVColor;
 	};
 
-	class Colorub
+	class EXPORT_API Colorub
 	{ // unsigned byte color
 		unsigned char data[3]; // data...
 	public:
@@ -172,7 +173,7 @@ namespace FLIVR
 	This structure holds a simple RGB color in char format.
 	*********************************************************/
 
-	class CharColor
+	class EXPORT_API CharColor
 	{
 	public:
 		char red;

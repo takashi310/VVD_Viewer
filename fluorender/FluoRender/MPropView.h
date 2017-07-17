@@ -32,6 +32,7 @@ DEALINGS IN THE SOFTWARE.
 #include <wx/glcanvas.h>
 #include <wx/clrpicker.h>
 #include <wx/slider.h>
+#include "DLLExport.h"
 
 #ifndef _MPROPVIEW_H_
 #define _MPROPVIEW_H_
@@ -39,7 +40,7 @@ DEALINGS IN THE SOFTWARE.
 using namespace std;
 
 
-class mpTextCtrl : public wxTextCtrl
+class EXPORT_API mpTextCtrl : public wxTextCtrl
 {
 public:
 	mpTextCtrl(wxWindow* frame,
@@ -72,7 +73,7 @@ private:
 };
 
 
-class MPropView: public wxPanel
+class EXPORT_API MPropView: public wxPanel
 {
 	enum
 	{

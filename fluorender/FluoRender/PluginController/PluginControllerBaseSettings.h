@@ -4,7 +4,7 @@
 #ifndef _MODULAR_CORESET_H_
 #define _MODULAR_CORESET_H_
 
-class PluginControllerBaseSettings
+class EXPORT_API PluginControllerBaseSettings
 {
 public:
 	PluginControllerBaseSettings();

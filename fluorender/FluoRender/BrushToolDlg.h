@@ -1,5 +1,6 @@
 #include <wx/wx.h>
 #include <wx/notebook.h>
+#include "DLLExport.h"
 
 #ifndef _BRUSHTOOLDLG_H_
 #define _BRUSHTOOLDLG_H_
@@ -11,7 +12,7 @@ class VolumeData;
 #define BRUSH_TOOL_ITER_NORMAL	30
 #define BRUSH_TOOL_ITER_STRONG	60
 
-class BrushToolDlg : public wxPanel
+class EXPORT_API BrushToolDlg : public wxPanel
 {
 public:
 	enum

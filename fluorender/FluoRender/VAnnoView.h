@@ -8,10 +8,11 @@
 #include <wx/glcanvas.h>
 #include <wx/clrpicker.h>
 #include <wx/slider.h>
+#include "DLLExport.h"
 
 using namespace std;
 
-class myTextCtrl : public wxTextCtrl
+class EXPORT_API myTextCtrl : public wxTextCtrl
 {
 public:
 	myTextCtrl(wxWindow* frame,
@@ -45,7 +46,7 @@ private:
 };
 
 
-class VAnnoView : public wxPanel
+class EXPORT_API VAnnoView : public wxPanel
 {
 	enum
 	{

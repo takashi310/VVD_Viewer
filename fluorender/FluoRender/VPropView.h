@@ -5,6 +5,7 @@
 #include <wx/clrpicker.h>
 #include <wx/slider.h>
 
+#include "DLLExport.h"
 #include "FLIVR/Color.h"
 #include "FLIVR/VolumeRenderer.h"
 #include "FLIVR/BBox.h"
@@ -19,7 +20,7 @@ using namespace std;
 
 class VRenderView;
 
-class VPropView: public wxPanel
+class EXPORT_API VPropView: public wxPanel
 {
 	enum
 	{

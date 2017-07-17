@@ -1,14 +1,3 @@
-/////////////////////////////////////////////////////////////////////////////
-// Name:        wxGuiPluginWindowBase.h
-// Purpose:     
-// Author:      Volodymyr (T-Rex) Triapichko
-// Modified by: 
-// Created:     09/09/2013 23:54:21
-// RCS-ID:      
-// Copyright:   Volodymyr (T-Rex) Triapichko, 2013
-// Licence:     
-/////////////////////////////////////////////////////////////////////////////
-
 #ifndef _WXGUIPLUGINWINDOWBASE_H_
 #define _WXGUIPLUGINWINDOWBASE_H_
 

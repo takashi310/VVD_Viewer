@@ -5,10 +5,11 @@
 
 #include <wx/wx.h>
 #include <wx/ipc.h>
+#include "DLLExport.h"
 
 class VRenderFrame;
 
-class ServerConnection: public wxConnection
+class EXPORT_API ServerConnection: public wxConnection
 {
 public:
     ServerConnection(void) : wxConnection() { m_vframe = NULL; }
@@ -27,7 +28,7 @@ protected:
 	wxString m_advise;
 };
 
-class ClientConnection: public wxConnection
+class EXPORT_API ClientConnection: public wxConnection
 {
 public:
     ClientConnection(void) : wxConnection() { }
@@ -37,7 +38,7 @@ public:
                   int size, wxIPCFormat format);
 };
 
-class MyClient: public wxClient
+class EXPORT_API MyClient: public wxClient
 {
 public:
 	MyClient(void) : wxClient() { m_connection = NULL; }
@@ -54,7 +55,7 @@ protected:
 	ClientConnection *m_connection;
 };
 
-class MyServer: public wxServer
+class EXPORT_API MyServer: public wxServer
 {
 public:
 	MyServer(void) : wxServer() { m_connection = NULL; m_vframe = NULL;}

@@ -29,6 +29,8 @@
 #ifndef SLIVR_VolumeRenderer_h
 #define SLIVR_VolumeRenderer_h
 
+#include "DLLExport.h"
+
 #include "Color.h"
 #include "Plane.h"
 #include "Texture.h"
@@ -42,7 +44,7 @@ namespace FLIVR
 {
 	class MultiVolumeRenderer;
 
-	class VolumeRenderer : public TextureRenderer
+	class EXPORT_API VolumeRenderer : public TextureRenderer
 	{
 	public:
 		VolumeRenderer(Texture* tex,

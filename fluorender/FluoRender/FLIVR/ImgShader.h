@@ -31,6 +31,7 @@
 
 #include <string>
 #include <vector>
+#include "DLLExport.h"
 
 namespace FLIVR
 {
@@ -56,7 +57,7 @@ namespace FLIVR
 
 	class ShaderProgram;
 
-	class ImgShader
+	class EXPORT_API ImgShader
 	{
 	public:
 		ImgShader(int type, int colormap);
@@ -93,7 +94,7 @@ namespace FLIVR
 		ShaderProgram* program_;
 	};
 
-	class ImgShaderFactory
+	class EXPORT_API ImgShaderFactory
 	{
 	public:
 		ImgShaderFactory();

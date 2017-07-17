@@ -28,13 +28,14 @@ DEALINGS IN THE SOFTWARE.
 #include "DataManager.h"
 #include <wx/progdlg.h>
 #include <boost/unordered_map.hpp>
+#include "DLLExport.h"
 
 #ifndef _VOLUMESELECTOR_H_
 #define _VOLUMESELECTOR_H_
 
 //using namespace stdext;
 
-class VolumeSelector
+class EXPORT_API VolumeSelector
 {
 public:
 	VolumeSelector();

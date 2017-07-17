@@ -34,6 +34,7 @@
 #include "Transform.h"
 #include "TextureBrick.h"
 #include "Utils.h"
+#include "DLLExport.h"
 
 namespace FLIVR
 {
@@ -41,7 +42,7 @@ namespace FLIVR
 
 	class Transform;
 
-	class Texture 
+	class EXPORT_API Texture 
 	{
 	public:
 		static size_t mask_undo_num_;

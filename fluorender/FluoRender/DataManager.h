@@ -61,6 +61,8 @@ DEALINGS IN THE SOFTWARE.
 #include <curl/curl.h>
 #include <boost/property_tree/ptree.hpp>
 
+#include "DLLExport.h"
+
 #ifndef _DATAMANAGER_H_
 #define _DATAMANAGER_H_
 
@@ -79,7 +81,7 @@ using namespace FLIVR;
 #define LOAD_TYPE_PVXML		6
 #define LOAD_TYPE_BRKXML	7
 
-class TreeLayer
+class EXPORT_API TreeLayer
 {
 public:
 	TreeLayer();
@@ -178,7 +180,7 @@ struct VD_Landmark
 
 class DataManager;
 
-class VolumeData : public TreeLayer
+class EXPORT_API VolumeData : public TreeLayer
 {
 public:
 	VolumeData();
@@ -598,7 +600,7 @@ private:
 #define MESH_FLOAT_SHN	4
 #define MESH_FLOAT_ALPHA	5
 
-class MeshData : public TreeLayer
+class EXPORT_API MeshData : public TreeLayer
 {
 public:
 	MeshData();
@@ -725,7 +727,7 @@ private:
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class AText
+class EXPORT_API AText
 {
 public:
 	AText();
@@ -747,7 +749,7 @@ private:
 };
 
 class DataManager;
-class Annotations : public TreeLayer
+class EXPORT_API Annotations : public TreeLayer
 {
 public:
 	Annotations();
@@ -833,7 +835,7 @@ private:
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class RulerBalloon
+class EXPORT_API RulerBalloon
 {
 public:
 	
@@ -872,7 +874,7 @@ private:
 	vector<string> m_bufs;
 };
 
-class ProfileBin
+class EXPORT_API ProfileBin
 {
 public:
 	ProfileBin():
@@ -882,7 +884,7 @@ public:
 	double m_accum;
 };
 
-class Ruler : public TreeLayer
+class EXPORT_API Ruler : public TreeLayer
 {
 public:
 	Ruler();
@@ -1063,7 +1065,7 @@ private:
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TraceGroup : public TreeLayer
+class EXPORT_API TraceGroup : public TreeLayer
 {
 public:
 	TraceGroup();
@@ -1164,7 +1166,7 @@ private:
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class DataGroup : public TreeLayer
+class EXPORT_API DataGroup : public TreeLayer
 {
 public:
 	DataGroup();
@@ -1315,7 +1317,7 @@ private:
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class MeshGroup : public TreeLayer
+class EXPORT_API MeshGroup : public TreeLayer
 {
 public:
 	MeshGroup();
@@ -1401,7 +1403,7 @@ private:
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class DataManager
+class EXPORT_API DataManager
 {
 public:
 	DataManager();

@@ -34,12 +34,13 @@
 
 #include <string>
 #include <vector>
+#include "DLLExport.h"
 
 namespace FLIVR
 {
 	class ShaderProgram;
 
-	class VolShader
+	class EXPORT_API VolShader
 	{
 	public:
 		VolShader(bool poly, int channels,
@@ -113,7 +114,7 @@ namespace FLIVR
 		ShaderProgram* program_;
 	};
 
-	class VolShaderFactory
+	class EXPORT_API VolShaderFactory
 	{
 	public:
 		VolShaderFactory();

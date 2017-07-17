@@ -34,13 +34,15 @@
 #include <string>
 #include <iosfwd>
 
+#include "DLLExport.h"
+
 namespace FLIVR {
 
 using std::string;
     
 class Vector;
 
-class Point {
+class EXPORT_API Point {
   double x_,y_,z_;
 public:
   inline explicit Point(const Vector& v);

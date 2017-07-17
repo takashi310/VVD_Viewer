@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "DLLExport.h"
+
 
 namespace FLIVR
 {
@@ -13,7 +15,7 @@ namespace FLIVR
 
 	class KernelProgram;
 
-	class VolKernel
+	class EXPORT_API VolKernel
 	{
 	public:
 		VolKernel(int type);
@@ -40,7 +42,7 @@ namespace FLIVR
 		KernelProgram* program_;
 	};
 
-	class VolKernelFactory
+	class EXPORT_API VolKernelFactory
 	{
 	public:
 		VolKernelFactory();

@@ -36,13 +36,15 @@
 #include <vector>
 #include <glm/glm.hpp>
 
+#include "DLLExport.h"
+
 using namespace std;
 
 namespace FLIVR
 {
 	class MshShaderFactory;
 
-	class MeshRenderer
+	class EXPORT_API MeshRenderer
 	{
 	public:
 		MeshRenderer(GLMmodel* data);

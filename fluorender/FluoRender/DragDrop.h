@@ -27,11 +27,12 @@ DEALINGS IN THE SOFTWARE.
 */
 #include <wx/wx.h>
 #include <wx/dnd.h>
+#include "DLLExport.h"
 
 #ifndef _DRAGDROP_H_
 #define _DRAGDROP_H_
 
-class DnDFile : public wxFileDropTarget
+class EXPORT_API DnDFile : public wxFileDropTarget
 {
 public:
 	DnDFile(wxWindow *frame, wxWindow *view = 0);

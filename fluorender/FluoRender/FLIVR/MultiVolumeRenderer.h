@@ -36,11 +36,13 @@
 #include "VolumeRenderer.h"
 #include <vector>
 
+#include "DLLExport.h"
+
 using namespace std;
 
 namespace FLIVR
 {
-	class MultiVolumeRenderer
+	class EXPORT_API MultiVolumeRenderer
 	{
 	public:
 		MultiVolumeRenderer();

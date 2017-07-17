@@ -31,6 +31,7 @@
 
 #include <string>
 #include <vector>
+#include "DLLExport.h"
 
 namespace FLIVR
 {
@@ -43,7 +44,7 @@ namespace FLIVR
 
 	class ShaderProgram;
 
-	class SegShader
+	class EXPORT_API SegShader
 	{
 	public:
 		SegShader(int type, int paint_mode, int hr_mode,
@@ -91,7 +92,7 @@ namespace FLIVR
 		ShaderProgram* program_;
 	};
 
-	class SegShaderFactory
+	class EXPORT_API SegShaderFactory
 	{
 	public:
 		SegShaderFactory();

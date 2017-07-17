@@ -29,6 +29,7 @@ DEALINGS IN THE SOFTWARE.
 #include <wx/listctrl.h>
 #include <wx/clrpicker.h>
 #include "FLIVR/Color.h"
+#include "DLLExport.h"
 
 #ifndef _MEASUREDLG_H_
 #define _MEASUREDLG_H_
@@ -38,7 +39,7 @@ using namespace FLIVR;
 
 class VRenderView;
 
-class RulerListCtrl : public wxListCtrl
+class EXPORT_API RulerListCtrl : public wxListCtrl
 {
 	enum
 	{
@@ -115,7 +116,7 @@ protected: //Possible TODO
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
-class MeasureDlg : public wxPanel
+class EXPORT_API MeasureDlg : public wxPanel
 {
 public:
 	enum

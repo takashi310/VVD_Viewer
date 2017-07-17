@@ -26,13 +26,14 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 */
 #include <wx/wx.h>
+#include "DLLExport.h"
 
 #ifndef _CONVERTDLG_H_
 #define _CONVERTDLG_H_
 
 class VRenderView;
 
-class ConvertDlg : public wxPanel
+class EXPORT_API ConvertDlg : public wxPanel
 {
 public:
 	enum

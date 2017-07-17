@@ -16,10 +16,12 @@
 #include <vector>
 #include <map>
 
+#include "DLLExport.h"
+
 namespace FLIVR
 {
 	class VolKernel;
-	class KernelProgram
+	class EXPORT_API KernelProgram
 	{
 	public:
 		KernelProgram(const std::string& source);

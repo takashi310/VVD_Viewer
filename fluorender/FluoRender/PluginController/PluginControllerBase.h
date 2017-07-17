@@ -8,7 +8,7 @@ WX_DECLARE_LIST(wxDynamicLibrary, wxDynamicLibraryList);
 
 class PluginControllerBaseSettings;
 
-class PluginControllerBase
+class EXPORT_API PluginControllerBase
 {
 public:
 	PluginControllerBase();

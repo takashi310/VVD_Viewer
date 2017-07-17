@@ -2,6 +2,7 @@
 #include <PluginControllerBase.h>
 #include <wxNonGuiPluginBase.h>
 #include <wxGuiPluginBase.h>
+#include "DLLExport.h"
 
 // We need to know which DLL produced the specific plugin object.
 WX_DECLARE_HASH_MAP(wxNonGuiPluginBase*, wxDynamicLibrary*, \
@@ -14,9 +15,11 @@ WX_DECLARE_HASH_MAP(wxGuiPluginBase*, wxDynamicLibrary*, \
 WX_DECLARE_LIST(wxNonGuiPluginBase, wxNonGuiPluginBaseList);
 WX_DECLARE_LIST(wxGuiPluginBase, wxGuiPluginBaseList);
 
-class PluginManager : public PluginControllerBase
+class EXPORT_API PluginManager : public PluginControllerBase
 {
 public:
+	PluginManager() : PluginControllerBase() {m_MainFrame = NULL;}
+	PluginManager(wxWindow* mainFrame) : PluginControllerBase() {m_MainFrame = mainFrame;}
 	virtual ~PluginManager();
 	virtual bool LoadAllPlugins(bool forceProgramPath);
 	virtual bool UnloadAllPlugins();
@@ -31,4 +34,5 @@ private:
 	wxNonGuiPluginBaseList m_NonGuiPlugins;
 	wxGuiPluginToDllDictionary m_MapGuiPluginsDll;
 	wxGuiPluginBaseList m_GuiPlugins;
+	wxWindow* m_MainFrame;
 };

@@ -31,12 +31,14 @@ DEALINGS IN THE SOFTWARE.
 
 #include "Vector.h"
 
+#include "DLLExport.h"
+
 namespace FLIVR
 {
 
 	class Point;
 	class Quaternion;
-	class Plane
+	class EXPORT_API Plane
 	{
 		Vector n;
 		double d;

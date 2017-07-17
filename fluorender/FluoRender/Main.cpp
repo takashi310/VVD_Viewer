@@ -70,6 +70,7 @@ bool VRenderApp::OnInit()
    std::string title =  std::string(FLUORENDER_TITLE) + "1.00";
 
    m_frame = new VRenderFrame(
+	     this,
          (wxFrame*) NULL,
          wxString(title),
          50,50,1024,768);

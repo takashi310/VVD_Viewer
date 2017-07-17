@@ -31,6 +31,7 @@ DEALINGS IN THE SOFTWARE.
 
 #include "Point.h"
 #include <ostream>
+#include "DLLExport.h"
 
 #ifdef _WIN32
 #  undef min
@@ -41,7 +42,7 @@ namespace FLIVR
 {
 	class Vector;
 
-	class BBox
+	class EXPORT_API BBox
 	{
 	public:
 

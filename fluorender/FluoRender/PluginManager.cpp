@@ -33,6 +33,7 @@ bool PluginManager::LoadAllPlugins(bool forceProgramPath)
 	{
 		wxGuiPluginBase * plugin = node->GetData();
 		plugin->SetEventHandler(m_Handler);
+		plugin->SetVVDMainFrame(m_MainFrame);
 	}
 	return true;
 }

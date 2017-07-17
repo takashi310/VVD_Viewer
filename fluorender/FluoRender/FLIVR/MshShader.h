@@ -32,12 +32,14 @@
 #include <string>
 #include <vector>
 
+#include "DLLExport.h"
+
 namespace FLIVR
 {
 
 	class ShaderProgram;
 
-	class MshShader
+	class EXPORT_API MshShader
 	{
 	public:
 		MshShader(int type,
@@ -80,7 +82,7 @@ namespace FLIVR
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	class MshShaderFactory
+	class EXPORT_API MshShaderFactory
 	{
 	public:
 		MshShaderFactory();

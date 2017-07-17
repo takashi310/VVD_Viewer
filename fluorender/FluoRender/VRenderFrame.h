@@ -25,6 +25,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 */
+#include "DLLExport.h"
 #include "DataManager.h"
 #include "TreePanel.h"
 #include "ListPanel.h"
@@ -105,7 +106,7 @@ using namespace std;
 #define UITEXT_PROPERTIES	"Properties"
 #define UITEXT_PLUGINS		"Plugins"
 
-class VRenderFrame: public wxFrame
+class EXPORT_API VRenderFrame: public wxFrame
 {
 	enum
 	{
@@ -160,11 +161,13 @@ class VRenderFrame: public wxFrame
 	};
 
 public:
-	VRenderFrame(wxFrame* frame,
+	VRenderFrame(wxApp *app, wxFrame* frame,
                  const wxString& title,
                  int x, int y,
                  int w, int h);
 	~VRenderFrame();
+
+	wxApp* GetApp() {return m_app;}
 
 	TreePanel *GetTree();
 	void UpdateTree(wxString name = "", int type=-1, bool set_calc=true);
@@ -423,6 +426,8 @@ private:
 
 	PluginManager* m_plugin_manager;
 	wxArrayString m_plugin_list;
+
+	wxApp* m_app; 
 
 private:
 	//views

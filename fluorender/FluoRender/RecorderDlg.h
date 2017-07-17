@@ -28,6 +28,7 @@ DEALINGS IN THE SOFTWARE.
 #include <wx/wx.h>
 #include <wx/listctrl.h>
 #include <vector>
+#include "DLLExport.h"
 
 #ifndef _RECORDERDLG_H_
 #define _RECORDERDLG_H_
@@ -36,7 +37,7 @@ using namespace std;
 
 class VRenderView;
 
-class KeyListCtrl : public wxListCtrl
+class EXPORT_API KeyListCtrl : public wxListCtrl
 {
    enum
    {
@@ -105,7 +106,7 @@ class KeyListCtrl : public wxListCtrl
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
-class RecorderDlg : public wxPanel
+class EXPORT_API RecorderDlg : public wxPanel
 {
    public:
       enum

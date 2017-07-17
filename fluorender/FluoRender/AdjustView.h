@@ -1,3 +1,4 @@
+#include "DLLExport.h"
 #include "DataManager.h"
 #include "VRenderView.h"
 #include <wx/wx.h>
@@ -27,7 +28,7 @@
 #define Hdr2UIP(v) \
 	int(v*100.0+0.5)
 
-class AdjustView: public wxPanel
+class EXPORT_API AdjustView: public wxPanel
 {
 	enum
 	{

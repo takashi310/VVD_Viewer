@@ -41,10 +41,12 @@
 #include <string>
 #include <tinyxml2.h>
 
+#include "DLLExport.h"
+
 namespace FLIVR
 {
    //a simple fixed-length fifo sequence
-   class BrickQueue
+   class EXPORT_API BrickQueue
    {
       public:
          BrickQueue(int limit):
@@ -134,7 +136,7 @@ namespace FLIVR
 #define PALETTE_SIZE (PALETTE_W*PALETTE_H)
 #define PALETTE_ELEM_COMP 4
 
-   class TextureRenderer
+   class EXPORT_API TextureRenderer
    {
       public:
          enum RenderMode
@@ -481,6 +483,7 @@ namespace FLIVR
 
 			   void rearrangeLoadedBrkVec();
    };
+
 } // end namespace FLIVR
 
 #endif // TextureRenderer_h

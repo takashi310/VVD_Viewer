@@ -32,11 +32,13 @@
 #include <string>
 #include <vector>
 
+#include "DLLExport.h"
+
 namespace FLIVR
 {
 	class ShaderProgram;
 
-	class PaintShader
+	class EXPORT_API PaintShader
 	{
 	public:
 		PaintShader();
@@ -57,7 +59,7 @@ namespace FLIVR
 		ShaderProgram* program_;
 	};
 
-	class PaintShaderFactory
+	class EXPORT_API PaintShaderFactory
 	{
 	public:
 		PaintShaderFactory();

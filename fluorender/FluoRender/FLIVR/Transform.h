@@ -30,6 +30,7 @@
 #define SLIVR_Transform_h
 
 #include <string>
+#include "DLLExport.h"
 
 namespace FLIVR
 {
@@ -38,7 +39,7 @@ namespace FLIVR
 	class Plane;
 	class Transform;
 
-	class Transform
+	class EXPORT_API Transform
 	{
 		double mat[4][4];
 		mutable double imat[4][4];

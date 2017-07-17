@@ -111,7 +111,7 @@ CURLM *_g_curlm;//add by takashi
 CURL *_g_curl;//add by takashi
 
 VRenderFrame::VRenderFrame(
-	wxFrame* frame,
+	wxApp* app, wxFrame* frame,
 	const wxString& title,
 	int x, int y,
 	int w, int h)
@@ -127,7 +127,8 @@ VRenderFrame::VRenderFrame(
 	m_cur_sel_vol(-1),
 	m_cur_sel_mesh(-1),
 	m_gpu_max_mem(-1.0),
-	m_timer(this,ID_Timer)
+	m_timer(this,ID_Timer),
+	m_app(app)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -239,7 +240,7 @@ VRenderFrame::VRenderFrame(
 		"Recorder: Record actions by key frames and play back");
 	m_main_tb->AddSeparator();
 
-	m_plugin_manager = new PluginManager;
+	m_plugin_manager = new PluginManager(this);
 	if(m_plugin_manager)
 		m_plugin_manager->LoadAllPlugins(true);
 	m_tb_menu_plugin = new wxMenu;

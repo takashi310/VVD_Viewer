@@ -22,9 +22,10 @@ DEALINGS IN THE SOFTWARE.
 #ifndef _FLKEY_DOUBLE_H_
 #define _FLKEY_DOUBLE_H_
 
+#include "DLLExport.h"
 #include "FlKey.h"
 
-class FlKeyDouble : public FlKey
+class EXPORT_API FlKeyDouble : public FlKey
 {
 public:
 	FlKeyDouble()

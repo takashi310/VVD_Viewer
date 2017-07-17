@@ -673,6 +673,10 @@ TraceDlg::TraceDlg(wxWindow* frame, wxWindow* parent)
 	SetEvtHandlerEnabled(false);
 	Freeze();
 
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (vr_frame && vr_frame->GetApp())
+		m_app = vr_frame->GetApp();
+
 	//validator: integer
 	wxIntegerValidator<unsigned int> vald_int;
 
@@ -1110,7 +1114,7 @@ void TraceDlg::OnConvertConsistent(wxCommandEvent &event)
 	}
 
 	m_stat_text->SetValue("Generating consistent IDs in");
-	wxGetApp().Yield();
+	if (m_app) m_app->Yield();
 	FL::TrackMap &track_map = trace_group->GetTrackMap();
 	FL::TrackMapProcessor tm_processor;
 	int chan = vd->GetCurChannel();
@@ -1139,7 +1143,7 @@ void TraceDlg::OnConvertConsistent(wxCommandEvent &event)
 	lbl_reader.SetFile(lblname);
 	nrrd_label_in1 = lbl_reader.Convert(0, chan, true);
 	(*m_stat_text) << wxString::Format("Label in 1 of frame %d read.\n", 0);
-	wxGetApp().Yield();
+	if (m_app) m_app->Yield();
 	//duplicate
 	nrrd_label_in2 = nrrdNew();
 	nrrdCopy(nrrd_label_in2, nrrd_label_in1);
@@ -1166,7 +1170,7 @@ void TraceDlg::OnConvertConsistent(wxCommandEvent &event)
 	lbl_writer.SetData(nrrd_label_in2);
 	lbl_writer.Save(label_name.ToStdWstring(), 1);
 	(*m_stat_text) << wxString::Format("Label in 2 of frame %d written.\n", 0);
-	wxGetApp().Yield();
+	if (m_app) m_app->Yield();
 
 	unsigned int label_out1, label_out2;
 	//remaining frames
@@ -1181,7 +1185,7 @@ void TraceDlg::OnConvertConsistent(wxCommandEvent &event)
 		lbl_reader.SetFile(lblname);
 		nrrd_label_out1 = lbl_reader.Convert(fi, chan, true);
 		(*m_stat_text) << wxString::Format("Label out 1 of frame %d read.\n", int(fi));
-		wxGetApp().Yield();
+		if (m_app) m_app->Yield();
 
 		//copy
 		nrrd_label_out2 = nrrdNew();
@@ -1219,7 +1223,7 @@ void TraceDlg::OnConvertConsistent(wxCommandEvent &event)
 		lbl_writer.SetData(nrrd_label_out2);
 		lbl_writer.Save(label_name.ToStdWstring(), 1);
 		(*m_stat_text) << wxString::Format("Label out 2 of frame %d written.\n", int(fi));
-		wxGetApp().Yield();
+		if (m_app) m_app->Yield();
 
 		//swap
 		nrrdNuke(nrrd_label_in1);
@@ -3126,7 +3130,7 @@ void TraceDlg::GenMap()
 		return;
 
 	m_stat_text->SetValue("Generating track map.\n");
-	wxGetApp().Yield();
+	if (m_app) m_app->Yield();
 	FL::TrackMap &track_map = trace_group->GetTrackMap();
 	FL::TrackMapProcessor tm_processor;
 	int chan = vd->GetCurChannel();
@@ -3208,7 +3212,7 @@ void TraceDlg::GenMap()
 		prog += prog_bit;
 		m_gen_map_prg->SetValue(int(prog));
 		(*m_stat_text) << wxString::Format("Time point %d initialized.\n", i);
-		wxGetApp().Yield();
+		if (m_app) m_app->Yield();
 	}
 
 	if (file_err)
@@ -3225,7 +3229,7 @@ void TraceDlg::GenMap()
 		prog += prog_bit;
 		m_gen_map_prg->SetValue(int(prog));
 		(*m_stat_text) << wxString::Format("Time point %d resolved.\n", int(fi));
-		wxGetApp().Yield();
+		if (m_app) m_app->Yield();
 	}
 
 	high_resolution_clock::time_point t1 = high_resolution_clock::now();
@@ -3239,7 +3243,7 @@ void TraceDlg::GenMap()
 			prog += prog_bit;
 			m_gen_map_prg->SetValue(int(prog));
 			(*m_stat_text) << wxString::Format("Time point %d linked.\n", int(fi));
-			wxGetApp().Yield();
+			if (m_app) m_app->Yield();
 		}
 
 		if (++iteri >= iter_num)
@@ -3255,7 +3259,7 @@ void TraceDlg::GenMap()
 			prog += prog_bit;
 			m_gen_map_prg->SetValue(int(prog));
 			(*m_stat_text) << wxString::Format("Time point %d unlinked.\n", int(fi));
-			wxGetApp().Yield();
+			if (m_app) m_app->Yield();
 		}
 	}
 	high_resolution_clock::time_point t2 = high_resolution_clock::now();
@@ -3275,7 +3279,7 @@ void TraceDlg::GenMap()
 		prog += prog_bit; \
 		m_gen_map_prg->SetValue(int(prog)); \
 		(*m_stat_text) << wxString::Format("Time point %d linked.\n", int(fi)); \
-		wxGetApp().Yield(); \
+		if (m_app) m_app->Yield(); \
 	}
 
 #define UNLINK_FRAMES \
@@ -3288,7 +3292,7 @@ void TraceDlg::GenMap()
 		prog += prog_bit; \
 		m_gen_map_prg->SetValue(int(prog)); \
 		(*m_stat_text) << wxString::Format("Time point %d unlinked.\n", int(fi)); \
-		wxGetApp().Yield(); \
+		if (m_app) m_app->Yield(); \
 	}
 
 void TraceDlg::RefineMap(int t)
@@ -3307,7 +3311,7 @@ void TraceDlg::RefineMap(int t)
 	else
 		m_stat_text->SetValue(wxString::Format(
 			"Refining track map at time point %d.\n", t));
-	wxGetApp().Yield();
+	if (m_app) m_app->Yield();
 	FL::TrackMap &track_map = trace_group->GetTrackMap();
 	FL::TrackMapProcessor tm_processor;
 	int start_frame, end_frame;
