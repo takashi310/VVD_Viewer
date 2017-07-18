@@ -679,11 +679,17 @@ VRenderFrame::VRenderFrame(
 	Thaw();
 	SetEvtHandlerEnabled(true);
 
+	//Initialize plugins
+	m_plugin_manager->InitPlugins();
+
 	m_timer.Start(100);
 }
 
 VRenderFrame::~VRenderFrame()
 {
+	//Finalize plugins
+	m_plugin_manager->FinalizePligins();
+
 	for (int i=0; i<(int)m_vrv_list.size(); i++)
 	{
 		VRenderView* vrv = m_vrv_list[i];

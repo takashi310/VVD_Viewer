@@ -23,6 +23,8 @@ public:
 	virtual ~PluginManager();
 	virtual bool LoadAllPlugins(bool forceProgramPath);
 	virtual bool UnloadAllPlugins();
+	void InitPlugins();
+	void FinalizePligins();
 
 	const wxNonGuiPluginBaseList& GetNonGuiPlugins() const;
 	const wxGuiPluginBaseList& GetGuiPlugins() const;

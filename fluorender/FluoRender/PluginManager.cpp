@@ -88,3 +88,25 @@ wxGuiPluginBase* PluginManager::GetGuiPlugin(wxString name) const
 
 	return NULL;
 }
+
+void PluginManager::InitPlugins()
+{
+	for(wxGuiPluginBaseList::Node * node = m_GuiPlugins.GetFirst(); 
+		node; node = node->GetNext())
+	{
+		wxGuiPluginBase *plugin = node->GetData();
+		if (plugin)
+			plugin->OnInit();
+	}
+}
+
+void PluginManager::FinalizePligins()
+{
+	for(wxGuiPluginBaseList::Node * node = m_GuiPlugins.GetFirst(); 
+		node; node = node->GetNext())
+	{
+		wxGuiPluginBase *plugin = node->GetData();
+		if (plugin)
+			plugin->OnDestroy();
+	}
+}
