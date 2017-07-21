@@ -278,6 +278,8 @@ public:
 	void LoadVolumes(wxArrayString files, VRenderView* view = 0, vector<vector<AnnotationDB>> annotations = vector<vector<AnnotationDB>>());
 	void LoadMeshes(wxArrayString files, VRenderView* view = 0);
 
+	void AddVolume(VolumeData *vd, VRenderView* view);
+
 	//compression
 	static void SetCompression(bool value)
 	{ m_save_compress = value; }

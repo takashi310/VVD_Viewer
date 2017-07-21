@@ -957,7 +957,7 @@ Nrrd* VolumeData::GetVolume(bool ret)
 	if (m_vr && m_tex)
 	{
 		if (ret) m_vr->return_volume();
-		return m_tex->get_nrrd(m_tex->nmask());
+		return m_tex->get_nrrd(0);
 	}
 
 	return 0;

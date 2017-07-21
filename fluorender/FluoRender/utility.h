@@ -72,8 +72,11 @@ float nCr(int n,int r);
 class EXPORT_API ActionInfo {
 public:
 	int id;
-	ActionInfo() {id = -1;}
-	ActionInfo(int evid) {id = evid;}
+	const void* data;
+	int size;
+	ActionInfo() {id = -1; data = NULL; size = 0;}
+	ActionInfo(int evid) {id = evid; data = NULL; size = 0;}
+	ActionInfo(int evid, const void *evdata, int evsize) {id = evid; data = evdata; size = evsize;}
 };
 
 // The observer class
@@ -105,6 +108,16 @@ public:
          
          // Create an information object and pass it to the callback function
          ActionInfo *ai = new ActionInfo(evid);
+         obsvr->doAction(ai);
+      }
+   }
+
+   virtual void notifyAll(int evid, const void *evdata, int evsize) {
+      for( size_t i=0; i<getObservers().size(); i++ ){
+         Observer *obsvr = getObservers()[i];
+         
+         // Create an information object and pass it to the callback function
+         ActionInfo *ai = new ActionInfo(evid, evdata, evsize);
          obsvr->doAction(ai);
       }
    }

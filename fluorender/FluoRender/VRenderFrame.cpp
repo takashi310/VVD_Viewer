@@ -1192,7 +1192,58 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
 		delete prg_diag;
 	}
 
-	vrv->RefreshGL();//added by Takashi
+	vrv->RefreshGL();
+}
+
+void VRenderFrame::AddVolume(VolumeData *vd, VRenderView* view)
+{
+	if (!vd) return;
+
+	int j;
+
+	VolumeData* vd_sel = 0;
+	DataGroup* group_sel = 0;
+	VRenderView* vrv = 0;
+
+	if (view)
+		vrv = view;
+	else
+		vrv = GetView(0);
+
+	if (vrv)
+	{
+		m_data_mgr.SetSliceSequence(m_sliceSequence);
+		m_data_mgr.SetTimeSequence(m_timeSequence);
+		m_data_mgr.SetCompression(m_compression);
+		m_data_mgr.SetSkipBrick(m_skip_brick);
+		m_data_mgr.SetTimeId(m_time_id);
+		m_data_mgr.SetLoadMask(m_load_mask);
+		m_setting_dlg->SetTimeId(m_time_id);
+
+		bool enable_4d = false;
+		m_data_mgr.AddVolumeData(vd);
+
+		vrv->AddVolumeData(vd);
+		vd_sel = vd;
+
+		if (vd->GetReader() && vd->GetReader()->GetTimeNum()>1){
+			vrv->m_glview->m_tseq_cur_num = vd->GetReader()->GetCurTime();
+			enable_4d = true;
+		}
+
+		UpdateTree(vd_sel->GetName(), 2);
+		
+		if (vrv)
+			vrv->InitView(INIT_BOUNDS|INIT_CENTER);
+		if (enable_4d) {
+			m_movie_view->EnableTime();
+			m_movie_view->DisableRot();
+			m_movie_view->SetCurrentTime(vrv->m_glview->m_tseq_cur_num);
+		}
+
+	}
+
+	vrv->RefreshGL();
 }
 
 void VRenderFrame::StartupLoad(wxArrayString files)

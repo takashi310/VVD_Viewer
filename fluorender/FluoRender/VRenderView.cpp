@@ -6183,7 +6183,7 @@ void VRenderGLView::OnIdle(wxIdleEvent& event)
 			!wxGetKeyState(wxKeyCode('l')))
 			m_cell_link = false;
 		//new cell id
-		if (!m_cell_new_id &&
+/*		if (!m_cell_new_id &&
 			wxGetKeyState(wxKeyCode('n')))
 		{
 			m_cell_new_id = true;
@@ -6194,7 +6194,7 @@ void VRenderGLView::OnIdle(wxIdleEvent& event)
 		if (m_cell_new_id &&
 			!wxGetKeyState(wxKeyCode('n')))
 			m_cell_new_id = false;
-		//clear
+*/		//clear
 		if (wxGetKeyState(wxKeyCode('c')) &&
 			!m_clear_mask)
 		{
