@@ -176,6 +176,7 @@ inline void FIND_FILES(std::wstring m_path_name,
 #define FSEEK64     fseek
 
 inline wchar_t GETSLASH() { return L'/'; }
+inline char GETSLASHS() { return '/'; }
 
 inline std::wstring s2ws(const std::string& utf8) {
 //    return std::wstring( str.begin(), str.end() );

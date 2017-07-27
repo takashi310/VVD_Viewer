@@ -426,18 +426,33 @@ VRenderFrame::VRenderFrame(
 		Name("m_main_tb").Caption("Toolbar").CaptionVisible(false).
 		MinSize(wxSize(-1, 49)).MaxSize(wxSize(-1, 50)).
 		Top().CloseButton(false).Layer(4));
+#ifndef _DARWIN
 	m_aui_mgr.AddPane(m_tree_panel, wxAuiPaneInfo().
 		Name("m_tree_panel").Caption(UITEXT_TREEVIEW).
 		Left().CloseButton(true).BestSize(wxSize(320, 300)).
-		FloatingSize(wxSize(320, 300)).Layer(3));
-	m_aui_mgr.AddPane(m_measure_dlg, wxAuiPaneInfo().
-		Name("m_measure_dlg").Caption(UITEXT_MEASUREMENT).
-		Left().CloseButton(true).BestSize(wxSize(320, 400)).
 		FloatingSize(wxSize(320, 300)).Layer(3));
 	m_aui_mgr.AddPane(m_movie_view, wxAuiPaneInfo().
 		Name("m_movie_view").Caption(UITEXT_MAKEMOVIE).
 		Left().CloseButton(true).MinSize(wxSize(320, 300)).
 		FloatingSize(wxSize(320, 300)).Layer(3));
+    m_aui_mgr.AddPane(m_measure_dlg, wxAuiPaneInfo().
+        Name("m_measure_dlg").Caption(UITEXT_MEASUREMENT).
+        Left().CloseButton(true).BestSize(wxSize(320, 400)).
+        FloatingSize(wxSize(320, 300)).Layer(3));
+#else
+    m_aui_mgr.AddPane(m_measure_dlg, wxAuiPaneInfo().
+        Name("m_measure_dlg").Caption(UITEXT_MEASUREMENT).
+        Left().CloseButton(true).BestSize(wxSize(320, 400)).
+        FloatingSize(wxSize(320, 300)).Layer(3));
+    m_aui_mgr.AddPane(m_movie_view, wxAuiPaneInfo().
+        Name("m_movie_view").Caption(UITEXT_MAKEMOVIE).
+        Left().CloseButton(true).MinSize(wxSize(320, 300)).
+        FloatingSize(wxSize(320, 300)).Layer(3));
+    m_aui_mgr.AddPane(m_tree_panel, wxAuiPaneInfo().
+        Name("m_tree_panel").Caption(UITEXT_TREEVIEW).
+        Left().CloseButton(true).BestSize(wxSize(320, 300)).
+        FloatingSize(wxSize(320, 300)).Layer(3));
+#endif
 	m_aui_mgr.AddPane(m_prop_panel, wxAuiPaneInfo().
 		Name("m_prop_panel").Caption(UITEXT_PROPERTIES).
 		Bottom().CloseButton(true).MinSize(wxSize(300, 150)).

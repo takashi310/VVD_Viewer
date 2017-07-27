@@ -9,6 +9,8 @@
 #define PLUGIN_EXPORTED_API	extern "C"
 #endif
 
+#define wxUSE_DDE_FOR_IPC 0
+
 #include "DLLExport.h"
 
 // SYSTEM INCLUDES
@@ -30,7 +32,7 @@
 #include <wx/fileconf.h>
 #include <wx/filename.h>
 #include <wx/frame.h>
-#include <wx/glcanvas.h>
+//#include <wx/glcanvas.h>
 #include <wx/hashmap.h>
 #include <wx/image.h>
 #include <wx/imaglist.h>
