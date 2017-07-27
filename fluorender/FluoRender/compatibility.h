@@ -61,6 +61,7 @@ DEALINGS IN THE SOFTWARE.
 #define SSCANF    sscanf
 
 inline wchar_t GETSLASH() { return L'\\'; }
+inline char GETSLASHS() { return '\\'; }
 
 inline std::wstring s2ws(const std::string& utf8) {
 //    return std::wstring( str.begin(), str.end() );
