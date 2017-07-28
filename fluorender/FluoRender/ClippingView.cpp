@@ -52,7 +52,7 @@ BEGIN_EVENT_TABLE(ClippingView, wxPanel)
 	EVT_TEXT(ID_Z1ClipText, ClippingView::OnZ1ClipEdit)
 	EVT_TEXT(ID_Z2ClipText, ClippingView::OnZ2ClipEdit)
 
-	EVT_IDLE(ClippingView::OnIdle)
+	EVT_TIMER(ID_CLTimer, ClippingView::OnIdle)
 
 	EVT_CHECKBOX(ID_LinkXChk, ClippingView::OnLinkXCheck)
 	EVT_CHECKBOX(ID_LinkYChk, ClippingView::OnLinkYCheck)
@@ -445,10 +445,15 @@ m_link_z(false)
 
 	Thaw();
 	SetEvtHandlerEnabled(true);
+
+	m_timer = new wxTimer(this, ID_CLTimer);
+	m_timer->Start(100);
 }
 
 ClippingView::~ClippingView()
 {
+	m_timer->Stop();
+	wxDELETE(m_timer);
 	SaveDefault();
 }
 
@@ -1513,7 +1518,7 @@ void ClippingView::OnZ2ClipEdit(wxCommandEvent &event)
 	RefreshVRenderViews(true);
 }
 
-void ClippingView::OnIdle(wxIdleEvent &event)
+void ClippingView::OnIdle(wxTimerEvent& event)
 {
 	if (!IsShown())
 		return;

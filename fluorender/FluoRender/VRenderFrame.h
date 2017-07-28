@@ -424,7 +424,7 @@ private:
 
 	double m_gpu_max_mem;
 
-	wxTimer m_timer;
+	wxTimer *m_timer;
 
 	PluginManager* m_plugin_manager;
 	wxArrayString m_plugin_list;

@@ -905,8 +905,8 @@ void VolumeLoader::GetPalams(long long &used_mem, int &running_decomp_th, int &q
 BEGIN_EVENT_TABLE(VRenderGLView, wxGLCanvas)
 	EVT_PAINT(VRenderGLView::OnDraw)
 	EVT_SIZE(VRenderGLView::OnResize)
+	EVT_TIMER(ID_Timer ,VRenderGLView::OnIdle)
 	EVT_MOUSE_EVENTS(VRenderGLView::OnMouse)
-	EVT_IDLE(VRenderGLView::OnIdle)
 	EVT_KEY_DOWN(VRenderGLView::OnKeyDown)
 	END_EVENT_TABLE()
 
@@ -1210,6 +1210,9 @@ wxGLCanvas(parent, id, attriblist, pos, size, style),
 
 	Thaw();
 	SetEvtHandlerEnabled(true);
+	
+	m_idleTimer = new wxTimer(this, ID_Timer);
+	m_idleTimer->Start(50);
 }
 
 void VRenderGLView::SetSearcherVisibility(bool visibility)
@@ -1255,6 +1258,8 @@ VRenderGLView::~VRenderGLView()
 {
 	goTimer->stop();
 	delete goTimer;
+	m_idleTimer->Stop();
+	wxDELETE(m_idleTimer);
 #ifdef _WIN32
 	//tablet
 	if (m_hTab)
@@ -5956,14 +5961,14 @@ bool VRenderGLView::SelSegVolume(int mode)
 	return rval;
 }
 
-void VRenderGLView::OnIdle(wxIdleEvent& event)
+void VRenderGLView::OnIdle(wxTimerEvent& event)
 {
 	bool refresh = false;
 	bool ref_stat = false;
 	bool start_loop = true;
 	m_drawing_coord = false;
 
-	event.RequestMore(true);
+	//event.RequestMore(true);
 
 	//check memory swap status
 	if (TextureRenderer::get_mem_swap() &&
@@ -7302,6 +7307,8 @@ void VRenderGLView::OnDraw(wxPaintEvent& event)
 	wxPaintDC dc(this);
 	SetCurrent(*m_glRC);
 
+	//SetEvtHandlerEnabled(false);
+
 	int nx = GetSize().x;
 	int ny = GetSize().y;
 
@@ -7380,6 +7387,7 @@ void VRenderGLView::OnDraw(wxPaintEvent& event)
 	if (m_resize)
 		m_resize = false;
 
+	//SetEvtHandlerEnabled(true);
 }
 
 void VRenderGLView::SetRadius(double r)
@@ -14126,6 +14134,7 @@ BEGIN_EVENT_TABLE(VRenderView, wxPanel)
 	EVT_SPIN_DOWN(ID_ZRotSpin, VRenderView::OnZRotSpinDown)
 	//reset
 	EVT_BUTTON(ID_DefaultBtn, VRenderView::OnSaveDefault)
+	EVT_TIMER(ID_Timer, VRenderView::OnAovSldrIdle)
 
 	EVT_KEY_DOWN(VRenderView::OnKeyDown)
 	END_EVENT_TABLE()
@@ -14232,6 +14241,9 @@ wxPanel(parent, id, pos, size, style),
 
 	Thaw();
 	SetEvtHandlerEnabled(true);
+
+	m_idleTimer = new wxTimer(this, ID_Timer);
+	m_idleTimer->Start(100);
 }
 
 #ifdef _WIN32
@@ -14250,6 +14262,8 @@ wxString VRenderGLView::GetOGLVersion() {
 
 VRenderView::~VRenderView()
 {
+	m_idleTimer->Stop();
+	wxDELETE(m_idleTimer);
 	if (m_glview)
 		delete m_glview;
 	if (m_full_frame)
@@ -14324,9 +14338,6 @@ void VRenderView::CreateBar()
 	m_aov_sldr = new wxSlider(this, ID_AovSldr, 45, 10, 100,
 		wxDefaultPosition, wxSize(120, 20), wxSL_HORIZONTAL);
 	m_aov_sldr->SetValue(GetPersp()?GetAov():10);
-	m_aov_sldr->Connect(wxID_ANY, wxEVT_IDLE,
-		wxIdleEventHandler(VRenderView::OnAovSldrIdle),
-		NULL, this);
 	m_aov_text = new wxTextCtrl(this, ID_AovText, "",
 		wxDefaultPosition, wxSize(60, 20), 0, vald_int);
 	m_aov_text->ChangeValue(GetPersp()?wxString::Format("%d", int(GetAov())):"Ortho");
@@ -14494,7 +14505,6 @@ void VRenderView::CreateBar()
 
 	SetSizer(sizer_v);
 	Layout();
-
 }
 
 //recalculate view according to object bounds
@@ -15783,7 +15793,7 @@ void VRenderView::OnSearchCheck(wxCommandEvent& event)
 	m_glview->SetSearcherVisibility(m_search_chk->GetValue());
 }
 
-void VRenderView::OnAovSldrIdle(wxIdleEvent& event)
+void VRenderView::OnAovSldrIdle(wxTimerEvent& event)
 {
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (!vr_frame) return;

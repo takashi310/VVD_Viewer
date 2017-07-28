@@ -297,7 +297,8 @@ class EXPORT_API VRenderGLView: public wxGLCanvas
 {
 	enum
 	{
-		ID_Searcher = wxID_HIGHEST+6001
+		ID_Searcher = wxID_HIGHEST+6001,
+		ID_Timer
 	};
 
 public:
@@ -1123,6 +1124,8 @@ private:
 	VolumeLoader m_loader;
 	bool m_load_in_main_thread;
 
+	wxTimer *m_idleTimer;
+
 private:
 #ifdef _WIN32
 	//wacom tablet
@@ -1238,7 +1241,7 @@ private:
 	//system call
 	void OnDraw(wxPaintEvent& event);
 	void OnResize(wxSizeEvent& event);
-	void OnIdle(wxIdleEvent& event);
+	void OnIdle(wxTimerEvent& event);
 	void OnKeyDown(wxKeyEvent& event);
 	//WXLRESULT MSWWindowProc(WXUINT message, WXWPARAM wParam, WXLPARAM lParam);
 
@@ -1296,7 +1299,8 @@ public:
 		ID_PPISldr,
 		ID_PPIText,
 		ID_Searcher,
-		ID_SearchChk
+		ID_SearchChk,
+		ID_Timer
 	};
 
 	VRenderView(wxWindow* frame,
@@ -1929,6 +1933,8 @@ public:
 	double m_dft_depth_atten_factor;
 	double m_dft_scale_factor;
 
+	wxTimer *m_idleTimer;
+
 private:
 	//called when updated from bars
 	void CreateBar();
@@ -1950,7 +1956,7 @@ private:
 	void OnLegendCheck(wxCommandEvent& event);
 	void OnIntpCheck(wxCommandEvent& event);
 	void OnSearchCheck(wxCommandEvent& event);
-	void OnAovSldrIdle(wxIdleEvent& event);
+	void OnAovSldrIdle(wxTimerEvent& event);
 	void OnAovChange(wxScrollEvent& event);
 	void OnAovText(wxCommandEvent &event);
 	void OnFreeChk(wxCommandEvent& event);

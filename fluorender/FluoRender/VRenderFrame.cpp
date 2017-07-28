@@ -127,7 +127,6 @@ VRenderFrame::VRenderFrame(
 	m_cur_sel_vol(-1),
 	m_cur_sel_mesh(-1),
 	m_gpu_max_mem(-1.0),
-	m_timer(this,ID_Timer),
 	m_app(app)
 {
 	SetEvtHandlerEnabled(false);
@@ -697,11 +696,14 @@ VRenderFrame::VRenderFrame(
 	//Initialize plugins
 	m_plugin_manager->InitPlugins();
 
-	m_timer.Start(100);
+	//m_timer = new wxTimer(this, ID_Timer);
+	//m_timer->Start(100);
 }
 
 VRenderFrame::~VRenderFrame()
 {
+	//m_timer->Stop();
+	//wxDELETE(m_timer);
 	//Finalize plugins
 	m_plugin_manager->FinalizePligins();
 

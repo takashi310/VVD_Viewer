@@ -84,7 +84,8 @@ class EXPORT_API ClippingView: public wxPanel
 		ID_XYClipBtn,
 		ID_YZDistText,
 		ID_XZDistText,
-		ID_XYDistText
+		ID_XYDistText,
+		ID_CLTimer
 	};
 
 public:
@@ -253,10 +254,12 @@ private:
 	wxTextCtrl *m_xz_dist_text;
 	wxTextCtrl *m_xy_dist_text;
 
+	wxTimer *m_timer;
+
 private:
 	void GetSettings();
 	
-	void OnIdle(wxIdleEvent &event);
+	void OnIdle(wxTimerEvent& event);
 
 	void OnLinkChannelsCheck(wxCommandEvent &event);
 	void OnPlaneModesCombo(wxCommandEvent &event);
