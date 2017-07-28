@@ -4050,7 +4050,7 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int pe
 	//calculate sampling frequency factor
 	int cnt_mask = 0;
 	bool use_tex_wt2 = false;
-	double sampling_frq_fac = 2 / (m_ortho_right - m_ortho_left);
+	double sampling_frq_fac = 0.1 / pow(m_ortho_right - m_ortho_left, 0.5);
 	for (i=0; i<(int)list.size(); i++)
 	{
 		VolumeData* vd = list[i];
