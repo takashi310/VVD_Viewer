@@ -2059,7 +2059,7 @@ void VPropView::OnScaleTextCheck(wxCommandEvent& event)
 			break;
 		case 1:
 		default:
-			unit_text = wxString::Format("%c%c", 131, 'm');
+			unit_text = wxString::Format("%c%c", 181, 'm');
 			break;
 		case 2:
 			unit_text = "mm";
