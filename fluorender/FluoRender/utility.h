@@ -105,7 +105,7 @@ public:
    virtual void notifyAll(int evid) {
       for( size_t i=0; i<getObservers().size(); i++ ){
          Observer *obsvr = getObservers()[i];
-         
+          if (!obsvr) continue;
          // Create an information object and pass it to the callback function
          ActionInfo *ai = new ActionInfo(evid);
          obsvr->doAction(ai);
@@ -115,7 +115,7 @@ public:
    virtual void notifyAll(int evid, const void *evdata, int evsize) {
       for( size_t i=0; i<getObservers().size(); i++ ){
          Observer *obsvr = getObservers()[i];
-         
+         if (!obsvr) continue;
          // Create an information object and pass it to the callback function
          ActionInfo *ai = new ActionInfo(evid, evdata, evsize);
          obsvr->doAction(ai);

@@ -5081,11 +5081,16 @@ void VRenderFrame::OnPluginMenuSelect(wxCommandEvent& event)
 				wxSize wsize = pp->GetVirtualSize();
 				m_aui_mgr.AddPane(pp, wxAuiPaneInfo().
 					Name(gp->GetName()).Caption(gp->GetName()).
-					Dockable(false).CloseButton(true).DestroyOnClose(true));
+					Dockable(false).CloseButton(true));
 				m_aui_mgr.GetPane(pp).Float();
 				m_aui_mgr.Update();
 				SetEvtHandlerEnabled(true);
 			}
+            else
+            {
+                m_aui_mgr.GetPane(gp->GetName()).Show();
+                m_aui_mgr.Update();
+            }
 		}
 		else if (auto ngp = m_plugin_manager->GetNonGuiPlugin(m_plugin_list[pid]))
 		{
