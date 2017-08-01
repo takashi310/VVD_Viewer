@@ -73,7 +73,7 @@ class EXPORT_API ActionInfo {
 public:
 	int id;
 	const void* data;
-	int size;
+	size_t size;
 	ActionInfo() {id = -1; data = NULL; size = 0;}
 	ActionInfo(int evid) {id = evid; data = NULL; size = 0;}
 	ActionInfo(int evid, const void *evdata, int evsize) {id = evid; data = evdata; size = evsize;}

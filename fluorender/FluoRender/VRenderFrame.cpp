@@ -266,7 +266,7 @@ VRenderFrame::VRenderFrame(
 
 
 	m_main_tb->AddTool(ID_Plugins, "Plugins",
-		wxGetBitmapFromMemory(icon_settings), wxNullBitmap, wxITEM_NORMAL,
+		wxGetBitmapFromMemory(plugins), wxNullBitmap, wxITEM_NORMAL,
 		"Plugins",
 		"Plugins");
     

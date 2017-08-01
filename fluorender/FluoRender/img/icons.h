@@ -1,5 +1,8 @@
 class icons {
 public:
+/* plugins.png - 3810 bytes */
+const static unsigned char plugins_png[4299];
+
 /* align.png - 1470 bytes */
 const static unsigned char align_png[1470];
 
