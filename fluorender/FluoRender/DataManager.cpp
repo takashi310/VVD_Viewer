@@ -282,14 +282,31 @@ VolumeData* VolumeData::DeepCopy(VolumeData &copy, bool use_default_settings, Da
 	}
 	bool is_brxml = tex->isBrxml();
 	int time = is_brxml ? 0 : copy.GetCurTime();
-	Nrrd *nv = vd->m_reader->Convert(time, copy.GetCurChannel(), true);
-	if (!nv)
-	{
-		delete(vd);
-		return NULL;
-	}
+    Nrrd *nv = NULL;
+    if (is_brxml)
+    {
+        nv = vd->m_reader->Convert(time, copy.GetCurChannel(), true);
+        if (!nv)
+        {
+            delete(vd);
+            return NULL;
+        }
+    }
+    else
+    {
+        if (copy.GetVolume(true))
+        {
+            nv = nrrdNew();
+            nrrdCopy(nv, copy.GetVolume(false));
+        }
+        else
+        {
+            delete(vd);
+            return NULL;
+        }
+    }
 
-	if (is_brxml)	vd->Load(nv, copy.GetName()+wxString::Format("_%d", vd->m_dup_counter), wxString(""), (BRKXMLReader*)vd->m_reader);
+	if (is_brxml) vd->Load(nv, copy.GetName()+wxString::Format("_%d", vd->m_dup_counter), wxString(""), (BRKXMLReader*)vd->m_reader);
 	else vd->Load(nv, copy.GetName()+wxString::Format("_%d", vd->m_dup_counter), wxString(""));
 
 	if (copy.GetMask(true))
