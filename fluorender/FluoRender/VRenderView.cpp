@@ -11252,10 +11252,22 @@ void VRenderGLView::StartLoopUpdate()
 
 		if (queues.size() > 0 && !m_interactive)
 		{
-			m_loader.Set(queues);
-			m_loader.SetMemoryLimitByte((long long)TextureRenderer::mainmem_buf_size_*1024LL*1024LL);
-			TextureRenderer::set_load_on_main_thread(false);
-			m_loader.Run();
+            bool runvl = false;
+            for (auto q : queues)
+            {
+                if (q.brick && !q.brick->isLoaded() && !q.brick->isLoading())
+                {
+                    runvl = true;
+                    break;
+                }
+            }
+            if (runvl)
+            {
+                m_loader.Set(queues);
+                m_loader.SetMemoryLimitByte((long long)TextureRenderer::mainmem_buf_size_*1024LL*1024LL);
+                TextureRenderer::set_load_on_main_thread(false);
+                m_loader.Run();
+            }
 		}
 
 		if (total_num > 0)
