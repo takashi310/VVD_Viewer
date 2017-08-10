@@ -5993,6 +5993,18 @@ void VRenderGLView::OnIdle(wxTimerEvent& event)
 	wxRect view_reg = GetScreenRect();
 
 	wxWindow *window = wxWindow::FindFocus();
+	bool editting = false;
+	if (window)
+	{
+		wxClassInfo *wclass = window->GetClassInfo();
+		if (wclass) 
+		{
+			wxString cname = wclass->GetClassName();
+			if (cname == "wxTextCtrl" || cname == "wxDirPickerCtrl" || cname == "wxFilePickerCtrl")
+				editting = true;
+		}
+	}
+
 	VRenderFrame* frame = (VRenderFrame*)m_frame;
 	VRenderGLView* cur_glview = NULL;
 	if (frame && frame->GetTree())
@@ -6001,7 +6013,7 @@ void VRenderGLView::OnIdle(wxTimerEvent& event)
 		if (vrv) cur_glview = vrv->m_glview;
 	}
 
-	if (window && !m_key_lock)
+	if (window && !editting && !m_key_lock)
 	{
 		//move view
 		//left
@@ -6156,12 +6168,12 @@ void VRenderGLView::OnIdle(wxTimerEvent& event)
 		}
 	}
 
-	if (window && view_reg.Contains(mouse_pos) && !m_key_lock)
+	if (window && !editting && view_reg.Contains(mouse_pos) && !m_key_lock)
 	{
 		UpdateBrushState();
 	}
 
-	if (window && this == cur_glview && !m_key_lock)
+	if (window && !editting && this == cur_glview && !m_key_lock)
 	{
 		//cell full
 		if (!m_cell_full &&

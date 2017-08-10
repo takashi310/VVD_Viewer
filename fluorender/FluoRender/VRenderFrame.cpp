@@ -2019,9 +2019,9 @@ void VRenderFrame::OnSelection(int type,
 	case 2:  //volume
 		if (vd && vd->GetDisp())
 		{
-			m_volume_prop->SetVolumeData(vd);
-			m_volume_prop->SetGroup(group);
 			m_volume_prop->SetView(vrv);
+			m_volume_prop->SetGroup(group);
+			m_volume_prop->SetVolumeData(vd);
 			if (!m_volume_prop->IsShown())
 			{
 				m_volume_prop->Show(true);

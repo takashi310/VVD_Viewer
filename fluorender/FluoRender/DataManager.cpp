@@ -2413,7 +2413,7 @@ m_data(0),
 	m_swc = false;
 	m_r_scale = 1.0;
 	m_def_r = 0.25;
-	m_subdiv = 1;
+	m_subdiv = 0;
 	m_swc_reader = NULL;
 }
 

@@ -415,7 +415,7 @@ wxPanel(parent, id, pos, size,style, name),
 	sizer_b->Add(st, 0, wxALIGN_CENTER);
 	sizer_b->Add(5, 5, 0);
 	sizer_b->Add(m_sync_group_chk, 0, wxALIGN_CENTER);
-	m_sync_g_spc_chk = new wxCheckBox(this, ID_SyncGroupSpcChk, "Sync Spc");
+	m_sync_g_spc_chk = new wxCheckBox(this, ID_SyncGroupSpcChk, "Sync Spacings");
 	sizer_b->Add(5, 5, 0);
 	sizer_b->Add(m_sync_g_spc_chk, 0, wxALIGN_CENTER);
 	//depth mode
