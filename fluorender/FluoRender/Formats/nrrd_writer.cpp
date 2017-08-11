@@ -86,12 +86,10 @@ void NRRDWriter::Save(wstring filename, int mode)
 		
 		nrrdAxisInfoSet(m_data, nrrdAxisInfoSpaceDirection, spc_vec[0], spc_vec[1], spc_vec[2]);
 		nrrdAxisInfoSet(m_data, nrrdAxisInfoSize, m_data->axis[0].size, m_data->axis[1].size, m_data->axis[2].size);
-/*		nrrdAxisInfoSet(m_data, nrrdAxisInfoSpacing, m_spcx, m_spcy, m_spcz);
-		nrrdAxisInfoSet(m_data, nrrdAxisInfoMax,
-			m_spcx*m_data->axis[0].size,
-			m_spcy*m_data->axis[1].size,
-			m_spcz*m_data->axis[2].size);
-*/	}
+		nrrdAxisInfoSet(m_data, nrrdAxisInfoSpacing, AIR_NAN, AIR_NAN, AIR_NAN);
+		nrrdAxisInfoSet(m_data, nrrdAxisInfoMax, AIR_NAN, AIR_NAN, AIR_NAN);
+		nrrdAxisInfoSet(m_data, nrrdAxisInfoMin, AIR_NAN, AIR_NAN, AIR_NAN);
+	}
 
 	string str;
 	str.assign(filename.length(), 0);
@@ -100,4 +98,8 @@ void NRRDWriter::Save(wstring filename, int mode)
 	nrrdSave(str.c_str(), m_data, nio);
 
 	nrrdIoStateNix(nio);
+
+	nrrdAxisInfoSet(m_data, nrrdAxisInfoSpacing, m_spcx, m_spcy, m_spcz);
+	nrrdAxisInfoSet(m_data, nrrdAxisInfoMax, m_spcx*m_data->axis[0].size, m_spcy*m_data->axis[1].size, m_spcz*m_data->axis[2].size);
+	nrrdAxisInfoSet(m_data, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
 }

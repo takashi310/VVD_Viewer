@@ -730,7 +730,6 @@ void VRenderFrame::OnTimer(wxTimerEvent& event)
 
 void VRenderFrame::OnExit(wxCommandEvent& WXUNUSED(event))
 {
-	wxDELETE(m_plugin_manager);
 	Close(true);
 }
 
@@ -5074,6 +5073,22 @@ void VRenderFrame::OnPluginMenuSelect(wxCommandEvent& event)
 	{
 		if (auto gp = m_plugin_manager->GetGuiPlugin(m_plugin_list[pid]))
 		{
+			ToggleVisibilityPluginWindow(gp->GetName(), true);
+		}
+		else if (auto ngp = m_plugin_manager->GetNonGuiPlugin(m_plugin_list[pid]))
+		{
+			ngp->Work();
+			return;
+		}
+	}
+}
+
+void VRenderFrame::ToggleVisibilityPluginWindow(wxString name, bool show)
+{
+	if (auto gp = m_plugin_manager->GetGuiPlugin(name))
+	{
+		if (show)
+		{
 			if (!m_aui_mgr.GetPane(gp->GetName()).IsOk())
 			{
 				SetEvtHandlerEnabled(false);
@@ -5086,18 +5101,94 @@ void VRenderFrame::OnPluginMenuSelect(wxCommandEvent& event)
 				m_aui_mgr.Update();
 				SetEvtHandlerEnabled(true);
 			}
-            else
-            {
-                m_aui_mgr.GetPane(gp->GetName()).Show();
-                m_aui_mgr.Update();
-            }
+			else
+			{
+				m_aui_mgr.GetPane(gp->GetName()).Show();
+				m_aui_mgr.Update();
+			}
 		}
-		else if (auto ngp = m_plugin_manager->GetNonGuiPlugin(m_plugin_list[pid]))
+		else if (m_aui_mgr.GetPane(gp->GetName()).IsOk())
 		{
-			ngp->Work();
-			return;
+			if (!m_aui_mgr.GetPane(gp->GetName()).IsOk())
+			{
+				SetEvtHandlerEnabled(false);
+				wxWindow* pp = gp->CreatePanel(m_help_dlg);//dummy parent window
+				wxSize wsize = pp->GetVirtualSize();
+				m_aui_mgr.AddPane(pp, wxAuiPaneInfo().
+					Name(gp->GetName()).Caption(gp->GetName()).
+					Dockable(false).CloseButton(true).Hide());
+				m_aui_mgr.GetPane(pp).Float();
+				m_aui_mgr.Update();
+				SetEvtHandlerEnabled(true);
+			}
+			else
+			{
+				m_aui_mgr.GetPane(gp->GetName()).Hide();
+				m_aui_mgr.Update();
+			}
 		}
 	}
+}
+
+void VRenderFrame::CreatePluginWindow(wxString name, bool show)
+{
+	ToggleVisibilityPluginWindow(name, show);
+}
+
+bool VRenderFrame::IsShownPluginWindow(wxString name)
+{
+	if (auto gp = m_plugin_manager->GetGuiPlugin(name))
+	{
+		if (!m_aui_mgr.GetPane(gp->GetName()).IsOk())
+			return m_aui_mgr.GetPane(gp->GetName()).IsShown();
+	}
+
+	return false;
+}
+
+bool VRenderFrame::PluginExists(wxString name)
+{
+	wxGuiPluginBaseList gplist = m_plugin_manager->GetGuiPlugins();
+	for(wxGuiPluginBaseList::Node * node = gplist.GetFirst(); node; node = node->GetNext())
+	{
+		wxGuiPluginBase *plugin = node->GetData();
+		if (plugin && plugin->GetName() == name)
+			return true;
+	}
+
+	wxNonGuiPluginBaseList ngplist = m_plugin_manager->GetNonGuiPlugins();
+	for(wxNonGuiPluginBaseList::Node * node = ngplist.GetFirst(); node; node = node->GetNext())
+	{
+		wxNonGuiPluginBase *plugin = node->GetData();
+		if (plugin && plugin->GetName() == name)
+			return true;
+	}
+
+	return false;
+}
+
+bool VRenderFrame::RunPlugin(wxString name, wxString options)
+{
+	wxGuiPluginBaseList gplist = m_plugin_manager->GetGuiPlugins();
+	for(wxGuiPluginBaseList::Node * node = gplist.GetFirst(); node; node = node->GetNext())
+	{
+		wxGuiPluginBase *plugin = node->GetData();
+		if (plugin && plugin->GetName() == name)
+			return plugin->OnRun(options);
+	}
+
+	wxNonGuiPluginBaseList ngplist = m_plugin_manager->GetNonGuiPlugins();
+	for(wxNonGuiPluginBaseList::Node * node = ngplist.GetFirst(); node; node = node->GetNext())
+	{
+		wxNonGuiPluginBase *plugin = node->GetData();
+		if (plugin && plugin->GetName() == name)
+		{
+			plugin->Work();
+			return true;
+		}
+	}
+
+	return false;
 }
 
 //panes

@@ -20,6 +20,9 @@ public:
 	//This method is called when the application is closing.
 	virtual void OnDestroy() = 0;
 	
+	//For command line.
+	virtual bool OnRun(wxString options);
+	
 	wxEvtHandler * GetEventHandler();
 	virtual void SetEventHandler(wxEvtHandler * handler);
 	virtual void SetVVDMainFrame(wxWindow * vvd);

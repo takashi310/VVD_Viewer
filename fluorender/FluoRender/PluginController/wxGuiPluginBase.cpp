@@ -33,3 +33,8 @@ wxWindow * wxGuiPluginBase::GetVVDMainFrame()
 {
 	return m_vvd;
 }
+
+bool wxGuiPluginBase::OnRun(wxString options)
+{
+	return true;
+}

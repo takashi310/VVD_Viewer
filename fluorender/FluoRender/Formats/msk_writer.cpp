@@ -80,11 +80,20 @@ void MSKWriter::Save(wstring filename, int mode)
 	if (m_use_spacings &&
 		m_data->dim == 3)
 	{
-		nrrdAxisInfoSet(m_data, nrrdAxisInfoSpacing, m_spcx, m_spcy, m_spcz);
-		nrrdAxisInfoSet(m_data, nrrdAxisInfoMax,
-			m_spcx*m_data->axis[0].size,
-			m_spcy*m_data->axis[1].size,
-			m_spcz*m_data->axis[2].size);
+		double spc_org[NRRD_SPACE_DIM_MAX] = {0.0, 0.0, 0.0};
+		double spc_vec[3][NRRD_SPACE_DIM_MAX]= {
+			{m_spcx, 0.0, 0.0},
+			{0.0, m_spcy, 0.0},
+			{0.0, 0.0, m_spcz} };
+
+		nrrdSpaceSet(m_data, nrrdSpaceRightAnteriorSuperior);
+		nrrdSpaceOriginSet(m_data, spc_org);
+		
+		nrrdAxisInfoSet(m_data, nrrdAxisInfoSpaceDirection, spc_vec[0], spc_vec[1], spc_vec[2]);
+		nrrdAxisInfoSet(m_data, nrrdAxisInfoSize, m_data->axis[0].size, m_data->axis[1].size, m_data->axis[2].size);
+		nrrdAxisInfoSet(m_data, nrrdAxisInfoSpacing, AIR_NAN, AIR_NAN, AIR_NAN);
+		nrrdAxisInfoSet(m_data, nrrdAxisInfoMax, AIR_NAN, AIR_NAN, AIR_NAN);
+		nrrdAxisInfoSet(m_data, nrrdAxisInfoMin, AIR_NAN, AIR_NAN, AIR_NAN);
 	}
 
 	string str;
@@ -92,6 +101,10 @@ void MSKWriter::Save(wstring filename, int mode)
 	for (int i=0; i<(int)str_name.length(); i++)
 		str[i] = (char)str_name[i];
 	nrrdSave(str.c_str(), m_data, NULL);
+
+	nrrdAxisInfoSet(m_data, nrrdAxisInfoSpacing, m_spcx, m_spcy, m_spcz);
+	nrrdAxisInfoSet(m_data, nrrdAxisInfoMax, m_spcx*m_data->axis[0].size, m_spcy*m_data->axis[1].size, m_spcz*m_data->axis[2].size);
+	nrrdAxisInfoSet(m_data, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
 }
 
 void MSKWriter::SetTC(int t, int c)

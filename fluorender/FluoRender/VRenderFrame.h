@@ -337,6 +337,12 @@ public:
 	void SetKeyLock(bool lock);
 
 	PluginManager* GetPluginManager() const { return m_plugin_manager ; }
+
+	void ToggleVisibilityPluginWindow(wxString name, bool show);
+	void CreatePluginWindow(wxString name, bool show);
+	bool IsShownPluginWindow(wxString name);
+	bool RunPlugin(wxString name, wxString options);
+	bool PluginExists(wxString name);
 	
 public: //public so export window can see it and set it. 
 	RecorderDlg* m_recorder_dlg;

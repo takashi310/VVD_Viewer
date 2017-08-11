@@ -285,6 +285,8 @@ Nrrd* NRRDReader::Convert(int t, int c, bool get_max)
 				   output->axis[2].spaceDirection[2]*output->axis[2].spaceDirection[2];
 		m_zspc = sqrt(n);
 	}
+	nrrdAxisInfoSet(output, nrrdAxisInfoSpacing, m_xspc, m_yspc, m_zspc);
+	nrrdAxisInfoSet(output, nrrdAxisInfoMax, m_xspc*output->axis[0].size, m_yspc*output->axis[1].size, m_zspc*output->axis[2].size);
 
 	if (m_xspc>0.0 && m_xspc<100.0 &&
 		m_yspc>0.0 && m_yspc<100.0 &&
