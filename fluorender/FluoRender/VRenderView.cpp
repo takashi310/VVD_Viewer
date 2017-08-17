@@ -6210,7 +6210,7 @@ void VRenderGLView::OnIdle(wxTimerEvent& event)
 			!wxGetKeyState(wxKeyCode('n')))
 			m_cell_new_id = false;
 */		//clear
-		if (wxGetKeyState(wxKeyCode('c')) &&
+/*		if (wxGetKeyState(wxKeyCode('c')) &&
 			!m_clear_mask)
 		{
 			if (frame && frame->GetTraceDlg())
@@ -6221,7 +6221,7 @@ void VRenderGLView::OnIdle(wxTimerEvent& event)
 		if (!wxGetKeyState(wxKeyCode('c')) &&
 			m_clear_mask)
 			m_clear_mask = false;
-		//full screen
+*/		//full screen
 		if (wxGetKeyState(WXK_ESCAPE))
 		{
 			/*			if (GetParent() == m_vrv->m_full_frame)
