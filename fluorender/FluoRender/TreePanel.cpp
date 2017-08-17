@@ -3388,10 +3388,6 @@ void DataTreeCtrl::BrushCreateInv()
 		//select data
 		wxString name = GetItemText(sel_item);
 		int cal_type = 6;
-		if (name.Find("_DELETED")==wxNOT_FOUND)
-			cal_type = 6;
-		else
-			cal_type = 7;
 
 		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
 		if (item_data && item_data->type==2)

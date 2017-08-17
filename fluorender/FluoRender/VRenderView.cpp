@@ -1993,7 +1993,6 @@ void VRenderGLView::DrawVolumes(int peel)
 
 	//draw
 	if ((!m_drawing_coord &&
-		m_int_mode!=2 &&
 		m_int_mode!=7 &&
 		m_updating) ||
 		(!m_drawing_coord &&
@@ -3873,8 +3872,7 @@ void VRenderGLView::CalculateSingle(int type, wxString prev_group, bool add)
 			VolumeData* vd_a = m_calculator.GetVolumeA();
 			if (vd_a)
 			{
-				vd_a->Replace(vd);
-				delete vd;
+				ReplaceVolumeData(vd_A->GetName(), vd_a);
 				VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 				if (vr_frame)
 					vr_frame->GetPropView()->SetVolumeData(vd_a);
