@@ -3872,7 +3872,8 @@ void VRenderGLView::CalculateSingle(int type, wxString prev_group, bool add)
 			VolumeData* vd_a = m_calculator.GetVolumeA();
 			if (vd_a)
 			{
-				ReplaceVolumeData(vd_A->GetName(), vd_a);
+                wxString nm = vd_A->GetName();
+				ReplaceVolumeData(nm, vd_a);
 				VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 				if (vr_frame)
 					vr_frame->GetPropView()->SetVolumeData(vd_a);
