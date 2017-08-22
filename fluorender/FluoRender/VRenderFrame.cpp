@@ -5135,11 +5135,19 @@ void VRenderFrame::CreatePluginWindow(wxString name, bool show)
 	ToggleVisibilityPluginWindow(name, show);
 }
 
+bool VRenderFrame::IsCreatedPluginWindow(wxString name)
+{
+	if (auto gp = m_plugin_manager->GetGuiPlugin(name))
+		return m_aui_mgr.GetPane(gp->GetName()).IsOk();
+
+	return false;
+}
+
 bool VRenderFrame::IsShownPluginWindow(wxString name)
 {
 	if (auto gp = m_plugin_manager->GetGuiPlugin(name))
 	{
-		if (!m_aui_mgr.GetPane(gp->GetName()).IsOk())
+		if (m_aui_mgr.GetPane(gp->GetName()).IsOk())
 			return m_aui_mgr.GetPane(gp->GetName()).IsShown();
 	}
 
