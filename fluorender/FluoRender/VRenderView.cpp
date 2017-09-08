@@ -2440,6 +2440,14 @@ void VRenderGLView::DrawVolumesDP()
 
 	PrepFinalBuffer();
 
+	if (TextureRenderer::get_mem_swap())
+	{
+		//set start time for the texture renderer
+		TextureRenderer::set_st_time(GET_TICK_COUNT());
+
+		TextureRenderer::set_interactive(m_interactive);
+	}
+
 	for (int s = m_finished_peeling_layer; s <= peeling_layers; s++)
 	{
 		//draw
@@ -2677,14 +2685,7 @@ void VRenderGLView::DrawVolumesDP()
 			PopVolumeList();
 
 			vector<VolumeData*> quota_vd_list;
-			if (TextureRenderer::get_mem_swap() && s == m_finished_peeling_layer)
-			{
-				//set start time for the texture renderer
-				TextureRenderer::set_st_time(GET_TICK_COUNT());
-
-				TextureRenderer::set_interactive(m_interactive);
-			}
-
+			
 			//handle intermixing modes
 			if (m_vol_method == VOL_METHOD_MULTI)
 			{
