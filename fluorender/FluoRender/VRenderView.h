@@ -696,7 +696,7 @@ public:
 	void Run4DScript();
 
 	//start loop update
-	void StartLoopUpdate();
+	void StartLoopUpdate(bool reset_peeling_layer=true);
 	void HaltLoopUpdate();
 	void RefreshGL(bool erase=false, bool start_loop=true);
 	void RefreshGLOverlays(bool erase=false);
@@ -921,6 +921,8 @@ private:
 	vector<GLuint> m_dp_fbo_list;
 	vector<GLuint> m_dp_tex_list;
 	vector<GLuint> m_dp_ctex_list;
+	GLuint m_dp_buf_fbo;
+	GLuint m_dp_buf_tex;
 	//vert buffer
 	GLuint m_quad_vbo, m_quad_vao;
 	GLuint m_misc_vbo, m_misc_ibo, m_misc_vao;
@@ -1041,6 +1043,7 @@ private:
 	double m_rotx_cl, m_roty_cl, m_rotz_cl;
 
 	bool m_dpeel;
+	bool m_mdtrans;
 
 	//volume selector for segmentation
 	VolumeSelector m_selector;
@@ -1126,6 +1129,8 @@ private:
 
 	wxTimer *m_idleTimer;
 
+	int m_finished_peeling_layer;
+
 private:
 #ifdef _WIN32
 	//wacom tablet
@@ -1167,6 +1172,7 @@ private:
 	//3: draw volume after 14 and before 15 (13, 14, 15)
 	//4: same as 3 (14, 15)
 	//5: same as 2 (15)
+	void DrawVolumesDP();
 	//annotation layer
 	void DrawAnnotations();
 	//draw out the framebuffer after composition

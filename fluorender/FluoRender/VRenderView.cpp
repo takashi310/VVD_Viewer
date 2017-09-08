@@ -1043,6 +1043,9 @@ wxGLCanvas(parent, id, attriblist, pos, size, style),
 	m_fbo_pick(0),
 	m_tex_pick(0),
 	m_tex_pick_depth(0),
+	//dp buffer
+	m_dp_buf_fbo(0),
+	m_dp_buf_tex(0),
 	//camera controls
 	m_persp(false),
 	m_free(false),
@@ -1176,7 +1179,8 @@ wxGLCanvas(parent, id, attriblist, pos, size, style),
 	m_adaptive_res(false),
 	m_int_res(false),
 	m_dpeel(false),
-	m_load_in_main_thread(true)
+	m_load_in_main_thread(true),
+	m_finished_peeling_layer(0)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -1343,6 +1347,27 @@ VRenderGLView::~VRenderGLView()
 		glDeleteTextures(1, &m_tex_pick);
 	if (glIsTexture(m_tex_pick_depth))
 		glDeleteTextures(1, &m_tex_pick_depth);
+
+	if (glIsFramebuffer(m_dp_buf_fbo))
+		glDeleteFramebuffers(1, &m_dp_buf_fbo);
+	if (glIsTexture(m_dp_buf_tex))
+		glDeleteTextures(1, &m_dp_buf_tex);
+
+	for (auto fbo : m_dp_fbo_list)
+	{
+		if (glIsFramebuffer(fbo))
+			glDeleteFramebuffers(1, &fbo);
+	}
+	for (auto tex : m_dp_tex_list)
+	{
+		if (glIsTexture(tex))
+			glDeleteTextures(1, &tex);
+	}
+	for (auto ctex : m_dp_ctex_list)
+	{
+		if (glIsTexture(ctex))
+			glDeleteTextures(1, &ctex);
+	}
 
 	if (!m_sharedRC)
 		delete m_glRC;
@@ -1627,7 +1652,8 @@ void VRenderGLView::Draw()
 			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 			//draw the volumes
-			DrawVolumes();
+			if (!m_dpeel) DrawVolumes();
+			else DrawVolumesDP();
 		}
 
 
@@ -1991,7 +2017,7 @@ void VRenderGLView::DrawVolumes(int peel)
 
 	PrepFinalBuffer();
 
-	bool dp = false;
+	bool dp = (m_md_pop_list.size() > 0);
 
 	//draw
 	if ((!m_drawing_coord &&
@@ -2030,7 +2056,7 @@ void VRenderGLView::DrawVolumes(int peel)
 
 			int peeling_layers;
 
-			if (!m_dpeel) peeling_layers = 1;
+			if (!m_mdtrans) peeling_layers = 1;
 			else peeling_layers = m_peeling_layers;
 
 			for (int i = 0; i < peeling_layers; i++)
@@ -2144,7 +2170,7 @@ void VRenderGLView::DrawVolumes(int peel)
 				glActiveTexture(GL_TEXTURE0);
 				glEnable(GL_TEXTURE_2D);
 				glEnable(GL_BLEND);
-				glBlendFunc(GL_SRC_ALPHA, GL_ZERO);
+				glBlendFunc(GL_ONE, GL_ZERO);
 				glEnable(GL_DEPTH_TEST);
 				glDepthFunc(GL_LEQUAL);
 
@@ -2178,10 +2204,10 @@ void VRenderGLView::DrawVolumes(int peel)
 			glActiveTexture(GL_TEXTURE0);
 			glEnable(GL_TEXTURE_2D);
 			glEnable(GL_BLEND);
-			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+			glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 			glDisable(GL_DEPTH_TEST);
 
-			ShaderProgram* img_shader = m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
+			ShaderProgram* img_shader = m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP_BLEND);
 			if (img_shader)
 			{
 				if (!img_shader->valid())
@@ -2201,8 +2227,6 @@ void VRenderGLView::DrawVolumes(int peel)
 				img_shader->release();
 
 			glBindTexture(GL_TEXTURE_2D, 0);
-
-			dp = true;
 		}
 
 		//setup
@@ -2335,7 +2359,38 @@ void VRenderGLView::DrawVolumes(int peel)
 	}
 
 	//final composition
-	DrawFinalBuffer();
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	//draw the final buffer to the windows buffer
+	glActiveTexture(GL_TEXTURE0);
+	glEnable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, m_tex_final);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+	glDisable(GL_DEPTH_TEST);
+
+	//2d adjustment
+	ShaderProgram* img_shader =
+		m_img_shader_factory.shader(IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR);
+	if (img_shader)
+	{
+		if (!img_shader->valid())
+			img_shader->create();
+		img_shader->bind();
+	}
+
+	img_shader->setLocalParam(0, 1.0, 1.0, 1.0, 1.0);
+	img_shader->setLocalParam(1, 1.0, 1.0, 1.0, 1.0);
+	img_shader->setLocalParam(2, 0.0, 0.0, 0.0, 0.0);
+
+	//2d adjustment
+
+	DrawViewQuad();
+
+	if (img_shader && img_shader->valid())
+		img_shader->release();
+
+	glBindTexture(GL_TEXTURE_2D, 0);
 
 	if (TextureRenderer::get_mem_swap())
 	{
@@ -2344,6 +2399,488 @@ void VRenderGLView::DrawVolumes(int peel)
 			TextureRenderer::get_done_update_loop())
 			TextureRenderer::reset_update_loop();
 	}
+
+	if (m_interactive)
+	{
+		m_interactive = false;
+		m_clear_buffer = true;
+		RefreshGL();
+	}
+
+	if (m_int_res)
+	{
+		m_int_res = false;
+		RefreshGL();
+	}
+
+	if (m_manip)
+	{
+		m_pre_draw = true;
+		RefreshGL();
+	}
+}
+
+void VRenderGLView::DrawVolumesDP()
+{
+	int finished_bricks = 0;
+	if (TextureRenderer::get_mem_swap())
+	{
+		finished_bricks = TextureRenderer::get_finished_bricks();
+		TextureRenderer::reset_finished_bricks();
+	}
+
+	bool dp = (m_md_pop_list.size() > 0);
+	
+	int peeling_layers;
+	if (!m_mdtrans || m_peeling_layers <= 0) peeling_layers = 0;
+	else peeling_layers = m_peeling_layers;
+
+	int nx = GetSize().x;
+	int ny = GetSize().y;
+
+	PrepFinalBuffer();
+
+	for (int s = m_finished_peeling_layer; s <= peeling_layers; s++)
+	{
+		//draw
+		if ((!m_drawing_coord &&
+			m_int_mode!=7 &&
+			m_updating) ||
+			(!m_drawing_coord &&
+			(m_int_mode == 1 ||
+			m_int_mode == 3 ||
+			m_int_mode == 4 ||
+			m_int_mode == 5 ||
+			(m_int_mode == 6 &&
+			!m_editing_ruler_point) ||
+			m_int_mode == 8 ||
+			m_force_clear)))
+		{
+			m_updating = false;
+			m_force_clear = false;
+
+			if (m_finished_peeling_layer == 0)
+				ClearFinalBuffer();
+
+			if (m_finished_peeling_layer == 0 && TextureRenderer::get_cur_brick_num() == 0 && m_md_pop_list.size() > 0)
+			{
+				glBindFramebuffer(GL_FRAMEBUFFER, 0);
+				int dptexnum = peeling_layers > 0 ? peeling_layers : 1;
+				for (int i = 0; i < dptexnum; i++)
+				{
+					if (i >= (int)m_dp_fbo_list.size())
+					{
+						GLuint fbo_id;
+						GLuint tex_id;
+						GLuint ctex_id;
+						glGenFramebuffers(1, &fbo_id);
+						glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
+
+						glGenTextures(1, &ctex_id);
+						glBindTexture(GL_TEXTURE_2D, ctex_id);
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+						glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
+							GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+						glFramebufferTexture2D(GL_FRAMEBUFFER,
+							GL_COLOR_ATTACHMENT0,
+							GL_TEXTURE_2D, ctex_id, 0);
+						m_dp_ctex_list.push_back(ctex_id);
+
+						glGenTextures(1, &tex_id);
+						glBindTexture(GL_TEXTURE_2D, tex_id);
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+						glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
+							GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
+						glFramebufferTexture2D(GL_FRAMEBUFFER,
+							GL_DEPTH_ATTACHMENT,
+							GL_TEXTURE_2D, tex_id, 0);
+						m_dp_tex_list.push_back(tex_id);
+
+						m_dp_fbo_list.push_back(fbo_id);
+					}
+					else if (i >= 0 && !glIsFramebuffer(m_dp_fbo_list[i]))
+					{
+						GLuint fbo_id;
+						GLuint tex_id;
+						GLuint ctex_id;
+						glGenFramebuffers(1, &fbo_id);
+						glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
+
+						if (!glIsTexture(m_dp_ctex_list[i]))
+							glGenTextures(1, &ctex_id);
+						else
+							ctex_id = m_dp_ctex_list[i];
+						glBindTexture(GL_TEXTURE_2D, ctex_id);
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+						glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
+							GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+						glFramebufferTexture2D(GL_FRAMEBUFFER,
+							GL_COLOR_ATTACHMENT0,
+							GL_TEXTURE_2D, ctex_id, 0);
+						m_dp_ctex_list[i] = ctex_id;
+
+						if (!glIsTexture(m_dp_tex_list[i]))
+							glGenTextures(1, &tex_id);
+						else
+							tex_id = m_dp_tex_list[i];
+						glBindTexture(GL_TEXTURE_2D, tex_id);
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+						glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
+							GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
+						glFramebufferTexture2D(GL_FRAMEBUFFER,
+							GL_DEPTH_ATTACHMENT,
+							GL_TEXTURE_2D, tex_id, 0);
+						m_dp_tex_list[i] = tex_id;
+
+						m_dp_fbo_list[i] = fbo_id;
+
+					}
+					else
+					{
+						glBindFramebuffer(GL_FRAMEBUFFER, m_dp_fbo_list[i]);
+						glFramebufferTexture2D(GL_FRAMEBUFFER,
+							GL_COLOR_ATTACHMENT0,
+							GL_TEXTURE_2D, m_dp_ctex_list[i], 0);
+						glFramebufferTexture2D(GL_FRAMEBUFFER,
+							GL_DEPTH_ATTACHMENT,
+							GL_TEXTURE_2D, m_dp_tex_list[i], 0);
+					}
+
+					if (m_resize)
+					{
+						glBindTexture(GL_TEXTURE_2D, m_dp_ctex_list[i]);
+						glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
+							GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+
+						glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[i]);
+						glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
+							GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
+						//m_resize = false;
+					}
+
+					glBindTexture(GL_TEXTURE_2D, 0);
+
+					glActiveTexture(GL_TEXTURE15);
+					glEnable(GL_TEXTURE_2D);
+					glActiveTexture(GL_TEXTURE0);
+					glEnable(GL_TEXTURE_2D);
+					glEnable(GL_BLEND);
+					glBlendFunc(GL_ONE, GL_ZERO);
+					glEnable(GL_DEPTH_TEST);
+					glDepthFunc(GL_LEQUAL);
+
+					glClearColor(0.0, 0.0, 0.0, 0.0);
+					glClearDepth(1.0);
+					glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+					if (i==0)
+					{
+						DrawMeshes(0);
+					}
+					else
+					{
+						glActiveTexture(GL_TEXTURE15);
+						glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[i-1]);
+						glActiveTexture(GL_TEXTURE0);
+						DrawMeshes(1);
+						glActiveTexture(GL_TEXTURE15);
+						glBindTexture(GL_TEXTURE_2D, 0);
+						glActiveTexture(GL_TEXTURE0);
+					}
+
+					glBindFramebuffer(GL_FRAMEBUFFER, 0);
+				}
+			}
+
+			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_final);
+			glFramebufferTexture2D(GL_FRAMEBUFFER,
+				GL_COLOR_ATTACHMENT0,
+				GL_TEXTURE_2D, m_tex_final, 0);
+			
+			int peel = 0;
+			if (m_dp_tex_list.size() >= peeling_layers && !m_dp_tex_list.empty() && m_md_pop_list.size() > 0)
+			{
+				if (TextureRenderer::get_update_order() == 0)
+				{
+					if (s == 0)
+					{
+						peel = 2;
+						glActiveTexture(GL_TEXTURE15);
+						glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[(peeling_layers-1)-s]);
+						glActiveTexture(GL_TEXTURE0);
+					}
+					else if (s == peeling_layers)
+					{
+						peel = 1;
+						glActiveTexture(GL_TEXTURE15);
+						glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[(peeling_layers-1)-(s-1)]);
+						glActiveTexture(GL_TEXTURE0);
+					}
+					else
+					{
+						peel = 3;
+						glActiveTexture(GL_TEXTURE14);
+						glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[(peeling_layers-1)-s]);
+						glActiveTexture(GL_TEXTURE15);
+						glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[(peeling_layers-1)-(s-1)]);
+						glActiveTexture(GL_TEXTURE0);
+					}
+				}
+				else
+				{
+					if (s == 0)
+					{
+						peel = 1;
+						glActiveTexture(GL_TEXTURE15);
+						glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[s]);
+						glActiveTexture(GL_TEXTURE0);
+					}
+					else if (s == peeling_layers)
+					{
+						peel = 2;
+						glActiveTexture(GL_TEXTURE15);
+						glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[s-1]);
+						glActiveTexture(GL_TEXTURE0);
+					}
+					else
+					{
+						peel = 3;
+						glActiveTexture(GL_TEXTURE14);
+						glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[s-1]);
+						glActiveTexture(GL_TEXTURE15);
+						glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[s]);
+						glActiveTexture(GL_TEXTURE0);
+					}
+				}
+			}
+
+			//setup
+			glDisable(GL_DEPTH_TEST);
+			glEnable(GL_BLEND);
+			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+			GLboolean bCull = glIsEnabled(GL_CULL_FACE);
+			glDisable(GL_CULL_FACE);
+
+			PopVolumeList();
+
+			vector<VolumeData*> quota_vd_list;
+			if (TextureRenderer::get_mem_swap() && s == m_finished_peeling_layer)
+			{
+				//set start time for the texture renderer
+				TextureRenderer::set_st_time(GET_TICK_COUNT());
+
+				TextureRenderer::set_interactive(m_interactive);
+			}
+
+			//handle intermixing modes
+			if (m_vol_method == VOL_METHOD_MULTI)
+			{
+				DrawVolumesMulti(m_vd_pop_list, peel);
+				//draw masks
+				if (m_draw_mask)
+					DrawVolumesComp(m_vd_pop_list, true, peel);
+			}
+			else
+			{
+				int i, j;
+				vector<VolumeData*> list;
+				for (i=(int)m_layer_list.size()-1; i>=0; i--)
+				{
+					if (!m_layer_list[i])
+						continue;
+					switch (m_layer_list[i]->IsA())
+					{
+					case 2://volume data (this won't happen now)
+						{
+							if (m_finished_peeling_layer != 0)
+								continue;
+							VolumeData* vd = (VolumeData*)m_layer_list[i];
+							if (vd && vd->GetDisp())
+							{
+								if (TextureRenderer::get_mem_swap() &&
+									TextureRenderer::get_interactive() &&
+									quota_vd_list.size()>0)
+								{
+									if (find(quota_vd_list.begin(),
+										quota_vd_list.end(), vd)!=
+										quota_vd_list.end())
+										list.push_back(vd);
+								}
+								else
+									list.push_back(vd);
+							}
+						}
+						break;
+					case 5://group
+						{
+							if (!list.empty())
+							{
+								DrawVolumesComp(list, false, peel);
+								//draw masks
+								if (m_draw_mask)
+									DrawVolumesComp(list, true, peel);
+								list.clear();
+							}
+							DataGroup* group = (DataGroup*)m_layer_list[i];
+							if (!group->GetDisp())
+								continue;
+							if (m_finished_peeling_layer != 0 && group->GetBlendMode() != VOL_METHOD_MULTI)
+								continue;
+							for (j=group->GetVolumeNum()-1; j>=0; j--)
+							{
+								VolumeData* vd = group->GetVolumeData(j);
+								if (vd && vd->GetDisp())
+								{
+									if (TextureRenderer::get_mem_swap() &&
+										TextureRenderer::get_interactive() &&
+										quota_vd_list.size()>0)
+									{
+										if (find(quota_vd_list.begin(),
+											quota_vd_list.end(), vd)!=
+											quota_vd_list.end())
+											list.push_back(vd);
+									}
+									else
+										list.push_back(vd);
+								}
+							}
+							if (!list.empty())
+							{
+								if (group->GetBlendMode() == VOL_METHOD_MULTI)
+									DrawVolumesMulti(list, peel);
+								else
+									DrawVolumesComp(list, false, peel);
+								//draw masks
+								if (m_draw_mask)
+									DrawVolumesComp(list, true, peel);
+								list.clear();
+							}
+						}
+						break;
+					}
+				}
+			}
+
+			glActiveTexture(GL_TEXTURE14);
+			glBindTexture(GL_TEXTURE_2D, 0);
+			glActiveTexture(GL_TEXTURE15);
+			glBindTexture(GL_TEXTURE_2D, 0);
+			glActiveTexture(GL_TEXTURE0);
+
+			int texid = TextureRenderer::get_update_order() == 0 ? (peeling_layers-1)-s : s;
+			if (m_dp_ctex_list.size() > texid && m_md_pop_list.size() > 0 &&
+				((TextureRenderer::get_start_update_loop() && TextureRenderer::get_done_update_loop()) || !TextureRenderer::get_mem_swap() || TextureRenderer::get_total_brick_num() == 0) )
+			{
+				glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_final);
+				glFramebufferTexture2D(GL_FRAMEBUFFER,
+					GL_COLOR_ATTACHMENT0,
+					GL_TEXTURE_2D, m_tex_final, 0);
+
+				glActiveTexture(GL_TEXTURE0);
+				glEnable(GL_TEXTURE_2D);
+				glEnable(GL_BLEND);
+				if (TextureRenderer::get_update_order() == 0)
+					glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+				else if (TextureRenderer::get_update_order() == 1)
+					glBlendFunc(GL_ONE_MINUS_DST_ALPHA, GL_ONE);
+				glDisable(GL_DEPTH_TEST);
+
+				ShaderProgram* img_shader = m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP_BLEND);
+				if (img_shader)
+				{
+					if (!img_shader->valid())
+						img_shader->create();
+					img_shader->bind();
+				}
+
+				glActiveTexture(GL_TEXTURE0);
+				glBindTexture(GL_TEXTURE_2D, m_dp_ctex_list[texid]);
+				DrawViewQuad();
+				glBindTexture(GL_TEXTURE_2D, 0);
+
+				if (img_shader && img_shader->valid())
+					img_shader->release();
+
+				glBindTexture(GL_TEXTURE_2D, 0);
+			}
+
+			if (bCull) glEnable(GL_CULL_FACE);
+		}
+
+		if (TextureRenderer::get_mem_swap() && TextureRenderer::get_total_brick_num() > 0)
+		{
+			unsigned int rn_time = GET_TICK_COUNT();
+			TextureRenderer::set_consumed_time(rn_time - TextureRenderer::get_st_time());
+			
+			if (TextureRenderer::get_start_update_loop() && !TextureRenderer::get_done_update_loop())
+				break;
+
+			if (TextureRenderer::get_start_update_loop() && TextureRenderer::get_done_update_loop())
+			{
+				m_finished_peeling_layer++;
+				if (m_finished_peeling_layer < peeling_layers)
+				{
+					StartLoopUpdate(false);
+					finished_bricks = TextureRenderer::get_finished_bricks();
+					TextureRenderer::reset_finished_bricks();
+				}
+				else
+					TextureRenderer::reset_update_loop();
+			}
+			
+			if (rn_time - TextureRenderer::get_st_time() > TextureRenderer::get_up_time())
+				break;
+		}
+		else
+			m_finished_peeling_layer++;
+	}
+
+	//final composition
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	//draw the final buffer to the windows buffer
+	glActiveTexture(GL_TEXTURE0);
+	glEnable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, m_tex_final);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+	glDisable(GL_DEPTH_TEST);
+
+	//2d adjustment
+	ShaderProgram* img_shader =
+		m_img_shader_factory.shader(IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR);
+	if (img_shader)
+	{
+		if (!img_shader->valid())
+			img_shader->create();
+		img_shader->bind();
+	}
+
+	img_shader->setLocalParam(0, 1.0, 1.0, 1.0, 1.0);
+	img_shader->setLocalParam(1, 1.0, 1.0, 1.0, 1.0);
+	img_shader->setLocalParam(2, 0.0, 0.0, 0.0, 0.0);
+
+	//2d adjustment
+
+	DrawViewQuad();
+
+	if (img_shader && img_shader->valid())
+		img_shader->release();
+
+	glBindTexture(GL_TEXTURE_2D, 0);
 
 	if (m_interactive)
 	{
@@ -5393,12 +5930,16 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 	if (m_vol_method == VOL_METHOD_COMP)
 		glBlendFunc(GL_ONE, GL_ONE);
 	else
-		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+	{
+		if (TextureRenderer::get_update_order() == 0)
+			glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+		else if (TextureRenderer::get_update_order() == 1)
+			glBlendFunc(GL_ONE_MINUS_DST_ALPHA, GL_ONE);
+	}
 	glDisable(GL_DEPTH_TEST);
 
 	//2d adjustment
-	img_shader =
-		m_img_shader_factory.shader(IMG_SHDR_BRIGHTNESS_CONTRAST_HDR);
+	img_shader = m_img_shader_factory.shader(IMG_SHDR_BRIGHTNESS_CONTRAST_HDR);
 	if (img_shader)
 	{
 		if (!img_shader->valid())
@@ -10751,13 +11292,16 @@ void VRenderGLView::Run4DScript()
 }
 
 //start loop update
-void VRenderGLView::StartLoopUpdate()
+void VRenderGLView::StartLoopUpdate(bool reset_peeling_layer)
 {
 	////this is for debug_ds, comment when done
 	//if (TextureRenderer::get_mem_swap() &&
 	//  TextureRenderer::get_start_update_loop() &&
 	//  !TextureRenderer::get_done_update_loop())
 	//  return;
+
+	if (reset_peeling_layer)
+		m_finished_peeling_layer = 0;
 
 	int nx = GetSize().x;
 	int ny = GetSize().y;
@@ -10781,6 +11325,7 @@ void VRenderGLView::StartLoopUpdate()
 
 	int i, j, k;
 	m_dpeel = false;
+	m_mdtrans = false;
 	for (i=0; i<m_md_pop_list.size(); i++)
 	{
 		MeshData *md = m_md_pop_list[i];
@@ -10788,7 +11333,7 @@ void VRenderGLView::StartLoopUpdate()
 		Color amb, diff, spec;
 		double shine, alpha;
 		md->GetMaterial(amb, diff, spec, shine, alpha);
-		if (alpha < 1.0) m_dpeel = true;
+		if (alpha < 1.0) m_mdtrans = true;
 	}
 
 	//	if (TextureRenderer::get_mem_swap())
@@ -10798,9 +11343,46 @@ void VRenderGLView::StartLoopUpdate()
 		int num_chan;
 		//reset drawn status for all bricks
 
-		for (i=0; i<m_vd_pop_list.size(); i++)
+		vector<VolumeData*> displist;
+		for (i=(int)m_layer_list.size()-1; i>=0; i--)
 		{
-			VolumeData* vd = m_vd_pop_list[i];
+			if (!m_layer_list[i])
+				continue;
+			switch (m_layer_list[i]->IsA())
+			{
+			case 5://group
+				{
+					DataGroup* group = (DataGroup*)m_layer_list[i];
+					if (!group->GetDisp() || group->GetBlendMode() != VOL_METHOD_MULTI)
+						continue;
+
+					for (j=group->GetVolumeNum()-1; j>=0; j--)
+					{
+						VolumeData* vd = group->GetVolumeData(j);
+						if (!vd || !vd->GetDisp())
+							continue;
+						Texture* tex = vd->GetTexture();
+						if (!tex)
+							continue;
+						Ray view_ray = vd->GetVR()->compute_view();
+						vector<TextureBrick*> *bricks = tex->get_sorted_bricks(view_ray, !m_persp);
+						if (!bricks || bricks->size()==0)
+							continue;
+						displist.push_back(vd);
+					}
+				}
+				break;
+			}
+		}
+		m_dpeel = !(displist.empty() && m_vol_method != VOL_METHOD_MULTI);
+		if (m_md_pop_list.size() == 0)
+			m_dpeel = false;
+		if (reset_peeling_layer || m_vol_method == VOL_METHOD_MULTI)
+			displist = m_vd_pop_list;
+
+		for (i=0; i<displist.size(); i++)
+		{
+			VolumeData* vd = displist[i];
 			if (vd && vd->GetDisp())
 			{
 				switchLevel(vd);
@@ -10873,9 +11455,9 @@ void VRenderGLView::StartLoopUpdate()
 		if (m_vol_method == VOL_METHOD_MULTI)
 		{
 			vector<VolumeData*> list;
-			for (i=0; i<m_vd_pop_list.size(); i++)
+			for (i=0; i<displist.size(); i++)
 			{
-				VolumeData* vd = m_vd_pop_list[i];
+				VolumeData* vd = displist[i];
 				if (!vd || !vd->GetDisp() || !vd->isBrxml())
 					continue;
 				Texture* tex = vd->GetTexture();
@@ -10969,6 +11551,8 @@ void VRenderGLView::StartLoopUpdate()
 				{
 				case 2://volume data (this won't happen now)
 					{
+						if (!reset_peeling_layer)
+							continue;
 						VolumeData* vd = (VolumeData*)m_layer_list[i];
 						vector<VolumeLoaderData> tmp_shade;
 						vector<VolumeLoaderData> tmp_shadow;
@@ -11132,6 +11716,8 @@ void VRenderGLView::StartLoopUpdate()
 						}
 						else
 						{
+							if (!reset_peeling_layer)
+								continue;
 							for (j = 0; j < list.size(); j++)
 							{
 								VolumeData* vd = list[j];

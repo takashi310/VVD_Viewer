@@ -136,6 +136,24 @@ namespace FLIVR
 	"	FragColor = c;\n" \
 	"}\n"
 
+#define IMG_SHADER_CODE_TEXTURE_LOOKUP_BLEND \
+	"//IMG_SHADER_CODE_TEXTURE_LOOKUP\n" \
+	"in vec3 OutVertex;\n" \
+	"in vec3 OutTexCoord;\n" \
+	"out vec4 FragColor;\n" \
+	"\n" \
+	"// IMG_SHADER_CODE_TEXTURE_LOOKUP\n" \
+	"uniform sampler2D tex0;\n" \
+	"\n" \
+	"void main()\n" \
+	"{\n" \
+	"	vec4 t = vec4(OutTexCoord, 1.0);\n" \
+	"	vec4 c = texture(tex0, t.xy);\n" \
+	"	c.a = clamp(c.a, 0.0, 1.0);\n" \
+	"	c.rgb *= c.a;\n" \
+	"	FragColor = c;\n" \
+	"}\n"
+
 #define IMG_SHADER_CODE_BRIGHTNESS_CONTRAST \
 	"//IMG_SHADER_CODE_BRIGHTNESS_CONTRAST\n" \
 	"in vec3 OutVertex;\n" \
@@ -194,6 +212,46 @@ namespace FLIVR
 	"	vec4 unit = vec4(1.0);\n" \
 	"	c = c*(unit-loc2)+loc2*c_avg;\n" \
 	"	FragColor = c*(unit-loc2)+loc2*(unit-unit/(c+unit));\n" \
+	"}\n"
+
+#define IMG_SHADER_CODE_BRIGHTNESS_CONTRAST_HDR_BLEND \
+	"//IMG_SHADER_CODE_BRIGHTNESS_CONTRAST_HDR\n" \
+	"in vec3 OutVertex;\n" \
+	"in vec3 OutTexCoord;\n" \
+	"out vec4 FragColor;\n" \
+	"\n" \
+	"// IMG_SHADER_CODE_BRIGHTNESS_CONTRAST_HDR\n" \
+	"uniform vec4 loc0; //(r_gamma, g_gamma, b_gamma, 1.0)\n" \
+	"uniform vec4 loc1; //(r_brightness, g_brightness, b_brightness, 1.0)\n" \
+	"uniform vec4 loc2; //(r_hdr, g_hdr, b_hdr, 0.0)\n" \
+	"uniform sampler2D tex0;\n" \
+	"\n" \
+	"void main()\n" \
+	"{\n" \
+	"	vec4 t = vec4(OutTexCoord, 1.0);\n" \
+	"	vec4 c = texture(tex0, t.xy);\n" \
+	"	vec4 c_avg_1 = max(textureLod(tex0, t.xy, 1), 0.001);\n" \
+	"	vec4 c_avg_2 = max(textureLod(tex0, t.xy, 2), 0.001);\n" \
+	"	vec4 c_avg_3 = max(textureLod(tex0, t.xy, 3), 0.001);\n" \
+	"	vec4 c_avg_4 = max(textureLod(tex0, t.xy, 4), 0.001);\n" \
+	"	vec4 c_avg_5 = max(textureLod(tex0, t.xy, 5), 0.001);\n" \
+	"	vec4 b = loc1;\n" \
+	"	b.x = b.x>1.0?(b.x<2.0?1.0/(2.0-b.x):256.0):loc1.x;\n" \
+	"	b.y = b.y>1.0?(b.y<2.0?1.0/(2.0-b.y):256.0):loc1.y;\n" \
+	"	b.z = b.z>1.0?(b.z<2.0?1.0/(2.0-b.z):256.0):loc1.z;\n" \
+	"	c = pow(c, loc0);\n" \
+	"	c_avg_1 = c/pow(c_avg_1, loc0);\n" \
+	"	c_avg_2 = c/pow(c_avg_2, loc0);\n" \
+	"	c_avg_3 = c/pow(c_avg_3, loc0);\n" \
+	"	c_avg_4 = c/pow(c_avg_4, loc0);\n" \
+	"	c_avg_5 = c/pow(c_avg_5, loc0);\n" \
+	"	c *= b;\n" \
+	"	vec4 c_avg = 0.43*c_avg_1+0.26*c_avg_2+0.17*c_avg_3+0.1*c_avg_4+0.04*c_avg_5;\n" \
+	"	vec4 unit = vec4(1.0);\n" \
+	"	c = c*(unit-loc2)+loc2*c_avg;\n" \
+	"	c = c*(unit-loc2)+loc2*(unit-unit/(c+unit));\n" \
+	"	c.rgb *= c.a;\n" \
+	"	FragColor = c;\n" \
 	"}\n"
 
 #define IMG_SHADER_CODE_GRADIENT_MAP \
@@ -544,6 +602,35 @@ namespace FLIVR
 	"	//FragColor = vec4(0.4, 1.0, 0.0, 1.0);\n" \
 	"}\n"
 
+#define IMG_SHADER_CODE_BLEND_BRIGHT_BACKGROUND_HDR_PREMULTI \
+	"//IMG_SHADER_CODE_BLEND_BRIGHT_BACKGROUND_HDR\n" \
+	"in vec3 OutVertex;\n" \
+	"in vec3 OutTexCoord;\n" \
+	"out vec4 FragColor;\n" \
+	"\n" \
+	"// IMG_SHADER_CODE_BLEND_BRIGHT_BACKGROUND_HDR\n" \
+	"uniform vec4 loc0; //(r_gamma, g_gamma, b_gamma, 1.0)\n" \
+	"uniform vec4 loc1; //(r_brightness, g_brightness, b_brightness, 1.0)\n" \
+	"uniform vec4 loc2; //(r_hdr, g_hdr, b_hdr, 0.0)\n" \
+	"uniform sampler2D tex0;\n" \
+	"\n" \
+	"void main()\n" \
+	"{\n" \
+	"	vec4 t = vec4(OutTexCoord, 1.0);\n" \
+	"	vec4 c = texture(tex0, t.xy);\n" \
+	"	c.rgb = c.a>0.0 ? c.rgb/c.a : vec3(0.0);\n" \
+	"	float alpha = clamp(c.a, 0.0, 1.0);\n" \
+	"	alpha = clamp(2.0*alpha - alpha*alpha, 0.0, 1.0);\n" \
+	"	vec4 b = loc1;\n" \
+	"	b.x = b.x>1.0?1.0/(2.0-b.x):loc1.x;\n" \
+	"	b.y = b.y>1.0?1.0/(2.0-b.y):loc1.y;\n" \
+	"	b.z = b.z>1.0?1.0/(2.0-b.z):loc1.z;\n" \
+	"	c = pow(c, loc0)*b;\n" \
+	"	vec4 unit = vec4(1.0);\n" \
+	"	FragColor = c*(unit-loc2)+loc2*(unit-unit/(c+unit));\n" \
+	"	FragColor.a = alpha;\n" \
+	"}\n"
+
 #define PAINT_SHADER_CODE \
 	"//PAINT_SHADER_CODE\n" \
 	"in vec3 OutVertex;\n" \
@@ -756,6 +843,15 @@ namespace FLIVR
 			break;
 		case IMG_SHDR_BLEND_ID_COLOR_FOR_DEPTH_MODE:
 			z << IMG_SHADER_CODE_BLEND_ID_COLOR_FOR_DEPTH_MODE;
+			break;
+		case IMG_SHADER_TEXTURE_LOOKUP_BLEND:
+			z << IMG_SHADER_CODE_TEXTURE_LOOKUP_BLEND;
+			break;
+		case IMG_SHDR_BRIGHTNESS_CONTRAST_HDR_BLEND:
+			z << IMG_SHADER_CODE_BRIGHTNESS_CONTRAST_HDR_BLEND;
+			break;
+		case IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR_PREMULTI:
+			z << IMG_SHADER_CODE_BLEND_BRIGHT_BACKGROUND_HDR_PREMULTI;
 			break;
 		default:
 			z << IMG_SHADER_CODE_TEXTURE_LOOKUP;
