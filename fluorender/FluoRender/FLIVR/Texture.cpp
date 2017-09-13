@@ -393,6 +393,9 @@ namespace FLIVR
 			spcx_ = x;
 			spcy_ = y;
 			spcz_ = z;
+			b_spcx_ = x;
+			b_spcy_ = y;
+			b_spcz_ = z;
 			Transform tform;
 			tform.load_identity();
 			Point nmax(nx_*x, ny_*y, nz_*z);

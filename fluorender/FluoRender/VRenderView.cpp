@@ -2262,9 +2262,9 @@ void VRenderGLView::DrawVolumes(int peel)
 				glActiveTexture(GL_TEXTURE0);
 			}
 			else DrawVolumesMulti(m_vd_pop_list, peel);
-		//draw masks
-		if (m_draw_mask)
-			DrawVolumesComp(m_vd_pop_list, true, peel);
+			//draw masks
+			if (m_draw_mask)
+				DrawVolumesComp(m_vd_pop_list, true, peel);
 		}
 		else
 		{
@@ -2439,6 +2439,7 @@ void VRenderGLView::DrawVolumesDP()
 	int ny = GetSize().y;
 
 	PrepFinalBuffer();
+	glClearColor(0.0, 0.0, 0.0, 0.0);
 
 	if (TextureRenderer::get_mem_swap())
 	{
@@ -2448,27 +2449,29 @@ void VRenderGLView::DrawVolumesDP()
 		TextureRenderer::set_interactive(m_interactive);
 	}
 
-	for (int s = m_finished_peeling_layer; s <= peeling_layers; s++)
-	{
-		//draw
-		if ((!m_drawing_coord &&
-			m_int_mode!=7 &&
-			m_updating) ||
-			(!m_drawing_coord &&
-			(m_int_mode == 1 ||
-			m_int_mode == 3 ||
-			m_int_mode == 4 ||
-			m_int_mode == 5 ||
-			(m_int_mode == 6 &&
-			!m_editing_ruler_point) ||
-			m_int_mode == 8 ||
-			m_force_clear)))
-		{
-			m_updating = false;
-			m_force_clear = false;
+	bool first = (m_finished_peeling_layer == 0 && (!TextureRenderer::get_mem_swap() || TextureRenderer::get_cur_brick_num() == 0)) ? true : false;
 
-			if (m_finished_peeling_layer == 0)
-				ClearFinalBuffer();
+	//draw
+	if ((!m_drawing_coord &&
+		m_int_mode!=7 &&
+		m_updating) ||
+		(!m_drawing_coord &&
+		(m_int_mode == 1 ||
+		m_int_mode == 3 ||
+		m_int_mode == 4 ||
+		m_int_mode == 5 ||
+		(m_int_mode == 6 &&
+		!m_editing_ruler_point) ||
+		m_int_mode == 8 ||
+		m_force_clear)))
+	{
+
+		m_updating = false;
+		m_force_clear = false;
+
+		for (int s = m_finished_peeling_layer; s <= peeling_layers; s++)
+		{
+			ClearFinalBuffer();
 
 			if (m_finished_peeling_layer == 0 && TextureRenderer::get_cur_brick_num() == 0 && m_md_pop_list.size() > 0)
 			{
@@ -2613,10 +2616,7 @@ void VRenderGLView::DrawVolumesDP()
 			}
 
 			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_final);
-			glFramebufferTexture2D(GL_FRAMEBUFFER,
-				GL_COLOR_ATTACHMENT0,
-				GL_TEXTURE_2D, m_tex_final, 0);
-			
+
 			int peel = 0;
 			if (m_dp_tex_list.size() >= peeling_layers && !m_dp_tex_list.empty() && m_md_pop_list.size() > 0)
 			{
@@ -2685,7 +2685,7 @@ void VRenderGLView::DrawVolumesDP()
 			PopVolumeList();
 
 			vector<VolumeData*> quota_vd_list;
-			
+
 			//handle intermixing modes
 			if (m_vol_method == VOL_METHOD_MULTI)
 			{
@@ -2738,8 +2738,8 @@ void VRenderGLView::DrawVolumesDP()
 							DataGroup* group = (DataGroup*)m_layer_list[i];
 							if (!group->GetDisp())
 								continue;
-							if (m_finished_peeling_layer != 0 && group->GetBlendMode() != VOL_METHOD_MULTI)
-								continue;
+//							if (m_finished_peeling_layer != 0 && group->GetBlendMode() != VOL_METHOD_MULTI)
+//								continue;
 							for (j=group->GetVolumeNum()-1; j>=0; j--)
 							{
 								VolumeData* vd = group->GetVolumeData(j);
@@ -2785,6 +2785,7 @@ void VRenderGLView::DrawVolumesDP()
 			if (m_dp_ctex_list.size() > texid && m_md_pop_list.size() > 0 &&
 				((TextureRenderer::get_start_update_loop() && TextureRenderer::get_done_update_loop()) || !TextureRenderer::get_mem_swap() || TextureRenderer::get_total_brick_num() == 0) )
 			{
+				glBindFramebuffer(GL_FRAMEBUFFER, 0);
 				glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_final);
 				glFramebufferTexture2D(GL_FRAMEBUFFER,
 					GL_COLOR_ATTACHMENT0,
@@ -2819,39 +2820,90 @@ void VRenderGLView::DrawVolumesDP()
 			}
 
 			if (bCull) glEnable(GL_CULL_FACE);
-		}
 
-		if (TextureRenderer::get_mem_swap() && TextureRenderer::get_total_brick_num() > 0)
-		{
-			unsigned int rn_time = GET_TICK_COUNT();
-			TextureRenderer::set_consumed_time(rn_time - TextureRenderer::get_st_time());
-			
-			if (TextureRenderer::get_start_update_loop() && !TextureRenderer::get_done_update_loop())
-				break;
-
-			if (TextureRenderer::get_start_update_loop() && TextureRenderer::get_done_update_loop())
+			if (TextureRenderer::get_mem_swap() && TextureRenderer::get_total_brick_num() > 0)
 			{
-				m_finished_peeling_layer++;
-				if (m_finished_peeling_layer < peeling_layers)
+				unsigned int rn_time = GET_TICK_COUNT();
+				TextureRenderer::set_consumed_time(rn_time - TextureRenderer::get_st_time());
+
+				if (TextureRenderer::get_start_update_loop() && !TextureRenderer::get_done_update_loop())
+					break;
+
+				if (TextureRenderer::get_start_update_loop() && TextureRenderer::get_done_update_loop())
 				{
-					StartLoopUpdate(false);
-					finished_bricks = TextureRenderer::get_finished_bricks();
-					TextureRenderer::reset_finished_bricks();
+					m_finished_peeling_layer++;
+					if (m_finished_peeling_layer < peeling_layers)
+					{
+						StartLoopUpdate(false);
+						finished_bricks = TextureRenderer::get_finished_bricks();
+						TextureRenderer::reset_finished_bricks();
+						
+						if (TextureRenderer::get_mem_swap() &&
+							TextureRenderer::get_start_update_loop() &&
+							TextureRenderer::get_save_final_buffer())
+						{
+							TextureRenderer::reset_save_final_buffer();
+
+							if (glIsFramebuffer(m_fbo_temp)!=GL_TRUE)
+							{
+								glGenFramebuffers(1, &m_fbo_temp);
+								if (glIsTexture(m_tex_temp)!=GL_TRUE)
+									glGenTextures(1, &m_tex_temp);
+								glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_temp);
+								//color buffer for each volume
+								glBindTexture(GL_TEXTURE_2D, m_tex_temp);
+								glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+								glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+								glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+								glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+								glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
+									GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+								glFramebufferTexture2D(GL_FRAMEBUFFER,
+									GL_COLOR_ATTACHMENT0,
+									GL_TEXTURE_2D, m_tex_temp, 0);
+							}
+							else
+								glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_temp);
+
+							glClearColor(0.0, 0.0, 0.0, 0.0);
+							glClear(GL_COLOR_BUFFER_BIT);
+							glActiveTexture(GL_TEXTURE0);
+							glEnable(GL_TEXTURE_2D);
+							glBindTexture(GL_TEXTURE_2D, m_tex_final);
+							glDisable(GL_BLEND);
+							glDisable(GL_DEPTH_TEST);
+
+							ShaderProgram* img_shader =
+								m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
+							if (img_shader)
+							{
+								if (!img_shader->valid())
+									img_shader->create();
+								img_shader->bind();
+							}
+							DrawViewQuad();
+							if (img_shader && img_shader->valid())
+								img_shader->release();
+
+							glBindTexture(GL_TEXTURE_2D, 0);
+							glBindFramebuffer(GL_FRAMEBUFFER, 0);
+						}
+
+					}
+					else
+						TextureRenderer::reset_update_loop();
 				}
-				else
-					TextureRenderer::reset_update_loop();
+
+				if (rn_time - TextureRenderer::get_st_time() > TextureRenderer::get_up_time())
+					break;
 			}
-			
-			if (rn_time - TextureRenderer::get_st_time() > TextureRenderer::get_up_time())
-				break;
+			else
+				m_finished_peeling_layer++;
 		}
-		else
-			m_finished_peeling_layer++;
 	}
 
 	//final composition
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
 	//draw the final buffer to the windows buffer
 	glActiveTexture(GL_TEXTURE0);
 	glEnable(GL_TEXTURE_2D);
@@ -2882,6 +2934,7 @@ void VRenderGLView::DrawVolumesDP()
 		img_shader->release();
 
 	glBindTexture(GL_TEXTURE_2D, 0);
+	glDisable(GL_BLEND);
 
 	if (m_interactive)
 	{
@@ -4831,53 +4884,62 @@ void VRenderGLView::DrawOVER(VolumeData* vd, GLuint tex, int peel, double sampli
 	ShaderProgram* img_shader = 0;
 
 	bool do_over = true;
+
 	if (TextureRenderer::get_mem_swap() &&
 		TextureRenderer::get_start_update_loop() &&
 		!TextureRenderer::get_done_update_loop())
 	{
-		unsigned int rn_time = GET_TICK_COUNT();
-		if (rn_time - TextureRenderer::get_st_time() >
-			TextureRenderer::get_up_time())
-			return;
 		if (vd->GetVR()->get_done_loop(0) && 
 			( !vd->isActiveMask()  || vd->GetVR()->get_done_loop(TEXTURE_RENDER_MODE_MASK)  ) &&
 			( !vd->isActiveLabel() || vd->GetVR()->get_done_loop(TEXTURE_RENDER_MODE_LABEL) )   )
 			do_over = false;
+
+		if (!do_over && !(vd->GetShadow() || !vd->GetVR()->get_done_loop(3)))
+			return;
+
+		if (do_over)
+		{
+			//before rendering this channel, save m_fbo_final to m_fbo_temp
+			if (TextureRenderer::get_mem_swap() &&
+				TextureRenderer::get_start_update_loop() &&
+				TextureRenderer::get_save_final_buffer())
+			{
+				TextureRenderer::reset_save_final_buffer();
+
+				glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_temp);
+				glClearColor(0.0, 0.0, 0.0, 0.0);
+				glClear(GL_COLOR_BUFFER_BIT);
+				glActiveTexture(GL_TEXTURE0);
+				glEnable(GL_TEXTURE_2D);
+				glBindTexture(GL_TEXTURE_2D, m_tex_final);
+				glDisable(GL_BLEND);
+				glDisable(GL_DEPTH_TEST);
+
+				img_shader =
+					m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
+				if (img_shader)
+				{
+					if (!img_shader->valid())
+						img_shader->create();
+					img_shader->bind();
+				}
+				DrawViewQuad();
+				if (img_shader && img_shader->valid())
+					img_shader->release();
+
+				glBindTexture(GL_TEXTURE_2D, 0);
+				glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			}
+		}
+
+		unsigned int rn_time = GET_TICK_COUNT();
+		if (rn_time - TextureRenderer::get_st_time() >
+			TextureRenderer::get_up_time())
+			return;
 	}
 
 	if (do_over)
 	{
-		//before rendering this channel, save m_fbo_final to m_fbo_temp
-		if (TextureRenderer::get_mem_swap() &&
-			TextureRenderer::get_start_update_loop() &&
-			TextureRenderer::get_save_final_buffer())
-		{
-			TextureRenderer::reset_save_final_buffer();
-
-			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_temp);
-			glClearColor(0.0, 0.0, 0.0, 0.0);
-			glClear(GL_COLOR_BUFFER_BIT);
-			glActiveTexture(GL_TEXTURE0);
-			glEnable(GL_TEXTURE_2D);
-			glBindTexture(GL_TEXTURE_2D, m_tex_final);
-			glDisable(GL_BLEND);
-			glDisable(GL_DEPTH_TEST);
-
-			img_shader =
-				m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
-			if (img_shader)
-			{
-				if (!img_shader->valid())
-					img_shader->create();
-				img_shader->bind();
-			}
-			DrawViewQuad();
-			if (img_shader && img_shader->valid())
-				img_shader->release();
-
-			glBindTexture(GL_TEXTURE_2D, 0);
-			glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		}
 		//bind the fbo
 		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
 
@@ -4911,7 +4973,7 @@ void VRenderGLView::DrawOVER(VolumeData* vd, GLuint tex, int peel, double sampli
 	//bind fbo for final composition
 	glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_final);
 
-	if (TextureRenderer::get_mem_swap())
+	if (TextureRenderer::get_mem_swap() && glIsFramebuffer(m_fbo_temp) == GL_TRUE && glIsTexture(m_tex_temp) == GL_TRUE)
 	{
 		//restore m_fbo_temp to m_fbo_final
 		glClearColor(0.0, 0.0, 0.0, 0.0);
@@ -4980,18 +5042,57 @@ void VRenderGLView::DrawOVER(VolumeData* vd, GLuint tex, int peel, double sampli
 void VRenderGLView::DrawMIP(VolumeData* vd, GLuint tex, int peel, double sampling_frq_fac)
 {
 	bool do_mip = true;
+	ShaderProgram* img_shader = 0;
 	if (TextureRenderer::get_mem_swap() &&
 		TextureRenderer::get_start_update_loop() &&
 		!TextureRenderer::get_done_update_loop())
 	{
-		unsigned int rn_time = GET_TICK_COUNT();
-		if (rn_time - TextureRenderer::get_st_time() >
-			TextureRenderer::get_up_time())
-			return;
 		if (vd->GetVR()->get_done_loop(1) && 
 			( !vd->isActiveMask()  || vd->GetVR()->get_done_loop(TEXTURE_RENDER_MODE_MASK)  ) &&
 			( !vd->isActiveLabel() || vd->GetVR()->get_done_loop(TEXTURE_RENDER_MODE_LABEL) )   )
 			do_mip = false;
+
+		if (!do_mip && !(vd->GetShadow() || !vd->GetVR()->get_done_loop(3)) && !(vd->GetShading() || !vd->GetVR()->get_done_loop(2)))
+			return;
+
+		if (do_mip)
+		{
+			//before rendering this channel, save m_fbo_final to m_fbo_temp
+			if (TextureRenderer::get_mem_swap() &&
+				TextureRenderer::get_start_update_loop() &&
+				TextureRenderer::get_save_final_buffer())
+			{
+				TextureRenderer::reset_save_final_buffer();
+
+				glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_temp);
+				glClearColor(0.0, 0.0, 0.0, 0.0);
+				glClear(GL_COLOR_BUFFER_BIT);
+				glActiveTexture(GL_TEXTURE0);
+				glBindTexture(GL_TEXTURE_2D, m_tex_final);
+				glDisable(GL_BLEND);
+				glDisable(GL_DEPTH_TEST);
+
+				img_shader =
+					m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
+				if (img_shader)
+				{
+					if (!img_shader->valid())
+						img_shader->create();
+					img_shader->bind();
+				}
+				DrawViewQuad();
+				if (img_shader && img_shader->valid())
+					img_shader->release();
+
+				glBindTexture(GL_TEXTURE_2D, 0);
+				glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			}
+		}
+
+		unsigned int rn_time = GET_TICK_COUNT();
+		if (rn_time - TextureRenderer::get_st_time() >
+			TextureRenderer::get_up_time())
+			return;
 	}
 
 	int nx, ny;
@@ -5002,41 +5103,9 @@ void VRenderGLView::DrawMIP(VolumeData* vd, GLuint tex, int peel, double samplin
 	bool shadow = vd->GetShadow();
 	int color_mode = vd->GetColormapMode();
 	bool enable_alpha = vd->GetEnableAlpha();
-	ShaderProgram* img_shader = 0;
 
 	if (do_mip)
 	{
-		//before rendering this channel, save m_fbo_final to m_fbo_temp
-		if (TextureRenderer::get_mem_swap() &&
-			TextureRenderer::get_start_update_loop() &&
-			TextureRenderer::get_save_final_buffer())
-		{
-			TextureRenderer::reset_save_final_buffer();
-
-			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_temp);
-			glClearColor(0.0, 0.0, 0.0, 0.0);
-			glClear(GL_COLOR_BUFFER_BIT);
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, m_tex_final);
-			glDisable(GL_BLEND);
-			glDisable(GL_DEPTH_TEST);
-
-			img_shader =
-				m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
-			if (img_shader)
-			{
-				if (!img_shader->valid())
-					img_shader->create();
-				img_shader->bind();
-			}
-			DrawViewQuad();
-			if (img_shader && img_shader->valid())
-				img_shader->release();
-
-			glBindTexture(GL_TEXTURE_2D, 0);
-			glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		}
-
 		if (!glIsFramebuffer(m_fbo_ol1))
 		{
 			glGenFramebuffers(1, &m_fbo_ol1);
@@ -5176,7 +5245,7 @@ void VRenderGLView::DrawMIP(VolumeData* vd, GLuint tex, int peel, double samplin
 	//bind fbo for final composition
 	glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_final);
 
-	if (TextureRenderer::get_mem_swap())
+	if (TextureRenderer::get_mem_swap() && glIsFramebuffer(m_fbo_temp) == GL_TRUE && glIsTexture(m_tex_temp) == GL_TRUE)
 	{
 		//restore m_fbo_temp to m_fbo_final
 		glClearColor(0.0, 0.0, 0.0, 0.0);
@@ -5245,12 +5314,16 @@ void VRenderGLView::DrawOLShading(VolumeData* vd)
 		TextureRenderer::get_start_update_loop() &&
 		!TextureRenderer::get_done_update_loop())
 	{
-		unsigned int rn_time = GET_TICK_COUNT();
-		if (rn_time - TextureRenderer::get_st_time() >
-			TextureRenderer::get_up_time())
+		if (TextureRenderer::get_done_update_loop())
 			return;
+
 		if (vd->GetVR()->get_done_loop(2))
 			return;
+
+		if (TextureRenderer::get_save_final_buffer())
+			TextureRenderer::reset_save_final_buffer();
+		if (TextureRenderer::get_clear_chan_buffer())
+			TextureRenderer::reset_clear_chan_buffer();
 	}
 
 	//shading pass
@@ -5457,9 +5530,20 @@ void VRenderGLView::DrawOLShadows(vector<VolumeData*> &vlist, GLuint tex)
 	{
 		if (TextureRenderer::get_done_update_loop())
 			return;
-		else if (vlist.size() == 1 && vlist[0]->GetShadow())
-			if (vlist[0]->GetVR()->get_done_loop(3))
+		else
+		{
+			bool doShadow = false;
+			for (int i = 0; i < vlist.size(); i++)
+			{
+				if (vlist[0]->GetVR())
+					doShadow |= !(vlist[0]->GetVR()->get_done_loop(3));
+			}
+			if (!doShadow)
 				return;
+		}
+
+		if (TextureRenderer::get_save_final_buffer())
+			TextureRenderer::reset_save_final_buffer();
 	}
 
 	double sampling_frq_fac = 2 / (m_ortho_right - m_ortho_left);
@@ -5729,6 +5813,8 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 	int i;
 	bool use_tex_wt2 = false;
 	bool shadow = false;
+	bool doMulti = false;
+	bool doShadow = false;
 	m_mvr->clear_vr();
 	for (i=0; i<(int)list.size(); i++)
 	{
@@ -5746,6 +5832,14 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 				m_mvr->add_vr(vr);
 				m_mvr->set_sampling_rate(vr->get_sampling_rate());
 				m_mvr->SetNoiseRed(vr->GetNoiseRed());
+				
+				if (TextureRenderer::get_mem_swap() &&
+					TextureRenderer::get_start_update_loop() &&
+					!TextureRenderer::get_done_update_loop())
+				{
+					doMulti |= !vr->get_done_loop(0);
+					doShadow |= !vr->get_done_loop(3);
+				}
 			}
 			VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 			if (list[i]->GetTexture() &&
@@ -5758,11 +5852,66 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 
 	if (m_mvr->get_vr_num()<=0)
 		return;
-	m_mvr->set_depth_peel(peel);
 
 	int nx, ny;
 	nx = GetSize().x;
 	ny = GetSize().y;
+
+	if (TextureRenderer::get_mem_swap() &&
+		TextureRenderer::get_start_update_loop() &&
+		TextureRenderer::get_save_final_buffer())
+	{
+		TextureRenderer::reset_save_final_buffer();
+
+		if (glIsFramebuffer(m_fbo_temp)!=GL_TRUE)
+		{
+			glGenFramebuffers(1, &m_fbo_temp);
+			if (glIsTexture(m_tex_temp)!=GL_TRUE)
+				glGenTextures(1, &m_tex_temp);
+			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_temp);
+			//color buffer for each volume
+			glBindTexture(GL_TEXTURE_2D, m_tex_temp);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
+				GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+			glFramebufferTexture2D(GL_FRAMEBUFFER,
+				GL_COLOR_ATTACHMENT0,
+				GL_TEXTURE_2D, m_tex_temp, 0);
+		}
+		else
+			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_temp);
+
+		glClearColor(0.0, 0.0, 0.0, 0.0);
+		glClear(GL_COLOR_BUFFER_BIT);
+		glActiveTexture(GL_TEXTURE0);
+		glEnable(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_2D, m_tex_final);
+		glDisable(GL_BLEND);
+		glDisable(GL_DEPTH_TEST);
+
+		img_shader =
+			m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
+		if (img_shader)
+		{
+			if (!img_shader->valid())
+				img_shader->create();
+			img_shader->bind();
+		}
+		DrawViewQuad();
+		if (img_shader && img_shader->valid())
+			img_shader->release();
+
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	}
+
+	if (!doMulti && !(shadow && doShadow))
+		return;
+
+	m_mvr->set_depth_peel(peel);
 
 	//generate textures & buffer objects
 	//frame buffer for each volume
@@ -5820,75 +5969,28 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 		}
 	}
 
-	if (TextureRenderer::get_mem_swap() &&
-		TextureRenderer::get_start_update_loop() &&
-		TextureRenderer::get_save_final_buffer())
+	if (doMulti)
 	{
-		TextureRenderer::reset_save_final_buffer();
-
-		if (glIsFramebuffer(m_fbo_temp)!=GL_TRUE)
+		//bind the fbo
+		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
+		if (!TextureRenderer::get_mem_swap() ||
+			(TextureRenderer::get_mem_swap() &&
+			TextureRenderer::get_clear_chan_buffer()))
 		{
-			glGenFramebuffers(1, &m_fbo_temp);
-			if (glIsTexture(m_tex_temp)!=GL_TRUE)
-				glGenTextures(1, &m_tex_temp);
-			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_temp);
-			//color buffer for each volume
-			glBindTexture(GL_TEXTURE_2D, m_tex_temp);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-				GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-			glFramebufferTexture2D(GL_FRAMEBUFFER,
-				GL_COLOR_ATTACHMENT0,
-				GL_TEXTURE_2D, m_tex_temp, 0);
+			glClearColor(0.0, 0.0, 0.0, 0.0);
+			glClear(GL_COLOR_BUFFER_BIT);
+			TextureRenderer::reset_clear_chan_buffer();
 		}
-		else
-			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_temp);
 
-		glClearColor(0.0, 0.0, 0.0, 0.0);
-		glClear(GL_COLOR_BUFFER_BIT);
-		glActiveTexture(GL_TEXTURE0);
-		glEnable(GL_TEXTURE_2D);
-		glBindTexture(GL_TEXTURE_2D, m_tex_final);
-		glDisable(GL_BLEND);
-		glDisable(GL_DEPTH_TEST);
-
-		img_shader =
-			m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
-		if (img_shader)
-		{
-			if (!img_shader->valid())
-				img_shader->create();
-			img_shader->bind();
-		}
-		DrawViewQuad();
-		if (img_shader && img_shader->valid())
-			img_shader->release();
-
-		glBindTexture(GL_TEXTURE_2D, 0);
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		//draw multiple volumes at the same time
+		double sampling_frq_fac = 2 / (m_ortho_right - m_ortho_left);
+		m_mvr->draw(m_test_wiref, m_interactive, !m_persp, m_scale_factor, m_intp, sampling_frq_fac);
 	}
 
-	//bind the fbo
-	glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-	if (!TextureRenderer::get_mem_swap() ||
-		(TextureRenderer::get_mem_swap() &&
-		TextureRenderer::get_clear_chan_buffer()))
-	{
-		glClearColor(0.0, 0.0, 0.0, 0.0);
-		glClear(GL_COLOR_BUFFER_BIT);
-		TextureRenderer::reset_clear_chan_buffer();
-	}
-
-	//draw multiple volumes at the same time
-	double sampling_frq_fac = 2 / (m_ortho_right - m_ortho_left);
-	m_mvr->draw(m_test_wiref, m_interactive, !m_persp, m_scale_factor, m_intp, sampling_frq_fac);
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-	if (shadow)
+	if (shadow && doShadow)
 	{
 		//draw shadows
 		DrawOLShadows(list, use_tex_wt2?m_tex_wt2:m_tex);
@@ -5897,7 +5999,7 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 	//bind fbo for final composition
 	glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_final);
 
-	if (TextureRenderer::get_mem_swap())
+	if (TextureRenderer::get_mem_swap() && glIsFramebuffer(m_fbo_temp) == GL_TRUE && glIsTexture(m_tex_temp) == GL_TRUE)
 	{
 		//restore m_fbo_temp to m_fbo_final
 		glClearColor(0.0, 0.0, 0.0, 0.0);
@@ -5928,9 +6030,9 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 	glGenerateMipmap(GL_TEXTURE_2D);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 	glEnable(GL_BLEND);
-	if (m_vol_method == VOL_METHOD_COMP)
-		glBlendFunc(GL_ONE, GL_ONE);
-	else
+//	if (m_vol_method == VOL_METHOD_COMP)
+//		glBlendFunc(GL_ONE, GL_ONE);
+//	else
 	{
 		if (TextureRenderer::get_update_order() == 0)
 			glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
@@ -8378,6 +8480,13 @@ DataGroup* VRenderGLView::AddVolumeData(VolumeData* vd, wxString group_name)
 		vd->SetSyncG(sync_g);
 		bool sync_b = group->GetSyncB();
 		vd->SetSyncB(sync_b);
+
+		if ((group->GetVolumeSyncSpc() || group->GetVolumeSyncProp()) && group->GetVolumeNum() > 0)
+		{
+			double spcx=1.0, spcy=1.0, spcz=1.0;
+			group->GetVolumeData(0)->GetBaseSpacings(spcx, spcy, spcz);
+			vd->SetBaseSpacings(spcx, spcy, spcz);
+		}
 
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 		if (vr_frame)
@@ -11378,7 +11487,7 @@ void VRenderGLView::StartLoopUpdate(bool reset_peeling_layer)
 		m_dpeel = !(displist.empty() && m_vol_method != VOL_METHOD_MULTI);
 		if (m_md_pop_list.size() == 0)
 			m_dpeel = false;
-		if (reset_peeling_layer || m_vol_method == VOL_METHOD_MULTI)
+//		if (reset_peeling_layer || m_vol_method == VOL_METHOD_MULTI)
 			displist = m_vd_pop_list;
 
 		for (i=0; i<displist.size(); i++)

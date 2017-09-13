@@ -1059,6 +1059,8 @@ namespace FLIVR
 	  {
 		  TextureRenderer::set_clear_chan_buffer(true);
 		  TextureRenderer::set_save_final_buffer();
+		  for (i=0; i<(int)vr_list_.size(); i++)
+			  vr_list_[i]->done_loop_[mode] = true;
 	  }
 
       if (TextureRenderer::get_mem_swap() &&

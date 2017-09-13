@@ -160,6 +160,10 @@ void DataTreeCtrl::DeleteSelection()
 			return;
 		wxString par_name = GetItemText(par_item);
 
+		wxTreeItemId next_item = GetNextSibling(sel_item);
+		if (!next_item.IsOk())
+			GetPrevSibling(sel_item);
+
 		LayerInfo* par_item_data = (LayerInfo*)GetItemData(par_item);
 		if (item_data->type == 7 || item_data->type == 8)
 		{
@@ -232,9 +236,12 @@ void DataTreeCtrl::DeleteSelection()
 						vrv->RemoveGroup(name_data);
 					}
 
-					vr_frame->UpdateTree();
-					vr_frame->RefreshVRenderViews();
-					vr_frame->OnSelection(1);
+					if (!next_item.IsOk())
+					{
+						vr_frame->UpdateTree();
+						vr_frame->RefreshVRenderViews();
+						vr_frame->OnSelection(1);
+					}
 				}
 				break;
 			case 5://group
@@ -246,9 +253,12 @@ void DataTreeCtrl::DeleteSelection()
 						break;
 					if (item_data->type == 2)
 						vrv->RemoveVolumeData(name_data);
-					vr_frame->UpdateTree();
-					vr_frame->RefreshVRenderViews();
-					vr_frame->OnSelection(1);
+					if (!next_item.IsOk())
+					{
+						vr_frame->UpdateTree();
+						vr_frame->RefreshVRenderViews();
+						vr_frame->OnSelection(1);
+					}
 
 					if (vrv->GetVolMethod() == VOL_METHOD_MULTI)
 					{
@@ -270,11 +280,30 @@ void DataTreeCtrl::DeleteSelection()
 						break;
 					if (item_data->type==3)
 						vrv->RemoveMeshData(name_data);
+					if (!next_item.IsOk())
+					{
+						vr_frame->UpdateTree();
+						vr_frame->RefreshVRenderViews();
+						vr_frame->OnSelection(1);
+					}
+				}
+				break;
+			}
+			if (next_item.IsOk())
+			{
+				LayerInfo* item_data = (LayerInfo*)GetItemData(next_item);
+				wxString name = GetItemText(next_item);
+				if (item_data)
+				{
+					vr_frame->UpdateTree(name, item_data->type);
+					vr_frame->RefreshVRenderViews();
+				}
+				else
+				{
 					vr_frame->UpdateTree();
 					vr_frame->RefreshVRenderViews();
 					vr_frame->OnSelection(1);
 				}
-				break;
 			}
 		}
 	}
