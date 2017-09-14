@@ -4963,7 +4963,7 @@ void VRenderGLView::DrawOVER(VolumeData* vd, GLuint tex, int peel, double sampli
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-	if (vd->GetShadow())
+	if (vd->GetShadow() && vd->GetVR()->get_done_loop(0))
 	{
 		vector<VolumeData*> list;
 		list.push_back(vd);
@@ -5230,12 +5230,12 @@ void VRenderGLView::DrawMIP(VolumeData* vd, GLuint tex, int peel, double samplin
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	}
 
-	if (shading)
+	if (shading && vd->GetVR()->get_done_loop(1))
 	{
 		DrawOLShading(vd);
 	}
 
-	if (shadow)
+	if (shadow && vd->GetVR()->get_done_loop(2))
 	{
 		vector<VolumeData*> list;
 		list.push_back(vd);
@@ -5327,10 +5327,11 @@ void VRenderGLView::DrawOLShading(VolumeData* vd)
 	}
 
 	//shading pass
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_ol1);
 	glClearColor(1.0, 1.0, 1.0, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT);
-
+	
 	vd->GetVR()->set_shading(true);
 	vd->SetMode(2);
 	int colormode = vd->GetColormapMode();
@@ -5343,6 +5344,7 @@ void VRenderGLView::DrawOLShading(VolumeData* vd)
 	vd->SetColormapMode(colormode);
 
 	glBindTexture(GL_TEXTURE_2D, 0);
+	glClearColor(0.0, 0.0, 0.0, 0.0);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	//bind fbo for final composition
@@ -5816,6 +5818,7 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 	bool doMulti = false;
 	bool doShadow = false;
 	m_mvr->clear_vr();
+	VolumeRenderer* vrfirst = 0;
 	for (i=0; i<(int)list.size(); i++)
 	{
 		if (list[i] && list[i]->GetDisp())
@@ -5830,6 +5833,7 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 				list[i]->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
 				list[i]->SetFog(m_use_fog, m_fog_intensity, m_fog_start, m_fog_end);
 				m_mvr->add_vr(vr);
+				if (!vrfirst) vrfirst = vr;
 				m_mvr->set_sampling_rate(vr->get_sampling_rate());
 				m_mvr->SetNoiseRed(vr->GetNoiseRed());
 				
@@ -5990,7 +5994,7 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-	if (shadow && doShadow)
+	if (shadow && doShadow && vrfirst && vrfirst->get_done_loop(0))
 	{
 		//draw shadows
 		DrawOLShadows(list, use_tex_wt2?m_tex_wt2:m_tex);
