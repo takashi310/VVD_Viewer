@@ -1380,6 +1380,9 @@ VRenderGLView::~VRenderGLView()
 
 void VRenderGLView::OnResize(wxSizeEvent& event)
 {
+	if (m_vd_pop_dirty)
+		PopVolumeList();
+
 	int i;
 	for (i=0; i<(int)m_vd_pop_list.size(); i++)
 	{
