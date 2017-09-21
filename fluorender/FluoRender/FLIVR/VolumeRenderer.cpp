@@ -566,7 +566,7 @@ namespace FLIVR
 
 		GLint vp[4];
 		glGetIntegerv(GL_VIEWPORT, vp);
-		int w = vp[2];
+		int w = min(vp[2], vp[3]);
 
 		double pxlen = 1.0 / w / sclfac;
 		
@@ -576,6 +576,7 @@ namespace FLIVR
 		double f_e_len = v.length();
 		v = field_trans->project(v);
 
+		double dp = Dot(mv_ray, v);
 		double dt = (pxlen * f_e_len) / Dot(mv_ray, v);
 		return dt;
 	}
@@ -1273,7 +1274,7 @@ namespace FLIVR
 				load_brick_label(bricks, i);
 
 			shader->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(),
-				mode_==MODE_OVER?1.0/(rate*(w*sampling_frq_fac)*3.0):1.0);
+				mode_==MODE_OVER?1.0/rate:1.0);
 
 			//for brick transformation
 			float matrix[16];

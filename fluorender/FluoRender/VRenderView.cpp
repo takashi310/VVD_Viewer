@@ -4574,7 +4574,7 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int pe
 	//calculate sampling frequency factor
 	int cnt_mask = 0;
 	bool use_tex_wt2 = false;
-	double sampling_frq_fac = 0.125 / pow(m_ortho_right - m_ortho_left, 0.5);
+	double sampling_frq_fac = 2 / (m_ortho_right - m_ortho_left);//0.125 / pow(m_ortho_right - m_ortho_left, 0.5);
 	for (i=0; i<(int)list.size(); i++)
 	{
 		VolumeData* vd = list[i];
@@ -9548,8 +9548,8 @@ void VRenderGLView::InitView(unsigned int type)
 		{
 			Vector diag = m_bounds.diagonal();
 			m_radius = sqrt(diag.x()*diag.x()+diag.y()*diag.y()) / 2.0;
-			if (m_radius<0.1)
-				m_radius = 5.0;
+//			if (m_radius<0.1)
+//				m_radius = 5.0;
 			m_near_clip = m_radius / 1000.0;
 			m_far_clip = m_radius * 100.0;
 		}
