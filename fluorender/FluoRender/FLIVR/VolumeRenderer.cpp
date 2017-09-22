@@ -67,6 +67,7 @@ namespace FLIVR
 		const vector<Plane*> &planes,
 		bool hiqual)
 		:TextureRenderer(tex),
+		buffer_scale_(1.0),
 		//scalar scaling factor
 		scalar_scale_(1.0),
 		//gm range
@@ -132,6 +133,7 @@ namespace FLIVR
 
 	VolumeRenderer::VolumeRenderer(const VolumeRenderer& copy)
 		:TextureRenderer(copy),
+		buffer_scale_(copy.buffer_scale_),
 		//scalar scale
 		scalar_scale_(copy.scalar_scale_),
 		//gm range
@@ -180,7 +182,11 @@ namespace FLIVR
 		filter_size_max_(0.0),
 		filter_size_shp_(0.0),
 		inv_(copy.inv_),
-		compression_(copy.compression_)
+		compression_(copy.compression_),
+		m_dslt_kernel(NULL),
+		m_dslt_l2_kernel(NULL),
+		m_dslt_b_kernel(NULL),
+		m_dslt_em_kernel(NULL)
 	{
 		//mode
 		mode_ = copy.mode_;
@@ -926,8 +932,8 @@ namespace FLIVR
 			filter_buffer_resize_ = true;
 		}
 
-		w2 = int(w*sfactor_+0.5);
-		h2 = int(h*sfactor_+0.5);
+		w2 = int(w*sfactor_*buffer_scale_+0.5);
+		h2 = int(h*sfactor_*buffer_scale_+0.5);
 
 		if(blend_num_bits_ > 8)
 		{

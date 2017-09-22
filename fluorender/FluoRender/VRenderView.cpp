@@ -1173,6 +1173,7 @@ wxGLCanvas(parent, id, attriblist, pos, size, style),
 	m_manip_time(300),
 	m_min_ppi(20),
 	m_res_mode(0),
+	m_res_scale(1.0),
 	m_draw_landmarks(false),
 	m_draw_overlays_only(false),
 	m_enhance_sel(false),
@@ -4783,6 +4784,28 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int pe
 				glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			}
 		}
+	}
+}
+
+void VRenderGLView::SetBufferScale(int mode)
+{
+	m_res_scale = 1.0;
+	switch(m_res_mode)
+	{
+	case 1:
+		m_res_scale = 1;
+		break;
+	case 2:
+		m_res_scale = 1.5;
+		break;
+	case 3:
+		m_res_scale = 2.0;
+		break;
+	case 4:
+		m_res_scale = 3.0;
+		break;
+	default:
+		m_res_scale = 1.0;
 	}
 }
 
@@ -11439,6 +11462,7 @@ void VRenderGLView::StartLoopUpdate(bool reset_peeling_layer)
 	m_mv_mat = glm::translate(m_mv_mat, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
 
 	PopMeshList();
+	SetBufferScale(m_res_mode);
 
 	int i, j, k;
 	m_dpeel = false;
@@ -11510,8 +11534,10 @@ void VRenderGLView::StartLoopUpdate(bool reset_peeling_layer)
 
 				num_chan = 0;
 				Texture* tex = vd->GetTexture();
-				if (tex)
+				if (tex && vd->GetVR())
 				{
+					vd->GetVR()->set_buffer_scale(1.0/m_res_scale);
+
 					Transform *tform = tex->transform();
 					double mvmat[16];
 					tform->get_trans(mvmat);

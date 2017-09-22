@@ -69,7 +69,8 @@ namespace FLIVR
       irate_(1.0),
       sampling_rate_(1.0),
       num_slices_(0),
-      colormap_mode_(0)
+      colormap_mode_(0),
+	  buffer_scale_(1.0)
    {
    }
 
@@ -100,7 +101,8 @@ namespace FLIVR
       irate_(copy.irate_),
       sampling_rate_(copy.sampling_rate_),
       num_slices_(0),
-      colormap_mode_(copy.colormap_mode_)
+      colormap_mode_(copy.colormap_mode_),
+	  buffer_scale_(copy.buffer_scale_)
    {
    }
 
@@ -245,8 +247,13 @@ namespace FLIVR
 		  filter_buffer_resize_ = true;
 		  blend_fbo_resize_ = true;
 	  }
-	  w2 = int(w*sfactor_+0.5);
-	  h2 = int(h*sfactor_+0.5);
+	  w2 = int(w*sfactor_*vr_list_[0]->get_buffer_scale()+0.5);
+	  h2 = int(h*sfactor_*vr_list_[0]->get_buffer_scale()+0.5);
+	  if (buffer_scale_ != vr_list_[0]->get_buffer_scale())
+	  {
+		  buffer_scale_ = vr_list_[0]->get_buffer_scale();
+		  resize();
+	  }
 
 	  int i;
 	  vector<bool> used_colortype(FLV_COLORTYPE_NUM, false);

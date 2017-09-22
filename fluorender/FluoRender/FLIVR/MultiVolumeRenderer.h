@@ -103,6 +103,7 @@ namespace FLIVR
 		bool hiqual_;
 		int blend_num_bits_;
 		bool blend_slices_;
+		double buffer_scale_;
 
 		//blend frame buffers
 		bool blend_framebuffer_resize_;

@@ -215,9 +215,20 @@ namespace FLIVR
 		bool test_against_view_clip(const BBox &bbox, const BBox &tbox, const BBox &dbox, bool persp);
 		void set_clip_quaternion(Quaternion q){ m_q_cl = q; }
 
+		void set_buffer_scale(double val)
+		{
+			if (val > 0.0 && val <= 1.0 && val != buffer_scale_)
+			{
+				buffer_scale_ = val;
+				resize();
+			}
+		}
+		double get_buffer_scale() { return buffer_scale_; }
+
 		friend class MultiVolumeRenderer;
 
 	protected:
+		double buffer_scale_;
 		double scalar_scale_;
 		double gm_scale_;
 		//transfer function properties

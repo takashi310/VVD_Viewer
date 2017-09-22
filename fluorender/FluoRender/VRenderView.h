@@ -759,6 +759,8 @@ public:
 
 	VolumeData *CopyLevel(VolumeData *src, int lv=-1);
 
+	void SetBufferScale(int mode);
+
 public:
 	//script run
 	bool m_run_script;
@@ -1103,6 +1105,7 @@ private:
 
 	int m_min_ppi;
 	int m_res_mode;
+	double m_res_scale;
 
 	LMSeacher *m_searcher;
 	vector<VolumeData *> m_lm_vdlist;
