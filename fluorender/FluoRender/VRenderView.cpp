@@ -4886,10 +4886,27 @@ void VRenderGLView::switchLevel(VolumeData *vd)
 				}
 			}
 			if (lv < 0) lv = 0;
-			//if (m_interactive) lv += 2;
 			if (lv >= lvnum) lv = lvnum - 1;
 			new_lv = lv;
-			//vd->GetVR()->set_scalar_scale();
+			
+			if (lv == 0)
+			{
+				double vxsize_on_screen = m_scale_factor / (sfs[0]/res_scale);
+				if (vxsize_on_screen > 1.5)
+				{
+					if (vxsize_on_screen <= 2.0) vd->GetVR()->set_buffer_scale(1.0/1.5);
+					else
+					{
+						double bscale = floor(vxsize_on_screen);
+						if (bscale > res_scale) bscale = res_scale;
+						vd->GetVR()->set_buffer_scale(1.0/bscale);
+					}
+				}
+				else
+				vd->GetVR()->set_buffer_scale(1.0);
+			}
+			else
+				vd->GetVR()->set_buffer_scale(1.0);
 		}
 		if (prev_lv != new_lv)
 		{
@@ -4902,6 +4919,70 @@ void VRenderGLView::switchLevel(VolumeData *vd)
 			vd->SetLevel(new_lv);
 			vtex->set_sort_bricks();
 		}
+	}
+
+	if (vtex && !vtex->isBrxml())
+	{
+		double max_res_scale = 1.0;
+		switch(m_res_mode)
+		{
+		case 1:
+			max_res_scale = 1;
+			break;
+		case 2:
+			max_res_scale = 1.5;
+			break;
+		case 3:
+			max_res_scale = 2.0;
+			break;
+		case 4:
+			max_res_scale = 3.0;
+			break;
+		default:
+			max_res_scale = 1.0;
+		}
+
+		if (max_res_scale > 1.0)
+		{
+			vector<double> sfs;
+			vector<double> spx, spy, spz;
+
+			double aspect = (double)nx / (double)ny;
+
+			double spc_x;
+			double spc_y;
+			double spc_z;
+			vtex->get_spacings(spc_x, spc_y, spc_z);
+			spc_x = spc_x<EPS?1.0:spc_x;
+			spc_y = spc_y<EPS?1.0:spc_y;
+
+			spx.push_back(spc_x);
+			spy.push_back(spc_y);
+			spz.push_back(spc_z);
+
+			double sf;
+			if (aspect > 1.0)
+				sf = 2.0*m_radius/spc_y/double(ny);
+			else
+				sf = 2.0*m_radius/spc_x/double(nx);
+
+			double vxsize_on_screen = m_scale_factor / sf;
+
+			if (vxsize_on_screen > 1.5)
+			{
+				if (vxsize_on_screen <= 2.0) vd->GetVR()->set_buffer_scale(1.0/1.5);
+				else
+				{
+					double bscale = floor(vxsize_on_screen);
+					if (bscale > max_res_scale) bscale = max_res_scale;
+					vd->GetVR()->set_buffer_scale(1.0/bscale);
+				}
+			}
+			else
+				vd->GetVR()->set_buffer_scale(1.0);
+		}
+		else
+			vd->GetVR()->set_buffer_scale(1.0);
 	}
 }
 
@@ -11536,8 +11617,6 @@ void VRenderGLView::StartLoopUpdate(bool reset_peeling_layer)
 				Texture* tex = vd->GetTexture();
 				if (tex && vd->GetVR())
 				{
-					vd->GetVR()->set_buffer_scale(1.0/m_res_scale);
-
 					Transform *tform = tex->transform();
 					double mvmat[16];
 					tform->get_trans(mvmat);

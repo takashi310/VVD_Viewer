@@ -922,18 +922,18 @@ namespace FLIVR
 		if (fabs(sf-sfactor_)>0.05)
 		{
 			sfactor_ = sf;
-			blend_framebuffer_resize_ = true;
-			filter_buffer_resize_ = true;
+//			blend_framebuffer_resize_ = true;
+//			filter_buffer_resize_ = true;
 		}
 		else if (sf==1.0 && sfactor_!=1.0)
 		{
 			sfactor_ = sf;
-			blend_framebuffer_resize_ = true;
-			filter_buffer_resize_ = true;
+//			blend_framebuffer_resize_ = true;
+//			filter_buffer_resize_ = true;
 		}
 
-		w2 = int(w*sfactor_*buffer_scale_+0.5);
-		h2 = int(h*sfactor_*buffer_scale_+0.5);
+		w2 = int(w/**sfactor_*/*buffer_scale_+0.5);
+		h2 = int(h/**sfactor_*/*buffer_scale_+0.5);
 
 		if(blend_num_bits_ > 8)
 		{
@@ -1279,7 +1279,7 @@ namespace FLIVR
 				load_brick_label(bricks, i);
 
 			shader->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(),
-				mode_==MODE_OVER?1.0/rate:1.0);
+				mode_==MODE_OVER?1.0/(rate*w*sampling_frq_fac):1.0);
 
 			//for brick transformation
 			float matrix[16];

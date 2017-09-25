@@ -231,31 +231,50 @@ namespace FLIVR
 	  int h = vp[3];
 	  int w2 = w;
 	  int h2 = h;
+	  int i;
+
+	  double max_bufscale = 0.0;
+	  int maxbsid = -1;
+	  for (i=0; i<(int)vr_list_.size(); i++)
+	  {
+		  VolumeRenderer* vr = vr_list_[i];
+		  if (vr)
+		  {
+			  double bs = vr->get_buffer_scale();
+			  if (max_bufscale < bs)
+			  {
+				  max_bufscale = bs;
+				  maxbsid = i;
+			  }
+		  }
+	  }
+	  if (maxbsid > 0 && maxbsid<(int)vr_list_.size())
+		  swap(vr_list_[0], vr_list_[maxbsid]);
 
 	  double sf = vr_list_[0]->CalcScaleFactor(w, h, res_.x(), res_.y(), zoom);
 	  if (fabs(sf-sfactor_)>0.05)
 	  {
 		  sfactor_ = sf;
-		  blend_framebuffer_resize_ = true;
-		  filter_buffer_resize_ = true;
-		  blend_fbo_resize_ = true;
+//		  blend_framebuffer_resize_ = true;
+//		  filter_buffer_resize_ = true;
+//		  blend_fbo_resize_ = true;
 	  }
 	  else if (sf==1.0 && sfactor_!=1.0)
 	  {
 		  sfactor_ = sf;
-		  blend_framebuffer_resize_ = true;
-		  filter_buffer_resize_ = true;
-		  blend_fbo_resize_ = true;
+//		  blend_framebuffer_resize_ = true;
+//		  filter_buffer_resize_ = true;
+//		  blend_fbo_resize_ = true;
 	  }
-	  w2 = int(w*sfactor_*vr_list_[0]->get_buffer_scale()+0.5);
-	  h2 = int(h*sfactor_*vr_list_[0]->get_buffer_scale()+0.5);
+
+	  w2 = int(w/**sfactor_*/*vr_list_[0]->get_buffer_scale()+0.5);
+	  h2 = int(h/**sfactor_*/*vr_list_[0]->get_buffer_scale()+0.5);
 	  if (buffer_scale_ != vr_list_[0]->get_buffer_scale())
 	  {
 		  buffer_scale_ = vr_list_[0]->get_buffer_scale();
 		  resize();
 	  }
 
-	  int i;
 	  vector<bool> used_colortype(FLV_COLORTYPE_NUM, false);
 	  vector<bool> used_shadertype(FLV_COLORTYPE_NUM*FLV_VRMODE_NUM, false);
 	  bool blend_slices = blend_slices_;
@@ -280,6 +299,7 @@ namespace FLIVR
 				  use_id_color = true;
 				  id_image_num++;
 				  idvr = vr;
+				  vr->set_buffer_scale(vr_list_[0]->get_buffer_scale());
 				  if (blend_framebuffer_resize_)
 					  vr->resize();
 			  }
@@ -850,7 +870,7 @@ namespace FLIVR
 			  if (depth_peel_ || vr_cmode == FLV_CTYPE_DEPTH)
 				  shader[vr_shader_id]->setLocalParam(7, 1.0/double(w2), 1.0/double(h2), 0.0, 0.0);
 
-			  shader[vr_shader_id]->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(), 1.0/rate);
+			  shader[vr_shader_id]->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(), 1.0/(rate*w*sampling_frq_fac));
 
 			  //for brick transformation
 			  float matrix[16];

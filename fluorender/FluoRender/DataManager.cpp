@@ -1677,7 +1677,7 @@ void VolumeData::Calculate(int type, VolumeData *vd_a, VolumeData *vd_b)
 			int max_val = 255;
 			int bytes = 1;
 			if (nrrd_data->type == nrrdTypeUShort) bytes = 2;
-			int mem_size = (unsigned long long)m_res_x * (unsigned long long)m_res_y * (unsigned long long)m_res_z * bytes;
+			unsigned long long mem_size = (unsigned long long)m_res_x * (unsigned long long)m_res_y * (unsigned long long)m_res_z * bytes;
 			if (nrrd_data->type == nrrdTypeUChar)
 				max_val = *std::max_element(val8nr, val8nr+mem_size);
 			else if (nrrd_data->type == nrrdTypeUShort)
