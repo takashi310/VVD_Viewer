@@ -4894,13 +4894,26 @@ void VRenderGLView::switchLevel(VolumeData *vd)
 				double vxsize_on_screen = m_scale_factor / (sfs[0]/res_scale);
 				if (vxsize_on_screen > 1.5)
 				{
-					if (vxsize_on_screen <= 2.0) vd->GetVR()->set_buffer_scale(1.0/1.5);
-					else
+					double fac = 0.0;
+					switch(m_res_mode)
 					{
-						double bscale = floor(vxsize_on_screen);
-						if (bscale > res_scale) bscale = res_scale;
-						vd->GetVR()->set_buffer_scale(1.0/bscale);
+					case 1:
+						fac = 0.0;
+						break;
+					case 2:
+						fac = 0.5;
+						break;
+					case 3:
+						fac = 1.0;
+						break;
+					case 4:
+						fac = 2.0;
+						break;
+					default:
+						fac = 0.0;
 					}
+					double bscale = (vxsize_on_screen - 1.5)*fac + 1.0;
+					vd->GetVR()->set_buffer_scale(1.0/bscale);
 				}
 				else
 				vd->GetVR()->set_buffer_scale(1.0);
@@ -4970,13 +4983,26 @@ void VRenderGLView::switchLevel(VolumeData *vd)
 
 			if (vxsize_on_screen > 1.5)
 			{
-				if (vxsize_on_screen <= 2.0) vd->GetVR()->set_buffer_scale(1.0/1.5);
-				else
+				double fac = 0.0;
+				switch(m_res_mode)
 				{
-					double bscale = floor(vxsize_on_screen);
-					if (bscale > max_res_scale) bscale = max_res_scale;
-					vd->GetVR()->set_buffer_scale(1.0/bscale);
+				case 1:
+					fac = 0.0;
+					break;
+				case 2:
+					fac = 0.25;
+					break;
+				case 3:
+					fac = 0.5;
+					break;
+				case 4:
+					fac = 1.0;
+					break;
+				default:
+					fac = 0.0;
 				}
+				double bscale = (vxsize_on_screen - 1.5)*fac + 1.0;
+				vd->GetVR()->set_buffer_scale(1.0/bscale);
 			}
 			else
 				vd->GetVR()->set_buffer_scale(1.0);

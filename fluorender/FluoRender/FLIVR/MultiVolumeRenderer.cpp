@@ -315,7 +315,7 @@ namespace FLIVR
 	  if (id_image_num > 1) multi_id_image = true;
 
 	  // Set sampling rate based on interaction.
-      double rate = imode_ ? irate_ : sampling_rate_;
+      double rate = imode_ ? irate_*2.0 : sampling_rate_*2.0;
 	  Vector diag = vr_list_[0]->tex_->bbox()->diagonal();
 	  double dt = 0.0020/rate;
 	  num_slices_ = (int)(diag.length()/dt);

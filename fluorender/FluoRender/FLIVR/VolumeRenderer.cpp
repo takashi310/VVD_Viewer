@@ -874,7 +874,7 @@ namespace FLIVR
 		set_interactive_mode(adaptive_ && interactive_mode_p);
 
 		// Set sampling rate based on interaction
-		double rate = imode_ ? irate_ : sampling_rate_;
+		double rate = imode_ ? irate_*2.0 : sampling_rate_*2.0;
 		double rate_fac = 1.0;
 		Vector diag = tex_->bbox()->diagonal();
 /*		Vector cell_diag(
