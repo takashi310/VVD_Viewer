@@ -672,6 +672,9 @@ void ClippingView::GetSettings()
 
 void ClippingView::OnLinkChannelsCheck(wxCommandEvent &event)
 {
+	if (!m_vd)
+		return;
+
 	if (m_link_channels->GetValue())
 	{
 		if (!m_mgr)
@@ -703,6 +706,15 @@ void ClippingView::OnLinkChannelsCheck(wxCommandEvent &event)
 		long z2_val = 0;
 		str.ToLong(&z2_val);
 
+		int resx, resy, resz;
+		m_vd->GetResolution(resx, resy, resz);
+		double x1_dv = double(x1_val)/double(resx);
+		double x2_dv = double(x2_val)/double(resx);
+		double y1_dv = double(y1_val)/double(resy);
+		double y2_dv = double(y2_val)/double(resy);
+		double z1_dv = double(z1_val)/double(resz);
+		double z2_dv = double(z2_val)/double(resz);
+
 		int i;
 
 		for (i=0; i<m_mgr->GetVolumeNum(); i++)
@@ -719,15 +731,12 @@ void ClippingView::OnLinkChannelsCheck(wxCommandEvent &event)
 			if (planes->size() != 6)
 				continue;
 
-			int resx, resy, resz;
-			vd->GetResolution(resx, resy, resz);
-
-			(*planes)[0]->ChangePlane(Point(double(x1_val)/double(resx), 0.0, 0.0), Vector(1.0, 0.0, 0.0));
-			(*planes)[1]->ChangePlane(Point(double(x2_val)/double(resx), 0.0, 0.0), Vector(-1.0, 0.0, 0.0));
-			(*planes)[2]->ChangePlane(Point(0.0, double(y1_val)/double(resy), 0.0), Vector(0.0, 1.0, 0.0));
-			(*planes)[3]->ChangePlane(Point(0.0, double(y2_val)/double(resy), 0.0), Vector(0.0, -1.0, 0.0));
-			(*planes)[4]->ChangePlane(Point(0.0, 0.0, double(z1_val)/double(resz)), Vector(0.0, 0.0, 1.0));
-			(*planes)[5]->ChangePlane(Point(0.0, 0.0, double(z2_val)/double(resz)), Vector(0.0, 0.0, -1.0));
+			(*planes)[0]->ChangePlane(Point(x1_dv, 0.0, 0.0), Vector(1.0, 0.0, 0.0));
+			(*planes)[1]->ChangePlane(Point(x2_dv, 0.0, 0.0), Vector(-1.0, 0.0, 0.0));
+			(*planes)[2]->ChangePlane(Point(0.0, y1_dv, 0.0), Vector(0.0, 1.0, 0.0));
+			(*planes)[3]->ChangePlane(Point(0.0, y2_dv, 0.0), Vector(0.0, -1.0, 0.0));
+			(*planes)[4]->ChangePlane(Point(0.0, 0.0, z1_dv), Vector(0.0, 0.0, 1.0));
+			(*planes)[5]->ChangePlane(Point(0.0, 0.0, z2_dv), Vector(0.0, 0.0, -1.0));
 		}
 
 		RefreshVRenderViews();

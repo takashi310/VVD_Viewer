@@ -74,7 +74,7 @@ bool DnDFile::OnDropFiles(wxCoord x, wxCoord y, const wxArrayString &filenames)
 			{
 				vr_frame->LoadVolumes(filenames, (VRenderView*)m_view);
 			}
-			else if (suffix == ".obj")
+			else if (suffix == ".obj" || suffix == ".swc")
 			{
 				vr_frame->LoadMeshes(filenames, (VRenderView*)m_view);
 			}
