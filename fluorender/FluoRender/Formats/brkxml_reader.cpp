@@ -406,9 +406,9 @@ void BRKXMLReader::ReadBrick(tinyxml2::XMLElement* brickNode, BrickInfo &binfo)
 
 	binfo.z_start = STOI(brickNode->Attribute("st_z"));
 
-	binfo.offset = STOI(brickNode->Attribute("offset"));
+	binfo.offset = STOLL(brickNode->Attribute("offset"));
 
-	binfo.fsize = STOI(brickNode->Attribute("size"));
+	binfo.fsize = STOLL(brickNode->Attribute("size"));
 
 	tinyxml2::XMLElement *child = brickNode->FirstChildElement();
 	while (child)
@@ -512,10 +512,10 @@ void BRKXMLReader::ReadFilenames(tinyxml2::XMLElement* fileRootNode, vector<vect
 
 				filename[frame][channel][id]->offset = 0;
 				if (child->Attribute("offset"))
-					filename[frame][channel][id]->offset = STOI(child->Attribute("offset"));
+					filename[frame][channel][id]->offset = STOLL(child->Attribute("offset"));
 				filename[frame][channel][id]->datasize = 0;
 				if (child->Attribute("datasize"))
-					filename[frame][channel][id]->datasize = STOI(child->Attribute("datasize"));
+					filename[frame][channel][id]->datasize = STOLL(child->Attribute("datasize"));
 				
 				if (child->Attribute("filetype"))
 				{

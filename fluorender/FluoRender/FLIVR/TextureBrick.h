@@ -103,8 +103,8 @@ namespace FLIVR {
 		}
 
 		std::wstring filename;
-		int offset;
-		int datasize;
+		long long offset;
+		long long datasize;
 		int type; //1-raw; 2-jpeg; 3-zlib;
 		bool isurl;
 		bool cached;

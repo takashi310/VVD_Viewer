@@ -117,6 +117,10 @@ inline int STOI(const char * s) { return (s ? atoi(s) : 0); }
 inline int STOI(const wxChar * s) { return (s ? _wtoi(s) : 0); }
 inline int STOI(wxChar * s) { return (s ?_wtoi(s) : 0); }
 
+inline long long STOLL(const char * s) { return (s ? _atoi64(s) : 0LL); }
+inline long long STOLL(const wxChar * s) { return (s ? _wtoi64(s) : 0LL); }
+inline long long STOLL(wxChar * s) { return (s ?_wtoi64(s) : 0LL); }
+
 inline double STOD(const char * s) { return (s ? atof(s): 0.0); }
 inline double STOD(wxChar * s) { return (s ? _wtof(s) : 0.0); }
 inline double STOD(const wxChar * s) { return (s ? _wtof(s) : 0.0); }
@@ -238,6 +242,8 @@ inline int WSTOI(std::wstring s) { return atoi(ws2s(s).c_str()); }
 inline double WSTOD(std::wstring s) { return atof(ws2s(s).c_str()); }
 
 inline int STOI(const char * s) { return (s ? atoi(s) : 0); }
+
+inline long long STOLL(const char * s) { return (s ? atoll(s) : 0LL); }
 
 inline double STOD(const char * s) { return (s ? atof(s) : 0.0); }
 
