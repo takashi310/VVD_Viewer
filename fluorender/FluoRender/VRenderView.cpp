@@ -8563,6 +8563,7 @@ DataGroup* VRenderGLView::AddVolumeData(VolumeData* vd, wxString group_name)
 	int i;
 	DataGroup* group = 0;
 	DataGroup* group_temp = 0;
+	DataGroup* cur_group = 0;
 
 	for (i=0; i<(int)m_layer_list.size(); i++)
 	{
@@ -8576,8 +8577,19 @@ DataGroup* VRenderGLView::AddVolumeData(VolumeData* vd, wxString group_name)
 				group = group_temp;
 				break;
 			}
+			if (group_temp)
+			{
+				for (int j = 0; j < group_temp->GetVolumeNum(); j++)
+				{
+					if (m_cur_vol && m_cur_vol == group_temp->GetVolumeData(j))
+						cur_group = group_temp;
+				}
+			}
 		}
 	}
+
+	if (!group && cur_group)
+		group = cur_group;
 
 	if (!group && group_temp)
 		group = group_temp;
@@ -8625,11 +8637,57 @@ DataGroup* VRenderGLView::AddVolumeData(VolumeData* vd, wxString group_name)
 			vd->SetBaseSpacings(spcx, spcy, spcz);
 		}
 
+		if (group->GetVolumeSyncProp() && group->GetVolumeData(0) != vd)
+		{
+			VolumeData *srcvd = group->GetVolumeData(0);
+			double dval = 0.0;
+			double dval2 = 0.0;
+			vd->Set3DGamma(srcvd->Get3DGamma());
+			vd->SetBoundary(srcvd->GetBoundary());
+			vd->SetOffset(srcvd->GetOffset());
+			vd->SetLeftThresh(srcvd->GetLeftThresh());
+			vd->SetRightThresh(srcvd->GetRightThresh());
+			vd->SetLuminance(srcvd->GetLuminance());
+			vd->SetShadow(srcvd->GetShadow());
+			srcvd->GetShadowParams(dval);
+			vd->SetShadowParams(dval);
+			vd->SetShading(srcvd->GetShading());
+			double amb, diff, spec, shine;
+			srcvd->GetMaterial(amb, diff, spec, shine);
+			vd->SetMaterial(amb, diff, spec, shine);
+			vd->SetAlpha(srcvd->GetAlpha());
+			vd->SetSampleRate(srcvd->GetSampleRate());
+			vd->SetShading(srcvd->GetShading());
+			vd->SetColormap(srcvd->GetColormap());
+			srcvd->GetColormapValues(dval, dval2);
+			vd->SetColormapValues(dval, dval2);
+			vd->SetInvert(srcvd->GetInvert());
+			vd->SetMode(srcvd->GetMode());
+			vd->SetNR(srcvd->GetNR());
+		}
+
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 		if (vr_frame)
 		{
 			vr_frame->GetAdjustView()->SetVolumeData(vd);
 			vr_frame->GetAdjustView()->SetGroupLink(group);
+			if (vr_frame->GetClippingView()->GetChannLink() && group->GetVolumeData(0) != vd)
+			{
+				vector<Plane*> *dst_planes = vd->GetVR()->get_planes();
+				for (int k=0; k<(int)dst_planes->size(); k++)
+				{
+					if ((*dst_planes)[k])
+						delete (*dst_planes)[k];
+				}
+				dst_planes->clear();
+
+				vector<Plane*> *src_planes = group->GetVolumeData(0)->GetVR()->get_planes();
+				for (int k=0; k<(int)src_planes->size(); k++)
+				{
+					Plane* plane = new Plane(*(*src_planes)[k]);
+					dst_planes->push_back(plane);
+				}
+			}
 		}
 	}
 
@@ -9287,6 +9345,66 @@ void VRenderGLView::MoveLayertoGroup(wxString &group_name, wxString &src_name, w
 	bool sync_b = group->GetSyncB();
 	src_vd->SetSyncB(sync_b);
 
+	if ((group->GetVolumeSyncSpc() || group->GetVolumeSyncProp()) && group->GetVolumeNum() > 0)
+	{
+		double spcx=1.0, spcy=1.0, spcz=1.0;
+		group->GetVolumeData(0)->GetBaseSpacings(spcx, spcy, spcz);
+		src_vd->SetBaseSpacings(spcx, spcy, spcz);
+	}
+
+	if (group->GetVolumeSyncProp() && group->GetVolumeData(0) != src_vd)
+	{
+		VolumeData *gvd = group->GetVolumeData(0);
+		double dval = 0.0;
+		double dval2 = 0.0;
+		src_vd->Set3DGamma(gvd->Get3DGamma());
+		src_vd->SetBoundary(gvd->GetBoundary());
+		src_vd->SetOffset(gvd->GetOffset());
+		src_vd->SetLeftThresh(gvd->GetLeftThresh());
+		src_vd->SetRightThresh(gvd->GetRightThresh());
+		src_vd->SetLuminance(gvd->GetLuminance());
+		src_vd->SetShadow(gvd->GetShadow());
+		gvd->GetShadowParams(dval);
+		src_vd->SetShadowParams(dval);
+		src_vd->SetShading(gvd->GetShading());
+		double amb, diff, spec, shine;
+		gvd->GetMaterial(amb, diff, spec, shine);
+		src_vd->SetMaterial(amb, diff, spec, shine);
+		src_vd->SetAlpha(gvd->GetAlpha());
+		src_vd->SetSampleRate(gvd->GetSampleRate());
+		src_vd->SetShading(gvd->GetShading());
+		src_vd->SetColormap(gvd->GetColormap());
+		gvd->GetColormapValues(dval, dval2);
+		src_vd->SetColormapValues(dval, dval2);
+		src_vd->SetInvert(gvd->GetInvert());
+		src_vd->SetMode(gvd->GetMode());
+		src_vd->SetNR(gvd->GetNR());
+	}
+
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (vr_frame)
+	{
+		vr_frame->GetAdjustView()->SetVolumeData(src_vd);
+		vr_frame->GetAdjustView()->SetGroupLink(group);
+		if (vr_frame->GetClippingView()->GetChannLink() && group->GetVolumeData(0) != src_vd)
+		{
+			vector<Plane*> *dst_planes = src_vd->GetVR()->get_planes();
+			for (int k=0; k<(int)dst_planes->size(); k++)
+			{
+				if ((*dst_planes)[k])
+					delete (*dst_planes)[k];
+			}
+			dst_planes->clear();
+
+			vector<Plane*> *src_planes = group->GetVolumeData(0)->GetVR()->get_planes();
+			for (int k=0; k<(int)src_planes->size(); k++)
+			{
+				Plane* plane = new Plane(*(*src_planes)[k]);
+				dst_planes->push_back(plane);
+			}
+		}
+	}
+
 	m_vd_pop_dirty = true;
 	m_md_pop_dirty = true;
 }
@@ -9348,10 +9466,69 @@ void VRenderGLView::MoveLayerfromtoGroup(wxString &src_group_name, wxString &dst
 	bool sync_b = dst_group->GetSyncB();
 	src_vd->SetSyncB(sync_b);
 
+	if ((dst_group->GetVolumeSyncSpc() || dst_group->GetVolumeSyncProp()) && dst_group->GetVolumeNum() > 0)
+	{
+		double spcx=1.0, spcy=1.0, spcz=1.0;
+		dst_group->GetVolumeData(0)->GetBaseSpacings(spcx, spcy, spcz);
+		src_vd->SetBaseSpacings(spcx, spcy, spcz);
+	}
+
+	if (dst_group->GetVolumeSyncProp() && dst_group->GetVolumeData(0) != src_vd)
+	{
+		VolumeData *gvd = dst_group->GetVolumeData(0);
+		double dval = 0.0;
+		double dval2 = 0.0;
+		src_vd->Set3DGamma(gvd->Get3DGamma());
+		src_vd->SetBoundary(gvd->GetBoundary());
+		src_vd->SetOffset(gvd->GetOffset());
+		src_vd->SetLeftThresh(gvd->GetLeftThresh());
+		src_vd->SetRightThresh(gvd->GetRightThresh());
+		src_vd->SetLuminance(gvd->GetLuminance());
+		src_vd->SetShadow(gvd->GetShadow());
+		gvd->GetShadowParams(dval);
+		src_vd->SetShadowParams(dval);
+		src_vd->SetShading(gvd->GetShading());
+		double amb, diff, spec, shine;
+		gvd->GetMaterial(amb, diff, spec, shine);
+		src_vd->SetMaterial(amb, diff, spec, shine);
+		src_vd->SetAlpha(gvd->GetAlpha());
+		src_vd->SetSampleRate(gvd->GetSampleRate());
+		src_vd->SetShading(gvd->GetShading());
+		src_vd->SetColormap(gvd->GetColormap());
+		gvd->GetColormapValues(dval, dval2);
+		src_vd->SetColormapValues(dval, dval2);
+		src_vd->SetInvert(gvd->GetInvert());
+		src_vd->SetMode(gvd->GetMode());
+		src_vd->SetNR(gvd->GetNR());
+	}
+
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (vr_frame)
+	{
+		vr_frame->GetAdjustView()->SetVolumeData(src_vd);
+		vr_frame->GetAdjustView()->SetGroupLink(dst_group);
+		if (vr_frame->GetClippingView()->GetChannLink() && dst_group->GetVolumeData(0) != src_vd)
+		{
+			vector<Plane*> *dst_planes = src_vd->GetVR()->get_planes();
+			for (int k=0; k<(int)dst_planes->size(); k++)
+			{
+				if ((*dst_planes)[k])
+					delete (*dst_planes)[k];
+			}
+			dst_planes->clear();
+
+			vector<Plane*> *src_planes = dst_group->GetVolumeData(0)->GetVR()->get_planes();
+			for (int k=0; k<(int)src_planes->size(); k++)
+			{
+				Plane* plane = new Plane(*(*src_planes)[k]);
+				dst_planes->push_back(plane);
+			}
+		}
+	}
+
 	m_vd_pop_dirty = true;
 	m_md_pop_dirty = true;
 
-	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (m_frame)
 	{
 		AdjustView* adjust_view = vr_frame->GetAdjustView();
