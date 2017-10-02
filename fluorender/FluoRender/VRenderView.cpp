@@ -9859,6 +9859,8 @@ void VRenderGLView::InitView(unsigned int type)
 //				m_radius = 5.0;
 			m_near_clip = m_radius / 1000.0;
 			m_far_clip = m_radius * 100.0;
+			for (i=0 ; i<(int)m_md_pop_list.size() ; i++)
+				m_md_pop_list[i]->SetBounds(m_bounds);
 		}
 	}
 

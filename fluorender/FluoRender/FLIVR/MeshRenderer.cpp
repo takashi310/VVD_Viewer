@@ -48,6 +48,23 @@ namespace FLIVR
 		alpha_(1.0),
 		update_(true)
 	{
+		Plane* plane = 0;
+		//x
+		plane = new Plane(Point(0.0, 0.0, 0.0), Vector(1.0, 0.0, 0.0));
+		planes_.push_back(plane);
+		plane = new Plane(Point(1.0, 0.0, 0.0), Vector(-1.0, 0.0, 0.0));
+		planes_.push_back(plane);
+		//y
+		plane = new Plane(Point(0.0, 0.0, 0.0), Vector(0.0, 1.0, 0.0));
+		planes_.push_back(plane);
+		plane = new Plane(Point(0.0, 1.0, 0.0), Vector(0.0, -1.0, 0.0));
+		planes_.push_back(plane);
+		//z
+		plane = new Plane(Point(0.0, 0.0, 0.0), Vector(0.0, 0.0, 1.0));
+		planes_.push_back(plane);
+		plane = new Plane(Point(0.0, 0.0, 1.0), Vector(0.0, 0.0, -1.0));
+		planes_.push_back(plane);
+
 		glGenBuffers(1, &m_vbo);
 		glGenVertexArrays(1, &m_vao);
 	}
@@ -62,12 +79,24 @@ namespace FLIVR
 		alpha_(copy.alpha_),
 		update_(true)
 	{
+		//clipping planes
+		for (int i=0; i<(int)copy.planes_.size(); i++)
+		{
+			Plane* plane = new Plane(*copy.planes_[i]);
+			planes_.push_back(plane);
+		}
 		glGenBuffers(1, &m_vbo);
 		glGenVertexArrays(1, &m_vao);
 	}
 
 	MeshRenderer::~MeshRenderer()
 	{
+		//release clipping planes
+		for (int i=0; i<(int)planes_.size(); i++)
+		{
+			if (planes_[i])
+				delete planes_[i];
+		}
 		if (glIsBuffer(m_vbo))
 			glDeleteBuffers(1, &m_vbo);
 		if (glIsVertexArray(m_vao))
@@ -245,6 +274,29 @@ namespace FLIVR
 
 			if (depth_peel_)
 				shader->setLocalParam(7, 1.0/double(vp[2]), 1.0/double(vp[3]), 0.0, 0.0);
+
+			BBox dbox = bounds_;
+			glm::mat4 gmat = glm::mat4(float(dbox.max().x()-dbox.min().x()), 0.0f, 0.0f, float(dbox.min().x()),
+									   0.0f, float(dbox.max().y()-dbox.min().y()), 0.0f, float(dbox.min().y()),
+									   0.0f, 0.0f, float(dbox.max().z()-dbox.min().z()), float(dbox.min().z()),
+									   0.0f, 0.0f, 0.0f, 1.0f);
+			glm::mat4 invmat = glm::inverseTranspose(gmat);
+			shader->setLocalParamMatrix(3, glm::value_ptr(invmat));
+
+			//set clipping planes
+			double abcd[4];
+			planes_[0]->get(abcd);
+			shader->setLocalParam(10, abcd[0], abcd[1], abcd[2], abcd[3]);
+			planes_[1]->get(abcd);
+			shader->setLocalParam(11, abcd[0], abcd[1], abcd[2], abcd[3]);
+			planes_[2]->get(abcd);
+			shader->setLocalParam(12, abcd[0], abcd[1], abcd[2], abcd[3]);
+			planes_[3]->get(abcd);
+			shader->setLocalParam(13, abcd[0], abcd[1], abcd[2], abcd[3]);
+			planes_[4]->get(abcd);
+			shader->setLocalParam(14, abcd[0], abcd[1], abcd[2], abcd[3]);
+			planes_[5]->get(abcd);
+			shader->setLocalParam(15, abcd[0], abcd[1], abcd[2], abcd[3]);
 
 			//draw
 			glDrawArrays(GL_TRIANGLES, pos, (GLsizei)(group->numtriangles*3));

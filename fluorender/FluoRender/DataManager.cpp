@@ -257,7 +257,6 @@ VolumeData::VolumeData(VolumeData &copy)
 
 VolumeData::~VolumeData()
 {
-	//m_vr�̊J�������ɂ��Ȃ���loadedbrks���̗v�f�N���A���ł��Ȃ�
 	if (m_vr)
 		delete m_vr;
 	if (m_tex)
@@ -2921,6 +2920,7 @@ void MeshData::Draw(int peel)
 
 	glDisable(GL_CULL_FACE);
 	m_mr->set_depth_peel(peel);
+	m_mr->set_bounds(m_bounds);
 	m_mr->draw();
 	if (m_draw_bounds)
 		DrawBounds();

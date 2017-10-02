@@ -33,6 +33,7 @@
 #include "MshShader.h"
 #include "glm.h"
 #include "Plane.h"
+#include "BBox.h"
 #include <vector>
 #include <glm/glm.hpp>
 
@@ -88,6 +89,9 @@ namespace FLIVR
 		bool get_fog()
 		{ return fog_; }
 
+		void set_bounds(BBox b) { bounds_ = b; }
+		BBox get_bounds() { return bounds_; } 
+
 	protected:
 		//data and display list
 		GLMmodel* data_;
@@ -112,6 +116,7 @@ namespace FLIVR
 		GLuint m_vbo, m_vao;
 		//bool update
 		bool update_;
+		BBox bounds_;
 
 		static MshShaderFactory msh_shader_factory_;
 	};

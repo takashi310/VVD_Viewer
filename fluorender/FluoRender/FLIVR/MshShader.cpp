@@ -67,6 +67,10 @@ namespace FLIVR
 	"//MSH_VERTEX_OUTPUTS_FOG\n" \
 	"out vec4 OutFogCoord;\n"
 
+#define MSH_VERTEX_OUTPUTS_POS \
+	"//MSH_VERTEX_OUTPUTS_POS\n" \
+	"out vec4 OutPosition;\n"
+
 #define MSH_VERTEX_UNIFORM_MATRIX \
 	"//MSH_VERTEX_UNIFORM_MATRIX\n" \
 	"uniform mat4 matrix0;//projection\n" \
@@ -83,7 +87,8 @@ namespace FLIVR
 
 #define MSH_VERTEX_BODY_POS \
 	"//MSH_VERTEX_BODY_POS\n" \
-	"	gl_Position = matrix0 * matrix1 * vec4(InVertex, 1.0);\n"
+	"	gl_Position = matrix0 * matrix1 * vec4(InVertex, 1.0);\n" \
+	"	OutPosition = vec4(InVertex, 1.0);\n"
 
 #define MSH_VERTEX_BODY_NORMAL \
 	"//MSH_VERTEX_BODY_NORMAL\n" \
@@ -118,6 +123,10 @@ namespace FLIVR
 #define MSH_FRAG_INPUTS_FOG \
 	"//MSH_FRAG_INPUTS_FOG\n" \
 	"in vec4 OutFogCoord;\n"
+
+#define MSH_FRAG_INPUTS_POS \
+	"//MSH_FRAG_INPUTS_POS\n" \
+	"in vec4 OutPosition;\n"
 
 #define MSH_FRAG_UNIFORMS_COLOR \
 	"//MSH_FRAG_UNIFORMS_COLOR\n" \
@@ -154,6 +163,32 @@ namespace FLIVR
 #define MSH_FRAG_UNIFORMS_INT \
 	"//MSH_FRAG_UNIFORMS_INT\n" \
 	"uniform uint loci0;//name\n"
+
+#define MSH_UNIFORMS_CLIP \
+	"//VOL_UNIFORMS_CLIP\n" \
+	"uniform vec4 loc10; //plane0\n" \
+	"uniform vec4 loc11; //plane1\n" \
+	"uniform vec4 loc12; //plane2\n" \
+	"uniform vec4 loc13; //plane3\n" \
+	"uniform vec4 loc14; //plane4\n" \
+	"uniform vec4 loc15; //plane5\n" \
+	"uniform mat4 matrix3;\n" \
+	"\n"
+
+#define MSH_HEAD_CLIP \
+	"	//VOL_HEAD_CLIP\n" \
+	"	vec4 fp = matrix3*OutPosition;\n" \
+	"	if (dot(fp.xyz, loc10.xyz)+loc10.w < 0.0 ||\n" \
+	"		dot(fp.xyz, loc11.xyz)+loc11.w < 0.0 ||\n" \
+	"		dot(fp.xyz, loc12.xyz)+loc12.w < 0.0 ||\n" \
+	"		dot(fp.xyz, loc13.xyz)+loc13.w < 0.0 ||\n" \
+	"		dot(fp.xyz, loc14.xyz)+loc14.w < 0.0 ||\n" \
+	"		dot(fp.xyz, loc15.xyz)+loc15.w < 0.0)\n" \
+	"	{\n" \
+	"		discard;//FragColor = vec4(0.0);\n" \
+	"		return;\n" \
+	"	}\n" \
+	"\n"
 
 //1: draw depth after 15 (15)
 #define MSH_FRAG_BODY_DP_1 \
@@ -262,6 +297,7 @@ namespace FLIVR
 
 		//inputs
 		z << MSH_VERTEX_INPUTS_V;
+		z << MSH_VERTEX_OUTPUTS_POS;
 		if (type_ == 0)
 		{
 			if (light_)
@@ -313,6 +349,8 @@ namespace FLIVR
 		{
 			z << MSH_FRAG_OUTPUTS;
 			//inputs
+			z << MSH_FRAG_INPUTS_POS;
+			z << MSH_UNIFORMS_CLIP;
 			if (light_)
 				z << MSH_FRAG_INPUTS_N;
 			if (tex_)
@@ -332,6 +370,7 @@ namespace FLIVR
 				z << MSH_FRAG_UNIFORMS_DP;
 
 			z << MSH_HEAD;
+			z << MSH_HEAD_CLIP;
 
 			//body
 			switch (peel_)
