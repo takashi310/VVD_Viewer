@@ -362,7 +362,29 @@ namespace FLIVR
 		if (fog_)
 			shader->setLocalParam(8, m_fog_intensity, m_fog_start, m_fog_end, 0.0);
 
+		BBox dbox = bounds_;
+		glm::mat4 gmat = glm::mat4(float(dbox.max().x()-dbox.min().x()), 0.0f, 0.0f, float(dbox.min().x()),
+								   0.0f, float(dbox.max().y()-dbox.min().y()), 0.0f, float(dbox.min().y()),
+								   0.0f, 0.0f, float(dbox.max().z()-dbox.min().z()), float(dbox.min().z()),
+								   0.0f, 0.0f, 0.0f, 1.0f);
+		glm::mat4 invmat = glm::inverseTranspose(gmat);
+		shader->setLocalParamMatrix(3, glm::value_ptr(invmat));
 
+		//set clipping planes
+		double abcd[4];
+		planes_[0]->get(abcd);
+		shader->setLocalParam(10, abcd[0], abcd[1], abcd[2], abcd[3]);
+		planes_[1]->get(abcd);
+		shader->setLocalParam(11, abcd[0], abcd[1], abcd[2], abcd[3]);
+		planes_[2]->get(abcd);
+		shader->setLocalParam(12, abcd[0], abcd[1], abcd[2], abcd[3]);
+		planes_[3]->get(abcd);
+		shader->setLocalParam(13, abcd[0], abcd[1], abcd[2], abcd[3]);
+		planes_[4]->get(abcd);
+		shader->setLocalParam(14, abcd[0], abcd[1], abcd[2], abcd[3]);
+		planes_[5]->get(abcd);
+		shader->setLocalParam(15, abcd[0], abcd[1], abcd[2], abcd[3]);
+		
 		while (group)
 		{
 			if (group->numtriangles == 0)

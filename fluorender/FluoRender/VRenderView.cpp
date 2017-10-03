@@ -9969,11 +9969,26 @@ void VRenderGLView::DrawClippingPlanes(bool border, int face_winding)
 	int i;
 	bool link = false;
 	int plane_mode = PM_NORMAL;
+	int draw_type = 2;
+	VolumeData *cur_vd = NULL;
+	MeshData *cur_md = NULL;
+
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (vr_frame && vr_frame->GetClippingView())
 	{
 		link = vr_frame->GetClippingView()->GetChannLink();
 		plane_mode = vr_frame->GetClippingView()->GetPlaneMode();
+		draw_type = vr_frame->GetClippingView()->GetSelType();
+		if (draw_type == 2)
+		{
+			cur_vd = vr_frame->GetClippingView()->GetVolumeData();
+			if (!cur_vd) return;
+		}
+		if (draw_type == 3)
+		{
+			cur_md = vr_frame->GetClippingView()->GetMeshData();
+			if (!cur_md) return;
+		}
 	}
 
 	bool draw_plane = plane_mode != PM_FRAME;
@@ -10019,282 +10034,559 @@ void VRenderGLView::DrawClippingPlanes(bool border, int face_winding)
 		shader->bind();
 	}
 
-	for (i=0; i<GetDispVolumeNum(); i++)
+	if (draw_type == 2)
 	{
-		VolumeData* vd = GetDispVolumeData(i);
-		if (!vd)
-			continue;
-
-		if (vd!=m_cur_vol)
-			continue;
-
-		VolumeRenderer *vr = vd->GetVR();
-		if (!vr)
-			continue;
-
-		vector<Plane*> *planes = vr->get_planes();
-		if (planes->size() != 6)
-			continue;
-
-		//calculating planes
-		//get six planes
-		Plane* px1 = (*planes)[0];
-		Plane* px2 = (*planes)[1];
-		Plane* py1 = (*planes)[2];
-		Plane* py2 = (*planes)[3];
-		Plane* pz1 = (*planes)[4];
-		Plane* pz2 = (*planes)[5];
-
-		//calculate 4 lines
-		Vector lv_x1z1, lv_x1z2, lv_x2z1, lv_x2z2;
-		Point lp_x1z1, lp_x1z2, lp_x2z1, lp_x2z2;
-		//x1z1
-		if (!px1->Intersect(*pz1, lp_x1z1, lv_x1z1))
-			continue;
-		//x1z2
-		if (!px1->Intersect(*pz2, lp_x1z2, lv_x1z2))
-			continue;
-		//x2z1
-		if (!px2->Intersect(*pz1, lp_x2z1, lv_x2z1))
-			continue;
-		//x2z2
-		if (!px2->Intersect(*pz2, lp_x2z2, lv_x2z2))
-			continue;
-
-		//calculate 8 points
-		Point pp[8];
-		//p0 = l_x1z1 * py1
-		if (!py1->Intersect(lp_x1z1, lv_x1z1, pp[0]))
-			continue;
-		//p1 = l_x1z2 * py1
-		if (!py1->Intersect(lp_x1z2, lv_x1z2, pp[1]))
-			continue;
-		//p2 = l_x2z1 *py1
-		if (!py1->Intersect(lp_x2z1, lv_x2z1, pp[2]))
-			continue;
-		//p3 = l_x2z2 * py1
-		if (!py1->Intersect(lp_x2z2, lv_x2z2, pp[3]))
-			continue;
-		//p4 = l_x1z1 * py2
-		if (!py2->Intersect(lp_x1z1, lv_x1z1, pp[4]))
-			continue;
-		//p5 = l_x1z2 * py2
-		if (!py2->Intersect(lp_x1z2, lv_x1z2, pp[5]))
-			continue;
-		//p6 = l_x2z1 * py2
-		if (!py2->Intersect(lp_x2z1, lv_x2z1, pp[6]))
-			continue;
-		//p7 = l_x2z2 * py2
-		if (!py2->Intersect(lp_x2z2, lv_x2z2, pp[7]))
-			continue;
-
-		//draw the six planes out of the eight points
-		//get color
-		Color color(1.0, 1.0, 1.0);
-		double plane_trans = 0.0;
-		if (face_winding == BACK_FACE &&
-			(m_clip_mask == 3 ||
-			m_clip_mask == 12 ||
-			m_clip_mask == 48 ||
-			m_clip_mask == 1 ||
-			m_clip_mask == 2 ||
-			m_clip_mask == 4 ||
-			m_clip_mask == 8 ||
-			m_clip_mask == 16 ||
-			m_clip_mask == 32 ||
-			m_clip_mask == 64)
-			)
-			plane_trans = plane_mode == PM_LOWTRANS ||
-			plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
-
-		if (face_winding == FRONT_FACE)
+		for (i=0; i<GetDispVolumeNum(); i++)
 		{
-			plane_trans = plane_mode == PM_LOWTRANS ||
+			VolumeData* vd = GetDispVolumeData(i);
+			if (!vd)
+				continue;
+
+			if (vd!=cur_vd)
+				continue;
+
+			VolumeRenderer *vr = vd->GetVR();
+			if (!vr)
+				continue;
+
+			vector<Plane*> *planes = vr->get_planes();
+			if (planes->size() != 6)
+				continue;
+
+			//calculating planes
+			//get six planes
+			Plane* px1 = (*planes)[0];
+			Plane* px2 = (*planes)[1];
+			Plane* py1 = (*planes)[2];
+			Plane* py2 = (*planes)[3];
+			Plane* pz1 = (*planes)[4];
+			Plane* pz2 = (*planes)[5];
+
+			//calculate 4 lines
+			Vector lv_x1z1, lv_x1z2, lv_x2z1, lv_x2z2;
+			Point lp_x1z1, lp_x1z2, lp_x2z1, lp_x2z2;
+			//x1z1
+			if (!px1->Intersect(*pz1, lp_x1z1, lv_x1z1))
+				continue;
+			//x1z2
+			if (!px1->Intersect(*pz2, lp_x1z2, lv_x1z2))
+				continue;
+			//x2z1
+			if (!px2->Intersect(*pz1, lp_x2z1, lv_x2z1))
+				continue;
+			//x2z2
+			if (!px2->Intersect(*pz2, lp_x2z2, lv_x2z2))
+				continue;
+
+			//calculate 8 points
+			Point pp[8];
+			//p0 = l_x1z1 * py1
+			if (!py1->Intersect(lp_x1z1, lv_x1z1, pp[0]))
+				continue;
+			//p1 = l_x1z2 * py1
+			if (!py1->Intersect(lp_x1z2, lv_x1z2, pp[1]))
+				continue;
+			//p2 = l_x2z1 *py1
+			if (!py1->Intersect(lp_x2z1, lv_x2z1, pp[2]))
+				continue;
+			//p3 = l_x2z2 * py1
+			if (!py1->Intersect(lp_x2z2, lv_x2z2, pp[3]))
+				continue;
+			//p4 = l_x1z1 * py2
+			if (!py2->Intersect(lp_x1z1, lv_x1z1, pp[4]))
+				continue;
+			//p5 = l_x1z2 * py2
+			if (!py2->Intersect(lp_x1z2, lv_x1z2, pp[5]))
+				continue;
+			//p6 = l_x2z1 * py2
+			if (!py2->Intersect(lp_x2z1, lv_x2z1, pp[6]))
+				continue;
+			//p7 = l_x2z2 * py2
+			if (!py2->Intersect(lp_x2z2, lv_x2z2, pp[7]))
+				continue;
+
+			//draw the six planes out of the eight points
+			//get color
+			Color color(1.0, 1.0, 1.0);
+			double plane_trans = 0.0;
+			if (face_winding == BACK_FACE &&
+				(m_clip_mask == 3 ||
+				m_clip_mask == 12 ||
+				m_clip_mask == 48 ||
+				m_clip_mask == 1 ||
+				m_clip_mask == 2 ||
+				m_clip_mask == 4 ||
+				m_clip_mask == 8 ||
+				m_clip_mask == 16 ||
+				m_clip_mask == 32 ||
+				m_clip_mask == 64)
+				)
+				plane_trans = plane_mode == PM_LOWTRANS ||
 				plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
-		}
 
-		if (plane_mode == PM_NORMAL ||
-			plane_mode == PM_NORMALBACK)
-		{
-			if (!link)
-				color = vd->GetColor();
-		}
-		else
-			color = GetTextColor();
-
-		//transform
-		if (!vd->GetTexture())
-			continue;
-		Transform *tform = vd->GetTexture()->transform();
-		if (!tform)
-			continue;
-		double mvmat[16];
-		tform->get_trans(mvmat);
-		double sclx, scly, sclz;
-		vd->GetScalings(sclx, scly, sclz);
-		glm::mat4 mv_mat = glm::scale(m_mv_mat,
-			glm::vec3(float(sclx), float(scly), float(sclz)));
-		glm::mat4 mv_mat2 = glm::mat4(
-			mvmat[0], mvmat[4], mvmat[8], mvmat[12],
-			mvmat[1], mvmat[5], mvmat[9], mvmat[13],
-			mvmat[2], mvmat[6], mvmat[10], mvmat[14],
-			mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
-		mv_mat = mv_mat * mv_mat2;
-		glm::mat4 matrix = m_proj_mat * mv_mat;
-		shader->setLocalParamMatrix(0, glm::value_ptr(matrix));
-
-		vector<float> vertex;
-		vertex.reserve(8*3);
-		vector<uint32_t> index;
-		index.reserve(6*4*2);
-
-		//vertices
-		for (size_t pi=0; pi<8; ++pi)
-		{
-			vertex.push_back(pp[pi].x());
-			vertex.push_back(pp[pi].y());
-			vertex.push_back(pp[pi].z());
-		}
-		//indices
-		index.push_back(4); index.push_back(0); index.push_back(5); index.push_back(1);
-		index.push_back(4); index.push_back(0); index.push_back(1); index.push_back(5);
-		index.push_back(7); index.push_back(3); index.push_back(6); index.push_back(2);
-		index.push_back(7); index.push_back(3); index.push_back(2); index.push_back(6);
-		index.push_back(1); index.push_back(0); index.push_back(3); index.push_back(2);
-		index.push_back(1); index.push_back(0); index.push_back(2); index.push_back(3);
-		index.push_back(4); index.push_back(5); index.push_back(6); index.push_back(7);
-		index.push_back(4); index.push_back(5); index.push_back(7); index.push_back(6);
-		index.push_back(0); index.push_back(4); index.push_back(2); index.push_back(6);
-		index.push_back(0); index.push_back(4); index.push_back(6); index.push_back(2);
-		index.push_back(5); index.push_back(1); index.push_back(7); index.push_back(3);
-		index.push_back(5); index.push_back(1); index.push_back(3); index.push_back(7);
-
-		glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_misc_ibo);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*index.size(), &index[0], GL_DYNAMIC_DRAW);
-
-		glBindVertexArray(m_misc_vao);
-		glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_misc_ibo);
-
-		//draw
-		//x1 = (p4, p0, p1, p5)
-		if (m_clip_mask & 1)
-		{
-			if (draw_plane)
+			if (face_winding == FRONT_FACE)
 			{
-				if (plane_mode == PM_NORMAL ||
-					plane_mode == PM_NORMALBACK)
-					shader->setLocalParam(0, 1.0, 0.5, 0.5, plane_trans);
-				else
+				plane_trans = plane_mode == PM_LOWTRANS ||
+					plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
+			}
+
+			if (plane_mode == PM_NORMAL ||
+				plane_mode == PM_NORMALBACK)
+			{
+				if (!link)
+					color = vd->GetColor();
+			}
+			else
+				color = GetTextColor();
+
+			//transform
+			if (!vd->GetTexture())
+				continue;
+			Transform *tform = vd->GetTexture()->transform();
+			if (!tform)
+				continue;
+			double mvmat[16];
+			tform->get_trans(mvmat);
+			double sclx, scly, sclz;
+			vd->GetScalings(sclx, scly, sclz);
+			glm::mat4 mv_mat = glm::scale(m_mv_mat,
+				glm::vec3(float(sclx), float(scly), float(sclz)));
+			glm::mat4 mv_mat2 = glm::mat4(
+				mvmat[0], mvmat[4], mvmat[8], mvmat[12],
+				mvmat[1], mvmat[5], mvmat[9], mvmat[13],
+				mvmat[2], mvmat[6], mvmat[10], mvmat[14],
+				mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
+			mv_mat = mv_mat * mv_mat2;
+			glm::mat4 matrix = m_proj_mat * mv_mat;
+			shader->setLocalParamMatrix(0, glm::value_ptr(matrix));
+
+			vector<float> vertex;
+			vertex.reserve(8*3);
+			vector<uint32_t> index;
+			index.reserve(6*4*2);
+
+			//vertices
+			for (size_t pi=0; pi<8; ++pi)
+			{
+				vertex.push_back(pp[pi].x());
+				vertex.push_back(pp[pi].y());
+				vertex.push_back(pp[pi].z());
+			}
+			//indices
+			index.push_back(4); index.push_back(0); index.push_back(5); index.push_back(1);
+			index.push_back(4); index.push_back(0); index.push_back(1); index.push_back(5);
+			index.push_back(7); index.push_back(3); index.push_back(6); index.push_back(2);
+			index.push_back(7); index.push_back(3); index.push_back(2); index.push_back(6);
+			index.push_back(1); index.push_back(0); index.push_back(3); index.push_back(2);
+			index.push_back(1); index.push_back(0); index.push_back(2); index.push_back(3);
+			index.push_back(4); index.push_back(5); index.push_back(6); index.push_back(7);
+			index.push_back(4); index.push_back(5); index.push_back(7); index.push_back(6);
+			index.push_back(0); index.push_back(4); index.push_back(2); index.push_back(6);
+			index.push_back(0); index.push_back(4); index.push_back(6); index.push_back(2);
+			index.push_back(5); index.push_back(1); index.push_back(7); index.push_back(3);
+			index.push_back(5); index.push_back(1); index.push_back(3); index.push_back(7);
+
+			glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
+			glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_misc_ibo);
+			glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*index.size(), &index[0], GL_DYNAMIC_DRAW);
+
+			glBindVertexArray(m_misc_vao);
+			glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
+			glEnableVertexAttribArray(0);
+			glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_misc_ibo);
+
+			//draw
+			//x1 = (p4, p0, p1, p5)
+			if (m_clip_mask & 1)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						shader->setLocalParam(0, 1.0, 0.5, 0.5, plane_trans);
+					else
+						shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+					glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)0);
+				}
+				if (border)
+				{
 					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)0);
+					glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(4*4));
+				}
 			}
-			if (border)
+			//x2 = (p7, p3, p2, p6)
+			if (m_clip_mask & 2)
 			{
-				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(4*4));
-			}
-		}
-		//x2 = (p7, p3, p2, p6)
-		if (m_clip_mask & 2)
-		{
-			if (draw_plane)
-			{
-				if (plane_mode == PM_NORMAL ||
-					plane_mode == PM_NORMALBACK)
-					shader->setLocalParam(0, 1.0, 0.5, 1.0, plane_trans);
-				else
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						shader->setLocalParam(0, 1.0, 0.5, 1.0, plane_trans);
+					else
+						shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+					glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(8 * 4));
+				}
+				if (border)
+				{
 					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(8 * 4));
+					glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(12*4));
+				}
 			}
-			if (border)
+			//y1 = (p1, p0, p2, p3)
+			if (m_clip_mask & 4)
 			{
-				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(12*4));
-			}
-		}
-		//y1 = (p1, p0, p2, p3)
-		if (m_clip_mask & 4)
-		{
-			if (draw_plane)
-			{
-				if (plane_mode == PM_NORMAL ||
-					plane_mode == PM_NORMALBACK)
-					shader->setLocalParam(0, 0.5, 1.0, 0.5, plane_trans);
-				else
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						shader->setLocalParam(0, 0.5, 1.0, 0.5, plane_trans);
+					else
+						shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+					glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(16 * 4));
+				}
+				if (border)
+				{
 					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(16 * 4));
+					glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(20*4));
+				}
 			}
-			if (border)
+			//y2 = (p4, p5, p7, p6)
+			if (m_clip_mask & 8)
 			{
-				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(20*4));
-			}
-		}
-		//y2 = (p4, p5, p7, p6)
-		if (m_clip_mask & 8)
-		{
-			if (draw_plane)
-			{
-				if (plane_mode == PM_NORMAL ||
-					plane_mode == PM_NORMALBACK)
-					shader->setLocalParam(0, 1.0, 1.0, 0.5, plane_trans);
-				else
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						shader->setLocalParam(0, 1.0, 1.0, 0.5, plane_trans);
+					else
+						shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+					glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(24 * 4));
+				}
+				if (border)
+				{
 					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(24 * 4));
+					glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(28*4));
+				}
 			}
-			if (border)
+			//z1 = (p0, p4, p6, p2)
+			if (m_clip_mask & 16)
 			{
-				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(28*4));
-			}
-		}
-		//z1 = (p0, p4, p6, p2)
-		if (m_clip_mask & 16)
-		{
-			if (draw_plane)
-			{
-				if (plane_mode == PM_NORMAL ||
-					plane_mode == PM_NORMALBACK)
-					shader->setLocalParam(0, 0.5, 0.5, 1.0, plane_trans);
-				else
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						shader->setLocalParam(0, 0.5, 0.5, 1.0, plane_trans);
+					else
+						shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+					glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(32 * 4));
+				}
+				if (border)
+				{
 					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(32 * 4));
+					glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(36*4));
+				}
 			}
-			if (border)
+			//z2 = (p5, p1, p3, p7)
+			if (m_clip_mask & 32)
 			{
-				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(36*4));
-			}
-		}
-		//z2 = (p5, p1, p3, p7)
-		if (m_clip_mask & 32)
-		{
-			if (draw_plane)
-			{
-				if (plane_mode == PM_NORMAL ||
-					plane_mode == PM_NORMALBACK)
-					shader->setLocalParam(0, 0.5, 1.0, 1.0, plane_trans);
-				else
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						shader->setLocalParam(0, 0.5, 1.0, 1.0, plane_trans);
+					else
+						shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+					glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(40 * 4));
+				}
+				if (border)
+				{
 					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(40 * 4));
+					glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(44*4));
+				}
 			}
-			if (border)
-			{
-				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(44*4));
-			}
-		}
 
-		glDisableVertexAttribArray(0);
-		//unbind
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-		glBindVertexArray(0);
+			glDisableVertexAttribArray(0);
+			//unbind
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+			glBindVertexArray(0);
+		}
+	}
+
+	if (draw_type == 3)
+	{
+		for (i=0; i<GetMeshNum(); i++)
+		{
+			MeshData* md = GetMeshData(i);
+			if (!md)
+				continue;
+
+			if (md!=cur_md)
+				continue;
+
+			MeshRenderer *mr = md->GetMR();
+			if (!mr)
+				continue;
+
+			vector<Plane*> *planes = mr->get_planes();
+			if (planes->size() != 6)
+				continue;
+
+			//calculating planes
+			//get six planes
+			Plane* px1 = (*planes)[0];
+			Plane* px2 = (*planes)[1];
+			Plane* py1 = (*planes)[2];
+			Plane* py2 = (*planes)[3];
+			Plane* pz1 = (*planes)[4];
+			Plane* pz2 = (*planes)[5];
+
+			//calculate 4 lines
+			Vector lv_x1z1, lv_x1z2, lv_x2z1, lv_x2z2;
+			Point lp_x1z1, lp_x1z2, lp_x2z1, lp_x2z2;
+			//x1z1
+			if (!px1->Intersect(*pz1, lp_x1z1, lv_x1z1))
+				continue;
+			//x1z2
+			if (!px1->Intersect(*pz2, lp_x1z2, lv_x1z2))
+				continue;
+			//x2z1
+			if (!px2->Intersect(*pz1, lp_x2z1, lv_x2z1))
+				continue;
+			//x2z2
+			if (!px2->Intersect(*pz2, lp_x2z2, lv_x2z2))
+				continue;
+
+			//calculate 8 points
+			Point pp[8];
+			//p0 = l_x1z1 * py1
+			if (!py1->Intersect(lp_x1z1, lv_x1z1, pp[0]))
+				continue;
+			//p1 = l_x1z2 * py1
+			if (!py1->Intersect(lp_x1z2, lv_x1z2, pp[1]))
+				continue;
+			//p2 = l_x2z1 *py1
+			if (!py1->Intersect(lp_x2z1, lv_x2z1, pp[2]))
+				continue;
+			//p3 = l_x2z2 * py1
+			if (!py1->Intersect(lp_x2z2, lv_x2z2, pp[3]))
+				continue;
+			//p4 = l_x1z1 * py2
+			if (!py2->Intersect(lp_x1z1, lv_x1z1, pp[4]))
+				continue;
+			//p5 = l_x1z2 * py2
+			if (!py2->Intersect(lp_x1z2, lv_x1z2, pp[5]))
+				continue;
+			//p6 = l_x2z1 * py2
+			if (!py2->Intersect(lp_x2z1, lv_x2z1, pp[6]))
+				continue;
+			//p7 = l_x2z2 * py2
+			if (!py2->Intersect(lp_x2z2, lv_x2z2, pp[7]))
+				continue;
+
+			//draw the six planes out of the eight points
+			//get color
+			Color color(1.0, 1.0, 1.0);
+			double plane_trans = 0.0;
+			if (face_winding == BACK_FACE &&
+				(m_clip_mask == 3 ||
+				m_clip_mask == 12 ||
+				m_clip_mask == 48 ||
+				m_clip_mask == 1 ||
+				m_clip_mask == 2 ||
+				m_clip_mask == 4 ||
+				m_clip_mask == 8 ||
+				m_clip_mask == 16 ||
+				m_clip_mask == 32 ||
+				m_clip_mask == 64)
+				)
+				plane_trans = plane_mode == PM_LOWTRANS ||
+				plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
+
+			if (face_winding == FRONT_FACE)
+			{
+				plane_trans = plane_mode == PM_LOWTRANS ||
+					plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
+			}
+
+			if (plane_mode == PM_NORMAL ||
+				plane_mode == PM_NORMALBACK)
+			{
+				if (!link)
+				{
+					Color amb, diff, spec;
+					double shine, alpha;
+					md->GetMaterial(amb, diff, spec, shine, alpha);
+					color = diff;
+				}
+			}
+			else
+				color = GetTextColor();
+
+			//transform
+			BBox dbox = md->GetBounds();
+			glm::mat4 mvmat = glm::mat4(float(dbox.max().x()-dbox.min().x()), 0.0f, 0.0f, 0.0f,
+										0.0f, float(dbox.max().y()-dbox.min().y()), 0.0f, 0.0f,
+										0.0f, 0.0f, float(dbox.max().z()-dbox.min().z()), 0.0f,
+										float(dbox.min().x()), float(dbox.min().y()), float(dbox.min().z()), 1.0f);
+			glm::mat4 matrix = m_proj_mat * m_mv_mat * mvmat;
+			shader->setLocalParamMatrix(0, glm::value_ptr(matrix));
+
+			vector<float> vertex;
+			vertex.reserve(8*3);
+			vector<uint32_t> index;
+			index.reserve(6*4*2);
+
+			//vertices
+			for (size_t pi=0; pi<8; ++pi)
+			{
+				vertex.push_back(pp[pi].x());
+				vertex.push_back(pp[pi].y());
+				vertex.push_back(pp[pi].z());
+			}
+			//indices
+			index.push_back(4); index.push_back(0); index.push_back(5); index.push_back(1);
+			index.push_back(4); index.push_back(0); index.push_back(1); index.push_back(5);
+			index.push_back(7); index.push_back(3); index.push_back(6); index.push_back(2);
+			index.push_back(7); index.push_back(3); index.push_back(2); index.push_back(6);
+			index.push_back(1); index.push_back(0); index.push_back(3); index.push_back(2);
+			index.push_back(1); index.push_back(0); index.push_back(2); index.push_back(3);
+			index.push_back(4); index.push_back(5); index.push_back(6); index.push_back(7);
+			index.push_back(4); index.push_back(5); index.push_back(7); index.push_back(6);
+			index.push_back(0); index.push_back(4); index.push_back(2); index.push_back(6);
+			index.push_back(0); index.push_back(4); index.push_back(6); index.push_back(2);
+			index.push_back(5); index.push_back(1); index.push_back(7); index.push_back(3);
+			index.push_back(5); index.push_back(1); index.push_back(3); index.push_back(7);
+
+			glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
+			glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_misc_ibo);
+			glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*index.size(), &index[0], GL_DYNAMIC_DRAW);
+
+			glBindVertexArray(m_misc_vao);
+			glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
+			glEnableVertexAttribArray(0);
+			glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_misc_ibo);
+
+			//draw
+			//x1 = (p4, p0, p1, p5)
+			if (m_clip_mask & 1)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						shader->setLocalParam(0, 1.0, 0.5, 0.5, plane_trans);
+					else
+						shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+					glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)0);
+				}
+				if (border)
+				{
+					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+					glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(4*4));
+				}
+			}
+			//x2 = (p7, p3, p2, p6)
+			if (m_clip_mask & 2)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						shader->setLocalParam(0, 1.0, 0.5, 1.0, plane_trans);
+					else
+						shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+					glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(8 * 4));
+				}
+				if (border)
+				{
+					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+					glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(12*4));
+				}
+			}
+			//y1 = (p1, p0, p2, p3)
+			if (m_clip_mask & 4)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						shader->setLocalParam(0, 0.5, 1.0, 0.5, plane_trans);
+					else
+						shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+					glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(16 * 4));
+				}
+				if (border)
+				{
+					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+					glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(20*4));
+				}
+			}
+			//y2 = (p4, p5, p7, p6)
+			if (m_clip_mask & 8)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						shader->setLocalParam(0, 1.0, 1.0, 0.5, plane_trans);
+					else
+						shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+					glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(24 * 4));
+				}
+				if (border)
+				{
+					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+					glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(28*4));
+				}
+			}
+			//z1 = (p0, p4, p6, p2)
+			if (m_clip_mask & 16)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						shader->setLocalParam(0, 0.5, 0.5, 1.0, plane_trans);
+					else
+						shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+					glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(32 * 4));
+				}
+				if (border)
+				{
+					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+					glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(36*4));
+				}
+			}
+			//z2 = (p5, p1, p3, p7)
+			if (m_clip_mask & 32)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						shader->setLocalParam(0, 0.5, 1.0, 1.0, plane_trans);
+					else
+						shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+					glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(40 * 4));
+				}
+				if (border)
+				{
+					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+					glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(44*4));
+				}
+			}
+
+			glDisableVertexAttribArray(0);
+			//unbind
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+			glBindVertexArray(0);
+		}
 	}
 
 	if (shader && shader->valid())

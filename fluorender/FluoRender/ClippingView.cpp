@@ -476,6 +476,7 @@ void ClippingView::SetVolumeData(VolumeData* vd)
 {
 	if (!vd) return;
 	m_vd = vd;
+	m_md = NULL;
 	m_sel_type = 2;
 	GetSettings();
 }
@@ -484,6 +485,7 @@ void ClippingView::SetMeshData(MeshData* md)
 {
 	if (!md) return;
 	m_md = md;
+	m_vd = NULL;
 	m_sel_type = 3;
 	GetSettings();
 }
@@ -507,7 +509,7 @@ void ClippingView::RefreshVRenderViewsOverlay()
 
 void ClippingView::GetSettings()
 {
-	if (!m_vd && !m_md)
+	if ( !((m_sel_type==2 && m_vd) || (m_sel_type==3 && m_md)) )
 	{
 		DisableAll();
 		return;
@@ -526,6 +528,13 @@ void ClippingView::GetSettings()
 	case 3:	//mesh
 		resx = resy = resz = 0;
 		resx_n = resy_n = resz_n = 0;
+		if (m_md)
+		{
+			Vector dim = m_md->GetBounds().diagonal();
+			resx = (int)dim.x();
+			resy = (int)dim.y();
+			resz = (int)dim.z();
+		}
 		break;
 	}
 	//slider range
@@ -557,24 +566,9 @@ void ClippingView::GetSettings()
 		{
 			int distx, disty, distz;
 			m_vd->GetClipDistance(distx, disty, distz);
-			if (distx == 0)
-			{
-				distx = 1;
-//				distx = resx/20;
-//				distx = distx==0?1:distx;
-			}
-			if (disty == 0)
-			{
-				disty = 1;
-//				disty = resy/20;
-//				disty = disty==0?1:disty;
-			}
-			if (distz == 0)
-			{
-				distz = 1;
-//				distz = resz/20;
-//				distz = distz==0?1:distz;
-			}
+			if (distx == 0) distx = 1;
+			if (disty == 0) disty = 1;
+			if (distz == 0) distz = 1;
 			m_yz_dist_text->SetValue(
 				wxString::Format("%d", distx));
 			m_xz_dist_text->SetValue(
@@ -585,6 +579,20 @@ void ClippingView::GetSettings()
 		}
 		break;
 	case 3:	//mesh
+		{
+			int distx, disty, distz;
+			m_md->GetClipDistance(distx, disty, distz);
+			if (distx == 0) distx = 1;
+			if (disty == 0) disty = 1;
+			if (distz == 0) distz = 1;
+			m_yz_dist_text->SetValue(
+				wxString::Format("%d", distx));
+			m_xz_dist_text->SetValue(
+				wxString::Format("%d", disty));
+			m_xy_dist_text->SetValue(
+				wxString::Format("%d", distz));
+			m_md->SetClipDistance(distx, disty, distz);
+		}
 		break;
 	}
 
@@ -672,7 +680,7 @@ void ClippingView::GetSettings()
 
 void ClippingView::OnLinkChannelsCheck(wxCommandEvent &event)
 {
-	if (!m_vd)
+	if ( !((m_sel_type==2 && m_vd) || (m_sel_type==3 && m_md)) )
 		return;
 
 	if (m_link_channels->GetValue())
@@ -707,7 +715,16 @@ void ClippingView::OnLinkChannelsCheck(wxCommandEvent &event)
 		str.ToLong(&z2_val);
 
 		int resx, resy, resz;
-		m_vd->GetResolution(resx, resy, resz);
+		if (m_sel_type == 2)
+			m_vd->GetResolution(resx, resy, resz);
+		else if (m_sel_type == 3)
+		{
+			Vector dim = m_md->GetBounds().diagonal();
+			resx = (int)dim.x();
+			resy = (int)dim.y();
+			resz = (int)dim.z();
+		}
+
 		double x1_dv = double(x1_val)/double(resx);
 		double x2_dv = double(x2_val)/double(resx);
 		double y1_dv = double(y1_val)/double(resy);
@@ -739,6 +756,28 @@ void ClippingView::OnLinkChannelsCheck(wxCommandEvent &event)
 			(*planes)[5]->ChangePlane(Point(0.0, 0.0, z2_dv), Vector(0.0, 0.0, -1.0));
 		}
 
+		for (i=0; i<m_mgr->GetMeshNum(); i++)
+		{
+			MeshData* md = m_mgr->GetMeshData(i);
+			if (!md || md == m_md)
+				continue;
+
+			vector<Plane*> *planes = 0;
+			if (md->GetMR())
+				planes = md->GetMR()->get_planes();
+			if (!planes)
+				continue;
+			if (planes->size() != 6)
+				continue;
+
+			(*planes)[0]->ChangePlane(Point(x1_dv, 0.0, 0.0), Vector(1.0, 0.0, 0.0));
+			(*planes)[1]->ChangePlane(Point(x2_dv, 0.0, 0.0), Vector(-1.0, 0.0, 0.0));
+			(*planes)[2]->ChangePlane(Point(0.0, y1_dv, 0.0), Vector(0.0, 1.0, 0.0));
+			(*planes)[3]->ChangePlane(Point(0.0, y2_dv, 0.0), Vector(0.0, -1.0, 0.0));
+			(*planes)[4]->ChangePlane(Point(0.0, 0.0, z1_dv), Vector(0.0, 0.0, 1.0));
+			(*planes)[5]->ChangePlane(Point(0.0, 0.0, z2_dv), Vector(0.0, 0.0, -1.0));
+		}
+
 		RefreshVRenderViews();
 
 	}
@@ -753,14 +792,28 @@ void ClippingView::OnPlaneModesCombo(wxCommandEvent &event)
 
 void ClippingView::OnClipResetBtn(wxCommandEvent &event)
 {
-	if (!m_vd)
+	if ( !((m_sel_type==2 && m_vd) || (m_sel_type==3 && m_md)) )
 		return;
+	
 	int resx, resy, resz;
-	m_vd->GetResolution(resx, resy, resz);
-
 	vector<Plane*> *planes = 0;
-	if (m_vd->GetVR())
-		planes = m_vd->GetVR()->get_planes();
+
+	if (m_sel_type == 2)
+	{
+		m_vd->GetResolution(resx, resy, resz);
+		if (m_vd->GetVR())
+			planes = m_vd->GetVR()->get_planes();
+	}
+	else if (m_sel_type == 3)
+	{
+		Vector dim = m_md->GetBounds().diagonal();
+		resx = (int)dim.x();
+		resy = (int)dim.y();
+		resz = (int)dim.z();
+		if (m_md->GetMR())
+			planes = m_md->GetMR()->get_planes();
+	}
+
 	if(!planes)
 		return;
 	if (planes->size()!=6)
@@ -816,8 +869,29 @@ void ClippingView::OnClipResetBtn(wxCommandEvent &event)
 					continue;
 
 				planes = 0;
-				if (m_vd->GetVR())
+				if (vd->GetVR())
 					planes = vd->GetVR()->get_planes();
+				if (!planes)
+					continue;
+				if (planes->size() != 6)
+					continue;
+
+				(*planes)[0]->ChangePlane(Point(0.0, 0.0, 0.0), Vector(1.0, 0.0, 0.0));
+				(*planes)[1]->ChangePlane(Point(1.0, 0.0, 0.0), Vector(-1.0, 0.0, 0.0));
+				(*planes)[2]->ChangePlane(Point(0.0, 0.0, 0.0), Vector(0.0, 1.0, 0.0));
+				(*planes)[3]->ChangePlane(Point(0.0, 1.0, 0.0), Vector(0.0, -1.0, 0.0));
+				(*planes)[4]->ChangePlane(Point(0.0, 0.0, 0.0), Vector(0.0, 0.0, 1.0));
+				(*planes)[5]->ChangePlane(Point(0.0, 0.0, 1.0), Vector(0.0, 0.0, -1.0));
+			}
+			for (i=0; i<m_mgr->GetMeshNum(); i++)
+			{
+				MeshData* md = m_mgr->GetMeshData(i);
+				if (!md || md == m_md)
+					continue;
+
+				planes = 0;
+				if (md->GetMR())
+					planes = md->GetMR()->get_planes();
 				if (!planes)
 					continue;
 				if (planes->size() != 6)
@@ -862,14 +936,27 @@ void ClippingView::OnX1ClipChange(wxScrollEvent &event)
 
 void ClippingView::OnX1ClipEdit(wxCommandEvent &event)
 {
-	if (!m_vd)
+	if ( !((m_sel_type==2 && m_vd) || (m_sel_type==3 && m_md)) )
 		return;
 	int resx, resy, resz;
-	m_vd->GetResolution(resx, resy, resz);
-
 	vector<Plane*> *planes = 0;
-	if (m_vd->GetVR())
-		planes = m_vd->GetVR()->get_planes();
+
+	if (m_sel_type == 2)
+	{
+		m_vd->GetResolution(resx, resy, resz);
+		if (m_vd->GetVR())
+			planes = m_vd->GetVR()->get_planes();
+	}
+	else if (m_sel_type == 3)
+	{
+		Vector dim = m_md->GetBounds().diagonal();
+		resx = (int)dim.x();
+		resy = (int)dim.y();
+		resz = (int)dim.z();
+		if (m_md->GetMR())
+			planes = m_md->GetMR()->get_planes();
+	}
+
 	if(!planes)
 		return;
 	if (planes->size()!=6)
@@ -926,8 +1013,26 @@ void ClippingView::OnX1ClipEdit(wxCommandEvent &event)
 					continue;
 
 				planes = 0;
-				if (m_vd->GetVR())
+				if (vd->GetVR())
 					planes = vd->GetVR()->get_planes();
+				if (!planes)
+					continue;
+				if (planes->size() != 6)
+					continue;
+
+				(*planes)[0]->ChangePlane(Point(val, 0.0, 0.0), Vector(1.0, 0.0, 0.0));
+				if (m_link_x)
+					(*planes)[1]->ChangePlane(Point(val2, 0.0, 0.0), Vector(-1.0, 0.0, 0.0));
+			}
+			for (i=0; i<m_mgr->GetMeshNum(); i++)
+			{
+				MeshData* md = m_mgr->GetMeshData(i);
+				if (!md || md == m_md)
+					continue;
+
+				planes = 0;
+				if (md->GetMR())
+					planes = md->GetMR()->get_planes();
 				if (!planes)
 					continue;
 				if (planes->size() != 6)
@@ -977,14 +1082,27 @@ void ClippingView::OnX2ClipChange(wxScrollEvent &event)
 
 void ClippingView::OnX2ClipEdit(wxCommandEvent &event)
 {
-	if (!m_vd)
+	if ( !((m_sel_type==2 && m_vd) || (m_sel_type==3 && m_md)) )
 		return;
 	int resx, resy, resz;
-	m_vd->GetResolution(resx, resy, resz);
-
 	vector<Plane*> *planes = 0;
-	if (m_vd->GetVR())
-		planes = m_vd->GetVR()->get_planes();
+
+	if (m_sel_type == 2)
+	{
+		m_vd->GetResolution(resx, resy, resz);
+		if (m_vd->GetVR())
+			planes = m_vd->GetVR()->get_planes();
+	}
+	else if (m_sel_type == 3)
+	{
+		Vector dim = m_md->GetBounds().diagonal();
+		resx = (int)dim.x();
+		resy = (int)dim.y();
+		resz = (int)dim.z();
+		if (m_md->GetMR())
+			planes = m_md->GetMR()->get_planes();
+	}
+
 	if (!planes)
 		return;
 	if (planes->size()!=6)
@@ -1042,8 +1160,25 @@ void ClippingView::OnX2ClipEdit(wxCommandEvent &event)
 					continue;
 
 				planes = 0;
-				if (m_vd->GetVR())
+				if (vd->GetVR())
 					planes = vd->GetVR()->get_planes();
+				if (!planes)
+					continue;
+				if (planes->size() != 6)
+					continue;
+				(*planes)[1]->ChangePlane(Point(val, 0.0, 0.0), Vector(-1.0, 0.0, 0.0));
+				if (m_link_x)
+					(*planes)[0]->ChangePlane(Point(val2, 0.0, 0.0), Vector(1.0, 0.0, 0.0));
+			}
+			for (i=0; i<m_mgr->GetMeshNum(); i++)
+			{
+				MeshData* md = m_mgr->GetMeshData(i);
+				if (!md || md == m_md)
+					continue;
+
+				planes = 0;
+				if (md->GetMR())
+					planes = md->GetMR()->get_planes();
 				if (!planes)
 					continue;
 				if (planes->size() != 6)
@@ -1086,14 +1221,27 @@ void ClippingView::OnY1ClipChange(wxScrollEvent &event)
 
 void ClippingView::OnY1ClipEdit(wxCommandEvent &event)
 {
-	if (!m_vd)
+	if ( !((m_sel_type==2 && m_vd) || (m_sel_type==3 && m_md)) )
 		return;
 	int resx, resy, resz;
-	m_vd->GetResolution(resx, resy, resz);
-
 	vector<Plane*> *planes = 0;
-	if (m_vd->GetVR())
-		planes = m_vd->GetVR()->get_planes();
+
+	if (m_sel_type == 2)
+	{
+		m_vd->GetResolution(resx, resy, resz);
+		if (m_vd->GetVR())
+			planes = m_vd->GetVR()->get_planes();
+	}
+	else if (m_sel_type == 3)
+	{
+		Vector dim = m_md->GetBounds().diagonal();
+		resx = (int)dim.x();
+		resy = (int)dim.y();
+		resz = (int)dim.z();
+		if (m_md->GetMR())
+			planes = m_md->GetMR()->get_planes();
+	}
+
 	if (!planes)
 		return;
 	if (planes->size()!=6)
@@ -1150,8 +1298,26 @@ void ClippingView::OnY1ClipEdit(wxCommandEvent &event)
 					continue;
 
 				planes = 0;
-				if (m_vd->GetVR())
+				if (vd->GetVR())
 					planes = vd->GetVR()->get_planes();
+				if (!planes)
+					continue;
+				if (planes->size() != 6)
+					continue;
+
+				(*planes)[2]->ChangePlane(Point(0.0, val, 0.0), Vector(0.0, 1.0, 0.0));
+				if (m_link_y)
+					(*planes)[3]->ChangePlane(Point(0.0, val2, 0.0), Vector(0.0, -1.0, 0.0));
+			}
+			for (i=0; i<m_mgr->GetMeshNum(); i++)
+			{
+				MeshData* md = m_mgr->GetMeshData(i);
+				if (!md || md == m_md)
+					continue;
+
+				planes = 0;
+				if (md->GetMR())
+					planes = md->GetMR()->get_planes();
 				if (!planes)
 					continue;
 				if (planes->size() != 6)
@@ -1202,13 +1368,27 @@ void ClippingView::OnY2ClipChange(wxScrollEvent &event)
 
 void ClippingView::OnY2ClipEdit(wxCommandEvent &event)
 {
-	if (!m_vd)
+	if ( !((m_sel_type==2 && m_vd) || (m_sel_type==3 && m_md)) )
 		return;
 	int resx, resy, resz;
-	m_vd->GetResolution(resx, resy, resz);
 	vector<Plane*> *planes = 0;
-	if (m_vd->GetVR())
-		planes = m_vd->GetVR()->get_planes();
+
+	if (m_sel_type == 2)
+	{
+		m_vd->GetResolution(resx, resy, resz);
+		if (m_vd->GetVR())
+			planes = m_vd->GetVR()->get_planes();
+	}
+	else if (m_sel_type == 3)
+	{
+		Vector dim = m_md->GetBounds().diagonal();
+		resx = (int)dim.x();
+		resy = (int)dim.y();
+		resz = (int)dim.z();
+		if (m_md->GetMR())
+			planes = m_md->GetMR()->get_planes();
+	}
+
 	if (!planes)
 		return;
 	if (planes->size()!=6)
@@ -1266,8 +1446,26 @@ void ClippingView::OnY2ClipEdit(wxCommandEvent &event)
 					continue;
 
 				planes = 0;
-				if (m_vd->GetVR())
+				if (vd->GetVR())
 					planes = vd->GetVR()->get_planes();
+				if (!planes)
+					continue;
+				if (planes->size() != 6)
+					continue;
+
+				(*planes)[3]->ChangePlane(Point(0.0, val, 0.0), Vector(0.0, -1.0, 0.0));
+				if (m_link_y)
+					(*planes)[2]->ChangePlane(Point(0.0, val2, 0.0), Vector(0.0, 1.0, 0.0));
+			}
+			for (i=0; i<m_mgr->GetMeshNum(); i++)
+			{
+				MeshData* md = m_mgr->GetMeshData(i);
+				if (!md || md == m_md)
+					continue;
+
+				planes = 0;
+				if (md->GetMR())
+					planes = md->GetMR()->get_planes();
 				if (!planes)
 					continue;
 				if (planes->size() != 6)
@@ -1311,13 +1509,27 @@ void ClippingView::OnZ1ClipChange(wxScrollEvent &event)
 
 void ClippingView::OnZ1ClipEdit(wxCommandEvent &event)
 {
-	if (!m_vd)
+	if ( !((m_sel_type==2 && m_vd) || (m_sel_type==3 && m_md)) )
 		return;
 	int resx, resy, resz;
-	m_vd->GetResolution(resx, resy, resz);
 	vector<Plane*> *planes = 0;
-	if (m_vd->GetVR())
-		planes = m_vd->GetVR()->get_planes();
+
+	if (m_sel_type == 2)
+	{
+		m_vd->GetResolution(resx, resy, resz);
+		if (m_vd->GetVR())
+			planes = m_vd->GetVR()->get_planes();
+	}
+	else if (m_sel_type == 3)
+	{
+		Vector dim = m_md->GetBounds().diagonal();
+		resx = (int)dim.x();
+		resy = (int)dim.y();
+		resz = (int)dim.z();
+		if (m_md->GetMR())
+			planes = m_md->GetMR()->get_planes();
+	}
+
 	if (!planes)
 		return;
 	if (planes->size()!=6)
@@ -1374,8 +1586,26 @@ void ClippingView::OnZ1ClipEdit(wxCommandEvent &event)
 					continue;
 
 				planes = 0;
-				if (m_vd->GetVR())
+				if (vd->GetVR())
 					planes = vd->GetVR()->get_planes();
+				if (!planes)
+					continue;
+				if (planes->size() != 6)
+					continue;
+
+				(*planes)[4]->ChangePlane(Point(0.0, 0.0, val), Vector(0.0, 0.0, 1.0));
+				if (m_link_z)
+					(*planes)[5]->ChangePlane(Point(0.0, 0.0, val2), Vector(0.0, 0.0, -1.0));
+			}
+			for (i=0; i<m_mgr->GetMeshNum(); i++)
+			{
+				MeshData* md = m_mgr->GetMeshData(i);
+				if (!md || md == m_md)
+					continue;
+
+				planes = 0;
+				if (md->GetMR())
+					planes = md->GetMR()->get_planes();
 				if (!planes)
 					continue;
 				if (planes->size() != 6)
@@ -1426,13 +1656,27 @@ void ClippingView::OnZ2ClipChange(wxScrollEvent &event)
 
 void ClippingView::OnZ2ClipEdit(wxCommandEvent &event)
 {
-	if (!m_vd)
+	if ( !((m_sel_type==2 && m_vd) || (m_sel_type==3 && m_md)) )
 		return;
 	int resx, resy, resz;
-	m_vd->GetResolution(resx, resy, resz);
 	vector<Plane*> *planes = 0;
-	if (m_vd->GetVR())
-		planes = m_vd->GetVR()->get_planes();
+
+	if (m_sel_type == 2)
+	{
+		m_vd->GetResolution(resx, resy, resz);
+		if (m_vd->GetVR())
+			planes = m_vd->GetVR()->get_planes();
+	}
+	else if (m_sel_type == 3)
+	{
+		Vector dim = m_md->GetBounds().diagonal();
+		resx = (int)dim.x();
+		resy = (int)dim.y();
+		resz = (int)dim.z();
+		if (m_md->GetMR())
+			planes = m_md->GetMR()->get_planes();
+	}
+
 	if (!planes)
 		return;
 	if (planes->size()!=6)
@@ -1492,6 +1736,24 @@ void ClippingView::OnZ2ClipEdit(wxCommandEvent &event)
 				planes = 0;
 				if (vd->GetVR())
 					planes = vd->GetVR()->get_planes();
+				if (!planes)
+					continue;
+				if (planes->size() != 6)
+					continue;
+
+				(*planes)[5]->ChangePlane(Point(0.0, 0.0, val), Vector(0.0, 0.0, -1.0));
+				if (m_link_z)
+					(*planes)[4]->ChangePlane(Point(0.0, 0.0, val2), Vector(0.0, 0.0, 1.0));
+			}
+			for (i=0; i<m_mgr->GetMeshNum(); i++)
+			{
+				MeshData* md = m_mgr->GetMeshData(i);
+				if (!md || md == m_md)
+					continue;
+
+				planes = 0;
+				if (md->GetMR())
+					planes = md->GetMR()->get_planes();
 				if (!planes)
 					continue;
 				if (planes->size() != 6)
@@ -1865,8 +2127,27 @@ void ClippingView::OnZRotSpinDown(wxSpinEvent& event)
 
 void ClippingView::OnSliderRClick(wxCommandEvent& event)
 {
-	if (m_sel_type!=2 || !m_vd)
+	if ( !((m_sel_type==2 && m_vd) || (m_sel_type==3 && m_md)) )
 		return;
+
+	int resx, resy, resz;
+	vector<Plane*> *planes = 0;
+
+	if (m_sel_type == 2)
+	{
+		m_vd->GetResolution(resx, resy, resz);
+		if (m_vd->GetVR())
+			planes = m_vd->GetVR()->get_planes();
+	}
+	else if (m_sel_type == 3)
+	{
+		Vector dim = m_md->GetBounds().diagonal();
+		resx = (int)dim.x();
+		resy = (int)dim.y();
+		resz = (int)dim.z();
+		if (m_md->GetMR())
+			planes = m_md->GetMR()->get_planes();
+	}
 
 	int id = event.GetId();
 
@@ -1874,7 +2155,7 @@ void ClippingView::OnSliderRClick(wxCommandEvent& event)
 	double val;
 
 	//good rate
-	if (m_vd->GetSampleRate()<2.0)
+/*	if (m_vd->GetSampleRate()<2.0)
 		m_vd->SetSampleRate(2.0);
 	if (m_link_channels->GetValue())
 	{
@@ -1891,10 +2172,8 @@ void ClippingView::OnSliderRClick(wxCommandEvent& event)
 			}
 		}
 	}
-
-	int resx, resy, resz;
-	m_vd->GetResolution(resx, resy, resz);
-
+*/
+	
 	if (id == ID_X1ClipSldr)
 	{
 		str = m_x1_clip_text->GetValue();
@@ -1975,9 +2254,6 @@ void ClippingView::OnSliderRClick(wxCommandEvent& event)
 	}
 
 	//reset others
-	vector<Plane*> *planes = 0;
-	if (m_vd->GetVR())
-		planes = m_vd->GetVR()->get_planes();
 	if(!planes)
 		return;
 	if (planes->size()!=6)
@@ -2029,11 +2305,19 @@ void ClippingView::OnSliderRClick(wxCommandEvent& event)
 
 void ClippingView::OnYZClipBtn(wxCommandEvent& event)
 {
-	if (m_sel_type!=2 || !m_vd)
+	if ( !((m_sel_type==2 && m_vd) || (m_sel_type==3 && m_md)) )
 		return;
 
 	int resx, resy, resz;
-	m_vd->GetResolution(resx, resy, resz);
+	if (m_sel_type == 2)
+		m_vd->GetResolution(resx, resy, resz);
+	else if (m_sel_type == 3)
+	{
+		Vector dim = m_md->GetBounds().diagonal();
+		resx = (int)dim.x();
+		resy = (int)dim.y();
+		resz = (int)dim.z();
+	}
 
 	wxString str = m_yz_dist_text->GetValue();
 	long dist;
@@ -2063,8 +2347,16 @@ void ClippingView::OnYZClipBtn(wxCommandEvent& event)
 			wxString::Format("%d", x2));
 		SetXLink(true);
 		int distx, disty, distz;
-		m_vd->GetClipDistance(distx, disty, distz);
-		m_vd->SetClipDistance(dist, disty, distz);
+		if (m_sel_type == 2)
+		{
+			m_vd->GetClipDistance(distx, disty, distz);
+			m_vd->SetClipDistance(dist, disty, distz);
+		}
+		else if (m_sel_type == 3)
+		{
+			m_md->GetClipDistance(distx, disty, distz);
+			m_md->SetClipDistance(dist, disty, distz);
+		}
 	}
 	else
 	{
@@ -2078,11 +2370,19 @@ void ClippingView::OnYZClipBtn(wxCommandEvent& event)
 
 void ClippingView::OnXZClipBtn(wxCommandEvent& event)
 {
-	if (m_sel_type!=2 || !m_vd)
+	if ( !((m_sel_type==2 && m_vd) || (m_sel_type==3 && m_md)) )
 		return;
 
 	int resx, resy, resz;
-	m_vd->GetResolution(resx, resy, resz);
+	if (m_sel_type == 2)
+		m_vd->GetResolution(resx, resy, resz);
+	else if (m_sel_type == 3)
+	{
+		Vector dim = m_md->GetBounds().diagonal();
+		resx = (int)dim.x();
+		resy = (int)dim.y();
+		resz = (int)dim.z();
+	}
 
 	wxString str = m_xz_dist_text->GetValue();
 	long dist;
@@ -2112,8 +2412,16 @@ void ClippingView::OnXZClipBtn(wxCommandEvent& event)
 			wxString::Format("%d", y2));
 		SetYLink(true);
 		int distx, disty, distz;
-		m_vd->GetClipDistance(distx, disty, distz);
-		m_vd->SetClipDistance(distx, dist, distz);
+		if (m_sel_type == 2)
+		{
+			m_vd->GetClipDistance(distx, disty, distz);
+			m_vd->SetClipDistance(distx, dist, distz);
+		}
+		else if (m_sel_type == 3)
+		{
+			m_md->GetClipDistance(distx, disty, distz);
+			m_md->SetClipDistance(distx, dist, distz);
+		}
 	}
 	else
 	{
@@ -2127,11 +2435,19 @@ void ClippingView::OnXZClipBtn(wxCommandEvent& event)
 
 void ClippingView::OnXYClipBtn(wxCommandEvent& event)
 {
-	if (m_sel_type!=2 || !m_vd)
+	if ( !((m_sel_type==2 && m_vd) || (m_sel_type==3 && m_md)) )
 		return;
 
 	int resx, resy, resz;
-	m_vd->GetResolution(resx, resy, resz);
+	if (m_sel_type == 2)
+		m_vd->GetResolution(resx, resy, resz);
+	else if (m_sel_type == 3)
+	{
+		Vector dim = m_md->GetBounds().diagonal();
+		resx = (int)dim.x();
+		resy = (int)dim.y();
+		resz = (int)dim.z();
+	}
 
 	wxString str = m_xy_dist_text->GetValue();
 	long dist;
@@ -2161,8 +2477,16 @@ void ClippingView::OnXYClipBtn(wxCommandEvent& event)
 			wxString::Format("%d", z2));
 		SetZLink(true);
 		int distx, disty, distz;
-		m_vd->GetClipDistance(distx, disty, distz);
-		m_vd->SetClipDistance(distx, disty, dist);
+		if (m_sel_type == 2)
+		{
+			m_vd->GetClipDistance(distx, disty, distz);
+			m_vd->SetClipDistance(distx, disty, dist);
+		}
+		else if (m_sel_type == 3)
+		{
+			m_md->GetClipDistance(distx, disty, distz);
+			m_md->SetClipDistance(distx, disty, dist);
+		}
 	}
 	else
 	{
@@ -2178,11 +2502,19 @@ void ClippingView::OnXYClipBtn(wxCommandEvent& event)
 //dir: 0-lower; 1-higher
 void ClippingView::MoveLinkedClippingPlanes(int dir)
 {
-	if (m_sel_type!=2 || !m_vd)
+	if ( !((m_sel_type==2 && m_vd) || (m_sel_type==3 && m_md)) )
 		return;
 
 	int resx, resy, resz;
-	m_vd->GetResolution(resx, resy, resz);
+	if (m_sel_type == 2)
+		m_vd->GetResolution(resx, resy, resz);
+	else if (m_sel_type == 3)
+	{
+		Vector dim = m_md->GetBounds().diagonal();
+		resx = (int)dim.x();
+		resy = (int)dim.y();
+		resz = (int)dim.z();
+	}
 
 	wxString str;
 	long dist;
@@ -2277,11 +2609,19 @@ void ClippingView::MoveLinkedClippingPlanes(int dir)
 
 void ClippingView::OnSliderKeyDown(wxKeyEvent& event)
 {
-	if (m_sel_type!=2 || !m_vd)
+	if ( !((m_sel_type==2 && m_vd) || (m_sel_type==3 && m_md)) )
 		return;
 
 	int resx, resy, resz;
-	m_vd->GetResolution(resx, resy, resz);
+	if (m_sel_type == 2)
+		m_vd->GetResolution(resx, resy, resz);
+	else if (m_sel_type == 3)
+	{
+		Vector dim = m_md->GetBounds().diagonal();
+		resx = (int)dim.x();
+		resy = (int)dim.y();
+		resz = (int)dim.z();
+	}
 
 	int id = event.GetId();
 	int key = event.GetKeyCode();

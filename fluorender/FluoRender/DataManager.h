@@ -685,6 +685,9 @@ public:
 	bool UpdateModelSWC();
 	double GetRadScale(){ return m_r_scale; }
 
+	void SetClipDistance(int distx, int disty, int distz);
+	void GetClipDistance(int &distx, int &disty, int &distz);
+
 private:
 	//wxString m_name;
 	wxString m_data_path;
@@ -725,6 +728,10 @@ private:
 	SWCReader *m_swc_reader;
 
 	wstring m_info;
+
+	int m_clip_dist_x;
+	int m_clip_dist_y;
+	int m_clip_dist_z;
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

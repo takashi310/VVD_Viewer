@@ -2414,6 +2414,9 @@ m_data(0),
 	m_def_r = 0.25;
 	m_subdiv = 0;
 	m_swc_reader = NULL;
+	m_clip_dist_x = 1;
+	m_clip_dist_y = 1;
+	m_clip_dist_z = 1;
 }
 
 MeshData::~MeshData()
@@ -2786,6 +2789,10 @@ MeshData* MeshData::DeepCopy(MeshData &copy, bool use_default_settings, DataMana
 		md->m_sync_g = copy.m_sync_g;
 		md->m_sync_b = copy.m_sync_b;
 	}
+
+	md->m_clip_dist_x = copy.m_clip_dist_x;
+	md->m_clip_dist_y = copy.m_clip_dist_y;
+	md->m_clip_dist_z = copy.m_clip_dist_z;
 	
 	md->m_mr = new FLIVR::MeshRenderer(md->m_data);
 	md->m_mr->set_alpha(copy.m_mr->get_alpha());
@@ -2808,6 +2815,21 @@ void MeshData::Save(wxString& filename)
 		delete []str;
 		m_data_path = filename;
 	}
+}
+
+//clip distance
+void MeshData::SetClipDistance(int distx, int disty, int distz)
+{
+	m_clip_dist_x = distx;
+	m_clip_dist_y = disty;
+	m_clip_dist_z = distz;
+}
+
+void MeshData::GetClipDistance(int &distx, int &disty, int &distz)
+{
+	distx = m_clip_dist_x;
+	disty = m_clip_dist_y;
+	distz = m_clip_dist_z;
 }
 
 bool MeshData::UpdateModelSWC()
