@@ -437,7 +437,7 @@ void MPropView::OnSyncCheck(wxCommandEvent& event)
 
 void MPropView::OnEnterInRadScaleText(wxCommandEvent& event)
 {
-//	UpdateRadScale();
+	UpdateRadScale();
 }
 
 void MPropView::UpdateRadScale()
@@ -446,10 +446,11 @@ void MPropView::UpdateRadScale()
 	double r;
 	str.ToDouble(&r);
 	
-	if (m_md)
+	if (m_md && r != m_md->GetRadScale())
 	{
 		m_md->SetRadScale(r);
 		if (m_sync) UpdateSync();
+		if (m_vrv) m_vrv->InitView(INIT_BOUNDS|INIT_CENTER);
 		RefreshVRenderViews();
 	}
 }

@@ -608,7 +608,7 @@ public:
 
 	wxString GetPath();
 	BBox GetBounds();
-	void SetBounds(BBox b) { m_bounds = b; }
+	void SetBounds(BBox b);
 	GLMmodel* GetMesh();
 	void SetDisp(bool disp);
 	void ToggleDisp();

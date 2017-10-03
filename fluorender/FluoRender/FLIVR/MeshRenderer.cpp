@@ -77,7 +77,8 @@ namespace FLIVR
 		light_(copy.light_),
 		fog_(copy.fog_),
 		alpha_(copy.alpha_),
-		update_(true)
+		update_(true),
+		bounds_(copy.bounds_)
 	{
 		//clipping planes
 		for (int i=0; i<(int)copy.planes_.size(); i++)

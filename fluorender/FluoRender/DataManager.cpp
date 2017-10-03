@@ -2799,6 +2799,8 @@ MeshData* MeshData::DeepCopy(MeshData &copy, bool use_default_settings, DataMana
 	md->m_mr->set_depth_peel(copy.m_mr->get_depth_peel());
 	md->m_mr->set_lighting(copy.m_mr->get_lighting());
 	md->m_mr->set_limit(copy.m_mr->get_limit());
+	md->m_mr->set_planes(copy.m_mr->get_planes());
+	md->m_mr->set_bounds(md->GetBounds());
 	
 	return md;
 }
@@ -2888,17 +2890,37 @@ bool MeshData::UpdateModelSWC()
 	Point pmax(fbounds[1], fbounds[3], fbounds[5]);
 	bounds.extend(pmin);
 	bounds.extend(pmax);
-	m_bounds = bounds;
+	m_bounds.extend(bounds);
 	m_center = Point((m_bounds.min().x()+m_bounds.max().x())*0.5,
 		(m_bounds.min().y()+m_bounds.max().y())*0.5,
 		(m_bounds.min().z()+m_bounds.max().z())*0.5);
 
+
+	MeshRenderer *tmp = 0;
 	if (m_mr)
-		delete m_mr;
+		tmp = m_mr;
 	m_mr = new FLIVR::MeshRenderer(m_data);
+
 	m_mr->set_alpha(m_mat_alpha);
+	m_mr->set_bounds(m_bounds);
+	if (tmp)
+	{
+		m_mr->set_planes(tmp->get_planes());
+		m_mr->set_depth_peel(tmp->get_depth_peel());
+		m_mr->set_lighting(tmp->get_lighting());
+		m_mr->set_limit(tmp->get_limit());
+		delete tmp;
+	}
 
 	return true;
+}
+
+void MeshData::SetBounds(BBox b)
+{
+	m_bounds = b;
+	m_center = Point((m_bounds.min().x()+m_bounds.max().x())*0.5,
+					 (m_bounds.min().y()+m_bounds.max().y())*0.5,
+					 (m_bounds.min().z()+m_bounds.max().z())*0.5);
 }
 
 //MR

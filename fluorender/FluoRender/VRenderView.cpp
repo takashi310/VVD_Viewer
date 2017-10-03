@@ -8671,6 +8671,15 @@ DataGroup* VRenderGLView::AddVolumeData(VolumeData* vd, wxString group_name)
 		{
 			vr_frame->GetAdjustView()->SetVolumeData(vd);
 			vr_frame->GetAdjustView()->SetGroupLink(group);
+
+			VolumeData* cvd = vr_frame->GetClippingView()->GetVolumeData();
+			MeshData* cmd = vr_frame->GetClippingView()->GetMeshData();
+			vector<Plane*> *src_planes = 0;
+			if (cmd && cmd->GetMR())
+				src_planes = cmd->GetMR()->get_planes();
+			else if (cvd && cvd->GetVR())
+				src_planes = cvd->GetVR()->get_planes();
+
 			if (vr_frame->GetClippingView()->GetChannLink() && group->GetVolumeData(0) != vd)
 			{
 				vector<Plane*> *dst_planes = vd->GetVR()->get_planes();
@@ -8681,7 +8690,6 @@ DataGroup* VRenderGLView::AddVolumeData(VolumeData* vd, wxString group_name)
 				}
 				dst_planes->clear();
 
-				vector<Plane*> *src_planes = group->GetVolumeData(0)->GetVR()->get_planes();
 				for (int k=0; k<(int)src_planes->size(); k++)
 				{
 					Plane* plane = new Plane(*(*src_planes)[k]);
@@ -8709,7 +8717,38 @@ DataGroup* VRenderGLView::AddVolumeData(VolumeData* vd, wxString group_name)
 
 void VRenderGLView::AddMeshData(MeshData* md)
 {
+	if (!md)
+		return;
+
 	m_layer_list.push_back(md);
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (vr_frame && vr_frame->GetClippingView())
+	{
+		VolumeData* cvd = vr_frame->GetClippingView()->GetVolumeData();
+		MeshData* cmd = vr_frame->GetClippingView()->GetMeshData();
+		vector<Plane*> *src_planes = 0;
+		if (cmd && cmd->GetMR())
+			src_planes = cmd->GetMR()->get_planes();
+		else if (cvd && cvd->GetVR())
+			src_planes = cvd->GetVR()->get_planes();
+
+		if (src_planes && vr_frame->GetClippingView()->GetChannLink())
+		{
+			vector<Plane*> *dst_planes = md->GetMR()->get_planes();
+			for (int k=0; k<(int)dst_planes->size(); k++)
+			{
+				if ((*dst_planes)[k])
+					delete (*dst_planes)[k];
+			}
+			dst_planes->clear();
+
+			for (int k=0; k<(int)src_planes->size(); k++)
+			{
+				Plane* plane = new Plane(*(*src_planes)[k]);
+				dst_planes->push_back(plane);
+			}
+		}
+	}
 	m_md_pop_dirty = true;
 }
 
@@ -11846,6 +11885,79 @@ void VRenderGLView::A2Q()
 			if (planes && planes->size()==6)
 			{
 				m_vd_pop_list[i]->GetVR()->set_clip_quaternion(m_q_cl);
+				double x1, x2, y1, y2, z1, z2;
+				double abcd[4];
+
+				(*planes)[0]->get_copy(abcd);
+				x1 = fabs(abcd[3]);
+				(*planes)[1]->get_copy(abcd);
+				x2 = fabs(abcd[3]);
+				(*planes)[2]->get_copy(abcd);
+				y1 = fabs(abcd[3]);
+				(*planes)[3]->get_copy(abcd);
+				y2 = fabs(abcd[3]);
+				(*planes)[4]->get_copy(abcd);
+				z1 = fabs(abcd[3]);
+				(*planes)[5]->get_copy(abcd);
+				z2 = fabs(abcd[3]);
+
+				Vector trans1(-0.5, -0.5, -0.5);
+				Vector trans2(0.5, 0.5, 0.5);
+
+				(*planes)[0]->Restore();
+				(*planes)[0]->Translate(trans1);
+				(*planes)[0]->Rotate(m_q_cl);
+				(*planes)[0]->Scale(scale);
+				(*planes)[0]->Translate(trans2);
+
+				(*planes)[1]->Restore();
+				(*planes)[1]->Translate(trans1);
+				(*planes)[1]->Rotate(m_q_cl);
+				(*planes)[1]->Scale(scale);
+				(*planes)[1]->Translate(trans2);
+
+				(*planes)[2]->Restore();
+				(*planes)[2]->Translate(trans1);
+				(*planes)[2]->Rotate(m_q_cl);
+				(*planes)[2]->Scale(scale);
+				(*planes)[2]->Translate(trans2);
+
+				(*planes)[3]->Restore();
+				(*planes)[3]->Translate(trans1);
+				(*planes)[3]->Rotate(m_q_cl);
+				(*planes)[3]->Scale(scale);
+				(*planes)[3]->Translate(trans2);
+
+				(*planes)[4]->Restore();
+				(*planes)[4]->Translate(trans1);
+				(*planes)[4]->Rotate(m_q_cl);
+				(*planes)[4]->Scale(scale);
+				(*planes)[4]->Translate(trans2);
+
+				(*planes)[5]->Restore();
+				(*planes)[5]->Translate(trans1);
+				(*planes)[5]->Rotate(m_q_cl);
+				(*planes)[5]->Scale(scale);
+				(*planes)[5]->Translate(trans2);
+			}
+		}
+
+		for (int i=0; i<(int)m_md_pop_list.size(); i++)
+		{
+			if (!m_md_pop_list[i])
+				continue;
+
+			vector<Plane*> *planes = 0;
+
+			Vector sz = m_md_pop_list[i]->GetBounds().diagonal();
+			Vector scale;
+			scale = Vector(1.0/sz.x(), 1.0/sz.y(), 1.0/sz.z());
+			scale.safe_normalize();
+			
+			if (m_md_pop_list[i]->GetMR())
+				planes = m_md_pop_list[i]->GetMR()->get_planes();
+			if (planes && planes->size()==6)
+			{
 				double x1, x2, y1, y2, z1, z2;
 				double abcd[4];
 

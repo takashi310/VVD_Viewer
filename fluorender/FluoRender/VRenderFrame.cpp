@@ -2565,7 +2565,10 @@ void VRenderFrame::SaveProject(wxString& filename)
 				wxString new_folder;
 				new_folder = filename + "_files";
 				CREATE_DIR(new_folder.fn_str());
-				str = new_folder + GETSLASH() + vd->GetName() + ".nrrd";
+				wxString ext = ".nrrd";
+				if (vd->GetName().AfterLast(L'.') == wxT("nrrd"))
+					ext = "";
+				str = new_folder + GETSLASH() + vd->GetName() + ext;
 				vd->Save(str, 2, false, VRenderFrame::GetCompression());
 				fconfig.Write("path", str);
 			}
@@ -2757,11 +2760,29 @@ void VRenderFrame::SaveProject(wxString& filename)
 		{
 			if (md->GetPath() == "" || m_vrp_embed)
 			{
-				wxString new_folder;
-				new_folder = filename + "_files";
-				CREATE_DIR(new_folder.fn_str());
-				str = new_folder + GETSLASH() + md->GetName() + ".obj";
-				md->Save(str);
+				if (!md->isSWC())
+				{
+					wxString new_folder;
+					new_folder = filename + "_files";
+					CREATE_DIR(new_folder.fn_str());
+					wxString ext = ".obj";
+					if (md->GetName().AfterLast(L'.') == wxT("obj"))
+						ext = "";
+					str = new_folder + GETSLASH() + md->GetName() + ext;
+					md->Save(str);
+				}
+				else
+				{
+					wxString new_folder;
+					wxString srcpath = md->GetPath();
+					new_folder = filename + "_files";
+					CREATE_DIR(new_folder.fn_str());
+					wxString ext = ".swc";
+					if (md->GetName().AfterLast(L'.') == wxT("swc"))
+						ext = "";
+					wxString dstpath = new_folder + GETSLASH() + md->GetName() + ext;
+					wxCopyFile(srcpath, dstpath);
+				}
 			}
 			str = wxString::Format("/data/mesh/%d", i);
 			fconfig.SetPath(str);
@@ -2801,6 +2822,50 @@ void VRenderFrame::SaveProject(wxString& filename)
 			double darkness;
 			md->GetShadowParams(darkness);
 			fconfig.Write("shadow_darkness", darkness);
+
+			fconfig.Write("radius_scale", md->GetRadScale());
+
+			//resolution scale
+			BBox b = md->GetBounds();
+			str = wxString::Format("%lf %lf %lf", b.min().x(), b.min().y(), b.min().z());
+			fconfig.Write("bound_min", str);
+			str = wxString::Format("%lf %lf %lf", b.max().x(), b.max().y(), b.max().z());
+			fconfig.Write("bound_max", str);
+			
+			//planes
+			vector<Plane*> *planes = 0;
+			if (md->GetMR())
+				planes = md->GetMR()->get_planes();
+			if (planes && planes->size() == 6)
+			{
+				Plane* plane = 0;
+				double abcd[4];
+
+				//x1
+				plane = (*planes)[0];
+				plane->get_copy(abcd);
+				fconfig.Write("x1_val", abcd[3]);
+				//x2
+				plane = (*planes)[1];
+				plane->get_copy(abcd);
+				fconfig.Write("x2_val", abcd[3]);
+				//y1
+				plane = (*planes)[2];
+				plane->get_copy(abcd);
+				fconfig.Write("y1_val", abcd[3]);
+				//y2
+				plane = (*planes)[3];
+				plane->get_copy(abcd);
+				fconfig.Write("y2_val", abcd[3]);
+				//z1
+				plane = (*planes)[4];
+				plane->get_copy(abcd);
+				fconfig.Write("z1_val", abcd[3]);
+				//z2
+				plane = (*planes)[5];
+				plane->get_copy(abcd);
+				fconfig.Write("z2_val", abcd[3]);
+			}
 
 			//mesh transform
 			fconfig.SetPath("../transform");
@@ -3588,7 +3653,7 @@ MeshData* VRenderFrame::OpenMeshFromProject(wxString name, wxFileConfig &fconfig
 				{
 					m_data_mgr.LoadMeshData(str);
 				}
-				MeshData* md = m_data_mgr.GetLastMeshData();
+				md = m_data_mgr.GetLastMeshData();
 				if (md)
 				{
 					if (fconfig.Read("name", &str))
@@ -3656,6 +3721,99 @@ MeshData* VRenderFrame::OpenMeshFromProject(wxString name, wxFileConfig &fconfig
 						double darkness;
 						if (fconfig.Read("shadow_darkness", &darkness))
 							md->SetShadowParams(darkness);
+						
+						double radsc;
+						if (fconfig.Read("radius_scale", &radsc))
+							md->SetRadScale(radsc);
+
+						Point bmin, bmax;
+						bool valid_bound = true;
+						if (fconfig.Read("bound_min", &str))
+						{
+							double b_x, b_y, b_z;
+							if (SSCANF(str.c_str(), "%lf%lf%lf", &b_x, &b_y, &b_z))
+								bmin = Point(b_x, b_y, b_z);
+						}
+						else
+							valid_bound = false;
+
+						if (fconfig.Read("bound_max", &str))
+						{
+							double b_x, b_y, b_z;
+							if (SSCANF(str.c_str(), "%lf%lf%lf", &b_x, &b_y, &b_z))
+								bmax = Point(b_x, b_y, b_z);
+						}
+						else
+							valid_bound = false;
+
+						if (valid_bound)
+						{
+							BBox bound(bmin, bmax);
+							md->SetBounds(bound);
+						}
+
+						vector<Plane*> *planes = 0;
+						if (md->GetMR())
+							planes = md->GetMR()->get_planes();
+						int iresx, iresy, iresz;
+						Vector d = md->GetBounds().diagonal();
+						iresx = (int)d.x();
+						iresy = (int)d.y();
+						iresz = (int)d.z();
+
+						if (planes && planes->size()==6)
+						{
+							double val;
+							wxString splane;
+
+							//x1
+							if (fconfig.Read("x1_vali", &val))
+								(*planes)[0]->ChangePlane(Point(abs(val/iresx), 0.0, 0.0),
+								Vector(1.0, 0.0, 0.0));
+							else if (fconfig.Read("x1_val", &val))
+								(*planes)[0]->ChangePlane(Point(abs(val), 0.0, 0.0),
+								Vector(1.0, 0.0, 0.0));
+
+							//x2
+							if (fconfig.Read("x2_vali", &val))
+								(*planes)[1]->ChangePlane(Point(abs(val/iresx), 0.0, 0.0),
+								Vector(-1.0, 0.0, 0.0));
+							else if (fconfig.Read("x2_val", &val))
+								(*planes)[1]->ChangePlane(Point(abs(val), 0.0, 0.0),
+								Vector(-1.0, 0.0, 0.0));
+
+							//y1
+							if (fconfig.Read("y1_vali", &val))
+								(*planes)[2]->ChangePlane(Point(0.0, abs(val/iresy), 0.0),
+								Vector(0.0, 1.0, 0.0));
+							else if (fconfig.Read("y1_val", &val))
+								(*planes)[2]->ChangePlane(Point(0.0, abs(val), 0.0),
+								Vector(0.0, 1.0, 0.0));
+
+							//y2
+							if (fconfig.Read("y2_vali", &val))
+								(*planes)[3]->ChangePlane(Point(0.0, abs(val/iresy), 0.0),
+								Vector(0.0, -1.0, 0.0));
+							else if (fconfig.Read("y2_val", &val))
+								(*planes)[3]->ChangePlane(Point(0.0, abs(val), 0.0),
+								Vector(0.0, -1.0, 0.0));
+
+							//z1
+							if (fconfig.Read("z1_vali", &val))
+								(*planes)[4]->ChangePlane(Point(0.0, 0.0, abs(val/iresz)),
+								Vector(0.0, 0.0, 1.0));
+							else if (fconfig.Read("z1_val", &val))
+								(*planes)[4]->ChangePlane(Point(0.0, 0.0, abs(val)),
+								Vector(0.0, 0.0, 1.0));
+
+							//z2
+							if (fconfig.Read("z2_vali", &val))
+								(*planes)[5]->ChangePlane(Point(0.0, 0.0, abs(val/iresz)),
+								Vector(0.0, 0.0, -1.0));
+							else if (fconfig.Read("z2_val", &val))
+								(*planes)[5]->ChangePlane(Point(0.0, 0.0, abs(val)),
+								Vector(0.0, 0.0, -1.0));
+						}
 
 						//mesh transform
 						if (fconfig.Exists("../transform"))
@@ -4290,6 +4448,7 @@ void VRenderFrame::OpenProject(wxString& filename)
 					}
 				}
 			}
+			vrv->InitView(INIT_BOUNDS|INIT_CENTER);
 		}
 	}
 
