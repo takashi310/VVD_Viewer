@@ -581,8 +581,12 @@ namespace FLIVR
 		Vector v = field_trans->project(Vector(-mvmat[2], -mvmat[6], -mvmat[10]));
 		double f_e_len = v.length();
 		v = field_trans->project(v);
-
 		double dt = (pxlen * f_e_len) / Dot(mv_ray, v);
+/*		
+		Vector v = field_trans->unproject(Vector(-mvmat[2], -mvmat[6], -mvmat[10]));
+		double f_e_len = v.length();
+		double dt = pxlen * f_e_len;
+*/
 		return dt;
 	}
 
@@ -915,6 +919,7 @@ namespace FLIVR
 
 		int w = vp[2];
 		int h = vp[3];
+		int minwh = min(w, h);
 		int w2 = w;
 		int h2 = h;
 
@@ -1279,7 +1284,7 @@ namespace FLIVR
 				load_brick_label(bricks, i);
 
 			shader->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(),
-				mode_==MODE_OVER?1.0/(rate*w*sampling_frq_fac):1.0);
+				mode_==MODE_OVER?1.0/(rate*minwh*0.001*zoom*2.0):1.0);
 
 			//for brick transformation
 			float matrix[16];

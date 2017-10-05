@@ -229,6 +229,7 @@ namespace FLIVR
       glGetIntegerv(GL_VIEWPORT, vp);
 	  int w = vp[2];
 	  int h = vp[3];
+	  int minwh = min(w, h);
 	  int w2 = w;
 	  int h2 = h;
 	  int i;
@@ -870,7 +871,8 @@ namespace FLIVR
 			  if (depth_peel_ || vr_cmode == FLV_CTYPE_DEPTH)
 				  shader[vr_shader_id]->setLocalParam(7, 1.0/double(w2), 1.0/double(h2), 0.0, 0.0);
 
-			  shader[vr_shader_id]->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(), 1.0/(rate*w*sampling_frq_fac));
+
+			  shader[vr_shader_id]->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(), 1.0/(rate*minwh*0.001*zoom*2.0));
 
 			  //for brick transformation
 			  float matrix[16];
