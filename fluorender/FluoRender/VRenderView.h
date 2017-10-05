@@ -556,6 +556,7 @@ public:
 	void EnableSBText() {m_disp_scale_bar_text = true;}
 	void DisableSBText() {m_disp_scale_bar_text = false;}
 	void SetScaleBarLen(double len) {m_sb_length = len;}
+	double GetScaleBarLen() { return m_sb_length; }
 	void SetSBText(wxString text) {m_sb_text = text;}
 
 	//gamma settings
@@ -760,6 +761,9 @@ public:
 	VolumeData *CopyLevel(VolumeData *src, int lv=-1);
 
 	void SetBufferScale(int mode);
+
+	void FixScaleBarLen(bool fix, double len=-1.0);
+	void GetScaleBarFixed(bool &fix, double &len, int &unitid);
 
 public:
 	//script run
@@ -1133,6 +1137,10 @@ private:
 	wxTimer *m_idleTimer;
 
 	int m_finished_peeling_layer;
+
+	bool m_fix_sclbar;
+	double m_fixed_sclbar_len;
+	double m_fixed_sclbar_fac;
 
 private:
 #ifdef _WIN32
@@ -1580,6 +1588,8 @@ public:
 	void DisableSBText() {if (m_glview) m_glview->DisableSBText();}
 	void SetScaleBarLen(double len)
 	{if (m_glview) m_glview->SetScaleBarLen(len);}
+	double GetScaleBarLen()
+	{if (m_glview) return m_glview->GetScaleBarLen(); else return 0.0; }
 	void SetSBText(wxString text)
 	{if (m_glview) m_glview->SetSBText(text);}
 	void SetSbNumText(wxString text)
@@ -1869,6 +1879,9 @@ public:
 		m_res_mode_combo->SetSelection(mode);
 	}
 	int GetResMode() {if (m_glview) return m_glview->m_res_mode; else return 0;}
+
+	void FixScaleBarLen(bool fix, double len=-1.0) {if (m_glview) m_glview->FixScaleBarLen(fix, len);}
+	void GetScaleBarFixed(bool &fix, double &len, int &unitid) {if (m_glview) m_glview->GetScaleBarFixed(fix, len, unitid);}
 
 public:
 	wxWindow* m_frame;

@@ -984,8 +984,8 @@ namespace FLIVR
 		int height = size[1];
 		int depth  = size[2];
 
-		data->data = malloc(width * height * depth * nbyte);
-		memset(data->data, 0, width * height * depth * nbyte);
+		data->data = malloc((size_t)width * (size_t)height * (size_t)depth * (size_t)nbyte);
+		memset(data->data, 0, (size_t)width * (size_t)height * (size_t)depth * (size_t)nbyte);
 
 		wxProgressDialog *prog_diag = new wxProgressDialog(
 			"FluoRender: Load Volume Data...",
@@ -1025,7 +1025,7 @@ namespace FLIVR
 			{
 				for (int y = 0; y < ny; y++)
 				{
-					memcpy(ptr_dst, ptr_src, nx*nbyte);
+					memcpy(ptr_dst, ptr_src, (long long)nx*(long long)nbyte);
 					ptr_dst += (long long)(width) * (long long)nbyte;
 					ptr_src += (long long)(nx) * (long long)nbyte;
 				}

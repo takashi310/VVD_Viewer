@@ -582,11 +582,7 @@ namespace FLIVR
 		double f_e_len = v.length();
 		v = field_trans->project(v);
 		double dt = (pxlen * f_e_len) / Dot(mv_ray, v);
-/*		
-		Vector v = field_trans->unproject(Vector(-mvmat[2], -mvmat[6], -mvmat[10]));
-		double f_e_len = v.length();
-		double dt = pxlen * f_e_len;
-*/
+
 		return dt;
 	}
 

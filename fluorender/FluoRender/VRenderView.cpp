@@ -1181,7 +1181,10 @@ wxGLCanvas(parent, id, attriblist, pos, size, style),
 	m_int_res(false),
 	m_dpeel(false),
 	m_load_in_main_thread(true),
-	m_finished_peeling_layer(0)
+	m_finished_peeling_layer(0),
+	m_fix_sclbar(false),
+	m_fixed_sclbar_len(0.0),
+	m_fixed_sclbar_fac(0.0)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -10801,6 +10804,82 @@ void VRenderGLView::DrawFrame()
 	glEnable(GL_DEPTH_TEST);
 }
 
+void VRenderGLView::FixScaleBarLen(bool fix, double len)
+{ 
+	int nx = GetSize().x;
+	int ny = GetSize().y;
+
+	m_fix_sclbar = fix;
+	if (len > 0.0) m_sb_length = len;
+	m_fixed_sclbar_fac = m_sb_length*m_scale_factor*min(nx,ny);
+}
+
+void VRenderGLView::GetScaleBarFixed(bool &fix, double &len, int &unitid)
+{
+	int nx = GetSize().x;
+	int ny = GetSize().y;
+
+	fix = m_fix_sclbar;
+	
+	if (m_fix_sclbar)
+		m_sb_length = m_fixed_sclbar_fac/(m_scale_factor*min(nx,ny));
+	
+	double len_txt = m_sb_length;
+	int unit_id = m_sb_unit;
+	wxString unit_txt = m_sb_text;
+
+	wxString num_txt = (len_txt==(int)len_txt) ? wxString::Format(wxT("%i "), (int)len_txt) :
+												 wxString::Format( ((int)(len_txt*100.0))%10==0 ? wxT("%.1f ") : wxT("%.2f "), len_txt);
+/*	if (m_fix_sclbar)
+	{
+
+		if (log10(len_txt) < 0.0)
+		{
+			while (log10(len_txt) < 0.0 && unit_id > 0)
+			{
+				len_txt *= 1000.0;
+				unit_id--;
+			}
+		}
+		else if (log10(len_txt) >= 3.0)
+		{
+			while (log10(len_txt) >= 3.0 && unit_id < 2)
+			{
+				len_txt *= 0.001;
+				unit_id++;
+			}
+		}
+
+		switch (unit_id)
+		{
+		case 0:
+			unit_txt = "nm";
+			break;
+		case 1:
+		default:
+			unit_txt = wxString::Format("%c%c", 181, 'm');
+			break;
+		case 2:
+			unit_txt = "mm";
+			break;
+		}
+
+		if (log10(len_txt) >= 2.0)
+			num_txt = wxString::Format(wxT("%i "), (int)len_txt);
+		else if (len_txt < 1.0)
+			num_txt = wxString::Format(wxT("%.3f "), len_txt);
+		else
+		{
+			int pr = 2.0 - (int)log10(len_txt);
+			wxString f = wxT("%.") + wxString::Format(wxT("%i"), pr) + wxT("f ");
+			num_txt = wxString::Format(f, len_txt);
+		}
+	}
+*/	
+	len = len_txt;
+	unitid = unit_id;
+}
+
 void VRenderGLView::DrawScaleBar()
 {
 	double offset = 0.0;
@@ -10818,9 +10897,99 @@ void VRenderGLView::DrawScaleBar()
 
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_BLEND);
-
+	
+	if (m_fix_sclbar)
+		m_sb_length = m_fixed_sclbar_fac/(m_scale_factor*min(nx,ny));
 	double len = m_sb_length / (m_ortho_right-m_ortho_left);
-	wstring wsb_text = m_sb_text.ToStdWstring();
+
+	double len_txt = m_sb_length;
+	int unit_id = m_sb_unit;
+	wxString unit_txt = m_sb_text;
+
+	wxString num_txt;
+
+	if (m_fix_sclbar)
+	{
+		if (log10(len_txt) >= 2.0)
+			num_txt = wxString::Format(wxT("%i "), (int)len_txt);
+		else if (len_txt < 1.0)
+			num_txt = wxString::Format(wxT("%.3f "), len_txt);
+		else
+		{
+			int pr = 2.0 - (int)log10(len_txt);
+			wxString f = wxT("%.") + wxString::Format(wxT("%i"), pr) + wxT("f ");
+			num_txt = wxString::Format(f, len_txt);
+		}
+	}
+	else
+	{
+		num_txt = wxString::Format(wxT("%.3f"), len_txt);
+		int i;
+		for (i = num_txt.Length()-1; i >= 0; i--)
+		{
+			if (num_txt.GetChar(i) == L'.')
+			{
+				i--;
+				break;
+			}
+			if (num_txt.GetChar(i) != L'0')
+				break;
+		}
+		if (i > 0)
+			num_txt = num_txt.Mid(0, i+1);
+		num_txt += wxT(" ");
+	}
+
+/*	wxString num_txt = (len_txt==(int)len_txt) ? wxString::Format(wxT("%i "), (int)len_txt) :
+												 wxString::Format( ((int)(len_txt*100.0))%10==0 ? wxT("%.1f ") : wxT("%.2f "), len_txt);
+	if (m_fix_sclbar)
+	{
+		if (log10(len_txt) < 0.0)
+		{
+			while (log10(len_txt) < 0.0 && unit_id > 0)
+			{
+				len_txt *= 1000.0;
+				unit_id--;
+			}
+		}
+		else if (log10(len_txt) >= 3.0)
+		{
+			while (log10(len_txt) >= 3.0 && unit_id < 2)
+			{
+				len_txt *= 0.001;
+				unit_id++;
+			}
+		}
+
+		switch (unit_id)
+		{
+		case 0:
+			unit_txt = "nm";
+			break;
+		case 1:
+		default:
+			unit_txt = wxString::Format("%c%c", 181, 'm');
+			break;
+		case 2:
+			unit_txt = "mm";
+			break;
+		}
+
+		if (log10(len_txt) >= 2.0)
+			num_txt = wxString::Format(wxT("%i "), (int)len_txt);
+		else if (len_txt < 1.0)
+			num_txt = wxString::Format(wxT("%.3f "), len_txt);
+		else
+		{
+			int pr = 2.0 - (int)log10(len_txt);
+			wxString f = wxT("%.") + wxString::Format(wxT("%i"), pr) + wxT("f ");
+			num_txt = wxString::Format(f, len_txt);
+		}
+	}
+*/
+	wstring wsb_text;
+	wsb_text = num_txt + unit_txt.ToStdWstring();
+	
 	double textlen = m_text_renderer?
 		m_text_renderer->RenderTextLen(wsb_text):0.0;
 	vector<float> vertex;
@@ -12135,6 +12304,9 @@ void VRenderGLView::StartLoopUpdate(bool reset_peeling_layer)
 
 	int nx = GetSize().x;
 	int ny = GetSize().y;
+
+	if (m_fix_sclbar)
+		m_sb_length = m_fixed_sclbar_fac/(m_scale_factor*min(nx,ny));
 
 	//projection
 	HandleProjection(nx, ny);
@@ -15605,8 +15777,8 @@ wxPanel(parent, id, pos, size, style),
 #endif
 	CreateBar();
 	if (m_glview) {
-		m_glview->SetSBText("50 µm");
-		m_glview->SetScaleBarLen(1.);
+		m_glview->SetSBText("µm");
+		m_glview->SetScaleBarLen(50.);
 	}
 	LoadSettings();
 

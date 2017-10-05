@@ -62,6 +62,7 @@ BEGIN_EVENT_TABLE(VPropView, wxPanel)
 	EVT_CHECKBOX(ID_ScaleTextChk, VPropView::OnScaleTextCheck)
 	EVT_TEXT(ID_ScaleText, VPropView::OnScaleTextEditing)
 	EVT_COMBOBOX(ID_ScaleCmb, VPropView::OnScaleUnitSelected)
+	EVT_CHECKBOX(ID_ScaleLenFixChk, VPropView::OnScaleLenFixCheck)
 	//legend
 	EVT_CHECKBOX(ID_LegendChk, VPropView::OnLegendCheck)
 	//sync within group
@@ -142,6 +143,8 @@ wxPanel(parent, id, pos, size,style, name),
 	wxFloatingPointValidator<double> vald_fp3(3);
 	//validator: floating point 4
 	wxFloatingPointValidator<double> vald_fp4(4);
+	//validator: floating point 8
+	wxFloatingPointValidator<double> vald_fp8(8);
 	//validator: integer
 	wxIntegerValidator<unsigned int> vald_int;
 
@@ -382,13 +385,15 @@ wxPanel(parent, id, pos, size,style, name),
 	m_scale_te_chk = new wxCheckBox(this, ID_ScaleTextChk, "Text:",
 		wxDefaultPosition, wxDefaultSize, wxALIGN_RIGHT);
 	m_scale_text = new wxTextCtrl(this, ID_ScaleText, "",
-		wxDefaultPosition, wxSize(35, 20), 0, vald_int);
+		wxDefaultPosition, wxSize(55, 20), 0, vald_fp3);
 	m_scale_cmb = new wxComboBox(this, ID_ScaleCmb, "",
 		wxDefaultPosition, wxSize(50, 30), 0, NULL, wxCB_READONLY);
 	m_scale_cmb->Append("nm");
 	m_scale_cmb->Append(L"\u03BCm");
 	m_scale_cmb->Append("mm");
 	m_scale_cmb->Select(1);
+	m_scale_lenfix_chk = new wxCheckBox(this, ID_ScaleLenFixChk, "Fix length:",
+		wxDefaultPosition, wxDefaultSize, wxALIGN_RIGHT);
 	sizer_b->Add(10, 5, 0);
 	sizer_b->Add(m_scale_chk, 0, wxALIGN_CENTER);
 	sizer_b->Add(5, 5, 0);
@@ -397,6 +402,8 @@ wxPanel(parent, id, pos, size,style, name),
 	sizer_b->Add(m_scale_text, 0, wxALIGN_CENTER);
 	sizer_b->Add(5, 5, 0);
 	sizer_b->Add(m_scale_cmb, 0, wxALIGN_CENTER);
+	sizer_b->Add(5, 5, 0);
+	sizer_b->Add(m_scale_lenfix_chk, 0, wxALIGN_CENTER);
 
 	//legend
 	m_legend_chk = new wxCheckBox(this, ID_LegendChk, "Legend:",
@@ -614,17 +621,32 @@ void VPropView::GetSettings()
 	//spacings
 	double spcx, spcy, spcz;
 	m_vd->GetSpacings(spcx, spcy, spcz, 0);
+	int pr = 3;
+	double minspclog10 = log10(min(min(spcx, spcy), spcz));
+	if (minspclog10 <= -2.0)
+		pr = 3 - ((int)minspclog10 + 1.0);
+	wxString fmstr = wxT("%.") + wxString::Format(wxT("%i"), pr) + wxT("f");
+
 	if ((vald_fp = (wxFloatingPointValidator<double>*)m_space_x_text->GetValidator()))
+	{
 		vald_fp->SetMin(0.0);
-	str = wxString::Format("%.3f", spcx);
+		vald_fp->SetPrecision(pr);
+	}
+	str = wxString::Format(fmstr, spcx);
 	m_space_x_text->ChangeValue(str);
 	if ((vald_fp = (wxFloatingPointValidator<double>*)m_space_y_text->GetValidator()))
+	{
 		vald_fp->SetMin(0.0);
-	str = wxString::Format("%.3f", spcy);
+		vald_fp->SetPrecision(pr);
+	}
+	str = wxString::Format(fmstr, spcy);
 	m_space_y_text->ChangeValue(str);
 	if ((vald_fp = (wxFloatingPointValidator<double>*)m_space_z_text->GetValidator()))
+	{
 		vald_fp->SetMin(0.0);
-	str = wxString::Format("%.3f", spcz);
+		vald_fp->SetPrecision(pr);
+	}
+	str = wxString::Format(fmstr, spcz);
 	m_space_z_text->ChangeValue(str);
 
 	//scale bar
@@ -632,18 +654,30 @@ void VPropView::GetSettings()
 	if (frame && frame->GetViewList()->size() > 0)
 	{
 		VRenderView* vrv = (*frame->GetViewList())[0];
-		if (vrv)
+		if (vrv && vrv->m_glview)
 		{
 			m_scale_cmb->Select(vrv->m_glview->m_sb_unit);
-			m_scale_text->ChangeValue(vrv->m_glview->m_sb_num);
+			dval = vrv->GetScaleBarLen();
+			m_scale_text->ChangeValue(wxString::Format("%.3f", dval));
 			bool scale_check = vrv->m_glview->m_disp_scale_bar;
 			m_scale_chk->SetValue(scale_check);
 			m_scale_te_chk->SetValue(vrv->m_glview->m_disp_scale_bar_text);
+			bool fixed = false;
+			vrv->m_glview->GetScaleBarFixed(fixed, dval, ival);
+			m_scale_lenfix_chk->SetValue(fixed);
 			if (scale_check)
 			{
 				m_scale_te_chk->Enable();
-				m_scale_text->Enable();
-				m_scale_cmb->Enable();
+				if (!fixed)
+				{
+					m_scale_text->Enable();
+					m_scale_cmb->Enable();
+				}
+				else
+				{
+					m_scale_text->Disable();
+					m_scale_cmb->Disable();
+				}
 			}
 			else
 			{
@@ -1988,11 +2022,10 @@ void VPropView::OnScaleCheck(wxCommandEvent& event)
 
 	if (m_scale_chk->GetValue())
 	{
-		wxString str, num_text, unit_text;
+		wxString num_text, unit_text;
 		num_text = m_scale_text->GetValue();
 		double len;
 		num_text.ToDouble(&len);
-		str = num_text + " ";
 		switch (m_scale_cmb->GetSelection())
 		{
 		case 0:
@@ -2000,28 +2033,31 @@ void VPropView::OnScaleCheck(wxCommandEvent& event)
 			break;
 		case 1:
 		default:
-			unit_text = wxString::Format("%c%c", 131, 'm');
+			unit_text = wxString::Format("%c%c", 181, 'm');
 			break;
 		case 2:
 			unit_text = "mm";
 			break;
 		}
-		str += unit_text;
 		for (int i=0; i<(int)vr_frame->GetViewList()->size(); i++)
 		{
 			VRenderView *vrv = (*vr_frame->GetViewList())[i];
 			if (vrv)
 			{
 				vrv->SetScaleBarLen(len);
-				vrv->SetSBText(str);
+				vrv->SetSBText(unit_text);
 				vrv->EnableScaleBar();
-				vrv->SetSbNumText(num_text);
 				vrv->SetSbUnitSel(m_scale_cmb->GetSelection());
+				vrv->FixScaleBarLen(m_scale_lenfix_chk->GetValue());
 			}
 		}
 		m_scale_te_chk->Enable();
-		m_scale_text->Enable();
-		m_scale_cmb->Enable();
+		m_scale_lenfix_chk->Enable();
+		if (!m_scale_lenfix_chk->GetValue())
+		{
+			m_scale_text->Enable();
+			m_scale_cmb->Enable();
+		}
 	}
 	else
 	{
@@ -2034,6 +2070,7 @@ void VPropView::OnScaleCheck(wxCommandEvent& event)
 			}
 		}
 		m_scale_te_chk->Disable();
+		m_scale_lenfix_chk->Disable();
 		m_scale_text->Disable();
 		m_scale_cmb->Disable();
 	}
@@ -2049,9 +2086,7 @@ void VPropView::OnScaleTextCheck(wxCommandEvent& event)
 
 	if (m_scale_te_chk->GetValue())
 	{
-		wxString str, num_text, unit_text;
-		num_text = m_scale_text->GetValue();
-		str = num_text + " ";
+		wxString unit_text;
 		switch (m_scale_cmb->GetSelection())
 		{
 		case 0:
@@ -2065,16 +2100,13 @@ void VPropView::OnScaleTextCheck(wxCommandEvent& event)
 			unit_text = "mm";
 			break;
 		}
-		str += unit_text;
-
 		for (int i=0; i<(int)vr_frame->GetViewList()->size(); i++)
 		{
 			VRenderView *vrv = (*vr_frame->GetViewList())[i];
 			if (vrv)
 			{
-				vrv->SetSBText(str);
+				vrv->SetSBText(unit_text);
 				vrv->EnableSBText();
-				vrv->SetSbNumText(num_text);
 				vrv->SetSbUnitSel(m_scale_cmb->GetSelection());
 			}
 		}
@@ -2102,11 +2134,10 @@ void VPropView::OnScaleTextEditing(wxCommandEvent& event)
 	if (!vr_frame)
 		return;
 
-	wxString str, num_text, unit_text;
+	wxString num_text, unit_text;
 	num_text = m_scale_text->GetValue();
 	double len;
 	num_text.ToDouble(&len);
-	str = num_text + " ";
 	switch (m_scale_cmb->GetSelection())
 	{
 	case 0:
@@ -2114,21 +2145,19 @@ void VPropView::OnScaleTextEditing(wxCommandEvent& event)
 		break;
 	case 1:
 	default:
-		unit_text = wxString::Format("%c%c", 131, 'm');
+		unit_text = wxString::Format("%c%c", 181, 'm');
 		break;
 	case 2:
 		unit_text = "mm";
 		break;
 	}
-	str += unit_text;
 	for (int i=0; i<(int)vr_frame->GetViewList()->size(); i++)
 	{
 		VRenderView *vrv = (*vr_frame->GetViewList())[i];
 		if (vrv)
 		{
 			vrv->SetScaleBarLen(len);
-			vrv->SetSBText(str);
-			vrv->SetSbNumText(num_text);
+			vrv->SetSBText(unit_text);
 			vrv->SetSbUnitSel(m_scale_cmb->GetSelection());
 		}
 	}
@@ -2142,9 +2171,7 @@ void VPropView::OnScaleUnitSelected(wxCommandEvent& event)
 	if (!vr_frame)
 		return;
 
-	wxString str, num_text, unit_text;
-	num_text = m_scale_text->GetValue();
-	str = num_text + " ";
+	wxString unit_text;
 	switch (m_scale_cmb->GetSelection())
 	{
 	case 0:
@@ -2152,25 +2179,86 @@ void VPropView::OnScaleUnitSelected(wxCommandEvent& event)
 		break;
 	case 1:
 	default:
-		unit_text = wxString::Format("%c%c", 131, 'm');
+		unit_text = wxString::Format("%c%c", 181, 'm');
 		break;
 	case 2:
 		unit_text = "mm";
 		break;
 	}
-	str += unit_text;
 	for (int i=0; i<(int)vr_frame->GetViewList()->size(); i++)
 	{
 		VRenderView *vrv = (*vr_frame->GetViewList())[i];
 		if (vrv)
 		{
-			vrv->SetSBText(str);
-			vrv->SetSbNumText(num_text);
+			vrv->SetSBText(unit_text);
 			vrv->SetSbUnitSel(m_scale_cmb->GetSelection());
 		}
 	}
 
 	RefreshVRenderViews();
+}
+
+void VPropView::OnScaleLenFixCheck(wxCommandEvent& event)
+{
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame)
+		return;
+
+	if(m_scale_lenfix_chk->GetValue())
+	{
+		for (int i=0; i<(int)vr_frame->GetViewList()->size(); i++)
+		{
+			VRenderView *vrv = (*vr_frame->GetViewList())[i];
+			if (vrv)
+				vrv->FixScaleBarLen(true);
+		}
+		m_scale_text->Disable();
+		m_scale_cmb->Disable();
+	}
+	else
+	{
+		if ( vr_frame->GetViewList()->size() != 0 && (*vr_frame->GetViewList())[0] )
+		{
+			VRenderView *vrv = (*vr_frame->GetViewList())[0];
+			bool fixed;
+			double len;
+			int unitid;
+
+			vrv->GetScaleBarFixed(fixed, len, unitid);
+			wxString unit_text;
+			switch (m_scale_cmb->GetSelection())
+			{
+			case 0:
+				unit_text = "nm";
+				break;
+			case 1:
+			default:
+				unit_text = wxString::Format("%c%c", 181, 'm');
+				break;
+			case 2:
+				unit_text = "mm";
+				break;
+			}
+
+			for (int i=0; i<(int)vr_frame->GetViewList()->size(); i++)
+			{
+				vrv = (*vr_frame->GetViewList())[i];
+				if (vrv)
+				{
+					vrv->FixScaleBarLen(false);
+					vrv->SetScaleBarLen(len);
+					vrv->SetSBText(unit_text);
+					vrv->SetSbUnitSel(unitid);
+					vrv->FixScaleBarLen(m_scale_lenfix_chk->GetValue());
+				}
+			}
+
+			m_scale_cmb->Select(unitid);
+			m_scale_text->ChangeValue(wxString::Format("%.3f", len));
+		}
+		m_scale_text->Enable();
+		m_scale_cmb->Enable();
+	}
 }
 
 //legend
