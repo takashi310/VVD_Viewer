@@ -10928,15 +10928,15 @@ void VRenderGLView::DrawScaleBar()
 		for (i = num_txt.Length()-1; i >= 0; i--)
 		{
 			if (num_txt.GetChar(i) == L'.')
+				break;
+			if (num_txt.GetChar(i) != L'0')
 			{
-				i--;
+				i++;
 				break;
 			}
-			if (num_txt.GetChar(i) != L'0')
-				break;
 		}
 		if (i > 0)
-			num_txt = num_txt.Mid(0, i+1);
+			num_txt = num_txt.Mid(0, i);
 		num_txt += wxT(" ");
 	}
 
