@@ -11762,11 +11762,18 @@ void VRenderGLView::DrawInfo(int nx, int ny)
 
 	if (m_cur_vol && m_cur_vol->isBrxml())
 	{
-		str += wxString::Format(" VVD_Level: %d/%d,", m_cur_vol->GetLevel()+1, m_cur_vol->GetLevelNum());
+		int resx=0, resy=0, resz=0;
+		if (m_cur_vol->GetTexture())
+		{
+			resx = m_cur_vol->GetTexture()->nx();
+			resy = m_cur_vol->GetTexture()->ny();
+			resz = m_cur_vol->GetTexture()->nz();
+		}
+		str += wxString::Format(" VVD_Level: %d/%d W:%d H:%d D:%d,", m_cur_vol->GetLevel()+1, m_cur_vol->GetLevelNum(), resx, resy, resz);
 		long long used_mem;
 		int dtnum, qnum, dqnum;
 		m_loader.GetPalams(used_mem, dtnum, qnum, dqnum);
-		str += wxString::Format(" Mem: %lld Th: %d Q: %d DQ: %d,", used_mem, dtnum, qnum, dqnum);
+		str += wxString::Format(" Mem:%lld(MB) Th: %d Q: %d DQ: %d,", used_mem/(1024LL*1024LL), dtnum, qnum, dqnum);
 	}
 
 	wstring wstr_temp = str.ToStdWstring();
