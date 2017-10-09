@@ -2484,7 +2484,7 @@ void VRenderGLView::DrawVolumesDP()
 			{
 				glBindFramebuffer(GL_FRAMEBUFFER, 0);
 				int dptexnum = peeling_layers > 0 ? peeling_layers : 1;
-				for (int i = 0; i < dptexnum; i++)
+				for (int i = 0; i <= dptexnum; i++)
 				{
 					if (i >= (int)m_dp_fbo_list.size())
 					{
@@ -2839,7 +2839,7 @@ void VRenderGLView::DrawVolumesDP()
 				if (TextureRenderer::get_start_update_loop() && TextureRenderer::get_done_update_loop())
 				{
 					m_finished_peeling_layer++;
-					if (m_finished_peeling_layer < peeling_layers)
+					if (m_finished_peeling_layer <= peeling_layers)
 					{
 						StartLoopUpdate(false);
 						finished_bricks = TextureRenderer::get_finished_bricks();
