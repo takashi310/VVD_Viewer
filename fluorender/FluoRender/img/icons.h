@@ -1,4 +1,6 @@
-class icons {
+#include "DLLExport.h"
+
+class EXPORT_API icons {
 public:
 /* plugins.png - 3810 bytes */
 const static unsigned char plugins_png[4299];

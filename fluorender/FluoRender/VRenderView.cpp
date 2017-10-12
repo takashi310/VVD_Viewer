@@ -8560,6 +8560,33 @@ int VRenderGLView::GetMeshNum()
 	return m_md_pop_list.size();
 }
 
+DataGroup* VRenderGLView::GetCurrentVolGroup()
+{
+	int i;
+	DataGroup* group = 0;
+	DataGroup* cur_group = 0;
+
+	for (i=0; i<(int)m_layer_list.size(); i++)
+	{
+		TreeLayer* layer = m_layer_list[i];
+		if (layer && layer->IsA() == 5)
+		{
+			//layer is group
+			group = (DataGroup*) layer;
+			if (group)
+			{
+				for (int j = 0; j < group->GetVolumeNum(); j++)
+				{
+					if (m_cur_vol && m_cur_vol == group->GetVolumeData(j))
+						cur_group = group;
+				}
+			}
+		}
+	}
+
+	return cur_group != NULL ? cur_group : group;
+}
+
 DataGroup* VRenderGLView::AddVolumeData(VolumeData* vd, wxString group_name)
 {
 	//m_layer_list.push_back(vd);

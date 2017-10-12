@@ -2041,7 +2041,7 @@ void VRenderFrame::OnSelection(int type,
 				VRenderView* vrv = m_vrv_list[i];
 				if (!vrv)
 					continue;
-				vrv->m_glview->m_cur_vol = vd;
+				vrv->SetCurrentVolume(vd);
 			}
 
 			if (m_volume_prop)

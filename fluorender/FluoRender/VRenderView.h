@@ -765,6 +765,10 @@ public:
 	void FixScaleBarLen(bool fix, double len=-1.0);
 	void GetScaleBarFixed(bool &fix, double &len, int &unitid);
 
+	VolumeData* GetCurrentVolume() {return m_cur_vol;}
+	void SetCurrentVolume(VolumeData *vd) {m_cur_vol = vd;}
+	DataGroup* GetCurrentVolGroup();
+
 public:
 	//script run
 	bool m_run_script;
@@ -1882,6 +1886,10 @@ public:
 
 	void FixScaleBarLen(bool fix, double len=-1.0) {if (m_glview) m_glview->FixScaleBarLen(fix, len);}
 	void GetScaleBarFixed(bool &fix, double &len, int &unitid) {if (m_glview) m_glview->GetScaleBarFixed(fix, len, unitid);}
+
+	VolumeData* GetCurrentVolume() { if (m_glview) return m_glview->GetCurrentVolume(); else return NULL; }
+	void SetCurrentVolume(VolumeData *vd) { if (m_glview) m_glview->SetCurrentVolume(vd); }
+	DataGroup* GetCurrentVolGroup() { if (m_glview) return m_glview->GetCurrentVolGroup(); else return NULL; }
 
 public:
 	wxWindow* m_frame;
