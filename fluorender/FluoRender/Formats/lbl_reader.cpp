@@ -127,10 +127,10 @@ Nrrd* LBLReader::Convert(int t, int c, bool get_max)
 		fclose(lbl_file);
 		return 0;
 	}
-	int slice_num = int(output->axis[2].size);
-	int x_size = int(output->axis[0].size);
-	int y_size = int(output->axis[1].size);
-	int data_size = slice_num * x_size * y_size;
+	size_t slice_num = output->axis[2].size;
+	size_t x_size = output->axis[0].size;
+	size_t y_size = output->axis[1].size;
+	size_t data_size = (size_t)slice_num * (size_t)x_size * (size_t)y_size;
 	output->data = new unsigned int[data_size];
 
 	if (nrrdRead(output, lbl_file, NULL))

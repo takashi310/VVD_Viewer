@@ -77,6 +77,12 @@ void MSKWriter::Save(wstring filename, int mode)
 		strs << str_name /*<< "_t" << m_time << "_c" << m_channel*/ << ".lbl";
 	str_name = strs.str();
 
+	NrrdIoState *nio = nrrdIoStateNew();
+	if (!nio)
+		return;
+	nrrdIoStateEncodingSet(nio, nrrdEncodingGzip);
+	nio->format = nrrdFormatNRRD;
+
 	if (m_use_spacings &&
 		m_data->dim == 3)
 	{
@@ -100,7 +106,9 @@ void MSKWriter::Save(wstring filename, int mode)
 	str.assign(str_name.length(), 0);
 	for (int i=0; i<(int)str_name.length(); i++)
 		str[i] = (char)str_name[i];
-	nrrdSave(str.c_str(), m_data, NULL);
+	nrrdSave(str.c_str(), m_data, nio);
+
+	nrrdIoStateNix(nio);
 
 	nrrdAxisInfoSet(m_data, nrrdAxisInfoSpacing, m_spcx, m_spcy, m_spcz);
 	nrrdAxisInfoSet(m_data, nrrdAxisInfoMax, m_spcx*m_data->axis[0].size, m_spcy*m_data->axis[1].size, m_spcz*m_data->axis[2].size);
