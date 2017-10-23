@@ -1981,7 +1981,10 @@ bool VPropView::SetSpacings()
 	if ((m_sync_group || m_sync_group_spc) && m_group)
 	{
 		for (int i=0; i<m_group->GetVolumeNum(); i++)
-			m_group->GetVolumeData(i)->SetSpacings(spcx, spcy, spcz);
+		{
+			if (m_group->GetVolumeData(i)->GetName().Find("skeleton") == -1)
+				m_group->GetVolumeData(i)->SetSpacings(spcx, spcy, spcz);
+		}
 	}
 	else if (m_vd)
 	{
