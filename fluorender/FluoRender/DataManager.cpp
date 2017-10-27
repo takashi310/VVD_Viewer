@@ -782,6 +782,7 @@ void VolumeData::LoadMask(Nrrd* mask)
 
 	//prepare the texture bricks for the mask
 	m_tex->add_empty_mask();
+	AddEmptyStroke();
 	m_tex->set_nrrd(mask, m_tex->nmask());
 }
 
@@ -791,6 +792,24 @@ void VolumeData::DeleteMask()
 		return;
 
 	m_tex->delete_mask();
+}
+
+void VolumeData::LoadStroke(Nrrd* stroke)
+{
+	if (!stroke || !m_tex || !m_vr)
+		return;
+
+	//prepare the texture bricks for the mask
+	m_tex->add_empty_stroke();
+	m_tex->set_nrrd(stroke, m_tex->nmask());
+}
+
+void VolumeData::DeleteStroke()
+{
+	if (!m_tex || !m_vr)
+		return;
+
+	m_tex->delete_stroke();
 }
 
 void VolumeData::AddEmptyMask()
@@ -821,6 +840,38 @@ void VolumeData::AddEmptyMask()
 		nrrdAxisInfoSet(nrrd_mask, nrrdAxisInfoMax, spcx*m_res_x, spcy*m_res_y, spcz*m_res_z);
 
 		m_tex->set_nrrd(nrrd_mask, m_tex->nmask());
+	}
+
+	AddEmptyStroke();
+}
+
+void VolumeData::AddEmptyStroke()
+{
+	if (!m_tex || !m_vr)
+		return;
+
+	if (m_tex->add_empty_stroke())
+	{
+		//add the nrrd data for mask
+		Nrrd *nrrd_stroke = nrrdNew();
+		unsigned long long mem_size = (unsigned long long)m_res_x*
+			(unsigned long long)m_res_y*(unsigned long long)m_res_z;
+		uint8 *val8 = new (std::nothrow) uint8[mem_size];
+		if (!val8)
+		{
+			wxMessageBox("Not enough memory. Please save project and restart.");
+			return;
+		}
+		double spcx, spcy, spcz;
+		m_tex->get_spacings(spcx, spcy, spcz);
+		memset((void*)val8, 0, mem_size*sizeof(uint8));
+		nrrdWrap(nrrd_stroke, val8, nrrdTypeUChar, 3, (size_t)m_res_x, (size_t)m_res_y, (size_t)m_res_z);
+		nrrdAxisInfoSet(nrrd_stroke, nrrdAxisInfoSize, (size_t)m_res_x, (size_t)m_res_y, (size_t)m_res_z);
+		nrrdAxisInfoSet(nrrd_stroke, nrrdAxisInfoSpacing, spcx, spcy, spcz);
+		nrrdAxisInfoSet(nrrd_stroke, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
+		nrrdAxisInfoSet(nrrd_stroke, nrrdAxisInfoMax, spcx*m_res_x, spcy*m_res_y, spcz*m_res_z);
+
+		m_tex->set_nrrd(nrrd_stroke, m_tex->nstroke());
 	}
 }
 
@@ -996,6 +1047,17 @@ Nrrd* VolumeData::GetLabel(bool ret)
 	{
 		if (ret) m_vr->return_label();
 		return m_tex->get_nrrd(m_tex->nlabel());
+	}
+
+	return 0;
+}
+
+Nrrd* VolumeData::GetStroke(bool ret)
+{
+	if (m_vr && m_tex && m_tex->nstroke()!=-1)
+	{
+		if (ret) m_vr->return_stroke();
+		return m_tex->get_nrrd(m_tex->nstroke());
 	}
 
 	return 0;
@@ -1637,6 +1699,12 @@ void VolumeData::DrawMask(int type, int paint_mode, int hr_mode,
 		m_vr->set_2d_weight(m_2d_weight1, m_2d_weight2);
 		m_vr->draw_mask(type, paint_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, scl_translate, w2d, bins, ortho, false);
 	}
+}
+
+void VolumeData::DrawMaskThreshold(float th, bool ortho)
+{
+	if (m_vr)
+		m_vr->draw_mask_th(th, ortho);
 }
 
 void VolumeData::DrawMaskDSLT(int type, int paint_mode, int hr_mode,

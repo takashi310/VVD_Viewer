@@ -1,5 +1,6 @@
 #include <wx/wx.h>
 #include <wx/notebook.h>
+#include <wx/stopwatch.h>
 #include "DLLExport.h"
 
 #ifndef _BRUSHTOOLDLG_H_
@@ -232,6 +233,8 @@ private:
 	wxButton *m_calc_isc_btn;
 	//one-operators
 	wxButton *m_calc_fill_btn;
+
+	wxStopWatch m_watch;
 
 private:
 	void LoadDefault();

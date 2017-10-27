@@ -41,8 +41,9 @@ namespace FLIVR
 {
 #define SEG_OUTPUTS \
 	"//SEG_OUTPUTS\n" \
-	"out vec4 FragColor;\n" \
-	"\n"
+	"layout(location = 0) out vec4 FragColor;\n"
+#define SEG_PAINT_OUTPUTS \
+	"layout(location = 1) out vec4 StrokeColor;\n"
 
 #define SEG_VERTEX_CODE \
 	"//SEG_VERTEX_CODE\n" \
@@ -163,33 +164,45 @@ namespace FLIVR
 
 #define SEG_BODY_INIT_BLEND_APPEND \
 	"	//SEG_BODY_INIT_BLEND_APPEND\n" \
-	"	FragColor = vec4(c.x>0.0?(c.x>loc7.x?1.0:0.0):0.0);\n" \
+	"	vec4 ret = vec4(c.x>0.0?(c.x>loc7.x?1.0:0.0):0.0);\n" \
+	"	FragColor = ret;\n" \
+	"	StrokeColor = vec4(1.0);\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_ERASE \
 	"	//SEG_BODY_INIT_BLEND_ERASE\n" \
 	"	FragColor = vec4(0.0);\n" \
+	"	StrokeColor = vec4(0.0);\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_DIFFUSE \
 	"	//SEG_BODY_INIT_BLEND_DIFFUSE\n" \
-	"	FragColor = texture(tex2, t.stp);\n" \
+	"	vec4 ret = texture(tex2, t.stp);\n" \
+	"	FragColor = ret;\n" \
+	"	StrokeColor = ret;\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_FLOOD \
 	"	//SEG_BODY_INIT_BLEND_FLOOD\n" \
-	"	FragColor = vec4(c.x>0.0?(c.x>loc7.x?1.0:0.0):0.0);\n" \
+	"	vec4 ret = vec4(c.x>0.0?(c.x>loc7.x?1.0:0.0):0.0);\n" \
+	"	FragColor = ret;\n" \
+	"	StrokeColor = vec4(1.0);\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_ALL \
 	"	//SEG_BODY_INIT_BLEND_ALL\n" \
 	"	FragColor = vec4(1.0);\n" \
+	"	StrokeColor = vec4(1.0);\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_HR_ORTHO \
 	"	//SEG_BODY_INIT_BLEND_HR_ORTHO\n" \
+	"	StrokeColor = vec4(1.0);\n" \
 	"	if (c.x <= loc7.x)\n" \
-	"		discard;\n" \
+	"	{\n" \
+	"		FragColor = vec4(0.0);\n" \
+	"		return;\n" \
+	"	}\n" \
 	"	vec4 cv = matrix3 * vec4(0.0, 0.0, 1.0, 0.0);\n" \
 	"	vec3 step = cv.xyz;\n" \
 	"	step = normalize(step);\n" \
@@ -209,7 +222,10 @@ namespace FLIVR
 	"		v.y = length(vol_grad_func(vec4(ray, 1.0), loc4).xyz);\n" \
 	"		cray = vol_trans_sin_color_l(v);\n" \
 	"		if (cray.x > loc7.x && flag)\n" \
-	"			discard;\n" \
+	"		{\n" \
+	"			FragColor = vec4(0.0);\n" \
+	"			return;\n" \
+	"		}\n" \
 	"		if (cray.x <= loc7.x)\n" \
 	"			flag = true;\n" \
 	"	}\n" \
@@ -218,8 +234,12 @@ namespace FLIVR
 
 #define SEG_BODY_INIT_BLEND_HR_PERSP \
 	"	//SEG_BODY_INIT_BLEND_HR_PERSP\n" \
+	"	StrokeColor = vec4(1.0);\n" \
 	"	if (c.x <= loc7.x)\n" \
-	"		discard;\n" \
+	"	{\n" \
+	"		FragColor = vec4(0.0);\n" \
+	"		return;\n" \
+	"	}\n" \
 	"	vec4 cv = matrix3 * vec4(0.0, 0.0, 0.0, 1.0);\n" \
 	"	cv = cv / cv.w;\n" \
 	"	vec3 step = cv.xyz - t.xyz;\n" \
@@ -252,7 +272,9 @@ namespace FLIVR
 
 #define SEG_BODY_INIT_POSTER \
 	"	//SEG_BODY_INIT_POSTER\n" \
-	"	FragColor = vec4(ceil(c.x*loc8.y)/loc8.y);\n" \
+	"	vec4 ret = vec4(ceil(c.x*loc8.y)/loc8.y);\n" \
+	"	FragColor = ret;\n" \
+	"	StrokeColor = ret;\n" \
 	"\n"
 
 #define SEG_BODY_DB_GROW_2D_COORD \
@@ -285,6 +307,7 @@ namespace FLIVR
 #define SEG_BODY_DB_GROW_BLEND_APPEND \
 	"	//SEG_BODY_DB_GROW_BLEND_APPEND\n" \
 	"	FragColor = (1.0-stop) * cc;\n" \
+	"	StrokeColor = (1.0-stop) * cc;\n" \
 	"	vec3 nb;\n" \
 	"	vec3 max_nb = t.stp;\n" \
 	"	float m;\n" \
@@ -309,6 +332,7 @@ namespace FLIVR
 	"			discard;\n" \
 	"	}\n" \
 	"	FragColor += cc*stop;\n"\
+	"	StrokeColor += cc*stop;\n"\
 	"\n"
 
 #define SEG_BODY_DB_GROW_BLEND_ERASE0 \
@@ -320,12 +344,15 @@ namespace FLIVR
 	"		vec3 nb = vec3(t.s+float(i)*loc4.x, t.t+float(j)*loc4.y, t.p+float(k)*loc4.z);\n"\
 	"		cc = vec4(min(cc.x, texture(tex2, nb).x));\n"\
 	"	}\n"\
-	"	FragColor = cc*clamp(1.0-stop, 0.0, 1.0);\n"\
+	"	vec4 ret = cc*clamp(1.0-stop, 0.0, 1.0);\n"\
+	"	FragColor = ret;\n"\
+	"	StrokeColor = ret;\n"\
 	"\n"
 
 #define SEG_BODY_DB_GROW_BLEND_ERASE \
 	"	//SEG_BODY_DB_GROW_BLEND_ERASE\n" \
 	"	FragColor = vec4(0.0);\n"\
+	"	StrokeColor = vec4(0.0);\n"\
 	"\n"
 
 #define SEG_BODY_LABEL_INITIALIZE \
@@ -488,6 +515,7 @@ namespace FLIVR
 		case SEG_SHDR_INITIALIZE:
 		case SEG_SHDR_DB_GROW:
 			z << SEG_OUTPUTS;
+			z << SEG_PAINT_OUTPUTS;
 			z << VOL_UNIFORMS_COMMON;
 			z << VOL_UNIFORMS_SIN_COLOR;
 			z << VOL_UNIFORMS_MASK;

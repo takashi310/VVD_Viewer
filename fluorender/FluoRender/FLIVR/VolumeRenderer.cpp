@@ -1730,6 +1730,18 @@ namespace FLIVR
 		glDisable(GL_DEPTH_TEST);
 		glDisable(GL_BLEND);
 
+		static const GLenum draw_buffers[] =
+		{
+			GL_COLOR_ATTACHMENT0,
+			GL_COLOR_ATTACHMENT1
+		};
+		static const GLenum attachment0 = GL_COLOR_ATTACHMENT0;
+		static const GLenum attachment1 = GL_COLOR_ATTACHMENT1;
+			
+		GLfloat clear_color[4];
+		glGetFloatv(GL_COLOR_CLEAR_VALUE, clear_color);
+		bool clear_stroke = (paint_mode == 1 || paint_mode == 2 || paint_mode == 7);
+
 		float matrix[16];
 		for (unsigned int i=0; i < bricks->size(); i++)
 		{
@@ -1761,6 +1773,7 @@ namespace FLIVR
 			GLint tex_id = -1;
 			GLint vd_id = load_brick(0, 0, bricks, i, GL_NEAREST, compression_);
 			GLint mask_id = load_brick_mask(bricks, i, GL_NEAREST);
+			GLint stroke_tex_id = load_brick_stroke(bricks, i, GL_NEAREST);
 			switch (type)
 			{
 			case 0:
@@ -1786,6 +1799,26 @@ namespace FLIVR
 					0,
 					z);
 
+				if (glIsTexture(stroke_tex_id) && (type == 0 || type == 1))
+				{
+					glFramebufferTexture3D(GL_FRAMEBUFFER, 
+						GL_COLOR_ATTACHMENT1,
+						GL_TEXTURE_3D,
+						stroke_tex_id,
+						0,
+						z);
+					if (clear_stroke)
+					{
+						glDrawBuffers(1, &attachment1);
+						glClearColor(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
+						glClear(GL_COLOR_BUFFER_BIT);
+					}
+					glDrawBuffers(2, draw_buffers);
+				}
+				else
+					glDrawBuffers(1, &attachment0);
+				
+
 				draw_view_quad(double(z+0.5) / double(b->nz()));
 			}
 
@@ -1798,6 +1831,7 @@ namespace FLIVR
 */
 		}
 
+		glDrawBuffers(1, &attachment0);
 		glViewport(vp[0], vp[1], vp[2], vp[3]);
 
 		//release 2d mask
@@ -1830,7 +1864,7 @@ namespace FLIVR
 		//enable depth test
 		glEnable(GL_DEPTH_TEST);
 	}
-
+	
 	wxString readCLcode(wxString filename)
 	{
 		wxString code = "";
@@ -1850,6 +1884,74 @@ namespace FLIVR
 		return code;
 	}
 
+	void VolumeRenderer::draw_mask_th(float thresh, bool orthographic_p)
+	{
+		Ray view_ray = compute_view();
+
+		vector<TextureBrick*> *bricks = tex_->get_sorted_bricks(view_ray, orthographic_p);
+		if (!bricks || bricks->size() == 0)
+			return;
+
+		if (!m_dslt_kernel)
+		{
+            std::wstring exePath = wxStandardPaths::Get().GetExecutablePath().ToStdWstring();
+            exePath = exePath.substr(0,exePath.find_last_of(std::wstring()+GETSLASH()));
+            std::wstring pref = exePath + GETSLASH() + L"CL_code" + GETSLASH();
+
+			wxString code = "";
+			wxString filepath;
+			
+			filepath = pref + wxString("dslt2.cl");
+			code = readCLcode(filepath);
+			m_dslt_kernel = vol_kernel_factory_.kernel(code.ToStdString());
+			if (!m_dslt_kernel)
+				return;
+		}
+
+		string kn_th = "threshold_mask";
+		if (!m_dslt_kernel->valid())
+		{
+			if (!m_dslt_kernel->create(kn_th))
+				return;
+		}
+
+		for (unsigned int i=0; i < bricks->size(); i++)
+		{
+			TextureBrick* b = (*bricks)[i];
+			int brick_x = b->nx();
+			int brick_y = b->ny();
+			int brick_z = b->nz();
+			int ypitch = brick_x;
+			int zpitch = brick_x*brick_y;
+			size_t global_size[3] = { (size_t)brick_x, (size_t)brick_y, (size_t)brick_z };
+			size_t *local_size = NULL;
+			
+			GLint vd_id = load_brick(0, 0, bricks, i, GL_NEAREST, compression_);
+			GLint mask_id = load_brick_mask(bricks, i, GL_NEAREST);
+			GLint stroke_tex_id = load_brick_stroke(bricks, i, GL_NEAREST);
+
+			if (!glIsTexture(stroke_tex_id) || !glIsTexture(mask_id) || !glIsTexture(vd_id))
+				continue;
+			
+			m_dslt_kernel->setKernelArgTex3D(0, CL_MEM_READ_ONLY, vd_id, kn_th);
+			m_dslt_kernel->setKernelArgTex3D(1, CL_MEM_READ_ONLY, stroke_tex_id, kn_th);
+			m_dslt_kernel->setKernelArgTex3D(2, CL_MEM_WRITE_ONLY, mask_id, kn_th);
+			m_dslt_kernel->setKernelArgConst(3, sizeof(float), (void*)(&thresh), kn_th);
+			m_dslt_kernel->setKernelArgConst(4, sizeof(int), (void*)(&ypitch), kn_th);
+			m_dslt_kernel->setKernelArgConst(5, sizeof(int), (void*)(&zpitch), kn_th);
+			m_dslt_kernel->execute(3, global_size, local_size, kn_th);
+		}
+
+
+		// Reset the blend functions after MIP
+		glBlendEquation(GL_FUNC_ADD);
+		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+		glDisable(GL_BLEND);
+
+		//enable depth test
+		glEnable(GL_DEPTH_TEST);
+	}
+	
 	//type: 0-initial; 1-diffusion-based growing; 2-masked filtering
 	//paint_mode: 1-select; 2-append; 3-erase; 4-diffuse; 5-flood; 6-clear; 7-all;
 	//			  11-posterize
@@ -3121,6 +3223,44 @@ namespace FLIVR
 		}
 
 		//release label texture
+		release_texture(c, GL_TEXTURE_3D);
+	}
+
+	void VolumeRenderer::return_stroke()
+	{
+		if (!tex_)
+			return;
+		vector<TextureBrick*> *bricks = tex_->get_bricks();
+		if (!bricks || bricks->size() == 0)
+			return;
+
+		int c = tex_->nstroke();
+		if (c<0 || c>=TEXTURE_MAX_COMPONENTS)
+			return;
+
+		for (unsigned int i=0; i<bricks->size(); i++)
+		{
+			load_brick_stroke(bricks, i);
+			glActiveTexture(GL_TEXTURE0+c);
+
+			// download texture data
+			int sx = (*bricks)[i]->sx();
+			int sy = (*bricks)[i]->sy();
+			glPixelStorei(GL_PACK_ROW_LENGTH, sx);
+			glPixelStorei(GL_PACK_IMAGE_HEIGHT, sy);
+			glPixelStorei(GL_PACK_ALIGNMENT, 1);
+
+			GLenum type = (*bricks)[i]->tex_type(c);
+			void* data = (*bricks)[i]->tex_data(c);
+			glGetTexImage(GL_TEXTURE_3D, 0, GL_RED,
+				type, data);
+
+			glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+			glPixelStorei(GL_PACK_IMAGE_HEIGHT, 0);
+			glPixelStorei(GL_PACK_ALIGNMENT, 4);
+		}
+
+		//release mask texture
 		release_texture(c, GL_TEXTURE_3D);
 	}
 

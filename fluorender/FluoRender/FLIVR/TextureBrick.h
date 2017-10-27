@@ -55,9 +55,9 @@ namespace FLIVR {
 
 	// We use no more than 2 texture units.
 	// GL_MAX_TEXTURE_UNITS is the actual maximum.
-	//we now added maximum to 4
+	//we now added maximum to 5
 	//which can include mask volumes
-#define TEXTURE_MAX_COMPONENTS	4
+#define TEXTURE_MAX_COMPONENTS	5
 	//these are the render modes used to determine if each mode is drawn
 #define TEXTURE_RENDER_MODES	6
 #define TEXTURE_RENDER_MODE_MASK	4
@@ -116,7 +116,7 @@ namespace FLIVR {
 	public:
 		enum CompType
 		{
-			TYPE_NONE=0, TYPE_INT, TYPE_INT_GRAD, TYPE_GM, TYPE_MASK, TYPE_LABEL
+			TYPE_NONE=0, TYPE_INT, TYPE_INT_GRAD, TYPE_GM, TYPE_MASK, TYPE_LABEL, TYPE_STROKE
 		};
 		// Creator of the brick owns the nrrd memory.
 		TextureBrick(Nrrd* n0, Nrrd* n1,
@@ -146,6 +146,8 @@ namespace FLIVR {
 		inline int nmask() { return nmask_; }
 		inline void nlabel(int label) {nlabel_ = label;}
 		inline int nlabel() {return nlabel_;}
+		inline void nstroke(int stroke) {nstroke_ = stroke;}
+		inline int nstroke() {return nstroke_;}
 		inline void ntype(CompType type, int c)
 		{
 			assert(c >= 0 && c < TEXTURE_MAX_COMPONENTS);
@@ -309,6 +311,8 @@ namespace FLIVR {
 		int nmask_;
 		//the index of current label
 		int nlabel_;
+		//the index of current stroke
+		int nstroke_;
 		//! bytes per texel for each component.
 		int nb_[TEXTURE_MAX_COMPONENTS]; 
 		//! offset into volume texture

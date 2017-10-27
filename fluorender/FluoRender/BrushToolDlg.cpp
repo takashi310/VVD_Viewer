@@ -590,6 +590,7 @@ BrushToolDlg::BrushToolDlg(wxWindow *frame, wxWindow *parent)
 
 	Thaw();
 	SetEvtHandlerEnabled(true);
+	//m_watch.Start();
 }
 
 BrushToolDlg::~BrushToolDlg()
@@ -859,6 +860,41 @@ void BrushToolDlg::OnBrushSclTranslateChange(wxScrollEvent &event)
    double val = double(ival)/10.0;
    wxString str = wxString::Format("%.1f", val);
    m_brush_scl_translate_text->SetValue(str);
+
+   //if (m_watch.Time() >= 100)
+   {
+	   VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	   VolumeData* sel_vol = 0;
+	   if (m_cur_view)
+		   sel_vol = m_cur_view->GetCurrentVolume();
+	   if (vr_frame && sel_vol)
+	   {
+		   if (!m_select_group_chk->GetValue())
+		   {
+			   double thval = val / sel_vol->GetMaxValue();
+			   sel_vol->DrawMaskThreshold((float)thval, m_cur_view->GetPersp());
+		   }
+		   else
+		   {
+			   DataGroup *group = m_cur_view->GetCurrentVolGroup();
+			   if (group)
+			   {
+				   for (int i = 0; i < group->GetVolumeNum(); i++)
+				   {
+					   VolumeData *vd = group->GetVolumeData(i);
+					   if (vd)
+					   {
+						   double thval = val / vd->GetMaxValue();
+						   vd->DrawMaskThreshold((float)thval, m_cur_view->GetPersp());
+					   }
+				   }
+			   }
+		   }
+		   vr_frame->RefreshVRenderViews();
+	   }
+	   
+	  // m_watch.Start();
+   }
 }
 
 void BrushToolDlg::OnBrushSclTranslateText(wxCommandEvent &event)

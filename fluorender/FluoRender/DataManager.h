@@ -224,6 +224,11 @@ public:
 	void DeleteLabel();
 	Nrrd* GetLabel(bool ret);
 	//empty label
+	//load stroke
+	void LoadStroke(Nrrd* stroke);
+	void DeleteStroke();
+	Nrrd* GetStroke(bool ret);
+	void AddEmptyStroke();
 	//mode: 0-zeros;1-ordered; 2-shuffled
 	void AddEmptyLabel(int mode=0);
 	bool SearchLabel(unsigned int label);
@@ -262,6 +267,7 @@ public:
 	void DrawMask(int type, int paint_mode, int hr_mode,
 		double ini_thresh, double gm_falloff, double scl_falloff, double scl_translate,
 		double w2d, double bins, bool ortho = false);
+	void DrawMaskThreshold(float th, bool ortho = false);
 	void DrawMaskDSLT(int type, int paint_mode, int hr_mode,
 		double ini_thresh, double gm_falloff, double scl_falloff, double scl_translate,
 		double w2d, double bins, int dslt_r, int dslt_q, double dslt_c, bool ortho = false);

@@ -876,6 +876,8 @@ z
          return GL_UNSIGNED_BYTE;
       else if (c == nlabel_)
          return GL_UNSIGNED_INT;
+	  else if (c == nstroke_)
+         return GL_UNSIGNED_BYTE;
       else
          return GL_NONE;
    }

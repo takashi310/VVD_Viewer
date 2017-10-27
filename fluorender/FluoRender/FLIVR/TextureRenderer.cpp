@@ -2235,6 +2235,138 @@ namespace FLIVR
 		return result;
 	}
 
+	//search for or create the mask texture in the texture pool
+	GLint TextureRenderer::load_brick_stroke(vector<TextureBrick*> *bricks, int bindex, GLint filter, bool compression, int unit)
+	{
+		GLint result = -1;
+
+		TextureBrick* brick = (*bricks)[bindex];
+		int c = brick->nstroke();
+
+		glActiveTexture(GL_TEXTURE0+(unit>0?unit:c));
+
+		int nb = brick->nb(c);
+		int nx = brick->nx();
+		int ny = brick->ny();
+		int nz = brick->nz();
+		GLenum textype = brick->tex_type(c);
+
+		//! Try to find the existing texture in tex_pool_, for this brick.
+		int idx = -1;
+		for(unsigned int i = 0; i < tex_pool_.size() && idx < 0; i++)
+		{
+			if(tex_pool_[i].id != 0
+				&& tex_pool_[i].brick == brick
+				&& tex_pool_[i].comp == c
+				&& nx == tex_pool_[i].nx
+				&& ny == tex_pool_[i].ny
+				&& nz == tex_pool_[i].nz
+				&& nb == tex_pool_[i].nb
+				&& textype == tex_pool_[i].textype
+				&& glIsTexture(tex_pool_[i].id))
+			{
+				//found!
+				idx = i;
+			}
+		}
+
+		if(idx != -1) 
+		{
+			//! The texture object was located, bind it.
+			// bind texture object
+			glBindTexture(GL_TEXTURE_3D, tex_pool_[idx].id);
+			result = tex_pool_[idx].id;
+			// set interpolation method
+			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, filter);
+			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, filter);
+		} 
+		else //idx == -1
+		{
+			////! try again to find the matching texture object
+			unsigned int tex_id;
+			glGenTextures(1, (GLuint*)&tex_id);
+
+			tex_pool_.push_back(TexParam(c, nx, ny, nz, nb, textype, tex_id));
+			idx = int(tex_pool_.size())-1;
+
+			tex_pool_[idx].brick = brick;
+			tex_pool_[idx].comp = c;
+			// bind texture object
+			glBindTexture(GL_TEXTURE_3D, tex_pool_[idx].id);
+			result = tex_pool_[idx].id;
+
+			// set border behavior
+			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+			// set interpolation method
+			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, filter);
+			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, filter);
+
+			// download texture data
+#ifdef _WIN32
+			glPixelStorei(GL_UNPACK_ROW_LENGTH, brick->sx());
+			glPixelStorei(GL_UNPACK_IMAGE_HEIGHT, brick->sy());
+#else
+			glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+			glPixelStorei(GL_UNPACK_IMAGE_HEIGHT, 0);
+#endif
+			glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+			if (ShaderProgram::shaders_supported())
+			{
+				GLint internal_format = GL_R8;
+				GLenum format = (nb == 1 ? GL_RED : GL_RGBA);
+				if (glTexImage3D)
+				{
+					glTexImage3D(GL_TEXTURE_3D, 0, internal_format, nx, ny, nz, 0, format,
+					brick->tex_type(c), 0);
+#ifdef _WIN32
+					glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format,
+					brick->tex_type(c), brick->tex_data(c));
+#else
+//					if (bricks->size() > 1)
+					{
+						unsigned long long mem_size = (unsigned long long)nx*
+							(unsigned long long)ny*(unsigned long long)nz*nb;
+						unsigned char* temp = new unsigned char[mem_size];
+						unsigned char* tempp = temp;
+						unsigned char* tp = (unsigned char*)(brick->tex_data(c));
+						unsigned char* tp2;
+						for (unsigned int k = 0; k < nz; ++k)
+						{
+							tp2 = tp;
+							for (unsigned int j = 0; j < ny; ++j)
+							{
+								memcpy(tempp, tp2, nx*nb);
+								tempp += nx*nb;
+								tp2 += brick->sx()*nb;
+				}
+							tp += brick->sx()*brick->sy()*nb;
+						}
+						glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format,
+							brick->tex_type(c), (GLvoid*)temp);
+						delete[]temp;
+					}
+//					else
+//						glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format,
+//							brick->tex_type(c), brick->tex_data(c));
+#endif
+			}
+			}
+
+#ifdef _WIN32
+			glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+			glPixelStorei(GL_UNPACK_IMAGE_HEIGHT, 0);
+#endif
+			glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+		}
+		
+		glActiveTexture(GL_TEXTURE0);
+		
+		return result;
+	}
+
 	bool TextureRenderer::brick_sort(const BrickDist& bd1, const BrickDist& bd2)
 	{
 		return bd1.dist > bd2.dist;

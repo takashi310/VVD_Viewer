@@ -48,6 +48,7 @@ namespace FLIVR
         nc_(0),
         nmask_(-1),
         nlabel_(-1),
+		nstroke_(-1),
 		vmin_(0.0),
 		vmax_(0.0),
 		gmin_(0.0),
@@ -758,6 +759,30 @@ namespace FLIVR
 			return false;
 	}
 
+	//add one more texture component as the labeling volume
+	bool Texture::add_empty_stroke()
+	{
+		if (nc_>0 && nc_<=2 && nstroke_==-1)
+		{
+			if (nmask_ < 4 && nlabel_ < 4)	//no mask
+				nstroke_ = 4;
+			else
+				nstroke_ = nlabel_ > nmask_ ? nlabel_+1 : nmask_+1;
+			nb_[nstroke_] = 1;
+
+			int i;
+			for (i=0; i<(int)(*bricks_).size(); i++)
+			{
+				(*bricks_)[i]->nstroke(nstroke_);
+				(*bricks_)[i]->nb(1, nstroke_);
+				(*bricks_)[i]->ntype(TextureBrick::TYPE_STROKE, nstroke_);
+			}
+			return true;
+		}
+		else
+			return false;
+	}
+
 	void Texture::delete_mask()
 	{
 		if (nmask_ > 0)
@@ -803,6 +828,30 @@ namespace FLIVR
 			}
 
 			nlabel_ = -1; 
+		}
+	}
+
+	void Texture::delete_stroke()
+	{
+		if (nstroke_ > 0)
+		{
+			nb_[nstroke_] = 0;
+
+			int i;
+			for (i=0; i<(int)(*bricks_).size(); i++)
+			{
+				(*bricks_)[i]->nstroke(-1);
+				(*bricks_)[i]->nb(0, nstroke_);
+				(*bricks_)[i]->ntype(TextureBrick::TYPE_NONE, nstroke_);
+			}
+
+			if (data_[nstroke_])
+			{
+				delete [] data_[nstroke_]->data;
+				data_[nstroke_] = NULL;
+			}
+
+			nstroke_ = -1; 
 		}
 	}
 

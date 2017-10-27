@@ -67,6 +67,7 @@ namespace FLIVR
 		}
 		inline int nmask() { return nmask_; }
 		inline int nlabel() { return nlabel_; }
+		inline int nstroke() { return nstroke_; }
 
 		inline void set_size(int nx, int ny, int nz, int nc, int* nb) 
 		{
@@ -174,9 +175,12 @@ namespace FLIVR
 		bool add_empty_mask();
 		//add one more texture component as the labeling volume
 		bool add_empty_label();
+		//add one more texture component as the labeling volume
+		bool add_empty_stroke();
 
 		void delete_mask();
 		void delete_label();
+		void delete_stroke();
 
 		//get priority brick number
 		inline void set_use_priority(bool value) {use_priority_ = value;}
@@ -228,6 +232,8 @@ namespace FLIVR
 		int											nmask_;
 		//the index of current label
 		int											nlabel_;
+		//the index of current stroke
+		int											nstroke_;
 		//! bytes per texel for each component.
 		int											nb_[TEXTURE_MAX_COMPONENTS];
 		//! data tform
