@@ -61,6 +61,7 @@ namespace FLIVR
 	VolCalShaderFactory TextureRenderer::cal_shader_factory_;
 	ImgShaderFactory VolumeRenderer::m_img_shader_factory;
 	VolKernelFactory TextureRenderer::vol_kernel_factory_;
+	KernelProgram* VolumeRenderer::m_dslt_kernel = NULL;
 	double VolumeRenderer::sw_ = 0.0;
 
 	VolumeRenderer::VolumeRenderer(Texture* tex,
@@ -119,7 +120,6 @@ namespace FLIVR
 		filter_size_shp_(0.0),
 		inv_(false),
 		compression_(false),
-		m_dslt_kernel(NULL),
 		m_dslt_l2_kernel(NULL),
 		m_dslt_b_kernel(NULL),
 		m_dslt_em_kernel(NULL)
@@ -183,7 +183,6 @@ namespace FLIVR
 		filter_size_shp_(0.0),
 		inv_(copy.inv_),
 		compression_(copy.compression_),
-		m_dslt_kernel(NULL),
 		m_dslt_l2_kernel(NULL),
 		m_dslt_b_kernel(NULL),
 		m_dslt_em_kernel(NULL)
@@ -1908,9 +1907,24 @@ namespace FLIVR
 				return;
 		}
 
-		string kn_th = "threshold_mask";
+		string kn_th  = "threshold_mask";
 		if (!m_dslt_kernel->valid())
 		{
+			string kn_max = "dslt_max";
+			string kn_l2  = "dslt_l2";
+			string kn_b   = "dslt_binarize";
+			string kn_em  = "dslt_elem_min";
+			string kn_ap  = "dslt_ap_mask";
+			if (!m_dslt_kernel->create(kn_max))
+				return;
+			if (!m_dslt_kernel->create(kn_l2))
+				return;
+			if (!m_dslt_kernel->create(kn_b))
+				return;
+			if (!m_dslt_kernel->create(kn_em))
+				return;
+			if (!m_dslt_kernel->create(kn_ap))
+				return;
 			if (!m_dslt_kernel->create(kn_th))
 				return;
 		}
@@ -1940,8 +1954,11 @@ namespace FLIVR
 			m_dslt_kernel->setKernelArgConst(4, sizeof(int), (void*)(&ypitch), kn_th);
 			m_dslt_kernel->setKernelArgConst(5, sizeof(int), (void*)(&zpitch), kn_th);
 			m_dslt_kernel->execute(3, global_size, local_size, kn_th);
-		}
 
+			m_dslt_kernel->delTex(vd_id);
+			m_dslt_kernel->delTex(stroke_tex_id);
+			m_dslt_kernel->delTex(mask_id);
+		}
 
 		// Reset the blend functions after MIP
 		glBlendEquation(GL_FUNC_ADD);
@@ -2097,6 +2114,7 @@ namespace FLIVR
 		string kn_b   = "dslt_binarize";
 		string kn_em  = "dslt_elem_min";
 		string kn_ap  = "dslt_ap_mask";
+		string kn_th  = "threshold_mask";
 		if (!m_dslt_kernel->valid())
 		{
 			if (!m_dslt_kernel->create(kn_max))
@@ -2108,6 +2126,8 @@ namespace FLIVR
 			if (!m_dslt_kernel->create(kn_em))
 				return;
 			if (!m_dslt_kernel->create(kn_ap))
+				return;
+			if (!m_dslt_kernel->create(kn_th))
 				return;
 		}
 

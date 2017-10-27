@@ -302,7 +302,7 @@ namespace FLIVR
 		double m_fog_start;
 		double m_fog_end;
 
-		KernelProgram* m_dslt_kernel;
+		static KernelProgram* m_dslt_kernel;
 		KernelProgram* m_dslt_l2_kernel;
 		KernelProgram* m_dslt_b_kernel;
 		KernelProgram* m_dslt_em_kernel;

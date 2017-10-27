@@ -324,6 +324,14 @@ VolumeData* VolumeData::DeepCopy(VolumeData &copy, bool use_default_settings, Da
 		vd->LoadLabel(label);
 	}
 
+	if (copy.GetStroke(true))
+	{
+		Nrrd *stroke;
+		stroke = nrrdNew();
+		nrrdCopy(stroke, copy.GetStroke(false));
+		vd->LoadStroke(stroke);
+	}
+
 	if (use_default_settings && d_manager)
 	{
 		if (is_brxml) ((BRKXMLReader*)vd->m_reader)->SetLevel(0);
@@ -801,7 +809,7 @@ void VolumeData::LoadStroke(Nrrd* stroke)
 
 	//prepare the texture bricks for the mask
 	m_tex->add_empty_stroke();
-	m_tex->set_nrrd(stroke, m_tex->nmask());
+	m_tex->set_nrrd(stroke, m_tex->nstroke());
 }
 
 void VolumeData::DeleteStroke()

@@ -882,7 +882,7 @@ void BrushToolDlg::OnBrushSclTranslateChange(wxScrollEvent &event)
 				   for (int i = 0; i < group->GetVolumeNum(); i++)
 				   {
 					   VolumeData *vd = group->GetVolumeData(i);
-					   if (vd)
+					   if (vd && vd->GetDisp())
 					   {
 						   double thval = val / vd->GetMaxValue();
 						   vd->DrawMaskThreshold((float)thval, m_cur_view->GetPersp());
