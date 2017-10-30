@@ -56,13 +56,13 @@ namespace FLIVR
             for (int didx = 0; didx < dev_num; didx++)
             {
                 char buffer[10240];
-                clGetDeviceInfo(device_, CL_DEVICE_NAME, sizeof(buffer), buffer, NULL);
+                clGetDeviceInfo(devices[didx], CL_DEVICE_NAME, sizeof(buffer), buffer, NULL);
                 device_name_ = std::string(buffer);
             
                 cl_uint freq = 0;
-                clGetDeviceInfo(device_, CL_DEVICE_MAX_CLOCK_FREQUENCY, sizeof(freq), &freq, NULL);
+                clGetDeviceInfo(devices[didx], CL_DEVICE_MAX_CLOCK_FREQUENCY, sizeof(freq), &freq, NULL);
                 cl_uint units = 0;
-                clGetDeviceInfo(device_, CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(units), &units, NULL);
+                clGetDeviceInfo(devices[didx], CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(units), &units, NULL);
                 if (best_spec < freq * units)
                 {
                     best_pid = pidx;
@@ -86,15 +86,37 @@ namespace FLIVR
 #ifdef _WIN32
             CL_GL_CONTEXT_KHR, (cl_context_properties)wglGetCurrentContext(),
             CL_WGL_HDC_KHR, (cl_context_properties)wglGetCurrentDC(),
+            CL_CONTEXT_PLATFORM, (cl_context_properties)platforms[best_pid],
 #endif
 #ifdef _DARWIN
             CL_CONTEXT_PROPERTY_USE_CGL_SHAREGROUP_APPLE,
             (cl_context_properties) CGLGetShareGroup( gl_context_),
 #endif
-            CL_CONTEXT_PLATFORM, (cl_context_properties)platforms[best_pid],
             0
         };
-        context_ = clCreateContext(properties, 1, &device_, NULL, NULL, &err);
+#ifdef _WIN32
+        context_ = clCreateContext(properties, 0, &device_, NULL, NULL, &err);
+#else
+        context_ = clCreateContext(properties, 0, NULL, NULL, NULL, &err);
+        size_t deviceBufferSize = -1;
+        clGetContextInfo(context_, CL_CONTEXT_DEVICES, 0, NULL, &deviceBufferSize);
+        
+        if (deviceBufferSize == 0)
+        {
+            fprintf(stderr, "No OpenCL devices available\n");
+            return;
+        }
+        
+        cl_device_id *devices = (cl_device_id *)malloc(deviceBufferSize);
+        clGetContextInfo(context_, CL_CONTEXT_DEVICES, deviceBufferSize, devices, NULL);
+        device_ = devices[0];
+        int dev_num = deviceBufferSize / sizeof(cl_device_id);
+        for (int didx = 0; didx < dev_num; didx++)
+        {
+            if (devices[didx] == best_dev)
+                device_ = best_dev;
+        }
+#endif
         if (err != CL_SUCCESS)
             return;
 			
