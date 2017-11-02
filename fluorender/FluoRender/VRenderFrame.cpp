@@ -2579,6 +2579,7 @@ void VRenderFrame::SaveProject(wxString& filename)
 			if (vd->GetReader())
 			{
 				fconfig.Write("slice_seq", vd->GetReader()->GetSliceSeq());
+				fconfig.Write("time_seq", vd->GetReader()->GetTimeSeq());
 				str = vd->GetReader()->GetTimeId();
 				fconfig.Write("time_id", str);
 			}
@@ -3087,6 +3088,12 @@ void VRenderFrame::SaveProject(wxString& filename)
 			fconfig.Write("brush_translate", vrv->GetBrushSclTranslate());
 			fconfig.Write("w2d", vrv->GetW2d());
 
+			int cur=0, st=0, ed=0;
+			vrv->Get4DSeqFrames(st, ed, cur);
+			fconfig.Write("st_time", st);
+			fconfig.Write("ed_time", ed);
+			fconfig.Write("cur_time", cur);
+
 			//rulers
 			fconfig.SetPath(wxString::Format("/views/%d/rulers", i));
 			vector<Ruler*>* ruler_list = vrv->GetRulerList();
@@ -3151,7 +3158,9 @@ void VRenderFrame::SaveProject(wxString& filename)
 	fconfig.Write("width_text", m_movie_view->m_width_text->GetValue());
 	fconfig.Write("height_text", m_movie_view->m_height_text->GetValue());
 	fconfig.Write("time_start_text", m_movie_view->m_time_start_text->GetValue());
+	fconfig.Write("time_cur_text", m_movie_view->m_time_current_text->GetValue());
 	fconfig.Write("time_end_text", m_movie_view->m_time_end_text->GetValue());
+	fconfig.Write("progress_text", m_movie_view->m_progress_text->GetValue());
 	//brushtool diag
 	fconfig.SetPath("/brush_diag");
 	fconfig.Write("ca_min", m_brush_tool_dlg->GetDftCAMin());
@@ -3306,10 +3315,13 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 						if (fconfig.Read("tiff_chan", &cur_chan))
 							cur_chan--;
 					int cur_time = 0;
-					fconfig.Read("cur_time", &cur_time);
+					//fconfig.Read("cur_time", &cur_time);
 					bool slice_seq = 0;
 					fconfig.Read("slice_seq", &slice_seq);
 					m_data_mgr.SetSliceSequence(slice_seq);
+					bool time_seq = 0;
+					fconfig.Read("time_seq", &time_seq);
+					m_data_mgr.SetTimeSequence(time_seq);
 					wxString time_id;
 					fconfig.Read("time_id", &time_id);
 					m_data_mgr.SetTimeId(time_id);
@@ -4499,6 +4511,7 @@ void VRenderFrame::OpenProject(wxString& filename)
 	}
 
 	//movie panel
+	wxString mov_prog, mov_time; 
 	if (fconfig.Exists("/movie_panel"))
 	{
 		fconfig.SetPath("/movie_panel");
@@ -4603,6 +4616,9 @@ void VRenderFrame::OpenProject(wxString& filename)
 			m_movie_view->m_time_start_text->SetValue(sVal);
 		if (fconfig.Read("time_end_text", &sVal))
 			m_movie_view->m_time_end_text->SetValue(sVal);
+		if (fconfig.Read("time_cur_text", &sVal))
+			m_movie_view->m_time_current_text->SetValue(sVal);
+		fconfig.Read("progress_text", &mov_prog);
 	}
 
 	//brushtool diag
@@ -4935,10 +4951,25 @@ void VRenderFrame::OpenProject(wxString& filename)
 
 	if (m_movie_view)
 		m_movie_view->SetView(0);
+
 	delete prg_diag;
     
     //Thaw();
     SetEvtHandlerEnabled(true);
+
+	if (!m_mov_step.IsEmpty() && !mov_prog.IsEmpty())
+	{
+		double movcur = 0.0, movlen = 1.0;
+		mov_prog.ToDouble(&movcur);
+		m_mov_step.ToDouble(&movlen);
+		m_movie_view->SetProgress(movcur/movlen);
+		m_movie_view->SetRendering(movcur/movlen);
+	}
+	else
+	{
+		m_movie_view->SetProgress(0.0);
+		m_movie_view->SetRendering(0.0);
+	}
 }
 
 void VRenderFrame::OnSettings(wxCommandEvent& WXUNUSED(event))

@@ -367,6 +367,9 @@ m_rot_int_type(0),
 m_delayed_stop(false),
 m_batch_mode(false)
 {
+	SetEvtHandlerEnabled(false);
+	Freeze();
+
 	//notebook
 	m_notebook = new wxNotebook(this, wxID_ANY);
 	m_notebook->AddPage(CreateSimplePage(m_notebook), "Basic");
@@ -435,6 +438,9 @@ m_batch_mode(false)
 	SetSizer(sizerV);
 	Layout();
 	Init();
+	
+	Thaw();
+	SetEvtHandlerEnabled(true);
 }
 
 VMovieView::~VMovieView() {}

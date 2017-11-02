@@ -120,6 +120,10 @@ public:
 	void SetCurrentTime(size_t t);
 	bool IsRunningScript() {return m_batch_mode;}
 
+	//set the renderview and progress bars/text
+	void SetRendering(double pcnt);
+	void SetProgress(double pcnt);
+
 public:
 	//controls
 	wxTextCtrl *m_fps_text;
@@ -195,10 +199,6 @@ private:
 
 private:
 	void GetSettings(int view=0);
-
-	//set the renderview and progress bars/text
-	void SetRendering(double pcnt);
-	void SetProgress(double pcnt);
 
 	//write frames to file
 	void WriteFrameToFile(int total_frames);
