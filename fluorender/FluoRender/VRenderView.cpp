@@ -5990,6 +5990,12 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 		}
 	}
 
+	if (!TextureRenderer::get_mem_swap())
+	{
+		doMulti = true;
+		doShadow = true;
+	}
+
 	if (m_mvr->get_vr_num()<=0)
 		return;
 
