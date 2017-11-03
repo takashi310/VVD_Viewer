@@ -3627,6 +3627,9 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 							msk_reader.SetFile(maskname);
 							BaseReader *br = &msk_reader;
 							Nrrd* mask = br->Convert(true);
+							Nrrd* oldmask = vd->GetMask(false);
+							if (oldmask)
+								vd->DeleteMask();
 							if (mask)
 								vd->LoadMask(mask);
 						}

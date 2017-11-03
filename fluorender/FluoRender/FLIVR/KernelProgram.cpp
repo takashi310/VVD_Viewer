@@ -95,7 +95,7 @@ namespace FLIVR
             0
         };
 #ifdef _WIN32
-        context_ = clCreateContext(properties, 0, &device_, NULL, NULL, &err);
+        context_ = clCreateContext(properties, 1, &device_, NULL, NULL, &err);
 #else
         context_ = clCreateContext(properties, 0, NULL, NULL, NULL, &err);
         size_t deviceBufferSize = -1;

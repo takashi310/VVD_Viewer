@@ -1218,6 +1218,8 @@ public:
 				m_vd_list.insert(m_vd_list.begin()+(index+1), vd);
 			else if (index == -1)
 				m_vd_list.insert(m_vd_list.begin()+0, vd);
+			else
+				m_vd_list.push_back(vd);
 		}
 		else
 		{

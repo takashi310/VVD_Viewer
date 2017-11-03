@@ -872,7 +872,8 @@ void BrushToolDlg::OnBrushSclTranslateChange(wxScrollEvent &event)
 		   if (!m_select_group_chk->GetValue())
 		   {
 			   double thval = val / sel_vol->GetMaxValue();
-			   sel_vol->DrawMaskThreshold((float)thval, m_cur_view->GetPersp());
+			   if (sel_vol->GetMask(false))
+				  sel_vol->DrawMaskThreshold((float)thval, m_cur_view->GetPersp());
 		   }
 		   else
 		   {
@@ -885,7 +886,8 @@ void BrushToolDlg::OnBrushSclTranslateChange(wxScrollEvent &event)
 					   if (vd && vd->GetDisp())
 					   {
 						   double thval = val / vd->GetMaxValue();
-						   vd->DrawMaskThreshold((float)thval, m_cur_view->GetPersp());
+						   if (vd->GetMask(false))
+							   vd->DrawMaskThreshold((float)thval, m_cur_view->GetPersp());
 					   }
 				   }
 			   }
