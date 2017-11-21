@@ -104,7 +104,7 @@ namespace FLIVR
 
 #define CAL_BODY_ADDITION \
 	"	//CAL_BODY_ADDITION\n" \
-	"	vec4 c = vec4(clamp(c1.x+c2.x, 0.0, 1.0));\n" \
+	"	vec4 c = vec4(max(c1.x, c2.x));\n" \
 	"\n"
 
 #define CAL_BODY_DIVISION \

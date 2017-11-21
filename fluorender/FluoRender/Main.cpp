@@ -193,7 +193,7 @@ bool VRenderApp::OnCmdLineParsed(wxCmdLineParser& parser)
    }
     
 #ifdef _WIN32
-   {
+/*   {
 	   wxString message;
 
 	   int fnum = m_files.GetCount();
@@ -223,7 +223,7 @@ bool VRenderApp::OnCmdLineParsed(wxCmdLineParser& parser)
 		   return true;
 	   }
 	   delete client;
-   }
+   }*/
 #endif
     
    return true;
