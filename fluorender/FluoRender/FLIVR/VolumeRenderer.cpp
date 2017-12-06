@@ -1932,9 +1932,14 @@ namespace FLIVR
 		for (unsigned int i=0; i < bricks->size(); i++)
 		{
 			TextureBrick* b = (*bricks)[i];
+			int c = b->nmask();
+			int nb = b->nb(c);
+			float bmax = (b->nb(0) == 2) ? 65535.0 : 255.0;
+			float thval = thresh / bmax;
 			int brick_x = b->nx();
 			int brick_y = b->ny();
 			int brick_z = b->nz();
+
 			int ypitch = brick_x;
 			int zpitch = brick_x*brick_y;
 			size_t global_size[3] = { (size_t)brick_x, (size_t)brick_y, (size_t)brick_z };
@@ -1950,7 +1955,7 @@ namespace FLIVR
 			m_dslt_kernel->setKernelArgTex3D(0, CL_MEM_READ_ONLY, vd_id, kn_th);
 			m_dslt_kernel->setKernelArgTex3D(1, CL_MEM_READ_ONLY, stroke_tex_id, kn_th);
 			m_dslt_kernel->setKernelArgTex3D(2, CL_MEM_WRITE_ONLY, mask_id, kn_th);
-			m_dslt_kernel->setKernelArgConst(3, sizeof(float), (void*)(&thresh), kn_th);
+			m_dslt_kernel->setKernelArgConst(3, sizeof(float), (void*)(&thval), kn_th);
 			m_dslt_kernel->setKernelArgConst(4, sizeof(int), (void*)(&ypitch), kn_th);
 			m_dslt_kernel->setKernelArgConst(5, sizeof(int), (void*)(&zpitch), kn_th);
 			m_dslt_kernel->execute(3, global_size, local_size, kn_th);

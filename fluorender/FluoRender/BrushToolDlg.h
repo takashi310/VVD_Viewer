@@ -243,6 +243,7 @@ private:
 	wxWindow* CreateAnalysisPage(wxWindow *parent);
 
 	void LoadVolumes();
+	void DrawBrush(double val);
 
 	//event handling
 	//paint tools
@@ -268,6 +269,7 @@ private:
 	//translate
 	void OnBrushSclTranslateChange(wxScrollEvent &event);
 	void OnBrushSclTranslateText(wxCommandEvent &event);
+	void OnBrushSclTranslateTextEnter(wxCommandEvent &event);
 	//brush properties
 	//brush size 1
 	void OnBrushSize1Change(wxScrollEvent &event);

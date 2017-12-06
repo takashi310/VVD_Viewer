@@ -133,6 +133,8 @@ void VolumeSelector::Select(double radius)
 	else
 	{
 		ini_thresh = m_scl_translate;
+		if (m_vd->GetLeftThresh() > ini_thresh)
+			ini_thresh = m_vd->GetLeftThresh();
 		scl_falloff = 0.0;
 	}
 	if (m_edge_detect)

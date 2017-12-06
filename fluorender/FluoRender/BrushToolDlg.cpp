@@ -26,6 +26,7 @@ EVT_TOOL(ID_HelpBtn, BrushToolDlg::OnHelpBtn)
 //translate
 EVT_COMMAND_SCROLL(ID_BrushSclTranslateSldr, BrushToolDlg::OnBrushSclTranslateChange)
 EVT_TEXT(ID_BrushSclTranslateText, BrushToolDlg::OnBrushSclTranslateText)
+EVT_TEXT_ENTER(ID_BrushSclTranslateText, BrushToolDlg::OnBrushSclTranslateTextEnter)
 //2d influence
 EVT_COMMAND_SCROLL(ID_Brush2dinflSldr, BrushToolDlg::OnBrush2dinflChange)
 EVT_TEXT(ID_Brush2dinflText, BrushToolDlg::OnBrush2dinflText)
@@ -155,7 +156,7 @@ wxWindow* BrushToolDlg::CreateBrushPage(wxWindow *parent)
 	m_brush_scl_translate_sldr = new wxSlider(page, ID_BrushSclTranslateSldr, 0, 0, 2550,
 		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
 	m_brush_scl_translate_text = new wxTextCtrl(page, ID_BrushSclTranslateText, "0.0",
-		wxDefaultPosition, wxSize(50, 20), 0, vald_fp1);
+		wxDefaultPosition, wxSize(50, 20), wxTE_PROCESS_ENTER, vald_fp1);
 	sizer1_2->Add(5, 5);
 	sizer1_2->Add(st, 0, wxALIGN_CENTER);
 	sizer1_2->Add(m_brush_scl_translate_sldr, 1, wxEXPAND);
@@ -852,6 +853,47 @@ void BrushToolDlg::OnBrushRedo(wxCommandEvent &event)
 	UpdateUndoRedo();
 }
 
+void BrushToolDlg::DrawBrush(double val)
+{
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	VolumeData* sel_vol = 0;
+	if (m_cur_view)
+		sel_vol = m_cur_view->GetCurrentVolume();
+	if (vr_frame && sel_vol)
+	{
+		if (!m_select_group_chk->GetValue())
+		{
+			double thval = val / sel_vol->GetMaxValue();
+			if (thval < sel_vol->GetLeftThresh())
+				thval = sel_vol->GetLeftThresh();
+			thval *= sel_vol->GetMaxValue();
+			if (sel_vol->GetMask(false))
+				sel_vol->DrawMaskThreshold((float)thval, m_cur_view->GetPersp());
+		}
+		else
+		{
+			DataGroup *group = m_cur_view->GetCurrentVolGroup();
+			if (group)
+			{
+				for (int i = 0; i < group->GetVolumeNum(); i++)
+				{
+					VolumeData *vd = group->GetVolumeData(i);
+					if (vd && vd->GetDisp())
+					{
+						double thval = val / vd->GetMaxValue();
+						if (thval < vd->GetLeftThresh())
+							thval = vd->GetLeftThresh();
+						thval *= sel_vol->GetMaxValue();
+						if (vd->GetMask(false))
+							vd->DrawMaskThreshold((float)thval, m_cur_view->GetPersp());
+					}
+				}
+			}
+		}
+		vr_frame->RefreshVRenderViews();
+	}
+}
+
 //selection adjustment
 //scalar translate
 void BrushToolDlg::OnBrushSclTranslateChange(wxScrollEvent &event)
@@ -861,42 +903,22 @@ void BrushToolDlg::OnBrushSclTranslateChange(wxScrollEvent &event)
    wxString str = wxString::Format("%.1f", val);
    m_brush_scl_translate_text->SetValue(str);
 
-   //if (m_watch.Time() >= 100)
-   {
-	   VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-	   VolumeData* sel_vol = 0;
-	   if (m_cur_view)
-		   sel_vol = m_cur_view->GetCurrentVolume();
-	   if (vr_frame && sel_vol)
-	   {
-		   if (!m_select_group_chk->GetValue())
-		   {
-			   double thval = val / sel_vol->GetMaxValue();
-			   if (sel_vol->GetMask(false))
-				  sel_vol->DrawMaskThreshold((float)thval, m_cur_view->GetPersp());
-		   }
-		   else
-		   {
-			   DataGroup *group = m_cur_view->GetCurrentVolGroup();
-			   if (group)
-			   {
-				   for (int i = 0; i < group->GetVolumeNum(); i++)
-				   {
-					   VolumeData *vd = group->GetVolumeData(i);
-					   if (vd && vd->GetDisp())
-					   {
-						   double thval = val / vd->GetMaxValue();
-						   if (vd->GetMask(false))
-							   vd->DrawMaskThreshold((float)thval, m_cur_view->GetPersp());
-					   }
-				   }
-			   }
-		   }
-		   vr_frame->RefreshVRenderViews();
-	   }
-	   
-	  // m_watch.Start();
-   }
+   DrawBrush(val);
+}
+
+void BrushToolDlg::OnBrushSclTranslateTextEnter(wxCommandEvent &event)
+{
+   wxString str = m_brush_scl_translate_text->GetValue();
+   double val;
+   str.ToDouble(&val);
+   m_dft_scl_translate = val/m_max_value;
+   m_brush_scl_translate_sldr->SetValue(int(val*10.0+0.5));
+
+   DrawBrush(val);
+   
+   //set translate
+   if (m_cur_view)
+      m_cur_view->SetBrushSclTranslate(m_dft_scl_translate);
 }
 
 void BrushToolDlg::OnBrushSclTranslateText(wxCommandEvent &event)
