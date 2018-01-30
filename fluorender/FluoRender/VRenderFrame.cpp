@@ -3056,6 +3056,10 @@ void VRenderFrame::SaveProject(wxString& filename)
 			str = vrv->m_glview->m_sb_num;
 			fconfig.Write("sb_num", str);
 			fconfig.Write("sb_unit", vrv->m_glview->m_sb_unit);
+			fconfig.Write("sb_digit", vrv->m_glview->GetScaleBarDigit());
+			bool fixed; int uid; double len;
+			vrv->GetScaleBarFixed(fixed, len, uid);
+			fconfig.Write("sb_fixed", fixed);
 
 			//2d adjustment
 			str = wxString::Format("%f %f %f", vrv->m_glview->GetGamma().r(),
@@ -4332,6 +4336,12 @@ void VRenderFrame::OpenProject(wxString& filename)
 				int unit;
 				if (fconfig.Read("sb_unit", &unit))
 					vrv->m_glview->m_sb_unit = unit;
+				int digit;
+				if (fconfig.Read("sb_digit", &digit))
+					vrv->SetScaleBarDigit(digit);
+				bool fixed;
+				if (fconfig.Read("sb_fixed", &fixed))
+					vrv->FixScaleBarLen(fixed);
 
 				//2d sdjustment settings
 				if (fconfig.Read("gamma", &str))

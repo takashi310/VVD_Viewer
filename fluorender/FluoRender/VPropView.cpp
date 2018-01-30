@@ -144,6 +144,8 @@ wxPanel(parent, id, pos, size,style, name),
 	wxFloatingPointValidator<double> vald_fp3(3);
 	//validator: floating point 4
 	wxFloatingPointValidator<double> vald_fp4(4);
+	//validator: floating point 6
+	wxFloatingPointValidator<double> vald_fp6(6);
 	//validator: floating point 8
 	wxFloatingPointValidator<double> vald_fp8(8);
 	//validator: integer
@@ -362,26 +364,26 @@ wxPanel(parent, id, pos, size,style, name),
 #ifdef _DARWIN
 	int spc_formsize = 50;
 #else
-	int spc_formsize = 70;
+	int spc_formsize = 60;
 #endif
 	//x
 	st = new wxStaticText(this, 0, "X:");
-	m_space_x_text = new wxTextCtrl(this, ID_SpaceXText, "1.00000000",
-		wxDefaultPosition, wxSize(spc_formsize, 20), 0, vald_fp8);
+	m_space_x_text = new wxTextCtrl(this, ID_SpaceXText, "1.000000",
+		wxDefaultPosition, wxSize(spc_formsize, 20), 0, vald_fp6);
 	sizer_b->Add(10, 5, 0);
 	sizer_b->Add(st, 0, wxALIGN_CENTER);
 	sizer_b->Add(m_space_x_text, 0, wxALIGN_CENTER);
 	//y
 	st = new wxStaticText(this, 0, "Y:");
-	m_space_y_text = new wxTextCtrl(this, ID_SpaceYText, "1.00000000",
-		wxDefaultPosition, wxSize(spc_formsize, 20), 0, vald_fp8);
+	m_space_y_text = new wxTextCtrl(this, ID_SpaceYText, "1.000000",
+		wxDefaultPosition, wxSize(spc_formsize, 20), 0, vald_fp6);
 	sizer_b->Add(5, 5, 0);
 	sizer_b->Add(st, 0, wxALIGN_CENTER);
 	sizer_b->Add(m_space_y_text, 0, wxALIGN_CENTER);
 	//z
 	st = new wxStaticText(this, 0, "Z:");
-	m_space_z_text = new wxTextCtrl(this, ID_SpaceZText, "1.00000000",
-		wxDefaultPosition, wxSize(spc_formsize, 20), 0, vald_fp8);
+	m_space_z_text = new wxTextCtrl(this, ID_SpaceZText, "1.000000",
+		wxDefaultPosition, wxSize(spc_formsize, 20), 0, vald_fp6);
 	sizer_b->Add(5, 5, 0);
 	sizer_b->Add(st, 0, wxALIGN_CENTER);
 	sizer_b->Add(m_space_z_text, 0, wxALIGN_CENTER);
@@ -389,7 +391,7 @@ wxPanel(parent, id, pos, size,style, name),
 #ifdef _DARWIN
 	int sb_formsize = 55;
 #else
-	int sb_formsize = 75;
+	int sb_formsize = 80;
 #endif
 	//scale bar
 	m_scale_chk = new wxCheckBox(this, ID_ScaleChk, "SclBar:",
@@ -645,7 +647,7 @@ void VPropView::GetSettings()
 	//spacings
 	double spcx, spcy, spcz;
 	m_vd->GetSpacings(spcx, spcy, spcz, 0);
-	int pr = 8;
+	int pr = 6;
 /*	double minspclog10 = log10(min(min(spcx, spcy), spcz));
 	if (minspclog10 <= -2.0)
 		pr = 3 - ((int)minspclog10 + 1.0);
@@ -682,11 +684,11 @@ void VPropView::GetSettings()
 		{
 			m_scale_cmb->Select(vrv->m_glview->m_sb_unit);
 			dval = vrv->GetScaleBarLen();
-			m_scale_text->ChangeValue(wxString::Format(fmstr, dval));
+			m_scale_text->ChangeValue(wxString::Format("%.8f", dval));
 			bool scale_check = vrv->m_glview->m_disp_scale_bar;
 			m_scale_chk->SetValue(scale_check);
 			m_scale_te_chk->SetValue(vrv->m_glview->m_disp_scale_bar_text);
-			int dig = m_vrv->m_glview->GetScaleBarDigit();
+			int dig = vrv->m_glview->GetScaleBarDigit();
 			if (dig >= 0 && dig <= 8)
 				m_scale_digit_cmb->Select(dig);
 			bool fixed = false;
@@ -2003,6 +2005,9 @@ bool VPropView::SetSpacings()
 	str = m_space_z_text->GetValue();
 	str.ToDouble(&spcz);
 	if (spcz<=0.0)
+		return false;
+
+	if ( spcz / Min(spcx,spcy) >= 500.0)
 		return false;
 
 	if ((m_sync_group || m_sync_group_spc) && m_group)
