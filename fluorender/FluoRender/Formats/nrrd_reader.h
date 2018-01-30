@@ -35,7 +35,7 @@ DEALINGS IN THE SOFTWARE.
 
 using namespace std;
 
-class NRRDReader : public BaseReader
+class EXPORT_API NRRDReader : public BaseReader
 {
 public:
 	NRRDReader();

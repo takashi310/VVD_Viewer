@@ -32,7 +32,7 @@ DEALINGS IN THE SOFTWARE.
 
 using namespace std;
 
-class MSKReader : public BaseReader
+class EXPORT_API MSKReader : public BaseReader
 {
 public:
 	MSKReader();

@@ -5393,6 +5393,68 @@ bool VRenderFrame::RunPlugin(wxString name, wxString options)
 	return false;
 }
 
+static size_t my_read_callback(void *ptr, size_t size, size_t nmemb, void *stream)
+{
+	curl_off_t nread;
+	/* in real-world cases, this would probably get this data differently
+	as this fread() stuff is exactly what the library already would do
+	by default internally */ 
+	size_t retcode = fread(ptr, size, nmemb, (FILE *)stream);
+
+	nread = (curl_off_t)retcode;
+
+	fprintf(stderr, "*** We read %" CURL_FORMAT_CURL_OFF_T " bytes from file\n", nread);
+	return retcode;
+}
+
+int VRenderFrame::UploadFileRemote(wxString url, wxString upfname, wxString loc_fpath, wxString usr, wxString pwd)
+{
+	CURLcode res;
+	FILE *fl;
+	struct stat file_info;
+	curl_off_t fsize;
+	struct curl_slist *headerlist = NULL;
+	wxString buf1 = wxString("RNFR ")+upfname+wxT(".uploading");
+	wxString buf2 = wxString("RNTO ")+upfname;
+	wxString usrpwd = usr + wxT(":") + pwd;
+	wxString fullurl = url + upfname + wxT(".uploading");
+
+	if (stat(loc_fpath.ToStdString().c_str(), &file_info)) {
+		printf("Couldnt open '%s': %sn", loc_fpath.ToStdString().c_str(), strerror(errno));
+		return 1;
+	}
+	fsize = (curl_off_t) file_info.st_size;
+	printf("Local file size: %" CURL_FORMAT_CURL_OFF_T " bytes.n", fsize);
+	fl = fopen(loc_fpath.ToStdString().c_str(), "rb");
+	
+	_g_curl = curl_easy_init();
+	if (_g_curl) {
+		headerlist = curl_slist_append(headerlist, buf1.ToStdString().c_str());
+		headerlist = curl_slist_append(headerlist, buf2.ToStdString().c_str());
+		curl_easy_setopt(_g_curl, CURLOPT_READFUNCTION, my_read_callback);
+		curl_easy_setopt(_g_curl, CURLOPT_UPLOAD, 1L);
+		curl_easy_setopt(_g_curl, CURLOPT_URL, fullurl.ToStdString().c_str());
+		curl_easy_setopt(_g_curl, CURLOPT_POSTQUOTE, headerlist);
+		curl_easy_setopt(_g_curl, CURLOPT_READDATA, fl);
+		curl_easy_setopt(_g_curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t) fsize);
+		curl_easy_setopt(_g_curl, CURLOPT_USERPWD, usrpwd);
+
+		res = curl_easy_perform(_g_curl);
+
+		curl_slist_free_all(headerlist);
+
+		curl_easy_cleanup(_g_curl);
+	}
+	fclose(fl);
+
+	return 0;
+}
+
+int VRenderFrame::DownloadFileRemote(wxString url, wxString dir, wxString usr, wxString pwd)
+{
+	return 0;
+}
+
 //panes
 void VRenderFrame::OnPaneClose(wxAuiManagerEvent& event)
 {

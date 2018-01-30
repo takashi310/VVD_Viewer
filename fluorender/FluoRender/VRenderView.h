@@ -764,6 +764,8 @@ public:
 
 	void FixScaleBarLen(bool fix, double len=-1.0);
 	void GetScaleBarFixed(bool &fix, double &len, int &unitid);
+	void SetScaleBarDigit(int digit){ m_sclbar_digit = (digit >= 0 && digit <= 8) ? digit : 3; }
+	int GetScaleBarDigit(){ return m_sclbar_digit; }
 
 	VolumeData* GetCurrentVolume() {return m_cur_vol;}
 	void SetCurrentVolume(VolumeData *vd) {m_cur_vol = vd;}
@@ -1145,6 +1147,7 @@ private:
 	bool m_fix_sclbar;
 	double m_fixed_sclbar_len;
 	double m_fixed_sclbar_fac;
+	int m_sclbar_digit;
 
 private:
 #ifdef _WIN32
@@ -1886,6 +1889,8 @@ public:
 
 	void FixScaleBarLen(bool fix, double len=-1.0) {if (m_glview) m_glview->FixScaleBarLen(fix, len);}
 	void GetScaleBarFixed(bool &fix, double &len, int &unitid) {if (m_glview) m_glview->GetScaleBarFixed(fix, len, unitid);}
+	void SetScaleBarDigit(int digit) {if (m_glview) m_glview->SetScaleBarDigit(digit);}
+	int GetScaleBarDigit() { return m_glview ? m_glview->GetScaleBarDigit() : 3; }
 
 	VolumeData* GetCurrentVolume() { if (m_glview) return m_glview->GetCurrentVolume(); else return NULL; }
 	void SetCurrentVolume(VolumeData *vd) { if (m_glview) m_glview->SetCurrentVolume(vd); }

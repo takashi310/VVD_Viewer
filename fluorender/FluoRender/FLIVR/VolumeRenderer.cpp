@@ -1739,7 +1739,7 @@ namespace FLIVR
 			
 		GLfloat clear_color[4];
 		glGetFloatv(GL_COLOR_CLEAR_VALUE, clear_color);
-		bool clear_stroke = (paint_mode == 1 || paint_mode == 2 || paint_mode == 7);
+		bool clear_stroke = (paint_mode == 1 || paint_mode == 2 || (paint_mode == 4 && type == 0) || paint_mode == 6 || paint_mode == 7);
 
 		float matrix[16];
 		for (unsigned int i=0; i < bricks->size(); i++)

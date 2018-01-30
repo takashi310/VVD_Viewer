@@ -8,7 +8,7 @@
 
 using namespace std;
 
-class BRKXMLReader : public BaseReader
+class EXPORT_API BRKXMLReader : public BaseReader
 {
 public:
 	BRKXMLReader();

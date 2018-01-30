@@ -8,7 +8,7 @@
 
 using namespace std;
 
-class SWCReader
+class EXPORT_API SWCReader
 {
 public:
 	SWCReader();

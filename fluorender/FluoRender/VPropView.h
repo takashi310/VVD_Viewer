@@ -64,6 +64,7 @@ class EXPORT_API VPropView: public wxPanel
 		ID_ScaleCmb,
 		ID_ScaleTextChk,
 		ID_ScaleLenFixChk,
+		ID_ScaleDigitCombo,
 		ID_LegendChk,
 		ID_SyncGroupChk,
 		ID_SyncGroupSpcChk,
@@ -213,6 +214,7 @@ private:
 	wxComboBox *m_scale_cmb;
 	wxCheckBox *m_scale_te_chk;
 	wxCheckBox *m_scale_lenfix_chk;
+	wxComboBox *m_scale_digit_cmb;
 	//legend
 	wxCheckBox *m_legend_chk;
 	//sync
@@ -280,6 +282,7 @@ private:
 	void OnScaleTextEditing(wxCommandEvent& event);
 	void OnScaleUnitSelected(wxCommandEvent& event);
 	void OnScaleLenFixCheck(wxCommandEvent& event);
+	void OnScaleDigitSelected(wxCommandEvent& event);
 	//legend
 	void OnLegendCheck(wxCommandEvent& event);
 	//sync within group

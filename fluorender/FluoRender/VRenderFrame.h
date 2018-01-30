@@ -344,6 +344,8 @@ public:
 	bool IsShownPluginWindow(wxString name);
 	bool RunPlugin(wxString name, wxString options);
 	bool PluginExists(wxString name);
+	int UploadFileRemote(wxString url, wxString upfname, wxString loc_fpath, wxString usr, wxString pwd=wxString());
+	int DownloadFileRemote(wxString url, wxString dir, wxString usr=wxString(), wxString pwd=wxString());
 	
 public: //public so export window can see it and set it. 
 	RecorderDlg* m_recorder_dlg;

@@ -1184,7 +1184,8 @@ wxGLCanvas(parent, id, attriblist, pos, size, style),
 	m_finished_peeling_layer(0),
 	m_fix_sclbar(false),
 	m_fixed_sclbar_len(0.0),
-	m_fixed_sclbar_fac(0.0)
+	m_fixed_sclbar_fac(0.0),
+	m_sclbar_digit(3)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -10940,38 +10941,60 @@ void VRenderGLView::DrawScaleBar()
 	wxString unit_txt = m_sb_text;
 
 	wxString num_txt;
-
-	if (m_fix_sclbar)
+	
+	if (m_sclbar_digit == 0)
+		num_txt = wxString::Format(wxT("%i "), (int)len_txt);
+	else if (m_sclbar_digit > 0)
 	{
-		if (log10(len_txt) >= 2.0)
-			num_txt = wxString::Format(wxT("%i "), (int)len_txt);
-		else if (len_txt < 1.0)
-			num_txt = wxString::Format(wxT("%.3f "), len_txt);
+		wxString f = wxT("%.9f");
+		num_txt = wxString::Format(f, len_txt);
+		wxString intstr = num_txt.BeforeFirst(wxT('.'));
+		wxString fracstr = num_txt.AfterFirst(wxT('.'));
+		int fractextlen = m_sclbar_digit;
+		if (fractextlen > fracstr.Length()) fractextlen = fracstr.Length();
+		num_txt = intstr + wxT(".") + fracstr.Mid(0, fractextlen) + wxT(" ");
+	}
+
+/*
+	if (m_sclbar_digit == 0)
+		num_txt = wxString::Format(wxT("%i "), (int)len_txt);
+	else if (m_sclbar_digit > 0)
+	{
+		wxString f = wxT("%.15f");
+		num_txt = wxString::Format(f, len_txt);
+		wxString intstr = num_txt.BeforeFirst(wxT('.'));
+		if (intstr.Length() >= m_sclbar_digit)
+			num_txt = intstr;
+		else if (intstr.GetChar(0) != wxT('0'))
+		{
+			int textlen = m_sclbar_digit+1;
+			if (textlen >= num_txt.Length()) textlen = num_txt.Length();
+			num_txt = num_txt.Mid(0, m_sclbar_digit+1);
+		}
 		else
 		{
-			int pr = 2.0 - (int)log10(len_txt);
-			wxString f = wxT("%.") + wxString::Format(wxT("%i"), pr) + wxT("f ");
-			num_txt = wxString::Format(f, len_txt);
-		}
-	}
-	else
-	{
-		num_txt = wxString::Format(wxT("%.3f"), len_txt);
-		int i;
-		for (i = num_txt.Length()-1; i >= 0; i--)
-		{
-			if (num_txt.GetChar(i) == L'.')
-				break;
-			if (num_txt.GetChar(i) != L'0')
+			int count;
+			bool zero = true;
+			for(count = 0; count < num_txt.Length(); count++)
 			{
-				i++;
-				break;
+				if (num_txt.GetChar(count) != wxT('0') && num_txt.GetChar(count) != wxT('.'))
+				{
+					zero = false;
+					break;
+				}
 			}
+			if (!zero)
+			{
+				count += m_sclbar_digit;
+				if (count >= num_txt.Length()) count = num_txt.Length()-1;
+			}
+			else
+				count = 1;
+			num_txt = num_txt.Mid(0, count);
 		}
-		if (i > 0)
-			num_txt = num_txt.Mid(0, i);
 		num_txt += wxT(" ");
 	}
+*/
 
 /*	wxString num_txt = (len_txt==(int)len_txt) ? wxString::Format(wxT("%i "), (int)len_txt) :
 												 wxString::Format( ((int)(len_txt*100.0))%10==0 ? wxT("%.1f ") : wxT("%.2f "), len_txt);

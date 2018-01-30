@@ -30,7 +30,7 @@ DEALINGS IN THE SOFTWARE.
 
 #include <base_writer.h>
 
-class NRRDWriter : public BaseWriter
+class EXPORT_API NRRDWriter : public BaseWriter
 {
 public:
 	NRRDWriter();

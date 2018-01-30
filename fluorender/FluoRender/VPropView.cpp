@@ -63,6 +63,7 @@ BEGIN_EVENT_TABLE(VPropView, wxPanel)
 	EVT_TEXT(ID_ScaleText, VPropView::OnScaleTextEditing)
 	EVT_COMBOBOX(ID_ScaleCmb, VPropView::OnScaleUnitSelected)
 	EVT_CHECKBOX(ID_ScaleLenFixChk, VPropView::OnScaleLenFixCheck)
+	EVT_COMBOBOX(ID_ScaleDigitCombo, VPropView::OnScaleDigitSelected)
 	//legend
 	EVT_CHECKBOX(ID_LegendChk, VPropView::OnLegendCheck)
 	//sync within group
@@ -357,43 +358,63 @@ wxPanel(parent, id, pos, size,style, name),
 	//m_color_text->Hide();
 
 	//spaceings
+
+#ifdef _DARWIN
+	int spc_formsize = 50;
+#else
+	int spc_formsize = 70;
+#endif
 	//x
 	st = new wxStaticText(this, 0, "X:");
-	m_space_x_text = new wxTextCtrl(this, ID_SpaceXText, "1.000",
-		wxDefaultPosition, wxSize(45, 20), 0, vald_fp3);
+	m_space_x_text = new wxTextCtrl(this, ID_SpaceXText, "1.00000000",
+		wxDefaultPosition, wxSize(spc_formsize, 20), 0, vald_fp8);
 	sizer_b->Add(10, 5, 0);
 	sizer_b->Add(st, 0, wxALIGN_CENTER);
 	sizer_b->Add(m_space_x_text, 0, wxALIGN_CENTER);
 	//y
 	st = new wxStaticText(this, 0, "Y:");
-	m_space_y_text = new wxTextCtrl(this, ID_SpaceYText, "1.000",
-		wxDefaultPosition, wxSize(45, 20), 0, vald_fp3);
+	m_space_y_text = new wxTextCtrl(this, ID_SpaceYText, "1.00000000",
+		wxDefaultPosition, wxSize(spc_formsize, 20), 0, vald_fp8);
 	sizer_b->Add(5, 5, 0);
 	sizer_b->Add(st, 0, wxALIGN_CENTER);
 	sizer_b->Add(m_space_y_text, 0, wxALIGN_CENTER);
 	//z
 	st = new wxStaticText(this, 0, "Z:");
-	m_space_z_text = new wxTextCtrl(this, ID_SpaceZText, "1.000",
-		wxDefaultPosition, wxSize(45, 20), 0, vald_fp3);
+	m_space_z_text = new wxTextCtrl(this, ID_SpaceZText, "1.00000000",
+		wxDefaultPosition, wxSize(spc_formsize, 20), 0, vald_fp8);
 	sizer_b->Add(5, 5, 0);
 	sizer_b->Add(st, 0, wxALIGN_CENTER);
 	sizer_b->Add(m_space_z_text, 0, wxALIGN_CENTER);
 
+#ifdef _DARWIN
+	int sb_formsize = 55;
+#else
+	int sb_formsize = 75;
+#endif
 	//scale bar
 	m_scale_chk = new wxCheckBox(this, ID_ScaleChk, "SclBar:",
 		wxDefaultPosition, wxDefaultSize, wxALIGN_RIGHT);
 	m_scale_te_chk = new wxCheckBox(this, ID_ScaleTextChk, "Text:",
 		wxDefaultPosition, wxDefaultSize, wxALIGN_RIGHT);
 	m_scale_text = new wxTextCtrl(this, ID_ScaleText, "",
-		wxDefaultPosition, wxSize(55, 20), 0, vald_fp3);
+		wxDefaultPosition, wxSize(sb_formsize, 20), 0, vald_fp8);
 	m_scale_cmb = new wxComboBox(this, ID_ScaleCmb, "",
 		wxDefaultPosition, wxSize(50, 30), 0, NULL, wxCB_READONLY);
 	m_scale_cmb->Append("nm");
 	m_scale_cmb->Append(L"\u03BCm");
 	m_scale_cmb->Append("mm");
 	m_scale_cmb->Select(1);
+	
+	st = new wxStaticText(this, 0, "Digit:");
+	m_scale_digit_cmb = new wxComboBox(this, ID_ScaleDigitCombo, "",
+		wxDefaultPosition, wxSize(35, 30), 0, NULL, wxCB_READONLY);
+	for (int c = 0; c <= 8; c++)
+		m_scale_digit_cmb->Append(wxString::Format(wxT(" %i"), c));
+	m_scale_digit_cmb->Select(2);
+	
 	m_scale_lenfix_chk = new wxCheckBox(this, ID_ScaleLenFixChk, "Fix length:",
 		wxDefaultPosition, wxDefaultSize, wxALIGN_RIGHT);
+
 	sizer_b->Add(10, 5, 0);
 	sizer_b->Add(m_scale_chk, 0, wxALIGN_CENTER);
 	sizer_b->Add(5, 5, 0);
@@ -402,6 +423,9 @@ wxPanel(parent, id, pos, size,style, name),
 	sizer_b->Add(m_scale_text, 0, wxALIGN_CENTER);
 	sizer_b->Add(5, 5, 0);
 	sizer_b->Add(m_scale_cmb, 0, wxALIGN_CENTER);
+	sizer_b->Add(5, 5, 0);
+	sizer_b->Add(st, 0, wxALIGN_CENTER);
+	sizer_b->Add(m_scale_digit_cmb, 0, wxALIGN_CENTER_VERTICAL);
 	sizer_b->Add(5, 5, 0);
 	sizer_b->Add(m_scale_lenfix_chk, 0, wxALIGN_CENTER);
 
@@ -621,11 +645,11 @@ void VPropView::GetSettings()
 	//spacings
 	double spcx, spcy, spcz;
 	m_vd->GetSpacings(spcx, spcy, spcz, 0);
-	int pr = 3;
-	double minspclog10 = log10(min(min(spcx, spcy), spcz));
+	int pr = 8;
+/*	double minspclog10 = log10(min(min(spcx, spcy), spcz));
 	if (minspclog10 <= -2.0)
 		pr = 3 - ((int)minspclog10 + 1.0);
-	wxString fmstr = wxT("%.") + wxString::Format(wxT("%i"), pr) + wxT("f");
+*/	wxString fmstr = wxT("%.") + wxString::Format(wxT("%i"), pr) + wxT("f");
 
 	if ((vald_fp = (wxFloatingPointValidator<double>*)m_space_x_text->GetValidator()))
 	{
@@ -658,10 +682,13 @@ void VPropView::GetSettings()
 		{
 			m_scale_cmb->Select(vrv->m_glview->m_sb_unit);
 			dval = vrv->GetScaleBarLen();
-			m_scale_text->ChangeValue(wxString::Format("%.3f", dval));
+			m_scale_text->ChangeValue(wxString::Format(fmstr, dval));
 			bool scale_check = vrv->m_glview->m_disp_scale_bar;
 			m_scale_chk->SetValue(scale_check);
 			m_scale_te_chk->SetValue(vrv->m_glview->m_disp_scale_bar_text);
+			int dig = m_vrv->m_glview->GetScaleBarDigit();
+			if (dig >= 0 && dig <= 8)
+				m_scale_digit_cmb->Select(dig);
 			bool fixed = false;
 			vrv->m_glview->GetScaleBarFixed(fixed, dval, ival);
 			m_scale_lenfix_chk->SetValue(fixed);
@@ -2196,6 +2223,24 @@ void VPropView::OnScaleUnitSelected(wxCommandEvent& event)
 			vrv->SetSBText(unit_text);
 			vrv->SetSbUnitSel(m_scale_cmb->GetSelection());
 		}
+	}
+
+	RefreshVRenderViews();
+}
+
+void VPropView::OnScaleDigitSelected(wxCommandEvent& event)
+{
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame)
+		return;
+
+	int digit = m_scale_digit_cmb->GetSelection();
+	
+	for (int i=0; i<(int)vr_frame->GetViewList()->size(); i++)
+	{
+		VRenderView *vrv = (*vr_frame->GetViewList())[i];
+		if (vrv)
+			vrv->SetScaleBarDigit(digit);
 	}
 
 	RefreshVRenderViews();

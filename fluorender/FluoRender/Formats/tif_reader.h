@@ -39,7 +39,7 @@ DEALINGS IN THE SOFTWARE.
 
 using namespace std;
 
-class TIFReader : public BaseReader
+class EXPORT_API TIFReader : public BaseReader
 {
 public:
 	TIFReader();
