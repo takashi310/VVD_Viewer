@@ -5448,6 +5448,7 @@ int VRenderFrame::UploadFileRemote(wxString url, wxString upfname, wxString loc_
 		curl_easy_setopt(_g_curl, CURLOPT_READDATA, fl);
 		curl_easy_setopt(_g_curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t) fsize);
 		curl_easy_setopt(_g_curl, CURLOPT_USERPWD, usrpwd);
+		curl_easy_setopt(_g_curl, CURLOPT_SSL_VERIFYPEER, false);
 
 		res = curl_easy_perform(_g_curl);
 

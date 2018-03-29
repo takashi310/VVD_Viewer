@@ -782,6 +782,16 @@ public:
 	bool m_capture_tsequ;
 	bool m_capture_bat;
 	bool m_capture_param;
+	bool m_capture_change_res;
+	int m_capture_resx;
+	int m_capture_resy;
+	bool m_tile_rendering;
+	int m_current_tileid;
+	int m_tile_xnum;
+	int m_tile_ynum;
+	int m_nx;
+	int m_ny;
+	bool m_postdraw;
 	//begin and end frame
 	int m_begin_frame;
 	int m_end_frame;
@@ -937,9 +947,15 @@ private:
 	GLuint m_dp_buf_tex;
 	//vert buffer
 	GLuint m_quad_vbo, m_quad_vao;
+	GLuint m_quad_tile_vbo, m_quad_tile_vao;
 	GLuint m_misc_vbo, m_misc_ibo, m_misc_vao;
 	//mesh picking buffer
 	GLuint m_fbo_pick, m_tex_pick, m_tex_pick_depth;
+	//tile buffer
+	GLuint m_fbo_tile;
+	GLuint m_tex_tile;
+	GLuint m_fbo_tiled_tmp;
+	GLuint m_tex_tiled_tmp;
 
 	//camera controls
 	bool m_persp;
@@ -1206,6 +1222,9 @@ private:
 	void DrawOLShading(VolumeData* vd);
 	void DrawOLShadows(vector<VolumeData*> &vlist, GLuint tex);
 	void DrawOLShadowsMesh(GLuint tex_depth, double darkenss);
+	
+	void DrawTile();
+	void DrawViewQuadTile(int tileid);
 
 	//get mesh shadow
 	bool GetMeshShadow(double &val);
