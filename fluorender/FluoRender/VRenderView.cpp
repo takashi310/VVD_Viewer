@@ -1058,6 +1058,7 @@ wxGLCanvas(parent, id, attriblist, pos, size, style),
 	m_quad_vao(0),
 	m_quad_tile_vbo(0),
 	m_quad_tile_vao(0),
+	m_tiled_image(NULL),
 	//camera controls
 	m_persp(false),
 	m_free(false),
@@ -1521,10 +1522,14 @@ void VRenderGLView::HandleProjection(int nx, int ny)
 		if (m_tile_rendering) {
 			int tilex = m_current_tileid % m_tile_xnum;
 			int tiley = m_current_tileid / m_tile_xnum;
-			float tx = -1.0f * (-1.0f + 2.0f/(2.0f*m_tile_xnum) + (2.0f/m_tile_xnum)*tilex);
-			float ty = -1.0f * (-1.0f + 2.0f/(2.0f*m_tile_ynum) + (2.0f/m_tile_ynum)*tiley);
-			auto scale = glm::scale(glm::vec3((float)m_tile_xnum, (float)m_tile_ynum, 1.f));
-			auto translate = glm::translate(glm::vec3(tx, -ty, 0.f));
+			double tilew = 2.0 * m_tile_w / nx;
+			double tileh = 2.0 * m_tile_h / ny;
+			double scalex = (double)nx/(double)(m_tile_w);
+			double scaley = (double)ny/(double)(m_tile_h);
+			double tx = -1.0 * (-1.0 + tilew/2.0 + tilew*tilex);
+			double ty = -1.0 * (-1.0 + tileh/2.0 + tileh*tiley);
+			auto scale = glm::scale(glm::vec3((float)scalex, (float)scaley, 1.f));
+			auto translate = glm::translate(glm::vec3((float)tx, (float)(-ty), 0.f));
 			m_proj_mat = scale * translate * m_proj_mat;
 		}
 	}
@@ -1535,8 +1540,8 @@ void VRenderGLView::HandleProjection(int nx, int ny)
 		if (m_tile_rendering) {
 			int tilex = m_current_tileid % m_tile_xnum;
 			int tiley = m_current_tileid / m_tile_xnum;
-			float shiftX = (m_ortho_right - m_ortho_left) / m_tile_xnum;
-			float shiftY = (m_ortho_top - m_ortho_bottom) / m_tile_ynum;
+			float shiftX = (double)m_tile_w * (m_ortho_right - m_ortho_left)/m_capture_resx;
+			float shiftY = (double)m_tile_h * (m_ortho_top - m_ortho_bottom)/m_capture_resy;
 			m_proj_mat = glm::ortho(m_ortho_left + shiftX*tilex, m_ortho_left + shiftX*(tilex+1),
 				m_ortho_top - shiftY*(tiley+1), m_ortho_top - shiftY*tiley, -m_far_clip/100.0, m_far_clip);
 		}
@@ -2428,7 +2433,7 @@ void VRenderGLView::DrawVolumes(int peel)
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, GetSize().x, GetSize().y, 0,
-				GL_RGB, GL_FLOAT, NULL);
+				GL_RGBA, GL_FLOAT, NULL);
 			glFramebufferTexture2D(GL_FRAMEBUFFER,
 				GL_COLOR_ATTACHMENT0,
 				GL_TEXTURE_2D, m_tex_tiled_tmp, 0);
@@ -2438,25 +2443,24 @@ void VRenderGLView::DrawVolumes(int peel)
 			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_tiled_tmp);
 			glBindTexture(GL_TEXTURE_2D, m_tex_tiled_tmp);
 			if (m_current_tileid == 0)
-				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, GetSize().x, GetSize().y, 0, GL_RGB, GL_FLOAT, NULL);
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, GetSize().x, GetSize().y, 0, GL_RGBA, GL_FLOAT, NULL);
 		}
 
 		glActiveTexture(GL_TEXTURE0);
 		glEnable(GL_TEXTURE_2D);
-
+		
+		glViewport(0, 0, (GLint)GetSize().x, (GLint)GetSize().y);
 		if (m_current_tileid == 0) {
 			glClearColor(0.0, 0.0, 0.0, 0.0);
 			glClear(GL_COLOR_BUFFER_BIT);
 		}
 		
 		glBindTexture(GL_TEXTURE_2D, m_tex_final);
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+		glDisable(GL_BLEND);
 		glDisable(GL_DEPTH_TEST);
 
 		//2d adjustment
-		ShaderProgram* img_shader =
-			m_img_shader_factory.shader(IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR);
+		ShaderProgram* img_shader = m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
 		if (img_shader)
 		{
 			if (!img_shader->valid())
@@ -2464,11 +2468,6 @@ void VRenderGLView::DrawVolumes(int peel)
 			img_shader->bind();
 		}
 
-		img_shader->setLocalParam(0, 1.0, 1.0, 1.0, 1.0);
-		img_shader->setLocalParam(1, 1.0, 1.0, 1.0, 1.0);
-		img_shader->setLocalParam(2, 0.0, 0.0, 0.0, 0.0);
-
-		glViewport(0, 0, (GLint)GetSize().x, (GLint)GetSize().y);
 		DrawViewQuadTile(m_current_tileid);
 
 		if (img_shader && img_shader->valid())
@@ -2480,17 +2479,23 @@ void VRenderGLView::DrawVolumes(int peel)
 		//draw the final buffer to the windows buffer
 		glActiveTexture(GL_TEXTURE0);
 		glEnable(GL_TEXTURE_2D);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 		glBindTexture(GL_TEXTURE_2D, m_tex_tiled_tmp);
 		glDisable(GL_DEPTH_TEST);
 
 		//2d adjustment
-		img_shader = m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
+		img_shader = m_img_shader_factory.shader(IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR);
 		if (img_shader)
 		{
 			if (!img_shader->valid())
 				img_shader->create();
 			img_shader->bind();
 		}
+
+		img_shader->setLocalParam(0, 1.0, 1.0, 1.0, 1.0);
+		img_shader->setLocalParam(1, 1.0, 1.0, 1.0, 1.0);
+		img_shader->setLocalParam(2, 0.0, 0.0, 0.0, 0.0);
 
 		DrawViewQuad();
 		if (img_shader && img_shader->valid())
@@ -2557,7 +2562,7 @@ void VRenderGLView::DrawVolumes(int peel)
 			glViewport(0, 0, (GLint)m_nx, (GLint)m_ny);
 			DrawTile();
 			m_current_tileid++;
-			m_postdraw = true;
+			if (m_capture) m_postdraw = true;
 			refresh = true;
 		}
 	}
@@ -3058,66 +3063,159 @@ void VRenderGLView::DrawVolumesDP()
 
 	//final composition
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	//draw the final buffer to the windows buffer
-	glActiveTexture(GL_TEXTURE0);
-	glEnable(GL_TEXTURE_2D);
-	glBindTexture(GL_TEXTURE_2D, m_tex_final);
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-	glDisable(GL_DEPTH_TEST);
+		
+	if (m_tile_rendering) {
+		//generate textures & buffer objects
+		//frame buffer for final
+		if (!glIsFramebuffer(m_fbo_tiled_tmp))
+		{
+			glGenFramebuffers(1, &m_fbo_tiled_tmp);
+			//color buffer/texture for final
+			if (!glIsTexture(m_tex_tiled_tmp))
+				glGenTextures(1, &m_tex_tiled_tmp);
+			//fbo_final
+			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_tiled_tmp);
+			//color buffer for final
+			glBindTexture(GL_TEXTURE_2D, m_tex_tiled_tmp);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, GetSize().x, GetSize().y, 0,
+				GL_RGBA, GL_FLOAT, NULL);
+			glFramebufferTexture2D(GL_FRAMEBUFFER,
+				GL_COLOR_ATTACHMENT0,
+				GL_TEXTURE_2D, m_tex_tiled_tmp, 0);
+		}
+		else
+		{
+			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_tiled_tmp);
+			glBindTexture(GL_TEXTURE_2D, m_tex_tiled_tmp);
+			if (m_current_tileid == 0)
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, GetSize().x, GetSize().y, 0, GL_RGBA, GL_FLOAT, NULL);
+		}
 
-	//2d adjustment
-	ShaderProgram* img_shader =
-		m_img_shader_factory.shader(IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR);
-	if (img_shader)
-	{
-		if (!img_shader->valid())
-			img_shader->create();
-		img_shader->bind();
+		glActiveTexture(GL_TEXTURE0);
+		glEnable(GL_TEXTURE_2D);
+		
+		glViewport(0, 0, (GLint)GetSize().x, (GLint)GetSize().y);
+		if (m_current_tileid == 0) {
+			glClearColor(0.0, 0.0, 0.0, 0.0);
+			glClear(GL_COLOR_BUFFER_BIT);
+		}
+		
+		glBindTexture(GL_TEXTURE_2D, m_tex_final);
+		glDisable(GL_BLEND);
+		glDisable(GL_DEPTH_TEST);
+
+		//2d adjustment
+		ShaderProgram* img_shader = m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
+		if (img_shader)
+		{
+			if (!img_shader->valid())
+				img_shader->create();
+			img_shader->bind();
+		}
+
+		DrawViewQuadTile(m_current_tileid);
+
+		if (img_shader && img_shader->valid())
+			img_shader->release();
+
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+		//draw the final buffer to the windows buffer
+		glActiveTexture(GL_TEXTURE0);
+		glEnable(GL_TEXTURE_2D);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+		glBindTexture(GL_TEXTURE_2D, m_tex_tiled_tmp);
+		glDisable(GL_DEPTH_TEST);
+
+		//2d adjustment
+		img_shader = m_img_shader_factory.shader(IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR);
+		if (img_shader)
+		{
+			if (!img_shader->valid())
+				img_shader->create();
+			img_shader->bind();
+		}
+
+		img_shader->setLocalParam(0, 1.0, 1.0, 1.0, 1.0);
+		img_shader->setLocalParam(1, 1.0, 1.0, 1.0, 1.0);
+		img_shader->setLocalParam(2, 0.0, 0.0, 0.0, 0.0);
+
+		DrawViewQuad();
+		if (img_shader && img_shader->valid())
+			img_shader->release();
+		glBindTexture(GL_TEXTURE_2D, 0);
+	}
+	else {
+		//draw the final buffer to the windows buffer
+		glActiveTexture(GL_TEXTURE0);
+		glEnable(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_2D, m_tex_final);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+		glDisable(GL_DEPTH_TEST);
+
+		//2d adjustment
+		ShaderProgram* img_shader =
+			m_img_shader_factory.shader(IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR);
+		if (img_shader)
+		{
+			if (!img_shader->valid())
+				img_shader->create();
+			img_shader->bind();
+		}
+
+		img_shader->setLocalParam(0, 1.0, 1.0, 1.0, 1.0);
+		img_shader->setLocalParam(1, 1.0, 1.0, 1.0, 1.0);
+		img_shader->setLocalParam(2, 0.0, 0.0, 0.0, 0.0);
+
+		//2d adjustment
+
+		DrawViewQuad();
+		if (img_shader && img_shader->valid())
+			img_shader->release();
+
+		glBindTexture(GL_TEXTURE_2D, 0);
 	}
 
-	img_shader->setLocalParam(0, 1.0, 1.0, 1.0, 1.0);
-	img_shader->setLocalParam(1, 1.0, 1.0, 1.0, 1.0);
-	img_shader->setLocalParam(2, 0.0, 0.0, 0.0, 0.0);
-
-	//2d adjustment
-
-	if (m_tile_rendering)
-		DrawViewQuadTile(m_current_tileid);
-	else 
-		DrawViewQuad();
-
-	if (img_shader && img_shader->valid())
-		img_shader->release();
-
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glDisable(GL_BLEND);
+	bool refresh = false;
 
 	if (m_interactive)
 	{
 		m_interactive = false;
 		m_clear_buffer = true;
-		RefreshGL();
+		refresh = true;
 	}
 
 	if (m_int_res)
 	{
 		m_int_res = false;
-		RefreshGL();
+		refresh = true;
 	}
 
 	if (m_manip)
 	{
 		m_pre_draw = true;
-		RefreshGL();
+		refresh = true;
 	}
 
 	if (m_tile_rendering && m_current_tileid < m_tile_xnum*m_tile_ynum) {
-		if ( m_finished_peeling_layer > peeling_layers ) {
+		if (m_finished_peeling_layer > peeling_layers) {
+			glViewport(0, 0, (GLint)m_nx, (GLint)m_ny);
+			DrawTile();
 			m_current_tileid++;
-			RefreshGL();
+			if (m_capture) m_postdraw = true;
+			refresh = true;
 		}
 	}
+
+	if (refresh)
+		RefreshGL();
 }
 
 void VRenderGLView::DrawAnnotations()
@@ -4632,6 +4730,28 @@ void VRenderGLView::Calculate(int type, wxString prev_group, bool add)
 		CalculateSingle(type, prev_group, add);
 }
 
+void VRenderGLView::StartTileRendering(int w, int h, int tilew, int tileh)
+{
+	m_tile_rendering = true;
+	m_capture_change_res = true;
+	m_capture_resx = w;
+	m_capture_resy = h;
+	m_tile_w = tilew;
+	m_tile_h = tileh;
+	m_tile_xnum = w/tilew + (w%tilew > 0);
+	m_tile_ynum = h/tileh + (h%tileh > 0);
+	m_current_tileid = 0;
+	OnResize(wxSizeEvent());
+
+	if (m_capture) {
+		if (m_tiled_image)
+			delete [] m_tiled_image;
+		m_tiled_image = new unsigned char [(size_t)m_capture_resx*(size_t)m_capture_resy*3];
+	}
+
+	RefreshGL();
+}
+
 void VRenderGLView::DrawTile()
 {
 	int nx, ny;
@@ -4673,7 +4793,7 @@ void VRenderGLView::DrawTile()
 		//m_resize = false;
 	}
 
-	glClearColor(0.0, 0.0, 0.0, 0.0);
+	glClearColor(m_bg_color.r(), m_bg_color.g(), m_bg_color.b(), 0.0);
 	glClear(GL_COLOR_BUFFER_BIT);
 
 	glBindTexture(GL_TEXTURE_2D, m_tex_final);
@@ -7834,10 +7954,7 @@ void VRenderGLView::PostDraw()
 	if (m_capture && !m_cap_file.IsEmpty())
 	{
 		wxString outputfilename = m_cap_file;
-		if (m_tile_rendering) {
-			outputfilename = outputfilename.BeforeLast('.') + wxString::Format("_%d", m_current_tileid) + wxT(".") + outputfilename.AfterLast('.');
-		}
-
+		
 		//capture
 		int x, y, w, h;
 		if (m_draw_frame)
@@ -7867,46 +7984,97 @@ void VRenderGLView::PostDraw()
 			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_tile);
 			glBindTexture(GL_TEXTURE_2D, 0);
 			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+
+			size_t stx = (m_current_tileid-1) % m_tile_xnum * m_tile_w;
+			size_t sty = (m_current_tileid-1) / m_tile_xnum * m_tile_h;
+			size_t edx = stx + m_tile_w;
+			size_t edy = sty + m_tile_h;
+			if (edx > m_capture_resx) edx = m_capture_resx;
+			if (edy > m_capture_resy) edy = m_capture_resy;
+			for(size_t y = sty; y < edy; y++) {
+				for (size_t x = stx; x < edx; x++) {
+					for (int c = 0; c < chann; c++) {
+						m_tiled_image[((edy-(y-sty)-1)*m_capture_resx + x)*chann + c] = image[((y-sty)*m_tile_w + (x-stx))*chann + c];
+					}
+				}
+			}
 		}
 		else {
 			glReadBuffer(GL_BACK);
 			glReadPixels(x, y, w, h, chann==3?GL_RGB:GL_RGBA, GL_UNSIGNED_BYTE, image);
-		}
-		glPixelStorei(GL_PACK_ROW_LENGTH, 0);
-		string str_fn = outputfilename.ToStdString();
-		TIFF *out = TIFFOpen(str_fn.c_str(), "wb");
-		if (!out)
-			return;
-		TIFFSetField(out, TIFFTAG_IMAGEWIDTH, w);
-		TIFFSetField(out, TIFFTAG_IMAGELENGTH, h);
-		TIFFSetField(out, TIFFTAG_SAMPLESPERPIXEL, chann);
-		TIFFSetField(out, TIFFTAG_BITSPERSAMPLE, 8);
-		TIFFSetField(out, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
-		TIFFSetField(out, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
-		TIFFSetField(out, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
-		if (VRenderFrame::GetCompression())
-			TIFFSetField(out, TIFFTAG_COMPRESSION, COMPRESSION_LZW);
+			glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+			string str_fn = outputfilename.ToStdString();
+			TIFF *out = TIFFOpen(str_fn.c_str(), "wb");
+			if (!out)
+				return;
+			TIFFSetField(out, TIFFTAG_IMAGEWIDTH, w);
+			TIFFSetField(out, TIFFTAG_IMAGELENGTH, h);
+			TIFFSetField(out, TIFFTAG_SAMPLESPERPIXEL, chann);
+			TIFFSetField(out, TIFFTAG_BITSPERSAMPLE, 8);
+			TIFFSetField(out, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
+			TIFFSetField(out, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
+			TIFFSetField(out, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
+			if (VRenderFrame::GetCompression())
+				TIFFSetField(out, TIFFTAG_COMPRESSION, COMPRESSION_LZW);
 
-		tsize_t linebytes = chann * w;
-		unsigned char *buf = NULL;
-		buf = (unsigned char *)_TIFFmalloc(linebytes);
-		TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(out, 0));
-		for (uint32 row = 0; row < (uint32)h; row++)
-		{
-			memcpy(buf, &image[(h-row-1)*linebytes], linebytes);// check the index here, and figure out why not using h*linebytes
-			if (TIFFWriteScanline(out, buf, row, 0) < 0)
-				break;
+			tsize_t linebytes = chann * w;
+			unsigned char *buf = NULL;
+			buf = (unsigned char *)_TIFFmalloc(linebytes);
+			TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(out, 0));
+			for (uint32 row = 0; row < (uint32)h; row++)
+			{
+				memcpy(buf, &image[(h-row-1)*linebytes], linebytes);// check the index here, and figure out why not using h*linebytes
+				if (TIFFWriteScanline(out, buf, row, 0) < 0)
+					break;
+			}
+			TIFFClose(out);
+			if (buf)
+				_TIFFfree(buf);
 		}
-		TIFFClose(out);
-		if (buf)
-			_TIFFfree(buf);
+
 		if (image)
 			delete []image;
 
 		m_capture = false;
 		
-		if (m_tile_rendering && m_current_tileid < m_tile_xnum*m_tile_ynum)
-			m_capture = true;
+		if (m_tile_rendering) {
+			if (m_current_tileid < m_tile_xnum*m_tile_ynum)
+				m_capture = true;
+			else if (m_tiled_image){
+				size_t imsize = (size_t)m_capture_resx * (size_t)m_capture_resy;
+				string str_fn = outputfilename.ToStdString();
+				TIFF *out = TIFFOpen(str_fn.c_str(), imsize <= 3758096384ULL ? "wb" : "wb8");
+				if (!out)
+					return;
+				TIFFSetField(out, TIFFTAG_IMAGEWIDTH, m_capture_resx);
+				TIFFSetField(out, TIFFTAG_IMAGELENGTH, m_capture_resy);
+				TIFFSetField(out, TIFFTAG_SAMPLESPERPIXEL, chann);
+				TIFFSetField(out, TIFFTAG_BITSPERSAMPLE, 8);
+				TIFFSetField(out, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
+				TIFFSetField(out, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
+				TIFFSetField(out, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
+				if (VRenderFrame::GetCompression())
+					TIFFSetField(out, TIFFTAG_COMPRESSION, COMPRESSION_LZW);
+
+				tsize_t linebytes = chann * m_capture_resx;
+				unsigned char *buf = NULL;
+				buf = (unsigned char *)_TIFFmalloc(linebytes);
+				TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(out, 0));
+				for (uint32 row = 0; row < (uint32)m_capture_resy; row++)
+				{
+					memcpy(buf, &m_tiled_image[row*linebytes], linebytes);// check the index here, and figure out why not using h*linebytes
+					if (TIFFWriteScanline(out, buf, row, 0) < 0)
+						break;
+				}
+				TIFFClose(out);
+				if (buf)
+					_TIFFfree(buf);
+
+				delete [] m_tiled_image;
+				m_tiled_image = NULL;
+			}
+		}
 	}
 
 	m_postdraw = false;
@@ -8296,8 +8464,8 @@ void VRenderGLView::OnDraw(wxPaintEvent& event)
 	m_nx = GetSize().x;
 	m_ny = GetSize().y;
 	if (m_tile_rendering) {
-		m_nx = m_capture_resx/m_tile_xnum;
-		m_ny = m_capture_resy/m_tile_ynum;
+		m_nx = m_tile_w;
+		m_ny = m_tile_h;
 	}
 
 	int nx = m_nx;
@@ -12631,8 +12799,8 @@ void VRenderGLView::StartLoopUpdate(bool reset_peeling_layer)
 	m_nx = GetSize().x;
 	m_ny = GetSize().y;
 	if (m_tile_rendering) {
-		m_nx = m_capture_resx/m_tile_xnum;
-		m_ny = m_capture_resy/m_tile_ynum;
+		m_nx = m_tile_w;
+		m_ny = m_tile_h;
 	}
 
 	int nx = m_nx;
@@ -15979,8 +16147,8 @@ void VRenderGLView::DrawViewQuadTile(int tileid)
 	double tileh = 1.0;
 	
 	if (win_aspect > ren_aspect) {
-		tilew = 2.0 * h*ren_aspect / w / m_tile_xnum;
-		tileh = 2.0 / m_tile_ynum;
+		tilew = 2.0 * m_tile_w * h/m_capture_resy / w;
+		tileh = 2.0 * m_tile_h * h/m_capture_resy / h;
 		stpos_x = -1.0 + 2.0 * (w - h*ren_aspect) / 2.0 / w;
 		stpos_y = 1.0;
 		stpos_x = stpos_x + tilew * (tileid % m_tile_xnum);
@@ -15988,8 +16156,8 @@ void VRenderGLView::DrawViewQuadTile(int tileid)
 		edpos_x = stpos_x + tilew;
 		edpos_y = stpos_y + tileh;
 	} else {
-		tilew = 2.0 / m_tile_xnum;
-		tileh = 2.0 * w/ren_aspect / h / m_tile_ynum;
+		tilew = 2.0 * m_tile_w * w/m_capture_resx / w;
+		tileh = 2.0 * m_tile_h * w/m_capture_resx / h;
 		stpos_x = -1.0;
 		stpos_y = 1.0 - 2.0*(h - w/ren_aspect) / 2.0 / h;
 		stpos_x = stpos_x + tilew * (tileid % m_tile_xnum);
@@ -15997,7 +16165,7 @@ void VRenderGLView::DrawViewQuadTile(int tileid)
 		edpos_x = stpos_x + tilew;
 		edpos_y = stpos_y + tileh;
 	}
-
+	
 	glEnable(GL_TEXTURE_2D);
 	
 	float points[] = {
@@ -17364,16 +17532,7 @@ void VRenderView::OnCapture(wxCommandEvent& event)
 		m_glview->m_cap_file = file_dlg.GetDirectory() + "/" + file_dlg.GetFilename();
 		m_glview->m_capture = true;
 		
-		m_glview->m_capture_change_res = true;
-		m_glview->m_capture_resx = 16000;
-		m_glview->m_capture_resy = 10000;
-		m_glview->m_tile_rendering = true;
-		m_glview->m_tile_xnum = 8;
-		m_glview->m_tile_ynum = 5;
-		m_glview->m_current_tileid = 0;
-		m_glview->OnResize(wxSizeEvent());
-
-		RefreshGL();
+		m_glview->StartTileRendering(16000, 10000, 3000, 3000);
 
 		if (vr_frame && vr_frame->GetSettingDlg() &&
 			vr_frame->GetSettingDlg()->GetProjSave())

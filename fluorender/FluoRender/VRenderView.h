@@ -789,6 +789,9 @@ public:
 	int m_current_tileid;
 	int m_tile_xnum;
 	int m_tile_ynum;
+	int m_tile_w;
+	int m_tile_h;
+	unsigned char *m_tiled_image;
 	int m_nx;
 	int m_ny;
 	bool m_postdraw;
@@ -1223,6 +1226,7 @@ private:
 	void DrawOLShadows(vector<VolumeData*> &vlist, GLuint tex);
 	void DrawOLShadowsMesh(GLuint tex_depth, double darkenss);
 	
+	void StartTileRendering(int w, int h, int tilew, int tileh);
 	void DrawTile();
 	void DrawViewQuadTile(int tileid);
 
