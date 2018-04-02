@@ -2565,7 +2565,7 @@ void VRenderGLView::DrawVolumes(int peel)
 			DrawTile();
 			m_current_tileid++;
 			if (m_capture) m_postdraw = true;
-			refresh = true;
+			if (m_current_tileid < m_tile_xnum*m_tile_ynum) refresh = true;
 		}
 	}
 
@@ -4779,7 +4779,26 @@ void VRenderGLView::EndTileRendering()
 		delete [] m_tiled_image;
 		m_tiled_image = NULL;
 	}
-	OnResize(wxSizeEvent());
+
+	int i;
+	for (i=0; i<(int)m_vd_pop_list.size(); i++)
+	{
+		VolumeData* vd = m_vd_pop_list[i];
+		if (vd)
+		{
+			VolumeRenderer* vr = vd->GetVR();
+			if (vr)
+				vr->resize();
+		}
+	}
+
+	if (m_mvr)
+		m_mvr->resize();
+
+	m_resize = true;
+	m_resize_ol1 = true;
+	m_resize_ol2 = true;
+	m_resize_paint = true;
 }
 
 void VRenderGLView::Get1x1DispSize(int &w, int &h)
