@@ -927,6 +927,8 @@ wxGLCanvas(parent, id, attriblist, pos, size, style),
 	m_capture_tsequ(false),
 	m_capture_bat(false),
 	m_capture_param(false),
+	m_capture_resx(-1),
+	m_capture_resy(-1),
 	m_tile_rendering(false),
 	m_postdraw(false),
 	//begin and end frame
@@ -4743,6 +4745,18 @@ void VRenderGLView::StartTileRendering(int w, int h, int tilew, int tileh)
 	m_current_tileid = 0;
 	OnResize(wxSizeEvent());
 
+	m_tmp_res_mode = m_res_mode;
+	m_res_mode = 0;
+	if (!m_tmp_sample_rates.empty())
+		m_tmp_sample_rates.clear();
+	PopVolumeList();
+	for (VolumeData* vd : m_vd_pop_list) {
+		if (vd) {
+			m_tmp_sample_rates[vd] = vd->GetSampleRate();
+			//vd->SetSampleRate(1.0);
+		}
+	}
+
 	if (m_capture) {
 		if (m_tiled_image)
 			delete [] m_tiled_image;
@@ -4750,6 +4764,58 @@ void VRenderGLView::StartTileRendering(int w, int h, int tilew, int tileh)
 	}
 
 	RefreshGL();
+}
+
+void VRenderGLView::EndTileRendering()
+{
+	m_tile_rendering = false;
+	m_res_mode = m_tmp_res_mode;
+	PopVolumeList();
+/*	for (VolumeData* vd : m_vd_pop_list) {
+		if (vd && m_tmp_sample_rates.count(vd) > 0)
+			vd->SetSampleRate(m_tmp_sample_rates[vd]);
+	}
+*/	if (m_tiled_image != NULL) {
+		delete [] m_tiled_image;
+		m_tiled_image = NULL;
+	}
+	OnResize(wxSizeEvent());
+}
+
+void VRenderGLView::Get1x1DispSize(int &w, int &h)
+{
+	int nx = GetSize().x;
+	int ny = GetSize().y;
+	PopVolumeList();
+
+	double maxvpd = 0.0;
+	for (VolumeData* vd : m_vd_pop_list) {
+		Texture *vtex = vd->GetTexture();
+		if (vtex)
+		{
+			double res_scale = 1.0;
+			double aspect = (double)nx / (double)ny;
+			double spc_x;
+			double spc_y;
+			double spc_z;
+			vtex->get_spacings(spc_x, spc_y, spc_z, 0);
+			spc_x = spc_x<EPS?1.0:spc_x;
+			spc_y = spc_y<EPS?1.0:spc_y;
+
+			double sf;
+			if (aspect > 1.0)
+				sf = 2.0*m_radius/spc_y/double(ny);
+			else
+				sf = 2.0*m_radius/spc_x/double(nx);
+
+			double vx_per_dot = m_scale_factor / sf;
+
+			if (maxvpd < vx_per_dot) maxvpd = vx_per_dot;
+		}
+	}
+
+	w = (int)(nx / maxvpd);
+	h = (int)(ny / maxvpd);
 }
 
 void VRenderGLView::DrawTile()
@@ -7323,6 +7389,14 @@ void VRenderGLView::OnIdle(wxTimerEvent& event)
 		}
 	}
 
+	if (window && !editting && this == cur_glview && !m_key_lock && m_tile_rendering)
+	{
+		if (wxGetKeyState(WXK_ESCAPE))
+		{
+			EndTileRendering();
+		}
+	}
+
 	extern CURLM * _g_curlm;
 	int handle_count;
 	curl_multi_perform(_g_curlm, &handle_count);
@@ -7976,7 +8050,7 @@ void VRenderGLView::PostDraw()
 		glPixelStorei(GL_PACK_ROW_LENGTH, w);
 		glPixelStorei(GL_PACK_ALIGNMENT, 1);
 		unsigned char *image = new unsigned char[w*h*chann];
-		if (m_tile_rendering) {
+		if (m_tile_rendering && m_tiled_image != NULL) {
 			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_tile);
 			glActiveTexture(GL_TEXTURE0);
 			glBindTexture(GL_TEXTURE_2D, m_tex_tile);
@@ -7995,7 +8069,7 @@ void VRenderGLView::PostDraw()
 			for(size_t y = sty; y < edy; y++) {
 				for (size_t x = stx; x < edx; x++) {
 					for (int c = 0; c < chann; c++) {
-						m_tiled_image[((edy-(y-sty)-1)*m_capture_resx + x)*chann + c] = image[((y-sty)*m_tile_w + (x-stx))*chann + c];
+						m_tiled_image[(y*m_capture_resx + x)*chann + c] = image[((m_tile_h-(y-sty)-1)*m_tile_w + (x-stx))*chann + c];
 					}
 				}
 			}
@@ -8547,8 +8621,7 @@ void VRenderGLView::OnDraw(wxPaintEvent& event)
 		m_resize = false;
 
 	if (m_tile_rendering && m_current_tileid >= m_tile_xnum*m_tile_ynum) {
-		m_tile_rendering = false;
-		OnResize(wxSizeEvent());
+		EndTileRendering();
 	}
 
 	//SetEvtHandlerEnabled(true);
@@ -16145,12 +16218,18 @@ void VRenderGLView::DrawViewQuadTile(int tileid)
 	double edpos_y = 1.0;
 	double tilew = 1.0;
 	double tileh = 1.0;
+
+	double xbound = 1.0;
+	double ybound = -1.0;
 	
 	if (win_aspect > ren_aspect) {
 		tilew = 2.0 * m_tile_w * h/m_capture_resy / w;
 		tileh = 2.0 * m_tile_h * h/m_capture_resy / h;
 		stpos_x = -1.0 + 2.0 * (w - h*ren_aspect) / 2.0 / w;
 		stpos_y = 1.0;
+		xbound = stpos_x + 2.0 * h*ren_aspect / w;
+		ybound = -1.0;
+
 		stpos_x = stpos_x + tilew * (tileid % m_tile_xnum);
 		stpos_y = stpos_y - tileh * (tileid / m_tile_xnum + 1);
 		edpos_x = stpos_x + tilew;
@@ -16160,19 +16239,33 @@ void VRenderGLView::DrawViewQuadTile(int tileid)
 		tileh = 2.0 * m_tile_h * w/m_capture_resx / h;
 		stpos_x = -1.0;
 		stpos_y = 1.0 - 2.0*(h - w/ren_aspect) / 2.0 / h;
+		xbound = 1.0;
+		ybound = stpos_y - 2.0 * w/ren_aspect / h;
+
 		stpos_x = stpos_x + tilew * (tileid % m_tile_xnum);
 		stpos_y = stpos_y - tileh * (tileid / m_tile_xnum + 1);
 		edpos_x = stpos_x + tilew;
 		edpos_y = stpos_y + tileh;
 	}
+
+	double tex_x = 1.0;
+	double tex_y = 0.0;
+	if (edpos_x > xbound) {
+		tex_x = (xbound - stpos_x) / tilew;
+		edpos_x = xbound;
+	}
+	if (stpos_y < ybound) {
+		tex_y = 1.0 - (edpos_y - ybound) / tileh;
+		stpos_y = ybound;
+	}
 	
 	glEnable(GL_TEXTURE_2D);
 	
 	float points[] = {
-		(float)stpos_x, (float)stpos_y, 0.0f, 0.0f, 0.0f, 0.0f,
-		(float)edpos_x, (float)stpos_y, 0.0f, 1.0f, 0.0f, 0.0f,
-		(float)stpos_x, (float)edpos_y, 0.0f, 0.0f, 1.0f, 0.0f,
-		(float)edpos_x, (float)edpos_y, 0.0f, 1.0f, 1.0f, 0.0f};
+		(float)stpos_x, (float)stpos_y, 0.0f, 0.0f,         (float)tex_y, 0.0f,
+		(float)edpos_x, (float)stpos_y, 0.0f, (float)tex_x, (float)tex_y, 0.0f,
+		(float)stpos_x, (float)edpos_y, 0.0f, 0.0f,         1.0f,         0.0f,
+		(float)edpos_x, (float)edpos_y, 0.0f, (float)tex_x, 1.0f,         0.0f};
 
 	glBindBuffer(GL_ARRAY_BUFFER, m_quad_tile_vbo);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(float)*24, points, GL_DYNAMIC_DRAW);
@@ -16251,7 +16344,16 @@ BEGIN_EVENT_TABLE(VRenderView, wxPanel)
 	EVT_KEY_DOWN(VRenderView::OnKeyDown)
 	END_EVENT_TABLE()
 
-	VRenderView::VRenderView(wxWindow* frame,
+int VRenderView::m_cap_resx = -1;
+int VRenderView::m_cap_resy = -1;
+int VRenderView::m_cap_orgresx = -1;
+int VRenderView::m_cap_orgresy = -1;
+int VRenderView::m_cap_dispresx = -1;
+int VRenderView::m_cap_dispresy = -1;
+wxTextCtrl* VRenderView::m_cap_w_txt = NULL;
+wxTextCtrl* VRenderView::m_cap_h_txt = NULL;
+
+VRenderView::VRenderView(wxWindow* frame,
 	wxWindow* parent,
 	wxWindowID id,
 	wxGLContext* sharedContext,
@@ -17489,6 +17591,40 @@ wxWindow* VRenderView::CreateExtraCaptureControl(wxWindow* parent)
 	if (ch1)
 		ch1->SetValue(VRenderFrame::GetCompression());
 
+	wxIntegerValidator<unsigned int> vald_int;
+
+	wxBoxSizer* sizer1 = new wxBoxSizer(wxHORIZONTAL);
+	wxStaticText* st = new wxStaticText(panel, 0, "width:");
+	m_cap_w_txt = new wxTextCtrl(panel, wxID_HIGHEST+3006,
+		"", wxDefaultPosition, wxSize(50, 20), wxALIGN_RIGHT, vald_int);
+	m_cap_w_txt->SetValue(wxString::Format(wxT("%i"),m_cap_resx));
+	m_cap_w_txt->Connect(m_cap_w_txt->GetId(), wxEVT_COMMAND_TEXT_UPDATED,
+		wxCommandEventHandler(VRenderView::OnCapWidthTextChange), NULL, panel);
+	sizer1->Add(st);
+	sizer1->Add(10, 10);
+	sizer1->Add(m_cap_w_txt);
+	sizer1->Add(20, 10);
+
+	st = new wxStaticText(panel, 0, "height:");
+	m_cap_h_txt = new wxTextCtrl(panel, wxID_HIGHEST+3007,
+		"", wxDefaultPosition, wxSize(50, 20), wxALIGN_RIGHT, vald_int);
+	m_cap_h_txt->SetValue(wxString::Format(wxT("%i"),m_cap_resy));
+	m_cap_h_txt->Connect(m_cap_h_txt->GetId(), wxEVT_COMMAND_TEXT_UPDATED,
+		wxCommandEventHandler(VRenderView::OnCapHeightTextChange), NULL, panel);
+	sizer1->Add(st);
+	sizer1->Add(10, 10);
+	sizer1->Add(m_cap_h_txt);
+	sizer1->Add(20, 10);
+	wxButton* orgresbtn = new wxButton(panel, wxID_HIGHEST+3008, "1:1", wxDefaultPosition, wxSize(40,20));
+	orgresbtn->Connect(orgresbtn->GetId(), wxEVT_COMMAND_BUTTON_CLICKED,
+		wxCommandEventHandler(VRenderView::OnSetOrgResButton), NULL, panel);
+	sizer1->Add(orgresbtn);
+	sizer1->Add(5, 10);
+	wxButton* dispresbtn = new wxButton(panel, wxID_HIGHEST+3009, "Disp", wxDefaultPosition, wxSize(40,20));
+	dispresbtn->Connect(dispresbtn->GetId(), wxEVT_COMMAND_BUTTON_CLICKED,
+		wxCommandEventHandler(VRenderView::OnSetDispResButton), NULL, panel);
+	sizer1->Add(dispresbtn);
+
 	//copy all files check box
 	wxCheckBox* ch_embed = 0;
 	if (VRenderFrame::GetSaveProject())
@@ -17504,6 +17640,8 @@ wxWindow* VRenderView::CreateExtraCaptureControl(wxWindow* parent)
 	group1->Add(10, 10);
 	group1->Add(ch1);
 	group1->Add(10, 10);
+	group1->Add(sizer1);
+	group1->Add(10, 10);
 	if (VRenderFrame::GetSaveProject() &&
 		ch_embed)
 	{
@@ -17517,12 +17655,54 @@ wxWindow* VRenderView::CreateExtraCaptureControl(wxWindow* parent)
 	return panel;
 }
 
+void VRenderView::OnCapWidthTextChange(wxCommandEvent &event)
+{
+	wxTextCtrl* txt1 = (wxTextCtrl*)event.GetEventObject();
+	wxString num_text = txt1->GetValue();
+	long w;
+	num_text.ToLong(&w);
+	m_cap_resx = w;
+}
+
+void VRenderView::OnCapHeightTextChange(wxCommandEvent &event)
+{
+	wxTextCtrl* txt1 = (wxTextCtrl*)event.GetEventObject();
+	wxString num_text = txt1->GetValue();
+	long h;
+	num_text.ToLong(&h);
+	m_cap_resy = h;
+}
+
+void VRenderView::OnSetOrgResButton(wxCommandEvent &event)
+{
+	if (m_cap_w_txt) m_cap_w_txt->SetValue(wxString::Format(wxT("%i"),m_cap_orgresx));
+	if (m_cap_h_txt) m_cap_h_txt->SetValue(wxString::Format(wxT("%i"),m_cap_orgresy));
+}
+
+void VRenderView::OnSetDispResButton(wxCommandEvent &event)
+{
+	if (m_cap_w_txt) m_cap_w_txt->SetValue(wxString::Format(wxT("%i"),m_cap_dispresx));
+	if (m_cap_h_txt) m_cap_h_txt->SetValue(wxString::Format(wxT("%i"),m_cap_dispresy));
+}
+
 void VRenderView::OnCapture(wxCommandEvent& event)
 {
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 
 	if (vr_frame && vr_frame->GetSettingDlg())
 		VRenderFrame::SetSaveProject(vr_frame->GetSettingDlg()->GetProjSave());
+
+	m_cap_resx = m_glview->m_capture_resx;
+	if (m_cap_resx <= 0) m_cap_resx = m_glview->GetSize().x;
+	m_cap_resy = m_glview->m_capture_resy;
+	if (m_cap_resy <= 0) m_cap_resy = m_glview->GetSize().y;
+	
+	m_glview->Get1x1DispSize(m_cap_orgresx, m_cap_orgresy);
+	if (m_cap_orgresx <= 0) m_cap_orgresx = m_glview->GetSize().x;
+	if (m_cap_orgresy <= 0) m_cap_orgresy = m_glview->GetSize().y;
+
+	m_cap_dispresx = m_glview->GetSize().x;
+	m_cap_dispresy = m_glview->GetSize().y;
 
 	wxFileDialog file_dlg(m_frame, "Save captured image", "", "", "*.tif", wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
 	file_dlg.SetExtraControlCreator(CreateExtraCaptureControl);
@@ -17532,7 +17712,10 @@ void VRenderView::OnCapture(wxCommandEvent& event)
 		m_glview->m_cap_file = file_dlg.GetDirectory() + "/" + file_dlg.GetFilename();
 		m_glview->m_capture = true;
 		
-		m_glview->StartTileRendering(16000, 10000, 3000, 3000);
+		if (m_cap_resx > 2000 && m_cap_resy > 2000)
+			m_glview->StartTileRendering(m_cap_resx, m_cap_resy, 2000, 2000);
+		else
+			m_glview->StartTileRendering(m_cap_resx, m_cap_resy, m_cap_resx, m_cap_resy);
 
 		if (vr_frame && vr_frame->GetSettingDlg() &&
 			vr_frame->GetSettingDlg()->GetProjSave())

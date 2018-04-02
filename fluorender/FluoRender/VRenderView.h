@@ -795,6 +795,8 @@ public:
 	int m_nx;
 	int m_ny;
 	bool m_postdraw;
+	int m_tmp_res_mode;
+	std::map<VolumeData*,double> m_tmp_sample_rates;
 	//begin and end frame
 	int m_begin_frame;
 	int m_end_frame;
@@ -1227,8 +1229,10 @@ private:
 	void DrawOLShadowsMesh(GLuint tex_depth, double darkenss);
 	
 	void StartTileRendering(int w, int h, int tilew, int tileh);
+	void EndTileRendering();
 	void DrawTile();
 	void DrawViewQuadTile(int tileid);
+	void Get1x1DispSize(int &w, int &h);
 
 	//get mesh shadow
 	bool GetMeshShadow(double &val);
@@ -1981,6 +1985,16 @@ public:
 	wxButton *m_scale_reset_btn;
 	wxSpinButton* m_scale_factor_spin;
 
+	//capture////////////////////////////////////////////////////
+	static int m_cap_resx;
+	static int m_cap_resy;
+	static int m_cap_orgresx;
+	static int m_cap_orgresy;
+	static int m_cap_dispresx;
+	static int m_cap_dispresy;
+	static wxTextCtrl *m_cap_w_txt;
+	static wxTextCtrl *m_cap_h_txt;
+
 	//draw clip
 	bool m_draw_clip;
 
@@ -2049,6 +2063,12 @@ private:
 	void OnYRotSpinDown(wxSpinEvent& event);
 	void OnZRotSpinUp(wxSpinEvent& event);
 	void OnZRotSpinDown(wxSpinEvent& event);
+
+	//capture
+	void OnCapWidthTextChange(wxCommandEvent &event);
+	void OnCapHeightTextChange(wxCommandEvent &event);
+	void OnSetOrgResButton(wxCommandEvent &event);
+	void OnSetDispResButton(wxCommandEvent &event);
 
 	void OnSaveDefault(wxCommandEvent &event);
 
