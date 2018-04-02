@@ -1292,6 +1292,7 @@ private:
 	//system call
 	void OnDraw(wxPaintEvent& event);
 	void OnResize(wxSizeEvent& event);
+	void Resize(bool refresh=true);
 	void OnIdle(wxTimerEvent& event);
 	void OnKeyDown(wxKeyEvent& event);
 	//WXLRESULT MSWWindowProc(WXUINT message, WXWPARAM wParam, WXLPARAM lParam);

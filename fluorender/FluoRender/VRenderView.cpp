@@ -1412,6 +1412,11 @@ VRenderGLView::~VRenderGLView()
 
 void VRenderGLView::OnResize(wxSizeEvent& event)
 {
+	Resize();
+}
+
+void VRenderGLView::Resize(bool refresh)
+{
 	if (m_vd_pop_dirty)
 		PopVolumeList();
 
@@ -1435,7 +1440,7 @@ void VRenderGLView::OnResize(wxSizeEvent& event)
 	m_resize_ol2 = true;
 	m_resize_paint = true;
 
-	RefreshGL();
+	if (refresh) RefreshGL();
 }
 
 void VRenderGLView::Init()
@@ -4743,7 +4748,7 @@ void VRenderGLView::StartTileRendering(int w, int h, int tilew, int tileh)
 	m_tile_xnum = w/tilew + (w%tilew > 0);
 	m_tile_ynum = h/tileh + (h%tileh > 0);
 	m_current_tileid = 0;
-	OnResize(wxSizeEvent());
+	Resize();
 
 	m_tmp_res_mode = m_res_mode;
 	m_res_mode = 0;
@@ -4780,25 +4785,7 @@ void VRenderGLView::EndTileRendering()
 		m_tiled_image = NULL;
 	}
 
-	int i;
-	for (i=0; i<(int)m_vd_pop_list.size(); i++)
-	{
-		VolumeData* vd = m_vd_pop_list[i];
-		if (vd)
-		{
-			VolumeRenderer* vr = vd->GetVR();
-			if (vr)
-				vr->resize();
-		}
-	}
-
-	if (m_mvr)
-		m_mvr->resize();
-
-	m_resize = true;
-	m_resize_ol1 = true;
-	m_resize_ol2 = true;
-	m_resize_paint = true;
+	Resize(false);
 }
 
 void VRenderGLView::Get1x1DispSize(int &w, int &h)
