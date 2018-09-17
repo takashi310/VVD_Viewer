@@ -3717,6 +3717,7 @@ wxPanel(parent, id, pos, size, style, name),
 	//create tool bar
 	m_toolbar = new wxToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTB_FLAT|wxTB_TOP|wxTB_NODIVIDER);
+    m_toolbar->SetToolBitmapSize(wxSize(20,20));
 	m_toolbar->AddTool(ID_ToggleView, "Toggle View",
 		wxGetBitmapFromMemory(listicon_toggle),
 		"Toggle the visibility of current selection");

@@ -100,6 +100,7 @@ wxWindow* BrushToolDlg::CreateBrushPage(wxWindow *parent)
 	//toolbar
 	m_toolbar = new wxToolBar(page, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTB_FLAT|wxTB_TOP|wxTB_NODIVIDER|wxTB_TEXT);
+    m_toolbar->SetToolBitmapSize(wxSize(20,20));
 	m_toolbar->AddTool(ID_BrushUndo, "Undo",
 		wxGetBitmapFromMemory(undo),
 		"Rollback previous brush operation");
@@ -129,7 +130,9 @@ wxWindow* BrushToolDlg::CreateBrushPage(wxWindow *parent)
 	m_toolbar->AddTool(ID_BrushCreate, "Extract",
 		wxGetBitmapFromMemory(listicon_brushcreate),
 		"Extract highlighted structures out and create a new volume");
-	m_toolbar->SetBackgroundColour(m_notebook->GetThemeBackgroundColour());
+    wxColour col =  m_notebook->GetThemeBackgroundColour();
+    if (col.Ok())
+        m_toolbar->SetBackgroundColour(col);
 	m_toolbar->Realize();
 
 	//Selection adjustment

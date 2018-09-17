@@ -66,7 +66,7 @@ DEALINGS IN THE SOFTWARE.
 
 using namespace std;
 
-#define WITH_DATABASE
+//#define WITH_DATABASE
 
 #define VERSION_CONTACT "http://www.sci.utah.edu/software/fluorender.html"
 #define VERSION_AUTHORS "    Yong Wan, Hideo Otsuna,\nChuck Hansen, Chi-Bin Chien,\nBrig Bagley\nTakashi Kawase\n      @The University of Utah"

@@ -288,7 +288,7 @@ void RulerListCtrl::DeleteSelection()
 			for (int i=0; i<(int)ruler_list->size(); i++)
 			{
 				Ruler* ruler = (*ruler_list)[i];
-				if (ruler && ruler->GetName()==name)
+				if (ruler && ruler->GetNameDisp()==name)
 				{
 					ruler_list->erase(ruler_list->begin()+i);
 					delete ruler;
@@ -761,6 +761,7 @@ wxPanel(parent, id, pos, size, style, name),
 	//toolbar
 	m_toolbar = new wxToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTB_FLAT|wxTB_TOP|wxTB_NODIVIDER);
+    m_toolbar->SetToolBitmapSize(wxSize(20,20));
 	m_toolbar->AddCheckTool(ID_LocatorBtn, "Locator",
 		wxGetBitmapFromMemory(listicon_locator_24x24),
 		wxNullBitmap,

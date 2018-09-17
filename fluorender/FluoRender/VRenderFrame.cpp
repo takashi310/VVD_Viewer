@@ -153,6 +153,7 @@ VRenderFrame::VRenderFrame(
 	// create the main toolbar
 	m_main_tb = new wxToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTB_FLAT|wxTB_TOP|wxTB_NODIVIDER);
+    m_main_tb->SetToolBitmapSize(wxSize(95,42));
 	//create the menu for UI management
 	m_tb_menu_ui = new wxMenu;
 	m_tb_menu_ui->Append(ID_UITreeView, UITEXT_TREEVIEW,
@@ -296,10 +297,16 @@ VRenderFrame::VRenderFrame(
 	m_main_tb->Realize();
 
 	//create render view
+    Thaw();
+    SetEvtHandlerEnabled(true);
+    
 	VRenderView *vrv = new VRenderView(this, this, wxID_ANY);
 	vrv->SetDropTarget(new DnDFile(this, vrv));
 	vrv->InitView();
 	m_vrv_list.push_back(vrv);
+    
+    SetEvtHandlerEnabled(false);
+    Freeze();
 
 	//create tree view
 	m_tree_panel = new TreePanel(this, this, wxID_ANY,
@@ -425,7 +432,7 @@ VRenderFrame::VRenderFrame(
 		Name("m_main_tb").Caption("Toolbar").CaptionVisible(false).
 		MinSize(wxSize(-1, 49)).MaxSize(wxSize(-1, 50)).
 		Top().CloseButton(false).Layer(4));
-#ifndef _DARWIN
+
 	m_aui_mgr.AddPane(m_tree_panel, wxAuiPaneInfo().
 		Name("m_tree_panel").Caption(UITEXT_TREEVIEW).
 		Left().CloseButton(true).BestSize(wxSize(320, 300)).
@@ -438,20 +445,6 @@ VRenderFrame::VRenderFrame(
         Name("m_measure_dlg").Caption(UITEXT_MEASUREMENT).
         Left().CloseButton(true).BestSize(wxSize(320, 400)).
         FloatingSize(wxSize(320, 300)).Layer(3));
-#else
-    m_aui_mgr.AddPane(m_measure_dlg, wxAuiPaneInfo().
-        Name("m_measure_dlg").Caption(UITEXT_MEASUREMENT).
-        Left().CloseButton(true).BestSize(wxSize(320, 400)).
-        FloatingSize(wxSize(320, 300)).Layer(3));
-    m_aui_mgr.AddPane(m_movie_view, wxAuiPaneInfo().
-        Name("m_movie_view").Caption(UITEXT_MAKEMOVIE).
-        Left().CloseButton(true).MinSize(wxSize(320, 300)).
-        FloatingSize(wxSize(320, 300)).Layer(3));
-    m_aui_mgr.AddPane(m_tree_panel, wxAuiPaneInfo().
-        Name("m_tree_panel").Caption(UITEXT_TREEVIEW).
-        Left().CloseButton(true).BestSize(wxSize(320, 300)).
-        FloatingSize(wxSize(320, 300)).Layer(3));
-#endif
 	m_aui_mgr.AddPane(m_prop_panel, wxAuiPaneInfo().
 		Name("m_prop_panel").Caption(UITEXT_PROPERTIES).
 		Bottom().CloseButton(true).MinSize(wxSize(300, 150)).
@@ -474,8 +467,8 @@ VRenderFrame::VRenderFrame(
 	m_aui_mgr.GetPane("m_measure_dlg").dock_proportion = 20;
 	m_aui_mgr.GetPane("m_movie_view").dock_proportion = 10;
 
-	m_aui_mgr.GetPane(m_measure_dlg).Float();
-	m_aui_mgr.GetPane(m_measure_dlg).Hide();
+	//m_aui_mgr.GetPane(m_measure_dlg).Float();
+	//m_aui_mgr.GetPane(m_measure_dlg).Hide();
 
 	//dialogs
 	//brush tool dialog
@@ -5447,7 +5440,7 @@ int VRenderFrame::UploadFileRemote(wxString url, wxString upfname, wxString loc_
 		curl_easy_setopt(_g_curl, CURLOPT_POSTQUOTE, headerlist);
 		curl_easy_setopt(_g_curl, CURLOPT_READDATA, fl);
 		curl_easy_setopt(_g_curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t) fsize);
-		curl_easy_setopt(_g_curl, CURLOPT_USERPWD, usrpwd);
+		curl_easy_setopt(_g_curl, CURLOPT_USERPWD, usrpwd.ToStdString().c_str());
 		curl_easy_setopt(_g_curl, CURLOPT_SSL_VERIFYPEER, false);
 
 		res = curl_easy_perform(_g_curl);

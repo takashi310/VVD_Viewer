@@ -16373,8 +16373,8 @@ wxPanel(parent, id, pos, size, style),
 	m_use_dft_settings(false),
 	m_res_mode(0)
 {
-	SetEvtHandlerEnabled(false);
-	Freeze();
+	//SetEvtHandlerEnabled(false);
+	//Freeze();
 
 	//full frame
 	m_full_frame = new wxFrame((wxFrame*)NULL, wxID_ANY, "FluoRender");
@@ -16459,8 +16459,8 @@ wxPanel(parent, id, pos, size, style),
 	}
 	LoadSettings();
 
-	Thaw();
-	SetEvtHandlerEnabled(true);
+	//Thaw();
+	//SetEvtHandlerEnabled(true);
 
 	m_idleTimer = new wxTimer(this, ID_Timer);
 	m_idleTimer->Start(100);

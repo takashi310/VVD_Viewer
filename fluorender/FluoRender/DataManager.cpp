@@ -5194,6 +5194,7 @@ wxString DataManager::SearchProjectPath(wxString &filename)
 		search_str.Prepend(pathname[i]);
 		if (pathname[i]=='\\' || pathname[i]=='/')
 		{
+            search_str[0] = GETSLASH();
 			wxString name_temp = m_prj_path + search_str;
 			if (wxFileExists(name_temp))
 				return name_temp;
