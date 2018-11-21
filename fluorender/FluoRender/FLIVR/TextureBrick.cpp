@@ -40,6 +40,7 @@
 #include <setjmp.h>
 #include <zlib.h>
 #include <wx/stdpaths.h>
+#include <h5j_reader.h>
 
 using namespace std;
 
@@ -48,6 +49,11 @@ namespace FLIVR
     CURL* TextureBrick::s_curl_ = NULL;
 	CURL* TextureBrick::s_curlm_ = NULL;
 	map<wstring, wstring> TextureBrick::cache_table_ = map<wstring, wstring>();
+	map<wstring, MemCache*> TextureBrick::memcache_table_ = map<wstring, MemCache*>();
+	list<std::wstring> TextureBrick::memcache_order = list<std::wstring>();
+	size_t TextureBrick::memcache_size = 0;
+	size_t TextureBrick::memcache_limit = 512*1024*1024;
+
     
    TextureBrick::TextureBrick (Nrrd* n0, Nrrd* n1,
          int nx, int ny, int nz, int nc, int* nb,
@@ -1104,6 +1110,21 @@ z
 	   readsize = -1;
 
 	   if (!finfo) return false;
+
+	   if (finfo->type == BRICK_FILE_TYPE_H265) {
+		   auto itr = memcache_table_.find(finfo->filename);
+		   if (itr != memcache_table_.end())
+		   {
+			   char *ptr = itr->second->data;
+			   size_t fsize = itr->second->datasize;
+			   size_t h265size = finfo->datasize;
+			   if (h265size <= 0) h265size = fsize;
+			   data = new char[h265size];
+			   memcpy(data, ptr+finfo->offset, h265size);
+			   readsize = h265size;
+			   return true;
+		   }
+	   }
 	   
 	   if (finfo->isurl)
 	   {
@@ -1215,22 +1236,56 @@ z
 	   wstring fn = finfo->cached ? finfo->cache_filename : finfo->filename;
 	   ifs.open(ws2s(fn), ios::binary);
 	   if (!ifs) return false;
-	   size_t zsize = finfo->datasize;
-	   if (zsize <= 0) zsize = (size_t)ifs.seekg(0, std::ios::end).tellg();
-	   char *zdata = new char[zsize];
-	   ifs.seekg(finfo->offset, ios_base::beg);
-	   ifs.read((char*)zdata, zsize);
-	   if (ifs) ifs.close();
-	   data = zdata;
-	   readsize = zsize;
+	   if (finfo->type != BRICK_FILE_TYPE_H265) 
+	   {
+		   size_t zsize = finfo->datasize;
+		   if (zsize <= 0) zsize = (size_t)ifs.seekg(0, std::ios::end).tellg();
+		   char *zdata = new char[zsize];
+		   ifs.seekg(finfo->offset, ios_base::beg);
+		   ifs.read((char*)zdata, zsize);
+		   if (ifs) ifs.close();
+		   data = zdata;
+		   readsize = zsize;
+	   } 
+	   else
+	   {
+		   size_t h265size = finfo->datasize;
+		   size_t fsize = (size_t)ifs.seekg(0, std::ios::end).tellg();
+		   if (h265size <= 0) h265size = fsize;
+		   char *fdata = new char[fsize];
+		   char *h265data = new char[h265size];
+		   ifs.seekg(0, ios_base::beg);
+		   ifs.read((char*)fdata, fsize);
+		   if (ifs) ifs.close();
+		   memcpy(h265data, fdata+finfo->offset, h265size);
+		   data = h265data;
+		   readsize = h265size;
+		   memcache_table_[finfo->filename] = new MemCache(fdata, fsize);
+		   memcache_order.push_back(finfo->filename);
+		   memcache_size += fsize;
+
+		   while (memcache_size > memcache_limit)
+		   {
+			   wstring name = *memcache_order.begin();
+			   auto itr = memcache_table_.find(name);
+			   if (itr != memcache_table_.end())
+			   {
+				   memcache_size -= itr->second->datasize;
+				   delete itr->second;
+				   memcache_table_.erase(itr);
+			   }
+			   memcache_order.pop_front();
+		   }
+	   }
 
 	   return true;
    }
 
-   bool TextureBrick::decompress_brick(char *out, char* in, size_t out_size, size_t in_size, int type)
+   bool TextureBrick::decompress_brick(char *out, char* in, size_t out_size, size_t in_size, int type, int w, int h)
    {
 	   if (type == BRICK_FILE_TYPE_JPEG) return jpeg_decompressor(out, in, out_size, in_size);
 	   if (type == BRICK_FILE_TYPE_ZLIB) return zlib_decompressor(out, in, out_size, in_size);
+	   if (type == BRICK_FILE_TYPE_H265) return h265_decompressor(out, in, out_size, in_size, w, h);
 
 	   return false;
    }
@@ -1323,6 +1378,19 @@ z
 		   return false;
 	   }
 
+	   return true;
+   }
+
+   bool TextureBrick::h265_decompressor(char *out, char* in, size_t out_size, size_t in_size, int w, int h)
+   {
+	   FFMpegMemDecoder decoder((void *)in, in_size, 0, 0);
+	   decoder.start();
+	   int vw = decoder.getImageWidth();
+	   int vh = decoder.getImageHeight();
+	   if (vw - w >= 0) decoder.setImagePaddingR(vw - w);
+	   if (vh - h >= 0) decoder.setImagePaddingB(vh - h);
+	   decoder.grab(out);
+	   decoder.close();
 	   return true;
    }
 

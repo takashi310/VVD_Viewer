@@ -147,7 +147,7 @@ VRenderFrame::VRenderFrame(
 
 	// set frame icon
 	wxIcon icon;
-	icon.CopyFromBitmap(wxGetBitmapFromMemory(icon_32));
+	icon.CopyFromBitmap(wxGetBitmapFromMemory(icon_64));
 	SetIcon(icon);
 
 	// create the main toolbar
@@ -444,7 +444,7 @@ VRenderFrame::VRenderFrame(
     m_aui_mgr.AddPane(m_measure_dlg, wxAuiPaneInfo().
         Name("m_measure_dlg").Caption(UITEXT_MEASUREMENT).
         Left().CloseButton(true).BestSize(wxSize(320, 400)).
-        FloatingSize(wxSize(320, 300)).Layer(3));
+        FloatingSize(wxSize(550, 500)).Layer(3).Dockable(false));
 	m_aui_mgr.AddPane(m_prop_panel, wxAuiPaneInfo().
 		Name("m_prop_panel").Caption(UITEXT_PROPERTIES).
 		Bottom().CloseButton(true).MinSize(wxSize(300, 150)).
@@ -467,8 +467,8 @@ VRenderFrame::VRenderFrame(
 	m_aui_mgr.GetPane("m_measure_dlg").dock_proportion = 20;
 	m_aui_mgr.GetPane("m_movie_view").dock_proportion = 10;
 
-	//m_aui_mgr.GetPane(m_measure_dlg).Float();
-	//m_aui_mgr.GetPane(m_measure_dlg).Hide();
+	m_aui_mgr.GetPane(m_measure_dlg).Float();
+	m_aui_mgr.GetPane(m_measure_dlg).Hide();
 
 	//dialogs
 	//brush tool dialog
@@ -1029,13 +1029,14 @@ void VRenderFrame::OnOpenVolume(wxCommandEvent& WXUNUSED(event))
 
 	wxFileDialog *fopendlg = new wxFileDialog(
 		this, "Choose the volume data file", "", "",
-		"All Supported|*.tif;*.tiff;*.oib;*.oif;*.lsm;*.xml;*.nrrd;*.vvd|"\
-		"Tiff Files (*.tif, *.tiff)|*.tif;*.tiff|"\
+		"All Supported|*.tif;*.tiff;*.zip;*.oib;*.oif;*.lsm;*.xml;*.nrrd;*.h5j;*.vvd|"\
+		"Tiff Files (*.tif, *.tiff, *.zip)|*.tif;*.tiff;*.zip|"\
 		"Olympus Image Binary Files (*.oib)|*.oib|"\
 		"Olympus Original Imaging Format (*.oif)|*.oif|"\
 		"Zeiss Laser Scanning Microscope (*.lsm)|*.lsm|"\
 		"Prairie View XML (*.xml)|*.xml|"\
 		"Nrrd files (*.nrrd)|*.nrrd|"\
+		"H5J files (*.h5j)|*.h5j|"\
 		"VVD files (*.vvd)|*.vvd", wxFD_OPEN|wxFD_MULTIPLE);
 	fopendlg->SetExtraControlCreator(CreateExtraControlVolume);
 
@@ -1108,7 +1109,7 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
 
 			if (suffix == ".nrrd")
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_NRRD);
-			else if (suffix==".tif" || suffix==".tiff")
+			else if (suffix==".tif" || suffix==".tiff" || suffix==".zip")
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_TIFF);
 			else if (suffix == ".oib")
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_OIB);
@@ -1120,6 +1121,8 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_PVXML);
 			else if (suffix==".vvd")
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_BRKXML);
+			else if (suffix == ".h5j")
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_H5J);
 
 			if (ch_num > 1)
 			{
@@ -1277,7 +1280,9 @@ void VRenderFrame::StartupLoad(wxArrayString files)
 			suffix == ".oif" ||
 			suffix == ".lsm" ||
 			suffix == ".xml" ||
-			suffix == ".vvd" )
+			suffix == ".vvd" ||
+			suffix == ".h5j" ||
+			suffix == ".zip")
 		{
 			LoadVolumes(files);
 		}
@@ -1764,6 +1769,8 @@ void VRenderFrame::UpdateTree(wxString name, int type, bool set_calc)
 			case 0://root
 				break;
 			case 1://view
+				if (name == layer->GetName() && (type == 1 || type < 0))
+					GetMeasureDlg()->GetSettings(vrv);
 				break;
 			case 2://volume data
 				{
@@ -1812,8 +1819,10 @@ void VRenderFrame::UpdateTree(wxString name, int type, bool set_calc)
 					m_tree_panel->ChangeIconColor(ii, wxc);
 					wxTreeItemId item = m_tree_panel->AddMeshItem(vrv_item, md->GetName());
 					m_tree_panel->SetMeshItemImage(item, md->GetDisp()?2*ii+1:2*ii);
-					if (name == md->GetName() && (type == 3 || type < 0))
+					if (name == md->GetName() && (type == 3 || type < 0)) {
+						GetMeasureDlg()->GetSettings(vrv);
 						sel_item = item;//m_tree_panel->SelectItem(item);
+					}
 				}
 				break;
 			case 4://annotations
@@ -1828,8 +1837,10 @@ void VRenderFrame::UpdateTree(wxString name, int type, bool set_calc)
 					m_tree_panel->ChangeIconColor(ii, wxc);
 					wxTreeItemId item = m_tree_panel->AddAnnotationItem(vrv_item, ann->GetName());
 					m_tree_panel->SetAnnotationItemImage(item, ann->GetDisp()?2*ii+1:2*ii);
-					if (name == ann->GetName() && (type == 4 || type < 0))
+					if (name == ann->GetName() && (type == 4 || type < 0)) {
+						GetMeasureDlg()->GetSettings(vrv);
 						sel_item = item;
+					}
 				}
 				break;
 			case 5://group
@@ -1869,8 +1880,10 @@ void VRenderFrame::UpdateTree(wxString name, int type, bool set_calc)
 							GetTraceDlg()->GetSettings(vrv);
 						}
 					}
-					if (name == group->GetName() && (type == 5 || type < 0))
+					if (name == group->GetName() && (type == 5 || type < 0)) {
+						GetMeasureDlg()->GetSettings(vrv);
 						sel_item = group_item;
+					}
 				}
 				break;
 			case 6://mesh group
@@ -1903,8 +1916,10 @@ void VRenderFrame::UpdateTree(wxString name, int type, bool set_calc)
 						if (name == md->GetName() && (type == 3 || type < 0))
 							sel_item = item;
 					}
-					if (name == group->GetName() && (type == 6 || type < 0))
+					if (name == group->GetName() && (type == 6 || type < 0)) {
 						sel_item = group_item;
+						GetMeasureDlg()->GetSettings(vrv);
+					}
 				}
 				break;
 			}
@@ -2008,6 +2023,7 @@ void VRenderFrame::OnSelection(int type,
 			m_annotation_prop->Show(false);
 		m_aui_mgr.GetPane(m_prop_panel).Caption(UITEXT_PROPERTIES);
 		m_aui_mgr.Update();
+		if (vrv) m_measure_dlg->GetSettings(vrv);
 		break;
 	case 2:  //volume
 		if (vd && vd->GetDisp())
@@ -3325,7 +3341,7 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 					wxString suffix = str.Mid(str.Find('.', true)).MakeLower();
 					if (suffix == ".nrrd")
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_NRRD, cur_chan, cur_time);
-					else if (suffix == ".tif"||suffix == ".tiff")
+					else if (suffix == ".tif"||suffix == ".tiff"||suffix == ".zip")
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_TIFF, cur_chan, cur_time);
 					else if (suffix == ".oib")
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_OIB, cur_chan, cur_time);
@@ -3337,6 +3353,8 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_PVXML, cur_chan, cur_time);
 					else if (suffix == ".vvd")
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_BRKXML, cur_chan, cur_time);
+					else if (suffix == ".h5j")
+						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_H5J, cur_chan, cur_time);
 				}
 				if (loaded_num)
 					vd = m_data_mgr.GetLastVolumeData();
@@ -3937,6 +3955,52 @@ void VRenderFrame::OpenProject(wxString& filename)
 		SetTextureRendererSettings();
 	}
 
+	if (ticks && prg_diag)
+		prg_diag->Update(90*tick_cnt/ticks,
+		"Reading project file. Please wait.");
+
+	//volumes
+	if (fconfig.Exists("/data/volume"))
+	{
+		fconfig.SetPath("/data/volume");
+		int num = fconfig.Read("num", 0l);
+		for (i = 0; i < num; i++)
+		{
+			wxString str;
+			str = wxString::Format("/data/volume/%d", i);
+			if (fconfig.Exists(str))
+			{
+				fconfig.SetPath(str);
+				if (fconfig.Read("name", &str))
+				{
+					OpenVolumeFromProject(str, fconfig);
+				}
+			}
+			tick_cnt++;
+		}
+	}
+
+	//meshes
+	if (fconfig.Exists("/data/mesh"))
+	{
+		fconfig.SetPath("/data/mesh");
+		int num = fconfig.Read("num", 0l);
+		for (i = 0; i < num; i++)
+		{
+			wxString str;
+			str = wxString::Format("/data/mesh/%d", i);
+			if (fconfig.Exists(str))
+			{
+				fconfig.SetPath(str);
+				if (fconfig.Read("name", &str))
+				{
+					OpenMeshFromProject(str, fconfig);
+				}
+			}
+			tick_cnt++;
+		}
+	}
+
 	//annotations
 	if (fconfig.Exists("/data/annotations"))
 	{
@@ -3954,6 +4018,7 @@ void VRenderFrame::OpenProject(wxString& filename)
 					m_data_mgr.LoadAnnotations(str);
 				}
 			}
+			tick_cnt++;
 		}
 	}
 
@@ -3984,10 +4049,6 @@ void VRenderFrame::OpenProject(wxString& filename)
 			if (i==0 && m_setting_dlg && m_setting_dlg->GetTestMode(1))
 				vrv->m_glview->m_test_speed = true;
 
-			if (ticks && prg_diag)
-				prg_diag->Update(90*tick_cnt/ticks,
-				"Reading project file. Please wait.");
-
 			wxString str;
 			//old
 			//volumes
@@ -4001,10 +4062,9 @@ void VRenderFrame::OpenProject(wxString& filename)
 					if (fconfig.Read(wxString::Format("name%d", j), &str))
 					{
 						
-						VolumeData* vd = OpenVolumeFromProject(str, fconfig);
+						VolumeData* vd = m_data_mgr.GetVolumeData(str);
 						if (vd)
 							vrv->AddVolumeData(vd);
-						tick_cnt++;
 					}
 				}
 				vrv->SetVolPopDirty();
@@ -4019,10 +4079,9 @@ void VRenderFrame::OpenProject(wxString& filename)
 				{
 					if (fconfig.Read(wxString::Format("name%d", j), &str))
 					{
-						MeshData* md = OpenMeshFromProject(str, fconfig);
+						MeshData* md = m_data_mgr.GetMeshData(str);
 						if (md)
 							vrv->AddMeshData(md);
-						tick_cnt++;
 					}
 				}
 			}
@@ -4049,10 +4108,9 @@ void VRenderFrame::OpenProject(wxString& filename)
 								{
 									if (fconfig.Read("name", &str))
 									{
-										VolumeData* vd = OpenVolumeFromProject(str, fconfig);
+										VolumeData* vd = m_data_mgr.GetVolumeData(str);
 										if (vd)
 											vrv->AddVolumeData(vd);
-										tick_cnt++;
 									}
 								}
 								break;
@@ -4060,10 +4118,9 @@ void VRenderFrame::OpenProject(wxString& filename)
 								{
 									if (fconfig.Read("name", &str))
 									{
-										MeshData* md = OpenMeshFromProject(str, fconfig);
+										MeshData* md = m_data_mgr.GetMeshData(str);
 										if (md)
 											vrv->AddMeshData(md);
-										tick_cnt++;
 									}
 								}
 								break;
@@ -4139,10 +4196,9 @@ void VRenderFrame::OpenProject(wxString& filename)
 												{
 													if (fconfig.Read(wxString::Format("vol_%d", k), &str))
 													{
-														VolumeData* vd = OpenVolumeFromProject(str, fconfig);
+														VolumeData* vd = m_data_mgr.GetVolumeData(str);
 														if (vd)
 															group->InsertVolumeData(k-1, vd);
-														tick_cnt++;
 													}
 												}
 											}
@@ -4177,10 +4233,9 @@ void VRenderFrame::OpenProject(wxString& filename)
 												{
 													if (fconfig.Read(wxString::Format("mesh_%d", k), &str))
 													{
-														MeshData* md = OpenMeshFromProject(str, fconfig);
+														MeshData* md = m_data_mgr.GetMeshData(str);
 														if (md)
 															group->InsertMeshData(k-1, md);
-														tick_cnt++;
 													}
 												}
 											}
@@ -4708,7 +4763,7 @@ void VRenderFrame::OpenProject(wxString& filename)
 		}
 		if (fconfig.Read("ui_measure_view", &bVal))
 		{
-/*			if (bVal)
+			if (bVal)
 			{
 				m_aui_mgr.GetPane(m_measure_dlg).Show();
 				m_tb_menu_ui->Check(ID_UIMeasureView, true);
@@ -4722,7 +4777,7 @@ void VRenderFrame::OpenProject(wxString& filename)
 				}
 			}
 			else
-*/			{
+			{
 				if (m_aui_mgr.GetPane(m_measure_dlg).IsOk())
 					m_aui_mgr.GetPane(m_measure_dlg).Hide();
 				m_tb_menu_ui->Check(ID_UIMeasureView, false);
@@ -4938,6 +4993,7 @@ void VRenderFrame::OpenProject(wxString& filename)
 				UpdateTree();
 			break;
 		default:
+			m_measure_dlg->GetSettings(m_vrv_list[0]);
 			UpdateTree();
 		}
 	}
@@ -4946,10 +5002,16 @@ void VRenderFrame::OpenProject(wxString& filename)
 		if (m_data_mgr.GetVolumeData(m_cur_sel_vol))
 			UpdateTree(m_data_mgr.GetVolumeData(m_cur_sel_vol)->GetName(), 2);
 		else
+		{
+			m_measure_dlg->GetSettings(m_vrv_list[0]);
 			UpdateTree();
+		}
 	}
 	else
+	{
+		m_measure_dlg->GetSettings(m_vrv_list[0]);
 		UpdateTree();
+	}
 
 	if (!expstate.IsEmpty())
 		m_tree_panel->ImportExpState(expstate.ToStdString());

@@ -161,6 +161,7 @@ namespace FLIVR
          //clear the opengl textures from the texture pool
          static void clear_tex_pool();
 		void clear_tex_current();
+		void clear_tex_current_mask();
 
          //resize the fbo texture
          void resize();
@@ -212,7 +213,7 @@ namespace FLIVR
 		 void get_id_color(unsigned char &r, unsigned char &g, unsigned char &b, int id=-1);
 		 void get_rendered_id_color(unsigned char &r, unsigned char &g, unsigned char &b, int id=-1);
 		 //0-dark; 1-gray; 2-invisible;
-		 void update_palette(int mode, float fac=0.1);
+		 void update_palette(int mode, float fac=-1.0f);
 		 int get_roi_disp_mode(){ return desel_palette_mode_; }
 		 void set_desel_palette_mode_dark(float fac=0.1);
 		 void set_desel_palette_mode_gray(float fac=0.1);

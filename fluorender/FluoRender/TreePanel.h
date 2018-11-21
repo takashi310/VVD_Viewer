@@ -102,7 +102,10 @@ class EXPORT_API DataTreeCtrl: public wxTreeCtrl, Notifier
 		ID_Counting,
 		ID_Colocalization,
 		ID_Convert,
-		ID_RandomizeColor
+		ID_RandomizeColor,
+		ID_ExportAllSegments,
+		ID_FlipH,
+		ID_FlipV
 	};
 
 public:
@@ -253,6 +256,9 @@ private:
 	void OnColocalization(wxCommandEvent& event);
 	void OnConvert(wxCommandEvent& event);
 	void OnRandomizeColor(wxCommandEvent& event);
+	void OnExportAllSegments(wxCommandEvent& event);
+	void OnFlipH(wxCommandEvent& event);
+	void OnFlipV(wxCommandEvent& event);
 
 	void OnSelChanged(wxTreeEvent& event);
 	void OnSelChanging(wxTreeEvent& event);

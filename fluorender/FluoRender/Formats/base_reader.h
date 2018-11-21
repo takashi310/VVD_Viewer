@@ -40,6 +40,13 @@ using namespace std;
 	#define nrrdAxisInfoSet nrrdAxisInfoSet_va
 #endif
 
+#define READER_OK	0
+#define READER_OPEN_FAIL	1
+#define READER_FORMAT_ERROR	2
+#define READER_EMPTY_DATA	3
+#define READER_FP32_DATA	4
+#define READER_JAVA_ARRAY_SIZE_ERROR 5
+
 class EXPORT_API BaseReader
 {
 public:
@@ -223,6 +230,7 @@ protected:
 	int LZWDecode(tidata_t tif, tidata_t op0, tsize_t occ0);
 	void DecodeAcc8(tidata_t cp0, tsize_t cc, tsize_t stride);
 	void DecodeAcc16(tidata_t cp0, tsize_t cc, tsize_t stride);
+	int get_number(string &str, int64_t pos);
 };
 
 #endif//_BASE_READER_H_

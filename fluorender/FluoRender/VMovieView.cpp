@@ -1180,6 +1180,21 @@ void VMovieView::WriteFrameToFile(int total_frames) {
 	wxString s_length = wxString::Format("%d", total_frames);
 	int length = s_length.Length();
 	wxString format = wxString::Format("_%%0%dd", length);
+
+	if(m_seq_chk->GetValue()) {
+		int first, sec, tmp;
+		vrv->Get4DSeqFrames(first, sec, tmp);
+		if (sec - first <= 0) { // batch mode
+			vrv->Get3DBatFrames(first, sec, tmp);
+			if (sec - first > 0) {
+				int volnum = vrv->GetAllVolumeNum();
+				VolumeData *vd = vrv->GetCurrentVolume();
+				if (vd && vd->GetDisp()) 
+					format = format + "_" + vd->GetName();
+			}
+		}
+	}
+
 	wxString outputfilename = wxString::Format("%s"+format+"%s",m_filename,
 		m_last_frame,".tif");
     //capture

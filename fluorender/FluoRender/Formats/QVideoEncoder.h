@@ -22,15 +22,15 @@ THIS SOFTWARE IS PROVIDED BY COPYRIGHT HOLDERS ``AS IS'' AND ANY EXPRESS OR IMPL
 #include <iostream>
 
 extern "C" {
-	namespace ffmpeg {
+
 #include <libavutil/opt.h>
 #include <libavutil/mathematics.h>
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
 #include <libswresample/swresample.h>
-	}
+
 }
-#define STREAM_PIX_FMT    ffmpeg::AV_PIX_FMT_YUV420P /* default pix_fmt */
+#define STREAM_PIX_FMT    AV_PIX_FMT_YUV420P /* default pix_fmt */
 #define SCALE_FLAGS SWS_BICUBIC
 
 class QVideoEncoder
@@ -46,30 +46,30 @@ protected:
 
 	// a wrapper around a single output AVStream
 	typedef struct OutputStream {
-		ffmpeg::AVStream *st;
+		AVStream *st;
 		/* pts of the next frame that will be generated */
 		int64_t next_pts;
 		int samples_count;
-		ffmpeg::AVFrame *frame;
-		ffmpeg::AVFrame *tmp_frame;
+		AVFrame *frame;
+		AVFrame *tmp_frame;
 		float t, tincr, tincr2;
-		struct ffmpeg::SwsContext *sws_ctx;
-		struct ffmpeg::SwrContext *swr_ctx;
+		struct SwsContext *sws_ctx;
+		struct SwrContext *swr_ctx;
 	} OutputStream;
 
 	//codec and format details.
 	OutputStream output_stream_;
-	ffmpeg::AVOutputFormat *format_;
-	ffmpeg::AVFormatContext *format_context_;
-	ffmpeg::AVCodec *video_codec_;
+	AVOutputFormat *format_;
+	AVFormatContext *format_context_;
+	AVCodec *video_codec_;
 
 	//interior functions
 	bool add_stream();
 	bool open_video();
-	ffmpeg::AVFrame * alloc_picture();
-	ffmpeg::AVFrame * get_video_frame();
-	int write_frame(const ffmpeg::AVRational *time_base, ffmpeg::AVPacket *pkt);
-	void log_packet(const ffmpeg::AVFormatContext *fmt_ctx, const ffmpeg::AVPacket *pkt);
+	AVFrame * alloc_picture();
+	AVFrame * get_video_frame();
+	int write_frame(const AVRational *time_base, AVPacket *pkt);
+	void log_packet(const AVFormatContext *fmt_ctx, const AVPacket *pkt);
 public:
     QVideoEncoder();
     virtual ~QVideoEncoder();

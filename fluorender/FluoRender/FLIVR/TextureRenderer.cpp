@@ -940,9 +940,11 @@ namespace FLIVR
 		switch(mode)
 		{
 		case 0:
+			if (fac < 0.0f) fac = 0.3f;
 			set_desel_palette_mode_dark(fac);
 			break;
 		case 1:
+			if (fac < 0.0f) fac = 0.1f;
 			set_desel_palette_mode_gray(fac);
 			break;
 		case 2:
@@ -1270,6 +1272,34 @@ namespace FLIVR
 				if (tex_pool_[i].brick == brick)
 				{
 					if (tex_pool_[i].comp >= 0 && tex_pool_[i].comp < TEXTURE_MAX_COMPONENTS && brick->nb(tex_pool_[i].comp) > 0)
+						est_avlb_mem += brick->nx()*brick->ny()*brick->nz()*brick->nb(tex_pool_[i].comp)/1.04e6;
+					glDeleteTextures(1, (GLuint*)&tex_pool_[i].id);
+					tex_pool_.erase(tex_pool_.begin() + i);
+					break;
+				}
+			}
+		}
+		if (use_mem_limit_)
+			available_mem_ = est_avlb_mem;
+	}
+
+	void TextureRenderer::clear_tex_current_mask()
+	{
+		if (!tex_)
+			return;
+
+		vector<TextureBrick*>* bricks = tex_->get_bricks();
+		TextureBrick* brick = 0;
+		double est_avlb_mem = available_mem_;
+		for (int i = tex_pool_.size() - 1; i >= 0; --i)
+		{
+			for (size_t j = 0; j < bricks->size(); ++j)
+			{
+				brick = (*bricks)[j];
+				int c = brick->nmask();
+				if (tex_pool_[i].comp == c && tex_pool_[i].brick == brick)
+				{
+					if (tex_pool_[i].comp < TEXTURE_MAX_COMPONENTS && brick->nb(tex_pool_[i].comp) > 0)
 						est_avlb_mem += brick->nx()*brick->ny()*brick->nz()*brick->nb(tex_pool_[i].comp)/1.04e6;
 					glDeleteTextures(1, (GLuint*)&tex_pool_[i].id);
 					tex_pool_.erase(tex_pool_.begin() + i);

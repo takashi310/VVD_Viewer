@@ -58,9 +58,8 @@ public:
 	~RulerListCtrl();
 
 	void Append(wxString name, wxString &color, double length, wxString &unit,
-		double angle, wxString &points, bool time_dep, int time,
-		wxString extra);
-	void UpdateRulers(VRenderView* vrv=0);
+		double angle, wxString &points, bool time_dep, int time, wxString extra, int type);
+	void UpdateRulers(VRenderView* vrv=0, bool update_annotaions=true);
 
 	void DeleteSelection();
 	void DeleteAll(bool cur_time=true);
@@ -86,6 +85,10 @@ private:
 	long m_dragging_to_item;
 	long m_dragging_item;
 
+	bool m_show_anno;
+
+	long m_ruler_count;
+
 private:
 	void EndEdit();
 	void OnAct(wxListEvent &event);
@@ -102,6 +105,7 @@ private:
 	void OnLeftDClick(wxMouseEvent& event);
 
 	void OnColumnSizeChanged(wxListEvent &event);
+	void OnColBeginDrag(wxListEvent& event);
 
 	void OnKeyDown(wxKeyEvent& event);
 	void OnKeyUp(wxKeyEvent& event);
@@ -142,9 +146,9 @@ public:
 		const wxString& name = "MeasureDlg");
 	~MeasureDlg();
 
-	void GetSettings(VRenderView* vrv);
+	void GetSettings(VRenderView* vrv, bool update_annotaions = true);
 	VRenderView* GetView();
-	void UpdateList();
+	void UpdateList(bool update_annotaions=true);
 
 private:
 	wxWindow* m_frame;

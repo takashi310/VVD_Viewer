@@ -30,7 +30,7 @@ DEALINGS IN THE SOFTWARE.
 
 #include <base_writer.h>
 
-class EXPORT_API TIFWriter : public BaseWriter
+class TIFWriter : public BaseWriter
 {
 public:
 	TIFWriter();

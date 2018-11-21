@@ -12,6 +12,8 @@
 #include <fstream>
 #include <algorithm>
 #include <set>
+#include <thread>
+#include <mutex>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
@@ -490,6 +492,245 @@ VolumeData* VolumeData::DeepCopy(VolumeData &copy, bool use_default_settings, Da
 	return vd;
 }
 
+void VolumeData::FlipHorizontally()
+{
+	if (!m_tex || !m_vr) return;
+	Nrrd *nrrd = GetVolume(true);
+	Nrrd *mask = GetMask(true);
+	Nrrd *label = GetLabel(true);
+	Nrrd *stroke = GetStroke(true);
+	int iw, ih, id;
+	GetResolution(iw, ih, id);
+	size_t w = iw, h = ih, d = id;
+	size_t linenum = h*d;
+	size_t nthreads = std::thread::hardware_concurrency();
+	if (nthreads > linenum) nthreads = linenum;
+	if (nrrd)
+	{
+		std::vector<std::thread> threads(nthreads);
+		if (nrrd->type == nrrdTypeUChar) {
+			unsigned char *data = (unsigned char *)nrrd->data;
+			for(size_t t = 0; t < nthreads; t++)
+			{
+				threads[t] = std::thread(std::bind(
+					[&](const size_t bi, const size_t ei, const size_t t)
+					{
+						for(size_t i = bi; i<ei; i++)
+						{
+							size_t baseid = i*w;
+							for (size_t j = 0; j < w/2; j++) {
+								swap(data[baseid + w-j-1], data[baseid + j]);
+							}
+						}
+					}, t*linenum/nthreads, (t+1)==nthreads ? linenum : (t+1)*linenum/nthreads, t));
+			}
+			std::for_each(threads.begin(),threads.end(),[](std::thread& x){x.join();});
+		} else if (nrrd->type == nrrdTypeUShort) {
+			unsigned short *data = (unsigned short *)nrrd->data;
+			for(size_t t = 0; t < nthreads; t++)
+			{
+				threads[t] = std::thread(std::bind(
+					[&](const size_t bi, const size_t ei, const size_t t)
+				{
+					for(size_t i = bi; i<ei; i++)
+					{
+						size_t baseid = i*w;
+						for (size_t j = 0; j < w/2; j++) {
+							swap(data[baseid + w-j-1], data[baseid + j]);
+						}
+					}
+				}, t*linenum/nthreads, (t+1)==nthreads ? linenum : (t+1)*linenum/nthreads, t));
+			}
+			std::for_each(threads.begin(),threads.end(),[](std::thread& x){x.join();});
+		}
+	}
+
+	if (mask)
+	{
+		std::vector<std::thread> threads(nthreads);
+		unsigned char *data = (unsigned char *)mask->data;
+		for(size_t t = 0; t < nthreads; t++)
+		{
+			threads[t] = std::thread(std::bind(
+				[&](const size_t bi, const size_t ei, const size_t t)
+			{
+				for(size_t i = bi; i<ei; i++)
+				{
+					size_t baseid = i*w;
+					for (size_t j = 0; j < w/2; j++) {
+						swap(data[baseid + w-j-1], data[baseid + j]);
+					}
+				}
+			}, t*linenum/nthreads, (t+1)==nthreads ? linenum : (t+1)*linenum/nthreads, t));
+		}
+		std::for_each(threads.begin(),threads.end(),[](std::thread& x){x.join();});
+	}
+
+	if (label)
+	{
+		std::vector<std::thread> threads(nthreads);
+		unsigned int *data = (unsigned int *)label->data;
+		for(size_t t = 0; t < nthreads; t++)
+		{
+			threads[t] = std::thread(std::bind(
+				[&](const size_t bi, const size_t ei, const size_t t)
+			{
+				for(size_t i = bi; i<ei; i++)
+				{
+					size_t baseid = i*w;
+					for (size_t j = 0; j < w/2; j++) {
+						swap(data[baseid + w-j-1], data[baseid + j]);
+					}
+				}
+			}, t*linenum/nthreads, (t+1)==nthreads ? linenum : (t+1)*linenum/nthreads, t));
+		}
+		std::for_each(threads.begin(),threads.end(),[](std::thread& x){x.join();});
+	}
+
+	if (stroke)
+	{
+		std::vector<std::thread> threads(nthreads);
+		unsigned char *data = (unsigned char *)stroke->data;
+		for(size_t t = 0; t < nthreads; t++)
+		{
+			threads[t] = std::thread(std::bind(
+				[&](const size_t bi, const size_t ei, const size_t t)
+			{
+				for(size_t i = bi; i<ei; i++)
+				{
+					size_t baseid = i*w;
+					for (size_t j = 0; j < w/2; j++) {
+						swap(data[baseid + w-j-1], data[baseid + j]);
+					}
+				}
+			}, t*linenum/nthreads, (t+1)==nthreads ? linenum : (t+1)*linenum/nthreads, t));
+		}
+		std::for_each(threads.begin(),threads.end(),[](std::thread& x){x.join();});
+	}
+
+	m_vr->clear_tex_current();
+}
+
+void VolumeData::FlipVertically()
+{
+	if (!m_tex || !m_vr) return;
+	Nrrd *nrrd = GetVolume(true);
+	Nrrd *mask = GetMask(true);
+	Nrrd *label = GetLabel(true);
+	Nrrd *stroke = GetStroke(true);
+	int iw, ih, id;
+	GetResolution(iw, ih, id);
+	size_t w = iw, h = ih, d = id;
+
+	size_t nthreads = std::thread::hardware_concurrency();
+	if (nthreads > d) nthreads = d;
+	if (nrrd)
+	{
+		std::vector<std::thread> threads(nthreads);
+		if (nrrd->type == nrrdTypeUChar) {
+			unsigned char *data = (unsigned char *)nrrd->data;
+			for (size_t t = 0; t < nthreads; t++)
+			{
+				threads[t] = std::thread(std::bind(
+					[&](const size_t bi, const size_t ei, const size_t t)
+				{
+					for (size_t z = bi; z < ei; z++)
+					for (size_t x = 0; x < w; x++)
+					{
+						size_t baseid = z * w*h + x;
+						for (size_t y = 0; y < h / 2; y++)
+							swap(data[baseid + (h - y - 1)*w], data[baseid + y * w]);
+					}
+				}, t*d / nthreads, (t + 1) == nthreads ? d : (t + 1)*d / nthreads, t));
+			}
+			std::for_each(threads.begin(), threads.end(), [](std::thread& x) {x.join(); });
+		}
+		else if (nrrd->type == nrrdTypeUShort) {
+			unsigned short *data = (unsigned short *)nrrd->data;
+			for (size_t t = 0; t < nthreads; t++)
+			{
+				threads[t] = std::thread(std::bind(
+					[&](const size_t bi, const size_t ei, const size_t t)
+				{
+					for (size_t z = bi; z < ei; z++)
+					for (size_t x = 0; x < w; x++)
+					{
+						size_t baseid = z * w*h + x;
+						for (size_t y = 0; y < h / 2; y++)
+							swap(data[baseid + (h - y - 1)*w], data[baseid + y * w]);
+					}
+				}, t*d / nthreads, (t + 1) == nthreads ? d : (t + 1)*d / nthreads, t));
+			}
+			std::for_each(threads.begin(), threads.end(), [](std::thread& x) {x.join(); });
+		}
+	}
+	
+	if (mask)
+	{
+		std::vector<std::thread> threads(nthreads);
+		unsigned char *data = (unsigned char *)mask->data;
+		for (size_t t = 0; t < nthreads; t++)
+		{
+			threads[t] = std::thread(std::bind(
+				[&](const size_t bi, const size_t ei, const size_t t)
+			{
+				for (size_t z = bi; z < ei; z++)
+				for (size_t x = 0; x < w; x++)
+				{
+					size_t baseid = z * w*h + x;
+					for (size_t y = 0; y < h / 2; y++)
+						swap(data[baseid + (h - y - 1)*w], data[baseid + y * w]);
+				}
+			}, t*d / nthreads, (t + 1) == nthreads ? d : (t + 1)*d / nthreads, t));
+		}
+		std::for_each(threads.begin(), threads.end(), [](std::thread& x) {x.join(); });
+	}
+
+	if (label)
+	{
+		std::vector<std::thread> threads(nthreads);
+		unsigned int *data = (unsigned int *)label->data;
+		for (size_t t = 0; t < nthreads; t++)
+		{
+			threads[t] = std::thread(std::bind(
+				[&](const size_t bi, const size_t ei, const size_t t)
+			{
+				for (size_t z = bi; z < ei; z++)
+				for (size_t x = 0; x < w; x++)
+				{
+					size_t baseid = z * w*h + x;
+					for (size_t y = 0; y < h / 2; y++)
+						swap(data[baseid + (h - y - 1)*w], data[baseid + y * w]);
+				}
+			}, t*d / nthreads, (t + 1) == nthreads ? d : (t + 1)*d / nthreads, t));
+		}
+		std::for_each(threads.begin(), threads.end(), [](std::thread& x) {x.join(); });
+	}
+
+	if (stroke)
+	{
+		std::vector<std::thread> threads(nthreads);
+		unsigned char *data = (unsigned char *)stroke->data;
+		for (size_t t = 0; t < nthreads; t++)
+		{
+			threads[t] = std::thread(std::bind(
+				[&](const size_t bi, const size_t ei, const size_t t)
+			{
+				for (size_t z = bi; z < ei; z++)
+				for (size_t x = 0; x < w; x++)
+				{
+					size_t baseid = z * w*h + x;
+					for (size_t y = 0; y < h / 2; y++)
+						swap(data[baseid + (h - y - 1)*w], data[baseid + y * w]);
+				}
+			}, t*d / nthreads, (t + 1) == nthreads ? d : (t + 1)*d / nthreads, t));
+		}
+		std::for_each(threads.begin(), threads.end(), [](std::thread& x) {x.join(); });
+	}
+
+	m_vr->clear_tex_current();
+}
+
 //duplication
 bool VolumeData::GetDup()
 {
@@ -629,7 +870,8 @@ int VolumeData::Replace(Nrrd* data, bool del_tex)
 {
 	if (!data || data->dim!=3)
 		return 0;
-
+	
+	double spcx = 1.0, spcy = 1.0, spcz = 1.0;
 	if (del_tex)
 	{
 		Nrrd *nv = data;
@@ -638,11 +880,18 @@ int VolumeData::Replace(Nrrd* data, bool del_tex)
 		m_res_y = nv->axis[1].size;
 		m_res_z = nv->axis[2].size;
 
-		if (m_tex)
+		if (m_vr) {
+			m_vr->clear_tex_current();
+			m_vr->reset_texture();
+		}
+		if (m_tex) {
+			m_tex->get_spacings(spcx, spcy, spcz);
 			delete m_tex;
+		}
 		m_tex = new Texture();
 		m_tex->set_use_priority(m_skip_brick);
 		m_tex->build(nv, gm, 0, m_max_value, 0, 0);
+		m_tex->set_spacings(spcx, spcy, spcz);
 	}
 	else
 	{
@@ -1438,6 +1687,140 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 		}
 
 		m_tex_path = filename;
+	}
+}
+
+void VolumeData::ExportEachSegment(wxString dir, Nrrd *label_nrrd, int mode, bool compress)
+{
+	if (m_vr && m_tex)
+	{
+		wxProgressDialog* prog_diag = new wxProgressDialog(
+			"FluoRender: Export Segments...",
+			"Please wait.",
+			100, 0,
+			wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);
+		int progress = 0;
+
+		Nrrd* main = 0;
+		Nrrd* label = 0;
+		
+		BaseWriter *writer = 0;
+		switch (mode)
+		{
+		case 0://multi-page tiff
+			writer = new TIFWriter();
+			break;
+		case 1://single-page tiff sequence
+			writer = new TIFWriter();
+			break;
+		case 2://nrrd
+			writer = new NRRDWriter();
+			break;
+		}
+
+		double spcx, spcy, spcz;
+		GetSpacings(spcx, spcy, spcz);
+
+		//save data
+		main = m_tex->get_nrrd(0);
+
+		if (label_nrrd) label = label_nrrd;
+		else
+		{
+			m_vr->return_label();
+			label = m_tex->get_nrrd(m_tex->nlabel());
+		}
+
+		if (main && main->data && label && label->data)
+		{
+			size_t voxelnum = (size_t)m_res_x * (size_t)m_res_y * (size_t)m_res_z;
+			size_t data_size = voxelnum;
+			
+			void *origdata = main->data;
+			
+			if (main->type == nrrdTypeUShort || main->type == nrrdTypeShort)
+				data_size *= 2;
+			void *tmpdata = new unsigned char[data_size];
+			memset(tmpdata, 0, data_size);
+			
+			//scan label
+			unsigned int* label_data = (unsigned int*)(label->data);
+			unordered_map <unsigned int, vector<size_t>> segs;
+			int segnum = 0;
+			for (size_t pos = 0; pos < voxelnum; pos++)
+			{
+				if (label_data[pos] > 0)
+				{
+					unsigned int id = label_data[pos];
+					unordered_map <unsigned int, vector<size_t>>::iterator ite = segs.find(id);
+					if (ite != segs.end())
+						ite->second.push_back(pos);
+					else 
+					{
+						vector<size_t> v;
+						v.push_back(pos);
+						segs.insert(pair<unsigned int, vector<size_t>>(id, v));
+						segnum++;
+					}
+				}
+			}
+
+			//save segments
+			main->data = tmpdata;
+			if (!dir.EndsWith(wxFileName::GetPathSeparator())) dir += wxFileName::GetPathSeparator();
+			unordered_map <unsigned int, vector<size_t>>:: const_iterator cite;
+			int segcount = 0;
+			if (main->type == nrrdTypeChar || main->type == nrrdTypeUChar) {
+				unsigned char *src = (unsigned char *)origdata;
+				unsigned char *tar = (unsigned char *)tmpdata;
+				for ( cite = segs.begin(); cite != segs.end(); ++cite )
+				{
+					wxString fname = dir + wxString::Format("%05d", cite->first) + "_" + m_name;
+					size_t segsize = cite->second.size();
+					for (size_t i = 0; i < segsize; i++)
+						tar[cite->second[i]] = src[cite->second[i]];
+					
+					writer->SetData(main);
+					writer->SetSpacings(spcx, spcy, spcz);
+					writer->SetCompression(compress);
+					writer->Save(fname.ToStdWstring(), mode);
+
+					memset(tmpdata, 0, data_size);
+					
+					segcount++;
+					prog_diag->Update(100 * segcount / segnum);
+				}
+			}
+			else if (main->type == nrrdTypeShort || main->type == nrrdTypeUShort) {
+				unsigned short *src = (unsigned short *)origdata;
+				unsigned short *tar = (unsigned short *)tmpdata;
+				for ( cite = segs.begin(); cite != segs.end(); ++cite )
+				{
+					wxString fname = dir + wxString::Format("%05d", cite->first) + "_" + m_name;
+					size_t segsize = cite->second.size();
+					for (size_t i = 0; i < segsize; i++)
+						tar[cite->second[i]] = src[cite->second[i]];
+					
+					writer->SetData(main);
+					writer->SetSpacings(spcx, spcy, spcz);
+					writer->SetCompression(compress);
+					writer->Save(fname.ToStdWstring(), mode);
+
+					memset(tmpdata, 0, data_size);
+					
+					segcount++;
+					prog_diag->Update(100 * segcount / segnum);
+				}
+			}
+
+			main->data = origdata;
+			delete [] tmpdata;
+		}
+
+		delete writer;
+
+		prog_diag->Update(100);
+		delete prog_diag;
 	}
 }
 
@@ -3441,6 +3824,7 @@ Annotations::Annotations()
 	m_vd = 0;
 	m_disp = true;
 	m_memo_ro = false;
+	m_label = NULL;
 }
 
 Annotations::~Annotations()
@@ -3530,6 +3914,11 @@ void Annotations::Clear()
 			delete atext;
 	}
 	m_alist.clear();
+
+	if (m_label) {
+		delete [] m_label->data;
+		nrrdNix(m_label);
+	}
 }
 
 //memo
@@ -3688,6 +4077,19 @@ void Annotations::Save(wxString &filename)
 	}
 
 	m_data_path = filename;
+
+	wxString labelpath = filename.Mid(0, filename.find_last_of(wxT('.'))) + ".lbl";
+
+	if (m_label && m_vd)
+	{
+		double spcx = 1.0, spcy = 1.0, spcz = 1.0; 
+		m_vd->GetSpacings(spcx, spcy, spcz);
+		NRRDWriter writer;
+		writer.SetData(m_label);
+		writer.SetSpacings(spcx, spcy, spcz);
+		writer.SetCompression(true);
+		writer.Save(labelpath.ToStdWstring(), 0);
+	}
 }
 
 wxString Annotations::GetInfoMeaning()
@@ -5330,6 +5732,8 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 			reader = new PVXMLReader();
 		else if (type == LOAD_TYPE_BRKXML)
 			reader = new BRKXMLReader();
+		else if (type == LOAD_TYPE_H5J)
+			reader = new H5JReader();
 
 		m_reader_list.push_back(reader);
 		wstring str_w = pathname.ToStdWstring();
@@ -5788,6 +6192,21 @@ int DataManager::LoadAnnotations(wxString &filename)
 		new_name = name+wxString::Format("_%d", i);
 	if (i>1)
 		ann->SetName(new_name);
+
+	wxString labelpathname = filename.Mid(0, filename.find_last_of(wxT('.'))) + ".lbl";
+	if (!wxFileExists(labelpathname))
+	{
+		labelpathname = SearchProjectPath(labelpathname);
+		if (!wxFileExists(labelpathname)) 
+			labelpathname = "";
+	}
+
+	if (wxFileExists(labelpathname)) {
+		LBLReader reader;
+		reader.SetFile(labelpathname.ToStdString());
+		ann->SetLabel(reader.Convert(0, 0, false));
+	}
+
 	m_annotation_list.push_back(ann);
 
 	return 1;

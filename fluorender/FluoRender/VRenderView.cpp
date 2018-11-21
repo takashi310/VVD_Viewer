@@ -436,7 +436,7 @@ wxThread::ExitCode VolumeDecompressorThread::Entry()
 
 		size_t bsize = (size_t)(q.b->nx())*(size_t)(q.b->ny())*(size_t)(q.b->nz())*(size_t)(q.b->nb(0));
 		char *result = new char[bsize];
-		if (TextureBrick::decompress_brick(result, q.in_data, bsize, q.in_size, q.finfo->type))
+		if (TextureBrick::decompress_brick(result, q.in_data, bsize, q.in_size, q.finfo->type, q.b->nx(), q.b->ny()))
 		{
 			m_vl->m_pThreadCS.Enter();
 
@@ -4219,7 +4219,7 @@ int VRenderGLView::NoiseAnalysis(double min_voxels, double max_voxels, double th
 
 	m_selector.Set2DMask(m_tex_paint);
 	m_selector.Set2DWeight(m_tex_final, glIsTexture(m_tex_wt2)?m_tex_wt2:m_tex);
-	return_val = m_selector.NoiseAnalysis(min_voxels, max_voxels, 10.0, thresh);
+	return_val = m_selector.CompAnalysis(min_voxels, max_voxels, thresh, 1.0, false, false);
 
 	if (copied) RefreshGL(false, true);
 
@@ -7968,10 +7968,10 @@ void VRenderGLView::Set3DBatFrame(int offset)
 				vd->SetName(data_name);
 				vd->SetPath(wxString(reader->GetPathName()));
 				vd->SetCurTime(reader->GetCurTime());
-				if (!reader->IsSpcInfoValid())
+				//if (!reader->IsSpcInfoValid())
 					vd->SetSpacings(spcx, spcy, spcz);
-				else
-					vd->SetSpacings(reader->GetXSpc(), reader->GetYSpc(), reader->GetZSpc());
+				//else
+				//	vd->SetSpacings(reader->GetXSpc(), reader->GetYSpc(), reader->GetZSpc());
 				if (vd->GetVR())
 					vd->GetVR()->clear_tex_pool();
 			}
@@ -9536,6 +9536,11 @@ void VRenderGLView::RemoveMeshData(wxString &name)
 
 void VRenderGLView::RemoveAnnotations(wxString &name)
 {
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+	DataManager *dm = vr_frame->GetDataManager();
+	if (!dm) return;
+
 	for (int i=0; i<(int)m_layer_list.size(); i++)
 	{
 		if (!m_layer_list[i])
@@ -9546,6 +9551,7 @@ void VRenderGLView::RemoveAnnotations(wxString &name)
 			if (ann && ann->GetName() == name)
 			{
 				m_layer_list.erase(m_layer_list.begin()+i);
+				dm->RemoveAnnotations(name);
 			}
 		}
 	}
@@ -13375,6 +13381,7 @@ void VRenderGLView::StartLoopUpdate(bool reset_peeling_layer)
             }
             if (runvl)
             {
+				//m_loader.SetMaxThreadNum(1);
                 m_loader.Set(queues);
                 m_loader.SetMemoryLimitByte((long long)TextureRenderer::mainmem_buf_size_*1024LL*1024LL);
                 TextureRenderer::set_load_on_main_thread(false);

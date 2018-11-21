@@ -43,6 +43,7 @@
 #include <nrrd.h>
 #include <stdint.h>
 #include <map>
+#include <list>
 #include <curl/curl.h>
 
 #include "DLLExport.h"
@@ -67,6 +68,7 @@ namespace FLIVR {
 #define BRICK_FILE_TYPE_RAW		1
 #define BRICK_FILE_TYPE_JPEG	2
 #define BRICK_FILE_TYPE_ZLIB	3
+#define BRICK_FILE_TYPE_H265	4
 
 	
 	class EXPORT_API FileLocInfo {
@@ -109,6 +111,26 @@ namespace FLIVR {
 		bool isurl;
 		bool cached;
 		std::wstring cache_filename;
+	};
+
+	class EXPORT_API MemCache {
+	public:
+		MemCache()
+		{
+			data = NULL;
+			datasize = 0;
+		}
+		MemCache(char *d, size_t size)
+		{
+			data = d;
+			datasize = size;
+		}
+		~MemCache()
+		{
+			if (data) delete data;
+		}
+		char *data;
+		size_t datasize;
 	};
 
 	class EXPORT_API TextureBrick
@@ -274,9 +296,10 @@ namespace FLIVR {
 		bool read_brick(char* data, size_t size, const FileLocInfo* finfo);
 		void set_brkdata(void *brkdata) {brkdata_ = brkdata;}
 		static bool read_brick_without_decomp(char* &data, size_t &readsize, FileLocInfo* finfo, wxThread *th=NULL);
-		static bool decompress_brick(char *out, char* in, size_t out_size, size_t in_size, int type);
+		static bool decompress_brick(char *out, char* in, size_t out_size, size_t in_size, int type, int w=0, int h=0);
 		static bool jpeg_decompressor(char *out, char* in, size_t out_size, size_t in_size);
 		static bool zlib_decompressor(char *out, char* in, size_t out_size, size_t in_size);
+		static bool h265_decompressor(char *out, char* in, size_t out_size, size_t in_size, int w, int h);
 		static void delete_all_cache_files();
 
 		void prevent_tex_deletion(bool val) {prevent_tex_deletion_ = val;}
@@ -359,6 +382,11 @@ namespace FLIVR {
         static CURL *s_curl_;
 		static CURLM *s_curlm_;
 		static std::map<std::wstring, std::wstring> cache_table_;
+		
+		static std::map<std::wstring, MemCache*> memcache_table_;
+		static std::list<std::wstring> memcache_order;
+		static size_t memcache_size;
+		static size_t memcache_limit;
 	};
 
 	struct Pyramid_Level {

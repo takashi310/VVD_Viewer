@@ -1746,22 +1746,22 @@ namespace FLIVR
 		{
 			TextureBrick* b = (*bricks)[i];
 
-			BBox bbox = b->bbox();
-			matrix[0] = float(bbox.max().x()-bbox.min().x());
+			BBox dbox = b->dbox();
+			matrix[0] = float(dbox.max().x() - dbox.min().x());
 			matrix[1] = 0.0f;
 			matrix[2] = 0.0f;
 			matrix[3] = 0.0f;
 			matrix[4] = 0.0f;
-			matrix[5] = float(bbox.max().y()-bbox.min().y());
+			matrix[5] = float(dbox.max().y() - dbox.min().y());
 			matrix[6] = 0.0f;
 			matrix[7] = 0.0f;
 			matrix[8] = 0.0f;
 			matrix[9] = 0.0f;
-			matrix[10] = float(bbox.max().z()-bbox.min().z());
+			matrix[10] = float(dbox.max().z() - dbox.min().z());
 			matrix[11] = 0.0f;
-			matrix[12] = float(bbox.min().x());
-			matrix[13] = float(bbox.min().y());
-			matrix[14] = float(bbox.min().z());
+			matrix[12] = float(dbox.min().x());
+			matrix[13] = float(dbox.min().y());
+			matrix[14] = float(dbox.min().z());
 			matrix[15] = 1.0f;
 			seg_shader->setLocalParamMatrix(2, matrix);
 
@@ -3211,6 +3211,41 @@ namespace FLIVR
 			glPixelStorei(GL_PACK_IMAGE_HEIGHT, 0);
 			glPixelStorei(GL_PACK_ALIGNMENT, 4);
 		}
+
+		/*
+		size_t nthreads = std::thread::hardware_concurrency();
+		if (nthreads > bricks->size()) nthreads = bricks->size();
+		std::vector<std::thread> threads(nthreads);
+		for(size_t t = 0; t < nthreads; t++)
+		{
+			threads[t] = std::thread(std::bind(
+				[&](const size_t bi, const size_t ei, const size_t t)
+			{
+				for(size_t i = bi; i<ei; i++)
+				{
+					load_brick_mask(bricks, i);
+					glActiveTexture(GL_TEXTURE0+c);
+
+					// download texture data
+					int sx = (*bricks)[i]->sx();
+					int sy = (*bricks)[i]->sy();
+					glPixelStorei(GL_PACK_ROW_LENGTH, sx);
+					glPixelStorei(GL_PACK_IMAGE_HEIGHT, sy);
+					glPixelStorei(GL_PACK_ALIGNMENT, 1);
+
+					GLenum type = (*bricks)[i]->tex_type(c);
+					void* data = (*bricks)[i]->tex_data(c);
+					glGetTexImage(GL_TEXTURE_3D, 0, GL_RED,
+						type, data);
+
+					glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+					glPixelStorei(GL_PACK_IMAGE_HEIGHT, 0);
+					glPixelStorei(GL_PACK_ALIGNMENT, 4);
+				}
+			}, t*bricks->size()/nthreads, (t+1)==nthreads ? bricks->size() : (t+1)*bricks->size()/nthreads, t));
+		}
+		std::for_each(threads.begin(),threads.end(),[](std::thread& x){x.join();});
+		*/
 
 		//release mask texture
 		release_texture(c, GL_TEXTURE_3D);

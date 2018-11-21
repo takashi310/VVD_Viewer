@@ -251,9 +251,9 @@ wxWindow* BrushToolDlg::CreateBrushPage(wxWindow *parent)
 	m_brush_iters_rb->SetValue(true);
 	m_brush_iterss_rb->SetValue(false);
 
-	m_brush_iterw_rb->Hide();
-	m_brush_iters_rb->Hide();
-	m_brush_iterss_rb->Hide();
+	//m_brush_iterw_rb->Hide();
+	//m_brush_iters_rb->Hide();
+	//m_brush_iterss_rb->Hide();
 
 	sizer2_4->Add(5, 5);
 	sizer2_4->Add(st, 0, wxALIGN_CENTER);

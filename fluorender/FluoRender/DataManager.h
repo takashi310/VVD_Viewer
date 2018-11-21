@@ -53,6 +53,7 @@ DEALINGS IN THE SOFTWARE.
 #include "Formats/lbl_reader.h"
 #include "Formats/pvxml_reader.h"
 #include "Formats/brkxml_reader.h"
+#include "Formats/h5j_reader.h"
 #include "Formats/swc_reader.h"
 
 #include "Tracking/TrackMap.h"
@@ -80,6 +81,7 @@ using namespace FLIVR;
 #define LOAD_TYPE_LSM		5
 #define LOAD_TYPE_PVXML		6
 #define LOAD_TYPE_BRKXML	7
+#define LOAD_TYPE_H5J		8
 
 class EXPORT_API TreeLayer
 {
@@ -237,6 +239,7 @@ public:
 	double GetOriginalValue(int i, int j, int k, bool normalize=true);
 	double GetTransferedValue(int i, int j, int k);
 	void Save(wxString &filename, int mode=0, bool bake=false, bool compress=false, bool save_msk=true, bool save_label=true);
+	void ExportEachSegment(wxString dir, Nrrd* label_nrrd=NULL, int mode=2, bool compress=true);
 
 	//volumerenderer
 	VolumeRenderer *GetVR();
@@ -479,6 +482,9 @@ public:
 	void ImportROITree(const wstring &tree){ if (m_vr) m_vr->import_roi_tree(tree); }
 	void ImportROITreeXML(const wstring &filepath){ if (m_vr) m_vr->import_roi_tree_xml(filepath); }
 	void ImportSelIDs(const string &sel_ids_str){ if (m_vr) m_vr->import_selected_ids(sel_ids_str); }
+
+	void FlipHorizontally();
+	void FlipVertically();
 
 private:
 	//duplication indicator and counter
@@ -826,11 +832,15 @@ public:
 
 	bool InsideClippingPlanes(Point &pos);
 
+	void SetLabel(Nrrd *label) {m_label = label;}
+	Nrrd *GetLabel() {return m_label;}
+
 private:
 	static int m_num;
 	vector<AText*> m_alist;
 	Transform *m_tform;
 	VolumeData* m_vd;
+	Nrrd* m_label;
 
 	bool m_disp;
 

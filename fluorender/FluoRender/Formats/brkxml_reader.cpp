@@ -338,6 +338,8 @@ void BRKXMLReader::ReadLevel(tinyxml2::XMLElement* lvNode, LevelInfo &lvinfo)
 		strValue = lvNode->Attribute("FileType");
 		if (strValue == "RAW") lvinfo.file_type = BRICK_FILE_TYPE_RAW;
 		else if (strValue == "JPEG") lvinfo.file_type = BRICK_FILE_TYPE_JPEG;
+		else if (strValue == "ZLIB") lvinfo.file_type = BRICK_FILE_TYPE_ZLIB;
+		else if (strValue == "H265") lvinfo.file_type = BRICK_FILE_TYPE_H265;
 	}
 	else lvinfo.file_type = BRICK_FILE_TYPE_NONE;
 
@@ -523,6 +525,7 @@ void BRKXMLReader::ReadFilenames(tinyxml2::XMLElement* fileRootNode, vector<vect
 					if (str == "RAW") filename[frame][channel][id]->type = BRICK_FILE_TYPE_RAW;
 					else if (str == "JPEG") filename[frame][channel][id]->type = BRICK_FILE_TYPE_JPEG;
 					else if (str == "ZLIB") filename[frame][channel][id]->type = BRICK_FILE_TYPE_ZLIB;
+					else if (str == "H265") filename[frame][channel][id]->type = BRICK_FILE_TYPE_H265;
 				}
 				else
 				{
@@ -537,6 +540,8 @@ void BRKXMLReader::ReadFilenames(tinyxml2::XMLElement* fileRootNode, vector<vect
 							filename[frame][channel][id]->type = BRICK_FILE_TYPE_JPEG;
 						else if (ext == L"zlib")
 							filename[frame][channel][id]->type = BRICK_FILE_TYPE_ZLIB;
+						else if (ext == L"mp4")
+							filename[frame][channel][id]->type = BRICK_FILE_TYPE_H265;
 					}
 				}
 			}

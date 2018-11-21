@@ -69,6 +69,9 @@ BEGIN_EVENT_TABLE(DataTreeCtrl, wxTreeCtrl)
 	EVT_MENU(ID_Colocalization, DataTreeCtrl::OnColocalization)
 	EVT_MENU(ID_Convert, DataTreeCtrl::OnConvert)
 	EVT_MENU(ID_RandomizeColor, DataTreeCtrl::OnRandomizeColor)
+	EVT_MENU(ID_ExportAllSegments, DataTreeCtrl::OnExportAllSegments)
+	EVT_MENU(ID_FlipH, DataTreeCtrl::OnFlipH)
+	EVT_MENU(ID_FlipV, DataTreeCtrl::OnFlipV)
 	EVT_TREE_SEL_CHANGED(wxID_ANY, DataTreeCtrl::OnSelChanged)
 	EVT_TREE_SEL_CHANGING(wxID_ANY, DataTreeCtrl::OnSelChanging)
 	EVT_TREE_DELETE_ITEM(wxID_ANY, DataTreeCtrl::OnDeleting)
@@ -377,6 +380,8 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 					menu.Append(ID_Isolate, "Isolate");
 					menu.Append(ID_ShowAll, "Show All");
 					menu.Append(ID_ImportMetadata, "Import Metadata");
+					menu.Append(ID_FlipH, "Flip Horizontally");
+					menu.Append(ID_FlipV, "Flip Vertically");
 					if (vd->GetColormapMode() == 3)
 					{
 						menu.AppendSeparator();
@@ -419,7 +424,7 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 			case 4:  //annotations
 				menu.Append(ID_Rename, "Rename");
 				menu.Append(ID_Save, "Save");
-				//menu.Append(ID_Duplicate, "Duplicate");
+				menu.Append(ID_ExportAllSegments, "Export Segments");
 				break;
 			case 5:  //data group
 				menu.Append(ID_ToggleDisp, "Toggle Visibility");
@@ -1871,6 +1876,88 @@ void DataTreeCtrl::OnRandomizeColor(wxCommandEvent& event)
 	vr_frame->RefreshVRenderViews();
 }
 
+void DataTreeCtrl::OnExportAllSegments(wxCommandEvent& event)
+{
+	wxTreeItemId sel_item = GetSelection();
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+
+	if (!vr_frame) return;
+	if (!sel_item.IsOk()) return;
+
+	//select data
+	wxString name = GetItemText(sel_item);
+	LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+
+	if (!item_data || item_data->type != 4) return;
+
+	Annotations* ann = vr_frame->GetDataManager()->GetAnnotations(name);
+	VolumeData *vd = ann->GetVolume();
+
+	if (!vd) return;
+	
+	wxDirDialog *dirdlg = new wxDirDialog(
+		m_frame, "Save segments in", "",
+		wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST);
+	int rval = dirdlg->ShowModal();
+	wxString out_dir;
+	if (rval == wxID_OK)
+	{
+		out_dir = dirdlg->GetPath();
+		delete dirdlg;
+	}
+	else
+	{
+		delete dirdlg;
+		return;
+	}
+
+	vd->ExportEachSegment(out_dir, ann->GetLabel());
+}
+
+void DataTreeCtrl::OnFlipH(wxCommandEvent& event)
+{
+	wxTreeItemId sel_item = GetSelection();
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+
+	if (!vr_frame) return;
+	if (!sel_item.IsOk()) return;
+
+	//select data
+	wxString name = GetItemText(sel_item);
+	LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+
+	if (!item_data || item_data->type != 2) return;
+
+	VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
+
+	if (!vd) return;
+
+	vd->FlipHorizontally();
+	vr_frame->RefreshVRenderViews();
+}
+
+void DataTreeCtrl::OnFlipV(wxCommandEvent& event)
+{
+	wxTreeItemId sel_item = GetSelection();
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+
+	if (!vr_frame) return;
+	if (!sel_item.IsOk()) return;
+
+	//select data
+	wxString name = GetItemText(sel_item);
+	LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+
+	if (!item_data || item_data->type != 2) return;
+
+	VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
+
+	if (!vd) return;
+
+	vd->FlipVertically();
+	vr_frame->RefreshVRenderViews();
+}
+
 //
 void DataTreeCtrl::UpdateSelection()
 {
@@ -1932,7 +2019,7 @@ void DataTreeCtrl::UpdateSelection()
 									vr_frame->OnSelection(2, vrv, group, vd, 0);
 									vrv->SetVolumeA(vd);
 									vr_frame->GetBrushToolDlg()->GetSettings(vrv);
-									vr_frame->GetMeasureDlg()->GetSettings(vrv);
+									vr_frame->GetMeasureDlg()->GetSettings(vrv, false);
 									vr_frame->GetTraceDlg()->GetSettings(vrv);
 								}
 							}
@@ -1948,7 +2035,7 @@ void DataTreeCtrl::UpdateSelection()
 									vr_frame->OnSelection(2, vrv, 0, vd);
 									vrv->SetVolumeA(vd);
 									vr_frame->GetBrushToolDlg()->GetSettings(vrv);
-									vr_frame->GetMeasureDlg()->GetSettings(vrv);
+									vr_frame->GetMeasureDlg()->GetSettings(vrv, false);
 									vr_frame->GetTraceDlg()->GetSettings(vrv);
 								}
 							}
@@ -2308,6 +2395,7 @@ void DataTreeCtrl::OnAct(wxTreeEvent &event)
 					if (ann)
 					{
 						ann->ToggleDisp();
+						vr_frame->GetMeasureDlg()->UpdateList();
 					}
 				}
 				break;
@@ -3241,6 +3329,10 @@ wxTreeItemId DataTreeCtrl::AddAnnotationItem(wxTreeItemId par_item, const wxStri
 	LayerInfo* item_data = new LayerInfo;
 	item_data->type = 4;//annotations
 	SetItemData(item, item_data);
+
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	vr_frame->GetMeasureDlg()->UpdateList();
+
 	return item;
 }
 

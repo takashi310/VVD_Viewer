@@ -558,6 +558,7 @@ public:
 	void SetScaleBarLen(double len) {m_sb_length = len;}
 	double GetScaleBarLen() { return m_sb_length; }
 	void SetSBText(wxString text) {m_sb_text = text;}
+	wxString GetSBText() { return m_sb_text;}
 
 	//gamma settings
 	Color GetGamma() {return m_gamma;}
@@ -1627,6 +1628,8 @@ public:
 	{if (m_glview) return m_glview->GetScaleBarLen(); else return 0.0; }
 	void SetSBText(wxString text)
 	{if (m_glview) m_glview->SetSBText(text);}
+	wxString GetSBText()
+	{if (m_glview) return m_glview->GetSBText(); else return wxString();}
 	void SetSbNumText(wxString text)
 	{if (m_glview) m_glview->m_sb_num = text;}
 	void SetSbUnitSel(int sel)

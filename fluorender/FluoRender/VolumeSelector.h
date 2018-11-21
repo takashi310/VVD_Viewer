@@ -27,7 +27,7 @@ DEALINGS IN THE SOFTWARE.
 */
 #include "DataManager.h"
 #include <wx/progdlg.h>
-#include <boost/unordered_map.hpp>
+//#include <boost/unordered_map.hpp>
 #include "DLLExport.h"
 
 #ifndef _VOLUMESELECTOR_H_
@@ -172,11 +172,14 @@ private:
 	struct Component
 	{
 		unsigned int id;
-		unsigned int counter;
+		unsigned long long counter;
 		Vector acc_pos;
 		double acc_int;
+		std::unordered_set<unsigned int > links;
+		bool marker;
 	};
-	boost::unordered_map <unsigned int, Component> m_comps;
+
+	std::unordered_map <unsigned int, Component> m_comps;
 	double m_min_voxels, m_max_voxels;
 
 	//exported volumes
@@ -206,6 +209,12 @@ private:
 private:
 	bool SearchComponentList(unsigned int cval, Vector &pos, double intensity);
 	double HueCalculation(int mode, unsigned int label);
+	unsigned int getMinIndexOfLinkedComponents(unsigned int lval);
+	unsigned int getMinIndexOfLinkedComponents_r(unsigned int lval);
+	void SetIdLinkedComponents(unsigned int lval, unsigned int new_lval);
+	void SetIdLinkedComponents_r(unsigned int lval, unsigned int new_lval);
+	Component GetCombinedComponent(unsigned int root);
+	void GetCombinedComponent_r(unsigned int lval, Component &output);
 };
 
 #endif//_VOLUMESELECTOR_H_

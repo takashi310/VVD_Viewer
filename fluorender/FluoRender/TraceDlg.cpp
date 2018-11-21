@@ -2661,7 +2661,7 @@ void TraceDlg::OutputMeasureResult(wxString &str)
 {
 	str = "Statistics on the selection:\n";
 	str += "A total of " +
-		wxString::Format("%u", m_info_list.size()) +
+		wxString::Format("%llu", m_info_list.size()) +
 		" component(s) selected\n";
 	str += "ID\tTotalN\tSurfaceN\tMean\tSigma\tMinimum\tMaximum\n";
 	for (size_t i = 0; i < m_info_list.size(); ++i)

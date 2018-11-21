@@ -9,9 +9,9 @@
 class VRenderView;
 class VolumeData;
 
-#define BRUSH_TOOL_ITER_WEAK	10
-#define BRUSH_TOOL_ITER_NORMAL	30
-#define BRUSH_TOOL_ITER_STRONG	60
+#define BRUSH_TOOL_ITER_WEAK	20
+#define BRUSH_TOOL_ITER_NORMAL	50
+#define BRUSH_TOOL_ITER_STRONG	100
 
 class EXPORT_API BrushToolDlg : public wxPanel
 {
