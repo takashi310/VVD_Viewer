@@ -6203,7 +6203,8 @@ int DataManager::LoadAnnotations(wxString &filename)
 
 	if (wxFileExists(labelpathname)) {
 		LBLReader reader;
-		reader.SetFile(labelpathname.ToStdString());
+        wstring fn = labelpathname.ToStdWstring();
+		reader.SetFile(fn);
 		ann->SetLabel(reader.Convert(0, 0, false));
 	}
 

@@ -1850,7 +1850,7 @@ wstring TIFReader::ZipDecompressionTemp(wstring path)
 	if (!stream.IsOk()) return L"";
 	wxZipEntry *entry = stream.GetNextEntry();
 
-	wstring ret = wxStandardPaths::Get().GetTempDir() + wxFileName::GetPathSeparator() + entry->GetName();
+	wstring ret = (wxStandardPaths::Get().GetTempDir() + wxFileName::GetPathSeparator() + entry->GetName()).ToStdWstring();
 	wxFileOutputStream file(ret);
 	if (!file.IsOk()) return L"";
 
