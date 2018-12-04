@@ -263,6 +263,34 @@ file(GLOB pngs_hdr fluorender/FluoRender/img/*.h)
 file(GLOB pngs_src fluorender/FluoRender/img/*.cpp)
 add_library(IMAGES_OBJ OBJECT  ${pngs_hdr} ${pngs_src})
 
+#plugins
+include_directories(${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/PluginController)
+set(PLUGIN_DIR ${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/PluginController)
+add_library(PLUGINS_OBJ OBJECT ${PLUGIN_DIR}/stdwx.h 
+							   ${PLUGIN_DIR}/wxGuiPluginBase.h 
+							   ${PLUGIN_DIR}/wxGuiPluginWindowBase.h 
+							   ${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/DLLExport.h
+							   ${PLUGIN_DIR}/stdwx.cpp
+							   ${PLUGIN_DIR}/PluginControllerBase.cpp
+							   ${PLUGIN_DIR}/PluginControllerBaseSettings.cpp)
+
+#hdf5
+if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
+  include_directories(${VVDViewer_SOURCE_DIR}/fluorender/hdf5/win/include)
+  file(GLOB hdf5_LIBS_DR ${VVDViewer_SOURCE_DIR}/fluorender/hdf5/win/lib/*.lib)
+  set(hdf5_LIBRARIES)
+  foreach(f ${hdf5_LIBS_DR})
+    if(f MATCHES "_D.lib$")
+      set(hdf5_LIBRARIES ${hdf5_LIBRARIES} debug ${f})
+	elseif(f MATCHES ".lib$")
+	  set(hdf5_LIBRARIES ${hdf5_LIBRARIES} optimized ${f})
+	endif()
+  endforeach()
+else()
+  include_directories(${VVDViewer_SOURCE_DIR}/fluorender/hdf5/mac/include)
+  file(GLOB hdf5_LIBRARIES ${VVDViewer_SOURCE_DIR}/fluorender/hdf5/mac/lib/*.a)
+endif()
+
 #OpenCL
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
   include_directories(${VVDViewer_SOURCE_DIR}/fluorender/OpenCL/include)
@@ -286,9 +314,46 @@ else()
 endif()
 
 #other sources
-file(GLOB src fluorender/FluoRender/*.cpp)
-file(GLOB hdr fluorender/FluoRender/*.h)
-file(GLOB rsc fluorender/FluoRender/img/*.xpm)
+file(GLOB src ${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/*.cpp)
+file(GLOB hdr ${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/*.h)
+file(GLOB rsc ${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/img/*.xpm)
+
+if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+	add_library(VVDMainFrame SHARED
+	    ${src} ${hdr} ${rsc}
+		$<TARGET_OBJECTS:IMAGES_OBJ>
+	    $<TARGET_OBJECTS:CONVERTERS_OBJ>
+	    $<TARGET_OBJECTS:FLIVR_OBJ>
+	    $<TARGET_OBJECTS:ANIMATORS_OBJ>
+	    $<TARGET_OBJECTS:NV_OBJ>
+	    $<TARGET_OBJECTS:FORMATS_OBJ>
+	    $<TARGET_OBJECTS:TRACKING_OBJ>
+	    $<TARGET_OBJECTS:GLEW_OBJ>
+	    $<TARGET_OBJECTS:POLE_OBJ>
+	    $<TARGET_OBJECTS:TEEM_OBJ>
+		$<TARGET_OBJECTS:PLUGINS_OBJ>)
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
+	include_directories(${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/WacUtils)
+    include_directories(${VVDViewer_SOURCE_DIR}/fluorender/Wacom/Include)
+    file(GLOB wac_src fluorender/FluoRender/WacUtils/*.cpp)
+    file(GLOB wac_hdr fluorender/FluoRender/WacUtils/*.h)
+	add_library(WACUTILS_OBJ OBJECT
+				${wac_src} ${wac_hdr})
+	add_library(VVDMainFrame SHARED
+		${src} ${hdr} ${rsc}
+		$<TARGET_OBJECTS:IMAGES_OBJ>
+		$<TARGET_OBJECTS:CONVERTERS_OBJ>
+		$<TARGET_OBJECTS:FLIVR_OBJ>
+		$<TARGET_OBJECTS:ANIMATORS_OBJ>
+		$<TARGET_OBJECTS:NV_OBJ>
+		$<TARGET_OBJECTS:FORMATS_OBJ>
+		$<TARGET_OBJECTS:TRACKING_OBJ>
+		$<TARGET_OBJECTS:GLEW_OBJ>
+		$<TARGET_OBJECTS:POLE_OBJ>
+		$<TARGET_OBJECTS:TEEM_OBJ>
+		$<TARGET_OBJECTS:PLUGINS_OBJ>
+		$<TARGET_OBJECTS:WACUTILS_OBJ>)
+endif()
 
 #platform specific rules
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
@@ -309,17 +374,8 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
    SET_SOURCE_FILES_PROPERTIES(${ICON_FILE_PATH} PROPERTIES 
       MACOSX_BUNDLE_LOCATION Resources)
    add_executable(VVDViewer MACOSX_BUNDLE
-      ${src} ${hdr} ${rsc}
-      $<TARGET_OBJECTS:IMAGES_OBJ>
-      $<TARGET_OBJECTS:CONVERTERS_OBJ>
-      $<TARGET_OBJECTS:FLIVR_OBJ>
-      $<TARGET_OBJECTS:ANIMATORS_OBJ>
-      $<TARGET_OBJECTS:NV_OBJ>
-      $<TARGET_OBJECTS:FORMATS_OBJ>
-      $<TARGET_OBJECTS:TRACKING_OBJ>
-      $<TARGET_OBJECTS:GLEW_OBJ>
-      $<TARGET_OBJECTS:POLE_OBJ>
-      $<TARGET_OBJECTS:TEEM_OBJ>)
+				  ${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/Main.h
+				  ${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/Main.cpp)
 
 elseif(NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
    #Windows
@@ -333,6 +389,25 @@ elseif(NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
    if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
       add_definitions(-DWIN32)
       add_definitions(-D_WIN32)
+	  set_target_properties(VVDMainFrame
+					  IMAGES_OBJ
+					  CONVERTERS_OBJ
+					  FLIVR_OBJ
+					  ANIMATORS_OBJ
+					  NV_OBJ
+					  FORMATS_OBJ
+					  TRACKING_OBJ
+					  GLEW_OBJ
+					  POLE_OBJ
+					  TEEM_OBJ
+					  PLUGINS_OBJ
+					  PROPERTIES
+					  COMPILE_DEFINITIONS 
+					  nrrd_EXPORTS
+					  COMPILE_DEFINITIONS 
+					  teem_EXPORTS
+					  COMPILE_DEFINITIONS 
+					  VVD_DLL_EXPORTS)
 	  if(MSVC)
 		  add_definitions(-D_CRT_NONSTDC_NO_DEPRECATE)
 		  add_definitions(-D_CRT_SECURE_NO_DEPRECATE)
@@ -340,6 +415,7 @@ elseif(NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 		  add_definitions("/wd4273")
 		  add_definitions(-D_XKEYCHECK_H)
 		  add_definitions(-DNOMINMAX)
+		  add_definitions("/MP")
 		  set(CFLAGS "")
 		  set(CXXFLAGS "/EHsc")
 		  #make sure the reference option is turned off and not incremental build linking
@@ -351,31 +427,17 @@ elseif(NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 		  STRING(REPLACE "INCREMENTAL:NO:NO" "INCREMENTAL:NO" replacementFlags3 ${replacementFlags2})
 		  SET(CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO "/INCREMENTAL:NO /OPT:NOREF ${replacementFlags3}" )
 
-		  SET(CMAKE_EXE_LINKER_FLAGS_RELEASE "/INCREMENTAL:NO /OPT:NOREF" )
+		  SET(CMAKE_EXE_LINKER_FLAGS_RELEASE "/INCREMENTAL:NO /OPT:NOREF /FORCE:MULTIPLE")
+		  SET(CMAKE_STATIC_LINKER_FLAGS_RELEASE "${CMAKE_STATIC_LINKER_FLAGS_RELEASE} /LTCG")
+		  SET(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} /LTCG /FORCE:MULTIPLE")
 		  SET(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -MDd")
 		  SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -MDd")
-		  SET(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -MT")
-		  SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -MT")
+		  SET(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -MT /O2 /Ob2 /Oi /Ot /Oy /GT /GL")
+		  SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -MT /O2 /Ob2 /Oi /Ot /Oy /GT /GL")
 	  endif()
-      include_directories(${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/WacUtils)
-      include_directories(${VVDViewer_SOURCE_DIR}/fluorender/Wacom/Include)
-      file(GLOB wac_src fluorender/FluoRender/WacUtils/*.cpp)
-      file(GLOB wac_hdr fluorender/FluoRender/WacUtils/*.h)
-	  add_library(WACUTILS_OBJ OBJECT
-			     ${wac_src} ${wac_hdr})
       add_executable(VVDViewer WIN32
-          	  ${src} ${hdr} ${rsc}
-		  $<TARGET_OBJECTS:IMAGES_OBJ>
-		  $<TARGET_OBJECTS:CONVERTERS_OBJ>
-		  $<TARGET_OBJECTS:FLIVR_OBJ>
-		  $<TARGET_OBJECTS:ANIMATORS_OBJ>
-		  $<TARGET_OBJECTS:NV_OBJ>
-		  $<TARGET_OBJECTS:FORMATS_OBJ>
-		  $<TARGET_OBJECTS:TRACKING_OBJ>
-		  $<TARGET_OBJECTS:GLEW_OBJ>
-		  $<TARGET_OBJECTS:POLE_OBJ>
-		  $<TARGET_OBJECTS:TEEM_OBJ>
-		  $<TARGET_OBJECTS:WACUTILS_OBJ>)
+          			 ${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/Main.h
+					 ${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/Main.cpp)
    endif(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 endif()
 
@@ -413,19 +475,25 @@ endif()
 
 #link the libraries
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-	target_link_libraries(VVDViewer
+	target_link_libraries(VVDMainFrame
 	   ${CURL_LIBRARIES}
 	   ${JPEG_LIBRARIES}
 	   ${ZLIB_LIBRARIES}
 	   ${OPENSSL_LIBRARIES} ws2_32.lib Wldap32.lib
-	   ${ffmpeg_LIBRARIES} Secur32.lib
+	   ${ffmpeg_LIBRARIES} Secur32.lib  Normaliz.lib crypt32.lib Bcrypt.lib
 	   ${OPENGL_LIBRARIES}
 	   ${Boost_LIBRARIES}
 	   ${OPENCL_LIBRARIES}
 	   ${FREETYPE_LIBRARIES}
+	   ${wxWidgets_LIBRARIES}
+	   ${hdf5_LIBRARIES})
+	target_link_libraries(VVDViewer
+	   VVDMainFrame
+	   ws2_32.lib Wldap32.lib
 	   ${wxWidgets_LIBRARIES})
 elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 	target_link_libraries(VVDViewer
+	   VVDMainFrame
 	   ${CURL_LIBRARIES}
 	   ${JPEG_LIBRARIES}
 	   ${ZLIB_LIBRARIES}
@@ -436,6 +504,10 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 	   ${Boost_LIBRARIES}
 	   ${OPENCL_LIBRARIES}
 	   ${FREETYPE_LIBRARIES}
+	   ${wxWidgets_LIBRARIES}
+	   ${hdf5_LIBRARIES})
+	target_link_libraries(VVDViewer
+	   VVDMainFrame
 	   ${wxWidgets_LIBRARIES})
 endif()
 
@@ -468,6 +540,7 @@ add_custom_command(TARGET VVDViewer PRE_BUILD
   "$<TARGET_FILE_DIR:VVDViewer>/Scripts")
 
 #copy executables (Windows)
+#[[
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	add_custom_command(TARGET VVDViewer PRE_BUILD
 		COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -478,9 +551,10 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 		"${VVDViewer_SOURCE_DIR}/Executables"
 		"${CMAKE_BINARY_DIR}/Executables")
 endif()
-   
-#build DLL copy
+]]
 
+#build DLL copy
+#[[
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	file(GLOB ffmpeg_DLLS fluorender/bin/*.dll)
 	foreach (f ${ffmpeg_DLLS})
@@ -490,7 +564,8 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 			$<TARGET_FILE_DIR:VVDViewer>)
 	endforeach()
 endif()
-   
+]]  
+
 #post build setting files copy
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	file(GLOB settings_files Settings/*)
