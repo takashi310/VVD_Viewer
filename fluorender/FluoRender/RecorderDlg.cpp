@@ -170,6 +170,9 @@ void KeyListCtrl::Update()
 	Interpolator* interpolator = vr_frame->GetInterpolator();
 	if (!interpolator)
 		return;
+	VMovieView* mov_view = vr_frame->GetMovieView();
+	if (!mov_view)
+		return;
 
 	DeleteAllItems();
 	for (int i=0; i<interpolator->GetKeyNum(); i++)
@@ -181,6 +184,14 @@ void KeyListCtrl::Update()
 		string desc = interpolator->GetKeyDesc(i);
 		Append(id, time, duration, interp, desc);
 	}
+
+	long fps = mov_view->GetFPS();
+	int frames = int(interpolator->GetLastT());
+	if (frames > 0 && fps > 0)
+	{
+		double runtime = (double)frames / (double)fps;
+		mov_view->SetMovieTime(runtime);
+	}
 }
 
 void KeyListCtrl::UpdateText()
@@ -190,6 +201,9 @@ void KeyListCtrl::UpdateText()
 		return;
 	Interpolator* interpolator = vr_frame->GetInterpolator();
 	if (!interpolator)
+		return;
+	VMovieView* mov_view = vr_frame->GetMovieView();
+	if (!mov_view)
 		return;
 
 	wxString str;
@@ -213,6 +227,14 @@ void KeyListCtrl::UpdateText()
 		str = desc;
 		SetText(i, 4, str);
 	}
+
+	long fps = mov_view->GetFPS();
+	int frames = int(interpolator->GetLastT());
+	if (frames > 0 && fps > 0)
+	{
+		double runtime = (double)frames / (double)fps;
+		mov_view->SetMovieTime(runtime);
+	}
 }
 
 void KeyListCtrl::OnAct(wxListEvent &event)
@@ -235,6 +257,15 @@ void KeyListCtrl::OnAct(wxListEvent &event)
 
 	int index = interpolator->GetKeyIndex(int(id));
 	double time = interpolator->GetKeyTime(index);
+	double end_frame = interpolator->GetLastT();
+	VMovieView *mov_view = vr_frame->GetMovieView();
+	if (mov_view)
+	{
+		mov_view->SetProgress(time / end_frame);
+		mov_view->SetRendering(time / end_frame);
+	}
+
+	/*
 	VRenderView* view = vr_frame->GetRecorderDlg()->GetView();
 	if (!view)
 		view = vr_frame->GetView(0);
@@ -243,6 +274,7 @@ void KeyListCtrl::OnAct(wxListEvent &event)
 		view->m_glview->SetParams(time);
 		view->RefreshGL();
 	}
+	*/
 }
 
 wxString KeyListCtrl::GetText(long item, int col)

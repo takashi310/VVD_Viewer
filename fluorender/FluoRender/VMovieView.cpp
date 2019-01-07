@@ -71,6 +71,8 @@ BEGIN_EVENT_TABLE(VMovieView, wxPanel)
 	EVT_SPIN_DOWN(ID_HeightSpin, VMovieView::OnFrameSpinDown)
 //timer
     EVT_TIMER(ID_Timer, VMovieView::OnTimer)
+//tabs
+	EVT_NOTEBOOK_PAGE_CHANGED(ID_PageChanged, VMovieView::OnPageChanged)
 END_EVENT_TABLE()
 
 double VMovieView::m_Mbitrate = 10.0;
@@ -180,6 +182,7 @@ wxWindow* VMovieView::CreateSimplePage(wxWindow *parent) {
 		wxDefaultPosition,wxSize(60,-1));
 	m_movie_time = new wxTextCtrl(page, ID_MovieTimeText, "5",
 		wxDefaultPosition,wxSize(40,-1));
+	m_movie_time_basic = 5;
 	//sizer 7
 	sizer_7->AddStretchSpacer();
 	sizer_7->Add(st, 0, wxALIGN_CENTER);
@@ -371,7 +374,7 @@ m_batch_mode(false)
 	Freeze();
 
 	//notebook
-	m_notebook = new wxNotebook(this, wxID_ANY);
+	m_notebook = new wxNotebook(this, ID_PageChanged);
 	m_notebook->AddPage(CreateSimplePage(m_notebook), "Basic");
 	m_notebook->AddPage(CreateAdvancedPage(m_notebook), "Advanced");
 	m_notebook->AddPage(CreateAutoKeyPage(m_notebook), "Auto Key");
@@ -467,7 +470,10 @@ void VMovieView::GetSettings(int view) {
 	if (vr_frame->m_mov_angle_end != "")
 		m_degree_end->SetValue(vr_frame->m_mov_angle_end);
 	if (vr_frame->m_mov_step != "")
+	{
 		m_movie_time->SetValue(vr_frame->m_mov_step);
+		vr_frame->m_mov_step.ToDouble(&m_movie_time_basic);
+	}
 	if (vr_frame->m_mov_frames != "")
 		m_fps_text->ChangeValue(vr_frame->m_mov_frames);
 
@@ -1068,7 +1074,7 @@ void VMovieView::SetRendering(double pcnt) {
 			vrv->Set3DBatFrame(time);
 		}
 	}
-	if (m_rot_chk->GetValue()) {
+	if (m_rot_chk->GetValue() && m_current_page == 0) {
 		double x,y,z,val;
 		vrv->GetRotations(x,y,z);
 		if (m_x_rd->GetValue())
@@ -1384,4 +1390,73 @@ wxWindow* VMovieView::CreateExtraCaptureControl(wxWindow* parent) {
 	panel->Layout();
 
 	return panel;
+}
+
+void VMovieView::OnPageChanged(wxBookCtrlEvent& event)
+{
+	int pageid = event.GetSelection();
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+	long fps;
+	m_fps_text->GetValue().ToLong(&fps);
+
+	double runtime = 0.0;
+	m_movie_time->GetValue().ToDouble(&runtime);
+	double pcnt = (m_cur_time / runtime);
+
+	switch (pageid)
+	{
+	case 0: 
+		if (m_current_page != 0) {
+			m_movie_time->ChangeValue(wxString::Format("%.2f", m_movie_time_basic));
+			m_current_page = 0;
+		}
+		break;
+	case 1:
+		if (m_current_page != 1) {
+			Interpolator *interpolator = vr_frame->GetInterpolator();
+			if (!interpolator)
+				break;
+			int frames = int(interpolator->GetLastT());
+			if (frames > 0)
+			{
+				runtime = (double)frames / (double)fps;
+				m_movie_time->GetValue().ToDouble(&m_movie_time_basic);
+				m_movie_time->ChangeValue(wxString::Format("%.2f", runtime));
+			}
+			m_current_page = 1;
+		}
+		break;
+	}
+
+	SetProgress(pcnt);
+	SetRendering(pcnt);
+
+}
+
+void VMovieView::SetMovieTime(double t)
+{
+	double runtime = 0.0;
+	m_movie_time->GetValue().ToDouble(&runtime);
+	double pcnt = (m_cur_time / runtime);
+
+	if (m_current_page == 0) {
+		m_movie_time->ChangeValue(wxString::Format("%.2f", t));
+		m_movie_time_basic = t;
+	}
+	else if (m_current_page == 1)
+	{
+		m_movie_time->ChangeValue(wxString::Format("%.2f", t));
+	}
+
+	SetProgress(pcnt);
+}
+
+long VMovieView::GetFPS()
+{
+	long fps = 0;
+
+	if (m_fps_text) m_fps_text->GetValue().ToLong(&fps);
+
+	return fps;
 }

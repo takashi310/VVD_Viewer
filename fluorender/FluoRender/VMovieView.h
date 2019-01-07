@@ -94,7 +94,10 @@ class EXPORT_API VMovieView : public wxPanel
 		ID_HeightText,
 		ID_WidthSpin,
 		ID_HeightSpin,
-		ID_Timer
+		ID_Timer,
+
+		//pages
+		ID_PageChanged
 	};
 
 public:
@@ -123,6 +126,9 @@ public:
 	//set the renderview and progress bars/text
 	void SetRendering(double pcnt);
 	void SetProgress(double pcnt);
+
+	void SetMovieTime(double t);
+	long GetFPS();
 
 public:
 	//controls
@@ -188,6 +194,7 @@ private:
 	RecorderDlg * m_advanced_movie;
 	wxNotebook * m_notebook;
 	int m_current_page;
+	double m_movie_time_basic;
 	QVideoEncoder encoder_;
 	wxString filetype_;
 	int m_rot_int_type;//0-linear; 1-smooth
@@ -260,6 +267,9 @@ private:
 
 	//timer for playback.
 	void OnTimer(wxTimerEvent& event);
+
+	//pages
+	void OnPageChanged(wxBookCtrlEvent& event);
 
 	DECLARE_EVENT_TABLE();
 };

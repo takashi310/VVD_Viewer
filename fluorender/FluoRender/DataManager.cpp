@@ -16,7 +16,17 @@
 #include <mutex>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-
+/*
+#include <vtkVersion.h>
+#include <vtkSmartPointer.h>
+#include <vtkMarchingCubes.h>
+#include <vtkVoxelModeller.h>
+#include <vtkSphereSource.h>
+#include <vtkImageData.h>
+#include <vtkDICOMImageReader.h>
+#include <vtkActor.h>
+#include <vtkPolyDataMapper.h>
+*/
 #ifdef _WIN32
 #  undef min
 #  undef max
@@ -133,6 +143,7 @@ VolumeData::VolumeData()
 
 	//valid brick number
 	m_brick_num = 0;
+
 }
 
 /*
@@ -4241,7 +4252,7 @@ void RulerBalloon::SetAnnotationsFromDatabase(vector<AnnotationDB> ann, Point ne
 		curl_multi_remove_handle(_g_curlm, m_curl[i]);
 
 		if (m_curl[i] == NULL) {
-			cerr << "curl_easy_init() failed" << endl;
+			//cerr << "curl_easy_init() failed" << endl;
 			return;
 		}
 		curl_easy_reset(m_curl[i]);
