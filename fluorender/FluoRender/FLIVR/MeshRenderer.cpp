@@ -64,9 +64,6 @@ namespace FLIVR
 		planes_.push_back(plane);
 		plane = new Plane(Point(0.0, 0.0, 1.0), Vector(0.0, 0.0, -1.0));
 		planes_.push_back(plane);
-
-		glGenBuffers(1, &m_vbo);
-		glGenVertexArrays(1, &m_vao);
 	}
 
 	MeshRenderer::MeshRenderer(MeshRenderer &copy)
@@ -132,6 +129,11 @@ namespace FLIVR
 
 	void MeshRenderer::update()
 	{
+        if (!glIsBuffer(m_vbo))
+            glGenBuffers(1, &m_vbo);
+        if (!glIsVertexArray(m_vao))
+            glGenVertexArrays(1, &m_vao);
+        
 		bool bnormal = data_->normals;
 		bool btexcoord = data_->texcoords;
 		vector<float> verts;
@@ -205,6 +207,11 @@ namespace FLIVR
 			update();
 			update_ = false;
 		}
+        
+        if (!glIsBuffer(m_vbo))
+            glGenBuffers(1, &m_vbo);
+        if (!glIsVertexArray(m_vao))
+            glGenVertexArrays(1, &m_vao);
 
 		GLint vp[4];
 		glGetIntegerv(GL_VIEWPORT, vp);
@@ -226,6 +233,8 @@ namespace FLIVR
 				continue;
 			}
 
+            
+            
 			//set up shader
 			shader = msh_shader_factory_.shader(0,
 				depth_peel_, tex, fog_, light_);
@@ -327,6 +336,11 @@ namespace FLIVR
 			update();
 			update_ = false;
 		}
+        
+        if (!glIsBuffer(m_vbo))
+            glGenBuffers(1, &m_vbo);
+        if (!glIsVertexArray(m_vao))
+            glGenVertexArrays(1, &m_vao);
 
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
@@ -420,6 +434,11 @@ namespace FLIVR
 			update();
 			update_ = false;
 		}
+        
+        if (!glIsBuffer(m_vbo))
+            glGenBuffers(1, &m_vbo);
+        if (!glIsVertexArray(m_vao))
+            glGenVertexArrays(1, &m_vao);
 
 		ShaderProgram* shader = 0;
 

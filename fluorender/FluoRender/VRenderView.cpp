@@ -1213,7 +1213,13 @@ wxGLCanvas(parent, id, attriblist, pos, size, style),
 	}
 	else
 	{
-		m_glRC = new wxGLContext(this);
+#ifdef __WXMAC__
+        wxGLContextAttrs ctxAttrs;
+        ctxAttrs.PlatformDefaults().CoreProfile().OGLVersion(4, 1).EndList();
+        m_glRC = new wxGLContext(this, NULL, &ctxAttrs);
+#else
+        m_glRC = new wxGLContext(this);
+#endif
 		m_sharedRC = false;
 	}
 
