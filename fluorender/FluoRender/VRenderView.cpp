@@ -7787,17 +7787,21 @@ void VRenderGLView::Set4DSeqFrame(int frame, bool run_script)
 					BRKXMLReader *br = (BRKXMLReader *)reader;
 					br->SetCurTime(frame);
 					int curlv = tex->GetCurLevel();
+					/*
 					for (int j = 0; j < br->GetLevelNum(); j++)
 					{
 						tex->setLevel(j);
 						if (vd->GetVR()) vd->GetVR()->clear_brick_buf();
 					}
+					*/
 					tex->setLevel(curlv);
 					tex->set_FrameAndChannel(frame, vd->GetCurChannel());
 					vd->SetCurTime(reader->GetCurTime());
 					//update rulers
 					if (vframe && vframe->GetMeasureDlg())
 						vframe->GetMeasureDlg()->UpdateList();
+					m_loader.RemoveAllLoadedBrick();
+					clear_pool = true;
 				}
 				else
 				{
@@ -7807,6 +7811,13 @@ void VRenderGLView::Set4DSeqFrame(int frame, bool run_script)
 					Nrrd* data = reader->Convert(frame, vd->GetCurChannel(), false);
 					if (!vd->Replace(data, false))
 						continue;
+
+					wxString data_path = wxString(reader->GetCurName(frame, vd->GetCurChannel()));
+					wxString data_name = data_path.AfterLast(wxFileName::GetPathSeparator());
+					if (reader->GetChanNum() > 1)
+						data_name += wxString::Format("_%d", vd->GetCurChannel()+1);
+					vd->SetName(data_name);
+					vd->SetPath(data_path);
 
 					vd->SetCurTime(reader->GetCurTime());
 					vd->SetSpacings(spcx, spcy, spcz);
@@ -7828,6 +7839,15 @@ void VRenderGLView::Set4DSeqFrame(int frame, bool run_script)
 		}
 	}
 	RefreshGL();
+
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (vr_frame)
+	{
+		vr_frame->UpdateTree(
+			vr_frame->GetCurSelVol()?
+			vr_frame->GetCurSelVol()->GetName():
+			"");
+	}
 }
 
 void VRenderGLView::Get3DBatFrames(int &start_frame, int &end_frame, int &cur_frame)
@@ -9227,7 +9247,7 @@ DataGroup* VRenderGLView::AddVolumeData(VolumeData* vd, wxString group_name)
 			else if (cvd && cvd->GetVR())
 				src_planes = cvd->GetVR()->get_planes();
 
-			if (vr_frame->GetClippingView()->GetChannLink() && group->GetVolumeData(0) != vd)
+			if (vr_frame->GetClippingView()->GetChannLink() && group->GetVolumeData(0) != vd && src_planes)
 			{
 				vector<Plane*> *dst_planes = vd->GetVR()->get_planes();
 				for (int k=0; k<(int)dst_planes->size(); k++)

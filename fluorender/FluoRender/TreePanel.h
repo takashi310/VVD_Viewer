@@ -193,6 +193,8 @@ public:
 	void ExpandDataTreeItem(wxString name, bool expand_children=false);
 	void CollapseDataTreeItem(wxString name, bool collapse_children=false);
 
+	wxString GetItemBaseText(wxTreeItemId itemid);
+
 	friend class TreePanel;
 
 private:

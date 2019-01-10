@@ -92,6 +92,8 @@ void H5JReader::SetFile(wstring &file)
 
 void H5JReader::Preprocess()
 {
+	m_4d_seq.clear();
+
 	int i;
 
 	wstring path, name;

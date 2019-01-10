@@ -114,6 +114,25 @@ DataTreeCtrl::~DataTreeCtrl()
 	TraversalDelete(GetRootItem());
 }
 
+wxString DataTreeCtrl::GetItemBaseText(wxTreeItemId itemid)
+{
+	wxString result;
+
+	if (itemid.IsOk())
+	{
+		wxString raw_name;
+		raw_name = GetItemText(itemid);
+		result = raw_name.BeforeFirst(wxT('|'));
+		if (result != raw_name)
+		{
+			size_t t = result.find_last_not_of(wxT(' '));
+			if (t != wxString::npos) result = result.SubString(0, t);
+		}
+	}
+
+	return result;
+}
+
 //delete
 void DataTreeCtrl::DeleteAll()
 {
@@ -154,14 +173,14 @@ void DataTreeCtrl::DeleteSelection()
 
 	if (sel_item.IsOk() && vr_frame)
 	{
-		wxString name_data = GetItemText(sel_item);
+		wxString name_data = GetItemBaseText(sel_item);
 		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
 		if (!item_data)
 			return;
 		wxTreeItemId par_item = GetItemParent(sel_item);
 		if (!par_item.IsOk())
 			return;
-		wxString par_name = GetItemText(par_item);
+		wxString par_name = GetItemBaseText(par_item);
 
 		wxTreeItemId next_item = GetNextSibling(sel_item);
 		if (!next_item.IsOk())
@@ -172,7 +191,7 @@ void DataTreeCtrl::DeleteSelection()
 		{
 			wxTreeItemId vitem = GetParentVolItem(sel_item);
 			if (!vitem.IsOk()) return;
-			wxString vname = GetItemText(vitem);
+			wxString vname = GetItemBaseText(vitem);
 			LayerInfo* vitem_data = (LayerInfo*)GetItemData(vitem);
 			if (!vitem_data) return;
 			VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(vname);
@@ -250,7 +269,7 @@ void DataTreeCtrl::DeleteSelection()
 			case 5://group
 				{
 					wxTreeItemId gpar_item = GetItemParent(par_item);
-					wxString gpar_name = GetItemText(gpar_item);
+					wxString gpar_name = GetItemBaseText(gpar_item);
 					VRenderView* vrv = vr_frame->GetView(gpar_name);
 					if (!vrv)
 						break;
@@ -277,7 +296,7 @@ void DataTreeCtrl::DeleteSelection()
 			case 6://mesh group
 				{
 					wxTreeItemId gpar_item = GetItemParent(par_item);
-					wxString gpar_name = GetItemText(gpar_item);
+					wxString gpar_name = GetItemBaseText(gpar_item);
 					VRenderView* vrv = vr_frame->GetView(gpar_name);
 					if (!vrv)
 						break;
@@ -295,7 +314,7 @@ void DataTreeCtrl::DeleteSelection()
 			if (next_item.IsOk())
 			{
 				LayerInfo* item_data = (LayerInfo*)GetItemData(next_item);
-				wxString name = GetItemText(next_item);
+				wxString name = GetItemBaseText(next_item);
 				if (item_data)
 				{
 					vr_frame->UpdateTree(name, item_data->type);
@@ -359,14 +378,14 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 					menu.Append(ID_RandomizeColor, "Randomize Colors");
 					menu.Append(ID_AddDataGroup, "Add Volume Group");
 					menu.Append(ID_AddMeshGroup, "Add Mesh Group");
-					wxString str = GetItemText(sel_item);
+					wxString str = GetItemBaseText(sel_item);
 					if (str != vr_frame->GetView(0)->GetName())
 						menu.Append(ID_CloseView, "Close");
 				}
 				break;
 			case 2:  //volume data
 				{
-					wxString name = GetItemText(sel_item);
+					wxString name = GetItemBaseText(sel_item);
 					DataManager *d_manage = vr_frame->GetDataManager();
 					if (!d_manage) break;
 					VolumeData* vd = d_manage->GetVolumeData(name);
@@ -487,7 +506,7 @@ void DataTreeCtrl::OnDuplicate(wxCommandEvent& event)
 	if (sel_item.IsOk() && vr_frame)
 	{
 		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
-		wxString name = GetItemText(sel_item);
+		wxString name = GetItemBaseText(sel_item);
 		if (item_data)
 		{
 			switch (item_data->type)
@@ -610,7 +629,7 @@ void DataTreeCtrl::OnRenamed(wxTreeEvent& event)
 
 	wxTreeItemId sel_item = GetSelection();
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-	wxString prev_name = GetItemText(sel_item);
+	wxString prev_name = GetItemBaseText(sel_item);
 	wxString name = event.GetLabel();
 
 	if (sel_item.IsOk() && vr_frame && prev_name != name && name != wxString(""))
@@ -677,7 +696,7 @@ void DataTreeCtrl::OnRenamed(wxTreeEvent& event)
 						if (par_data && par_data->type == 1)
 						{
 							//group in view
-							wxString vname = GetItemText(par_item);
+							wxString vname = GetItemBaseText(par_item);
 							VRenderView* vrv = vr_frame->GetView(vname);
 							if (vrv)
 							{
@@ -713,7 +732,7 @@ void DataTreeCtrl::OnRenamed(wxTreeEvent& event)
 					wxTreeItemId vol_item = GetParentVolItem(sel_item);
 					if (vol_item.IsOk())
 					{
-						wxString vname = GetItemText(vol_item);
+						wxString vname = GetItemBaseText(vol_item);
 						VolumeData* vd = d_manage->GetVolumeData(vname);
 						if (vd && item_data->id != -1)
 						{
@@ -752,7 +771,7 @@ void DataTreeCtrl::OnSave(wxCommandEvent& event)
 	if (!item_data)
 		return;
 
-	wxString name = GetItemText(sel_item);
+	wxString name = GetItemBaseText(sel_item);
 
 	if (item_data->type == 2) //volume
 	{
@@ -829,7 +848,7 @@ void DataTreeCtrl::OnBakeVolume(wxCommandEvent& event)
 	if (!item_data)
 		return;
 
-	wxString name = GetItemText(sel_item);
+	wxString name = GetItemBaseText(sel_item);
 
 	if (item_data->type == 2) //volume
 	{
@@ -873,7 +892,7 @@ void DataTreeCtrl::OnIsolate(wxCommandEvent& event)
 		if (item_data)
 		{
 			item_type = item_data->type;
-			itemname = GetItemText(sel_item);
+			itemname = GetItemBaseText(sel_item);
 			wxTreeItemId par_item = GetItemParent(sel_item);
 			if (par_item.IsOk())
 			{
@@ -883,7 +902,7 @@ void DataTreeCtrl::OnIsolate(wxCommandEvent& event)
 					if (par_data->type == 1)
 					{
 						//view
-						viewname = GetItemText(par_item);
+						viewname = GetItemBaseText(par_item);
 					}
 					else if (par_data->type == 5 ||
 						par_data->type == 6)
@@ -895,7 +914,7 @@ void DataTreeCtrl::OnIsolate(wxCommandEvent& event)
 							if (gpar_data && gpar_data->type==1)
 							{
 								//view
-								viewname = GetItemText(gpar_item);
+								viewname = GetItemBaseText(gpar_item);
 							}
 						}
 					}
@@ -933,7 +952,7 @@ void DataTreeCtrl::OnShowAll(wxCommandEvent& event)
 		if (item_data)
 		{
 			item_type = item_data->type;
-			itemname = GetItemText(sel_item);
+			itemname = GetItemBaseText(sel_item);
 			wxTreeItemId par_item = GetItemParent(sel_item);
 			if (par_item.IsOk())
 			{
@@ -943,7 +962,7 @@ void DataTreeCtrl::OnShowAll(wxCommandEvent& event)
 					if (par_data->type == 1)
 					{
 						//view
-						viewname = GetItemText(par_item);
+						viewname = GetItemBaseText(par_item);
 					}
 					else if (par_data->type == 5 ||
 						par_data->type == 6)
@@ -955,7 +974,7 @@ void DataTreeCtrl::OnShowAll(wxCommandEvent& event)
 							if (gpar_data && gpar_data->type==1)
 							{
 								//view
-								viewname = GetItemText(gpar_item);
+								viewname = GetItemBaseText(gpar_item);
 							}
 						}
 					}
@@ -993,10 +1012,10 @@ void DataTreeCtrl::OnImportMetadata(wxCommandEvent& event)
 		if (item_data)
 		{
 			int item_type = item_data->type;
-			wxString itemname = GetItemText(sel_item);
+			wxString itemname = GetItemBaseText(sel_item);
 			if (item_type == 2)
 			{
-				VolumeData* vd = d_manager->GetVolumeData(GetItemText(sel_item));
+				VolumeData* vd = d_manager->GetVolumeData(GetItemBaseText(sel_item));
 				if (vd)
 				{
 					wxFileDialog *fopendlg = new wxFileDialog(
@@ -1042,10 +1061,10 @@ void DataTreeCtrl::OnExportMetadata(wxCommandEvent& event)
 		if (item_data)
 		{
 			int item_type = item_data->type;
-			wxString itemname = GetItemText(sel_item);
+			wxString itemname = GetItemBaseText(sel_item);
 			if (item_type == 2)
 			{
-				VolumeData* vd = d_manager->GetVolumeData(GetItemText(sel_item));
+				VolumeData* vd = d_manager->GetVolumeData(GetItemBaseText(sel_item));
 				if (vd && vd->isBrxml())
 				{
 					wxFileDialog *fopendlg = new wxFileDialog(
@@ -1154,22 +1173,22 @@ void DataTreeCtrl::OnShowAllSegChildren(wxCommandEvent& event)
 		if (item_data)
 		{
 			int item_type = item_data->type;
-			wxString itemname = GetItemText(sel_item);
+			wxString itemname = GetItemBaseText(sel_item);
 			if (item_type == 8)
 			{
 
 				wxTreeItemId vol_item = GetParentVolItem(sel_item);
 				if (vol_item.IsOk())
 				{
-					wxString vname = GetItemText(vol_item);
+					wxString vname = GetItemBaseText(vol_item);
 					VolumeData* vd = d_manager->GetVolumeData(vname);
 					if (vd)
 					{
-						int id = vd->GetROIid(GetItemText(sel_item).ToStdWstring());
+						int id = vd->GetROIid(GetItemBaseText(sel_item).ToStdWstring());
 						if (id != -1)
 						{
-							vd->SetROISel(GetItemText(sel_item).ToStdWstring(), true);
-							vd->SetROISelChildren(GetItemText(sel_item).ToStdWstring(), true);
+							vd->SetROISel(GetItemBaseText(sel_item).ToStdWstring(), true);
+							vd->SetROISelChildren(GetItemBaseText(sel_item).ToStdWstring(), true);
 						}
 
 						vr_frame->UpdateTreeIcons();
@@ -1179,7 +1198,7 @@ void DataTreeCtrl::OnShowAllSegChildren(wxCommandEvent& event)
 			}
 			if (item_type == 2)
 			{
-				VolumeData* vd = d_manager->GetVolumeData(GetItemText(sel_item));
+				VolumeData* vd = d_manager->GetVolumeData(GetItemBaseText(sel_item));
 				if (vd)
 				{
 					vd->SetROISelChildren(wstring(), true);
@@ -1208,20 +1227,20 @@ void DataTreeCtrl::OnHideAllSegChildren(wxCommandEvent& event)
 		if (item_data)
 		{
 			int item_type = item_data->type;
-			wxString itemname = GetItemText(sel_item);
+			wxString itemname = GetItemBaseText(sel_item);
 			if (item_type == 8)
 			{
 
 				wxTreeItemId vol_item = GetParentVolItem(sel_item);
 				if (vol_item.IsOk())
 				{
-					wxString vname = GetItemText(vol_item);
+					wxString vname = GetItemBaseText(vol_item);
 					VolumeData* vd = d_manager->GetVolumeData(vname);
 					if (vd)
 					{
-						int id = vd->GetROIid(GetItemText(sel_item).ToStdWstring());
+						int id = vd->GetROIid(GetItemBaseText(sel_item).ToStdWstring());
 						if (id != -1)
-							vd->SetROISelChildren(GetItemText(sel_item).ToStdWstring(), false);
+							vd->SetROISelChildren(GetItemBaseText(sel_item).ToStdWstring(), false);
 
 						vr_frame->UpdateTreeIcons();
 						vr_frame->RefreshVRenderViews();
@@ -1230,7 +1249,7 @@ void DataTreeCtrl::OnHideAllSegChildren(wxCommandEvent& event)
 			}
 			if (item_type == 2)
 			{
-				VolumeData* vd = d_manager->GetVolumeData(GetItemText(sel_item));
+				VolumeData* vd = d_manager->GetVolumeData(GetItemBaseText(sel_item));
 				if (vd)
 				{
 					vd->SetROISelChildren(wstring(), false);
@@ -1259,7 +1278,7 @@ void DataTreeCtrl::OnShowAllNamedSeg(wxCommandEvent& event)
 		if (item_data)
 		{
 			int item_type = item_data->type;
-			wxString itemname = GetItemText(sel_item);
+			wxString itemname = GetItemBaseText(sel_item);
 			VolumeData* vd = NULL;
 			if (item_type == 8)
 			{
@@ -1267,12 +1286,12 @@ void DataTreeCtrl::OnShowAllNamedSeg(wxCommandEvent& event)
 				wxTreeItemId vol_item = GetParentVolItem(sel_item);
 				if (vol_item.IsOk())
 				{
-					wxString vname = GetItemText(vol_item);
+					wxString vname = GetItemBaseText(vol_item);
 					vd = d_manager->GetVolumeData(vname);
 				}
 			}
 			if (item_type == 2)
-				vd = d_manager->GetVolumeData(GetItemText(sel_item));
+				vd = d_manager->GetVolumeData(GetItemBaseText(sel_item));
 
 			if (vd)
 			{
@@ -1301,7 +1320,7 @@ void DataTreeCtrl::OnHideAllSeg(wxCommandEvent& event)
 		if (item_data)
 		{
 			int item_type = item_data->type;
-			wxString itemname = GetItemText(sel_item);
+			wxString itemname = GetItemBaseText(sel_item);
 			VolumeData* vd = NULL;
 			if (item_type == 8)
 			{
@@ -1309,12 +1328,12 @@ void DataTreeCtrl::OnHideAllSeg(wxCommandEvent& event)
 				wxTreeItemId vol_item = GetParentVolItem(sel_item);
 				if (vol_item.IsOk())
 				{
-					wxString vname = GetItemText(vol_item);
+					wxString vname = GetItemBaseText(vol_item);
 					vd = d_manager->GetVolumeData(vname);
 				}
 			}
 			if (item_type == 2)
-				vd = d_manager->GetVolumeData(GetItemText(sel_item));
+				vd = d_manager->GetVolumeData(GetItemBaseText(sel_item));
 
 			if (vd)
 			{
@@ -1343,7 +1362,7 @@ void DataTreeCtrl::OnDeleteAllSeg(wxCommandEvent& event)
 		if (item_data)
 		{
 			int item_type = item_data->type;
-			wxString itemname = GetItemText(sel_item);
+			wxString itemname = GetItemBaseText(sel_item);
 			VolumeData* vd = NULL;
 			wxString vname;
 			if (item_type == 8)
@@ -1352,13 +1371,13 @@ void DataTreeCtrl::OnDeleteAllSeg(wxCommandEvent& event)
 				wxTreeItemId vol_item = GetParentVolItem(sel_item);
 				if (vol_item.IsOk())
 				{
-					vname = GetItemText(vol_item);
+					vname = GetItemBaseText(vol_item);
 					vd = d_manager->GetVolumeData(vname);
 				}
 			}
 			if (item_type == 2)
 			{
-				vname = GetItemText(sel_item);
+				vname = GetItemBaseText(sel_item);
 				vd = d_manager->GetVolumeData(vname);
 			}
 
@@ -1392,7 +1411,7 @@ void DataTreeCtrl::OnCloseView(wxCommandEvent& event)
 		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
 		if (item_data && item_data->type == 1)//view
 		{
-			wxString name = GetItemText(sel_item);
+			wxString name = GetItemBaseText(sel_item);
 			vr_frame->DeleteVRenderView(name);
 		}
 	}
@@ -1411,7 +1430,7 @@ void DataTreeCtrl::OnManipulateData(wxCommandEvent& event)
 		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
 		if (item_data && item_data->type == 3)//mesh data
 		{
-			wxString name = GetItemText(sel_item);
+			wxString name = GetItemBaseText(sel_item);
 			MeshData* md = vr_frame->GetDataManager()->GetMeshData(name);
 			vr_frame->OnSelection(6, 0, 0, 0, md);
 		}
@@ -1439,7 +1458,7 @@ void DataTreeCtrl::OnAddMeshGroup(wxCommandEvent &event)
 		if (item_data && item_data->type == 1)
 		{
 			//view
-			wxString name = GetItemText(sel_item);
+			wxString name = GetItemBaseText(sel_item);
 			VRenderView* vrv = vr_frame->GetView(name);
 			if (vrv)
 			{
@@ -1458,7 +1477,7 @@ void DataTreeCtrl::OnAddMeshGroup(wxCommandEvent &event)
 				if (par_data && par_data->type == 1)
 				{
 					//volume in view
-					wxString name = GetItemText(par_item);
+					wxString name = GetItemBaseText(par_item);
 					VRenderView* vrv = vr_frame->GetView(name);
 					if (vrv)
 					{
@@ -1475,7 +1494,7 @@ void DataTreeCtrl::OnAddMeshGroup(wxCommandEvent &event)
 						LayerInfo* gpar_data = (LayerInfo*)GetItemData(gpar_item);
 						if (gpar_data && gpar_data->type == 1)
 						{
-							wxString name = GetItemText(gpar_item);
+							wxString name = GetItemBaseText(gpar_item);
 							VRenderView* vrv = vr_frame->GetView(name);
 							if (vrv)
 							{
@@ -1497,7 +1516,7 @@ void DataTreeCtrl::OnAddMeshGroup(wxCommandEvent &event)
 				if (par_data && par_data->type == 1)
 				{
 					//mesh in view
-					wxString name = GetItemText(par_item);
+					wxString name = GetItemBaseText(par_item);
 					VRenderView* vrv = vr_frame->GetView(name);
 					if (vrv)
 					{
@@ -1514,7 +1533,7 @@ void DataTreeCtrl::OnAddMeshGroup(wxCommandEvent &event)
 						LayerInfo* gpar_data = (LayerInfo*)GetItemData(gpar_item);
 						if (gpar_data && gpar_data->type == 1)
 						{
-							wxString name = GetItemText(gpar_item);
+							wxString name = GetItemBaseText(gpar_item);
 							VRenderView* vrv = vr_frame->GetView(name);
 							if (vrv)
 							{
@@ -1537,7 +1556,7 @@ void DataTreeCtrl::OnAddMeshGroup(wxCommandEvent &event)
 				if (par_data && par_data->type == 1)
 				{
 					//group in view
-					wxString name = GetItemText(par_item);
+					wxString name = GetItemBaseText(par_item);
 					VRenderView* vrv = vr_frame->GetView(name);
 					if (vrv)
 					{
@@ -1571,7 +1590,7 @@ void DataTreeCtrl::OnAddDataGroup(wxCommandEvent& event)
 		if (item_data && item_data->type == 1)
 		{
 			//view
-			wxString name = GetItemText(sel_item);
+			wxString name = GetItemBaseText(sel_item);
 			VRenderView* vrv = vr_frame->GetView(name);
 			if (vrv)
 			{
@@ -1590,7 +1609,7 @@ void DataTreeCtrl::OnAddDataGroup(wxCommandEvent& event)
 				if (par_data && par_data->type == 1)
 				{
 					//volume in view
-					wxString name = GetItemText(par_item);
+					wxString name = GetItemBaseText(par_item);
 					VRenderView* vrv = vr_frame->GetView(name);
 					if (vrv)
 					{
@@ -1607,7 +1626,7 @@ void DataTreeCtrl::OnAddDataGroup(wxCommandEvent& event)
 						LayerInfo* gpar_data = (LayerInfo*)GetItemData(gpar_item);
 						if (gpar_data && gpar_data->type == 1)
 						{
-							wxString name = GetItemText(gpar_item);
+							wxString name = GetItemBaseText(gpar_item);
 							VRenderView* vrv = vr_frame->GetView(name);
 							if (vrv)
 							{
@@ -1629,7 +1648,7 @@ void DataTreeCtrl::OnAddDataGroup(wxCommandEvent& event)
 				if (par_data && par_data->type == 1)
 				{
 					//mesh in view
-					wxString name = GetItemText(par_item);
+					wxString name = GetItemBaseText(par_item);
 					VRenderView* vrv = vr_frame->GetView(name);
 					if (vrv)
 					{
@@ -1646,7 +1665,7 @@ void DataTreeCtrl::OnAddDataGroup(wxCommandEvent& event)
 						LayerInfo* gpar_data = (LayerInfo*)GetItemData(gpar_item);
 						if (gpar_data && gpar_data->type == 1)
 						{
-							wxString name = GetItemText(gpar_item);
+							wxString name = GetItemBaseText(gpar_item);
 							VRenderView* vrv = vr_frame->GetView(name);
 							if (vrv)
 							{
@@ -1669,7 +1688,7 @@ void DataTreeCtrl::OnAddDataGroup(wxCommandEvent& event)
 				if (par_data && par_data->type == 1)
 				{
 					//group in view
-					wxString name = GetItemText(par_item);
+					wxString name = GetItemBaseText(par_item);
 					VRenderView* vrv = vr_frame->GetView(name);
 					if (vrv)
 					{
@@ -1702,7 +1721,7 @@ void DataTreeCtrl::OnAddSegGroup(wxCommandEvent& event)
 	
 	if (item_data->type == 2)
 	{
-		wxString vname = GetItemText(sel_item);
+		wxString vname = GetItemBaseText(sel_item);
 		VolumeData* vd = d_manage->GetVolumeData(vname);
 		if (!vd) return;
 		int gid = vd->AddROIGroup();
@@ -1716,7 +1735,7 @@ void DataTreeCtrl::OnAddSegGroup(wxCommandEvent& event)
 	{
 		wxTreeItemId vitem = GetParentVolItem(sel_item);
 		if (!vitem.IsOk()) return;
-		wxString vname = GetItemText(vitem);
+		wxString vname = GetItemBaseText(vitem);
 		VolumeData* vd = d_manage->GetVolumeData(vname);
 		if (!vd) return;
 
@@ -1729,10 +1748,10 @@ void DataTreeCtrl::OnAddSegGroup(wxCommandEvent& event)
 		if (item_data->type == 7)
 		{
 			if (pitem_data->type == 8)
-				parent_name = GetItemText(pitem);
+				parent_name = GetItemBaseText(pitem);
 		}
 		else if (item_data->type == 8)
-			parent_name = GetItemText(sel_item);
+			parent_name = GetItemBaseText(sel_item);
 
 		int gid = vd->AddROIGroup(parent_name.ToStdWstring());
 		vd->AddSelID(gid);
@@ -1822,7 +1841,7 @@ void DataTreeCtrl::OnRandomizeColor(wxCommandEvent& event)
 	LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
 	if (!item_data) return;
 
-	wxString name = GetItemText(sel_item);
+	wxString name = GetItemBaseText(sel_item);
 	if (item_data->type == 1)
 	{
 		//view
@@ -1847,7 +1866,7 @@ void DataTreeCtrl::OnRandomizeColor(wxCommandEvent& event)
 	else if (item_data->type == 5)
 	{
 		//volume group
-		wxString par_name = GetItemText(GetItemParent(sel_item));
+		wxString par_name = GetItemBaseText(GetItemParent(sel_item));
 		VRenderView* vrv = vr_frame->GetView(par_name);
 		if (vrv)
 		{
@@ -1859,7 +1878,7 @@ void DataTreeCtrl::OnRandomizeColor(wxCommandEvent& event)
 	else if (item_data->type == 6)
 	{
 		//mesh group
-		wxString par_name = GetItemText(GetItemParent(sel_item));
+		wxString par_name = GetItemBaseText(GetItemParent(sel_item));
 		VRenderView* vrv = vr_frame->GetView(par_name);
 		if (vrv)
 		{
@@ -1885,7 +1904,7 @@ void DataTreeCtrl::OnExportAllSegments(wxCommandEvent& event)
 	if (!sel_item.IsOk()) return;
 
 	//select data
-	wxString name = GetItemText(sel_item);
+	wxString name = GetItemBaseText(sel_item);
 	LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
 
 	if (!item_data || item_data->type != 4) return;
@@ -1923,7 +1942,7 @@ void DataTreeCtrl::OnFlipH(wxCommandEvent& event)
 	if (!sel_item.IsOk()) return;
 
 	//select data
-	wxString name = GetItemText(sel_item);
+	wxString name = GetItemBaseText(sel_item);
 	LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
 
 	if (!item_data || item_data->type != 2) return;
@@ -1945,7 +1964,7 @@ void DataTreeCtrl::OnFlipV(wxCommandEvent& event)
 	if (!sel_item.IsOk()) return;
 
 	//select data
-	wxString name = GetItemText(sel_item);
+	wxString name = GetItemBaseText(sel_item);
 	LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
 
 	if (!item_data || item_data->type != 2) return;
@@ -1980,7 +1999,7 @@ void DataTreeCtrl::UpdateSelection()
 	if (sel_item.IsOk())
 	{
 		//select data
-		wxString name = GetItemText(sel_item);
+		wxString name = GetItemBaseText(sel_item);
 		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
 		if (item_data)
 		{
@@ -1992,7 +2011,7 @@ void DataTreeCtrl::UpdateSelection()
 			case 1://view
 				//vr_frame->OnSelection(0);
 				{
-					wxString str = GetItemText(sel_item);
+					wxString str = GetItemBaseText(sel_item);
 					VRenderView* vrv = vr_frame->GetView(str);
 					vr_frame->OnSelection(1, vrv, 0, 0, 0);
 				}
@@ -2008,12 +2027,12 @@ void DataTreeCtrl::UpdateSelection()
 							if (par_item_data && par_item_data->type == 5)
 							{
 								//par is group
-								wxString str = GetItemText(GetItemParent(par_item));
+								wxString str = GetItemBaseText(GetItemParent(par_item));
 								VRenderView* vrv = vr_frame->GetView(str);
 								if (vrv)
 								{
 									VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
-									str = GetItemText(par_item);
+									str = GetItemBaseText(par_item);
 									DataGroup* group = vrv->GetGroup(str);
 									vr_frame->GetAdjustView()->SetGroupLink(group);
 									vr_frame->OnSelection(2, vrv, group, vd, 0);
@@ -2026,7 +2045,7 @@ void DataTreeCtrl::UpdateSelection()
 							else if (par_item_data && par_item_data->type == 1)
 							{
 								//par is view
-								wxString str = GetItemText(par_item);
+								wxString str = GetItemBaseText(par_item);
 								VRenderView* vrv = vr_frame->GetView(str);
 								if (vrv)
 								{
@@ -2052,7 +2071,7 @@ void DataTreeCtrl::UpdateSelection()
 						if (par_item_data && par_item_data->type == 6)
 						{
 							//par is group
-							wxString str = GetItemText(GetItemParent(par_item));
+							wxString str = GetItemBaseText(GetItemParent(par_item));
 							VRenderView* vrv = vr_frame->GetView(str);
 							if (vrv)
 							{
@@ -2063,7 +2082,7 @@ void DataTreeCtrl::UpdateSelection()
 						else if (par_item_data && par_item_data->type == 1)
 						{
 							//par is view
-							wxString str = GetItemText(par_item);
+							wxString str = GetItemBaseText(par_item);
 							VRenderView* vrv = vr_frame->GetView(str);
 							if (vrv)
 							{
@@ -2076,7 +2095,7 @@ void DataTreeCtrl::UpdateSelection()
 				break;
 			case 4://annotations
 				{
-					wxString par_name = GetItemText(GetItemParent(sel_item));
+					wxString par_name = GetItemBaseText(GetItemParent(sel_item));
 					VRenderView* vrv = vr_frame->GetView(par_name);
 					Annotations* ann = vr_frame->GetDataManager()->GetAnnotations(name);
 					vr_frame->OnSelection(4, vrv, 0, 0, 0, ann);
@@ -2084,7 +2103,7 @@ void DataTreeCtrl::UpdateSelection()
 				break;
 			case 5://group
 				{
-					wxString par_name = GetItemText(GetItemParent(sel_item));
+					wxString par_name = GetItemBaseText(GetItemParent(sel_item));
 					VRenderView* vrv = vr_frame->GetView(par_name);
 					if (vrv)
 					{
@@ -2095,7 +2114,7 @@ void DataTreeCtrl::UpdateSelection()
 				break;
 			case 6://mesh group
 				{
-					wxString par_name = GetItemText(GetItemParent(sel_item));
+					wxString par_name = GetItemBaseText(GetItemParent(sel_item));
 					VRenderView* vrv = vr_frame->GetView(par_name);
 					if (vrv)
 					{
@@ -2108,7 +2127,7 @@ void DataTreeCtrl::UpdateSelection()
 				{
 					wxTreeItemId vitem = GetParentVolItem(sel_item);
 					if (!vitem.IsOk()) break;
-					wxString vname = GetItemText(vitem);
+					wxString vname = GetItemBaseText(vitem);
 					LayerInfo* vitem_data = (LayerInfo*)GetItemData(vitem);
 					if (!vitem_data) break;
 					VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(vname);
@@ -2125,11 +2144,11 @@ void DataTreeCtrl::UpdateSelection()
 							if (par_item_data && par_item_data->type == 5)
 							{
 								//par is group
-								wxString str = GetItemText(GetItemParent(par_item));
+								wxString str = GetItemBaseText(GetItemParent(par_item));
 								VRenderView* vrv = vr_frame->GetView(str);
 								if (vrv)
 								{
-									str = GetItemText(par_item);
+									str = GetItemBaseText(par_item);
 									DataGroup* group = vrv->GetGroup(str);
 									vr_frame->GetAdjustView()->SetGroupLink(group);
 									vr_frame->OnSelection(2, vrv, group, vd, 0);
@@ -2142,7 +2161,7 @@ void DataTreeCtrl::UpdateSelection()
 							else if (par_item_data && par_item_data->type == 1)
 							{
 								//par is view
-								wxString str = GetItemText(par_item);
+								wxString str = GetItemBaseText(par_item);
 								VRenderView* vrv = vr_frame->GetView(str);
 								if (vrv)
 								{
@@ -2170,7 +2189,7 @@ wxString DataTreeCtrl::GetCurrentSel()
 	wxTreeItemId sel_item = GetSelection();
 	if (sel_item.IsOk())
 	{
-		return GetItemText(sel_item);
+		return GetItemBaseText(sel_item);
 	}
 
 	return "";
@@ -2203,7 +2222,7 @@ int DataTreeCtrl::TraversalSelect(wxTreeItemId item, wxString name)
 		child_item = GetNextChild(item, cookie);
 	}
 
-	wxString item_name = GetItemText(item);
+	wxString item_name = GetItemBaseText(item);
 	if (item_name == name)
 	{
 		found = 1;
@@ -2222,7 +2241,7 @@ void DataTreeCtrl::Select(wxString view, wxString name)
 		wxTreeItemId view_item = GetFirstChild(root, cookie);
 		if (view_item.IsOk())
 		{
-			wxString view_name = GetItemText(view_item);
+			wxString view_name = GetItemBaseText(view_item);
 			if (view_name == view ||
 				view == "")
 			{
@@ -2238,7 +2257,7 @@ void DataTreeCtrl::Select(wxString view, wxString name)
 		view_item = GetNextChild(root, cookie);
 		while (!found && view_item.IsOk())
 		{
-			wxString view_name = GetItemText(view_item);
+			wxString view_name = GetItemBaseText(view_item);
 			if (view_name == view ||
 				view == "")
 			{
@@ -2279,7 +2298,7 @@ void DataTreeCtrl::SelectROI(VolumeData* vd, int id)
 			wxTreeItemId sel_vitem = GetParentVolItem(sel_item);
 			if (item_data && sel_vitem.IsOk())
 			{
-				if (GetItemText(vitem) == GetItemText(sel_vitem) && item_data->id < -1)
+				if (GetItemBaseText(vitem) == GetItemBaseText(sel_vitem) && item_data->id < -1)
 					sel_sgroup = true;
 			}
 		}
@@ -2331,7 +2350,7 @@ void DataTreeCtrl::OnAct(wxTreeEvent &event)
 
 	if (sel_item.IsOk() && vr_frame)
 	{
-		name = GetItemText(sel_item);
+		name = GetItemBaseText(sel_item);
 		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
 		if (item_data)
 		{
@@ -2401,7 +2420,7 @@ void DataTreeCtrl::OnAct(wxTreeEvent &event)
 				break;
 			case 5://group
 				{
-					wxString par_name = GetItemText(GetItemParent(sel_item));
+					wxString par_name = GetItemBaseText(GetItemParent(sel_item));
 					VRenderView* vrv = vr_frame->GetView(par_name);
 					if (vrv)
 					{
@@ -2421,7 +2440,7 @@ void DataTreeCtrl::OnAct(wxTreeEvent &event)
 				break;
 			case 6://mesh group
 				{
-					wxString par_name = GetItemText(GetItemParent(sel_item));
+					wxString par_name = GetItemBaseText(GetItemParent(sel_item));
 					VRenderView* vrv = vr_frame->GetView(par_name);
 					if (vrv)
 					{
@@ -2445,13 +2464,13 @@ void DataTreeCtrl::OnAct(wxTreeEvent &event)
 					wxTreeItemId vol_item = GetParentVolItem(sel_item);
 					if (vol_item.IsOk())
 					{
-						wxString vname = GetItemText(vol_item);
+						wxString vname = GetItemBaseText(vol_item);
 						VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(vname);
 						if (vd)
 						{
-							int id = vd->GetROIid(GetItemText(sel_item).ToStdWstring());
+							int id = vd->GetROIid(GetItemBaseText(sel_item).ToStdWstring());
 							if (id != -1)
-								vd->SetROISel(GetItemText(sel_item).ToStdWstring(), !(vd->isSelID(id)));
+								vd->SetROISel(GetItemBaseText(sel_item).ToStdWstring(), !(vd->isSelID(id)));
 						}
 					}
 				}
@@ -2564,10 +2583,10 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 			int dst_type = dst_item_data->type;
 			int dst_par_type = dst_par_item_data->type;
 
-			wxString src_name = GetItemText(src_item);
-			wxString src_par_name = GetItemText(src_par_item);
-			wxString dst_name = GetItemText(dst_item);
-			wxString dst_par_name = GetItemText(dst_par_item);
+			wxString src_name = GetItemBaseText(src_item);
+			wxString src_par_name = GetItemBaseText(src_par_item);
+			wxString dst_name = GetItemBaseText(dst_item);
+			wxString dst_par_name = GetItemBaseText(dst_par_item);
 
 			VolumeData *vd = NULL;
 
@@ -2610,7 +2629,7 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 				src_name != dst_name)
 			{
 				//move volume within the same group
-				wxString str = GetItemText(GetItemParent(src_par_item));
+				wxString str = GetItemBaseText(GetItemParent(src_par_item));
 				VRenderView* vrv = vr_frame->GetView(str);
 				if (vrv)
 					vrv->MoveLayerinGroup(src_par_name, src_name, dst_name, insert_mode);
@@ -2618,7 +2637,7 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 			else if (src_par_type == 5 && //par is group
 				src_type == 2 && //src is volume
 				dst_par_type == 1 && //dst's par is view
-				dst_par_name == GetItemText(GetItemParent(src_par_item))) //in same view
+				dst_par_name == GetItemBaseText(GetItemParent(src_par_item))) //in same view
 			{
 				//move volume outside of the group
 				if (dst_type == 5) //dst is group
@@ -2640,7 +2659,7 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 			else if (src_par_type == 1 && //src's par is view
 				src_type == 2 && //src is volume
 				dst_par_type == 5 && //dst's par is group
-				src_par_name == GetItemText(GetItemParent(dst_par_item))) //in the same view
+				src_par_name == GetItemBaseText(GetItemParent(dst_par_item))) //in the same view
 			{
 				//move volume into group
 				VRenderView* vrv = vr_frame->GetView(src_par_name);
@@ -2651,11 +2670,11 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 				src_type == 2 && // src is volume
 				dst_par_type == 5 && //dst's par is group
 				dst_type == 2 && //dst is volume
-				GetItemText(GetItemParent(src_par_item)) == GetItemText(GetItemParent(dst_par_item)) && // in the same view
-				GetItemText(src_par_item) != GetItemText(dst_par_item))// par groups are different
+				GetItemBaseText(GetItemParent(src_par_item)) == GetItemBaseText(GetItemParent(dst_par_item)) && // in the same view
+				GetItemBaseText(src_par_item) != GetItemBaseText(dst_par_item))// par groups are different
 			{
 				//move volume from one group to another
-				wxString str = GetItemText(GetItemParent(src_par_item));
+				wxString str = GetItemBaseText(GetItemParent(src_par_item));
 				VRenderView* vrv = vr_frame->GetView(str);
 				if (vrv)
 					vrv->MoveLayerfromtoGroup(src_par_name, dst_par_name, src_name, dst_name, insert_mode);
@@ -2663,7 +2682,7 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 			else if (src_type == 2 && //src is volume
 				src_par_type == 5 && //src's par is group
 				dst_type == 1 && //dst is view
-				GetItemText(GetItemParent(src_par_item)) == dst_name) //in the same view
+				GetItemBaseText(GetItemParent(src_par_item)) == dst_name) //in the same view
 			{
 				//move volume outside of the group
 				VRenderView* vrv = vr_frame->GetView(dst_name);
@@ -2679,7 +2698,7 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 				src_name != dst_name)
 			{
 				//move mesh within the same group
-				wxString str = GetItemText(GetItemParent(src_par_item));
+				wxString str = GetItemBaseText(GetItemParent(src_par_item));
 				VRenderView* vrv = vr_frame->GetView(str);
 				if (vrv)
 					vrv->MoveMeshinGroup(src_par_name, src_name, dst_name, insert_mode);
@@ -2687,7 +2706,7 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 			else if (src_par_type == 6 && //par is group
 				src_type == 3 && //src is mesh
 				dst_par_type == 1 && //dst's par is view
-				dst_par_name == GetItemText(GetItemParent(src_par_item))) //in same view
+				dst_par_name == GetItemBaseText(GetItemParent(src_par_item))) //in same view
 			{
 				//move mesh outside of the group
 				if (dst_type == 6) //dst is group
@@ -2709,7 +2728,7 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 			else if (src_par_type == 1 && //src's par is view
 				src_type == 3 && //src is mesh
 				dst_par_type == 6 && //dst's par is group
-				src_par_name == GetItemText(GetItemParent(dst_par_item))) //in the same view
+				src_par_name == GetItemBaseText(GetItemParent(dst_par_item))) //in the same view
 			{
 				//move mesh into group
 				VRenderView* vrv = vr_frame->GetView(src_par_name);
@@ -2720,11 +2739,11 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 				src_type == 3 && // src is mesh
 				dst_par_type == 6 && //dst's par is group
 				dst_type == 3 && //dst is mesh
-				GetItemText(GetItemParent(src_par_item)) == GetItemText(GetItemParent(dst_par_item)) && // in the same view
-				GetItemText(src_par_item) != GetItemText(dst_par_item))// par groups are different
+				GetItemBaseText(GetItemParent(src_par_item)) == GetItemBaseText(GetItemParent(dst_par_item)) && // in the same view
+				GetItemBaseText(src_par_item) != GetItemBaseText(dst_par_item))// par groups are different
 			{
 				//move mesh from one group to another
-				wxString str = GetItemText(GetItemParent(src_par_item));
+				wxString str = GetItemBaseText(GetItemParent(src_par_item));
 				VRenderView* vrv = vr_frame->GetView(str);
 				if (vrv)
 					vrv->MoveMeshfromtoGroup(src_par_name, dst_par_name, src_name, dst_name, insert_mode);
@@ -2732,7 +2751,7 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 			else if (src_type == 3 && //src is mesh
 				src_par_type == 6 && //src's par is group
 				dst_type == 1 && //dst is view
-				GetItemText(GetItemParent(src_par_item)) == dst_name) //in the same view
+				GetItemBaseText(GetItemParent(src_par_item)) == dst_name) //in the same view
 			{
 				//move mesh outside of the group
 				VRenderView* vrv = vr_frame->GetView(dst_name);
@@ -2748,7 +2767,7 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 				wxTreeItemId d_vitem = GetParentVolItem(dst_item);
 				if (s_vitem.IsOk() && d_vitem.IsOk() && s_vitem == d_vitem && vr_frame->GetDataManager())
 				{
-					vd = vr_frame->GetDataManager()->GetVolumeData(GetItemText(s_vitem));
+					vd = vr_frame->GetDataManager()->GetVolumeData(GetItemBaseText(s_vitem));
 					if (vd && m_insert_mode != -1)
 						vd->MoveROINode(src_item_data->id, dst_item_data->id, m_insert_mode);
 				}
@@ -2758,7 +2777,7 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 				wxTreeItemId s_vitem = GetParentVolItem(src_item);
 				if (s_vitem.IsOk() && s_vitem == dst_item && vr_frame->GetDataManager())
 				{
-					vd = vr_frame->GetDataManager()->GetVolumeData(GetItemText(s_vitem));
+					vd = vr_frame->GetDataManager()->GetVolumeData(GetItemBaseText(s_vitem));
 					if (vd)
 						vd->MoveROINode(src_item_data->id, -1);
 				}
@@ -2787,12 +2806,12 @@ void DataTreeCtrl::OnEndDrag(wxTreeEvent& event)
 			int src_type = src_item_data->type;
 			int src_par_type = src_par_item_data->type;
 
-			wxString src_name = GetItemText(src_item);
-			wxString src_par_name = GetItemText(src_par_item);
+			wxString src_name = GetItemBaseText(src_item);
+			wxString src_par_name = GetItemBaseText(src_par_item);
 
 			if (src_type == 2 && src_par_type == 5)
 			{
-				wxString str = GetItemText(GetItemParent(src_par_item));
+				wxString str = GetItemBaseText(GetItemParent(src_par_item));
 				VRenderView* vrv = vr_frame->GetView(str);
 				if (vrv)
 				{
@@ -3280,7 +3299,7 @@ wxTreeItemId DataTreeCtrl::FindTreeItem(wxTreeItemId par_item, const wxString& n
 	if (!roi_tree && (item_data->type == 7 || item_data->type == 8))
 		return rval;
 
-	if (GetItemText(item) == name) return item;
+	if (GetItemBaseText(item) == name) return item;
 
 	wxTreeItemIdValue cookie;
 	wxTreeItemId child_item = GetFirstChild(item, cookie);
@@ -3392,7 +3411,7 @@ void DataTreeCtrl::BrushClear()
 	if (sel_item.IsOk() && vr_frame)
 	{
 		//select data
-		wxString name = GetItemText(sel_item);
+		wxString name = GetItemBaseText(sel_item);
 		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
 		if (item_data && item_data->type==2)
 		{
@@ -3403,7 +3422,7 @@ void DataTreeCtrl::BrushClear()
 				if (par_item_data && par_item_data->type == 5)
 				{
 					//par is group
-					wxString str = GetItemText(GetItemParent(par_item));
+					wxString str = GetItemBaseText(GetItemParent(par_item));
 					VRenderView* vrv = vr_frame->GetView(str);
 					if (vrv)
 					{
@@ -3424,7 +3443,7 @@ void DataTreeCtrl::BrushClear()
 				else if (par_item_data && par_item_data->type == 1)
 				{
 					//par is view
-					wxString str = GetItemText(par_item);
+					wxString str = GetItemBaseText(par_item);
 					VRenderView* vrv = vr_frame->GetView(str);
 					if (vrv)
 					{
@@ -3455,7 +3474,7 @@ void DataTreeCtrl::BrushCreate()
 	if (sel_item.IsOk() && vr_frame)
 	{
 		//select data
-		wxString name = GetItemText(sel_item);
+		wxString name = GetItemBaseText(sel_item);
 		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
 		if (item_data && item_data->type==2)
 		{
@@ -3466,8 +3485,8 @@ void DataTreeCtrl::BrushCreate()
 				if (par_item_data && par_item_data->type == 5)
 				{
 					//par is group
-					wxString group_name = GetItemText(par_item);
-					wxString str = GetItemText(GetItemParent(par_item));
+					wxString group_name = GetItemBaseText(par_item);
+					wxString str = GetItemBaseText(GetItemParent(par_item));
 					VRenderView* vrv = vr_frame->GetView(str);
 					if (vrv)
 					{
@@ -3482,7 +3501,7 @@ void DataTreeCtrl::BrushCreate()
 				else if (par_item_data && par_item_data->type == 1)
 				{
 					//par is view
-					wxString str = GetItemText(par_item);
+					wxString str = GetItemBaseText(par_item);
 					VRenderView* vrv = vr_frame->GetView(str);
 					if (vrv)
 					{
@@ -3507,7 +3526,7 @@ void DataTreeCtrl::BrushCreateInv()
 	if (sel_item.IsOk() && vr_frame)
 	{
 		//select data
-		wxString name = GetItemText(sel_item);
+		wxString name = GetItemBaseText(sel_item);
 		int cal_type = 6;
 
 		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
@@ -3520,8 +3539,8 @@ void DataTreeCtrl::BrushCreateInv()
 				if (par_item_data && par_item_data->type == 5)
 				{
 					//par is group
-					wxString group_name = GetItemText(par_item);
-					wxString str = GetItemText(GetItemParent(par_item));
+					wxString group_name = GetItemBaseText(par_item);
+					wxString str = GetItemBaseText(GetItemParent(par_item));
 					VRenderView* vrv = vr_frame->GetView(str);
 					if (vrv)
 					{
@@ -3536,7 +3555,7 @@ void DataTreeCtrl::BrushCreateInv()
 				else if (par_item_data && par_item_data->type == 1)
 				{
 					//par is view
-					wxString str = GetItemText(par_item);
+					wxString str = GetItemBaseText(par_item);
 					VRenderView* vrv = vr_frame->GetView(str);
 					if (vrv)
 					{
@@ -3569,7 +3588,7 @@ VRenderView* DataTreeCtrl::GetCurrentView()
 		if (item_data && item_data->type == 1)
 		{
 			//view
-			wxString name = GetItemText(sel_item);
+			wxString name = GetItemBaseText(sel_item);
 			vrv = vr_frame->GetView(name);
 		}
 		else if (item_data)
@@ -3581,7 +3600,7 @@ VRenderView* DataTreeCtrl::GetCurrentView()
 				LayerInfo* par_data = (LayerInfo*) GetItemData(par_item);
 				if (par_data && par_data->type == 1)
 				{
-					wxString name = GetItemText(par_item);
+					wxString name = GetItemBaseText(par_item);
 					vrv = vr_frame->GetView(name);
 					break;
 				}
@@ -3609,13 +3628,13 @@ void DataTreeCtrl::SaveExpState(wxTreeItemId node, const wxString& prefix)
 	if (!item.IsOk()) return;
 	LayerInfo* item_data = (LayerInfo*)GetItemData(item);
 	if (!item_data) return;
-	m_exp_state[prefix + GetItemText(item) + wxString::Format(wxT("#%i"),item_data->type)] = IsExpanded(item);
+	m_exp_state[prefix + GetItemBaseText(item) + wxString::Format(wxT("#%i"),item_data->type)] = IsExpanded(item);
 
 	wxTreeItemIdValue cookie;
 	wxTreeItemId child_item = GetFirstChild(item, cookie);
 	wxString child_prefix = prefix;
 	if (item_data->type == 2)
-		child_prefix = GetItemText(item) + wxT(".");
+		child_prefix = GetItemBaseText(item) + wxT(".");
 	while (child_item.IsOk())
 	{
 		SaveExpState(child_item, child_prefix);
@@ -3639,7 +3658,7 @@ void DataTreeCtrl::LoadExpState(wxTreeItemId node, const wxString& prefix, bool 
 	if (!item_data) return;
 	
 	bool is_new = false;
-	wxString name = prefix + GetItemText(item) + wxString::Format(wxT("#%i"),item_data->type);
+	wxString name = prefix + GetItemBaseText(item) + wxString::Format(wxT("#%i"),item_data->type);
 	if (m_exp_state.find(name) != m_exp_state.end())
 	{
 		is_new = false;
@@ -3663,7 +3682,7 @@ void DataTreeCtrl::LoadExpState(wxTreeItemId node, const wxString& prefix, bool 
 	wxString child_prefix = prefix;
 	if (item_data && item_data->type == 2)
 	{
-		child_prefix = GetItemText(item) + wxT(".");
+		child_prefix = GetItemBaseText(item) + wxT(".");
 		if (is_new)
 			expand_newitem_child = false;
 	}
