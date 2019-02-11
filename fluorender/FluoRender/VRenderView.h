@@ -772,6 +772,8 @@ public:
 	void SetCurrentVolume(VolumeData *vd) {m_cur_vol = vd;}
 	DataGroup* GetCurrentVolGroup();
 
+	double CalcCameraDistance();
+
 public:
 	//script run
 	bool m_run_script;

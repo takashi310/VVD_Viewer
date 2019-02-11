@@ -1070,9 +1070,8 @@ void VMovieView::SetRendering(double pcnt) {
 		vrv->Get4DSeqFrames(first, sec, tmp);
 		if (sec - first > 0) {
 			vrv->Set4DSeqFrame(time, false);
-		} else {
+		} else
 			vrv->Set3DBatFrame(time);
-		}
 	}
 	if (m_rot_chk->GetValue() && m_current_page == 0) {
 		double x,y,z,val;

@@ -126,27 +126,25 @@ void RulerListCtrl::Append(wxString name, wxString &color, double length, wxStri
 	else pos = GetItemCount();
 
 	long tmp = InsertItem(pos, name, 0);
-	//    SetColumnWidth(0, wxLIST_AUTOSIZE_USEHEADER);
 	SetItem(tmp, 1, wxString::Format("%d", type));
 	SetItem(tmp, 2, name);
-	//SetColumnWidth(2, wxLIST_AUTOSIZE);
 	SetItem(tmp, 3, color);
-	SetColumnWidth(3, wxLIST_AUTOSIZE);
+	//SetColumnWidth(3, wxLIST_AUTOSIZE);
 	wxString str = wxString::Format("%.2f", length) + unit;
 	SetItem(tmp, 4, str);
-	SetColumnWidth(4, wxLIST_AUTOSIZE);
+	//SetColumnWidth(4, wxLIST_AUTOSIZE);
 	str = wxString::Format("%.1f", angle) + "Deg";
 	SetItem(tmp, 5, str);
-	SetColumnWidth(5, wxLIST_AUTOSIZE);
+	//SetColumnWidth(5, wxLIST_AUTOSIZE);
 	SetItem(tmp, 6, points);
 	if (time_dep)
 		str = wxString::Format("%d", time);
 	else
 		str = "N/A";
 	SetItem(tmp, 7, str);
-	SetColumnWidth(5, wxLIST_AUTOSIZE_USEHEADER);
+	//SetColumnWidth(7, wxLIST_AUTOSIZE_USEHEADER);
 	SetItem(tmp, 8, desc);
-	SetColumnWidth(8, wxLIST_AUTOSIZE_USEHEADER);
+	//SetColumnWidth(8, wxLIST_AUTOSIZE_USEHEADER);
 }
 
 void RulerListCtrl::UpdateRulers(VRenderView* vrv, bool update_annotaions)
@@ -267,6 +265,15 @@ void RulerListCtrl::UpdateRulers(VRenderView* vrv, bool update_annotaions)
 				}
 			}
 		}
+	}
+
+	if (GetItemCount() > 0) {
+		SetColumnWidth(3, wxLIST_AUTOSIZE);
+		SetColumnWidth(4, wxLIST_AUTOSIZE);
+		SetColumnWidth(5, wxLIST_AUTOSIZE);
+		SetColumnWidth(6, wxLIST_AUTOSIZE);
+		SetColumnWidth(7, wxLIST_AUTOSIZE_USEHEADER);
+		SetColumnWidth(8, wxLIST_AUTOSIZE_USEHEADER);
 	}
 
 	Thaw();

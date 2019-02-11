@@ -1509,6 +1509,8 @@ void VRenderGLView::HandleProjection(int nx, int ny)
 	double aspect = (double)nx / (double)ny;
 	if (!m_free)
 		m_distance = m_radius/tan(d2r(m_aov/2.0))/m_scale_factor;
+	else
+		m_scale_factor = m_radius/tan(d2r(m_aov/2.0)) / ( CalcCameraDistance() + (m_radius/tan(d2r(m_aov/2.0))/12.0) );
 	if (aspect>1.0)
 	{
 		m_ortho_left = -m_radius*aspect/m_scale_factor;
@@ -7627,7 +7629,21 @@ void VRenderGLView::SetParams(double t)
 			plane->ChangePlane(Point(0.0, 0.0, abs(val)),
 			Vector(0.0, 0.0, -1.0));
 	}
+/*
+	//t
+	double frame;
+	keycode.l2 = 0;
+	keycode.l2_name = "frame";
+	if (interpolator->GetDouble(keycode, t, frame))
+		Set4DSeqFrame(int(frame + 0.5), false);
 
+	//batch
+	double batch;
+	keycode.l2 = 0;
+	keycode.l2_name = "batch";
+	if (interpolator->GetDouble(keycode, t, batch))
+		Set3DBatFrame(int(batch + 0.5));
+*/
 	bool bx, by, bz;
 	//for the view
 	keycode.l1 = 1;
@@ -7903,7 +7919,7 @@ void VRenderGLView::Set3DBatFrame(int offset)
 	for (i=0; i<(int)m_vd_pop_list.size(); i++)
 	{
 		VolumeData* vd = m_vd_pop_list[i];
-		if (vd && vd->GetReader())
+		if (vd && vd->GetReader() && vd->GetReader()->GetBatch())
 		{
 			Texture *tex = vd->GetTexture();
 			BaseReader* reader = vd->GetReader();
@@ -9601,6 +9617,8 @@ void VRenderGLView::RemoveGroup(wxString &name)
 						VolumeData* vd = group->GetVolumeData(j);
 						if (vd)
 						{
+							if (m_cur_vol == vd)
+								m_cur_vol = NULL;
 							group->RemoveVolumeData(j);
 							m_loader.RemoveBrickVD(vd);
 							vd->GetVR()->clear_tex_current();
@@ -10574,6 +10592,129 @@ void VRenderGLView::DrawBounds()
 
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_BLEND);
+}
+
+double VRenderGLView::CalcCameraDistance()
+{
+	glm::mat4 mv_temp = m_mv_mat;
+	//translate object
+	mv_temp = glm::translate(mv_temp, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
+	//rotate object
+	mv_temp = glm::rotate(mv_temp, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_roty + 180.0), glm::vec3(0.0, 1.0, 0.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz + 180.0), glm::vec3(0.0, 0.0, 1.0));
+	//center object
+	mv_temp = glm::translate(mv_temp, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
+
+	double mvmat[16] =
+		{ mv_temp[0][0], mv_temp[0][1], mv_temp[0][2], mv_temp[0][3],
+		  mv_temp[1][0], mv_temp[1][1], mv_temp[1][2], mv_temp[1][3],
+		  mv_temp[2][0], mv_temp[2][1], mv_temp[2][2], mv_temp[2][3],
+		  mv_temp[3][0], mv_temp[3][1], mv_temp[3][2], mv_temp[3][3]};
+
+	
+	Transform mv;
+	mv.set_trans(mvmat);
+
+	vector<Vector> points;
+	points.reserve(8);
+
+	points.push_back(Vector(m_bounds.min().x(), m_bounds.min().y(), m_bounds.min().z()));
+	points.push_back(Vector(m_bounds.max().x(), m_bounds.min().y(), m_bounds.min().z()));
+	points.push_back(Vector(m_bounds.min().x(), m_bounds.max().y(), m_bounds.min().z()));
+	points.push_back(Vector(m_bounds.max().x(), m_bounds.max().y(), m_bounds.min().z()));
+	points.push_back(Vector(m_bounds.min().x(), m_bounds.min().y(), m_bounds.max().z()));
+	points.push_back(Vector(m_bounds.max().x(), m_bounds.min().y(), m_bounds.max().z()));
+	points.push_back(Vector(m_bounds.min().x(), m_bounds.max().y(), m_bounds.max().z()));
+	points.push_back(Vector(m_bounds.max().x(), m_bounds.max().y(), m_bounds.max().z()));
+
+	static int edges[12*2] = {0, 1,  1, 3,  3, 2,  2, 0,
+							  0, 4,  1, 5,  3, 7,  2, 6,
+							  4, 5,  5, 7,  7, 6,  6, 4};
+
+	static int planes[3*6] = {0, 1, 2,  0, 1, 4,  1, 3, 5,  3, 2, 7,  2, 0, 6,  4, 5, 6};
+	
+	for (int i = 0; i < 8; i++)
+		points[i] = mv.project(points[i].asPoint()).asVector();
+
+	double dmin = DBL_MAX;
+	
+	//point
+	for (int i = 0; i < 8; i++)
+	{
+		double d = points[i].length2();
+		if (d < dmin) dmin = d;
+	}
+	
+	//edge
+	for (int i = 0; i < 12; i++)
+	{
+		Vector p = points[edges[i*2]];
+		Vector q = points[edges[i*2+1]];
+
+		if (Dot(p,p-q) <= 0 || Dot(q,q-p) <= 0) continue;
+
+		Vector e = q - p;
+		e.safe_normalize();
+		double d = Dot(p, e);
+		d = p.length2() - d*d;
+
+		if (d < dmin) dmin = d;
+	}
+
+	//planes
+	for (int i = 0; i < 6; i++)
+	{
+		Vector o = points[planes[i*3]];
+		Vector p = points[planes[i*3+1]] - points[planes[i*3]];
+		Vector q = points[planes[i*3+2]] - points[planes[i*3]];
+		double plen = p.length();
+		double qlen = q.length();
+		p.safe_normalize();
+		q.safe_normalize();
+		Vector c = Cross(p, q);
+		c.safe_normalize();
+
+		double d = Dot(points[planes[i*3+1]], c);
+		Vector v = c*d - o;
+
+		double s = Dot(v, p) / plen;
+		double t = Dot(v, q) / qlen;
+
+		d = d*d;
+
+		if (s > 0 && s < 1 && t > 0 && t < 1 && d < dmin) 
+			dmin = d;
+	}
+
+	//inside?
+	bool inside = false;
+	//double padding = 0.0;
+	{
+		Vector ex = points[1] - points[0];
+		Vector ey = points[2] - points[0];
+		Vector ez = points[4] - points[0];
+		double xlen = ex.length();
+		double ylen = ey.length();
+		double zlen = ez.length();
+		ex.safe_normalize();
+		ey.safe_normalize();
+		ez.safe_normalize();
+
+		Vector v = Vector(0)-points[0];
+
+		double x = Dot(v, ex) / xlen;
+		double y = Dot(v, ey) / ylen;
+		double z = Dot(v, ez) / zlen;
+		if (x > 0 && x < 1 && y > 0 && y < 1 && z > 0 && z < 1) 
+			inside = true;
+
+		//padding = Min(Min(xlen, ylen), zlen) / 2.0;
+	}
+	
+	dmin = inside ? 0 : sqrt(dmin);
+
+	return dmin;
 }
 
 void VRenderGLView::DrawClippingPlanes(bool border, int face_winding)
@@ -12329,12 +12470,13 @@ void VRenderGLView::DrawInfo(int nx, int ny)
 	if (TextureRenderer::get_mem_swap())
 	{
 		str = wxString::Format(
-			"FPS: %.2f, Bricks: %d, Quota: %d, Int: %s, Time: %lu",
+			"FPS: %.2f, Bricks: %d, Quota: %d, Int: %s, Time: %lu, Dist: %f",
 			fps_>=0.0&&fps_<300.0?fps_:0.0,
 			TextureRenderer::get_total_brick_num(),
 			TextureRenderer::get_quota_bricks(),
 			m_interactive?"Yes":"No",
-			TextureRenderer::get_cor_up_time());
+			TextureRenderer::get_cor_up_time(),
+			CalcCameraDistance());
 		////budget_test
 		//if (m_interactive)
 		//  tos <<
@@ -15446,25 +15588,27 @@ void VRenderGLView::OnMouse(wxMouseEvent& event)
 				{
 					long dx = event.GetX() - old_mouse_X;
 					long dy = event.GetY() - old_mouse_Y;
-
-					double delta = abs(dx)>abs(dy)?
-						(double)dx/(double)GetSize().x:
-					(double)-dy/(double)GetSize().y;
-					m_scale_factor += m_scale_factor*delta;
-					wxString str = wxString::Format("%.0f", m_scale_factor*100.0);
-					m_vrv->m_scale_factor_sldr->SetValue(m_scale_factor*100);
-					m_vrv->m_scale_factor_text->ChangeValue(str);
+					double delta = abs(dx) > abs(dy) ?
+									(double)dx / (double)GetSize().x :
+									(double)-dy / (double)GetSize().y;
 
 					if (m_free)
 					{
 						Vector pos(m_transx, m_transy, m_transz);
 						pos.normalize();
 						Vector ctr(m_ctrx, m_ctry, m_ctrz);
-						ctr -= delta*pos*1000;
+						ctr -= delta * pos * m_radius * 2;//1000;
 						m_ctrx = ctr.x();
 						m_ctry = ctr.y();
 						m_ctrz = ctr.z();
+						m_scale_factor = m_radius/tan(d2r(m_aov/2.0)) / ( CalcCameraDistance() + (m_radius/tan(d2r(m_aov/2.0))/12.0) );
 					}
+					else
+						m_scale_factor += m_scale_factor*delta;
+
+					wxString str = wxString::Format("%.0f", m_scale_factor*100.0);
+					m_vrv->m_scale_factor_sldr->SetValue(m_scale_factor*100);
+					m_vrv->m_scale_factor_text->ChangeValue(str);
 
 					m_interactive = m_adaptive;
 					m_int_res = m_adaptive_res;
@@ -15788,7 +15932,7 @@ void VRenderGLView::CalcFrame()
 		w = m_capture_resx;
 		h = m_capture_resy;
 	}
-
+	/*
 	if (m_cur_vol)
 	{
 		//projection
@@ -15849,7 +15993,7 @@ void VRenderGLView::CalcFrame()
 		m_frame_h = int((maxy-miny)*h/2.0-1.5);
 
 	}
-	else
+	else*/
 	{
 		int size;
 		if (w > h)

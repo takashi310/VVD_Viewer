@@ -1005,7 +1005,7 @@ namespace FLIVR
 
 		  }//for (int j = 0; j < cur_brs.size(); j++)
 
-		  glFinish();
+		  if (blend_slices) glFinish();
 
 		  for (int j = 0; j < cur_brs.size(); j++)
 			  cur_brs[j]->prevent_tex_deletion(false);

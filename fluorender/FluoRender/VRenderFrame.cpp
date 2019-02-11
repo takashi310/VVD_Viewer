@@ -3928,6 +3928,7 @@ void VRenderFrame::OpenProject(wxString& filename)
 		100, 0, wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);
 
 	//read streaming mode
+	/*
 	if (fconfig.Exists("/memory settings"))
 	{
 		fconfig.SetPath("/memory settings");
@@ -3954,7 +3955,7 @@ void VRenderFrame::OpenProject(wxString& filename)
 
 		SetTextureRendererSettings();
 	}
-
+	*/
 	if (ticks && prg_diag)
 		prg_diag->Update(90*tick_cnt/ticks,
 		"Reading project file. Please wait.");

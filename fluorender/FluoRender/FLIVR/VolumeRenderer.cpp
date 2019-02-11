@@ -577,10 +577,16 @@ namespace FLIVR
 		
 		// index space view direction
 		Vector mv_ray = Vector(-mvmat[2], -mvmat[6], -mvmat[10]);//normalized
-		Vector v = field_trans->project(Vector(-mvmat[2], -mvmat[6], -mvmat[10]));
+		Vector v = field_trans->project(Vector(-mvmat[2], -mvmat[6], -mvmat[10])); //for scaling (unproject normal)
+		/*
 		double f_e_len = v.length();
 		v = field_trans->project(v);
 		double dt = (pxlen * f_e_len) / Dot(mv_ray, v);
+		*/
+
+		Vector p = field_trans->unproject(pxlen*mv_ray);
+		v.safe_normalize();
+		double dt = Dot(p, v);
 
 		return dt;
 	}
@@ -1312,7 +1318,7 @@ namespace FLIVR
 			
 			if (mem_swap_){
 				finished_bricks_++;
-				glFinish();//Added by takashi
+				//glFinish();
 			}
 
 			//takashi_debug

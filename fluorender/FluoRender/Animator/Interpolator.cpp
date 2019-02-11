@@ -235,8 +235,7 @@ void Interpolator::RemoveKey(int id)
 //move before
 void Interpolator::MoveKeyBefore(int from_idx, int to_idx)
 {
-	if (from_idx == to_idx ||
-		from_idx == to_idx-1)
+	if (to_idx >= from_idx)
 		return;
 
 	//double from_duration = 0.0;
@@ -258,9 +257,12 @@ void Interpolator::MoveKeyBefore(int from_idx, int to_idx)
 	//	from_grp->t = m_key_list[to_idx-1]->t+from_duration;
 	//else
 	//	from_grp->t = 0.0;
-	double tmp_t = from_grp->t;
-	from_grp->t = to_grp->t;
-	to_grp->t = tmp_t;
+
+	double tmp_t = to_grp->t;
+
+	for (int i = to_idx; i < from_idx; i++)
+		m_key_list[i]->t = m_key_list[i+1]->t;
+	from_grp->t = tmp_t;
 
 	//insert before
 	m_key_list.erase(m_key_list.begin() + from_idx);
@@ -272,8 +274,7 @@ void Interpolator::MoveKeyBefore(int from_idx, int to_idx)
 //move after
 void Interpolator::MoveKeyAfter(int from_idx, int to_idx)
 {
-	if (from_idx == to_idx ||
-		from_idx == to_idx+1)
+	if (to_idx <= from_idx)
 		return;
 
 	if (from_idx<0 || from_idx>=(int)m_key_list.size())
@@ -282,9 +283,11 @@ void Interpolator::MoveKeyAfter(int from_idx, int to_idx)
 	if (to_idx<0 || to_idx>=(int)m_key_list.size())
 		return;
 	FlKeyGroup *to_grp = m_key_list[to_idx];
-	double tmp_t = from_grp->t;
-	from_grp->t = to_grp->t;
-	to_grp->t = tmp_t;
+	
+	double tmp_t = to_grp->t;
+	for (int i = to_idx; i > from_idx; i--)
+		m_key_list[i]->t = m_key_list[i-1]->t;
+	from_grp->t = tmp_t;
 
 	//insert after
 	m_key_list.erase(m_key_list.begin() + from_idx);
