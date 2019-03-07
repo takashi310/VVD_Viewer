@@ -182,6 +182,148 @@ struct VD_Landmark
 
 class DataManager;
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#define MESH_COLOR_AMB	1
+#define MESH_COLOR_DIFF	2
+#define MESH_COLOR_SPEC	3
+#define MESH_FLOAT_SHN	4
+#define MESH_FLOAT_ALPHA	5
+
+class EXPORT_API MeshData : public TreeLayer
+{
+public:
+	MeshData();
+	virtual ~MeshData();
+
+	wxString GetPath();
+	BBox GetBounds();
+	void SetBounds(BBox b);
+	GLMmodel* GetMesh();
+	void SetDisp(bool disp);
+	void ToggleDisp();
+	bool GetDisp();
+	void SetDrawBounds(bool draw);
+	void ToggleDrawBounds();
+	bool GetDrawBounds();
+
+	//data management
+	int Load(wxString &filename);
+	int Load(GLMmodel* mesh);
+	void Save(wxString &filename);
+
+	static MeshData* DeepCopy(MeshData &copy, bool use_default_settings=false, DataManager *d_manager=NULL);
+
+	//MR
+	MeshRenderer* GetMR();
+
+	//draw
+	void SetMatrices(glm::mat4 &mv_mat, glm::mat4 &proj_mat);
+	void Draw(int peel);
+	void DrawBounds();
+	void DrawInt(unsigned int name);
+
+	//lighting
+	void SetLighting(bool bVal);
+	bool GetLighting();
+	void SetFog(bool bVal, double fog_intensity, double fog_start, double fog_end);
+	bool GetFog();
+	void SetMaterial(Color& amb, Color& diff, Color& spec, 
+		double shine = 30.0, double alpha = 1.0);
+	void SetColor(Color &color, int type);
+	void SetFloat(double &value, int type);
+	void GetMaterial(Color& amb, Color& diff, Color& spec,
+		double& shine, double& alpha);
+	bool IsTransp();
+	//shadow
+	void SetShadow(bool bVal);
+	bool GetShadow();
+	void SetShadowParams(double val);
+	void GetShadowParams(double &val);
+
+	void SetTranslation(double x, double y, double z);
+	void GetTranslation(double &x, double &y, double &z);
+	void SetRotation(double x, double y, double z);
+	void GetRotation(double &x, double &y, double &z);
+	void SetScaling(double x, double y, double z);
+	void GetScaling(double &x, double &y, double &z);
+
+	//randomize color
+	void RandomizeColor();
+
+	//shown in legend
+	void SetLegend(bool val);
+	bool GetLegend();
+
+	//size limiter
+	void SetLimit(bool bVal);
+	bool GetLimit();
+	void SetLimitNumer(int val);
+	int GetLimitNumber();
+
+	wstring GetInfo(){ return m_info; };
+
+	bool isSWC(){ return m_swc; }
+	void SetRadScale(double rs)
+	{
+		if (m_r_scale != rs)
+		{
+			m_r_scale = rs;
+			UpdateModelSWC();
+		}
+	}
+	bool UpdateModelSWC();
+	double GetRadScale(){ return m_r_scale; }
+
+	void SetClipDistance(int distx, int disty, int distz);
+	void GetClipDistance(int &distx, int &disty, int &distz);
+
+private:
+	//wxString m_name;
+	wxString m_data_path;
+	GLMmodel* m_data;
+	MeshRenderer *m_mr;
+	BBox m_bounds;
+	Point m_center;
+
+	bool m_disp;
+	bool m_draw_bounds;
+
+	//lighting
+	bool m_light;
+	bool m_fog;
+	Color m_mat_amb;
+	Color m_mat_diff;
+	Color m_mat_spec;
+	double m_mat_shine;
+	double m_mat_alpha;
+	//shadow
+	bool m_shadow;
+	double m_shadow_darkness;
+	//size limiter
+	bool m_enable_limit;
+	int m_limit;
+
+	double m_trans[3];
+	double m_rot[3];
+	double m_scale[3];
+
+	//legend
+	bool m_legend;
+
+	bool m_swc;
+	double m_r_scale;
+	double m_def_r;
+	int m_subdiv;
+	SWCReader *m_swc_reader;
+
+	wstring m_info;
+
+	int m_clip_dist_x;
+	int m_clip_dist_y;
+	int m_clip_dist_z;
+};
+
+/////////////////////////////////////////////////////////////////////
 class EXPORT_API VolumeData : public TreeLayer
 {
 public:
@@ -486,6 +628,8 @@ public:
 	void FlipHorizontally();
 	void FlipVertically();
 
+	MeshData *ExportMeshMask();
+
 private:
 	//duplication indicator and counter
 	bool m_dup;
@@ -603,147 +747,6 @@ private:
 	void SetOrderedID(unsigned int* val);
 	void SetReverseID(unsigned int* val);
 	void SetShuffledID(unsigned int* val);
-};
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#define MESH_COLOR_AMB	1
-#define MESH_COLOR_DIFF	2
-#define MESH_COLOR_SPEC	3
-#define MESH_FLOAT_SHN	4
-#define MESH_FLOAT_ALPHA	5
-
-class EXPORT_API MeshData : public TreeLayer
-{
-public:
-	MeshData();
-	virtual ~MeshData();
-
-	wxString GetPath();
-	BBox GetBounds();
-	void SetBounds(BBox b);
-	GLMmodel* GetMesh();
-	void SetDisp(bool disp);
-	void ToggleDisp();
-	bool GetDisp();
-	void SetDrawBounds(bool draw);
-	void ToggleDrawBounds();
-	bool GetDrawBounds();
-
-	//data management
-	int Load(wxString &filename);
-	int Load(GLMmodel* mesh);
-	void Save(wxString &filename);
-
-	static MeshData* DeepCopy(MeshData &copy, bool use_default_settings=false, DataManager *d_manager=NULL);
-
-	//MR
-	MeshRenderer* GetMR();
-
-	//draw
-	void SetMatrices(glm::mat4 &mv_mat, glm::mat4 &proj_mat);
-	void Draw(int peel);
-	void DrawBounds();
-	void DrawInt(unsigned int name);
-
-	//lighting
-	void SetLighting(bool bVal);
-	bool GetLighting();
-	void SetFog(bool bVal, double fog_intensity, double fog_start, double fog_end);
-	bool GetFog();
-	void SetMaterial(Color& amb, Color& diff, Color& spec, 
-		double shine = 30.0, double alpha = 1.0);
-	void SetColor(Color &color, int type);
-	void SetFloat(double &value, int type);
-	void GetMaterial(Color& amb, Color& diff, Color& spec,
-		double& shine, double& alpha);
-	bool IsTransp();
-	//shadow
-	void SetShadow(bool bVal);
-	bool GetShadow();
-	void SetShadowParams(double val);
-	void GetShadowParams(double &val);
-
-	void SetTranslation(double x, double y, double z);
-	void GetTranslation(double &x, double &y, double &z);
-	void SetRotation(double x, double y, double z);
-	void GetRotation(double &x, double &y, double &z);
-	void SetScaling(double x, double y, double z);
-	void GetScaling(double &x, double &y, double &z);
-
-	//randomize color
-	void RandomizeColor();
-
-	//shown in legend
-	void SetLegend(bool val);
-	bool GetLegend();
-
-	//size limiter
-	void SetLimit(bool bVal);
-	bool GetLimit();
-	void SetLimitNumer(int val);
-	int GetLimitNumber();
-
-	wstring GetInfo(){ return m_info; };
-
-	bool isSWC(){ return m_swc; }
-	void SetRadScale(double rs)
-	{
-		if (m_r_scale != rs)
-		{
-			m_r_scale = rs;
-			UpdateModelSWC();
-		}
-	}
-	bool UpdateModelSWC();
-	double GetRadScale(){ return m_r_scale; }
-
-	void SetClipDistance(int distx, int disty, int distz);
-	void GetClipDistance(int &distx, int &disty, int &distz);
-
-private:
-	//wxString m_name;
-	wxString m_data_path;
-	GLMmodel* m_data;
-	MeshRenderer *m_mr;
-	BBox m_bounds;
-	Point m_center;
-
-	bool m_disp;
-	bool m_draw_bounds;
-
-	//lighting
-	bool m_light;
-	bool m_fog;
-	Color m_mat_amb;
-	Color m_mat_diff;
-	Color m_mat_spec;
-	double m_mat_shine;
-	double m_mat_alpha;
-	//shadow
-	bool m_shadow;
-	double m_shadow_darkness;
-	//size limiter
-	bool m_enable_limit;
-	int m_limit;
-
-	double m_trans[3];
-	double m_rot[3];
-	double m_scale[3];
-
-	//legend
-	bool m_legend;
-
-	bool m_swc;
-	double m_r_scale;
-	double m_def_r;
-	int m_subdiv;
-	SWCReader *m_swc_reader;
-
-	wstring m_info;
-
-	int m_clip_dist_x;
-	int m_clip_dist_y;
-	int m_clip_dist_z;
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

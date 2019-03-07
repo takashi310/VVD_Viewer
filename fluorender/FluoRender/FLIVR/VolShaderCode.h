@@ -36,7 +36,6 @@ namespace FLIVR
 #define VOL_INPUTS \
 	"#pragma optionNV(inline all)\n" \
 	"#pragma optionNV(fastmath on)\n" \
-	"#pragma optionNV(fastprecision on)\n" \
 	"#pragma optionNV(ifcvt none)\n" \
 	"#pragma optionNV(strict on)\n" \
 	"#pragma optionNV(unroll all)\n" \

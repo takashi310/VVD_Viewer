@@ -371,7 +371,7 @@ namespace FLIVR
 	  }
 	  bs_size = bs.size();
 
-	  if (remain_brk == 0) return;
+	  if (TextureRenderer::get_mem_swap() && remain_brk == 0) return;
 
       //--------------------------------------------------------------------------
       bool use_shading = vr_list_[0]->shading_;

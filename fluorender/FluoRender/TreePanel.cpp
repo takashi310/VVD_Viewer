@@ -72,6 +72,7 @@ BEGIN_EVENT_TABLE(DataTreeCtrl, wxTreeCtrl)
 	EVT_MENU(ID_ExportAllSegments, DataTreeCtrl::OnExportAllSegments)
 	EVT_MENU(ID_FlipH, DataTreeCtrl::OnFlipH)
 	EVT_MENU(ID_FlipV, DataTreeCtrl::OnFlipV)
+	EVT_MENU(ID_ExportMeshMask, DataTreeCtrl::OnExportMeshMask)
 	EVT_TREE_SEL_CHANGED(wxID_ANY, DataTreeCtrl::OnSelChanged)
 	EVT_TREE_SEL_CHANGING(wxID_ANY, DataTreeCtrl::OnSelChanging)
 	EVT_TREE_DELETE_ITEM(wxID_ANY, DataTreeCtrl::OnDeleting)
@@ -401,6 +402,7 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 					menu.Append(ID_ImportMetadata, "Import Metadata");
 					menu.Append(ID_FlipH, "Flip Horizontally");
 					menu.Append(ID_FlipV, "Flip Vertically");
+					menu.Append(ID_ExportMeshMask, "Export Mesh Mask...");
 					if (vd->GetColormapMode() == 3)
 					{
 						menu.AppendSeparator();
@@ -1974,6 +1976,46 @@ void DataTreeCtrl::OnFlipV(wxCommandEvent& event)
 	if (!vd) return;
 
 	vd->FlipVertically();
+	vr_frame->RefreshVRenderViews();
+}
+
+void DataTreeCtrl::OnExportMeshMask(wxCommandEvent& event)
+{
+	wxTreeItemId sel_item = GetSelection();
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+
+	if (!vr_frame) return;
+	if (!sel_item.IsOk()) return;
+
+	//select data
+	wxString name = GetItemBaseText(sel_item);
+	LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+
+	if (!item_data || item_data->type != 2) return;
+
+	VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
+	if (!vd) return;
+
+	MeshData *mesh = vd->ExportMeshMask();
+	if (!mesh) return;
+
+	DataManager *d_manage = vr_frame->GetDataManager();
+	if (!d_manage) return;
+	VRenderView* view = GetCurrentView();
+	if (view)
+	{
+		DataManager *d_manage = vr_frame->GetDataManager();
+		if (!d_manage) return;
+		VRenderView* view = GetCurrentView();
+		if (view)
+		{
+			d_manage->AddMeshData(mesh);
+			view->AddMeshData(mesh);
+			vr_frame->OnSelection(3, 0, 0, 0, mesh);
+			vr_frame->UpdateTree(mesh->GetName());
+		}
+	}
+
 	vr_frame->RefreshVRenderViews();
 }
 

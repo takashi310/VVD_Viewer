@@ -105,7 +105,8 @@ class EXPORT_API DataTreeCtrl: public wxTreeCtrl, Notifier
 		ID_RandomizeColor,
 		ID_ExportAllSegments,
 		ID_FlipH,
-		ID_FlipV
+		ID_FlipV,
+		ID_ExportMeshMask
 	};
 
 public:
@@ -261,6 +262,7 @@ private:
 	void OnExportAllSegments(wxCommandEvent& event);
 	void OnFlipH(wxCommandEvent& event);
 	void OnFlipV(wxCommandEvent& event);
+	void OnExportMeshMask(wxCommandEvent& event);
 
 	void OnSelChanged(wxTreeEvent& event);
 	void OnSelChanging(wxTreeEvent& event);

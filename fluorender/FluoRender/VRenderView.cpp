@@ -2639,7 +2639,7 @@ void VRenderGLView::DrawVolumesDP()
 
 		for (int s = m_finished_peeling_layer; s <= peeling_layers; s++)
 		{
-			ClearFinalBuffer();
+			if ( s == 0 || (TextureRenderer::get_mem_swap() && TextureRenderer::get_total_brick_num() > 0) ) ClearFinalBuffer();
 
 			if (m_finished_peeling_layer == 0 && TextureRenderer::get_cur_brick_num() == 0 && m_md_pop_list.size() > 0)
 			{
@@ -2767,6 +2767,18 @@ void VRenderGLView::DrawVolumesDP()
 					if (i==0)
 					{
 						DrawMeshes(0);
+						/*
+						glFinish();
+						float *image = new float[nx*ny];
+						glReadPixels(0, 0, nx, ny, GL_DEPTH_COMPONENT, GL_FLOAT, image);
+						for (int ii = 0; ii < nx*ny; ii++) {
+							if (image[ii] > 0.0f && image[ii] < 1.0f) {
+								float dummy = image[ii];
+								dummy = 0;
+							}
+						}
+						delete[] image;
+						*/
 					}
 					else
 					{
