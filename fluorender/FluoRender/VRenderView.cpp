@@ -1,4 +1,4 @@
-﻿/*
+/*
 For more information, please see: http://software.sci.utah.edu
 
 The MIT License
@@ -3940,6 +3940,8 @@ VolumeData *VRenderGLView::CopyLevel(VolumeData *src, int lv)
 //segment volumes in current view
 void VRenderGLView::Segment()
 {
+    SetCurrent(*m_glRC);
+    
 	glViewport(0, 0, (GLint)m_nx, (GLint)m_ny);
 	HandleCamera();
 
@@ -4061,7 +4063,7 @@ void VRenderGLView::Segment()
 		m_selector.Select(m_brush_radius2-m_brush_radius1);
 	}
 
-	if (copied = true) RefreshGL(false, true);
+	if (copied == true) RefreshGL(false, true);
 
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (vr_frame && vr_frame->GetTraceDlg())
@@ -4097,6 +4099,8 @@ void VRenderGLView::Label()
 //remove noise
 int VRenderGLView::CompAnalysis(double min_voxels, double max_voxels, double thresh, bool select, bool gen_ann, int iter_limit)
 {
+    SetCurrent(*m_glRC);
+    
 	int return_val = 0;
 
 	bool copied = false;
@@ -4226,6 +4230,8 @@ void VRenderGLView::ShowAnnotations()
 
 int VRenderGLView::NoiseAnalysis(double min_voxels, double max_voxels, double thresh)
 {
+    SetCurrent(*m_glRC);
+    
 	int return_val = 0;
 
 	bool copied = false;
@@ -4248,6 +4254,8 @@ int VRenderGLView::NoiseAnalysis(double min_voxels, double max_voxels, double th
 
 void VRenderGLView::NoiseRemoval(int iter, double thresh)
 {
+    SetCurrent(*m_glRC);
+    
 	VolumeData* vd = m_selector.GetVolume();
 	if (!vd || !vd->GetMask(false)) return;
 
@@ -4575,6 +4583,8 @@ void VRenderGLView::SetVolumeB(VolumeData* vd)
 
 void VRenderGLView::CalculateSingle(int type, wxString prev_group, bool add)
 {
+    SetCurrent(*m_glRC);
+    
 	bool copied = false;
 	VolumeData* vd_A = m_calculator.GetVolumeA();
 	if (vd_A && vd_A->isBrxml())
@@ -6851,6 +6861,8 @@ void VRenderGLView::Pick()
 
 void VRenderGLView::PickMesh()
 {
+    SetCurrent(*m_glRC);
+    
 	int i;
 	int nx = GetSize().x;
 	int ny = GetSize().y;
@@ -6967,6 +6979,8 @@ void VRenderGLView::PickMesh()
 
 void VRenderGLView::PickVolume()
 {
+    SetCurrent(*m_glRC);
+    
 	double dist = 0.0;
 	double min_dist = -1.0;
 	Point p;
@@ -7026,6 +7040,8 @@ void VRenderGLView::PickVolume()
 
 bool VRenderGLView::SelSegVolume(int mode)
 {
+    SetCurrent(*m_glRC);
+    
 	double dist = 0.0;
 	double min_dist = -1.0;
 	Point p;

@@ -1623,11 +1623,18 @@ namespace FLIVR
 			return;
 
 		//mask frame buffer object
+        GLint cur_framebuffer_id;
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &cur_framebuffer_id);
+        static const GLenum draw_buffers[] =
+        {
+            GL_COLOR_ATTACHMENT0,
+            GL_COLOR_ATTACHMENT1
+        };
+        static const GLenum attachment0 = GL_COLOR_ATTACHMENT0;
+        static const GLenum attachment1 = GL_COLOR_ATTACHMENT1;
 		if (!glIsFramebuffer(fbo_mask_))
 			glGenFramebuffers(1, &fbo_mask_);
-		GLint cur_framebuffer_id;
-		glGetIntegerv(GL_FRAMEBUFFER_BINDING, &cur_framebuffer_id);
-		glBindFramebuffer(GL_FRAMEBUFFER, fbo_mask_);
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo_mask_);
 
 		//--------------------------------------------------------------------------
 		// Set up shaders
@@ -1734,14 +1741,6 @@ namespace FLIVR
 
 		glDisable(GL_DEPTH_TEST);
 		glDisable(GL_BLEND);
-
-		static const GLenum draw_buffers[] =
-		{
-			GL_COLOR_ATTACHMENT0,
-			GL_COLOR_ATTACHMENT1
-		};
-		static const GLenum attachment0 = GL_COLOR_ATTACHMENT0;
-		static const GLenum attachment1 = GL_COLOR_ATTACHMENT1;
 			
 		GLfloat clear_color[4];
 		glGetFloatv(GL_COLOR_CLEAR_VALUE, clear_color);

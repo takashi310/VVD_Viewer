@@ -5186,7 +5186,9 @@ void VRenderFrame::SetTextureRendererSettings()
 		if (error != GL_INVALID_ENUM)
 			m_gpu_max_mem = mem_info[0]/1024.0;
 	}
-	double mem_size = m_gpu_max_mem > m_setting_dlg->GetGraphicsMem() ? m_setting_dlg->GetGraphicsMem() : m_gpu_max_mem;
+    double user_mem_limit = m_setting_dlg->GetGraphicsMem();
+	double mem_size = user_mem_limit;
+    if (m_gpu_max_mem > 0.0 && m_gpu_max_mem < user_mem_limit) mem_size = m_gpu_max_mem;
 
 	//reserve a memory area for 2D textures
 	//(TextureRenderer takes no account of 2D textures in calculating allocated memory size)

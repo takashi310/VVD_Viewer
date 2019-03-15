@@ -1160,8 +1160,8 @@ z
 				   return false;
 			   }
 			   curl_easy_reset(s_curl_);
-			   curl_easy_setopt(s_curl_, CURLOPT_URL, wxString::wxString(finfo->filename).ToStdString().c_str());
-			   curl_easy_setopt(s_curl_, CURLOPT_TIMEOUT, 10L);
+			   curl_easy_setopt(s_curl_, CURLOPT_URL, wxString(finfo->filename).ToStdString().c_str());
+               curl_easy_setopt(s_curl_, CURLOPT_TIMEOUT, 10L);
 			   curl_easy_setopt(s_curl_, CURLOPT_USERAGENT, "libcurl-agent/1.0");
 			   curl_easy_setopt(s_curl_, CURLOPT_WRITEFUNCTION, WriteFileCallback);
 			   curl_easy_setopt(s_curl_, CURLOPT_SSL_VERIFYPEER, 0);
@@ -1456,8 +1456,8 @@ z
 		   return false;
 	   }
 	   curl_easy_reset(s_curl_);
-	   curl_easy_setopt(s_curl_, CURLOPT_URL, wxString::wxString(finfo->filename).ToStdString().c_str());
-	   curl_easy_setopt(s_curl_, CURLOPT_TIMEOUT, 10L);
+	   curl_easy_setopt(s_curl_, CURLOPT_URL, wxString(finfo->filename).ToStdString().c_str());
+       curl_easy_setopt(s_curl_, CURLOPT_TIMEOUT, 10L);
 	   curl_easy_setopt(s_curl_, CURLOPT_USERAGENT, "libcurl-agent/1.0");
 	   curl_easy_setopt(s_curl_, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
 	   curl_easy_setopt(s_curl_, CURLOPT_WRITEDATA, &chunk);
@@ -1537,8 +1537,8 @@ z
 		   return false;
 	   }
 	   curl_easy_reset(s_curl_);
-	   curl_easy_setopt(s_curl_, CURLOPT_URL, wxString::wxString(finfo->filename).ToStdString().c_str());
-	   curl_easy_setopt(s_curl_, CURLOPT_TIMEOUT, 10L);
+	   curl_easy_setopt(s_curl_, CURLOPT_URL, wxString(finfo->filename).ToStdString().c_str());
+       curl_easy_setopt(s_curl_, CURLOPT_TIMEOUT, 10L);
 	   curl_easy_setopt(s_curl_, CURLOPT_USERAGENT, "libcurl-agent/1.0");
 	   curl_easy_setopt(s_curl_, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
 	   curl_easy_setopt(s_curl_, CURLOPT_WRITEDATA, &chunk);

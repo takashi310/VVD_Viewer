@@ -1,4 +1,4 @@
-﻿#include "DataManager.h"
+#include "DataManager.h"
 #include "teem/Nrrd/nrrd.h"
 #include <wx/msgdlg.h>
 #include <wx/progdlg.h>
@@ -17,6 +17,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#ifdef _WIN32
 #include <vtkVersion.h>
 #include <vtkSmartPointer.h>
 #include <vtkImageImport.h>
@@ -30,7 +31,6 @@
 #include <vtkPointData.h>
 #include <vtkCellData.h>
 
-#ifdef _WIN32
 #include <omp.h>
 #  undef min
 #  undef max
@@ -2846,6 +2846,10 @@ bool VolumeData::isBrxml()
 
 MeshData *VolumeData::ExportMeshMask()
 {
+    MeshData *result = NULL;
+    
+#ifdef _WIN32
+    
 	if (m_tex->nmask() == -1) return NULL;
 	
 	m_vr->return_mask();
@@ -2964,12 +2968,14 @@ MeshData *VolumeData::ExportMeshMask()
 	model->groups = group;
 	model->numgroups++;
 
-	MeshData *result = new MeshData();
+	result = new MeshData();
 	result->Load(model);
 	wxString newname = m_name + wxT("_MeshMask");
 	result->SetName(newname);
-
-	return result;
+    
+#endif
+    
+    return result;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////

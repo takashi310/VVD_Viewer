@@ -2507,6 +2507,36 @@ namespace FLIVR
 				if (tex_pool_[j].delayed_del &&
 					glIsTexture(tex_pool_[j].id))
 				{
+                    //save mask before deletion
+                    TextureBrick* b = tex_pool_[j].brick;
+                    int c = b->nmask();
+                    if (c>=0 && c<TEXTURE_MAX_COMPONENTS)
+                    {
+                        glActiveTexture(GL_TEXTURE0+c);
+                        
+                        glBindTexture(GL_TEXTURE_3D, tex_pool_[j].id);
+                        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                        
+                        // download texture data
+                        int sx = b->sx();
+                        int sy = b->sy();
+                        glPixelStorei(GL_PACK_ROW_LENGTH, sx);
+                        glPixelStorei(GL_PACK_IMAGE_HEIGHT, sy);
+                        glPixelStorei(GL_PACK_ALIGNMENT, 1);
+                        
+                        GLenum type = b->tex_type(c);
+                        void* data = b->tex_data(c);
+                        glGetTexImage(GL_TEXTURE_3D, 0, GL_RED,
+                                      type, data);
+                        
+                        glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+                        glPixelStorei(GL_PACK_IMAGE_HEIGHT, 0);
+                        glPixelStorei(GL_PACK_ALIGNMENT, 4);
+                        
+                        release_texture(c, GL_TEXTURE_3D);
+                    }
+                    
 					glDeleteTextures(1, (GLuint*)&tex_pool_[j].id);
 					tex_pool_.erase(tex_pool_.begin()+j);
 				}
