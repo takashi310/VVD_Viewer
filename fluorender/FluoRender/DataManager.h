@@ -628,6 +628,14 @@ public:
 	void FlipHorizontally();
 	void FlipVertically();
 
+	VolumeData *GetBrkxmlMask() { return m_brkxml_mask; }
+	void SetBrkxmlMask(VolumeData *vd)
+	{
+		if (m_brkxml_mask) delete m_brkxml_mask;
+		m_brkxml_mask = vd;
+	}
+	int GetLevelBySize(size_t size);
+
 	MeshData *ExportMeshMask();
 
 private:
@@ -741,6 +749,8 @@ private:
 	
 	vector<VD_Landmark> m_landmarks;
 	wstring m_metadata_id;
+
+	VolumeData *m_brkxml_mask;
 
 private:
 	//label functions

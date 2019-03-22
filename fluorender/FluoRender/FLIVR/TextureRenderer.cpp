@@ -2467,6 +2467,7 @@ namespace FLIVR
 
 
 			//remove
+			glFinish();
 			for (i=0; i<bd_undisp.size(); i++)
 			{
 				TextureBrick* btemp = bd_undisp[i].brick;

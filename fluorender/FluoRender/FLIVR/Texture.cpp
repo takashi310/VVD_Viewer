@@ -577,6 +577,24 @@ namespace FLIVR
 		return true;
 	}
 
+	void Texture::get_dimensions(size_t &w, size_t &h, size_t &d, int lv)
+	{
+		if (!brkxml_ || (lv < 0 || lv >= pyramid_lv_num_ || pyramid_.empty()))
+		{
+			w = nx_;
+			h = ny_;
+			d = nz_;
+		}
+		else if(pyramid_[lv].data)
+		{
+			int offset = 0;
+			if (pyramid_[lv].data->dim > 3) offset = 1; 
+			w = pyramid_[lv].data->axis[offset + 0].size;
+			h = pyramid_[lv].data->axis[offset + 1].size;
+			d = pyramid_[lv].data->axis[offset + 2].size;
+		}
+	}
+
 	void Texture::build_bricks(vector<TextureBrick*> &bricks, 
 		int sz_x, int sz_y, int sz_z,
 		int numc, int* numb)

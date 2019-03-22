@@ -1046,7 +1046,7 @@ z
    bool TextureBrick::read_brick(char* data, size_t size, const FileLocInfo* finfo)
    {
 	   if (!finfo) return false;
-	   
+/*
 	   if (finfo->isurl)
 	   {
 		   if (finfo->type == BRICK_FILE_TYPE_RAW)  return raw_brick_reader_url(data, size, finfo);
@@ -1059,8 +1059,21 @@ z
 		   if (finfo->type == BRICK_FILE_TYPE_JPEG) return jpeg_brick_reader(data, size, finfo);
 		   if (finfo->type == BRICK_FILE_TYPE_ZLIB) return zlib_brick_reader(data, size, finfo);
 	   }
+*/
+	   FileLocInfo tmpinfo = *finfo;
+	   char *tmp = NULL;
+	   size_t tmpsize;
+	   read_brick_without_decomp(tmp, tmpsize, &tmpinfo);
+	   bool result = false;
+	   if	   (finfo->type == BRICK_FILE_TYPE_RAW) { data = tmp; size = tmpsize; return true; }
+	   else if (finfo->type == BRICK_FILE_TYPE_JPEG) result = jpeg_decompressor(data, tmp, size, tmpsize);
+	   else if (finfo->type == BRICK_FILE_TYPE_ZLIB) result = zlib_decompressor(data, tmp, size, tmpsize);
+	   else if (finfo->type == BRICK_FILE_TYPE_H265) result = h265_decompressor(data, tmp, size, tmpsize, nx_, ny_);
 
-	   return false;
+	   if (tmp)
+		   delete[] tmp;
+
+	   return result;
    }
 
 #define DOWNLOAD_BUFSIZE 8192

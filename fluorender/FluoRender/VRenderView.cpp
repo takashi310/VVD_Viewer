@@ -1,4 +1,4 @@
-/*
+﻿/*
 For more information, please see: http://software.sci.utah.edu
 
 The MIT License
@@ -3995,26 +3995,19 @@ void VRenderGLView::Segment()
 				{
 					tmp_vd = group->GetVolumeData(i);
 					if (tmp_vd && tmp_vd->isBrxml() && tmp_vd->GetDisp())
-						cp_vd_list.push_back(tmp_vd);
-				}
-				for (auto v : cp_vd_list)
-				{
-					bool cur = (v == vd);
-					v = CopyLevel(v);
-					if (cur) vd = v;
-				}
-
-				for (int i=0; i<group->GetVolumeNum(); i++)
-				{
-					tmp_vd = group->GetVolumeData(i);
-					if (tmp_vd && tmp_vd->GetDisp())
 					{
-						tmp_vd->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
-						m_selector.SetVolume(tmp_vd);
-						m_selector.Select(m_brush_radius2-m_brush_radius1);
+						int lv = tmp_vd->GetLevelBySize(4ULL*1024ULL*1024ULL*1024ULL);
+						if (!tmp_vd->GetBrkxmlMask()){
+							int lv = tmp_vd->GetLevelBySize(2ULL*1024ULL*1024ULL*1024ULL);
+							tmp_vd->SetBrkxmlMask(tmp_vd->CopyLevel(lv));
+						}
+						tmp_vd = tmp_vd->GetBrkxmlMask();
 					}
+					tmp_vd->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
+					m_selector.SetVolume(tmp_vd);
+					m_selector.Select(m_brush_radius2-m_brush_radius1);
 				}
-				m_selector.SetVolume(vd);
+				m_selector.SetVolume( vd->GetBrkxmlMask() ? vd->GetBrkxmlMask() : vd );
 			}
 		}
 	}
@@ -4023,7 +4016,12 @@ void VRenderGLView::Segment()
 		VolumeData* vd = m_calculator.GetVolumeA();
 		if (vd && vd->isBrxml())
 		{
-			vd = CopyLevel(vd);
+			int lv = vd->GetLevelBySize(4ULL*1024ULL*1024ULL*1024ULL);
+			if (!vd->GetBrkxmlMask()){
+				int lv = vd->GetLevelBySize(2ULL*1024ULL*1024ULL*1024ULL);
+				vd->SetBrkxmlMask(vd->CopyLevel(lv));
+			}
+			vd = vd->GetBrkxmlMask();
 			m_calculator.SetVolumeA(vd);
 			if (vd) copied = true;
 		}
@@ -4039,7 +4037,12 @@ void VRenderGLView::Segment()
 		vd = m_calculator.GetVolumeB();
 		if (vd && vd->isBrxml())
 		{
-			vd = CopyLevel(vd);
+			int lv = vd->GetLevelBySize(4ULL*1024ULL*1024ULL*1024ULL);
+			if (!vd->GetBrkxmlMask()){
+				int lv = vd->GetLevelBySize(2ULL*1024ULL*1024ULL*1024ULL);
+				vd->SetBrkxmlMask(vd->CopyLevel(lv));
+			}
+			vd = vd->GetBrkxmlMask();
 			m_calculator.SetVolumeB(vd);
 			if (vd) copied = true;
 		}
@@ -4056,7 +4059,11 @@ void VRenderGLView::Segment()
 		VolumeData* vd = m_selector.GetVolume();
 		if (vd && vd->isBrxml())
 		{
-			vd = CopyLevel(vd);
+			if (!vd->GetBrkxmlMask()){
+				int lv = 0;//vd->GetLevelBySize(2ULL*1024ULL*1024ULL*1024ULL);
+				vd->SetBrkxmlMask(vd->CopyLevel(lv));
+			}
+			vd = vd->GetBrkxmlMask();
 			m_selector.SetVolume(vd);
 			if (vd) copied = true;
 		}
@@ -5038,6 +5045,7 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int pe
 		VolumeData* vd = list[i];
 		if (!vd || !vd->GetDisp())
 			continue;
+		if (mask && vd->GetBrkxmlMask()) vd = vd->GetBrkxmlMask();
 		Texture *tex = vd->GetTexture();
 		if (tex)
 		{
@@ -5161,6 +5169,7 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int pe
 			continue;
 		if (mask)
 		{
+			if (vd->GetBrkxmlMask()) vd = vd->GetBrkxmlMask();
 			//when run script
 			VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 			if (vr_frame &&
@@ -13230,6 +13239,49 @@ void VRenderGLView::StartLoopUpdate(bool reset_peeling_layer)
 							num_chan++;
 						}
 					}
+
+					if (m_draw_mask && vd->GetBrkxmlMask())
+					{
+						VolumeData *bxmask = vd->GetBrkxmlMask();
+						Texture* tex2 = bxmask->GetTexture();
+						int num_chan2 = 0;
+						if (tex2 && bxmask->GetVR())
+						{
+							Transform *tform2 = tex2->transform();
+							double mvmat2[16];
+							tform2->get_trans(mvmat2);
+							bxmask->GetVR()->m_mv_mat2 = glm::mat4(
+								mvmat2[0], mvmat2[4], mvmat2[8], mvmat2[12],
+								mvmat2[1], mvmat2[5], mvmat2[9], mvmat2[13],
+								mvmat2[2], mvmat2[6], mvmat2[10], mvmat2[14],
+								mvmat2[3], mvmat2[7], mvmat2[11], mvmat2[15]);
+							bxmask->GetVR()->m_mv_mat2 = bxmask->GetVR()->m_mv_mat * bxmask->GetVR()->m_mv_mat2;
+
+							Ray view_ray2 = bxmask->GetVR()->compute_view();
+
+							vector<TextureBrick*> *bricks2 = tex2->get_sorted_bricks(view_ray2, !m_persp);
+							if (!bricks2 || bricks2->size()==0)
+								continue;
+							for (j=0; j<bricks2->size(); j++)
+							{
+								(*bricks2)[j]->set_drawn(false);
+								if ((*bricks2)[j]->get_priority()>0 ||
+									!bxmask->GetVR()->test_against_view_clip((*bricks2)[j]->bbox(), (*bricks2)[j]->tbox(), (*bricks2)[j]->dbox(), m_persp))//changed by takashi
+								{
+									(*bricks2)[j]->set_disp(false);
+									continue;
+								}
+								else
+									(*bricks2)[j]->set_disp(true);
+								total_num++;
+								num_chan2++;
+							}
+							bxmask->SetBrickNum(num_chan);
+							if (bxmask->GetVR())
+								bxmask->GetVR()->set_done_loop(false);
+						}
+					}
+
 				}
 				vd->SetBrickNum(num_chan);
 				if (vd->GetVR())

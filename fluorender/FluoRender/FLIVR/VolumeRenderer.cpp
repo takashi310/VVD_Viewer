@@ -1208,6 +1208,9 @@ namespace FLIVR
 					break;
 			}
 
+			if (mask_)
+				int dummy = 0;
+
 			TextureBrick* b = (*bricks)[i];
 			if (colormap_mode_==1 && colormap_proj_)
 			{
@@ -1318,7 +1321,7 @@ namespace FLIVR
 			
 			if (mem_swap_){
 				finished_bricks_++;
-				//glFinish();
+				glFinish();
 			}
 
 			//takashi_debug

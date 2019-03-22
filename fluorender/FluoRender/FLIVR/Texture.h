@@ -154,6 +154,8 @@ namespace FLIVR
 		void get_base_spacings(double &x, double &y, double &z);
 		void set_spacing_scales(double x, double y, double z);
 		void get_spacing_scales(double &x, double &y, double &z);
+
+		void get_dimensions(size_t &w, size_t &h, size_t &d, int lv = -1);
 		
 			// Creator of the brick owns the nrrd memory.
 		void set_nrrd(Nrrd* data, int index);

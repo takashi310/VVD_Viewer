@@ -1,4 +1,4 @@
-#include "DataManager.h"
+﻿#include "DataManager.h"
 #include "teem/Nrrd/nrrd.h"
 #include <wx/msgdlg.h>
 #include <wx/progdlg.h>
@@ -147,7 +147,8 @@ VolumeData::VolumeData()
 
 	//valid brick number
 	m_brick_num = 0;
-
+	
+	m_brkxml_mask = NULL;
 }
 
 /*
@@ -278,6 +279,8 @@ VolumeData::~VolumeData()
 		delete m_vr;
 	if (m_tex)
 		delete m_tex;
+	if (m_brkxml_mask)
+		delete m_brkxml_mask;
 }
 
 VolumeData* VolumeData::DeepCopy(VolumeData &copy, bool use_default_settings, DataManager *d_manager)
@@ -2724,12 +2727,31 @@ void VolumeData::SetFog(bool use_fog,
 		m_vr->set_fog(use_fog, fog_intensity, fog_start, fog_end);
 }
 
+int VolumeData::GetLevelBySize(size_t size)
+{
+	if (!m_tex || !m_tex->isBrxml())
+		return 0;
+
+	size_t nx, ny, nz, nb;
+	int lvnum = m_tex->GetLevelNum();
+	int i;
+	for (i = 0; i < lvnum; i++)
+	{
+		nx = ny = nz = nb = 0;
+		m_tex->get_dimensions(nx, ny, nz, i);
+		nb = m_tex->nb(0);
+		if (nx*ny*nz*nb <= size) break; 
+	}
+	return i;
+}
+
 VolumeData* VolumeData::CopyLevel(int lv)
 {
 	if(!m_tex->isBrxml()) return NULL;
 
 	VolumeData* vd = new VolumeData();
 
+	m_tex->set_FrameAndChannel(m_time, m_chan);
 	Nrrd *src_nv = m_tex->loadData(lv);
 	if (!src_nv) return NULL;
 	vd->Load(src_nv, GetName() + wxT("_Copy_Lv") + wxString::Format("%d", lv), wxString(""));
