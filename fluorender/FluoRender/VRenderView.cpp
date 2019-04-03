@@ -441,8 +441,10 @@ wxThread::ExitCode VolumeDecompressorThread::Entry()
 			m_vl->m_pThreadCS.Enter();
 
 			delete [] q.in_data;
-			q.b->set_brkdata(result);
+			shared_ptr<VL_Array> sp = make_shared<VL_Array>(result, bsize);
+			q.b->set_brkdata(sp);
 			q.b->set_loading_state(false);
+			m_vl->m_memcached_data[q.finfo->id_string] = sp;
 			m_vl->m_pThreadCS.Leave();
 		}
 		else
@@ -510,6 +512,7 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 		else
 			ite++;
 	}
+
 	m_vl->m_pThreadCS.Leave();
 
 	while(1)
@@ -531,6 +534,16 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 
 		if (!b.brick->isLoaded() && !b.brick->isLoading())
 		{
+			wstring id = b.finfo->id_string;
+			if (m_vl->m_memcached_data.find(b.finfo->id_string) != m_vl->m_memcached_data.end())
+			{
+				m_vl->m_pThreadCS.Enter();
+				b.brick->set_brkdata(m_vl->m_memcached_data[b.finfo->id_string]);
+				m_vl->m_loaded[b.brick] = b;
+				m_vl->m_pThreadCS.Leave();
+				continue;
+			}
+
 			if (m_vl->m_used_memory >= m_vl->m_memory_limit)
 			{
 				m_vl->m_pThreadCS.Enter();
@@ -554,7 +567,8 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 			if (b.finfo->type == BRICK_FILE_TYPE_RAW)
 			{
 				m_vl->m_pThreadCS.Enter();
-				b.brick->set_brkdata(ptr);
+				shared_ptr<VL_Array> sp = make_shared<VL_Array>(ptr, readsize);
+				b.brick->set_brkdata(sp);
 				b.datasize = readsize;
 				m_vl->AddLoadedBrick(b);
 				m_vl->m_pThreadCS.Leave();
@@ -623,10 +637,10 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 					{
 						m_vl->m_pThreadCS.Enter();
 						delete [] dq.in_data;
-						b.brick->set_brkdata(result);
+						shared_ptr<VL_Array> sp = make_shared<VL_Array>(result, bsize);
+						b.brick->set_brkdata(sp);
 						b.datasize = bsize;
-						m_vl->m_used_memory += bsize;
-						m_vl->m_loaded[b.brick] = b;
+						m_vl->AddLoadedBrick(b);
 						m_vl->m_pThreadCS.Leave();
 					}
 					else
@@ -738,6 +752,14 @@ void VolumeLoader::StopAll()
 	}
 }
 
+void VolumeLoader::Join()
+{
+	while(m_thread->IsRunning() || m_running_decomp_th > 0)
+	{
+		wxMilliSleep(10);
+	}
+}
+
 bool VolumeLoader::Run()
 {
 	Abort();
@@ -757,6 +779,22 @@ bool VolumeLoader::Run()
 	return true;
 }
 
+void VolumeLoader::CheckMemoryCache()
+{
+	for(int i = 0; i < m_queues.size(); i++)
+	{
+		TextureBrick *b = m_queues[i].brick;
+		if (!b->isLoaded())
+		{
+			if (m_memcached_data.find(m_queues[i].finfo->id_string) != m_memcached_data.end())
+			{
+				b->set_brkdata(m_memcached_data[m_queues[i].finfo->id_string]);
+				m_loaded[b] = m_queues[i];
+			}
+		}
+	}
+}
+
 void VolumeLoader::CleanupLoadedBrick()
 {
 	long long required = 0;
@@ -764,16 +802,28 @@ void VolumeLoader::CleanupLoadedBrick()
 	for(int i = 0; i < m_queues.size(); i++)
 	{
 		TextureBrick *b = m_queues[i].brick;
-		if (!m_queues[i].brick->isLoaded())
-			required += (size_t)b->nx()*(size_t)b->ny()*(size_t)b->nz()*(size_t)b->nb(0);
+		if (!b->isLoaded())
+		{
+			wstring id = m_queues[i].finfo->id_string;
+			if (m_memcached_data.find(m_queues[i].finfo->id_string) != m_memcached_data.end())
+			{
+				b->set_brkdata(m_memcached_data[m_queues[i].finfo->id_string]);
+				m_loaded[b] = m_queues[i];
+			}
+			else
+				required += (size_t)b->nx()*(size_t)b->ny()*(size_t)b->nz()*(size_t)b->nb(0);
+		}
 	}
 
+	vector<VolumeLoaderData> b_locked;
 	vector<VolumeLoaderData> vd_undisp;
 	vector<VolumeLoaderData> b_undisp;
 	vector<VolumeLoaderData> b_drawn;
 	for(auto elem : m_loaded)
 	{
-		if (!elem.second.vd->GetDisp())
+		if(elem.second.brick->is_brickdata_locked())
+			b_locked.push_back(elem.second);
+		else if (!elem.second.vd->GetDisp())
 			vd_undisp.push_back(elem.second);
 		else if(!elem.second.brick->get_disp())
 			b_undisp.push_back(elem.second);
@@ -786,9 +836,14 @@ void VolumeLoader::CleanupLoadedBrick()
 		{
 			if (!vd_undisp[i].brick->isLoaded())
 				continue;
+			if (vd_undisp[i].brick->getBrickDataSPCount() <= 2)
+			{
+				required -= vd_undisp[i].datasize;
+				m_used_memory -= vd_undisp[i].datasize;
+				m_memcached_data[vd_undisp[i].finfo->id_string].reset();
+				m_memcached_data.erase(vd_undisp[i].finfo->id_string);
+			}
 			vd_undisp[i].brick->freeBrkData();
-			required -= vd_undisp[i].datasize;
-			m_used_memory -= vd_undisp[i].datasize;
 			m_loaded.erase(vd_undisp[i].brick);
 			if (required <= 0 && m_used_memory < m_memory_limit)
 				break;
@@ -800,9 +855,14 @@ void VolumeLoader::CleanupLoadedBrick()
 		{
 			if (!b_undisp[i].brick->isLoaded())
 				continue;
+			if (b_undisp[i].brick->getBrickDataSPCount() <= 2)
+			{
+				required -= b_undisp[i].datasize;
+				m_used_memory -= b_undisp[i].datasize;
+				m_memcached_data[b_undisp[i].finfo->id_string].reset();
+				m_memcached_data.erase(b_undisp[i].finfo->id_string);
+			}
 			b_undisp[i].brick->freeBrkData();
-			required -= b_undisp[i].datasize;
-			m_used_memory -= b_undisp[i].datasize;
 			m_loaded.erase(b_undisp[i].brick);
 			if (required <= 0 && m_used_memory < m_memory_limit)
 				break;
@@ -814,9 +874,14 @@ void VolumeLoader::CleanupLoadedBrick()
 		{
 			if (!b_drawn[i].brick->isLoaded())
 				continue;
+			if (b_drawn[i].brick->getBrickDataSPCount() <= 2)
+			{
+				required -= b_drawn[i].datasize;
+				m_used_memory -= b_drawn[i].datasize;
+				m_memcached_data[b_drawn[i].finfo->id_string].reset();
+				m_memcached_data.erase(b_drawn[i].finfo->id_string);
+			}
 			b_drawn[i].brick->freeBrkData();
-			required -= b_drawn[i].datasize;
-			m_used_memory -= b_drawn[i].datasize;
 			m_loaded.erase(b_drawn[i].brick);
 			if (required <= 0 && m_used_memory < m_memory_limit)
 				break;
@@ -827,7 +892,7 @@ void VolumeLoader::CleanupLoadedBrick()
 		for(int i = m_queues.size()-1; i >= 0; i--)
 		{
 			TextureBrick *b = m_queues[i].brick;
-			if (b->isLoaded() && m_loaded.find(b) != m_loaded.end())
+			if (b->isLoaded() && !b->is_brickdata_locked() && m_loaded.find(b) != m_loaded.end())
 			{
 				bool skip = false;
 				for (int j = m_queued.size()-1; j >= 0; j--)
@@ -837,14 +902,51 @@ void VolumeLoader::CleanupLoadedBrick()
 				}
 				if (!skip)
 				{
+					if (b->getBrickDataSPCount() <= 2)
+					{
+						long long datasize = (size_t)(b->nx())*(size_t)(b->ny())*(size_t)(b->nz())*(size_t)(b->nb(0));
+						required -= datasize;
+						m_used_memory -= datasize;
+						m_memcached_data[m_queues[i].finfo->id_string].reset();
+						m_memcached_data.erase(m_queues[i].finfo->id_string);
+					}
+
 					b->freeBrkData();
-					long long datasize = (size_t)(b->nx())*(size_t)(b->ny())*(size_t)(b->nz())*(size_t)(b->nb(0));
-					required -= datasize;
-					m_used_memory -= datasize;
 					m_loaded.erase(b);
+
 					if (m_used_memory < m_memory_limit)
 						break;
 				}
+			}
+		}
+	}
+
+	if (m_used_memory >= m_memory_limit)
+	{
+		for (int i = 0; i < b_locked.size(); i++)
+		{
+			TextureBrick *b = b_locked[i].brick;
+			if (!b->isLoaded())
+				continue;
+			bool skip = false;
+			for (int j = m_queued.size()-1; j >= 0; j--)
+			{
+				if (m_queued[j].brick == b && !b->drawn(m_queued[j].mode))
+					skip = true;
+			}
+			if (!skip)
+			{
+				if (b->getBrickDataSPCount() <= 2)
+				{
+					required -= b_locked[i].datasize;
+					m_used_memory -= b_locked[i].datasize;
+					m_memcached_data[b_locked[i].finfo->id_string].reset();
+					m_memcached_data.erase(b_locked[i].finfo->id_string);
+				}
+				b->freeBrkData();
+				m_loaded.erase(b);
+				if (m_used_memory < m_memory_limit)
+					break;
 			}
 		}
 	}
@@ -857,12 +959,15 @@ void VolumeLoader::RemoveAllLoadedBrick()
 	for(auto e : m_loaded)
 	{
 		if (e.second.brick->isLoaded())
-		{
 			e.second.brick->freeBrkData();
-			m_used_memory -= e.second.datasize;
-		}
+	}
+	for(auto &elem : m_memcached_data)
+	{
+		m_used_memory -= elem.second->getSize();
+		elem.second.reset();
 	}
 	m_loaded.clear();
+	m_memcached_data.clear();
 }
 
 void VolumeLoader::RemoveBrickVD(VolumeData *vd)
@@ -874,12 +979,66 @@ void VolumeLoader::RemoveBrickVD(VolumeData *vd)
 		if (ite->second.vd == vd && ite->second.brick->isLoaded())
 		{
 			ite->second.brick->freeBrkData();
-			m_used_memory -= ite->second.datasize;
 			ite = m_loaded.erase(ite);
 		}
 		else
 			ite++;
 	}
+
+	auto ite2 = m_memcached_data.begin();
+	while (ite2 != m_memcached_data.end())
+	{
+		if (ite2->second.use_count() == 1)
+		{
+			m_used_memory -= ite2->second->getSize();
+			ite2->second.reset();
+			ite2 = m_memcached_data.erase(ite2);
+		}
+		else
+			ite2++;
+	}
+}
+
+void VolumeLoader::PreloadLevel(VolumeData *vd, int lv, bool lock)
+{
+	if (!vd || !vd->isBrxml()) return;
+	if (lv < 0 || lv >= vd->GetLevelNum()) return;
+
+	Texture *tex = vd->GetTexture();
+	if (!tex) return;
+
+	int curlevel = vd->GetLevel();
+
+	vd->SetLevel(lv);
+
+	vector<TextureBrick*> *bricks = tex->get_bricks();
+	vector<VolumeLoaderData> queues;
+	int mode = vd->GetMode() == 1 ? 1 : 0;
+	size_t required = 0;
+	for (int i = 0; i < bricks->size(); i++)
+	{
+		VolumeLoaderData d;
+		TextureBrick* b = (*bricks)[i];
+		b->lock_brickdata(true);
+		if (!b->isLoaded())
+		{
+			d.brick = b;
+			d.finfo = tex->GetFileName(b->getID());
+			d.vd = vd;
+			d.mode = mode;
+			queues.push_back(d);
+			required += (size_t)b->nx()*(size_t)b->ny()*(size_t)b->nz()*(size_t)b->nb(0);
+		}
+	}
+
+	if (queues.empty()) return;
+
+	Set(queues);
+	long long cur_memlimit = m_memory_limit;
+	SetMemoryLimitByte(m_used_memory + required);
+	Run();
+	Join();
+	SetMemoryLimitByte(cur_memlimit);
 }
 
 void VolumeLoader::GetPalams(long long &used_mem, int &running_decomp_th, int &queue_num, int &decomp_queue_num)
@@ -2320,6 +2479,9 @@ void VRenderGLView::DrawVolumes(int peel)
 		//handle intermixing modes
 		if (m_vol_method == VOL_METHOD_MULTI)
 		{
+			//if (m_draw_mask)
+			//	DrawVolumesComp(m_vd_pop_list, true, peel);
+
 			if (dp)
 			{
 				glActiveTexture(GL_TEXTURE15);
@@ -2331,6 +2493,7 @@ void VRenderGLView::DrawVolumes(int peel)
 				glActiveTexture(GL_TEXTURE0);
 			}
 			else DrawVolumesMulti(m_vd_pop_list, peel);
+			
 			//draw masks
 			if (m_draw_mask)
 				DrawVolumesComp(m_vd_pop_list, true, peel);
@@ -2397,6 +2560,8 @@ void VRenderGLView::DrawVolumes(int peel)
 						}
 						if (!list.empty())
 						{
+							//if (m_draw_mask)
+							//	DrawVolumesComp(list, true, peel);
 							if (group->GetBlendMode() == VOL_METHOD_MULTI)
 							{
 								if (dp)
@@ -3728,8 +3893,8 @@ void VRenderGLView::PaintStroke()
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-			GL_RGBA, GL_FLOAT, NULL);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, nx, ny, 0,
+			GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 		glFramebufferTexture2D(GL_FRAMEBUFFER,
 			GL_COLOR_ATTACHMENT0,
 			GL_TEXTURE_2D, m_tex_paint, 0); 
@@ -3746,8 +3911,8 @@ void VRenderGLView::PaintStroke()
 	if (m_resize_paint)
 	{
 		glBindTexture(GL_TEXTURE_2D, m_tex_paint);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-			GL_RGBA, GL_FLOAT, NULL);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, nx, ny, 0,
+			GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 		glBindTexture(GL_TEXTURE_2D, 0);
 		m_resize_paint = false;
 	}
@@ -3994,79 +4159,41 @@ void VRenderGLView::Segment()
 				for (int i=0; i<group->GetVolumeNum(); i++)
 				{
 					tmp_vd = group->GetVolumeData(i);
-					if (tmp_vd && tmp_vd->isBrxml() && tmp_vd->GetDisp())
-					{
-						int lv = tmp_vd->GetLevelBySize(4ULL*1024ULL*1024ULL*1024ULL);
-						if (!tmp_vd->GetBrkxmlMask()){
-							int lv = tmp_vd->GetLevelBySize(2ULL*1024ULL*1024ULL*1024ULL);
-							tmp_vd->SetBrkxmlMask(tmp_vd->CopyLevel(lv));
-						}
-						tmp_vd = tmp_vd->GetBrkxmlMask();
-					}
 					tmp_vd->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
 					m_selector.SetVolume(tmp_vd);
+					m_loader.PreloadLevel(tmp_vd, tmp_vd->GetMaskLv(), true);
 					m_selector.Select(m_brush_radius2-m_brush_radius1);
 				}
-				m_selector.SetVolume( vd->GetBrkxmlMask() ? vd->GetBrkxmlMask() : vd );
+				m_selector.SetVolume(vd);
 			}
 		}
 	}
 	else if (m_selector.GetSelectBoth())
 	{
 		VolumeData* vd = m_calculator.GetVolumeA();
-		if (vd && vd->isBrxml())
-		{
-			int lv = vd->GetLevelBySize(4ULL*1024ULL*1024ULL*1024ULL);
-			if (!vd->GetBrkxmlMask()){
-				int lv = vd->GetLevelBySize(2ULL*1024ULL*1024ULL*1024ULL);
-				vd->SetBrkxmlMask(vd->CopyLevel(lv));
-			}
-			vd = vd->GetBrkxmlMask();
-			m_calculator.SetVolumeA(vd);
-			if (vd) copied = true;
-		}
 
 		if (vd)
 		{
 			vd->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
 			m_selector.SetVolume(vd);
+			m_loader.PreloadLevel(vd, vd->GetMaskLv(), true);
 			m_selector.Select(m_brush_radius2-m_brush_radius1);
 		}
 
-
 		vd = m_calculator.GetVolumeB();
-		if (vd && vd->isBrxml())
-		{
-			int lv = vd->GetLevelBySize(4ULL*1024ULL*1024ULL*1024ULL);
-			if (!vd->GetBrkxmlMask()){
-				int lv = vd->GetLevelBySize(2ULL*1024ULL*1024ULL*1024ULL);
-				vd->SetBrkxmlMask(vd->CopyLevel(lv));
-			}
-			vd = vd->GetBrkxmlMask();
-			m_calculator.SetVolumeB(vd);
-			if (vd) copied = true;
-		}
 
 		if (vd)
 		{
 			vd->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
 			m_selector.SetVolume(vd);
+			m_loader.PreloadLevel(vd, vd->GetMaskLv(), true);
 			m_selector.Select(m_brush_radius2-m_brush_radius1);
 		}
 	}
 	else
 	{
 		VolumeData* vd = m_selector.GetVolume();
-		if (vd && vd->isBrxml())
-		{
-			if (!vd->GetBrkxmlMask()){
-				int lv = 0;//vd->GetLevelBySize(2ULL*1024ULL*1024ULL*1024ULL);
-				vd->SetBrkxmlMask(vd->CopyLevel(lv));
-			}
-			vd = vd->GetBrkxmlMask();
-			m_selector.SetVolume(vd);
-			if (vd) copied = true;
-		}
+		m_loader.PreloadLevel(vd, vd->GetMaskLv(), true);
 		m_selector.Select(m_brush_radius2-m_brush_radius1);
 	}
 
@@ -5045,7 +5172,6 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int pe
 		VolumeData* vd = list[i];
 		if (!vd || !vd->GetDisp())
 			continue;
-		if (mask && vd->GetBrkxmlMask()) vd = vd->GetBrkxmlMask();
 		Texture *tex = vd->GetTexture();
 		if (tex)
 		{
@@ -5169,7 +5295,6 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int pe
 			continue;
 		if (mask)
 		{
-			if (vd->GetBrkxmlMask()) vd = vd->GetBrkxmlMask();
 			//when run script
 			VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 			if (vr_frame &&
@@ -5533,7 +5658,7 @@ void VRenderGLView::DrawOVER(VolumeData* vd, GLuint tex, int peel, double sampli
 
 		unsigned int rn_time = GET_TICK_COUNT();
 		if (rn_time - TextureRenderer::get_st_time() >
-			TextureRenderer::get_up_time())
+			TextureRenderer::get_up_time()/* && vd->GetMaskMode() != 1*/)
 			return;
 	}
 
@@ -9327,6 +9452,9 @@ DataGroup* VRenderGLView::AddVolumeData(VolumeData* vd, wxString group_name)
 
 	m_vd_pop_dirty = true;
 
+	if (vd->isBrxml())
+		m_loader.PreloadLevel(vd, vd->GetMaskLv(), true);
+
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (m_frame)
 	{
@@ -9447,6 +9575,8 @@ void VRenderGLView::ReplaceVolumeData(wxString &name, VolumeData *dst)
 
 	if (found)
 	{
+		if (dst->isBrxml())
+			m_loader.PreloadLevel(dst, dst->GetMaskLv(), true);
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 		if (vr_frame)
 		{
@@ -13086,6 +13216,8 @@ void VRenderGLView::StartLoopUpdate(bool reset_peeling_layer)
 	if (reset_peeling_layer)
 		m_finished_peeling_layer = 0;
 
+	SetSortBricks();
+
 	m_nx = GetSize().x;
 	m_ny = GetSize().y;
 	if (m_tile_rendering) {
@@ -13190,6 +13322,50 @@ void VRenderGLView::StartLoopUpdate(bool reset_peeling_layer)
 				Texture* tex = vd->GetTexture();
 				if (tex && vd->GetVR())
 				{
+					if (m_draw_mask && tex->isBrxml())
+					{
+						int curlv = vd->GetLevel();
+						vd->SetLevel(vd->GetMaskLv());
+						Transform *tform = tex->transform();
+						double mvmat2[16];
+						tform->get_trans(mvmat2);
+						vd->GetVR()->m_mv_mat2 = glm::mat4(
+							mvmat2[0], mvmat2[4], mvmat2[8], mvmat2[12],
+							mvmat2[1], mvmat2[5], mvmat2[9], mvmat2[13],
+							mvmat2[2], mvmat2[6], mvmat2[10], mvmat2[14],
+							mvmat2[3], mvmat2[7], mvmat2[11], mvmat2[15]);
+						vd->GetVR()->m_mv_mat2 = vd->GetVR()->m_mv_mat * vd->GetVR()->m_mv_mat2;
+
+						Ray view_ray = vd->GetVR()->compute_view();
+
+						vector<TextureBrick*> *bricks2 = tex->get_sorted_bricks(view_ray, !m_persp);
+						if (!bricks2 || bricks2->size()==0)
+							continue;
+						for (j=0; j<bricks2->size(); j++)
+						{
+							(*bricks2)[j]->set_drawn(false);
+							if ((*bricks2)[j]->get_priority()>0 ||
+								!vd->GetVR()->test_against_view_clip((*bricks2)[j]->bbox(), (*bricks2)[j]->tbox(), (*bricks2)[j]->dbox(), m_persp))//changed by takashi
+							{
+								(*bricks2)[j]->set_disp(false);
+								continue;
+							}
+							else
+								(*bricks2)[j]->set_disp(true);
+							if (m_draw_mask && tex->nmask() != -1)
+							{
+								total_num++;
+								num_chan++;
+							}
+							if (m_draw_label && tex->nlabel() != -1)
+							{
+								total_num++;
+								num_chan++;
+							}
+						}
+						vd->SetLevel(curlv);
+					}
+
 					Transform *tform = tex->transform();
 					double mvmat[16];
 					tform->get_trans(mvmat);
@@ -13228,60 +13404,17 @@ void VRenderGLView::StartLoopUpdate(bool reset_peeling_layer)
 							total_num++;
 							num_chan++;
 						}
-						if (m_draw_mask && tex->nmask() != -1)
+						if (m_draw_mask && tex->nmask() != -1 && !tex->isBrxml())
 						{
 							total_num++;
 							num_chan++;
 						}
-						if (m_draw_label && tex->nlabel() != -1)
+						if (m_draw_label && tex->nlabel() != -1 && !tex->isBrxml())
 						{
 							total_num++;
 							num_chan++;
 						}
 					}
-
-					if (m_draw_mask && vd->GetBrkxmlMask())
-					{
-						VolumeData *bxmask = vd->GetBrkxmlMask();
-						Texture* tex2 = bxmask->GetTexture();
-						int num_chan2 = 0;
-						if (tex2 && bxmask->GetVR())
-						{
-							Transform *tform2 = tex2->transform();
-							double mvmat2[16];
-							tform2->get_trans(mvmat2);
-							bxmask->GetVR()->m_mv_mat2 = glm::mat4(
-								mvmat2[0], mvmat2[4], mvmat2[8], mvmat2[12],
-								mvmat2[1], mvmat2[5], mvmat2[9], mvmat2[13],
-								mvmat2[2], mvmat2[6], mvmat2[10], mvmat2[14],
-								mvmat2[3], mvmat2[7], mvmat2[11], mvmat2[15]);
-							bxmask->GetVR()->m_mv_mat2 = bxmask->GetVR()->m_mv_mat * bxmask->GetVR()->m_mv_mat2;
-
-							Ray view_ray2 = bxmask->GetVR()->compute_view();
-
-							vector<TextureBrick*> *bricks2 = tex2->get_sorted_bricks(view_ray2, !m_persp);
-							if (!bricks2 || bricks2->size()==0)
-								continue;
-							for (j=0; j<bricks2->size(); j++)
-							{
-								(*bricks2)[j]->set_drawn(false);
-								if ((*bricks2)[j]->get_priority()>0 ||
-									!bxmask->GetVR()->test_against_view_clip((*bricks2)[j]->bbox(), (*bricks2)[j]->tbox(), (*bricks2)[j]->dbox(), m_persp))//changed by takashi
-								{
-									(*bricks2)[j]->set_disp(false);
-									continue;
-								}
-								else
-									(*bricks2)[j]->set_disp(true);
-								total_num++;
-								num_chan2++;
-							}
-							bxmask->SetBrickNum(num_chan);
-							if (bxmask->GetVR())
-								bxmask->GetVR()->set_done_loop(false);
-						}
-					}
-
 				}
 				vd->SetBrickNum(num_chan);
 				if (vd->GetVR())
@@ -13378,6 +13511,41 @@ void VRenderGLView::StartLoopUpdate(bool reset_peeling_layer)
 					std::sort(tmp_shadow.begin(), tmp_shadow.end(), VolumeLoader::sort_data_asc);
 				queues.insert(queues.end(), tmp_shadow.begin(), tmp_shadow.end());
 			}
+
+			//for mask
+			if (m_draw_mask)
+			{
+				for (i = 0; i < list.size(); i++)
+				{
+					VolumeData* vd = list[i];
+					if (vd->GetTexture()->nmask() < 0) continue;
+					int curlevel = vd->GetLevel();
+					vd->SetLevel(vd->GetMaskLv());
+					Texture* tex = vd->GetTexture();
+					if (tex->nmask() < 0) continue;
+					Ray view_ray = vd->GetVR()->compute_view();
+					vector<TextureBrick*> *bricks = tex->get_sorted_bricks(view_ray, !m_persp);
+					int mode = TEXTURE_RENDER_MODE_MASK;
+					for (j = 0; j < bricks->size(); j++)
+					{
+						VolumeLoaderData d;
+						TextureBrick* b = (*bricks)[j];
+						if (b->get_disp())
+						{
+							d.brick = b;
+							d.finfo = tex->GetFileName(b->getID());
+							d.vd = vd;
+							if (!b->drawn(mode))
+							{
+								d.mode = mode;
+								queues.push_back(d);
+							}
+						}
+					}
+					vd->SetLevel(curlevel);
+				}
+			}
+
 		}
 		else if (m_layer_list.size() > 0)
 		{
@@ -13387,70 +13555,6 @@ void VRenderGLView::StartLoopUpdate(bool reset_peeling_layer)
 					continue;
 				switch (m_layer_list[i]->IsA())
 				{
-				case 2://volume data (this won't happen now)
-					{
-						if (!reset_peeling_layer)
-							continue;
-						VolumeData* vd = (VolumeData*)m_layer_list[i];
-						vector<VolumeLoaderData> tmp_shade;
-						vector<VolumeLoaderData> tmp_shadow;
-						if (vd && vd->GetDisp() && vd->isBrxml())
-						{
-							Texture* tex = vd->GetTexture();
-							if (!tex)
-								continue;
-							Ray view_ray = vd->GetVR()->compute_view();
-							vector<TextureBrick*> *bricks = tex->get_sorted_bricks(view_ray, !m_persp);
-							if (!bricks || bricks->size()==0)
-								continue;
-							int mode = vd->GetMode() == 1 ? 1 : 0;
-							bool shade = (mode == 1 && vd->GetShading());
-							bool shadow = vd->GetShadow();
-							for (j=0; j<bricks->size(); j++)
-							{
-								VolumeLoaderData d;
-								TextureBrick* b = (*bricks)[j];
-								if (b->get_disp())
-								{
-									d.brick = b;
-									d.finfo = tex->GetFileName(b->getID());
-									d.vd = vd;
-									if (!b->drawn(mode))
-									{
-										d.mode = mode;
-										queues.push_back(d);
-									}
-									if (shade && !b->drawn(2))
-									{
-										d.mode = 2;
-										tmp_shade.push_back(d);
-									}
-									if (shadow && !b->drawn(3))
-									{
-										d.mode = 3;
-										tmp_shadow.push_back(d);
-									}
-								}
-							}
-							if (!tmp_shade.empty()) queues.insert(queues.end(), tmp_shade.begin(), tmp_shade.end());
-							if (!tmp_shadow.empty())
-							{
-								if (TextureRenderer::get_update_order() == 1)
-								{
-									int order = TextureRenderer::get_update_order();
-									TextureRenderer::set_update_order(0);
-									Ray view_ray = vd->GetVR()->compute_view();
-									tex->set_sort_bricks();
-									tex->get_sorted_bricks(view_ray, !m_persp); //recalculate brick.d_
-									tex->set_sort_bricks();
-									TextureRenderer::set_update_order(order);
-									std::sort(tmp_shadow.begin(), tmp_shadow.end(), VolumeLoader::sort_data_asc);
-								}
-								queues.insert(queues.end(), tmp_shadow.begin(), tmp_shadow.end());
-							}
-						}
-					}
-					break;
 				case 5://group
 					{
 						vector<VolumeData*> list;
@@ -13607,6 +13711,39 @@ void VRenderGLView::StartLoopUpdate(bool reset_peeling_layer)
 									}
 									queues.insert(queues.end(), tmp_shadow.begin(), tmp_shadow.end());
 								}
+							}
+						}
+
+						//for mask
+						if (m_draw_mask)
+						{
+							for (j = 0; j < list.size(); j++)
+							{
+								VolumeData* vd = list[j];
+								if (vd->GetTexture()->nmask() < 0) continue;
+								int curlevel = vd->GetLevel();
+								vd->SetLevel(vd->GetMaskLv());
+								Texture* tex = vd->GetTexture();
+								Ray view_ray = vd->GetVR()->compute_view();
+								vector<TextureBrick*> *bricks = tex->get_sorted_bricks(view_ray, !m_persp);
+								int mode = TEXTURE_RENDER_MODE_MASK;
+								for (k=0; k<bricks->size(); k++)
+								{
+									VolumeLoaderData d;
+									TextureBrick* b = (*bricks)[k];
+									if (b->get_disp())
+									{
+										d.brick = b;
+										d.finfo = tex->GetFileName(b->getID());
+										d.vd = vd;
+										if (!b->drawn(mode))
+										{
+											d.mode = mode;
+											queues.push_back(d);
+										}
+									}
+								}
+								vd->SetLevel(curlevel);
 							}
 						}
 

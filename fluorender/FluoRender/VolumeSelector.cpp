@@ -105,7 +105,7 @@ void VolumeSelector::SetProjection(double *mvmat, double *prjmat)
 
 void VolumeSelector::Select(double radius)
 {
-	if (!m_vd || m_vd->isBrxml())
+	if (!m_vd)
 		return;
 
 	//insert the mask volume into m_vd
@@ -195,7 +195,7 @@ void VolumeSelector::Select(double radius)
 //mode: 0-normal; 1-posterized; 2-noraml,copy; 3-poster, copy
 void VolumeSelector::Label(int mode)
 {
-	if (!m_vd || m_vd->isBrxml())
+	if (!m_vd)
 		return;
 
 	int label_mode = 0;

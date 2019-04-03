@@ -951,6 +951,7 @@ namespace FLIVR
 		Point nmax(nx_*spcx_*s_spcx_, ny_*spcy_*s_spcy_, nz_*spcz_*s_spcz_);
 		tform.pre_scale(Vector(nmax));
 		set_transform(tform);
+		set_sort_bricks();
 	}
 
 	bool Texture::buildPyramid(vector<Pyramid_Level> &pyramid, vector<vector<vector<vector<FileLocInfo *>>>> &filenames, bool useURL)

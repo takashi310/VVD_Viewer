@@ -166,12 +166,20 @@ namespace FLIVR
 	"	//SEG_BODY_INIT_BLEND_APPEND\n" \
 	"	vec4 ret = vec4(c.x>0.0?(c.x>loc7.x?1.0:0.0):0.0);\n" \
 	"	FragColor = ret;\n" \
+	"\n"
+
+#define SEG_BODY_INIT_BLEND_APPEND_STROKE_TAIL \
+	"	//SEG_BODY_INIT_BLEND_APPEND_STROKE_TAIL\n" \
 	"	StrokeColor = vec4(1.0);\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_ERASE \
 	"	//SEG_BODY_INIT_BLEND_ERASE\n" \
 	"	FragColor = vec4(0.0);\n" \
+	"\n"
+
+#define SEG_BODY_INIT_BLEND_ERASE_STROKE_TAIL \
+	"	//SEG_BODY_INIT_BLEND_ERASE_STROKE_TAIL\n" \
 	"	StrokeColor = vec4(0.0);\n" \
 	"\n"
 
@@ -179,6 +187,10 @@ namespace FLIVR
 	"	//SEG_BODY_INIT_BLEND_DIFFUSE\n" \
 	"	vec4 ret = texture(tex2, t.stp);\n" \
 	"	FragColor = ret;\n" \
+	"\n"
+
+#define SEG_BODY_INIT_BLEND_DIFFUSE_STROKE_TAIL \
+	"	//SEG_BODY_INIT_BLEND_DIFFUSE_STROKE_TAIL\n" \
 	"	StrokeColor = ret;\n" \
 	"\n"
 
@@ -186,18 +198,30 @@ namespace FLIVR
 	"	//SEG_BODY_INIT_BLEND_FLOOD\n" \
 	"	vec4 ret = vec4(c.x>0.0?(c.x>loc7.x?1.0:0.0):0.0);\n" \
 	"	FragColor = ret;\n" \
+	"\n"
+
+#define SEG_BODY_INIT_BLEND_FLOOD_STROKE_TAIL \
+	"	//SEG_BODY_INIT_BLEND_FLOOD_STROKE_TAIL\n" \
 	"	StrokeColor = vec4(1.0);\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_ALL \
 	"	//SEG_BODY_INIT_BLEND_ALL\n" \
 	"	FragColor = vec4(1.0);\n" \
+	"\n"
+
+#define SEG_BODY_INIT_BLEND_ALL_STROKE_TAIL \
+	"	//SEG_BODY_INIT_BLEND_ALL_STROKE_TAIL\n" \
+	"	StrokeColor = vec4(1.0);\n" \
+	"\n"
+
+#define SEG_BODY_INIT_BLEND_HR_ORTHO_STROKE_HEAD \
+	"	//SEG_BODY_INIT_BLEND_HR_ORTHO_STROKE_HEAD\n" \
 	"	StrokeColor = vec4(1.0);\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_HR_ORTHO \
 	"	//SEG_BODY_INIT_BLEND_HR_ORTHO\n" \
-	"	StrokeColor = vec4(1.0);\n" \
 	"	if (c.x <= loc7.x)\n" \
 	"	{\n" \
 	"		FragColor = vec4(0.0);\n" \
@@ -232,9 +256,13 @@ namespace FLIVR
 	"	FragColor = vec4(1.0);\n" \
 	"\n"
 
+#define SEG_BODY_INIT_BLEND_HR_PERSP_STROKE_HEAD \
+	"	//SEG_BODY_INIT_BLEND_HR_PERSP_STROKE_HEAD\n" \
+	"	StrokeColor = vec4(1.0);\n" \
+	"\n"
+
 #define SEG_BODY_INIT_BLEND_HR_PERSP \
 	"	//SEG_BODY_INIT_BLEND_HR_PERSP\n" \
-	"	StrokeColor = vec4(1.0);\n" \
 	"	if (c.x <= loc7.x)\n" \
 	"	{\n" \
 	"		FragColor = vec4(0.0);\n" \
@@ -274,6 +302,10 @@ namespace FLIVR
 	"	//SEG_BODY_INIT_POSTER\n" \
 	"	vec4 ret = vec4(ceil(c.x*loc8.y)/loc8.y);\n" \
 	"	FragColor = ret;\n" \
+	"\n"
+
+#define SEG_BODY_INIT_POSTER_STROKE_TAIL \
+	"	//SEG_BODY_INIT_POSTER_STROKE_TAIL\n" \
 	"	StrokeColor = ret;\n" \
 	"\n"
 
@@ -302,12 +334,16 @@ namespace FLIVR
 	"		(v.x>loc7.w?1.0:(loc7.z>0.0?(v.x<loc7.w-sqrt(loc7.z)*2.12?0.0:exp(-(v.x-loc7.w)*(v.x-loc7.w)/loc7.z)):0.0));\n" \
 	"	if (stop == 0.0)\n" \
 	"		discard;\n" \
-	"\n"\
+	"\n"
+
+#define SEG_BODY_DB_GROW_BLEND_APPEND_HEAD \
+	"	//SEG_BODY_DB_GROW_BLEND_APPEND_HEAD\n" \
+	"	StrokeColor = (1.0-stop) * cc;\n" \
+	"\n"
 
 #define SEG_BODY_DB_GROW_BLEND_APPEND \
 	"	//SEG_BODY_DB_GROW_BLEND_APPEND\n" \
 	"	FragColor = (1.0-stop) * cc;\n" \
-	"	StrokeColor = (1.0-stop) * cc;\n" \
 	"	vec3 nb;\n" \
 	"	vec3 max_nb = t.stp;\n" \
 	"	float m;\n" \
@@ -332,11 +368,15 @@ namespace FLIVR
 	"			discard;\n" \
 	"	}\n" \
 	"	FragColor += cc*stop;\n"\
+	"\n"
+
+#define SEG_BODY_DB_GROW_BLEND_APPEND_TAIL \
+	"	//SEG_BODY_DB_GROW_BLEND_APPEND_HEAD\n" \
 	"	StrokeColor += cc*stop;\n"\
 	"\n"
 
 #define SEG_BODY_DB_GROW_BLEND_ERASE0 \
-	"	//SEG_BODY_DB_GROW_BLEND_ERASE\n" \
+	"	//SEG_BODY_DB_GROW_BLEND_ERASE0\n" \
 	"	for (int i=-1; i<2; i++)\n"\
 	"	for (int j=-1; j<2; j++)\n"\
 	"	for (int k=-1; k<2; k++)\n"\
@@ -346,12 +386,20 @@ namespace FLIVR
 	"	}\n"\
 	"	vec4 ret = cc*clamp(1.0-stop, 0.0, 1.0);\n"\
 	"	FragColor = ret;\n"\
+	"\n"
+
+#define SEG_BODY_DB_GROW_BLEND_ERASE0_STROKE_TAIL \
+	"	//SEG_BODY_DB_GROW_BLEND_ERASE0_STROKE_TAIL\n" \
 	"	StrokeColor = ret;\n"\
 	"\n"
 
 #define SEG_BODY_DB_GROW_BLEND_ERASE \
 	"	//SEG_BODY_DB_GROW_BLEND_ERASE\n" \
 	"	FragColor = vec4(0.0);\n"\
+	"\n"
+
+#define SEG_BODY_DB_GROW_BLEND_ERASE_STROKE_TAIL \
+	"	//SEG_BODY_DB_GROW_BLEND_ERASE_STROKE_TAIL\n" \
 	"	StrokeColor = vec4(0.0);\n"\
 	"\n"
 
@@ -476,7 +524,7 @@ namespace FLIVR
 	"\n"
 
 	SegShader::SegShader(int type, int paint_mode, int hr_mode,
-		bool use_2d, bool shading, int peel, bool clip, bool hiqual) :
+		bool use_2d, bool shading, int peel, bool clip, bool hiqual, bool use_stroke) :
 	type_(type),
 	paint_mode_(paint_mode),
 	hr_mode_(hr_mode),
@@ -485,6 +533,7 @@ namespace FLIVR
 	peel_(peel),
 	clip_(clip),
 	hiqual_(hiqual),
+	use_stroke_(use_stroke),
 	program_(0)
 	{}
 
@@ -515,7 +564,7 @@ namespace FLIVR
 		case SEG_SHDR_INITIALIZE:
 		case SEG_SHDR_DB_GROW:
 			z << SEG_OUTPUTS;
-			z << SEG_PAINT_OUTPUTS;
+			if (use_stroke_) z << SEG_PAINT_OUTPUTS;
 			z << VOL_UNIFORMS_COMMON;
 			z << VOL_UNIFORMS_SIN_COLOR;
 			z << VOL_UNIFORMS_MASK;
@@ -618,25 +667,36 @@ namespace FLIVR
 				if (paint_mode_==1 ||
 					paint_mode_==2)
 				{
-					if (hr_mode_ == 0)
+					if (hr_mode_ == 0) {
 						z << SEG_BODY_INIT_BLEND_APPEND;
-					else if (hr_mode_ == 1)//ortho
+						if (use_stroke_) z << SEG_BODY_INIT_BLEND_APPEND_STROKE_TAIL;
+					} else if (hr_mode_ == 1) {//ortho
+						if (use_stroke_) z << SEG_BODY_INIT_BLEND_HR_ORTHO_STROKE_HEAD;
 						z << SEG_BODY_INIT_BLEND_HR_ORTHO;
-					else if (hr_mode_ == 2)//persp
+					} else if (hr_mode_ == 2) {//persp
+						if (use_stroke_) z << SEG_BODY_INIT_BLEND_HR_PERSP_STROKE_HEAD;
 						z << SEG_BODY_INIT_BLEND_HR_PERSP;
+					}
 				}
-				else if (paint_mode_==3)
+				else if (paint_mode_==3) {
 					z << SEG_BODY_INIT_BLEND_ERASE;
-				else if (paint_mode_==4)
+					if (use_stroke_) z << SEG_BODY_INIT_BLEND_ERASE_STROKE_TAIL;
+				} else if (paint_mode_==4) {
 					z << SEG_BODY_INIT_BLEND_DIFFUSE;
-				else if (paint_mode_==5)
+					if (use_stroke_) z << SEG_BODY_INIT_BLEND_DIFFUSE_STROKE_TAIL;
+				} else if (paint_mode_==5) {
 					z << SEG_BODY_INIT_BLEND_FLOOD;
-				else if (paint_mode_==7)
+					if (use_stroke_) z << SEG_BODY_INIT_BLEND_FLOOD_STROKE_TAIL;
+				} else if (paint_mode_==7) {
 					z << SEG_BODY_INIT_BLEND_ALL;
-				else if (paint_mode_==8)
+					if (use_stroke_) z << SEG_BODY_INIT_BLEND_ALL_STROKE_TAIL;
+				} else if (paint_mode_==8) {
 					z << SEG_BODY_INIT_BLEND_ALL;
-				else if (paint_mode_==11)
+					if (use_stroke_) z << SEG_BODY_INIT_BLEND_ALL_STROKE_TAIL;
+				} else if (paint_mode_==11) {
 					z << SEG_BODY_INIT_POSTER;
+					if (use_stroke_) z << SEG_BODY_INIT_POSTER_STROKE_TAIL;
+				}
 				break;
 			case SEG_SHDR_DB_GROW:
 				z << SEG_BODY_DB_GROW_2D_COORD;
@@ -663,10 +723,15 @@ namespace FLIVR
 				if (paint_mode_==1 ||
 					paint_mode_==2 ||
 					paint_mode_==4 ||
-					paint_mode_==5)
+					paint_mode_==5) {
+					if (use_stroke_) z << SEG_BODY_DB_GROW_BLEND_APPEND_HEAD;
 					z << SEG_BODY_DB_GROW_BLEND_APPEND;
-				else if (paint_mode_==3)
+					if (use_stroke_) z << SEG_BODY_DB_GROW_BLEND_APPEND_TAIL;
+				}
+				else if (paint_mode_==3) {
 					z << SEG_BODY_DB_GROW_BLEND_ERASE;
+					if (use_stroke_) z << SEG_BODY_DB_GROW_BLEND_ERASE_STROKE_TAIL;
+				}
 				break;
 			case LBL_SHDR_INITIALIZE:
 				z << VOL_HEAD_LIT;
@@ -739,25 +804,25 @@ namespace FLIVR
 	}
 
 	ShaderProgram* SegShaderFactory::shader(int type, int paint_mode, int hr_mode,
-		bool use_2d, bool shading, int peel, bool clip, bool hiqual)
+		bool use_2d, bool shading, int peel, bool clip, bool hiqual, bool use_stroke)
 	{
 		if(prev_shader_ >= 0)
 		{
-			if(shader_[prev_shader_]->match(type, paint_mode, hr_mode, use_2d, shading, peel, clip, hiqual)) 
+			if(shader_[prev_shader_]->match(type, paint_mode, hr_mode, use_2d, shading, peel, clip, hiqual, use_stroke)) 
 			{
 				return shader_[prev_shader_]->program();
 			}
 		}
 		for(unsigned int i=0; i<shader_.size(); i++)
 		{
-			if(shader_[i]->match(type, paint_mode, hr_mode, use_2d, shading, peel, clip, hiqual)) 
+			if(shader_[i]->match(type, paint_mode, hr_mode, use_2d, shading, peel, clip, hiqual, use_stroke)) 
 			{
 				prev_shader_ = i;
 				return shader_[i]->program();
 			}
 		}
 
-		SegShader* s = new SegShader(type, paint_mode, hr_mode, use_2d, shading, peel, clip, hiqual);
+		SegShader* s = new SegShader(type, paint_mode, hr_mode, use_2d, shading, peel, clip, hiqual, use_stroke);
 		if(s->create())
 		{
 			delete s;

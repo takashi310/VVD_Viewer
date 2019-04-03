@@ -45,6 +45,8 @@
 #include <map>
 #include <list>
 #include <curl/curl.h>
+#include <memory>
+#include <sstream>
 
 #include "DLLExport.h"
 
@@ -70,6 +72,29 @@ namespace FLIVR {
 #define BRICK_FILE_TYPE_ZLIB	3
 #define BRICK_FILE_TYPE_H265	4
 
+
+	class EXPORT_API VL_Array
+	{
+		char *m_data;
+		size_t m_size;
+		bool m_protected;
+	public:
+		VL_Array() {
+			m_data = NULL; m_protected = false; m_size = 0;
+		}
+		VL_Array(char *data, size_t size, bool protection = false) {
+			 m_data = data; m_size = size; m_protected = protection;
+		}
+		~VL_Array() {
+			if (m_data) {
+				delete [] m_data;
+			}
+		}
+		const void *getData() { return m_data; }
+		size_t getSize() { return m_size; }
+		bool isProtected() { return m_protected; }
+		void SetProtection(bool protection) { m_protected = protection; }
+	};
 	
 	class EXPORT_API FileLocInfo {
 	public:
@@ -82,6 +107,7 @@ namespace FLIVR {
 			isurl = false;
 			cached = false;
 			cache_filename = L"";
+			id_string = L"";
 		}
 		FileLocInfo(std::wstring filename_, int offset_, int datasize_, int type_, bool isurl_)
 		{
@@ -92,6 +118,9 @@ namespace FLIVR {
 			isurl = isurl_;
 			cached = false;
 			cache_filename = L"";
+			std::wstringstream wss;
+			wss << filename << L" " << offset;
+			id_string = wss.str();
 		}
 		FileLocInfo(const FileLocInfo &copy)
 		{
@@ -102,6 +131,7 @@ namespace FLIVR {
 			isurl = copy.isurl;
 			cached = copy.cached;
 			cache_filename = copy.cache_filename;
+			id_string = copy.id_string;
 		}
 
 		std::wstring filename;
@@ -111,6 +141,7 @@ namespace FLIVR {
 		bool isurl;
 		bool cached;
 		std::wstring cache_filename;
+		std::wstring id_string;
 	};
 
 	class EXPORT_API MemCache {
@@ -127,7 +158,7 @@ namespace FLIVR {
 		}
 		~MemCache()
 		{
-			if (data) delete data;
+			if (data) delete [] data;
 		}
 		char *data;
 		size_t datasize;
@@ -200,6 +231,13 @@ namespace FLIVR {
 		inline bool drawn(int mode)
 		{ if (mode>=0 && mode<TEXTURE_RENDER_MODES) return drawn_[mode]; else return false;}
 
+		inline void set_dirty(int comp, bool val)
+		{ if (comp>=0 && comp<TEXTURE_MAX_COMPONENTS) dirty_[comp] = val; }
+		inline void set_dirty(bool val)
+		{ for (int i=0; i<TEXTURE_MAX_COMPONENTS; i++) dirty_[i] = val; }
+		inline bool dirty(int comp)
+		{ if (comp>=0 && comp<TEXTURE_MAX_COMPONENTS) return dirty_[comp]; else return false;}
+
 		// Creator of the brick owns the nrrd memory.
 		void set_nrrd(Nrrd* data, int index)
 		{if (index>=0&&index<TEXTURE_MAX_COMPONENTS) data_[index] = data;}
@@ -266,7 +304,9 @@ namespace FLIVR {
 		void set_id_in_loadedbrks(int id) {id_in_loadedbrks = id;};
 		int get_id_in_loadedbrks() {return id_in_loadedbrks;}
 		int getID() {return findex_;}
-		const void *getBrickData() {return brkdata_;}
+		const void *getBrickData() {return brkdata_ ? brkdata_->getData() : NULL;}
+		std::shared_ptr<VL_Array> getBrickDataSP() {return brkdata_;}
+		long getBrickDataSPCount() {return brkdata_.use_count();}
 
 		double dt() {return dt_;}
 		double timin() {return timin_;}
@@ -294,7 +334,8 @@ namespace FLIVR {
 		size_t tex_type_size(GLenum t);
 		GLenum tex_type_aux(Nrrd* n);
 		bool read_brick(char* data, size_t size, const FileLocInfo* finfo);
-		void set_brkdata(void *brkdata) {brkdata_ = brkdata;}
+		void set_brkdata(const std::shared_ptr<VL_Array> &brkdata) {brkdata_ = brkdata;}
+		void set_brkdata(void *brkdata, size_t size) {brkdata_ = std::make_shared<VL_Array>((char *)brkdata, size);}
 		static bool read_brick_without_decomp(char* &data, size_t &readsize, FileLocInfo* finfo, wxThread *th=NULL);
 		static bool decompress_brick(char *out, char* in, size_t out_size, size_t in_size, int type, int w=0, int h=0);
 		static bool jpeg_decompressor(char *out, char* in, size_t out_size, size_t in_size);
@@ -304,6 +345,8 @@ namespace FLIVR {
 
 		void prevent_tex_deletion(bool val) {prevent_tex_deletion_ = val;}
 		bool is_tex_deletion_prevented() {return prevent_tex_deletion_;}
+		void lock_brickdata(bool val) {lock_brickdata_ = val;}
+		bool is_brickdata_locked() {return lock_brickdata_;}
 	private:
 		void compute_edge_rays(BBox &bbox);
 		void compute_edge_rays_tex(BBox &bbox);
@@ -355,13 +398,16 @@ namespace FLIVR {
 		//current index in the queue, for reverse searching
 		size_t ind_;
 
+		bool dirty_[TEXTURE_MAX_COMPONENTS]; 
+
 		long long offset_;
 		long long fsize_;
-		void *brkdata_;
+		std::shared_ptr<VL_Array> brkdata_;
 		bool loading_;
 		int id_in_loadedbrks;
 
 		bool prevent_tex_deletion_;
+		bool lock_brickdata_;
 
 		int findex_;
 

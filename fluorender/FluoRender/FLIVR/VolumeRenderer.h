@@ -153,6 +153,9 @@ namespace FLIVR
 		void draw_mask(int type, int paint_mode, int hr_mode,
 			double ini_thresh, double gm_falloff, double scl_falloff,
 			double scl_translate, double w2d, double bins, bool ortho, bool estimate);
+		void draw_mask_cpu(int type, int paint_mode, int hr_mode,
+			double ini_thresh, double gm_falloff, double scl_falloff,
+			double scl_translate, double w2d, double bins, bool ortho, bool estimate);
 		void draw_mask_th(float thresh, bool orthographic_p);
 		void draw_mask_dslt(int type, int paint_mode, int hr_mode,
 			double ini_thresh, double gm_falloff, double scl_falloff,
@@ -226,6 +229,9 @@ namespace FLIVR
 			}
 		}
 		double get_buffer_scale() { return buffer_scale_; }
+
+		bool is_mask_active() { eval_ml_mode(); return mask_; }
+		bool is_label_active() { eval_ml_mode(); return label_; }
 
 		friend class MultiVolumeRenderer;
 

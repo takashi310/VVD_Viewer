@@ -544,6 +544,10 @@ void BRKXMLReader::ReadFilenames(tinyxml2::XMLElement* fileRootNode, vector<vect
 							filename[frame][channel][id]->type = BRICK_FILE_TYPE_H265;
 					}
 				}
+
+				std::wstringstream wss;
+				wss << filename[frame][channel][id]->filename << L" " << filename[frame][channel][id]->offset;
+				filename[frame][channel][id]->id_string = wss.str();
 			}
 		}
 		child = child->NextSiblingElement();

@@ -52,7 +52,7 @@ namespace FLIVR
 	map<wstring, MemCache*> TextureBrick::memcache_table_ = map<wstring, MemCache*>();
 	list<std::wstring> TextureBrick::memcache_order = list<std::wstring>();
 	size_t TextureBrick::memcache_size = 0;
-	size_t TextureBrick::memcache_limit = 512*1024*1024;
+	size_t TextureBrick::memcache_limit = 1024*1024*1024;
 
     
    TextureBrick::TextureBrick (Nrrd* n0, Nrrd* n1,
@@ -96,6 +96,9 @@ namespace FLIVR
       for (int i=0; i<TEXTURE_RENDER_MODES; i++)
          drawn_[i] = false;
 
+	   for (int i=0; i<TEXTURE_MAX_COMPONENTS; i++)
+         dirty_[i] = false;
+
       //priority
       priority_ = 0;
 
@@ -105,6 +108,7 @@ namespace FLIVR
 	  
 	  disp_ = true;
 	  prevent_tex_deletion_ = false;
+	  lock_brickdata_ = false;
    }
 
    TextureBrick::~TextureBrick()
@@ -113,8 +117,6 @@ namespace FLIVR
       // This object never deletes that memory.
       data_[0] = 0;
       data_[1] = 0;
-
-	  if (brkdata_) delete [] brkdata_;
    }
 
    /* The cube is numbered in the following way
@@ -894,7 +896,7 @@ z
 	   {
 		   if(data_[c]->data)
 		   {
-			   unsigned char *ptr = (unsigned char *)(data_[c]->data);
+			   char *ptr = (char *)(data_[c]->data);
 			   long long offset = (long long)(oz()) * (long long)(sx()) * (long long)(sy()) +
 								  (long long)(oy()) * (long long)(sx()) +
 								  (long long)(ox());
@@ -907,18 +909,19 @@ z
 
    void *TextureBrick::tex_data_brk(int c, const FileLocInfo* finfo)
    {
-	   unsigned char *ptr = NULL;
-	   if(brkdata_) ptr = (unsigned char *)(brkdata_);
+	   char *ptr = NULL;
+	   if(brkdata_) ptr = (char *)(brkdata_->getData());
 	   else
 	   {
 		   int bd = tex_type_size(tex_type(c));
-		   ptr = new unsigned char[(size_t)nx_*(size_t)ny_*(size_t)nz_*(size_t)bd];
-		   if (!read_brick((char *)ptr, (size_t)nx_*(size_t)ny_*(size_t)nz_*(size_t)bd, finfo))
+		   size_t bsize = (size_t)nx_*(size_t)ny_*(size_t)nz_*(size_t)bd;
+		   ptr = new char[bsize];
+		   if (!read_brick(ptr, bsize, finfo))
 		   {
 			   delete [] ptr;
 			   return NULL;
 		   }
-		   brkdata_ = (void *)ptr;
+		   brkdata_ = make_shared<VL_Array>(ptr, bsize);
 	   }
 	   return ptr;
    }
@@ -1650,7 +1653,6 @@ z
 
    void TextureBrick::freeBrkData()
    {
-	   if (brkdata_) delete [] brkdata_;
-	   brkdata_ = NULL;
+	   if (brkdata_) brkdata_.reset();
    }
 } // end namespace FLIVR

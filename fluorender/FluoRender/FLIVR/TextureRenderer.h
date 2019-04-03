@@ -444,16 +444,16 @@ namespace FLIVR
                //brick distance sort
                static bool brick_sort(const BrickDist& bd1, const BrickDist& bd2);
                //check and swap memory
-               void check_swap_memory(TextureBrick* brick, int c);
+               int check_swap_memory(TextureBrick* brick, int c);
                //load texture bricks for drawing
                //unit:assigned unit, c:channel
                GLint load_brick(int unit, int c, vector<TextureBrick*> *b, int i, GLint filter=GL_LINEAR, bool compression=false, int mode=0, bool set_drawn=true);
                //load the texture for volume mask into texture pool
-               GLint load_brick_mask(vector<TextureBrick*> *b, int i, GLint filter=GL_NEAREST, bool compression=false, int unit=0);
+               GLint load_brick_mask(vector<TextureBrick*> *b, int i, GLint filter=GL_NEAREST, bool compression=false, int unit=0, bool swap_mem=false);
 			   //load the texture for volume labeling into texture pool
-               GLint load_brick_label(vector<TextureBrick*> *b, int i);
+               GLint load_brick_label(vector<TextureBrick*> *b, int i, bool swap_mem=false);
 			   //load the texture for volume stroke into texture pool
-               GLint load_brick_stroke(vector<TextureBrick*> *b, int i, GLint filter=GL_NEAREST, bool compression=false, int unit=0);
+               GLint load_brick_stroke(vector<TextureBrick*> *b, int i, GLint filter=GL_NEAREST, bool compression=false, int unit=0, bool swap_mem=false);
                void release_texture(int unit, GLenum target);
 
                //draw slices of the volume

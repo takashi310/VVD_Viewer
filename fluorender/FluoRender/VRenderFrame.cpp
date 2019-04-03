@@ -4199,7 +4199,8 @@ void VRenderFrame::OpenProject(wxString& filename)
 													{
 														VolumeData* vd = m_data_mgr.GetVolumeData(str);
 														if (vd)
-															group->InsertVolumeData(k-1, vd);
+															vrv->AddVolumeData(vd, group->GetName());
+															//group->InsertVolumeData(k-1, vd);
 													}
 												}
 											}

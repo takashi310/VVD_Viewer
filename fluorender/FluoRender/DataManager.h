@@ -638,6 +638,13 @@ public:
 
 	MeshData *ExportMeshMask();
 
+	int GetMaskLv()
+	{
+		if (!isBrxml()) return -1;
+		else if (m_mask_lv < 0 || m_mask_lv >= GetLevelNum()) return GetLevelNum()-1;
+		return m_mask_lv;
+	}
+
 private:
 	//duplication indicator and counter
 	bool m_dup;
@@ -751,6 +758,7 @@ private:
 	wstring m_metadata_id;
 
 	VolumeData *m_brkxml_mask;
+	int m_mask_lv;
 
 private:
 	//label functions

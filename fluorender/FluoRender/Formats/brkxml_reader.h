@@ -5,6 +5,7 @@
 #include <base_reader.h>
 #include <FLIVR/TextureBrick.h>
 #include <tinyxml2.h>
+#include <memory>
 
 using namespace std;
 

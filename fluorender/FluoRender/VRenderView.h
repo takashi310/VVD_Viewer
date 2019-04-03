@@ -54,6 +54,7 @@ DEALINGS IN THE SOFTWARE.
 #include <vector>
 #include <stdarg.h>
 #include <unordered_map>
+#include <memory>
 #include "nv/timer.h"
 
 #include <glm/glm.hpp>
@@ -255,13 +256,16 @@ class EXPORT_API VolumeLoader
 		void Set(vector<VolumeLoaderData> vld);
 		void Abort();
 		void StopAll();
+		void Join();
 		bool Run();
 		void SetMaxThreadNum(int num) {m_max_decomp_th = num;}
 		void SetMemoryLimitByte(long long limit) {m_memory_limit = limit;}
 		void CleanupLoadedBrick();
+		void CheckMemoryCache();
 		void RemoveAllLoadedBrick();
 		void RemoveBrickVD(VolumeData *vd);
 		void GetPalams(long long &used_mem, int &running_decomp_th, int &queue_num, int &decomp_queue_num);
+		void PreloadLevel(VolumeData *vd, int lv, bool lock=false);
 
 		static bool sort_data_dsc(const VolumeLoaderData b1, const VolumeLoaderData b2)
 		{ return b2.brick->get_d() > b1.brick->get_d(); }
@@ -276,6 +280,7 @@ class EXPORT_API VolumeLoader
 		vector<VolumeDecompressorData> m_decomp_queues;
 		vector<VolumeDecompressorThread *> m_decomp_threads;
 		unordered_map<TextureBrick*, VolumeLoaderData> m_loaded;
+		unordered_map<wstring, std::shared_ptr<VL_Array>> m_memcached_data;
 		int m_running_decomp_th;
 		int m_max_decomp_th;
 		bool m_valid;
@@ -283,9 +288,10 @@ class EXPORT_API VolumeLoader
 		long long m_memory_limit;
 		long long m_used_memory;
 
-		inline void AddLoadedBrick(VolumeLoaderData lbd)
+		inline void AddLoadedBrick(const VolumeLoaderData &lbd)
 		{
 			m_loaded[lbd.brick] = lbd;
+			m_memcached_data[lbd.finfo->id_string] = lbd.brick->getBrickDataSP();
 			m_used_memory += lbd.datasize;
 		}
 

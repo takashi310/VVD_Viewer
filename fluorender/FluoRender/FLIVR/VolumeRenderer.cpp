@@ -46,7 +46,8 @@
 //#include <boost/bind.hpp>
 
 #ifdef _WIN32
-#include <windows.h>//added by takashi
+#include <windows.h>
+#include <omp.h>
 #endif
 
 namespace FLIVR
@@ -1201,15 +1202,12 @@ namespace FLIVR
 		for (unsigned int i=0; i < bricks->size(); i++)
 		{
 			//comment off when debug_ds
-			if (mem_swap_)
+			if (mem_swap_/* && !mask_ && !label_*/)
 			{
 				uint32_t rn_time = GET_TICK_COUNT();
 				if (rn_time - st_time_ > get_up_time())
 					break;
 			}
-
-			if (mask_)
-				int dummy = 0;
 
 			TextureBrick* b = (*bricks)[i];
 			if (colormap_mode_==1 && colormap_proj_)
@@ -1280,7 +1278,7 @@ namespace FLIVR
 			else
 				filter = GL_NEAREST;
 
-			if (!load_brick(0, 0, bricks, i, filter, compression_, mode))
+			if (load_brick(0, 0, bricks, i, filter, compression_, mode, (mask_ || label_) ? false : true) < 0)
 				continue;
 			if (mask_)
 				load_brick_mask(bricks, i, filter);
@@ -1614,10 +1612,18 @@ namespace FLIVR
 		double scl_translate, double w2d, double bins, bool orthographic_p,
 		bool estimate)
 	{
+/*		if (paint_mode == 1 || paint_mode == 2)
+		{
+			draw_mask_cpu(type, paint_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, scl_translate, w2d, bins, orthographic_p, estimate);
+			return;
+		}
+*/
 		if (estimate && type==0)
 			est_thresh_ = 0.0;
 		bool use_2d = glIsTexture(tex_2d_weight1_)&&
 			glIsTexture(tex_2d_weight2_)?true:false;
+
+		bool use_stroke = (tex_->nstroke() >= 0) ? true : false;
 
 		Ray view_ray = compute_view();
 
@@ -1649,17 +1655,17 @@ namespace FLIVR
 		case 0://initialize
 			seg_shader = seg_shader_factory_.shader(
 				SEG_SHDR_INITIALIZE, paint_mode, hr_mode,
-				use_2d, true, depth_peel_, true, hiqual_);
+				use_2d, true, depth_peel_, true, hiqual_, use_stroke);
 			break;
 		case 1://diffusion-based growing
 			seg_shader = seg_shader_factory_.shader(
 				SEG_SHDR_DB_GROW, paint_mode, hr_mode,
-				use_2d, true, depth_peel_, true, hiqual_);
+				use_2d, true, depth_peel_, true, hiqual_, use_stroke);
 			break;
 		case 2://noise removal
 			seg_shader = seg_shader_factory_.shader(
 				FLT_SHDR_NR, paint_mode, hr_mode,
-				false, false, depth_peel_, false, hiqual_);
+				false, false, depth_peel_, false, hiqual_, use_stroke);
 			break;
 		}
 
@@ -1778,9 +1784,11 @@ namespace FLIVR
 
 			//load the texture
 			GLint tex_id = -1;
+			b->prevent_tex_deletion(true);
 			GLint vd_id = load_brick(0, 0, bricks, i, GL_NEAREST, compression_);
-			GLint mask_id = load_brick_mask(bricks, i, GL_NEAREST);
-			GLint stroke_tex_id = load_brick_stroke(bricks, i, GL_NEAREST);
+			GLint mask_id = load_brick_mask(bricks, i, GL_NEAREST, false, 0, true);
+			GLint stroke_tex_id = load_brick_stroke(bricks, i, GL_NEAREST, false, 0, true);
+			b->prevent_tex_deletion(false);
 			switch (type)
 			{
 			case 0:
@@ -1806,7 +1814,7 @@ namespace FLIVR
 					0,
 					z);
 
-				if (glIsTexture(stroke_tex_id) && (type == 0 || type == 1))
+				if (use_stroke && glIsTexture(stroke_tex_id) && (type == 0 || type == 1))
 				{
 					glFramebufferTexture3D(GL_FRAMEBUFFER, 
 						GL_COLOR_ATTACHMENT1,
@@ -1828,6 +1836,10 @@ namespace FLIVR
 
 				draw_view_quad(double(z+0.5) / double(b->nz()));
 			}
+
+			glFinish();
+
+			b->set_dirty(b->nmask(), true);
 
 			//test cl
 /*			if (estimate && type == 0)
@@ -1871,6 +1883,243 @@ namespace FLIVR
 		//enable depth test
 		glEnable(GL_DEPTH_TEST);
 	}
+
+	void VolumeRenderer::draw_mask_cpu(int type, int paint_mode, int hr_mode,
+		double ini_thresh, double gm_falloff, double scl_falloff,
+		double scl_translate, double w2d, double bins, bool orthographic_p,
+		bool estimate)
+	{
+		if (estimate && type==0)
+			est_thresh_ = 0.0;
+		bool use_2d = glIsTexture(tex_2d_weight1_)&&
+			glIsTexture(tex_2d_weight2_)?true:false;
+
+		Ray view_ray = compute_view();
+
+		vector<TextureBrick*> *bricks = tex_->get_sorted_bricks(view_ray, orthographic_p);
+		if (!bricks || bricks->size() == 0)
+			return;
+
+		Nrrd *source = tex_->get_nrrd(0);
+		Nrrd *target = NULL;
+		switch (type)
+		{
+			case 0:
+			case 1:
+				target = tex_->get_nrrd(tex_->nmask());
+				break;
+			case 2:
+				//target = tex_->get_nrrd(0);
+				break;
+		}
+		if (!source || !target) return;
+
+		//spacings
+		double spcx, spcy, spcz;
+		tex_->get_spacings(spcx, spcy, spcz);
+
+		//transfer function
+		glm::vec4 loc2 = glm::vec4(inv_?-scalar_scale_:scalar_scale_, gm_scale_, lo_thresh_, hi_thresh_);
+
+		//setup depth peeling
+		//if (depth_peel_)
+		//	seg_shader->setLocalParam(7, 1.0/double(w2), 1.0/double(h2), 0.0, 0.0);
+
+		//thresh1
+		glm::vec4 loc7 = glm::vec4(ini_thresh, gm_falloff, scl_falloff, scl_translate);
+		//w2d
+		glm::vec4 loc8 = glm::vec4(w2d, bins, 0.0, 0.0);
+		
+		//set clipping planes
+		double abcd[4];
+		planes_[0]->get(abcd);
+		glm::vec3 loc10 = glm::vec3(abcd[0], abcd[1], abcd[2]);
+		float loc10w = (float)abcd[3];
+		planes_[1]->get(abcd);
+		glm::vec3 loc11 = glm::vec3(abcd[0], abcd[1], abcd[2]);
+		float loc11w = (float)abcd[3];
+		planes_[2]->get(abcd);
+		glm::vec3 loc12 = glm::vec3(abcd[0], abcd[1], abcd[2]);
+		float loc12w = (float)abcd[3];
+		planes_[3]->get(abcd);
+		glm::vec3 loc13 = glm::vec3(abcd[0], abcd[1], abcd[2]);
+		float loc13w = (float)abcd[3];
+		planes_[4]->get(abcd);
+		glm::vec3 loc14 = glm::vec3(abcd[0], abcd[1], abcd[2]);
+		float loc14w = (float)abcd[3];
+		planes_[5]->get(abcd);
+		glm::vec3 loc15 = glm::vec3(abcd[0], abcd[1], abcd[2]);
+		float loc15w = (float)abcd[3];
+
+		////////////////////////////////////////////////////////
+		// render bricks
+		// Set up transform
+		Transform *tform = tex_->transform();
+		double mvmat[16];
+		tform->get_trans(mvmat);
+		m_mv_mat2 = glm::mat4(
+			mvmat[0], mvmat[4], mvmat[8], mvmat[12],
+			mvmat[1], mvmat[5], mvmat[9], mvmat[13],
+			mvmat[2], mvmat[6], mvmat[10], mvmat[14],
+			mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
+		m_mv_mat2 = m_mv_mat * m_mv_mat2;
+		glm::mat4 matrix0 = m_mv_mat2;
+		glm::mat4 matrix1 = m_proj_mat;
+		glm::mat4 matrix3 = glm::inverse(m_mv_mat2);
+
+		//bind 2d mask texture
+		bind_2d_mask();
+		glActiveTexture(GL_TEXTURE6);
+		int mask_w, mask_h;
+		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &mask_w);
+		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &mask_h);
+		size_t texsize = (size_t)mask_w*(size_t)mask_h*4;
+		unsigned char *mask2d = new unsigned char[texsize];
+		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, mask2d);
+
+		//bind 2d weight map (unused)
+		if (use_2d)
+		{
+			bind_2d_weight();
+			glActiveTexture(GL_TEXTURE4);
+			//to do
+			glActiveTexture(GL_TEXTURE5);
+			//to do
+		}
+
+		bool clear_stroke = (paint_mode == 1 || paint_mode == 2 || (paint_mode == 4 && type == 0) || paint_mode == 6 || paint_mode == 7);
+
+		if (!tex_->isBrxml())
+		{
+			void *sdata = source->data;
+			int nb = tex_->nb(0);
+			unsigned char *tdata = (unsigned char *)target->data;
+			size_t nx = tex_->nx();
+			size_t ny = tex_->ny();
+			size_t nz = tex_->nz();
+			size_t vxnum = nx*ny*nz;
+			glm::mat4 matrix = matrix1 * matrix0;
+
+			#pragma omp parallel
+			{
+				#pragma omp for
+				for (long long i = 0; i < vxnum; i++)
+				{
+					size_t tx = i % nx;
+					size_t ty = (i / nx) % ny;
+					size_t tz = i / (nx * ny);
+
+					glm::vec4 t = glm::vec4( (float)tx/(float)nx, (float)ty/(float)ny, (float)tz/(float)nz, 1.0);
+					glm::vec4 s = matrix * t;
+					s = s / s.w;
+					s.x = s.x / 2.0 + 0.5;
+					s.y = s.y / 2.0 + 0.5;
+
+					size_t mask_x = (size_t)(s.x*mask_w);
+					size_t mask_y = (size_t)(s.y*mask_h);
+					if (mask_x < 0 || mask_x >= mask_w || mask_y < 0 || mask_y >= mask_h)
+						continue;
+
+					unsigned char mask_val = mask2d[ (mask_y*mask_w + mask_x)*4 ];
+					if (mask_val <= 242)//255*0.95
+						continue;
+
+					glm::vec3 t3 = glm::vec3(t);
+					if (glm::dot(t3, loc10) + loc10w < 0.0 ||
+						glm::dot(t3, loc11) + loc11w < 0.0 ||
+						glm::dot(t3, loc12) + loc12w < 0.0 ||
+						glm::dot(t3, loc13) + loc13w < 0.0 ||
+						glm::dot(t3, loc14) + loc14w < 0.0 ||
+						glm::dot(t3, loc15) + loc15w < 0.0)
+						continue;
+
+					float v = 0.0f;
+					if (nb == 1) v = ((unsigned char *)sdata)[i] / 255.0f;
+					else if (nb == 2) v = ((unsigned short *)sdata)[i] / 65535.0f;
+					v = loc2.x < 0.0 ? (1.0 + v * loc2.x) : v * loc2.x;
+
+					//SEG_BODY_INIT_BLEND_APPEND
+					float ret = v > 0.0 ? (v > loc7.x ? 1.0 : 0.0) : 0.0;
+					tdata[i] = (unsigned char)(ret*255.0f);
+					//StrokeColor = vec4(1.0);
+				}
+
+			}
+		}
+		else
+		{
+			int nb = tex_->nb(0);
+			unsigned char *tdata = (unsigned char *)target->data;
+			size_t nx = tex_->nx();
+			size_t ny = tex_->ny();
+			size_t nz = tex_->nz();
+			size_t vxnum = nx*ny*nz;
+			glm::mat4 matrix = matrix1 * matrix0;
+			unsigned int bnum = bricks->size();
+
+			//#pragma omp parallel for
+			for (int bid = 0; bid < bnum; bid++)
+			{
+				TextureBrick* b = (*bricks)[bid];
+				size_t box = b->ox();
+				size_t boy = b->oy();
+				size_t boz = b->oz();
+				size_t bnx = b->nx();
+				size_t bny = b->ny();
+				size_t bnz = b->nz();
+				size_t bvxnum = bnx * bny*bnz;
+				const void *sdata = b->getBrickData();
+
+				#pragma omp parallel for
+				for (long long i = 0; i < bvxnum; i++)
+				{
+					if (sdata)
+					{
+						size_t tx = i % bnx + box;
+						size_t ty = (i / bnx) % bny + boy;
+						size_t tz = i / (bnx * bny) + boz;
+
+						size_t tarvxid = tz * nx*ny + ty * nx + tx;
+
+						glm::vec4 t = glm::vec4((float)tx / (float)nx, (float)ty / (float)ny, (float)tz / (float)nz, 1.0);
+						glm::vec4 s = matrix * t;
+						s = s / s.w;
+						s.x = s.x / 2.0 + 0.5;
+						s.y = s.y / 2.0 + 0.5;
+
+						size_t mask_x = (size_t)(s.x*mask_w);
+						size_t mask_y = (size_t)(s.y*mask_h);
+						if (mask_x < 0 || mask_x >= mask_w || mask_y < 0 || mask_y >= mask_h)
+							continue;
+
+						unsigned char mask_val = mask2d[(mask_y*mask_w + mask_x) * 4];
+						if (mask_val <= 242)//255*0.95
+							continue;
+
+						glm::vec3 t3 = glm::vec3(t);
+						if (glm::dot(t3, loc10) + loc10w < 0.0 ||
+							glm::dot(t3, loc11) + loc11w < 0.0 ||
+							glm::dot(t3, loc12) + loc12w < 0.0 ||
+							glm::dot(t3, loc13) + loc13w < 0.0 ||
+							glm::dot(t3, loc14) + loc14w < 0.0 ||
+							glm::dot(t3, loc15) + loc15w < 0.0)
+							continue;
+
+						float v = 0.0f;
+						if (nb == 1) v = ((const unsigned char *)sdata)[i] / 255.0f;
+						else if (nb == 2) v = ((const unsigned short *)sdata)[i] / 65535.0f;
+						v = loc2.x < 0.0 ? (1.0 + v * loc2.x) : v * loc2.x;
+
+						//SEG_BODY_INIT_BLEND_APPEND
+						float ret = v > 0.0 ? (v > loc7.x ? 1.0 : 0.0) : 0.0;
+						tdata[tarvxid] = (unsigned char)(ret*255.0f);
+						//StrokeColor = vec4(1.0);
+					}
+				}
+			}
+
+		}
+	}
 	
 	wxString readCLcode(wxString filename)
 	{
@@ -1893,6 +2142,8 @@ namespace FLIVR
 
 	void VolumeRenderer::draw_mask_th(float thresh, bool orthographic_p)
 	{
+		if (!tex_ || tex_->nstroke() < 0) return;
+
 		Ray view_ray = compute_view();
 
 		vector<TextureBrick*> *bricks = tex_->get_sorted_bricks(view_ray, orthographic_p);
@@ -1971,6 +2222,8 @@ namespace FLIVR
 			m_dslt_kernel->delTex(vd_id);
 			m_dslt_kernel->delTex(stroke_tex_id);
 			m_dslt_kernel->delTex(mask_id);
+
+			b->set_dirty(b->nmask(), true);
 		}
 
 		// Reset the blend functions after MIP
@@ -1996,6 +2249,8 @@ namespace FLIVR
 		bool use_2d = glIsTexture(tex_2d_weight1_)&&
 			glIsTexture(tex_2d_weight2_)?true:false;
 
+		bool use_stroke = (tex_->nstroke() >= 0) ? true : false;
+
 		Ray view_ray = compute_view();
 
 		vector<TextureBrick*> *bricks = tex_->get_sorted_bricks(view_ray, orthographic_p);
@@ -2016,7 +2271,7 @@ namespace FLIVR
 
 		seg_shader = seg_shader_factory_.shader(
 						SEG_SHDR_INITIALIZE, 2, hr_mode,
-						use_2d, true, depth_peel_, true, hiqual_);
+						use_2d, true, depth_peel_, true, hiqual_, use_stroke);
 
 		if (seg_shader)
 		{
@@ -2189,6 +2444,7 @@ namespace FLIVR
 		for (unsigned int i=0; i < bricks->size(); i++)
 		{
 			TextureBrick* b = (*bricks)[i];
+			b->set_dirty(b->nmask(), true);
 
 			BBox bbox = b->bbox();
 			matrix[0] = float(bbox.max().x()-bbox.min().x());
@@ -2640,6 +2896,7 @@ namespace FLIVR
 		for (unsigned int i = 0; i<bricks->size(); ++i)
 		{
 			TextureBrick* b = (*bricks)[i];
+			b->set_dirty(b->nmask(), true);
 			GLint data_id = load_brick(0, 0, bricks, i);
 			GLint mask_data_id = load_brick_mask(bricks, i);
 			int brick_x = b->nx();
@@ -2842,12 +3099,12 @@ namespace FLIVR
 		case 0://initialize
 			seg_shader = seg_shader_factory_.shader(
 				LBL_SHDR_INITIALIZE, mode, 0, has_mask,
-				false, false, false, hiqual_);
+				false, false, false, hiqual_, false);
 			break;
 		case 1://maximum filter
 			seg_shader = seg_shader_factory_.shader(
 				LBL_SHDR_MIF, mode, 0, has_mask,
-				false, false, false, hiqual_);
+				false, false, false, hiqual_, false);
 			break;
 		}
 
@@ -2932,6 +3189,8 @@ namespace FLIVR
 
 				draw_view_quad(double(z+0.5) / double(b->nz()));
 			}
+
+			b->set_dirty(b->nlabel(), true);
 		}
 
 		glViewport(vp[0], vp[1], vp[2], vp[3]);
@@ -3117,6 +3376,8 @@ namespace FLIVR
 					z);
 				draw_view_quad(double(z+0.5) / double(b->nz()));
 			}
+
+			b->set_dirty(0, true);
 		}
 
 		//release 3d mask
@@ -3178,6 +3439,8 @@ namespace FLIVR
 			glPixelStorei(GL_PACK_ROW_LENGTH, 0);
 			glPixelStorei(GL_PACK_IMAGE_HEIGHT, 0);
 			glPixelStorei(GL_PACK_ALIGNMENT, 4);
+
+			(*bricks)[i]->set_dirty(0, false);
 		}
 
 		//release 3d texture
@@ -3212,12 +3475,13 @@ namespace FLIVR
 
 			GLenum type = (*bricks)[i]->tex_type(c);
 			void* data = (*bricks)[i]->tex_data(c);
-			glGetTexImage(GL_TEXTURE_3D, 0, GL_RED,
-				type, data);
+			glGetTexImage(GL_TEXTURE_3D, 0, GL_RED, type, data);
 
 			glPixelStorei(GL_PACK_ROW_LENGTH, 0);
 			glPixelStorei(GL_PACK_IMAGE_HEIGHT, 0);
 			glPixelStorei(GL_PACK_ALIGNMENT, 4);
+
+			(*bricks)[i]->set_dirty((*bricks)[i]->nmask(), false);
 		}
 
 		/*
@@ -3288,6 +3552,8 @@ namespace FLIVR
 			glPixelStorei(GL_PACK_ROW_LENGTH, 0);
 			glPixelStorei(GL_PACK_IMAGE_HEIGHT, 0);
 			//glPixelStorei(GL_PACK_ALIGNMENT, 4);
+
+			(*bricks)[i]->set_dirty((*bricks)[i]->nlabel(), false);
 		}
 
 		//release label texture
@@ -3326,6 +3592,7 @@ namespace FLIVR
 			glPixelStorei(GL_PACK_ROW_LENGTH, 0);
 			glPixelStorei(GL_PACK_IMAGE_HEIGHT, 0);
 			glPixelStorei(GL_PACK_ALIGNMENT, 4);
+			(*bricks)[i]->set_dirty((*bricks)[i]->nstroke(), false);
 		}
 
 		//release mask texture

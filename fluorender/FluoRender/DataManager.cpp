@@ -149,6 +149,7 @@ VolumeData::VolumeData()
 	m_brick_num = 0;
 	
 	m_brkxml_mask = NULL;
+	m_mask_lv = -1;
 }
 
 /*
@@ -505,6 +506,8 @@ VolumeData* VolumeData::DeepCopy(VolumeData &copy, bool use_default_settings, Da
 		vd->m_annotation = copy.m_annotation;
 
 		vd->m_landmarks = copy.m_landmarks;
+
+		vd->m_mask_lv = copy.m_mask_lv;
 	}
 
 	return vd;
@@ -1092,13 +1095,23 @@ void VolumeData::AddEmptyMask()
 	if (!m_tex || !m_vr)
 		return;
 
+	int curlv = -1;
+	if (isBrxml())
+	{
+		curlv = GetLevel();
+		SetLevel(GetMaskLv());
+	}
+
+	size_t res_x = m_tex->nx();
+	size_t res_y = m_tex->ny();
+	size_t res_z = m_tex->nz();
+
 	//prepare the texture bricks for the mask
 	if (m_tex->add_empty_mask())
 	{
 		//add the nrrd data for mask
 		Nrrd *nrrd_mask = nrrdNew();
-		unsigned long long mem_size = (unsigned long long)m_res_x*
-			(unsigned long long)m_res_y*(unsigned long long)m_res_z;
+		size_t mem_size = res_x*res_y*res_z;
 		uint8 *val8 = new (std::nothrow) uint8[mem_size];
 		if (!val8)
 		{
@@ -1108,16 +1121,20 @@ void VolumeData::AddEmptyMask()
 		double spcx, spcy, spcz;
 		m_tex->get_spacings(spcx, spcy, spcz);
 		memset((void*)val8, 0, mem_size*sizeof(uint8));
-		nrrdWrap(nrrd_mask, val8, nrrdTypeUChar, 3, (size_t)m_res_x, (size_t)m_res_y, (size_t)m_res_z);
-		nrrdAxisInfoSet(nrrd_mask, nrrdAxisInfoSize, (size_t)m_res_x, (size_t)m_res_y, (size_t)m_res_z);
+		nrrdWrap(nrrd_mask, val8, nrrdTypeUChar, 3, res_x, res_y, res_z);
+		nrrdAxisInfoSet(nrrd_mask, nrrdAxisInfoSize, res_x, res_y, res_z);
 		nrrdAxisInfoSet(nrrd_mask, nrrdAxisInfoSpacing, spcx, spcy, spcz);
 		nrrdAxisInfoSet(nrrd_mask, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
-		nrrdAxisInfoSet(nrrd_mask, nrrdAxisInfoMax, spcx*m_res_x, spcy*m_res_y, spcz*m_res_z);
+		nrrdAxisInfoSet(nrrd_mask, nrrdAxisInfoMax, spcx*res_x, spcy*res_y, spcz*res_z);
 
 		m_tex->set_nrrd(nrrd_mask, m_tex->nmask());
 	}
 
-	AddEmptyStroke();
+	if (!isBrxml())
+		AddEmptyStroke();
+
+	if (isBrxml())
+		SetLevel(curlv);
 }
 
 void VolumeData::AddEmptyStroke()
@@ -1125,12 +1142,22 @@ void VolumeData::AddEmptyStroke()
 	if (!m_tex || !m_vr)
 		return;
 
+	int curlv = -1;
+	if (isBrxml())
+	{
+		curlv = GetLevel();
+		SetLevel(GetMaskLv());
+	}
+
+	size_t res_x = m_tex->nx();
+	size_t res_y = m_tex->ny();
+	size_t res_z = m_tex->nz();
+
 	if (m_tex->add_empty_stroke())
 	{
 		//add the nrrd data for mask
 		Nrrd *nrrd_stroke = nrrdNew();
-		unsigned long long mem_size = (unsigned long long)m_res_x*
-			(unsigned long long)m_res_y*(unsigned long long)m_res_z;
+		size_t mem_size = res_x*res_y*res_z;
 		uint8 *val8 = new (std::nothrow) uint8[mem_size];
 		if (!val8)
 		{
@@ -1140,14 +1167,17 @@ void VolumeData::AddEmptyStroke()
 		double spcx, spcy, spcz;
 		m_tex->get_spacings(spcx, spcy, spcz);
 		memset((void*)val8, 0, mem_size*sizeof(uint8));
-		nrrdWrap(nrrd_stroke, val8, nrrdTypeUChar, 3, (size_t)m_res_x, (size_t)m_res_y, (size_t)m_res_z);
-		nrrdAxisInfoSet(nrrd_stroke, nrrdAxisInfoSize, (size_t)m_res_x, (size_t)m_res_y, (size_t)m_res_z);
+		nrrdWrap(nrrd_stroke, val8, nrrdTypeUChar, 3, res_x, res_y, res_z);
+		nrrdAxisInfoSet(nrrd_stroke, nrrdAxisInfoSize, res_x, res_y, res_z);
 		nrrdAxisInfoSet(nrrd_stroke, nrrdAxisInfoSpacing, spcx, spcy, spcz);
 		nrrdAxisInfoSet(nrrd_stroke, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
-		nrrdAxisInfoSet(nrrd_stroke, nrrdAxisInfoMax, spcx*m_res_x, spcy*m_res_y, spcz*m_res_z);
+		nrrdAxisInfoSet(nrrd_stroke, nrrdAxisInfoMax, spcx*res_x, spcy*res_y, spcz*res_z);
 
 		m_tex->set_nrrd(nrrd_stroke, m_tex->nstroke());
 	}
+
+	if (isBrxml())
+		SetLevel(curlv);
 }
 
 //volume label
@@ -1225,6 +1255,17 @@ void VolumeData::AddEmptyLabel(int mode)
 	if (!m_tex || !m_vr)
 		return;
 
+	int curlv = -1;
+	if (isBrxml())
+	{
+		curlv = GetLevel();
+		SetLevel(GetMaskLv());
+	}
+
+	size_t res_x = m_tex->nx();
+	size_t res_y = m_tex->ny();
+	size_t res_z = m_tex->nz();
+
 	Nrrd *nrrd_label = 0;
 	unsigned int *val32 = 0;
 	//prepare the texture bricks for the labeling mask
@@ -1232,8 +1273,7 @@ void VolumeData::AddEmptyLabel(int mode)
 	{
 		//add the nrrd data for the labeling mask
 		nrrd_label = nrrdNew();
-		unsigned long long mem_size = (unsigned long long)m_res_x*
-			(unsigned long long)m_res_y*(unsigned long long)m_res_z;
+		size_t mem_size = res_x*res_y*res_z;
 		val32 = new (std::nothrow) unsigned int[mem_size];
 		if (!val32)
 		{
@@ -1243,11 +1283,11 @@ void VolumeData::AddEmptyLabel(int mode)
 
 		double spcx, spcy, spcz;
 		m_tex->get_spacings(spcx, spcy, spcz);
-		nrrdWrap(nrrd_label, val32, nrrdTypeUInt, 3, (size_t)m_res_x, (size_t)m_res_y, (size_t)m_res_z);
+		nrrdWrap(nrrd_label, val32, nrrdTypeUInt, 3, res_x, res_y, res_z);
 		nrrdAxisInfoSet(nrrd_label, nrrdAxisInfoSpacing, spcx, spcy, spcz);
 		nrrdAxisInfoSet(nrrd_label, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
-		nrrdAxisInfoSet(nrrd_label, nrrdAxisInfoMax, spcx*m_res_x, spcy*m_res_y, spcz*m_res_z);
-		nrrdAxisInfoSet(nrrd_label, nrrdAxisInfoSize, (size_t)m_res_x, (size_t)m_res_y, (size_t)m_res_z);
+		nrrdAxisInfoSet(nrrd_label, nrrdAxisInfoMax, res_x, res_y, res_z);
+		nrrdAxisInfoSet(nrrd_label, nrrdAxisInfoSize, res_x, res_y, res_z);
 
 		m_tex->set_nrrd(nrrd_label, m_tex->nlabel());
 	}
@@ -1272,6 +1312,8 @@ void VolumeData::AddEmptyLabel(int mode)
 		break;
 	}
 
+	if (isBrxml())
+		SetLevel(curlv);
 }
 
 bool VolumeData::SearchLabel(unsigned int label)
@@ -1309,8 +1351,18 @@ Nrrd* VolumeData::GetMask(bool ret)
 {
 	if (m_vr && m_tex && m_tex->nmask()!=-1)
 	{
+		int curlv = -1;
+		if (isBrxml())
+		{
+			curlv = GetLevel();
+			SetLevel(GetMaskLv());
+		}
+
 		if (ret) m_vr->return_mask();
 		return m_tex->get_nrrd(m_tex->nmask());
+
+		if (isBrxml())
+			SetLevel(curlv);
 	}
 
 	return 0;
@@ -1320,8 +1372,19 @@ Nrrd* VolumeData::GetLabel(bool ret)
 {
 	if (m_vr && m_tex && m_tex->nlabel() != -1)
 	{
+
+		int curlv = -1;
+		if (isBrxml())
+		{
+			curlv = GetLevel();
+			SetLevel(GetMaskLv());
+		}
+
 		if (ret) m_vr->return_label();
 		return m_tex->get_nrrd(m_tex->nlabel());
+
+		if (isBrxml())
+			SetLevel(curlv);
 	}
 
 	return 0;
@@ -1331,8 +1394,18 @@ Nrrd* VolumeData::GetStroke(bool ret)
 {
 	if (m_vr && m_tex && m_tex->nstroke()!=-1)
 	{
+		int curlv = -1;
+		if (isBrxml())
+		{
+			curlv = GetLevel();
+			SetLevel(GetMaskLv());
+		}
+
 		if (ret) m_vr->return_stroke();
 		return m_tex->get_nrrd(m_tex->nstroke());
+
+		if (isBrxml())
+			SetLevel(curlv);
 	}
 
 	return 0;
@@ -2083,7 +2156,17 @@ void VolumeData::Draw(bool ortho, bool interactive, double zoom, double sampling
 {
 	if (m_vr)
 	{
+		int curlv = -1;
+		if ( isBrxml() && (m_vr->is_mask_active() || m_vr->is_label_active()) )
+		{
+			curlv = GetLevel();
+			SetLevel(GetMaskLv());
+		}
+		
 		m_vr->draw(m_test_wiref, interactive, ortho, zoom, m_stream_mode, sampling_frq_fac);
+		
+		if ( isBrxml() && (m_vr->is_mask_active() || m_vr->is_label_active()) )
+			SetLevel(curlv);
 	}
 	if (m_draw_bounds)
 		DrawBounds();
@@ -2104,16 +2187,38 @@ void VolumeData::DrawMask(int type, int paint_mode, int hr_mode,
 {
 	if (m_vr)
 	{
+		int curlv = -1;
+		if (isBrxml())
+		{
+			curlv = GetLevel();
+			SetLevel(GetMaskLv());
+		}
+
 		m_vr->set_2d_mask(m_2d_mask);
 		m_vr->set_2d_weight(m_2d_weight1, m_2d_weight2);
 		m_vr->draw_mask(type, paint_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, scl_translate, w2d, bins, ortho, false);
+
+		if (isBrxml())
+			SetLevel(curlv);
 	}
 }
 
 void VolumeData::DrawMaskThreshold(float th, bool ortho)
 {
 	if (m_vr)
+	{
+		int curlv = -1;
+		if (isBrxml())
+		{
+			curlv = GetLevel();
+			SetLevel(GetMaskLv());
+		}
+
 		m_vr->draw_mask_th(th, ortho);
+
+		if (isBrxml())
+			SetLevel(curlv);
+	}
 }
 
 void VolumeData::DrawMaskDSLT(int type, int paint_mode, int hr_mode,
@@ -2122,9 +2227,18 @@ void VolumeData::DrawMaskDSLT(int type, int paint_mode, int hr_mode,
 {
 	if (m_vr)
 	{
+		int curlv = -1;
+		if (isBrxml())
+		{
+			curlv = GetLevel();
+			SetLevel(GetMaskLv());
+		}
 		m_vr->set_2d_mask(m_2d_mask);
 		m_vr->set_2d_weight(m_2d_weight1, m_2d_weight2);
 		m_vr->draw_mask_dslt(type, paint_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, scl_translate, w2d, bins, ortho, false, dslt_r, dslt_q, dslt_c*GetMaxValue());
+
+		if (isBrxml())
+			SetLevel(curlv);
 	}
 }
 
@@ -2134,7 +2248,19 @@ void VolumeData::DrawMaskDSLT(int type, int paint_mode, int hr_mode,
 void VolumeData::DrawLabel(int type, int mode, double thresh, double gm_falloff)
 {
 	if (m_vr)
+	{
+		int curlv = -1;
+		if (isBrxml())
+		{
+			curlv = GetLevel();
+			SetLevel(GetMaskLv());
+		}
+
 		m_vr->draw_label(type, mode, thresh, gm_falloff);
+
+		if (isBrxml())
+			SetLevel(curlv);
+	}
 }
 
 //calculation
@@ -2872,18 +2998,28 @@ MeshData *VolumeData::ExportMeshMask()
     
 #ifdef _WIN32
     
-	if (m_tex->nmask() == -1) return NULL;
+	if (!m_tex || m_tex->nmask() == -1) return NULL;
+
+	int curlv = -1;
+	if (isBrxml())
+	{
+		curlv = GetLevel();
+		SetLevel(GetMaskLv());
+	}
 	
 	m_vr->return_mask();
 	
 	Nrrd *nrrd = m_tex->get_nrrd(m_tex->nmask());
 	double spcx = 1.0, spcy = 1.0, spcz = 1.0;
 	GetSpacings(spcx, spcy, spcz);
+	size_t res_x = m_tex->nx();
+	size_t res_y = m_tex->ny();
+	size_t res_z = m_tex->nz();
 
 	vtkSmartPointer<vtkImageImport> imageImport = vtkSmartPointer<vtkImageImport>::New();
 	imageImport->SetDataSpacing(spcx, spcy, spcz);
 	imageImport->SetDataOrigin(0, 0, 0);
-	imageImport->SetWholeExtent(0, m_res_x-1, 0, m_res_y-1, 0, m_res_z-1);
+	imageImport->SetWholeExtent(0, res_x-1, 0, res_y-1, 0, res_z-1);
 	imageImport->SetDataExtentToWholeExtent();
 	imageImport->SetDataScalarTypeToUnsignedChar();
 	imageImport->SetNumberOfScalarComponents(1);
@@ -2996,6 +3132,9 @@ MeshData *VolumeData::ExportMeshMask()
 	result->SetName(newname);
     
 #endif
+
+	if (isBrxml())
+		SetLevel(curlv);
     
     return result;
 }
