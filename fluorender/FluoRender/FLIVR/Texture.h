@@ -204,6 +204,20 @@ namespace FLIVR
 		int GetLevelNum() {return pyramid_.size();}
 		void SetCopyableLevel(int lv) {pyramid_copy_lv_ = lv;}
 		int GetCopyableLevel() {return pyramid_copy_lv_;}
+		int GetMaskLv()
+		{
+			if (!isBrxml()) return -1;
+			else if (masklv_ < 0 || masklv_ >= GetLevelNum()) return GetLevelNum()-1;
+			return masklv_;
+		}
+		void SetMaskLv(int lv)
+		{
+			if (!isBrxml()) return;
+			else if (lv < 0 || lv >= GetLevelNum()) return;
+			masklv_ = lv;
+		}
+		void GetDimensionLv(int lv, int &x, int &y, int &z);
+		Nrrd* get_nrrd_lv(int lv, int index);
 
 		void DeleteCacheFiles();
 
@@ -277,6 +291,8 @@ namespace FLIVR
 		vector<vector<vector<vector<FileLocInfo *>>>> filenames_;
 
 		int pyramid_copy_lv_;
+
+		int masklv_;
 
 		//used when brkxml_ is not equal to false.
 		vector<TextureBrick*> default_vec_;

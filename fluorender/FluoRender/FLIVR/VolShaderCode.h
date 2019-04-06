@@ -71,6 +71,11 @@ namespace FLIVR
 	"uniform mat4 matrix2;//tex transform for bricking\n" \
 	"\n"
 
+#define VOL_UNIFORMS_MATRICES_MASK_HIDE \
+	"// VOL_UNIFORMS_MATRICES_MASK_HIDE\n" \
+	"uniform mat4 matrix6;//tex transform for mask bricks\n" \
+	"\n"
+
 #define VOL_UNIFORMS_SIN_COLOR \
 	"//VOL_UNIFORMS_SIN_COLOR\n" \
 	"uniform vec4 loc6;//(red, green, blue, mask_threshold)\n" \
@@ -212,6 +217,28 @@ namespace FLIVR
 	"	else\n" \
 	"		return false;\n" \
 	"}\n" \
+	"\n"
+
+#define VOL_HEAD_HIDE_OUTSIDE_MASK \
+	"	//VOL_HEAD_HIDE_OUTSIDE_MASK\n" \
+	"	vec4 maskt = matrix6 * t;\n" \
+	"	vec4 maskcheck = texture(tex2, maskt.stp); //get mask value\n" \
+	"	if (maskcheck.x <= 0.5)\n" \
+	"	{\n" \
+	"		discard;\n" \
+	"		return;\n" \
+	"	}\n" \
+	"\n"
+
+#define VOL_HEAD_HIDE_INSIDE_MASK \
+	"	//VOL_HEAD_HIDE_INSIDE_MASK\n" \
+	"	vec4 maskt = matrix6 * t;\n" \
+	"	vec4 maskcheck = texture(tex2, maskt.stp); //get mask value\n" \
+	"	if (maskcheck.x > 0.5)\n" \
+	"	{\n" \
+	"		discard;\n" \
+	"		return;\n" \
+	"	}\n" \
 	"\n"
 
 #define VOL_HEAD_LIT \

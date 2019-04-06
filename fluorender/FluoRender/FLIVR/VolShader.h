@@ -48,7 +48,7 @@ namespace FLIVR
 				int peel, bool clip,
 				bool hiqual, int mask,
 				int color_mode, int colormap, int colormap_proj,
-				bool solid, int vertex_shader);
+				bool solid, int vertex_shader, int mask_hide_mode);
 		~VolShader();
 
 		bool create();
@@ -65,13 +65,14 @@ namespace FLIVR
 		inline int colormap() {return colormap_;}
 		inline int colormap_proj() {return colormap_proj_;}
 		inline bool solid() {return solid_;}
+		inline bool mask_hide_mode() {return mask_hide_mode_;}
 
 		inline bool match(bool poly, int channels,
 						bool shading, bool fog,
 						int peel, bool clip,
 						bool hiqual, int mask,
 						int color_mode, int colormap, int colormap_proj,
-						bool solid, int vertex_shader)
+						bool solid, int vertex_shader, int mask_hide_mode)
 		{ 
 			return (poly_ == poly &&
 				channels_ == channels &&
@@ -85,7 +86,8 @@ namespace FLIVR
 				colormap_ == colormap &&
 				colormap_proj_ == colormap_proj &&
 				solid_ == solid &&
-				vertex_type_ == vertex_shader); 
+				vertex_type_ == vertex_shader &&
+				mask_hide_mode_ == mask_hide_mode); 
 		}
 
 		inline ShaderProgram* program() { return program_; }
@@ -110,6 +112,7 @@ namespace FLIVR
 		int colormap_proj_;//projection direction
 		bool solid_;//no transparency
 		int vertex_type_;
+		int mask_hide_mode_;
 
 		ShaderProgram* program_;
 	};
@@ -125,7 +128,7 @@ namespace FLIVR
 								int peel, bool clip,
 								bool hiqual, int mask,
 								int color_mode, int colormap, int colormap_proj,
-								bool solid, int vertex_type);
+								bool solid, int vertex_type, int mask_hide_mode);
 		//mask: 0-no mask, 1-segmentation mask, 2-labeling mask
 		//color_mode: 0-normal; 1-rainbow; 2-depth; 3-index; 255-index(depth mode)
 

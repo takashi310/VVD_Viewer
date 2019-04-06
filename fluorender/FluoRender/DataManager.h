@@ -640,10 +640,17 @@ public:
 
 	int GetMaskLv()
 	{
-		if (!isBrxml()) return -1;
-		else if (m_mask_lv < 0 || m_mask_lv >= GetLevelNum()) return GetLevelNum()-1;
-		return m_mask_lv;
+		if (!m_tex) return -1;
+		return m_tex->GetMaskLv();
 	}
+	void SetMaskLv(int lv)
+	{
+		if (!m_tex) return;
+		m_tex->SetMaskLv(lv);
+	}
+
+	void SetMaskHideMode(int mode) { if (m_vr) m_vr->set_mask_hide_mode(mode); }
+	int GetMaskHideMode() { return m_vr ? m_vr->get_mask_hide_mode() : VOL_MASK_HIDE_NONE; }
 
 private:
 	//duplication indicator and counter

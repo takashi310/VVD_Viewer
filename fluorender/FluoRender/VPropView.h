@@ -82,7 +82,9 @@ class EXPORT_API VPropView: public wxPanel
 		ID_IDCLChk,
 		ID_MipChk,
 		ID_NRChk,
-		ID_DepthChk
+		ID_DepthChk,
+		ID_MaskHideOutside,
+		ID_MaskHideInside
 };
 
 public:
@@ -224,6 +226,9 @@ private:
 	wxButton *m_save_default;
 	wxButton *m_reset_default;
 
+	wxCheckBox *m_mask_outside_chk;
+	wxCheckBox *m_mask_inside_chk;
+
 private:
 	void GetSettings();
 	bool SetSpacings();
@@ -301,6 +306,9 @@ private:
 	void OnNRCheck(wxCommandEvent &event);
 	//depth omde
 	void OnDepthCheck(wxCommandEvent &event);
+
+	void OnMaskHideOutsideCheck(wxCommandEvent &event);
+	void OnMaskHideInsideCheck(wxCommandEvent &event);
 
 	DECLARE_EVENT_TABLE();
 };

@@ -815,6 +815,9 @@ void VolumeLoader::CleanupLoadedBrick()
 		}
 	}
 
+	if (required > 5LL*1024LL*1024LL*1024LL) 
+		required = 5LL*1024LL*1024LL*1024LL;
+
 	vector<VolumeLoaderData> b_locked;
 	vector<VolumeLoaderData> vd_undisp;
 	vector<VolumeLoaderData> b_undisp;
@@ -1001,11 +1004,15 @@ void VolumeLoader::RemoveBrickVD(VolumeData *vd)
 
 void VolumeLoader::PreloadLevel(VolumeData *vd, int lv, bool lock)
 {
+	OutputDebugStringA("Preloader enter.\n");
+
 	if (!vd || !vd->isBrxml()) return;
 	if (lv < 0 || lv >= vd->GetLevelNum()) return;
 
 	Texture *tex = vd->GetTexture();
 	if (!tex) return;
+
+	StopAll();
 
 	int curlevel = vd->GetLevel();
 
@@ -1035,9 +1042,11 @@ void VolumeLoader::PreloadLevel(VolumeData *vd, int lv, bool lock)
 
 	Set(queues);
 	long long cur_memlimit = m_memory_limit;
-	SetMemoryLimitByte(m_used_memory + required);
+	SetMemoryLimitByte(m_used_memory + required + 100);
+	OutputDebugStringA("Preloader running.\n");
 	Run();
 	Join();
+	OutputDebugStringA("Preload done.\n");
 	SetMemoryLimitByte(cur_memlimit);
 }
 
@@ -5191,7 +5200,7 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int pe
 			}
 			if (maxlen > sampling_frq_fac) sampling_frq_fac = maxlen;
 			*/
-			if (tex->nmask()!=-1)
+			if (tex->nmask()!=-1 && vd->GetMaskHideMode() == VOL_MASK_HIDE_NONE)
 			{
 				cnt_mask++;
 				if (vr_frame &&
@@ -5295,6 +5304,8 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int pe
 			continue;
 		if (mask)
 		{
+			if (vd->GetMaskHideMode() != VOL_MASK_HIDE_NONE)
+				continue;
 			//when run script
 			VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 			if (vr_frame &&
@@ -9384,8 +9395,8 @@ DataGroup* VRenderGLView::AddVolumeData(VolumeData* vd, wxString group_name)
 		if ((group->GetVolumeSyncSpc() || group->GetVolumeSyncProp()) && group->GetVolumeNum() > 0)
 		{
 			double spcx=1.0, spcy=1.0, spcz=1.0;
-			group->GetVolumeData(0)->GetBaseSpacings(spcx, spcy, spcz);
-			vd->SetBaseSpacings(spcx, spcy, spcz);
+			group->GetVolumeData(0)->GetSpacings(spcx, spcy, spcz, 0);
+			vd->SetSpacings(spcx, spcy, spcz);
 		}
 
 		if (group->GetVolumeSyncProp() && group->GetVolumeData(0) != vd)
@@ -10151,8 +10162,8 @@ void VRenderGLView::MoveLayertoGroup(wxString &group_name, wxString &src_name, w
 	if ((group->GetVolumeSyncSpc() || group->GetVolumeSyncProp()) && group->GetVolumeNum() > 0)
 	{
 		double spcx=1.0, spcy=1.0, spcz=1.0;
-		group->GetVolumeData(0)->GetBaseSpacings(spcx, spcy, spcz);
-		src_vd->SetBaseSpacings(spcx, spcy, spcz);
+		group->GetVolumeData(0)->GetSpacings(spcx, spcy, spcz, 0);
+		src_vd->SetSpacings(spcx, spcy, spcz);
 	}
 
 	if (group->GetVolumeSyncProp() && group->GetVolumeData(0) != src_vd)
@@ -10272,8 +10283,8 @@ void VRenderGLView::MoveLayerfromtoGroup(wxString &src_group_name, wxString &dst
 	if ((dst_group->GetVolumeSyncSpc() || dst_group->GetVolumeSyncProp()) && dst_group->GetVolumeNum() > 0)
 	{
 		double spcx=1.0, spcy=1.0, spcz=1.0;
-		dst_group->GetVolumeData(0)->GetBaseSpacings(spcx, spcy, spcz);
-		src_vd->SetBaseSpacings(spcx, spcy, spcz);
+		dst_group->GetVolumeData(0)->GetSpacings(spcx, spcy, spcz, 0);
+		src_vd->SetSpacings(spcx, spcy, spcz);
 	}
 
 	if (dst_group->GetVolumeSyncProp() && dst_group->GetVolumeData(0) != src_vd)
@@ -13352,7 +13363,7 @@ void VRenderGLView::StartLoopUpdate(bool reset_peeling_layer)
 							}
 							else
 								(*bricks2)[j]->set_disp(true);
-							if (m_draw_mask && tex->nmask() != -1)
+							if (m_draw_mask && tex->nmask() != -1 && vd->GetMaskHideMode() == VOL_MASK_HIDE_NONE)
 							{
 								total_num++;
 								num_chan++;
@@ -13404,7 +13415,7 @@ void VRenderGLView::StartLoopUpdate(bool reset_peeling_layer)
 							total_num++;
 							num_chan++;
 						}
-						if (m_draw_mask && tex->nmask() != -1 && !tex->isBrxml())
+						if (m_draw_mask && tex->nmask() != -1 && !tex->isBrxml() && vd->GetMaskHideMode() == VOL_MASK_HIDE_NONE)
 						{
 							total_num++;
 							num_chan++;

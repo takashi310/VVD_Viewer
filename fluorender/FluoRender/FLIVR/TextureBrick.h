@@ -184,6 +184,10 @@ namespace FLIVR {
 		inline int nx() { return nx_; }
 		inline int ny() { return ny_; }
 		inline int nz() { return nz_; }
+		void nx(int nx) { nx_ = nx; }
+		void ny(int ny) { ny_ = ny; }
+		void nz(int nz) { nz_ = nz; }
+
 		inline int nc() { return nc_; }
 		inline int nb(int c)
 		{
@@ -215,10 +219,16 @@ namespace FLIVR {
 		inline int mx() { return mx_; }
 		inline int my() { return my_; }
 		inline int mz() { return mz_; }
+		void mx(int mx) { mx_ = mx; }
+		void my(int my) { my_ = my; }
+		void mz(int mz) { mz_ = mz; }
 
 		inline int ox() { return ox_; }
 		inline int oy() { return oy_; }
 		inline int oz() { return oz_; }
+		void ox(int ox) { ox_ = ox; }
+		void oy(int oy) { oy_ = oy; }
+		void oz(int oz) { oz_ = oz; }
 
 		virtual int sx();
 		virtual int sy();

@@ -123,7 +123,8 @@ namespace FLIVR
 		compression_(false),
 		m_dslt_l2_kernel(NULL),
 		m_dslt_b_kernel(NULL),
-		m_dslt_em_kernel(NULL)
+		m_dslt_em_kernel(NULL),
+		m_mask_hide_mode(VOL_MASK_HIDE_NONE)
 	{
 		//mode
 		mode_ = MODE_OVER;
@@ -186,7 +187,8 @@ namespace FLIVR
 		compression_(copy.compression_),
 		m_dslt_l2_kernel(NULL),
 		m_dslt_b_kernel(NULL),
-		m_dslt_em_kernel(NULL)
+		m_dslt_em_kernel(NULL),
+		m_mask_hide_mode(copy.m_mask_hide_mode)
 	{
 		//mode
 		mode_ = copy.mode_;
@@ -1078,7 +1080,7 @@ namespace FLIVR
 			depth_peel_, true,
 			hiqual_, ml_mode_,
 			colormap_mode_, colormap_, colormap_proj_,
-			solid_, 1);
+			solid_, 1, tex_->nmask() != -1 ? m_mask_hide_mode : VOL_MASK_HIDE_NONE);
 		if (shader)
 		{
 			if (!shader->valid())
@@ -1278,12 +1280,115 @@ namespace FLIVR
 			else
 				filter = GL_NEAREST;
 
+			b->prevent_tex_deletion(true);
 			if (load_brick(0, 0, bricks, i, filter, compression_, mode, (mask_ || label_) ? false : true) < 0)
 				continue;
+			
 			if (mask_)
 				load_brick_mask(bricks, i, filter);
+			else if (tex_->nmask() != -1 && m_mask_hide_mode != VOL_MASK_HIDE_NONE)
+			{
+				if (tex_->isBrxml() && tex_->GetMaskLv() != tex_->GetCurLevel())
+				{
+					m_pThreadCS.Enter();
+
+					int cnx = b->nx(), cny = b->ny(), cnz = b->nz();
+					int cox = b->ox(), coy = b->oy(), coz = b->oz();
+					int cmx = b->mx(), cmy = b->my(), cmz = b->mz();
+					int csx = b->sx(), csy = b->sy(), csz = b->sz();
+					Nrrd *cdata = b->get_nrrd(0);
+					Nrrd *cmdata = b->get_nrrd(tex_->nmask());
+					
+					b->set_nrrd(tex_->get_nrrd_lv(tex_->GetMaskLv(),0), 0);
+					b->set_nrrd(tex_->get_nrrd(tex_->nmask()), tex_->nmask());
+					int sx = b->sx(), sy = b->sy(), sz = b->sz();
+					double xscale = (double)sx/csx;
+					double yscale = (double)sy/csy;
+					double zscale = (double)sz/csz;
+					
+					double ox_d = (double)cox*xscale;
+					double oy_d = (double)coy*yscale;
+					double oz_d = (double)coz*zscale;
+					int ox = (int)floor(ox_d);
+					int oy = (int)floor(oy_d);
+					int oz = (int)floor(oz_d);
+
+					b->ox(ox); b->oy(oy); b->oz(oz);
+
+					double endx_d = (double)(cox+cnx)*xscale;
+					double endy_d = (double)(coy+cny)*yscale;
+					double endz_d = (double)(coz+cnz)*zscale;
+					int nx = (int)ceil(endx_d) - ox;
+					int ny = (int)ceil(endy_d) - oy;
+					int nz = (int)ceil(endz_d) - oz;
+					
+					b->nx(nx); b->ny(ny); b->nz(nz);
+					b->mx(nx); b->my(ny); b->mz(nz);
+
+					load_brick_mask(bricks, i, filter, false, 0, true, false);
+
+					double trans_x = (ox_d-ox)/nx;
+					double trans_y = (oy_d-oy)/ny;
+					double trans_z = (oz_d-oz)/nz;
+					double scale_x = (endx_d-ox_d)/nx;
+					double scale_y = (endy_d-oy_d)/ny;
+					double scale_z = (endz_d-oz_d)/nz;
+
+					float matrix[16];
+					matrix[0] = (float)scale_x;
+					matrix[1] = 0.0f;
+					matrix[2] = 0.0f;
+					matrix[3] = 0.0f;
+					matrix[4] = 0.0f;
+					matrix[5] = (float)scale_y;
+					matrix[6] = 0.0f;
+					matrix[7] = 0.0f;
+					matrix[8] = 0.0f;
+					matrix[9] = 0.0f;
+					matrix[10] = (float)scale_z;
+					matrix[11] = 0.0f;
+					matrix[12] = (float)trans_x;
+					matrix[13] = (float)trans_y;
+					matrix[14] = (float)trans_z;
+					matrix[15] = 1.0f;
+					shader->setLocalParamMatrix(6, matrix);
+
+					b->nx(cnx); b->ny(cny); b->nz(cnz);
+					b->ox(cox); b->oy(coy); b->oz(coz);
+					b->mx(cmx); b->my(cmy); b->mz(cmz);
+					b->set_nrrd(cdata, 0);
+					b->set_nrrd(cmdata, tex_->nmask());
+
+					m_pThreadCS.Leave();
+				}
+				else
+				{
+					load_brick_mask(bricks, i, filter, false, 0, true, false);
+
+					float matrix[16];
+					matrix[0] = 1.0f;
+					matrix[1] = 0.0f;
+					matrix[2] = 0.0f;
+					matrix[3] = 0.0f;
+					matrix[4] = 0.0f;
+					matrix[5] = 1.0f;
+					matrix[6] = 0.0f;
+					matrix[7] = 0.0f;
+					matrix[8] = 0.0f;
+					matrix[9] = 0.0f;
+					matrix[10] = 1.0f;
+					matrix[12] = 0.0f;
+					matrix[13] = 0.0f;
+					matrix[14] = 0.0f;
+					matrix[15] = 1.0f;
+					shader->setLocalParamMatrix(6, matrix);
+				}
+			}
+
 			if (label_)
 				load_brick_label(bricks, i);
+
+			b->prevent_tex_deletion(false);
 
 			shader->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(),
 				mode_==MODE_OVER?1.0/(rate*minwh*0.001*zoom*2.0):1.0);
@@ -1556,7 +1661,7 @@ namespace FLIVR
 			0, false,
 			false, 0,
 			0, 0, 0,
-			false, 1);
+			false, 1, 0);
 		if (shader)
 		{
 			if (!shader->valid())
@@ -1758,6 +1863,9 @@ namespace FLIVR
 		float matrix[16];
 		for (unsigned int i=0; i < bricks->size(); i++)
 		{
+			wxString dbgstr = wxString::Format("draw_mask brick: %d %d\n", i, (*bricks)[i]->getBrickData() ? 1 : 0);
+			OutputDebugStringA(dbgstr.ToStdString().c_str());
+
 			TextureBrick* b = (*bricks)[i];
 
 			BBox dbox = b->dbox();
@@ -1787,7 +1895,9 @@ namespace FLIVR
 			b->prevent_tex_deletion(true);
 			GLint vd_id = load_brick(0, 0, bricks, i, GL_NEAREST, compression_);
 			GLint mask_id = load_brick_mask(bricks, i, GL_NEAREST, false, 0, true);
+			OutputDebugStringA("load_brick_stroke: Enter\n");
 			GLint stroke_tex_id = load_brick_stroke(bricks, i, GL_NEAREST, false, 0, true);
+			OutputDebugStringA("load_brick_stroke: Leave\n");
 			b->prevent_tex_deletion(false);
 			switch (type)
 			{
@@ -1803,6 +1913,10 @@ namespace FLIVR
 			//size and sample rate
 			seg_shader->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(),
 				mode_==MODE_OVER?1.0/sampling_rate_:1.0);
+
+			dbgstr = wxString::Format("draw_mask: vd_id %d, mask_id %d, stroke_id %d, tex_id %d\n",
+										vd_id, mask_id, stroke_tex_id, tex_id);
+			OutputDebugStringA(dbgstr.ToStdString().c_str());
 
 			//draw each slice
 			for (int z=0; z<b->nz(); z++)

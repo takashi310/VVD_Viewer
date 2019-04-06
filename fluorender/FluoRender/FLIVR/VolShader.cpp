@@ -92,7 +92,7 @@ VolShader::VolShader(
 	int peel, bool clip,
 	bool hiqual, int mask,
 	int color_mode, int colormap, int colormap_proj,
-	bool solid, int vertex_shader)
+	bool solid, int vertex_shader, int mask_hide_mode)
 	: poly_(poly),
 	channels_(channels),
 	shading_(shading),
@@ -106,6 +106,7 @@ VolShader::VolShader(
 	colormap_proj_(colormap_proj),
 	solid_(solid),
 	vertex_type_(vertex_shader),
+	mask_hide_mode_(mask_hide_mode),
 	program_(0)
 	{
 	}
@@ -248,6 +249,12 @@ VolShader::VolShader(
 			break;
 		}
 
+		if ( (mask_ <= 0 || mask_ == 3)  && mask_hide_mode_ > 0)
+		{
+			z << VOL_UNIFORMS_MASK;
+			z << VOL_UNIFORMS_MATRICES_MASK_HIDE;
+		}
+
 		//uniform for fog
 		if (fog_)
 			z << VOL_UNIFORMS_FOG_LOC;
@@ -275,6 +282,11 @@ VolShader::VolShader(
 
 		// Set up light variables and input parameters.
 		z << VOL_HEAD_LIT;
+
+		if ( mask_hide_mode_ == 1)
+			z << VOL_HEAD_HIDE_OUTSIDE_MASK;
+		else if ( mask_hide_mode_ == 2)
+			z << VOL_HEAD_HIDE_INSIDE_MASK;
 
 		// Set up fog variables and input parameters.
 		if (fog_)
@@ -471,7 +483,7 @@ VolShader::VolShader(
 		int peel, bool clip,
 		bool hiqual, int mask,
 		int color_mode, int colormap, int colormap_proj,
-		bool solid, int vertex_shader)
+		bool solid, int vertex_shader, int mask_hide_mode)
 	{
 		if(prev_shader_ >= 0)
 		{
@@ -481,7 +493,7 @@ VolShader::VolShader(
 				peel, clip,
 				hiqual, mask,
 				color_mode, colormap, colormap_proj,
-				solid,vertex_shader))
+				solid, vertex_shader, mask_hide_mode))
 			{
 				return shader_[prev_shader_]->program();
 			}
@@ -494,7 +506,7 @@ VolShader::VolShader(
 				peel, clip,
 				hiqual, mask,
 				color_mode, colormap, colormap_proj,
-				solid,vertex_shader))
+				solid, vertex_shader, mask_hide_mode))
 			{
 				prev_shader_ = i;
 				return shader_[i]->program();
@@ -506,7 +518,7 @@ VolShader::VolShader(
 			peel, clip,
 			hiqual, mask,
 			color_mode, colormap, colormap_proj,
-			solid, vertex_shader);
+			solid, vertex_shader, mask_hide_mode);
 		if(s->create())
 		{
 			delete s;

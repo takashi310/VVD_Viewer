@@ -505,7 +505,7 @@ namespace FLIVR
 					  false, vr_list_[0]->tex_->nc(),
 					  use_shading, use_fog!=0,
 					  depth_peel_, true,
-					  hiqual_, 0, s_cm, 0, 0, solid, 1);
+					  hiqual_, 0, s_cm, 0, 0, solid, 1, 0);
 
 				  used_shader_n++;
 				  shader_id = vr_stype(i, j);

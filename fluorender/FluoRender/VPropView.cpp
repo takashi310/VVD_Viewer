@@ -82,6 +82,8 @@ BEGIN_EVENT_TABLE(VPropView, wxPanel)
 	EVT_CHECKBOX(ID_NRChk, VPropView::OnNRCheck)
 	//depth mode
 	EVT_CHECKBOX(ID_DepthChk, VPropView::OnDepthCheck)
+	EVT_CHECKBOX(ID_MaskHideOutside, VPropView::OnMaskHideOutsideCheck)
+	EVT_CHECKBOX(ID_MaskHideInside, VPropView::OnMaskHideInsideCheck)
 	END_EVENT_TABLE()
 
 	VPropView::VPropView(wxWindow* frame,
@@ -437,6 +439,17 @@ wxPanel(parent, id, pos, size,style, name),
 	sizer_b->Add(10, 5, 0);
 	sizer_b->Add(m_legend_chk, 0, wxALIGN_CENTER);
 
+	//mask
+	st = new wxStaticText(this, 0, "Mask:");
+	m_mask_outside_chk = new wxCheckBox(this, ID_MaskHideOutside, "Hide Outside");
+	sizer_b->Add(15, 5, 0);
+	sizer_b->Add(st, 0, wxALIGN_CENTER);
+	sizer_b->Add(5, 5, 0);
+	sizer_b->Add(m_mask_outside_chk, 0, wxALIGN_CENTER);
+	m_mask_inside_chk = new wxCheckBox(this, ID_MaskHideInside, "Hide Inside");
+	sizer_b->Add(5, 5, 0);
+	sizer_b->Add(m_mask_inside_chk, 0, wxALIGN_CENTER);
+
 	//stretcher
 	sizer_b->AddStretchSpacer(1);
 
@@ -719,6 +732,15 @@ void VPropView::GetSettings()
 
 	//legend
 	m_legend_chk->SetValue(m_vd->GetLegend());
+
+	//mask
+	int mask_hide_mode = m_vd->GetMaskHideMode();
+	m_mask_outside_chk->SetValue(false);
+	m_mask_inside_chk->SetValue(false);
+	if (mask_hide_mode == VOL_MASK_HIDE_OUTSIDE)
+		m_mask_outside_chk->SetValue(true);
+	if (mask_hide_mode == VOL_MASK_HIDE_INSIDE)
+		m_mask_inside_chk->SetValue(true);
 
 	//sync group
 	if (m_group)
@@ -2434,6 +2456,38 @@ void VPropView::OnSyncGroupSpcCheck(wxCommandEvent& event)
 	{
 		SetSpacings();
 	}
+
+	RefreshVRenderViews();
+}
+
+//hide volume outside of mask
+void VPropView::OnMaskHideOutsideCheck(wxCommandEvent& event)
+{
+	bool outside = m_mask_outside_chk->GetValue();
+	bool inside = m_mask_inside_chk->GetValue();
+	if (outside)
+		m_mask_inside_chk->SetValue(false);
+
+	if (outside)
+		m_vd->SetMaskHideMode(VOL_MASK_HIDE_OUTSIDE);
+	else
+		m_vd->SetMaskHideMode(VOL_MASK_HIDE_NONE);
+
+	RefreshVRenderViews();
+}
+
+//hide volume inside of mask
+void VPropView::OnMaskHideInsideCheck(wxCommandEvent& event)
+{
+	bool outside = m_mask_outside_chk->GetValue();
+	bool inside = m_mask_inside_chk->GetValue();
+	if (inside)
+		m_mask_outside_chk->SetValue(false);
+
+	if (inside)
+		m_vd->SetMaskHideMode(VOL_MASK_HIDE_INSIDE);
+	else
+		m_vd->SetMaskHideMode(VOL_MASK_HIDE_NONE);
 
 	RefreshVRenderViews();
 }

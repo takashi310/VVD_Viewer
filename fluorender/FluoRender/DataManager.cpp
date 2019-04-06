@@ -149,7 +149,6 @@ VolumeData::VolumeData()
 	m_brick_num = 0;
 	
 	m_brkxml_mask = NULL;
-	m_mask_lv = -1;
 }
 
 /*
@@ -329,30 +328,6 @@ VolumeData* VolumeData::DeepCopy(VolumeData &copy, bool use_default_settings, Da
 	if (is_brxml) vd->Load(nv, copy.GetName()+wxString::Format("_%d", vd->m_dup_counter), wxString(""), (BRKXMLReader*)vd->m_reader);
 	else vd->Load(nv, copy.GetName()+wxString::Format("_%d", vd->m_dup_counter), wxString(""));
 
-	if (copy.GetMask(true))
-	{
-		Nrrd *mask;
-		mask = nrrdNew();
-		nrrdCopy(mask, copy.GetMask(false));
-		vd->LoadMask(mask);
-	}
-
-	if (copy.GetLabel(true))
-	{
-		Nrrd *label;
-		label = nrrdNew();
-		nrrdCopy(label, copy.GetLabel(false));
-		vd->LoadLabel(label);
-	}
-
-	if (copy.GetStroke(true))
-	{
-		Nrrd *stroke;
-		stroke = nrrdNew();
-		nrrdCopy(stroke, copy.GetStroke(false));
-		vd->LoadStroke(stroke);
-	}
-
 	if (use_default_settings && d_manager)
 	{
 		if (is_brxml) ((BRKXMLReader*)vd->m_reader)->SetLevel(0);
@@ -507,8 +482,35 @@ VolumeData* VolumeData::DeepCopy(VolumeData &copy, bool use_default_settings, Da
 
 		vd->m_landmarks = copy.m_landmarks;
 
-		vd->m_mask_lv = copy.m_mask_lv;
+		vd->SetMaskHideMode(copy.GetMaskHideMode());
 	}
+
+	if (is_brxml) vd->SetLevel(copy.GetLevel());
+
+	if (copy.GetMask(true))
+	{
+		Nrrd *mask;
+		mask = nrrdNew();
+		nrrdCopy(mask, copy.GetMask(false));
+		vd->LoadMask(mask);
+	}
+
+	if (copy.GetLabel(true))
+	{
+		Nrrd *label;
+		label = nrrdNew();
+		nrrdCopy(label, copy.GetLabel(false));
+		vd->LoadLabel(label);
+	}
+
+	if (copy.GetStroke(true))
+	{
+		Nrrd *stroke;
+		stroke = nrrdNew();
+		nrrdCopy(stroke, copy.GetStroke(false));
+		vd->LoadStroke(stroke);
+	}
+
 
 	return vd;
 }
@@ -1059,9 +1061,19 @@ void VolumeData::LoadMask(Nrrd* mask)
 		return;
 
 	//prepare the texture bricks for the mask
+	int curlv = -1;
+	if (isBrxml())
+	{
+		curlv = GetLevel();
+		SetLevel(GetMaskLv());
+	}
+
 	m_tex->add_empty_mask();
-	AddEmptyStroke();
+	if (!isBrxml()) AddEmptyStroke();
 	m_tex->set_nrrd(mask, m_tex->nmask());
+
+	if (isBrxml())
+		SetLevel(curlv);
 }
 
 void VolumeData::DeleteMask()
@@ -1069,7 +1081,17 @@ void VolumeData::DeleteMask()
 	if (!m_tex || !m_vr)
 		return;
 
+	int curlv = -1;
+	if (isBrxml())
+	{
+		curlv = GetLevel();
+		SetLevel(GetMaskLv());
+	}
+
 	m_tex->delete_mask();
+
+	if (isBrxml())
+		SetLevel(curlv);
 }
 
 void VolumeData::LoadStroke(Nrrd* stroke)
@@ -1077,9 +1099,19 @@ void VolumeData::LoadStroke(Nrrd* stroke)
 	if (!stroke || !m_tex || !m_vr)
 		return;
 
+	int curlv = -1;
+	if (isBrxml())
+	{
+		curlv = GetLevel();
+		SetLevel(GetMaskLv());
+	}
+
 	//prepare the texture bricks for the mask
 	m_tex->add_empty_stroke();
 	m_tex->set_nrrd(stroke, m_tex->nstroke());
+
+	if (isBrxml())
+		SetLevel(curlv);
 }
 
 void VolumeData::DeleteStroke()
@@ -2193,13 +2225,13 @@ void VolumeData::DrawMask(int type, int paint_mode, int hr_mode,
 			curlv = GetLevel();
 			SetLevel(GetMaskLv());
 		}
-
+		OutputDebugStringA("DrawMask Enter\n");
 		m_vr->set_2d_mask(m_2d_mask);
 		m_vr->set_2d_weight(m_2d_weight1, m_2d_weight2);
 		m_vr->draw_mask(type, paint_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, scl_translate, w2d, bins, ortho, false);
-
 		if (isBrxml())
 			SetLevel(curlv);
+		OutputDebugStringA("DrawMask Leave\n");
 	}
 }
 
@@ -6433,8 +6465,8 @@ void DataManager::AddVolumeData(VolumeData* vd)
 		if (m_vd_list.size() > 0)
 		{
 			double spcx, spcy, spcz;
-			m_vd_list[0]->GetBaseSpacings(spcx, spcy, spcz);
-			vd->SetBaseSpacings(spcx, spcy, spcz);
+			m_vd_list[0]->GetSpacings(spcx, spcy, spcz, 0);
+			vd->SetSpacings(spcx, spcy, spcz);
 			vd->SetSpcFromFile(true);
 		}
 	}

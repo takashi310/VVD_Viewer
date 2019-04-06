@@ -91,6 +91,8 @@ namespace FLIVR
       data_[1] = n1;
 
       nmask_ = -1;
+	  nlabel_ = -1;
+	  nstroke_ = -1;
 
       //if it's been drawn in a full update loop
       for (int i=0; i<TEXTURE_RENDER_MODES; i++)

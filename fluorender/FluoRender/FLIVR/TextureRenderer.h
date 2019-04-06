@@ -40,6 +40,7 @@
 #include <boost/optional.hpp>
 #include <string>
 #include <tinyxml2.h>
+#include <wx/thread.h>
 
 #include "DLLExport.h"
 
@@ -436,6 +437,8 @@ namespace FLIVR
 			   GLuint m_slices_vbo, m_slices_ibo, m_slices_vao;
 			   GLuint m_quad_vbo, m_quad_vao;
 
+			   wxCriticalSection m_pThreadCS;
+
                //compute view
                Ray compute_view();
 			   Ray compute_snapview(double snap);
@@ -449,9 +452,9 @@ namespace FLIVR
                //unit:assigned unit, c:channel
                GLint load_brick(int unit, int c, vector<TextureBrick*> *b, int i, GLint filter=GL_LINEAR, bool compression=false, int mode=0, bool set_drawn=true);
                //load the texture for volume mask into texture pool
-               GLint load_brick_mask(vector<TextureBrick*> *b, int i, GLint filter=GL_NEAREST, bool compression=false, int unit=0, bool swap_mem=false);
+               GLint load_brick_mask(vector<TextureBrick*> *b, int i, GLint filter=GL_NEAREST, bool compression=false, int unit=0, bool swap_mem=false, bool set_drawn=true);
 			   //load the texture for volume labeling into texture pool
-               GLint load_brick_label(vector<TextureBrick*> *b, int i, bool swap_mem=false);
+               GLint load_brick_label(vector<TextureBrick*> *b, int i, bool swap_mem=false, bool set_drawn=true);
 			   //load the texture for volume stroke into texture pool
                GLint load_brick_stroke(vector<TextureBrick*> *b, int i, GLint filter=GL_NEAREST, bool compression=false, int unit=0, bool swap_mem=false);
                void release_texture(int unit, GLenum target);

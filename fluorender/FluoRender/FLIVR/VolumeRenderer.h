@@ -42,6 +42,11 @@
 
 namespace FLIVR
 {
+	
+#define VOL_MASK_HIDE_NONE		0
+#define VOL_MASK_HIDE_OUTSIDE	1
+#define VOL_MASK_HIDE_INSIDE	2
+
 	class MultiVolumeRenderer;
 
 	class EXPORT_API VolumeRenderer : public TextureRenderer
@@ -233,6 +238,27 @@ namespace FLIVR
 		bool is_mask_active() { eval_ml_mode(); return mask_; }
 		bool is_label_active() { eval_ml_mode(); return label_; }
 
+		void set_mask_hide_mode(int mode) 
+		{
+			if (tex_ && tex_->isBrxml() && m_mask_hide_mode == VOL_MASK_HIDE_NONE && mode != VOL_MASK_HIDE_NONE)
+			{
+				int curlv = tex_->GetCurLevel();
+				tex_->setLevel(tex_->GetMaskLv());
+				return_mask();
+				for (int lv = 0; lv < tex_->GetLevelNum(); lv++)
+				{
+					if (lv != tex_->GetMaskLv())
+					{
+						tex_->setLevel(lv);
+						clear_tex_current_mask();
+					}
+				}
+				tex_->setLevel(curlv);
+			}
+			m_mask_hide_mode = mode;
+		}
+		int get_mask_hide_mode() { return m_mask_hide_mode; }
+
 		friend class MultiVolumeRenderer;
 
 	protected:
@@ -314,6 +340,9 @@ namespace FLIVR
 		KernelProgram* m_dslt_em_kernel;
 
 		Quaternion m_q_cl;
+
+		// 0:none, 1:outside, 2:inside 
+		int m_mask_hide_mode;
 
 		//calculating scaling factor, etc
 		double CalcScaleFactor(double w, double h, double tex_w, double tex_h, double zoom);
