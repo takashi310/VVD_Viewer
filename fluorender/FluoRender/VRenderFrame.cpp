@@ -2754,6 +2754,9 @@ void VRenderFrame::SaveProject(wxString& filename)
 				msk_writer.Save(str.ToStdWstring(), 0);
 			}
 			fconfig.Write("mask", str);
+			
+			fconfig.Write("mask_disp_mode", vd->GetMaskHideMode());
+			fconfig.Write("mask_lv", vd->GetMaskLv());
 		}
 	}
 	//mesh
@@ -3634,6 +3637,9 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 						if (fconfig.Read("roi_disp_mode", &iVal))
 							vd->SetIDColDispMode(iVal);
 
+						if (fconfig.Read("mask_lv", &iVal))
+							vd->SetMaskLv(iVal);
+
 						//mask
 						if (fconfig.Read("mask", &str))
 						{
@@ -3648,6 +3654,9 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 							if (mask)
 								vd->LoadMask(mask);
 						}
+
+						if (fconfig.Read("mask_disp_mode", &iVal))
+							vd->SetMaskHideMode(iVal);
 					}
 				}
 			}

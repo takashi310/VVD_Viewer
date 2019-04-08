@@ -1280,12 +1280,12 @@ namespace FLIVR
 			else
 				filter = GL_NEAREST;
 
-			b->prevent_tex_deletion(true);
 			if (load_brick(0, 0, bricks, i, filter, compression_, mode, (mask_ || label_) ? false : true) < 0)
 				continue;
 			
+			b->prevent_tex_deletion(true);
 			if (mask_)
-				load_brick_mask(bricks, i, filter);
+				load_brick_mask(bricks, i, filter, false, 0, true);
 			else if (tex_->nmask() != -1 && m_mask_hide_mode != VOL_MASK_HIDE_NONE)
 			{
 				if (tex_->isBrxml() && tex_->GetMaskLv() != tex_->GetCurLevel())
@@ -3577,25 +3577,28 @@ namespace FLIVR
 
 		for (unsigned int i=0; i<bricks->size(); i++)
 		{
-			load_brick_mask(bricks, i);
-			glActiveTexture(GL_TEXTURE0+c);
+			if ((*bricks)[i]->dirty(c))
+			{
+				load_brick_mask(bricks, i, GL_NEAREST, false, 0, true, false);
+				glActiveTexture(GL_TEXTURE0+c);
 
-			// download texture data
-			int sx = (*bricks)[i]->sx();
-			int sy = (*bricks)[i]->sy();
-			glPixelStorei(GL_PACK_ROW_LENGTH, sx);
-			glPixelStorei(GL_PACK_IMAGE_HEIGHT, sy);
-			glPixelStorei(GL_PACK_ALIGNMENT, 1);
+				// download texture data
+				int sx = (*bricks)[i]->sx();
+				int sy = (*bricks)[i]->sy();
+				glPixelStorei(GL_PACK_ROW_LENGTH, sx);
+				glPixelStorei(GL_PACK_IMAGE_HEIGHT, sy);
+				glPixelStorei(GL_PACK_ALIGNMENT, 1);
 
-			GLenum type = (*bricks)[i]->tex_type(c);
-			void* data = (*bricks)[i]->tex_data(c);
-			glGetTexImage(GL_TEXTURE_3D, 0, GL_RED, type, data);
+				GLenum type = (*bricks)[i]->tex_type(c);
+				void* data = (*bricks)[i]->tex_data(c);
+				glGetTexImage(GL_TEXTURE_3D, 0, GL_RED, type, data);
 
-			glPixelStorei(GL_PACK_ROW_LENGTH, 0);
-			glPixelStorei(GL_PACK_IMAGE_HEIGHT, 0);
-			glPixelStorei(GL_PACK_ALIGNMENT, 4);
+				glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+				glPixelStorei(GL_PACK_IMAGE_HEIGHT, 0);
+				glPixelStorei(GL_PACK_ALIGNMENT, 4);
 
-			(*bricks)[i]->set_dirty((*bricks)[i]->nmask(), false);
+				(*bricks)[i]->set_dirty((*bricks)[i]->nmask(), false);
+			}
 		}
 
 		/*

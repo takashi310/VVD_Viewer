@@ -954,6 +954,14 @@ void VolumeLoader::CleanupLoadedBrick()
 		}
 	}
 
+	//something wrong
+	if (m_used_memory < 0)
+	{
+		m_used_memory = 0;
+		for(auto &elem : m_memcached_data)
+			m_used_memory += elem.second->getSize();
+		cerr << "Volume Loader: error in CleanupLoadedBrick" << endl;
+	}
 }
 
 void VolumeLoader::RemoveAllLoadedBrick()
