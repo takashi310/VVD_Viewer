@@ -3896,7 +3896,6 @@ void VRenderFrame::OpenProject(wxString& filename)
 	int iVal;
 	int i, j, k;
 	//clear
-	m_data_mgr.ClearAll();
 	DataGroup::ResetID();
 	MeshGroup::ResetID();
 	m_adjust_view->SetVolumeData(0);
@@ -3905,6 +3904,7 @@ void VRenderFrame::OpenProject(wxString& filename)
 	m_vrv_list[0]->Clear();
 	for (i=m_vrv_list.size()-1; i>0; i--)
 		DeleteVRenderView(i);
+	m_data_mgr.ClearAll();
 	
 	wxFileInputStream is(filename);
 	if (!is.IsOk())

@@ -5360,7 +5360,7 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int pe
 		{
 			GLuint tex = m_tex;
 			if (vr_frame && vd==vr_frame->GetCurSelVol() &&
-				vd->GetTexture() && vd->GetTexture()->nmask()!=-1)
+				vd->GetTexture() && use_tex_wt2)
 			{
 				glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
 				glFramebufferTexture2D(GL_FRAMEBUFFER,
