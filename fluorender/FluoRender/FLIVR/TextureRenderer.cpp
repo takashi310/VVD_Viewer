@@ -2622,7 +2622,6 @@ namespace FLIVR
 
 		vector<BrickDist> bd_list;
 		BrickDist bd;
-		double total = 0;
 		//generate a list of bricks and their distances to the new brick
 		for (i=0; i<tex_pool_.size(); i++)
 		{
@@ -2631,7 +2630,6 @@ namespace FLIVR
 			//calculate the distance
 			bd.dist = brick->bbox().distance(bd.brick->bbox());
 			bd_list.push_back(bd);
-			total += tex_pool_[i].nx*tex_pool_[i].ny*tex_pool_[i].nz*tex_pool_[i].nb/1.04e6;
 		}
 
 		//release bricks far away
