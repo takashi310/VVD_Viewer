@@ -181,6 +181,7 @@ struct VD_Landmark
 };
 
 class DataManager;
+class VolumeLoader;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #define MESH_COLOR_AMB	1
@@ -380,7 +381,7 @@ public:
 	//save
 	double GetOriginalValue(int i, int j, int k, bool normalize=true);
 	double GetTransferedValue(int i, int j, int k);
-	void Save(wxString &filename, int mode=0, bool bake=false, bool compress=false, bool save_msk=true, bool save_label=true);
+	void Save(wxString &filename, int mode=0, bool bake=false, bool compress=false, bool save_msk=true, bool save_label=true, VolumeLoader *vl=NULL);
 	void ExportEachSegment(wxString dir, Nrrd* label_nrrd=NULL, int mode=2, bool compress=true);
 
 	//volumerenderer
@@ -1621,5 +1622,108 @@ private:
 	bool m_pvxml_flip_x;
 	bool m_pvxml_flip_y;
 };
+
+
+
+struct VolumeLoaderData
+{
+	FileLocInfo *finfo;
+	TextureBrick *brick;
+	VolumeData *vd;
+	unsigned long long datasize;
+	int mode;
+};
+
+struct VolumeDecompressorData
+{
+	char *in_data;
+	size_t in_size;
+	TextureBrick *b;
+	FileLocInfo *finfo;
+	VolumeData *vd;
+	unsigned long long datasize;
+	int mode;
+};
+
+class VolumeLoader;
+
+class EXPORT_API VolumeDecompressorThread : public wxThread
+{
+    public:
+		VolumeDecompressorThread(VolumeLoader *vl);
+		~VolumeDecompressorThread();
+    protected:
+		virtual ExitCode Entry();
+        VolumeLoader* m_vl;
+};
+
+class EXPORT_API VolumeLoaderThread : public wxThread
+{
+    public:
+		VolumeLoaderThread(VolumeLoader *vl);
+		~VolumeLoaderThread();
+    protected:
+		virtual ExitCode Entry();
+        VolumeLoader* m_vl;
+};
+
+class EXPORT_API VolumeLoader
+{
+	public:
+		VolumeLoader();
+		~VolumeLoader();
+		void Queue(VolumeLoaderData brick);
+		void ClearQueues();
+		void Set(vector<VolumeLoaderData> vld);
+		void Abort();
+		void StopAll();
+		void Join();
+		bool Run();
+		void SetMaxThreadNum(int num) {m_max_decomp_th = num;}
+		void SetMemoryLimitByte(long long limit) {m_memory_limit = limit;}
+		void CleanupLoadedBrick();
+		void TryToFreeMemory(long long req=-1);
+		void CheckMemoryCache();
+		void RemoveAllLoadedBrick();
+		void RemoveBrickVD(VolumeData *vd);
+		void GetPalams(long long &used_mem, int &running_decomp_th, int &queue_num, int &decomp_queue_num);
+		void PreloadLevel(VolumeData *vd, int lv, bool lock=false);
+
+		long long GetAvailableMemory() { return m_memory_limit - m_used_memory; }
+		long long GetMemoryLimitByte() { return m_memory_limit; }
+		long long GetUsedMemory() { return m_used_memory; }
+
+		static bool sort_data_dsc(const VolumeLoaderData b1, const VolumeLoaderData b2)
+		{ return b2.brick->get_d() > b1.brick->get_d(); }
+		static bool sort_data_asc(const VolumeLoaderData b1, const VolumeLoaderData b2)
+		{ return b2.brick->get_d() < b1.brick->get_d(); }
+
+	protected:
+		VolumeLoaderThread *m_thread;
+		wxCriticalSection m_pThreadCS;
+		vector<VolumeLoaderData> m_queues;
+		vector<VolumeLoaderData> m_queued;
+		vector<VolumeDecompressorData> m_decomp_queues;
+		vector<VolumeDecompressorThread *> m_decomp_threads;
+		unordered_map<TextureBrick*, VolumeLoaderData> m_loaded;
+		unordered_map<wstring, std::shared_ptr<VL_Array>> m_memcached_data;
+		int m_running_decomp_th;
+		int m_max_decomp_th;
+		bool m_valid;
+
+		long long m_memory_limit;
+		long long m_used_memory;
+
+		inline void AddLoadedBrick(const VolumeLoaderData &lbd)
+		{
+			m_loaded[lbd.brick] = lbd;
+			m_memcached_data[lbd.finfo->id_string] = lbd.brick->getBrickDataSP();
+			m_used_memory += lbd.datasize;
+		}
+
+		friend class VolumeLoaderThread;
+		friend class VolumeDecompressorThread;
+};
+
 
 #endif//_DATAMANAGER_H_

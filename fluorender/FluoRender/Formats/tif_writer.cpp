@@ -38,6 +38,8 @@ TIFWriter::TIFWriter()
 	m_spcz = 0.0;
 	m_use_spacings = false;
 	m_compression = false;
+	m_base_seq_id = 1;
+	m_ndigit = -1;
 }
 
 TIFWriter::~TIFWriter()
@@ -60,6 +62,18 @@ void TIFWriter::SetSpacings(double spcx, double spcy, double spcz)
 void TIFWriter::SetCompression(bool value)
 {
 	m_compression = value;
+}
+
+void TIFWriter::SetBaseSeqID(int startID)
+{
+	if (startID < 1) return;
+	m_base_seq_id = startID;
+}
+
+void TIFWriter::SetDigitNum(int ndigit)
+{
+	if (ndigit < 1) return;
+	m_ndigit = ndigit;
 }
 
 void TIFWriter::Save(wstring filename, int mode)
@@ -209,9 +223,9 @@ void TIFWriter::SaveSequence(wstring filename)
 	{
 		wchar_t fileindex[32];
 		wchar_t format[32];
-		int ndigit = int(log10(double(numPages))) + 1;
+		int ndigit = m_ndigit > 0 ? m_ndigit : int(log10(double(numPages))) + 1;
 		swprintf_s(format, 32, L"%%0%dd", ndigit);
-		swprintf_s(fileindex, 32, format, i+1);
+		swprintf_s(fileindex, 32, format, i+m_base_seq_id);
 		wstring pagefilename = filename + fileindex + L".tif";
 		TIFF* outfile = TIFFOpenW(pagefilename, "wb");
 
@@ -240,15 +254,15 @@ void TIFWriter::SaveSequence(wstring filename)
 
 		for (int j=0; j<height; j++)
 		{
-			int lineindex = (width*height*i + width*j)*samples;
+			size_t lineindex = ((size_t)width*(size_t)height*(size_t)i + (size_t)width*(size_t)j)*(size_t)samples;
 			if (bits == 16)
 			{
-				memcpy(buf16, ((uint16*)m_data->data)+lineindex, width*sizeof(uint16)*samples);
+				memcpy(buf16, ((uint16*)m_data->data)+lineindex, (size_t)width*sizeof(uint16)*samples);
 				TIFFWriteScanline(outfile, buf16, j, 0);
 			}
 			else
 			{
-				memcpy(buf8, ((uint8*)m_data->data)+lineindex, width*sizeof(uint8)*samples);
+				memcpy(buf8, ((uint8*)m_data->data)+lineindex, (size_t)width*sizeof(uint8)*samples);
 				TIFFWriteScanline(outfile, buf8, j, 0);
 			}
 		}

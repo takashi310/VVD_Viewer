@@ -1682,8 +1682,8 @@ namespace FLIVR
 			}
 		}
 
-		wxString dbgstr = wxString::Format("load_brick_mask: tex_pool idx = %d\n", idx);
-		OutputDebugStringA(dbgstr.ToStdString().c_str());
+		//wxString dbgstr = wxString::Format("load_brick: tex_pool idx = %d\n", idx);
+		//OutputDebugStringA(dbgstr.ToStdString().c_str());
 
 		if(idx != -1) 
 		{
@@ -1872,8 +1872,8 @@ namespace FLIVR
 								if (mem_swap_)
 									idx = check_swap_memory(brick, c);
 
-								dbgstr = wxString::Format("load_brick: check_swap_memory idx = %d\n", idx);
-								OutputDebugStringA(dbgstr.ToStdString().c_str());
+								//dbgstr = wxString::Format("load_brick: check_swap_memory idx = %d\n", idx);
+								//OutputDebugStringA(dbgstr.ToStdString().c_str());
 
 								if (idx == -1)
 								{
@@ -1915,11 +1915,11 @@ namespace FLIVR
 								void *texdata = brick->tex_data_brk(c, NULL);
 								if (texdata)
 								{
-									dbgstr = wxString::Format("load_brick: glTexSubImage3D textype = %d data %d\n", brick->tex_type(c), texdata ? 1 : 0);
-									OutputDebugStringA(dbgstr.ToStdString().c_str());
+									//dbgstr = wxString::Format("load_brick: glTexSubImage3D textype = %d data %d\n", brick->tex_type(c), texdata ? 1 : 0);
+									//OutputDebugStringA(dbgstr.ToStdString().c_str());
 									if (!overwrite) glTexImage3D(GL_TEXTURE_3D, 0, internal_format, nx, ny, nz, 0, format, brick->tex_type(c), 0);
 									glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format, brick->tex_type(c), texdata);
-									OutputDebugStringA("load_brick Leave\n");
+									//OutputDebugStringA("load_brick Leave\n");
 								}
 								else if (!overwrite)
 								{
@@ -1949,8 +1949,8 @@ namespace FLIVR
 									if (mem_swap_)
 										idx = check_swap_memory(brick, c);
 
-									dbgstr = wxString::Format("load_brick: check_swap_memory idx = %d\n", idx);
-									OutputDebugStringA(dbgstr.ToStdString().c_str());
+									//dbgstr = wxString::Format("load_brick: check_swap_memory idx = %d\n", idx);
+									//OutputDebugStringA(dbgstr.ToStdString().c_str());
 
 									if (idx == -1)
 									{
@@ -1992,11 +1992,11 @@ namespace FLIVR
 									void *texdata = brick->tex_data_brk(c, NULL);
 									if (texdata)
 									{
-										dbgstr = wxString::Format("load_brick: glTexSubImage3D textype = %d data %d\n", brick->tex_type(c), texdata ? 1 : 0);
-										OutputDebugStringA(dbgstr.ToStdString().c_str());
+										//dbgstr = wxString::Format("load_brick: glTexSubImage3D textype = %d data %d\n", brick->tex_type(c), texdata ? 1 : 0);
+										//OutputDebugStringA(dbgstr.ToStdString().c_str());
 										if (!overwrite) glTexImage3D(GL_TEXTURE_3D, 0, internal_format, nx, ny, nz, 0, format, brick->tex_type(c), 0);
 										glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format, brick->tex_type(c), texdata);
-										OutputDebugStringA("load_brick Leave\n");
+										//OutputDebugStringA("load_brick Leave\n");
 									}
 									else if (!overwrite)
 									{
@@ -2065,7 +2065,7 @@ namespace FLIVR
 		if (mem_swap_ &&
 			start_update_loop_ &&
 			!done_update_loop_ &&
-			set_drawn && result >= 0)
+			set_drawn && (result >= 0 || interactive_))
 		{
 			if (!brick->drawn(mode))
 			{
@@ -2118,8 +2118,8 @@ namespace FLIVR
 			}
 		}
 
-		wxString dbgstr = wxString::Format("load_brick_mask: tex_pool idx = %d\n", idx);
-		OutputDebugStringA(dbgstr.ToStdString().c_str());
+		//wxString dbgstr = wxString::Format("load_brick_mask: tex_pool idx = %d\n", idx);
+		//OutputDebugStringA(dbgstr.ToStdString().c_str());
 
 		if(idx != -1) 
 		{
@@ -2138,8 +2138,8 @@ namespace FLIVR
 			if (mem_swap_ && swap_mem)
 				idx = check_swap_memory(brick, c);
 
-			dbgstr = wxString::Format("load_brick_mask: check_swap_memory idx = %d\n", idx);
-			OutputDebugStringA(dbgstr.ToStdString().c_str());
+			//dbgstr = wxString::Format("load_brick_mask: check_swap_memory idx = %d\n", idx);
+			//OutputDebugStringA(dbgstr.ToStdString().c_str());
 
 			if (idx == -1)
 			{
@@ -2190,13 +2190,13 @@ namespace FLIVR
 				{
 					if (!overwrite) glTexImage3D(GL_TEXTURE_3D, 0, internal_format, nx, ny, nz, 0, format, brick->tex_type(c), 0);
 #ifdef _WIN32
-					dbgstr = wxString::Format("load_brick_mask: glTexSubImage3D textype = %d data %d\n", brick->tex_type(c), brick->tex_data(c) ? 1 : 0);
-					OutputDebugStringA(dbgstr.ToStdString().c_str());
+					//dbgstr = wxString::Format("load_brick_mask: glTexSubImage3D textype = %d data %d\n", brick->tex_type(c), brick->tex_data(c) ? 1 : 0);
+					//OutputDebugStringA(dbgstr.ToStdString().c_str());
 
 					glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format,
 					brick->tex_type(c), brick->tex_data(c));
 
-					OutputDebugStringA("load_brick_mask Leave\n");
+					//OutputDebugStringA("load_brick_mask Leave\n");
 #else
 //					if (bricks->size() > 1)
 					{
@@ -2435,8 +2435,8 @@ namespace FLIVR
 		if (c < 0)
 			return result;
 
-		wxString dbgstr = wxString::Format("load_brick_stroke: nstroke %d\n", c);
-		OutputDebugStringA(dbgstr.ToStdString().c_str());
+		//wxString dbgstr = wxString::Format("load_brick_stroke: nstroke %d\n", c);
+		//OutputDebugStringA(dbgstr.ToStdString().c_str());
 
 		glActiveTexture(GL_TEXTURE0+(unit>0?unit:c));
 
@@ -2622,6 +2622,7 @@ namespace FLIVR
 
 		vector<BrickDist> bd_list;
 		BrickDist bd;
+		double total = 0;
 		//generate a list of bricks and their distances to the new brick
 		for (i=0; i<tex_pool_.size(); i++)
 		{
@@ -2630,6 +2631,7 @@ namespace FLIVR
 			//calculate the distance
 			bd.dist = brick->bbox().distance(bd.brick->bbox());
 			bd_list.push_back(bd);
+			total += tex_pool_[i].nx*tex_pool_[i].ny*tex_pool_[i].nz*tex_pool_[i].nb/1.04e6;
 		}
 
 		//release bricks far away

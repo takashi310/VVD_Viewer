@@ -5049,6 +5049,9 @@ void VRenderFrame::OpenProject(wxString& filename)
 		m_movie_view->SetProgress(0.0);
 		m_movie_view->SetRendering(0.0);
 	}
+
+	if (m_setting_dlg)
+		m_setting_dlg->UpdateUI();
 }
 
 void VRenderFrame::OnSettings(wxCommandEvent& WXUNUSED(event))
@@ -5195,15 +5198,19 @@ void VRenderFrame::SetTextureRendererSettings()
 		}
 		if (error != GL_INVALID_ENUM)
 			m_gpu_max_mem = mem_info[0]/1024.0;
+		
+		if (m_gpu_max_mem >= 4096.0) m_gpu_max_mem -= 1024.0 + 512.0;
+		else if (m_gpu_max_mem >= 1024.0) m_gpu_max_mem -= 512.0;
+		else m_gpu_max_mem *= 0.7;
 	}
+
     double user_mem_limit = m_setting_dlg->GetGraphicsMem();
 	double mem_size = user_mem_limit;
+
     if (m_gpu_max_mem > 0.0 && m_gpu_max_mem < user_mem_limit) mem_size = m_gpu_max_mem;
 
 	//reserve a memory area for 2D textures
 	//(TextureRenderer takes no account of 2D textures in calculating allocated memory size)
-	if (mem_size > 1024.0) mem_size -= 300.0;
-	else mem_size *= 0.7;
 
 	double mem_delta = mem_size - TextureRenderer::get_mem_limit();
 	double prev_available_mem = TextureRenderer::get_available_mem();

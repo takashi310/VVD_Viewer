@@ -8,6 +8,7 @@
 #include <wx/file.h>
 #include <wx/stdpaths.h>
 #include "utility.h"
+#include <iostream>
 #include <sstream>
 #include <fstream>
 #include <algorithm>
@@ -1631,13 +1632,16 @@ double VolumeData::GetTransferedValue(int i, int j, int k)
 }
 
 //save
-void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bool save_msk, bool save_label)
+void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bool save_msk, bool save_label, VolumeLoader *vl)
 {
 	if (m_vr && m_tex)
 	{
 		Nrrd* data = 0;
 
 		BaseWriter *writer = 0;
+
+		if (isBrxml()) mode = 1;
+
 		switch (mode)
 		{
 		case 0://multi-page tiff
@@ -1658,132 +1662,262 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 		data = m_tex->get_nrrd(0);
 		if (data)
 		{
-			if (bake)
+			if (!isBrxml())
 			{
-				wxProgressDialog *prg_diag = new wxProgressDialog(
-					"FluoRender: Baking volume data...",
-					"Baking volume data. Please wait.",
-					100, 0, wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);
-
-				//process the data
-				int bits = data->type==nrrdTypeUShort?16:8;
-				int nx = int(data->axis[0].size);
-				int ny = int(data->axis[1].size);
-				int nz = int(data->axis[2].size);
-
-				//clipping planes
-				vector<Plane*> *planes = m_vr->get_planes();
-
-				Nrrd* baked_data = nrrdNew();
-				if (bits == 8)
+				if (bake)
 				{
-					unsigned long long mem_size = (unsigned long long)nx*
-						(unsigned long long)ny*(unsigned long long)nz;
-					uint8 *val8 = new (std::nothrow) uint8[mem_size];
-					if (!val8)
+					wxProgressDialog *prg_diag = new wxProgressDialog(
+						"FluoRender: Baking volume data...",
+						"Baking volume data. Please wait.",
+						100, 0, wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);
+
+					//process the data
+					int bits = data->type==nrrdTypeUShort?16:8;
+					int nx = int(data->axis[0].size);
+					int ny = int(data->axis[1].size);
+					int nz = int(data->axis[2].size);
+
+					//clipping planes
+					vector<Plane*> *planes = m_vr->get_planes();
+
+					Nrrd* baked_data = nrrdNew();
+					if (bits == 8)
 					{
-						wxMessageBox("Not enough memory. Please save project and restart.");
-						return;
-					}
-					//transfer function
-					for (int i=0; i<nx; i++)
-					{
-						prg_diag->Update(95*(i+1)/nx);
-						for (int j=0; j<ny; j++)
-							for (int k=0; k<nz; k++)
-							{
-								int index = nx*ny*k + nx*j + i;
-								bool clipped = false;
-								Point p(double(i) / double(nx),
-									double(j) / double(ny),
-									double(k) / double(nz));
-								for (int pi = 0; pi < 6; ++pi)
+						unsigned long long mem_size = (unsigned long long)nx*
+							(unsigned long long)ny*(unsigned long long)nz;
+						uint8 *val8 = new (std::nothrow) uint8[mem_size];
+						if (!val8)
+						{
+							wxMessageBox("Not enough memory. Please save project and restart.");
+							return;
+						}
+						//transfer function
+						for (int i=0; i<nx; i++)
+						{
+							prg_diag->Update(95*(i+1)/nx);
+							for (int j=0; j<ny; j++)
+								for (int k=0; k<nz; k++)
 								{
-									if ((*planes)[pi] &&
-										(*planes)[pi]->eval_point(p) < 0.0)
+									int index = nx*ny*k + nx*j + i;
+									bool clipped = false;
+									Point p(double(i) / double(nx),
+										double(j) / double(ny),
+										double(k) / double(nz));
+									for (int pi = 0; pi < 6; ++pi)
 									{
-										val8[index] = 0;
-										clipped = true;
+										if ((*planes)[pi] &&
+											(*planes)[pi]->eval_point(p) < 0.0)
+										{
+											val8[index] = 0;
+											clipped = true;
+										}
+									}
+									if (!clipped)
+									{
+										double new_value = GetTransferedValue(i, j, k);
+										val8[index] = uint8(new_value*255.0);
 									}
 								}
-								if (!clipped)
-								{
-									double new_value = GetTransferedValue(i, j, k);
-									val8[index] = uint8(new_value*255.0);
-								}
-							}
+						}
+						nrrdWrap(baked_data, val8, nrrdTypeUChar, 3, (size_t)nx, (size_t)ny, (size_t)nz);
 					}
-					nrrdWrap(baked_data, val8, nrrdTypeUChar, 3, (size_t)nx, (size_t)ny, (size_t)nz);
-				}
-				else if (bits == 16)
-				{
-					unsigned long long mem_size = (unsigned long long)nx*
-						(unsigned long long)ny*(unsigned long long)nz;
-					uint16 *val16 = new (std::nothrow) uint16[mem_size];
-					if (!val16)
+					else if (bits == 16)
 					{
-						wxMessageBox("Not enough memory. Please save project and restart.");
-						return;
-					}
-					//transfer function
-					for (int i=0; i<nx; i++)
-					{
-						prg_diag->Update(95*(i+1)/nx);
-						for (int j=0; j<ny; j++)
-							for (int k=0; k<nz; k++)
-							{
-								int index = nx*ny*k + nx*j + i;
-								bool clipped = false;
-								Point p(double(i) / double(nx),
-									double(j) / double(ny),
-									double(k) / double(nz));
-								for (int pi = 0; pi < 6; ++pi)
+						unsigned long long mem_size = (unsigned long long)nx*
+							(unsigned long long)ny*(unsigned long long)nz;
+						uint16 *val16 = new (std::nothrow) uint16[mem_size];
+						if (!val16)
+						{
+							wxMessageBox("Not enough memory. Please save project and restart.");
+							return;
+						}
+						//transfer function
+						for (int i=0; i<nx; i++)
+						{
+							prg_diag->Update(95*(i+1)/nx);
+							for (int j=0; j<ny; j++)
+								for (int k=0; k<nz; k++)
 								{
-									if ((*planes)[pi] &&
-										(*planes)[pi]->eval_point(p) < 0.0)
+									int index = nx*ny*k + nx*j + i;
+									bool clipped = false;
+									Point p(double(i) / double(nx),
+										double(j) / double(ny),
+										double(k) / double(nz));
+									for (int pi = 0; pi < 6; ++pi)
 									{
-										val16[index] = 0;
-										clipped = true;
+										if ((*planes)[pi] &&
+											(*planes)[pi]->eval_point(p) < 0.0)
+										{
+											val16[index] = 0;
+											clipped = true;
+										}
+									}
+									if (!clipped)
+									{
+										double new_value = GetTransferedValue(i, j, k);
+										val16[index] = uint16(new_value*65535.0);
 									}
 								}
-								if (!clipped)
-								{
-									double new_value = GetTransferedValue(i, j, k);
-									val16[index] = uint16(new_value*65535.0);
-								}
-							}
+						}
+						nrrdWrap(baked_data, val16, nrrdTypeUShort, 3, (size_t)nx, (size_t)ny, (size_t)nz);
 					}
-					nrrdWrap(baked_data, val16, nrrdTypeUShort, 3, (size_t)nx, (size_t)ny, (size_t)nz);
+					nrrdAxisInfoSet(baked_data, nrrdAxisInfoSpacing, spcx, spcy, spcz);
+					nrrdAxisInfoSet(baked_data, nrrdAxisInfoMax, spcx*nx, spcy*ny, spcz*nz);
+					nrrdAxisInfoSet(baked_data, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
+					nrrdAxisInfoSet(baked_data, nrrdAxisInfoSize, (size_t)nx, (size_t)ny, (size_t)nz);
+
+					writer->SetData(baked_data);
+					writer->SetSpacings(spcx, spcy, spcz);
+					writer->SetCompression(compress);
+					writer->Save(filename.ToStdWstring(), mode);
+
+					//free memory
+					delete []baked_data->data;
+					nrrdNix(baked_data);
+
+					prg_diag->Update(100);
+					delete prg_diag;
 				}
-				nrrdAxisInfoSet(baked_data, nrrdAxisInfoSpacing, spcx, spcy, spcz);
-				nrrdAxisInfoSet(baked_data, nrrdAxisInfoMax, spcx*nx, spcy*ny, spcz*nz);
-				nrrdAxisInfoSet(baked_data, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
-				nrrdAxisInfoSet(baked_data, nrrdAxisInfoSize, (size_t)nx, (size_t)ny, (size_t)nz);
-
-				writer->SetData(baked_data);
-				writer->SetSpacings(spcx, spcy, spcz);
-				writer->SetCompression(compress);
-				writer->Save(filename.ToStdWstring(), mode);
-
-				//free memory
-				delete []baked_data->data;
-				nrrdNix(baked_data);
-
-				prg_diag->Update(100);
-				delete prg_diag;
+				else
+				{
+					writer->SetData(data);
+					writer->SetSpacings(spcx, spcy, spcz);
+					writer->SetCompression(compress);
+					writer->Save(filename.ToStdWstring(), mode);
+				}
 			}
 			else
 			{
-				writer->SetData(data);
-				writer->SetSpacings(spcx, spcy, spcz);
-				writer->SetCompression(compress);
-				writer->Save(filename.ToStdWstring(), mode);
+				int curlv = -1;
+				curlv = GetLevel();
+				int tarlv = 0;
+				SetLevel(tarlv);
+				GetSpacings(spcx, spcy, spcz);
+				size_t w, h, d;
+				m_tex->get_dimensions(w, h, d);
+
+				TIFWriter *tifwriter = (TIFWriter *)writer;
+				int ndigit = int(log10(double(d))) + 1;
+				
+				auto bricks = m_tex->get_bricks();
+				std::sort(
+					bricks->begin(),
+					bricks->end(),
+					[](TextureBrick *x, TextureBrick *y){ return x->bbox().min().z() < y->bbox().min().z(); }
+				);
+
+				vector<int> bricknum_layer;
+				int count = 0;
+				int minz = (*bricks)[0]->oz();
+				int nz = (*bricks)[0]->nz();
+				bool check = false;
+				for (auto &b : *bricks)
+				{
+					if (minz == b->oz())
+					{
+						if (nz != b->nz())
+							check = true;
+						count++;
+					}
+					else
+					{
+						bricknum_layer.push_back(count);
+						minz = b->oz();
+						nz = b->nz();
+						count = 1;
+					}
+				}
+				bricknum_layer.push_back(count);
+
+				if (!check)
+				{
+					int bid = 0;
+					for (auto layercount : bricknum_layer)
+					{
+						vector<VolumeLoaderData> queues;
+						vector<TextureBrick*> lbs;
+						long long req_mem = 0;
+						for (int i = 0; i < layercount; i++, bid++)
+						{
+							TextureBrick* b = (*bricks)[bid];
+							b->lock_brickdata(true);
+							lbs.push_back(b);
+
+							VolumeLoaderData d;
+							d.brick = b;
+							d.finfo = m_tex->GetFileName(b->getID());
+							d.vd = this;
+							d.mode = 0;
+							queues.push_back(d);
+
+							if (!b->isLoaded())
+								req_mem += (size_t)(b->nx())*(size_t)(b->ny())*(size_t)(b->nz())*(size_t)(b->nb(0));
+						}
+						
+						size_t slicenum = lbs[0]->nz();
+						size_t buffer_size = w*h*slicenum*(size_t)(lbs[0]->nb(0));
+						vl->TryToFreeMemory(req_mem + buffer_size);
+						long long avmem = vl->GetAvailableMemory();
+						bool runVL = true;
+						if (avmem < req_mem + buffer_size)
+						{
+							if (avmem > req_mem)
+								slicenum = (avmem - req_mem) / (w*h*lbs[0]->nb(0));
+							else
+							{
+								slicenum = avmem / (w*h*lbs[0]->nb(0));
+								runVL = false;
+							}
+							if (slicenum == 0) slicenum = 1;
+							buffer_size = w*h*slicenum*(size_t)(lbs[0]->nb(0));
+						}
+
+						if (runVL)
+						{
+							vl->Set(queues);
+							vl->Run();
+							vl->Join();
+						}
+
+						int lnz = lbs[0]->nz();
+						int loz = lbs[0]->oz();
+						for (int s = 0; s < lnz; s += slicenum)
+						{
+							size_t bufd = (s+slicenum <= lnz) ? slicenum : lnz-s;
+
+							Nrrd* datablock = m_tex->getSubData(tarlv, GetMaskHideMode(), &lbs, 0, 0, s+loz, w, h, bufd);
+							tifwriter->SetData(datablock);
+							tifwriter->SetBaseSeqID(s+loz+1); //start from 1
+							tifwriter->SetDigitNum(ndigit);
+							tifwriter->SetSpacings(spcx, spcy, spcz);
+							tifwriter->SetCompression(compress);
+							tifwriter->Save(filename.ToStdWstring(), mode);
+							
+							delete [] datablock->data;
+							nrrdNix(datablock);
+						}
+
+						for (auto &b : lbs)
+							b->lock_brickdata(false);
+					}
+				}
+
+				m_tex->set_sort_bricks();
+				SetLevel(curlv);
 			}
 		}
 		delete writer;
 
+
+		int curlv = -1;
+		if ( isBrxml() )
+		{
+			curlv = GetLevel();
+			SetLevel(GetMaskLv());
+		}
+
 		//save mask
-		if (m_tex->nmask() != -1 && save_msk)
+		if (m_tex->nmask() != -1 && save_msk && GetMaskHideMode() == VOL_MASK_HIDE_NONE)
 		{
 			m_vr->return_mask();
 			data = m_tex->get_nrrd(m_tex->nmask());
@@ -1797,7 +1931,7 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 		}
 
 		//save label
-		if (m_tex->nlabel() != -1 && save_label)
+		if (m_tex->nlabel() != -1 && save_label && GetMaskHideMode() == VOL_MASK_HIDE_NONE)
 		{
 			data = m_tex->get_nrrd(m_tex->nlabel());
 			if (data)
@@ -1808,6 +1942,10 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 				msk_writer.Save(filename.ToStdWstring(), 1);
 			}
 		}
+
+		if ( isBrxml() )
+			SetLevel(curlv);
+
 
 		m_tex_path = filename;
 	}
@@ -2225,13 +2363,13 @@ void VolumeData::DrawMask(int type, int paint_mode, int hr_mode,
 			curlv = GetLevel();
 			SetLevel(GetMaskLv());
 		}
-		OutputDebugStringA("DrawMask Enter\n");
+		//OutputDebugStringA("DrawMask Enter\n");
 		m_vr->set_2d_mask(m_2d_mask);
 		m_vr->set_2d_weight(m_2d_weight1, m_2d_weight2);
 		m_vr->draw_mask(type, paint_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, scl_translate, w2d, bins, ortho, false);
 		if (isBrxml())
 			SetLevel(curlv);
-		OutputDebugStringA("DrawMask Leave\n");
+		//OutputDebugStringA("DrawMask Leave\n");
 	}
 }
 
@@ -6828,4 +6966,783 @@ Color DataManager::GetWavelengthColor(double wavelength)
 		return m_vol_wav[3];
 	else
 		return Color(1.0, 1.0, 1.0);
+}
+
+
+
+
+/////////////////////////////////////////////////////////////////////////
+
+VolumeDecompressorThread::VolumeDecompressorThread(VolumeLoader *vl)
+	: wxThread(wxTHREAD_DETACHED), m_vl(vl)
+{
+
+}
+
+VolumeDecompressorThread::~VolumeDecompressorThread()
+{
+	wxCriticalSectionLocker enter(m_vl->m_pThreadCS);
+	// the thread is being destroyed; make sure not to leave dangling pointers around
+	m_vl->m_running_decomp_th--;
+}
+
+wxThread::ExitCode VolumeDecompressorThread::Entry()
+{
+	unsigned int st_time = GET_TICK_COUNT();
+
+	m_vl->m_pThreadCS.Enter();
+	m_vl->m_running_decomp_th++;
+	m_vl->m_pThreadCS.Leave();
+
+	while(1)
+	{
+		m_vl->m_pThreadCS.Enter();
+
+		if (m_vl->m_decomp_queues.size() == 0)
+		{
+			m_vl->m_pThreadCS.Leave();
+			break;
+		}
+		VolumeDecompressorData q = m_vl->m_decomp_queues[0];
+		m_vl->m_decomp_queues.erase(m_vl->m_decomp_queues.begin());
+
+		m_vl->m_pThreadCS.Leave();
+
+
+		size_t bsize = (size_t)(q.b->nx())*(size_t)(q.b->ny())*(size_t)(q.b->nz())*(size_t)(q.b->nb(0));
+		char *result = new char[bsize];
+		if (TextureBrick::decompress_brick(result, q.in_data, bsize, q.in_size, q.finfo->type, q.b->nx(), q.b->ny()))
+		{
+			m_vl->m_pThreadCS.Enter();
+
+			delete [] q.in_data;
+			shared_ptr<VL_Array> sp = make_shared<VL_Array>(result, bsize);
+			q.b->set_brkdata(sp);
+			q.b->set_loading_state(false);
+			m_vl->m_memcached_data[q.finfo->id_string] = sp;
+			m_vl->m_pThreadCS.Leave();
+		}
+		else
+		{
+			delete [] result;
+
+			m_vl->m_pThreadCS.Enter();
+			delete [] q.in_data;
+			m_vl->m_used_memory -= bsize;
+			q.b->set_drawn(q.mode, true);
+			q.b->set_loading_state(false);
+			m_vl->m_pThreadCS.Leave();
+		}
+	}
+
+	return (wxThread::ExitCode)0;
+}
+
+/*
+wxDEFINE_EVENT(wxEVT_VLTHREAD_COMPLETED, wxCommandEvent);
+wxDEFINE_EVENT(wxEVT_VLTHREAD_PAUSED, wxCommandEvent);
+*/
+VolumeLoaderThread::VolumeLoaderThread(VolumeLoader *vl)
+	: wxThread(wxTHREAD_JOINABLE), m_vl(vl)
+{
+
+}
+
+VolumeLoaderThread::~VolumeLoaderThread()
+{
+	wxCriticalSectionLocker enter(m_vl->m_pThreadCS);
+	if (!m_vl->m_decomp_queues.empty())
+	{
+		for (int i = 0; i < m_vl->m_decomp_queues.size(); i++)
+		{
+			if (m_vl->m_decomp_queues[i].in_data != NULL)
+				delete [] m_vl->m_decomp_queues[i].in_data;
+			m_vl->m_used_memory -= m_vl->m_decomp_queues[i].datasize;
+		}
+		m_vl->m_decomp_queues.clear();
+	}
+	// the thread is being destroyed; make sure not to leave dangling pointers around
+}
+
+wxThread::ExitCode VolumeLoaderThread::Entry()
+{
+	unsigned int st_time = GET_TICK_COUNT();
+
+	while(m_vl->m_running_decomp_th > 0)
+	{
+		if (TestDestroy())
+			return (wxThread::ExitCode)0;
+		Sleep(10);
+	}
+
+	m_vl->m_pThreadCS.Enter();
+	auto ite = m_vl->m_loaded.begin();
+	while(ite != m_vl->m_loaded.end())
+	{
+		if (!ite->second.brick->isLoaded() && ite->second.brick->isLoading())
+		{
+			ite->second.brick->set_loading_state(false);
+			ite = m_vl->m_loaded.erase(ite);
+		}
+		else
+			ite++;
+	}
+
+	m_vl->m_pThreadCS.Leave();
+
+	while(1)
+	{
+		if (TestDestroy())
+			break;
+
+		m_vl->m_pThreadCS.Enter();
+		if (m_vl->m_queues.size() == 0)
+		{
+			m_vl->m_pThreadCS.Leave();
+			break;
+		}
+		VolumeLoaderData b = m_vl->m_queues[0];
+		b.brick->set_loading_state(false);
+		m_vl->m_queues.erase(m_vl->m_queues.begin());
+		m_vl->m_queued.push_back(b);
+		m_vl->m_pThreadCS.Leave();
+
+		if (!b.brick->isLoaded() && !b.brick->isLoading())
+		{
+			wstring id = b.finfo->id_string;
+			if (m_vl->m_memcached_data.find(b.finfo->id_string) != m_vl->m_memcached_data.end())
+			{
+				m_vl->m_pThreadCS.Enter();
+				b.brick->set_brkdata(m_vl->m_memcached_data[b.finfo->id_string]);
+				m_vl->m_loaded[b.brick] = b;
+				m_vl->m_pThreadCS.Leave();
+				continue;
+			}
+
+			if (m_vl->m_used_memory >= m_vl->m_memory_limit)
+			{
+				m_vl->m_pThreadCS.Enter();
+				while(1)
+				{
+					m_vl->CleanupLoadedBrick();
+					if (m_vl->m_used_memory < m_vl->m_memory_limit || TestDestroy())
+						break;
+					m_vl->m_pThreadCS.Leave();
+					Sleep(10);
+					m_vl->m_pThreadCS.Enter();
+				}
+				m_vl->m_pThreadCS.Leave();
+			}
+
+			char *ptr = NULL;
+			size_t readsize;
+			TextureBrick::read_brick_without_decomp(ptr, readsize, b.finfo, this);
+			if (!ptr) continue;
+
+			if (b.finfo->type == BRICK_FILE_TYPE_RAW)
+			{
+				m_vl->m_pThreadCS.Enter();
+				shared_ptr<VL_Array> sp = make_shared<VL_Array>(ptr, readsize);
+				b.brick->set_brkdata(sp);
+				b.datasize = readsize;
+				m_vl->AddLoadedBrick(b);
+				m_vl->m_pThreadCS.Leave();
+			}
+			else
+			{
+				bool decomp_in_this_thread = false;
+				VolumeDecompressorData dq;
+				dq.b = b.brick;
+				dq.finfo = b.finfo;
+				dq.vd = b.vd;
+				dq.mode = b.mode;
+				dq.in_data = ptr;
+				dq.in_size = readsize;
+
+				size_t bsize = (size_t)(b.brick->nx())*(size_t)(b.brick->ny())*(size_t)(b.brick->nz())*(size_t)(b.brick->nb(0));
+				b.datasize = bsize;
+				dq.datasize = bsize;
+
+				if (m_vl->m_max_decomp_th == 0)
+					decomp_in_this_thread = true;
+				else if (m_vl->m_max_decomp_th < 0 || 
+					m_vl->m_running_decomp_th < m_vl->m_max_decomp_th)
+				{
+					VolumeDecompressorThread *dthread = new VolumeDecompressorThread(m_vl);
+					if (dthread->Create() == wxTHREAD_NO_ERROR)
+					{
+						m_vl->m_pThreadCS.Enter();
+						m_vl->m_decomp_queues.push_back(dq);
+						m_vl->m_used_memory += bsize;
+						b.brick->set_loading_state(true);
+						m_vl->m_loaded[b.brick] = b;
+						m_vl->m_pThreadCS.Leave();
+
+						dthread->Run();
+					}
+					else
+					{
+						if (m_vl->m_running_decomp_th <= 0)
+							decomp_in_this_thread = true;
+						else
+						{
+							m_vl->m_pThreadCS.Enter();
+							m_vl->m_decomp_queues.push_back(dq);
+							m_vl->m_used_memory += bsize;
+							b.brick->set_loading_state(true);
+							m_vl->m_loaded[b.brick] = b;
+							m_vl->m_pThreadCS.Leave();
+						}
+					}
+				}
+				else
+				{
+					m_vl->m_pThreadCS.Enter();
+					m_vl->m_decomp_queues.push_back(dq);
+					m_vl->m_used_memory += bsize;
+					b.brick->set_loading_state(true);
+					m_vl->m_loaded[b.brick] = b;
+					m_vl->m_pThreadCS.Leave();
+				}
+
+				if (decomp_in_this_thread)
+				{
+					char *result = new char[bsize];
+					if (TextureBrick::decompress_brick(result, dq.in_data, bsize, dq.in_size, dq.finfo->type))
+					{
+						m_vl->m_pThreadCS.Enter();
+						delete [] dq.in_data;
+						shared_ptr<VL_Array> sp = make_shared<VL_Array>(result, bsize);
+						b.brick->set_brkdata(sp);
+						b.datasize = bsize;
+						m_vl->AddLoadedBrick(b);
+						m_vl->m_pThreadCS.Leave();
+					}
+					else
+					{
+						delete [] result;
+
+						m_vl->m_pThreadCS.Enter();
+						delete [] dq.in_data;
+						m_vl->m_used_memory -= bsize;
+						dq.b->set_drawn(dq.mode, true);
+						m_vl->m_pThreadCS.Leave();
+					}
+				}
+			}
+
+		}
+		else
+		{
+			size_t bsize = (size_t)(b.brick->nx())*(size_t)(b.brick->ny())*(size_t)(b.brick->nz())*(size_t)(b.brick->nb(0));
+			b.datasize = bsize;
+
+			m_vl->m_pThreadCS.Enter();
+			if (m_vl->m_loaded.find(b.brick) != m_vl->m_loaded.end())
+				m_vl->m_loaded[b.brick] = b;
+			m_vl->m_pThreadCS.Leave();
+		}
+	}
+
+	/*
+	wxCommandEvent evt(wxEVT_VLTHREAD_COMPLETED, GetId());
+	VolumeLoaderData *data = new VolumeLoaderData;
+	data->m_cur_cat = 0;
+	data->m_cur_item = 0;
+	data->m_progress = 0;
+	evt.SetClientData(data);
+	wxPostEvent(m_pParent, evt);
+	*/
+	return (wxThread::ExitCode)0;
+}
+
+VolumeLoader::VolumeLoader()
+{
+	m_thread = NULL;
+	m_running_decomp_th = 0;
+	m_max_decomp_th = wxThread::GetCPUCount()-1;
+	if (m_max_decomp_th < 0)
+		m_max_decomp_th = -1;
+	m_memory_limit = 10000000LL;
+	m_used_memory = 0LL;
+}
+
+VolumeLoader::~VolumeLoader()
+{
+	if (m_thread)
+	{
+		if (m_thread->IsAlive())
+		{
+			m_thread->Delete();
+			if (m_thread->IsAlive()) m_thread->Wait();
+		}
+		delete m_thread;
+	}
+	RemoveAllLoadedBrick();
+}
+
+void VolumeLoader::Queue(VolumeLoaderData brick)
+{
+	wxCriticalSectionLocker enter(m_pThreadCS);
+	m_queues.push_back(brick);
+}
+
+void VolumeLoader::ClearQueues()
+{
+	if (!m_queues.empty())
+	{
+		Abort();
+		m_queues.clear();
+	}
+}
+
+void VolumeLoader::Set(vector<VolumeLoaderData> vld)
+{
+	Abort();
+	//StopAll();
+	m_queues = vld;
+}
+
+void VolumeLoader::Abort()
+{
+	if (m_thread)
+	{
+		if (m_thread->IsAlive())
+		{
+			m_thread->Delete();
+			if (m_thread->IsAlive()) m_thread->Wait();
+		}
+		delete m_thread;
+		m_thread = NULL;
+	}
+}
+
+void VolumeLoader::StopAll()
+{
+	Abort();
+
+	while(m_running_decomp_th > 0)
+	{
+		wxMilliSleep(10);
+	}
+}
+
+void VolumeLoader::Join()
+{
+	while(m_thread->IsRunning() || m_running_decomp_th > 0)
+	{
+		wxMilliSleep(10);
+	}
+}
+
+bool VolumeLoader::Run()
+{
+	Abort();
+	//StopAll();
+	if (!m_queued.empty())
+		m_queued.clear();
+
+	m_thread = new VolumeLoaderThread(this);
+	if (m_thread->Create() != wxTHREAD_NO_ERROR)
+	{
+		delete m_thread;
+		m_thread = NULL;
+		return false;
+	}
+	m_thread->Run();
+
+	return true;
+}
+
+void VolumeLoader::CheckMemoryCache()
+{
+	for(int i = 0; i < m_queues.size(); i++)
+	{
+		TextureBrick *b = m_queues[i].brick;
+		if (!b->isLoaded())
+		{
+			if (m_memcached_data.find(m_queues[i].finfo->id_string) != m_memcached_data.end())
+			{
+				b->set_brkdata(m_memcached_data[m_queues[i].finfo->id_string]);
+				m_loaded[b] = m_queues[i];
+			}
+		}
+	}
+}
+
+void VolumeLoader::CleanupLoadedBrick()
+{
+	long long required = 0;
+
+	for(int i = 0; i < m_queues.size(); i++)
+	{
+		TextureBrick *b = m_queues[i].brick;
+		if (!b->isLoaded())
+		{
+			wstring id = m_queues[i].finfo->id_string;
+			if (m_memcached_data.find(m_queues[i].finfo->id_string) != m_memcached_data.end())
+			{
+				b->set_brkdata(m_memcached_data[m_queues[i].finfo->id_string]);
+				m_loaded[b] = m_queues[i];
+			}
+			else
+				required += (size_t)b->nx()*(size_t)b->ny()*(size_t)b->nz()*(size_t)b->nb(0);
+		}
+	}
+
+	if (required > 3LL*1024LL*1024LL*1024LL) 
+		required = 3LL*1024LL*1024LL*1024LL;
+
+	vector<VolumeLoaderData> b_locked;
+	vector<VolumeLoaderData> vd_undisp;
+	vector<VolumeLoaderData> b_undisp;
+	vector<VolumeLoaderData> b_drawn;
+	for(auto elem : m_loaded)
+	{
+		if(elem.second.brick->is_brickdata_locked())
+			b_locked.push_back(elem.second);
+		else if (!elem.second.vd->GetDisp())
+			vd_undisp.push_back(elem.second);
+		else if(!elem.second.brick->get_disp())
+			b_undisp.push_back(elem.second);
+		else if (elem.second.brick->drawn(elem.second.mode))
+			b_drawn.push_back(elem.second);
+	}
+	if (required > 0 || m_used_memory >= m_memory_limit)
+	{
+		for (int i = 0; i < vd_undisp.size(); i++)
+		{
+			if (!vd_undisp[i].brick->isLoaded())
+				continue;
+			if (vd_undisp[i].brick->getBrickDataSPCount() <= 2)
+			{
+				required -= vd_undisp[i].datasize;
+				m_used_memory -= vd_undisp[i].datasize;
+				m_memcached_data[vd_undisp[i].finfo->id_string].reset();
+				m_memcached_data.erase(vd_undisp[i].finfo->id_string);
+			}
+			vd_undisp[i].brick->freeBrkData();
+			m_loaded.erase(vd_undisp[i].brick);
+			if (required <= 0 && m_used_memory < m_memory_limit)
+				break;
+		}
+	}
+	if (required > 0 || m_used_memory >= m_memory_limit)
+	{
+		for (int i = 0; i < b_undisp.size(); i++)
+		{
+			if (!b_undisp[i].brick->isLoaded())
+				continue;
+			if (b_undisp[i].brick->getBrickDataSPCount() <= 2)
+			{
+				required -= b_undisp[i].datasize;
+				m_used_memory -= b_undisp[i].datasize;
+				m_memcached_data[b_undisp[i].finfo->id_string].reset();
+				m_memcached_data.erase(b_undisp[i].finfo->id_string);
+			}
+			b_undisp[i].brick->freeBrkData();
+			m_loaded.erase(b_undisp[i].brick);
+			if (required <= 0 && m_used_memory < m_memory_limit)
+				break;
+		}
+	}
+	if (required > 0 || m_used_memory >= m_memory_limit)
+	{
+		for (int i = 0; i < b_drawn.size(); i++)
+		{
+			if (!b_drawn[i].brick->isLoaded())
+				continue;
+			if (b_drawn[i].brick->getBrickDataSPCount() <= 2)
+			{
+				required -= b_drawn[i].datasize;
+				m_used_memory -= b_drawn[i].datasize;
+				m_memcached_data[b_drawn[i].finfo->id_string].reset();
+				m_memcached_data.erase(b_drawn[i].finfo->id_string);
+			}
+			b_drawn[i].brick->freeBrkData();
+			m_loaded.erase(b_drawn[i].brick);
+			if (required <= 0 && m_used_memory < m_memory_limit)
+				break;
+		}
+	}
+	if (m_used_memory >= m_memory_limit)
+	{
+		for(int i = m_queues.size()-1; i >= 0; i--)
+		{
+			TextureBrick *b = m_queues[i].brick;
+			if (b->isLoaded() && !b->is_brickdata_locked() && m_loaded.find(b) != m_loaded.end())
+			{
+				bool skip = false;
+				for (int j = m_queued.size()-1; j >= 0; j--)
+				{
+					if (m_queued[j].brick == b && !b->drawn(m_queued[j].mode))
+						skip = true;
+				}
+				if (!skip)
+				{
+					if (b->getBrickDataSPCount() <= 2)
+					{
+						long long datasize = (size_t)(b->nx())*(size_t)(b->ny())*(size_t)(b->nz())*(size_t)(b->nb(0));
+						required -= datasize;
+						m_used_memory -= datasize;
+						m_memcached_data[m_queues[i].finfo->id_string].reset();
+						m_memcached_data.erase(m_queues[i].finfo->id_string);
+					}
+
+					b->freeBrkData();
+					m_loaded.erase(b);
+
+					if (m_used_memory < m_memory_limit)
+						break;
+				}
+			}
+		}
+	}
+
+	if (m_used_memory >= m_memory_limit)
+	{
+		for (int i = 0; i < b_locked.size(); i++)
+		{
+			TextureBrick *b = b_locked[i].brick;
+			if (!b->isLoaded())
+				continue;
+			bool skip = false;
+			for (int j = m_queued.size()-1; j >= 0; j--)
+			{
+				if (m_queued[j].brick == b && !b->drawn(m_queued[j].mode))
+					skip = true;
+			}
+			if (!skip)
+			{
+				if (b->getBrickDataSPCount() <= 2)
+				{
+					required -= b_locked[i].datasize;
+					m_used_memory -= b_locked[i].datasize;
+					m_memcached_data[b_locked[i].finfo->id_string].reset();
+					m_memcached_data.erase(b_locked[i].finfo->id_string);
+				}
+				b->freeBrkData();
+				m_loaded.erase(b);
+				if (m_used_memory < m_memory_limit)
+					break;
+			}
+		}
+	}
+
+	//something wrong
+	if (m_used_memory < 0)
+	{
+		m_used_memory = 0;
+		for(auto &elem : m_memcached_data)
+			m_used_memory += elem.second->getSize();
+		//cerr << "Volume Loader: error in CleanupLoadedBrick" << endl;
+	}
+}
+
+void VolumeLoader::TryToFreeMemory(long long req)
+{
+	StopAll();
+
+	if (!m_queued.empty())
+		m_queued.clear();
+
+	long long available_memory = m_memory_limit - m_used_memory;
+
+	if (available_memory >= req) return;
+
+	long long required = req > 0 ? req-available_memory : m_used_memory;
+
+	vector<VolumeLoaderData> b_locked;
+	vector<VolumeLoaderData> vd_undisp;
+	vector<VolumeLoaderData> b_undisp;
+	vector<VolumeLoaderData> b_others;
+	for(auto elem : m_loaded)
+	{
+		if(elem.second.brick->is_brickdata_locked())
+			b_locked.push_back(elem.second);
+		else if (!elem.second.vd->GetDisp())
+			vd_undisp.push_back(elem.second);
+		else if(!elem.second.brick->get_disp())
+			b_undisp.push_back(elem.second);
+		else
+			b_others.push_back(elem.second);
+	}
+	if (required > 0)
+	{
+		for (int i = 0; i < vd_undisp.size(); i++)
+		{
+			if (!vd_undisp[i].brick->isLoaded())
+				continue;
+			if (vd_undisp[i].brick->getBrickDataSPCount() <= 2)
+			{
+				required -= vd_undisp[i].datasize;
+				m_used_memory -= vd_undisp[i].datasize;
+				m_memcached_data[vd_undisp[i].finfo->id_string].reset();
+				m_memcached_data.erase(vd_undisp[i].finfo->id_string);
+			}
+			vd_undisp[i].brick->freeBrkData();
+			m_loaded.erase(vd_undisp[i].brick);
+			if (required <= 0)
+				break;
+		}
+	}
+	if (required > 0)
+	{
+		for (int i = 0; i < b_undisp.size(); i++)
+		{
+			if (!b_undisp[i].brick->isLoaded())
+				continue;
+			if (b_undisp[i].brick->getBrickDataSPCount() <= 2)
+			{
+				required -= b_undisp[i].datasize;
+				m_used_memory -= b_undisp[i].datasize;
+				m_memcached_data[b_undisp[i].finfo->id_string].reset();
+				m_memcached_data.erase(b_undisp[i].finfo->id_string);
+			}
+			b_undisp[i].brick->freeBrkData();
+			m_loaded.erase(b_undisp[i].brick);
+			if (required <= 0)
+				break;
+		}
+	}
+	if (required > 0)
+	{
+		for (int i = 0; i < b_others.size(); i++)
+		{
+			if (!b_others[i].brick->isLoaded())
+				continue;
+			if (b_others[i].brick->getBrickDataSPCount() <= 2)
+			{
+				required -= b_others[i].datasize;
+				m_used_memory -= b_others[i].datasize;
+				m_memcached_data[b_others[i].finfo->id_string].reset();
+				m_memcached_data.erase(b_others[i].finfo->id_string);
+			}
+			b_others[i].brick->freeBrkData();
+			m_loaded.erase(b_others[i].brick);
+			if (required <= 0)
+				break;
+		}
+	}
+	
+	//something wrong
+	if (m_used_memory < 0)
+	{
+		m_used_memory = 0;
+		for(auto &elem : m_memcached_data)
+			m_used_memory += elem.second->getSize();
+		//cerr << "Volume Loader: error in CleanupLoadedBrick" << endl;
+	}
+
+}
+
+void VolumeLoader::RemoveAllLoadedBrick()
+{
+	StopAll();
+	for(auto e : m_loaded)
+	{
+		if (e.second.brick->isLoaded())
+			e.second.brick->freeBrkData();
+	}
+	for(auto &elem : m_memcached_data)
+	{
+		m_used_memory -= elem.second->getSize();
+		elem.second.reset();
+	}
+	m_loaded.clear();
+	m_memcached_data.clear();
+}
+
+void VolumeLoader::RemoveBrickVD(VolumeData *vd)
+{
+	StopAll();
+	auto ite = m_loaded.begin();
+	while(ite != m_loaded.end())
+	{
+		if (ite->second.vd == vd && ite->second.brick->isLoaded())
+		{
+			ite->second.brick->freeBrkData();
+			ite = m_loaded.erase(ite);
+		}
+		else
+			ite++;
+	}
+
+	auto ite2 = m_memcached_data.begin();
+	while (ite2 != m_memcached_data.end())
+	{
+		if (ite2->second.use_count() == 1)
+		{
+			m_used_memory -= ite2->second->getSize();
+			ite2->second.reset();
+			ite2 = m_memcached_data.erase(ite2);
+		}
+		else
+			ite2++;
+	}
+}
+
+void VolumeLoader::PreloadLevel(VolumeData *vd, int lv, bool lock)
+{
+	//OutputDebugStringA("Preloader enter.\n");
+
+	if (!vd || !vd->isBrxml()) return;
+	if (lv < 0 || lv >= vd->GetLevelNum()) return;
+
+	Texture *tex = vd->GetTexture();
+	if (!tex) return;
+
+	StopAll();
+
+	int curlevel = vd->GetLevel();
+
+	vd->SetLevel(lv);
+
+	vector<TextureBrick*> *bricks = tex->get_bricks();
+	vector<VolumeLoaderData> queues;
+	int mode = vd->GetMode() == 1 ? 1 : 0;
+	size_t required = 0;
+	for (int i = 0; i < bricks->size(); i++)
+	{
+		VolumeLoaderData d;
+		TextureBrick* b = (*bricks)[i];
+		b->lock_brickdata(true);
+		if (!b->isLoaded())
+		{
+			d.brick = b;
+			d.finfo = tex->GetFileName(b->getID());
+			d.vd = vd;
+			d.mode = mode;
+			queues.push_back(d);
+			required += (size_t)b->nx()*(size_t)b->ny()*(size_t)b->nz()*(size_t)b->nb(0);
+		}
+	}
+
+	if (queues.empty()) return;
+
+	Set(queues);
+	long long cur_memlimit = m_memory_limit;
+	SetMemoryLimitByte(m_used_memory + required + 100);
+	//OutputDebugStringA("Preloader running.\n");
+	Run();
+	Join();
+	//OutputDebugStringA("Preload done.\n");
+	SetMemoryLimitByte(cur_memlimit);
+}
+
+void VolumeLoader::GetPalams(long long &used_mem, int &running_decomp_th, int &queue_num, int &decomp_queue_num)
+{
+	long long us = 0;
+	int ll = 0;
+/*	for(auto e : m_loaded)
+	{
+		if (e.second.brick->isLoaded())
+			us += e.second.datasize;
+		if (!e.second.brick->get_disp())
+			ll++;
+	}
+*/	used_mem = m_used_memory;
+	running_decomp_th = m_running_decomp_th;
+	queue_num = m_queues.size();
+	decomp_queue_num = m_decomp_queues.size();
 }

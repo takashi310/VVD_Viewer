@@ -32,8 +32,13 @@
 #include <FLIVR/Utils.h>
 #include <algorithm>
 #include <inttypes.h>
+#include <base_reader.h>
 
 #include <wx/progdlg.h>
+
+#ifdef _WIN32
+#include <omp.h>
+#endif
 
 using namespace std;
 
@@ -377,9 +382,17 @@ namespace FLIVR
 		return &quota_bricks_;
 	}
 
-	vector<TextureBrick*>* Texture::get_bricks()
+	vector<TextureBrick*>* Texture::get_bricks(int lv)
 	{
-		return bricks_;
+		if (brkxml_)
+		{
+			if (lv < 0 || lv > pyramid_.size())
+				return bricks_;
+			else
+				return &pyramid_[lv].bricks;
+		}
+		else
+			return bricks_;
 	}
 
 	vector<TextureBrick*>* Texture::get_quota_bricks()
@@ -973,6 +986,7 @@ namespace FLIVR
 	void Texture::setLevel(int lv)
 	{
 		if (lv < 0 || lv >= pyramid_lv_num_ || !brkxml_ || pyramid_cur_lv_ == lv) return;
+
 		pyramid_cur_lv_ = lv;
 		build(pyramid_[pyramid_cur_lv_].data, 0, 0, 256, 0, 0, &pyramid_[pyramid_cur_lv_].bricks);
 		set_data_file(pyramid_[pyramid_cur_lv_].filenames, pyramid_[pyramid_cur_lv_].filetype);
@@ -1089,7 +1103,17 @@ namespace FLIVR
 		int height = size[1];
 		int depth  = size[2];
 
-		data->data = malloc((size_t)width * (size_t)height * (size_t)depth * (size_t)nbyte);
+		if (nbyte == 1)
+		{
+			unsigned char *val8 = new (std::nothrow) unsigned char[(size_t)width * (size_t)height * (size_t)depth];
+			data->data = val8;
+		}
+		else
+		{
+			unsigned short *val16 = new (std::nothrow) unsigned short[(size_t)width * (size_t)height * (size_t)depth];
+			data->data = val16;
+		}
+
 		memset(data->data, 0, (size_t)width * (size_t)height * (size_t)depth * (size_t)nbyte);
 
 		wxProgressDialog *prog_diag = new wxProgressDialog(
@@ -1149,6 +1173,162 @@ namespace FLIVR
 		delete prog_diag;
 
 		lv = level;
+
+		return data;
+	}
+
+	Nrrd *Texture::getSubData(int lv, int mask_mode, vector<TextureBrick*> *tar_bricks, size_t stx, size_t sty, size_t stz, size_t w, size_t h, size_t d)
+	{
+		if (!brkxml_) return NULL;
+
+		int level = lv;
+		if (level < 0 || level > pyramid_.size()) level = pyramid_copy_lv_;
+		if (level < 0 || level > pyramid_.size()) level = pyramid_cur_lv_;
+		if (pyramid_cur_fr_ < 0 || pyramid_cur_fr_ >= filenames_[level].size()) return NULL;
+		if (pyramid_cur_ch_ < 0 || pyramid_cur_ch_ >= filenames_[level][pyramid_cur_fr_].size()) return NULL;
+		
+		vector<TextureBrick*> *bricks = tar_bricks ? tar_bricks : &pyramid_[level].bricks;
+		
+		int bnum = bricks->size();
+		if (bnum <= 0) return NULL;
+
+		size_t imageW=0, imageH=0, imageD=0;
+		get_dimensions(imageW, imageH, imageD, lv);
+		double xspc = 1.0, yspc = 1.0, zspc = 1.0;
+		get_spacings(xspc, yspc, zspc, lv);
+		size_t nbyte = nb_[0];
+		if (w == 0) w = imageW;
+		if (h == 0) h = imageH;
+		if (d == 0) d = imageD;
+
+		if (stx+w > imageW || sty+h > imageH || stz+d > imageD) return NULL;
+
+		Nrrd *data;
+		data = nrrdNew();
+		if (nbyte == 1)
+		{
+			unsigned char *val8 = new (std::nothrow) unsigned char[w*h*d*nbyte];
+			nrrdWrap(data, val8, nrrdTypeUChar, 3, w, h, d);
+		}
+		else if (nbyte == 2)
+		{
+			unsigned short *val16 = new (std::nothrow) unsigned short[w*h*d*nbyte];
+			nrrdWrap(data, val16, nrrdTypeUShort, 3, w, h, d);
+		}
+		else if (nbyte == 4)
+		{
+			float *val32 = new (std::nothrow) float[w*h*d*nbyte];
+			nrrdWrap(data, val32, nrrdTypeFloat, 3, w, h, d);
+		}
+		nrrdAxisInfoSet(data, nrrdAxisInfoSpacing, xspc, yspc, zspc);
+		nrrdAxisInfoSet(data, nrrdAxisInfoMax, xspc*w, yspc*h, zspc*d);
+		nrrdAxisInfoSet(data, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
+		nrrdAxisInfoSet(data, nrrdAxisInfoSize, w, h, d);
+
+		memset(data->data, 0, w*h*d*nbyte);
+
+		size_t mask_w, mask_h, mask_d;
+		get_dimensions(mask_w, mask_h, mask_d, GetMaskLv());
+		double xscale = (double)mask_w / imageW;
+		double yscale = (double)mask_h / imageH;
+		double zscale = (double)mask_d / imageD;
+
+		bool mask = false;
+
+		unsigned char *ptr_mask = NULL;
+		if (mask_mode != 0 && get_nrrd(nmask_))
+		{
+			ptr_mask = (unsigned char *)data_[nmask_]->data;
+			if (ptr_mask) mask = true;
+		}
+
+		for(int i = 0; i < bnum; i++)
+		{
+			TextureBrick *b = (*bricks)[i];
+			//naive
+			int ox = b->ox();
+			int oy = b->oy();
+			int oz = b->oz();
+			int nx = b->nx();
+			int ny = b->ny();
+			int nz = b->nz();
+
+			if ( ox+nz <= stx || ox >= stx+w || oy+ny <= sty || oy >= sty+h || oz+nz <= stz || oz >= stz+d )
+				continue;
+
+			int ox2 = ox < stx ? stx : ox;
+			int oy2 = oy < sty ? sty : oy;
+			int oz2 = oz < stz ? stz : oz;
+			int ex2 = ox+nx > stx+w ? stx+w : ox+nx;
+			int ey2 = oy+ny > sty+h ? sty+h : oy+ny;
+			int ez2 = oz+nz > stz+d ? stz+d : oz+nz;
+			int nx2 = ex2-ox2;
+			int ny2 = ey2-oy2;
+			int nz2 = ez2-oz2;
+
+			int sox = ox2 - ox;
+			int soy = oy2 - oy;
+			int soz = oz2 - oz;
+			int dox = ox2 - stx;
+			int doy = oy2 - sty;
+			int doz = oz2 - stz;
+
+			bool tmp = false;
+			if(!b->isLoaded())
+			{
+				FileLocInfo *finfo = filenames_[level][pyramid_cur_fr_][pyramid_cur_ch_][b->getID()];
+				b->tex_data_brk(0, finfo);
+				tmp = true;
+			}
+			
+			if (nbyte == 1) {
+				unsigned char *ptr_dst = (unsigned char *)(data->data);
+				const unsigned char *ptr_src = (const unsigned char *)(*bricks)[i]->getBrickData();
+				#pragma omp parallel for
+				for (int z = 0; z < nz2; z++) {
+					for (int y = 0; y < ny2; y++) {
+						for (int x = 0; x < nx2; x++) {
+							size_t src_id = (size_t)(z+soz)*ny*nx + (size_t)(y+soy)*nx + (size_t)(x+sox);
+							size_t dst_id = (size_t)(z+doz)*h*w + (size_t)(y+doy)*w + (size_t)(x+dox);
+							if (!mask)
+								ptr_dst[dst_id] = ptr_src[src_id];
+							else {
+								size_t mx = (size_t)((x+ox2+0.5)*xscale);
+								size_t my = (size_t)((y+oy2+0.5)*yscale);
+								size_t mz = (size_t)((z+oz2+0.5)*zscale);
+								size_t mid = mz*mask_h*mask_w + my*mask_w + mx;
+								if		(mask_mode == 1) ptr_dst[dst_id] = ptr_mask[mid] > 0  ? ptr_src[src_id] : 0;
+								else if (mask_mode == 2) ptr_dst[dst_id] = ptr_mask[mid] == 0 ? ptr_src[src_id] : 0;
+							}
+						}
+					}
+				}
+			} else if (nbyte == 2) {
+				unsigned short *ptr_dst = (unsigned short *)(data->data);
+				const unsigned short *ptr_src = (const unsigned short *)(*bricks)[i]->getBrickData();
+				#pragma omp parallel for
+				for (int z = 0; z < nz2; z++) {
+					for (int y = 0; y < ny2; y++) {
+						for (int x = 0; x < nx2; x++) {
+							size_t src_id = (size_t)(z+soz)*ny*nx + (size_t)(y+soy)*nx + (size_t)(x+sox);
+							size_t dst_id = (size_t)(z+doz)*h*w + (size_t)(y+doy)*w + (size_t)(x+dox);
+							if (!mask)
+								ptr_dst[dst_id] = ptr_src[src_id];
+							else {
+								size_t mx = (size_t)((x+ox2+0.5)*xscale);
+								size_t my = (size_t)((y+oy2+0.5)*yscale);
+								size_t mz = (size_t)((z+oz2+0.5)*zscale);
+								size_t mid = mz*mask_h*mask_w + my*mask_w + mx;
+								if		(mask_mode == 1) ptr_dst[dst_id] = ptr_mask[mid] > 0  ? ptr_src[src_id] : 0;
+								else if (mask_mode == 2) ptr_dst[dst_id] = ptr_mask[mid] == 0 ? ptr_src[src_id] : 0;
+							}
+						}
+					}
+				}
+			}
+
+			if (tmp) (*bricks)[i]->freeBrkData();
+		}
 
 		return data;
 	}

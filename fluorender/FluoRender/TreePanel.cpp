@@ -777,11 +777,22 @@ void DataTreeCtrl::OnSave(wxCommandEvent& event)
 
 	if (item_data->type == 2) //volume
 	{
+		VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
+
+		wxString formats;
+		if (vd && vd->isBrxml())
+		{
+			formats = "Single-page Tiff sequence (*.tif)|*.tif;*.tiff";
+		}
+		else
+		{
+			formats = "Muti-page Tiff file (*.tif, *.tiff)|*.tif;*.tiff|"\
+					  "Single-page Tiff sequence (*.tif)|*.tif;*.tiff|"\
+					  "Nrrd file (*.nrrd)|*.nrrd";
+		}
 		wxFileDialog *fopendlg = new wxFileDialog(
 			m_frame, "Save Volume Data", "", "",
-			"Muti-page Tiff file (*.tif, *.tiff)|*.tif;*.tiff|"\
-			"Single-page Tiff sequence (*.tif)|*.tif;*.tiff|"\
-			"Nrrd file (*.nrrd)|*.nrrd",
+			formats,
 			wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
 		fopendlg->SetExtraControlCreator(CreateExtraControl);
 
@@ -790,10 +801,11 @@ void DataTreeCtrl::OnSave(wxCommandEvent& event)
 		if (rval == wxID_OK)
 		{
 			wxString filename = fopendlg->GetPath();
-			VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
 			if (vd)
-				vd->Save(filename, fopendlg->GetFilterIndex(), false, VRenderFrame::GetCompression());
+				vd->Save(filename, fopendlg->GetFilterIndex(), false, VRenderFrame::GetCompression(), true, true, GetCurrentView() ? GetCurrentView()->GetVolumeLoader() : NULL);
 		}
+		if (vd && vd->isBrxml())
+			vr_frame->RefreshVRenderViews();
 		delete fopendlg;
 	}
 	else if (item_data->type == 3) //mesh
@@ -854,6 +866,10 @@ void DataTreeCtrl::OnBakeVolume(wxCommandEvent& event)
 
 	if (item_data->type == 2) //volume
 	{
+		VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
+		if (vd && vd->isBrxml())
+			return;
+
 		wxFileDialog *fopendlg = new wxFileDialog(
 			m_frame, "Bake Volume Data", "", "",
 			"Muti-page Tiff file (*.tif, *.tiff)|*.tif;*.tiff|"\
@@ -867,7 +883,6 @@ void DataTreeCtrl::OnBakeVolume(wxCommandEvent& event)
 		if (rval == wxID_OK)
 		{
 			wxString filename = fopendlg->GetPath();
-			VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
 			if (vd)
 				vd->Save(filename, fopendlg->GetFilterIndex(), true, VRenderFrame::GetCompression());
 		}

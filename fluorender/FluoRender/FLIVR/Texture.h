@@ -128,7 +128,7 @@ namespace FLIVR
 		void reset_sort_bricks() {sort_bricks_ = false;}
 		bool get_sort_bricks() {return sort_bricks_;}
 		// load the bricks independent of the view
-		vector<TextureBrick*>* get_bricks();
+		vector<TextureBrick*>* get_bricks(int lv=-1);
 		int get_brick_num() {return int((*bricks_).size());}
 		//quota bricks
 		vector<TextureBrick*>* get_quota_bricks();
@@ -199,7 +199,8 @@ namespace FLIVR
 		bool buildPyramid(vector<Pyramid_Level> &pyramid, vector<vector<vector<vector<FileLocInfo *>>>> &filenames, bool useURL = false);
 		void set_FrameAndChannel(int fr, int ch);
 		void setLevel(int lv);
-		Nrrd * loadData(int &lv);
+		Nrrd* loadData(int &lv);
+		Nrrd* getSubData(int lv, int mask_mode, vector<TextureBrick*> *tar_bricks=NULL, size_t stx=0, size_t sty=0, size_t stz=0, size_t w=0, size_t h=0, size_t d=0);
 		int GetCurLevel() {return pyramid_cur_lv_;}
 		int GetLevelNum() {return pyramid_.size();}
 		void SetCopyableLevel(int lv) {pyramid_copy_lv_ = lv;}

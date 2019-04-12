@@ -1020,7 +1020,7 @@ namespace FLIVR
 				GL_COLOR_ATTACHMENT0,
 				GL_COLOR_ATTACHMENT1
 			};
-			glDrawBuffers(cur_chan_brick_num_==0 && colormap_mode_==3 ? 2 : 1, draw_buffers);
+			glDrawBuffers( (cur_chan_brick_num_==0 && colormap_mode_==3) ? 2 : 1, draw_buffers);
 
 			glClearColor(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
 			glClear(GL_COLOR_BUFFER_BIT);
@@ -1863,8 +1863,8 @@ namespace FLIVR
 		float matrix[16];
 		for (unsigned int i=0; i < bricks->size(); i++)
 		{
-			wxString dbgstr = wxString::Format("draw_mask brick: %d %d\n", i, (*bricks)[i]->getBrickData() ? 1 : 0);
-			OutputDebugStringA(dbgstr.ToStdString().c_str());
+			//wxString dbgstr = wxString::Format("draw_mask brick: %d %d\n", i, (*bricks)[i]->getBrickData() ? 1 : 0);
+			//OutputDebugStringA(dbgstr.ToStdString().c_str());
 
 			TextureBrick* b = (*bricks)[i];
 
@@ -1895,9 +1895,9 @@ namespace FLIVR
 			b->prevent_tex_deletion(true);
 			GLint vd_id = load_brick(0, 0, bricks, i, GL_NEAREST, compression_);
 			GLint mask_id = load_brick_mask(bricks, i, GL_NEAREST, false, 0, true);
-			OutputDebugStringA("load_brick_stroke: Enter\n");
+			//OutputDebugStringA("load_brick_stroke: Enter\n");
 			GLint stroke_tex_id = load_brick_stroke(bricks, i, GL_NEAREST, false, 0, true);
-			OutputDebugStringA("load_brick_stroke: Leave\n");
+			//OutputDebugStringA("load_brick_stroke: Leave\n");
 			b->prevent_tex_deletion(false);
 			switch (type)
 			{
@@ -1914,9 +1914,9 @@ namespace FLIVR
 			seg_shader->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(),
 				mode_==MODE_OVER?1.0/sampling_rate_:1.0);
 
-			dbgstr = wxString::Format("draw_mask: vd_id %d, mask_id %d, stroke_id %d, tex_id %d\n",
-										vd_id, mask_id, stroke_tex_id, tex_id);
-			OutputDebugStringA(dbgstr.ToStdString().c_str());
+			//dbgstr = wxString::Format("draw_mask: vd_id %d, mask_id %d, stroke_id %d, tex_id %d\n",
+			//							vd_id, mask_id, stroke_tex_id, tex_id);
+			//OutputDebugStringA(dbgstr.ToStdString().c_str());
 
 			//draw each slice
 			for (int z=0; z<b->nz(); z++)
