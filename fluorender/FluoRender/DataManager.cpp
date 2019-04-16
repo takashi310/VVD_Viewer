@@ -518,7 +518,7 @@ VolumeData* VolumeData::DeepCopy(VolumeData &copy, bool use_default_settings, Da
 
 void VolumeData::FlipHorizontally()
 {
-	if (!m_tex || !m_vr) return;
+	if (!m_tex || !m_vr || isBrxml()) return;
 	Nrrd *nrrd = GetVolume(true);
 	Nrrd *mask = GetMask(true);
 	Nrrd *label = GetLabel(true);
@@ -637,7 +637,7 @@ void VolumeData::FlipHorizontally()
 
 void VolumeData::FlipVertically()
 {
-	if (!m_tex || !m_vr) return;
+	if (!m_tex || !m_vr || isBrxml()) return;
 	Nrrd *nrrd = GetVolume(true);
 	Nrrd *mask = GetMask(true);
 	Nrrd *label = GetLabel(true);
@@ -1056,10 +1056,10 @@ void VolumeData::AddEmptyData(int bits,
 }
 
 //volume mask
-void VolumeData::LoadMask(Nrrd* mask)
+bool VolumeData::LoadMask(Nrrd* mask)
 {
 	if (!mask || !m_tex || !m_vr)
-		return;
+		return false;
 
 	//prepare the texture bricks for the mask
 	int curlv = -1;
@@ -1069,12 +1069,28 @@ void VolumeData::LoadMask(Nrrd* mask)
 		SetLevel(GetMaskLv());
 	}
 
+	size_t dim = mask->dim;
+	std::vector<int> size(dim);
+	int offset = 0;
+	if (dim > 3) offset = 1; 
+	for (size_t p = 0; p < dim; p++) 
+		size[p] = (int)mask->axis[p + offset].size;
+	int mskw = size[0];
+	int mskh = size[1];
+	int mskd = size[2];
+	int w, h, d;
+	m_tex->GetDimensionLv(GetLevel(), w, h, d);
+	if (w != mskw || h != mskh || d != mskd)
+		return false;
+
 	m_tex->add_empty_mask();
 	if (!isBrxml()) AddEmptyStroke();
 	m_tex->set_nrrd(mask, m_tex->nmask());
 
 	if (isBrxml())
 		SetLevel(curlv);
+
+	return true;
 }
 
 void VolumeData::DeleteMask()
@@ -1916,6 +1932,8 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 			SetLevel(GetMaskLv());
 		}
 
+		GetSpacings(spcx, spcy, spcz);
+
 		//save mask
 		if (m_tex->nmask() != -1 && save_msk && GetMaskHideMode() == VOL_MASK_HIDE_NONE)
 		{
@@ -1946,8 +1964,60 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 		if ( isBrxml() )
 			SetLevel(curlv);
 
+		if ( !isBrxml() ) m_tex_path = filename;
+	}
+}
 
-		m_tex_path = filename;
+
+void VolumeData::ExportMask(wxString &filename)
+{
+	if (m_vr && m_tex)
+	{
+		Nrrd* data = 0;
+
+		int curlv = -1;
+		if ( isBrxml() )
+		{
+			curlv = GetLevel();
+			SetLevel(GetMaskLv());
+		}
+
+		double spcx, spcy, spcz;
+		GetSpacings(spcx, spcy, spcz);
+
+		//save mask
+		if (m_tex->nmask() != -1)
+		{
+			m_vr->return_mask();
+			data = m_tex->get_nrrd(m_tex->nmask());
+			if (data)
+			{
+				MSKWriter msk_writer;
+				msk_writer.SetData(data);
+				msk_writer.SetSpacings(spcx, spcy, spcz);
+				msk_writer.Save(filename.ToStdWstring(), -1);
+			}
+		}
+
+		if ( isBrxml() )
+			SetLevel(curlv);
+	}
+}
+
+void VolumeData::ImportMask(wxString &filename)
+{
+	MSKReader msk_reader;
+	msk_reader.SetAddExt(false);
+	msk_reader.SetFile(filename.ToStdString());
+	Nrrd* mask = msk_reader.Convert(0, 0, true);
+	if (mask)
+	{
+		if (!LoadMask(mask))
+		{
+			delete [] mask->data;
+			nrrdNix(mask);
+			wxMessageBox(wxT("Unable to load the mask data.\nMask data must have same dimensions as the volume data."), wxT("Mask Import Error"));
+		}
 	}
 }
 

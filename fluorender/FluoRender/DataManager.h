@@ -359,7 +359,7 @@ public:
 		int nx, int ny, int nz,
 		double spcx, double spcy, double spcz);
 	//load mask
-	void LoadMask(Nrrd* mask);
+	bool LoadMask(Nrrd* mask);
 	void DeleteMask();
 	Nrrd* GetMask(bool ret);
 	//empty mask
@@ -382,6 +382,8 @@ public:
 	double GetOriginalValue(int i, int j, int k, bool normalize=true);
 	double GetTransferedValue(int i, int j, int k);
 	void Save(wxString &filename, int mode=0, bool bake=false, bool compress=false, bool save_msk=true, bool save_label=true, VolumeLoader *vl=NULL);
+	void ExportMask(wxString &filename);
+	void ImportMask(wxString &filename);
 	void ExportEachSegment(wxString dir, Nrrd* label_nrrd=NULL, int mode=2, bool compress=true);
 
 	//volumerenderer

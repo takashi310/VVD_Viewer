@@ -66,16 +66,22 @@ void MSKWriter::Save(wstring filename, int mode)
 	if (!m_data)
 		return;
 
-	int64_t pos = filename.find_last_of('.');
-	if (pos == -1)
-		return;
-	wstring str_name = filename.substr(0, pos);
-	wostringstream strs;
-	if (mode == 0)
-		strs << str_name /*<< "_t" << m_time << "_c" << m_channel*/ << ".msk";
-	else if (mode == 1)
-		strs << str_name /*<< "_t" << m_time << "_c" << m_channel*/ << ".lbl";
-	str_name = strs.str();
+	wstring str_name;
+	if (mode >= 0)
+	{
+		int64_t pos = filename.find_last_of('.');
+		if (pos == -1)
+			return;
+		str_name = filename.substr(0, pos);
+		wostringstream strs;
+		if (mode == 0)
+			strs << str_name /*<< "_t" << m_time << "_c" << m_channel*/ << ".msk";
+		else if (mode == 1)
+			strs << str_name /*<< "_t" << m_time << "_c" << m_channel*/ << ".lbl";
+		str_name = strs.str();
+	}
+	else
+		str_name = filename;
 
 	NrrdIoState *nio = nrrdIoStateNew();
 	if (!nio)

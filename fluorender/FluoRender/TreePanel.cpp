@@ -44,6 +44,8 @@ BEGIN_EVENT_TABLE(DataTreeCtrl, wxTreeCtrl)
 	EVT_MENU(ID_Rename, DataTreeCtrl::OnRenameMenu)
 	EVT_MENU(ID_Duplicate, DataTreeCtrl::OnDuplicate)
 	EVT_MENU(ID_Save, DataTreeCtrl::OnSave)
+	EVT_MENU(ID_ExportMask, DataTreeCtrl::OnExportMask)
+	EVT_MENU(ID_ImportMask, DataTreeCtrl::OnImportMask)
 	EVT_MENU(ID_BakeVolume, DataTreeCtrl::OnBakeVolume)
 	EVT_MENU(ID_Isolate, DataTreeCtrl::OnIsolate)
 	EVT_MENU(ID_ShowAll, DataTreeCtrl::OnShowAll)
@@ -395,14 +397,15 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 					menu.Append(ID_Rename, "Rename");
 					menu.Append(ID_Duplicate, "Duplicate");
 					menu.Append(ID_Save, "Save");
-
+					menu.Append(ID_ExportMask, "Export Mask");
+					menu.Append(ID_ImportMask, "Import Mask");
 					menu.Append(ID_BakeVolume, "Bake");
 					menu.Append(ID_Isolate, "Isolate");
 					menu.Append(ID_ShowAll, "Show All");
 					menu.Append(ID_ImportMetadata, "Import Metadata");
 					menu.Append(ID_FlipH, "Flip Horizontally");
 					menu.Append(ID_FlipV, "Flip Vertically");
-					menu.Append(ID_ExportMeshMask, "Export Mesh Mask...");
+					//menu.Append(ID_ExportMeshMask, "Export Mesh Mask...");
 					if (vd->GetColormapMode() == 3)
 					{
 						menu.AppendSeparator();
@@ -845,6 +848,85 @@ void DataTreeCtrl::OnSave(wxCommandEvent& event)
 				ann->Save(filename);
 		}
 		delete fopendlg;
+	}
+}
+
+void DataTreeCtrl::OnExportMask(wxCommandEvent& event)
+{
+	if (m_fixed)
+		return;
+
+	wxTreeItemId sel_item = GetSelection();
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+
+	if (!sel_item.IsOk() || !vr_frame)
+		return;
+	LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+	if (!item_data)
+		return;
+
+	wxString name = GetItemBaseText(sel_item);
+
+	if (item_data->type == 2) //volume
+	{
+		VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
+		
+		wxFileDialog *fopendlg = new wxFileDialog(
+			m_frame, "Export Mask Data", "", "",
+			"Nrrd file (*.nrrd)|*.nrrd",
+			wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
+
+		int rval = fopendlg->ShowModal();
+
+		if (rval == wxID_OK)
+		{
+			wxString filename = fopendlg->GetPath();
+			if (vd)
+				vd->ExportMask(filename);
+		}
+
+		delete fopendlg;
+	}
+}
+
+
+void DataTreeCtrl::OnImportMask(wxCommandEvent& event)
+{
+	if (m_fixed)
+		return;
+
+	wxTreeItemId sel_item = GetSelection();
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+
+	if (!sel_item.IsOk() || !vr_frame)
+		return;
+	LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+	if (!item_data)
+		return;
+
+	wxString name = GetItemBaseText(sel_item);
+
+	if (item_data->type == 2) //volume
+	{
+		VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
+		
+		wxFileDialog *fopendlg = new wxFileDialog(
+			m_frame, "Import Mask Data", "", "",
+			"All Supported|*.msk;*.nrrd",
+			wxFD_OPEN);
+
+		int rval = fopendlg->ShowModal();
+
+		if (rval == wxID_OK)
+		{
+			wxString filename = fopendlg->GetPath();
+			if (vd)
+				vd->ImportMask(filename);
+		}
+
+		delete fopendlg;
+
+		vr_frame->RefreshVRenderViews();
 	}
 }
 

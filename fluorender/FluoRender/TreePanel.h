@@ -78,6 +78,8 @@ class EXPORT_API DataTreeCtrl: public wxTreeCtrl, Notifier
 		ID_Rename,
 		ID_Duplicate,
 		ID_Save,
+		ID_ExportMask,
+		ID_ImportMask,
 		ID_BakeVolume,
 		ID_Isolate,
 		ID_ShowAll,
@@ -233,6 +235,8 @@ private:
 	void OnToggleDisp(wxCommandEvent& event);
 	void OnDuplicate(wxCommandEvent& event);
 	void OnSave(wxCommandEvent& event);
+	void OnExportMask(wxCommandEvent& event);
+	void OnImportMask(wxCommandEvent& event);
 	void OnBakeVolume(wxCommandEvent& event);
 	void OnRenameMenu(wxCommandEvent& event);
 	void OnIsolate(wxCommandEvent& event);

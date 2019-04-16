@@ -1254,8 +1254,8 @@ z
 	   wstring fn = finfo->cached ? finfo->cache_filename : finfo->filename;
 	   ifs.open(ws2s(fn), ios::binary);
 	   if (!ifs) return false;
-	   if (finfo->type != BRICK_FILE_TYPE_H265) 
-	   {
+//	   if (finfo->type != BRICK_FILE_TYPE_H265) 
+//	   {
 		   size_t zsize = finfo->datasize;
 		   if (zsize <= 0) zsize = (size_t)ifs.seekg(0, std::ios::end).tellg();
 		   char *zdata = new char[zsize];
@@ -1264,8 +1264,8 @@ z
 		   if (ifs) ifs.close();
 		   data = zdata;
 		   readsize = zsize;
-	   } 
-	   else
+//	   } 
+/*	   else
 	   {
 		   size_t h265size = finfo->datasize;
 		   size_t fsize = (size_t)ifs.seekg(0, std::ios::end).tellg();
@@ -1295,7 +1295,7 @@ z
 			   memcache_order.pop_front();
 		   }
 	   }
-
+*/
 	   return true;
    }
 
