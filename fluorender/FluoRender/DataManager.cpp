@@ -1083,6 +1083,7 @@ bool VolumeData::LoadMask(Nrrd* mask)
 	if (w != mskw || h != mskh || d != mskd)
 		return false;
 
+	m_vr->clear_tex_current_mask();
 	m_tex->add_empty_mask();
 	if (!isBrxml()) AddEmptyStroke();
 	m_tex->set_nrrd(mask, m_tex->nmask());

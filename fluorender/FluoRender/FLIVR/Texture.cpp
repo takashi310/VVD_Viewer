@@ -867,6 +867,7 @@ namespace FLIVR
 			if (data_[nmask_])
 			{
 				delete [] data_[nmask_]->data;
+				nrrdNix(data_[nmask_]);
 				data_[nmask_] = NULL;
 			}
 
@@ -891,6 +892,7 @@ namespace FLIVR
 			if (data_[nlabel_])
 			{
 				delete [] data_[nlabel_]->data;
+				nrrdNix(data_[nlabel_]);
 				data_[nlabel_] = NULL;
 			}
 
@@ -915,6 +917,7 @@ namespace FLIVR
 			if (data_[nstroke_])
 			{
 				delete [] data_[nstroke_]->data;
+				nrrdNix(data_[nstroke_]);
 				data_[nstroke_] = NULL;
 			}
 
@@ -933,8 +936,7 @@ namespace FLIVR
 			
 			if (data_[index] && data && !existInPyramid)
 			{
-				if (index != nmask_)
-					delete [] data_[index]->data;
+				delete [] data_[index]->data;
 				nrrdNix(data_[index]);
 			}
 
