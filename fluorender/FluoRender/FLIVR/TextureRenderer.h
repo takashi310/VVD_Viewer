@@ -448,6 +448,9 @@ namespace FLIVR
                static bool brick_sort(const BrickDist& bd1, const BrickDist& bd2);
                //check and swap memory
                int check_swap_memory(TextureBrick* brick, int c);
+			   bool return_brick(const TexParam &texp);
+			   void clean_texpool();
+
                //load texture bricks for drawing
                //unit:assigned unit, c:channel
                GLint load_brick(int unit, int c, vector<TextureBrick*> *b, int i, GLint filter=GL_LINEAR, bool compression=false, int mode=0, bool set_drawn=true);

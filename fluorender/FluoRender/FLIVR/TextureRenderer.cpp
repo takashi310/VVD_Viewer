@@ -2588,6 +2588,62 @@ namespace FLIVR
 		return bd1.dist > bd2.dist;
 	}
 
+	bool TextureRenderer::return_brick(const TexParam &texp)
+	{
+		TextureBrick* b = texp.brick;
+		int c = texp.comp;
+		if (!b->dirty(c) || c <= 0 || c >= TEXTURE_MAX_COMPONENTS)
+			return false;
+
+		GLint cur_unit = GL_TEXTURE0;
+		glGetIntegerv(GL_ACTIVE_TEXTURE, &cur_unit);
+
+		glActiveTexture(GL_TEXTURE0+c);
+
+		glBindTexture(GL_TEXTURE_3D, texp.id);
+		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+		// download texture data
+		int sx = b->sx();
+		int sy = b->sy();
+		int sz = b->sz();
+		glPixelStorei(GL_PACK_ROW_LENGTH, sx);
+		glPixelStorei(GL_PACK_IMAGE_HEIGHT, sy);
+		glPixelStorei(GL_PACK_ALIGNMENT, 1);
+
+		size_t nx = b->nx();
+		size_t ny = b->ny();
+		size_t nz = b->nz();
+		GLenum type = b->tex_type(c);
+		void* data = b->tex_data(c);
+		//size_t bufsize = (size_t)nx*(size_t)ny*(size_t)nz*(size_t)b->tex_type_size(type);
+		//glGetTextureSubImage(GL_TEXTURE_3D, 0, 0, 0, 0, sx, sy, sz, GL_RED, type, bufsize, data);
+		glGetTexImage(GL_TEXTURE_3D, 0, GL_RED, type, data);
+
+		b->set_dirty(c, false);
+
+		glBindTexture(GL_TEXTURE_3D, 0);
+		glActiveTexture(cur_unit);
+
+		return true;
+	}
+
+	void TextureRenderer::clean_texpool()
+	{
+		for (int j=int(tex_pool_.size()-1); j>=0; j--)
+		{
+			if (tex_pool_[j].delayed_del &&
+				glIsTexture(tex_pool_[j].id))
+			{
+				//save before deletion
+				return_brick(tex_pool_[j]);
+				glDeleteTextures(1, (GLuint*)&tex_pool_[j].id);
+				tex_pool_.erase(tex_pool_.begin()+j);
+			}
+		}
+	}
+
 	int TextureRenderer::check_swap_memory(TextureBrick* brick, int c)
 	{
 		unsigned int i;
@@ -2637,8 +2693,6 @@ namespace FLIVR
 		int comp;
 		if (bd_list.size() > 0)
 		{
-			glFinish();
-
 			//sort from farthest to closest
 			std::sort(bd_list.begin(), bd_list.end(), TextureRenderer::brick_sort);
 
@@ -2656,7 +2710,8 @@ namespace FLIVR
 					bd_others.push_back(bd_list[i]);
 			}
 
-			//overwrite
+			//overwrite or remove undisplayed bricks.
+			//try to overwrite
 			for (i=0; i<bd_undisp.size(); i++)
 			{
 				TexParam &texp = tex_pool_[bd_undisp[i].index];
@@ -2673,8 +2728,30 @@ namespace FLIVR
 					break;
 				}
 			}
-			if (overwrite == -1)
+			if (overwrite >= 0)
 			{
+				//save before deletion
+				return_brick(tex_pool_[overwrite]);
+				return overwrite;
+			}
+			//remove
+			vector<int> deleted;
+			for (i=0; i<bd_undisp.size(); i++)
+			{
+				TexParam &texp = tex_pool_[bd_undisp[i].index];
+				texp.delayed_del = true;
+				comp = texp.comp;
+				deleted.push_back(bd_undisp[i].index);
+				double released_mem = texp.nx*texp.ny*texp.nz*texp.nb/1.04e6;
+				est_avlb_mem += released_mem;
+				if (est_avlb_mem >= new_mem)
+					break;
+			}
+			
+			//overwrite or remove displayed bricks far away.
+			if (est_avlb_mem < new_mem)
+			{
+				//try to overwrite
 				for (i=0; i<bd_others.size(); i++)
 				{
 					TexParam &texp = tex_pool_[bd_others[i].index];
@@ -2691,155 +2768,37 @@ namespace FLIVR
 						break;
 					}
 				}
+				if (overwrite >= 0)
+				{
+					//save before deletion
+					return_brick(tex_pool_[overwrite]);
+				}
+				else
+				{
+					//remove
+					for (i=0; i<bd_others.size(); i++)
+					{
+						TexParam &texp = tex_pool_[bd_others[i].index];
+						texp.delayed_del = true;
+						comp = texp.comp;
+						deleted.push_back(bd_others[i].index);
+						double released_mem = texp.nx*texp.ny*texp.nz*texp.nb/1.04e6;
+						est_avlb_mem += released_mem;
+						if (est_avlb_mem >= new_mem)
+							break;
+					}
+				}
 			}
+
+			clean_texpool();
+			if (use_mem_limit_)
+				available_mem_ = est_avlb_mem;
 
 			if (overwrite >= 0)
 			{
-				//save before deletion
-				TextureBrick* b = tex_pool_[overwrite].brick;
-				int delc = tex_pool_[overwrite].comp;
-				if (b->dirty(delc) && delc > 0 && delc <TEXTURE_MAX_COMPONENTS)
-				{
-					GLint cur_unit = GL_TEXTURE0;
-					glGetIntegerv(GL_ACTIVE_TEXTURE, &cur_unit);
-
-					glActiveTexture(GL_TEXTURE0+delc);
-
-					glBindTexture(GL_TEXTURE_3D, tex_pool_[overwrite].id);
-					glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-					glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-					// download texture data
-					int sx = b->sx();
-					int sy = b->sy();
-					int sz = b->sz();
-					glPixelStorei(GL_PACK_ROW_LENGTH, sx);
-					glPixelStorei(GL_PACK_IMAGE_HEIGHT, sy);
-					glPixelStorei(GL_PACK_ALIGNMENT, 1);
-					
-					size_t nx = b->nx();
-					size_t ny = b->ny();
-					size_t nz = b->nz();
-					GLenum type = b->tex_type(delc);
-					void* data = b->tex_data(delc);
-					//size_t bufsize = (size_t)nx*(size_t)ny*(size_t)nz*(size_t)b->tex_type_size(type);
-					//glGetTextureSubImage(GL_TEXTURE_3D, 0, 0, 0, 0, sx, sy, sz, GL_RED, type, bufsize, data);
-					glGetTexImage(GL_TEXTURE_3D, 0, GL_RED, type, data);
-
-					b->set_dirty(delc, false);
-
-					glBindTexture(GL_TEXTURE_3D, 0);
-					glActiveTexture(cur_unit);
-				}
-				return overwrite;
+				for (auto i : deleted)
+					if (i < overwrite) overwrite--;
 			}
-			
-			//remove
-			for (i=0; i<bd_undisp.size(); i++)
-			{
-				TexParam &texp = tex_pool_[bd_undisp[i].index];
-				texp.delayed_del = true;
-				comp = texp.comp;
-				double released_mem = texp.nx*texp.ny*texp.nz*texp.nb/1.04e6;
-				est_avlb_mem += released_mem;
-				if (est_avlb_mem >= new_mem)
-					break;
-			}
-			if (est_avlb_mem < new_mem)
-			{
-				for (i=0; i<bd_others.size(); i++)
-				{
-					TexParam &texp = tex_pool_[bd_others[i].index];
-					texp.delayed_del = true;
-					comp = texp.comp;
-					double released_mem = texp.nx*texp.ny*texp.nz*texp.nb/1.04e6;
-					est_avlb_mem += released_mem;
-					if (est_avlb_mem >= new_mem)
-						break;
-				}
-			}
-			/*
-			if (est_avlb_mem < new_mem)
-			{
-				for (i=0; i<bd_saved.size(); i++)
-				{
-					TexParam &texp = tex_pool_[bd_saved[i].index];
-					texp.delayed_del = true;
-					comp = texp.comp;
-					double released_mem = texp.nx*texp.ny*texp.nz*texp.nb/1.04e6;
-					est_avlb_mem += released_mem;
-					if (est_avlb_mem >= new_mem)
-						break;
-				}
-			}
-			*/
-			//delete from pool
-			for (int j=int(tex_pool_.size()-1); j>=0; j--)
-			{
-				if (tex_pool_[j].delayed_del &&
-					glIsTexture(tex_pool_[j].id))
-				{
-					
-					//save before deletion
-                    TextureBrick* b = tex_pool_[j].brick;
-                    int delc = tex_pool_[j].comp;
-					if (b->dirty(delc) && delc > 0 && delc <TEXTURE_MAX_COMPONENTS)
-                    {
-						GLint cur_unit = GL_TEXTURE0;
-						glGetIntegerv(GL_ACTIVE_TEXTURE, &cur_unit);
-
-                        glActiveTexture(GL_TEXTURE0+delc);
-                        
-                        glBindTexture(GL_TEXTURE_3D, tex_pool_[j].id);
-                        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-                        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-                        
-                        // download texture data
-                        int sx = b->sx();
-                        int sy = b->sy();
-						int sz = b->sz();
-                        glPixelStorei(GL_PACK_ROW_LENGTH, sx);
-                        glPixelStorei(GL_PACK_IMAGE_HEIGHT, sy);
-                        glPixelStorei(GL_PACK_ALIGNMENT, 1);
-						
-						size_t nx = b->nx();
-						size_t ny = b->ny();
-						size_t nz = b->nz();
-                        GLenum type = b->tex_type(delc);
-                        void* data = b->tex_data(delc);
-						//size_t bufsize = (size_t)nx*(size_t)ny*(size_t)nz*(size_t)b->tex_type_size(type);
-						//glGetTextureSubImage(GL_TEXTURE_3D, 0, 0, 0, 0, sx, sy, sz, GL_RED, type, bufsize, data);
-						glGetTexImage(GL_TEXTURE_3D, 0, GL_RED, type, data);
-                        
-						b->set_dirty(delc, false);
-
-						glBindTexture(GL_TEXTURE_3D, 0);
-						glActiveTexture(cur_unit);
-                    }
-                   /*
-					if( overwrite == -1 
-						&& tex_pool_[j].id != 0
-						&& tex_pool_[j].comp == c
-						&& brick->nx() == tex_pool_[j].nx
-						&& brick->ny() == tex_pool_[j].ny
-						&& brick->nz() == tex_pool_[j].nz
-						&& brick->nb(c) == tex_pool_[j].nb
-						&& brick->tex_type(c) == tex_pool_[j].textype)
-					{
-						//over write a texture that has exact same properties.
-						overwrite = j;
-						tex_pool_[j].delayed_del = false;
-						est_avlb_mem -= new_mem;
-						continue;
-					}*/
-					glDeleteTextures(1, (GLuint*)&tex_pool_[j].id);
-					tex_pool_.erase(tex_pool_.begin()+j);
-					if (overwrite >= 0) overwrite--;
-				}
-			}
-
-			if (use_mem_limit_)
-				available_mem_ = est_avlb_mem;
 		}
 		
 		return overwrite;
