@@ -150,6 +150,8 @@ VolumeData::VolumeData()
 	m_brick_num = 0;
 	
 	m_brkxml_mask = NULL;
+
+	m_skip_brick = false;
 }
 
 /*
