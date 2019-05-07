@@ -28,6 +28,7 @@
 #include <string>
 #include <sstream>
 #include <iostream>
+#include <regex>
 #include <FLIVR/VolShader.h>
 #include <FLIVR/ShaderProgram.h>
 #include <FLIVR/VolShaderCode.h>
@@ -42,48 +43,54 @@ namespace FLIVR
 
 #define VTX_SHADER_CODE_CORE_PROFILE \
 	"//VTX_SHADER_CODE_CORE_PROFILE\n" \
-	"uniform mat4 matrix0; //projection matrix\n" \
-	"uniform mat4 matrix1; //modelview matrix\n" \
+	"layout (binding = 0) uniform VolVertShaderUBO {" \
+	"	mat4 matrix0; //projection matrix\n" \
+	"	mat4 matrix1; //modelview matrix\n" \
+	"} vubo;" \
 	"layout(location = 0) in vec3 InVertex;  //w will be set to 1.0 automatically\n" \
 	"layout(location = 1) in vec3 InTexture;\n" \
-	"out vec3 OutVertex;\n" \
-	"out vec3 OutTexture;\n" \
+	"layout(location = 0) out vec3 OutVertex;\n" \
+	"layout(location = 1) out vec3 OutTexture;\n" \
 	"//-------------------\n" \
 	"void main()\n" \
 	"{\n" \
-	"	gl_Position = matrix0 * matrix1 * vec4(InVertex,1.);\n" \
+	"	gl_Position = vubo.matrix0 * vubo.matrix1 * vec4(InVertex,1.);\n" \
 	"	OutTexture = InTexture;\n" \
 	"	OutVertex  = InVertex;\n" \
 	"}\n" 
 
 #define VTX_SHADER_CODE_FOG \
 	"//VTX_SHADER_CODE_FOG\n" \
-	"uniform mat4 matrix0; //projection matrix\n" \
-	"uniform mat4 matrix1; //modelview matrix\n" \
+	"layout (binding = 0) uniform VolVertShaderUBO {" \
+	"	mat4 matrix0; //projection matrix\n" \
+	"	mat4 matrix1; //modelview matrix\n" \
+	"} vubo;" \
 	"layout(location = 0) in vec3 InVertex;  //w will be set to 1.0 automatically\n" \
 	"layout(location = 1) in vec3 InTexture;\n" \
-	"out vec3 OutVertex;\n" \
-	"out vec3 OutTexture;\n" \
-	"out vec4 OutFogCoord;\n" \
+	"layout(location = 0) out vec3 OutVertex;\n" \
+	"layout(location = 1) out vec3 OutTexture;\n" \
+	"layout(location = 2) out vec4 OutFogCoord;\n" \
 	"//-------------------\n" \
 	"void main()\n" \
 	"{\n" \
-	"	OutFogCoord = matrix1 * vec4(InVertex,1.);\n" \
-	"	gl_Position = matrix0 * OutFogCoord;\n" \
+	"	OutFogCoord = vubo.matrix1 * vec4(InVertex,1.);\n" \
+	"	gl_Position = vubo.matrix0 * OutFogCoord;\n" \
 	"	OutTexture = InTexture;\n" \
 	"	OutVertex  = InVertex;\n" \
 	"}\n" 
 
 #define FRG_SHADER_CODE_CORE_PROFILE \
 	"//FRG_SHADER_CODE_CORE_PROFILE\n" \
-	"in vec3 OutVertex;\n" \
-	"in vec3 OutTexCoord;\n" \
-	"out vec4 FragColor;\n" \
+	"layout(location = 0) in vec3 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexCoord;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
 	"\n" \
-	"uniform vec4 loc0;//color\n" \
+	"layout (push_constant) uniform PushConsts {" \
+	"	vec4 loc0;//color\n" \
+	"} ct;" \
 	"void main()\n" \
 	"{\n" \
-	"	FragColor = loc0;\n" \
+	"	FragColor = ct.loc0;\n" \
 	"}\n"
 
 VolShader::VolShader(
@@ -194,23 +201,15 @@ VolShader::VolShader(
 		if (color_mode_ == 3) z << VOL_ID_COLOR_OUTPUTS;
 
 		//the common uniforms
-		z << VOL_UNIFORMS_COMMON;
+		z << VOL_UNIFORMS_BASE;
 
-		//2d map location
-		if (peel_ != 0 || color_mode_ == 2)
-			z << VOL_UNIFORMS_2DMAP_LOC;
+		//the brick uniforms
+		z << VOL_UNIFORMS_BRICK;
 
 		//color modes
 		switch (color_mode_)
 		{
-		case 0://normal
-			z << VOL_UNIFORMS_SIN_COLOR;
-			break;
-		case 1://colormap
-			z << VOL_UNIFORMS_COLORMAP;
-			break;
 		case 2://depth map
-			z << VOL_UNIFORMS_SIN_COLOR;
 			z << VOL_UNIFORMS_DEPTHMAP;
 			break;
 		case 3://index color
@@ -225,13 +224,6 @@ VolShader::VolShader(
 		// add uniform for depth peeling
 		if (peel_ != 0)
 			z << VOL_UNIFORMS_DP;
-
-		// add uniforms for clipping
-		if (clip_)
-		{
-			z << VOL_UNIFORMS_CLIP;
-			z << VOL_UNIFORMS_MATRICES;
-		}
 
 		// add uniforms for masking
 		switch (mask_)
@@ -250,14 +242,7 @@ VolShader::VolShader(
 		}
 
 		if ( (mask_ <= 0 || mask_ == 3)  && mask_hide_mode_ > 0)
-		{
 			z << VOL_UNIFORMS_MASK;
-			z << VOL_UNIFORMS_MATRICES_MASK_HIDE;
-		}
-
-		//uniform for fog
-		if (fog_)
-			z << VOL_UNIFORMS_FOG_LOC;
 
 		//functions
 		if (clip_)
@@ -469,12 +454,39 @@ VolShader::VolShader(
 	VolShaderFactory::VolShaderFactory()
 		: prev_shader_(-1)
 	{
+
+	}
+
+	VolShaderFactory::VolShaderFactory(std::shared_ptr<VVulkan> vulkan)
+		: prev_shader_(-1)
+	{
+		init(vulkan);
+	}
+
+	void VolShaderFactory::init(std::shared_ptr<VVulkan> vulkan)
+	{
+		prepareUniformBuffers();
+		setupDescriptorSetLayout();
+		setupDescriptorPool();
+		setupDescriptorSetUniforms();
 	}
 
 	VolShaderFactory::~VolShaderFactory()
 	{
 		for(unsigned int i=0; i<shader_.size(); i++)
 			delete shader_[i];
+
+		auto device = ShaderProgram::get_vulkan()->getDevice();
+		
+		vkDestroyPipelineLayout(device, pipeline_.pipelineLayout, nullptr);
+		vkDestroyDescriptorSetLayout(device, pipeline_.descriptorSetLayout, nullptr);
+		vkDestroyDescriptorPool(device, pipeline_.descriptorPool, nullptr);
+		
+		// Uniform buffers
+		uniformBuffers_.vert.destroy();
+		uniformBuffers_.frag_base.destroy();
+		uniformBuffers_.frag_brick.destroy();
+
 	}
 
 	ShaderProgram* VolShaderFactory::shader(
@@ -485,6 +497,7 @@ VolShader::VolShader(
 		int color_mode, int colormap, int colormap_proj,
 		bool solid, int vertex_shader, int mask_hide_mode)
 	{
+		VolShader *ret = nullptr;
 		if(prev_shader_ >= 0)
 		{
 			if(shader_[prev_shader_]->match(
@@ -495,38 +508,182 @@ VolShader::VolShader(
 				color_mode, colormap, colormap_proj,
 				solid, vertex_shader, mask_hide_mode))
 			{
-				return shader_[prev_shader_]->program();
+				ret = shader_[prev_shader_];
 			}
 		}
-		for(unsigned int i=0; i<shader_.size(); i++)
+		if (!ret)
 		{
-			if(shader_[i]->match(
-				poly, channels,
+			for(unsigned int i=0; i<shader_.size(); i++)
+			{
+				if(shader_[i]->match(
+					poly, channels,
+					shading, fog,
+					peel, clip,
+					hiqual, mask,
+					color_mode, colormap, colormap_proj,
+					solid, vertex_shader, mask_hide_mode))
+				{
+					prev_shader_ = i;
+					ret = shader_[i];
+					break;
+				}
+			}
+		}
+
+		if (!ret)
+		{
+			VolShader* s = new VolShader(poly, channels,
 				shading, fog,
 				peel, clip,
 				hiqual, mask,
 				color_mode, colormap, colormap_proj,
-				solid, vertex_shader, mask_hide_mode))
+				solid, vertex_shader, mask_hide_mode);
+			if(s->create())
+				delete s;
+			else
 			{
-				prev_shader_ = i;
-				return shader_[i]->program();
+				shader_.push_back(s);
+				prev_shader_ = int(shader_.size())-1;
+				ret = s;
 			}
 		}
 
-		VolShader* s = new VolShader(poly, channels,
-			shading, fog,
-			peel, clip,
-			hiqual, mask,
-			color_mode, colormap, colormap_proj,
-			solid, vertex_shader, mask_hide_mode);
-		if(s->create())
+		return ret ? ret->program() : NULL;
+	}
+
+	void VolShaderFactory::setupDescriptorPool()
+	{
+		std::vector<VkDescriptorPoolSize> poolSizes =
 		{
-			delete s;
-			return 0;
+			vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3),
+			vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, ShaderProgram::MAX_SHADER_UNIFORMS)
+		};
+
+		VkDescriptorPoolCreateInfo descriptorPoolInfo = 
+			vks::initializers::descriptorPoolCreateInfo(
+			static_cast<uint32_t>(poolSizes.size()),
+			poolSizes.data(),
+			2);
+
+		VK_CHECK_RESULT(vkCreateDescriptorPool(ShaderProgram::get_vulkan()->getDevice(), &descriptorPoolInfo, nullptr, &pipeline_.descriptorPool));
+	}
+
+	void VolShaderFactory::setupDescriptorSetLayout()
+	{
+		VkDevice device = ShaderProgram::get_vulkan()->getDevice();
+
+		std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = 
+		{
+			// Binding 0 : Uniform buffer for vertex shader
+			vks::initializers::descriptorSetLayoutBinding(
+			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 
+			VK_SHADER_STAGE_VERTEX_BIT, 
+			0),
+			// Binding 1 : Base uniform buffer for fragment shader
+			vks::initializers::descriptorSetLayoutBinding(
+			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 
+			VK_SHADER_STAGE_FRAGMENT_BIT, 
+			1),
+			// Binding 2 : Brick uniform buffer for fragment shader
+			vks::initializers::descriptorSetLayoutBinding(
+			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 
+			VK_SHADER_STAGE_FRAGMENT_BIT, 
+			2),
+		};
+
+		int offset = 2;
+		for (int i = 0; i < ShaderProgram::MAX_SHADER_UNIFORMS; i++)
+		{
+			setLayoutBindings.push_back(
+				vks::initializers::descriptorSetLayoutBinding(
+				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
+				VK_SHADER_STAGE_FRAGMENT_BIT, 
+				offset+i)
+			);
 		}
-		shader_.push_back(s);
-		prev_shader_ = int(shader_.size())-1;
-		return s->program();
+
+		VkDescriptorSetLayoutCreateInfo descriptorLayout = 
+			vks::initializers::descriptorSetLayoutCreateInfo(
+			setLayoutBindings.data(),
+			static_cast<uint32_t>(setLayoutBindings.size()));
+
+		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &pipeline_.descriptorSetLayout));
+
+		VkPipelineLayoutCreateInfo pPipelineLayoutCreateInfo =
+			vks::initializers::pipelineLayoutCreateInfo(
+			&pipeline_.descriptorSetLayout,
+			1);
+
+		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pPipelineLayoutCreateInfo, nullptr, &pipeline_.pipelineLayout));
+	}
+
+	void VolShaderFactory::setupDescriptorSetUniforms()
+	{
+		VkDevice device = ShaderProgram::get_vulkan()->getDevice();
+
+		VkDescriptorSetAllocateInfo descriptorSetAllocInfo;
+		descriptorSetAllocInfo = vks::initializers::descriptorSetAllocateInfo(pipeline_.descriptorPool, &pipeline_.descriptorSetLayout, 1);
+		VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &pipeline_.descriptorSet));
+		
+		std::vector<VkWriteDescriptorSet> writeDescriptorSets = {			
+			vks::initializers::writeDescriptorSet(pipeline_.descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &uniformBuffers_.vert.descriptor),
+			vks::initializers::writeDescriptorSet(pipeline_.descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, &uniformBuffers_.frag_base.descriptor),
+			vks::initializers::writeDescriptorSet(pipeline_.descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2, &uniformBuffers_.frag_brick.descriptor)
+		};
+		vkUpdateDescriptorSets(device, writeDescriptorSets.size(), writeDescriptorSets.data(), 0, NULL);
+	}
+
+	void VolShaderFactory::setupDescriptorSetSamplers(uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites)
+	{
+		VkDevice device = ShaderProgram::get_vulkan()->getDevice();
+		vkUpdateDescriptorSets(device, descriptorWriteCountconst, pDescriptorWrites, 0, NULL);
+	}
+
+	// Prepare and initialize uniform buffer containing shader uniforms
+	void VolShaderFactory::prepareUniformBuffers()
+	{
+		auto vulkanDev = ShaderProgram::get_vulkan()->vulkanDevice;
+
+		// Phong and color pass vertex shader uniform buffer
+		VK_CHECK_RESULT(vulkanDev->createBuffer(
+			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			&uniformBuffers_.vert,
+			sizeof(VolVertShaderUBO)));
+
+		// Blur parameters uniform buffers
+		VK_CHECK_RESULT(vulkanDev->createBuffer(
+			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			&uniformBuffers_.frag_base,
+			sizeof(VolFragShaderBaseUBO)));
+
+		// Skybox
+		VK_CHECK_RESULT(vulkanDev->createBuffer(
+			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			&uniformBuffers_.frag_brick,
+			sizeof(VolFragShaderBrickUBO)));
+
+		// Map persistent
+		VK_CHECK_RESULT(uniformBuffers_.vert.map());
+		VK_CHECK_RESULT(uniformBuffers_.frag_base.map());
+		VK_CHECK_RESULT(uniformBuffers_.frag_brick.map());
+	}
+
+	void VolShaderFactory::updateUniformBuffersVert(VolVertShaderUBO ubo)
+	{
+		memcpy(uniformBuffers_.vert.mapped, &ubo, sizeof(ubo));
+	}
+
+	void VolShaderFactory::updateUniformBuffersFragBase(VolFragShaderBaseUBO ubo)
+	{
+		memcpy(uniformBuffers_.frag_base.mapped, &ubo, sizeof(ubo));
+	}
+
+	void VolShaderFactory::updateUniformBuffersFragBrick(VolFragShaderBrickUBO ubo)
+	{
+		memcpy(uniformBuffers_.frag_brick.mapped, &ubo, sizeof(ubo));
 	}
 
 } // end namespace FLIVR

@@ -42,6 +42,8 @@
 #include <tinyxml2.h>
 #include <wx/thread.h>
 
+#include <VVulkan.h>
+
 #include "DLLExport.h"
 
 namespace FLIVR
@@ -491,6 +493,93 @@ namespace FLIVR
                void bind_2d_dmap();
 
 			   void rearrangeLoadedBrkVec();
+
+			   ////Vulkan Settings
+			   shared_ptr<VVulkan> vulkan_;
+
+			   struct VVertex {
+				   float pos[3];
+				   float uv[3];
+			   };
+
+			   struct VTexture {
+				   VkSampler sampler = VK_NULL_HANDLE;
+				   VkImage image = VK_NULL_HANDLE;
+				   VkImageLayout imageLayout;
+				   VkDeviceMemory deviceMemory = VK_NULL_HANDLE;
+				   VkImageView view = VK_NULL_HANDLE;
+				   VkDescriptorImageInfo descriptor;
+				   VkFormat format;
+				   uint32_t width, height, depth;
+				   uint32_t mipLevels;
+			   } texture_;
+
+			   struct {
+				   VkPipelineVertexInputStateCreateInfo inputState;
+				   std::vector<VkVertexInputBindingDescription> inputBinding;
+				   std::vector<VkVertexInputAttributeDescription> inputAttributes;
+			   } vertices_;
+
+			   struct VertexBuffer {
+				   vks::Buffer vertexBuffer;
+				   vks::Buffer indexBuffer;
+				   uint32_t indexCount;
+			   } brk_vertbuf_, quad_vertbuf_;
+
+			   vks::Buffer brk_uniformBufferVS_;
+			   vks::Buffer quad_uniformBufferVS_;
+
+			   struct BrkUboVS {
+				   glm::mat4 projection;
+				   glm::mat4 model;
+				   glm::vec4 viewPos;
+				   float depth = 0.0f;
+			   } brk_uboVS_;
+
+			   struct QuadUboVS {
+				   glm::mat4 projection;
+				   glm::mat4 model;
+				   glm::vec4 viewPos;
+				   float depth = 0.0f;
+			   } quad_uboVS_;
+
+			   struct {
+				   VkPipeline brk;
+				   VkPipeline quad;
+			   } pipelines_;
+
+			   // Framebuffer for offscreen rendering
+			   struct FrameBufferAttachment {
+				   VkImage image;
+				   VkDeviceMemory mem;
+				   VkImageView view;
+			   };
+			   struct FrameBuffer {
+				   VkFramebuffer framebuffer;
+				   FrameBufferAttachment color, depth;
+				   VkDescriptorImageInfo descriptor;
+			   } brk_framebuf_, quad_framebuf_;
+
+			   struct OffscreenPass {
+				   int32_t width, height;
+				   VkRenderPass renderPass;
+				   VkSampler sampler;
+			   } brk_offscreenPass_, quad_offscreenPass_;
+
+			   struct PipelineSettings {
+				   VkPipelineLayout pipelineLayout;
+				   VkDescriptorSet descriptorSet;
+				   VkDescriptorSetLayout descriptorSetLayout;
+			   } brk_pipeset, quad_pipeset;
+
+			   void generateViewQuad();
+			   void setupVertexDescriptions();
+			   void setupDescriptorPool();
+			   void setupDescriptorSetLayout();
+			   void setupDescriptorSet();
+			   void preparePipelines();
+			   void prepareUniformBuffers();
+			   void updateUniformBuffers(bool viewchanged = true);
    };
 
 } // end namespace FLIVR

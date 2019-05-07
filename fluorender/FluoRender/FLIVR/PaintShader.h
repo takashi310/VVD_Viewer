@@ -36,6 +36,8 @@
 
 namespace FLIVR
 {
+	#define PAINT_SAMPLER_NUM 1
+
 	class ShaderProgram;
 
 	class EXPORT_API PaintShader
@@ -63,9 +65,26 @@ namespace FLIVR
 	{
 	public:
 		PaintShaderFactory();
+		PaintShaderFactory(std::shared_ptr<VVulkan> vulkan);
 		~PaintShaderFactory();
 
 		ShaderProgram* shader();
+
+		void init(std::shared_ptr<VVulkan> vulkan);
+
+		struct VolCalPipeline {
+			VkDescriptorPool descriptorPool;
+			VkDescriptorSetLayout descriptorSetLayout;
+			VkPipelineLayout pipelineLayout;
+			VkDescriptorSet descriptorSet;
+		};
+
+		void setupDescriptorPool();
+		void setupDescriptorSetLayout();
+		void allocDescriptorSet();
+		void setupDescriptorSetSamplers(uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites);
+			
+		VolCalPipeline pipeline_;
 
 	protected:
 		std::vector<PaintShader*> shader_;

@@ -59,53 +59,57 @@ namespace FLIVR
 	"	OutVertex  = InVertex;\n" \
 	"}\n" 
 
-#define SEG_UNIFORMS_LABEL_INT \
-	"//SEG_UNIFORMS_LABEL_INT\n" \
-	"uniform vec4 loc9;//(nx, ny, nz, 0)\n" \
-	"\n"
+#define SEG_UNIFORMS_BASE \
+	"// SEG_UNIFORMS_BASE\n" \
+	"layout (binding = 1) uniform VolFragShaderBaseUBO {" \
+	"	vec4 loc0;//(lx, ly, lz, alpha)\n" \
+	"	vec4 loc1;//(ka, kd, ks, ns)\n" \
+	"	vec4 loc2;//(scalar_scale, gm_scale, left_thresh, right_thresh)\n" \
+	"	vec4 loc3;//(gamma, gm_thresh, offset, sw)\n" \
+	"	vec4 loc5;//(spcx, spcy, spcz, max_id)\n" \
+	"	vec4 loc6;//(1/vx, 1/vy, luminance, depth_mode)\n" \
+	"	vec4 loc7;//(1/vx, 1/vy, 0, 0)\n" \
+	"	vec4 loc8;//(int, start, end, 0.0)\n" \
+	"	vec4 loc10; //plane0\n" \
+	"	vec4 loc11; //plane1\n" \
+	"	vec4 loc12; //plane2\n" \
+	"	vec4 loc13; //plane3\n" \
+	"	vec4 loc14; //plane4\n" \
+	"	vec4 loc15; //plane5\n" \
+	"	mat4 matrix0; //projection matrix\n" \
+	"	mat4 matrix1; //modelview matrix\n" \
+	"	mat4 matrix3;//modelview matrix inverse\n" \
+	"	mat4 matrix4;//projection matrix inverse\n" \
+	"} base;" \
+	"\n" \
+	"layout (binding = 3) uniform sampler3D tex0;//data volume\n" \
+	"layout (binding = 4) uniform sampler3D tex1;//gm volume\n" \
+	"\n" \
 
-#define SEG_UNIFORMS_LABEL_MIF \
-	"//SEG_UNIFORMS_LABEL_MIF\n" \
-	"uniform vec4 loc0;//(1/nx, 1/ny, 1/nz, 0)\n" \
+#define SEG_UNIFORMS_BRICK \
+	"// VOL_UNIFORMS_BRICK\n" \
+	"layout (binding = 2) uniform VolFragShaderBrickUBO {" \
+	"	vec4 loc4;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
+	"	vec4 loc9;//(nx, ny, nz, 0) (value_var_foff, angle_var_foff, 0, 0)\n" \
+	"	mat4 brkmat;//tex transform for bricking\n" \
+	"	mat4 mskbrkmat;//tex transform for mask bricks\n" \
+	"} brk;" \
 	"\n"
 
 #define SEG_UNIFORMS_WMAP_2D \
 	"//SEG_UNIFORMS_WMAP_2D\n" \
-	"uniform sampler2D tex4;//2d weight map (after tone mapping)\n" \
-	"uniform sampler2D tex5;//2d weight map (before tone mapping)\n" \
+	"layout(location = 7) uniform sampler2D tex4;//2d weight map (after tone mapping)\n" \
+	"layout(location = 8) uniform sampler2D tex5;//2d weight map (before tone mapping)\n" \
 	"\n"
 
 #define SEG_UNIFORMS_MASK_2D \
 	"//SEG_UNIFORMS_MASK_2D\n" \
-	"uniform sampler2D tex6;//2d mask\n" \
-	"\n"
-
-#define SEG_UNIFORMS_MATRICES \
-	"//SEG_UNIFORMS_MATRICES\n" \
-	"uniform mat4 matrix0;//modelview matrix\n" \
-	"uniform mat4 matrix1;//projection matrix\n" \
-	"\n"
-
-#define SEG_UNIFORM_MATRICES_INVERSE \
-	"//SEG_UNIFORM_MATRICES_INVERSE\n" \
-	"uniform mat4 matrix3;//modelview matrix inverse\n" \
-	"uniform mat4 matrix4;//projection matrix inverse\n" \
+	"layout(location = 9) uniform sampler2D tex6;//2d mask\n" \
 	"\n"
 
 #define SEG_UNIFORMS_LABEL_OUTPUT \
 	"//SEG_UNIFORMS_LABEL_OUTPUT\n" \
 	"out uint FragUint;\n"\
-	"\n"
-
-#define SEG_UNIFORMS_PARAMS \
-	"//SEG_UNIFORMS_PARAMS\n" \
-	"uniform vec4 loc7;//(ini_thresh, gm_falloff, scl_falloff, scl_translate)\n" \
-	"uniform vec4 loc8;//(weight_2d, post_bins, 0, 0)\n" \
-	"\n"
-
-#define SEG_UNIFORMS_PARAM_MEASURE \
-	"//SEG_UNIFORMS_PARAM_MEASURE\n" \
-	"uniform vec4 loc9;//(value_var_foff, angle_var_foff, 0, 0)\n" \
 	"\n"
 
 #define SEG_TAIL \
@@ -125,7 +129,7 @@ namespace FLIVR
 
 #define SEG_BODY_BLEND_WEIGHT \
 	"	//SEG_BODY_BLEND_WEIGHT\n" \
-	"	c = loc8.x>1.0?c*loc8.x*weight2d:(1.0-loc8.x)*c+loc8.x*c*weight2d;\n" \
+	"	c = base.loc8.x>1.0?c*base.loc8.x*weight2d:(1.0-base.loc8.x)*c+base.loc8.x*c*weight2d;\n" \
 	"\n"
 
 #define SEG_BODY_INIT_CLEAR \
@@ -164,7 +168,7 @@ namespace FLIVR
 
 #define SEG_BODY_INIT_BLEND_APPEND \
 	"	//SEG_BODY_INIT_BLEND_APPEND\n" \
-	"	vec4 ret = vec4(c.x>0.0?(c.x>loc7.x?1.0:0.0):0.0);\n" \
+	"	vec4 ret = vec4(c.x>0.0?(c.x>base.loc7.x?1.0:0.0):0.0);\n" \
 	"	FragColor = ret;\n" \
 	"\n"
 
@@ -196,7 +200,7 @@ namespace FLIVR
 
 #define SEG_BODY_INIT_BLEND_FLOOD \
 	"	//SEG_BODY_INIT_BLEND_FLOOD\n" \
-	"	vec4 ret = vec4(c.x>0.0?(c.x>loc7.x?1.0:0.0):0.0);\n" \
+	"	vec4 ret = vec4(c.x>0.0?(c.x>base.loc7.x?1.0:0.0):0.0);\n" \
 	"	FragColor = ret;\n" \
 	"\n"
 
@@ -222,7 +226,7 @@ namespace FLIVR
 
 #define SEG_BODY_INIT_BLEND_HR_ORTHO \
 	"	//SEG_BODY_INIT_BLEND_HR_ORTHO\n" \
-	"	if (c.x <= loc7.x)\n" \
+	"	if (c.x <= base.loc7.x)\n" \
 	"	{\n" \
 	"		FragColor = vec4(0.0);\n" \
 	"		return;\n" \
@@ -230,7 +234,7 @@ namespace FLIVR
 	"	vec4 cv = matrix3 * vec4(0.0, 0.0, 1.0, 0.0);\n" \
 	"	vec3 step = cv.xyz;\n" \
 	"	step = normalize(step);\n" \
-	"	step = step * length(step * loc4.xyz);\n" \
+	"	step = step * length(step * brk.loc4.xyz);\n" \
 	"	vec3 ray = t.xyz;\n" \
 	"	vec4 cray;\n" \
 	"	bool flag = false;\n" \
@@ -243,14 +247,14 @@ namespace FLIVR
 	"		if (vol_clip_func(vec4(ray, 1.0)))\n" \
 	"			break;\n" \
 	"		v.x = texture(tex0, ray).x;\n" \
-	"		v.y = length(vol_grad_func(vec4(ray, 1.0), loc4).xyz);\n" \
+	"		v.y = length(vol_grad_func(vec4(ray, 1.0), brk.loc4).xyz);\n" \
 	"		cray = vol_trans_sin_color_l(v);\n" \
-	"		if (cray.x > loc7.x && flag)\n" \
+	"		if (cray.x > base.loc7.x && flag)\n" \
 	"		{\n" \
 	"			FragColor = vec4(0.0);\n" \
 	"			return;\n" \
 	"		}\n" \
-	"		if (cray.x <= loc7.x)\n" \
+	"		if (cray.x <= base.loc7.x)\n" \
 	"			flag = true;\n" \
 	"	}\n" \
 	"	FragColor = vec4(1.0);\n" \
@@ -263,7 +267,7 @@ namespace FLIVR
 
 #define SEG_BODY_INIT_BLEND_HR_PERSP \
 	"	//SEG_BODY_INIT_BLEND_HR_PERSP\n" \
-	"	if (c.x <= loc7.x)\n" \
+	"	if (c.x <= base.loc7.x)\n" \
 	"	{\n" \
 	"		FragColor = vec4(0.0);\n" \
 	"		return;\n" \
@@ -272,7 +276,7 @@ namespace FLIVR
 	"	cv = cv / cv.w;\n" \
 	"	vec3 step = cv.xyz - t.xyz;\n" \
 	"	step = normalize(step);\n" \
-	"	step = step * length(step * loc4.xyz);\n" \
+	"	step = step * length(step * brk.loc4.xyz);\n" \
 	"	vec3 ray = t.xyz;\n" \
 	"	vec4 cray;\n" \
 	"	bool flag = false;\n" \
@@ -285,14 +289,14 @@ namespace FLIVR
 	"		if (vol_clip_func(vec4(ray, 1.0)))\n" \
 	"			break;\n" \
 	"		v.x = texture(tex0, ray).x;\n" \
-	"		v.y = length(vol_grad_func(vec4(ray, 1.0), loc4).xyz);\n" \
+	"		v.y = length(vol_grad_func(vec4(ray, 1.0), brk.loc4).xyz);\n" \
 	"		cray = vol_trans_sin_color_l(v);\n" \
-	"		if (cray.x > loc7.x && flag)\n" \
+	"		if (cray.x > base.loc7.x && flag)\n" \
 	"		{\n" \
 	"			FragColor = vec4(0.0);\n" \
 	"			return;\n" \
 	"		}\n" \
-	"		if (cray.x <= loc7.x)\n" \
+	"		if (cray.x <= base.loc7.x)\n" \
 	"			flag = true;\n" \
 	"	}\n" \
 	"	FragColor = vec4(1.0);\n" \
@@ -300,7 +304,7 @@ namespace FLIVR
 
 #define SEG_BODY_INIT_POSTER \
 	"	//SEG_BODY_INIT_POSTER\n" \
-	"	vec4 ret = vec4(ceil(c.x*loc8.y)/loc8.y);\n" \
+	"	vec4 ret = vec4(ceil(c.x*base.loc8.y)/base.loc8.y);\n" \
 	"	FragColor = ret;\n" \
 	"\n"
 
@@ -330,8 +334,8 @@ namespace FLIVR
 	"		discard;\n" \
 	"	v.x = c.x>1.0?1.0:c.x;\n" \
 	"	float stop = \n" \
-	"		(loc7.y>=1.0?1.0:(v.y>sqrt(loc7.y)*2.12?0.0:exp(-v.y*v.y/loc7.y)))*\n" \
-	"		(v.x>loc7.w?1.0:(loc7.z>0.0?(v.x<loc7.w-sqrt(loc7.z)*2.12?0.0:exp(-(v.x-loc7.w)*(v.x-loc7.w)/loc7.z)):0.0));\n" \
+	"		(base.loc7.y>=1.0?1.0:(v.y>sqrt(base.loc7.y)*2.12?0.0:exp(-v.y*v.y/base.loc7.y)))*\n" \
+	"		(v.x>base.loc7.w?1.0:(base.loc7.z>0.0?(v.x<base.loc7.w-sqrt(base.loc7.z)*2.12?0.0:exp(-(v.x-base.loc7.w)*(v.x-base.loc7.w)/base.loc7.z)):0.0));\n" \
 	"	if (stop == 0.0)\n" \
 	"		discard;\n" \
 	"\n"
@@ -352,7 +356,7 @@ namespace FLIVR
 	"	for (int j=-1; j<2; j++)\n"\
 	"	for (int k=-1; k<2; k++)\n"\
 	"	{\n"\
-	"		nb = vec3(t.s+float(i)*loc4.x, t.t+float(j)*loc4.y, t.p+float(k)*loc4.z);\n"\
+	"		nb = vec3(t.s+float(i)*brk.loc4.x, t.t+float(j)*brk.loc4.y, t.p+float(k)*brk.loc4.z);\n"\
 	"		m = texture(tex2, nb).x;\n" \
 	"		if (m > cc.x)\n" \
 	"		{\n" \
@@ -360,11 +364,11 @@ namespace FLIVR
 	"			max_nb = nb;\n" \
 	"		}\n" \
 	"	}\n"\
-	"	if (loc7.y>0.0)\n" \
+	"	if (base.loc7.y>0.0)\n" \
 	"	{\n" \
-	"		m = texture(tex0, max_nb).x + loc7.y;\n" \
+	"		m = texture(tex0, max_nb).x + base.loc7.y;\n" \
 	"		mx = texture(tex0, t.stp).x;\n" \
-	"		if (m < mx || m - mx > 2.0*loc7.y)\n" \
+	"		if (m < mx || m - mx > 2.0*base.loc7.y)\n" \
 	"			discard;\n" \
 	"	}\n" \
 	"	FragColor += cc*stop;\n"\
@@ -381,7 +385,7 @@ namespace FLIVR
 	"	for (int j=-1; j<2; j++)\n"\
 	"	for (int k=-1; k<2; k++)\n"\
 	"	{\n"\
-	"		vec3 nb = vec3(t.s+float(i)*loc4.x, t.t+float(j)*loc4.y, t.p+float(k)*loc4.z);\n"\
+	"		vec3 nb = vec3(t.s+float(i)*brk.loc4.x, t.t+float(j)*brk.loc4.y, t.p+float(k)*brk.loc4.z);\n"\
 	"		cc = vec4(min(cc.x, texture(tex2, nb).x));\n"\
 	"	}\n"\
 	"	vec4 ret = cc*clamp(1.0-stop, 0.0, 1.0);\n"\
@@ -406,7 +410,7 @@ namespace FLIVR
 #define SEG_BODY_LABEL_INITIALIZE \
 	"	//SEG_BODY_LABEL_INITIALIZE\n" \
 	"	vec4 mask = texture(tex2, t.stp)*c.x;\n" \
-	"	if (mask.x == 0.0 || mask.x < loc7.x)\n" \
+	"	if (mask.x == 0.0 || mask.x < base.loc7.x)\n" \
 	"	{\n" \
 	"		FragUint = uint(0);\n" \
 	"		return;\n" \
@@ -415,8 +419,8 @@ namespace FLIVR
 
 #define SEG_BODY_LABEL_INIT_ORDER \
 	"	//SEG_BODY_LABEL_INIT_ORDER\n" \
-	"	vec3 int_pos = vec3(t.x*loc9.x, t.y*loc9.y, t.z*loc9.z);\n" \
-	"	uint index = uint(int_pos.z*loc9.x*loc9.y+int_pos.y*loc9.x+int_pos.x+1);\n" \
+	"	vec3 int_pos = vec3(t.x*brk.loc9.x, t.y*brk.loc9.y, t.z*brk.loc9.z);\n" \
+	"	uint index = uint(int_pos.z*brk.loc9.x*brk.loc9.y+int_pos.y*brk.loc9.x+int_pos.x+1);\n" \
 	"	FragUint = index;\n" \
 	"\n"
 
@@ -427,7 +431,7 @@ namespace FLIVR
 
 #define SEG_BODY_LABEL_INITIALIZE_NOMASK \
 	"	//SEG_BODY_LABEL_INITIALIZE_NOMASK\n" \
-	"	if (c.x ==0.0 || c.x <= loc7.x)\n" \
+	"	if (c.x ==0.0 || c.x <= base.loc7.x)\n" \
 	"	{\n" \
 	"		FragUint = uint(0);\n" \
 	"		return;\n" \
@@ -446,10 +450,10 @@ namespace FLIVR
 
 #define VOL_MEASURE_GM_LOOKUP \
 	"	//VOL_MEASURE_GM_LOOKUP\n" \
-	"	w = vol_grad_func(t, loc4);\n" \
+	"	w = vol_grad_func(t, brk.loc4);\n" \
 	"	n.xyz = clamp(normalize(w.xyz), vec3(0.0), vec3(1.0));\n" \
 	"	v.y = length(w.xyz);\n" \
-	"	v.y = 0.5 * (loc2.x<0.0?(1.0+v.y*loc2.x):v.y*loc2.x);\n" \
+	"	v.y = 0.5 * (base.loc2.x<0.0?(1.0+v.y*base.loc2.x):v.y*base.loc2.x);\n" \
 	"\n"
 
 #define SEG_BODY_LABEL_MAX_FILTER \
@@ -466,7 +470,7 @@ namespace FLIVR
 	"	{\n" \
 	"		if (k==0 && (i!=0 || j!=0))\n" \
 	"			continue;\n" \
-	"		nb = vec3(t.s+float(i)*loc4.x, t.t+float(j)*loc4.y, t.p+float(k)*loc4.z);\n" \
+	"		nb = vec3(t.s+float(i)*brk.loc4.x, t.t+float(j)*brk.loc4.y, t.p+float(k)*brk.loc4.z);\n" \
 	"		m = texture(tex3, nb).x;\n" \
 	"		if (m > int_val)\n" \
 	"		{\n" \
@@ -474,7 +478,7 @@ namespace FLIVR
 	"			max_nb = nb;\n" \
 	"		}\n" \
 	"	}\n" \
-	"	if (texture(tex0, max_nb).x+loc7.y < texture(tex0, t.stp).x)\n" \
+	"	if (texture(tex0, max_nb).x+base.loc7.y < texture(tex0, t.stp).x)\n" \
 	"		discard;\n" \
 	"	FragUint = int_val;\n" \
 	"\n"
@@ -493,7 +497,7 @@ namespace FLIVR
 	"	for (int j=-1; j<2; j++)\n" \
 	"	for (int k=-1; k<2; k++)\n" \
 	"	{\n" \
-	"		vec3 nb = vec3(t.s+float(i)*loc0.x, t.t+float(j)*loc0.y, t.p+float(k)*loc0.z);\n" \
+	"		vec3 nb = vec3(t.s+float(i)*base.loc0.x, t.t+float(j)*base.loc0.y, t.p+float(k)*base.loc0.z);\n" \
 	"		nb_val = texture(tex2, nb).x;\n" \
 	"		if (abs(nb_val-cur_val) < 0.001)\n" \
 	"			int_val = max(int_val, texture(tex3, nb).x);\n" \
@@ -513,7 +517,7 @@ namespace FLIVR
 	"	for (int j=-2; j<3; j++)\n" \
 	"	for (int k=-2; k<3; k++)\n" \
 	"	{\n" \
-	"		vec3 nb = vec3(t.s+float(i)*loc4.x, t.t+float(j)*loc4.y, t.p+float(k)*loc4.z);\n" \
+	"		vec3 nb = vec3(t.s+float(i)*brk.loc4.x, t.t+float(j)*brk.loc4.y, t.p+float(k)*brk.loc4.z);\n" \
 	"		nb_val = texture(tex0, nb).x;\n" \
 	"		max_val = (nb_val<vc && nb_val>max_val)?nb_val:max_val;\n" \
 	"	}\n" \
@@ -558,6 +562,9 @@ namespace FLIVR
 		z << ShaderProgram::glsl_version_;
 		z << VOL_INPUTS;
 
+		z << SEG_UNIFORMS_BASE;
+		z << SEG_UNIFORMS_BRICK;
+
 		//uniforms
 		switch (type_)
 		{
@@ -565,53 +572,32 @@ namespace FLIVR
 		case SEG_SHDR_DB_GROW:
 			z << SEG_OUTPUTS;
 			if (use_stroke_) z << SEG_PAINT_OUTPUTS;
-			z << VOL_UNIFORMS_COMMON;
-			z << VOL_UNIFORMS_SIN_COLOR;
 			z << VOL_UNIFORMS_MASK;
 			z << SEG_UNIFORMS_WMAP_2D;
 			z << SEG_UNIFORMS_MASK_2D;
-			z << SEG_UNIFORMS_MATRICES;
-			z << VOL_UNIFORMS_MATRICES;
-			z << SEG_UNIFORMS_PARAMS;
 			break;
 		case LBL_SHDR_INITIALIZE:
 			z << SEG_UNIFORMS_LABEL_OUTPUT;
-			z << VOL_UNIFORMS_COMMON;
-			z << VOL_UNIFORMS_SIN_COLOR;
-			z << SEG_UNIFORMS_LABEL_INT;
 			if (use_2d_)
 				z << VOL_UNIFORMS_MASK;
-			z << SEG_UNIFORMS_PARAMS;
 			break;
 		case LBL_SHDR_MIF:
 			z << SEG_UNIFORMS_LABEL_OUTPUT;
-			z << VOL_UNIFORMS_COMMON;
-			z << VOL_UNIFORMS_SIN_COLOR;
 			z << VOL_UNIFORMS_LABEL;
 			if (paint_mode_==1)
 				z << VOL_UNIFORMS_MASK;
-			z << SEG_UNIFORMS_PARAMS;
-			z << SEG_UNIFORMS_PARAM_MEASURE;
 			break;
 		case FLT_SHDR_NR:
 			z << SEG_OUTPUTS;
-			z << VOL_UNIFORMS_COMMON;
 			z << VOL_UNIFORMS_MASK;
-			z << SEG_UNIFORMS_MATRICES;
-			z << VOL_UNIFORMS_MATRICES;
 			break;
 		}
-
-		//uniforms for clipping
-		if (paint_mode_!=6 && clip_)
-			z << VOL_UNIFORMS_CLIP;
 
 		//functions
 		if (type_==SEG_SHDR_INITIALIZE &&
 			(paint_mode_==1 || paint_mode_==2) &&
 			hr_mode_>0)
 		{
-			z << SEG_UNIFORM_MATRICES_INVERSE;
 			z << VOL_GRAD_COMPUTE_FUNC;
 			z << VOL_TRANSFER_FUNCTION_SIN_COLOR_L_FUNC;
 		}
@@ -795,12 +781,28 @@ namespace FLIVR
 		: prev_shader_(-1)
 	{}
 
+	SegShaderFactory::SegShaderFactory(std::shared_ptr<VVulkan> vulkan)
+		: prev_shader_(-1)
+	{
+		init(vulkan);
+	}
+
 	SegShaderFactory::~SegShaderFactory()
 	{
 		for(unsigned int i=0; i<shader_.size(); i++)
 		{
 			delete shader_[i];
 		}
+
+		auto device = ShaderProgram::get_vulkan()->getDevice();
+		
+		vkDestroyPipelineLayout(device, pipeline_.pipelineLayout, nullptr);
+		vkDestroyDescriptorSetLayout(device, pipeline_.descriptorSetLayout, nullptr);
+		vkDestroyDescriptorPool(device, pipeline_.descriptorPool, nullptr);
+		
+		// Uniform buffers
+		uniformBuffers_.frag_base.destroy();
+		uniformBuffers_.frag_brick.destroy();
 	}
 
 	ShaderProgram* SegShaderFactory::shader(int type, int paint_mode, int hr_mode,
@@ -831,6 +833,120 @@ namespace FLIVR
 		shader_.push_back(s);
 		prev_shader_ = (int)shader_.size()-1;
 		return s->program();
+	}
+
+	void SegShaderFactory::setupDescriptorPool()
+	{
+		// Example uses one ubo and one image sampler
+		std::vector<VkDescriptorPoolSize> poolSizes =
+		{
+			vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2),
+			vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, ShaderProgram::MAX_SHADER_UNIFORMS)
+		};
+
+		VkDescriptorPoolCreateInfo descriptorPoolInfo = 
+			vks::initializers::descriptorPoolCreateInfo(
+			static_cast<uint32_t>(poolSizes.size()),
+			poolSizes.data(),
+			2);
+
+		VK_CHECK_RESULT(vkCreateDescriptorPool(ShaderProgram::get_vulkan()->getDevice(), &descriptorPoolInfo, nullptr, &pipeline_.descriptorPool));
+	}
+
+	void SegShaderFactory::setupDescriptorSetLayout()
+	{
+		VkDevice device = ShaderProgram::get_vulkan()->getDevice();
+
+		std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = 
+		{
+			// Binding 1 : Base uniform buffer for fragment shader
+			vks::initializers::descriptorSetLayoutBinding(
+			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 
+			VK_SHADER_STAGE_FRAGMENT_BIT, 
+			1),
+			// Binding 2 : Brick uniform buffer for fragment shader
+			vks::initializers::descriptorSetLayoutBinding(
+			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 
+			VK_SHADER_STAGE_FRAGMENT_BIT, 
+			2),
+		};
+
+		int offset = 2;
+		for (int i = 0; i < ShaderProgram::MAX_SHADER_UNIFORMS; i++)
+		{
+			setLayoutBindings.push_back(
+				vks::initializers::descriptorSetLayoutBinding(
+				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
+				VK_SHADER_STAGE_FRAGMENT_BIT, 
+				offset+i)
+			);
+		}
+
+		VkDescriptorSetLayoutCreateInfo descriptorLayout = 
+			vks::initializers::descriptorSetLayoutCreateInfo(
+			setLayoutBindings.data(),
+			static_cast<uint32_t>(setLayoutBindings.size()));
+
+		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &pipeline_.descriptorSetLayout));
+
+		VkPipelineLayoutCreateInfo pPipelineLayoutCreateInfo =
+			vks::initializers::pipelineLayoutCreateInfo(
+			&pipeline_.descriptorSetLayout,
+			1);
+
+		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pPipelineLayoutCreateInfo, nullptr, &pipeline_.pipelineLayout));
+	}
+
+	void SegShaderFactory::setupDescriptorSetUniforms()
+	{
+		VkDevice device = ShaderProgram::get_vulkan()->getDevice();
+
+		VkDescriptorSetAllocateInfo descriptorSetAllocInfo;
+		descriptorSetAllocInfo = vks::initializers::descriptorSetAllocateInfo(pipeline_.descriptorPool, &pipeline_.descriptorSetLayout, 1);
+		VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &pipeline_.descriptorSet));
+		
+		std::vector<VkWriteDescriptorSet> writeDescriptorSets = {			
+			vks::initializers::writeDescriptorSet(pipeline_.descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, &uniformBuffers_.frag_base.descriptor),
+			vks::initializers::writeDescriptorSet(pipeline_.descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2, &uniformBuffers_.frag_brick.descriptor)
+		};
+		vkUpdateDescriptorSets(device, writeDescriptorSets.size(), writeDescriptorSets.data(), 0, NULL);
+	}
+
+	void SegShaderFactory::setupDescriptorSetSamplers(uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites)
+	{
+		VkDevice device = ShaderProgram::get_vulkan()->getDevice();
+		vkUpdateDescriptorSets(device, descriptorWriteCountconst, pDescriptorWrites, 0, NULL);
+	}
+
+	// Prepare and initialize uniform buffer containing shader uniforms
+	void SegShaderFactory::prepareUniformBuffers()
+	{
+		auto vulkanDev = ShaderProgram::get_vulkan()->vulkanDevice;
+
+		VK_CHECK_RESULT(vulkanDev->createBuffer(
+			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			&uniformBuffers_.frag_base,
+			sizeof(SegFragShaderBaseUBO)));
+
+		VK_CHECK_RESULT(vulkanDev->createBuffer(
+			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			&uniformBuffers_.frag_brick,
+			sizeof(SegFragShaderBrickUBO)));
+
+		VK_CHECK_RESULT(uniformBuffers_.frag_base.map());
+		VK_CHECK_RESULT(uniformBuffers_.frag_brick.map());
+	}
+
+	void SegShaderFactory::updateUniformBuffersFragBase(SegFragShaderBaseUBO ubo)
+	{
+		memcpy(uniformBuffers_.frag_base.mapped, &ubo, sizeof(ubo));
+	}
+
+	void SegShaderFactory::updateUniformBuffersFragBrick(SegFragShaderBrickUBO ubo)
+	{
+		memcpy(uniformBuffers_.frag_brick.mapped, &ubo, sizeof(ubo));
 	}
 
 } // end namespace FLIVR

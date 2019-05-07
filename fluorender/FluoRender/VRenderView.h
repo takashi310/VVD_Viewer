@@ -46,7 +46,6 @@ DEALINGS IN THE SOFTWARE.
 #include <wx/wx.h>
 #include <wx/clrpicker.h>
 #include <wx/spinbutt.h>
-#include <wx/glcanvas.h>
 #include <wx/event.h>
 #include <wx/srchctrl.h>
 #include <wx/thread.h>
@@ -58,6 +57,8 @@ DEALINGS IN THE SOFTWARE.
 #include "nv/timer.h"
 
 #include <glm/glm.hpp>
+
+#include "VVulkan.h"
 
 #ifndef _VRENDERVIEW_H_
 #define _VRENDERVIEW_H_
@@ -90,7 +91,7 @@ DEALINGS IN THE SOFTWARE.
 using namespace std;
 
 class VRenderView;
-class VRenderGLView;
+class VRenderVulkanView;
 class LMSeacher;
 
 //tree item data
@@ -118,7 +119,7 @@ class EXPORT_API LMTreeCtrl : public wxTreeCtrl
 	};
 
 public:
-	LMTreeCtrl(VRenderGLView *glview,
+	LMTreeCtrl(VRenderVulkanView *glview,
 		wxWindow* parent,
 		wxWindowID id,
 		const wxPoint& pos = wxDefaultPosition,
@@ -143,7 +144,7 @@ public:
 	void StartManip(wxString str);
 
 private:
-	VRenderGLView* m_glview;
+	VRenderVulkanView* m_glview;
 
 	LMSeacher *m_schtxtctrl;
 
@@ -169,7 +170,7 @@ protected: //Possible TODO
 class EXPORT_API LMSeacher : public wxTextCtrl
 {
 public:
-	LMSeacher(VRenderGLView* glview,
+	LMSeacher(VRenderVulkanView* glview,
 		wxWindow* parent,
 		wxWindowID id,
 		const wxString& text = wxT(""),
@@ -181,7 +182,7 @@ public:
 	void KillFocus();
 
 private:
-	VRenderGLView *m_glview;
+	VRenderVulkanView *m_glview;
 	wxButton *m_dummy;
 
 	LMTreeCtrl *m_list;
@@ -204,7 +205,7 @@ private:
 	DECLARE_EVENT_TABLE()
 };
 
-class EXPORT_API VRenderGLView: public wxGLCanvas
+class EXPORT_API VRenderVulkanView: public wxWindow
 {
 	enum
 	{
@@ -213,15 +214,13 @@ class EXPORT_API VRenderGLView: public wxGLCanvas
 	};
 
 public:
-	VRenderGLView(wxWindow* frame,
-		wxWindow* parent,
-		wxWindowID id,
-		const int* attriblist = NULL,
-		wxGLContext* sharedContext=0,
-		const wxPoint& pos=wxDefaultPosition,
-		const wxSize& size=wxDefaultSize,
-		long style=0);
-	~VRenderGLView();
+	VRenderVulkanView(wxWindow *parent,
+        wxWindowID id,
+        const wxPoint& pos = wxDefaultPosition,
+        const wxSize& size = wxDefaultSize,
+        long style = 0,
+        const wxString& name = "VulkanCanvasName");
+	~VRenderVulkanView();
 
 	//for degugging, this allows inspection of the pixel format actually given.
 #ifdef _WIN32
@@ -685,6 +684,8 @@ public:
 
 	double CalcCameraDistance();
 
+	void OnErase(wxEraseEvent& event);
+
 public:
 	//script run
 	bool m_run_script;
@@ -771,9 +772,8 @@ public:
 	bool m_linked_rot;
 
 private:
-	wxString m_GLversion;
-	wxGLContext* m_glRC;
-	bool m_sharedRC;
+	shared_ptr<VVulkan> m_vulkan;
+
 	wxWindow* m_frame;
 	VRenderView* m_vrv;
 	//populated lists of data
@@ -1849,7 +1849,7 @@ public:
 	static int m_id;
 
 	//render view///////////////////////////////////////////////
-	VRenderGLView *m_glview;
+	VRenderVulkanView *m_glview;
 	wxFrame* m_full_frame;
 	wxBoxSizer* m_view_sizer;
 

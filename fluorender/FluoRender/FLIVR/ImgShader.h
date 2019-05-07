@@ -58,6 +58,8 @@ namespace FLIVR
 #define IMG_SHDR_BRIGHTNESS_CONTRAST_HDR_BLEND	20
 #define IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR_PREMULTI	21
 
+#define IMG_SHDR_SAMPLER_NUM	3
+
 	class ShaderProgram;
 
 	class EXPORT_API ImgShader
@@ -101,9 +103,26 @@ namespace FLIVR
 	{
 	public:
 		ImgShaderFactory();
+		ImgShaderFactory(std::shared_ptr<VVulkan> vulkan);
 		~ImgShaderFactory();
 
+		void init(std::shared_ptr<VVulkan> vulkan);
+
 		ShaderProgram* shader(int type, int colormap_=0);
+
+		struct ImgPipeline {
+			VkDescriptorPool descriptorPool;
+			VkDescriptorSetLayout descriptorSetLayout;
+			VkPipelineLayout pipelineLayout;
+			VkDescriptorSet descriptorSet;
+		};
+		
+		void setupDescriptorPool();
+		void setupDescriptorSetLayout();
+		void allocDescriptorSet();
+		void setupDescriptorSetSamplers(uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites);
+		
+		ImgPipeline pipeline_;
 
 	protected:
 		std::vector<ImgShader*> shader_;

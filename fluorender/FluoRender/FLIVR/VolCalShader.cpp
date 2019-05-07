@@ -60,18 +60,22 @@ namespace FLIVR
 
 #define CAL_UNIFORMS_COMMON \
 	"//CAL_UNIFORMS_COMMON\n" \
-	"uniform sampler3D tex1;//operand A\n" \
-	"uniform sampler3D tex2;//operand B\n" \
-	"uniform vec4 loc0;//(scale_A, scale_B, 0.0, 0.0)\n" \
+	"layout (binding = 1) uniform sampler3D tex1;//operand A\n" \
+	"layout (binding = 2) uniform sampler3D tex2;//operand B\n" \
+	"layout (push_constant) uniform PushConsts {" \
+	"	vec4 loc0;//(scale_A, scale_B, 0.0, 0.0)\n" \
+	"} ct;" \
 	"\n"
 
 #define CAL_UNIFORMS_WITH_MASK \
 	"//CAL_UNIFORMS_WITH_MASK\n" \
-	"uniform sampler3D tex1;//operand A\n" \
-	"uniform sampler3D tex3;//mask of A\n" \
-	"uniform sampler3D tex2;//operand B\n" \
-	"uniform sampler3D tex4;//mask of B\n" \
-	"uniform vec4 loc0;//(scale_a, scale_b, use_mask_a, use_mask_b)\n" \
+	"layout (binding = 1) uniform sampler3D tex1;//operand A\n" \
+	"layout (binding = 3) uniform sampler3D tex3;//mask of A\n" \
+	"layout (binding = 2) uniform sampler3D tex2;//operand B\n" \
+	"layout (binding = 4) uniform sampler3D tex4;//mask of B\n" \
+	"layout (push_constant) uniform PushConsts {" \
+	"	vec4 loc0;//(scale_a, scale_b, use_mask_a, use_mask_b)\n" \
+	"} ct;" \
 	"\n"
 
 #define CAL_HEAD \
@@ -85,16 +89,16 @@ namespace FLIVR
 
 #define CAL_TEX_LOOKUP \
 	"	//CAL_TEX_LOOKUP\n" \
-	"	vec4 c1 = texture(tex1, t1.stp)*loc0.x;\n" \
-	"	vec4 c2 = texture(tex2, t2.stp)*loc0.y;\n" \
+	"	vec4 c1 = texture(tex1, t1.stp)*ct.loc0.x;\n" \
+	"	vec4 c2 = texture(tex2, t2.stp)*ct.loc0.y;\n" \
 	"\n"
 
 #define CAL_TEX_LOOKUP_WITH_MASK \
 	"	//CAL_TEX_LOOKUP_WITH_MASK\n" \
-	"	vec4 c1 = texture3D(tex1, t1.stp)*loc0.x;\n" \
-	"	vec4 m1 = loc0.z>0.0?texture(tex3, t1.stp):vec4(1.0);\n" \
-	"	vec4 c2 = texture(tex2, t2.stp)*loc0.y;\n" \
-	"	vec4 m2 = loc0.w>0.0?texture(tex4, t2.stp):vec4(1.0);\n" \
+	"	vec4 c1 = texture3D(tex1, t1.stp)*ct.loc0.x;\n" \
+	"	vec4 m1 = ct.loc0.z>0.0?texture(tex3, t1.stp):vec4(1.0);\n" \
+	"	vec4 c2 = texture(tex2, t2.stp)*ct.loc0.y;\n" \
+	"	vec4 m2 = ct.loc0.w>0.0?texture(tex4, t2.stp):vec4(1.0);\n" \
 	"\n"
 
 #define CAL_BODY_SUBSTRACTION \
@@ -126,7 +130,7 @@ namespace FLIVR
 
 #define CAL_BODY_APPLYMASK \
 	"	//CAL_BODY_APPLYMASK\n" \
-	"	vec4 c = vec4((loc0.z<0.0?(1.0-c1.x):c1.x)*c2.x);\n" \
+	"	vec4 c = vec4((ct.loc0.z<0.0?(1.0-c1.x):c1.x)*c2.x);\n" \
 	"\n"
 
 #define CAL_BODY_APPLYMASKINV \
@@ -178,12 +182,9 @@ namespace FLIVR
 		case CAL_DIVISION:
 		case CAL_INTERSECTION:
 		case CAL_APPLYMASK:
-			z << CAL_UNIFORMS_COMMON;
-			break;
 		case CAL_APPLYMASKINV:
 		case CAL_APPLYMASKINV2:
-			z << VOL_UNIFORMS_COMMON;
-			z << VOL_UNIFORMS_MASK;
+			z << CAL_UNIFORMS_COMMON;
 			break;
 		case CAL_INTERSECTION_WITH_MASK:
 			z << CAL_UNIFORMS_WITH_MASK;
@@ -235,12 +236,31 @@ namespace FLIVR
 		: prev_shader_(-1)
 	{}
 
+	VolCalShaderFactory::VolCalShaderFactory(std::shared_ptr<VVulkan> vulkan)
+		: prev_shader_(-1)
+	{
+		init(vulkan);
+	}
+
+	void VolCalShaderFactory::init(std::shared_ptr<VVulkan> vulkan)
+	{
+		setupDescriptorSetLayout();
+		setupDescriptorPool();
+		allocDescriptorSet();
+	}
+
 	VolCalShaderFactory::~VolCalShaderFactory()
 	{
 		for(unsigned int i=0; i<shader_.size(); i++)
 		{
 			delete shader_[i];
 		}
+
+		auto device = ShaderProgram::get_vulkan()->getDevice();
+		
+		vkDestroyPipelineLayout(device, pipeline_.pipelineLayout, nullptr);
+		vkDestroyDescriptorSetLayout(device, pipeline_.descriptorSetLayout, nullptr);
+		vkDestroyDescriptorPool(device, pipeline_.descriptorPool, nullptr);
 	}
 
 	ShaderProgram* VolCalShaderFactory::shader(int type)
@@ -272,4 +292,67 @@ namespace FLIVR
 		return s->program();
 	}
 
+	
+	void VolCalShaderFactory::setupDescriptorPool()
+	{
+		std::vector<VkDescriptorPoolSize> poolSizes =
+		{
+			vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, CAL_SAMPLER_NUM)
+		};
+
+		VkDescriptorPoolCreateInfo descriptorPoolInfo = 
+			vks::initializers::descriptorPoolCreateInfo(
+			static_cast<uint32_t>(poolSizes.size()),
+			poolSizes.data(),
+			1);
+
+		VK_CHECK_RESULT(vkCreateDescriptorPool(ShaderProgram::get_vulkan()->getDevice(), &descriptorPoolInfo, nullptr, &pipeline_.descriptorPool));
+	}
+
+	void VolCalShaderFactory::setupDescriptorSetLayout()
+	{
+		VkDevice device = ShaderProgram::get_vulkan()->getDevice();
+
+		std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {};
+
+		int offset = 0;
+		for (int i = 0; i < CAL_SAMPLER_NUM; i++)
+		{
+			setLayoutBindings.push_back(
+				vks::initializers::descriptorSetLayoutBinding(
+				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
+				VK_SHADER_STAGE_FRAGMENT_BIT, 
+				offset+i)
+			);
+		}
+
+		VkDescriptorSetLayoutCreateInfo descriptorLayout = 
+			vks::initializers::descriptorSetLayoutCreateInfo(
+			setLayoutBindings.data(),
+			static_cast<uint32_t>(setLayoutBindings.size()));
+
+		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &pipeline_.descriptorSetLayout));
+
+		VkPipelineLayoutCreateInfo pPipelineLayoutCreateInfo =
+			vks::initializers::pipelineLayoutCreateInfo(
+			&pipeline_.descriptorSetLayout,
+			1);
+
+		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pPipelineLayoutCreateInfo, nullptr, &pipeline_.pipelineLayout));
+	}
+
+	void VolCalShaderFactory::allocDescriptorSet()
+	{
+		VkDevice device = ShaderProgram::get_vulkan()->getDevice();
+
+		VkDescriptorSetAllocateInfo descriptorSetAllocInfo;
+		descriptorSetAllocInfo = vks::initializers::descriptorSetAllocateInfo(pipeline_.descriptorPool, &pipeline_.descriptorSetLayout, 1);
+		VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &pipeline_.descriptorSet));
+	}
+
+	void VolCalShaderFactory::setupDescriptorSetSamplers(uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites)
+	{
+		VkDevice device = ShaderProgram::get_vulkan()->getDevice();
+		vkUpdateDescriptorSets(device, descriptorWriteCountconst, pDescriptorWrites, 0, NULL);
+	}
 } // end namespace FLIVR

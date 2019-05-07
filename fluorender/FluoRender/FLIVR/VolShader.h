@@ -34,6 +34,7 @@
 
 #include <string>
 #include <vector>
+#include <memory>
 #include "DLLExport.h"
 
 namespace FLIVR
@@ -121,7 +122,10 @@ namespace FLIVR
 	{
 	public:
 		VolShaderFactory();
+		VolShaderFactory(std::shared_ptr<VVulkan> vulkan);
 		~VolShaderFactory();
+
+		void init(std::shared_ptr<VVulkan> vulkan);
 
 		ShaderProgram* shader(bool poly, int channels,
 								bool shading, bool fog,
@@ -131,6 +135,60 @@ namespace FLIVR
 								bool solid, int vertex_type, int mask_hide_mode);
 		//mask: 0-no mask, 1-segmentation mask, 2-labeling mask
 		//color_mode: 0-normal; 1-rainbow; 2-depth; 3-index; 255-index(depth mode)
+
+		struct VolPipeline {
+			VkDescriptorPool descriptorPool;
+			VkDescriptorSetLayout descriptorSetLayout;
+			VkPipelineLayout pipelineLayout;
+			VkDescriptorSet descriptorSet;
+		};
+		
+		struct VolVertShaderUBO {
+			glm::mat4 proj_mat;
+			glm::mat4 model_mat;
+		};
+
+		struct VolFragShaderBaseUBO {
+			glm::vec4 loc0_light_alpha;	//loc0
+			glm::vec4 loc1_material;	//loc1
+			glm::vec4 loc2_scscale_th;	//loc2
+			glm::vec4 loc3_gamma_offset;//loc3
+//			glm::vec4 loc4_dim;			//loc4
+			glm::vec4 loc5_spc_id;		//loc5
+			glm::vec4 loc6_colparam;	//loc6
+			glm::vec4 loc7_view;		//loc7
+			glm::vec4 loc8_fog;			//loc8
+			glm::vec4 plane0;			//loc10
+			glm::vec4 plane1;			//loc11
+			glm::vec4 plane2;			//loc12
+			glm::vec4 plane3;			//loc13
+			glm::vec4 plane4;			//loc14
+			glm::vec4 plane5;			//loc15
+		};
+
+		struct VolFragShaderBrickUBO {
+			glm::vec4 loc_dim_inv;	//loc4
+			glm::mat4 bmat;
+			glm::mat4 mask_bmat;
+		};
+
+		struct VolUniformBufs {
+			vks::Buffer vert;
+			vks::Buffer frag_base;
+			vks::Buffer frag_brick;
+		};
+
+		void setupDescriptorPool();
+		void setupDescriptorSetLayout();
+		void setupDescriptorSetUniforms();
+		void setupDescriptorSetSamplers(uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites);
+		void prepareUniformBuffers();
+		void updateUniformBuffersVert(VolVertShaderUBO ubo);
+		void updateUniformBuffersFragBase(VolFragShaderBaseUBO ubo);
+		void updateUniformBuffersFragBrick(VolFragShaderBrickUBO ubo);
+		
+		VolPipeline pipeline_;
+		VolUniformBufs uniformBuffers_;
 
 	protected:
 		std::vector<VolShader*> shader_;

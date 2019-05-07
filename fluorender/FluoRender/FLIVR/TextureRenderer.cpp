@@ -3125,6 +3125,91 @@ namespace FLIVR
 		tex_->setLevel(cur_lv);
 	}
 
+	void TextureRenderer::generateViewQuad()
+	{
+		// Setup vertices for a single uv-mapped quad made from two triangles
+		std::vector<VVertex> vertices =
+		{
+			{ {  1.0f,  1.0f, 0.0f }, { 1.0f, 1.0f, 0.0f } },
+			{ { -1.0f,  1.0f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
+			{ { -1.0f, -1.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } },
+			{ {  1.0f, -1.0f, 0.0f }, { 1.0f, 0.0f, 0.0f } }
+		};
+
+		// Setup indices
+		std::vector<uint32_t> indices = { 0,1,2, 2,3,0 };
+		quad_vertbuf_.indexCount = static_cast<uint32_t>(indices.size());
+
+		// Create buffers
+		// For the sake of simplicity we won't stage the vertex data to the gpu memory
+		// Vertex buffer
+		VK_CHECK_RESULT(vulkan_->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			&quad_vertbuf_.vertexBuffer,
+			vertices.size() * sizeof(VVertex),
+			vertices.data()));
+		// Index buffer
+		VK_CHECK_RESULT(vulkan_->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			&quad_vertbuf_.indexBuffer,
+			indices.size() * sizeof(uint32_t),
+			indices.data()));
+	}
+
+	void TextureRenderer::setupVertexDescriptions()
+	{
+		// Binding description
+		vertices_.inputBinding.resize(1);
+		vertices_.inputBinding[0] =
+			vks::initializers::vertexInputBindingDescription(
+			0, 
+			sizeof(VVertex), 
+			VK_VERTEX_INPUT_RATE_VERTEX);
+
+		// Attribute descriptions
+		// Describes memory layout and shader positions
+		vertices_.inputAttributes.resize(3);
+		// Location 0 : Position
+		vertices_.inputAttributes[0] =
+			vks::initializers::vertexInputAttributeDescription(
+			0,
+			0,
+			VK_FORMAT_R32G32B32_SFLOAT,
+			offsetof(VVertex, pos));			
+		// Location 1 : Texture coordinates
+		vertices_.inputAttributes[1] =
+			vks::initializers::vertexInputAttributeDescription(
+			0,
+			1,
+			VK_FORMAT_R32G32B32_SFLOAT,
+			offsetof(VVertex, uv));
+
+		vertices_.inputState = vks::initializers::pipelineVertexInputStateCreateInfo();
+		vertices_.inputState.vertexBindingDescriptionCount = static_cast<uint32_t>(vertices_.inputBinding.size());
+		vertices_.inputState.pVertexBindingDescriptions = vertices_.inputBinding.data();
+		vertices_.inputState.vertexAttributeDescriptionCount = static_cast<uint32_t>(vertices_.inputAttributes.size());
+		vertices_.inputState.pVertexAttributeDescriptions = vertices_.inputAttributes.data();
+	}
+
+	void TextureRenderer::setupDescriptorPool()
+	{
+		// Example uses one ubo and one image sampler
+		std::vector<VkDescriptorPoolSize> poolSizes =
+		{
+			vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1),
+			vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1)
+		};
+
+		VkDescriptorPoolCreateInfo descriptorPoolInfo = 
+			vks::initializers::descriptorPoolCreateInfo(
+			static_cast<uint32_t>(poolSizes.size()),
+			poolSizes.data(),
+			2);
+
+		VK_CHECK_RESULT(vkCreateDescriptorPool(device, &descriptorPoolInfo, nullptr, &descriptorPool_));
+	}
 
 } // namespace FLIVR
 

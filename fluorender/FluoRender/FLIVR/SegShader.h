@@ -98,10 +98,65 @@ namespace FLIVR
 	{
 	public:
 		SegShaderFactory();
+		SegShaderFactory(std::shared_ptr<VVulkan> vulkan);
 		~SegShaderFactory();
 
 		ShaderProgram* shader(int type, int paint_mode, int hr_mode,
 			bool use_2d, bool shading, int peel, bool clip, bool hiqual, bool use_stroke);
+
+		void init(std::shared_ptr<VVulkan> vulkan);
+
+		struct SegPipeline {
+			VkDescriptorPool descriptorPool;
+			VkDescriptorSetLayout descriptorSetLayout;
+			VkPipelineLayout pipelineLayout;
+			VkDescriptorSet descriptorSet;
+		};
+
+		struct SegFragShaderBaseUBO {
+			glm::vec4 loc0_light_alpha;	//loc0
+			glm::vec4 loc1_material;	//loc1
+			glm::vec4 loc2_scscale_th;	//loc2
+			glm::vec4 loc3_gamma_offset;//loc3
+//			glm::vec4 loc4_dim;			//loc4
+			glm::vec4 loc5_spc_id;		//loc5
+			glm::vec4 loc6_colparam;	//loc6
+			glm::vec4 loc7_view;		//loc7
+			glm::vec4 loc8_fog;			//loc8
+			glm::vec4 plane0;			//loc10
+			glm::vec4 plane1;			//loc11
+			glm::vec4 plane2;			//loc12
+			glm::vec4 plane3;			//loc13
+			glm::vec4 plane4;			//loc14
+			glm::vec4 plane5;			//loc15
+			glm::mat4 proj_mat;
+			glm::mat4 model_mat;
+			glm::mat4 model_mat_inv;
+			glm::mat4 proj_mat_inv;
+		};
+
+		struct SegFragShaderBrickUBO {
+			glm::vec4 loc_dim_inv;	//loc4
+			glm::vec4 loc_dim;		//loc9
+			glm::mat4 bmat;
+			glm::mat4 mask_bmat;
+		};
+
+		struct SegUniformBufs {
+			vks::Buffer frag_base;
+			vks::Buffer frag_brick;
+		};
+
+		void setupDescriptorPool();
+		void setupDescriptorSetLayout();
+		void setupDescriptorSetUniforms();
+		void setupDescriptorSetSamplers(uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites);
+		void prepareUniformBuffers();
+		void updateUniformBuffersFragBase(SegFragShaderBaseUBO ubo);
+		void updateUniformBuffersFragBrick(SegFragShaderBrickUBO ubo);
+		
+		SegPipeline pipeline_;
+		SegUniformBufs uniformBuffers_;
 
 	protected:
 		std::vector<SegShader*> shader_;

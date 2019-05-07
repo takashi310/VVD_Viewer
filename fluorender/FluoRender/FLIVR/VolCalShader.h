@@ -45,6 +45,8 @@ namespace FLIVR
 	#define CAL_APPLYMASKINV2	7	//apply the inverted mask
 	#define CAL_INTERSECTION_WITH_MASK	8	//minimum of two with mask
 
+	#define CAL_SAMPLER_NUM 5
+
 	class ShaderProgram;
 
 	class EXPORT_API VolCalShader
@@ -76,10 +78,27 @@ namespace FLIVR
 	{
 	public:
 		VolCalShaderFactory();
+		VolCalShaderFactory(std::shared_ptr<VVulkan> vulkan);
 		~VolCalShaderFactory();
 
 		ShaderProgram* shader(int type);
 
+		void init(std::shared_ptr<VVulkan> vulkan);
+
+		struct VolCalPipeline {
+			VkDescriptorPool descriptorPool;
+			VkDescriptorSetLayout descriptorSetLayout;
+			VkPipelineLayout pipelineLayout;
+			VkDescriptorSet descriptorSet;
+		};
+
+		void setupDescriptorPool();
+		void setupDescriptorSetLayout();
+		void allocDescriptorSet();
+		void setupDescriptorSetSamplers(uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites);
+			
+		VolCalPipeline pipeline_;
+		
 	protected:
 		std::vector<VolCalShader*> shader_;
 		int prev_shader_;

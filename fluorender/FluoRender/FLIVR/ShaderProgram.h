@@ -30,6 +30,16 @@
 #define ShaderProgram_h
 
 #include <string>
+#include <memory>
+
+#include "VVulkan.h"
+
+#if (defined(VK_USE_PLATFORM_IOS_MVK) || defined(VK_USE_PLATFORM_MACOS_MVK))
+#include <MoltenVKGLSLToSPIRVConverter/GLSLToSPIRVConverter.h>
+#else
+#include "SPIRV/GlslangToSpv.h"
+#endif
+
 #include "DLLExport.h"
 
 namespace FLIVR
@@ -47,45 +57,45 @@ namespace FLIVR
 		bool valid();
 		void destroy();
 
-		void bind();
-		void bind_frag_data_location(int color_num, const char* name);
-		void release();
-
-		//set vector uniform (4x1)
-		void setLocalParam(int, double, double, double, double);
-		//set matrix uniform (4x4)
-		void setLocalParamMatrix(int, float*);
-		//set integer
-		void setLocalParamUInt(int, unsigned int);
+		VkPipelineShaderStageCreateInfo get_vertex_shader() { return vert_shader_stage_; }
+		VkPipelineShaderStageCreateInfo get_fragment_shader() { return frag_shader_stage_; }
+		std::string get_vertex_shader_code() { return vert_shader_; }
+		std::string get_fragment_shader_code() { return frag_shader_; }
 
 		// Call init_shaders_supported before shaders_supported queries!
 		static bool init();
-		static void init_shaders_supported();
+		static void init_shaders_supported(std::shared_ptr<VVulkan> vulkan);
 		static bool shaders_supported();
 		static int max_texture_size();
 		static bool texture_non_power_of_two();
 		static const int MAX_SHADER_UNIFORMS = 16;
-		static std::string glsl_version_;
+		static string glsl_version_;
+
+#if !(defined(VK_USE_PLATFORM_IOS_MVK) || defined(VK_USE_PLATFORM_MACOS_MVK))
+		static EShLanguage FindLanguage(const VkShaderStageFlagBits shader_type);
+		static void init_resources(TBuiltInResource &Resources);
+#endif
+		static bool GLSLtoSPV(const VkShaderStageFlagBits shader_type, const char *pshader, std::vector<unsigned int> &spirv);
+		static void init_glslang();
+		static void finalize_glslang();
+		static const std::shared_ptr<VVulkan> get_vulkan() { return vulkan_; }
 
 	protected:
 		unsigned int id_;
 		std::string  vert_shader_;
 		std::string  frag_shader_;
+		VkPipelineShaderStageCreateInfo vert_shader_stage_;
+		VkPipelineShaderStageCreateInfo frag_shader_stage_;
 
 		//validation
 		bool valid_;
-
-		//locations
-		int loc_ui[MAX_SHADER_UNIFORMS];
-		int loc_vec4[MAX_SHADER_UNIFORMS];
-		int loc_mat4[MAX_SHADER_UNIFORMS];
 
 		static bool init_;
 		static bool supported_;
 		static bool non_2_textures_;
 		static int  max_texture_size_;
-		static int v_major_;
-		static int v_minor_;
+
+		static std::shared_ptr<VVulkan> vulkan_;
 	};
 
 } // end namespace FLIVR

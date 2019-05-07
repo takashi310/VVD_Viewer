@@ -101,7 +101,7 @@ public:
 			DisableAll();
 		}
 	}
-	VRenderGLView* GetRenderView()
+	VRenderVulkanView* GetRenderView()
 	{
 		return m_glview;
 	}
@@ -188,7 +188,7 @@ public:
 private:
 	wxWindow* m_frame;
 	int m_type;
-	VRenderGLView *m_glview;
+	VRenderVulkanView *m_glview;
 	VolumeData* m_vd;
 	DataGroup* m_group;
 	bool m_link_group;

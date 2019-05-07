@@ -56,11 +56,13 @@ namespace FLIVR
 #define IMG_VTX_CODE_DRAW_GEOMETRY \
 	"//IMG_VTX_CODE_DRAW_GEOMETRY\n" \
 	"layout(location = 0) in vec3 InVertex;\n" \
-	"uniform mat4 matrix0;//transformation\n" \
+	"layout (push_constant) uniform PushConsts {" \
+	"	mat4 matrix0;//transformation\n" \
+	"} ct;" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
-	"	gl_Position = matrix0 * vec4(InVertex, 1.0);\n" \
+	"	gl_Position = ct.matrix0 * vec4(InVertex, 1.0);\n" \
 	"}\n"
 
 #define IMG_VTX_CODE_DRAW_GEOMETRY_COLOR3 \
@@ -68,11 +70,13 @@ namespace FLIVR
 	"layout(location = 0) in vec3 InVertex;\n" \
 	"layout(location = 1) in vec3 InColor;\n" \
 	"out vec3 OutColor;\n" \
-	"uniform mat4 matrix0;//transformation\n" \
+	"layout (push_constant) uniform PushConsts {" \
+	"	mat4 matrix0;//transformation\n" \
+	"} ct;" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
-	"	gl_Position = matrix0 * vec4(InVertex, 1.0);\n" \
+	"	gl_Position = ct.matrix0 * vec4(InVertex, 1.0);\n" \
 	"	OutColor = InColor;\n" \
 	"}\n"
 
@@ -81,22 +85,26 @@ namespace FLIVR
 	"layout(location = 0) in vec3 InVertex;\n" \
 	"layout(location = 1) in vec4 InColor;\n" \
 	"out vec4 OutColor;\n" \
-	"uniform mat4 matrix0;//transformation\n" \
+	"layout (push_constant) uniform PushConsts {" \
+	"	mat4 matrix0;//transformation\n" \
+	"} ct;" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
-	"	gl_Position = matrix0 * vec4(InVertex, 1.0);\n" \
+	"	gl_Position = ct.matrix0 * vec4(InVertex, 1.0);\n" \
 	"	OutColor = InColor;\n" \
 	"}\n"
 
 #define IMG_FRG_CODE_DRAW_GEOMETRY \
 	"//IMG_FRG_CODE_DRAW_GEOMETRY\n" \
 	"out vec4 FragColor;\n" \
-	"uniform vec4 loc0;\n" \
+	"layout (push_constant) uniform PushConsts {" \
+	"	uniform vec4 loc0;\n" \
+	"} ct;" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
-	"	FragColor = loc0;\n" \
+	"	FragColor = ct.loc0;\n" \
 	"}\n"
 
 #define IMG_FRG_CODE_DRAW_GEOMETRY_COLOR3 \
@@ -126,7 +134,7 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_TEXTURE_LOOKUP\n" \
-	"uniform sampler2D tex0;\n" \
+	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
@@ -143,7 +151,7 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_TEXTURE_LOOKUP\n" \
-	"uniform sampler2D tex0;\n" \
+	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
@@ -161,19 +169,21 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_BRIGHTNESS_CONTRAST\n" \
-	"uniform vec4 loc0; //(r_gamma, g_gamma, b_gamma, 1.0)\n" \
-	"uniform vec4 loc1; //(r_brightness, g_brightness, b_brightness, 1.0)\n" \
-	"uniform sampler2D tex0;\n" \
+	"layout (push_constant) uniform PushConsts {" \
+	"	vec4 loc0; //(r_gamma, g_gamma, b_gamma, 1.0)\n" \
+	"	vec4 loc1; //(r_brightness, g_brightness, b_brightness, 1.0)\n" \
+	"} ct;" \
+	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
 	"	vec4 t = vec4(OutTexCoord, 1.0);\n" \
 	"	vec4 c = texture(tex0, t.xy);\n" \
-	"	vec4 b = loc1;\n" \
-	"	b.x = b.x>1.0?1.0/(2.0-b.x):loc1.x;\n" \
-	"	b.y = b.y>1.0?1.0/(2.0-b.y):loc1.y;\n" \
-	"	b.z = b.z>1.0?1.0/(2.0-b.z):loc1.z;\n" \
-	"	FragColor = pow(c, loc0)*b;\n" \
+	"	vec4 b = ct.loc1;\n" \
+	"	b.x = b.x>1.0?1.0/(2.0-b.x):ct.loc1.x;\n" \
+	"	b.y = b.y>1.0?1.0/(2.0-b.y):ct.loc1.y;\n" \
+	"	b.z = b.z>1.0?1.0/(2.0-b.z):ct.loc1.z;\n" \
+	"	FragColor = pow(c, ct.loc0)*b;\n" \
 	"}\n"
 
 #define IMG_SHADER_CODE_BRIGHTNESS_CONTRAST_HDR \
@@ -183,10 +193,12 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_BRIGHTNESS_CONTRAST_HDR\n" \
-	"uniform vec4 loc0; //(r_gamma, g_gamma, b_gamma, 1.0)\n" \
-	"uniform vec4 loc1; //(r_brightness, g_brightness, b_brightness, 1.0)\n" \
-	"uniform vec4 loc2; //(r_hdr, g_hdr, b_hdr, 0.0)\n" \
-	"uniform sampler2D tex0;\n" \
+	"layout (push_constant) uniform PushConsts {" \
+	"	vec4 loc0; //(r_gamma, g_gamma, b_gamma, 1.0)\n" \
+	"	vec4 loc1; //(r_brightness, g_brightness, b_brightness, 1.0)\n" \
+	"	vec4 loc2; //(r_hdr, g_hdr, b_hdr, 0.0)\n" \
+	"} ct;" \
+	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
@@ -197,21 +209,21 @@ namespace FLIVR
 	"	vec4 c_avg_3 = max(textureLod(tex0, t.xy, 3), 0.001);\n" \
 	"	vec4 c_avg_4 = max(textureLod(tex0, t.xy, 4), 0.001);\n" \
 	"	vec4 c_avg_5 = max(textureLod(tex0, t.xy, 5), 0.001);\n" \
-	"	vec4 b = loc1;\n" \
-	"	b.x = b.x>1.0?(b.x<2.0?1.0/(2.0-b.x):256.0):loc1.x;\n" \
-	"	b.y = b.y>1.0?(b.y<2.0?1.0/(2.0-b.y):256.0):loc1.y;\n" \
-	"	b.z = b.z>1.0?(b.z<2.0?1.0/(2.0-b.z):256.0):loc1.z;\n" \
-	"	c = pow(c, loc0);\n" \
-	"	c_avg_1 = c/pow(c_avg_1, loc0);\n" \
-	"	c_avg_2 = c/pow(c_avg_2, loc0);\n" \
-	"	c_avg_3 = c/pow(c_avg_3, loc0);\n" \
-	"	c_avg_4 = c/pow(c_avg_4, loc0);\n" \
-	"	c_avg_5 = c/pow(c_avg_5, loc0);\n" \
+	"	vec4 b = ct.loc1;\n" \
+	"	b.x = b.x>1.0?(b.x<2.0?1.0/(2.0-b.x):256.0):ct.loc1.x;\n" \
+	"	b.y = b.y>1.0?(b.y<2.0?1.0/(2.0-b.y):256.0):ct.loc1.y;\n" \
+	"	b.z = b.z>1.0?(b.z<2.0?1.0/(2.0-b.z):256.0):ct.loc1.z;\n" \
+	"	c = pow(c, ct.loc0);\n" \
+	"	c_avg_1 = c/pow(c_avg_1, ct.loc0);\n" \
+	"	c_avg_2 = c/pow(c_avg_2, ct.loc0);\n" \
+	"	c_avg_3 = c/pow(c_avg_3, ct.loc0);\n" \
+	"	c_avg_4 = c/pow(c_avg_4, ct.loc0);\n" \
+	"	c_avg_5 = c/pow(c_avg_5, ct.loc0);\n" \
 	"	c *= b;\n" \
 	"	vec4 c_avg = 0.43*c_avg_1+0.26*c_avg_2+0.17*c_avg_3+0.1*c_avg_4+0.04*c_avg_5;\n" \
 	"	vec4 unit = vec4(1.0);\n" \
-	"	c = c*(unit-loc2)+loc2*c_avg;\n" \
-	"	FragColor = c*(unit-loc2)+loc2*(unit-unit/(c+unit));\n" \
+	"	c = c*(unit-ct.loc2)+ct.loc2*c_avg;\n" \
+	"	FragColor = c*(unit-ct.loc2)+ct.loc2*(unit-unit/(c+unit));\n" \
 	"}\n"
 
 #define IMG_SHADER_CODE_BRIGHTNESS_CONTRAST_HDR_BLEND \
@@ -221,10 +233,12 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_BRIGHTNESS_CONTRAST_HDR\n" \
-	"uniform vec4 loc0; //(r_gamma, g_gamma, b_gamma, 1.0)\n" \
-	"uniform vec4 loc1; //(r_brightness, g_brightness, b_brightness, 1.0)\n" \
-	"uniform vec4 loc2; //(r_hdr, g_hdr, b_hdr, 0.0)\n" \
-	"uniform sampler2D tex0;\n" \
+	"layout (push_constant) uniform PushConsts {" \
+	"	vec4 loc0; //(r_gamma, g_gamma, b_gamma, 1.0)\n" \
+	"	vec4 loc1; //(r_brightness, g_brightness, b_brightness, 1.0)\n" \
+	"	vec4 loc2; //(r_hdr, g_hdr, b_hdr, 0.0)\n" \
+	"} ct;" \
+	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
@@ -235,21 +249,21 @@ namespace FLIVR
 	"	vec4 c_avg_3 = max(textureLod(tex0, t.xy, 3), 0.001);\n" \
 	"	vec4 c_avg_4 = max(textureLod(tex0, t.xy, 4), 0.001);\n" \
 	"	vec4 c_avg_5 = max(textureLod(tex0, t.xy, 5), 0.001);\n" \
-	"	vec4 b = loc1;\n" \
-	"	b.x = b.x>1.0?(b.x<2.0?1.0/(2.0-b.x):256.0):loc1.x;\n" \
-	"	b.y = b.y>1.0?(b.y<2.0?1.0/(2.0-b.y):256.0):loc1.y;\n" \
-	"	b.z = b.z>1.0?(b.z<2.0?1.0/(2.0-b.z):256.0):loc1.z;\n" \
-	"	c = pow(c, loc0);\n" \
-	"	c_avg_1 = c/pow(c_avg_1, loc0);\n" \
-	"	c_avg_2 = c/pow(c_avg_2, loc0);\n" \
-	"	c_avg_3 = c/pow(c_avg_3, loc0);\n" \
-	"	c_avg_4 = c/pow(c_avg_4, loc0);\n" \
-	"	c_avg_5 = c/pow(c_avg_5, loc0);\n" \
+	"	vec4 b = ct.loc1;\n" \
+	"	b.x = b.x>1.0?(b.x<2.0?1.0/(2.0-b.x):256.0):ct.loc1.x;\n" \
+	"	b.y = b.y>1.0?(b.y<2.0?1.0/(2.0-b.y):256.0):ct.loc1.y;\n" \
+	"	b.z = b.z>1.0?(b.z<2.0?1.0/(2.0-b.z):256.0):ct.loc1.z;\n" \
+	"	c = pow(c, ct.loc0);\n" \
+	"	c_avg_1 = c/pow(c_avg_1, ct.loc0);\n" \
+	"	c_avg_2 = c/pow(c_avg_2, ct.loc0);\n" \
+	"	c_avg_3 = c/pow(c_avg_3, ct.loc0);\n" \
+	"	c_avg_4 = c/pow(c_avg_4, ct.loc0);\n" \
+	"	c_avg_5 = c/pow(c_avg_5, ct.loc0);\n" \
 	"	c *= b;\n" \
 	"	vec4 c_avg = 0.43*c_avg_1+0.26*c_avg_2+0.17*c_avg_3+0.1*c_avg_4+0.04*c_avg_5;\n" \
 	"	vec4 unit = vec4(1.0);\n" \
-	"	c = c*(unit-loc2)+loc2*c_avg;\n" \
-	"	c = c*(unit-loc2)+loc2*(unit-unit/(c+unit));\n" \
+	"	c = c*(unit-ct.loc2)+ct.loc2*c_avg;\n" \
+	"	c = c*(unit-ct.loc2)+ct.loc2*(unit-unit/(c+unit));\n" \
 	"	c.rgb *= c.a;\n" \
 	"	FragColor = c;\n" \
 	"}\n"
@@ -261,17 +275,19 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_GRADIENT_MAP\n" \
-	"uniform vec4 loc0; //(lo, hi, hi-lo, alpha) \n" \
-	"uniform sampler2D tex0;\n" \
+	"layout (push_constant) uniform PushConsts {" \
+	"	vec4 loc0; //(lo, hi, hi-lo, alpha) \n" \
+	"} ct;" \
+	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
 	"	vec4 rb;\n" \
 	"	vec4 t = vec4(OutTexCoord, 1.0);\n" \
 	"	vec4 c = texture(tex0, t.xy);\n" \
-	"	rb.a = (loc0.w>0.5?loc0.w:c.x)*c.a;\n" \
+	"	rb.a = (ct.loc0.w>0.5?ct.loc0.w:c.x)*c.a;\n" \
 	"	float valu = (c.r + c.g + c.b)/3.0;\n" \
-	"	valu = (valu-loc0.x)/loc0.z;\n" \
+	"	valu = (valu-ct.loc0.x)/ct.loc0.z;\n" \
 
 #define IMG_SHADER_CODE_GRADIENT_MAP_RESULT \
 	"	//IMG_SHADER_CODE_GRADIENT_MAP_RESULT\n" \
@@ -285,26 +301,28 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_FILTER_MIN\n" \
-	"uniform vec4 loc0; //(width, height, thresh, 0.0)\n" \
-	"uniform sampler2D tex0;\n" \
+	"layout (push_constant) uniform PushConsts {" \
+	"	vec4 loc0; //(width, height, thresh, 0.0)\n" \
+	"} ct;" \
+	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
 	"	vec4 t = vec4(OutTexCoord, 1.0);\n" \
 	"	vec4 c = texture(tex0, t.xy);\n" \
-	"	if (min(c.r, min(c.g, c.b)) >= loc0.z)\n" \
+	"	if (min(c.r, min(c.g, c.b)) >= ct.loc0.z)\n" \
 	"	{\n" \
 	"		FragColor = c;\n" \
 	"		return;\n" \
 	"	}\n" \
-	"	vec4 c1 = texture(tex0, vec2(t.x-0.70711*loc0.x, t.y-0.70711*loc0.y));\n" \
-	"	vec4 c2 = texture(tex0, vec2(t.x, t.y-loc0.y));\n" \
-	"	vec4 c3 = texture(tex0, vec2(t.x+0.70711*loc0.x, t.y-0.70711*loc0.y));\n" \
-	"	vec4 c4 = texture(tex0, vec2(t.x-loc0.x, t.y));\n" \
-	"	vec4 c5 = texture(tex0, vec2(t.x+loc0.x, t.y));\n" \
-	"	vec4 c6 = texture(tex0, vec2(t.x-0.70711*loc0.x, t.y+0.70711*loc0.y));\n" \
-	"	vec4 c7 = texture(tex0, vec2(t.x, t.y+loc0.y));\n" \
-	"	vec4 c8 = texture(tex0, vec2(t.x+0.70711*loc0.x, t.y+0.70711*loc0.y));\n" \
+	"	vec4 c1 = texture(tex0, vec2(t.x-0.70711*ct.loc0.x, t.y-0.70711*ct.loc0.y));\n" \
+	"	vec4 c2 = texture(tex0, vec2(t.x, t.y-ct.loc0.y));\n" \
+	"	vec4 c3 = texture(tex0, vec2(t.x+0.70711*ct.loc0.x, t.y-0.70711*ct.loc0.y));\n" \
+	"	vec4 c4 = texture(tex0, vec2(t.x-ct.loc0.x, t.y));\n" \
+	"	vec4 c5 = texture(tex0, vec2(t.x+ct.loc0.x, t.y));\n" \
+	"	vec4 c6 = texture(tex0, vec2(t.x-0.70711*ct.loc0.x, t.y+0.70711*ct.loc0.y));\n" \
+	"	vec4 c7 = texture(tex0, vec2(t.x, t.y+ct.loc0.y));\n" \
+	"	vec4 c8 = texture(tex0, vec2(t.x+0.70711*ct.loc0.x, t.y+0.70711*ct.loc0.y));\n" \
 	"	c = min(c, c1);\n" \
 	"	c = min(c, c2);\n" \
 	"	c = min(c, c3);\n" \
@@ -323,22 +341,24 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_FILTER_MAX\n" \
-	"uniform vec4 loc0; //(width, height, scale, 0.0)\n" \
-	"uniform sampler2D tex0;\n" \
+	"layout (push_constant) uniform PushConsts {" \
+	"	vec4 loc0; //(width, height, scale, 0.0)\n" \
+	"} ct;" \
+	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
 	"	vec4 t = vec4(OutTexCoord, 1.0);\n" \
 	"	vec4 c = texture(tex0, t.xy);\n" \
-	"	float s = pow(1.0-max(c.r, max(c.g, c.b)), 3.0)*loc0.z;\n" \
-	"	vec4 c1 = texture(tex0, vec2(t.x-0.70711*loc0.x, t.y-0.70711*loc0.y));\n" \
-	"	vec4 c2 = texture(tex0, vec2(t.x, t.y-loc0.y));\n" \
-	"	vec4 c3 = texture(tex0, vec2(t.x+0.70711*loc0.x, t.y-0.70711*loc0.y));\n" \
-	"	vec4 c4 = texture(tex0, vec2(t.x-loc0.x, t.y));\n" \
-	"	vec4 c5 = texture(tex0, vec2(t.x+loc0.x, t.y));\n" \
-	"	vec4 c6 = texture(tex0, vec2(t.x-0.70711*loc0.x, t.y+0.70711*loc0.y));\n" \
-	"	vec4 c7 = texture(tex0, vec2(t.x, t.y+loc0.y));\n" \
-	"	vec4 c8 = texture(tex0, vec2(t.x+0.70711*loc0.x, t.y+0.70711*loc0.y));\n" \
+	"	float s = pow(1.0-max(c.r, max(c.g, c.b)), 3.0)*ct.loc0.z;\n" \
+	"	vec4 c1 = texture(tex0, vec2(t.x-0.70711*ct.loc0.x, t.y-0.70711*ct.loc0.y));\n" \
+	"	vec4 c2 = texture(tex0, vec2(t.x, t.y-ct.loc0.y));\n" \
+	"	vec4 c3 = texture(tex0, vec2(t.x+0.70711*ct.loc0.x, t.y-0.70711*ct.loc0.y));\n" \
+	"	vec4 c4 = texture(tex0, vec2(t.x-ct.loc0.x, t.y));\n" \
+	"	vec4 c5 = texture(tex0, vec2(t.x+ct.loc0.x, t.y));\n" \
+	"	vec4 c6 = texture(tex0, vec2(t.x-0.70711*ct.loc0.x, t.y+0.70711*ct.loc0.y));\n" \
+	"	vec4 c7 = texture(tex0, vec2(t.x, t.y+ct.loc0.y));\n" \
+	"	vec4 c8 = texture(tex0, vec2(t.x+0.70711*ct.loc0.x, t.y+0.70711*ct.loc0.y));\n" \
 	"	c = max(c, c1);\n" \
 	"	c = max(c, c2);\n" \
 	"	c = max(c, c3);\n" \
@@ -357,21 +377,23 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_FILTER_BLUR\n" \
-	"uniform vec4 loc0; //(width, height, dx, dy)\n" \
-	"uniform sampler2D tex0;\n" \
+	"layout (push_constant) uniform PushConsts {" \
+	"	vec4 loc0; //(width, height, dx, dy)\n" \
+	"} ct;" \
+	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
 	"	vec4 t = vec4(OutTexCoord, 1.0);\n" \
 	"	vec4 c = texture(tex0, t.xy);\n" \
-	"	vec4 c1 = texture(tex0, vec2(t.x-0.70711*loc0.x, t.y-0.70711*loc0.y));\n" \
-	"	vec4 c2 = texture(tex0, vec2(t.x, t.y-loc0.y));\n" \
-	"	vec4 c3 = texture(tex0, vec2(t.x+0.70711*loc0.x, t.y-0.70711*loc0.y));\n" \
-	"	vec4 c4 = texture(tex0, vec2(t.x-loc0.x, t.y));\n" \
-	"	vec4 c5 = texture(tex0, vec2(t.x+loc0.x, t.y));\n" \
-	"	vec4 c6 = texture(tex0, vec2(t.x-0.70711*loc0.x, t.y+0.70711*loc0.y));\n" \
-	"	vec4 c7 = texture(tex0, vec2(t.x, t.y+loc0.y));\n" \
-	"	vec4 c8 = texture(tex0, vec2(t.x+0.70711*loc0.x, t.y+0.70711*loc0.y));\n" \
+	"	vec4 c1 = texture(tex0, vec2(t.x-0.70711*ct.loc0.x, t.y-0.70711*ct.loc0.y));\n" \
+	"	vec4 c2 = texture(tex0, vec2(t.x, t.y-ct.loc0.y));\n" \
+	"	vec4 c3 = texture(tex0, vec2(t.x+0.70711*ct.loc0.x, t.y-0.70711*ct.loc0.y));\n" \
+	"	vec4 c4 = texture(tex0, vec2(t.x-ct.loc0.x, t.y));\n" \
+	"	vec4 c5 = texture(tex0, vec2(t.x+ct.loc0.x, t.y));\n" \
+	"	vec4 c6 = texture(tex0, vec2(t.x-0.70711*ct.loc0.x, t.y+0.70711*ct.loc0.y));\n" \
+	"	vec4 c7 = texture(tex0, vec2(t.x, t.y+ct.loc0.y));\n" \
+	"	vec4 c8 = texture(tex0, vec2(t.x+0.70711*ct.loc0.x, t.y+0.70711*ct.loc0.y));\n" \
 	"	FragColor = (c1+c2+c3+c4+c5+c6+c7+c8)/8.0;\n" \
 	"	//FragColor = vec4(1.0, 0.0, 0.0, 1.0);\n" \
 	"}\n"
@@ -383,21 +405,23 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_FILTER_SHARPEN\n" \
-	"uniform vec4 loc0; //(width, height, 0.0, 0.0)\n" \
-	"uniform sampler2D tex0;\n" \
+	"layout (push_constant) uniform PushConsts {" \
+	"	vec4 loc0; //(width, height, 0.0, 0.0)\n" \
+	"} ct;" \
+	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
 	"	vec4 t = vec4(OutTexCoord, 1.0);\n" \
 	"	vec4 c = texture(tex0, t.xy);\n" \
-	"	vec4 c1 = texture(tex0, vec2(t.x-0.70711*loc0.x, t.y-0.70711*loc0.y));\n" \
-	"	vec4 c2 = texture(tex0, vec2(t.x, t.y-loc0.y));\n" \
-	"	vec4 c3 = texture(tex0, vec2(t.x+0.70711*loc0.x, t.y-0.70711*loc0.y));\n" \
-	"	vec4 c4 = texture(tex0, vec2(t.x-loc0.x, t.y));\n" \
-	"	vec4 c5 = texture(tex0, vec2(t.x+loc0.x, t.y));\n" \
-	"	vec4 c6 = texture(tex0, vec2(t.x-0.70711*loc0.x, t.y+0.70711*loc0.y));\n" \
-	"	vec4 c7 = texture(tex0, vec2(t.x, t.y+loc0.y));\n" \
-	"	vec4 c8 = texture(tex0, vec2(t.x+0.70711*loc0.x, t.y+0.70711*loc0.y));\n" \
+	"	vec4 c1 = texture(tex0, vec2(t.x-0.70711*ct.loc0.x, t.y-0.70711*ct.loc0.y));\n" \
+	"	vec4 c2 = texture(tex0, vec2(t.x, t.y-ct.loc0.y));\n" \
+	"	vec4 c3 = texture(tex0, vec2(t.x+0.70711*ct.loc0.x, t.y-0.70711*ct.loc0.y));\n" \
+	"	vec4 c4 = texture(tex0, vec2(t.x-ct.loc0.x, t.y));\n" \
+	"	vec4 c5 = texture(tex0, vec2(t.x+ct.loc0.x, t.y));\n" \
+	"	vec4 c6 = texture(tex0, vec2(t.x-0.70711*ct.loc0.x, t.y+0.70711*ct.loc0.y));\n" \
+	"	vec4 c7 = texture(tex0, vec2(t.x, t.y+ct.loc0.y));\n" \
+	"	vec4 c8 = texture(tex0, vec2(t.x+0.70711*ct.loc0.x, t.y+0.70711*ct.loc0.y));\n" \
 	"	c = c*9.0 - (c1+c2+c3+c4+c5+c6+c7+c8);\n" \
 	"	FragColor = c;\n" \
 	"}\n"
@@ -409,21 +433,23 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"//IMG_SHADER_CODE_DEPTH_TO_OUTLINES\n" \
-	"uniform vec4 loc0; //(width, height, 0.0, 0.0)\n" \
-	"uniform sampler2D tex0;\n" \
+	"layout (push_constant) uniform PushConsts {" \
+	"	vec4 loc0; //(width, height, 0.0, 0.0)\n" \
+	"} ct;" \
+	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
 	"	vec4 t = vec4(OutTexCoord, 1.0);\n" \
 	"	vec4 c = texture(tex0, t.xy);\n" \
-	"	//vec4 c1 = texture(tex0, vec2(t.x-0.70711*loc0.x, t.y-0.70711*loc0.y));\n" \
-	"	vec4 c2 = texture(tex0, vec2(t.x, t.y-loc0.y));\n" \
-	"	//vec4 c3 = texture(tex0, vec2(t.x+0.70711*loc0.x, t.y-0.70711*loc0.y));\n" \
-	"	vec4 c4 = texture(tex0, vec2(t.x-loc0.x, t.y));\n" \
-	"	vec4 c5 = texture(tex0, vec2(t.x+loc0.x, t.y));\n" \
-	"	//vec4 c6 = texture(tex0, vec2(t.x-0.70711*loc0.x, t.y+0.70711*loc0.y));\n" \
-	"	vec4 c7 = texture(tex0, vec2(t.x, t.y+loc0.y));\n" \
-	"	//vec4 c8 = texture(tex0, vec2(t.x+0.70711*loc0.x, t.y+0.70711*loc0.y));\n" \
+	"	//vec4 c1 = texture(tex0, vec2(t.x-0.70711*ct.loc0.x, t.y-0.70711*ct.loc0.y));\n" \
+	"	vec4 c2 = texture(tex0, vec2(t.x, t.y-ct.loc0.y));\n" \
+	"	//vec4 c3 = texture(tex0, vec2(t.x+0.70711*ct.loc0.x, t.y-0.70711*ct.loc0.y));\n" \
+	"	vec4 c4 = texture(tex0, vec2(t.x-ct.loc0.x, t.y));\n" \
+	"	vec4 c5 = texture(tex0, vec2(t.x+ct.loc0.x, t.y));\n" \
+	"	//vec4 c6 = texture(tex0, vec2(t.x-0.70711*ct.loc0.x, t.y+0.70711*ct.loc0.y));\n" \
+	"	vec4 c7 = texture(tex0, vec2(t.x, t.y+ct.loc0.y));\n" \
+	"	//vec4 c8 = texture(tex0, vec2(t.x+0.70711*ct.loc0.x, t.y+0.70711*ct.loc0.y));\n" \
 	"	c = (c5-c4)*(c5-c4)+(c7-c2)*(c7-c2);\n" \
 	"	c = clamp(c*2e6, 0.0, 1.0);\n" \
 	"	FragColor = vec4(1.0-c.r, 1.0-c.g, 1.0-c.b, 1.0);\n" \
@@ -437,25 +463,27 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"//IMG_SHADER_CODE_DEPTH_TO_GRADIENT\n" \
-	"uniform vec4 loc0; //(width, height, scale, 0.0)\n" \
-	"uniform vec4 loc1; //(pert.x, pert.y, 0.0, 0.0)\n" \
-	"uniform sampler2D tex0;\n" \
+	"layout (push_constant) uniform PushConsts {" \
+	"	vec4 loc0; //(width, height, scale, 0.0)\n" \
+	"	vec4 loc1; //(pert.x, pert.y, 0.0, 0.0)\n" \
+	"} ct;" \
+	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
 	"	vec4 t = vec4(OutTexCoord, 1.0);\n" \
 	"	float c;\n" \
-	"	vec4 c2 = texture(tex0, vec2(t.x, t.y-loc0.y));\n" \
-	"	vec4 c4 = texture(tex0, vec2(t.x-loc0.x, t.y));\n" \
-	"	vec4 c5 = texture(tex0, vec2(t.x+loc0.x, t.y));\n" \
-	"	vec4 c7 = texture(tex0, vec2(t.x, t.y+loc0.y));\n" \
+	"	vec4 c2 = texture(tex0, vec2(t.x, t.y-ct.loc0.y));\n" \
+	"	vec4 c4 = texture(tex0, vec2(t.x-ct.loc0.x, t.y));\n" \
+	"	vec4 c5 = texture(tex0, vec2(t.x+ct.loc0.x, t.y));\n" \
+	"	vec4 c7 = texture(tex0, vec2(t.x, t.y+ct.loc0.y));\n" \
 	"	vec2 grad = vec2(c5.r-c4.r, c7.r-c2.r);\n" \
-	"	vec2 pert = loc1.xy;\n" \
+	"	vec2 pert = ct.loc1.xy;\n" \
 	"	float ang = max(dot(normalize(grad), pert)*2.0, -1.0);\n" \
 	"	pert = grad*ang;\n" \
 	"	grad += pert;\n" \
 	"	c = grad.x*grad.x+grad.y*grad.y;\n" \
-	"	c = clamp(c*loc0.z, 0.0, 1.0);\n" \
+	"	c = clamp(c*ct.loc0.z, 0.0, 1.0);\n" \
 	"	FragColor = vec4(grad, c, 1.0);\n" \
 	"}\n" \
 	"\n"
@@ -467,10 +495,12 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"//IMG_SHADER_CODE_GRADIENT_TO_SHADOW\n" \
-	"uniform vec4 loc0; //(1/width, 1/height, zoom, 0.0)\n" \
-	"uniform vec4 loc1; //(darkness, 0.0, 0.0, 0.0)\n" \
-	"uniform sampler2D tex0;\n" \
-	"uniform sampler2D tex1;\n" \
+	"layout (push_constant) uniform PushConsts {" \
+	"	vec4 loc0; //(1/width, 1/height, zoom, 0.0)\n" \
+	"	vec4 loc1; //(darkness, 0.0, 0.0, 0.0)\n" \
+	"} ct;" \
+	"layout (binding = 0) uniform sampler2D tex0;\n" \
+	"layout (binding = 1) uniform sampler2D tex1;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
@@ -482,7 +512,7 @@ namespace FLIVR
 	"		return;\n" \
 	"	}\n" \
 	"	float c = 0.0;\n" \
-	"	vec2 d = loc0.xy;\n" \
+	"	vec2 d = ct.loc0.xy;\n" \
 	"	vec2 nb;\n" \
 	"	vec2 delta;\n" \
 	"	vec4 c_nb;\n" \
@@ -497,11 +527,11 @@ namespace FLIVR
 	"		c_nb = texture(tex0, nb);\n" \
 	"		ang = dot(normalize(delta), normalize(c_nb.xy));\n" \
 	"		dist = pow(float(i)*float(i)+float(j)*float(j), 0.8);\n" \
-	"		dist = dist==0.0?0.0:1.0/dist*clamp(loc0.z, 0.4, 3.0);\n" \
-	"		dense = clamp(0.02+(3.0-loc0.z)*0.015, 0.02, 0.05);\n" \
+	"		dist = dist==0.0?0.0:1.0/dist*clamp(ct.loc0.z, 0.4, 3.0);\n" \
+	"		dense = clamp(0.02+(3.0-ct.loc0.z)*0.015, 0.02, 0.05);\n" \
 	"		c += dense*(ang<-0.3?1.0:max(-ang+0.7, 0.0))*c_nb.z*dist;\n" \
 	"	}\n" \
-	"	c = clamp(1.0-clamp(c, 0.0, 1.0)*loc1.x, 0.01, 1.0);\n" \
+	"	c = clamp(1.0-clamp(c, 0.0, 1.0)*ct.loc1.x, 0.01, 1.0);\n" \
 	"	FragColor = vec4(vec3(c), 1.0);\n" \
 	"}\n" \
 	"\n"
@@ -513,11 +543,13 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"//IMG_SHADER_CODE_GRADIENT_TO_SHADOW_MESH\n" \
-	"uniform vec4 loc0; //(1/width, 1/height, zoom, 0.0)\n" \
-	"uniform vec4 loc1; //(darkness, 0.0, 0.0, 0.0)\n" \
-	"uniform sampler2D tex0;\n" \
-	"uniform sampler2D tex1;\n" \
-	"uniform sampler2D tex2;\n" \
+	"layout (push_constant) uniform PushConsts {" \
+	"	vec4 loc0; //(1/width, 1/height, zoom, 0.0)\n" \
+	"	vec4 loc1; //(darkness, 0.0, 0.0, 0.0)\n" \
+	"} ct;" \
+	"layout (binding = 0) uniform sampler2D tex0;\n" \
+	"layout (binding = 1) uniform sampler2D tex1;\n" \
+	"layout (binding = 2) uniform sampler2D tex2;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
@@ -530,7 +562,7 @@ namespace FLIVR
 	"		return;\n" \
 	"	}\n" \
 	"	float c = 0.0;\n" \
-	"	vec2 d = loc0.xy;\n" \
+	"	vec2 d = ct.loc0.xy;\n" \
 	"	vec2 nb;\n" \
 	"	vec2 delta;\n" \
 	"	vec4 c_nb;\n" \
@@ -545,11 +577,11 @@ namespace FLIVR
 	"		c_nb = texture(tex0, nb);\n" \
 	"		ang = dot(normalize(delta), normalize(c_nb.xy));\n" \
 	"		dist = pow(float(i)*float(i)+float(j)*float(j), 0.8);\n" \
-	"		dist = dist==0.0?0.0:1.0/dist*clamp(loc0.z, 0.4, 3.0);\n" \
-	"		dense = clamp(0.02+(3.0-loc0.z)*0.015, 0.02, 0.05);\n" \
+	"		dist = dist==0.0?0.0:1.0/dist*clamp(ct.loc0.z, 0.4, 3.0);\n" \
+	"		dense = clamp(0.02+(3.0-ct.loc0.z)*0.015, 0.02, 0.05);\n" \
 	"		c += dense*(ang<-0.3?1.0:max(-ang+0.7, 0.0))*c_nb.z*dist;\n" \
 	"	}\n" \
-	"	c = clamp(1.0-clamp(c, 0.0, 1.0)*loc1.x, 0.01, 1.0);\n" \
+	"	c = clamp(1.0-clamp(c, 0.0, 1.0)*ct.loc1.x, 0.01, 1.0);\n" \
 	"	FragColor = vec4(vec3(c), 1.0);\n" \
 	"}\n" \
 	"\n"
@@ -561,7 +593,7 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_BLEND_BRIGHT_BACKGROUND\n" \
-	"uniform sampler2D tex0;\n" \
+	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
@@ -580,10 +612,12 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_BLEND_BRIGHT_BACKGROUND_HDR\n" \
-	"uniform vec4 loc0; //(r_gamma, g_gamma, b_gamma, 1.0)\n" \
-	"uniform vec4 loc1; //(r_brightness, g_brightness, b_brightness, 1.0)\n" \
-	"uniform vec4 loc2; //(r_hdr, g_hdr, b_hdr, 0.0)\n" \
-	"uniform sampler2D tex0;\n" \
+	"layout (push_constant) uniform PushConsts {" \
+	"	vec4 loc0; //(r_gamma, g_gamma, b_gamma, 1.0)\n" \
+	"	vec4 loc1; //(r_brightness, g_brightness, b_brightness, 1.0)\n" \
+	"	vec4 loc2; //(r_hdr, g_hdr, b_hdr, 0.0)\n" \
+	"} ct;" \
+	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
@@ -591,13 +625,13 @@ namespace FLIVR
 	"	vec4 c = texture(tex0, t.xy);\n" \
 	"	float alpha = clamp(c.a, 0.0, 1.0);\n" \
 	"	alpha = clamp(2.0*alpha - alpha*alpha, 0.0, 1.0);\n" \
-	"	vec4 b = loc1;\n" \
-	"	b.x = b.x>1.0?1.0/(2.0-b.x):loc1.x;\n" \
-	"	b.y = b.y>1.0?1.0/(2.0-b.y):loc1.y;\n" \
-	"	b.z = b.z>1.0?1.0/(2.0-b.z):loc1.z;\n" \
-	"	c = pow(c, loc0)*b;\n" \
+	"	vec4 b = ct.loc1;\n" \
+	"	b.x = b.x>1.0?1.0/(2.0-b.x):ct.loc1.x;\n" \
+	"	b.y = b.y>1.0?1.0/(2.0-b.y):ct.loc1.y;\n" \
+	"	b.z = b.z>1.0?1.0/(2.0-b.z):ct.loc1.z;\n" \
+	"	c = pow(c, ct.loc0)*b;\n" \
 	"	vec4 unit = vec4(1.0);\n" \
-	"	FragColor = c*(unit-loc2)+loc2*(unit-unit/(c+unit));\n" \
+	"	FragColor = c*(unit-ct.loc2)+ct.loc2*(unit-unit/(c+unit));\n" \
 	"	FragColor.a = alpha;\n" \
 	"	//FragColor = vec4(0.4, 1.0, 0.0, 1.0);\n" \
 	"}\n"
@@ -609,10 +643,12 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_BLEND_BRIGHT_BACKGROUND_HDR\n" \
-	"uniform vec4 loc0; //(r_gamma, g_gamma, b_gamma, 1.0)\n" \
-	"uniform vec4 loc1; //(r_brightness, g_brightness, b_brightness, 1.0)\n" \
-	"uniform vec4 loc2; //(r_hdr, g_hdr, b_hdr, 0.0)\n" \
-	"uniform sampler2D tex0;\n" \
+	"layout (push_constant) uniform PushConsts {" \
+	"	vec4 loc0; //(r_gamma, g_gamma, b_gamma, 1.0)\n" \
+	"	vec4 loc1; //(r_brightness, g_brightness, b_brightness, 1.0)\n" \
+	"	vec4 loc2; //(r_hdr, g_hdr, b_hdr, 0.0)\n" \
+	"} ct;" \
+	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
@@ -621,13 +657,13 @@ namespace FLIVR
 	"	c.rgb = c.a>0.0 ? c.rgb/c.a : vec3(0.0);\n" \
 	"	float alpha = clamp(c.a, 0.0, 1.0);\n" \
 	"	alpha = clamp(2.0*alpha - alpha*alpha, 0.0, 1.0);\n" \
-	"	vec4 b = loc1;\n" \
-	"	b.x = b.x>1.0?1.0/(2.0-b.x):loc1.x;\n" \
-	"	b.y = b.y>1.0?1.0/(2.0-b.y):loc1.y;\n" \
-	"	b.z = b.z>1.0?1.0/(2.0-b.z):loc1.z;\n" \
-	"	c = pow(c, loc0)*b;\n" \
+	"	vec4 b = ct.loc1;\n" \
+	"	b.x = b.x>1.0?1.0/(2.0-b.x):ct.loc1.x;\n" \
+	"	b.y = b.y>1.0?1.0/(2.0-b.y):ct.loc1.y;\n" \
+	"	b.z = b.z>1.0?1.0/(2.0-b.z):ct.loc1.z;\n" \
+	"	c = pow(c, ct.loc0)*b;\n" \
 	"	vec4 unit = vec4(1.0);\n" \
-	"	FragColor = c*(unit-loc2)+loc2*(unit-unit/(c+unit));\n" \
+	"	FragColor = c*(unit-ct.loc2)+ct.loc2*(unit-unit/(c+unit));\n" \
 	"	FragColor.a = alpha;\n" \
 	"}\n"
 
@@ -638,18 +674,20 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"// PAINT_SHADER_CODE\n" \
-	"uniform vec4 loc0; //(mouse_x, mouse_y, radius1, radius2)\n" \
-	"uniform vec4 loc1; //(width, height, 0, 0)\n" \
-	"uniform sampler2D tex0;\n" \
+	"layout (push_constant) uniform PushConsts {" \
+	"	vec4 loc0; //(mouse_x, mouse_y, radius1, radius2)\n" \
+	"	vec4 loc1; //(width, height, 0, 0)\n" \
+	"} ct;" \
+	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
 	"	vec4 t = vec4(OutTexCoord, 1.0);\n" \
 	"	vec4 c = texture(tex0, t.xy);\n" \
-	"	vec2 center = vec2(loc0.x, loc0.y);\n" \
-	"	vec2 pos = vec2(t.x*loc1.x, t.y*loc1.y);\n" \
+	"	vec2 center = vec2(ct.loc0.x, ct.loc0.y);\n" \
+	"	vec2 pos = vec2(t.x*ct.loc1.x, t.y*ct.loc1.y);\n" \
 	"	float d = length(pos - center);\n" \
-	"	vec4 ctemp = d<loc0.z?vec4(1.0, 1.0, 1.0, 1.0):(d<loc0.w?vec4(0.5, 0.5, 0.5, 1.0):vec4(0.0, 0.0, 0.0, 1.0));\n" \
+	"	vec4 ctemp = d<ct.loc0.z?vec4(1.0, 1.0, 1.0, 1.0):(d<ct.loc0.w?vec4(0.5, 0.5, 0.5, 1.0):vec4(0.0, 0.0, 0.0, 1.0));\n" \
 	"	FragColor = ctemp.r>c.r?ctemp:c;\n" \
 	"	FragColor.a = FragColor.r>0.1?0.5:0.0;\n" \
 	"}\n"
@@ -660,7 +698,7 @@ namespace FLIVR
 	"in vec3 OutTexCoord;\n" \
 	"out vec4 FragColor;\n" \
 	"// IMG_SHADER_CODE_BLEND_FOR_DEPTH_MODE\n" \
-	"uniform sampler2D tex0;\n" \
+	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
@@ -677,16 +715,16 @@ namespace FLIVR
 	"layout(location = 0) out vec4 FragColor;\n" \
 	"layout(location = 1) out vec4 IDColor;\n" \
 	"// IMG_SHADER_CODE_BLEND_ID_COLOR_FOR_DEPTH_MODE\n" \
-	"uniform sampler2D tex0;\n" \
-	"uniform sampler2D tex5;\n" \
-	"uniform sampler2D tex6;\n" \
+	"layout (binding = 0) uniform sampler2D tex0;\n" \
+	"layout (binding = 1) uniform sampler2D tex1;\n" \
+	"layout (binding = 2) uniform sampler2D tex2;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
 	"	vec4 t = vec4(OutTexCoord, 1.0);\n" \
 	"	vec4 c_b = texture(tex0, t.xy);\n" \
-	"	vec4 c_id = texture(tex6, t.xy);\n" \
-	"	vec4 c_id_ref = texture(tex5, t.xy);\n" \
+	"	vec4 c_id = texture(tex2, t.xy);\n" \
+	"	vec4 c_id_ref = texture(tex1, t.xy);\n" \
 	"	vec4 c = c_b;\n" \
 	"	if (c_id.rgb != vec3(0.0) && c_id_ref.rgb != c_id.rgb)\n" \
 	"	{\n" \
@@ -867,12 +905,31 @@ namespace FLIVR
 		: prev_shader_(-1)
 	{}
 
+	ImgShaderFactory::ImgShaderFactory(std::shared_ptr<VVulkan> vulkan)
+		: prev_shader_(-1)
+	{
+		init(vulkan);
+	}
+
 	ImgShaderFactory::~ImgShaderFactory()
 	{
 		for(unsigned int i=0; i<shader_.size(); i++)
 		{
 			delete shader_[i];
 		}
+
+		auto device = ShaderProgram::get_vulkan()->getDevice();
+		
+		vkDestroyPipelineLayout(device, pipeline_.pipelineLayout, nullptr);
+		vkDestroyDescriptorSetLayout(device, pipeline_.descriptorSetLayout, nullptr);
+		vkDestroyDescriptorPool(device, pipeline_.descriptorPool, nullptr);
+	}
+
+	void ImgShaderFactory::init(std::shared_ptr<VVulkan> vulkan)
+	{
+		setupDescriptorSetLayout();
+		setupDescriptorPool();
+		allocDescriptorSet();
 	}
 
 	ShaderProgram*
@@ -903,6 +960,69 @@ namespace FLIVR
 		shader_.push_back(s);
 		prev_shader_ = int(shader_.size())-1;
 		return s->program();
+	}
+
+	void ImgShaderFactory::setupDescriptorPool()
+	{
+		std::vector<VkDescriptorPoolSize> poolSizes =
+		{
+			vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, IMG_SHDR_SAMPLER_NUM)
+		};
+
+		VkDescriptorPoolCreateInfo descriptorPoolInfo = 
+			vks::initializers::descriptorPoolCreateInfo(
+			static_cast<uint32_t>(poolSizes.size()),
+			poolSizes.data(),
+			1);
+
+		VK_CHECK_RESULT(vkCreateDescriptorPool(ShaderProgram::get_vulkan()->getDevice(), &descriptorPoolInfo, nullptr, &pipeline_.descriptorPool));
+	}
+
+	void ImgShaderFactory::setupDescriptorSetLayout()
+	{
+		VkDevice device = ShaderProgram::get_vulkan()->getDevice();
+
+		std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {};
+
+		int offset = 0;
+		for (int i = 0; i < IMG_SHDR_SAMPLER_NUM; i++)
+		{
+			setLayoutBindings.push_back(
+				vks::initializers::descriptorSetLayoutBinding(
+				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
+				VK_SHADER_STAGE_FRAGMENT_BIT, 
+				offset+i)
+			);
+		}
+
+		VkDescriptorSetLayoutCreateInfo descriptorLayout = 
+			vks::initializers::descriptorSetLayoutCreateInfo(
+			setLayoutBindings.data(),
+			static_cast<uint32_t>(setLayoutBindings.size()));
+
+		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &pipeline_.descriptorSetLayout));
+
+		VkPipelineLayoutCreateInfo pPipelineLayoutCreateInfo =
+			vks::initializers::pipelineLayoutCreateInfo(
+			&pipeline_.descriptorSetLayout,
+			1);
+
+		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pPipelineLayoutCreateInfo, nullptr, &pipeline_.pipelineLayout));
+	}
+
+	void ImgShaderFactory::allocDescriptorSet()
+	{
+		VkDevice device = ShaderProgram::get_vulkan()->getDevice();
+
+		VkDescriptorSetAllocateInfo descriptorSetAllocInfo;
+		descriptorSetAllocInfo = vks::initializers::descriptorSetAllocateInfo(pipeline_.descriptorPool, &pipeline_.descriptorSetLayout, 1);
+		VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &pipeline_.descriptorSet));
+	}
+
+	void ImgShaderFactory::setupDescriptorSetSamplers(uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites)
+	{
+		VkDevice device = ShaderProgram::get_vulkan()->getDevice();
+		vkUpdateDescriptorSets(device, descriptorWriteCountconst, pDescriptorWrites, 0, NULL);
 	}
 
 } // end namespace FLIVR

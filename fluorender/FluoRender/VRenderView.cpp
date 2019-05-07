@@ -50,7 +50,7 @@ DEALINGS IN THE SOFTWARE.
 #endif
 
 int VRenderView::m_id = 1;
-ImgShaderFactory VRenderGLView::m_img_shader_factory;
+ImgShaderFactory VRenderVulkanView::m_img_shader_factory;
 ////////////////////////////////////////////////////////////////////////
 
 
@@ -64,7 +64,7 @@ BEGIN_EVENT_TABLE(LMTreeCtrl, wxTreeCtrl)
 	END_EVENT_TABLE()
 
 	LMTreeCtrl::LMTreeCtrl(
-	VRenderGLView *glview,
+	VRenderVulkanView *glview,
 	wxWindow* parent,
 	wxWindowID id,
 	const wxPoint& pos,
@@ -224,7 +224,7 @@ BEGIN_EVENT_TABLE(LMSeacher, wxTextCtrl)
 	END_EVENT_TABLE()
 
 	LMSeacher::LMSeacher(
-	VRenderGLView* glview,
+	VRenderVulkanView* glview,
 	wxWindow* parent,
 	wxWindowID id,
 	const wxString& text,
@@ -399,23 +399,22 @@ void LMSeacher::OnMouse(wxMouseEvent& event)
 //////////////////////////////////////////////////////////////////////////
 
 
-BEGIN_EVENT_TABLE(VRenderGLView, wxGLCanvas)
-	EVT_PAINT(VRenderGLView::OnDraw)
-	EVT_SIZE(VRenderGLView::OnResize)
-	EVT_TIMER(ID_Timer ,VRenderGLView::OnIdle)
-	EVT_MOUSE_EVENTS(VRenderGLView::OnMouse)
-	EVT_KEY_DOWN(VRenderGLView::OnKeyDown)
-	END_EVENT_TABLE()
+BEGIN_EVENT_TABLE(VRenderVulkanView, wxWindow)
+	EVT_PAINT(VRenderVulkanView::OnDraw)
+	EVT_SIZE(VRenderVulkanView::OnResize)
+	EVT_ERASE_BACKGROUND(VRenderVulkanView::OnErase)
+	EVT_TIMER(ID_Timer ,VRenderVulkanView::OnIdle)
+	EVT_MOUSE_EVENTS(VRenderVulkanView::OnMouse)
+	EVT_KEY_DOWN(VRenderVulkanView::OnKeyDown)
+END_EVENT_TABLE()
 
-	VRenderGLView::VRenderGLView(wxWindow* frame,
-	wxWindow* parent,
+VRenderVulkanView::VRenderVulkanView(wxWindow *parent,
 	wxWindowID id,
-	const int* attriblist,
-	wxGLContext* sharedContext,
 	const wxPoint& pos,
 	const wxSize& size,
-	long style) :
-wxGLCanvas(parent, id, attriblist, pos, size, style),
+	long style,
+	const wxString& name)
+	: wxWindow(parent, id, pos, size, style, name),
 	//public
 	//capture modes
 	m_capture(false),
@@ -702,26 +701,18 @@ wxGLCanvas(parent, id, attriblist, pos, size, style),
 	SetEvtHandlerEnabled(false);
 	Freeze();
 
-	//create context
-	if (sharedContext)
-	{
-		m_glRC = sharedContext;
-		m_sharedRC = true;
-	}
-	else
-	{
-#ifdef __WXMAC__
-        wxGLContextAttrs ctxAttrs;
-        ctxAttrs.PlatformDefaults().CoreProfile().OGLVersion(4, 1).EndList();
-        m_glRC = new wxGLContext(this, NULL, &ctxAttrs);
-#else
-        m_glRC = new wxGLContext(this);
+	m_vulkan = make_shared<VVulkan>(VVulkan());
+	m_vulkan->initVulkan();
+#if defined(_WIN32)
+	m_vulkan->setWindow((HWND)GetHWND(), GetModuleHandle(NULL));
+#elif (defined(__WXMAC__))
+	m_vulkan->setWindow(GetHandle());
 #endif
-		m_sharedRC = false;
-	}
+	m_vulkan->prepare();
 
 	goTimer = new nv::Timer(10);
 	m_sb_num = "50";
+
 #ifdef _WIN32
 	//tablet initialization
 	if (m_use_pres && LoadWintab())
@@ -730,6 +721,7 @@ wxGLCanvas(parent, id, attriblist, pos, size, style),
 		m_hTab = TabletInit((HWND)GetHWND());
 	}
 #endif
+
 	LoadDefaultBrushSettings();
 
 	m_searcher = new LMSeacher(this, (wxWindow *)this, ID_Searcher, wxT("Search"), wxPoint(20, 20), wxSize(200, -1), wxTE_PROCESS_ENTER);
@@ -742,46 +734,7 @@ wxGLCanvas(parent, id, attriblist, pos, size, style),
 	m_idleTimer->Start(50);
 }
 
-void VRenderGLView::SetSearcherVisibility(bool visibility)
-{
-	if(visibility)
-	{
-		m_draw_landmarks = true;
-		m_searcher->Show();
-	}
-	else
-	{
-		m_draw_landmarks = false;
-		m_searcher->Hide();
-	}
-}
-
-#ifdef _WIN32
-//tablet init
-HCTX VRenderGLView::TabletInit(HWND hWnd)
-{
-	/* get default region */
-	gpWTInfoA(WTI_DEFCONTEXT, 0, &m_lc);
-
-	/* modify the digitizing region */
-	m_lc.lcOptions |= CXO_MESSAGES;
-	m_lc.lcPktData = PACKETDATA;
-	m_lc.lcPktMode = PACKETMODE;
-	m_lc.lcMoveMask = PACKETDATA;
-	m_lc.lcBtnUpMask = m_lc.lcBtnDnMask;
-
-	/* output in 10000 x 10000 grid */
-	m_lc.lcOutOrgX = m_lc.lcOutOrgY = 0;
-	m_lc.lcOutExtX = 10000;
-	m_lc.lcOutExtY = 10000;
-
-	/* open the region */
-	return gpWTOpenA(hWnd, &m_lc, TRUE);
-
-}
-#endif
-
-VRenderGLView::~VRenderGLView()
+VRenderVulkanView::~VRenderVulkanView()
 {
 	goTimer->stop();
 	delete goTimer;
@@ -826,99 +779,62 @@ VRenderGLView::~VRenderGLView()
 			delete m_landmarks[i];
 	}
 
-	//delete buffers and textures
-	if (glIsFramebuffer(m_fbo))
-		glDeleteFramebuffers(1, &m_fbo);
-	if (glIsFramebuffer(m_fbo_final))
-		glDeleteFramebuffers(1, &m_fbo_final);
-	if (glIsFramebuffer(m_fbo_temp))
-		glDeleteFramebuffers(1, &m_fbo_temp);
-	if (glIsFramebuffer(m_fbo_paint))
-		glDeleteFramebuffers(1, &m_fbo_paint);
-	if (glIsFramebuffer(m_fbo_ol1))
-		glDeleteFramebuffers(1, &m_fbo_ol1);
-	if (glIsFramebuffer(m_fbo_ol2))
-		glDeleteFramebuffers(1, &m_fbo_ol2);
-	if (glIsFramebuffer(m_fbo_tile))
-		glDeleteFramebuffers(1, &m_fbo_tile);
-	if (glIsFramebuffer(m_fbo_tiled_tmp))
-		glDeleteFramebuffers(1, &m_fbo_tiled_tmp);
-	if (glIsTexture(m_tex))
-		glDeleteTextures(1, &m_tex);
-	if (glIsTexture(m_tex_final))
-		glDeleteTextures(1, &m_tex_final);
-	if (glIsTexture(m_tex_temp))
-		glDeleteTextures(1, &m_tex_temp);
-	if (glIsTexture(m_tex_paint))
-		glDeleteTextures(1, &m_tex_paint);
-	if (glIsTexture(m_tex_ol1))
-		glDeleteTextures(1, &m_tex_ol1);
-	if (glIsTexture(m_tex_ol2))
-		glDeleteTextures(1, &m_tex_ol2);
-	if (glIsTexture(m_tex_tile))
-		glDeleteTextures(1, &m_tex_tile);
-	if (glIsTexture(m_tex_tiled_tmp))
-		glDeleteTextures(1, &m_tex_tiled_tmp);
-
-	if (glIsBuffer(m_quad_vbo))
-		glDeleteBuffers(1, &m_quad_vbo);
-	if (glIsVertexArray(m_quad_vao))
-		glDeleteVertexArrays(1, &m_quad_vao);
-	if (glIsBuffer(m_quad_tile_vbo))
-		glDeleteBuffers(1, &m_quad_tile_vbo);
-	if (glIsVertexArray(m_quad_tile_vao))
-		glDeleteVertexArrays(1, &m_quad_tile_vao);
-	if (glIsBuffer(m_misc_vbo))
-		glDeleteBuffers(1, &m_misc_vbo);
-	if (glIsBuffer(m_misc_ibo))
-		glDeleteBuffers(1, &m_misc_ibo);
-	if (glIsVertexArray(m_misc_vao))
-		glDeleteVertexArrays(1, &m_misc_vao);
-
-	//pick buffer
-	if (glIsFramebuffer(m_fbo_pick))
-		glDeleteFramebuffers(1, &m_fbo_pick);
-	if (glIsTexture(m_tex_pick))
-		glDeleteTextures(1, &m_tex_pick);
-	if (glIsTexture(m_tex_pick_depth))
-		glDeleteTextures(1, &m_tex_pick_depth);
-
-	if (glIsFramebuffer(m_dp_buf_fbo))
-		glDeleteFramebuffers(1, &m_dp_buf_fbo);
-	if (glIsTexture(m_dp_buf_tex))
-		glDeleteTextures(1, &m_dp_buf_tex);
-
-	for (auto fbo : m_dp_fbo_list)
-	{
-		if (glIsFramebuffer(fbo))
-			glDeleteFramebuffers(1, &fbo);
-	}
-	for (auto tex : m_dp_tex_list)
-	{
-		if (glIsTexture(tex))
-			glDeleteTextures(1, &tex);
-	}
-	for (auto ctex : m_dp_ctex_list)
-	{
-		if (glIsTexture(ctex))
-			glDeleteTextures(1, &ctex);
-	}
-
-	if (!m_sharedRC)
-		delete m_glRC;
-
-	if (m_trace_group)
-		delete m_trace_group;
+	m_vulkan.reset();
 
 	KernelProgram::clear();
 }
 
-void VRenderGLView::OnResize(wxSizeEvent& event)
+
+void VRenderVulkanView::OnErase(wxEraseEvent& event)
+{
+
+}
+
+void VRenderVulkanView::SetSearcherVisibility(bool visibility)
+{
+	if(visibility)
+	{
+		m_draw_landmarks = true;
+		m_searcher->Show();
+	}
+	else
+	{
+		m_draw_landmarks = false;
+		m_searcher->Hide();
+	}
+}
+
+#ifdef _WIN32
+//tablet init
+HCTX VRenderVulkanView::TabletInit(HWND hWnd)
+{
+	/* get default region */
+	gpWTInfoA(WTI_DEFCONTEXT, 0, &m_lc);
+
+	/* modify the digitizing region */
+	m_lc.lcOptions |= CXO_MESSAGES;
+	m_lc.lcPktData = PACKETDATA;
+	m_lc.lcPktMode = PACKETMODE;
+	m_lc.lcMoveMask = PACKETDATA;
+	m_lc.lcBtnUpMask = m_lc.lcBtnDnMask;
+
+	/* output in 10000 x 10000 grid */
+	m_lc.lcOutOrgX = m_lc.lcOutOrgY = 0;
+	m_lc.lcOutExtX = 10000;
+	m_lc.lcOutExtY = 10000;
+
+	/* open the region */
+	return gpWTOpenA(hWnd, &m_lc, TRUE);
+
+}
+#endif
+
+void VRenderVulkanView::OnResize(wxSizeEvent& event)
 {
 	Resize();
 }
 
-void VRenderGLView::Resize(bool refresh)
+void VRenderVulkanView::Resize(bool refresh)
 {
 	if (m_vd_pop_dirty)
 		PopVolumeList();
@@ -943,10 +859,12 @@ void VRenderGLView::Resize(bool refresh)
 	m_resize_ol2 = true;
 	m_resize_paint = true;
 
+	m_vulkanExample->windowResize();
+
 	if (refresh) RefreshGL();
 }
 
-void VRenderGLView::Init()
+void VRenderVulkanView::Init()
 {
 	if (!m_initialized)
 	{
@@ -981,7 +899,7 @@ void VRenderGLView::Init()
 	//m_GLversion = wxString("OpenGL Version: ") + wxString(version);
 }
 
-void VRenderGLView::Clear()
+void VRenderVulkanView::Clear()
 {
 	m_loader.RemoveAllLoadedBrick();
 	TextureRenderer::clear_tex_pool();
@@ -1007,7 +925,7 @@ void VRenderGLView::Clear()
 	m_layer_list.clear();
 }
 
-void VRenderGLView::HandleProjection(int nx, int ny)
+void VRenderVulkanView::HandleProjection(int nx, int ny)
 {
 	double aspect = (double)nx / (double)ny;
 	if (!m_free)
@@ -1060,7 +978,7 @@ void VRenderGLView::HandleProjection(int nx, int ny)
 	}
 }
 
-void VRenderGLView::HandleCamera()
+void VRenderVulkanView::HandleCamera()
 {
 	Vector pos(m_transx, m_transy, m_transz);
 	pos.normalize();
@@ -1082,7 +1000,7 @@ void VRenderGLView::HandleCamera()
 }
 
 //depth buffer calculation
-double VRenderGLView::CalcZ(double z)
+double VRenderVulkanView::CalcZ(double z)
 {
 	double result = 0.0;
 	if (m_persp)
@@ -1098,7 +1016,7 @@ double VRenderGLView::CalcZ(double z)
 	return result;
 }
 
-void VRenderGLView::CalcFogRange()
+void VRenderVulkanView::CalcFogRange()
 {
 	BBox bbox;
 	bool use_box = false;
@@ -1160,7 +1078,7 @@ void VRenderGLView::CalcFogRange()
 }
 
 //draw the volume data only
-void VRenderGLView::Draw()
+void VRenderVulkanView::Draw()
 {
 	int nx = m_nx;
 	int ny = m_ny;
@@ -1245,7 +1163,7 @@ void VRenderGLView::Draw()
 }
 
 //draw with depth peeling
-void VRenderGLView::DrawDP()
+void VRenderVulkanView::DrawDP()
 {
 	int i;
 	int nx = m_nx;
@@ -1534,7 +1452,7 @@ void VRenderGLView::DrawDP()
 
 //draw meshes
 //peel==true -- depth peeling
-void VRenderGLView::DrawMeshes(int peel)
+void VRenderVulkanView::DrawMeshes(int peel)
 {
 	for (int i=0 ; i<(int)m_layer_list.size() ; i++)
 	{
@@ -1572,7 +1490,7 @@ void VRenderGLView::DrawMeshes(int peel)
 
 //draw volumes
 //peel==true -- depth peeling
-void VRenderGLView::DrawVolumes(int peel)
+void VRenderVulkanView::DrawVolumes(int peel)
 {
 	int finished_bricks = 0;
 	if (TextureRenderer::get_mem_swap())
@@ -2097,7 +2015,7 @@ void VRenderGLView::DrawVolumes(int peel)
 		RefreshGL();
 }
 
-void VRenderGLView::DrawVolumesDP()
+void VRenderVulkanView::DrawVolumesDP()
 {
 	int finished_bricks = 0;
 	if (TextureRenderer::get_mem_swap())
@@ -2748,7 +2666,7 @@ void VRenderGLView::DrawVolumesDP()
 		RefreshGL();
 }
 
-void VRenderGLView::DrawAnnotations()
+void VRenderVulkanView::DrawAnnotations()
 {
 	if (!m_text_renderer)
 		return;
@@ -2812,7 +2730,7 @@ void VRenderGLView::DrawAnnotations()
 
 //get populated mesh list
 //stored in m_md_pop_list
-void VRenderGLView::PopMeshList()
+void VRenderVulkanView::PopMeshList()
 {
 	if (!m_md_pop_dirty)
 		return;
@@ -2853,7 +2771,7 @@ void VRenderGLView::PopMeshList()
 
 //get populated volume list
 //stored in m_vd_pop_list
-void VRenderGLView::PopVolumeList()
+void VRenderVulkanView::PopVolumeList()
 {
 	if (!m_vd_pop_dirty)
 		return;
@@ -2894,7 +2812,7 @@ void VRenderGLView::PopVolumeList()
 //organize layers in view
 //put all volume data under view into last group of the view
 //if no group in view
-void VRenderGLView::OrganizeLayers()
+void VRenderVulkanView::OrganizeLayers()
 {
 	DataGroup* le_group = 0;
 	int i, j, k;
@@ -3023,7 +2941,7 @@ void VRenderGLView::OrganizeLayers()
 	}
 }
 
-void VRenderGLView::RandomizeColor()
+void VRenderVulkanView::RandomizeColor()
 {
 	for (int i=0; i<(int)m_layer_list.size(); i++)
 	{
@@ -3032,25 +2950,25 @@ void VRenderGLView::RandomizeColor()
 	}
 }
 
-void VRenderGLView::ClearVolList()
+void VRenderVulkanView::ClearVolList()
 {
 	m_loader.RemoveAllLoadedBrick();
 	TextureRenderer::clear_tex_pool();
 	m_vd_pop_list.clear();
 }
 
-void VRenderGLView::ClearMeshList()
+void VRenderVulkanView::ClearMeshList()
 {
 	m_md_pop_list.clear();
 }
 
 //interactive modes
-int VRenderGLView::GetIntMode()
+int VRenderVulkanView::GetIntMode()
 {
 	return m_int_mode;
 }
 
-void VRenderGLView::SetIntMode(int mode)
+void VRenderVulkanView::SetIntMode(int mode)
 {
 	m_int_mode = mode;
 	if (m_int_mode == 1)
@@ -3061,29 +2979,29 @@ void VRenderGLView::SetIntMode(int mode)
 }
 
 //set use 2d rendering results
-void VRenderGLView::SetPaintUse2d(bool use2d)
+void VRenderVulkanView::SetPaintUse2d(bool use2d)
 {
 	m_selector.SetPaintUse2d(use2d);
 }
 
-bool VRenderGLView::GetPaintUse2d()
+bool VRenderVulkanView::GetPaintUse2d()
 {
 	return m_selector.GetPaintUse2d();
 }
 
 //segmentation mdoe selection
-void VRenderGLView::SetPaintMode(int mode)
+void VRenderVulkanView::SetPaintMode(int mode)
 {
 	m_selector.SetMode(mode);
 	m_brush_state = mode;
 }
 
-int VRenderGLView::GetPaintMode()
+int VRenderVulkanView::GetPaintMode()
 {
 	return m_selector.GetMode();
 }
 
-void VRenderGLView::DrawCircle(double cx, double cy,
+void VRenderVulkanView::DrawCircle(double cx, double cy,
 							   double radius, Color &color, glm::mat4 &matrix)
 {
 	int secs = 60;
@@ -3128,7 +3046,7 @@ void VRenderGLView::DrawCircle(double cx, double cy,
 }
 
 //draw the brush shape
-void VRenderGLView::DrawBrush()
+void VRenderVulkanView::DrawBrush()
 {
 	double pressure = m_use_pres&&m_on_press?m_pressure:1.0;
 
@@ -3205,7 +3123,7 @@ void VRenderGLView::DrawBrush()
 }
 
 //paint strokes on the paint fbo
-void VRenderGLView::PaintStroke()
+void VRenderVulkanView::PaintStroke()
 {
 	int nx, ny;
 	nx = m_nx;
@@ -3340,7 +3258,7 @@ void VRenderGLView::PaintStroke()
 }
 
 //show the stroke buffer
-void VRenderGLView::DisplayStroke()
+void VRenderVulkanView::DisplayStroke()
 {
 	//painting texture
 	if (!glIsTexture(m_tex_paint))
@@ -3369,12 +3287,12 @@ void VRenderGLView::DisplayStroke()
 }
 
 //set 2d weights
-void VRenderGLView::Set2dWeights()
+void VRenderVulkanView::Set2dWeights()
 {
 	m_selector.Set2DWeight(m_tex_final, glIsTexture(m_tex_wt2)?m_tex_wt2:m_tex);
 }
 
-VolumeData *VRenderGLView::CopyLevel(VolumeData *src, int lv)
+VolumeData *VRenderVulkanView::CopyLevel(VolumeData *src, int lv)
 {
 	if (!src->isBrxml()) return NULL;
 
@@ -3441,7 +3359,7 @@ VolumeData *VRenderGLView::CopyLevel(VolumeData *src, int lv)
 }
 
 //segment volumes in current view
-void VRenderGLView::Segment()
+void VRenderVulkanView::Segment()
 {
     SetCurrent(*m_glRC);
     
@@ -3567,13 +3485,13 @@ void VRenderGLView::Segment()
 }
 
 //label volumes in current view
-void VRenderGLView::Label()
+void VRenderVulkanView::Label()
 {
 	m_selector.Label(0);
 }
 
 //remove noise
-int VRenderGLView::CompAnalysis(double min_voxels, double max_voxels, double thresh, bool select, bool gen_ann, int iter_limit)
+int VRenderVulkanView::CompAnalysis(double min_voxels, double max_voxels, double thresh, bool select, bool gen_ann, int iter_limit)
 {
     SetCurrent(*m_glRC);
     
@@ -3618,7 +3536,7 @@ int VRenderGLView::CompAnalysis(double min_voxels, double max_voxels, double thr
 	return return_val;
 }
 
-void VRenderGLView::CompExport(int mode, bool select)
+void VRenderVulkanView::CompExport(int mode, bool select)
 {
 	switch (mode)
 	{
@@ -3692,7 +3610,7 @@ void VRenderGLView::CompExport(int mode, bool select)
 	}
 }
 
-void VRenderGLView::ShowAnnotations()
+void VRenderVulkanView::ShowAnnotations()
 {
 	Annotations* ann = m_selector.GetAnnotations();
 	if (ann)
@@ -3704,7 +3622,7 @@ void VRenderGLView::ShowAnnotations()
 	}
 }
 
-int VRenderGLView::NoiseAnalysis(double min_voxels, double max_voxels, double thresh)
+int VRenderVulkanView::NoiseAnalysis(double min_voxels, double max_voxels, double thresh)
 {
     SetCurrent(*m_glRC);
     
@@ -3728,7 +3646,7 @@ int VRenderGLView::NoiseAnalysis(double min_voxels, double max_voxels, double th
 	return return_val;
 }
 
-void VRenderGLView::NoiseRemoval(int iter, double thresh)
+void VRenderVulkanView::NoiseRemoval(int iter, double thresh)
 {
     SetCurrent(*m_glRC);
     
@@ -3767,7 +3685,7 @@ void VRenderGLView::NoiseRemoval(int iter, double thresh)
 
 //brush properties
 //load default
-void VRenderGLView::LoadDefaultBrushSettings()
+void VRenderVulkanView::LoadDefaultBrushSettings()
 {
 	wxString expath = wxStandardPaths::Get().GetExecutablePath();
 	expath = expath.BeforeLast(GETSLASH(),NULL);
@@ -3852,17 +3770,17 @@ void VRenderGLView::LoadDefaultBrushSettings()
 		m_selector.SetBrushDSLT_C(val);
 }
 
-void VRenderGLView::SetBrushUsePres(bool pres)
+void VRenderVulkanView::SetBrushUsePres(bool pres)
 {
 	m_use_pres = pres;
 }
 
-bool VRenderGLView::GetBrushUsePres()
+bool VRenderVulkanView::GetBrushUsePres()
 {
 	return m_use_pres;
 }
 
-void VRenderGLView::SetUseBrushSize2(bool val)
+void VRenderVulkanView::SetUseBrushSize2(bool val)
 {
 	m_use_brush_radius2 = val;
 	m_selector.SetUseBrushSize2(val);
@@ -3870,12 +3788,12 @@ void VRenderGLView::SetUseBrushSize2(bool val)
 		m_brush_radius2 = m_brush_radius1;
 }
 
-bool VRenderGLView::GetBrushSize2Link()
+bool VRenderVulkanView::GetBrushSize2Link()
 {
 	return m_use_brush_radius2;
 }
 
-void VRenderGLView::SetBrushSize(double size1, double size2)
+void VRenderVulkanView::SetBrushSize(double size1, double size2)
 {
 	if (size1 > 0.0)
 		m_brush_radius1 = size1;
@@ -3885,179 +3803,179 @@ void VRenderGLView::SetBrushSize(double size1, double size2)
 		m_brush_radius2 = m_brush_radius1;
 }
 
-double VRenderGLView::GetBrushSize1()
+double VRenderVulkanView::GetBrushSize1()
 {
 	return m_brush_radius1;
 }
 
-double VRenderGLView::GetBrushSize2()
+double VRenderVulkanView::GetBrushSize2()
 {
 	return m_brush_radius2;
 }
 
-void VRenderGLView::SetBrushSpacing(double spacing)
+void VRenderVulkanView::SetBrushSpacing(double spacing)
 {
 	if (spacing > 0.0)
 		m_brush_spacing = spacing;
 }
 
-double VRenderGLView::GetBrushSpacing()
+double VRenderVulkanView::GetBrushSpacing()
 {
 	return m_brush_spacing;
 }
 
-void VRenderGLView::SetBrushIteration(int num)
+void VRenderVulkanView::SetBrushIteration(int num)
 {
 	m_selector.SetBrushIteration(num);
 }
 
-int VRenderGLView::GetBrushIteration()
+int VRenderVulkanView::GetBrushIteration()
 {
 	return m_selector.GetBrushIteration();
 }
 
 //brush translate
-void VRenderGLView::SetBrushSclTranslate(double val)
+void VRenderVulkanView::SetBrushSclTranslate(double val)
 {
 	m_selector.SetBrushSclTranslate(val);
 	m_calculator.SetThreshold(val);
 }
 
-double VRenderGLView::GetBrushSclTranslate()
+double VRenderVulkanView::GetBrushSclTranslate()
 {
 	return m_selector.GetBrushSclTranslate();
 }
 
 //gm falloff
-void VRenderGLView::SetBrushGmFalloff(double val)
+void VRenderVulkanView::SetBrushGmFalloff(double val)
 {
 	m_selector.SetBrushGmFalloff(val);
 }
 
-double VRenderGLView::GetBrushGmFalloff()
+double VRenderVulkanView::GetBrushGmFalloff()
 {
 	return m_selector.GetBrushGmFalloff();
 }
 
-void VRenderGLView::SetW2d(double val)
+void VRenderVulkanView::SetW2d(double val)
 {
 	m_selector.SetW2d(val);
 }
 
-double VRenderGLView::GetW2d()
+double VRenderVulkanView::GetW2d()
 {
 	return m_selector.GetW2d();
 }
 
 //edge detect
-void VRenderGLView::SetEdgeDetect(bool value)
+void VRenderVulkanView::SetEdgeDetect(bool value)
 {
 	m_selector.SetEdgeDetect(value);
 }
 
-bool VRenderGLView::GetEdgeDetect()
+bool VRenderVulkanView::GetEdgeDetect()
 {
 	return m_selector.GetEdgeDetect();
 }
 
 //hidden removal
-void VRenderGLView::SetHiddenRemoval(bool value)
+void VRenderVulkanView::SetHiddenRemoval(bool value)
 {
 	m_selector.SetHiddenRemoval(value);
 }
 
-bool VRenderGLView::GetHiddenRemoval()
+bool VRenderVulkanView::GetHiddenRemoval()
 {
 	return m_selector.GetHiddenRemoval();
 }
 
 //select group
-void VRenderGLView::SetSelectGroup(bool value)
+void VRenderVulkanView::SetSelectGroup(bool value)
 {
 	m_selector.SetSelectGroup(value);
 }
 
-bool VRenderGLView::GetSelectGroup()
+bool VRenderVulkanView::GetSelectGroup()
 {
 	return m_selector.GetSelectGroup();
 }
 
 //estimate threshold
-void VRenderGLView::SetEstimateThresh(bool value)
+void VRenderVulkanView::SetEstimateThresh(bool value)
 {
 	m_selector.SetEstimateThreshold(value);
 }
 
-bool VRenderGLView::GetEstimateThresh()
+bool VRenderVulkanView::GetEstimateThresh()
 {
 	return m_selector.GetEstimateThreshold();
 }
 
 //select both
-void VRenderGLView::SetSelectBoth(bool value)
+void VRenderVulkanView::SetSelectBoth(bool value)
 {
 	m_selector.SetSelectBoth(value);
 }
 
-bool VRenderGLView::GetSelectBoth()
+bool VRenderVulkanView::GetSelectBoth()
 {
 	return m_selector.GetSelectBoth();
 }
 
-void VRenderGLView::SetUseDSLTBrush(bool value)
+void VRenderVulkanView::SetUseDSLTBrush(bool value)
 {
 	m_selector.SetUseDSLTBrush(value);
 }
 
-bool VRenderGLView::GetUseDSLTBrush()
+bool VRenderVulkanView::GetUseDSLTBrush()
 {
 	return m_selector.GetUseDSLTBrush();
 }
 
-void VRenderGLView::SetBrushDSLT_R(int rad)
+void VRenderVulkanView::SetBrushDSLT_R(int rad)
 {
 	m_selector.SetBrushDSLT_R(rad);
 }
 
-int VRenderGLView::GetBrushDSLT_R()
+int VRenderVulkanView::GetBrushDSLT_R()
 {
 	return m_selector.GetBrushDSLT_R();
 }
 
-void VRenderGLView::SetBrushDSLT_Q(int quality)
+void VRenderVulkanView::SetBrushDSLT_Q(int quality)
 {
 	m_selector.SetBrushDSLT_Q(quality);
 }
 
-int VRenderGLView::GetBrushDSLT_Q()
+int VRenderVulkanView::GetBrushDSLT_Q()
 {
 	return m_selector.GetBrushDSLT_Q();
 }
 
-void VRenderGLView::SetBrushDSLT_C(double c)
+void VRenderVulkanView::SetBrushDSLT_C(double c)
 {
 	m_selector.SetBrushDSLT_C(c);
 }
 
-double VRenderGLView::GetBrushDSLT_C()
+double VRenderVulkanView::GetBrushDSLT_C()
 {
 	return m_selector.GetBrushDSLT_C();
 }
 
 
 //calculations
-void VRenderGLView::SetVolumeA(VolumeData* vd)
+void VRenderVulkanView::SetVolumeA(VolumeData* vd)
 {
 	m_calculator.SetVolumeA(vd);
 	m_selector.SetVolume(vd);
 }
 
-void VRenderGLView::SetVolumeB(VolumeData* vd)
+void VRenderVulkanView::SetVolumeB(VolumeData* vd)
 {
 	m_calculator.SetVolumeB(vd);
 }
 
-void VRenderGLView::CalculateSingle(int type, wxString prev_group, bool add)
+void VRenderVulkanView::CalculateSingle(int type, wxString prev_group, bool add)
 {
     SetCurrent(*m_glRC);
     
@@ -4185,7 +4103,7 @@ void VRenderGLView::CalculateSingle(int type, wxString prev_group, bool add)
 	}
 }
 
-void VRenderGLView::Calculate(int type, wxString prev_group, bool add)
+void VRenderVulkanView::Calculate(int type, wxString prev_group, bool add)
 {
 	if (type == 5 ||
 		type == 6 ||
@@ -4243,7 +4161,7 @@ void VRenderGLView::Calculate(int type, wxString prev_group, bool add)
 		CalculateSingle(type, prev_group, add);
 }
 
-void VRenderGLView::StartTileRendering(int w, int h, int tilew, int tileh)
+void VRenderVulkanView::StartTileRendering(int w, int h, int tilew, int tileh)
 {
 	m_tile_rendering = true;
 	m_capture_change_res = true;
@@ -4277,7 +4195,7 @@ void VRenderGLView::StartTileRendering(int w, int h, int tilew, int tileh)
 	RefreshGL();
 }
 
-void VRenderGLView::EndTileRendering()
+void VRenderVulkanView::EndTileRendering()
 {
 	m_tile_rendering = false;
 	m_res_mode = m_tmp_res_mode;
@@ -4294,7 +4212,7 @@ void VRenderGLView::EndTileRendering()
 	Resize(false);
 }
 
-void VRenderGLView::Get1x1DispSize(int &w, int &h)
+void VRenderVulkanView::Get1x1DispSize(int &w, int &h)
 {
 	int nx = GetSize().x;
 	int ny = GetSize().y;
@@ -4330,7 +4248,7 @@ void VRenderGLView::Get1x1DispSize(int &w, int &h)
 	h = (int)(ny / maxvpd);
 }
 
-void VRenderGLView::DrawTile()
+void VRenderVulkanView::DrawTile()
 {
 	int nx, ny;
 	nx = m_nx;
@@ -4406,7 +4324,7 @@ void VRenderGLView::DrawTile()
 }
 
 //draw out the framebuffer after composition
-void VRenderGLView::PrepFinalBuffer()
+void VRenderVulkanView::PrepFinalBuffer()
 {
 	int nx, ny;
 	nx = m_nx;
@@ -4447,7 +4365,7 @@ void VRenderGLView::PrepFinalBuffer()
 
 }
 
-void VRenderGLView::ClearFinalBuffer()
+void VRenderVulkanView::ClearFinalBuffer()
 {
 	glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_final);
 	//clear color buffer to black for compositing
@@ -4455,7 +4373,7 @@ void VRenderGLView::ClearFinalBuffer()
 	glClear(GL_COLOR_BUFFER_BIT);
 }
 
-void VRenderGLView::DrawFinalBuffer()
+void VRenderVulkanView::DrawFinalBuffer()
 {
 	//bind back the window frame buffer
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -4495,7 +4413,7 @@ void VRenderGLView::DrawFinalBuffer()
 
 //Draw the volmues with compositing
 //peel==true -- depth peeling
-void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int peel)
+void VRenderVulkanView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int peel)
 {
 	if (list.size() <= 0)
 		return;
@@ -4725,7 +4643,7 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int pe
 	}
 }
 
-void VRenderGLView::SetBufferScale(int mode)
+void VRenderVulkanView::SetBufferScale(int mode)
 {
 	m_res_scale = 1.0;
 	switch(m_res_mode)
@@ -4747,7 +4665,7 @@ void VRenderGLView::SetBufferScale(int mode)
 	}
 }
 
-void VRenderGLView::switchLevel(VolumeData *vd)
+void VRenderVulkanView::switchLevel(VolumeData *vd)
 {
 	if(!vd) return;
 
@@ -4955,7 +4873,7 @@ void VRenderGLView::switchLevel(VolumeData *vd)
 	}
 }
 
-void VRenderGLView::DrawOVER(VolumeData* vd, GLuint tex, int peel, double sampling_frq_fac)
+void VRenderVulkanView::DrawOVER(VolumeData* vd, GLuint tex, int peel, double sampling_frq_fac)
 {
 	ShaderProgram* img_shader = 0;
 
@@ -5115,7 +5033,7 @@ void VRenderGLView::DrawOVER(VolumeData* vd, GLuint tex, int peel, double sampli
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void VRenderGLView::DrawMIP(VolumeData* vd, GLuint tex, int peel, double sampling_frq_fac)
+void VRenderVulkanView::DrawMIP(VolumeData* vd, GLuint tex, int peel, double sampling_frq_fac)
 {
 	bool do_mip = true;
 	ShaderProgram* img_shader = 0;
@@ -5384,7 +5302,7 @@ void VRenderGLView::DrawMIP(VolumeData* vd, GLuint tex, int peel, double samplin
 	vd->SetColormapMode(color_mode);
 }
 
-void VRenderGLView::DrawOLShading(VolumeData* vd)
+void VRenderVulkanView::DrawOLShading(VolumeData* vd)
 {
 	if (TextureRenderer::get_mem_swap() &&
 		TextureRenderer::get_start_update_loop() &&
@@ -5452,7 +5370,7 @@ void VRenderGLView::DrawOLShading(VolumeData* vd)
 }
 
 //get mesh shadow
-bool VRenderGLView::GetMeshShadow(double &val)
+bool VRenderVulkanView::GetMeshShadow(double &val)
 {
 	for (int i=0 ; i<(int)m_layer_list.size() ; i++)
 	{
@@ -5488,7 +5406,7 @@ bool VRenderGLView::GetMeshShadow(double &val)
 	return false;
 }
 
-void VRenderGLView::DrawOLShadowsMesh(GLuint tex_depth, double darkness)
+void VRenderVulkanView::DrawOLShadowsMesh(GLuint tex_depth, double darkness)
 {
 	int nx, ny;
 	nx = m_nx;
@@ -5598,7 +5516,7 @@ void VRenderGLView::DrawOLShadowsMesh(GLuint tex_depth, double darkness)
 	glEnable(GL_DEPTH_TEST);
 }
 
-void VRenderGLView::DrawOLShadows(vector<VolumeData*> &vlist, GLuint tex)
+void VRenderVulkanView::DrawOLShadows(vector<VolumeData*> &vlist, GLuint tex)
 {
 	if (vlist.empty())
 		return;
@@ -5874,7 +5792,7 @@ void VRenderGLView::DrawOLShadows(vector<VolumeData*> &vlist, GLuint tex)
 
 //draw multi volumes with depth consideration
 //peel==true -- depth peeling
-void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
+void VRenderVulkanView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 {
 	if (list.empty())
 		return;
@@ -6174,7 +6092,7 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 	}
 }
 
-void VRenderGLView::SetBrush(int mode)
+void VRenderVulkanView::SetBrush(int mode)
 {
 	m_prev_focus = FindFocus();
 	SetFocus();
@@ -6211,7 +6129,7 @@ void VRenderGLView::SetBrush(int mode)
 	m_draw_brush = true;
 }
 
-void VRenderGLView::UpdateBrushState()
+void VRenderVulkanView::UpdateBrushState()
 {
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	TreePanel* tree_panel = 0;
@@ -6322,7 +6240,7 @@ void VRenderGLView::UpdateBrushState()
 }
 
 //selection
-void VRenderGLView::Pick()
+void VRenderVulkanView::Pick()
 {
 	if (m_draw_all)
 	{
@@ -6345,7 +6263,7 @@ void VRenderGLView::Pick()
 	}
 }
 
-void VRenderGLView::PickMesh()
+void VRenderVulkanView::PickMesh()
 {
     SetCurrent(*m_glRC);
     
@@ -6463,7 +6381,7 @@ void VRenderGLView::PickMesh()
 	m_mv_mat = mv_temp;
 }
 
-void VRenderGLView::PickVolume()
+void VRenderVulkanView::PickVolume()
 {
     SetCurrent(*m_glRC);
     
@@ -6524,7 +6442,7 @@ void VRenderGLView::PickVolume()
 	}
 }
 
-bool VRenderGLView::SelSegVolume(int mode)
+bool VRenderVulkanView::SelSegVolume(int mode)
 {
     SetCurrent(*m_glRC);
     
@@ -6627,7 +6545,7 @@ bool VRenderGLView::SelSegVolume(int mode)
 	return rval;
 }
 
-void VRenderGLView::OnIdle(wxTimerEvent& event)
+void VRenderVulkanView::OnIdle(wxTimerEvent& event)
 {
 	bool refresh = false;
 	bool ref_stat = false;
@@ -6672,7 +6590,7 @@ void VRenderGLView::OnIdle(wxTimerEvent& event)
 	}
 
 	VRenderFrame* frame = (VRenderFrame*)m_frame;
-	VRenderGLView* cur_glview = NULL;
+	VRenderVulkanView* cur_glview = NULL;
 	if (frame && frame->GetTree())
 	{
 		VRenderView *vrv = frame->GetTree()->GetCurrentView();
@@ -6942,12 +6860,12 @@ void VRenderGLView::OnIdle(wxTimerEvent& event)
 	}
 }
 
-void VRenderGLView::OnKeyDown(wxKeyEvent& event)
+void VRenderVulkanView::OnKeyDown(wxKeyEvent& event)
 {
 	event.Skip();
 }
 
-void VRenderGLView::Set3DRotCapture(double start_angle,
+void VRenderVulkanView::Set3DRotCapture(double start_angle,
 									double end_angle,
 									double step,
 									int frames,
@@ -7010,7 +6928,7 @@ void VRenderGLView::Set3DRotCapture(double start_angle,
 	m_stages = 0;
 }
 
-void VRenderGLView::Set3DBatCapture(wxString &cap_file, int begin_frame, int end_frame)
+void VRenderVulkanView::Set3DBatCapture(wxString &cap_file, int begin_frame, int end_frame)
 {
 	m_cap_file = cap_file;
 	m_begin_frame = begin_frame;
@@ -7036,7 +6954,7 @@ void VRenderGLView::Set3DBatCapture(wxString &cap_file, int begin_frame, int end
 	//m_fr_length = (int)s_fr_length.length();
 }
 
-void VRenderGLView::Set4DSeqCapture(wxString &cap_file, int begin_frame, int end_frame, bool rewind)
+void VRenderVulkanView::Set4DSeqCapture(wxString &cap_file, int begin_frame, int end_frame, bool rewind)
 {
 	m_cap_file = cap_file;
 	m_tseq_cur_num = begin_frame;
@@ -7055,7 +6973,7 @@ void VRenderGLView::Set4DSeqCapture(wxString &cap_file, int begin_frame, int end
 	//m_fr_length = (int)s_fr_length.length();
 }
 
-void VRenderGLView::SetParamCapture(wxString &cap_file, int begin_frame, int end_frame, bool rewind)
+void VRenderVulkanView::SetParamCapture(wxString &cap_file, int begin_frame, int end_frame, bool rewind)
 {
 	m_cap_file = cap_file;
 	m_param_cur_num = begin_frame;
@@ -7070,7 +6988,7 @@ void VRenderGLView::SetParamCapture(wxString &cap_file, int begin_frame, int end
 	//m_fr_length = (int)s_fr_length.length();
 }
 
-void VRenderGLView::SetParams(double t)
+void VRenderVulkanView::SetParams(double t)
 {
 	if (!m_vrv)
 		return;
@@ -7229,7 +7147,7 @@ void VRenderGLView::SetParams(double t)
 	SetVolPopDirty();
 }
 
-void VRenderGLView::ResetMovieAngle()
+void VRenderVulkanView::ResetMovieAngle()
 {
 	double rotx, roty, rotz;
 	GetRotations(rotx, roty, rotz);
@@ -7252,7 +7170,7 @@ void VRenderGLView::ResetMovieAngle()
 	RefreshGL();
 }
 
-void VRenderGLView::StopMovie()
+void VRenderVulkanView::StopMovie()
 {
 	m_capture = false;
 	m_capture_rotat = false;
@@ -7260,7 +7178,7 @@ void VRenderGLView::StopMovie()
 	m_capture_param = false;
 }
 
-void VRenderGLView::Get4DSeqFrames(int &start_frame, int &end_frame, int &cur_frame)
+void VRenderVulkanView::Get4DSeqFrames(int &start_frame, int &end_frame, int &cur_frame)
 {
 	for (int i=0; i<(int)m_vd_pop_list.size(); i++)
 	{
@@ -7290,7 +7208,7 @@ void VRenderGLView::Get4DSeqFrames(int &start_frame, int &end_frame, int &cur_fr
 	}
 }
 
-void VRenderGLView::Set4DSeqFrame(int frame, bool run_script)
+void VRenderVulkanView::Set4DSeqFrame(int frame, bool run_script)
 {
 	int start_frame, end_frame, cur_frame;
 	Get4DSeqFrames(start_frame, end_frame, cur_frame);
@@ -7386,7 +7304,7 @@ void VRenderGLView::Set4DSeqFrame(int frame, bool run_script)
 	}
 }
 
-void VRenderGLView::Get3DBatFrames(int &start_frame, int &end_frame, int &cur_frame)
+void VRenderVulkanView::Get3DBatFrames(int &start_frame, int &end_frame, int &cur_frame)
 {
 	m_bat_folder = "";
 
@@ -7428,7 +7346,7 @@ void VRenderGLView::Get3DBatFrames(int &start_frame, int &end_frame, int &cur_fr
 	start_frame = 0;
 }
 
-void VRenderGLView::Set3DBatFrame(int offset)
+void VRenderVulkanView::Set3DBatFrame(int offset)
 {
 	int i, j;
 	vector<BaseReader*> reader_list;
@@ -7549,7 +7467,7 @@ void VRenderGLView::Set3DBatFrame(int offset)
 }
 
 //pre-draw processings
-void VRenderGLView::PreDraw()
+void VRenderVulkanView::PreDraw()
 {
 	//skip if not done with loop
 	if (TextureRenderer::get_mem_swap())
@@ -7576,7 +7494,7 @@ void VRenderGLView::PreDraw()
 	}
 }
 
-void VRenderGLView::PostDraw()
+void VRenderVulkanView::PostDraw()
 {
 	//skip if not done with loop
 	if (!m_postdraw) {
@@ -7724,7 +7642,7 @@ void VRenderGLView::PostDraw()
 }
 
 //run 4d script
-void VRenderGLView::Run4DScript(wxString &scriptname, VolumeData* vd)
+void VRenderVulkanView::Run4DScript(wxString &scriptname, VolumeData* vd)
 {
 	if (m_run_script && wxFileExists(m_script_file))
 	{
@@ -7772,7 +7690,7 @@ void VRenderGLView::Run4DScript(wxString &scriptname, VolumeData* vd)
 	}
 }
 
-void VRenderGLView::RunNoiseReduction(wxFileConfig &fconfig)
+void VRenderVulkanView::RunNoiseReduction(wxFileConfig &fconfig)
 {
 	wxString str;
 	wxString pathname;
@@ -7824,7 +7742,7 @@ void VRenderGLView::RunNoiseReduction(wxFileConfig &fconfig)
 	m_cur_vol->DeleteLabel();
 }
 
-void VRenderGLView::RunSelectionTracking(wxFileConfig &fconfig)
+void VRenderVulkanView::RunSelectionTracking(wxFileConfig &fconfig)
 {
 	//read the size threshold
 	int slimit;
@@ -7947,7 +7865,7 @@ void VRenderGLView::RunSelectionTracking(wxFileConfig &fconfig)
 						vr_frame->GetTraceDlg()->GetSettings(m_vrv);
 }
 
-void VRenderGLView::RunRandomColors(wxFileConfig &fconfig)
+void VRenderVulkanView::RunRandomColors(wxFileConfig &fconfig)
 {
 	int hmode;
 	fconfig.Read("huemode", &hmode, 1);
@@ -8004,7 +7922,7 @@ void VRenderGLView::RunRandomColors(wxFileConfig &fconfig)
 	}
 }
 
-void VRenderGLView::RunSeparateChannels(wxFileConfig &fconfig)
+void VRenderVulkanView::RunSeparateChannels(wxFileConfig &fconfig)
 {
 	wxString str, pathname;
 	int mode;
@@ -8043,7 +7961,7 @@ void VRenderGLView::RunSeparateChannels(wxFileConfig &fconfig)
 	}
 }
 
-void VRenderGLView::RunExternalExe(wxFileConfig &fconfig)
+void VRenderVulkanView::RunExternalExe(wxFileConfig &fconfig)
 {
 	/*	wxString pathname;
 	fconfig.Read("exepath", &pathname);
@@ -8069,7 +7987,7 @@ void VRenderGLView::RunExternalExe(wxFileConfig &fconfig)
 	*/
 }
 
-void VRenderGLView::RunFetchMask(wxFileConfig &fconfig)
+void VRenderVulkanView::RunFetchMask(wxFileConfig &fconfig)
 {
 	//load and replace the mask
 	if (!m_cur_vol)
@@ -8097,7 +8015,7 @@ void VRenderGLView::RunFetchMask(wxFileConfig &fconfig)
 }
 
 //draw
-void VRenderGLView::OnDraw(wxPaintEvent& event)
+void VRenderVulkanView::OnDraw(wxPaintEvent& event)
 {
 	Init();
 	wxPaintDC dc(this);
@@ -8196,12 +8114,12 @@ void VRenderGLView::OnDraw(wxPaintEvent& event)
 	//SetEvtHandlerEnabled(true);
 }
 
-void VRenderGLView::SetRadius(double r)
+void VRenderVulkanView::SetRadius(double r)
 {
 	m_radius = r;
 }
 
-void VRenderGLView::SetCenter()
+void VRenderVulkanView::SetCenter()
 {
 	InitView(INIT_BOUNDS|INIT_CENTER|INIT_OBJ_TRANSL);
 
@@ -8243,7 +8161,7 @@ void VRenderGLView::SetCenter()
 	}
 }
 
-void VRenderGLView::SetScale121()
+void VRenderVulkanView::SetScale121()
 {
 	//SetCenter();
 
@@ -8278,7 +8196,7 @@ void VRenderGLView::SetScale121()
 	RefreshGL();
 }
 
-void VRenderGLView::SetPersp(bool persp)
+void VRenderVulkanView::SetPersp(bool persp)
 {
 	m_persp = persp;
 	if (m_free && !m_persp)
@@ -8312,7 +8230,7 @@ void VRenderGLView::SetPersp(bool persp)
 	//SetSortBricks();
 }
 
-void VRenderGLView::SetFree(bool free)
+void VRenderVulkanView::SetFree(bool free)
 {
 	m_free = free;
 	if (m_vrv->m_free_chk->GetValue() != m_free)
@@ -8379,7 +8297,7 @@ void VRenderGLView::SetFree(bool free)
 	//SetSortBricks();
 }
 
-void VRenderGLView::SetAov(double aov)
+void VRenderVulkanView::SetAov(double aov)
 {
 	//view has been changed, sort bricks
 	//SetSortBricks();
@@ -8392,14 +8310,14 @@ void VRenderGLView::SetAov(double aov)
 	}
 }
 
-void VRenderGLView::SetMinPPI(double ppi)
+void VRenderVulkanView::SetMinPPI(double ppi)
 {
 	m_min_ppi = ppi;
 	m_vrv->m_ppi_text->ChangeValue(wxString::Format("%d", int(m_min_ppi)));
 	m_vrv->m_ppi_sldr->SetValue(int(m_min_ppi));
 }
 
-void VRenderGLView::SetVolMethod(int method)
+void VRenderVulkanView::SetVolMethod(int method)
 {
 	//get the volume list m_vd_pop_list
 	PopVolumeList();
@@ -8424,7 +8342,7 @@ void VRenderGLView::SetVolMethod(int method)
 	}
 }
 
-VolumeData* VRenderGLView::GetAllVolumeData(int index)
+VolumeData* VRenderVulkanView::GetAllVolumeData(int index)
 {
 	int cnt = 0;
 	int i, j;
@@ -8457,7 +8375,7 @@ VolumeData* VRenderGLView::GetAllVolumeData(int index)
 	return 0;
 }
 
-VolumeData* VRenderGLView::GetDispVolumeData(int index)
+VolumeData* VRenderVulkanView::GetDispVolumeData(int index)
 {
 	if (GetDispVolumeNum()<=0)
 		return 0;
@@ -8471,7 +8389,7 @@ VolumeData* VRenderGLView::GetDispVolumeData(int index)
 		return 0;
 }
 
-MeshData* VRenderGLView::GetMeshData(int index)
+MeshData* VRenderVulkanView::GetMeshData(int index)
 {
 	if (GetMeshNum()<=0)
 		return 0;
@@ -8484,7 +8402,7 @@ MeshData* VRenderGLView::GetMeshData(int index)
 		return 0;
 }
 
-VolumeData* VRenderGLView::GetVolumeData(wxString &name)
+VolumeData* VRenderVulkanView::GetVolumeData(wxString &name)
 {
 	int i, j;
 
@@ -8520,7 +8438,7 @@ VolumeData* VRenderGLView::GetVolumeData(wxString &name)
 	return 0;
 }
 
-MeshData* VRenderGLView::GetMeshData(wxString &name)
+MeshData* VRenderVulkanView::GetMeshData(wxString &name)
 {
 	int i, j;
 
@@ -8554,7 +8472,7 @@ MeshData* VRenderGLView::GetMeshData(wxString &name)
 	return 0;
 }
 
-Annotations* VRenderGLView::GetAnnotations(wxString &name)
+Annotations* VRenderVulkanView::GetAnnotations(wxString &name)
 {
 	int i;
 
@@ -8575,7 +8493,7 @@ Annotations* VRenderGLView::GetAnnotations(wxString &name)
 	return 0;
 }
 
-DataGroup* VRenderGLView::GetGroup(wxString &name)
+DataGroup* VRenderVulkanView::GetGroup(wxString &name)
 {
 	int i;
 
@@ -8596,14 +8514,14 @@ DataGroup* VRenderGLView::GetGroup(wxString &name)
 	return 0;
 }
 
-int VRenderGLView::GetAny()
+int VRenderVulkanView::GetAny()
 {
 	PopVolumeList();
 	PopMeshList();
 	return m_vd_pop_list.size() + m_md_pop_list.size();
 }
 
-int VRenderGLView::GetDispVolumeNum()
+int VRenderVulkanView::GetDispVolumeNum()
 {
 	//get the volume list m_vd_pop_list
 	PopVolumeList();
@@ -8611,7 +8529,7 @@ int VRenderGLView::GetDispVolumeNum()
 	return m_vd_pop_list.size();
 }
 
-int VRenderGLView::GetAllVolumeNum()
+int VRenderVulkanView::GetAllVolumeNum()
 {
 	int num = 0;
 	for (int i=0; i<(int)m_layer_list.size(); i++)
@@ -8634,13 +8552,13 @@ int VRenderGLView::GetAllVolumeNum()
 	return num;
 }
 
-int VRenderGLView::GetMeshNum()
+int VRenderVulkanView::GetMeshNum()
 {
 	PopMeshList();
 	return m_md_pop_list.size();
 }
 
-DataGroup* VRenderGLView::GetCurrentVolGroup()
+DataGroup* VRenderVulkanView::GetCurrentVolGroup()
 {
 	int i;
 	DataGroup* group = 0;
@@ -8667,7 +8585,7 @@ DataGroup* VRenderGLView::GetCurrentVolGroup()
 	return cur_group != NULL ? cur_group : group;
 }
 
-DataGroup* VRenderGLView::AddVolumeData(VolumeData* vd, wxString group_name)
+DataGroup* VRenderVulkanView::AddVolumeData(VolumeData* vd, wxString group_name)
 {
 	//m_layer_list.push_back(vd);
 	int i;
@@ -8831,7 +8749,7 @@ DataGroup* VRenderGLView::AddVolumeData(VolumeData* vd, wxString group_name)
 	return group;
 }
 
-void VRenderGLView::AddMeshData(MeshData* md)
+void VRenderVulkanView::AddMeshData(MeshData* md)
 {
 	if (!md)
 		return;
@@ -8868,7 +8786,7 @@ void VRenderGLView::AddMeshData(MeshData* md)
 	m_md_pop_dirty = true;
 }
 
-void VRenderGLView::AddAnnotations(Annotations* ann)
+void VRenderVulkanView::AddAnnotations(Annotations* ann)
 {
 	bool exist = false;
 	for (auto layer : m_layer_list)
@@ -8877,7 +8795,7 @@ void VRenderGLView::AddAnnotations(Annotations* ann)
 	if (!exist) m_layer_list.push_back(ann);
 }
 
-void VRenderGLView::ReplaceVolumeData(wxString &name, VolumeData *dst)
+void VRenderVulkanView::ReplaceVolumeData(wxString &name, VolumeData *dst)
 {
 	int i, j;
 
@@ -8956,7 +8874,7 @@ void VRenderGLView::ReplaceVolumeData(wxString &name, VolumeData *dst)
 	}
 }
 
-void VRenderGLView::RemoveVolumeData(wxString &name)
+void VRenderVulkanView::RemoveVolumeData(wxString &name)
 {
 	int i, j;
 	
@@ -9009,7 +8927,7 @@ void VRenderGLView::RemoveVolumeData(wxString &name)
 	}
 }
 
-void VRenderGLView::RemoveVolumeDataset(BaseReader *reader, int channel)
+void VRenderVulkanView::RemoveVolumeDataset(BaseReader *reader, int channel)
 {
 	int i, j;
 
@@ -9060,7 +8978,7 @@ void VRenderGLView::RemoveVolumeDataset(BaseReader *reader, int channel)
 	}
 }
 
-void VRenderGLView::RemoveMeshData(wxString &name)
+void VRenderVulkanView::RemoveMeshData(wxString &name)
 {
 	int i, j;
 
@@ -9108,7 +9026,7 @@ void VRenderGLView::RemoveMeshData(wxString &name)
 	}
 }
 
-void VRenderGLView::RemoveAnnotations(wxString &name)
+void VRenderVulkanView::RemoveAnnotations(wxString &name)
 {
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (!vr_frame) return;
@@ -9131,7 +9049,7 @@ void VRenderGLView::RemoveAnnotations(wxString &name)
 	}
 }
 
-void VRenderGLView::RemoveGroup(wxString &name)
+void VRenderVulkanView::RemoveGroup(wxString &name)
 {
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (!vr_frame) return;
@@ -9194,7 +9112,7 @@ void VRenderGLView::RemoveGroup(wxString &name)
 }
 
 //isolate
-void VRenderGLView::Isolate(int type, wxString name)
+void VRenderVulkanView::Isolate(int type, wxString name)
 {
 	for (int i=0; i<(int)m_layer_list.size(); i++)
 	{
@@ -9289,7 +9207,7 @@ void VRenderGLView::Isolate(int type, wxString name)
 
 //move layer of the same level within this view
 //source is after the destination
-void VRenderGLView::MoveLayerinView(wxString &src_name, wxString &dst_name)
+void VRenderVulkanView::MoveLayerinView(wxString &src_name, wxString &dst_name)
 {
 	int i, src_index;
 	TreeLayer* src = 0;
@@ -9320,7 +9238,7 @@ void VRenderGLView::MoveLayerinView(wxString &src_name, wxString &dst_name)
 	m_md_pop_dirty = true;
 }
 
-void VRenderGLView::ShowAll()
+void VRenderVulkanView::ShowAll()
 {
 	for (unsigned int i=0; i<m_layer_list.size(); ++i)
 	{
@@ -9385,7 +9303,7 @@ void VRenderGLView::ShowAll()
 
 //move layer (volume) of the same level within the given group
 //source is after the destination
-void VRenderGLView::MoveLayerinGroup(wxString &group_name, wxString &src_name, wxString &dst_name, int insert_mode)
+void VRenderVulkanView::MoveLayerinGroup(wxString &group_name, wxString &src_name, wxString &dst_name, int insert_mode)
 {
 	DataGroup* group = GetGroup(group_name);
 	if (!group)
@@ -9422,7 +9340,7 @@ void VRenderGLView::MoveLayerinGroup(wxString &group_name, wxString &src_name, w
 
 //move layer (volume) from the given group up one level to this view
 //source is after the destination
-void VRenderGLView::MoveLayertoView(wxString &group_name, wxString &src_name, wxString &dst_name)
+void VRenderVulkanView::MoveLayertoView(wxString &group_name, wxString &src_name, wxString &dst_name)
 {
 	DataGroup* group = GetGroup(group_name);
 	if (!group)
@@ -9464,7 +9382,7 @@ void VRenderGLView::MoveLayertoView(wxString &group_name, wxString &src_name, wx
 
 //move layer (volume) one level down to the given group
 //source is after the destination
-void VRenderGLView::MoveLayertoGroup(wxString &group_name, wxString &src_name, wxString &dst_name)
+void VRenderVulkanView::MoveLayertoGroup(wxString &group_name, wxString &src_name, wxString &dst_name)
 {
 	VolumeData* src_vd = 0;
 	int i;
@@ -9579,7 +9497,7 @@ void VRenderGLView::MoveLayertoGroup(wxString &group_name, wxString &src_name, w
 
 //move layer (volume from one group to another different group
 //sourece is after the destination
-void VRenderGLView::MoveLayerfromtoGroup(wxString &src_group_name, wxString &dst_group_name, wxString &src_name, wxString &dst_name, int insert_mode)
+void VRenderVulkanView::MoveLayerfromtoGroup(wxString &src_group_name, wxString &dst_group_name, wxString &src_name, wxString &dst_name, int insert_mode)
 {
 	DataGroup* src_group = GetGroup(src_group_name);
 	if (!src_group)
@@ -9710,7 +9628,7 @@ void VRenderGLView::MoveLayerfromtoGroup(wxString &src_group_name, wxString &dst
 }
 
 //move mesh within a group
-void VRenderGLView::MoveMeshinGroup(wxString &group_name, wxString &src_name, wxString &dst_name, int insert_mode)
+void VRenderVulkanView::MoveMeshinGroup(wxString &group_name, wxString &src_name, wxString &dst_name, int insert_mode)
 {
 	MeshGroup* group = GetMGroup(group_name);
 	if (!group)
@@ -9747,7 +9665,7 @@ void VRenderGLView::MoveMeshinGroup(wxString &group_name, wxString &src_name, wx
 }
 
 //move mesh out of a group
-void VRenderGLView::MoveMeshtoView(wxString &group_name, wxString &src_name, wxString &dst_name)
+void VRenderVulkanView::MoveMeshtoView(wxString &group_name, wxString &src_name, wxString &dst_name)
 {
 	MeshGroup* group = GetMGroup(group_name);
 	if (!group)
@@ -9786,7 +9704,7 @@ void VRenderGLView::MoveMeshtoView(wxString &group_name, wxString &src_name, wxS
 }
 
 //move mesh into a group
-void VRenderGLView::MoveMeshtoGroup(wxString &group_name, wxString &src_name, wxString &dst_name)
+void VRenderVulkanView::MoveMeshtoGroup(wxString &group_name, wxString &src_name, wxString &dst_name)
 {
 	MeshData* src_md = 0;
 	int i;
@@ -9823,7 +9741,7 @@ void VRenderGLView::MoveMeshtoGroup(wxString &group_name, wxString &src_name, wx
 }
 
 //move mesh out of then into a group
-void VRenderGLView::MoveMeshfromtoGroup(wxString &src_group_name, wxString &dst_group_name, wxString &src_name, wxString &dst_name, int insert_mode)
+void VRenderVulkanView::MoveMeshfromtoGroup(wxString &src_group_name, wxString &dst_group_name, wxString &src_name, wxString &dst_name, int insert_mode)
 {
 	MeshGroup* src_group = GetMGroup(src_group_name);
 	if (!src_group)
@@ -9863,7 +9781,7 @@ void VRenderGLView::MoveMeshfromtoGroup(wxString &src_group_name, wxString &dst_
 }
 
 //layer control
-int VRenderGLView::GetGroupNum()
+int VRenderVulkanView::GetGroupNum()
 {
 	int group_num = 0;
 
@@ -9876,12 +9794,12 @@ int VRenderGLView::GetGroupNum()
 	return group_num;
 }
 
-int VRenderGLView::GetLayerNum()
+int VRenderVulkanView::GetLayerNum()
 {
 	return m_layer_list.size();
 }
 
-TreeLayer* VRenderGLView::GetLayer(int index)
+TreeLayer* VRenderVulkanView::GetLayer(int index)
 {
 	if (index>=0 && index<(int)m_layer_list.size())
 		return m_layer_list[index];
@@ -9889,7 +9807,7 @@ TreeLayer* VRenderGLView::GetLayer(int index)
 		return 0;
 }
 
-wxString VRenderGLView::CheckNewGroupName(const wxString &name, int type)
+wxString VRenderVulkanView::CheckNewGroupName(const wxString &name, int type)
 {
 	wxString result = name;
 
@@ -9900,7 +9818,7 @@ wxString VRenderGLView::CheckNewGroupName(const wxString &name, int type)
 	return result;
 }
 
-bool VRenderGLView::CheckGroupNames(const wxString &name, int type)
+bool VRenderVulkanView::CheckGroupNames(const wxString &name, int type)
 {
 	bool result = false;
 	for (unsigned int i=0; i<m_layer_list.size(); i++)
@@ -9916,7 +9834,7 @@ bool VRenderGLView::CheckGroupNames(const wxString &name, int type)
 	return result;
 }
 
-wxString VRenderGLView::AddGroup(wxString str, wxString prev_group)
+wxString VRenderVulkanView::AddGroup(wxString str, wxString prev_group)
 {
 	DataGroup* group = new DataGroup();
 	if (group && str != "")
@@ -9969,7 +9887,7 @@ wxString VRenderGLView::AddGroup(wxString str, wxString prev_group)
 		return "";
 }
 
-wxString VRenderGLView::AddMGroup(wxString str)
+wxString VRenderVulkanView::AddMGroup(wxString str)
 {
 	MeshGroup* group = new MeshGroup();
 	if (group && str != "")
@@ -9982,7 +9900,7 @@ wxString VRenderGLView::AddMGroup(wxString str)
 		return "";
 }
 
-MeshGroup* VRenderGLView::GetMGroup(wxString str)
+MeshGroup* VRenderVulkanView::GetMGroup(wxString str)
 {
 	int i;
 
@@ -10004,7 +9922,7 @@ MeshGroup* VRenderGLView::GetMGroup(wxString str)
 }
 
 //init
-void VRenderGLView::InitView(unsigned int type)
+void VRenderVulkanView::InitView(unsigned int type)
 {
 	int i;
 
@@ -10073,7 +9991,7 @@ void VRenderGLView::InitView(unsigned int type)
 
 }
 
-void VRenderGLView::DrawBounds()
+void VRenderVulkanView::DrawBounds()
 {
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_BLEND);
@@ -10132,7 +10050,7 @@ void VRenderGLView::DrawBounds()
 	glEnable(GL_BLEND);
 }
 
-double VRenderGLView::CalcCameraDistance()
+double VRenderVulkanView::CalcCameraDistance()
 {
 	glm::mat4 mv_temp = m_mv_mat;
 	//translate object
@@ -10255,7 +10173,7 @@ double VRenderGLView::CalcCameraDistance()
 	return dmin;
 }
 
-void VRenderGLView::DrawClippingPlanes(bool border, int face_winding)
+void VRenderVulkanView::DrawClippingPlanes(bool border, int face_winding)
 {
 	int i;
 	bool link = false;
@@ -10887,7 +10805,7 @@ void VRenderGLView::DrawClippingPlanes(bool border, int face_winding)
 	glCullFace(GL_BACK);
 }
 
-void VRenderGLView::DrawGrid()
+void VRenderVulkanView::DrawGrid()
 {
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_BLEND);
@@ -10949,7 +10867,7 @@ void VRenderGLView::DrawGrid()
 	glEnable(GL_BLEND);
 }
 
-void VRenderGLView::DrawCamCtr()
+void VRenderVulkanView::DrawCamCtr()
 {
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_BLEND);
@@ -11006,7 +10924,7 @@ void VRenderGLView::DrawCamCtr()
 	glEnable(GL_BLEND);
 }
 
-void VRenderGLView::DrawFrame()
+void VRenderVulkanView::DrawFrame()
 {
 	int nx, ny;
 	nx = GetSize().x;
@@ -11053,7 +10971,7 @@ void VRenderGLView::DrawFrame()
 	glEnable(GL_DEPTH_TEST);
 }
 
-void VRenderGLView::FixScaleBarLen(bool fix, double len)
+void VRenderVulkanView::FixScaleBarLen(bool fix, double len)
 { 
 	int nx = GetSize().x;
 	int ny = GetSize().y;
@@ -11063,7 +10981,7 @@ void VRenderGLView::FixScaleBarLen(bool fix, double len)
 	m_fixed_sclbar_fac = m_sb_length*m_scale_factor*min(nx,ny);
 }
 
-void VRenderGLView::GetScaleBarFixed(bool &fix, double &len, int &unitid)
+void VRenderVulkanView::GetScaleBarFixed(bool &fix, double &len, int &unitid)
 {
 	int nx = GetSize().x;
 	int ny = GetSize().y;
@@ -11129,7 +11047,7 @@ void VRenderGLView::GetScaleBarFixed(bool &fix, double &len, int &unitid)
 	unitid = unit_id;
 }
 
-void VRenderGLView::DrawScaleBar()
+void VRenderVulkanView::DrawScaleBar()
 {
 	double offset = 0.0;
 	if (m_draw_legend)
@@ -11340,7 +11258,7 @@ void VRenderGLView::DrawScaleBar()
 	glEnable(GL_BLEND);
 }
 
-void VRenderGLView::DrawLegend()
+void VRenderVulkanView::DrawLegend()
 {
 	if (!m_text_renderer)
 		return;
@@ -11477,7 +11395,7 @@ void VRenderGLView::DrawLegend()
 	m_sb_height = (lines+1)*font_height;
 }
 
-void VRenderGLView::DrawName(
+void VRenderVulkanView::DrawName(
 	double x, double y, int nx, int ny,
 	wxString name, Color color,
 	double font_height,
@@ -11560,7 +11478,7 @@ void VRenderGLView::DrawName(
 	glEnable(GL_BLEND);
 }
 
-void VRenderGLView::DrawGradBg()
+void VRenderVulkanView::DrawGradBg()
 {
 	glm::mat4 proj_mat = glm::ortho(0.0f, 1.0f, 0.0f, 1.0f);
 
@@ -11652,7 +11570,7 @@ void VRenderGLView::DrawGradBg()
 	glEnable(GL_BLEND);
 }
 
-void VRenderGLView::SetColormapColors(int colormap)
+void VRenderVulkanView::SetColormapColors(int colormap)
 {
 	switch (colormap)
 	{
@@ -11704,7 +11622,7 @@ void VRenderGLView::SetColormapColors(int colormap)
 	}
 }
 
-void VRenderGLView::DrawColormap()
+void VRenderVulkanView::DrawColormap()
 {
 	bool draw = false;
 
@@ -11990,7 +11908,7 @@ void VRenderGLView::DrawColormap()
 	glEnable(GL_DEPTH_TEST);
 }
 
-void VRenderGLView::DrawInfo(int nx, int ny)
+void VRenderVulkanView::DrawInfo(int nx, int ny)
 {
 	if (!m_text_renderer)
 		return;
@@ -12116,7 +12034,7 @@ void VRenderGLView::DrawInfo(int nx, int ny)
 	}
 }
 
-Quaternion VRenderGLView::Trackball(int p1x, int p1y, int p2x, int p2y)
+Quaternion VRenderVulkanView::Trackball(int p1x, int p1y, int p2x, int p2y)
 {
 	Quaternion q;
 	Vector a; /* Axis of rotation */
@@ -12160,7 +12078,7 @@ Quaternion VRenderGLView::Trackball(int p1x, int p1y, int p2x, int p2y)
 	return q;
 }
 
-Quaternion VRenderGLView::TrackballClip(int p1x, int p1y, int p2x, int p2y)
+Quaternion VRenderVulkanView::TrackballClip(int p1x, int p1y, int p2x, int p2y)
 {
 	Quaternion q;
 	Vector a; /* Axis of rotation */
@@ -12190,7 +12108,7 @@ Quaternion VRenderGLView::TrackballClip(int p1x, int p1y, int p2x, int p2y)
 	return q;
 }
 
-void VRenderGLView::Q2A()
+void VRenderVulkanView::Q2A()
 {
 	//view changed, re-sort bricks
 	//SetSortBricks();
@@ -12297,7 +12215,7 @@ void VRenderGLView::Q2A()
 	}
 }
 
-void VRenderGLView::A2Q()
+void VRenderVulkanView::A2Q()
 {
 	//view changed, re-sort bricks
 	//SetSortBricks();
@@ -12466,7 +12384,7 @@ void VRenderGLView::A2Q()
 }
 
 //sort bricks after view changes
-void VRenderGLView::SetSortBricks()
+void VRenderVulkanView::SetSortBricks()
 {
 	PopVolumeList();
 
@@ -12478,7 +12396,7 @@ void VRenderGLView::SetSortBricks()
 	}
 }
 
-void VRenderGLView::SetClipMode(int mode)
+void VRenderVulkanView::SetClipMode(int mode)
 {
 	switch (mode)
 	{
@@ -12506,7 +12424,7 @@ void VRenderGLView::SetClipMode(int mode)
 	}
 }
 
-void VRenderGLView::RestorePlanes()
+void VRenderVulkanView::RestorePlanes()
 {
 	vector<Plane*> *planes = 0;
 	for (int i=0; i<(int)m_vd_pop_list.size(); i++)
@@ -12529,7 +12447,7 @@ void VRenderGLView::RestorePlanes()
 	}
 }
 
-void VRenderGLView::SetClippingPlaneRotations(double rotx, double roty, double rotz)
+void VRenderVulkanView::SetClippingPlaneRotations(double rotx, double roty, double rotz)
 {
 	m_rotx_cl = -rotx;
 	m_roty_cl = roty;
@@ -12541,7 +12459,7 @@ void VRenderGLView::SetClippingPlaneRotations(double rotx, double roty, double r
 	SetRotations(m_rotx, m_roty, m_rotz);
 }
 
-void VRenderGLView::GetClippingPlaneRotations(double &rotx, double &roty, double &rotz)
+void VRenderVulkanView::GetClippingPlaneRotations(double &rotx, double &roty, double &rotz)
 {
 	rotx = -m_rotx_cl;
 	roty = m_roty_cl;
@@ -12549,17 +12467,17 @@ void VRenderGLView::GetClippingPlaneRotations(double &rotx, double &roty, double
 }
 
 //interpolation
-void VRenderGLView::SetIntp(bool mode)
+void VRenderVulkanView::SetIntp(bool mode)
 {
 	m_intp = mode;
 }
 
-bool VRenderGLView::GetIntp()
+bool VRenderVulkanView::GetIntp()
 {
 	return m_intp;
 }
 
-void VRenderGLView::Run4DScript()
+void VRenderVulkanView::Run4DScript()
 {
 	for (int i = 0; i < (int)m_vd_pop_list.size(); ++i)
 	{
@@ -12570,7 +12488,7 @@ void VRenderGLView::Run4DScript()
 }
 
 //start loop update
-void VRenderGLView::StartLoopUpdate(bool reset_peeling_layer)
+void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 {
 	////this is for debug_ds, comment when done
 	//if (TextureRenderer::get_mem_swap() &&
@@ -13151,7 +13069,7 @@ void VRenderGLView::StartLoopUpdate(bool reset_peeling_layer)
 }
 
 //halt loop update
-void VRenderGLView::HaltLoopUpdate()
+void VRenderVulkanView::HaltLoopUpdate()
 {
 	if (TextureRenderer::get_mem_swap())
 	{
@@ -13160,7 +13078,7 @@ void VRenderGLView::HaltLoopUpdate()
 }
 
 //new function to refresh
-void VRenderGLView::RefreshGL(bool erase, bool start_loop)
+void VRenderVulkanView::RefreshGL(bool erase, bool start_loop)
 {
 	m_draw_overlays_only = false;
 	m_updating = true;
@@ -13171,7 +13089,7 @@ void VRenderGLView::RefreshGL(bool erase, bool start_loop)
 }
 
 //new function to refresh
-void VRenderGLView::RefreshGLOverlays(bool erase)
+void VRenderVulkanView::RefreshGLOverlays(bool erase)
 {
 	if (m_updating) return;
 	if (TextureRenderer::get_mem_swap() && !TextureRenderer::get_done_update_loop()) return;
@@ -13182,7 +13100,7 @@ void VRenderGLView::RefreshGLOverlays(bool erase)
 
 }
 
-double VRenderGLView::GetPointVolume(Point& mp, int mx, int my,
+double VRenderVulkanView::GetPointVolume(Point& mp, int mx, int my,
 									 VolumeData* vd, int mode, bool use_transf, double thresh)
 {
 	if (!vd)
@@ -13350,7 +13268,7 @@ double VRenderGLView::GetPointVolume(Point& mp, int mx, int my,
 	return return_val;
 }
 
-double VRenderGLView::GetPointAndIntVolume(Point& mp, double &intensity, bool normalize, int mx, int my, VolumeData* vd, double thresh)
+double VRenderVulkanView::GetPointAndIntVolume(Point& mp, double &intensity, bool normalize, int mx, int my, VolumeData* vd, double thresh)
 {
 	if (!vd)
 		return -1.0;
@@ -13508,7 +13426,7 @@ double VRenderGLView::GetPointAndIntVolume(Point& mp, double &intensity, bool no
 	return return_val;
 }
 
-double VRenderGLView::GetPointVolumeBox(Point &mp, int mx, int my, VolumeData* vd, bool calc_mats)
+double VRenderVulkanView::GetPointVolumeBox(Point &mp, int mx, int my, VolumeData* vd, bool calc_mats)
 {
 	if (!vd)
 		return -1.0;
@@ -13627,7 +13545,7 @@ double VRenderGLView::GetPointVolumeBox(Point &mp, int mx, int my, VolumeData* v
 	return mint;
 }
 
-double VRenderGLView::GetPointVolumeBox2(Point &p1, Point &p2, int mx, int my, VolumeData* vd)
+double VRenderVulkanView::GetPointVolumeBox2(Point &p1, Point &p2, int mx, int my, VolumeData* vd)
 {
 	if (!vd)
 		return -1.0;
@@ -13740,7 +13658,7 @@ double VRenderGLView::GetPointVolumeBox2(Point &p1, Point &p2, int mx, int my, V
 	return mint;
 }
 
-double VRenderGLView::GetPointPlane(Point &mp, int mx, int my, Point* planep, bool calc_mats)
+double VRenderVulkanView::GetPointPlane(Point &mp, int mx, int my, Point* planep, bool calc_mats)
 {
 	int nx = GetSize().x;
 	int ny = GetSize().y;
@@ -13812,7 +13730,7 @@ double VRenderGLView::GetPointPlane(Point &mp, int mx, int my, Point* planep, bo
 	return (mp-mp1).length();
 }
 
-Point* VRenderGLView::GetEditingRulerPoint(int mx, int my)
+Point* VRenderVulkanView::GetEditingRulerPoint(int mx, int my)
 {
 	Point* point = 0;
 
@@ -13917,7 +13835,7 @@ Point* VRenderGLView::GetEditingRulerPoint(int mx, int my)
 }
 
 //added by takashi
-bool VRenderGLView::SwitchRulerBalloonVisibility_Point(int mx, int my)
+bool VRenderVulkanView::SwitchRulerBalloonVisibility_Point(int mx, int my)
 {
 	Point* point = 0;
 
@@ -14023,17 +13941,17 @@ bool VRenderGLView::SwitchRulerBalloonVisibility_Point(int mx, int my)
 		return false;
 }
 
-int VRenderGLView::GetRulerType()
+int VRenderVulkanView::GetRulerType()
 {
 	return m_ruler_type;
 }
 
-void VRenderGLView::SetRulerType(int type)
+void VRenderVulkanView::SetRulerType(int type)
 {
 	m_ruler_type = type;
 }
 
-void VRenderGLView::FinishRuler()
+void VRenderVulkanView::FinishRuler()
 {
 	size_t size = m_ruler_list.size();
 	if (!size) return;
@@ -14042,7 +13960,7 @@ void VRenderGLView::FinishRuler()
 		m_ruler_list[size-1]->SetFinished();
 }
 
-bool VRenderGLView::GetRulerFinished()
+bool VRenderVulkanView::GetRulerFinished()
 {
 	size_t size = m_ruler_list.size();
 	if (!size) return true;
@@ -14052,7 +13970,7 @@ bool VRenderGLView::GetRulerFinished()
 		return true;
 }
 
-void VRenderGLView::AddRulerPoint(int mx, int my)
+void VRenderVulkanView::AddRulerPoint(int mx, int my)
 {
 	if (m_ruler_type == 3)
 	{
@@ -14113,7 +14031,7 @@ void VRenderGLView::AddRulerPoint(int mx, int my)
 		vr_frame->GetMeasureDlg()->GetSettings(m_vrv);
 }
 
-void VRenderGLView::AddPaintRulerPoint()
+void VRenderVulkanView::AddPaintRulerPoint()
 {
 	if (m_selector.ProcessSel(0.01))
 	{
@@ -14157,7 +14075,7 @@ void VRenderGLView::AddPaintRulerPoint()
 	}
 }
 
-void VRenderGLView::DrawRulers()
+void VRenderVulkanView::DrawRulers()
 {
 	if (!m_text_renderer)
 		return;
@@ -14669,18 +14587,18 @@ void VRenderGLView::DrawRulers()
 	}
 }
 
-vector<Ruler*>* VRenderGLView::GetRulerList()
+vector<Ruler*>* VRenderVulkanView::GetRulerList()
 {
 	return &m_ruler_list;
 }
 
 //traces
-TraceGroup* VRenderGLView::GetTraceGroup()
+TraceGroup* VRenderVulkanView::GetTraceGroup()
 {
 	return m_trace_group;
 }
 
-void VRenderGLView::CreateTraceGroup()
+void VRenderVulkanView::CreateTraceGroup()
 {
 	if (m_trace_group)
 		delete m_trace_group;
@@ -14688,7 +14606,7 @@ void VRenderGLView::CreateTraceGroup()
 	m_trace_group = new TraceGroup;
 }
 
-int VRenderGLView::LoadTraceGroup(wxString filename)
+int VRenderVulkanView::LoadTraceGroup(wxString filename)
 {
 	if (m_trace_group)
 		delete m_trace_group;
@@ -14697,7 +14615,7 @@ int VRenderGLView::LoadTraceGroup(wxString filename)
 	return m_trace_group->Load(filename);
 }
 
-int VRenderGLView::SaveTraceGroup(wxString filename)
+int VRenderVulkanView::SaveTraceGroup(wxString filename)
 {
 	if (m_trace_group)
 		return m_trace_group->Save(filename);
@@ -14705,13 +14623,13 @@ int VRenderGLView::SaveTraceGroup(wxString filename)
 		return 0;
 }
 
-void VRenderGLView::ExportTrace(wxString filename, unsigned int id)
+void VRenderVulkanView::ExportTrace(wxString filename, unsigned int id)
 {
 	if (!m_trace_group)
 		return;
 }
 
-void VRenderGLView::DrawTraces()
+void VRenderVulkanView::DrawTraces()
 {
 	if (m_cur_vol && m_trace_group && m_text_renderer)
 	{
@@ -14768,7 +14686,7 @@ void VRenderGLView::DrawTraces()
 	}
 }
 
-void VRenderGLView::GetTraces()
+void VRenderVulkanView::GetTraces()
 {
 	if (!m_trace_group)
 		return;
@@ -14824,7 +14742,7 @@ void VRenderGLView::GetTraces()
 				vr_frame->GetTraceDlg()->GetSettings(m_vrv);
 }
 
-/*WXLRESULT VRenderGLView::MSWWindowProc(WXUINT message, WXWPARAM wParam, WXLPARAM lParam)
+/*WXLRESULT VRenderVulkanView::MSWWindowProc(WXUINT message, WXWPARAM wParam, WXLPARAM lParam)
 {
 PACKET pkt;
 
@@ -14901,7 +14819,7 @@ RefreshGL();
 return wxWindow::MSWWindowProc(message, wParam, lParam);
 }*/
 
-void VRenderGLView::OnMouse(wxMouseEvent& event)
+void VRenderVulkanView::OnMouse(wxMouseEvent& event)
 {
 	wxWindow *window = wxWindow::FindFocus();
 	//	if (window &&
@@ -15347,27 +15265,27 @@ void VRenderGLView::OnMouse(wxMouseEvent& event)
 	}
 }
 
-void VRenderGLView::SetDraw(bool draw)
+void VRenderVulkanView::SetDraw(bool draw)
 {
 	m_draw_all = draw;
 }
 
-void VRenderGLView::ToggleDraw()
+void VRenderVulkanView::ToggleDraw()
 {
 	m_draw_all = !m_draw_all;
 }
 
-bool VRenderGLView::GetDraw()
+bool VRenderVulkanView::GetDraw()
 {
 	return m_draw_all;
 }
 
-Color VRenderGLView::GetBackgroundColor()
+Color VRenderVulkanView::GetBackgroundColor()
 {
 	return m_bg_color;
 }
 
-Color VRenderGLView::GetTextColor()
+Color VRenderVulkanView::GetTextColor()
 {
 	VRenderFrame* frame = (VRenderFrame*)m_frame;
 	if (!frame || !frame->GetSettingDlg())
@@ -15387,7 +15305,7 @@ Color VRenderGLView::GetTextColor()
 	return m_bg_color_inv;
 }
 
-void VRenderGLView::SetBackgroundColor(Color &color)
+void VRenderVulkanView::SetBackgroundColor(Color &color)
 {
 	m_bg_color = color;
 	HSVColor bg_color(m_bg_color);
@@ -15409,12 +15327,12 @@ void VRenderGLView::SetBackgroundColor(Color &color)
 	}
 }
 
-void VRenderGLView::SetGradBg(bool val)
+void VRenderVulkanView::SetGradBg(bool val)
 {
 	m_grad_bg = val;
 }
 
-void VRenderGLView::SetRotations(double rotx, double roty, double rotz, bool ui_update, bool link_update)
+void VRenderVulkanView::SetRotations(double rotx, double roty, double rotz, bool ui_update, bool link_update)
 {
 	m_rotx = rotx;
 	m_roty = roty;
@@ -15488,7 +15406,7 @@ void VRenderGLView::SetRotations(double rotx, double roty, double rotz, bool ui_
 	}
 }
 
-char* VRenderGLView::wxStringToChar(wxString input)
+char* VRenderVulkanView::wxStringToChar(wxString input)
 {
 #if (wxUSE_UNICODE)
 	size_t size = input.size() + 1;
@@ -15503,7 +15421,7 @@ char* VRenderGLView::wxStringToChar(wxString input)
 #endif
 }
 
-void VRenderGLView::GetFrame(int &x, int &y, int &w, int &h)
+void VRenderVulkanView::GetFrame(int &x, int &y, int &w, int &h)
 {
 	x = m_frame_x;
 	y = m_frame_y;
@@ -15511,7 +15429,7 @@ void VRenderGLView::GetFrame(int &x, int &y, int &w, int &h)
 	h = m_frame_h;
 }
 
-void VRenderGLView::CalcFrame()
+void VRenderVulkanView::CalcFrame()
 {
 	int w, h;
 	w = GetSize().x;
@@ -15600,7 +15518,7 @@ void VRenderGLView::CalcFrame()
 	}
 }
 
-void VRenderGLView::StartManipulation(const Point *view_trans, const Point *view_center, const Point *view_rot, const Point *obj_trans, const double *scale)
+void VRenderVulkanView::StartManipulation(const Point *view_trans, const Point *view_center, const Point *view_rot, const Point *obj_trans, const double *scale)
 {
 	if(m_capture) return;
 
@@ -15631,7 +15549,7 @@ void VRenderGLView::StartManipulation(const Point *view_trans, const Point *view
 	m_manip_end_frame = t;
 }
 
-void VRenderGLView::EndManipulation()
+void VRenderVulkanView::EndManipulation()
 {
 	TextureRenderer::set_up_time(m_saved_uptime);
 	m_manip_interpolator.Clear();
@@ -15641,7 +15559,7 @@ void VRenderGLView::EndManipulation()
 	TextureRenderer::set_done_update_loop(true);
 }
 
-void VRenderGLView::SetManipKey(double t, int interpolation, const Point *view_trans, const Point *view_center, const Point *view_rot, const Point *obj_trans, const double *scale)
+void VRenderVulkanView::SetManipKey(double t, int interpolation, const Point *view_trans, const Point *view_center, const Point *view_rot, const Point *obj_trans, const double *scale)
 {
 	if(!m_vrv)
 		return;
@@ -15802,7 +15720,7 @@ void VRenderGLView::SetManipKey(double t, int interpolation, const Point *view_t
 
 }
 
-void VRenderGLView::SetManipParams(double t)
+void VRenderVulkanView::SetManipParams(double t)
 {
 	if (!m_vrv)
 		return;
@@ -15939,7 +15857,7 @@ void VRenderGLView::SetManipParams(double t)
 	SetVolPopDirty();
 }
 
-void VRenderGLView::DrawViewQuad()
+void VRenderVulkanView::DrawViewQuad()
 {
 	glEnable(GL_TEXTURE_2D);
 	if (!glIsVertexArray(m_quad_vao))
@@ -15970,7 +15888,7 @@ void VRenderGLView::DrawViewQuad()
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-void VRenderGLView::DrawViewQuadTile(int tileid)
+void VRenderVulkanView::DrawViewQuadTile(int tileid)
 {
 	int w = GetSize().x;
 	int h = GetSize().y;
@@ -16182,7 +16100,7 @@ wxPanel(parent, id, pos, size, style),
 		WX_GL_MINOR_VERSION, gl_minor_ver,
 		0, 0
 	};
-	m_glview = new VRenderGLView(frame, this, wxID_ANY, attriblist, sharedContext);
+	m_glview = new VRenderVulkanView(frame, this, wxID_ANY, attriblist, sharedContext);
 	m_glview->SetCanFocus(false);
 	//m_view_sizer->Add(m_glview, 1, wxEXPAND);
 #ifdef _WIN32
@@ -16226,7 +16144,7 @@ wxPanel(parent, id, pos, size, style),
 }
 
 #ifdef _WIN32
-int VRenderGLView::GetPixelFormat(PIXELFORMATDESCRIPTOR *pfd) {
+int VRenderVulkanView::GetPixelFormat(PIXELFORMATDESCRIPTOR *pfd) {
 	int pixelFormat = ::GetPixelFormat(m_hDC);
 	if (pixelFormat == 0) return GetLastError();
 	pixelFormat = DescribePixelFormat(m_hDC, pixelFormat, sizeof(PIXELFORMATDESCRIPTOR), pfd);
@@ -16235,7 +16153,7 @@ int VRenderGLView::GetPixelFormat(PIXELFORMATDESCRIPTOR *pfd) {
 }
 #endif
 
-wxString VRenderGLView::GetOGLVersion() {
+wxString VRenderVulkanView::GetOGLVersion() {
 	return m_GLversion;
 }
 
