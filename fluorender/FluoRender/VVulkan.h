@@ -26,7 +26,7 @@ public:
 		float uv[3];
 	};
 
-	struct Texture {
+	struct VTexture {
 		VkSampler sampler = VK_NULL_HANDLE;
 		VkImage image = VK_NULL_HANDLE;
 		VkImageLayout imageLayout;
@@ -84,9 +84,17 @@ public:
 	VkDescriptorSet descriptorSet;
 	VkDescriptorSetLayout descriptorSetLayout;
 
+	struct StagingBuffer {
+		VkBuffer buffer;
+		VkDeviceMemory memory;
+		VkDeviceSize size;
+	} staging_buf;
+
 	VVulkan() : VulkanExampleBase(ENABLE_VALIDATION)
 	{
-
+		staging_buf.buffer = VK_NULL_HANDLE;
+		staging_buf.memory = VK_NULL_HANDLE;
+		staging_buf.size = -1;
 	}
 
 	~VVulkan()
@@ -110,6 +118,14 @@ public:
 	void prepareUniformBuffers();
 	void updateUniformBuffers(bool viewchanged = true);
 	void prepare();
+
+	uint32_t findMemoryType(VkPhysicalDevice pdev, uint32_t typeFilter, VkMemoryPropertyFlags properties);
+	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+
+	void checkStagingBuffer(VkDeviceSize size);
+
+	VTexture GenTexture2D(VkFormat format, uint32_t w, uint32_t h, void *data);
+	VTexture GenTexture3D(VkFormat format, uint32_t w, uint32_t h, uint32_t d, void *data);
 };
 
 #endif

@@ -289,3 +289,148 @@ void VVulkan::prepare()
 	setupDescriptorSet();
 	prepared = true;
 }
+
+uint32_t VVulkan::findMemoryType(VkPhysicalDevice pdev, uint32_t typeFilter, VkMemoryPropertyFlags properties)
+{
+	VkPhysicalDeviceMemoryProperties memProperties;
+	vkGetPhysicalDeviceMemoryProperties(pdev, &memProperties);
+
+	for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+		if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+			return i;
+		}
+	}
+
+	throw std::runtime_error("failed to find suitable memory type!");
+}
+
+void VVulkan::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
+	VkBufferCreateInfo bufferInfo = {};
+	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	bufferInfo.size = size;
+	bufferInfo.usage = usage;
+	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+	if (vkCreateBuffer(device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create buffer!");
+	}
+
+	VkMemoryRequirements memRequirements;
+	vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
+
+	VkMemoryAllocateInfo allocInfo = {};
+	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	allocInfo.allocationSize = memRequirements.size;
+	allocInfo.memoryTypeIndex = findMemoryType(physicalDevice, memRequirements.memoryTypeBits, properties);
+
+	if (vkAllocateMemory(device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
+		throw std::runtime_error("failed to allocate buffer memory!");
+	}
+
+	vkBindBufferMemory(device, buffer, bufferMemory, 0);
+}
+
+void VVulkan::checkStagingBuffer(VkDeviceSize size)
+{
+
+}
+
+VVulkan::VTexture VVulkan::GenTexture2D(VkFormat format, uint32_t w, uint32_t h, void *data)
+{
+	VVulkan::VTexture ret;
+
+	texture.width = width;
+	texture.height = height;
+	texture.depth = 1;
+	texture.mipLevels = 1;
+	texture.format = format;
+	texture.image = VK_NULL_HANDLE;
+	texture.deviceMemory = VK_NULL_HANDLE;
+	texture.sampler = VK_NULL_HANDLE;
+	texture.view = VK_NULL_HANDLE;
+
+	// Format support check
+	VkFormatProperties formatProperties;
+	vkGetPhysicalDeviceFormatProperties(physicalDevice, texture.format, &formatProperties);
+	// Check if format supports transfer
+	if (!(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_TRANSFER_DST_BIT))
+	{
+		std::cout << "Error: Device does not support flag TRANSFER_DST for selected texture format!" << std::endl;
+		return ret;
+	}
+	// Check if GPU supports requested 3D texture dimensions
+	uint32_t maxImageDimension2D(vulkanDevice->properties.limits.maxImageDimension2D);
+	if (width > maxImageDimension2D || height > maxImageDimension2D)
+	{
+		std::cout << "Error: Requested texture dimensions is greater than supported 2D texture dimension!" << std::endl;
+		return ret;
+	}
+
+	// Create optimal tiled target image
+	VkImageCreateInfo imageCreateInfo = vks::initializers::imageCreateInfo();
+	imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
+	imageCreateInfo.format = texture.format;
+	imageCreateInfo.mipLevels = texture.mipLevels;
+	imageCreateInfo.arrayLayers = 1;
+	imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+	imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	imageCreateInfo.extent.width = texture.width;
+	imageCreateInfo.extent.height = texture.height;
+	imageCreateInfo.extent.depth = texture.depth;
+	// Set initial layout of the image to undefined
+	imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	imageCreateInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+	VK_CHECK_RESULT(vkCreateImage(device, &imageCreateInfo, nullptr, &texture.image));
+
+	// Device local memory to back up image
+	VkMemoryAllocateInfo memAllocInfo = vks::initializers::memoryAllocateInfo();
+	VkMemoryRequirements memReqs = {};
+	vkGetImageMemoryRequirements(device, texture.image, &memReqs);
+	memAllocInfo.allocationSize = memReqs.size;
+	memAllocInfo.memoryTypeIndex = vulkanDevice->getMemoryType(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	VK_CHECK_RESULT(vkAllocateMemory(device, &memAllocInfo, nullptr, &texture.deviceMemory));
+	VK_CHECK_RESULT(vkBindImageMemory(device, texture.image, texture.deviceMemory, 0));
+
+	// Create sampler
+	VkSamplerCreateInfo sampler = vks::initializers::samplerCreateInfo();
+	sampler.magFilter = VK_FILTER_LINEAR;
+	sampler.minFilter = VK_FILTER_LINEAR;
+	sampler.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	sampler.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	sampler.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	sampler.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	sampler.mipLodBias = 0.0f;
+	sampler.compareOp = VK_COMPARE_OP_NEVER;
+	sampler.minLod = 0.0f;
+	sampler.maxLod = 0.0f;
+	sampler.maxAnisotropy = 1.0;
+	sampler.anisotropyEnable = VK_FALSE;
+	sampler.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+	VK_CHECK_RESULT(vkCreateSampler(device, &sampler, nullptr, &texture.sampler));
+
+	// Create image view
+	VkImageViewCreateInfo view = vks::initializers::imageViewCreateInfo();
+	view.image = texture.image;
+	view.viewType = VK_IMAGE_VIEW_TYPE_3D;
+	view.format = texture.format;
+	view.components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+	view.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	view.subresourceRange.baseMipLevel = 0;
+	view.subresourceRange.baseArrayLayer = 0;
+	view.subresourceRange.layerCount = 1;
+	view.subresourceRange.levelCount = 1;
+	VK_CHECK_RESULT(vkCreateImageView(device, &view, nullptr, &texture.view));
+
+	// Fill image descriptor image info to be used descriptor set setup
+	texture.descriptor.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	texture.descriptor.imageView = texture.view;
+	texture.descriptor.sampler = texture.sampler;
+
+	updateNoiseTexture();
+}
+
+VVulkan::VTexture VVulkan::GenTexture3D(VkFormat format, uint32_t w, uint32_t h, uint32_t d, void *data)
+{
+
+}
