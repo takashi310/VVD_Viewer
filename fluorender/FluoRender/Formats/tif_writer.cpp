@@ -238,15 +238,13 @@ void TIFWriter::SaveSequence(wstring filename)
 		TIFFSetField(outfile, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
 		TIFFSetField(outfile, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
 		TIFFSetField(outfile, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_MINISBLACK);
-		TIFFSetField(outfile, TIFFTAG_SUBFILETYPE, FILETYPE_PAGE);
-		TIFFSetField(outfile, TIFFTAG_PAGENUMBER, 0);
 		TIFFSetField(outfile, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(outfile, 0));
 		ostringstream strs;
 		strs << "ImageJ=1.52a\n";
 		strs << "spacing=" << z_res << "\n";
-		strs << "images=" << 1 << "\n";
-		strs << "slices=" << 1 << "\n";
-		strs << "loop=false";
+//		strs << "images=" << 1 << "\n";
+//		strs << "slices=" << 1 << "\n";
+//		strs << "loop=false";
 		string desc = strs.str();
 		TIFFSetField(outfile, TIFFTAG_IMAGEDESCRIPTION, desc.c_str());
 		if (m_compression)
