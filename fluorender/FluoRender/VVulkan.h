@@ -124,8 +124,9 @@ public:
 
 	void checkStagingBuffer(VkDeviceSize size);
 
-	VTexture GenTexture2D(VkFormat format, uint32_t w, uint32_t h, void *data);
-	VTexture GenTexture3D(VkFormat format, uint32_t w, uint32_t h, uint32_t d, void *data);
+	VTexture GenTexture2D(VkFormat format, VkFilter filter, uint32_t w, uint32_t h);
+	VTexture GenTexture3D(VkFormat format, VkFilter filter, uint32_t w, uint32_t h, uint32_t d);
+	bool UploadTexture3D(VTexture tex, void *data, VkOffset3D offset, VkExtent3D extent, uint32_t xpitch, uint32_t ypitch);
 };
 
 #endif
