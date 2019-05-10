@@ -1080,8 +1080,8 @@ bool VolumeData::LoadMask(Nrrd* mask)
 	int mskw = size[0];
 	int mskh = size[1];
 	int mskd = size[2];
-	int w, h, d;
-	m_tex->GetDimensionLv(GetLevel(), w, h, d);
+	size_t w, h, d;
+	m_tex->get_dimensions(w, h, d, GetLevel());
 	if (w != mskw || h != mskh || d != mskd)
 		return false;
 

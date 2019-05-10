@@ -17470,7 +17470,17 @@ void VRenderView::OnCapture(wxCommandEvent& event)
 	m_cap_dispresx = m_glview->GetSize().x;
 	m_cap_dispresy = m_glview->GetSize().y;
 
-	wxFileDialog file_dlg(m_frame, "Save captured image", "", "", "*.tif", wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
+	VolumeData *curvol = vr_frame->GetCurSelVol();
+	wxString filename;
+	if (curvol)
+	{
+		wxString name = curvol->GetName();
+		filename = name.BeforeLast('.');
+		if (name.Len() - filename.Len() > 5)
+			filename = name;
+	}
+
+	wxFileDialog file_dlg(m_frame, "Save captured image", "", filename, "*.tif", wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
 	file_dlg.SetExtraControlCreator(CreateExtraCaptureControl);
 	int rval = file_dlg.ShowModal();
 	if (rval == wxID_OK)

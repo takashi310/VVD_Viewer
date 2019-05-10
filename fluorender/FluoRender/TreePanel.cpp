@@ -777,6 +777,9 @@ void DataTreeCtrl::OnSave(wxCommandEvent& event)
 		return;
 
 	wxString name = GetItemBaseText(sel_item);
+	wxString filename = name.BeforeLast('.');
+	if (name.Len() - filename.Len() > 5)
+		filename = name;
 
 	if (item_data->type == 2) //volume
 	{
@@ -794,7 +797,7 @@ void DataTreeCtrl::OnSave(wxCommandEvent& event)
 					  "Nrrd file (*.nrrd)|*.nrrd";
 		}
 		wxFileDialog *fopendlg = new wxFileDialog(
-			m_frame, "Save Volume Data", "", "",
+			m_frame, "Save Volume Data", "", filename,
 			formats,
 			wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
 		fopendlg->SetExtraControlCreator(CreateExtraControl);
@@ -814,7 +817,7 @@ void DataTreeCtrl::OnSave(wxCommandEvent& event)
 	else if (item_data->type == 3) //mesh
 	{
 		wxFileDialog *fopendlg = new wxFileDialog(
-			m_frame, "Save Mesh Data", "", "",
+			m_frame, "Save Mesh Data", "", filename,
 			"OBJ file (*.obj)|*.obj",
 			wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
 
@@ -834,7 +837,7 @@ void DataTreeCtrl::OnSave(wxCommandEvent& event)
 	else if (item_data->type == 4) //annotation
 	{
 		wxFileDialog *fopendlg = new wxFileDialog(
-			m_frame, "Save Annotations", "", "",
+			m_frame, "Save Annotations", "", filename,
 			"Text file (*.txt)|*.txt",
 			wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
 
@@ -866,13 +869,17 @@ void DataTreeCtrl::OnExportMask(wxCommandEvent& event)
 		return;
 
 	wxString name = GetItemBaseText(sel_item);
+	wxString filename = name.BeforeLast('.');
+	if (name.Len() - filename.Len() > 5)
+		filename = name;
+	filename = filename + wxT("_mask");
 
 	if (item_data->type == 2) //volume
 	{
 		VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
 		
 		wxFileDialog *fopendlg = new wxFileDialog(
-			m_frame, "Export Mask Data", "", "",
+			m_frame, "Export Mask Data", "", filename,
 			"Nrrd file (*.nrrd)|*.nrrd",
 			wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
 
@@ -945,6 +952,9 @@ void DataTreeCtrl::OnBakeVolume(wxCommandEvent& event)
 		return;
 
 	wxString name = GetItemBaseText(sel_item);
+	wxString filename = name.BeforeLast('.');
+	if (name.Len() - filename.Len() > 5)
+		filename = name;
 
 	if (item_data->type == 2) //volume
 	{
@@ -953,7 +963,7 @@ void DataTreeCtrl::OnBakeVolume(wxCommandEvent& event)
 			return;
 
 		wxFileDialog *fopendlg = new wxFileDialog(
-			m_frame, "Bake Volume Data", "", "",
+			m_frame, "Bake Volume Data", "", filename,
 			"Muti-page Tiff file (*.tif, *.tiff)|*.tif;*.tiff|"\
 			"Single-page Tiff sequence (*.tif)|*.tif;*.tiff|"\
 			"Nrrd file (*.nrrd)|*.nrrd",
