@@ -3,7 +3,7 @@
 void VVulkan::generateQuad()
 {
 	// Setup vertices for a single uv-mapped quad made from two triangles
-	std::vector<Vertex> vertices =
+	std::vector<Vertex> quad =
 	{
 		{ {  1.0f,  1.0f, 0.0f }, { 1.0f, 1.0f },{ 0.0f, 0.0f, 1.0f } },
 		{ { -1.0f,  1.0f, 0.0f }, { 0.0f, 1.0f },{ 0.0f, 0.0f, 1.0f } },
@@ -22,8 +22,8 @@ void VVulkan::generateQuad()
 		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 		&vertexBuffer,
-		vertices.size() * sizeof(Vertex),
-		vertices.data()));
+		quad.size() * sizeof(Vertex),
+		quad.data()));
 	// Index buffer
 	VK_CHECK_RESULT(vulkanDevice->createBuffer(
 		VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
@@ -290,52 +290,7 @@ void VVulkan::prepare()
 	prepared = true;
 }
 
-uint32_t VVulkan::findMemoryType(VkPhysicalDevice pdev, uint32_t typeFilter, VkMemoryPropertyFlags properties)
-{
-	VkPhysicalDeviceMemoryProperties memProperties;
-	vkGetPhysicalDeviceMemoryProperties(pdev, &memProperties);
-
-	for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
-		if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
-			return i;
-		}
-	}
-
-	throw std::runtime_error("failed to find suitable memory type!");
-}
-
-void VVulkan::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
-	VkBufferCreateInfo bufferInfo = {};
-	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	bufferInfo.size = size;
-	bufferInfo.usage = usage;
-	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-	if (vkCreateBuffer(device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create buffer!");
-	}
-
-	VkMemoryRequirements memRequirements;
-	vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
-
-	VkMemoryAllocateInfo allocInfo = {};
-	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	allocInfo.allocationSize = memRequirements.size;
-	allocInfo.memoryTypeIndex = findMemoryType(physicalDevice, memRequirements.memoryTypeBits, properties);
-
-	if (vkAllocateMemory(device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
-		throw std::runtime_error("failed to allocate buffer memory!");
-	}
-
-	vkBindBufferMemory(device, buffer, bufferMemory, 0);
-}
-
-void VVulkan::checkStagingBuffer(VkDeviceSize size)
-{
-
-}
-
-VVulkan::VTexture VVulkan::GenTexture2D(VkFormat format, VkFilter filter, uint32_t w, uint32_t h)
+VVulkan::VTexture VVulkan::GenTexture2D(VkFormat format, VkFilter filter, uint32_t w, uint32_t h, VkImageUsageFlags usage)
 {
 	VVulkan::VTexture ret;
 
@@ -380,7 +335,7 @@ VVulkan::VTexture VVulkan::GenTexture2D(VkFormat format, VkFilter filter, uint32
 	imageCreateInfo.extent.depth = ret.depth;
 	// Set initial layout of the image to undefined
 	imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	imageCreateInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+	imageCreateInfo.usage = usage;
 	VK_CHECK_RESULT(vkCreateImage(device, &imageCreateInfo, nullptr, &ret.image));
 
 	// Device local memory to back up image
@@ -414,8 +369,13 @@ VVulkan::VTexture VVulkan::GenTexture2D(VkFormat format, VkFilter filter, uint32
 	view.image = ret.image;
 	view.viewType = VK_IMAGE_VIEW_TYPE_2D;
 	view.format = ret.format;
-	view.components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
-	view.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	if (usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)
+		view.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+	else
+	{
+		view.components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+		view.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	}
 	view.subresourceRange.baseMipLevel = 0;
 	view.subresourceRange.baseArrayLayer = 0;
 	view.subresourceRange.layerCount = 1;
@@ -525,7 +485,133 @@ VVulkan::VTexture VVulkan::GenTexture3D(VkFormat format, VkFilter filter, uint32
 	return ret;
 }
 
-bool VVulkan::UploadTexture3D(VVulkan::VTexture tex, void *data, VkOffset3D offset, VkExtent3D extent, uint32_t xpitch, uint32_t ypitch)
-{
+void VVulkan::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
+	VkBufferCreateInfo bufferInfo = {};
+	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	bufferInfo.size = size;
+	bufferInfo.usage = usage;
+	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
+	if (vkCreateBuffer(device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create buffer!");
+	}
+
+	VkMemoryRequirements memRequirements;
+	vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
+
+	VkMemoryAllocateInfo allocInfo = {};
+	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	allocInfo.allocationSize = memRequirements.size;
+	allocInfo.memoryTypeIndex = vulkanDevice->getMemoryType(memRequirements.memoryTypeBits, properties);
+
+	VK_CHECK_RESULT(vkAllocateMemory(device, &allocInfo, nullptr, &bufferMemory));
+	VK_CHECK_RESULT(vkBindBufferMemory(device, buffer, bufferMemory, 0));
+}
+
+void VVulkan::checkStagingBuffer(VkDeviceSize size)
+{
+	if (size > staging_buf.size)
+	{
+		staging_buf.unmap();
+		staging_buf.destroy();
+	}
+	if (staging_buf.buffer == VK_NULL_HANDLE)
+	{
+		vulkanDevice->createBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
+								   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+								   &staging_buf, size);
+		// Map persistent
+		VK_CHECK_RESULT(staging_buf.map());
+	}
+}
+
+
+bool VVulkan::UploadTexture3D(VVulkan::VTexture tex, void *data, VkOffset3D offset, VkExtent3D extent, uint32_t xpitch, uint32_t ypitch, uint32_t bytes)
+{
+	const VkDeviceSize texMemSize = (VkDeviceSize)texture.width * (VkDeviceSize)texture.height * (VkDeviceSize)texture.depth * (VkDeviceSize)texture.bytes;
+
+	checkStagingBuffer(texMemSize);
+
+	// Copy texture data into staging buffer
+	uint64_t poffset = offset.z*ypitch*xpitch + offset.y*xpitch + offset.x*bytes;
+	uint64_t dst_xpitch = (VkDeviceSize)texture.width * (VkDeviceSize)texture.bytes;
+	unsigned char* dstp = (unsigned char*)staging_buf.mapped;
+	unsigned char* tp = (unsigned char *)data + poffset;
+	unsigned char* tp2; 
+	for (uint32_t z = 0; z < extent.depth; z++)
+	{
+		tp2 = tp;
+		for (uint32_t y = 0; y < extent.height; y++)
+		{
+			memcpy(dstp, tp2, dst_xpitch);
+			dstp += dst_xpitch;
+			tp2 += xpitch;
+		}
+		tp += ypitch*xpitch;
+	}
+
+	CopyDataStagingBuf2Tex3D(tex);
+}
+
+bool VVulkan::UploadTexture3D(VTexture tex, void *data)
+{
+	const VkDeviceSize texMemSize = (VkDeviceSize)texture.width * (VkDeviceSize)texture.height * (VkDeviceSize)texture.depth * (VkDeviceSize)texture.bytes;
+
+	checkStagingBuffer(texMemSize);
+
+	// Copy texture data into staging buffer
+	memcpy(staging_buf.mapped, data, texMemSize);
+
+	CopyDataStagingBuf2Tex3D(tex);
+}
+
+void VVulkan::CopyDataStagingBuf2Tex3D(VTexture tex)
+{
+	VkCommandBuffer copyCmd = VulkanExampleBase::createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+
+	// The sub resource range describes the regions of the image we will be transitioned
+	VkImageSubresourceRange subresourceRange = {};
+	subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	subresourceRange.baseMipLevel = 0;
+	subresourceRange.baseArrayLayer = 0;
+	subresourceRange.levelCount = 1;
+	subresourceRange.layerCount = 1;
+
+	// Optimal image will be used as destination for the copy, so we must transfer from our
+	// initial undefined image layout to the transfer destination layout
+	vks::tools::setImageLayout(
+		copyCmd,
+		tex.image,
+		VK_IMAGE_LAYOUT_UNDEFINED,
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		subresourceRange);
+
+	// Setup buffer copy regions
+	VkBufferImageCopy bufferCopyRegion{};
+	bufferCopyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	bufferCopyRegion.imageSubresource.mipLevel = 0;
+	bufferCopyRegion.imageSubresource.baseArrayLayer = 0;
+	bufferCopyRegion.imageSubresource.layerCount = 1;
+	bufferCopyRegion.imageExtent.width = tex.width;
+	bufferCopyRegion.imageExtent.height = tex.height;
+	bufferCopyRegion.imageExtent.depth = tex.depth;
+
+	vkCmdCopyBufferToImage(
+		copyCmd,
+		staging_buf.buffer,
+		tex.image,
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		1,
+		&bufferCopyRegion);
+
+	// Change texture image layout to shader read after all mip levels have been copied
+	tex.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	vks::tools::setImageLayout(
+		copyCmd,
+		tex.image,
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		tex.imageLayout,
+		subresourceRange);
+
+	VulkanExampleBase::flushCommandBuffer(copyCmd, queue, true);
 }

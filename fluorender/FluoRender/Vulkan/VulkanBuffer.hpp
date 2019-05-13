@@ -150,10 +150,12 @@ namespace vks
 			if (buffer)
 			{
 				vkDestroyBuffer(device, buffer, nullptr);
+				buffer = VK_NULL_HANDLE;
 			}
 			if (memory)
 			{
 				vkFreeMemory(device, memory, nullptr);
+				memory = VK_NULL_HANDLE;
 			}
 		}
 

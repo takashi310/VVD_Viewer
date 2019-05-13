@@ -34,7 +34,7 @@ public:
 		VkImageView view = VK_NULL_HANDLE;
 		VkDescriptorImageInfo descriptor;
 		VkFormat format;
-		uint32_t width, height, depth;
+		uint32_t width, height, depth, bytes;
 		uint32_t mipLevels;
 	} texture;
 
@@ -62,16 +62,9 @@ public:
 		VkPipeline add;
 	} pipelines;
 
-	// Framebuffer for offscreen rendering
-	struct FrameBufferAttachment {
-		VkImage image;
-		VkDeviceMemory mem;
-		VkImageView view;
-	};
 	struct FrameBuffer {
 		VkFramebuffer framebuffer;
-		FrameBufferAttachment color, depth;
-		VkDescriptorImageInfo descriptor;
+		VTexture color, depth;
 	};
 	struct OffscreenPass {
 		int32_t width, height;
@@ -84,22 +77,17 @@ public:
 	VkDescriptorSet descriptorSet;
 	VkDescriptorSetLayout descriptorSetLayout;
 
-	struct StagingBuffer {
-		VkBuffer buffer;
-		VkDeviceMemory memory;
-		VkDeviceSize size;
-	} staging_buf;
+	vks::Buffer staging_buf;
 
 	VVulkan() : VulkanExampleBase(ENABLE_VALIDATION)
 	{
-		staging_buf.buffer = VK_NULL_HANDLE;
-		staging_buf.memory = VK_NULL_HANDLE;
-		staging_buf.size = -1;
+
 	}
 
 	~VVulkan()
 	{
-		vkDestroyPipeline(device, pipelines.solid, nullptr);
+		vkDestroyPipeline(device, pipelines.over, nullptr);
+		vkDestroyPipeline(device, pipelines.add, nullptr);
 
 		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 		vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
@@ -119,14 +107,15 @@ public:
 	void updateUniformBuffers(bool viewchanged = true);
 	void prepare();
 
-	uint32_t findMemoryType(VkPhysicalDevice pdev, uint32_t typeFilter, VkMemoryPropertyFlags properties);
 	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 
 	void checkStagingBuffer(VkDeviceSize size);
 
-	VTexture GenTexture2D(VkFormat format, VkFilter filter, uint32_t w, uint32_t h);
+	VTexture GenTexture2D(VkFormat format, VkFilter filter, uint32_t w, uint32_t h, VkImageUsageFlags usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT);
 	VTexture GenTexture3D(VkFormat format, VkFilter filter, uint32_t w, uint32_t h, uint32_t d);
-	bool UploadTexture3D(VTexture tex, void *data, VkOffset3D offset, VkExtent3D extent, uint32_t xpitch, uint32_t ypitch);
+	bool UploadTexture3D(VTexture tex, void *data, VkOffset3D offset, VkExtent3D extent, uint32_t xpitch, uint32_t ypitch, uint32_t bytes);
+	bool UploadTexture3D(VTexture tex, void *data);
+	void CopyDataStagingBuf2Tex3D(VTexture tex);
 };
 
 #endif
