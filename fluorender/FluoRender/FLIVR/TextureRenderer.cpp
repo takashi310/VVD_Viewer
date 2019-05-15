@@ -46,6 +46,11 @@
 #include <wx/utils.h>
 //#include <iomanip>
 
+#ifdef _WIN32
+#include <windows.h>
+#include <omp.h>
+#endif
+
 using boost::property_tree::wptree;
 using namespace std;
 
@@ -2592,8 +2597,21 @@ namespace FLIVR
 	{
 		TextureBrick* b = texp.brick;
 		int c = texp.comp;
-		if (!b->dirty(c) || c <= 0 || c >= TEXTURE_MAX_COMPONENTS)
+		if (!b->dirty(c) || c < 0 || c >= TEXTURE_MAX_COMPONENTS)
 			return false;
+
+		int nb = b->nb(c);
+		GLenum format = GL_RED;
+		GLint alignment = 1;
+
+		if (c == 0) {
+			if (nb >= 3)
+				format = GL_RGBA;
+		}
+		else if (b->nlabel() == c) {
+			format = GL_RED_INTEGER;
+			alignment = 4;
+		}
 
 		GLint cur_unit = GL_TEXTURE0;
 		glGetIntegerv(GL_ACTIVE_TEXTURE, &cur_unit);
@@ -2610,7 +2628,7 @@ namespace FLIVR
 		int sz = b->sz();
 		glPixelStorei(GL_PACK_ROW_LENGTH, sx);
 		glPixelStorei(GL_PACK_IMAGE_HEIGHT, sy);
-		glPixelStorei(GL_PACK_ALIGNMENT, 1);
+		glPixelStorei(GL_PACK_ALIGNMENT, alignment);
 
 		size_t nx = b->nx();
 		size_t ny = b->ny();
@@ -2619,7 +2637,35 @@ namespace FLIVR
 		void* data = b->tex_data(c);
 		//size_t bufsize = (size_t)nx*(size_t)ny*(size_t)nz*(size_t)b->tex_type_size(type);
 		//glGetTextureSubImage(GL_TEXTURE_3D, 0, 0, 0, 0, sx, sy, sz, GL_RED, type, bufsize, data);
-		glGetTexImage(GL_TEXTURE_3D, 0, GL_RED, type, data);
+		GLenum error = glGetError();
+		glGetTexImage(GL_TEXTURE_3D, 0, format, type, data);
+		error = glGetError();
+
+		if (error != GL_NO_ERROR) {
+			GLint w, h, d;
+			glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, &w);
+			glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_HEIGHT, &h);
+			glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_DEPTH, &d);
+
+			unsigned char* tmp = new unsigned char[(size_t)w*(size_t)h*(size_t)d*(size_t)nb];
+			unsigned char* dstp = (unsigned char *)data;
+
+			glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+			glPixelStorei(GL_PACK_IMAGE_HEIGHT, 0);
+			glPixelStorei(GL_PACK_ALIGNMENT, alignment);
+			glGetTexImage(GL_TEXTURE_3D, 0, format, type, tmp);
+			
+			size_t d_xp = sx * nb;
+			size_t d_yp = sy * sx * nb;
+			size_t s_xp = w * nb;
+			size_t s_yp = h * w * nb;
+			#pragma omp parallel for
+			for (int z = 0; z < d; z++) {
+				for (int y = 0; y < h; y++)
+					memcpy(dstp + z * d_yp + y * d_xp, tmp + z * s_yp + y * s_xp, s_xp);
+			}
+			delete[] tmp;
+		}
 
 		b->set_dirty(c, false);
 

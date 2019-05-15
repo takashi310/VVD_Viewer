@@ -3286,9 +3286,11 @@ namespace FLIVR
 			glViewport(0, 0, b->nx(), b->ny());
 
 			//load the texture
+			b->prevent_tex_deletion(true);
 			load_brick(0, 0, bricks, i, GL_NEAREST, compression_);
-			if (has_mask) load_brick_mask(bricks, i);
-			GLuint label_id = load_brick_label(bricks, i);
+			if (has_mask) load_brick_mask(bricks, i, GL_NEAREST, false, 0, true, false);
+			GLuint label_id = load_brick_label(bricks, i, true, false);
+			b->prevent_tex_deletion(false);
 
 			//draw each slice
 			int z;
@@ -3449,6 +3451,11 @@ namespace FLIVR
 				vr_b?vr_b->get_scalar_scale():1.0,
 				(vr_a&&vr_a->tex_&&vr_a->tex_->nmask()!=-1)?1.0:0.0,
 				(vr_b&&vr_b->tex_&&vr_b->tex_->nmask()!=-1)?1.0:0.0);
+		else if (type == 5)
+		{
+			cal_shader->setLocalParam(0, 1.0, 1.0, 0.0, 0.0);
+			scalar_scale_ = vr_a ? vr_a->get_scalar_scale() : 1.0;
+		}
 		else
 			cal_shader->setLocalParam(0, vr_a?vr_a->get_scalar_scale():1.0,
 				vr_b?vr_b->get_scalar_scale():1.0,
@@ -3468,17 +3475,26 @@ namespace FLIVR
 			glViewport(0, 0, b->nx(), b->ny());
 
 			//load the texture
+			b->prevent_tex_deletion(true);
+			if (bricks_a) (*bricks_a)[i]->prevent_tex_deletion(true);
+			if (bricks_b) (*bricks_b)[i]->prevent_tex_deletion(true);
+
 			GLuint tex_id = load_brick(0, 0, bricks, i, GL_NEAREST);
 			if (bricks_a) vr_a->load_brick(1, 0, bricks_a, i, GL_NEAREST);
 			if (bricks_b) vr_b->load_brick(2, 0, bricks_b, i, GL_NEAREST);
-			if ((type==5 || type==6 ||type==7) && bricks_a) vr_a->load_brick_mask(bricks_a, i, GL_NEAREST);
+			if ((type==5 || type==6 ||type==7) && bricks_a) vr_a->load_brick_mask(bricks_a, i, GL_NEAREST, false, 0, true);
 			if (type==8)
 			{
 				if (bricks_a)
-					vr_a->load_brick_mask(bricks_a, i, GL_NEAREST, false, 3);
+					vr_a->load_brick_mask(bricks_a, i, GL_NEAREST, false, 3, true);
 				if (bricks_b)
-					vr_b->load_brick_mask(bricks_b, i, GL_NEAREST, false, 4);
+					vr_b->load_brick_mask(bricks_b, i, GL_NEAREST, false, 4, true);
 			}
+
+			b->prevent_tex_deletion(false);
+			if (bricks_a) (*bricks_a)[i]->prevent_tex_deletion(false);
+			if (bricks_b) (*bricks_b)[i]->prevent_tex_deletion(false);
+
 			//draw each slice
 			for (int z=0; z<b->nz(); z++)
 			{
@@ -3530,31 +3546,64 @@ namespace FLIVR
 		int c = 0;
 		for (unsigned int i=0; i<bricks->size(); i++)
 		{
-			load_brick(0, c, bricks, i, GL_NEAREST);
-			int nb = (*bricks)[i]->nb(c);
-			GLenum format;
-			if (nb < 3)
-				format = GL_RED;
-			else
-				format = GL_RGBA;
+			if ((*bricks)[i]->dirty(c))
+			{
+				load_brick(0, c, bricks, i, GL_NEAREST, false, 0, false);
+				int nb = (*bricks)[i]->nb(c);
+				GLenum format;
+				if (nb < 3)
+					format = GL_RED;
+				else
+					format = GL_RGBA;
 
-			// download texture data
-			int sx = (*bricks)[i]->sx();
-			int sy = (*bricks)[i]->sy();
-			glPixelStorei(GL_PACK_ROW_LENGTH, sx);
-			glPixelStorei(GL_PACK_IMAGE_HEIGHT, sy);
-			glPixelStorei(GL_PACK_ALIGNMENT, 1);
+				GLint alignment = 1;
 
-			GLenum type = (*bricks)[i]->tex_type(c);
-			void* data = (*bricks)[i]->tex_data(c);
-			glGetTexImage(GL_TEXTURE_3D, 0, format,
-				type, data);
+				// download texture data
+				int sx = (*bricks)[i]->sx();
+				int sy = (*bricks)[i]->sy();
+				glPixelStorei(GL_PACK_ROW_LENGTH, sx);
+				glPixelStorei(GL_PACK_IMAGE_HEIGHT, sy);
+				glPixelStorei(GL_PACK_ALIGNMENT, alignment);
+				
+				GLenum type = (*bricks)[i]->tex_type(c);
+				void* data = (*bricks)[i]->tex_data(c);
+				
+				GLenum error = glGetError();
+				glGetTexImage(GL_TEXTURE_3D, 0, format, type, data);
+				error = glGetError();
 
-			glPixelStorei(GL_PACK_ROW_LENGTH, 0);
-			glPixelStorei(GL_PACK_IMAGE_HEIGHT, 0);
-			glPixelStorei(GL_PACK_ALIGNMENT, 4);
+				if (error != GL_NO_ERROR) {
+					GLint w, h, d;
+					glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, &w);
+					glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_HEIGHT, &h);
+					glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_DEPTH, &d);
 
-			(*bricks)[i]->set_dirty(0, false);
+					unsigned char* tmp = new unsigned char[(size_t)w*(size_t)h*(size_t)d*(size_t)nb];
+					unsigned char* dstp = (unsigned char *)data;
+
+					glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+					glPixelStorei(GL_PACK_IMAGE_HEIGHT, 0);
+					glPixelStorei(GL_PACK_ALIGNMENT, alignment);
+					glGetTexImage(GL_TEXTURE_3D, 0, format, type, tmp);
+
+					size_t d_xp = sx * nb;
+					size_t d_yp = sy * sx * nb;
+					size_t s_xp = w * nb;
+					size_t s_yp = h * w * nb;
+					#pragma omp parallel for
+					for (int z = 0; z < d; z++) {
+						for (int y = 0; y < h; y++)
+							memcpy(dstp + z*d_yp + y*d_xp, tmp + z*s_yp + y*s_xp, s_xp);
+					}
+					delete[] tmp;
+				}
+
+				glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+				glPixelStorei(GL_PACK_IMAGE_HEIGHT, 0);
+				glPixelStorei(GL_PACK_ALIGNMENT, 4);
+
+				(*bricks)[i]->set_dirty(0, false);
+			}
 		}
 
 		//release 3d texture
@@ -3591,7 +3640,37 @@ namespace FLIVR
 
 				GLenum type = (*bricks)[i]->tex_type(c);
 				void* data = (*bricks)[i]->tex_data(c);
+				
+				GLenum error = glGetError();
 				glGetTexImage(GL_TEXTURE_3D, 0, GL_RED, type, data);
+				error = glGetError();
+
+				if (error != GL_NO_ERROR) {
+					GLint w, h, d;
+					glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, &w);
+					glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_HEIGHT, &h);
+					glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_DEPTH, &d);
+					int nb = (*bricks)[i]->nb(c);
+
+					unsigned char* tmp = new unsigned char[(size_t)w*(size_t)h*(size_t)d*(size_t)nb];
+					unsigned char* dstp = (unsigned char *)data;
+
+					glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+					glPixelStorei(GL_PACK_IMAGE_HEIGHT, 0);
+					glPixelStorei(GL_PACK_ALIGNMENT, 1);
+					glGetTexImage(GL_TEXTURE_3D, 0, GL_RED, type, tmp);
+					
+					size_t d_xp = sx * nb;
+					size_t d_yp = sy * sx * nb;
+					size_t s_xp = w * nb;
+					size_t s_yp = h * w * nb;
+					#pragma omp parallel for
+					for (int z = 0; z < d; z++) {
+						for (int y = 0; y < h; y++)
+							memcpy(dstp + z * d_yp + y * d_xp, tmp + z * s_yp + y * s_xp, s_xp);
+					}
+					delete[] tmp;
+				}
 
 				glPixelStorei(GL_PACK_ROW_LENGTH, 0);
 				glPixelStorei(GL_PACK_IMAGE_HEIGHT, 0);
@@ -3659,12 +3738,45 @@ namespace FLIVR
 			glActiveTexture(GL_TEXTURE0+c);
 
 			//download texture data
-			glPixelStorei(GL_PACK_ROW_LENGTH, (*bricks)[i]->sx());
-			glPixelStorei(GL_PACK_IMAGE_HEIGHT, (*bricks)[i]->sy());
+			int sx = (*bricks)[i]->sx();
+			int sy = (*bricks)[i]->sy();
+			glPixelStorei(GL_PACK_ROW_LENGTH, sx);
+			glPixelStorei(GL_PACK_IMAGE_HEIGHT, sy);
 			glPixelStorei(GL_PACK_ALIGNMENT, 4);
 
-			glGetTexImage(GL_TEXTURE_3D, 0, GL_RED_INTEGER,
-				(*bricks)[i]->tex_type(c), (*bricks)[i]->tex_data(c));
+			GLenum type = (*bricks)[i]->tex_type(c);
+			void* data = (*bricks)[i]->tex_data(c);
+
+			GLenum error = glGetError();
+			glGetTexImage(GL_TEXTURE_3D, 0, GL_RED_INTEGER, type, data);
+			error = glGetError();
+
+			if (error != GL_NO_ERROR) {
+				GLint w, h, d;
+				glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, &w);
+				glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_HEIGHT, &h);
+				glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_DEPTH, &d);
+				int nb = (*bricks)[i]->nb(c);
+
+				unsigned char* tmp = new unsigned char[(size_t)w*(size_t)h*(size_t)d*(size_t)nb];
+				unsigned char* dstp = (unsigned char *)data;
+
+				glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+				glPixelStorei(GL_PACK_IMAGE_HEIGHT, 0);
+				glPixelStorei(GL_PACK_ALIGNMENT, 4);
+				glGetTexImage(GL_TEXTURE_3D, 0, GL_RED_INTEGER, type, tmp);
+				
+				size_t d_xp = sx * nb;
+				size_t d_yp = sy * sx * nb;
+				size_t s_xp = w * nb;
+				size_t s_yp = h * w * nb;
+				#pragma omp parallel for
+				for (int z = 0; z < d; z++) {
+					for (int y = 0; y < h; y++)
+						memcpy(dstp + z * d_yp + y * d_xp, tmp + z * s_yp + y * s_xp, s_xp);
+				}
+				delete[] tmp;
+			}
 
 			glPixelStorei(GL_PACK_ROW_LENGTH, 0);
 			glPixelStorei(GL_PACK_IMAGE_HEIGHT, 0);
