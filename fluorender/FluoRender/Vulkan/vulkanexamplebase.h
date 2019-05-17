@@ -285,5 +285,7 @@ public:
 	VkPipelineShaderStageCreateInfo loadShader(std::string fileName, VkShaderStageFlagBits stage);
 
 	VkDevice getDevice() { return device; }
+	VkPhysicalDevice getPhysicalDevice() { return physicalDevice; }
 	VkPhysicalDeviceProperties getPhysicalDeviceProperties() { return deviceProperties; }
+	VkPipelineCache getPipelineCache() { return pipelineCache; }
 };

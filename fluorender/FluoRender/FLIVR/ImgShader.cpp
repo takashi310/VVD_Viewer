@@ -920,9 +920,9 @@ namespace FLIVR
 
 		auto device = ShaderProgram::get_vulkan()->getDevice();
 		
-		vkDestroyPipelineLayout(device, pipeline_.pipelineLayout, nullptr);
-		vkDestroyDescriptorSetLayout(device, pipeline_.descriptorSetLayout, nullptr);
-		vkDestroyDescriptorPool(device, pipeline_.descriptorPool, nullptr);
+		vkDestroyPipelineLayout(device, pipeline_settings_.pipelineLayout, nullptr);
+		vkDestroyDescriptorSetLayout(device, pipeline_settings_.descriptorSetLayout, nullptr);
+		vkDestroyDescriptorPool(device, pipeline_settings_.descriptorPool, nullptr);
 	}
 
 	void ImgShaderFactory::init(std::shared_ptr<VVulkan> vulkan)
@@ -975,7 +975,7 @@ namespace FLIVR
 			poolSizes.data(),
 			1);
 
-		VK_CHECK_RESULT(vkCreateDescriptorPool(ShaderProgram::get_vulkan()->getDevice(), &descriptorPoolInfo, nullptr, &pipeline_.descriptorPool));
+		VK_CHECK_RESULT(vkCreateDescriptorPool(ShaderProgram::get_vulkan()->getDevice(), &descriptorPoolInfo, nullptr, &pipeline_settings_.descriptorPool));
 	}
 
 	void ImgShaderFactory::setupDescriptorSetLayout()
@@ -1000,14 +1000,14 @@ namespace FLIVR
 			setLayoutBindings.data(),
 			static_cast<uint32_t>(setLayoutBindings.size()));
 
-		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &pipeline_.descriptorSetLayout));
+		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &pipeline_settings_.descriptorSetLayout));
 
 		VkPipelineLayoutCreateInfo pPipelineLayoutCreateInfo =
 			vks::initializers::pipelineLayoutCreateInfo(
-			&pipeline_.descriptorSetLayout,
+			&pipeline_settings_.descriptorSetLayout,
 			1);
 
-		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pPipelineLayoutCreateInfo, nullptr, &pipeline_.pipelineLayout));
+		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pPipelineLayoutCreateInfo, nullptr, &pipeline_settings_.pipelineLayout));
 	}
 
 	void ImgShaderFactory::allocDescriptorSet()
@@ -1015,8 +1015,8 @@ namespace FLIVR
 		VkDevice device = ShaderProgram::get_vulkan()->getDevice();
 
 		VkDescriptorSetAllocateInfo descriptorSetAllocInfo;
-		descriptorSetAllocInfo = vks::initializers::descriptorSetAllocateInfo(pipeline_.descriptorPool, &pipeline_.descriptorSetLayout, 1);
-		VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &pipeline_.descriptorSet));
+		descriptorSetAllocInfo = vks::initializers::descriptorSetAllocateInfo(pipeline_settings_.descriptorPool, &pipeline_settings_.descriptorSetLayout, 1);
+		VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &pipeline_settings_.descriptorSet));
 	}
 
 	void ImgShaderFactory::setupDescriptorSetSamplers(uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites)

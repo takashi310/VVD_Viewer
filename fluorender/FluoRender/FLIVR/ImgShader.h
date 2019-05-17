@@ -110,7 +110,7 @@ namespace FLIVR
 
 		ShaderProgram* shader(int type, int colormap_=0);
 
-		struct ImgPipeline {
+		struct ImgPipelineSettings {
 			VkDescriptorPool descriptorPool;
 			VkDescriptorSetLayout descriptorSetLayout;
 			VkPipelineLayout pipelineLayout;
@@ -121,8 +121,10 @@ namespace FLIVR
 		void setupDescriptorSetLayout();
 		void allocDescriptorSet();
 		void setupDescriptorSetSamplers(uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites);
+
+		ImgPipelineSettings getImgPipelineSettings() { return pipeline_settings_; }
 		
-		ImgPipeline pipeline_;
+		ImgPipelineSettings pipeline_settings_;
 
 	protected:
 		std::vector<ImgShader*> shader_;

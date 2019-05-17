@@ -64,10 +64,10 @@ public:
 
 	struct FrameBuffer {
 		VkFramebuffer framebuffer;
+		int32_t w, h;
 		VTexture color, depth;
 	};
 	struct OffscreenPass {
-		int32_t width, height;
 		VkRenderPass renderPass;
 		VkSampler sampler;
 		FrameBuffer framebuffer;
