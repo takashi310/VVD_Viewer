@@ -65,6 +65,7 @@ namespace FLIVR
 		// Call init_shaders_supported before shaders_supported queries!
 		static bool init();
 		static void init_shaders_supported(std::shared_ptr<VVulkan> vulkan);
+		static void finalize_shaders_supported();
 		static bool shaders_supported();
 		static int max_texture_size();
 		static bool texture_non_power_of_two();

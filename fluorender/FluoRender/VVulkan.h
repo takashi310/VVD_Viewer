@@ -9,6 +9,8 @@
 #include "Vulkan/VulkanModel.hpp"
 #include "Vulkan/VulkanBuffer.hpp"
 
+#include <memory>
+
 #define ENABLE_VALIDATION true
 
 // Offscreen frame buffer properties
@@ -18,6 +20,41 @@
 #ifndef _VVULKAN_H_
 #define _VVULKAN_H_
 
+class VTexture {
+public:
+	VkSampler sampler;
+	VkImage image;
+	VkImageLayout imageLayout;
+	VkDeviceMemory deviceMemory;
+	VkImageView view;
+	VkDescriptorImageInfo descriptor;
+	VkFormat format;
+	VkDevice device;
+	uint32_t width, height, depth, bytes;
+	uint32_t mipLevels;
+
+	VTexture()
+	{
+		sampler = VK_NULL_HANDLE;
+		image = VK_NULL_HANDLE;
+		deviceMemory = VK_NULL_HANDLE;
+		view = VK_NULL_HANDLE;
+		device = VK_NULL_HANDLE;
+	}
+
+	~VTexture()
+	{
+		if (view != VK_NULL_HANDLE)
+			vkDestroyImageView(device, view, nullptr);
+		if (image != VK_NULL_HANDLE)
+			vkDestroyImage(device, image, nullptr);
+		//if (sampler != VK_NULL_HANDLE)
+			//vkDestroySampler(device, sampler, nullptr);
+		if (deviceMemory != VK_NULL_HANDLE)
+			vkFreeMemory(device, deviceMemory, nullptr);
+	}
+};
+
 class VVulkan : public VulkanExampleBase
 {
 public:
@@ -26,93 +63,40 @@ public:
 		float uv[3];
 	};
 
-	struct VTexture {
-		VkSampler sampler = VK_NULL_HANDLE;
-		VkImage image = VK_NULL_HANDLE;
-		VkImageLayout imageLayout;
-		VkDeviceMemory deviceMemory = VK_NULL_HANDLE;
-		VkImageView view = VK_NULL_HANDLE;
-		VkDescriptorImageInfo descriptor;
-		VkFormat format;
-		uint32_t width, height, depth, bytes;
-		uint32_t mipLevels;
-	} texture;
-
-	struct {
-		VkPipelineVertexInputStateCreateInfo inputState;
-		std::vector<VkVertexInputBindingDescription> inputBinding;
-		std::vector<VkVertexInputAttributeDescription> inputAttributes;
-	} vertices;
-
-	vks::Buffer vertexBuffer;
-	vks::Buffer indexBuffer;
-	uint32_t indexCount;
-
-	vks::Buffer uniformBufferVS;
-
-	struct UboVS {
-		glm::mat4 projection;
-		glm::mat4 model;
-		glm::vec4 viewPos;
-		float depth = 0.0f;
-	} uboVS;
-
-	struct {
-		VkPipeline over;
-		VkPipeline add;
-	} pipelines;
-
 	struct FrameBuffer {
 		VkFramebuffer framebuffer;
 		int32_t w, h;
-		VTexture color, depth;
+		std::shared_ptr<VTexture> color, depth;
 	};
-	struct OffscreenPass {
-		VkRenderPass renderPass;
-		VkSampler sampler;
-		FrameBuffer framebuffer;
-	} offscreenPass;
-
-	VkPipelineLayout pipelineLayout;
-	VkDescriptorSet descriptorSet;
-	VkDescriptorSetLayout descriptorSetLayout;
 
 	vks::Buffer staging_buf;
 
+	VkSampler linear_sampler;
+	VkSampler nearest_sampler;
+
 	VVulkan() : VulkanExampleBase(ENABLE_VALIDATION)
 	{
-
+		linear_sampler = VK_NULL_HANDLE;
+		nearest_sampler = VK_NULL_HANDLE;
 	}
 
 	~VVulkan()
 	{
-		vkDestroyPipeline(device, pipelines.over, nullptr);
-		vkDestroyPipeline(device, pipelines.add, nullptr);
-
-		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
-		vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
-
-		vertexBuffer.destroy();
-		indexBuffer.destroy();
-		uniformBufferVS.destroy();
+		if (linear_sampler != VK_NULL_HANDLE)
+			vkDestroySampler(device, linear_sampler, nullptr);
+		if (nearest_sampler != VK_NULL_HANDLE)
+			vkDestroySampler(device, nearest_sampler, nullptr);
 	}
 
-	void generateQuad();
-	void setupVertexDescriptions();
-	void setupDescriptorPool();
-	void setupDescriptorSetLayout();
-	void setupDescriptorSet();
-	void preparePipelines();
-	void prepareUniformBuffers();
-	void updateUniformBuffers(bool viewchanged = true);
+	void prepareSamplers();
 	void prepare();
 
 	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 
 	void checkStagingBuffer(VkDeviceSize size);
 
-	VTexture GenTexture2D(VkFormat format, VkFilter filter, uint32_t w, uint32_t h, VkImageUsageFlags usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT);
-	VTexture GenTexture3D(VkFormat format, VkFilter filter, uint32_t w, uint32_t h, uint32_t d);
+	std::shared_ptr<VTexture> GenTexture2D(VkFormat format, VkFilter filter, uint32_t w, uint32_t h, VkImageUsageFlags usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT);
+	std::shared_ptr<VTexture> GenTexture3D(VkFormat format, VkFilter filter, uint32_t w, uint32_t h, uint32_t d);
 	bool UploadTexture3D(VTexture tex, void *data, VkOffset3D offset, VkExtent3D extent, uint32_t xpitch, uint32_t ypitch, uint32_t bytes);
 	bool UploadTexture3D(VTexture tex, void *data);
 	void CopyDataStagingBuf2Tex3D(VTexture tex);

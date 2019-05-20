@@ -859,7 +859,7 @@ void VRenderVulkanView::Resize(bool refresh)
 	m_resize_ol2 = true;
 	m_resize_paint = true;
 
-	m_vulkanExample->windowResize();
+	m_vulkan->windowResize();
 
 	if (refresh) RefreshGL();
 }
@@ -869,14 +869,12 @@ void VRenderVulkanView::Init()
 	if (!m_initialized)
 	{
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-		SetCurrent(*m_glRC);
-		ShaderProgram::init_shaders_supported();
+		ShaderProgram::init_shaders_supported(m_vulkan);
 		if (vr_frame)
 		{
 			vr_frame->SetTextureRendererSettings();
 			vr_frame->SetTextureUndos();
 		}
-		glViewport(0, 0, (GLint)(GetSize().x), (GLint)(GetSize().y));
 		goTimer->start();
 		glGenBuffers(1, &m_quad_vbo);
 		m_quad_vao = 0;

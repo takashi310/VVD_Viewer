@@ -42,7 +42,8 @@
 #include <tinyxml2.h>
 #include <wx/thread.h>
 
-#include <VVulkan.h>
+#include "VVulkan.h"
+#include "Vulkan2dRender.h"
 
 #include "DLLExport.h"
 
@@ -319,6 +320,19 @@ namespace FLIVR
 			   static void set_load_on_main_thread(bool val) {load_on_main_thread_ = val;}
 			   static bool get_load_on_main_thread() {return load_on_main_thread_;}
 
+			   static void set_vulkan(std::shared_ptr<VVulkan> vulkan, std::shared_ptr<Vulkan2dRender> v2drender) 
+			   { 
+					m_vulkan = vulkan;
+					m_v2drender = v2drender;
+			   }
+			   static std::shared_ptr<VVulkan> get_vulkan() { return m_vulkan; }
+			   static std::shared_ptr<Vulkan2dRender> get_vulkan2drender() { return m_v2drender; }
+			   static void finalize_vulkan() 
+			   {
+				   if (m_vulkan) m_vulkan.reset();
+				   if (m_v2drender) m_v2drender.reset();
+			   }
+
 			   static VolKernelFactory vol_kernel_factory_;
 
       public:
@@ -337,16 +351,16 @@ namespace FLIVR
 
                //blend frame buffer for output
                bool blend_framebuffer_resize_;
-               GLuint blend_framebuffer_;
-               GLuint blend_tex_id_;
-			   GLuint label_tex_id_;
+               VVulkan::FrameBuffer blend_framebuffer_;
+			   std::shared_ptr<VTexture> blend_tex_id_;
+			   std::shared_ptr<VTexture> label_tex_id_;
                //2nd buffer for multiple filtering
                bool filter_buffer_resize_;
-               GLuint filter_buffer_;
-               GLuint filter_tex_id_;
+               VVulkan::FrameBuffer filter_buffer_;
+               std::shared_ptr<VTexture> filter_tex_id_;
 
-			   GLuint palette_tex_id_;
-			   GLuint base_palette_tex_id_;
+			   std::shared_ptr<VTexture> palette_tex_id_;
+			   std::shared_ptr<VTexture> base_palette_tex_id_;
 			   unsigned char palette_[PALETTE_SIZE*PALETTE_ELEM_COMP];
 			   unsigned char base_palette_[PALETTE_SIZE*PALETTE_ELEM_COMP];
 			   unordered_set<int> sel_ids_;
@@ -364,16 +378,16 @@ namespace FLIVR
                static VolCalShaderFactory cal_shader_factory_;
 
                //3d frame buffer object for mask
-               GLuint fbo_mask_;
+               VVulkan::FrameBuffer fbo_mask_;
                //3d frame buffer object for label
-               GLuint fbo_label_;
+               VVulkan::FrameBuffer fbo_label_;
                //2d mask texture
-               GLuint tex_2d_mask_;
+               std::shared_ptr<VTexture> tex_2d_mask_;
                //2d weight map
-               GLuint tex_2d_weight1_;  //after tone mapping
-               GLuint tex_2d_weight2_;  //before tone mapping
+               std::shared_ptr<VTexture> tex_2d_weight1_;  //after tone mapping
+               std::shared_ptr<VTexture> tex_2d_weight2_;  //before tone mapping
                //2d depth map texture
-               GLuint tex_2d_dmap_;
+               std::shared_ptr<VTexture> tex_2d_dmap_;
 
                int blend_num_bits_;
                static bool clear_pool_;
@@ -425,6 +439,9 @@ namespace FLIVR
 
 			   static bool load_on_main_thread_;
 
+			   static std::shared_ptr<VVulkan> m_vulkan;
+			   static std::shared_ptr<Vulkan2dRender> m_v2drender;
+
                //for view testing
                float mvmat_[16];
                float prmat_[16];
@@ -444,7 +461,7 @@ namespace FLIVR
                //compute view
                Ray compute_view();
 			   Ray compute_snapview(double snap);
-		double compute_rate_scale(Vector v);
+			   double compute_rate_scale(Vector v);
 
                //brick distance sort
                static bool brick_sort(const BrickDist& bd1, const BrickDist& bd2);
@@ -455,13 +472,13 @@ namespace FLIVR
 
                //load texture bricks for drawing
                //unit:assigned unit, c:channel
-               GLint load_brick(int unit, int c, vector<TextureBrick*> *b, int i, GLint filter=GL_LINEAR, bool compression=false, int mode=0, bool set_drawn=true);
+               std::shared_ptr<VTexture> load_brick(int unit, int c, vector<TextureBrick*> *b, int i, VkFilter filter=VK_FILTER_LINEAR, bool compression=false, int mode=0, bool set_drawn=true);
                //load the texture for volume mask into texture pool
-               GLint load_brick_mask(vector<TextureBrick*> *b, int i, GLint filter=GL_NEAREST, bool compression=false, int unit=0, bool swap_mem=false, bool set_drawn=true);
+               std::shared_ptr<VTexture> load_brick_mask(vector<TextureBrick*> *b, int i, VkFilter filter=VK_FILTER_NEAREST, bool compression=false, int unit=0, bool swap_mem=false, bool set_drawn=true);
 			   //load the texture for volume labeling into texture pool
-               GLint load_brick_label(vector<TextureBrick*> *b, int i, bool swap_mem=false, bool set_drawn=true);
+               std::shared_ptr<VTexture> load_brick_label(vector<TextureBrick*> *b, int i, bool swap_mem=false, bool set_drawn=true);
 			   //load the texture for volume stroke into texture pool
-               GLint load_brick_stroke(vector<TextureBrick*> *b, int i, GLint filter=GL_NEAREST, bool compression=false, int unit=0, bool swap_mem=false);
+               std::shared_ptr<VTexture> load_brick_stroke(vector<TextureBrick*> *b, int i, VkFilter filter=VK_FILTER_NEAREST, bool compression=false, int unit=0, bool swap_mem=false);
                void release_texture(int unit, GLenum target);
 
                //draw slices of the volume
@@ -497,23 +514,6 @@ namespace FLIVR
 			   ////Vulkan Settings
 			   shared_ptr<VVulkan> vulkan_;
 
-			   struct VVertex {
-				   float pos[3];
-				   float uv[3];
-			   };
-
-			   struct VTexture {
-				   VkSampler sampler = VK_NULL_HANDLE;
-				   VkImage image = VK_NULL_HANDLE;
-				   VkImageLayout imageLayout;
-				   VkDeviceMemory deviceMemory = VK_NULL_HANDLE;
-				   VkImageView view = VK_NULL_HANDLE;
-				   VkDescriptorImageInfo descriptor;
-				   VkFormat format;
-				   uint32_t width, height, depth;
-				   uint32_t mipLevels;
-			   } texture_;
-
 			   struct {
 				   VkPipelineVertexInputStateCreateInfo inputState;
 				   std::vector<VkVertexInputBindingDescription> inputBinding;
@@ -524,10 +524,9 @@ namespace FLIVR
 				   vks::Buffer vertexBuffer;
 				   vks::Buffer indexBuffer;
 				   uint32_t indexCount;
-			   } brk_vertbuf_, quad_vertbuf_;
+			   } brk_vertbuf_;
 
 			   vks::Buffer brk_uniformBufferVS_;
-			   vks::Buffer quad_uniformBufferVS_;
 
 			   struct BrkUboVS {
 				   glm::mat4 projection;
@@ -535,13 +534,6 @@ namespace FLIVR
 				   glm::vec4 viewPos;
 				   float depth = 0.0f;
 			   } brk_uboVS_;
-
-			   struct QuadUboVS {
-				   glm::mat4 projection;
-				   glm::mat4 model;
-				   glm::vec4 viewPos;
-				   float depth = 0.0f;
-			   } quad_uboVS_;
 
 			   struct {
 				   VkPipeline brk;

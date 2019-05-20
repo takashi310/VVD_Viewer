@@ -39,6 +39,8 @@ public:
 		VkBool32 uniforms[V2DRENDER_UNIFORM_NUM] = { VK_FALSE };
 		VkBool32 samplers[IMG_SHDR_SAMPLER_NUM] = { VK_FALSE };
 	};
+
+	unsigned char constant_buf[V2DRENDER_UNIFORM_VEC_NUM*sizeof(glm::vec4) + V2DRENDER_UNIFORM_MAT_NUM*sizeof(glm::mat4)];
 	
 	FLIVR::ImgShaderFactory::ImgPipelineSettings m_img_pipeline_settings;
 	std::vector<V2dPipeline> m_pipelines;
@@ -68,12 +70,12 @@ public:
 		int blend = V2DRENDER_BLEND_OVER;
 		bool clear = false;
 		VkClearColorValue clearColor = { 0.0f, 0.0f, 0.0f, 0.0f };
-		VVulkan::VTexture *tex[IMG_SHDR_SAMPLER_NUM] = { NULL };
+		VTexture *tex[IMG_SHDR_SAMPLER_NUM] = { NULL };
 		glm::vec4 loc[V2DRENDER_UNIFORM_VEC_NUM] = { glm::vec4(0.0f) };
 		glm::mat4 matrix[V2DRENDER_UNIFORM_MAT_NUM] = { glm::mat4(1.0f) };
 	};
 
-	void setupDescriptorSet(const V2DRenderParams &params);
+	void setupDescriptorSet(const V2DRenderParams &params, const V2dPipeline &pipeline);
 	void buildCommandBuffer(VkCommandBuffer commandbufs[], int commandbuf_num, VVulkan::FrameBuffer framebuf, const V2DRenderParams &params);
 };
 

@@ -357,12 +357,12 @@ void Vulkan2dRender::getEnabledUniforms(V2dPipeline pipeline, const std::string 
 	}
 }
 
-void Vulkan2dRender::setupDescriptorSet(const V2DRenderParams &params)
+void Vulkan2dRender::setupDescriptorSet(const V2DRenderParams &params, const V2dPipeline &pipeline)
 {
 	std::vector<VkWriteDescriptorSet> descriptorWrites;
 
 	for (int i = 0; i < IMG_SHDR_SAMPLER_NUM; i++) {
-		if (params.tex[i]) {
+		if (params.tex[i] && pipeline.samplers[i]) {
 			VkWriteDescriptorSet dw;
 			dw.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			dw.dstSet = m_img_pipeline_settings.descriptorSet;
@@ -384,7 +384,21 @@ void Vulkan2dRender::buildCommandBuffer(VkCommandBuffer commandbufs[], int comma
 
 	V2dPipeline pipeline = preparePipeline(params.shader, params.blend);
 
-	setupDescriptorSet(params);
+	setupDescriptorSet(params, pipeline);
+
+	uint64_t constsize = 0;
+	for (int32_t i = 0; i < V2DRENDER_UNIFORM_VEC_NUM; i++) {
+		if (pipeline.uniforms[i]) {
+			memcpy(constant_buf+constsize, &params.loc[i], sizeof(glm::vec4));
+			constsize += sizeof(glm::vec4);
+		}
+	}
+	for (int32_t i = V2DRENDER_UNIFORM_VEC_NUM; i < V2DRENDER_UNIFORM_NUM; i++) {
+		if (pipeline.uniforms[i]) {
+			memcpy(constant_buf+constsize, &params.matrix[i-V2DRENDER_UNIFORM_VEC_NUM], sizeof(glm::mat4));
+			constsize += sizeof(glm::mat4);
+		}
+	}
 
 	VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
 
@@ -417,8 +431,29 @@ void Vulkan2dRender::buildCommandBuffer(VkCommandBuffer commandbufs[], int comma
 		VkRect2D scissor = vks::initializers::rect2D(framebuf.w, framebuf.h, 0, 0);
 		vkCmdSetScissor(commandbufs[i], 0, 1, &scissor);
 
-		vkCmdBindDescriptorSets(commandbufs[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_img_pipeline_settings.pipelineLayout, 0, 1, &m_img_pipeline_settings.descriptorSet, 0, NULL);
+		vkCmdBindDescriptorSets(
+			commandbufs[i], 
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			m_img_pipeline_settings.pipelineLayout,
+			0,
+			1,
+			&m_img_pipeline_settings.descriptorSet,
+			0,
+			NULL);
+
 		vkCmdBindPipeline(commandbufs[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
+
+		//push constants
+		if (constsize > 0)
+		{
+			vkCmdPushConstants(
+				commandbufs[i],
+				m_img_pipeline_settings.pipelineLayout,
+				VK_SHADER_STAGE_FRAGMENT_BIT,
+				0,
+				constsize,
+				constant_buf);
+		}
 
 		VkDeviceSize offsets[1] = { 0 };
 		vkCmdBindVertexBuffers(commandbufs[i], 0, 1, &m_vertexBuffer.buffer, offsets);

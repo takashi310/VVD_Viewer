@@ -89,6 +89,18 @@ namespace FLIVR
 		}
 	}
 
+	void ShaderProgram::finalize_shaders_supported()
+	{
+		if (vulkan_)
+			vulkan_.reset();
+
+		supported_ = false;
+		max_texture_size_ = 0;
+		non_2_textures_ = false;
+		init_ = false;
+
+	}
+
 	bool ShaderProgram::shaders_supported()
 	{
 		return supported_;
