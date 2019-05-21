@@ -377,7 +377,7 @@ void Vulkan2dRender::setupDescriptorSet(const V2DRenderParams &params, const V2d
 	vkUpdateDescriptorSets(m_vulkan->getDevice(), descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
 }
 
-void Vulkan2dRender::buildCommandBuffer(VkCommandBuffer commandbufs[], int commandbuf_num, VVulkan::FrameBuffer framebuf, const V2DRenderParams &params)
+void Vulkan2dRender::buildCommandBuffer(VkCommandBuffer commandbufs[], int commandbuf_num, const std::unique_ptr<VFrameBuffer> &framebuf, const V2DRenderParams &params)
 {
 	if (!commandbufs || commandbuf_num <= 0)
 		return;
@@ -409,8 +409,8 @@ void Vulkan2dRender::buildCommandBuffer(VkCommandBuffer commandbufs[], int comma
 	renderPassBeginInfo.renderPass = m_pass;
 	renderPassBeginInfo.renderArea.offset.x = 0;
 	renderPassBeginInfo.renderArea.offset.y = 0;
-	renderPassBeginInfo.renderArea.extent.width = framebuf.w;
-	renderPassBeginInfo.renderArea.extent.height = framebuf.h;
+	renderPassBeginInfo.renderArea.extent.width = framebuf->w;
+	renderPassBeginInfo.renderArea.extent.height = framebuf->h;
 	if (params.clear) {
 		renderPassBeginInfo.clearValueCount = 1;
 		renderPassBeginInfo.pClearValues = clearValues;
@@ -419,16 +419,16 @@ void Vulkan2dRender::buildCommandBuffer(VkCommandBuffer commandbufs[], int comma
 	for (int32_t i = 0; i < commandbuf_num; ++i)
 	{
 		// Set target frame buffer
-		renderPassBeginInfo.framebuffer = framebuf.framebuffer;
+		renderPassBeginInfo.framebuffer = framebuf->framebuffer;
 
 		VK_CHECK_RESULT(vkBeginCommandBuffer(commandbufs[i], &cmdBufInfo));
 
 		vkCmdBeginRenderPass(commandbufs[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-		VkViewport viewport = vks::initializers::viewport((float)framebuf.w, (float)framebuf.h, 0.0f, 1.0f);
+		VkViewport viewport = vks::initializers::viewport((float)framebuf->w, (float)framebuf->h, 0.0f, 1.0f);
 		vkCmdSetViewport(commandbufs[i], 0, 1, &viewport);
 
-		VkRect2D scissor = vks::initializers::rect2D(framebuf.w, framebuf.h, 0, 0);
+		VkRect2D scissor = vks::initializers::rect2D(framebuf->w, framebuf->h, 0, 0);
 		vkCmdSetScissor(commandbufs[i], 0, 1, &scissor);
 
 		vkCmdBindDescriptorSets(

@@ -111,6 +111,8 @@ namespace FLIVR
 	  disp_ = true;
 	  prevent_tex_deletion_ = false;
 	  lock_brickdata_ = false;
+
+	  compression_ = false;
    }
 
    TextureBrick::~TextureBrick()
@@ -853,43 +855,42 @@ z
          return (int)data_[0]->axis[3].size;
    }
 
-   GLenum TextureBrick::tex_type_aux(Nrrd* n)
+   VkFormat TextureBrick::tex_format_aux(Nrrd* n)
    {
-      // GL_BITMAP!?
-      if (n->type == nrrdTypeChar)   return GL_BYTE;
-      if (n->type == nrrdTypeUChar)  return GL_UNSIGNED_BYTE;
-      if (n->type == nrrdTypeShort)  return GL_SHORT;
-      if (n->type == nrrdTypeUShort) return GL_UNSIGNED_SHORT;
-      if (n->type == nrrdTypeInt)    return GL_INT;
-      if (n->type == nrrdTypeUInt)   return GL_UNSIGNED_INT;
-      if (n->type == nrrdTypeFloat)  return GL_FLOAT;
-      return GL_NONE;
+      if (n->type == nrrdTypeChar)   return compression_ ? VK_FORMAT_BC4_SNORM_BLOCK : VK_FORMAT_R8_SNORM;
+      if (n->type == nrrdTypeUChar)  return compression_ ? VK_FORMAT_BC4_UNORM_BLOCK : VK_FORMAT_R8_UNORM;
+      if (n->type == nrrdTypeShort)  return VK_FORMAT_R16_SNORM;
+      if (n->type == nrrdTypeUShort) return VK_FORMAT_R16_UNORM;
+	  if (n->type == nrrdTypeInt)    return VK_FORMAT_R32_SINT;
+      if (n->type == nrrdTypeUInt)   return VK_FORMAT_R32_UINT;
+	  if (n->type == nrrdTypeFloat)  return VK_FORMAT_R32_SFLOAT;
+      return VK_FORMAT_UNDEFINED;
    }
 
-   size_t TextureBrick::tex_type_size(GLenum t)
+   size_t TextureBrick::tex_format_size(VkFormat t)
    {
-      if (t == GL_BYTE)           { return sizeof(GLbyte); }
-      if (t == GL_UNSIGNED_BYTE)  { return sizeof(GLubyte); }
-      if (t == GL_SHORT)          { return sizeof(GLshort); }
-      if (t == GL_UNSIGNED_SHORT) { return sizeof(GLushort); }
-      if (t == GL_INT)            { return sizeof(GLint); }
-      if (t == GL_UNSIGNED_INT)   { return sizeof(GLuint); }
-      if (t == GL_FLOAT)          { return sizeof(GLfloat); }
+      if (t == VK_FORMAT_R8_SNORM || VK_FORMAT_BC4_SNORM_BLOCK)  { return sizeof(int8_t); }
+      if (t == VK_FORMAT_R8_UNORM || VK_FORMAT_BC4_UNORM_BLOCK)  { return sizeof(uint8_t); }
+      if (t == VK_FORMAT_R16_SNORM) { return sizeof(int16_t); }
+      if (t == VK_FORMAT_R16_UNORM) { return sizeof(uint16_t); }
+      if (t == VK_FORMAT_R32_SINT)  { return sizeof(int32_t); }
+      if (t == VK_FORMAT_R32_UINT)  { return sizeof(uint32_t); }
+      if (t == VK_FORMAT_R32_SFLOAT){ return sizeof(float); }
       return 0;
    }
 
-   GLenum TextureBrick::tex_type(int c)
+   VkFormat TextureBrick::tex_format(int c)
    {
       if (c < nc_)
-         return tex_type_aux(data_[c]);
+         return tex_format_aux(data_[c]);
       else if (c == nmask_)
-         return GL_UNSIGNED_BYTE;
+		 return VK_FORMAT_R8_UNORM;
       else if (c == nlabel_)
-         return GL_UNSIGNED_INT;
+         return VK_FORMAT_R16_UINT;
 	  else if (c == nstroke_)
-         return GL_UNSIGNED_BYTE;
+         return VK_FORMAT_R8_UNORM;
       else
-         return GL_NONE;
+         return VK_FORMAT_UNDEFINED;
    }
 
    void *TextureBrick::tex_data(int c)
@@ -902,7 +903,7 @@ z
 			   long long offset = (long long)(oz()) * (long long)(sx()) * (long long)(sy()) +
 								  (long long)(oy()) * (long long)(sx()) +
 								  (long long)(ox());
-			   return ptr + offset * tex_type_size(tex_type(c));
+			   return ptr + offset * tex_format_size(tex_format(c));
 		   }
 	   }
 
@@ -915,7 +916,7 @@ z
 	   if(brkdata_) ptr = (char *)(brkdata_->getData());
 	   else
 	   {
-		   int bd = tex_type_size(tex_type(c));
+		   int bd = tex_format_size(tex_format(c));
 		   size_t bsize = (size_t)nx_*(size_t)ny_*(size_t)nz_*(size_t)bd;
 		   ptr = new char[bsize];
 		   if (!read_brick(ptr, bsize, finfo))
@@ -935,7 +936,7 @@ z
          priority_ = 0;
          return;
       }
-      size_t vs = tex_type_size(tex_type(0));
+      size_t vs = tex_format_size(tex_format(0));
       size_t sx = data_[0]->axis[0].size;
       size_t sy = data_[0]->axis[1].size;
       if (vs == 1)

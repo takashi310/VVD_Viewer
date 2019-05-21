@@ -76,7 +76,7 @@ public:
 	};
 
 	void setupDescriptorSet(const V2DRenderParams &params, const V2dPipeline &pipeline);
-	void buildCommandBuffer(VkCommandBuffer commandbufs[], int commandbuf_num, VVulkan::FrameBuffer framebuf, const V2DRenderParams &params);
+	void buildCommandBuffer(VkCommandBuffer commandbufs[], int commandbuf_num, const std::unique_ptr<VFrameBuffer> &framebuf, const V2DRenderParams &params);
 };
 
 #endif

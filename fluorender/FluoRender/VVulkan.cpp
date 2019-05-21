@@ -47,9 +47,9 @@ std::shared_ptr<VTexture> VVulkan::GenTexture2D(VkFormat format, VkFilter filter
 {
 	std::shared_ptr<VTexture> ret = std::make_shared<VTexture>(VTexture());
 
-	ret->width = w;
-	ret->height = h;
-	ret->depth = 1;
+	ret->w = w;
+	ret->h = h;
+	ret->d = 1;
 	ret->mipLevels = 1;
 	ret->format = format;
 	ret->image = VK_NULL_HANDLE;
@@ -84,9 +84,9 @@ std::shared_ptr<VTexture> VVulkan::GenTexture2D(VkFormat format, VkFilter filter
 	imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 	imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 	imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	imageCreateInfo.extent.width = ret->width;
-	imageCreateInfo.extent.height = ret->height;
-	imageCreateInfo.extent.depth = ret->depth;
+	imageCreateInfo.extent.width = ret->w;
+	imageCreateInfo.extent.height = ret->h;
+	imageCreateInfo.extent.depth = ret->d;
 	// Set initial layout of the image to undefined
 	imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	imageCreateInfo.usage = usage;
@@ -148,9 +148,9 @@ std::shared_ptr<VTexture> VVulkan::GenTexture3D(VkFormat format, VkFilter filter
 {
 	std::shared_ptr<VTexture> ret = std::make_shared<VTexture>(VTexture());
 
-	ret->width = w;
-	ret->height = h;
-	ret->depth = 1;
+	ret->w = w;
+	ret->h = h;
+	ret->d = 1;
 	ret->mipLevels = 1;
 	ret->format = format;
 	ret->image = VK_NULL_HANDLE;
@@ -185,9 +185,9 @@ std::shared_ptr<VTexture> VVulkan::GenTexture3D(VkFormat format, VkFilter filter
 	imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 	imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 	imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	imageCreateInfo.extent.width = ret->width;
-	imageCreateInfo.extent.height = ret->height;
-	imageCreateInfo.extent.depth = ret->depth;
+	imageCreateInfo.extent.width = ret->w;
+	imageCreateInfo.extent.height = ret->h;
+	imageCreateInfo.extent.depth = ret->d;
 	// Set initial layout of the image to undefined
 	imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	imageCreateInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
@@ -270,46 +270,46 @@ void VVulkan::checkStagingBuffer(VkDeviceSize size)
 }
 
 
-bool VVulkan::UploadTexture3D(VTexture tex, void *data, VkOffset3D offset, VkExtent3D extent, uint32_t xpitch, uint32_t ypitch, uint32_t bytes)
+bool VVulkan::UploadTexture3D(const std::shared_ptr<const VTexture> &tex, void *data, VkOffset3D offset, uint32_t ypitch, uint32_t zpitch)
 {
-	const VkDeviceSize texMemSize = (VkDeviceSize)tex.width * (VkDeviceSize)tex.height * (VkDeviceSize)tex.depth * (VkDeviceSize)tex.bytes;
+	const VkDeviceSize texMemSize = (VkDeviceSize)tex->w * (VkDeviceSize)tex->h * (VkDeviceSize)tex->d * (VkDeviceSize)tex->bytes;
 
 	checkStagingBuffer(texMemSize);
 
 	// Copy texture data into staging buffer
-	uint64_t poffset = offset.z*ypitch*xpitch + offset.y*xpitch + offset.x*bytes;
-	uint64_t dst_xpitch = (VkDeviceSize)texture.width * (VkDeviceSize)texture.bytes;
+	uint64_t poffset = offset.z*zpitch + offset.y*ypitch + offset.x*(VkDeviceSize)tex->bytes;
+	uint64_t dst_ypitch = (VkDeviceSize)tex->w * (VkDeviceSize)tex->bytes;
 	unsigned char* dstp = (unsigned char*)staging_buf.mapped;
 	unsigned char* tp = (unsigned char *)data + poffset;
 	unsigned char* tp2; 
-	for (uint32_t z = 0; z < extent.depth; z++)
+	for (uint32_t z = 0; z < tex->d; z++)
 	{
 		tp2 = tp;
-		for (uint32_t y = 0; y < extent.height; y++)
+		for (uint32_t y = 0; y < tex->h; y++)
 		{
-			memcpy(dstp, tp2, dst_xpitch);
-			dstp += dst_xpitch;
-			tp2 += xpitch;
+			memcpy(dstp, tp2, dst_ypitch);
+			dstp += dst_ypitch;
+			tp2 += ypitch;
 		}
-		tp += ypitch*xpitch;
+		tp += zpitch;
 	}
 
-	CopyDataStagingBuf2Tex3D(tex);
+	CopyDataStagingBuf2Tex(tex);
 }
 
-bool VVulkan::UploadTexture3D(VTexture tex, void *data)
+bool VVulkan::UploadTexture(const std::shared_ptr<const VTexture> &tex, void *data)
 {
-	const VkDeviceSize texMemSize = (VkDeviceSize)tex.width * (VkDeviceSize)tex.height * (VkDeviceSize)tex.depth * (VkDeviceSize)tex.bytes;
+	const VkDeviceSize texMemSize = (VkDeviceSize)tex->w * (VkDeviceSize)tex->h * (VkDeviceSize)tex->d * (VkDeviceSize)tex->bytes;
 
 	checkStagingBuffer(texMemSize);
 
 	// Copy texture data into staging buffer
 	memcpy(staging_buf.mapped, data, texMemSize);
 
-	CopyDataStagingBuf2Tex3D(tex);
+	CopyDataStagingBuf2Tex(tex);
 }
 
-void VVulkan::CopyDataStagingBuf2Tex3D(VTexture tex)
+void VVulkan::CopyDataStagingBuf2Tex(const std::shared_ptr<const VTexture> &tex)
 {
 	VkCommandBuffer copyCmd = VulkanExampleBase::createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
 
@@ -325,7 +325,7 @@ void VVulkan::CopyDataStagingBuf2Tex3D(VTexture tex)
 	// initial undefined image layout to the transfer destination layout
 	vks::tools::setImageLayout(
 		copyCmd,
-		tex.image,
+		tex->image,
 		VK_IMAGE_LAYOUT_UNDEFINED,
 		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 		subresourceRange);
@@ -336,26 +336,27 @@ void VVulkan::CopyDataStagingBuf2Tex3D(VTexture tex)
 	bufferCopyRegion.imageSubresource.mipLevel = 0;
 	bufferCopyRegion.imageSubresource.baseArrayLayer = 0;
 	bufferCopyRegion.imageSubresource.layerCount = 1;
-	bufferCopyRegion.imageExtent.width = tex.width;
-	bufferCopyRegion.imageExtent.height = tex.height;
-	bufferCopyRegion.imageExtent.depth = tex.depth;
+	bufferCopyRegion.imageExtent.width = tex->w;
+	bufferCopyRegion.imageExtent.height = tex->h;
+	bufferCopyRegion.imageExtent.depth = tex->d;
 
 	vkCmdCopyBufferToImage(
 		copyCmd,
 		staging_buf.buffer,
-		tex.image,
+		tex->image,
 		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 		1,
 		&bufferCopyRegion);
 
 	// Change texture image layout to shader read after all mip levels have been copied
-	tex.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	tex->imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	vks::tools::setImageLayout(
 		copyCmd,
-		tex.image,
+		tex->image,
 		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		tex.imageLayout,
+		tex->imageLayout,
 		subresourceRange);
 
 	VulkanExampleBase::flushCommandBuffer(copyCmd, queue, true);
 }
+

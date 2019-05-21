@@ -44,6 +44,7 @@
 
 #include "VVulkan.h"
 #include "Vulkan2dRender.h"
+#include <memory>
 
 #include "DLLExport.h"
 
@@ -112,26 +113,16 @@ namespace FLIVR
 
    struct TexParam
    {
-      int nx, ny, nz, nb;
-      unsigned int id;
+      std::shared_ptr<VTexture> tex;
       TextureBrick *brick;
       int comp;
-      GLenum textype;
       bool delayed_del;
       TexParam() :
-         nx(0), ny(0), nz(0), nb(0),
-         id(0), brick(0), comp(0),
-         textype(GL_UNSIGNED_BYTE),
+         tex(0), brick(0), comp(0),
          delayed_del(false)
       {}
-      TexParam(int c, int x,
-            int y, int z,
-            int b, GLenum f,
-            unsigned int i) :
-          nx(x), ny(y),
-         nz(z), nb(b), id(i),
-         brick(0), comp(c), textype(f),
-         delayed_del(false)
+      TexParam(int c, const std::shared_ptr<VTexture> &t) :
+         tex(t), brick(0), comp(c), delayed_del(false)
       {}
    };
 
@@ -171,12 +162,12 @@ namespace FLIVR
          void resize();
 
          //set the 2d texture mask for segmentation
-         void set_2d_mask(GLuint id);
+         void set_2d_mask(const shared_ptr<VTexture> tex);
          //set 2d weight map for segmentation
-         void set_2d_weight(GLuint weight1, GLuint weight2);
+         void set_2d_weight(const shared_ptr<VTexture> weight1, const shared_ptr<VTexture> weight2);
 
          //set the 2d texture depth map for rendering shadows
-         void set_2d_dmap(GLuint id);
+         void set_2d_dmap(const shared_ptr<VTexture> tex);
 
          // Tests the bounding box against the current MODELVIEW and
          // PROJECTION matrices to determine if it is within the viewport.
@@ -222,7 +213,7 @@ namespace FLIVR
 		 void set_desel_palette_mode_dark(float fac=0.1);
 		 void set_desel_palette_mode_gray(float fac=0.1);
 		 void set_desel_palette_mode_invisible();
-		 GLuint get_palette();
+		 std::shared_ptr<VTexture> get_palette();
 		 bool is_sel_id(int id);
 		 void add_sel_id(int id);
 		 void del_sel_id(int id);
@@ -351,12 +342,12 @@ namespace FLIVR
 
                //blend frame buffer for output
                bool blend_framebuffer_resize_;
-               VVulkan::FrameBuffer blend_framebuffer_;
+               std::unique_ptr<VFrameBuffer> blend_framebuffer_;
 			   std::shared_ptr<VTexture> blend_tex_id_;
 			   std::shared_ptr<VTexture> label_tex_id_;
                //2nd buffer for multiple filtering
                bool filter_buffer_resize_;
-               VVulkan::FrameBuffer filter_buffer_;
+               std::unique_ptr<VFrameBuffer> filter_buffer_;
                std::shared_ptr<VTexture> filter_tex_id_;
 
 			   std::shared_ptr<VTexture> palette_tex_id_;
@@ -378,9 +369,9 @@ namespace FLIVR
                static VolCalShaderFactory cal_shader_factory_;
 
                //3d frame buffer object for mask
-               VVulkan::FrameBuffer fbo_mask_;
+               std::unique_ptr<VFrameBuffer> fbo_mask_;
                //3d frame buffer object for label
-               VVulkan::FrameBuffer fbo_label_;
+               std::unique_ptr<VFrameBuffer> fbo_label_;
                //2d mask texture
                std::shared_ptr<VTexture> tex_2d_mask_;
                //2d weight map
@@ -453,8 +444,7 @@ namespace FLIVR
 			   glm::mat4 m_tex_mat;
 
 			   //vertex and index buffer bind points
-			   GLuint m_slices_vbo, m_slices_ibo, m_slices_vao;
-			   GLuint m_quad_vbo, m_quad_vao;
+			   vks::Buffer m_slices_vbo, m_slices_ibo, m_slices_vao;
 
 			   wxCriticalSection m_pThreadCS;
 
@@ -541,28 +531,13 @@ namespace FLIVR
 			   } pipelines_;
 
 			   // Framebuffer for offscreen rendering
-			   struct FrameBufferAttachment {
-				   VkImage image;
-				   VkDeviceMemory mem;
-				   VkImageView view;
-			   };
-			   struct FrameBuffer {
-				   VkFramebuffer framebuffer;
-				   FrameBufferAttachment color, depth;
-				   VkDescriptorImageInfo descriptor;
-			   } brk_framebuf_, quad_framebuf_;
-
-			   struct OffscreenPass {
-				   int32_t width, height;
-				   VkRenderPass renderPass;
-				   VkSampler sampler;
-			   } brk_offscreenPass_, quad_offscreenPass_;
+			   VkRenderPass brk_offscreenPass_, quad_offscreenPass_;
 
 			   struct PipelineSettings {
 				   VkPipelineLayout pipelineLayout;
 				   VkDescriptorSet descriptorSet;
 				   VkDescriptorSetLayout descriptorSetLayout;
-			   } brk_pipeset, quad_pipeset;
+			   } brk_pipeset;
 
 			   void generateViewQuad();
 			   void setupVertexDescriptions();

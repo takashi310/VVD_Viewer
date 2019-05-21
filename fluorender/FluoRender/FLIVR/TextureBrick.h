@@ -259,7 +259,7 @@ namespace FLIVR {
 		void set_priority_brk(std::ifstream* ifs, int filetype);
 		inline int get_priority() {return priority_;}
 
-		virtual GLenum tex_type(int c);
+		virtual VkFormat tex_format(int c);
 		virtual void* tex_data(int c);
 		virtual void* tex_data_brk(int c, const FileLocInfo* finfo);
 		
@@ -337,12 +337,15 @@ namespace FLIVR {
 
 		void set_disp(bool disp) {disp_ = disp;}
 		bool get_disp() {return disp_;}
+
+		void set_compression(bool compression) {compression_ = compression;}
+		bool get_compression() {return compression_;}
         
         static void setCURL(CURL *c) {s_curl_ = c;}
 		static void setCURL_Multi(CURLM *c) {s_curlm_ = c;}
 
-		size_t tex_type_size(GLenum t);
-		GLenum tex_type_aux(Nrrd* n);
+		size_t tex_format_size(VkFormat t);
+		VkFormat tex_format_aux(Nrrd* n);
 		bool read_brick(char* data, size_t size, const FileLocInfo* finfo);
 		void set_brkdata(const std::shared_ptr<VL_Array> &brkdata) {brkdata_ = brkdata;}
 		void set_brkdata(void *brkdata, size_t size) {brkdata_ = std::make_shared<VL_Array>((char *)brkdata, size);}
@@ -434,6 +437,8 @@ namespace FLIVR {
 		vector<int> size_integ_i_;
 
 		bool disp_;
+
+		bool compression_;
         
         static CURL *s_curl_;
 		static CURLM *s_curlm_;
