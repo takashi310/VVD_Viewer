@@ -70,13 +70,13 @@ public:
 		int blend = V2DRENDER_BLEND_OVER;
 		bool clear = false;
 		VkClearColorValue clearColor = { 0.0f, 0.0f, 0.0f, 0.0f };
-		VTexture *tex[IMG_SHDR_SAMPLER_NUM] = { NULL };
+		vks::VTexture *tex[IMG_SHDR_SAMPLER_NUM] = { NULL };
 		glm::vec4 loc[V2DRENDER_UNIFORM_VEC_NUM] = { glm::vec4(0.0f) };
 		glm::mat4 matrix[V2DRENDER_UNIFORM_MAT_NUM] = { glm::mat4(1.0f) };
 	};
-
+	
 	void setupDescriptorSet(const V2DRenderParams &params, const V2dPipeline &pipeline);
-	void buildCommandBuffer(VkCommandBuffer commandbufs[], int commandbuf_num, const std::unique_ptr<VFrameBuffer> &framebuf, const V2DRenderParams &params);
+	void buildCommandBuffer(VkCommandBuffer commandbufs[], int commandbuf_num, const std::unique_ptr<vks::VFrameBuffer> &framebuf, const V2DRenderParams &params);
 };
 
 #endif

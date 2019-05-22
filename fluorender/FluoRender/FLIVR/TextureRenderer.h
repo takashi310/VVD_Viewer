@@ -113,7 +113,7 @@ namespace FLIVR
 
    struct TexParam
    {
-      std::shared_ptr<VTexture> tex;
+      std::shared_ptr<vks::VTexture> tex;
       TextureBrick *brick;
       int comp;
       bool delayed_del;
@@ -121,7 +121,7 @@ namespace FLIVR
          tex(0), brick(0), comp(0),
          delayed_del(false)
       {}
-      TexParam(int c, const std::shared_ptr<VTexture> &t) :
+      TexParam(int c, const std::shared_ptr<vks::VTexture> &t) :
          tex(t), brick(0), comp(c), delayed_del(false)
       {}
    };
@@ -162,19 +162,17 @@ namespace FLIVR
          void resize();
 
          //set the 2d texture mask for segmentation
-         void set_2d_mask(const shared_ptr<VTexture> tex);
+         void set_2d_mask(const shared_ptr<vks::VTexture> tex);
          //set 2d weight map for segmentation
-         void set_2d_weight(const shared_ptr<VTexture> weight1, const shared_ptr<VTexture> weight2);
+         void set_2d_weight(const shared_ptr<vks::VTexture> weight1, const shared_ptr<vks::VTexture> weight2);
 
          //set the 2d texture depth map for rendering shadows
-         void set_2d_dmap(const shared_ptr<VTexture> tex);
+         void set_2d_dmap(const shared_ptr<vks::VTexture> tex);
 
          // Tests the bounding box against the current MODELVIEW and
          // PROJECTION matrices to determine if it is within the viewport.
          // Returns true if it is visible.
 		bool test_against_view(const BBox &bbox, bool persp=false);
-
-		 void clear_brick_buf();
 
 		 void init_palette();
 		 void update_palette_tex();
@@ -213,7 +211,7 @@ namespace FLIVR
 		 void set_desel_palette_mode_dark(float fac=0.1);
 		 void set_desel_palette_mode_gray(float fac=0.1);
 		 void set_desel_palette_mode_invisible();
-		 std::shared_ptr<VTexture> get_palette();
+		 std::vector<std::shared_ptr<vks::VTexture>> get_palette();
 		 bool is_sel_id(int id);
 		 void add_sel_id(int id);
 		 void del_sel_id(int id);
@@ -342,16 +340,16 @@ namespace FLIVR
 
                //blend frame buffer for output
                bool blend_framebuffer_resize_;
-               std::unique_ptr<VFrameBuffer> blend_framebuffer_;
-			   std::shared_ptr<VTexture> blend_tex_id_;
-			   std::shared_ptr<VTexture> label_tex_id_;
+               std::unique_ptr<vks::VFrameBuffer> blend_framebuffer_;
+			   std::shared_ptr<vks::VTexture> blend_tex_id_;
+			   std::shared_ptr<vks::VTexture> label_tex_id_;
                //2nd buffer for multiple filtering
                bool filter_buffer_resize_;
-               std::unique_ptr<VFrameBuffer> filter_buffer_;
-               std::shared_ptr<VTexture> filter_tex_id_;
+               std::unique_ptr<vks::VFrameBuffer> filter_buffer_;
+               std::shared_ptr<vks::VTexture> filter_tex_id_;
 
-			   std::shared_ptr<VTexture> palette_tex_id_;
-			   std::shared_ptr<VTexture> base_palette_tex_id_;
+			   std::vector<std::shared_ptr<vks::VTexture>> palette_tex_id_;
+			   std::vector<std::shared_ptr<vks::VTexture>> base_palette_tex_id_;
 			   unsigned char palette_[PALETTE_SIZE*PALETTE_ELEM_COMP];
 			   unsigned char base_palette_[PALETTE_SIZE*PALETTE_ELEM_COMP];
 			   unordered_set<int> sel_ids_;
@@ -369,19 +367,18 @@ namespace FLIVR
                static VolCalShaderFactory cal_shader_factory_;
 
                //3d frame buffer object for mask
-               std::unique_ptr<VFrameBuffer> fbo_mask_;
+               std::unique_ptr<vks::VFrameBuffer> fbo_mask_;
                //3d frame buffer object for label
-               std::unique_ptr<VFrameBuffer> fbo_label_;
+               std::unique_ptr<vks::VFrameBuffer> fbo_label_;
                //2d mask texture
-               std::shared_ptr<VTexture> tex_2d_mask_;
+               std::shared_ptr<vks::VTexture> tex_2d_mask_;
                //2d weight map
-               std::shared_ptr<VTexture> tex_2d_weight1_;  //after tone mapping
-               std::shared_ptr<VTexture> tex_2d_weight2_;  //before tone mapping
+               std::shared_ptr<vks::VTexture> tex_2d_weight1_;  //after tone mapping
+               std::shared_ptr<vks::VTexture> tex_2d_weight2_;  //before tone mapping
                //2d depth map texture
-               std::shared_ptr<VTexture> tex_2d_dmap_;
+               std::shared_ptr<vks::VTexture> tex_2d_dmap_;
 
                int blend_num_bits_;
-               static bool clear_pool_;
 
 			   struct LoadedBrick {
 				   bool swapped;
@@ -455,26 +452,18 @@ namespace FLIVR
 
                //brick distance sort
                static bool brick_sort(const BrickDist& bd1, const BrickDist& bd2);
-               //check and swap memory
-               int check_swap_memory(TextureBrick* brick, int c);
-			   bool return_brick(const TexParam &texp);
-			   void clean_texpool();
+
 
                //load texture bricks for drawing
                //unit:assigned unit, c:channel
-               std::shared_ptr<VTexture> load_brick(int unit, int c, vector<TextureBrick*> *b, int i, VkFilter filter=VK_FILTER_LINEAR, bool compression=false, int mode=0, bool set_drawn=true);
+			   std::shared_ptr<vks::VTexture> load_brick(vks::VulkanDevice *device, int unit, int c, vector<TextureBrick*> *b, int i, VkFilter filter=VK_FILTER_LINEAR, bool compression=false, int mode=0, bool set_drawn=true);
                //load the texture for volume mask into texture pool
-               std::shared_ptr<VTexture> load_brick_mask(vector<TextureBrick*> *b, int i, VkFilter filter=VK_FILTER_NEAREST, bool compression=false, int unit=0, bool swap_mem=false, bool set_drawn=true);
+               std::shared_ptr<vks::VTexture> load_brick_mask(vks::VulkanDevice *device, vector<TextureBrick*> *b, int i, VkFilter filter=VK_FILTER_NEAREST, bool compression=false, int unit=0, bool swap_mem=false, bool set_drawn=true);
 			   //load the texture for volume labeling into texture pool
-               std::shared_ptr<VTexture> load_brick_label(vector<TextureBrick*> *b, int i, bool swap_mem=false, bool set_drawn=true);
+               std::shared_ptr<vks::VTexture> load_brick_label(vks::VulkanDevice *device, vector<TextureBrick*> *b, int i, bool swap_mem=false, bool set_drawn=true);
 			   //load the texture for volume stroke into texture pool
-               std::shared_ptr<VTexture> load_brick_stroke(vector<TextureBrick*> *b, int i, VkFilter filter=VK_FILTER_NEAREST, bool compression=false, int unit=0, bool swap_mem=false);
+               std::shared_ptr<vks::VTexture> load_brick_stroke(vks::VulkanDevice *device, vector<TextureBrick*> *b, int i, VkFilter filter=VK_FILTER_NEAREST, bool compression=false, int unit=0, bool swap_mem=false);
                void release_texture(int unit, GLenum target);
-
-               //draw slices of the volume
-               void draw_slices(double d);
-
-			   void draw_view_quad(double d=0.0);
 
                //slices
                void draw_polygons(vector<double>& vertex, vector<double>& texcoord,
@@ -499,54 +488,6 @@ namespace FLIVR
                //bind 2d depth map for rendering shadows
                void bind_2d_dmap();
 
-			   void rearrangeLoadedBrkVec();
-
-			   ////Vulkan Settings
-			   shared_ptr<VVulkan> vulkan_;
-
-			   struct {
-				   VkPipelineVertexInputStateCreateInfo inputState;
-				   std::vector<VkVertexInputBindingDescription> inputBinding;
-				   std::vector<VkVertexInputAttributeDescription> inputAttributes;
-			   } vertices_;
-
-			   struct VertexBuffer {
-				   vks::Buffer vertexBuffer;
-				   vks::Buffer indexBuffer;
-				   uint32_t indexCount;
-			   } brk_vertbuf_;
-
-			   vks::Buffer brk_uniformBufferVS_;
-
-			   struct BrkUboVS {
-				   glm::mat4 projection;
-				   glm::mat4 model;
-				   glm::vec4 viewPos;
-				   float depth = 0.0f;
-			   } brk_uboVS_;
-
-			   struct {
-				   VkPipeline brk;
-				   VkPipeline quad;
-			   } pipelines_;
-
-			   // Framebuffer for offscreen rendering
-			   VkRenderPass brk_offscreenPass_, quad_offscreenPass_;
-
-			   struct PipelineSettings {
-				   VkPipelineLayout pipelineLayout;
-				   VkDescriptorSet descriptorSet;
-				   VkDescriptorSetLayout descriptorSetLayout;
-			   } brk_pipeset;
-
-			   void generateViewQuad();
-			   void setupVertexDescriptions();
-			   void setupDescriptorPool();
-			   void setupDescriptorSetLayout();
-			   void setupDescriptorSet();
-			   void preparePipelines();
-			   void prepareUniformBuffers();
-			   void updateUniformBuffers(bool viewchanged = true);
    };
 
 } // end namespace FLIVR

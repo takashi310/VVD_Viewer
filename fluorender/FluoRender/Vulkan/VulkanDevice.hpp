@@ -13,18 +13,26 @@
 #include <exception>
 #include <assert.h>
 #include <algorithm>
+#include <memory>
 #include "vulkan/vulkan.h"
 #include "VulkanTools.h"
 #include "VulkanBuffer.hpp"
+#include <FLIVR/TextureBrick.h>
 
 namespace vks
 {	
+	class VTexture;
+	class VFrameBuffer;
+	struct TexParam;
+	
 	struct VulkanDevice
 	{
 		/** @brief Physical device representation */
 		VkPhysicalDevice physicalDevice;
 		/** @brief Logical device representation (application's view of the device) */
 		VkDevice logicalDevice;
+		// Handle to the device graphics queue that command buffers are submitted to
+		VkQueue queue;
 		/** @brief Properties of the physical device including limits that the application can check against */
 		VkPhysicalDeviceProperties properties;
 		/** @brief Features of the physical device that an application can use to check if a feature is supported */
@@ -51,6 +59,34 @@ namespace vks
 			uint32_t compute;
 			uint32_t transfer;
 		} queueFamilyIndices;
+
+		vks::Buffer staging_buf;
+
+		VkSampler linear_sampler;
+		VkSampler nearest_sampler;
+
+		bool mem_swap = true;
+		bool use_mem_limit = false;
+		double mem_limit = 0.0;
+		double available_mem = 0.0;
+		std::vector<TexParam> tex_pool;
+
+		void clear_tex_pool();
+		static bool return_brick(const TexParam &texp);
+		void clean_texpool();
+		int check_swap_memory(FLIVR::TextureBrick* brick, int c);
+
+		void prepareSamplers();
+		void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+		void checkStagingBuffer(VkDeviceSize size);
+		std::shared_ptr<VTexture> GenTexture2D(VkFormat format, VkFilter filter, uint32_t w, uint32_t h, VkImageUsageFlags usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT);
+		std::shared_ptr<VTexture> GenTexture3D(VkFormat format, VkFilter filter, uint32_t w, uint32_t h, uint32_t d);
+		bool UploadTexture3D(const std::shared_ptr<VTexture> &tex, void *data, VkOffset3D offset, uint32_t ypitch, uint32_t zpitch);
+		bool UploadTexture(const std::shared_ptr<VTexture> &tex, void *data);
+		void CopyDataStagingBuf2Tex(const std::shared_ptr<VTexture> &tex);
+		bool DownloadTexture3D(const std::shared_ptr<VTexture> &tex, void *data, VkOffset3D offset, uint32_t ypitch, uint32_t zpitch);
+		bool DownloadTexture(const std::shared_ptr<VTexture> &tex, void *data);
+		void CopyDataTex2StagingBuf(const std::shared_ptr<VTexture> &tex);
 
 		/**  @brief Typecast to VkDevice */
 		operator VkDevice() { return logicalDevice; };
@@ -93,6 +129,9 @@ namespace vks
 					}
 				}
 			}
+
+			linear_sampler = VK_NULL_HANDLE;
+			nearest_sampler = VK_NULL_HANDLE;
 		}
 
 		/** 
@@ -102,6 +141,11 @@ namespace vks
 		*/
 		~VulkanDevice()
 		{
+			staging_buf.destroy();
+			if (linear_sampler != VK_NULL_HANDLE)
+				vkDestroySampler(logicalDevice, linear_sampler, nullptr);
+			if (nearest_sampler != VK_NULL_HANDLE)
+				vkDestroySampler(logicalDevice, nearest_sampler, nullptr);
 			if (commandPool)
 			{
 				vkDestroyCommandPool(logicalDevice, commandPool, nullptr);
@@ -320,6 +364,11 @@ namespace vks
 			}
 
 			this->enabledFeatures = enabledFeatures;
+
+			// Get a graphics queue from the device
+			vkGetDeviceQueue(logicalDevice, queueFamilyIndices.graphics, 0, &queue);
+
+			prepareSamplers();
 
 			return result;
 		}
@@ -557,4 +606,77 @@ namespace vks
 		}
 
 	};
+
+	class VTexture {
+	public:
+		VkSampler sampler;
+		VkImage image;
+		VkImageLayout imageLayout;
+		VkDeviceMemory deviceMemory;
+		VkImageView view;
+		VkDescriptorImageInfo descriptor;
+		VkFormat format;
+		VulkanDevice *device;
+		uint32_t w, h, d, bytes;
+		uint32_t mipLevels;
+		bool free_sampler;
+
+		VTexture()
+		{
+			sampler = VK_NULL_HANDLE;
+			image = VK_NULL_HANDLE;
+			deviceMemory = VK_NULL_HANDLE;
+			view = VK_NULL_HANDLE;
+			device = VK_NULL_HANDLE;
+			free_sampler = true;
+		}
+
+		~VTexture()
+		{
+			if (view != VK_NULL_HANDLE)
+				vkDestroyImageView(device->logicalDevice, view, nullptr);
+			if (image != VK_NULL_HANDLE)
+				vkDestroyImage(device->logicalDevice, image, nullptr);
+			if (sampler != VK_NULL_HANDLE && free_sampler)
+				vkDestroySampler(device->logicalDevice, sampler, nullptr);
+			if (deviceMemory != VK_NULL_HANDLE)
+				vkFreeMemory(device->logicalDevice, deviceMemory, nullptr);
+		}
+	};
+
+	class VFrameBuffer {
+	public:
+		VkFramebuffer framebuffer;
+		VulkanDevice *device;
+		int32_t w, h;
+		std::shared_ptr<VTexture> color, depth;
+
+		VFrameBuffer()
+		{
+			framebuffer = VK_NULL_HANDLE;
+			device = VK_NULL_HANDLE;
+		}
+
+		~VFrameBuffer()
+		{
+			if (framebuffer != VK_NULL_HANDLE)
+				vkDestroyFramebuffer(device->logicalDevice, framebuffer, nullptr);
+		}
+	};
+
+	struct TexParam
+	{
+		std::shared_ptr<VTexture> tex;
+		FLIVR::TextureBrick *brick;
+		int comp;
+		bool delayed_del;
+		TexParam() :
+			tex(0), brick(0), comp(0),
+			delayed_del(false)
+		{}
+		TexParam(int c, const std::shared_ptr<VTexture> &t) :
+			tex(t), brick(0), comp(c), delayed_del(false)
+		{}
+	};
+
 }

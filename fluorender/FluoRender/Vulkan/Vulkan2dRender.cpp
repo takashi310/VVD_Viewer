@@ -377,7 +377,7 @@ void Vulkan2dRender::setupDescriptorSet(const V2DRenderParams &params, const V2d
 	vkUpdateDescriptorSets(m_vulkan->getDevice(), descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
 }
 
-void Vulkan2dRender::buildCommandBuffer(VkCommandBuffer commandbufs[], int commandbuf_num, const std::unique_ptr<VFrameBuffer> &framebuf, const V2DRenderParams &params)
+void Vulkan2dRender::buildCommandBuffer(VkCommandBuffer commandbufs[], int commandbuf_num, const std::unique_ptr<vks::VFrameBuffer> &framebuf, const V2DRenderParams &params)
 {
 	if (!commandbufs || commandbuf_num <= 0)
 		return;

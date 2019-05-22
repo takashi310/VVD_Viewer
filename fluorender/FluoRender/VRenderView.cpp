@@ -7238,15 +7238,6 @@ void VRenderVulkanView::Set4DSeqFrame(int frame, bool run_script)
 				{
 					BRKXMLReader *br = (BRKXMLReader *)reader;
 					br->SetCurTime(frame);
-					int curlv = tex->GetCurLevel();
-					/*
-					for (int j = 0; j < br->GetLevelNum(); j++)
-					{
-						tex->setLevel(j);
-						if (vd->GetVR()) vd->GetVR()->clear_brick_buf();
-					}
-					*/
-					tex->setLevel(curlv);
 					tex->set_FrameAndChannel(frame, vd->GetCurChannel());
 					vd->SetCurTime(reader->GetCurTime());
 					//update rulers
@@ -7362,13 +7353,6 @@ void VRenderVulkanView::Set3DBatFrame(int offset)
 			if(tex && tex->isBrxml())
 			{
 				BRKXMLReader *br = (BRKXMLReader *)reader;
-				int curlv = tex->GetCurLevel();
-				for (int j = 0; j < br->GetLevelNum(); j++)
-				{
-					tex->setLevel(j);
-					if (vd->GetVR()) vd->GetVR()->clear_brick_buf();
-				}
-				tex->setLevel(curlv);
 				tex->set_FrameAndChannel(0, vd->GetCurChannel());
 				vd->SetCurTime(reader->GetCurTime());
 				wxString data_name = wxString(reader->GetDataName());
