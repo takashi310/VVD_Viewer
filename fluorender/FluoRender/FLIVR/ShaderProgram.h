@@ -32,7 +32,7 @@
 #include <string>
 #include <memory>
 
-#include "VVulkan.h"
+#include "vulkan/vulkan.h"
 
 #if (defined(VK_USE_PLATFORM_IOS_MVK) || defined(VK_USE_PLATFORM_MACOS_MVK))
 #include <MoltenVKGLSLToSPIRVConverter/GLSLToSPIRVConverter.h>
@@ -53,7 +53,7 @@ namespace FLIVR
 		~ShaderProgram();
 
 		unsigned int id();
-		bool create();
+		bool create(VkDevice device);
 		bool valid();
 		void destroy();
 
@@ -62,13 +62,6 @@ namespace FLIVR
 		std::string get_vertex_shader_code() { return vert_shader_; }
 		std::string get_fragment_shader_code() { return frag_shader_; }
 
-		// Call init_shaders_supported before shaders_supported queries!
-		static bool init();
-		static void init_shaders_supported(std::shared_ptr<VVulkan> vulkan);
-		static void finalize_shaders_supported();
-		static bool shaders_supported();
-		static int max_texture_size();
-		static bool texture_non_power_of_two();
 		static const int MAX_SHADER_UNIFORMS = 16;
 		static string glsl_version_;
 
@@ -91,10 +84,7 @@ namespace FLIVR
 		//validation
 		bool valid_;
 
-		static bool init_;
-		static bool supported_;
-		static bool non_2_textures_;
-		static int  max_texture_size_;
+		VkDevice device_;
 
 		static std::shared_ptr<VVulkan> vulkan_;
 	};

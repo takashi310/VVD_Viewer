@@ -154,7 +154,6 @@ namespace FLIVR
          void set_blend_num_bits(int b);
 
          //clear the opengl textures from the texture pool
-         static void clear_tex_pool();
 		void clear_tex_current();
 		void clear_tex_current_mask();
 
@@ -397,7 +396,6 @@ namespace FLIVR
 			   static double available_mainmem_buf_size_;
                static double large_data_size_;
                static int force_brick_size_;
-               static vector<TexParam> tex_pool_;
                static bool start_update_loop_;
                static bool done_update_loop_;
                static bool done_current_chan_;
@@ -463,7 +461,10 @@ namespace FLIVR
                std::shared_ptr<vks::VTexture> load_brick_label(vks::VulkanDevice *device, vector<TextureBrick*> *b, int i, bool swap_mem=false, bool set_drawn=true);
 			   //load the texture for volume stroke into texture pool
                std::shared_ptr<vks::VTexture> load_brick_stroke(vks::VulkanDevice *device, vector<TextureBrick*> *b, int i, VkFilter filter=VK_FILTER_NEAREST, bool compression=false, int unit=0, bool swap_mem=false);
-               void release_texture(int unit, GLenum target);
+               
+			   std::shared_ptr<vks::VTexture> base_fanc_load_brick_comp(vks::VulkanDevice *device, int c, TextureBrick* brick, VkFilter filter, bool compression, bool swap_mem);
+               
+			   void release_texture(int unit, GLenum target);
 
                //slices
                void draw_polygons(vector<double>& vertex, vector<double>& texcoord,

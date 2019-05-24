@@ -32,6 +32,8 @@
 #ifndef VolShader_h
 #define VolShader_h
 
+#include "VulkanDevice.hpp"
+
 #include <string>
 #include <vector>
 #include <memory>
@@ -122,10 +124,10 @@ namespace FLIVR
 	{
 	public:
 		VolShaderFactory();
-		VolShaderFactory(std::shared_ptr<VVulkan> vulkan);
+		VolShaderFactory(std::vector<vks::VulkanDevice*> &devices);
 		~VolShaderFactory();
 
-		void init(std::shared_ptr<VVulkan> vulkan);
+		void init(std::vector<vks::VulkanDevice*> &devices);
 
 		ShaderProgram* shader(bool poly, int channels,
 								bool shading, bool fog,
@@ -137,7 +139,6 @@ namespace FLIVR
 		//color_mode: 0-normal; 1-rainbow; 2-depth; 3-index; 255-index(depth mode)
 
 		struct VolPipeline {
-			VkDescriptorPool descriptorPool;
 			VkDescriptorSetLayout descriptorSetLayout;
 			VkPipelineLayout pipelineLayout;
 			VkDescriptorSet descriptorSet;
@@ -178,17 +179,18 @@ namespace FLIVR
 			vks::Buffer frag_brick;
 		};
 
-		void setupDescriptorPool();
 		void setupDescriptorSetLayout();
-		void setupDescriptorSetUniforms();
-		void setupDescriptorSetSamplers(uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites);
+		void setupDescriptorSetUniforms(vks::VulkanDevice *vdev);
+		void setupDescriptorSetSamplers(vks::VulkanDevice *vdev, uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites);
 		void prepareUniformBuffers();
-		void updateUniformBuffersVert(VolVertShaderUBO ubo);
-		void updateUniformBuffersFragBase(VolFragShaderBaseUBO ubo);
-		void updateUniformBuffersFragBrick(VolFragShaderBrickUBO ubo);
+		void updateUniformBuffersVert(vks::VulkanDevice *vdev, VolVertShaderUBO ubo);
+		void updateUniformBuffersFragBase(vks::VulkanDevice *vdev, VolFragShaderBaseUBO ubo);
+		void updateUniformBuffersFragBrick(vks::VulkanDevice *vdev, VolFragShaderBrickUBO ubo);
 		
-		VolPipeline pipeline_;
-		VolUniformBufs uniformBuffers_;
+		std::map<vks::VulkanDevice*, VolPipeline> pipeline_;
+		std::map<vks::VulkanDevice*, VolUniformBufs> uniformBuffers_;
+
+		std::vector<vks::VulkanDevice*> vdevices_;
 
 	protected:
 		std::vector<VolShader*> shader_;

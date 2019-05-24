@@ -34,6 +34,8 @@
 
 #include "DLLExport.h"
 
+#include "VulkanDevice.hpp"
+
 namespace FLIVR
 {
 	#define PAINT_SAMPLER_NUM 1
@@ -65,26 +67,25 @@ namespace FLIVR
 	{
 	public:
 		PaintShaderFactory();
-		PaintShaderFactory(std::shared_ptr<VVulkan> vulkan);
+		PaintShaderFactory(std::vector<vks::VulkanDevice*> &devices);
 		~PaintShaderFactory();
 
 		ShaderProgram* shader();
 
-		void init(std::shared_ptr<VVulkan> vulkan);
+		void init(std::vector<vks::VulkanDevice*> &devices);
 
-		struct VolCalPipeline {
-			VkDescriptorPool descriptorPool;
+		struct PaintPipeline {
 			VkDescriptorSetLayout descriptorSetLayout;
 			VkPipelineLayout pipelineLayout;
 			VkDescriptorSet descriptorSet;
 		};
 
-		void setupDescriptorPool();
 		void setupDescriptorSetLayout();
-		void allocDescriptorSet();
-		void setupDescriptorSetSamplers(uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites);
+		void setupDescriptorSetSamplers(vks::VulkanDevice *vdev, uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites);
 			
-		VolCalPipeline pipeline_;
+		std::map<vks::VulkanDevice*, PaintPipeline> pipeline_;
+
+		std::vector<vks::VulkanDevice*> vdevices_;
 
 	protected:
 		std::vector<PaintShader*> shader_;

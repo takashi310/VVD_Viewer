@@ -2,6 +2,47 @@
 
 namespace vks
 {
+	void VulkanDevice::setMemoryLimit(double limit)
+	{
+		VkPhysicalDeviceMemoryBudgetPropertiesEXT mem_bprop;
+		VkPhysicalDeviceMemoryProperties2KHR mem_prop2;
+
+		mem_prop2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2;
+		mem_prop2.pNext = &mem_bprop;
+
+		mem_bprop.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT;
+		mem_bprop.pNext = nullptr;
+
+		vkGetPhysicalDeviceMemoryProperties2(physicalDevice, &mem_prop2);
+
+		VkDeviceSize cur_mem_lim = 0;
+		for (int i = 0; i < mem_prop2.memoryProperties.memoryHeapCount; i++)
+		{
+			if (mem_prop2.memoryProperties.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
+			{
+				VkDeviceSize heap_budget = mem_bprop.heapBudget[i];
+				VkDeviceSize heap_usage = mem_bprop.heapUsage[i];
+				if (cur_mem_lim < heap_budget - heap_usage)
+					cur_mem_lim = heap_budget - heap_usage;
+			}
+		}
+
+		double dev_max_mem = (double)cur_mem_lim / 1024.0 / 1024.0;
+		if (dev_max_mem >= 4096.0) dev_max_mem -= 1024.0 + 512.0;
+		else if (dev_max_mem >= 1024.0) dev_max_mem -= 512.0;
+		else dev_max_mem *= 0.7;
+
+		double new_mem_limit = 0.0;
+
+		if (limit > 0 && limit < dev_max_mem)
+			new_mem_limit = limit;
+		else
+			new_mem_limit = dev_max_mem;
+
+		use_mem_limit = true;
+		available_mem = new_mem_limit - mem_limit + available_mem;
+		mem_limit = new_mem_limit;
+	}
 
 	void VulkanDevice::clear_tex_pool() 
 	{
@@ -43,6 +84,8 @@ namespace vks
 			{
 				//save before deletion
 				return_brick(tex_pool[j]);
+				if (tex_pool[i].comp >= 0 && tex_pool[i].comp < TEXTURE_MAX_COMPONENTS && tex_pool[i].tex->bytes > 0)
+					available_mem += tex_pool[i].tex->w*tex_pool[i].tex->h*tex_pool[i].tex->d*tex_pool[i].tex->bytes/1.04e6;
 				tex_pool.erase(tex_pool.begin()+j);
 			}
 		}
@@ -73,22 +116,7 @@ namespace vks
 		}
 		else
 		{
-			GLenum error = glGetError();
-			GLint mem_info[4] = {0, 0, 0, 0};
-			glGetIntegerv(GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX, mem_info);
-			error = glGetError();
-			if (error == GL_INVALID_ENUM)
-			{
-				glGetIntegerv(GL_TEXTURE_FREE_MEMORY_ATI, mem_info);
-				error = glGetError();
-				if (error == GL_INVALID_ENUM)
-					return overwrite;
-			}
-
-			//available memory size in MB
-			available_mem = mem_info[0]/1024.0;
-			if (available_mem >= new_mem)
-				return overwrite;
+			return overwrite;
 		}
 
 		std::vector<BrickDist> bd_list;
@@ -136,7 +164,8 @@ namespace vks
 					&& brick->ny() == texp.tex->h
 					&& brick->nz() == texp.tex->d
 					&& brick->nb(c) == texp.tex->bytes
-					&& brick->tex_format(c) == texp.tex->format)
+					&& brick->tex_format(c) == texp.tex->format
+					&& !brick->dirty(c))
 				{
 					//over write a texture that has exact same properties.
 					overwrite = bd_undisp[i].index;
@@ -176,7 +205,8 @@ namespace vks
 						&& brick->ny() == texp.tex->h
 						&& brick->nz() == texp.tex->d
 						&& brick->nb(c) == texp.tex->bytes
-						&& brick->tex_format(c) == texp.tex->format)
+						&& brick->tex_format(c) == texp.tex->format
+						&& !brick->dirty(c))
 					{
 						//over write a texture that has exact same properties.
 						overwrite = bd_others[i].index;
@@ -217,6 +247,66 @@ namespace vks
 		}
 
 		return overwrite;
+	}
+
+	int VulkanDevice::findTexInPool(FLIVR::TextureBrick* b, int c, int w, int h, int d, int bytes, VkFormat format)
+	{
+		int count = 0;
+		for (auto &e : tex_pool)
+		{
+			if (e.tex && b == e.brick && c == e.comp &&
+				w == e.tex->w && h == e.tex->h && d == e.tex->d && bytes == e.tex->bytes &&
+				format == e.tex->format)
+			{
+				//found!
+				return count;
+			}
+			count++;
+		}
+
+		return -1;
+	}
+
+	int VulkanDevice::GenTexture3D_pool(VkFormat format, VkFilter filter, FLIVR::TextureBrick *b, int comp)
+	{
+		std::shared_ptr<VTexture> ret;
+
+		ret = GenTexture3D(format, filter, b->nx(), b->ny(), b->nz());
+
+		if (ret)
+		{
+			vks::TexParam p = vks::TexParam(comp, ret);
+			p.brick = b;
+			tex_pool.push_back(p);
+			available_mem -= ret->w*ret->h*ret->d*ret->bytes/1.04e6;
+		}
+
+		return int(tex_pool.size()) - 1;
+	}
+
+	void VulkanDevice::createPipelineCache()
+	{
+		VkPipelineCacheCreateInfo pipelineCacheCreateInfo = {};
+		pipelineCacheCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+		VK_CHECK_RESULT(vkCreatePipelineCache(logicalDevice, &pipelineCacheCreateInfo, nullptr, &pipelineCache));
+	}
+
+	void VulkanDevice::setupDescriptorPool()
+	{
+		std::vector<VkDescriptorPoolSize> poolSizes =
+		{
+			vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1024),
+			vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1024)
+		};
+
+		VkDescriptorPoolCreateInfo descriptorPoolInfo = 
+			vks::initializers::descriptorPoolCreateInfo(
+			static_cast<uint32_t>(poolSizes.size()),
+			poolSizes.data(),
+			1024);
+		descriptorPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT_EXT;
+
+		VK_CHECK_RESULT(vkCreateDescriptorPool(logicalDevice, &descriptorPoolInfo, nullptr, &descriptorPool));
 	}
 
 	void VulkanDevice::prepareSamplers()

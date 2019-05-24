@@ -33,6 +33,7 @@
 #include <vector>
 
 #include "DLLExport.h"
+#include "VulkanDevice.hpp"
 
 namespace FLIVR
 {
@@ -78,26 +79,25 @@ namespace FLIVR
 	{
 	public:
 		VolCalShaderFactory();
-		VolCalShaderFactory(std::shared_ptr<VVulkan> vulkan);
+		VolCalShaderFactory(std::vector<vks::VulkanDevice*> &devices);
 		~VolCalShaderFactory();
 
 		ShaderProgram* shader(int type);
 
-		void init(std::shared_ptr<VVulkan> vulkan);
+		void init(std::vector<vks::VulkanDevice*> &devices);
 
 		struct VolCalPipeline {
-			VkDescriptorPool descriptorPool;
 			VkDescriptorSetLayout descriptorSetLayout;
 			VkPipelineLayout pipelineLayout;
 			VkDescriptorSet descriptorSet;
 		};
 
-		void setupDescriptorPool();
 		void setupDescriptorSetLayout();
-		void allocDescriptorSet();
-		void setupDescriptorSetSamplers(uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites);
+		void setupDescriptorSetSamplers(vks::VulkanDevice *vdev, uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites);
 			
-		VolCalPipeline pipeline_;
+		std::map<vks::VulkanDevice*, VolCalPipeline> pipeline_;
+
+		std::vector<vks::VulkanDevice*> vdevices_;
 		
 	protected:
 		std::vector<VolCalShader*> shader_;

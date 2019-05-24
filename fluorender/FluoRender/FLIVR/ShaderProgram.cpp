@@ -40,21 +40,19 @@ using std::string;
 
 namespace FLIVR
 {
-	bool ShaderProgram::init_ = false;
-	bool ShaderProgram::supported_ = false;
-	bool ShaderProgram::non_2_textures_ = false;
-	int ShaderProgram::max_texture_size_ = 64;
 	string ShaderProgram::glsl_version_ = "#version 450";
 
 	ShaderProgram::ShaderProgram(const string& frag_shader) :
 	vert_shader_(""), frag_shader_(frag_shader), valid_(false)
 	{
+		device_ = VK_NULL_HANDLE;
 		vert_shader_stage_.module = VK_NULL_HANDLE;
 		frag_shader_stage_.module = VK_NULL_HANDLE;
 	}
 	ShaderProgram::ShaderProgram(const string& vert_shader, const string& frag_shader) :
 	vert_shader_(vert_shader), frag_shader_(frag_shader), valid_(false)
 	{
+		device_ = VK_NULL_HANDLE;
 		vert_shader_stage_.module = VK_NULL_HANDLE;
 		frag_shader_stage_.module = VK_NULL_HANDLE;
 	}
@@ -69,115 +67,68 @@ namespace FLIVR
 		return valid_;
 	}
 
-	bool ShaderProgram::init()
+	bool ShaderProgram::create(VkDevice device)
 	{
-		return init_;
-	}
 
-	void ShaderProgram::init_shaders_supported(std::shared_ptr<VVulkan> vulkan)
-	{
-		if (!init_ && vulkan)
-		{
-			vulkan_ = vulkan;
-			supported_ = true;
-			
-			VkPhysicalDeviceProperties dprops = vulkan_->getPhysicalDeviceProperties();
-			max_texture_size_ = dprops.limits.maxImageDimension3D;
-			non_2_textures_ = true;
+		init_glslang();
+		VkShaderModuleCreateInfo moduleCreateInfo;
 
-			init_ = true;
+		if (!vert_shader_.empty()) {
+			std::vector<unsigned int> vtx_spv;
+			vert_shader_stage_.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+			vert_shader_stage_.pNext = NULL;
+			vert_shader_stage_.pSpecializationInfo = NULL;
+			vert_shader_stage_.flags = 0;
+			vert_shader_stage_.stage = VK_SHADER_STAGE_VERTEX_BIT;
+			vert_shader_stage_.pName = "main";
+
+			if ( !GLSLtoSPV(VK_SHADER_STAGE_VERTEX_BIT, vert_shader_.data(), vtx_spv) )
+				return true;
+
+			moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+			moduleCreateInfo.pNext = NULL;
+			moduleCreateInfo.flags = 0;
+			moduleCreateInfo.codeSize = vtx_spv.size() * sizeof(unsigned int);
+			moduleCreateInfo.pCode = vtx_spv.data();
+			VK_CHECK_RESULT( vkCreateShaderModule(device, &moduleCreateInfo, NULL, &vert_shader_stage_.module) );
 		}
-	}
 
-	void ShaderProgram::finalize_shaders_supported()
-	{
-		if (vulkan_)
-			vulkan_.reset();
+		if (!frag_shader_.empty()) {
+			std::vector<unsigned int> frag_spv;
+			frag_shader_stage_.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+			frag_shader_stage_.pNext = NULL;
+			frag_shader_stage_.pSpecializationInfo = NULL;
+			frag_shader_stage_.flags = 0;
+			frag_shader_stage_.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+			frag_shader_stage_.pName = "main";
 
-		supported_ = false;
-		max_texture_size_ = 0;
-		non_2_textures_ = false;
-		init_ = false;
+			if ( !GLSLtoSPV(VK_SHADER_STAGE_FRAGMENT_BIT, frag_shader_.data(), frag_spv) )
+				return true;
 
-	}
-
-	bool ShaderProgram::shaders_supported()
-	{
-		return supported_;
-	}
-
-	int ShaderProgram::max_texture_size()
-	{
-		return max_texture_size_;
-	}
-
-	bool ShaderProgram::texture_non_power_of_two()
-	{
-		return non_2_textures_;
-	}
-
-	bool ShaderProgram::create()
-	{
-		if (shaders_supported())
-		{
-			init_glslang();
-			VkShaderModuleCreateInfo moduleCreateInfo;
-
-			if (!vert_shader_.empty()) {
-				std::vector<unsigned int> vtx_spv;
-				vert_shader_stage_.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-				vert_shader_stage_.pNext = NULL;
-				vert_shader_stage_.pSpecializationInfo = NULL;
-				vert_shader_stage_.flags = 0;
-				vert_shader_stage_.stage = VK_SHADER_STAGE_VERTEX_BIT;
-				vert_shader_stage_.pName = "main";
-
-				if ( !GLSLtoSPV(VK_SHADER_STAGE_VERTEX_BIT, vert_shader_.data(), vtx_spv) )
-					return true;
-
-				moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-				moduleCreateInfo.pNext = NULL;
-				moduleCreateInfo.flags = 0;
-				moduleCreateInfo.codeSize = vtx_spv.size() * sizeof(unsigned int);
-				moduleCreateInfo.pCode = vtx_spv.data();
-				VK_CHECK_RESULT( vkCreateShaderModule(vulkan_->getDevice(), &moduleCreateInfo, NULL, &vert_shader_stage_.module) );
-			}
-
-			if (!frag_shader_.empty()) {
-				std::vector<unsigned int> frag_spv;
-				frag_shader_stage_.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-				frag_shader_stage_.pNext = NULL;
-				frag_shader_stage_.pSpecializationInfo = NULL;
-				frag_shader_stage_.flags = 0;
-				frag_shader_stage_.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-				frag_shader_stage_.pName = "main";
-
-				if ( !GLSLtoSPV(VK_SHADER_STAGE_FRAGMENT_BIT, frag_shader_.data(), frag_spv) )
-					return true;
-
-				moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-				moduleCreateInfo.pNext = NULL;
-				moduleCreateInfo.flags = 0;
-				moduleCreateInfo.codeSize = frag_spv.size() * sizeof(unsigned int);
-				moduleCreateInfo.pCode = frag_spv.data();
-				VK_CHECK_RESULT( vkCreateShaderModule(vulkan_->getDevice(), &moduleCreateInfo, NULL, &frag_shader_stage_.module) );
-			}
-
-			valid_ = true;
-
-			finalize_glslang();
-
-			return false;
+			moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+			moduleCreateInfo.pNext = NULL;
+			moduleCreateInfo.flags = 0;
+			moduleCreateInfo.codeSize = frag_spv.size() * sizeof(unsigned int);
+			moduleCreateInfo.pCode = frag_spv.data();
+			VK_CHECK_RESULT( vkCreateShaderModule(device, &moduleCreateInfo, NULL, &frag_shader_stage_.module) );
 		}
-		return true;
+
+		device_ = device;
+
+		valid_ = true;
+
+		finalize_glslang();
+
+		return false;
+
 	}
 
 	void ShaderProgram::destroy()
 	{
-		if (shaders_supported())
+		if (device_ != VK_NULL_HANDLE)
 		{
-			if (vert_shader_stage_.module != VK_NULL_HANDLE) vkDestroyShaderModule(vulkan_->getDevice(), vert_shader_stage_.module, NULL);
-			if (frag_shader_stage_.module != VK_NULL_HANDLE) vkDestroyShaderModule(vulkan_->getDevice(), frag_shader_stage_.module, NULL);
+			if (vert_shader_stage_.module != VK_NULL_HANDLE) vkDestroyShaderModule(device_, vert_shader_stage_.module, NULL);
+			if (frag_shader_stage_.module != VK_NULL_HANDLE) vkDestroyShaderModule(device_, frag_shader_stage_.module, NULL);
 		}
 	}
 

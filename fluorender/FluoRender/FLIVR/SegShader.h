@@ -33,6 +33,8 @@
 #include <vector>
 #include "DLLExport.h"
 
+#include "VulkanDevice.hpp"
+
 namespace FLIVR
 {
 //type definitions
@@ -98,13 +100,13 @@ namespace FLIVR
 	{
 	public:
 		SegShaderFactory();
-		SegShaderFactory(std::shared_ptr<VVulkan> vulkan);
+		SegShaderFactory(std::vector<vks::VulkanDevice*> &devices);
 		~SegShaderFactory();
 
 		ShaderProgram* shader(int type, int paint_mode, int hr_mode,
 			bool use_2d, bool shading, int peel, bool clip, bool hiqual, bool use_stroke);
 
-		void init(std::shared_ptr<VVulkan> vulkan);
+		void init(std::vector<vks::VulkanDevice*> &devices);
 
 		struct SegPipeline {
 			VkDescriptorPool descriptorPool;
@@ -147,16 +149,17 @@ namespace FLIVR
 			vks::Buffer frag_brick;
 		};
 
-		void setupDescriptorPool();
 		void setupDescriptorSetLayout();
-		void setupDescriptorSetUniforms();
-		void setupDescriptorSetSamplers(uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites);
+		void setupDescriptorSetUniforms(vks::VulkanDevice *vdev);
+		void setupDescriptorSetSamplers(vks::VulkanDevice *vdev, uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites);
 		void prepareUniformBuffers();
-		void updateUniformBuffersFragBase(SegFragShaderBaseUBO ubo);
-		void updateUniformBuffersFragBrick(SegFragShaderBrickUBO ubo);
+		void updateUniformBuffersFragBase(vks::VulkanDevice *vdev, SegFragShaderBaseUBO ubo);
+		void updateUniformBuffersFragBrick(vks::VulkanDevice *vdev, SegFragShaderBrickUBO ubo);
 		
-		SegPipeline pipeline_;
-		SegUniformBufs uniformBuffers_;
+		std::map<vks::VulkanDevice*, SegPipeline> pipeline_;
+		std::map<vks::VulkanDevice*, SegUniformBufs> uniformBuffers_;
+
+		std::vector<vks::VulkanDevice*> vdevices_;
 
 	protected:
 		std::vector<SegShader*> shader_;

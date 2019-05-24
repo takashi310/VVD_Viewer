@@ -33,6 +33,8 @@
 #include <vector>
 #include "DLLExport.h"
 
+#include "VulkanDevice.hpp"
+
 namespace FLIVR
 {
 #define IMG_SHADER_TEXTURE_LOOKUP			0
@@ -103,28 +105,25 @@ namespace FLIVR
 	{
 	public:
 		ImgShaderFactory();
-		ImgShaderFactory(std::shared_ptr<VVulkan> vulkan);
+		ImgShaderFactory(std::vector<vks::VulkanDevice*> &devices);
 		~ImgShaderFactory();
 
-		void init(std::shared_ptr<VVulkan> vulkan);
+		void init(std::vector<vks::VulkanDevice*> &devices);
 
 		ShaderProgram* shader(int type, int colormap_=0);
 
 		struct ImgPipelineSettings {
-			VkDescriptorPool descriptorPool;
 			VkDescriptorSetLayout descriptorSetLayout;
 			VkPipelineLayout pipelineLayout;
 			VkDescriptorSet descriptorSet;
 		};
 		
-		void setupDescriptorPool();
 		void setupDescriptorSetLayout();
-		void allocDescriptorSet();
-		void setupDescriptorSetSamplers(uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites);
+		void setupDescriptorSetSamplers(vks::VulkanDevice *vdev, uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites);
 
-		ImgPipelineSettings getImgPipelineSettings() { return pipeline_settings_; }
+		std::map<vks::VulkanDevice*, ImgPipelineSettings> pipeline_settings_;
 		
-		ImgPipelineSettings pipeline_settings_;
+		std::vector<vks::VulkanDevice*> vdevices_;
 
 	protected:
 		std::vector<ImgShader*> shader_;

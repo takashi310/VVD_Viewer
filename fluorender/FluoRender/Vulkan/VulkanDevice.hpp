@@ -71,10 +71,19 @@ namespace vks
 		double available_mem = 0.0;
 		std::vector<TexParam> tex_pool;
 
+		void setMemoryLimit(double limit=0);
 		void clear_tex_pool();
 		static bool return_brick(const TexParam &texp);
 		void clean_texpool();
 		int check_swap_memory(FLIVR::TextureBrick* brick, int c);
+		int findTexInPool(FLIVR::TextureBrick* b, int c, int w, int h, int d, int bytes, VkFormat format);
+		int GenTexture3D_pool(VkFormat format, VkFilter filter, FLIVR::TextureBrick *b, int comp);
+
+		VkDescriptorPool descriptorPool;
+		void setupDescriptorPool();
+
+		VkPipelineCache pipelineCache;
+		void createPipelineCache();
 
 		void prepareSamplers();
 		void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
@@ -129,6 +138,10 @@ namespace vks
 					}
 				}
 			}
+
+			createPipelineCache();
+			setupDescriptorPool();
+			setMemoryLimit();
 
 			linear_sampler = VK_NULL_HANDLE;
 			nearest_sampler = VK_NULL_HANDLE;

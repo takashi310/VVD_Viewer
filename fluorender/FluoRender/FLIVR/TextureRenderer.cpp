@@ -59,7 +59,6 @@ namespace FLIVR
 	double TextureRenderer::available_mainmem_buf_size_ = 0.0;
 	double TextureRenderer::large_data_size_ = 0.0;
 	int TextureRenderer::force_brick_size_ = 0;
-	vector<TexParam> TextureRenderer::tex_pool_;
 	bool TextureRenderer::start_update_loop_ = false;
 	bool TextureRenderer::done_update_loop_ = true;
 	bool TextureRenderer::done_current_chan_ = true;
@@ -1157,24 +1156,7 @@ namespace FLIVR
 		if (!tex_)
 			return;
 		vector<TextureBrick*>* bricks = tex_->get_bricks();
-		TextureBrick* brick = 0;
-		double est_avlb_mem = available_mem_;
-		for (int i = tex_pool_.size() - 1; i >= 0; --i)
-		{
-			for (size_t j = 0; j < bricks->size(); ++j)
-			{
-				brick = (*bricks)[j];
-				if (tex_pool_[i].brick == brick && tex_pool_[i].tex)
-				{
-					if (tex_pool_[i].comp >= 0 && tex_pool_[i].comp < TEXTURE_MAX_COMPONENTS && tex_pool_[i].tex->bytes > 0)
-						est_avlb_mem += tex_pool_[i].tex->w*tex_pool_[i].tex->h*tex_pool_[i].tex->d*tex_pool_[i].tex->bytes/1.04e6;
-					tex_pool_.erase(tex_pool_.begin() + i);
-					break;
-				}
-			}
-		}
-		if (use_mem_limit_)
-			available_mem_ = est_avlb_mem;
+		m_vulkan->eraseBricksFromTexpools(bricks);
 	}
 
 	void TextureRenderer::clear_tex_current_mask()
@@ -1183,25 +1165,7 @@ namespace FLIVR
 			return;
 
 		vector<TextureBrick*>* bricks = tex_->get_bricks();
-		TextureBrick* brick = 0;
-		double est_avlb_mem = available_mem_;
-		for (int i = tex_pool_.size() - 1; i >= 0; --i)
-		{
-			for (size_t j = 0; j < bricks->size(); ++j)
-			{
-				brick = (*bricks)[j];
-				int c = brick->nmask();
-				if (tex_pool_[i].comp == c && tex_pool_[i].brick == brick && tex_pool_[i].tex)
-				{
-					if (tex_pool_[i].comp < TEXTURE_MAX_COMPONENTS && tex_pool_[i].tex->bytes > 0)
-						est_avlb_mem += tex_pool_[i].tex->w*tex_pool_[i].tex->h*tex_pool_[i].tex->d*tex_pool_[i].tex->bytes/1.04e6;
-					tex_pool_.erase(tex_pool_.begin() + i);
-					break;
-				}
-			}
-		}
-		if (use_mem_limit_)
-			available_mem_ = est_avlb_mem;
+		m_vulkan->eraseBricksFromTexpools(bricks, tex_->nmask());
 	}
 
 	//resize the fbo texture
@@ -1561,26 +1525,11 @@ namespace FLIVR
 		VkFormat texformat = brick->tex_format(c);
 
 		//! Try to find the existing texture in tex_pool_, for this brick.
-		idx = -1;
-		for(unsigned int i = 0; i < tex_pool_.size() && idx < 0; i++)
-		{
-			if(tex_pool_[i].tex
-				&& tex_pool_[i].brick == brick
-				&& tex_pool_[i].comp == c
-				&& nx == tex_pool_[i].tex->w
-				&& ny == tex_pool_[i].tex->h
-				&& nz == tex_pool_[i].tex->d
-				&& nb == tex_pool_[i].tex->bytes
-				&& texformat == tex_pool_[i].tex->format)
-			{
-				//found!
-				idx = i;
-			}
-		}
-		
+		idx = device->findTexInPool(brick, c, nx, ny, nz, nb, texformat);
+				
 		if(idx != -1) 
 		{
-			result = tex_pool_[idx].tex;
+			result = device->tex_pool[idx].tex;
 			if (filter == VK_FILTER_LINEAR)
 				result->sampler = device->linear_sampler;
 			else if (filter == VK_FILTER_NEAREST)
@@ -1602,19 +1551,14 @@ namespace FLIVR
 				if (idx == -1)
 				{
 					// allocate new object
-					result = device->GenTexture3D(texformat, filter, nx, ny, nz);
-
-					// create new entry
-					tex_pool_.push_back(TexParam(c, result));
-					idx = int(tex_pool_.size()) - 1;
-					tex_pool_[idx].brick = brick;
+					idx = device->GenTexture3D_pool(texformat, filter, brick, c);
 				}
 				else
 				{
-					tex_pool_[idx].brick = brick;
-					result = tex_pool_[idx].tex;
+					device->tex_pool[idx].brick = brick;
 					overwrite = true;
 				}
+				result = device->tex_pool[idx].tex;
 
 				offset.x = brick->ox();
 				offset.y = brick->oy();
@@ -1643,19 +1587,14 @@ namespace FLIVR
 					if (idx == -1)
 					{
 						// allocate new object
-						result = device->GenTexture3D(texformat, filter, nx, ny, nz);
-
-						// create new entry
-						tex_pool_.push_back(TexParam(c, result));
-						idx = int(tex_pool_.size()) - 1;
-						tex_pool_[idx].brick = brick;
+						idx = device->GenTexture3D_pool(texformat, filter, brick, c);
 					}
 					else
 					{
-						tex_pool_[idx].brick = brick;
-						result = tex_pool_[idx].tex;
+						device->tex_pool[idx].brick = brick;
 						overwrite = true;
 					}
+					result = device->tex_pool[idx].tex;
 
 					if (filter == VK_FILTER_LINEAR)
 						result->sampler = device->linear_sampler;
@@ -1692,19 +1631,14 @@ namespace FLIVR
 						if (idx == -1)
 						{
 							// allocate new object
-							result = device->GenTexture3D(texformat, filter, nx, ny, nz);
-
-							// create new entry
-							tex_pool_.push_back(TexParam(c, result));
-							idx = int(tex_pool_.size()) - 1;
-							tex_pool_[idx].brick = brick;
+							idx = device->GenTexture3D_pool(texformat, filter, brick, c);
 						}
 						else
 						{
-							tex_pool_[idx].brick = brick;
-							result = tex_pool_[idx].tex;
+							device->tex_pool[idx].brick = brick;
 							overwrite = true;
 						}
+						result = device->tex_pool[idx].tex;
 
 						if (filter == VK_FILTER_LINEAR)
 							result->sampler = device->linear_sampler;
@@ -1739,13 +1673,9 @@ namespace FLIVR
 		return std::move(result);
 	}
 
-	//search for or create the mask texture in the texture pool
-	std::shared_ptr<vks::VTexture> TextureRenderer::load_brick_mask(vks::VulkanDevice *device, vector<TextureBrick*> *bricks, int bindex, VkFilter filter, bool compression, int unit, bool swap_mem, bool set_drawn)
+	std::shared_ptr<vks::VTexture> TextureRenderer::base_fanc_load_brick_comp(vks::VulkanDevice *device, int c, TextureBrick* brick, VkFilter filter, bool compression, bool swap_mem)
 	{
 		std::shared_ptr<vks::VTexture> result;
-
-		TextureBrick* brick = (*bricks)[bindex];
-		int c = brick->nmask();
 
 		if (c < 0)
 			return std::move(result);
@@ -1757,26 +1687,11 @@ namespace FLIVR
 		VkFormat texformat = brick->tex_format(c);
 
 		//! Try to find the existing texture in tex_pool_, for this brick.
-		int idx = -1;
-		for(unsigned int i = 0; i < tex_pool_.size() && idx < 0; i++)
-		{
-			if(tex_pool_[i].tex
-				&& tex_pool_[i].brick == brick
-				&& tex_pool_[i].comp == c
-				&& nx == tex_pool_[i].tex->w
-				&& ny == tex_pool_[i].tex->h
-				&& nz == tex_pool_[i].tex->d
-				&& nb == tex_pool_[i].tex->bytes
-				&& texformat == tex_pool_[i].tex->format)
-			{
-				//found!
-				idx = i;
-			}
-		}
+		int idx = device->findTexInPool(brick, c, nx, ny, nz, nb, texformat);
 
 		if(idx != -1) 
 		{
-			result = tex_pool_[idx].tex;
+			result = device->tex_pool[idx].tex;
 			if (filter == VK_FILTER_LINEAR)
 				result->sampler = device->linear_sampler;
 			else if (filter == VK_FILTER_NEAREST)
@@ -1795,19 +1710,14 @@ namespace FLIVR
 			if (idx == -1)
 			{
 				// allocate new object
-				result = device->GenTexture3D(texformat, filter, nx, ny, nz);
-
-				// create new entry
-				tex_pool_.push_back(TexParam(c, result));
-				idx = int(tex_pool_.size()) - 1;
-				tex_pool_[idx].brick = brick;
+				idx = device->GenTexture3D_pool(texformat, filter, brick, c);
 			}
 			else
 			{
-				tex_pool_[idx].brick = brick;
-				result = tex_pool_[idx].tex;
+				device->tex_pool[idx].brick = brick;
 				overwrite = true;
 			}
+			result = device->tex_pool[idx].tex;
 
 			offset.x = brick->ox();
 			offset.y = brick->oy();
@@ -1824,6 +1734,19 @@ namespace FLIVR
 			void *texdata = brick->tex_data(c);
 			device->UploadTexture3D(result, texdata, offset, ypitch, zpitch);
 		}
+
+		return std::move(result);
+	}
+
+	//search for or create the mask texture in the texture pool
+	std::shared_ptr<vks::VTexture> TextureRenderer::load_brick_mask(vks::VulkanDevice *device, vector<TextureBrick*> *bricks, int bindex, VkFilter filter, bool compression, int unit, bool swap_mem, bool set_drawn)
+	{
+		std::shared_ptr<vks::VTexture> result;
+
+		TextureBrick* brick = (*bricks)[bindex];
+		int c = brick->nmask();
+
+		result = base_fanc_load_brick_comp(device, c, brick, filter, compression, swap_mem);
 
 		if (mem_swap_ &&
 			start_update_loop_ &&
@@ -1848,78 +1771,8 @@ namespace FLIVR
 		TextureBrick* brick = (*bricks)[bindex];
 		int c = brick->nlabel();
 
-		if (c < 0)
-			return std::move(result);
-
-		int nb = brick->nb(c);
-		int nx = brick->nx();
-		int ny = brick->ny();
-		int nz = brick->nz();
-		VkFormat texformat = brick->tex_format(c);
-
-		//! Try to find the existing texture in tex_pool_, for this brick.
-		int idx = -1;
-		for(unsigned int i = 0; i < tex_pool_.size() && idx < 0; i++)
-		{
-			if(tex_pool_[i].tex
-				&& tex_pool_[i].brick == brick
-				&& tex_pool_[i].comp == c
-				&& nx == tex_pool_[i].tex->w
-				&& ny == tex_pool_[i].tex->h
-				&& nz == tex_pool_[i].tex->d
-				&& nb == tex_pool_[i].tex->bytes
-				&& texformat == tex_pool_[i].tex->format)
-			{
-				//found!
-				idx = i;
-			}
-		}
-
-		if(idx != -1) 
-		{
-			result = tex_pool_[idx].tex;
-			result->sampler = device->nearest_sampler;
-		}
-		else //idx == -1
-		{
-			bool overwrite = false;
-			VkOffset3D offset;
-			uint64_t ypitch;
-			uint64_t zpitch;
-
-			if (mem_swap_ && swap_mem)
-				idx = device->check_swap_memory(brick, c);
-
-			if (idx == -1)
-			{
-				// allocate new object
-				result = device->GenTexture3D(texformat, VK_FILTER_NEAREST, nx, ny, nz);
-
-				// create new entry
-				tex_pool_.push_back(TexParam(c, result));
-				idx = int(tex_pool_.size()) - 1;
-				tex_pool_[idx].brick = brick;
-			}
-			else
-			{
-				tex_pool_[idx].brick = brick;
-				result = tex_pool_[idx].tex;
-				overwrite = true;
-			}
-
-			offset.x = brick->ox();
-			offset.y = brick->oy();
-			offset.z = brick->oz();
-			ypitch = brick->sx() * brick->nb(c);
-			zpitch = brick->sy() * brick->sx() * brick->nb(c);
-
-			result->sampler = device->nearest_sampler;
-
-			void *texdata = brick->tex_data(c);
-			device->UploadTexture3D(result, texdata, offset, ypitch, zpitch);
-
-		}
-
+		result = base_fanc_load_brick_comp(device, c, brick, VK_FILTER_NEAREST, false, swap_mem);
+		
 		if (mem_swap_ &&
 			start_update_loop_ &&
 			!done_update_loop_ && set_drawn)
@@ -1943,84 +1796,7 @@ namespace FLIVR
 		TextureBrick* brick = (*bricks)[bindex];
 		int c = brick->nstroke();
 
-		if (c < 0)
-			return std::move(result);
-
-		int nb = brick->nb(c);
-		int nx = brick->nx();
-		int ny = brick->ny();
-		int nz = brick->nz();
-		VkFormat texformat = brick->tex_format(c);
-
-		//! Try to find the existing texture in tex_pool_, for this brick.
-		int idx = -1;
-		for(unsigned int i = 0; i < tex_pool_.size() && idx < 0; i++)
-		{
-			if(tex_pool_[i].tex
-				&& tex_pool_[i].brick == brick
-				&& tex_pool_[i].comp == c
-				&& nx == tex_pool_[i].tex->w
-				&& ny == tex_pool_[i].tex->h
-				&& nz == tex_pool_[i].tex->d
-				&& nb == tex_pool_[i].tex->bytes
-				&& texformat == tex_pool_[i].tex->format)
-			{
-				//found!
-				idx = i;
-			}
-		}
-
-		if(idx != -1) 
-		{
-			result = tex_pool_[idx].tex;
-			if (filter == VK_FILTER_LINEAR)
-				result->sampler = device->linear_sampler;
-			else if (filter == VK_FILTER_NEAREST)
-				result->sampler = device->nearest_sampler;
-		} 
-		else //idx == -1
-		{
-			bool overwrite = false;
-			VkOffset3D offset;
-			uint64_t ypitch;
-			uint64_t zpitch;
-
-			if (mem_swap_ && swap_mem)
-				idx = device->check_swap_memory(brick, c);
-
-			if (idx == -1)
-			{
-				// allocate new object
-				result = device->GenTexture3D(texformat, filter, nx, ny, nz);
-
-				// create new entry
-				tex_pool_.push_back(TexParam(c, result));
-				idx = int(tex_pool_.size()) - 1;
-				tex_pool_[idx].brick = brick;
-			}
-			else
-			{
-				tex_pool_[idx].brick = brick;
-				result = tex_pool_[idx].tex;
-				overwrite = true;
-			}
-
-			offset.x = brick->ox();
-			offset.y = brick->oy();
-			offset.z = brick->oz();
-			ypitch = brick->sx() * brick->nb(c);
-			zpitch = brick->sy() * brick->sx() * brick->nb(c);
-
-			// set interpolation method
-			if (filter == VK_FILTER_LINEAR)
-				result->sampler = device->linear_sampler;
-			else if (filter == VK_FILTER_NEAREST)
-				result->sampler = device->nearest_sampler;
-
-			void *texdata = brick->tex_data(c);
-			device->UploadTexture3D(result, texdata, offset, ypitch, zpitch);
-
-		}
+		result = base_fanc_load_brick_comp(device, c, brick, filter, compression, swap_mem);
 		
 		return std::move(result);
 	}

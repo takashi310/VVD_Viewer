@@ -92,17 +92,16 @@ namespace FLIVR {
 		: prev_shader_(-1)
 	{}
 
-	PaintShaderFactory::PaintShaderFactory(std::shared_ptr<VVulkan> vulkan)
+	PaintShaderFactory::PaintShaderFactory(std::vector<vks::VulkanDevice*> &devices)
 		: prev_shader_(-1)
 	{
-		init(vulkan);
+		init(devices);
 	}
 
-	void PaintShaderFactory::init(std::shared_ptr<VVulkan> vulkan)
+	void PaintShaderFactory::init(std::vector<vks::VulkanDevice*> &devices)
 	{
+		vdevices_ = devices;
 		setupDescriptorSetLayout();
-		setupDescriptorPool();
-		allocDescriptorSet();
 	}
 
 	PaintShaderFactory::~PaintShaderFactory()
@@ -110,11 +109,13 @@ namespace FLIVR {
 		for(unsigned int i=0; i<shader_.size(); i++)
 			delete shader_[i];
 
-		auto device = ShaderProgram::get_vulkan()->getDevice();
-		
-		vkDestroyPipelineLayout(device, pipeline_.pipelineLayout, nullptr);
-		vkDestroyDescriptorSetLayout(device, pipeline_.descriptorSetLayout, nullptr);
-		vkDestroyDescriptorPool(device, pipeline_.descriptorPool, nullptr);
+		for (auto vdev : vdevices_)
+		{
+			VkDevice device = vdev->logicalDevice;
+
+			vkDestroyPipelineLayout(device, pipeline_[vdev].pipelineLayout, nullptr);
+			vkDestroyDescriptorSetLayout(device, pipeline_[vdev].descriptorSetLayout, nullptr);
+		}
 	}
 
 	ShaderProgram* PaintShaderFactory::shader()
@@ -147,66 +148,61 @@ namespace FLIVR {
 	}
 
 	
-	void PaintShaderFactory::setupDescriptorPool()
-	{
-		std::vector<VkDescriptorPoolSize> poolSizes =
-		{
-			vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, PAINT_SAMPLER_NUM)
-		};
-
-		VkDescriptorPoolCreateInfo descriptorPoolInfo = 
-			vks::initializers::descriptorPoolCreateInfo(
-			static_cast<uint32_t>(poolSizes.size()),
-			poolSizes.data(),
-			1);
-
-		VK_CHECK_RESULT(vkCreateDescriptorPool(ShaderProgram::get_vulkan()->getDevice(), &descriptorPoolInfo, nullptr, &pipeline_.descriptorPool));
-	}
-
 	void PaintShaderFactory::setupDescriptorSetLayout()
 	{
-		VkDevice device = ShaderProgram::get_vulkan()->getDevice();
-
-		std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {};
-
-		int offset = 0;
-		for (int i = 0; i < PAINT_SAMPLER_NUM; i++)
+		for (auto vdev : vdevices_)
 		{
-			setLayoutBindings.push_back(
-				vks::initializers::descriptorSetLayoutBinding(
-				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
-				VK_SHADER_STAGE_FRAGMENT_BIT, 
-				offset+i)
-			);
+			VkDevice device = vdev->logicalDevice;
+
+			std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {};
+
+			int offset = 0;
+			for (int i = 0; i < PAINT_SAMPLER_NUM; i++)
+			{
+				setLayoutBindings.push_back(
+					vks::initializers::descriptorSetLayoutBinding(
+					VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
+					VK_SHADER_STAGE_FRAGMENT_BIT, 
+					offset+i)
+					);
+			}
+
+			std::array<VkDescriptorBindingFlagsEXT, PAINT_SAMPLER_NUM> bflags;
+			bflags.fill(VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT);
+			VkDescriptorSetLayoutBindingFlagsCreateInfoEXT bext;
+			bext.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT;
+			bext.pNext = nullptr;
+			bext.bindingCount = bflags.size();
+			bext.pBindingFlags = bflags.data();
+
+			VkDescriptorSetLayoutCreateInfo descriptorLayout = 
+				vks::initializers::descriptorSetLayoutCreateInfo(
+				setLayoutBindings.data(),
+				static_cast<uint32_t>(setLayoutBindings.size()));
+
+			descriptorLayout.pNext = &bext;
+
+			PaintPipeline pipe;
+			VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &pipe.descriptorSetLayout));
+
+			VkPipelineLayoutCreateInfo pPipelineLayoutCreateInfo =
+				vks::initializers::pipelineLayoutCreateInfo(
+				&pipe.descriptorSetLayout,
+				1);
+
+			VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pPipelineLayoutCreateInfo, nullptr, &pipe.pipelineLayout));
+
+			VkDescriptorSetAllocateInfo descriptorSetAllocInfo;
+			descriptorSetAllocInfo = vks::initializers::descriptorSetAllocateInfo(vdev->descriptorPool, &pipe.descriptorSetLayout, 1);
+			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &pipe.descriptorSet));
+
+			pipeline_[vdev] = pipe;
 		}
-
-		VkDescriptorSetLayoutCreateInfo descriptorLayout = 
-			vks::initializers::descriptorSetLayoutCreateInfo(
-			setLayoutBindings.data(),
-			static_cast<uint32_t>(setLayoutBindings.size()));
-
-		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &pipeline_.descriptorSetLayout));
-
-		VkPipelineLayoutCreateInfo pPipelineLayoutCreateInfo =
-			vks::initializers::pipelineLayoutCreateInfo(
-			&pipeline_.descriptorSetLayout,
-			1);
-
-		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pPipelineLayoutCreateInfo, nullptr, &pipeline_.pipelineLayout));
 	}
 
-	void PaintShaderFactory::allocDescriptorSet()
+	void PaintShaderFactory::setupDescriptorSetSamplers(vks::VulkanDevice *vdev, uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites)
 	{
-		VkDevice device = ShaderProgram::get_vulkan()->getDevice();
-
-		VkDescriptorSetAllocateInfo descriptorSetAllocInfo;
-		descriptorSetAllocInfo = vks::initializers::descriptorSetAllocateInfo(pipeline_.descriptorPool, &pipeline_.descriptorSetLayout, 1);
-		VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &pipeline_.descriptorSet));
-	}
-
-	void PaintShaderFactory::setupDescriptorSetSamplers(uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites)
-	{
-		VkDevice device = ShaderProgram::get_vulkan()->getDevice();
+		VkDevice device = vdev->logicalDevice;
 		vkUpdateDescriptorSets(device, descriptorWriteCountconst, pDescriptorWrites, 0, NULL);
 	}
 

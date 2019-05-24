@@ -781,10 +781,18 @@ namespace FLIVR
 		: prev_shader_(-1)
 	{}
 
-	SegShaderFactory::SegShaderFactory(std::shared_ptr<VVulkan> vulkan)
+	SegShaderFactory::SegShaderFactory(std::vector<vks::VulkanDevice*> &devices)
 		: prev_shader_(-1)
 	{
-		init(vulkan);
+		init(devices);
+	}
+
+	void SegShaderFactory::init(std::vector<vks::VulkanDevice*> &devices)
+	{
+		vdevices_ = devices;
+		prepareUniformBuffers();
+		setupDescriptorSetLayout();
+		setupDescriptorSetUniforms();
 	}
 
 	SegShaderFactory::~SegShaderFactory()
@@ -794,15 +802,18 @@ namespace FLIVR
 			delete shader_[i];
 		}
 
-		auto device = ShaderProgram::get_vulkan()->getDevice();
-		
-		vkDestroyPipelineLayout(device, pipeline_.pipelineLayout, nullptr);
-		vkDestroyDescriptorSetLayout(device, pipeline_.descriptorSetLayout, nullptr);
-		vkDestroyDescriptorPool(device, pipeline_.descriptorPool, nullptr);
-		
-		// Uniform buffers
-		uniformBuffers_.frag_base.destroy();
-		uniformBuffers_.frag_brick.destroy();
+		for (auto vdev : vdevices_)
+		{
+			VkDevice device = vdev->logicalDevice;
+
+			vkDestroyPipelineLayout(device, pipeline_[vdev].pipelineLayout, nullptr);
+			vkDestroyDescriptorSetLayout(device, pipeline_[vdev].descriptorSetLayout, nullptr);
+			vkDestroyDescriptorPool(device, pipeline_[vdev].descriptorPool, nullptr);
+
+			// Uniform buffers
+			uniformBuffers_[vdev].frag_base.destroy();
+			uniformBuffers_[vdev].frag_brick.destroy();
+		}
 	}
 
 	ShaderProgram* SegShaderFactory::shader(int type, int paint_mode, int hr_mode,
@@ -834,119 +845,123 @@ namespace FLIVR
 		prev_shader_ = (int)shader_.size()-1;
 		return s->program();
 	}
-
-	void SegShaderFactory::setupDescriptorPool()
-	{
-		// Example uses one ubo and one image sampler
-		std::vector<VkDescriptorPoolSize> poolSizes =
-		{
-			vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2),
-			vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, ShaderProgram::MAX_SHADER_UNIFORMS)
-		};
-
-		VkDescriptorPoolCreateInfo descriptorPoolInfo = 
-			vks::initializers::descriptorPoolCreateInfo(
-			static_cast<uint32_t>(poolSizes.size()),
-			poolSizes.data(),
-			2);
-
-		VK_CHECK_RESULT(vkCreateDescriptorPool(ShaderProgram::get_vulkan()->getDevice(), &descriptorPoolInfo, nullptr, &pipeline_.descriptorPool));
-	}
-
+	
 	void SegShaderFactory::setupDescriptorSetLayout()
 	{
-		VkDevice device = ShaderProgram::get_vulkan()->getDevice();
-
-		std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = 
+		for (auto vdev : vdevices_)
 		{
-			// Binding 1 : Base uniform buffer for fragment shader
-			vks::initializers::descriptorSetLayoutBinding(
-			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 
-			VK_SHADER_STAGE_FRAGMENT_BIT, 
-			1),
-			// Binding 2 : Brick uniform buffer for fragment shader
-			vks::initializers::descriptorSetLayoutBinding(
-			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 
-			VK_SHADER_STAGE_FRAGMENT_BIT, 
-			2),
-		};
+			VkDevice device = vdev->logicalDevice;
 
-		int offset = 2;
-		for (int i = 0; i < ShaderProgram::MAX_SHADER_UNIFORMS; i++)
-		{
-			setLayoutBindings.push_back(
+
+			std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = 
+			{
+				// Binding 1 : Base uniform buffer for fragment shader
 				vks::initializers::descriptorSetLayoutBinding(
-				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
+				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 
 				VK_SHADER_STAGE_FRAGMENT_BIT, 
-				offset+i)
-			);
+				1),
+				// Binding 2 : Brick uniform buffer for fragment shader
+				vks::initializers::descriptorSetLayoutBinding(
+				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 
+				VK_SHADER_STAGE_FRAGMENT_BIT, 
+				2),
+			};
+
+			int offset = 2;
+			for (int i = 0; i < ShaderProgram::MAX_SHADER_UNIFORMS; i++)
+			{
+				setLayoutBindings.push_back(
+					vks::initializers::descriptorSetLayoutBinding(
+					VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
+					VK_SHADER_STAGE_FRAGMENT_BIT, 
+					offset+i)
+					);
+			}
+
+			std::array<VkDescriptorBindingFlagsEXT, 2+ShaderProgram::MAX_SHADER_UNIFORMS> bflags;
+			bflags.fill(VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT);
+			VkDescriptorSetLayoutBindingFlagsCreateInfoEXT bext;
+			bext.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT;
+			bext.pNext = nullptr;
+			bext.bindingCount = bflags.size();
+			bext.pBindingFlags = bflags.data();
+
+			VkDescriptorSetLayoutCreateInfo descriptorLayout = 
+				vks::initializers::descriptorSetLayoutCreateInfo(
+				setLayoutBindings.data(),
+				static_cast<uint32_t>(setLayoutBindings.size()));
+
+			descriptorLayout.pNext = &bext;
+
+			SegPipeline pipe;
+			VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &pipe.descriptorSetLayout));
+
+			VkPipelineLayoutCreateInfo pPipelineLayoutCreateInfo =
+				vks::initializers::pipelineLayoutCreateInfo(
+				&pipe.descriptorSetLayout,
+				1);
+
+			VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pPipelineLayoutCreateInfo, nullptr, &pipe.pipelineLayout));
+
+			VkDescriptorSetAllocateInfo descriptorSetAllocInfo;
+			descriptorSetAllocInfo = vks::initializers::descriptorSetAllocateInfo(vdev->descriptorPool, &pipe.descriptorSetLayout, 1);
+			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &pipe.descriptorSet));
+			
+			pipeline_[vdev] = pipe;
 		}
-
-		VkDescriptorSetLayoutCreateInfo descriptorLayout = 
-			vks::initializers::descriptorSetLayoutCreateInfo(
-			setLayoutBindings.data(),
-			static_cast<uint32_t>(setLayoutBindings.size()));
-
-		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &pipeline_.descriptorSetLayout));
-
-		VkPipelineLayoutCreateInfo pPipelineLayoutCreateInfo =
-			vks::initializers::pipelineLayoutCreateInfo(
-			&pipeline_.descriptorSetLayout,
-			1);
-
-		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pPipelineLayoutCreateInfo, nullptr, &pipeline_.pipelineLayout));
 	}
 
-	void SegShaderFactory::setupDescriptorSetUniforms()
+	void SegShaderFactory::setupDescriptorSetUniforms(vks::VulkanDevice *vdev)
 	{
-		VkDevice device = ShaderProgram::get_vulkan()->getDevice();
-
-		VkDescriptorSetAllocateInfo descriptorSetAllocInfo;
-		descriptorSetAllocInfo = vks::initializers::descriptorSetAllocateInfo(pipeline_.descriptorPool, &pipeline_.descriptorSetLayout, 1);
-		VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &pipeline_.descriptorSet));
+		VkDevice device = vdev->logicalDevice;
 		
 		std::vector<VkWriteDescriptorSet> writeDescriptorSets = {			
-			vks::initializers::writeDescriptorSet(pipeline_.descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, &uniformBuffers_.frag_base.descriptor),
-			vks::initializers::writeDescriptorSet(pipeline_.descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2, &uniformBuffers_.frag_brick.descriptor)
+			vks::initializers::writeDescriptorSet(pipeline_[vdev].descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, &uniformBuffers_[vdev].frag_base.descriptor),
+			vks::initializers::writeDescriptorSet(pipeline_[vdev].descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2, &uniformBuffers_[vdev].frag_brick.descriptor)
 		};
 		vkUpdateDescriptorSets(device, writeDescriptorSets.size(), writeDescriptorSets.data(), 0, NULL);
 	}
 
-	void SegShaderFactory::setupDescriptorSetSamplers(uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites)
+	void SegShaderFactory::setupDescriptorSetSamplers(vks::VulkanDevice *vdev, uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites)
 	{
-		VkDevice device = ShaderProgram::get_vulkan()->getDevice();
+		VkDevice device = vdev->logicalDevice;
 		vkUpdateDescriptorSets(device, descriptorWriteCountconst, pDescriptorWrites, 0, NULL);
 	}
 
 	// Prepare and initialize uniform buffer containing shader uniforms
 	void SegShaderFactory::prepareUniformBuffers()
 	{
-		auto vulkanDev = ShaderProgram::get_vulkan()->vulkanDevice;
+		for (auto vulkanDev : vdevices_)
+		{
+			SegUniformBufs uniformbufs;
 
-		VK_CHECK_RESULT(vulkanDev->createBuffer(
-			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			&uniformBuffers_.frag_base,
-			sizeof(SegFragShaderBaseUBO)));
+			VK_CHECK_RESULT(vulkanDev->createBuffer(
+				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+				&uniformbufs.frag_base,
+				sizeof(SegFragShaderBaseUBO)));
 
-		VK_CHECK_RESULT(vulkanDev->createBuffer(
-			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			&uniformBuffers_.frag_brick,
-			sizeof(SegFragShaderBrickUBO)));
+			VK_CHECK_RESULT(vulkanDev->createBuffer(
+				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+				&uniformbufs.frag_brick,
+				sizeof(SegFragShaderBrickUBO)));
 
-		VK_CHECK_RESULT(uniformBuffers_.frag_base.map());
-		VK_CHECK_RESULT(uniformBuffers_.frag_brick.map());
+			VK_CHECK_RESULT(uniformbufs.frag_base.map());
+			VK_CHECK_RESULT(uniformbufs.frag_brick.map());
+
+			uniformBuffers_[vulkanDev] = uniformbufs;
+		}
 	}
 
-	void SegShaderFactory::updateUniformBuffersFragBase(SegFragShaderBaseUBO ubo)
+	void SegShaderFactory::updateUniformBuffersFragBase(vks::VulkanDevice *vdev, SegFragShaderBaseUBO ubo)
 	{
-		memcpy(uniformBuffers_.frag_base.mapped, &ubo, sizeof(ubo));
+		memcpy(uniformBuffers_[vdev].frag_base.mapped, &ubo, sizeof(ubo));
 	}
 
-	void SegShaderFactory::updateUniformBuffersFragBrick(SegFragShaderBrickUBO ubo)
+	void SegShaderFactory::updateUniformBuffersFragBrick(vks::VulkanDevice *vdev, SegFragShaderBrickUBO ubo)
 	{
-		memcpy(uniformBuffers_.frag_brick.mapped, &ubo, sizeof(ubo));
+		memcpy(uniformBuffers_[vdev].frag_brick.mapped, &ubo, sizeof(ubo));
 	}
 
 } // end namespace FLIVR

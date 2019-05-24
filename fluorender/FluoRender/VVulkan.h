@@ -10,6 +10,13 @@
 #include "Vulkan/VulkanBuffer.hpp"
 #include "Vulkan/VulkanDevice.hpp"
 
+#include <FLIVR/ShaderProgram.h>
+#include <FLIVR/VolShader.h>
+#include <FLIVR/VolCalShader.h>
+#include <FLIVR/SegShader.h>
+#include <FLIVR/PaintShader.h>
+#include <FLIVR/ImgShader.h>
+
 #include <vector>
 #include <memory>
 
@@ -24,20 +31,22 @@ public:
 
 	std::vector<vks::VulkanDevice*> devices;
 	
-	VVulkan() : VulkanExampleBase(ENABLE_VALIDATION)
-	{
-		//#0 is a primary device
-		devices.push_back(vulkanDevice);
-	}
+	VVulkan();
 
-	~VVulkan()
-	{
-		for (auto dev : devices)
-			if (dev) delete dev;
-	}
+	~VVulkan();
+
+	std::unique_ptr<FLIVR::VolShaderFactory> vol_shader_factory_;
+	std::unique_ptr<FLIVR::VolCalShaderFactory> cal_shader_factory_;
+	std::unique_ptr<FLIVR::SegShaderFactory> seg_shader_factory_;
+	std::unique_ptr<FLIVR::PaintShaderFactory> paint_shader_factory_;
+	std::unique_ptr<FLIVR::ImgShaderFactory> img_shader_factory_;
 
 	void prepare();
 	void initSubDevices();
+
+	void eraseBricksFromTexpools(const std::vector<FLIVR::TextureBrick*>* bricks, int c=-1);
+	bool findTexInPools(FLIVR::TextureBrick* b, int c, int w, int h, int d, int bytes, VkFormat format, vks::VulkanDevice* &ret_dev, int &ret_id);
+	bool getCompatibleTexFromPool(int w, int h, int d, int bytes, VkFormat format, vks::VulkanDevice* &ret_dev, int &ret_id);
 
 	void GenTextures2DAllDevice(std::vector<std::shared_ptr<vks::VTexture>> &result,
 								VkFormat format, VkFilter filter, uint32_t w, uint32_t h,
