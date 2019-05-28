@@ -84,8 +84,8 @@ namespace vks
 			{
 				//save before deletion
 				return_brick(tex_pool[j]);
-				if (tex_pool[i].comp >= 0 && tex_pool[i].comp < TEXTURE_MAX_COMPONENTS && tex_pool[i].tex->bytes > 0)
-					available_mem += tex_pool[i].tex->w*tex_pool[i].tex->h*tex_pool[i].tex->d*tex_pool[i].tex->bytes/1.04e6;
+				if (tex_pool[j].comp >= 0 && tex_pool[j].comp < TEXTURE_MAX_COMPONENTS && tex_pool[j].tex->bytes > 0)
+					available_mem += tex_pool[j].tex->w*tex_pool[j].tex->h*tex_pool[j].tex->d*tex_pool[j].tex->bytes/1.04e6;
 				tex_pool.erase(tex_pool.begin()+j);
 			}
 		}

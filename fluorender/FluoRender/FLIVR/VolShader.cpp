@@ -468,7 +468,8 @@ VolShader::VolShader(
 		vdevices_ = devices;
 		prepareUniformBuffers();
 		setupDescriptorSetLayout();
-		setupDescriptorSetUniforms();
+		for (auto vdev : vdevices_)
+			setupDescriptorSetUniforms(vdev);
 	}
 
 	VolShaderFactory::~VolShaderFactory()

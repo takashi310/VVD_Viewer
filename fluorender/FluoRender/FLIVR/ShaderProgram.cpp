@@ -28,6 +28,7 @@
 
 #include "GL/glew.h"
 #include "ShaderProgram.h"
+#include "Vulkan/vulkanexamplebase.h"
 #include "Utils.h"
 #include "../compatibility.h"
 #include <time.h>

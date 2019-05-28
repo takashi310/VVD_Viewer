@@ -46,7 +46,7 @@ void VVulkan::eraseBricksFromTexpools(const std::vector<FLIVR::TextureBrick*>* b
 	{
 		for (auto &e : dev->tex_pool)
 		{
-			for (auto b : bricks)
+			for (auto b : *bricks)
 			{
 				if (b == e.brick && e.tex && (c == e.comp || c < 0))
 					e.delayed_del = true;

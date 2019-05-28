@@ -51,8 +51,6 @@ public:
 	bool m_init;
 	std::shared_ptr<VVulkan> m_vulkan;
 
-	static FLIVR::ImgShaderFactory m_img_shader_factory;
-
 	Vulkan2dRender();
 	Vulkan2dRender(std::shared_ptr<VVulkan> vulkan);
 	~Vulkan2dRender();

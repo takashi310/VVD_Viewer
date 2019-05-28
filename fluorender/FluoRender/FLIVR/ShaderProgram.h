@@ -52,7 +52,6 @@ namespace FLIVR
 		ShaderProgram(const std::string& frag_shader);
 		~ShaderProgram();
 
-		unsigned int id();
 		bool create(VkDevice device);
 		bool valid();
 		void destroy();
@@ -72,10 +71,8 @@ namespace FLIVR
 		static bool GLSLtoSPV(const VkShaderStageFlagBits shader_type, const char *pshader, std::vector<unsigned int> &spirv);
 		static void init_glslang();
 		static void finalize_glslang();
-		static const std::shared_ptr<VVulkan> get_vulkan() { return vulkan_; }
 
 	protected:
-		unsigned int id_;
 		std::string  vert_shader_;
 		std::string  frag_shader_;
 		VkPipelineShaderStageCreateInfo vert_shader_stage_;
@@ -86,7 +83,6 @@ namespace FLIVR
 
 		VkDevice device_;
 
-		static std::shared_ptr<VVulkan> vulkan_;
 	};
 
 } // end namespace FLIVR

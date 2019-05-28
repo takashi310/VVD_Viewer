@@ -19,18 +19,23 @@ void Vulkan2dRender::init(std::shared_ptr<VVulkan> vulkan)
 
 	generateQuad();
 	setupVertexDescriptions();
-	void prepareRenderPass();
+	prepareRenderPass();
+}
+
+Vulkan2dRender::~Vulkan2dRender()
+{
+
 }
 
 void Vulkan2dRender::generateQuad()
 {
 	// Setup vertices for a single uv-mapped quad made from two triangles
-	std::vector<Vertex> quad =
+	std::vector<Vulkan2dRender::Vertex> quad =
 	{
-		{ {  1.0f,  1.0f, 0.0f }, { 1.0f, 1.0f },{ 0.0f, 0.0f, 1.0f } },
-		{ { -1.0f,  1.0f, 0.0f }, { 0.0f, 1.0f },{ 0.0f, 0.0f, 1.0f } },
-		{ { -1.0f, -1.0f, 0.0f }, { 0.0f, 0.0f },{ 0.0f, 0.0f, 1.0f } },
-		{ {  1.0f, -1.0f, 0.0f }, { 1.0f, 0.0f },{ 0.0f, 0.0f, 1.0f } }
+		{ {  1.0f,  1.0f, 0.0f }, { 1.0f, 1.0f, 0.0f } },
+		{ { -1.0f,  1.0f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
+		{ { -1.0f, -1.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } },
+		{ {  1.0f, -1.0f, 0.0f }, { 1.0f, 0.0f, 0.0f } }
 	};
 
 	// Setup indices
@@ -98,7 +103,7 @@ void Vulkan2dRender::prepareRenderPass()
 	// Create a separate render pass for the offscreen rendering as it may differ from the one used for scene rendering
 	std::array<VkAttachmentDescription, 1> attchmentDescriptions = {};
 	// Color attachment
-	attchmentDescriptions[0].format = FB_COLOR_FORMAT;
+	attchmentDescriptions[0].format = VK_FORMAT_R8G8B8A8_UNORM;
 	attchmentDescriptions[0].samples = VK_SAMPLE_COUNT_1_BIT;
 	attchmentDescriptions[0].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	attchmentDescriptions[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -196,7 +201,7 @@ Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blen
 		static_cast<uint32_t>(dynamicStateEnables.size()),
 		0);
 
-	m_img_pipeline_settings = m_img_shader_factory.getImgPipeline();
+	m_img_pipeline_settings = m_vulkan->img_shader_factory_->pipeline_settings_[m_vulkan->vulkanDevice];
 	VkGraphicsPipelineCreateInfo pipelineCreateInfo =
 		vks::initializers::pipelineCreateInfo(
 		m_img_pipeline_settings.pipelineLayout,
@@ -248,7 +253,7 @@ Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blen
 
 	// Load shaders
 	std::array<VkPipelineShaderStageCreateInfo,2> shaderStages;
-	FLIVR::ShaderProgram *sh = m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
+	FLIVR::ShaderProgram *sh = m_vulkan->img_shader_factory_->shader(IMG_SHADER_TEXTURE_LOOKUP);
 	shaderStages[0] = sh->get_vertex_shader();
 	shaderStages[1] = sh->get_fragment_shader();
 	pipelineCreateInfo.pStages = shaderStages.data();
@@ -357,7 +362,7 @@ void Vulkan2dRender::getEnabledUniforms(V2dPipeline pipeline, const std::string 
 	}
 }
 
-void Vulkan2dRender::setupDescriptorSet(const V2DRenderParams &params, const V2dPipeline &pipeline)
+void Vulkan2dRender::setupDescriptorSet(const Vulkan2dRender::V2DRenderParams &params, const Vulkan2dRender::V2dPipeline &pipeline)
 {
 	std::vector<VkWriteDescriptorSet> descriptorWrites;
 
