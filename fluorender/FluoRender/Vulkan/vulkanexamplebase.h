@@ -63,8 +63,6 @@ private:
 	uint32_t destWidth;
 	uint32_t destHeight;
 	bool resizing = false;
-	// Called if the window is resized and some resources have to be recreatesd
-	void handleMouseMove(int32_t x, int32_t y);
 protected:
 	// Frame counter to display fps
 	uint32_t frameCounter = 0;

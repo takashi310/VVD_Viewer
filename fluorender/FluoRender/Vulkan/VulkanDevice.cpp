@@ -353,6 +353,7 @@ namespace vks
 		ret->d = 1;
 		ret->mipLevels = 1;
 		ret->format = format;
+		ret->usage = usage;
 		ret->image = VK_NULL_HANDLE;
 		ret->deviceMemory = VK_NULL_HANDLE;
 		ret->sampler = VK_NULL_HANDLE;
@@ -435,10 +436,12 @@ namespace vks
 		view.subresourceRange.baseArrayLayer = 0;
 		view.subresourceRange.layerCount = 1;
 		view.subresourceRange.levelCount = 1;
+		ret->subresourceRange = view.subresourceRange;
 		VK_CHECK_RESULT(vkCreateImageView(ret->device->logicalDevice, &view, nullptr, &ret->view));
 
 		// Fill image descriptor image info to be used descriptor set setup
-		ret->descriptor.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		ret->descriptor.imageLayout = 
+			(usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		ret->descriptor.imageView = ret->view;
 		ret->descriptor.sampler = ret->sampler;
 
@@ -454,6 +457,7 @@ namespace vks
 		ret->d = 1;
 		ret->mipLevels = 1;
 		ret->format = format;
+		ret->usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 		ret->image = VK_NULL_HANDLE;
 		ret->deviceMemory = VK_NULL_HANDLE;
 		ret->sampler = VK_NULL_HANDLE;
@@ -491,7 +495,7 @@ namespace vks
 		imageCreateInfo.extent.depth = ret->d;
 		// Set initial layout of the image to undefined
 		imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		imageCreateInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		imageCreateInfo.usage = ret->usage;
 		VK_CHECK_RESULT(vkCreateImage(ret->device->logicalDevice, &imageCreateInfo, nullptr, &ret->image));
 
 		// Device local memory to back up image
@@ -522,6 +526,7 @@ namespace vks
 		view.subresourceRange.baseArrayLayer = 0;
 		view.subresourceRange.layerCount = 1;
 		view.subresourceRange.levelCount = 1;
+		ret->subresourceRange = view.subresourceRange;
 		VK_CHECK_RESULT(vkCreateImageView(ret->device->logicalDevice, &view, nullptr, &ret->view));
 
 		// Fill image descriptor image info to be used descriptor set setup

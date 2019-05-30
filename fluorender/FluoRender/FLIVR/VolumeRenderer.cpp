@@ -32,8 +32,8 @@
 #include <FLIVR/VolCalShader.h>
 #include <FLIVR/ShaderProgram.h>
 #include <FLIVR/TextureBrick.h>
-#include <FLIVR/KernelProgram.h>
-#include <FLIVR/VolKernel.h>
+//#include <FLIVR/KernelProgram.h>
+//#include <FLIVR/VolKernel.h>
 #include "utility.h"
 #include "../compatibility.h"
 #include <fstream>
@@ -57,12 +57,6 @@ namespace FLIVR
 #undef max
 #endif
 
-	VolShaderFactory TextureRenderer::vol_shader_factory_;
-	SegShaderFactory TextureRenderer::seg_shader_factory_;
-	VolCalShaderFactory TextureRenderer::cal_shader_factory_;
-	ImgShaderFactory VolumeRenderer::m_img_shader_factory;
-	VolKernelFactory TextureRenderer::vol_kernel_factory_;
-	KernelProgram* VolumeRenderer::m_dslt_kernel = NULL;
 	double VolumeRenderer::sw_ = 0.0;
 
 	VolumeRenderer::VolumeRenderer(Texture* tex,
@@ -121,9 +115,6 @@ namespace FLIVR
 		filter_size_shp_(0.0),
 		inv_(false),
 		compression_(false),
-		m_dslt_l2_kernel(NULL),
-		m_dslt_b_kernel(NULL),
-		m_dslt_em_kernel(NULL),
 		m_mask_hide_mode(VOL_MASK_HIDE_NONE)
 	{
 		//mode
@@ -131,6 +122,9 @@ namespace FLIVR
 		//done loop
 		for (int i=0; i<TEXTURE_RENDER_MODES; i++)
 			done_loop_[i] = false;
+
+		clear_color_ = { { 0.0f, 0.0f, 0.0f, 0.0f } };
+
 	}
 
 	VolumeRenderer::VolumeRenderer(const VolumeRenderer& copy)
@@ -185,9 +179,6 @@ namespace FLIVR
 		filter_size_shp_(0.0),
 		inv_(copy.inv_),
 		compression_(copy.compression_),
-		m_dslt_l2_kernel(NULL),
-		m_dslt_b_kernel(NULL),
-		m_dslt_em_kernel(NULL),
 		m_mask_hide_mode(copy.m_mask_hide_mode)
 	{
 		//mode
@@ -201,6 +192,12 @@ namespace FLIVR
 		//done loop
 		for (int i=0; i<TEXTURE_RENDER_MODES; i++)
 			done_loop_[i] = false;
+
+		if (m_vulkan)
+		{
+			m_vulkan->vol_shader_factory_->prepareUniformBuffers(m_volUniformBuffers);
+			m_vulkan->seg_shader_factory_->prepareUniformBuffers(m_segUniformBuffers);
+		}
 	}
 
 	VolumeRenderer::~VolumeRenderer()
@@ -212,8 +209,15 @@ namespace FLIVR
 				delete planes_[i];
 		}
 		planes_.clear();
-	}
 
+		for (auto vdev : m_vulkan->devices)
+		{
+			m_volUniformBuffers[vdev].vert.destroy();
+			m_volUniformBuffers[vdev].frag_base.destroy();
+			m_segUniformBuffers[vdev].frag_base.destroy();
+		}
+	}
+	
 	//render mode
 	void VolumeRenderer::set_mode(RenderMode mode)
 	{
@@ -851,6 +855,135 @@ namespace FLIVR
 		}
 	}
 
+	VolumeRenderer::VVolPipeline VolumeRenderer::prepareVolPipeline(int shader, int mode, int update_order, int colormap_mode)
+	{
+		if (m_prev_vol_pipeline >= 0) {
+			if (m_vol_pipelines[m_prev_vol_pipeline].shader == shader &&
+				m_vol_pipelines[m_prev_vol_pipeline].mode == mode &&
+				m_vol_pipelines[m_prev_vol_pipeline].update_order == update_order &&
+				m_vol_pipelines[m_prev_vol_pipeline].colormap_mode == colormap_mode)
+				return m_vol_pipelines[m_prev_vol_pipeline];
+		}
+		for (int i = 0; i < m_vol_pipelines.size(); i++) {
+			if (m_vol_pipelines[i].shader == shader &&
+				m_vol_pipelines[i].mode == mode &&
+				m_vol_pipelines[i].update_order == update_order &&
+				m_vol_pipelines[i].colormap_mode == colormap_mode)
+			{
+				m_prev_vol_pipeline = i;
+				return m_vol_pipelines[i];
+			}
+		}
+
+		VkPipelineInputAssemblyStateCreateInfo inputAssemblyState =
+			vks::initializers::pipelineInputAssemblyStateCreateInfo(
+				VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+				0,
+				VK_FALSE);
+
+		VkPipelineRasterizationStateCreateInfo rasterizationState =
+			vks::initializers::pipelineRasterizationStateCreateInfo(
+				VK_POLYGON_MODE_FILL,
+				VK_CULL_MODE_NONE,
+				VK_FRONT_FACE_COUNTER_CLOCKWISE,
+				0);
+
+		VkPipelineDepthStencilStateCreateInfo depthStencilState =
+			vks::initializers::pipelineDepthStencilStateCreateInfo(
+				VK_FALSE,
+				VK_FALSE,
+				VK_COMPARE_OP_NEVER);
+
+		VkPipelineViewportStateCreateInfo viewportState =
+			vks::initializers::pipelineViewportStateCreateInfo(1, 1, 0);
+
+		VkPipelineMultisampleStateCreateInfo multisampleState =
+			vks::initializers::pipelineMultisampleStateCreateInfo(
+				VK_SAMPLE_COUNT_1_BIT,
+				0);
+
+		std::vector<VkDynamicState> dynamicStateEnables = {
+			VK_DYNAMIC_STATE_VIEWPORT,
+			VK_DYNAMIC_STATE_SCISSOR
+		};
+		VkPipelineDynamicStateCreateInfo dynamicState =
+			vks::initializers::pipelineDynamicStateCreateInfo(
+				dynamicStateEnables.data(),
+				static_cast<uint32_t>(dynamicStateEnables.size()),
+				0);
+
+		m_img_pipeline_settings = m_vulkan->img_shader_factory_->pipeline_settings_[m_vulkan->vulkanDevice];
+		VkGraphicsPipelineCreateInfo pipelineCreateInfo =
+			vks::initializers::pipelineCreateInfo(
+				m_img_pipeline_settings.pipelineLayout,
+				m_pass,
+				0);
+
+		pipelineCreateInfo.pVertexInputState = &m_vertices.inputState;
+		pipelineCreateInfo.pInputAssemblyState = &inputAssemblyState;
+		pipelineCreateInfo.pRasterizationState = &rasterizationState;
+		pipelineCreateInfo.pMultisampleState = &multisampleState;
+		pipelineCreateInfo.pViewportState = &viewportState;
+		pipelineCreateInfo.pDepthStencilState = &depthStencilState;
+		pipelineCreateInfo.pDynamicState = &dynamicState;
+		pipelineCreateInfo.stageCount = 2;
+
+		//blend mode
+		VkBool32 enable_blend;
+		VkBlendFactor src_blend, dst_blend;
+		switch (blend_mode)
+		{
+		case V2DRENDER_BLEND_OVER:
+			enable_blend = VK_TRUE;
+			src_blend = VK_BLEND_FACTOR_ONE;
+			dst_blend = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+			break;
+		case V2DRENDER_BLEND_ADD:
+			enable_blend = VK_TRUE;
+			src_blend = VK_BLEND_FACTOR_ONE;
+			dst_blend = VK_BLEND_FACTOR_ONE;
+		default:
+			enable_blend = VK_FALSE;
+			src_blend = VK_BLEND_FACTOR_ONE;
+			dst_blend = VK_BLEND_FACTOR_ZERO;
+		}
+
+		VkPipelineColorBlendAttachmentState blendAttachmentState =
+			vks::initializers::pipelineColorBlendAttachmentState(
+				enable_blend,
+				VK_BLEND_OP_ADD,
+				src_blend,
+				dst_blend,
+				0xf);
+
+		VkPipelineColorBlendStateCreateInfo colorBlendState =
+			vks::initializers::pipelineColorBlendStateCreateInfo(
+				1,
+				&blendAttachmentState);
+		pipelineCreateInfo.pColorBlendState = &colorBlendState;
+
+		// Load shaders
+		std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages;
+		FLIVR::ShaderProgram* sh = m_vulkan->img_shader_factory_->shader(IMG_SHADER_TEXTURE_LOOKUP);
+		shaderStages[0] = sh->get_vertex_shader();
+		shaderStages[1] = sh->get_fragment_shader();
+		pipelineCreateInfo.pStages = shaderStages.data();
+
+		V2dPipeline v2d_pipeline;
+		v2d_pipeline.shader = IMG_SHADER_TEXTURE_LOOKUP;
+		v2d_pipeline.blend = blend_mode;
+		getEnabledUniforms(v2d_pipeline, sh->get_fragment_shader_code());
+
+		VK_CHECK_RESULT(
+			vkCreateGraphicsPipelines(m_vulkan->getDevice(), m_vulkan->getPipelineCache(), 1, &pipelineCreateInfo, nullptr, &v2d_pipeline.pipeline)
+		);
+
+		m_pipelines.push_back(v2d_pipeline);
+		prev_pipeline = m_pipelines.size() - 1;
+
+		return v2d_pipeline;
+	}
+
 	//draw
 	void VolumeRenderer::draw(bool draw_wireframe_p, bool interactive_mode_p,
 		bool orthographic_p, double zoom, int mode, double sampling_frq_fac)
@@ -902,27 +1035,10 @@ namespace FLIVR
 		size.reserve(num_slices_*6);
 
 		//--------------------------------------------------------------------------
-
 		bool use_fog = m_use_fog && colormap_mode_!=2;
-		GLfloat clear_color[4];
-		glGetFloatv(GL_COLOR_CLEAR_VALUE, clear_color);
-		GLint vp[4];
-		glGetIntegerv(GL_VIEWPORT, vp);
-
-
-		// Cache this value to reset, in case another framebuffer is active,
-		// as it is in the case of saving an image from the viewer.
-		GLint cur_framebuffer_id;
-		glGetIntegerv(GL_FRAMEBUFFER_BINDING, &cur_framebuffer_id);
-		GLint cur_draw_buffer;
-		glGetIntegerv(GL_DRAW_BUFFER, &cur_draw_buffer);
-		GLint cur_read_buffer;
-		glGetIntegerv(GL_READ_BUFFER, &cur_read_buffer);
-
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-		int w = vp[2];
-		int h = vp[3];
+		
+		int w = m_vulkan->width;
+		int h = m_vulkan->height;
 		int minwh = min(w, h);
 		int w2 = w;
 		int h2 = h;
@@ -944,90 +1060,46 @@ namespace FLIVR
 		w2 = int(w/**sfactor_*/*buffer_scale_+0.5);
 		h2 = int(h/**sfactor_*/*buffer_scale_+0.5);
 
+		vks::VulkanDevice* prim_dev = m_vulkan->devices[0];
+
 		if(blend_num_bits_ > 8)
 		{
-			if (!glIsFramebuffer(blend_framebuffer_))
-			{
-				glGenFramebuffers(1, &blend_framebuffer_);
-				if (!glIsTexture(blend_tex_id_))
-					glGenTextures(1, &blend_tex_id_);
-				if (!glIsTexture(label_tex_id_))
-					glGenTextures(1, &label_tex_id_);
-
-				glBindFramebuffer(GL_FRAMEBUFFER, blend_framebuffer_);
-
-				// Initialize texture color renderbuffer
-				glBindTexture(GL_TEXTURE_2D, blend_tex_id_);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
-					GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-				glFramebufferTexture2D(GL_FRAMEBUFFER,
-					GL_COLOR_ATTACHMENT0,
-					GL_TEXTURE_2D, blend_tex_id_, 0);
-				glBindTexture(GL_TEXTURE_2D, 0);
-
-				glBindTexture(GL_TEXTURE_2D, label_tex_id_);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
-					GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-				glFramebufferTexture2D(GL_FRAMEBUFFER,
-					GL_COLOR_ATTACHMENT1,
-					GL_TEXTURE_2D, label_tex_id_, 0);
-				glBindTexture(GL_TEXTURE_2D, 0);
-
-				glDisable(GL_TEXTURE_2D);
-			}
-			else
-			{
-				glBindFramebuffer(GL_FRAMEBUFFER, blend_framebuffer_);
-
-				glFramebufferTexture2D(GL_FRAMEBUFFER,
-					GL_COLOR_ATTACHMENT0,
-					GL_TEXTURE_2D, blend_tex_id_, 0);
-
-				glFramebufferTexture2D(GL_FRAMEBUFFER,
-					GL_COLOR_ATTACHMENT1,
-					GL_TEXTURE_2D, label_tex_id_, 0);
-			}
-
 			if (blend_framebuffer_resize_)
 			{
-				// resize texture color renderbuffer
-				glBindTexture(GL_TEXTURE_2D, blend_tex_id_);
-				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
-					GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-				glBindTexture(GL_TEXTURE_2D, 0);
-
-				glBindTexture(GL_TEXTURE_2D, label_tex_id_);
-				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
-					GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-				glBindTexture(GL_TEXTURE_2D, 0);
+				blend_framebuffer_.reset();
+				blend_framebuffer_label_.reset();
+				blend_tex_id_.reset();
+				label_tex_id_.reset();
 
 				blend_framebuffer_resize_ = false;
 			}
 
-			glBindTexture(GL_TEXTURE_2D, 0);
-			glDisable(GL_TEXTURE_2D);
-
-			static const GLenum draw_buffers[] =
+			if (!blend_framebuffer_)
 			{
-				GL_COLOR_ATTACHMENT0,
-				GL_COLOR_ATTACHMENT1
-			};
-			glDrawBuffers( (cur_chan_brick_num_==0 && colormap_mode_==3) ? 2 : 1, draw_buffers);
+				blend_framebuffer_ = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+				blend_framebuffer_->w = w2;
+				blend_framebuffer_->h = h2;
+				blend_framebuffer_->device = prim_dev;
+			}
+			if (!blend_framebuffer_label_)
+			{
+				blend_framebuffer_label_ = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+				blend_framebuffer_label_->w = w2;
+				blend_framebuffer_label_->h = h2;
+				blend_framebuffer_label_->device = prim_dev;
+			}
+			if (!blend_tex_id_)
+				blend_tex_id_ = prim_dev->GenTexture2D(VK_FORMAT_R8G8B8A8_UNORM, VK_FILTER_LINEAR, w2, h2);
+			if (!label_tex_id_)
+				label_tex_id_ = prim_dev->GenTexture2D(VK_FORMAT_R8G8B8A8_UNORM, VK_FILTER_LINEAR, w2, h2);
 
-			glClearColor(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
-			glClear(GL_COLOR_BUFFER_BIT);
+			blend_framebuffer_->addAttachment(blend_tex_id_);
 
-			glDrawBuffers(colormap_mode_==3 ? 2 : 1, draw_buffers);
+			blend_framebuffer_label_->addAttachment(blend_tex_id_);
+			blend_framebuffer_label_->addAttachment(label_tex_id_);
 
-			glViewport(vp[0], vp[1], w2, h2);
+			blend_framebuffer_->createRenderPass();
+			blend_framebuffer_label_->createRenderPass();
 		}
 		
 		glEnablei(GL_BLEND, 0);

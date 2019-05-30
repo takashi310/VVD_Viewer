@@ -102,6 +102,9 @@ namespace vks
 			VkPipelineStageFlags srcStageMask,
 			VkPipelineStageFlags dstStageMask)
 		{
+			if (oldImageLayout == newImageLayout)
+				return;
+
 			// Create an image barrier object
 			VkImageMemoryBarrier imageMemoryBarrier = vks::initializers::imageMemoryBarrier();
 			imageMemoryBarrier.oldLayout = oldImageLayout;
@@ -157,6 +160,12 @@ namespace vks
 				// Make sure any shader reads from the image have been finished
 				imageMemoryBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
 				break;
+
+			case VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL:
+				// Image is read by a shader
+				// Make sure any shader reads from the image have been finished
+				imageMemoryBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+				break;
 			default:
 				// Other source layouts aren't handled (yet)
 				break;
@@ -192,6 +201,16 @@ namespace vks
 
 			case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
 				// Image will be read in a shader (sampler, input attachment)
+				// Make sure any writes to the image have been finished
+				if (imageMemoryBarrier.srcAccessMask == 0)
+				{
+					imageMemoryBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+				}
+				imageMemoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+				break;
+
+			case VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL:
+				// Image is read by a shader
 				// Make sure any writes to the image have been finished
 				if (imageMemoryBarrier.srcAccessMask == 0)
 				{

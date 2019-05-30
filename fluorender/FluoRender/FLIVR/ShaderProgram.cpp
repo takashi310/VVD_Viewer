@@ -26,7 +26,6 @@
 //  DEALINGS IN THE SOFTWARE.
 //  
 
-#include "GL/glew.h"
 #include "ShaderProgram.h"
 #include "Vulkan/vulkanexamplebase.h"
 #include "Utils.h"

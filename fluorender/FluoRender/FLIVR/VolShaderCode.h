@@ -76,10 +76,12 @@ namespace FLIVR
 
 #define VOL_UNIFORMS_BRICK \
 	"// VOL_UNIFORMS_BRICK\n" \
-	"layout (binding = 2) uniform VolFragShaderBrickUBO {" \
+	"layout (push_constant) uniform VolFragShaderBrickConst {" \
 	"	vec4 loc4;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
-	"	mat4 brkmat;//tex transform for bricking\n" \
-	"	mat4 mskbrkmat;//tex transform for mask bricks\n" \
+	"	vec4 brkscale;//tex transform for bricking\n" \
+	"	vec4 brktrans;//tex transform for bricking\n" \
+	"	vec4 mskbrkscale;//tex transform for mask bricks\n" \
+	"	vec4 mskbrktrans;//tex transform for mask bricks\n" \
 	"} brk;" \
 	"\n"
 
@@ -156,7 +158,7 @@ namespace FLIVR
 
 #define VOL_HEAD_CLIP \
 	"	//VOL_HEAD_CLIP\n" \
-	"	vec4 brickt = brkmat * t;\n" \
+	"	vec4 brickt = (t + brktrans)*brkscale;\n" \
 	"	if (dot(brickt.xyz, base.loc10.xyz)+base.loc10.w < 0.0 ||\n" \
 	"		dot(brickt.xyz, base.loc11.xyz)+base.loc11.w < 0.0 ||\n" \
 	"		dot(brickt.xyz, base.loc12.xyz)+base.loc12.w < 0.0 ||\n" \
@@ -181,7 +183,7 @@ namespace FLIVR
 	"//VOL_CLIP_FUNC\n" \
 	"bool vol_clip_func(vec4 t)\n" \
 	"{\n" \
-	"	vec4 brickt = brkmat * t;\n" \
+	"	vec4 brickt = (t + brktrans)*brkscale;\n" \
 	"	if (dot(brickt.xyz, base.loc10.xyz)+base.loc10.w < 0.0 ||\n" \
 	"		dot(brickt.xyz, base.loc11.xyz)+base.loc11.w < 0.0 ||\n" \
 	"		dot(brickt.xyz, base.loc12.xyz)+base.loc12.w < 0.0 ||\n" \
@@ -196,7 +198,7 @@ namespace FLIVR
 
 #define VOL_HEAD_HIDE_OUTSIDE_MASK \
 	"	//VOL_HEAD_HIDE_OUTSIDE_MASK\n" \
-	"	vec4 maskt = mskbrkmat * t;\n" \
+	"	vec4 maskt = (t + mskbrktrans)*mskbrkscale;\n" \
 	"	vec4 maskcheck = texture(tex2, maskt.stp); //get mask value\n" \
 	"	if (maskcheck.x <= 0.5)\n" \
 	"	{\n" \
@@ -207,7 +209,7 @@ namespace FLIVR
 
 #define VOL_HEAD_HIDE_INSIDE_MASK \
 	"	//VOL_HEAD_HIDE_INSIDE_MASK\n" \
-	"	vec4 maskt = mskbrkmat * t;\n" \
+	"	vec4 maskt = (t + mskbrktrans)*mskbrkscale;\n" \
 	"	vec4 maskcheck = texture(tex2, maskt.stp); //get mask value\n" \
 	"	if (maskcheck.x > 0.5)\n" \
 	"	{\n" \
@@ -541,17 +543,17 @@ namespace FLIVR
 
 #define VOL_TRANSFER_FUNCTION_COLORMAP_VALU1 \
 	"		//VOL_TRANSFER_FUNCTION_COLORMAP_VALU_Z\n" \
-	"		vec4 tt = brkmat * t;\n" \
+	"		vec4 tt = (t + brktrans)*mskbrkscale;\n" \
 	"		float valu = (1.0-tt.z-base.loc6.x)/base.loc6.z;\n"
 
 #define VOL_TRANSFER_FUNCTION_COLORMAP_VALU2 \
 	"		//VOL_TRANSFER_FUNCTION_COLORMAP_VALU_Z\n" \
-	"		vec4 tt = brkmat * t;\n" \
+	"		vec4 tt = (t + brktrans)*mskbrkscale;\n" \
 	"		float valu = (1.0-tt.y-base.loc6.x)/base.loc6.z;\n"
 
 #define VOL_TRANSFER_FUNCTION_COLORMAP_VALU3 \
 	"		//VOL_TRANSFER_FUNCTION_COLORMAP_VALU_Z\n" \
-	"		vec4 tt = brkmat * t;\n" \
+	"		vec4 tt = (t + brktrans)*mskbrkscale;\n" \
 	"		float valu = (1.0-tt.x-base.loc6.x)/base.loc6.z;\n"
 
 #define VOL_TRANSFER_FUNCTION_COLORMAP_RESULT \

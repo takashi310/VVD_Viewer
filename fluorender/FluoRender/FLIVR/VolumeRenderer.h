@@ -31,13 +31,12 @@
 
 #include "DLLExport.h"
 
+#include "VVulkan.h"
+
 #include "Color.h"
 #include "Plane.h"
 #include "Texture.h"
 #include "TextureRenderer.h"
-#include "ImgShader.h"
-#include <FLIVR/KernelProgram.h>
-#include <FLIVR/VolKernel.h>
 #include "FLIVR/Quaternion.h"
 
 namespace FLIVR
@@ -259,6 +258,9 @@ namespace FLIVR
 		}
 		int get_mask_hide_mode() { return m_mask_hide_mode; }
 
+		void set_clear_color(VkClearColorValue col) { clear_color_ = col; }
+		VkClearColorValue get_clear_color() { return clear_color_; }
+
 		friend class MultiVolumeRenderer;
 
 	protected:
@@ -302,8 +304,6 @@ namespace FLIVR
 						//3-random color with label, 4-random color with label+mask
 		bool mask_;
 		bool label_;
-		//smooth filter
-		static ImgShaderFactory m_img_shader_factory;
 
 		//noise reduction
 		bool noise_red_;
@@ -334,10 +334,12 @@ namespace FLIVR
 		double m_fog_start;
 		double m_fog_end;
 
-		static KernelProgram* m_dslt_kernel;
-		KernelProgram* m_dslt_l2_kernel;
-		KernelProgram* m_dslt_b_kernel;
-		KernelProgram* m_dslt_em_kernel;
+		/*
+		static KernelProgram* m_dslt_kernel = NULL;
+		KernelProgram* m_dslt_l2_kernel = NULL;
+		KernelProgram* m_dslt_b_kernel = NULL;
+		KernelProgram* m_dslt_em_kernel = NULL;
+		*/
 
 		Quaternion m_q_cl;
 
@@ -353,6 +355,43 @@ namespace FLIVR
 										//		 2:max filter
 										//		 3:sharpening
 
+public:
+		VkClearColorValue m_clear_color;
+		std::map<vks::VulkanDevice*, VolShaderFactory::VolUniformBufs> m_volUniformBuffers;
+		std::map<vks::VulkanDevice*, SegShaderFactory::SegUniformBufs> m_segUniformBuffers;
+
+		struct VVolPipeline {
+			VkPipeline pipeline;
+			int shader;
+			int mode;
+			int update_order;
+			int colormap_mode;
+			VkBool32 uniforms[V2DRENDER_UNIFORM_NUM] = { VK_FALSE };
+			VkBool32 samplers[IMG_SHDR_SAMPLER_NUM] = { VK_FALSE };
+		};
+		std::vector<VVolPipeline> m_vol_pipelines;
+		int m_prev_vol_pipeline = -1;
+		VVolPipeline prepareVolPipeline(int shader, int mode, int update_order, int colormap_mode);
+
+		struct VSegPipeline {
+			VkPipeline pipeline;
+			int shader;
+			VkBool32 uniforms[V2DRENDER_UNIFORM_NUM] = { VK_FALSE };
+			VkBool32 samplers[IMG_SHDR_SAMPLER_NUM] = { VK_FALSE };
+		};
+		std::vector<VSegPipeline> m_seg_pipelines;
+		int m_prev_seg_pipeline = -1;
+		VSegPipeline prepareSegPipeline(int shader, int mode, int update_order, int colormap_mode);
+
+		struct VCalPipeline {
+			VkPipeline pipeline;
+			int shader;
+			VkBool32 uniforms[V2DRENDER_UNIFORM_NUM] = { VK_FALSE };
+			VkBool32 samplers[IMG_SHDR_SAMPLER_NUM] = { VK_FALSE };
+		};
+		std::vector<VCalPipeline> m_cal_pipelines;
+		int m_prev_cal_pipeline = -1;
+		VCalPipeline prepareCalPipeline(int shader, int mode, int update_order, int colormap_mode);
 	};
 
 } // End namespace FLIVR

@@ -88,11 +88,13 @@ namespace FLIVR
 
 #define SEG_UNIFORMS_BRICK \
 	"// VOL_UNIFORMS_BRICK\n" \
-	"layout (binding = 2) uniform VolFragShaderBrickUBO {" \
+	"layout (push_constant) uniform VolFragShaderBrickConst {" \
 	"	vec4 loc4;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
 	"	vec4 loc9;//(nx, ny, nz, 0) (value_var_foff, angle_var_foff, 0, 0)\n" \
-	"	mat4 brkmat;//tex transform for bricking\n" \
-	"	mat4 mskbrkmat;//tex transform for mask bricks\n" \
+	"	vec4 brkscale;//tex transform for bricking\n" \
+	"	vec4 brktrans;//tex transform for bricking\n" \
+	"	vec4 mskbrkscale;//tex transform for mask bricks\n" \
+	"	vec4 mskbrktrans;//tex transform for mask bricks\n" \
 	"} brk;" \
 	"\n"
 
@@ -810,10 +812,6 @@ namespace FLIVR
 			vkDestroyPipelineLayout(device, pipeline_[vdev].pipelineLayout, nullptr);
 			vkDestroyDescriptorSetLayout(device, pipeline_[vdev].descriptorSetLayout, nullptr);
 			vkDestroyDescriptorPool(device, pipeline_[vdev].descriptorPool, nullptr);
-
-			// Uniform buffers
-			uniformBuffers_[vdev].frag_base.destroy();
-			uniformBuffers_[vdev].frag_brick.destroy();
 		}
 	}
 
@@ -861,14 +859,9 @@ namespace FLIVR
 				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 
 				VK_SHADER_STAGE_FRAGMENT_BIT, 
 				1),
-				// Binding 2 : Brick uniform buffer for fragment shader
-				vks::initializers::descriptorSetLayoutBinding(
-				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 
-				VK_SHADER_STAGE_FRAGMENT_BIT, 
-				2),
 			};
 
-			int offset = 2;
+			int offset = 1;
 			for (int i = 0; i < ShaderProgram::MAX_SHADER_UNIFORMS; i++)
 			{
 				setLayoutBindings.push_back(
@@ -879,7 +872,7 @@ namespace FLIVR
 					);
 			}
 
-			std::array<VkDescriptorBindingFlagsEXT, 2+ShaderProgram::MAX_SHADER_UNIFORMS> bflags;
+			std::array<VkDescriptorBindingFlagsEXT, 1+ShaderProgram::MAX_SHADER_UNIFORMS> bflags;
 			bflags.fill(VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT);
 			VkDescriptorSetLayoutBindingFlagsCreateInfoEXT bext;
 			bext.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT;
@@ -902,6 +895,15 @@ namespace FLIVR
 				&pipe.descriptorSetLayout,
 				1);
 
+			VkPushConstantRange pushConstantRange = {};
+			pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+			pushConstantRange.size = sizeof(SegShaderFactory::SegFragShaderBrickConst);
+			pushConstantRange.offset = 0;
+
+			// Push constant ranges are part of the pipeline layout
+			pPipelineLayoutCreateInfo.pushConstantRangeCount = 1;
+			pPipelineLayoutCreateInfo.pPushConstantRanges = &pushConstantRange;
+
 			VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pPipelineLayoutCreateInfo, nullptr, &pipe.pipelineLayout));
 
 			VkDescriptorSetAllocateInfo descriptorSetAllocInfo;
@@ -912,13 +914,12 @@ namespace FLIVR
 		}
 	}
 
-	void SegShaderFactory::setupDescriptorSetUniforms(vks::VulkanDevice *vdev)
+	void SegShaderFactory::setupDescriptorSetUniforms(vks::VulkanDevice* vdev, SegUniformBufs& uniformBuffers)
 	{
 		VkDevice device = vdev->logicalDevice;
 		
 		std::vector<VkWriteDescriptorSet> writeDescriptorSets = {			
-			vks::initializers::writeDescriptorSet(pipeline_[vdev].descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, &uniformBuffers_[vdev].frag_base.descriptor),
-			vks::initializers::writeDescriptorSet(pipeline_[vdev].descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2, &uniformBuffers_[vdev].frag_brick.descriptor)
+			vks::initializers::writeDescriptorSet(pipeline_[vdev].descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, &uniformBuffers.frag_base.descriptor),
 		};
 		vkUpdateDescriptorSets(device, writeDescriptorSets.size(), writeDescriptorSets.data(), 0, NULL);
 	}
@@ -930,7 +931,7 @@ namespace FLIVR
 	}
 
 	// Prepare and initialize uniform buffer containing shader uniforms
-	void SegShaderFactory::prepareUniformBuffers()
+	void SegShaderFactory::prepareUniformBuffers(std::map<vks::VulkanDevice*, SegUniformBufs>& uniformBuffers)
 	{
 		for (auto vulkanDev : vdevices_)
 		{
@@ -942,28 +943,17 @@ namespace FLIVR
 				&uniformbufs.frag_base,
 				sizeof(SegFragShaderBaseUBO)));
 
-			VK_CHECK_RESULT(vulkanDev->createBuffer(
-				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-				&uniformbufs.frag_brick,
-				sizeof(SegFragShaderBrickUBO)));
-
 			VK_CHECK_RESULT(uniformbufs.frag_base.map());
-			VK_CHECK_RESULT(uniformbufs.frag_brick.map());
 
-			uniformBuffers_[vulkanDev] = uniformbufs;
+			uniformBuffers[vulkanDev] = uniformbufs;
 		}
 	}
 
-	void SegShaderFactory::updateUniformBuffersFragBase(vks::VulkanDevice *vdev, SegFragShaderBaseUBO ubo)
+	void SegShaderFactory::updateUniformBuffers(SegUniformBufs& uniformBuffers, SegFragShaderBaseUBO fubo)
 	{
-		memcpy(uniformBuffers_[vdev].frag_base.mapped, &ubo, sizeof(ubo));
+		memcpy(uniformBuffers.frag_base.mapped, &fubo, sizeof(fubo));
 	}
 
-	void SegShaderFactory::updateUniformBuffersFragBrick(vks::VulkanDevice *vdev, SegFragShaderBrickUBO ubo)
-	{
-		memcpy(uniformBuffers_[vdev].frag_brick.mapped, &ubo, sizeof(ubo));
-	}
 
 } // end namespace FLIVR
 

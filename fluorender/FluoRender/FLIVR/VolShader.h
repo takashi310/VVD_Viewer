@@ -33,7 +33,7 @@
 #define VolShader_h
 
 #include "VulkanDevice.hpp"
-
+#include <glm/glm.hpp>
 #include <string>
 #include <vector>
 #include <memory>
@@ -138,7 +138,7 @@ namespace FLIVR
 		//mask: 0-no mask, 1-segmentation mask, 2-labeling mask
 		//color_mode: 0-normal; 1-rainbow; 2-depth; 3-index; 255-index(depth mode)
 
-		struct VolPipeline {
+		struct VolPipelineSettings {
 			VkDescriptorSetLayout descriptorSetLayout;
 			VkPipelineLayout pipelineLayout;
 			VkDescriptorSet descriptorSet;
@@ -167,28 +167,26 @@ namespace FLIVR
 			glm::vec4 plane5;			//loc15
 		};
 
-		struct VolFragShaderBrickUBO {
+		struct VolFragShaderBrickConst {
 			glm::vec4 loc_dim_inv;	//loc4
-			glm::mat4 bmat;
-			glm::mat4 mask_bmat;
+			glm::vec4 b_scale;
+			glm::vec4 b_trans;
+			glm::vec4 mask_b_scale;
+			glm::vec4 mask_b_trans;
 		};
 
 		struct VolUniformBufs {
 			vks::Buffer vert;
 			vks::Buffer frag_base;
-			vks::Buffer frag_brick;
 		};
 
 		void setupDescriptorSetLayout();
-		void setupDescriptorSetUniforms(vks::VulkanDevice *vdev);
+		void setupDescriptorSetUniforms(vks::VulkanDevice *vdev, VolUniformBufs &uniformBuffers);
 		void setupDescriptorSetSamplers(vks::VulkanDevice *vdev, uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites);
-		void prepareUniformBuffers();
-		void updateUniformBuffersVert(vks::VulkanDevice *vdev, VolVertShaderUBO ubo);
-		void updateUniformBuffersFragBase(vks::VulkanDevice *vdev, VolFragShaderBaseUBO ubo);
-		void updateUniformBuffersFragBrick(vks::VulkanDevice *vdev, VolFragShaderBrickUBO ubo);
+		void prepareUniformBuffers(std::map<vks::VulkanDevice*, VolUniformBufs> &uniformBuffers);
+		void updateUniformBuffers(VolUniformBufs& uniformBuffers, VolVertShaderUBO vubo, VolFragShaderBaseUBO fubo);
 		
-		std::map<vks::VulkanDevice*, VolPipeline> pipeline_;
-		std::map<vks::VulkanDevice*, VolUniformBufs> uniformBuffers_;
+		std::map<vks::VulkanDevice*, VolPipelineSettings> pipeline_;
 
 		std::vector<vks::VulkanDevice*> vdevices_;
 

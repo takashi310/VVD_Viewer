@@ -466,10 +466,7 @@ VolShader::VolShader(
 	void VolShaderFactory::init(std::vector<vks::VulkanDevice*> &devices)
 	{
 		vdevices_ = devices;
-		prepareUniformBuffers();
 		setupDescriptorSetLayout();
-		for (auto vdev : vdevices_)
-			setupDescriptorSetUniforms(vdev);
 	}
 
 	VolShaderFactory::~VolShaderFactory()
@@ -484,10 +481,6 @@ VolShader::VolShader(
 			vkDestroyPipelineLayout(device, pipeline_[vdev].pipelineLayout, nullptr);
 			vkDestroyDescriptorSetLayout(device, pipeline_[vdev].descriptorSetLayout, nullptr);
 
-			// Uniform buffers
-			uniformBuffers_[vdev].vert.destroy();
-			uniformBuffers_[vdev].frag_base.destroy();
-			uniformBuffers_[vdev].frag_brick.destroy();
 		}
 	}
 
@@ -571,14 +564,9 @@ VolShader::VolShader(
 				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 
 				VK_SHADER_STAGE_FRAGMENT_BIT, 
 				1),
-				// Binding 2 : Brick uniform buffer for fragment shader
-				vks::initializers::descriptorSetLayoutBinding(
-				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 
-				VK_SHADER_STAGE_FRAGMENT_BIT, 
-				2),
 			};
 
-			int offset = 3;
+			int offset = 2;
 			for (int i = 0; i < ShaderProgram::MAX_SHADER_UNIFORMS; i++)
 			{
 				setLayoutBindings.push_back(
@@ -589,7 +577,7 @@ VolShader::VolShader(
 					);
 			}
 
-			std::array<VkDescriptorBindingFlagsEXT, 3+ShaderProgram::MAX_SHADER_UNIFORMS> bflags;
+			std::array<VkDescriptorBindingFlagsEXT, 2+ShaderProgram::MAX_SHADER_UNIFORMS> bflags;
 			bflags.fill(VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT);
 			VkDescriptorSetLayoutBindingFlagsCreateInfoEXT bext;
 			bext.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT;
@@ -604,13 +592,22 @@ VolShader::VolShader(
 
 			descriptorLayout.pNext = &bext;
 
-			VolPipeline pipe;
+			VolPipelineSettings pipe;
 			VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &pipe.descriptorSetLayout));
 
 			VkPipelineLayoutCreateInfo pPipelineLayoutCreateInfo =
 				vks::initializers::pipelineLayoutCreateInfo(
 				&pipe.descriptorSetLayout,
 				1);
+
+			VkPushConstantRange pushConstantRange = {};
+			pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+			pushConstantRange.size = sizeof(VolShaderFactory::VolFragShaderBrickConst);
+			pushConstantRange.offset = 0;
+
+			// Push constant ranges are part of the pipeline layout
+			pPipelineLayoutCreateInfo.pushConstantRangeCount = 1;
+			pPipelineLayoutCreateInfo.pPushConstantRanges = &pushConstantRange;
 
 			VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pPipelineLayoutCreateInfo, nullptr, &pipe.pipelineLayout));
 
@@ -621,75 +618,57 @@ VolShader::VolShader(
 			pipeline_[vdev] = pipe;
 		}
 	}
-
-	void VolShaderFactory::setupDescriptorSetUniforms(vks::VulkanDevice *vdev)
+	
+	void VolShaderFactory::setupDescriptorSetUniforms(vks::VulkanDevice *vdev, VolUniformBufs& uniformBuffers)
 	{
 		VkDevice device = vdev->logicalDevice;
 		
 		std::vector<VkWriteDescriptorSet> writeDescriptorSets = {			
-			vks::initializers::writeDescriptorSet(pipeline_[vdev].descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &uniformBuffers_[vdev].vert.descriptor),
-			vks::initializers::writeDescriptorSet(pipeline_[vdev].descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, &uniformBuffers_[vdev].frag_base.descriptor),
-			vks::initializers::writeDescriptorSet(pipeline_[vdev].descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2, &uniformBuffers_[vdev].frag_brick.descriptor)
+			vks::initializers::writeDescriptorSet(pipeline_[vdev].descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &uniformBuffers[vdev].vert.descriptor),
+			vks::initializers::writeDescriptorSet(pipeline_[vdev].descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, &uniformBuffers[vdev].frag_base.descriptor),
 		};
 		vkUpdateDescriptorSets(device, writeDescriptorSets.size(), writeDescriptorSets.data(), 0, NULL);
 	}
 
+	
 	void VolShaderFactory::setupDescriptorSetSamplers(vks::VulkanDevice *vdev, uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites)
 	{
 		VkDevice device = vdev->logicalDevice;
 		vkUpdateDescriptorSets(device, descriptorWriteCountconst, pDescriptorWrites, 0, NULL);
 	}
-
+	
 	// Prepare and initialize uniform buffer containing shader uniforms
-	void VolShaderFactory::prepareUniformBuffers()
+	void VolShaderFactory::prepareUniformBuffers(std::map<vks::VulkanDevice*, VolUniformBufs>& uniformBuffers)
 	{
 		for (auto vulkanDev : vdevices_)
 		{
 			VolUniformBufs uniformbufs;
 
-			// Phong and color pass vertex shader uniform buffer
 			VK_CHECK_RESULT(vulkanDev->createBuffer(
 				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 				&uniformbufs.vert,
 				sizeof(VolVertShaderUBO)));
 
-			// Blur parameters uniform buffers
 			VK_CHECK_RESULT(vulkanDev->createBuffer(
 				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 				&uniformbufs.frag_base,
 				sizeof(VolFragShaderBaseUBO)));
 
-			// Skybox
-			VK_CHECK_RESULT(vulkanDev->createBuffer(
-				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-				&uniformbufs.frag_brick,
-				sizeof(VolFragShaderBrickUBO)));
-
 			// Map persistent
 			VK_CHECK_RESULT(uniformbufs.vert.map());
 			VK_CHECK_RESULT(uniformbufs.frag_base.map());
-			VK_CHECK_RESULT(uniformbufs.frag_brick.map());
 
-			uniformBuffers_[vulkanDev] = uniformbufs;
+			uniformBuffers[vulkanDev] = uniformbufs;
 		}
 	}
 
-	void VolShaderFactory::updateUniformBuffersVert(vks::VulkanDevice *vdev, VolVertShaderUBO ubo)
+	void VolShaderFactory::updateUniformBuffers(VolUniformBufs& uniformBuffers, VolVertShaderUBO vubo, VolFragShaderBaseUBO fubo)
 	{
-		memcpy(uniformBuffers_[vdev].vert.mapped, &ubo, sizeof(ubo));
+		memcpy(uniformBuffers.vert.mapped, &vubo, sizeof(vubo));
+		memcpy(uniformBuffers.frag_base.mapped, &fubo, sizeof(fubo));
 	}
 
-	void VolShaderFactory::updateUniformBuffersFragBase(vks::VulkanDevice *vdev, VolFragShaderBaseUBO ubo)
-	{
-		memcpy(uniformBuffers_[vdev].frag_base.mapped, &ubo, sizeof(ubo));
-	}
-
-	void VolShaderFactory::updateUniformBuffersFragBrick(vks::VulkanDevice *vdev, VolFragShaderBrickUBO ubo)
-	{
-		memcpy(uniformBuffers_[vdev].frag_brick.mapped, &ubo, sizeof(ubo));
-	}
-
+	
 } // end namespace FLIVR

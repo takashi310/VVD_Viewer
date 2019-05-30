@@ -26,7 +26,6 @@
 //  DEALINGS IN THE SOFTWARE.
 //  
 
-#include <GL/glew.h>
 #include <FLIVR/texturebrick.h>
 #include <FLIVR/TextureRenderer.h>
 #include <FLIVR/Color.h>

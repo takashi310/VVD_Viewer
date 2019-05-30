@@ -1006,6 +1006,15 @@ namespace FLIVR
 				&pipe.descriptorSetLayout,
 				1);
 
+			VkPushConstantRange pushConstantRange = {};
+			pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+			pushConstantRange.size = sizeof(float) * 4 * 4;
+			pushConstantRange.offset = 0;
+
+			// Push constant ranges are part of the pipeline layout
+			pPipelineLayoutCreateInfo.pushConstantRangeCount = 1;
+			pPipelineLayoutCreateInfo.pPushConstantRanges = &pushConstantRange;
+
 			VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pPipelineLayoutCreateInfo, nullptr, &pipe.pipelineLayout));
 
 			VkDescriptorSetAllocateInfo descriptorSetAllocInfo;

@@ -416,10 +416,6 @@ void Vulkan2dRender::buildCommandBuffer(VkCommandBuffer commandbufs[], int comma
 	renderPassBeginInfo.renderArea.offset.y = 0;
 	renderPassBeginInfo.renderArea.extent.width = framebuf->w;
 	renderPassBeginInfo.renderArea.extent.height = framebuf->h;
-	if (params.clear) {
-		renderPassBeginInfo.clearValueCount = 1;
-		renderPassBeginInfo.pClearValues = clearValues;
-	}
 
 	for (int32_t i = 0; i < commandbuf_num; ++i)
 	{
@@ -445,6 +441,26 @@ void Vulkan2dRender::buildCommandBuffer(VkCommandBuffer commandbufs[], int comma
 			&m_img_pipeline_settings.descriptorSet,
 			0,
 			NULL);
+
+		if (params.clear)
+		{
+			VkClearAttachment clearAttachments[1] = {};
+			clearAttachments[0].aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			clearAttachments[0].clearValue = clearValues[0];
+			clearAttachments[0].colorAttachment = 0;
+
+			VkClearRect clearRect = {};
+			clearRect.layerCount = 1;
+			clearRect.rect.offset = { 0, 0 };
+			clearRect.rect.extent = { framebuf->w, framebuf->h };
+
+			vkCmdClearAttachments(
+				commandbufs[i],
+				1,
+				clearAttachments,
+				1,
+				&clearRect);
+		}
 
 		vkCmdBindPipeline(commandbufs[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
 

@@ -29,6 +29,7 @@
 #ifndef SegShader_h
 #define SegShader_h
 
+#include <glm/glm.hpp>
 #include <string>
 #include <vector>
 #include "DLLExport.h"
@@ -137,27 +138,26 @@ namespace FLIVR
 			glm::mat4 proj_mat_inv;
 		};
 
-		struct SegFragShaderBrickUBO {
+		struct SegFragShaderBrickConst {
 			glm::vec4 loc_dim_inv;	//loc4
 			glm::vec4 loc_dim;		//loc9
-			glm::mat4 bmat;
-			glm::mat4 mask_bmat;
+			glm::vec4 b_scale;
+			glm::vec4 b_trans;
+			glm::vec4 mask_b_scale;
+			glm::vec4 mask_b_trans;
 		};
 
 		struct SegUniformBufs {
 			vks::Buffer frag_base;
-			vks::Buffer frag_brick;
 		};
 
 		void setupDescriptorSetLayout();
-		void setupDescriptorSetUniforms(vks::VulkanDevice *vdev);
-		void setupDescriptorSetSamplers(vks::VulkanDevice *vdev, uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites);
-		void prepareUniformBuffers();
-		void updateUniformBuffersFragBase(vks::VulkanDevice *vdev, SegFragShaderBaseUBO ubo);
-		void updateUniformBuffersFragBrick(vks::VulkanDevice *vdev, SegFragShaderBrickUBO ubo);
+		void setupDescriptorSetUniforms(vks::VulkanDevice* vdev, SegUniformBufs& uniformBuffers);
+		void setupDescriptorSetSamplers(vks::VulkanDevice* vdev, uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites);
+		void prepareUniformBuffers(std::map<vks::VulkanDevice*, SegUniformBufs>& uniformBuffers);
+		void updateUniformBuffers(SegUniformBufs& uniformBuffers, SegFragShaderBaseUBO fubo);
 		
 		std::map<vks::VulkanDevice*, SegPipeline> pipeline_;
-		std::map<vks::VulkanDevice*, SegUniformBufs> uniformBuffers_;
 
 		std::vector<vks::VulkanDevice*> vdevices_;
 

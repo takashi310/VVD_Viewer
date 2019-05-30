@@ -14,6 +14,7 @@
 #include <assert.h>
 #include <algorithm>
 #include <memory>
+#include <array>
 #include "vulkan/vulkan.h"
 #include "VulkanTools.h"
 #include "VulkanBuffer.hpp"
@@ -629,6 +630,9 @@ namespace vks
 		VkImageView view;
 		VkDescriptorImageInfo descriptor;
 		VkFormat format;
+		VkImageUsageFlags usage;
+		VkAttachmentDescription attdesc;
+		VkImageSubresourceRange subresourceRange;
 		VulkanDevice *device;
 		uint32_t w, h, d, bytes;
 		uint32_t mipLevels;
@@ -655,25 +659,161 @@ namespace vks
 			if (deviceMemory != VK_NULL_HANDLE)
 				vkFreeMemory(device->logicalDevice, deviceMemory, nullptr);
 		}
+
 	};
 
 	class VFrameBuffer {
 	public:
 		VkFramebuffer framebuffer;
+		VkRenderPass renderPass;
 		VulkanDevice *device;
 		int32_t w, h;
-		std::shared_ptr<VTexture> color, depth;
+		std::vector<std::shared_ptr<VTexture>> attachments;
 
 		VFrameBuffer()
 		{
 			framebuffer = VK_NULL_HANDLE;
+			renderPass = VK_NULL_HANDLE;
 			device = VK_NULL_HANDLE;
 		}
 
 		~VFrameBuffer()
 		{
+			if (renderPass != VK_NULL_HANDLE)
+				vkDestroyRenderPass(device->logicalDevice, renderPass, nullptr);
 			if (framebuffer != VK_NULL_HANDLE)
 				vkDestroyFramebuffer(device->logicalDevice, framebuffer, nullptr);
+		}
+
+		uint32_t addAttachment(std::shared_ptr<VTexture> &attachment)
+		{
+			// Fill attachment description
+			attachment->attdesc = {};
+			attachment->attdesc.samples = VK_SAMPLE_COUNT_1_BIT;
+			attachment->attdesc.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+			attachment->attdesc.storeOp = (attachment->usage & VK_IMAGE_USAGE_SAMPLED_BIT) ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			attachment->attdesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+			attachment->attdesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			attachment->attdesc.format = attachment->format;
+			attachment->attdesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			// Final layout
+			// If not, final layout depends on attachment type
+			attachment->attdesc.finalLayout = attachment->descriptor.imageLayout;
+
+			attachments.push_back(attachment);
+
+			return static_cast<uint32_t>(attachments.size() - 1);
+		}
+
+		/**
+		* Creates a default render pass setup with one sub pass
+		*
+		* @return VK_SUCCESS if all resources have been created successfully
+		*/
+		VkResult createRenderPass()
+		{
+			std::vector<VkAttachmentDescription> attachmentDescriptions;
+			for (auto& attachment : attachments)
+			{
+				attachmentDescriptions.push_back(attachment->attdesc);
+			};
+
+			// Collect attachment references
+			std::vector<VkAttachmentReference> colorReferences;
+			VkAttachmentReference depthReference = {};
+			bool hasDepth = false;
+			bool hasColor = false;
+
+			uint32_t attachmentIndex = 0;
+
+			for (auto& attachment : attachments)
+			{
+				if (attachment->usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)
+				{
+					// Only one depth attachment allowed
+					assert(!hasDepth);
+					depthReference.attachment = attachmentIndex;
+					depthReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+					hasDepth = true;
+				}
+				else
+				{
+					colorReferences.push_back({ attachmentIndex, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
+					hasColor = true;
+				}
+				attachmentIndex++;
+			};
+
+			// Default render pass setup uses only one subpass
+			VkSubpassDescription subpass = {};
+			subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+			if (hasColor)
+			{
+				subpass.pColorAttachments = colorReferences.data();
+				subpass.colorAttachmentCount = static_cast<uint32_t>(colorReferences.size());
+			}
+			if (hasDepth)
+			{
+				subpass.pDepthStencilAttachment = &depthReference;
+			}
+
+			// Use subpass dependencies for attachment layout transitions
+			std::array<VkSubpassDependency, 2> dependencies;
+
+			dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+			dependencies[0].dstSubpass = 0;
+			dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+			dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			dependencies[0].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+			dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+			dependencies[1].srcSubpass = 0;
+			dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+			dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+			dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+			dependencies[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+			// Create render pass
+			VkRenderPassCreateInfo renderPassInfo = {};
+			renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+			renderPassInfo.pAttachments = attachmentDescriptions.data();
+			renderPassInfo.attachmentCount = static_cast<uint32_t>(attachmentDescriptions.size());
+			renderPassInfo.subpassCount = 1;
+			renderPassInfo.pSubpasses = &subpass;
+			renderPassInfo.dependencyCount = 2;
+			renderPassInfo.pDependencies = dependencies.data();
+			VK_CHECK_RESULT(vkCreateRenderPass(device->logicalDevice, &renderPassInfo, nullptr, &renderPass));
+
+			std::vector<VkImageView> attachmentViews;
+			for (auto attachment : attachments)
+			{
+				attachmentViews.push_back(attachment->view);
+			}
+
+			// Find. max number of layers across attachments
+			uint32_t maxLayers = 0;
+			for (auto attachment : attachments)
+			{
+				if (attachment->subresourceRange.layerCount > maxLayers)
+				{
+					maxLayers = attachment->subresourceRange.layerCount;
+				}
+			}
+
+			VkFramebufferCreateInfo framebufferInfo = {};
+			framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+			framebufferInfo.renderPass = renderPass;
+			framebufferInfo.pAttachments = attachmentViews.data();
+			framebufferInfo.attachmentCount = static_cast<uint32_t>(attachmentViews.size());
+			framebufferInfo.width = w;
+			framebufferInfo.height = h;
+			framebufferInfo.layers = maxLayers;
+			VK_CHECK_RESULT(vkCreateFramebuffer(device->logicalDevice, &framebufferInfo, nullptr, &framebuffer));
+
+			return VK_SUCCESS;
 		}
 	};
 

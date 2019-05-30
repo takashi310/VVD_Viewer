@@ -340,6 +340,7 @@ namespace FLIVR
                //blend frame buffer for output
                bool blend_framebuffer_resize_;
                std::unique_ptr<vks::VFrameBuffer> blend_framebuffer_;
+			   std::unique_ptr<vks::VFrameBuffer> blend_framebuffer_label_;
 			   std::shared_ptr<vks::VTexture> blend_tex_id_;
 			   std::shared_ptr<vks::VTexture> label_tex_id_;
                //2nd buffer for multiple filtering
