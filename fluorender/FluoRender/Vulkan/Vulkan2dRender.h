@@ -36,6 +36,7 @@ public:
 		VkPipeline pipeline;
 		int shader;
 		int blend;
+		VkFormat dstformat;
 		VkBool32 uniforms[V2DRENDER_UNIFORM_NUM] = { VK_FALSE };
 		VkBool32 samplers[IMG_SHDR_SAMPLER_NUM] = { VK_FALSE };
 	};
@@ -46,7 +47,8 @@ public:
 	std::vector<V2dPipeline> m_pipelines;
 	int prev_pipeline;
 
-	VkRenderPass m_pass; 
+	VkRenderPass m_pass8;
+	VkRenderPass m_pass32; 
 
 	bool m_init;
 	std::shared_ptr<VVulkan> m_vulkan;
@@ -59,7 +61,7 @@ public:
 	void generateQuad();
 	void setupVertexDescriptions();
 	void prepareRenderPass();
-	V2dPipeline preparePipeline(int shader, int blend_mode);
+	V2dPipeline preparePipeline(int shader, int blend_mode, VkFormat dstformat);
 
 	void getEnabledUniforms(V2dPipeline pipeline, const std::string &code);
 

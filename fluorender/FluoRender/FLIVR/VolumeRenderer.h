@@ -258,8 +258,8 @@ namespace FLIVR
 		}
 		int get_mask_hide_mode() { return m_mask_hide_mode; }
 
-		void set_clear_color(VkClearColorValue col) { clear_color_ = col; }
-		VkClearColorValue get_clear_color() { return clear_color_; }
+		void set_clear_color(VkClearColorValue col) { m_clear_color = col; }
+		VkClearColorValue get_clear_color() { return m_clear_color; }
 
 		friend class MultiVolumeRenderer;
 
@@ -359,39 +359,56 @@ public:
 		VkClearColorValue m_clear_color;
 		std::map<vks::VulkanDevice*, VolShaderFactory::VolUniformBufs> m_volUniformBuffers;
 		std::map<vks::VulkanDevice*, SegShaderFactory::SegUniformBufs> m_segUniformBuffers;
+		
+		struct Vertex {
+			float pos[3];
+			float uv[3];
+		};
+		struct {
+			VkPipelineVertexInputStateCreateInfo inputState;
+			std::vector<VkVertexInputBindingDescription> inputBinding;
+			std::vector<VkVertexInputAttributeDescription> inputAttributes;
+		} m_vertices;
+		void setupVertexDescriptions();
+
+		VkRenderPass prepareRenderPass(int attatchment_num);
 
 		struct VVolPipeline {
 			VkPipeline pipeline;
-			int shader;
+			VkRenderPass renderpass;
+			ShaderProgram* shader;
 			int mode;
 			int update_order;
 			int colormap_mode;
-			VkBool32 uniforms[V2DRENDER_UNIFORM_NUM] = { VK_FALSE };
 			VkBool32 samplers[IMG_SHDR_SAMPLER_NUM] = { VK_FALSE };
 		};
-		std::vector<VVolPipeline> m_vol_pipelines;
-		int m_prev_vol_pipeline = -1;
-		VVolPipeline prepareVolPipeline(int shader, int mode, int update_order, int colormap_mode);
+		static std::vector<VVolPipeline> m_vol_pipelines;
+		int m_prev_vol_pipeline;
+		VVolPipeline prepareVolPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode);
 
 		struct VSegPipeline {
 			VkPipeline pipeline;
+			VkRenderPass renderpass;
+			ShaderProgram* shader;
 			int shader;
 			VkBool32 uniforms[V2DRENDER_UNIFORM_NUM] = { VK_FALSE };
 			VkBool32 samplers[IMG_SHDR_SAMPLER_NUM] = { VK_FALSE };
 		};
-		std::vector<VSegPipeline> m_seg_pipelines;
-		int m_prev_seg_pipeline = -1;
-		VSegPipeline prepareSegPipeline(int shader, int mode, int update_order, int colormap_mode);
+		static std::vector<VSegPipeline> m_seg_pipelines;
+		int m_prev_seg_pipeline;
+		VSegPipeline prepareSegPipeline((vks::VulkanDevice* device, int mode, int update_order, int colormap_mode);
 
 		struct VCalPipeline {
 			VkPipeline pipeline;
+			VkRenderPass renderpass;
+			ShaderProgram* shader;
 			int shader;
 			VkBool32 uniforms[V2DRENDER_UNIFORM_NUM] = { VK_FALSE };
 			VkBool32 samplers[IMG_SHDR_SAMPLER_NUM] = { VK_FALSE };
 		};
-		std::vector<VCalPipeline> m_cal_pipelines;
-		int m_prev_cal_pipeline = -1;
-		VCalPipeline prepareCalPipeline(int shader, int mode, int update_order, int colormap_mode);
+		static std::vector<VCalPipeline> m_cal_pipelines;
+		int m_prev_cal_pipeline;
+		VCalPipeline prepareCalPipeline((vks::VulkanDevice* device, int mode, int update_order, int colormap_mode);
 	};
 
 } // End namespace FLIVR

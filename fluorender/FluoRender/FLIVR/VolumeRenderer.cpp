@@ -58,6 +58,9 @@ namespace FLIVR
 #endif
 
 	double VolumeRenderer::sw_ = 0.0;
+	std::vector<VolumeRenderer::VVolPipeline> VolumeRenderer::m_vol_pipelines;
+	std::vector<VolumeRenderer::VSegPipeline> VolumeRenderer::m_seg_pipelines;
+	std::vector<VolumeRenderer::VCalPipeline> VolumeRenderer::m_cal_pipelines;
 
 	VolumeRenderer::VolumeRenderer(Texture* tex,
 		const vector<Plane*> &planes,
@@ -123,8 +126,13 @@ namespace FLIVR
 		for (int i=0; i<TEXTURE_RENDER_MODES; i++)
 			done_loop_[i] = false;
 
-		clear_color_ = { { 0.0f, 0.0f, 0.0f, 0.0f } };
+		m_clear_color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
+		
+		setupVertexDescriptions();
 
+		m_prev_vol_pipeline = -1;
+		m_prev_seg_pipeline = -1;
+		m_prev_cal_pipeline = -1;
 	}
 
 	VolumeRenderer::VolumeRenderer(const VolumeRenderer& copy)
@@ -198,6 +206,12 @@ namespace FLIVR
 			m_vulkan->vol_shader_factory_->prepareUniformBuffers(m_volUniformBuffers);
 			m_vulkan->seg_shader_factory_->prepareUniformBuffers(m_segUniformBuffers);
 		}
+
+		setupVertexDescriptions();
+
+		m_prev_vol_pipeline = copy.m_prev_vol_pipeline;
+		m_prev_seg_pipeline = copy.m_prev_seg_pipeline;
+		m_prev_cal_pipeline = copy.m_prev_cal_pipeline;
 	}
 
 	VolumeRenderer::~VolumeRenderer()
@@ -855,8 +869,123 @@ namespace FLIVR
 		}
 	}
 
-	VolumeRenderer::VVolPipeline VolumeRenderer::prepareVolPipeline(int shader, int mode, int update_order, int colormap_mode)
+	void VolumeRenderer::setupVertexDescriptions()
 	{
+		// Binding description
+		m_vertices.inputBinding.resize(1);
+		m_vertices.inputBinding[0] =
+			vks::initializers::vertexInputBindingDescription(
+				0,
+				sizeof(Vertex),
+				VK_VERTEX_INPUT_RATE_VERTEX);
+
+		// Attribute descriptions
+		// Describes memory layout and shader positions
+		m_vertices.inputAttributes.resize(3);
+		// Location 0 : Position
+		m_vertices.inputAttributes[0] =
+			vks::initializers::vertexInputAttributeDescription(
+				0,
+				0,
+				VK_FORMAT_R32G32B32_SFLOAT,
+				offsetof(Vertex, pos));
+		// Location 1 : Texture coordinates
+		m_vertices.inputAttributes[1] =
+			vks::initializers::vertexInputAttributeDescription(
+				0,
+				1,
+				VK_FORMAT_R32G32B32_SFLOAT,
+				offsetof(Vertex, uv));
+
+		m_vertices.inputState = vks::initializers::pipelineVertexInputStateCreateInfo();
+		m_vertices.inputState.vertexBindingDescriptionCount = static_cast<uint32_t>(m_vertices.inputBinding.size());
+		m_vertices.inputState.pVertexBindingDescriptions = m_vertices.inputBinding.data();
+		m_vertices.inputState.vertexAttributeDescriptionCount = static_cast<uint32_t>(m_vertices.inputAttributes.size());
+		m_vertices.inputState.pVertexAttributeDescriptions = m_vertices.inputAttributes.data();
+	}
+
+	VkRenderPass VolumeRenderer::prepareRenderPass(int attatchment_num)
+	{
+		VkRenderPass ret = VK_NULL_HANDLE;
+
+		VkPhysicalDevice physicalDevice = m_vulkan->getPhysicalDevice();
+		VkDevice device = m_vulkan->getDevice();
+
+		// Create a separate render pass for the offscreen rendering as it may differ from the one used for scene rendering
+		std::vector<VkAttachmentDescription> attchmentDescriptions;
+		VkAttachmentDescription ad = {};
+		// Color attachment
+		ad.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+		ad.samples = VK_SAMPLE_COUNT_1_BIT;
+		ad.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		ad.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+		ad.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		ad.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+		ad.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		ad.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+		for (int i = 0; i < attatchment_num; i++)
+			attchmentDescriptions.push_back(ad);
+
+		std::vector<VkAttachmentReference> colorReferences;
+		for (int i = 0; i < attatchment_num; i++)
+		{
+			VkAttachmentReference cr = { i, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+			colorReferences.push_back(cr);
+		}
+
+		VkSubpassDescription subpassDescription = {};
+		subpassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+		subpassDescription.colorAttachmentCount = static_cast<uint32_t>(colorReferences.size());
+		subpassDescription.pColorAttachments = colorReferences.data();
+
+		// Use subpass dependencies for layout transitions
+		std::array<VkSubpassDependency, 2> dependencies;
+
+		dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+		dependencies[0].dstSubpass = 0;
+		dependencies[0].srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+		dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+		dependencies[0].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+		dependencies[1].srcSubpass = 0;
+		dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+		dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+		dependencies[1].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+		dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		dependencies[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+		// Create the actual renderpass
+		VkRenderPassCreateInfo renderPassInfo = {};
+		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+		renderPassInfo.attachmentCount = static_cast<uint32_t>(attchmentDescriptions.size());
+		renderPassInfo.pAttachments = attchmentDescriptions.data();
+		renderPassInfo.subpassCount = 1;
+		renderPassInfo.pSubpasses = &subpassDescription;
+		renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
+		renderPassInfo.pDependencies = dependencies.data();
+
+		VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassInfo, nullptr, &ret));
+
+		return ret;
+	}
+
+	VolumeRenderer::VVolPipeline VolumeRenderer::prepareVolPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode)
+	{
+		VVolPipeline ret_pipeline;
+
+		bool use_fog = m_use_fog && colormap_mode_ != 2;
+		ShaderProgram *shader = vol_shader_factory_.shader(
+			false, tex_->nc(),
+			shading_, use_fog,
+			depth_peel_, true,
+			hiqual_, ml_mode_,
+			colormap_mode_, colormap_, colormap_proj_,
+			solid_, 1, tex_->nmask() != -1 ? m_mask_hide_mode : VOL_MASK_HIDE_NONE);
+
 		if (m_prev_vol_pipeline >= 0) {
 			if (m_vol_pipelines[m_prev_vol_pipeline].shader == shader &&
 				m_vol_pipelines[m_prev_vol_pipeline].mode == mode &&
@@ -912,11 +1041,13 @@ namespace FLIVR
 				static_cast<uint32_t>(dynamicStateEnables.size()),
 				0);
 
-		m_img_pipeline_settings = m_vulkan->img_shader_factory_->pipeline_settings_[m_vulkan->vulkanDevice];
+		VkRenderPass renderpass = prepareRenderPass( colormap_mode_ == 3 ? 2 : 1 );
+
+		VolShaderFactory::VolPipelineSettings pipeline_settings = m_vulkan->vol_shader_factory_->pipeline_[device];
 		VkGraphicsPipelineCreateInfo pipelineCreateInfo =
 			vks::initializers::pipelineCreateInfo(
-				m_img_pipeline_settings.pipelineLayout,
-				m_pass,
+				pipeline_settings.pipelineLayout,
+				renderpass,
 				0);
 
 		pipelineCreateInfo.pVertexInputState = &m_vertices.inputState;
@@ -930,58 +1061,89 @@ namespace FLIVR
 
 		//blend mode
 		VkBool32 enable_blend;
+		VkBlendOp blendop;
 		VkBlendFactor src_blend, dst_blend;
-		switch (blend_mode)
+		
+		enable_blend = VK_TRUE;
+		switch (mode_)
 		{
-		case V2DRENDER_BLEND_OVER:
-			enable_blend = VK_TRUE;
-			src_blend = VK_BLEND_FACTOR_ONE;
-			dst_blend = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+		case MODE_OVER:
+			blendop = VK_BLEND_OP_ADD;
+			if (update_order_ == 0)
+			{
+				src_blend = VK_BLEND_FACTOR_ONE;
+				dst_blend = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+			}
+			else if (update_order_ == 1)
+			{
+				src_blend = VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+				dst_blend = VK_BLEND_FACTOR_ONE;
+			}
 			break;
-		case V2DRENDER_BLEND_ADD:
-			enable_blend = VK_TRUE;
+		case MODE_MIP:
+			blendop = VK_BLEND_OP_MAX;
 			src_blend = VK_BLEND_FACTOR_ONE;
 			dst_blend = VK_BLEND_FACTOR_ONE;
+			break;
 		default:
-			enable_blend = VK_FALSE;
-			src_blend = VK_BLEND_FACTOR_ONE;
-			dst_blend = VK_BLEND_FACTOR_ZERO;
+			break;
 		}
+		enable_blend = (colormap_mode_ == 3) ? VK_FALSE : VK_TRUE;
 
 		VkPipelineColorBlendAttachmentState blendAttachmentState =
 			vks::initializers::pipelineColorBlendAttachmentState(
 				enable_blend,
-				VK_BLEND_OP_ADD,
+				blendop,
 				src_blend,
 				dst_blend,
 				0xf);
 
-		VkPipelineColorBlendStateCreateInfo colorBlendState =
-			vks::initializers::pipelineColorBlendStateCreateInfo(
-				1,
-				&blendAttachmentState);
-		pipelineCreateInfo.pColorBlendState = &colorBlendState;
+		if (colormap_mode_ != 3)
+		{
+			VkPipelineColorBlendStateCreateInfo colorBlendState =
+				vks::initializers::pipelineColorBlendStateCreateInfo(
+					1,
+					&blendAttachmentState);
+			pipelineCreateInfo.pColorBlendState = &colorBlendState;
+		}
+		else
+		{
+			std::array<VkPipelineColorBlendAttachmentState, 2> blendAttStates;
+			blendAttStates[0] = blendAttachmentState;
+			blendAttStates[1] =
+				vks::initializers::pipelineColorBlendAttachmentState(
+					VK_FALSE,
+					blendop,
+					src_blend,
+					dst_blend,
+					0xf);
+
+			VkPipelineColorBlendStateCreateInfo colorBlendState =
+				vks::initializers::pipelineColorBlendStateCreateInfo(
+					2,
+					blendAttStates.data());
+			pipelineCreateInfo.pColorBlendState = &colorBlendState;
+		}
 
 		// Load shaders
 		std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages;
-		FLIVR::ShaderProgram* sh = m_vulkan->img_shader_factory_->shader(IMG_SHADER_TEXTURE_LOOKUP);
-		shaderStages[0] = sh->get_vertex_shader();
-		shaderStages[1] = sh->get_fragment_shader();
+		shaderStages[0] = ret_pipeline.shader->get_vertex_shader();
+		shaderStages[1] = ret_pipeline.shader->get_fragment_shader();
 		pipelineCreateInfo.pStages = shaderStages.data();
 
-		V2dPipeline v2d_pipeline;
-		v2d_pipeline.shader = IMG_SHADER_TEXTURE_LOOKUP;
-		v2d_pipeline.blend = blend_mode;
-		getEnabledUniforms(v2d_pipeline, sh->get_fragment_shader_code());
-
 		VK_CHECK_RESULT(
-			vkCreateGraphicsPipelines(m_vulkan->getDevice(), m_vulkan->getPipelineCache(), 1, &pipelineCreateInfo, nullptr, &v2d_pipeline.pipeline)
+			vkCreateGraphicsPipelines(m_vulkan->getDevice(), m_vulkan->getPipelineCache(), 1, &pipelineCreateInfo, nullptr, &ret_pipeline.pipeline)
 		);
+		ret_pipeline.renderpass = renderpass;
+		ret_pipeline.shader = shader;
+		ret_pipeline.mode = mode;
+		ret_pipeline.update_order = update_order;
+		ret_pipeline.colormap_mode = colormap_mode;
 
-		m_pipelines.push_back(v2d_pipeline);
-		prev_pipeline = m_pipelines.size() - 1;
+		m_vol_pipelines.push_back(ret_pipeline);
+		m_prev_vol_pipeline = m_vol_pipelines.size() - 1;
 
-		return v2d_pipeline;
+		return ret_pipeline;
 	}
 
 	//draw
@@ -996,7 +1158,7 @@ namespace FLIVR
 	void VolumeRenderer::draw_volume(bool interactive_mode_p,
 		bool orthographic_p, double zoom, int mode, double sampling_frq_fac)
 	{
-		if (!tex_)
+		if (!tex_ || !m_vulkan)
 			return;
 
 		Ray view_ray = compute_view();
@@ -1061,6 +1223,9 @@ namespace FLIVR
 		h2 = int(h/**sfactor_*/*buffer_scale_+0.5);
 
 		vks::VulkanDevice* prim_dev = m_vulkan->devices[0];
+		
+		if (m_volUniformBuffers.empty())
+			m_vulkan->vol_shader_factory_->prepareUniformBuffers(m_volUniformBuffers);
 
 		if(blend_num_bits_ > 8)
 		{
@@ -1089,9 +1254,9 @@ namespace FLIVR
 				blend_framebuffer_label_->device = prim_dev;
 			}
 			if (!blend_tex_id_)
-				blend_tex_id_ = prim_dev->GenTexture2D(VK_FORMAT_R8G8B8A8_UNORM, VK_FILTER_LINEAR, w2, h2);
+				blend_tex_id_ = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, w2, h2);
 			if (!label_tex_id_)
-				label_tex_id_ = prim_dev->GenTexture2D(VK_FORMAT_R8G8B8A8_UNORM, VK_FILTER_LINEAR, w2, h2);
+				label_tex_id_ = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, w2, h2);
 
 			blend_framebuffer_->addAttachment(blend_tex_id_);
 
@@ -1101,137 +1266,93 @@ namespace FLIVR
 			blend_framebuffer_->createRenderPass();
 			blend_framebuffer_label_->createRenderPass();
 		}
-		
-		glEnablei(GL_BLEND, 0);
-		switch(mode_)
-		{
-		case MODE_OVER:
-			glBlendEquationi(0, GL_FUNC_ADD);
-			if (update_order_ == 0)
-				glBlendFunci(0, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-			else if (update_order_ == 1)
-				glBlendFunci(0, GL_ONE_MINUS_DST_ALPHA, GL_ONE);
-			break;
-		case MODE_MIP:
-			glBlendEquationi(0, GL_MAX);
-			glBlendFunci(0, GL_ONE, GL_ONE);
-			break;
-		default:
-			break;
-		}
-		if (colormap_mode_ == 3) glDisablei(GL_BLEND, 1);
-		
-
-		if(colormap_mode_ == 3 && glIsTexture(label_tex_id_) && glIsTexture(get_palette()))
-		{
-			glActiveTexture(GL_TEXTURE5);
-			glEnable(GL_TEXTURE_2D);
-			glBindTexture(GL_TEXTURE_2D, label_tex_id_);
-			glActiveTexture(GL_TEXTURE0);
-			glActiveTexture(GL_TEXTURE7);
-			glEnable(GL_TEXTURE_2D);
-			glBindTexture(GL_TEXTURE_2D, get_palette());
-			glActiveTexture(GL_TEXTURE0);
-		}
-
-		//disable depth test
-		glDisable(GL_DEPTH_TEST);
-
-		//enable 3d texture
-		glEnable(GL_TEXTURE_3D);
 
 		eval_ml_mode();
+		
+		VVolPipeline pipeline = prepareVolPipeline(prim_dev, mode_, update_order_, colormap_mode_);
+		VkDescriptorSet dset = m_vulkan->vol_shader_factory_->pipeline_[prim_dev].descriptorSet;
 
-		//--------------------------------------------------------------------------
-		// Set up shaders
-		ShaderProgram* shader = 0;
-		//create/bind
-		shader = vol_shader_factory_.shader(
-			false, tex_->nc(),
-			shading_, use_fog,
-			depth_peel_, true,
-			hiqual_, ml_mode_,
-			colormap_mode_, colormap_, colormap_proj_,
-			solid_, 1, tex_->nmask() != -1 ? m_mask_hide_mode : VOL_MASK_HIDE_NONE);
-		if (shader)
+		std::vector<VkWriteDescriptorSet> descriptorWrites;
+		if(colormap_mode_ == 3)
 		{
-			if (!shader->valid())
-				shader->create();
-			shader->bind();
+			auto palette = get_palette();
+			if (label_tex_id_)
+				descriptorWrites.push_back(VolShaderFactory::writeDescriptorSetTex(dset, 5, &label_tex_id_->descriptor));
+			if (palette[0])
+				descriptorWrites.push_back(VolShaderFactory::writeDescriptorSetTex(dset, 7, &palette[0]->descriptor));
 		}
+		
+		VolShaderFactory::VolVertShaderUBO vert_ubo;
+		VolShaderFactory::VolFragShaderBaseUBO frag_ubo;
+		VolShaderFactory::VolFragShaderBrickConst frag_const;
 
-		//set uniforms
-		//set up shading
-		//set the light
 		Vector light = view_ray.direction();
 		light.safe_normalize();
-		shader->setLocalParam(0, light.x(), light.y(), light.z(), alpha_);
+		
+		frag_ubo.loc0_light_alpha = { light.x(), light.y(), light.z(), alpha_ };
 		if (shading_)
-			shader->setLocalParam(1, 2.0 - ambient_, diffuse_, specular_, shine_);
+			frag_ubo.loc1_material = { 2.0 - ambient_, diffuse_, specular_, shine_ };
 		else
-			shader->setLocalParam(1, 2.0 - ambient_, 0.0, specular_, shine_);
+			frag_ubo.loc1_material = { 2.0 - ambient_, 0.0, specular_, shine_ };
 
 		//spacings
 		double spcx, spcy, spcz;
 		tex_->get_spacings(spcx, spcy, spcz);
 		if (colormap_mode_ == 3)
 		{
-			int max_id = ((*bricks)[0]->tex_type(0)==GL_SHORT||(*bricks)[0]->tex_type(0)==GL_UNSIGNED_SHORT) ? USHRT_MAX : UCHAR_MAX;
-			shader->setLocalParam(5, spcx, spcy, spcz, max_id);
+			int max_id = (*bricks)[0]->nb(0) == 2 ? USHRT_MAX : UCHAR_MAX;
+			frag_ubo.loc5_spc_id = { spcx, spcy, spcz, max_id };
 		}
 		else
-			shader->setLocalParam(5, spcx, spcy, spcz, 1.0);
+			frag_ubo.loc5_spc_id = { spcx, spcy, spcz, 1.0 };
 
 		//transfer function
-		shader->setLocalParam(2, inv_?-scalar_scale_:scalar_scale_, gm_scale_, lo_thresh_, hi_thresh_);
-		shader->setLocalParam(3, 1.0/gamma3d_, gm_thresh_, offset_, sw_);
+		frag_ubo.loc2_scscale_th = { inv_ ? -scalar_scale_ : scalar_scale_, gm_scale_, lo_thresh_, hi_thresh_ };
+		frag_ubo.loc3_gamma_offset = { 1.0 / gamma3d_, gm_thresh_, offset_, sw_ };
 		switch (colormap_mode_)
 		{
 		case 0://normal
 			if (mask_ && !label_)
-				shader->setLocalParam(6, mask_color_.r(), mask_color_.g(), mask_color_.b(), mask_thresh_);
+				frag_ubo.loc6_colparam = { mask_color_.r(), mask_color_.g(), mask_color_.b(), mask_thresh_ };
 			else
-				shader->setLocalParam(6, color_.r(), color_.g(), color_.b(), 0.0);
+				frag_ubo.loc6_colparam = { color_.r(), color_.g(), color_.b(), 0.0 };
 			break;
 		case 1://colormap
-			shader->setLocalParam(6, colormap_low_value_, colormap_hi_value_,
-				colormap_hi_value_-colormap_low_value_, 0.0);
+			frag_ubo.loc6_colparam = { colormap_low_value_, colormap_hi_value_, colormap_hi_value_ - colormap_low_value_, 0.0 };
 			break;
 		case 2://depth map
-			shader->setLocalParam(6, color_.r(), color_.g(), color_.b(), 0.0);
+			frag_ubo.loc6_colparam = { color_.r(), color_.g(), color_.b(), 0.0 };
 			break;
 		case 3://indexed color
 			HSVColor hsv(color_);
 			double luminance = hsv.val();
-			shader->setLocalParam(6, 1.0/double(w2), 1.0/double(h2), luminance, 0.0);
+			frag_ubo.loc6_colparam = { 1.0 / double(w2), 1.0 / double(h2), luminance, 0.0 };
 			break;
 		}
 
 		//setup depth peeling
 		if (depth_peel_ || colormap_mode_ == 2)
-			shader->setLocalParam(7, 1.0/double(w2), 1.0/double(h2), 0.0, 0.0);
+			frag_ubo.loc7_view = { 1.0 / double(w2), 1.0 / double(h2), 0.0, 0.0 };
 
 		//fog
 		if (m_use_fog)
-			shader->setLocalParam(8, m_fog_intensity, m_fog_start, m_fog_end, 0.0);
+			frag_ubo.loc8_fog = { m_fog_intensity, m_fog_start, m_fog_end, 0.0 };
 
 		//set clipping planes
 		double abcd[4];
 		planes_[0]->get(abcd);
-		shader->setLocalParam(10, abcd[0], abcd[1], abcd[2], abcd[3]);
+		frag_ubo.plane0 = { abcd[0], abcd[1], abcd[2], abcd[3] };
 		planes_[1]->get(abcd);
-		shader->setLocalParam(11, abcd[0], abcd[1], abcd[2], abcd[3]);
+		frag_ubo.plane1 = { abcd[0], abcd[1], abcd[2], abcd[3] };
 		planes_[2]->get(abcd);
-		shader->setLocalParam(12, abcd[0], abcd[1], abcd[2], abcd[3]);
+		frag_ubo.plane2 = { abcd[0], abcd[1], abcd[2], abcd[3] };
 		planes_[3]->get(abcd);
-		shader->setLocalParam(13, abcd[0], abcd[1], abcd[2], abcd[3]);
+		frag_ubo.plane3 = { abcd[0], abcd[1], abcd[2], abcd[3] };
 		planes_[4]->get(abcd);
-		shader->setLocalParam(14, abcd[0], abcd[1], abcd[2], abcd[3]);
+		frag_ubo.plane4 = { abcd[0], abcd[1], abcd[2], abcd[3] };
 		planes_[5]->get(abcd);
-		shader->setLocalParam(15, abcd[0], abcd[1], abcd[2], abcd[3]);
+		frag_ubo.plane5 = { abcd[0], abcd[1], abcd[2], abcd[3] };
 
-		////////////////////////////////////////////////////////
-		// render bricks
 		// Set up transform
 		Transform *tform = tex_->transform();
 		double mvmat[16];
@@ -1242,32 +1363,73 @@ namespace FLIVR
 			mvmat[2], mvmat[6], mvmat[10], mvmat[14],
 			mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
 		m_mv_mat2 = m_mv_mat * m_mv_mat2;
-		shader->setLocalParamMatrix(0, glm::value_ptr(m_proj_mat));
-		shader->setLocalParamMatrix(1, glm::value_ptr(m_mv_mat2));
-		
-		//takashi_debug
-/*		if(mode == 3){
-			ofstream ofs;
-			ofs.open("draw_depth_shader.txt");
-			ofs << shader->getProgram() << endl;
-			ofs.close();
+		vert_ubo.proj_mat = m_proj_mat;
+		vert_ubo.model_mat = m_mv_mat2;
+
+		VolShaderFactory::updateUniformBuffers(m_volUniformBuffers[prim_dev], vert_ubo, frag_ubo);
+
+
+		//////////////////////////////////////////
+		//render bricks
+		auto& active_framebuf = colormap_mode_ == 3 ? blend_framebuffer_label_ : blend_framebuffer_;
+
+		VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
+
+		VkClearValue clearValues[2];
+		clearValues[0].color = m_clear_color;
+		clearValues[1].color = m_clear_color;
+
+		VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
+		renderPassBeginInfo.renderPass = pipeline.renderpass;
+		renderPassBeginInfo.renderArea.offset.x = 0;
+		renderPassBeginInfo.renderArea.offset.y = 0;
+		renderPassBeginInfo.renderArea.extent.width = active_framebuf->w;
+		renderPassBeginInfo.renderArea.extent.height = active_framebuf->h;
+
+		renderPassBeginInfo.framebuffer = active_framebuf->framebuffer;
+
+		VK_CHECK_RESULT(vkBeginCommandBuffer(commandbufs[i], &cmdBufInfo));
+
+		vkCmdBeginRenderPass(commandbufs[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+		VkViewport viewport = vks::initializers::viewport((float)framebuf->w, (float)framebuf->h, 0.0f, 1.0f);
+		vkCmdSetViewport(commandbufs[i], 0, 1, &viewport);
+
+		VkRect2D scissor = vks::initializers::rect2D(framebuf->w, framebuf->h, 0, 0);
+		vkCmdSetScissor(commandbufs[i], 0, 1, &scissor);
+
+		vkCmdBindDescriptorSets(
+			commandbufs[i],
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			m_img_pipeline_settings.pipelineLayout,
+			0,
+			1,
+			&m_img_pipeline_settings.descriptorSet,
+			0,
+			NULL);
+
+		if (params.clear)
+		{
+			VkClearAttachment clearAttachments[1] = {};
+			clearAttachments[0].aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			clearAttachments[0].clearValue = clearValues[0];
+			clearAttachments[0].colorAttachment = 0;
+
+			VkClearRect clearRect = {};
+			clearRect.layerCount = 1;
+			clearRect.rect.offset = { 0, 0 };
+			clearRect.rect.extent = { framebuf->w, framebuf->h };
+
+			vkCmdClearAttachments(
+				commandbufs[i],
+				1,
+				clearAttachments,
+				1,
+				&clearRect);
 		}
 
-		if(i == 0 && !mask_){
-			ofstream ofs;
-			ofs.open("draw_shader.txt");
-			ofs << shader->getProgram() << endl;
-			ofs.close();
-		}
-		if(i == 0 && mask_){
-			ofstream ofs;
-			ofs.open("draw_mask_shader.txt");
-			ofs << shader->getProgram() << endl;
-			ofs.close();
-		}
-*/
+		vkCmdBindPipeline(commandbufs[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
 
-		if (cur_chan_brick_num_ == 0) rearrangeLoadedBrkVec();
 
 		int bmode = mode;
 		if (mask_)  bmode = TEXTURE_RENDER_MODE_MASK;

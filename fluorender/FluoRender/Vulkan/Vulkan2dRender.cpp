@@ -148,17 +148,29 @@ void Vulkan2dRender::prepareRenderPass()
 	renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
 	renderPassInfo.pDependencies = dependencies.data();
 
-	VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassInfo, nullptr, &m_pass));
+	VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassInfo, nullptr, &m_pass8));
+
+
+	attchmentDescriptions[0].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+	VkRenderPassCreateInfo renderPassInfo = {};
+	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	renderPassInfo.attachmentCount = static_cast<uint32_t>(attchmentDescriptions.size());
+	VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassInfo, nullptr, &m_pass32));
 }
 
-Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blend_mode)
+Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blend_mode, VkFormat dstformat)
 {
 	if (prev_pipeline >= 0) {
-		if (m_pipelines[prev_pipeline].shader == shader && m_pipelines[prev_pipeline].blend == blend_mode)
+		if (m_pipelines[prev_pipeline].shader == shader &&
+			m_pipelines[prev_pipeline].blend == blend_mode &&
+			m_pipelines[prev_pipeline].dstformat == dstformat)
 			return m_pipelines[prev_pipeline];
 	}
 	for (int i = 0; i < m_pipelines.size(); i++) {
-		if (m_pipelines[i].shader == shader && m_pipelines[i].blend == blend_mode) {
+		if (m_pipelines[i].shader == shader &&
+			m_pipelines[i].blend == blend_mode &&
+			m_pipelines[i].dstformat == dstformat)
+		{
 			prev_pipeline = i;
 			return m_pipelines[i];
 		}
@@ -205,7 +217,7 @@ Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blen
 	VkGraphicsPipelineCreateInfo pipelineCreateInfo =
 		vks::initializers::pipelineCreateInfo(
 		m_img_pipeline_settings.pipelineLayout,
-		m_pass,
+		dstformat==VK_FORMAT_R8G8B8A8_UNORM ? m_pass8 : m_pass32,
 		0);
 
 	pipelineCreateInfo.pVertexInputState = &m_vertices.inputState;
@@ -253,14 +265,15 @@ Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blen
 
 	// Load shaders
 	std::array<VkPipelineShaderStageCreateInfo,2> shaderStages;
-	FLIVR::ShaderProgram *sh = m_vulkan->img_shader_factory_->shader(IMG_SHADER_TEXTURE_LOOKUP);
+	FLIVR::ShaderProgram *sh = m_vulkan->img_shader_factory_->shader(shader);
 	shaderStages[0] = sh->get_vertex_shader();
 	shaderStages[1] = sh->get_fragment_shader();
 	pipelineCreateInfo.pStages = shaderStages.data();
 
 	V2dPipeline v2d_pipeline;
-	v2d_pipeline.shader = IMG_SHADER_TEXTURE_LOOKUP;
+	v2d_pipeline.shader = shader;
 	v2d_pipeline.blend = blend_mode;
+	v2d_pipeline.dstformat = dstformat;
 	getEnabledUniforms(v2d_pipeline, sh->get_fragment_shader_code());
 
 	VK_CHECK_RESULT(

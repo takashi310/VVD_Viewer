@@ -70,8 +70,8 @@ namespace FLIVR
 	"	vec4 loc15; //plane5\n" \
 	"} base;" \
 	"\n" \
-	"layout (binding = 3) uniform sampler3D tex0;//data volume\n" \
-	"layout (binding = 4) uniform sampler3D tex1;//gm volume\n" \
+	"layout (binding = 2) uniform sampler3D tex0;//data volume\n" \
+	"layout (binding = 3) uniform sampler3D tex1;//gm volume\n" \
 	"\n" \
 
 #define VOL_UNIFORMS_BRICK \
@@ -87,35 +87,35 @@ namespace FLIVR
 
 #define VOL_UNIFORMS_INDEX_COLOR \
 	"//VOL_UNIFORMS_INDEX_COLOR\n" \
-	"layout (binding = 8) uniform sampler2D tex5;\n" \
-	"layout (binding = 10) uniform sampler2D tex7;\n" \
+	"layout (binding = 7) uniform sampler2D tex5;\n" \
+	"layout (binding = 9) uniform sampler2D tex7;\n" \
 	"\n"
 
 #define VOL_UNIFORMS_INDEX_COLOR_D \
     "//VOL_UNIFORMS_INDEX_COLOR_D\n" \
-    "layout (binding = 8) uniform sampler2D tex5;\n" \
-	"layout (binding = 10) uniform sampler2D tex7;\n" \
+    "layout (binding = 7) uniform sampler2D tex5;\n" \
+	"layout (binding = 8) uniform sampler2D tex7;\n" \
     "\n"
 
 #define VOL_UNIFORMS_DP \
 	"//VOL_UNIFORMS_DP\n" \
-	"layout (binding = 17) uniform sampler2D tex14;//depth texture 1\n" \
-	"layout (binding = 18) uniform sampler2D tex15;//depth texture 2\n" \
+	"layout (binding = 16) uniform sampler2D tex14;//depth texture 1\n" \
+	"layout (binding = 17) uniform sampler2D tex15;//depth texture 2\n" \
 	"\n"
 
 #define VOL_UNIFORMS_MASK \
 	"//VOL_UNIFORMS_MASK\n" \
-	"layout (binding = 5) uniform sampler3D tex2;//3d mask volume\n" \
+	"layout (binding = 4) uniform sampler3D tex2;//3d mask volume\n" \
 	"\n"
 
 #define VOL_UNIFORMS_LABEL \
 	"//VOL_UNIFORMS_LABEL\n" \
-	"layout (binding = 6) uniform usampler3D tex3;//3d label volume\n" \
+	"layout (binding = 5) uniform usampler3D tex3;//3d label volume\n" \
 	"\n"
 
 #define VOL_UNIFORMS_DEPTHMAP \
 	"//VOL_UNIFORMS_DEPTHMAP\n" \
-	"layout (binding = 7) uniform sampler2D tex4;//2d depth map\n" \
+	"layout (binding = 6) uniform sampler2D tex4;//2d depth map\n" \
 	"\n"
 
 #define VOL_HEAD \

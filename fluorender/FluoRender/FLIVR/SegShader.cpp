@@ -100,13 +100,13 @@ namespace FLIVR
 
 #define SEG_UNIFORMS_WMAP_2D \
 	"//SEG_UNIFORMS_WMAP_2D\n" \
-	"layout(location = 7) uniform sampler2D tex4;//2d weight map (after tone mapping)\n" \
-	"layout(location = 8) uniform sampler2D tex5;//2d weight map (before tone mapping)\n" \
+	"layout(location = 6) uniform sampler2D tex4;//2d weight map (after tone mapping)\n" \
+	"layout(location = 7) uniform sampler2D tex5;//2d weight map (before tone mapping)\n" \
 	"\n"
 
 #define SEG_UNIFORMS_MASK_2D \
 	"//SEG_UNIFORMS_MASK_2D\n" \
-	"layout(location = 9) uniform sampler2D tex6;//2d mask\n" \
+	"layout(location = 8) uniform sampler2D tex6;//2d mask\n" \
 	"\n"
 
 #define SEG_UNIFORMS_LABEL_OUTPUT \
