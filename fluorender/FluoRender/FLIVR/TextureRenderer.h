@@ -210,7 +210,7 @@ namespace FLIVR
 		 void set_desel_palette_mode_dark(float fac=0.1);
 		 void set_desel_palette_mode_gray(float fac=0.1);
 		 void set_desel_palette_mode_invisible();
-		 std::vector<std::shared_ptr<vks::VTexture>> get_palette();
+		 std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> get_palette();
 		 bool is_sel_id(int id);
 		 void add_sel_id(int id);
 		 void del_sel_id(int id);
@@ -348,8 +348,8 @@ namespace FLIVR
                std::unique_ptr<vks::VFrameBuffer> filter_buffer_;
                std::shared_ptr<vks::VTexture> filter_tex_id_;
 
-			   std::vector<std::shared_ptr<vks::VTexture>> palette_tex_id_;
-			   std::vector<std::shared_ptr<vks::VTexture>> base_palette_tex_id_;
+			   std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> palette_tex_id_;
+			   std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> base_palette_tex_id_;
 			   unsigned char palette_[PALETTE_SIZE*PALETTE_ELEM_COMP];
 			   unsigned char base_palette_[PALETTE_SIZE*PALETTE_ELEM_COMP];
 			   unordered_set<int> sel_ids_;

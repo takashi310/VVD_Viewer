@@ -756,4 +756,5 @@ namespace vks
 
 		flushCommandBuffer(copyCmd, queue, true);
 	}
+
 }

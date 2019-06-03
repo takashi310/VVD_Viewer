@@ -869,7 +869,7 @@ namespace FLIVR
 		desel_col_fac_ = fac;
 	}
 
-	std::vector<std::shared_ptr<vks::VTexture>> TextureRenderer::get_palette()
+	std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> TextureRenderer::get_palette()
 	{
 		update_sel_segs();
 

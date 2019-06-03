@@ -62,7 +62,7 @@ namespace FLIVR
 		std::string get_fragment_shader_code() { return frag_shader_; }
 
 		static const int MAX_SHADER_UNIFORMS = 16;
-		static string glsl_version_;
+		static std::string glsl_version_;
 
 #if !(defined(VK_USE_PLATFORM_IOS_MVK) || defined(VK_USE_PLATFORM_MACOS_MVK))
 		static EShLanguage FindLanguage(const VkShaderStageFlagBits shader_type);

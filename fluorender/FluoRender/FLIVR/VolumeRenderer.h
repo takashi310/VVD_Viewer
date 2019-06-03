@@ -359,6 +359,7 @@ public:
 		VkClearColorValue m_clear_color;
 		std::map<vks::VulkanDevice*, VolShaderFactory::VolUniformBufs> m_volUniformBuffers;
 		std::map<vks::VulkanDevice*, SegShaderFactory::SegUniformBufs> m_segUniformBuffers;
+		std::map<vks::VulkanDevice*, VkCommandBuffer> m_commandBuffers;
 		
 		struct Vertex {
 			float pos[3];
@@ -372,6 +373,16 @@ public:
 		void setupVertexDescriptions();
 
 		VkRenderPass prepareRenderPass(int attatchment_num);
+
+		struct VVolVertexBuffers {
+			vks::Buffer vertexBuffer;
+			vks::Buffer indexBuffer;
+			uint32_t indexCount;
+		};
+		std::map<vks::VulkanDevice*, VVolVertexBuffers> m_vertbufs;
+		VkDeviceSize vertbuf_offset;
+		VkDeviceSize idxbuf_offset;
+		void prepareVertexBuffers(vks::VulkanDevice* device, double dt);
 
 		struct VVolPipeline {
 			VkPipeline pipeline;
@@ -396,7 +407,7 @@ public:
 		};
 		static std::vector<VSegPipeline> m_seg_pipelines;
 		int m_prev_seg_pipeline;
-		VSegPipeline prepareSegPipeline((vks::VulkanDevice* device, int mode, int update_order, int colormap_mode);
+		VSegPipeline prepareSegPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode);
 
 		struct VCalPipeline {
 			VkPipeline pipeline;
@@ -408,7 +419,7 @@ public:
 		};
 		static std::vector<VCalPipeline> m_cal_pipelines;
 		int m_prev_cal_pipeline;
-		VCalPipeline prepareCalPipeline((vks::VulkanDevice* device, int mode, int update_order, int colormap_mode);
+		VCalPipeline prepareCalPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode);
 	};
 
 } // End namespace FLIVR

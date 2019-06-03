@@ -205,6 +205,8 @@ namespace FLIVR
 		{
 			m_vulkan->vol_shader_factory_->prepareUniformBuffers(m_volUniformBuffers);
 			m_vulkan->seg_shader_factory_->prepareUniformBuffers(m_segUniformBuffers);
+			for (auto dev : m_vulkan->devices)
+				m_commandBuffers[dev] = dev->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 		}
 
 		setupVertexDescriptions();
@@ -229,6 +231,7 @@ namespace FLIVR
 			m_volUniformBuffers[vdev].vert.destroy();
 			m_volUniformBuffers[vdev].frag_base.destroy();
 			m_segUniformBuffers[vdev].frag_base.destroy();
+			vkFreeCommandBuffers(vdev->logicalDevice, vdev->commandPool, 1, &m_commandBuffers[vdev]);
 		}
 	}
 	
@@ -1146,6 +1149,43 @@ namespace FLIVR
 		return ret_pipeline;
 	}
 
+	void VolumeRenderer::prepareVertexBuffers(vks::VulkanDevice* device, double dt)
+	{
+		if (!tex_ || !m_vulkan)
+			return;
+
+		Vector diag = tex_->GetBrickMaxDims();
+
+		VkDeviceSize num_slices_ = (VkDeviceSize)(diag.length() / dt);
+		VkDeviceSize brick_num = tex_->get_brick_num();
+
+		VkDeviceSize vertbufsize = num_slices_ * 6 * 6 * sizeof(float) * brick_num;
+		VkDeviceSize idxbufsize = num_slices_ * 4 * 3 * sizeof(unsigned int) * brick_num;
+
+		if (m_vertbufs[device].vertexBuffer.buffer && m_vertbufs[device].vertexBuffer.size < vertbufsize)
+			m_vertbufs[device].vertexBuffer.destroy();
+		if (m_vertbufs[device].indexBuffer.buffer && m_vertbufs[device].indexBuffer.size < idxbufsize)
+			m_vertbufs[device].indexBuffer.destroy();
+
+		if (!m_vertbufs[device].vertexBuffer.buffer)
+		{
+			device->createBuffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+								 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+								 &m_vertbufs[device].vertexBuffer,
+								 vertbufsize);
+			m_vertbufs[device].vertexBuffer.map();
+		}
+
+		if (!m_vertbufs[device].indexBuffer.buffer)
+		{
+			device->createBuffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+								 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+								 &m_vertbufs[device].indexBuffer,
+								 idxbufsize);
+			m_vertbufs[device].indexBuffer.map();
+		}
+	}
+
 	//draw
 	void VolumeRenderer::draw(bool draw_wireframe_p, bool interactive_mode_p,
 		bool orthographic_p, double zoom, int mode, double sampling_frq_fac)
@@ -1161,44 +1201,52 @@ namespace FLIVR
 		if (!tex_ || !m_vulkan)
 			return;
 
+		//comment off when debug_ds
+		if (mem_swap_)
+		{
+			uint32_t rn_time = GET_TICK_COUNT();
+			if (rn_time - st_time_ > get_up_time())
+				return;
+		}
+
 		Ray view_ray = compute_view();
 		Ray snapview = compute_snapview(0.4);
 
-		vector<TextureBrick*> *bricks = 0;
-/*		if (mem_swap_ && interactive_)
-			bricks = tex_->get_closest_bricks(
-			quota_center_, quota_bricks_chan_, true,
-			view_ray, orthographic_p);
-		else
-*/			bricks = tex_->get_sorted_bricks(view_ray, orthographic_p);
+		vector<TextureBrick*>* bricks = 0;
+		/*		if (mem_swap_ && interactive_)
+					bricks = tex_->get_closest_bricks(
+					quota_center_, quota_bricks_chan_, true,
+					view_ray, orthographic_p);
+				else
+		*/			bricks = tex_->get_sorted_bricks(view_ray, orthographic_p);
 		if (!bricks || bricks->size() == 0)
 			return;
 
 		set_interactive_mode(adaptive_ && interactive_mode_p);
 
 		// Set sampling rate based on interaction
-		double rate = imode_ ? irate_*2.0 : sampling_rate_*2.0;
+		double rate = imode_ ? irate_ * 2.0 : sampling_rate_ * 2.0;
 		double rate_fac = 1.0;
 		Vector diag = tex_->bbox()->diagonal();
-/*		Vector cell_diag(
-			diag.x() / tex_->nx(),
-			diag.y() / tex_->ny(),
-			diag.z() / tex_->nz());
-		double dt = cell_diag.length()/compute_rate_scale()/rate;
-*/		//double dt = 0.0020/rate * compute_dt_fac(sampling_frq_fac, &rate_fac);
-		double dt = compute_dt_fac_1px(sampling_frq_fac)/rate;
-		num_slices_ = (int)(diag.length()/dt);
+		/*		Vector cell_diag(
+					diag.x() / tex_->nx(),
+					diag.y() / tex_->ny(),
+					diag.z() / tex_->nz());
+				double dt = cell_diag.length()/compute_rate_scale()/rate;
+		*/		//double dt = 0.0020/rate * compute_dt_fac(sampling_frq_fac, &rate_fac);
+		double dt = compute_dt_fac_1px(sampling_frq_fac) / rate;
+		num_slices_ = (int)(diag.length() / dt);
 
 		vector<float> vertex;
 		vector<uint32_t> index;
 		vector<uint32_t> size;
-		vertex.reserve(num_slices_*12);
-		index.reserve(num_slices_*6);
-		size.reserve(num_slices_*6);
+		vertex.reserve(num_slices_ * 12);
+		index.reserve(num_slices_ * 6);
+		size.reserve(num_slices_ * 6);
 
 		//--------------------------------------------------------------------------
-		bool use_fog = m_use_fog && colormap_mode_!=2;
-		
+		bool use_fog = m_use_fog && colormap_mode_ != 2;
+
 		int w = m_vulkan->width;
 		int h = m_vulkan->height;
 		int minwh = min(w, h);
@@ -1206,35 +1254,33 @@ namespace FLIVR
 		int h2 = h;
 
 		double sf = CalcScaleFactor(w, h, tex_->nx(), tex_->ny(), zoom);
-		if (fabs(sf-sfactor_)>0.05)
+		if (fabs(sf - sfactor_) > 0.05)
 		{
 			sfactor_ = sf;
-//			blend_framebuffer_resize_ = true;
-//			filter_buffer_resize_ = true;
+			//			blend_framebuffer_resize_ = true;
+			//			filter_buffer_resize_ = true;
 		}
-		else if (sf==1.0 && sfactor_!=1.0)
+		else if (sf == 1.0 && sfactor_ != 1.0)
 		{
 			sfactor_ = sf;
-//			blend_framebuffer_resize_ = true;
-//			filter_buffer_resize_ = true;
+			//			blend_framebuffer_resize_ = true;
+			//			filter_buffer_resize_ = true;
 		}
 
-		w2 = int(w/**sfactor_*/*buffer_scale_+0.5);
-		h2 = int(h/**sfactor_*/*buffer_scale_+0.5);
+		w2 = int(w/**sfactor_*/ * buffer_scale_ + 0.5);
+		h2 = int(h/**sfactor_*/ * buffer_scale_ + 0.5);
 
 		vks::VulkanDevice* prim_dev = m_vulkan->devices[0];
-		
+
 		if (m_volUniformBuffers.empty())
 			m_vulkan->vol_shader_factory_->prepareUniformBuffers(m_volUniformBuffers);
 
-		if(blend_num_bits_ > 8)
+		if (blend_num_bits_ > 8)
 		{
 			if (blend_framebuffer_resize_)
 			{
 				blend_framebuffer_.reset();
-				blend_framebuffer_label_.reset();
 				blend_tex_id_.reset();
-				label_tex_id_.reset();
 
 				blend_framebuffer_resize_ = false;
 			}
@@ -1246,49 +1292,37 @@ namespace FLIVR
 				blend_framebuffer_->h = h2;
 				blend_framebuffer_->device = prim_dev;
 			}
-			if (!blend_framebuffer_label_)
-			{
-				blend_framebuffer_label_ = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
-				blend_framebuffer_label_->w = w2;
-				blend_framebuffer_label_->h = h2;
-				blend_framebuffer_label_->device = prim_dev;
-			}
+
 			if (!blend_tex_id_)
 				blend_tex_id_ = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, w2, h2);
-			if (!label_tex_id_)
-				label_tex_id_ = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, w2, h2);
 
 			blend_framebuffer_->addAttachment(blend_tex_id_);
 
-			blend_framebuffer_label_->addAttachment(blend_tex_id_);
-			blend_framebuffer_label_->addAttachment(label_tex_id_);
-
 			blend_framebuffer_->createRenderPass();
-			blend_framebuffer_label_->createRenderPass();
+
 		}
 
 		eval_ml_mode();
-		
+
 		VVolPipeline pipeline = prepareVolPipeline(prim_dev, mode_, update_order_, colormap_mode_);
-		VkDescriptorSet dset = m_vulkan->vol_shader_factory_->pipeline_[prim_dev].descriptorSet;
+		VkPipelineLayout pipelineLayout = m_vulkan->vol_shader_factory_->pipeline_[prim_dev].pipelineLayout;
+		VkDescriptorSet descriptorSet = m_vulkan->vol_shader_factory_->pipeline_[prim_dev].descriptorSet;
 
 		std::vector<VkWriteDescriptorSet> descriptorWrites;
-		if(colormap_mode_ == 3)
+		if (colormap_mode_ == 3)
 		{
 			auto palette = get_palette();
-			if (label_tex_id_)
-				descriptorWrites.push_back(VolShaderFactory::writeDescriptorSetTex(dset, 5, &label_tex_id_->descriptor));
 			if (palette[0])
-				descriptorWrites.push_back(VolShaderFactory::writeDescriptorSetTex(dset, 7, &palette[0]->descriptor));
+				descriptorWrites.push_back(VolShaderFactory::writeDescriptorSetTex(descriptorSet, 7, &palette[prim_dev]->descriptor));
 		}
-		
+
 		VolShaderFactory::VolVertShaderUBO vert_ubo;
 		VolShaderFactory::VolFragShaderBaseUBO frag_ubo;
 		VolShaderFactory::VolFragShaderBrickConst frag_const;
 
 		Vector light = view_ray.direction();
 		light.safe_normalize();
-		
+
 		frag_ubo.loc0_light_alpha = { light.x(), light.y(), light.z(), alpha_ };
 		if (shading_)
 			frag_ubo.loc1_material = { 2.0 - ambient_, diffuse_, specular_, shine_ };
@@ -1354,7 +1388,7 @@ namespace FLIVR
 		frag_ubo.plane5 = { abcd[0], abcd[1], abcd[2], abcd[3] };
 
 		// Set up transform
-		Transform *tform = tex_->transform();
+		Transform* tform = tex_->transform();
 		double mvmat[16];
 		tform->get_trans(mvmat);
 		m_mv_mat2 = glm::mat4(
@@ -1368,68 +1402,18 @@ namespace FLIVR
 
 		VolShaderFactory::updateUniformBuffers(m_volUniformBuffers[prim_dev], vert_ubo, frag_ubo);
 
+		bool clear = false;
+		if (!mem_swap_ || (mem_swap_ && cur_chan_brick_num_ == 0))
+		{
+			prepareVertexBuffers(prim_dev, dt);
+			vertbuf_offset = 0;
+			idxbuf_offset = 0;
+			clear = true;
+		}
+
 
 		//////////////////////////////////////////
 		//render bricks
-		auto& active_framebuf = colormap_mode_ == 3 ? blend_framebuffer_label_ : blend_framebuffer_;
-
-		VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
-
-		VkClearValue clearValues[2];
-		clearValues[0].color = m_clear_color;
-		clearValues[1].color = m_clear_color;
-
-		VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
-		renderPassBeginInfo.renderPass = pipeline.renderpass;
-		renderPassBeginInfo.renderArea.offset.x = 0;
-		renderPassBeginInfo.renderArea.offset.y = 0;
-		renderPassBeginInfo.renderArea.extent.width = active_framebuf->w;
-		renderPassBeginInfo.renderArea.extent.height = active_framebuf->h;
-
-		renderPassBeginInfo.framebuffer = active_framebuf->framebuffer;
-
-		VK_CHECK_RESULT(vkBeginCommandBuffer(commandbufs[i], &cmdBufInfo));
-
-		vkCmdBeginRenderPass(commandbufs[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-		VkViewport viewport = vks::initializers::viewport((float)framebuf->w, (float)framebuf->h, 0.0f, 1.0f);
-		vkCmdSetViewport(commandbufs[i], 0, 1, &viewport);
-
-		VkRect2D scissor = vks::initializers::rect2D(framebuf->w, framebuf->h, 0, 0);
-		vkCmdSetScissor(commandbufs[i], 0, 1, &scissor);
-
-		vkCmdBindDescriptorSets(
-			commandbufs[i],
-			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			m_img_pipeline_settings.pipelineLayout,
-			0,
-			1,
-			&m_img_pipeline_settings.descriptorSet,
-			0,
-			NULL);
-
-		if (params.clear)
-		{
-			VkClearAttachment clearAttachments[1] = {};
-			clearAttachments[0].aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			clearAttachments[0].clearValue = clearValues[0];
-			clearAttachments[0].colorAttachment = 0;
-
-			VkClearRect clearRect = {};
-			clearRect.layerCount = 1;
-			clearRect.rect.offset = { 0, 0 };
-			clearRect.rect.extent = { framebuf->w, framebuf->h };
-
-			vkCmdClearAttachments(
-				commandbufs[i],
-				1,
-				clearAttachments,
-				1,
-				&clearRect);
-		}
-
-		vkCmdBindPipeline(commandbufs[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
-
 
 		int bmode = mode;
 		if (mask_)  bmode = TEXTURE_RENDER_MODE_MASK;
@@ -1437,38 +1421,8 @@ namespace FLIVR
 
 		for (unsigned int i=0; i < bricks->size(); i++)
 		{
-			//comment off when debug_ds
-			if (mem_swap_/* && !mask_ && !label_*/)
-			{
-				uint32_t rn_time = GET_TICK_COUNT();
-				if (rn_time - st_time_ > get_up_time())
-					break;
-			}
-
 			TextureBrick* b = (*bricks)[i];
-			if (colormap_mode_==1 && colormap_proj_)
-			{
-				float matrix[16];
-				BBox dbox = b->dbox();
-				matrix[0] = float(dbox.max().x()-dbox.min().x());
-				matrix[1] = 0.0f;
-				matrix[2] = 0.0f;
-				matrix[3] = 0.0f;
-				matrix[4] = 0.0f;
-				matrix[5] = float(dbox.max().y()-dbox.min().y());
-				matrix[6] = 0.0f;
-				matrix[7] = 0.0f;
-				matrix[8] = 0.0f;
-				matrix[9] = 0.0f;
-				matrix[10] = float(dbox.max().z()-dbox.min().z());
-				matrix[11] = 0.0f;
-				matrix[12] = float(dbox.min().x());
-				matrix[13] = float(dbox.min().y());
-				matrix[14] = float(dbox.min().z());
-				matrix[15] = 1.0f;
-				shader->setLocalParamMatrix(5, matrix);
-			}
-			
+						
 			if (mem_swap_ && start_update_loop_ && !done_update_loop_)
 			{
 				if (b->drawn(bmode))
@@ -1508,18 +1462,29 @@ namespace FLIVR
 				continue;
 			}
 
-			GLint filter;
-			if (interpolate_ && colormap_mode_ != 3)
-				filter = GL_LINEAR;
-			else
-				filter = GL_NEAREST;
+			memcpy( (unsigned char*)m_vertbufs[prim_dev].vertexBuffer.mapped + vertbuf_offset,
+					vertex.data(), 
+					vertex.size()*sizeof(float) );
+			memcpy( (unsigned char*)m_vertbufs[prim_dev].indexBuffer.mapped + idxbuf_offset,
+					index.data(),
+					index.size() * sizeof(unsigned int));
+			vertbuf_offset += vertex.size() * sizeof(float);
+			idxbuf_offset += index.size() * sizeof(unsigned int);
 
-			if (load_brick(0, 0, bricks, i, filter, compression_, mode, (mask_ || label_) ? false : true) < 0)
+
+			VkFilter filter;
+			if (interpolate_ && colormap_mode_ != 3)
+				filter = VK_FILTER_LINEAR;
+			else
+				filter = VK_FILTER_NEAREST;
+
+			shared_ptr<vks::VTexture> brktex, msktex, lbltex;
+			brktex = load_brick(prim_dev, 0, 0, bricks, i, filter, compression_, mode, (mask_ || label_) ? false : true);
+			if (!brktex)
 				continue;
-			
 			b->prevent_tex_deletion(true);
 			if (mask_)
-				load_brick_mask(bricks, i, filter, false, 0, true);
+				msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true);
 			else if (tex_->nmask() != -1 && m_mask_hide_mode != VOL_MASK_HIDE_NONE)
 			{
 				if (tex_->isBrxml() && tex_->GetMaskLv() != tex_->GetCurLevel())
@@ -1559,7 +1524,7 @@ namespace FLIVR
 					b->nx(nx); b->ny(ny); b->nz(nz);
 					b->mx(nx); b->my(ny); b->mz(nz);
 
-					load_brick_mask(bricks, i, filter, false, 0, true, false);
+					msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, false);
 
 					double trans_x = (ox_d-ox)/nx;
 					double trans_y = (oy_d-oy)/ny;
@@ -1568,24 +1533,8 @@ namespace FLIVR
 					double scale_y = (endy_d-oy_d)/ny;
 					double scale_z = (endz_d-oz_d)/nz;
 
-					float matrix[16];
-					matrix[0] = (float)scale_x;
-					matrix[1] = 0.0f;
-					matrix[2] = 0.0f;
-					matrix[3] = 0.0f;
-					matrix[4] = 0.0f;
-					matrix[5] = (float)scale_y;
-					matrix[6] = 0.0f;
-					matrix[7] = 0.0f;
-					matrix[8] = 0.0f;
-					matrix[9] = 0.0f;
-					matrix[10] = (float)scale_z;
-					matrix[11] = 0.0f;
-					matrix[12] = (float)trans_x;
-					matrix[13] = (float)trans_y;
-					matrix[14] = (float)trans_z;
-					matrix[15] = 1.0f;
-					shader->setLocalParamMatrix(6, matrix);
+					frag_const.mask_b_scale = { (float)scale_x, (float)scale_y, (float)scale_z, 1.0f };
+					frag_const.mask_b_trans = { (float)trans_x, (float)trans_y, (float)trans_z, 0.0f };
 
 					b->nx(cnx); b->ny(cny); b->nz(cnz);
 					b->ox(cox); b->oy(coy); b->oz(coz);
@@ -1597,87 +1546,150 @@ namespace FLIVR
 				}
 				else
 				{
-					load_brick_mask(bricks, i, filter, false, 0, true, false);
+					msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, false);
 
-					float matrix[16];
-					matrix[0] = 1.0f;
-					matrix[1] = 0.0f;
-					matrix[2] = 0.0f;
-					matrix[3] = 0.0f;
-					matrix[4] = 0.0f;
-					matrix[5] = 1.0f;
-					matrix[6] = 0.0f;
-					matrix[7] = 0.0f;
-					matrix[8] = 0.0f;
-					matrix[9] = 0.0f;
-					matrix[10] = 1.0f;
-					matrix[12] = 0.0f;
-					matrix[13] = 0.0f;
-					matrix[14] = 0.0f;
-					matrix[15] = 1.0f;
-					shader->setLocalParamMatrix(6, matrix);
+					frag_const.mask_b_scale = { 1.0f, 1.0f, 1.0f, 1.0f };
+					frag_const.mask_b_trans = { 0.0f, 0.0f, 0.0f, 0.0f };
 				}
 			}
 
 			if (label_)
-				load_brick_label(bricks, i);
+				lbltex = load_brick_label(prim_dev, bricks, i);
 
 			b->prevent_tex_deletion(false);
 
-			shader->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(),
-				mode_==MODE_OVER?1.0/(rate*minwh*0.001*zoom*2.0):1.0);
+			descriptorWrites.push_back(VolShaderFactory::writeDescriptorSetTex(descriptorSet, 0, &brktex->descriptor));
+			if (msktex)
+				descriptorWrites.push_back(VolShaderFactory::writeDescriptorSetTex(descriptorSet, 2, &brktex->descriptor));
+			if (lbltex)
+				descriptorWrites.push_back(VolShaderFactory::writeDescriptorSetTex(descriptorSet, 3, &brktex->descriptor));
 
+			frag_const.loc_dim_inv = { 1.0 / b->nx(), 1.0 / b->ny(), 1.0 / b->nz(),
+									   mode_ == MODE_OVER ? 1.0 / (rate * minwh * 0.001 * zoom * 2.0) : 1.0 };
 			//for brick transformation
-			float matrix[16];
 			BBox dbox = b->dbox();
-			matrix[0] = float(dbox.max().x()-dbox.min().x());
-			matrix[1] = 0.0f;
-			matrix[2] = 0.0f;
-			matrix[3] = 0.0f;
-			matrix[4] = 0.0f;
-			matrix[5] = float(dbox.max().y()-dbox.min().y());
-			matrix[6] = 0.0f;
-			matrix[7] = 0.0f;
-			matrix[8] = 0.0f;
-			matrix[9] = 0.0f;
-			matrix[10] = float(dbox.max().z()-dbox.min().z());
-			matrix[11] = 0.0f;
-			matrix[12] = float(dbox.min().x());
-			matrix[13] = float(dbox.min().y());
-			matrix[14] = float(dbox.min().z());
-			matrix[15] = 1.0f;
-			shader->setLocalParamMatrix(2, matrix);
+			frag_const.b_scale = { float(dbox.max().x() - dbox.min().x()),
+								   float(dbox.max().y() - dbox.min().y()),
+								   float(dbox.max().z() - dbox.min().z()),
+								   1.0f };
 
-			//takashi_debug
-//			LARGE_INTEGER liBegin,liEnd,liFreq;
-//			QueryPerformanceCounter(&liBegin);
+			frag_const.b_trans = { float(dbox.min().x()), float(dbox.min().y()), float(dbox.min().z()), 0.0f };
 
-			//draw_polygons(vertex, texcoord, size, use_fog, shader);
-			if (colormap_mode_ == 3) draw_polygons(vertex, index, size);
-			else draw_polygons(vertex, index);
-			
-			if (mem_swap_){
-				finished_bricks_++;
-				glFinish();
+			vkUpdateDescriptorSets(prim_dev->logicalDevice, descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
+
+
+			//////////////////////
+			//build command buffer
+			VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
+			cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+			VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
+			renderPassBeginInfo.renderPass = pipeline.renderpass;
+			renderPassBeginInfo.renderArea.offset.x = 0;
+			renderPassBeginInfo.renderArea.offset.y = 0;
+			renderPassBeginInfo.renderArea.extent.width = blend_framebuffer_->w;
+			renderPassBeginInfo.renderArea.extent.height = blend_framebuffer_->h;
+
+			renderPassBeginInfo.framebuffer = blend_framebuffer_->framebuffer;
+
+			VkCommandBuffer cmdbuf = m_commandBuffers[prim_dev];
+
+			VK_CHECK_RESULT(vkBeginCommandBuffer(cmdbuf, &cmdBufInfo));
+
+			vkCmdBeginRenderPass(cmdbuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+			VkViewport viewport = vks::initializers::viewport((float)w2, (float)h2, 0.0f, 1.0f);
+			vkCmdSetViewport(cmdbuf, 0, 1, &viewport);
+
+			VkRect2D scissor = vks::initializers::rect2D(w2, h2, 0, 0);
+			vkCmdSetScissor(cmdbuf, 0, 1, &scissor);
+
+			vkCmdBindDescriptorSets(
+				cmdbuf,
+				VK_PIPELINE_BIND_POINT_GRAPHICS,
+				pipelineLayout,
+				0,
+				1,
+				&descriptorSet,
+				0,
+				NULL);
+
+			if (clear)
+			{
+				VkClearValue clearValues[1];
+				clearValues[0].color = m_clear_color;
+
+				VkClearAttachment clearAttachments[1] = {};
+				clearAttachments[0].aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+				clearAttachments[0].clearValue = clearValues[0];
+				clearAttachments[0].colorAttachment = 0;
+
+				VkClearRect clearRect[1] = {};
+				clearRect[0].layerCount = 1;
+				clearRect[0].rect.offset = { 0, 0 };
+				clearRect[0].rect.extent = { w2, h2 };
+
+				vkCmdClearAttachments(
+					cmdbuf,
+					1,
+					clearAttachments,
+					1,
+					clearRect);
+
+				clear = false;
 			}
 
-			//takashi_debug
-/*			QueryPerformanceCounter(&liEnd);
+			vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
 
-			QueryPerformanceFrequency(&liFreq);
-			
-			ofstream ofs;
-			ofs.open("draw_time.txt", ios::app);
-			ofs << (double)(liEnd.QuadPart - liBegin.QuadPart) / (double)liFreq.QuadPart << endl;
-			ofs.close();
-*/
-			////this is for debug_ds, comment when done
-			//if (mem_swap_)
-			//{
-			//	uint32_t rn_time = GET_TICK_COUNT();
-			//	if (rn_time - st_time_ > get_up_time())
-			//		break;
-			//}
+			vkCmdPushConstants(
+				cmdbuf,
+				m_vulkan->vol_shader_factory_->pipeline_[prim_dev].pipelineLayout,
+				VK_SHADER_STAGE_FRAGMENT_BIT,
+				0,
+				sizeof(VolShaderFactory::VolFragShaderBrickConst),
+				&frag_const);
+
+			vkCmdBindVertexBuffers(cmdbuf, 0, 1, &m_vertbufs[prim_dev].vertexBuffer.buffer, &vertbuf_offset);
+			vkCmdBindIndexBuffer(cmdbuf, m_vertbufs[prim_dev].indexBuffer.buffer, &idxbuf_offset, VK_INDEX_TYPE_UINT32);
+			vkCmdDrawIndexed(cmdbuf, index.size(), 1, 0, 0, 0);
+
+			vkCmdEndRenderPass(cmdbuf);
+
+			VK_CHECK_RESULT(vkEndCommandBuffer(cmdbuf));
+
+			VkSubmitInfo submitInfo = vks::initializers::submitInfo();
+			submitInfo.commandBufferCount = 1;
+			submitInfo.pCommandBuffers = &cmdbuf;
+
+			if (mem_swap_)
+			{
+				VkFenceCreateInfo fenceInfo = vks::initializers::fenceCreateInfo(VK_FLAGS_NONE);
+				VkFence fence;
+				VK_CHECK_RESULT(vkCreateFence(prim_dev->logicalDevice, &fenceInfo, nullptr, &fence));
+
+				// Submit to the queue
+				VK_CHECK_RESULT(vkQueueSubmit(prim_dev->queue, 1, &submitInfo, fence));
+				// Wait for the fence to signal that command buffer has finished executing
+				VK_CHECK_RESULT(vkWaitForFences(prim_dev->logicalDevice, 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
+
+				vkDestroyFence(prim_dev->logicalDevice, fence, nullptr);
+
+				finished_bricks_++;
+			}
+			else
+			{
+				// Submit to the queue
+				VK_CHECK_RESULT(vkQueueSubmit(prim_dev->queue, 1, &submitInfo, VK_NULL_HANDLE));
+			}
+
+
+			//comment off when debug_ds
+			if (mem_swap_/* && !mask_ && !label_*/)
+			{
+				uint32_t rn_time = GET_TICK_COUNT();
+				if (rn_time - st_time_ > get_up_time())
+					break;
+			}
 		}
 
 		if (mem_swap_ &&
@@ -1861,7 +1873,7 @@ namespace FLIVR
 		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 		glDisable(GL_BLEND);
 	}
-
+	
 	void VolumeRenderer::draw_wireframe(bool orthographic_p, double sampling_frq_fac)
 	{
 		Ray view_ray = compute_view();

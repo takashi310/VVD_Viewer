@@ -48,10 +48,10 @@ public:
 	bool findTexInPools(FLIVR::TextureBrick* b, int c, int w, int h, int d, int bytes, VkFormat format, vks::VulkanDevice* &ret_dev, int &ret_id);
 	bool getCompatibleTexFromPool(int w, int h, int d, int bytes, VkFormat format, vks::VulkanDevice* &ret_dev, int &ret_id);
 
-	void GenTextures2DAllDevice(std::vector<std::shared_ptr<vks::VTexture>> &result,
+	void GenTextures2DAllDevice(std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> &result,
 								VkFormat format, VkFilter filter, uint32_t w, uint32_t h,
 								VkImageUsageFlags usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT);
-	bool UploadTextures(const std::vector<std::shared_ptr<vks::VTexture>> &tex, void *data);
+	bool UploadTextures(std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> &tex, void *data);
 };
 
 #endif

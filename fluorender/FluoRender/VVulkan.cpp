@@ -86,25 +86,21 @@ bool VVulkan::getCompatibleTexFromPool(int w, int h, int d, int bytes, VkFormat 
 
 }
 
-void VVulkan::GenTextures2DAllDevice(std::vector<std::shared_ptr<vks::VTexture>> &result, 
+void VVulkan::GenTextures2DAllDevice(std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> &result,
 									 VkFormat format, VkFilter filter, uint32_t w, uint32_t h, VkImageUsageFlags usage)
 {
 	if (!result.empty())
 		result.clear();
 
 	for (auto dev : devices)
-		result.push_back(dev->GenTexture2D(format, filter, w, h, usage));
+		result[dev] = dev->GenTexture2D(format, filter, w, h, usage);
 }
 
-bool VVulkan::UploadTextures(const std::vector<std::shared_ptr<vks::VTexture>> &tex, void *data)
+bool VVulkan::UploadTextures(std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> &tex, void *data)
 {
-	for (auto t : tex)
+	for (auto dev : devices)
 	{
-		if (t)
-		{
-			vks::VulkanDevice *device = t->device;
-			if (device)
-				device->UploadTexture(t, data);
-		}
+		if (tex[dev])
+			dev->UploadTexture(tex[dev], data);
 	}
 }

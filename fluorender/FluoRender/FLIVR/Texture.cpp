@@ -592,6 +592,15 @@ namespace FLIVR
 		set_nrrd(nv_nrrd, 0);
 		set_nrrd(gm_nrrd, 1);
 
+		brick_max_dim_ = Vector(0.0);
+		for (unsigned int i = 0; i < (*bricks_).size(); i++)
+		{
+			TextureBrick* tb = (*bricks_)[i];
+			if (tb->nx() > brick_max_dim_.x) brick_max_dim_.x = tb->nx();
+			if (tb->ny() > brick_max_dim_.y) brick_max_dim_.y = tb->ny();
+			if (tb->nz() > brick_max_dim_.z) brick_max_dim_.z = tb->nz();
+		}
+
 		return true;
 	}
 

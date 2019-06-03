@@ -19,7 +19,6 @@ void Vulkan2dRender::init(std::shared_ptr<VVulkan> vulkan)
 
 	generateQuad();
 	setupVertexDescriptions();
-	prepareRenderPass();
 }
 
 Vulkan2dRender::~Vulkan2dRender()
@@ -95,29 +94,38 @@ void Vulkan2dRender::setupVertexDescriptions()
 	m_vertices.inputState.pVertexAttributeDescriptions = m_vertices.inputAttributes.data();
 }
 
-void Vulkan2dRender::prepareRenderPass()
+VkRenderPass Vulkan2dRender::prepareRenderPass(VkFormat framebuf_format, int framebuf_num)
 {
+	VkRenderPass pass = VK_NULL_HANDLE;
+
 	VkPhysicalDevice physicalDevice = m_vulkan->getPhysicalDevice();
 	VkDevice device = m_vulkan->getDevice();
 
 	// Create a separate render pass for the offscreen rendering as it may differ from the one used for scene rendering
-	std::array<VkAttachmentDescription, 1> attchmentDescriptions = {};
-	// Color attachment
-	attchmentDescriptions[0].format = VK_FORMAT_R8G8B8A8_UNORM;
-	attchmentDescriptions[0].samples = VK_SAMPLE_COUNT_1_BIT;
-	attchmentDescriptions[0].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	attchmentDescriptions[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-	attchmentDescriptions[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	attchmentDescriptions[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	attchmentDescriptions[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	attchmentDescriptions[0].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	
-	VkAttachmentReference colorReference = { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+	std::vector<VkAttachmentDescription> attchmentDescriptions = {};
+	std::vector<VkAttachmentReference> colorReferences;
+	for (int i = 0; i < framebuf_num; i++)
+	{
+		// Color attachment
+		VkAttachmentDescription attd;
+		attd.format = framebuf_format;
+		attd.samples = VK_SAMPLE_COUNT_1_BIT;
+		attd.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		attd.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+		attd.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		attd.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+		attd.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		attd.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		attchmentDescriptions.push_back(attd);
 
+		VkAttachmentReference colref = { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+		colorReferences.push_back(colref);
+	}
+	
 	VkSubpassDescription subpassDescription = {};
 	subpassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpassDescription.colorAttachmentCount = 1;
-	subpassDescription.pColorAttachments = &colorReference;
+	subpassDescription.colorAttachmentCount = colorReferences.size();
+	subpassDescription.pColorAttachments = colorReferences.data();
 
 	// Use subpass dependencies for layout transitions
 	std::array<VkSubpassDependency, 2> dependencies;
@@ -148,28 +156,25 @@ void Vulkan2dRender::prepareRenderPass()
 	renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
 	renderPassInfo.pDependencies = dependencies.data();
 
-	VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassInfo, nullptr, &m_pass8));
+	VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassInfo, nullptr, &pass));
 
-
-	attchmentDescriptions[0].format = VK_FORMAT_R32G32B32A32_SFLOAT;
-	VkRenderPassCreateInfo renderPassInfo = {};
-	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-	renderPassInfo.attachmentCount = static_cast<uint32_t>(attchmentDescriptions.size());
-	VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassInfo, nullptr, &m_pass32));
+	return pass;
 }
 
-Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blend_mode, VkFormat dstformat)
+Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blend_mode, VkFormat framebuf_format, int framebuf_num)
 {
 	if (prev_pipeline >= 0) {
 		if (m_pipelines[prev_pipeline].shader == shader &&
 			m_pipelines[prev_pipeline].blend == blend_mode &&
-			m_pipelines[prev_pipeline].dstformat == dstformat)
+			m_pipelines[prev_pipeline].framebuf_format == framebuf_format &&
+			m_pipelines[prev_pipeline].framebuf_num == framebuf_num)
 			return m_pipelines[prev_pipeline];
 	}
 	for (int i = 0; i < m_pipelines.size(); i++) {
 		if (m_pipelines[i].shader == shader &&
 			m_pipelines[i].blend == blend_mode &&
-			m_pipelines[i].dstformat == dstformat)
+			m_pipelines[i].framebuf_format == framebuf_format &&
+			m_pipelines[i].framebuf_num == framebuf_num)
 		{
 			prev_pipeline = i;
 			return m_pipelines[i];
@@ -213,11 +218,13 @@ Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blen
 		static_cast<uint32_t>(dynamicStateEnables.size()),
 		0);
 
+	VkRenderPass pass = prepareRenderPass(framebuf_format, framebuf_num);
+
 	m_img_pipeline_settings = m_vulkan->img_shader_factory_->pipeline_settings_[m_vulkan->vulkanDevice];
 	VkGraphicsPipelineCreateInfo pipelineCreateInfo =
 		vks::initializers::pipelineCreateInfo(
 		m_img_pipeline_settings.pipelineLayout,
-		dstformat==VK_FORMAT_R8G8B8A8_UNORM ? m_pass8 : m_pass32,
+		pass,
 		0);
 
 	pipelineCreateInfo.pVertexInputState = &m_vertices.inputState;
@@ -273,7 +280,8 @@ Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blen
 	V2dPipeline v2d_pipeline;
 	v2d_pipeline.shader = shader;
 	v2d_pipeline.blend = blend_mode;
-	v2d_pipeline.dstformat = dstformat;
+	v2d_pipeline.framebuf_format = framebuf_format;
+	v2d_pipeline.framebuf_num = framebuf_num;
 	getEnabledUniforms(v2d_pipeline, sh->get_fragment_shader_code());
 
 	VK_CHECK_RESULT(
@@ -400,7 +408,7 @@ void Vulkan2dRender::buildCommandBuffer(VkCommandBuffer commandbufs[], int comma
 	if (!commandbufs || commandbuf_num <= 0)
 		return;
 
-	V2dPipeline pipeline = preparePipeline(params.shader, params.blend);
+	V2dPipeline pipeline = preparePipeline(params.shader, params.blend, framebuf->attachments[0]->format, framebuf->attachments.size());
 
 	setupDescriptorSet(params, pipeline);
 
@@ -424,7 +432,7 @@ void Vulkan2dRender::buildCommandBuffer(VkCommandBuffer commandbufs[], int comma
 	clearValues[0].color = params.clearColor;
 
 	VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
-	renderPassBeginInfo.renderPass = m_pass;
+	renderPassBeginInfo.renderPass = pipeline.pass;
 	renderPassBeginInfo.renderArea.offset.x = 0;
 	renderPassBeginInfo.renderArea.offset.y = 0;
 	renderPassBeginInfo.renderArea.extent.width = framebuf->w;

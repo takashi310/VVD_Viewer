@@ -26,7 +26,7 @@ public:
 		float uv[3];
 	};
 
-	struct {
+	struct V2dVertexSettings{
 		VkPipelineVertexInputStateCreateInfo inputState;
 		std::vector<VkVertexInputBindingDescription> inputBinding;
 		std::vector<VkVertexInputAttributeDescription> inputAttributes;
@@ -34,9 +34,11 @@ public:
 
 	struct V2dPipeline {
 		VkPipeline pipeline;
+		VkRenderPass pass;
 		int shader;
 		int blend;
-		VkFormat dstformat;
+		VkFormat framebuf_format;
+		int framebuf_num;
 		VkBool32 uniforms[V2DRENDER_UNIFORM_NUM] = { VK_FALSE };
 		VkBool32 samplers[IMG_SHDR_SAMPLER_NUM] = { VK_FALSE };
 	};
@@ -46,9 +48,6 @@ public:
 	FLIVR::ImgShaderFactory::ImgPipelineSettings m_img_pipeline_settings;
 	std::vector<V2dPipeline> m_pipelines;
 	int prev_pipeline;
-
-	VkRenderPass m_pass8;
-	VkRenderPass m_pass32; 
 
 	bool m_init;
 	std::shared_ptr<VVulkan> m_vulkan;
@@ -60,8 +59,8 @@ public:
 	void init(std::shared_ptr<VVulkan> vulkan);
 	void generateQuad();
 	void setupVertexDescriptions();
-	void prepareRenderPass();
-	V2dPipeline preparePipeline(int shader, int blend_mode, VkFormat dstformat);
+	VkRenderPass prepareRenderPass(VkFormat framebuf_format, int framebuf_num);
+	V2dPipeline preparePipeline(int shader, int blend_mode, VkFormat framebuf_format, int framebuf_num);
 
 	void getEnabledUniforms(V2dPipeline pipeline, const std::string &code);
 
