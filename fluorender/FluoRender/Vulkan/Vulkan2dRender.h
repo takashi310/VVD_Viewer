@@ -52,6 +52,8 @@ public:
 	bool m_init;
 	std::shared_ptr<VVulkan> m_vulkan;
 
+	VkCommandBuffer m_default_cmdbuf;
+
 	Vulkan2dRender();
 	Vulkan2dRender(std::shared_ptr<VVulkan> vulkan);
 	~Vulkan2dRender();
@@ -72,10 +74,15 @@ public:
 		vks::VTexture *tex[IMG_SHDR_SAMPLER_NUM] = { NULL };
 		glm::vec4 loc[V2DRENDER_UNIFORM_VEC_NUM] = { glm::vec4(0.0f) };
 		glm::mat4 matrix[V2DRENDER_UNIFORM_MAT_NUM] = { glm::mat4(1.0f) };
+		uint32_t waitSemaphoreCount = 0;
+		uint32_t signalSemaphoreCount = 0;
+		VkSemaphore *waitSemaphores = nullptr;
+		VkSemaphore *signalSemaphores = nullptr;
 	};
 	
-	void setupDescriptorSet(const V2DRenderParams &params, const V2dPipeline &pipeline);
+	void setupDescriptorSetWrites(const V2DRenderParams &params, const V2dPipeline &pipeline, std::vector<VkWriteDescriptorSet> &descriptorWrites);
 	void buildCommandBuffer(VkCommandBuffer commandbufs[], int commandbuf_num, const std::unique_ptr<vks::VFrameBuffer> &framebuf, const V2DRenderParams &params);
+	void render(const std::unique_ptr<vks::VFrameBuffer>& framebuf, const V2DRenderParams& params);
 };
 
 #endif

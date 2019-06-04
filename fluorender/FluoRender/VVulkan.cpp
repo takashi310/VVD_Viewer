@@ -4,10 +4,8 @@
 VVulkan::VVulkan() : VulkanExampleBase(ENABLE_VALIDATION)
 {
 	enabledInstanceExtensions.push_back("VK_KHR_get_physical_device_properties2");
-	enabledDeviceExtensions.push_back("VK_EXT_descriptor_indexing");
+	enabledDeviceExtensions.push_back("VK_KHR_push_descriptor");
 	enabledDeviceExtensions.push_back("VK_KHR_maintenance3");
-	//#0 is a primary device
-	devices.push_back(vulkanDevice);
 }
 
 VVulkan::~VVulkan()
@@ -25,6 +23,9 @@ VVulkan::~VVulkan()
 void VVulkan::prepare()
 {
 	VulkanExampleBase::prepare();
+	//#0 is a primary device
+	devices.push_back(vulkanDevice);
+
 	initSubDevices();
 
 	vol_shader_factory_ = std::make_unique<FLIVR::VolShaderFactory>(new FLIVR::VolShaderFactory(devices));

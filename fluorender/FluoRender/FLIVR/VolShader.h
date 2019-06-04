@@ -181,8 +181,7 @@ namespace FLIVR
 		};
 
 		void setupDescriptorSetLayout();
-		void setupDescriptorSetUniforms(vks::VulkanDevice *vdev, VolUniformBufs &uniformBuffers);
-		void setupDescriptorSetSamplers(vks::VulkanDevice *vdev, uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites);
+		void getDescriptorSetWriteUniforms(vks::VulkanDevice* vdev, VolUniformBufs& uniformBuffers, std::vector<VkWriteDescriptorSet>& writeDescriptorSets);
 		void prepareUniformBuffers(std::map<vks::VulkanDevice*, VolUniformBufs> &uniformBuffers);
 		static void updateUniformBuffers(VolUniformBufs& uniformBuffers, VolVertShaderUBO vubo, VolFragShaderBaseUBO fubo);
 

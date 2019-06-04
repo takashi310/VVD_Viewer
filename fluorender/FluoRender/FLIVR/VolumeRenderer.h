@@ -142,33 +142,6 @@ namespace FLIVR
 
 		//draw
 		void eval_ml_mode();
-		virtual void draw(bool draw_wireframe_p, 
-			bool interactive_mode_p, 
-			bool orthographic_p = false,
-			double zoom = 1.0, int mode = 0, double sampling_frq_fac = -1.0);
-		void draw_wireframe(bool orthographic_p = false, double sampling_frq_fac = -1.0);
-		void draw_volume(bool interactive_mode_p,
-			bool orthographic_p = false,
-			double zoom = 1.0, int mode = 0, double sampling_frq_fac = -1.0);
-		//type: 0-initial; 1-diffusion-based growing; 2-masked filtering
-		//paint_mode: 1-select; 2-append; 3-erase; 4-diffuse; 5-flood; 6-clear; 7-all;
-		//			  11-posterize
-		//hr_mode (hidden removal): 0-none; 1-ortho; 2-persp
-		void draw_mask(int type, int paint_mode, int hr_mode,
-			double ini_thresh, double gm_falloff, double scl_falloff,
-			double scl_translate, double w2d, double bins, bool ortho, bool estimate);
-		void draw_mask_cpu(int type, int paint_mode, int hr_mode,
-			double ini_thresh, double gm_falloff, double scl_falloff,
-			double scl_translate, double w2d, double bins, bool ortho, bool estimate);
-		void draw_mask_th(float thresh, bool orthographic_p);
-		void draw_mask_dslt(int type, int paint_mode, int hr_mode,
-			double ini_thresh, double gm_falloff, double scl_falloff,
-			double scl_translate, double w2d, double bins, bool ortho, bool estimate, int dslt_r, int dslt_q, double dslt_c);
-		void dslt_mask(int rmax, int quality, double c);
-		//generate the labeling assuming the mask is already generated
-		//type: 0-initialization; 1-maximum intensity filtering
-		//mode: 0-normal; 1-posterized
-		void draw_label(int type, int mode, double thresh, double gm_falloff);
 
 		double calc_hist_3d(GLuint, GLuint, size_t, size_t, size_t);
 
@@ -360,6 +333,9 @@ public:
 		std::map<vks::VulkanDevice*, VolShaderFactory::VolUniformBufs> m_volUniformBuffers;
 		std::map<vks::VulkanDevice*, SegShaderFactory::SegUniformBufs> m_segUniformBuffers;
 		std::map<vks::VulkanDevice*, VkCommandBuffer> m_commandBuffers;
+		std::map<vks::VulkanDevice*, VkSemaphore> m_volFinishedSemaphores;
+		std::map<vks::VulkanDevice*, VkSemaphore> m_filterFinishedSemaphores;
+		std::map<vks::VulkanDevice*, VkSemaphore> m_renderFinishedSemaphores;
 		
 		struct Vertex {
 			float pos[3];
@@ -371,6 +347,53 @@ public:
 			std::vector<VkVertexInputAttributeDescription> inputAttributes;
 		} m_vertices;
 		void setupVertexDescriptions();
+
+		struct VSemaphoreSettings {
+			uint32_t waitSemaphoreCount = 0;
+			uint32_t signalSemaphoreCount = 0;
+			VkSemaphore* waitSemaphores = nullptr;
+			VkSemaphore* signalSemaphores = nullptr;
+		};
+
+		virtual void draw(
+			const std::unique_ptr<vks::VFrameBuffer>& framebuf,
+			VSemaphoreSettings semaphores,
+			bool draw_wireframe_p,
+			bool interactive_mode_p,
+			bool orthographic_p = false,
+			double zoom = 1.0,
+			int mode = 0,
+			double sampling_frq_fac = -1.0
+		);
+		void draw_wireframe(bool orthographic_p = false, double sampling_frq_fac = -1.0);
+		void draw_volume(
+			const std::unique_ptr<vks::VFrameBuffer>& framebuf,
+			VSemaphoreSettings semaphores,
+			bool interactive_mode_p,
+			bool orthographic_p = false,
+			double zoom = 1.0,
+			int mode = 0,
+			double sampling_frq_fac = -1.0
+		);
+		//type: 0-initial; 1-diffusion-based growing; 2-masked filtering
+		//paint_mode: 1-select; 2-append; 3-erase; 4-diffuse; 5-flood; 6-clear; 7-all;
+		//			  11-posterize
+		//hr_mode (hidden removal): 0-none; 1-ortho; 2-persp
+		void draw_mask(int type, int paint_mode, int hr_mode,
+			double ini_thresh, double gm_falloff, double scl_falloff,
+			double scl_translate, double w2d, double bins, bool ortho, bool estimate);
+		void draw_mask_cpu(int type, int paint_mode, int hr_mode,
+			double ini_thresh, double gm_falloff, double scl_falloff,
+			double scl_translate, double w2d, double bins, bool ortho, bool estimate);
+		void draw_mask_th(float thresh, bool orthographic_p);
+		void draw_mask_dslt(int type, int paint_mode, int hr_mode,
+			double ini_thresh, double gm_falloff, double scl_falloff,
+			double scl_translate, double w2d, double bins, bool ortho, bool estimate, int dslt_r, int dslt_q, double dslt_c);
+		void dslt_mask(int rmax, int quality, double c);
+		//generate the labeling assuming the mask is already generated
+		//type: 0-initialization; 1-maximum intensity filtering
+		//mode: 0-normal; 1-posterized
+		void draw_label(int type, int mode, double thresh, double gm_falloff);
 
 		VkRenderPass prepareRenderPass(int attatchment_num);
 

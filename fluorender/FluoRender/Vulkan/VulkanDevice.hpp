@@ -61,6 +61,8 @@ namespace vks
 			uint32_t transfer;
 		} queueFamilyIndices;
 
+		PFN_vkCmdPushDescriptorSetKHR vkCmdPushDescriptorSetKHR;
+
 		vks::Buffer staging_buf;
 
 		VkSampler linear_sampler;
@@ -139,13 +141,6 @@ namespace vks
 					}
 				}
 			}
-
-			createPipelineCache();
-			setupDescriptorPool();
-			setMemoryLimit();
-
-			linear_sampler = VK_NULL_HANDLE;
-			nearest_sampler = VK_NULL_HANDLE;
 		}
 
 		/** 
@@ -381,6 +376,15 @@ namespace vks
 
 			// Get a graphics queue from the device
 			vkGetDeviceQueue(logicalDevice, queueFamilyIndices.graphics, 0, &queue);
+
+			vkCmdPushDescriptorSetKHR = (PFN_vkCmdPushDescriptorSetKHR)vkGetDeviceProcAddr(logicalDevice, "vkCmdPushDescriptorSetKHR");
+
+			createPipelineCache();
+			setupDescriptorPool();
+			setMemoryLimit();
+
+			linear_sampler = VK_NULL_HANDLE;
+			nearest_sampler = VK_NULL_HANDLE;
 
 			prepareSamplers();
 

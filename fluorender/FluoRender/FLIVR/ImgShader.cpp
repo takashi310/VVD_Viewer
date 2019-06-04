@@ -982,21 +982,14 @@ namespace FLIVR
 					offset+i)
 					);
 			}
-
-			std::array<VkDescriptorBindingFlagsEXT, IMG_SHDR_SAMPLER_NUM> bflags;
-			bflags.fill(VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT);
-			VkDescriptorSetLayoutBindingFlagsCreateInfoEXT bext;
-			bext.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT;
-			bext.pNext = nullptr;
-			bext.bindingCount = bflags.size();
-			bext.pBindingFlags = bflags.data();
-
+			
 			VkDescriptorSetLayoutCreateInfo descriptorLayout = 
 				vks::initializers::descriptorSetLayoutCreateInfo(
 				setLayoutBindings.data(),
 				static_cast<uint32_t>(setLayoutBindings.size()));
-
-			descriptorLayout.pNext = &bext;
+			
+			descriptorLayout.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
+			descriptorLayout.pNext = nullptr;
 
 			ImgPipelineSettings pipe;
 			VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &pipe.descriptorSetLayout));
@@ -1017,18 +1010,8 @@ namespace FLIVR
 
 			VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pPipelineLayoutCreateInfo, nullptr, &pipe.pipelineLayout));
 
-			VkDescriptorSetAllocateInfo descriptorSetAllocInfo;
-			descriptorSetAllocInfo = vks::initializers::descriptorSetAllocateInfo(vdev->descriptorPool, &pipe.descriptorSetLayout, 1);
-			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &pipe.descriptorSet));
-
 			pipeline_settings_[vdev] = pipe;
 		}
 	}
 	
-	void ImgShaderFactory::setupDescriptorSetSamplers(vks::VulkanDevice *vdev, uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites)
-	{
-		VkDevice device = vdev->logicalDevice;
-		vkUpdateDescriptorSets(device, descriptorWriteCountconst, pDescriptorWrites, 0, NULL);
-	}
-
 } // end namespace FLIVR

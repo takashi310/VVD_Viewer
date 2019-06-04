@@ -93,7 +93,6 @@ namespace FLIVR
 		};
 
 		void setupDescriptorSetLayout();
-		void setupDescriptorSetSamplers(vks::VulkanDevice *vdev, uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites);
 			
 		std::map<vks::VulkanDevice*, VolCalPipeline> pipeline_;
 

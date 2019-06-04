@@ -19,6 +19,7 @@ void Vulkan2dRender::init(std::shared_ptr<VVulkan> vulkan)
 
 	generateQuad();
 	setupVertexDescriptions();
+	m_default_cmdbuf = m_vulkan->vulkanDevice->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 }
 
 Vulkan2dRender::~Vulkan2dRender()
@@ -383,10 +384,8 @@ void Vulkan2dRender::getEnabledUniforms(V2dPipeline pipeline, const std::string 
 	}
 }
 
-void Vulkan2dRender::setupDescriptorSet(const Vulkan2dRender::V2DRenderParams &params, const Vulkan2dRender::V2dPipeline &pipeline)
+void Vulkan2dRender::setupDescriptorSetWrites(const V2DRenderParams& params, const V2dPipeline& pipeline, std::vector<VkWriteDescriptorSet>& descriptorWrites)
 {
-	std::vector<VkWriteDescriptorSet> descriptorWrites;
-
 	for (int i = 0; i < IMG_SHDR_SAMPLER_NUM; i++) {
 		if (params.tex[i] && pipeline.samplers[i]) {
 			VkWriteDescriptorSet dw;
@@ -400,7 +399,6 @@ void Vulkan2dRender::setupDescriptorSet(const Vulkan2dRender::V2DRenderParams &p
 			descriptorWrites.push_back(dw);
 		}
 	}
-	vkUpdateDescriptorSets(m_vulkan->getDevice(), descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
 }
 
 void Vulkan2dRender::buildCommandBuffer(VkCommandBuffer commandbufs[], int commandbuf_num, const std::unique_ptr<vks::VFrameBuffer> &framebuf, const V2DRenderParams &params)
@@ -409,8 +407,9 @@ void Vulkan2dRender::buildCommandBuffer(VkCommandBuffer commandbufs[], int comma
 		return;
 
 	V2dPipeline pipeline = preparePipeline(params.shader, params.blend, framebuf->attachments[0]->format, framebuf->attachments.size());
-
-	setupDescriptorSet(params, pipeline);
+	
+	std::vector<VkWriteDescriptorSet> descriptorWrites;
+	setupDescriptorSetWrites(params, pipeline, descriptorWrites);
 
 	uint64_t constsize = 0;
 	for (int32_t i = 0; i < V2DRENDER_UNIFORM_VEC_NUM; i++) {
@@ -453,15 +452,13 @@ void Vulkan2dRender::buildCommandBuffer(VkCommandBuffer commandbufs[], int comma
 		VkRect2D scissor = vks::initializers::rect2D(framebuf->w, framebuf->h, 0, 0);
 		vkCmdSetScissor(commandbufs[i], 0, 1, &scissor);
 
-		vkCmdBindDescriptorSets(
+		m_vulkan->vulkanDevice->vkCmdPushDescriptorSetKHR(
 			commandbufs[i], 
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
 			m_img_pipeline_settings.pipelineLayout,
 			0,
-			1,
-			&m_img_pipeline_settings.descriptorSet,
-			0,
-			NULL);
+			descriptorWrites.size(),
+			descriptorWrites.data());
 
 		if (params.clear)
 		{
@@ -506,5 +503,21 @@ void Vulkan2dRender::buildCommandBuffer(VkCommandBuffer commandbufs[], int comma
 
 		VK_CHECK_RESULT(vkEndCommandBuffer(commandbufs[i]));
 	}
-
 }
+
+void Vulkan2dRender::render(const std::unique_ptr<vks::VFrameBuffer>& framebuf, const V2DRenderParams& params)
+{
+	buildCommandBuffer(&m_default_cmdbuf, 1, framebuf, params);
+	
+	VkSubmitInfo submitInfo = vks::initializers::submitInfo();
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &m_default_cmdbuf;
+	submitInfo.waitSemaphoreCount = params.waitSemaphoreCount;
+	submitInfo.pWaitSemaphores = params.waitSemaphores;
+	submitInfo.signalSemaphoreCount = params.signalSemaphoreCount;
+	submitInfo.pSignalSemaphores = params.signalSemaphores;
+
+	// Submit to the queue
+	VK_CHECK_RESULT(vkQueueSubmit(m_vulkan->vulkanDevice->queue, 1, &submitInfo, VK_NULL_HANDLE));
+}
+

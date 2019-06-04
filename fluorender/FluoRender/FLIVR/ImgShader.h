@@ -119,8 +119,7 @@ namespace FLIVR
 		};
 		
 		void setupDescriptorSetLayout();
-		void setupDescriptorSetSamplers(vks::VulkanDevice *vdev, uint32_t descriptorWriteCountconst, VkWriteDescriptorSet* pDescriptorWrites);
-
+		
 		std::map<vks::VulkanDevice*, ImgPipelineSettings> pipeline_settings_;
 		
 		std::vector<vks::VulkanDevice*> vdevices_;

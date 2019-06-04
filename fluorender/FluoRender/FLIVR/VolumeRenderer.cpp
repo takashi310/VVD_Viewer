@@ -128,6 +128,30 @@ namespace FLIVR
 
 		m_clear_color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
 		
+		if (m_vulkan)
+		{
+			m_vulkan->vol_shader_factory_->prepareUniformBuffers(m_volUniformBuffers);
+			m_vulkan->seg_shader_factory_->prepareUniformBuffers(m_segUniformBuffers);
+			for (auto dev : m_vulkan->devices)
+				m_commandBuffers[dev] = dev->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+
+			VkSemaphoreCreateInfo semaphoreInfo = vks::initializers::semaphoreCreateInfo();
+			for (auto dev : m_vulkan->devices)
+			{
+				VkSemaphore tmp;
+				VK_CHECK_RESULT(vkCreateSemaphore(dev->logicalDevice, &semaphoreInfo, nullptr, &tmp));
+				m_volFinishedSemaphores[dev] = tmp;
+
+				VkSemaphore tmp2;
+				VK_CHECK_RESULT(vkCreateSemaphore(dev->logicalDevice, &semaphoreInfo, nullptr, &tmp2));
+				m_filterFinishedSemaphores[dev] = tmp2;
+
+				VkSemaphore tmp3;
+				VK_CHECK_RESULT(vkCreateSemaphore(dev->logicalDevice, &semaphoreInfo, nullptr, &tmp3));
+				m_renderFinishedSemaphores[dev] = tmp3;
+			}
+		}
+
 		setupVertexDescriptions();
 
 		m_prev_vol_pipeline = -1;
@@ -201,12 +225,30 @@ namespace FLIVR
 		for (int i=0; i<TEXTURE_RENDER_MODES; i++)
 			done_loop_[i] = false;
 
+		m_clear_color = copy.m_clear_color;
+
 		if (m_vulkan)
 		{
 			m_vulkan->vol_shader_factory_->prepareUniformBuffers(m_volUniformBuffers);
 			m_vulkan->seg_shader_factory_->prepareUniformBuffers(m_segUniformBuffers);
 			for (auto dev : m_vulkan->devices)
 				m_commandBuffers[dev] = dev->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+
+			VkSemaphoreCreateInfo semaphoreInfo = vks::initializers::semaphoreCreateInfo();
+			for (auto dev : m_vulkan->devices)
+			{
+				VkSemaphore tmp;
+				VK_CHECK_RESULT(vkCreateSemaphore(dev->logicalDevice, &semaphoreInfo, nullptr, &tmp));
+				m_volFinishedSemaphores[dev] = tmp;
+
+				VkSemaphore tmp2;
+				VK_CHECK_RESULT(vkCreateSemaphore(dev->logicalDevice, &semaphoreInfo, nullptr, &tmp2));
+				m_filterFinishedSemaphores[dev] = tmp2;
+
+				VkSemaphore tmp3;
+				VK_CHECK_RESULT(vkCreateSemaphore(dev->logicalDevice, &semaphoreInfo, nullptr, &tmp3));
+				m_renderFinishedSemaphores[dev] = tmp3;
+			}
 		}
 
 		setupVertexDescriptions();
@@ -232,6 +274,9 @@ namespace FLIVR
 			m_volUniformBuffers[vdev].frag_base.destroy();
 			m_segUniformBuffers[vdev].frag_base.destroy();
 			vkFreeCommandBuffers(vdev->logicalDevice, vdev->commandPool, 1, &m_commandBuffers[vdev]);
+			vkDestroySemaphore(vdev->logicalDevice, m_volFinishedSemaphores[vdev], nullptr);
+			vkDestroySemaphore(vdev->logicalDevice, m_filterFinishedSemaphores[vdev], nullptr);
+			vkDestroySemaphore(vdev->logicalDevice, m_renderFinishedSemaphores[vdev], nullptr);
 		}
 	}
 	
@@ -1187,16 +1232,21 @@ namespace FLIVR
 	}
 
 	//draw
-	void VolumeRenderer::draw(bool draw_wireframe_p, bool interactive_mode_p,
+	void VolumeRenderer::draw(
+		const std::unique_ptr<vks::VFrameBuffer>& framebuf,
+		VSemaphoreSettings semaphores,
+		bool draw_wireframe_p, bool interactive_mode_p,
 		bool orthographic_p, double zoom, int mode, double sampling_frq_fac)
 	{
-		draw_volume(interactive_mode_p, orthographic_p, zoom, mode, sampling_frq_fac);
+		draw_volume(framebuf, semaphores, interactive_mode_p, orthographic_p, zoom, mode, sampling_frq_fac);
 		if(draw_wireframe_p)
 			draw_wireframe(orthographic_p);
 	}
 
-	void VolumeRenderer::draw_volume(bool interactive_mode_p,
-		bool orthographic_p, double zoom, int mode, double sampling_frq_fac)
+	void VolumeRenderer::draw_volume(
+		const std::unique_ptr<vks::VFrameBuffer>& framebuf,
+		VSemaphoreSettings semaphores,
+		bool interactive_mode_p, bool orthographic_p, double zoom, int mode, double sampling_frq_fac)
 	{
 		if (!tex_ || !m_vulkan)
 			return;
@@ -1291,15 +1341,14 @@ namespace FLIVR
 				blend_framebuffer_->w = w2;
 				blend_framebuffer_->h = h2;
 				blend_framebuffer_->device = prim_dev;
+
+				if (!blend_tex_id_)
+					blend_tex_id_ = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, w2, h2);
+
+				blend_framebuffer_->addAttachment(blend_tex_id_);
+
+				blend_framebuffer_->createRenderPass();
 			}
-
-			if (!blend_tex_id_)
-				blend_tex_id_ = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, w2, h2);
-
-			blend_framebuffer_->addAttachment(blend_tex_id_);
-
-			blend_framebuffer_->createRenderPass();
-
 		}
 
 		eval_ml_mode();
@@ -1309,6 +1358,7 @@ namespace FLIVR
 		VkDescriptorSet descriptorSet = m_vulkan->vol_shader_factory_->pipeline_[prim_dev].descriptorSet;
 
 		std::vector<VkWriteDescriptorSet> descriptorWrites;
+		m_vulkan->vol_shader_factory_->getDescriptorSetWriteUniforms(prim_dev, m_volUniformBuffers[prim_dev], descriptorWrites);
 		if (colormap_mode_ == 3)
 		{
 			auto palette = get_palette();
@@ -1403,6 +1453,7 @@ namespace FLIVR
 		VolShaderFactory::updateUniformBuffers(m_volUniformBuffers[prim_dev], vert_ubo, frag_ubo);
 
 		bool clear = false;
+		bool waitsemaphore = true;
 		if (!mem_swap_ || (mem_swap_ && cur_chan_brick_num_ == 0))
 		{
 			prepareVertexBuffers(prim_dev, dt);
@@ -1419,6 +1470,26 @@ namespace FLIVR
 		if (mask_)  bmode = TEXTURE_RENDER_MODE_MASK;
 		if (label_) bmode = TEXTURE_RENDER_MODE_LABEL;
 
+		VkCommandBuffer cmdbuf = m_commandBuffers[prim_dev];
+		if (!mem_swap_)
+		{
+			VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
+			cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+			VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
+			renderPassBeginInfo.renderPass = pipeline.renderpass;
+			renderPassBeginInfo.renderArea.offset.x = 0;
+			renderPassBeginInfo.renderArea.offset.y = 0;
+			renderPassBeginInfo.renderArea.extent.width = blend_framebuffer_->w;
+			renderPassBeginInfo.renderArea.extent.height = blend_framebuffer_->h;
+
+			renderPassBeginInfo.framebuffer = blend_framebuffer_->framebuffer;
+
+			VK_CHECK_RESULT(vkBeginCommandBuffer(cmdbuf, &cmdBufInfo));
+
+			vkCmdBeginRenderPass(cmdbuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+		}
+		
 		for (unsigned int i=0; i < bricks->size(); i++)
 		{
 			TextureBrick* b = (*bricks)[i];
@@ -1575,28 +1646,28 @@ namespace FLIVR
 
 			frag_const.b_trans = { float(dbox.min().x()), float(dbox.min().y()), float(dbox.min().z()), 0.0f };
 
-			vkUpdateDescriptorSets(prim_dev->logicalDevice, descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
 
 
 			//////////////////////
 			//build command buffer
-			VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
-			cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+			if (mem_swap_)
+			{
+				VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
+				cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-			VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
-			renderPassBeginInfo.renderPass = pipeline.renderpass;
-			renderPassBeginInfo.renderArea.offset.x = 0;
-			renderPassBeginInfo.renderArea.offset.y = 0;
-			renderPassBeginInfo.renderArea.extent.width = blend_framebuffer_->w;
-			renderPassBeginInfo.renderArea.extent.height = blend_framebuffer_->h;
+				VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
+				renderPassBeginInfo.renderPass = pipeline.renderpass;
+				renderPassBeginInfo.renderArea.offset.x = 0;
+				renderPassBeginInfo.renderArea.offset.y = 0;
+				renderPassBeginInfo.renderArea.extent.width = blend_framebuffer_->w;
+				renderPassBeginInfo.renderArea.extent.height = blend_framebuffer_->h;
 
-			renderPassBeginInfo.framebuffer = blend_framebuffer_->framebuffer;
+				renderPassBeginInfo.framebuffer = blend_framebuffer_->framebuffer;
 
-			VkCommandBuffer cmdbuf = m_commandBuffers[prim_dev];
+				VK_CHECK_RESULT(vkBeginCommandBuffer(cmdbuf, &cmdBufInfo));
 
-			VK_CHECK_RESULT(vkBeginCommandBuffer(cmdbuf, &cmdBufInfo));
-
-			vkCmdBeginRenderPass(cmdbuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+				vkCmdBeginRenderPass(cmdbuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+			}
 
 			VkViewport viewport = vks::initializers::viewport((float)w2, (float)h2, 0.0f, 1.0f);
 			vkCmdSetViewport(cmdbuf, 0, 1, &viewport);
@@ -1604,15 +1675,14 @@ namespace FLIVR
 			VkRect2D scissor = vks::initializers::rect2D(w2, h2, 0, 0);
 			vkCmdSetScissor(cmdbuf, 0, 1, &scissor);
 
-			vkCmdBindDescriptorSets(
+			vkCmdPushDescriptorSetKHR(
 				cmdbuf,
 				VK_PIPELINE_BIND_POINT_GRAPHICS,
 				pipelineLayout,
 				0,
-				1,
-				&descriptorSet,
-				0,
-				NULL);
+				descriptorWrites.size(),
+				descriptorWrites.data()
+			);
 
 			if (clear)
 			{
@@ -1650,19 +1720,25 @@ namespace FLIVR
 				&frag_const);
 
 			vkCmdBindVertexBuffers(cmdbuf, 0, 1, &m_vertbufs[prim_dev].vertexBuffer.buffer, &vertbuf_offset);
-			vkCmdBindIndexBuffer(cmdbuf, m_vertbufs[prim_dev].indexBuffer.buffer, &idxbuf_offset, VK_INDEX_TYPE_UINT32);
+			vkCmdBindIndexBuffer(cmdbuf, m_vertbufs[prim_dev].indexBuffer.buffer, idxbuf_offset, VK_INDEX_TYPE_UINT32);
 			vkCmdDrawIndexed(cmdbuf, index.size(), 1, 0, 0, 0);
-
-			vkCmdEndRenderPass(cmdbuf);
-
-			VK_CHECK_RESULT(vkEndCommandBuffer(cmdbuf));
-
-			VkSubmitInfo submitInfo = vks::initializers::submitInfo();
-			submitInfo.commandBufferCount = 1;
-			submitInfo.pCommandBuffers = &cmdbuf;
 
 			if (mem_swap_)
 			{
+				vkCmdEndRenderPass(cmdbuf);
+
+				VK_CHECK_RESULT(vkEndCommandBuffer(cmdbuf));
+
+				VkSubmitInfo submitInfo = vks::initializers::submitInfo();
+				submitInfo.commandBufferCount = 1;
+				submitInfo.pCommandBuffers = &cmdbuf;
+				if (waitsemaphore)
+				{
+					submitInfo.waitSemaphoreCount = semaphores.waitSemaphoreCount;
+					submitInfo.pWaitSemaphores = semaphores.waitSemaphores;
+					waitsemaphore = false;
+				}
+				
 				VkFenceCreateInfo fenceInfo = vks::initializers::fenceCreateInfo(VK_FLAGS_NONE);
 				VkFence fence;
 				VK_CHECK_RESULT(vkCreateFence(prim_dev->logicalDevice, &fenceInfo, nullptr, &fence));
@@ -1676,12 +1752,6 @@ namespace FLIVR
 
 				finished_bricks_++;
 			}
-			else
-			{
-				// Submit to the queue
-				VK_CHECK_RESULT(vkQueueSubmit(prim_dev->queue, 1, &submitInfo, VK_NULL_HANDLE));
-			}
-
 
 			//comment off when debug_ds
 			if (mem_swap_/* && !mask_ && !label_*/)
@@ -1690,6 +1760,22 @@ namespace FLIVR
 				if (rn_time - st_time_ > get_up_time())
 					break;
 			}
+		}
+
+		if (!mem_swap_)
+		{
+			vkCmdEndRenderPass(cmdbuf);
+
+			VK_CHECK_RESULT(vkEndCommandBuffer(cmdbuf));
+
+			VkSubmitInfo submitInfo = vks::initializers::submitInfo();
+			submitInfo.commandBufferCount = 1;
+			submitInfo.pCommandBuffers = &cmdbuf;
+			submitInfo.signalSemaphoreCount = 1;
+			submitInfo.pSignalSemaphores = &m_volFinishedSemaphores[prim_dev];
+
+			// Submit to the queue
+			VK_CHECK_RESULT(vkQueueSubmit(prim_dev->queue, 1, &submitInfo, VK_NULL_HANDLE));
 		}
 
 		if (mem_swap_ &&
@@ -1714,164 +1800,80 @@ namespace FLIVR
 		}
 
 		////////////////////////////////////////////////////////
-		if (colormap_mode_ == 3)
-		{		
-			if(glIsTexture(label_tex_id_))
-			{
-				glActiveTexture(GL_TEXTURE5);
-				glBindTexture(GL_TEXTURE_2D, 0);
-				glDisable(GL_TEXTURE_2D);
-				glActiveTexture(GL_TEXTURE0);
-			}
-			if(glIsTexture(get_palette()))
-			{
-				glActiveTexture(GL_TEXTURE7);
-				glBindTexture(GL_TEXTURE_2D, 0);
-				glDisable(GL_TEXTURE_2D);
-				glActiveTexture(GL_TEXTURE0);
-			}
-			glBindFramebuffer(GL_FRAMEBUFFER, blend_framebuffer_);
-			glFramebufferTexture2D(GL_FRAMEBUFFER,
-				GL_COLOR_ATTACHMENT1,
-				GL_TEXTURE_2D, 0, 0);
-			static const GLenum draw_buf = GL_COLOR_ATTACHMENT0;
-			glDrawBuffers(1, &draw_buf);
-		}
-
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-		//release depth texture for rendering shadows
-		if (colormap_mode_ == 2)
-			release_texture(4, GL_TEXTURE_2D);
-
-		// Release shader.
-		if (shader && shader->valid())
-			shader->release();
-
-		//Release 3d texture
-		release_texture(0, GL_TEXTURE_3D);
-		if (mask_)
-			release_texture((*bricks)[0]->nmask(), GL_TEXTURE_3D);
-		if (label_)
-			release_texture((*bricks)[0]->nlabel(), GL_TEXTURE_3D);
-
-		//enable
-		glEnable(GL_DEPTH_TEST);
-
 		//output result
 		if (blend_num_bits_ > 8)
 		{
-			//states
-			GLboolean depth_test = glIsEnabled(GL_DEPTH_TEST);
-			GLboolean cull_face = glIsEnabled(GL_CULL_FACE);
-			glDisable(GL_DEPTH_TEST);
-			glDisable(GL_CULL_FACE);
-			glEnable(GL_TEXTURE_2D);
-			glActiveTexture(GL_TEXTURE0);
-			
 			ShaderProgram* img_shader = 0;
 
 			if (noise_red_ && colormap_mode_!=2)
 			{
 				//FILTERING/////////////////////////////////////////////////////////////////
-				if (!glIsTexture(filter_tex_id_))
-				{
-					glGenTextures(1, &filter_tex_id_);
-					glBindTexture(GL_TEXTURE_2D, filter_tex_id_);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
-						GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-				}
-				if (!glIsFramebuffer(filter_buffer_))
-				{
-					glGenFramebuffers(1, &filter_buffer_);
-					glBindFramebuffer(GL_FRAMEBUFFER, filter_buffer_);
-					glFramebufferTexture2D(GL_FRAMEBUFFER,
-						GL_COLOR_ATTACHMENT0,
-						GL_TEXTURE_2D, filter_tex_id_, 0);
-				}
 				if (filter_buffer_resize_)
 				{
-					glBindTexture(GL_TEXTURE_2D, filter_tex_id_);
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h2, 0,
-						GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+					filter_buffer_.reset();
+					filter_tex_id_.reset();
+
 					filter_buffer_resize_ = false;
 				}
-
-				glBindFramebuffer(GL_FRAMEBUFFER, filter_buffer_);
-				glClear(GL_COLOR_BUFFER_BIT);
-
-				glBindTexture(GL_TEXTURE_2D, blend_tex_id_);
-				img_shader = 
-					m_img_shader_factory.shader(IMG_SHDR_FILTER_BLUR);
-				if (img_shader)
+				if (!filter_buffer_)
 				{
-					if (!img_shader->valid())
-					{
-						img_shader->create();
-					}
-					img_shader->bind();
+					filter_buffer_ = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+					filter_buffer_->w = w2;
+					filter_buffer_->h = h2;
+					filter_buffer_->device = prim_dev;
+
+					if (!filter_tex_id_)
+						filter_tex_id_ = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, w2, h2);
+
+					filter_buffer_->addAttachment(blend_tex_id_);
+
+					filter_buffer_->createRenderPass();
 				}
+
 				filter_size_min_ = CalcFilterSize(4, w, h, tex_->nx(), tex_->ny(), zoom, sfactor_);
-				img_shader->setLocalParam(0, filter_size_min_/w2, filter_size_min_/h2, 1.0/w2, 1.0/h2);
 
-				draw_view_quad();
+				Vulkan2dRender::V2DRenderParams filter_params;
+				filter_params.shader = IMG_SHDR_FILTER_BLUR;
+				filter_params.clear = true;
+				filter_params.loc[0] = { filter_size_min_/w2, filter_size_min_/h2, 1.0/w2, 1.0/h2 };
+				filter_params.tex[0] = blend_tex_id_.get();
+				if (!mem_swap_)
+				{
+					filter_params.waitSemaphoreCount = 1;
+					filter_params.waitSemaphores = &m_volFinishedSemaphores[prim_dev];
+				}
+				filter_params.signalSemaphoreCount = 1;
+				filter_params.signalSemaphores = &m_filterFinishedSemaphores[prim_dev];
 
-				if (img_shader && img_shader->valid())
-					img_shader->release();
+				m_v2drender->render(filter_buffer_, filter_params);
 			}
 
-			//go back to normal
-			glBindFramebuffer(GL_FRAMEBUFFER, cur_framebuffer_id); 
-			glDrawBuffer(cur_draw_buffer);
-			glReadBuffer(cur_read_buffer);
-
-			glViewport(vp[0], vp[1], vp[2], vp[3]);
-
-			if (noise_red_ && colormap_mode_!=2)
-				glBindTexture(GL_TEXTURE_2D, filter_tex_id_);
-			else
-				glBindTexture(GL_TEXTURE_2D, blend_tex_id_);
-
-			if (noise_red_ && colormap_mode_!=2)
-				img_shader = 
-					m_img_shader_factory.shader(IMG_SHDR_FILTER_SHARPEN);
-			else
-				img_shader = 
-				m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
-
-			if (img_shader)
+			Vulkan2dRender::V2DRenderParams params;
+			if (noise_red_ && colormap_mode_ != 2)
 			{
-				if (!img_shader->valid())
-					img_shader->create();
-				img_shader->bind();
-			}
-
-			if (noise_red_ && colormap_mode_!=2)
-			{
+				params.shader = IMG_SHDR_FILTER_SHARPEN;
+				params.tex[0] = filter_tex_id_.get();
 				filter_size_shp_ = CalcFilterSize(3, w, h, tex_->nx(), tex_->ny(), zoom, sfactor_);
-				img_shader->setLocalParam(0, filter_size_shp_/w, filter_size_shp_/h, 0.0, 0.0);
+				params.loc[0] = { filter_size_shp_/w, filter_size_shp_/h, 0.0, 0.0 };
+				params.waitSemaphoreCount = 1;
+				params.waitSemaphores = &m_filterFinishedSemaphores[prim_dev];
 			}
-
-			draw_view_quad();
-
-			if (img_shader && img_shader->valid())
-				img_shader->release();
-
-			if (depth_test) glEnable(GL_DEPTH_TEST);
-			if (cull_face) glEnable(GL_CULL_FACE);
-
-			glBindTexture(GL_TEXTURE_2D, 0);
-			glDisable(GL_TEXTURE_2D);
+			else
+			{
+				params.shader = IMG_SHADER_TEXTURE_LOOKUP;
+				params.tex[0] = blend_tex_id_.get();
+				if (!mem_swap_)
+				{
+					params.waitSemaphoreCount = 1;
+					params.waitSemaphores = &m_volFinishedSemaphores[prim_dev];
+				}
+			}
+			params.signalSemaphoreCount = semaphores.signalSemaphoreCount;
+			params.signalSemaphores = semaphores.signalSemaphores;
+			
+			m_v2drender->render(framebuf, params);
 		}
 
-		// Reset the blend functions after MIP
-		glBlendEquation(GL_FUNC_ADD);
-		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-		glDisable(GL_BLEND);
 	}
 	
 	void VolumeRenderer::draw_wireframe(bool orthographic_p, double sampling_frq_fac)
