@@ -1024,7 +1024,7 @@ namespace FLIVR
 		VVolPipeline ret_pipeline;
 
 		bool use_fog = m_use_fog && colormap_mode_ != 2;
-		ShaderProgram *shader = vol_shader_factory_.shader(
+		ShaderProgram *shader = m_vulkan->vol_shader_factory_->shader(
 			false, tex_->nc(),
 			shading_, use_fog,
 			depth_peel_, true,

@@ -374,13 +374,6 @@ namespace FLIVR
 			   float desel_col_fac_;
 			   int edit_sel_id_;
 
-               //sahder for volume rendering
-               static VolShaderFactory vol_shader_factory_;
-               //shader for segmentation
-               static SegShaderFactory seg_shader_factory_;
-               //shader for calculation
-               static VolCalShaderFactory cal_shader_factory_;
-
                //3d frame buffer object for mask
                std::unique_ptr<vks::VFrameBuffer> fbo_mask_;
                //3d frame buffer object for label
