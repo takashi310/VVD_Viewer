@@ -143,17 +143,6 @@ namespace FLIVR
 		//draw
 		void eval_ml_mode();
 
-		double calc_hist_3d(GLuint, GLuint, size_t, size_t, size_t);
-
-		//calculation
-		void calculate(int type, VolumeRenderer* vr_a, VolumeRenderer* vr_b);
-
-		//return
-		void return_volume();//return the data volume
-		void return_mask();//return the mask volume
-		void return_label(); //return the label volume
-		void return_stroke(); //return the stroke volume
-
 		//mask and label
 		int get_ml_mode() {return ml_mode_;}
 		void set_ml_mode(int mode) {ml_mode_ = mode;}
@@ -209,28 +198,7 @@ namespace FLIVR
 
 		bool is_mask_active() { eval_ml_mode(); return mask_; }
 		bool is_label_active() { eval_ml_mode(); return label_; }
-
-		void set_mask_hide_mode(int mode) 
-		{
-			if (tex_ && tex_->isBrxml() && m_mask_hide_mode == VOL_MASK_HIDE_NONE && mode != VOL_MASK_HIDE_NONE)
-			{
-				int curlv = tex_->GetCurLevel();
-				tex_->setLevel(tex_->GetMaskLv());
-				return_mask();
-				for (int lv = 0; lv < tex_->GetLevelNum(); lv++)
-				{
-					if (lv != tex_->GetMaskLv())
-					{
-						tex_->setLevel(lv);
-						clear_tex_current_mask();
-					}
-				}
-				tex_->setLevel(curlv);
-			}
-			m_mask_hide_mode = mode;
-		}
-		int get_mask_hide_mode() { return m_mask_hide_mode; }
-
+		
 		void set_clear_color(VkClearColorValue col) { m_clear_color = col; }
 		VkClearColorValue get_clear_color() { return m_clear_color; }
 
@@ -365,7 +333,6 @@ public:
 			int mode = 0,
 			double sampling_frq_fac = -1.0
 		);
-		void draw_wireframe(bool orthographic_p = false, double sampling_frq_fac = -1.0);
 		void draw_volume(
 			const std::unique_ptr<vks::VFrameBuffer>& framebuf,
 			VSemaphoreSettings semaphores,
@@ -375,25 +342,58 @@ public:
 			int mode = 0,
 			double sampling_frq_fac = -1.0
 		);
-		//type: 0-initial; 1-diffusion-based growing; 2-masked filtering
-		//paint_mode: 1-select; 2-append; 3-erase; 4-diffuse; 5-flood; 6-clear; 7-all;
-		//			  11-posterize
-		//hr_mode (hidden removal): 0-none; 1-ortho; 2-persp
-		void draw_mask(int type, int paint_mode, int hr_mode,
-			double ini_thresh, double gm_falloff, double scl_falloff,
-			double scl_translate, double w2d, double bins, bool ortho, bool estimate);
-		void draw_mask_cpu(int type, int paint_mode, int hr_mode,
-			double ini_thresh, double gm_falloff, double scl_falloff,
-			double scl_translate, double w2d, double bins, bool ortho, bool estimate);
-		void draw_mask_th(float thresh, bool orthographic_p);
-		void draw_mask_dslt(int type, int paint_mode, int hr_mode,
-			double ini_thresh, double gm_falloff, double scl_falloff,
-			double scl_translate, double w2d, double bins, bool ortho, bool estimate, int dslt_r, int dslt_q, double dslt_c);
-		void dslt_mask(int rmax, int quality, double c);
-		//generate the labeling assuming the mask is already generated
-		//type: 0-initialization; 1-maximum intensity filtering
-		//mode: 0-normal; 1-posterized
-		void draw_label(int type, int mode, double thresh, double gm_falloff);
+
+		//double calc_hist_3d(GLuint, GLuint, size_t, size_t, size_t);
+		////calculation
+		//void calculate(int type, VolumeRenderer* vr_a, VolumeRenderer* vr_b);
+		////return
+		//void return_volume();//return the data volume
+		//void return_mask();//return the mask volume
+		//void return_label(); //return the label volume
+		//void return_stroke(); //return the stroke volume
+
+		//void draw_wireframe(bool orthographic_p = false, double sampling_frq_fac = -1.0);
+		////type: 0-initial; 1-diffusion-based growing; 2-masked filtering
+		////paint_mode: 1-select; 2-append; 3-erase; 4-diffuse; 5-flood; 6-clear; 7-all;
+		////			  11-posterize
+		////hr_mode (hidden removal): 0-none; 1-ortho; 2-persp
+		//void draw_mask(int type, int paint_mode, int hr_mode,
+		//	double ini_thresh, double gm_falloff, double scl_falloff,
+		//	double scl_translate, double w2d, double bins, bool ortho, bool estimate);
+		//void draw_mask_cpu(int type, int paint_mode, int hr_mode,
+		//	double ini_thresh, double gm_falloff, double scl_falloff,
+		//	double scl_translate, double w2d, double bins, bool ortho, bool estimate);
+		//void draw_mask_th(float thresh, bool orthographic_p);
+		//void draw_mask_dslt(int type, int paint_mode, int hr_mode,
+		//	double ini_thresh, double gm_falloff, double scl_falloff,
+		//	double scl_translate, double w2d, double bins, bool ortho, bool estimate, int dslt_r, int dslt_q, double dslt_c);
+		//void dslt_mask(int rmax, int quality, double c);
+		////generate the labeling assuming the mask is already generated
+		////type: 0-initialization; 1-maximum intensity filtering
+		////mode: 0-normal; 1-posterized
+		//void draw_label(int type, int mode, double thresh, double gm_falloff);
+/*
+		void set_mask_hide_mode(int mode)
+		{
+			if (tex_ && tex_->isBrxml() && m_mask_hide_mode == VOL_MASK_HIDE_NONE && mode != VOL_MASK_HIDE_NONE)
+			{
+				int curlv = tex_->GetCurLevel();
+				tex_->setLevel(tex_->GetMaskLv());
+				return_mask();
+				for (int lv = 0; lv < tex_->GetLevelNum(); lv++)
+				{
+					if (lv != tex_->GetMaskLv())
+					{
+						tex_->setLevel(lv);
+						clear_tex_current_mask();
+					}
+				}
+				tex_->setLevel(curlv);
+			}
+			m_mask_hide_mode = mode;
+		}
+		int get_mask_hide_mode() { return m_mask_hide_mode; }
+*/
 
 		VkRenderPass prepareRenderPass(int attatchment_num);
 

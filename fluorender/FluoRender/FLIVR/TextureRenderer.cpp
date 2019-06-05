@@ -1805,243 +1805,243 @@ namespace FLIVR
 		return bd1.dist > bd2.dist;
 	}
 
-	void TextureRenderer::draw_polygons(vector<double>& vertex, 
-		vector<double>& texcoord,
-		vector<int>& poly, 
-		bool fog,
-		ShaderProgram* shader)
-	{
-		double mvmat[16];
-		if(fog)
-		{
-			glGetDoublev(GL_MODELVIEW_MATRIX, mvmat);
-		}
+	//void TextureRenderer::draw_polygons(vector<double>& vertex, 
+	//	vector<double>& texcoord,
+	//	vector<int>& poly, 
+	//	bool fog,
+	//	ShaderProgram* shader)
+	//{
+	//	double mvmat[16];
+	//	if(fog)
+	//	{
+	//		glGetDoublev(GL_MODELVIEW_MATRIX, mvmat);
+	//	}
 
-		for(unsigned int i=0, k=0; i<poly.size(); i++)
-		{
-			glBegin(GL_POLYGON);
-			{
-				for(int j=0; j<poly[i]; j++) 
-				{
-					double* t = &texcoord[(k+j)*3];
-					double* v = &vertex[(k+j)*3];
-					if (glMultiTexCoord3d) 
-					{
-						glMultiTexCoord3d(GL_TEXTURE0, t[0], t[1], t[2]);
-						if(fog) 
-						{
-							double vz = mvmat[2]*v[0] + mvmat[6]*v[1] + mvmat[10]*v[2] + mvmat[14];
-							glMultiTexCoord3d(GL_TEXTURE1, -vz, 0.0, 0.0);
-						}
-					}
-					glVertex3d(v[0], v[1], v[2]);
-				}
-			}
-			glEnd();
+	//	for(unsigned int i=0, k=0; i<poly.size(); i++)
+	//	{
+	//		glBegin(GL_POLYGON);
+	//		{
+	//			for(int j=0; j<poly[i]; j++) 
+	//			{
+	//				double* t = &texcoord[(k+j)*3];
+	//				double* v = &vertex[(k+j)*3];
+	//				if (glMultiTexCoord3d) 
+	//				{
+	//					glMultiTexCoord3d(GL_TEXTURE0, t[0], t[1], t[2]);
+	//					if(fog) 
+	//					{
+	//						double vz = mvmat[2]*v[0] + mvmat[6]*v[1] + mvmat[10]*v[2] + mvmat[14];
+	//						glMultiTexCoord3d(GL_TEXTURE1, -vz, 0.0, 0.0);
+	//					}
+	//				}
+	//				glVertex3d(v[0], v[1], v[2]);
+	//			}
+	//		}
+	//		glEnd();
 
-			glFlush();
+	//		glFlush();
 
-			k += poly[i];
-		}
-	}
+	//		k += poly[i];
+	//	}
+	//}
 
-	void TextureRenderer::draw_polygons_wireframe(vector<double>& vertex,
-		vector<double>& texcoord,
-		vector<int>& poly,
-		bool fog)
-	{
-		for(unsigned int i=0, k=0; i<poly.size(); i++)
-		{
-			glBegin(GL_LINE_LOOP);
-			{
-				for(int j=0; j<poly[i]; j++)
-				{
-					double* v = &vertex[(k+j)*3];
-					glVertex3d(v[0], v[1], v[2]);
-				}
-			}
-			glEnd();
-			k += poly[i];
-		}
-	}
+	//void TextureRenderer::draw_polygons_wireframe(vector<double>& vertex,
+	//	vector<double>& texcoord,
+	//	vector<int>& poly,
+	//	bool fog)
+	//{
+	//	for(unsigned int i=0, k=0; i<poly.size(); i++)
+	//	{
+	//		glBegin(GL_LINE_LOOP);
+	//		{
+	//			for(int j=0; j<poly[i]; j++)
+	//			{
+	//				double* v = &vertex[(k+j)*3];
+	//				glVertex3d(v[0], v[1], v[2]);
+	//			}
+	//		}
+	//		glEnd();
+	//		k += poly[i];
+	//	}
+	//}
 
-	void TextureRenderer::draw_polygons(vector<float>& vertex,
-		vector<uint32_t>& triangle_verts)
-	{
-		if (vertex.empty() || triangle_verts.empty())
-			return;
+	//void TextureRenderer::draw_polygons(vector<float>& vertex,
+	//	vector<uint32_t>& triangle_verts)
+	//{
+	//	if (vertex.empty() || triangle_verts.empty())
+	//		return;
 
-		if (!glIsBuffer(m_slices_vbo))
-			glGenBuffers(1, &m_slices_vbo);
-		if (!glIsBuffer(m_slices_ibo))
-			glGenBuffers(1, &m_slices_ibo);
-		if (!glIsVertexArray(m_slices_vao))
-			glGenVertexArrays(1, &m_slices_vao);
+	//	if (!glIsBuffer(m_slices_vbo))
+	//		glGenBuffers(1, &m_slices_vbo);
+	//	if (!glIsBuffer(m_slices_ibo))
+	//		glGenBuffers(1, &m_slices_ibo);
+	//	if (!glIsVertexArray(m_slices_vao))
+	//		glGenVertexArrays(1, &m_slices_vao);
 
-		//link to the new data
-		glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_STREAM_DRAW);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_slices_ibo);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*triangle_verts.size(), 
-			&triangle_verts[0], GL_STREAM_DRAW);
-		
-		glBindVertexArray(m_slices_vao);
-		//now draw it
-		glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)0);
-		glEnableVertexAttribArray(1);
-		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)12);
+	//	//link to the new data
+	//	glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
+	//	glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_STREAM_DRAW);
+	//	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_slices_ibo);
+	//	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*triangle_verts.size(), 
+	//		&triangle_verts[0], GL_STREAM_DRAW);
+	//	
+	//	glBindVertexArray(m_slices_vao);
+	//	//now draw it
+	//	glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
+	//	glEnableVertexAttribArray(0);
+	//	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)0);
+	//	glEnableVertexAttribArray(1);
+	//	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)12);
 
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_slices_ibo);
-		glDrawElements(GL_TRIANGLES, triangle_verts.size(), GL_UNSIGNED_INT, 0);
-		glDisableVertexAttribArray(0);
-		glDisableVertexAttribArray(1);
-		//unbind
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-		glBindVertexArray(0);
-	}
+	//	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_slices_ibo);
+	//	glDrawElements(GL_TRIANGLES, triangle_verts.size(), GL_UNSIGNED_INT, 0);
+	//	glDisableVertexAttribArray(0);
+	//	glDisableVertexAttribArray(1);
+	//	//unbind
+	//	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	//	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	//	glBindVertexArray(0);
+	//}
 
-	void TextureRenderer::draw_polygons(vector<float>& vertex,
-		vector<uint32_t>& triangle_verts, vector<uint32_t>& size)
-	{
-        if (vertex.empty() || triangle_verts.empty())
-            return;
+	//void TextureRenderer::draw_polygons(vector<float>& vertex,
+	//	vector<uint32_t>& triangle_verts, vector<uint32_t>& size)
+	//{
+ //       if (vertex.empty() || triangle_verts.empty())
+ //           return;
 
-		if (!glIsBuffer(m_slices_vbo))
-			glGenBuffers(1, &m_slices_vbo);
-		if (!glIsBuffer(m_slices_ibo))
-			glGenBuffers(1, &m_slices_ibo);
-		if (!glIsVertexArray(m_slices_vao))
-			glGenVertexArrays(1, &m_slices_vao);
-        
-        //link to the new data
-        glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_slices_ibo);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*triangle_verts.size(),
-                     &triangle_verts[0], GL_DYNAMIC_DRAW);
-        
-        glBindVertexArray(m_slices_vao);
-        //now draw it
-        glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)0);
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)12);
-        
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_slices_ibo);
-        int slicen = size.size();
-        uint32_t *t = &triangle_verts[0];
-        for (int s = 0; s < slicen; s++)
-        {
-            unsigned int tsize = (size[s]-2)*3;
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*tsize,
-                         t, GL_DYNAMIC_DRAW);
-            glDrawElements(GL_TRIANGLES, tsize, GL_UNSIGNED_INT, 0);
-            glFlush();
-            t += tsize;
-        }
-        glDisableVertexAttribArray(0);
-        glDisableVertexAttribArray(1);
-        //unbind
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
-	}
+	//	if (!glIsBuffer(m_slices_vbo))
+	//		glGenBuffers(1, &m_slices_vbo);
+	//	if (!glIsBuffer(m_slices_ibo))
+	//		glGenBuffers(1, &m_slices_ibo);
+	//	if (!glIsVertexArray(m_slices_vao))
+	//		glGenVertexArrays(1, &m_slices_vao);
+ //       
+ //       //link to the new data
+ //       glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
+ //       glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
+ //       glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_slices_ibo);
+ //       glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*triangle_verts.size(),
+ //                    &triangle_verts[0], GL_DYNAMIC_DRAW);
+ //       
+ //       glBindVertexArray(m_slices_vao);
+ //       //now draw it
+ //       glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
+ //       glEnableVertexAttribArray(0);
+ //       glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)0);
+ //       glEnableVertexAttribArray(1);
+ //       glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)12);
+ //       
+ //       glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_slices_ibo);
+ //       int slicen = size.size();
+ //       uint32_t *t = &triangle_verts[0];
+ //       for (int s = 0; s < slicen; s++)
+ //       {
+ //           unsigned int tsize = (size[s]-2)*3;
+ //           glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*tsize,
+ //                        t, GL_DYNAMIC_DRAW);
+ //           glDrawElements(GL_TRIANGLES, tsize, GL_UNSIGNED_INT, 0);
+ //           glFlush();
+ //           t += tsize;
+ //       }
+ //       glDisableVertexAttribArray(0);
+ //       glDisableVertexAttribArray(1);
+ //       //unbind
+ //       glBindBuffer(GL_ARRAY_BUFFER, 0);
+ //       glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+ //       glBindVertexArray(0);
+	//}
 
-	void TextureRenderer::draw_polygons_wireframe(vector<float>& vertex,
-		vector<uint32_t>& index, vector<uint32_t>& size)
-	{
-		if (vertex.empty() || index.empty())
-			return;
+	//void TextureRenderer::draw_polygons_wireframe(vector<float>& vertex,
+	//	vector<uint32_t>& index, vector<uint32_t>& size)
+	//{
+	//	if (vertex.empty() || index.empty())
+	//		return;
 
-		if (!glIsBuffer(m_slices_vbo))
-			glGenBuffers(1, &m_slices_vbo);
-		if (!glIsBuffer(m_slices_ibo))
-			glGenBuffers(1, &m_slices_ibo);
-		if (!glIsVertexArray(m_slices_vao))
-			glGenVertexArrays(1, &m_slices_vao);
+	//	if (!glIsBuffer(m_slices_vbo))
+	//		glGenBuffers(1, &m_slices_vbo);
+	//	if (!glIsBuffer(m_slices_ibo))
+	//		glGenBuffers(1, &m_slices_ibo);
+	//	if (!glIsVertexArray(m_slices_vao))
+	//		glGenVertexArrays(1, &m_slices_vao);
 
-		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	//	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-		glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_STREAM_DRAW);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_slices_ibo);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*index.size(), 
-			&index[0], GL_STREAM_DRAW);
+	//	glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
+	//	glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_STREAM_DRAW);
+	//	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_slices_ibo);
+	//	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*index.size(), 
+	//		&index[0], GL_STREAM_DRAW);
 
-		glBindVertexArray(m_slices_vao);
-		glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)0);
-		glEnableVertexAttribArray(1);
-		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)12);
+	//	glBindVertexArray(m_slices_vao);
+	//	glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
+	//	glEnableVertexAttribArray(0);
+	//	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)0);
+	//	glEnableVertexAttribArray(1);
+	//	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)12);
 
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_slices_ibo);
-		unsigned int idx_num;
-		for (unsigned int i=0, k=0; i<size.size(); ++i)
-		{
-			idx_num = (size[i]-2)*3;
-			glDrawElements(GL_TRIANGLES, idx_num, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*> (k));
-			k += idx_num*4;
-		}
-		glDisableVertexAttribArray(0);
-		glDisableVertexAttribArray(1);
-		//unbind
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-		glBindVertexArray(0);
+	//	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_slices_ibo);
+	//	unsigned int idx_num;
+	//	for (unsigned int i=0, k=0; i<size.size(); ++i)
+	//	{
+	//		idx_num = (size[i]-2)*3;
+	//		glDrawElements(GL_TRIANGLES, idx_num, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*> (k));
+	//		k += idx_num*4;
+	//	}
+	//	glDisableVertexAttribArray(0);
+	//	glDisableVertexAttribArray(1);
+	//	//unbind
+	//	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	//	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	//	glBindVertexArray(0);
 
-		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-	}
+	//	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	//}
 
-	//bind 2d mask for segmentation
-	void TextureRenderer::bind_2d_mask()
-	{
-		if (ShaderProgram::shaders_supported() && glActiveTexture)
-		{
-			glActiveTexture(GL_TEXTURE6);
-			glBindTexture(GL_TEXTURE_2D, tex_2d_mask_);
-			glActiveTexture(GL_TEXTURE0);
-		}
-	}
+	////bind 2d mask for segmentation
+	//void TextureRenderer::bind_2d_mask()
+	//{
+	//	if (ShaderProgram::shaders_supported() && glActiveTexture)
+	//	{
+	//		glActiveTexture(GL_TEXTURE6);
+	//		glBindTexture(GL_TEXTURE_2D, tex_2d_mask_);
+	//		glActiveTexture(GL_TEXTURE0);
+	//	}
+	//}
 
-	//bind 2d weight map for segmentation
-	void TextureRenderer::bind_2d_weight()
-	{
-		if (ShaderProgram::shaders_supported() && glActiveTexture)
-		{
-			glActiveTexture(GL_TEXTURE4);
-			glBindTexture(GL_TEXTURE_2D, tex_2d_weight1_);
-			glActiveTexture(GL_TEXTURE5);
-			glBindTexture(GL_TEXTURE_2D, tex_2d_weight2_);
-			glActiveTexture(GL_TEXTURE0);
-		}
-	}
+	////bind 2d weight map for segmentation
+	//void TextureRenderer::bind_2d_weight()
+	//{
+	//	if (ShaderProgram::shaders_supported() && glActiveTexture)
+	//	{
+	//		glActiveTexture(GL_TEXTURE4);
+	//		glBindTexture(GL_TEXTURE_2D, tex_2d_weight1_);
+	//		glActiveTexture(GL_TEXTURE5);
+	//		glBindTexture(GL_TEXTURE_2D, tex_2d_weight2_);
+	//		glActiveTexture(GL_TEXTURE0);
+	//	}
+	//}
 
-	//bind 2d depth map for rendering shadows
-	void TextureRenderer::bind_2d_dmap()
-	{
-		if (ShaderProgram::shaders_supported() && glActiveTexture)
-		{
-			glActiveTexture(GL_TEXTURE4);
-			glBindTexture(GL_TEXTURE_2D, tex_2d_dmap_);
-			glActiveTexture(GL_TEXTURE0);
-		}
-	}
+	////bind 2d depth map for rendering shadows
+	//void TextureRenderer::bind_2d_dmap()
+	//{
+	//	if (ShaderProgram::shaders_supported() && glActiveTexture)
+	//	{
+	//		glActiveTexture(GL_TEXTURE4);
+	//		glBindTexture(GL_TEXTURE_2D, tex_2d_dmap_);
+	//		glActiveTexture(GL_TEXTURE0);
+	//	}
+	//}
 
-	//release texture
-	void TextureRenderer::release_texture(int unit, GLenum taget)
-	{
-		if (ShaderProgram::shaders_supported() && glActiveTexture)
-		{
-			glActiveTexture(GL_TEXTURE0 + unit);
-			glBindTexture(taget, 0);
-			glActiveTexture(GL_TEXTURE0);
-		}
-	}
+	////release texture
+	//void TextureRenderer::release_texture(int unit, GLenum taget)
+	//{
+	//	if (ShaderProgram::shaders_supported() && glActiveTexture)
+	//	{
+	//		glActiveTexture(GL_TEXTURE0 + unit);
+	//		glBindTexture(taget, 0);
+	//		glActiveTexture(GL_TEXTURE0);
+	//	}
+	//}
 	
 } // namespace FLIVR
 
