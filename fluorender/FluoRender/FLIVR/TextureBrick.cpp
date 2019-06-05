@@ -31,9 +31,12 @@
 #include <FLIVR/TextureBrick.h>
 #include <FLIVR/TextureRenderer.h>
 #include <FLIVR/Utils.h>
+
+#include <utility>
+
+#ifndef _UNIT_TEST_VOLUME_RENDERER_
 #include <wx/wx.h>
 #include <wx/url.h>
-#include <utility>
 #include <iostream>
 #include <jpeglib.h>
 #include "../compatibility.h"
@@ -41,13 +44,18 @@
 #include <zlib.h>
 #include <wx/stdpaths.h>
 #include <h5j_reader.h>
+#endif
 
 using namespace std;
 
 namespace FLIVR
 {
-    CURL* TextureBrick::s_curl_ = NULL;
+
+#ifndef _UNIT_TEST_VOLUME_RENDERER_
+	CURL* TextureBrick::s_curl_ = NULL;
 	CURL* TextureBrick::s_curlm_ = NULL;
+#endif
+
 	map<wstring, wstring> TextureBrick::cache_table_ = map<wstring, wstring>();
 	map<wstring, MemCache*> TextureBrick::memcache_table_ = map<wstring, MemCache*>();
 	list<std::wstring> TextureBrick::memcache_order = list<std::wstring>();
@@ -1049,28 +1057,21 @@ z
       }
 */   }
 
+   void TextureBrick::freeBrkData()
+   {
+	   if (brkdata_) brkdata_.reset();
+   }
+
    bool TextureBrick::read_brick(char* data, size_t size, const FileLocInfo* finfo)
    {
-	   if (!finfo) return false;
-/*
-	   if (finfo->isurl)
-	   {
-		   if (finfo->type == BRICK_FILE_TYPE_RAW)  return raw_brick_reader_url(data, size, finfo);
-		   if (finfo->type == BRICK_FILE_TYPE_JPEG) return jpeg_brick_reader_url(data, size, finfo);
-		   if (finfo->type == BRICK_FILE_TYPE_ZLIB) return zlib_brick_reader_url(data, size, finfo);
-	   }
-	   else
-	   {
-		   if (finfo->type == BRICK_FILE_TYPE_RAW)  return raw_brick_reader(data, size, finfo);
-		   if (finfo->type == BRICK_FILE_TYPE_JPEG) return jpeg_brick_reader(data, size, finfo);
-		   if (finfo->type == BRICK_FILE_TYPE_ZLIB) return zlib_brick_reader(data, size, finfo);
-	   }
-*/
+	   bool result = false;
+#ifndef _UNIT_TEST_VOLUME_RENDERER_
+	   if (!finfo) return result;
+
 	   FileLocInfo tmpinfo = *finfo;
 	   char *tmp = NULL;
 	   size_t tmpsize;
 	   read_brick_without_decomp(tmp, tmpsize, &tmpinfo);
-	   bool result = false;
 	   if	   (finfo->type == BRICK_FILE_TYPE_RAW) { data = tmp; size = tmpsize; return true; }
 	   else if (finfo->type == BRICK_FILE_TYPE_JPEG) result = jpeg_decompressor(data, tmp, size, tmpsize);
 	   else if (finfo->type == BRICK_FILE_TYPE_ZLIB) result = zlib_decompressor(data, tmp, size, tmpsize);
@@ -1078,9 +1079,11 @@ z
 
 	   if (tmp)
 		   delete[] tmp;
-
+#endif
 	   return result;
    }
+
+#ifndef _UNIT_TEST_VOLUME_RENDERER_
 
 #define DOWNLOAD_BUFSIZE 8192
    
@@ -1653,9 +1656,6 @@ z
    {
 	   return true;
    }
+#endif
 
-   void TextureBrick::freeBrkData()
-   {
-	   if (brkdata_) brkdata_.reset();
-   }
 } // end namespace FLIVR

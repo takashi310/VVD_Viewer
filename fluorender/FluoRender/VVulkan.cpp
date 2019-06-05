@@ -29,11 +29,11 @@ void VVulkan::prepare()
 
 	initSubDevices();
 
-	vol_shader_factory_ = std::make_unique<FLIVR::VolShaderFactory>(new FLIVR::VolShaderFactory(devices));
-	cal_shader_factory_ = std::make_unique<FLIVR::VolCalShaderFactory>(new FLIVR::VolCalShaderFactory(devices));
-	seg_shader_factory_ = std::make_unique<FLIVR::SegShaderFactory>(new FLIVR::SegShaderFactory(devices));
-	paint_shader_factory_ = std::make_unique<FLIVR::PaintShaderFactory>(new FLIVR::PaintShaderFactory(devices));
-	img_shader_factory_ = std::make_unique<FLIVR::ImgShaderFactory>(new FLIVR::ImgShaderFactory(devices));
+	vol_shader_factory_ = std::make_unique<FLIVR::VolShaderFactory>(devices);
+	cal_shader_factory_ = std::make_unique<FLIVR::VolCalShaderFactory>(devices);
+	seg_shader_factory_ = std::make_unique<FLIVR::SegShaderFactory>(devices);
+	paint_shader_factory_ = std::make_unique<FLIVR::PaintShaderFactory>(devices);
+	img_shader_factory_ = std::make_unique<FLIVR::ImgShaderFactory>(devices);
 	
 	prepared = true;
 }
@@ -85,7 +85,7 @@ bool VVulkan::findTexInPools(FLIVR::TextureBrick *b, int c, int w, int h, int d,
 bool VVulkan::getCompatibleTexFromPool(int w, int h, int d, int bytes, VkFormat format,
 									   vks::VulkanDevice* &ret_dev, int &ret_id)
 {
-
+	return true;
 }
 
 void VVulkan::GenTextures2DAllDevice(std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> &result,
@@ -105,4 +105,6 @@ bool VVulkan::UploadTextures(std::map<vks::VulkanDevice*, std::shared_ptr<vks::V
 		if (tex[dev])
 			dev->UploadTexture(tex[dev], data);
 	}
+
+	return true;
 }

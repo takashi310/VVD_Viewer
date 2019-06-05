@@ -138,7 +138,7 @@ namespace FLIVR
 		int get_depth_peel() {return depth_peel_;}
 
 		double compute_dt_fac(double sampling_frq_fac=-1.0, double *rate_fac=nullptr);
-		double compute_dt_fac_1px(double sclfac);
+		double compute_dt_fac_1px(uint32_t w, uint32_t h, double sclfac);
 
 		//draw
 		void eval_ml_mode();
@@ -424,25 +424,23 @@ public:
 			VkPipeline pipeline;
 			VkRenderPass renderpass;
 			ShaderProgram* shader;
-			int shader;
 			VkBool32 uniforms[V2DRENDER_UNIFORM_NUM] = { VK_FALSE };
 			VkBool32 samplers[IMG_SHDR_SAMPLER_NUM] = { VK_FALSE };
 		};
 		static std::vector<VSegPipeline> m_seg_pipelines;
 		int m_prev_seg_pipeline;
-		VSegPipeline prepareSegPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode);
+		//VSegPipeline prepareSegPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode);
 
 		struct VCalPipeline {
 			VkPipeline pipeline;
 			VkRenderPass renderpass;
 			ShaderProgram* shader;
-			int shader;
 			VkBool32 uniforms[V2DRENDER_UNIFORM_NUM] = { VK_FALSE };
 			VkBool32 samplers[IMG_SHDR_SAMPLER_NUM] = { VK_FALSE };
 		};
 		static std::vector<VCalPipeline> m_cal_pipelines;
 		int m_prev_cal_pipeline;
-		VCalPipeline prepareCalPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode);
+		//VCalPipeline prepareCalPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode);
 	};
 
 } // End namespace FLIVR

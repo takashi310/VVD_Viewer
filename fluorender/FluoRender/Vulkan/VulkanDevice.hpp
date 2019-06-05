@@ -671,7 +671,7 @@ namespace vks
 		VkFramebuffer framebuffer;
 		VkRenderPass renderPass;
 		VulkanDevice *device;
-		int32_t w, h;
+		uint32_t w, h;
 		std::vector<std::shared_ptr<VTexture>> attachments;
 
 		VFrameBuffer()
@@ -679,6 +679,8 @@ namespace vks
 			framebuffer = VK_NULL_HANDLE;
 			renderPass = VK_NULL_HANDLE;
 			device = VK_NULL_HANDLE;
+			w = 0;
+			h = 0;
 		}
 
 		~VFrameBuffer()

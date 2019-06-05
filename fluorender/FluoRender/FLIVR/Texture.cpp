@@ -596,9 +596,9 @@ namespace FLIVR
 		for (unsigned int i = 0; i < (*bricks_).size(); i++)
 		{
 			TextureBrick* tb = (*bricks_)[i];
-			if (tb->nx() > brick_max_dim_.x) brick_max_dim_.x = tb->nx();
-			if (tb->ny() > brick_max_dim_.y) brick_max_dim_.y = tb->ny();
-			if (tb->nz() > brick_max_dim_.z) brick_max_dim_.z = tb->nz();
+			if (tb->nx() > brick_max_dim_[0]) brick_max_dim_[0] = tb->nx();
+			if (tb->ny() > brick_max_dim_[1]) brick_max_dim_[1] = tb->ny();
+			if (tb->nz() > brick_max_dim_[2]) brick_max_dim_[2] = tb->nz();
 		}
 
 		return true;
@@ -627,13 +627,8 @@ namespace FLIVR
 		int numc, int* numb)
 	{
 		bool force_pow2 = false;
-		if (ShaderProgram::init())
-			force_pow2 = !ShaderProgram::texture_non_power_of_two();
-
-		int max_texture_size = 2048;
-		if (ShaderProgram::init())
-			max_texture_size = ShaderProgram::max_texture_size();
-
+		int max_texture_size = 65535;
+		
 		//further determine the max texture size
 		if (TextureRenderer::get_mem_swap())
 		{

@@ -585,7 +585,7 @@ namespace vks
 		checkStagingBuffer(texMemSize);
 
 		// Copy texture data into staging buffer
-		uint64_t poffset = offset.z*zpitch + offset.y*ypitch + offset.x*(VkDeviceSize)tex->bytes;
+		uint64_t poffset = (VkDeviceSize)offset.z*zpitch + (VkDeviceSize)offset.y*ypitch + offset.x*(VkDeviceSize)tex->bytes;
 		uint64_t dst_ypitch = (VkDeviceSize)tex->w * (VkDeviceSize)tex->bytes;
 		unsigned char* dstp = (unsigned char*)staging_buf.mapped;
 		unsigned char* tp = (unsigned char *)data + poffset;
@@ -603,6 +603,8 @@ namespace vks
 		}
 
 		CopyDataStagingBuf2Tex(tex);
+
+		return true;
 	}
 
 	bool VulkanDevice::UploadTexture(const std::shared_ptr<VTexture> &tex, void *data)
@@ -615,6 +617,8 @@ namespace vks
 		memcpy(staging_buf.mapped, data, texMemSize);
 
 		CopyDataStagingBuf2Tex(tex);
+
+		return true;
 	}
 
 	void VulkanDevice::CopyDataStagingBuf2Tex(const std::shared_ptr<VTexture> &tex)
@@ -677,7 +681,7 @@ namespace vks
 		CopyDataTex2StagingBuf(tex);
 
 		// Copy texture data from staging buffer
-		uint64_t poffset = offset.z*zpitch + offset.y*ypitch + offset.x*(VkDeviceSize)tex->bytes;
+		uint64_t poffset = (VkDeviceSize)offset.z*zpitch + (VkDeviceSize)offset.y*ypitch + offset.x*(VkDeviceSize)tex->bytes;
 		uint64_t src_ypitch = (VkDeviceSize)tex->w * (VkDeviceSize)tex->bytes;
 		unsigned char* srcp = (unsigned char*)staging_buf.mapped;
 		unsigned char* tp = (unsigned char *)data + poffset;
@@ -693,6 +697,8 @@ namespace vks
 			}
 			tp += zpitch;
 		}
+
+		return true;
 	}
 
 	bool VulkanDevice::DownloadTexture(const std::shared_ptr<VTexture> &tex, void *data)
@@ -704,6 +710,8 @@ namespace vks
 		CopyDataTex2StagingBuf(tex);
 
 		memcpy(data, staging_buf.mapped, texMemSize);
+		
+		return true;
 	}
 
 	void VulkanDevice::CopyDataTex2StagingBuf(const std::shared_ptr<VTexture> &tex)

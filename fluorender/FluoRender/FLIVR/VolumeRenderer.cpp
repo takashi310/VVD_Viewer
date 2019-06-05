@@ -623,7 +623,7 @@ namespace FLIVR
 	}
 
 	//sclfac: m_proj_mat[0][0] (ortho)
-	double VolumeRenderer::compute_dt_fac_1px(double sclfac)
+	double VolumeRenderer::compute_dt_fac_1px(uint32_t w, uint32_t h, double sclfac)
 	{
 		if (sclfac <= 0.0)
 			return 1.0;
@@ -638,11 +638,9 @@ namespace FLIVR
 			 m_mv_mat[2][0], m_mv_mat[2][1], m_mv_mat[2][2], m_mv_mat[2][3],
 			 m_mv_mat[3][0], m_mv_mat[3][1], m_mv_mat[3][2], m_mv_mat[3][3]};
 
-		GLint vp[4];
-		glGetIntegerv(GL_VIEWPORT, vp);
-		int w = min(vp[2], vp[3]);
+		uint32_t mindim = min(w, h);
 
-		double pxlen = 1.0 / w / sclfac;
+		double pxlen = 1.0 / mindim / sclfac;
 		
 		// index space view direction
 		Vector mv_ray = Vector(-mvmat[2], -mvmat[6], -mvmat[10]);//normalized
@@ -972,11 +970,11 @@ namespace FLIVR
 		ad.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		ad.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-		for (int i = 0; i < attatchment_num; i++)
+		for (uint32_t i = 0; i < attatchment_num; i++)
 			attchmentDescriptions.push_back(ad);
 
 		std::vector<VkAttachmentReference> colorReferences;
-		for (int i = 0; i < attatchment_num; i++)
+		for (uint32_t i = 0; i < attatchment_num; i++)
 		{
 			VkAttachmentReference cr = { i, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
 			colorReferences.push_back(cr);
@@ -1284,7 +1282,13 @@ namespace FLIVR
 					diag.z() / tex_->nz());
 				double dt = cell_diag.length()/compute_rate_scale()/rate;
 		*/		//double dt = 0.0020/rate * compute_dt_fac(sampling_frq_fac, &rate_fac);
-		double dt = compute_dt_fac_1px(sampling_frq_fac) / rate;
+		uint32_t w = m_vulkan->width;
+		uint32_t h = m_vulkan->height;
+		uint32_t minwh = min(w, h);
+		uint32_t w2 = w;
+		uint32_t h2 = h;
+		
+		double dt = compute_dt_fac_1px(w, h, sampling_frq_fac) / rate;
 		num_slices_ = (int)(diag.length() / dt);
 
 		vector<float> vertex;
@@ -1296,12 +1300,6 @@ namespace FLIVR
 
 		//--------------------------------------------------------------------------
 		bool use_fog = m_use_fog && colormap_mode_ != 2;
-
-		int w = m_vulkan->width;
-		int h = m_vulkan->height;
-		int minwh = min(w, h);
-		int w2 = w;
-		int h2 = h;
 
 		double sf = CalcScaleFactor(w, h, tex_->nx(), tex_->ny(), zoom);
 		if (fabs(sf - sfactor_) > 0.05)
@@ -1558,6 +1556,7 @@ namespace FLIVR
 				msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true);
 			else if (tex_->nmask() != -1 && m_mask_hide_mode != VOL_MASK_HIDE_NONE)
 			{
+#ifndef _UNIT_TEST_VOLUME_RENDERER_
 				if (tex_->isBrxml() && tex_->GetMaskLv() != tex_->GetCurLevel())
 				{
 					m_pThreadCS.Enter();
@@ -1622,6 +1621,7 @@ namespace FLIVR
 					frag_const.mask_b_scale = { 1.0f, 1.0f, 1.0f, 1.0f };
 					frag_const.mask_b_trans = { 0.0f, 0.0f, 0.0f, 0.0f };
 				}
+#endif
 			}
 
 			if (label_)
@@ -1675,7 +1675,7 @@ namespace FLIVR
 			VkRect2D scissor = vks::initializers::rect2D(w2, h2, 0, 0);
 			vkCmdSetScissor(cmdbuf, 0, 1, &scissor);
 
-			vkCmdPushDescriptorSetKHR(
+			prim_dev->vkCmdPushDescriptorSetKHR(
 				cmdbuf,
 				VK_PIPELINE_BIND_POINT_GRAPHICS,
 				pipelineLayout,

@@ -36,11 +36,18 @@
 #include <glm/glm.hpp>
 #include <unordered_set>
 #include <unordered_map>
+
+#ifndef _UNIT_TEST_VOLUME_RENDERER_
+#include <wx/thread.h>
+#endif
+
+#ifndef _UNIT_TEST_VOLUME_RENDERER_WITHOUT_IDVOL
 #include <boost/property_tree/ptree.hpp>
 #include <boost/optional.hpp>
+#endif
+
 #include <string>
 #include <tinyxml2.h>
-#include <wx/thread.h>
 
 #include "VVulkan.h"
 #include "Vulkan2dRender.h"
@@ -173,8 +180,12 @@ namespace FLIVR
          // Returns true if it is visible.
 		bool test_against_view(const BBox &bbox, bool persp=false);
 
-		 void init_palette();
-		 void update_palette_tex();
+
+		void init_palette();
+		void update_palette_tex();
+		std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> get_palette();
+
+#ifndef _UNIT_TEST_VOLUME_RENDERER_WITHOUT_IDVOL
 		 void set_roi_name(wstring name, int id=-1, wstring parent_name=wstring());
 		 void set_roi_name(wstring name, int id, int parent_id);
 		 wstring check_new_roi_name(wstring name);
@@ -210,7 +221,6 @@ namespace FLIVR
 		 void set_desel_palette_mode_dark(float fac=0.1);
 		 void set_desel_palette_mode_gray(float fac=0.1);
 		 void set_desel_palette_mode_invisible();
-		 std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> get_palette();
 		 bool is_sel_id(int id);
 		 void add_sel_id(int id);
 		 void del_sel_id(int id);
@@ -226,6 +236,11 @@ namespace FLIVR
 		 string exprot_selected_roi_ids();
 		 void import_roi_tree(const wstring &tree);
 		 void import_selected_ids(const string &sel_ids_str);
+
+		 boost::property_tree::wptree roi_tree_;
+#else
+		void *roi_tree_; //dummy
+#endif
 		 
          //memory swap
          static void set_mem_swap(bool val) {mem_swap_ = val;}
@@ -354,7 +369,7 @@ namespace FLIVR
 			   unsigned char base_palette_[PALETTE_SIZE*PALETTE_ELEM_COMP];
 			   unordered_set<int> sel_ids_;
 			   unordered_set<int> sel_segs_;
-			   boost::property_tree::wptree roi_tree_;
+
 			   int desel_palette_mode_;
 			   float desel_col_fac_;
 			   int edit_sel_id_;
@@ -442,7 +457,9 @@ namespace FLIVR
 			   //vertex and index buffer bind points
 			   vks::Buffer m_slices_vbo, m_slices_ibo, m_slices_vao;
 
+#ifndef _UNIT_TEST_VOLUME_RENDERER_
 			   wxCriticalSection m_pThreadCS;
+#endif
 
                //compute view
                Ray compute_view();
@@ -464,31 +481,31 @@ namespace FLIVR
                std::shared_ptr<vks::VTexture> load_brick_stroke(vks::VulkanDevice *device, vector<TextureBrick*> *b, int i, VkFilter filter=VK_FILTER_NEAREST, bool compression=false, int unit=0, bool swap_mem=false);
                
 			   std::shared_ptr<vks::VTexture> base_fanc_load_brick_comp(vks::VulkanDevice *device, int c, TextureBrick* brick, VkFilter filter, bool compression, bool swap_mem);
-               
-			   void release_texture(int unit, GLenum target);
+      //         
+			   //void release_texture(int unit, GLenum target);
 
-               //slices
-               void draw_polygons(vector<double>& vertex, vector<double>& texcoord,
-                     vector<int>& poly,
-                     bool fog,
-                     ShaderProgram *shader = 0);
-               void draw_polygons_wireframe(vector<double>& vertex, vector<double>& texcoord,
-                     vector<int>& poly,
-                     bool fog);
+      //         //slices
+      //         void draw_polygons(vector<double>& vertex, vector<double>& texcoord,
+      //               vector<int>& poly,
+      //               bool fog,
+      //               ShaderProgram *shader = 0);
+      //         void draw_polygons_wireframe(vector<double>& vertex, vector<double>& texcoord,
+      //               vector<int>& poly,
+      //               bool fog);
 
-			   void draw_polygons(vector<float>& vertex,
-				   vector<uint32_t>& triangle_verts);
-			   void draw_polygons(vector<float>& vertex,
-				   vector<uint32_t>& triangle_verts, vector<uint32_t>& size);
-			   void draw_polygons_wireframe(vector<float>& vertex,
-				   vector<uint32_t>& index, vector<uint32_t>& size);
+			   //void draw_polygons(vector<float>& vertex,
+				  // vector<uint32_t>& triangle_verts);
+			   //void draw_polygons(vector<float>& vertex,
+				  // vector<uint32_t>& triangle_verts, vector<uint32_t>& size);
+			   //void draw_polygons_wireframe(vector<float>& vertex,
+				  // vector<uint32_t>& index, vector<uint32_t>& size);
 
-               //bind 2d mask for segmentation
-               void bind_2d_mask();
-               //bind 2d weight map for segmentation
-               void bind_2d_weight();
-               //bind 2d depth map for rendering shadows
-               void bind_2d_dmap();
+      //         //bind 2d mask for segmentation
+      //         void bind_2d_mask();
+      //         //bind 2d weight map for segmentation
+      //         void bind_2d_weight();
+      //         //bind 2d depth map for rendering shadows
+      //         void bind_2d_dmap();
 
    };
 

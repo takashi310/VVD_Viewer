@@ -30,12 +30,14 @@
 #define SLIVR_TextureBrick_h
 
 
-#include "GL/glew.h"
 #include "Ray.h"
 #include "BBox.h"
 #include "Plane.h"
 
+#ifndef _UNIT_TEST_VOLUME_RENDERER_
 #include <wx/thread.h>
+#include <curl/curl.h>
+#endif
 
 #include <vector>
 #include <fstream>
@@ -44,9 +46,10 @@
 #include <stdint.h>
 #include <map>
 #include <list>
-#include <curl/curl.h>
 #include <memory>
 #include <sstream>
+
+#include <vulkan/vulkan.h>
 
 #include "DLLExport.h"
 
@@ -340,13 +343,15 @@ namespace FLIVR {
 
 		void set_compression(bool compression) {compression_ = compression;}
 		bool get_compression() {return compression_;}
-        
-        static void setCURL(CURL *c) {s_curl_ = c;}
-		static void setCURL_Multi(CURLM *c) {s_curlm_ = c;}
 
 		size_t tex_format_size(VkFormat t);
 		VkFormat tex_format_aux(Nrrd* n);
+
 		bool read_brick(char* data, size_t size, const FileLocInfo* finfo);
+        
+#ifndef _UNIT_TEST_VOLUME_RENDERER_
+        static void setCURL(CURL *c) {s_curl_ = c;}
+		static void setCURL_Multi(CURLM *c) {s_curlm_ = c;}
 		void set_brkdata(const std::shared_ptr<VL_Array> &brkdata) {brkdata_ = brkdata;}
 		void set_brkdata(void *brkdata, size_t size) {brkdata_ = std::make_shared<VL_Array>((char *)brkdata, size);}
 		static bool read_brick_without_decomp(char* &data, size_t &readsize, FileLocInfo* finfo, wxThread *th=NULL);
@@ -356,14 +361,6 @@ namespace FLIVR {
 		static bool h265_decompressor(char *out, char* in, size_t out_size, size_t in_size, int w, int h);
 		static void delete_all_cache_files();
 
-		void prevent_tex_deletion(bool val) {prevent_tex_deletion_ = val;}
-		bool is_tex_deletion_prevented() {return prevent_tex_deletion_;}
-		void lock_brickdata(bool val) {lock_brickdata_ = val;}
-		bool is_brickdata_locked() {return lock_brickdata_;}
-	private:
-		void compute_edge_rays(BBox &bbox);
-		void compute_edge_rays_tex(BBox &bbox);
-		
 		bool raw_brick_reader(char* data, size_t size, const FileLocInfo* finfo);
 		bool jpeg_brick_reader(char* data, size_t size, const FileLocInfo* finfo);
 		bool zlib_brick_reader(char* data, size_t size, const FileLocInfo* finfo);
@@ -371,9 +368,21 @@ namespace FLIVR {
 		bool jpeg_brick_reader_url(char* data, size_t size, const FileLocInfo* finfo);
 		bool zlib_brick_reader_url(char* data, size_t size, const FileLocInfo* finfo);
 
-		static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp);
-		static size_t WriteFileCallback(void *contents, size_t size, size_t nmemb, void *userp);
-		static int xferinfo(void *p, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow);
+		static size_t WriteMemoryCallback(void* contents, size_t size, size_t nmemb, void* userp);
+		static size_t WriteFileCallback(void* contents, size_t size, size_t nmemb, void* userp);
+		static int xferinfo(void* p, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow);
+		
+		static CURL* s_curl_;
+		static CURLM* s_curlm_;
+#endif
+
+		void prevent_tex_deletion(bool val) {prevent_tex_deletion_ = val;}
+		bool is_tex_deletion_prevented() {return prevent_tex_deletion_;}
+		void lock_brickdata(bool val) {lock_brickdata_ = val;}
+		bool is_brickdata_locked() {return lock_brickdata_;}
+	private:
+		void compute_edge_rays(BBox &bbox);
+		void compute_edge_rays_tex(BBox &bbox);
 
 		//! bbox edges
 		Ray edge_[12]; 
@@ -440,8 +449,6 @@ namespace FLIVR {
 
 		bool compression_;
         
-        static CURL *s_curl_;
-		static CURLM *s_curlm_;
 		static std::map<std::wstring, std::wstring> cache_table_;
 		
 		static std::map<std::wstring, MemCache*> memcache_table_;

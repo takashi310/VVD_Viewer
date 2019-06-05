@@ -26,7 +26,7 @@
 //  DEALINGS IN THE SOFTWARE.
 //  
 
-#include <FLIVR/texturebrick.h>
+#include <FLIVR/TextureBrick.h>
 #include <FLIVR/TextureRenderer.h>
 #include <FLIVR/Color.h>
 #include <FLIVR/Utils.h>
@@ -37,15 +37,24 @@
 #include <algorithm>
 #include <glm/gtc/type_ptr.hpp>
 #include <FLIVR/palettes.h>
-#include <boost/foreach.hpp>
-#include <boost/lexical_cast.hpp>
+
 #include <sstream>
-#include "compatibility.h"
 #include <time.h>
-#include <wx/utils.h>
+
 //#include <iomanip>
 
+#ifndef _UNIT_TEST_VOLUME_RENDERER_
+#include "compatibility.h"
+#include <wx/utils.h>
+#endif
+
+#ifndef _UNIT_TEST_VOLUME_RENDERER_WITHOUT_IDVOL
+#include <boost/foreach.hpp>
+#include <boost/lexical_cast.hpp>
 using boost::property_tree::wptree;
+#endif
+
+
 using namespace std;
 
 namespace FLIVR
@@ -81,6 +90,9 @@ namespace FLIVR
 
 	vector<TextureRenderer::LoadedBrick> TextureRenderer::loadedbrks;
 	int TextureRenderer::del_id = 0;
+
+	std::shared_ptr<VVulkan> TextureRenderer::m_vulkan;
+	std::shared_ptr<Vulkan2dRender> TextureRenderer::m_v2drender;
 
 	TextureRenderer::TextureRenderer(Texture* tex)
 		:
@@ -128,7 +140,9 @@ namespace FLIVR
 			}
 		}
 */
+#ifndef _UNIT_TEST_VOLUME_RENDERER_WITHOUT_IDVOL
 		select_all_roi_tree();
+#endif
 	}
 
 	TextureRenderer::TextureRenderer(const TextureRenderer& copy)
@@ -233,6 +247,19 @@ namespace FLIVR
 		m_vulkan->UploadTextures(palette_tex_id_, palette_);
 	}
 
+	std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> TextureRenderer::get_palette()
+	{
+#ifndef _UNIT_TEST_VOLUME_RENDERER_WITHOUT_IDVOL
+		update_sel_segs();
+
+		if (sel_ids_.empty() && roi_tree_.empty()) return base_palette_tex_id_;
+		else return palette_tex_id_;
+#else
+		return palette_tex_id_;
+#endif
+	}
+
+#ifndef _UNIT_TEST_VOLUME_RENDERER_WITHOUT_IDVOL
 	boost::optional<wstring> TextureRenderer::get_roi_path(int id)
 	{
 		return get_roi_path(id, roi_tree_, L"");
@@ -869,14 +896,6 @@ namespace FLIVR
 		desel_col_fac_ = fac;
 	}
 
-	std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> TextureRenderer::get_palette()
-	{
-		update_sel_segs();
-
-		if (sel_ids_.empty() && roi_tree_.empty()) return base_palette_tex_id_;
-		else return palette_tex_id_;
-	}
-
 	bool TextureRenderer::is_sel_id(int id)
 	{
 		auto ite = sel_ids_.find(id);
@@ -1126,7 +1145,7 @@ namespace FLIVR
 
 		update_palette(desel_palette_mode_, desel_col_fac_);
 	}
-
+#endif
 
 	//set the texture for rendering
 	void TextureRenderer::set_texture(Texture* tex)
@@ -1576,6 +1595,7 @@ namespace FLIVR
 			}
 			else if(tex_->isBrxml())
 			{
+#ifndef _UNIT_TEST_VOLUME_RENDERER_
 				m_pThreadCS.Enter();
 				if (brick->isLoaded())
 				{
@@ -1653,6 +1673,7 @@ namespace FLIVR
 					} 
 				}
 				m_pThreadCS.Leave();
+#endif
 			}
 		}
 
