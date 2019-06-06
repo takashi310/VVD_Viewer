@@ -215,6 +215,7 @@ public:
 	void* view;
 	void setWindow(void *pView) { view = pView;}
 #endif
+	void setSize(int width, int height);
 
 	/**
 	* Create the application wide Vulkan instance
@@ -282,8 +283,17 @@ public:
 	// Load a SPIR-V shader
 	VkPipelineShaderStageCreateInfo loadShader(std::string fileName, VkShaderStageFlagBits stage);
 
+	// Prepare the frame for workload submission
+	// - Acquires the next image from the swap chain 
+	// - Sets the default wait and signal semaphores
+	void prepareFrame();
+
+	// Submit the frames' workload 
+	void submitFrame();
+
 	VkDevice getDevice() { return device; }
 	VkPhysicalDevice getPhysicalDevice() { return physicalDevice; }
 	VkPhysicalDeviceProperties getPhysicalDeviceProperties() { return deviceProperties; }
 	VkPipelineCache getPipelineCache() { return pipelineCache; }
+
 };

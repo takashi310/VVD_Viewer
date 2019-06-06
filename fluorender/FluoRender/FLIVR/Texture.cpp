@@ -1111,12 +1111,12 @@ namespace FLIVR
 
 		if (nbyte == 1)
 		{
-			unsigned char *val8 = new (std::nothrow) unsigned char[(size_t)width * (size_t)height * (size_t)depth];
+			unsigned char *val8 = new unsigned char[(size_t)width * (size_t)height * (size_t)depth];
 			data->data = val8;
 		}
 		else
 		{
-			unsigned short *val16 = new (std::nothrow) unsigned short[(size_t)width * (size_t)height * (size_t)depth];
+			unsigned short *val16 = new unsigned short[(size_t)width * (size_t)height * (size_t)depth];
 			data->data = val16;
 		}
 
@@ -1213,17 +1213,17 @@ namespace FLIVR
 		data = nrrdNew();
 		if (nbyte == 1)
 		{
-			unsigned char *val8 = new (std::nothrow) unsigned char[w*h*d*nbyte];
+			unsigned char *val8 = new unsigned char[w*h*d*nbyte];
 			nrrdWrap(data, val8, nrrdTypeUChar, 3, w, h, d);
 		}
 		else if (nbyte == 2)
 		{
-			unsigned short *val16 = new (std::nothrow) unsigned short[w*h*d*nbyte];
+			unsigned short *val16 = new unsigned short[w*h*d*nbyte];
 			nrrdWrap(data, val16, nrrdTypeUShort, 3, w, h, d);
 		}
 		else if (nbyte == 4)
 		{
-			float *val32 = new (std::nothrow) float[w*h*d*nbyte];
+			float *val32 = new float[w*h*d*nbyte];
 			nrrdWrap(data, val32, nrrdTypeFloat, 3, w, h, d);
 		}
 		nrrdAxisInfoSet(data, nrrdAxisInfoSpacing, xspc, yspc, zspc);
@@ -1432,7 +1432,7 @@ namespace FLIVR
 		//duplicate at pointer position
 		unsigned long long mem_size = (unsigned long long)nx*
 			(unsigned long long)ny*(unsigned long long)nz;
-		void* new_data = (void*)new (std::nothrow) unsigned char[mem_size];
+		void* new_data = (void*)new unsigned char[mem_size];
 		memcpy(new_data, mask_undos_[mask_undo_pointer_], size_t(mem_size));
 		if (mask_undo_pointer_<mask_undos_.size()-1)
 		{

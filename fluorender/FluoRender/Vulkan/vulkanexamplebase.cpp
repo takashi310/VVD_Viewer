@@ -179,6 +179,35 @@ VkPipelineShaderStageCreateInfo VulkanExampleBase::loadShader(std::string fileNa
 	return shaderStage;
 }
 
+void VulkanExampleBase::prepareFrame()
+{
+	// Acquire the next image from the swap chain
+	VkResult err = swapChain.acquireNextImage(semaphores.presentComplete, &currentBuffer);
+	// Recreate the swapchain if it's no longer compatible with the surface (OUT_OF_DATE) or no longer optimal for presentation (SUBOPTIMAL)
+	if ((err == VK_ERROR_OUT_OF_DATE_KHR) || (err == VK_SUBOPTIMAL_KHR)) {
+		windowResize();
+	}
+	else {
+		VK_CHECK_RESULT(err);
+	}
+}
+
+void VulkanExampleBase::submitFrame()
+{
+	VkResult res = swapChain.queuePresent(queue, currentBuffer, semaphores.renderComplete);
+	if (!((res == VK_SUCCESS) || (res == VK_SUBOPTIMAL_KHR))) {
+		if (res == VK_ERROR_OUT_OF_DATE_KHR) {
+			// Swap chain is no longer compatible with the surface and needs to be recreated
+			windowResize();
+			return;
+		}
+		else {
+			VK_CHECK_RESULT(res);
+		}
+	}
+	VK_CHECK_RESULT(vkQueueWaitIdle(queue));
+}
+
 VulkanExampleBase::VulkanExampleBase(bool enableValidation)
 {
 	settings.validation = enableValidation;
@@ -272,8 +301,6 @@ VulkanExampleBase::~VulkanExampleBase()
 	vkDestroyImageView(device, depthStencil.view, nullptr);
 	vkDestroyImage(device, depthStencil.image, nullptr);
 	vkFreeMemory(device, depthStencil.mem, nullptr);
-
-	vkDestroyPipelineCache(device, pipelineCache, nullptr);
 
 	vkDestroyCommandPool(device, cmdPool, nullptr);
 
@@ -554,6 +581,17 @@ void VulkanExampleBase::setupRenderPass()
 void VulkanExampleBase::getEnabledFeatures()
 {
 	// Can be overriden in derived class
+}
+
+void VulkanExampleBase::setSize(int width, int height)
+{
+	if (width <= 0 || height <= 0)
+		return;
+
+	destWidth = width;
+	destHeight = height;
+
+	windowResize();
 }
 
 void VulkanExampleBase::windowResize()

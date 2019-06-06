@@ -1,6 +1,5 @@
 #include "VVulkan.h"
 
-
 VVulkan::VVulkan() : VulkanExampleBase(ENABLE_VALIDATION)
 {
 	enabledInstanceExtensions.push_back("VK_KHR_get_physical_device_properties2");
@@ -17,8 +16,7 @@ VVulkan::~VVulkan()
 	paint_shader_factory_.reset();
 	img_shader_factory_.reset();
 
-	for (auto dev : devices)
-		if (dev) delete dev;
+	DestroySubDevices();
 }
 
 void VVulkan::prepare()
@@ -28,7 +26,7 @@ void VVulkan::prepare()
 	devices.push_back(vulkanDevice);
 
 	initSubDevices();
-
+	
 	vol_shader_factory_ = std::make_unique<FLIVR::VolShaderFactory>(devices);
 	cal_shader_factory_ = std::make_unique<FLIVR::VolCalShaderFactory>(devices);
 	seg_shader_factory_ = std::make_unique<FLIVR::SegShaderFactory>(devices);
@@ -40,6 +38,18 @@ void VVulkan::prepare()
 
 void VVulkan::initSubDevices()
 {
+}
+
+void VVulkan::DestroySubDevices()
+{
+	if (devices.size() > 1)
+	{
+		for (int i = 0; i < devices.size(); i++)
+		{
+			if (devices[i])
+				delete devices[i];
+		}
+	}
 }
 
 void VVulkan::eraseBricksFromTexpools(const std::vector<FLIVR::TextureBrick*>* bricks, int c)

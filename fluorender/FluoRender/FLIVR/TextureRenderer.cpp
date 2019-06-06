@@ -54,7 +54,6 @@
 using boost::property_tree::wptree;
 #endif
 
-
 using namespace std;
 
 namespace FLIVR

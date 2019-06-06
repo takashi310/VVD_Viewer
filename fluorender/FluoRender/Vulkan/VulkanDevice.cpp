@@ -1,4 +1,5 @@
 #include "VulkanDevice.hpp"
+#include "vk_format_utils.h"
 
 namespace vks
 {
@@ -351,6 +352,7 @@ namespace vks
 		ret->w = w;
 		ret->h = h;
 		ret->d = 1;
+		ret->bytes = FormatTexelSize(format);
 		ret->mipLevels = 1;
 		ret->format = format;
 		ret->usage = usage;
@@ -454,7 +456,8 @@ namespace vks
 
 		ret->w = w;
 		ret->h = h;
-		ret->d = 1;
+		ret->d = d;
+		ret->bytes = FormatTexelSize(format);
 		ret->mipLevels = 1;
 		ret->format = format;
 		ret->usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;

@@ -63,10 +63,12 @@ namespace vks
 
 		PFN_vkCmdPushDescriptorSetKHR vkCmdPushDescriptorSetKHR;
 
+		VkCommandPool cmd_pool;
+
 		vks::Buffer staging_buf;
 
-		VkSampler linear_sampler;
-		VkSampler nearest_sampler;
+		VkSampler linear_sampler = VK_NULL_HANDLE;
+		VkSampler nearest_sampler = VK_NULL_HANDLE;
 
 		bool mem_swap = true;
 		bool use_mem_limit = false;
@@ -82,10 +84,10 @@ namespace vks
 		int findTexInPool(FLIVR::TextureBrick* b, int c, int w, int h, int d, int bytes, VkFormat format);
 		int GenTexture3D_pool(VkFormat format, VkFilter filter, FLIVR::TextureBrick *b, int comp);
 
-		VkDescriptorPool descriptorPool;
+		VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 		void setupDescriptorPool();
 
-		VkPipelineCache pipelineCache;
+		VkPipelineCache pipelineCache = VK_NULL_HANDLE;
 		void createPipelineCache();
 
 		void prepareSamplers();
@@ -151,10 +153,14 @@ namespace vks
 		~VulkanDevice()
 		{
 			staging_buf.destroy();
-			if (linear_sampler != VK_NULL_HANDLE)
+			if (linear_sampler)
 				vkDestroySampler(logicalDevice, linear_sampler, nullptr);
-			if (nearest_sampler != VK_NULL_HANDLE)
+			if (nearest_sampler)
 				vkDestroySampler(logicalDevice, nearest_sampler, nullptr);
+			if (pipelineCache)
+				vkDestroyPipelineCache(logicalDevice, pipelineCache, nullptr);
+			if (descriptorPool)
+				vkDestroyDescriptorPool(logicalDevice, descriptorPool, nullptr);
 			if (commandPool)
 			{
 				vkDestroyCommandPool(logicalDevice, commandPool, nullptr);

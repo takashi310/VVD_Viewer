@@ -32,6 +32,7 @@
 #include <FLIVR/PaintShader.h>
 #include <FLIVR/ShaderProgram.h>
 
+
 using std::string;
 using std::vector;
 using std::ostringstream;
