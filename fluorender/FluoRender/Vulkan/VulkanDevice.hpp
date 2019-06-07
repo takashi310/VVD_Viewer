@@ -717,6 +717,65 @@ namespace vks
 			return static_cast<uint32_t>(attachments.size() - 1);
 		}
 
+		VkResult setup(VkRenderPass render_pass)
+		{
+			renderPass = render_pass;
+
+			// Collect attachment references
+			std::vector<VkAttachmentReference> colorReferences;
+			VkAttachmentReference depthReference = {};
+			bool hasDepth = false;
+			bool hasColor = false;
+
+			uint32_t attachmentIndex = 0;
+
+			for (auto& attachment : attachments)
+			{
+				if (attachment->usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)
+				{
+					// Only one depth attachment allowed
+					assert(!hasDepth);
+					depthReference.attachment = attachmentIndex;
+					depthReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+					hasDepth = true;
+				}
+				else
+				{
+					colorReferences.push_back({ attachmentIndex, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
+					hasColor = true;
+				}
+				attachmentIndex++;
+			};
+
+			std::vector<VkImageView> attachmentViews;
+			for (auto attachment : attachments)
+			{
+				attachmentViews.push_back(attachment->view);
+			}
+
+			// Find. max number of layers across attachments
+			uint32_t maxLayers = 0;
+			for (auto attachment : attachments)
+			{
+				if (attachment->subresourceRange.layerCount > maxLayers)
+				{
+					maxLayers = attachment->subresourceRange.layerCount;
+				}
+			}
+
+			VkFramebufferCreateInfo framebufferInfo = {};
+			framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+			framebufferInfo.renderPass = renderPass;
+			framebufferInfo.pAttachments = attachmentViews.data();
+			framebufferInfo.attachmentCount = static_cast<uint32_t>(attachmentViews.size());
+			framebufferInfo.width = w;
+			framebufferInfo.height = h;
+			framebufferInfo.layers = maxLayers;
+			VK_CHECK_RESULT(vkCreateFramebuffer(device->logicalDevice, &framebufferInfo, nullptr, &framebuffer));
+
+			return VK_SUCCESS;
+		}
+
 		/**
 		* Creates a default render pass setup with one sub pass
 		*

@@ -104,10 +104,7 @@ protected:
 	std::vector<VkCommandBuffer> drawCmdBuffers;
 	// Global render pass for frame buffer writes
 	VkRenderPass renderPass;
-	// List of available frame buffers (same as number of swap chain images)
-	std::vector<VkFramebuffer>frameBuffers;
-	// Active frame buffer index
-	uint32_t currentBuffer = 0;
+
 	// Descriptor set pool
 	VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 	// List of shader modules created (stored for cleanup)
@@ -129,7 +126,7 @@ public:
 	uint32_t width = 1280;
 	uint32_t height = 720;
 
-	vks::UIOverlay UIOverlay;
+	//vks::UIOverlay UIOverlay;
 
 	/** @brief Last frame time measured using a high performance timer (if available) */
 	float frameTimer = 1.0f;
@@ -138,6 +135,11 @@ public:
 
 	/** @brief Encapsulated physical and logical vulkan device */
 	vks::VulkanDevice *vulkanDevice;
+
+	// List of available frame buffers (same as number of swap chain images)
+	std::vector<VkFramebuffer> frameBuffers;
+	// Active frame buffer index
+	uint32_t currentBuffer = 0;
 
 	/** @brief Example settings that can be changed e.g. by command line arguments */
 	struct Settings {

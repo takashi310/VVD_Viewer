@@ -406,7 +406,13 @@ void Vulkan2dRender::buildCommandBuffer(VkCommandBuffer commandbufs[], int comma
 	if (!commandbufs || commandbuf_num <= 0)
 		return;
 
-	V2dPipeline pipeline = preparePipeline(params.shader, params.blend, framebuf->attachments[0]->format, framebuf->attachments.size());
+	V2dPipeline pipeline = 
+		preparePipeline(
+			params.shader,
+			params.blend,
+			framebuf->attachments[0]->format,
+			framebuf->attachments.size()
+		);
 	
 	std::vector<VkWriteDescriptorSet> descriptorWrites;
 	setupDescriptorSetWrites(params, pipeline, descriptorWrites);

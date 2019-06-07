@@ -310,9 +310,9 @@ VulkanExampleBase::~VulkanExampleBase()
 		vkDestroyFence(device, fence, nullptr);
 	}
 
-	if (settings.overlay) {
-		UIOverlay.freeResources();
-	}
+	//if (settings.overlay) {
+	//	UIOverlay.freeResources();
+	//}
 
 	delete vulkanDevice;
 
@@ -619,13 +619,13 @@ void VulkanExampleBase::windowResize()
 		vkDestroyFramebuffer(device, frameBuffers[i], nullptr);
 	}
 	setupFrameBuffer();
-
+/*
 	if ((width > 0.0f) && (height > 0.0f)) {
 		if (settings.overlay) {
 			UIOverlay.resize(width, height);
 		}
 	}
-
+*/
 	// Command buffers need to be recreated as they may store
 	// references to the recreated frame buffer
 	destroyCommandBuffers();

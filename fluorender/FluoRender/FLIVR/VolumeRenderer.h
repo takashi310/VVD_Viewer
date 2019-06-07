@@ -395,7 +395,7 @@ public:
 		int get_mask_hide_mode() { return m_mask_hide_mode; }
 */
 
-		VkRenderPass prepareRenderPass(int attatchment_num);
+		static VkRenderPass prepareRenderPass(vks::VulkanDevice* device, int attatchment_num);
 
 		struct VVolVertexBuffers {
 			vks::Buffer vertexBuffer;
@@ -407,16 +407,21 @@ public:
 		VkDeviceSize idxbuf_offset;
 		void prepareVertexBuffers(vks::VulkanDevice* device, double dt);
 
+		static void init();
+		static void finalize();
+
 		struct VVolPipeline {
 			VkPipeline pipeline;
 			VkRenderPass renderpass;
 			ShaderProgram* shader;
+			vks::VulkanDevice* device;
 			int mode;
 			int update_order;
 			int colormap_mode;
 			VkBool32 samplers[IMG_SHDR_SAMPLER_NUM] = { VK_FALSE };
 		};
 		static std::vector<VVolPipeline> m_vol_pipelines;
+		static std::map<vks::VulkanDevice*, VkRenderPass> m_vol_draw_pass;
 		int m_prev_vol_pipeline;
 		VVolPipeline prepareVolPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode);
 
@@ -424,10 +429,12 @@ public:
 			VkPipeline pipeline;
 			VkRenderPass renderpass;
 			ShaderProgram* shader;
+			vks::VulkanDevice* device;
 			VkBool32 uniforms[V2DRENDER_UNIFORM_NUM] = { VK_FALSE };
 			VkBool32 samplers[IMG_SHDR_SAMPLER_NUM] = { VK_FALSE };
 		};
 		static std::vector<VSegPipeline> m_seg_pipelines;
+		static std::map<vks::VulkanDevice*, VkRenderPass> m_seg_draw_pass;
 		int m_prev_seg_pipeline;
 		//VSegPipeline prepareSegPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode);
 
@@ -435,10 +442,12 @@ public:
 			VkPipeline pipeline;
 			VkRenderPass renderpass;
 			ShaderProgram* shader;
+			vks::VulkanDevice* device;
 			VkBool32 uniforms[V2DRENDER_UNIFORM_NUM] = { VK_FALSE };
 			VkBool32 samplers[IMG_SHDR_SAMPLER_NUM] = { VK_FALSE };
 		};
 		static std::vector<VCalPipeline> m_cal_pipelines;
+		static std::map<vks::VulkanDevice*, VkRenderPass> m_cal_draw_pass;
 		int m_prev_cal_pipeline;
 		//VCalPipeline prepareCalPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode);
 	};

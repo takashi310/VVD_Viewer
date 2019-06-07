@@ -58,9 +58,15 @@ namespace FLIVR
 #endif
 
 	double VolumeRenderer::sw_ = 0.0;
+	
 	std::vector<VolumeRenderer::VVolPipeline> VolumeRenderer::m_vol_pipelines;
+	std::map<vks::VulkanDevice*, VkRenderPass> VolumeRenderer::m_vol_draw_pass;
+	
 	std::vector<VolumeRenderer::VSegPipeline> VolumeRenderer::m_seg_pipelines;
+	std::map<vks::VulkanDevice*, VkRenderPass> VolumeRenderer::m_seg_draw_pass;
+	
 	std::vector<VolumeRenderer::VCalPipeline> VolumeRenderer::m_cal_pipelines;
+	std::map<vks::VulkanDevice*, VkRenderPass> VolumeRenderer::m_cal_draw_pass;
 
 	VolumeRenderer::VolumeRenderer(Texture* tex,
 		const vector<Plane*> &planes,
@@ -277,6 +283,57 @@ namespace FLIVR
 			vkDestroySemaphore(vdev->logicalDevice, m_volFinishedSemaphores[vdev], nullptr);
 			vkDestroySemaphore(vdev->logicalDevice, m_filterFinishedSemaphores[vdev], nullptr);
 			vkDestroySemaphore(vdev->logicalDevice, m_renderFinishedSemaphores[vdev], nullptr);
+		}
+	}
+
+	void VolumeRenderer::init()
+	{
+		if (m_vulkan)
+		{
+			for (auto dev : m_vulkan->devices)
+			{
+				m_vol_draw_pass[dev] = prepareRenderPass(dev, 1);
+			}
+			for (auto dev : m_vulkan->devices)
+			{
+				m_seg_draw_pass[dev] = prepareRenderPass(dev, 1);
+			}
+			for (auto dev : m_vulkan->devices)
+			{
+				m_cal_draw_pass[dev] = prepareRenderPass(dev, 1);
+			}
+		}
+	}
+
+	void VolumeRenderer::finalize()
+	{
+		if (m_vulkan)
+		{
+			for (auto dev : m_vulkan->devices)
+			{
+				vkDestroyRenderPass(dev->logicalDevice, m_vol_draw_pass[dev], nullptr);
+			}
+			for (auto dev : m_vulkan->devices)
+			{
+				vkDestroyRenderPass(dev->logicalDevice, m_seg_draw_pass[dev], nullptr);
+			}
+			for (auto dev : m_vulkan->devices)
+			{
+				vkDestroyRenderPass(dev->logicalDevice, m_cal_draw_pass[dev], nullptr);
+			}
+
+			for (auto &p : m_vol_pipelines)
+			{
+				vkDestroyPipeline(p.device->logicalDevice, p.pipeline, nullptr);
+			}
+			for (auto& p : m_seg_pipelines)
+			{
+				vkDestroyPipeline(p.device->logicalDevice, p.pipeline, nullptr);
+			}
+			for (auto& p : m_cal_pipelines)
+			{
+				vkDestroyPipeline(p.device->logicalDevice, p.pipeline, nullptr);
+			}
 		}
 	}
 	
@@ -950,13 +1007,10 @@ namespace FLIVR
 		m_vertices.inputState.pVertexAttributeDescriptions = m_vertices.inputAttributes.data();
 	}
 
-	VkRenderPass VolumeRenderer::prepareRenderPass(int attatchment_num)
+	VkRenderPass VolumeRenderer::prepareRenderPass(vks::VulkanDevice* device, int attatchment_num)
 	{
 		VkRenderPass ret = VK_NULL_HANDLE;
-
-		VkPhysicalDevice physicalDevice = m_vulkan->getPhysicalDevice();
-		VkDevice device = m_vulkan->getDevice();
-
+		
 		// Create a separate render pass for the offscreen rendering as it may differ from the one used for scene rendering
 		std::vector<VkAttachmentDescription> attchmentDescriptions;
 		VkAttachmentDescription ad = {};
@@ -1014,7 +1068,7 @@ namespace FLIVR
 		renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
 		renderPassInfo.pDependencies = dependencies.data();
 
-		VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassInfo, nullptr, &ret));
+		VK_CHECK_RESULT(vkCreateRenderPass(device->logicalDevice, &renderPassInfo, nullptr, &ret));
 
 		return ret;
 	}
@@ -1087,13 +1141,11 @@ namespace FLIVR
 				static_cast<uint32_t>(dynamicStateEnables.size()),
 				0);
 
-		VkRenderPass renderpass = prepareRenderPass( colormap_mode_ == 3 ? 2 : 1 );
-
 		VolShaderFactory::VolPipelineSettings pipeline_settings = m_vulkan->vol_shader_factory_->pipeline_[device];
 		VkGraphicsPipelineCreateInfo pipelineCreateInfo =
 			vks::initializers::pipelineCreateInfo(
 				pipeline_settings.pipelineLayout,
-				renderpass,
+				m_vol_draw_pass[device],
 				0);
 
 		pipelineCreateInfo.pVertexInputState = &m_vertices.inputState;
@@ -1178,9 +1230,17 @@ namespace FLIVR
 		pipelineCreateInfo.pStages = shaderStages.data();
 
 		VK_CHECK_RESULT(
-			vkCreateGraphicsPipelines(m_vulkan->getDevice(), m_vulkan->getPipelineCache(), 1, &pipelineCreateInfo, nullptr, &ret_pipeline.pipeline)
+			vkCreateGraphicsPipelines(
+				device->logicalDevice,
+				m_vulkan->getPipelineCache(),
+				1,
+				&pipelineCreateInfo,
+				nullptr,
+				&ret_pipeline.pipeline
+			)
 		);
-		ret_pipeline.renderpass = renderpass;
+
+		ret_pipeline.renderpass = m_vol_draw_pass[device];
 		ret_pipeline.shader = shader;
 		ret_pipeline.mode = mode;
 		ret_pipeline.update_order = update_order;
@@ -1323,17 +1383,23 @@ namespace FLIVR
 		if (m_volUniformBuffers.empty())
 			m_vulkan->vol_shader_factory_->prepareUniformBuffers(m_volUniformBuffers);
 
+		eval_ml_mode();
+
+		VVolPipeline pipeline = prepareVolPipeline(prim_dev, mode_, update_order_, colormap_mode_);
+		VkPipelineLayout pipelineLayout = m_vulkan->vol_shader_factory_->pipeline_[prim_dev].pipelineLayout;
+		VkDescriptorSet descriptorSet = m_vulkan->vol_shader_factory_->pipeline_[prim_dev].descriptorSet;
+
 		if (blend_num_bits_ > 8)
 		{
-			if (blend_framebuffer_resize_)
+			if (blend_framebuffer_resize_ || pipeline.renderpass != blend_framebuffer_->renderPass)
 			{
 				blend_framebuffer_.reset();
 				blend_tex_id_.reset();
 
-				blend_framebuffer_resize_ = false;
+				if (blend_framebuffer_resize_) blend_framebuffer_resize_ = false;
 			}
 
-			if (!blend_framebuffer_)
+			if (!blend_framebuffer_ )
 			{
 				blend_framebuffer_ = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
 				blend_framebuffer_->w = w2;
@@ -1345,15 +1411,9 @@ namespace FLIVR
 
 				blend_framebuffer_->addAttachment(blend_tex_id_);
 
-				blend_framebuffer_->createRenderPass();
+				blend_framebuffer_->setup(pipeline.renderpass);
 			}
 		}
-
-		eval_ml_mode();
-
-		VVolPipeline pipeline = prepareVolPipeline(prim_dev, mode_, update_order_, colormap_mode_);
-		VkPipelineLayout pipelineLayout = m_vulkan->vol_shader_factory_->pipeline_[prim_dev].pipelineLayout;
-		VkDescriptorSet descriptorSet = m_vulkan->vol_shader_factory_->pipeline_[prim_dev].descriptorSet;
 
 		std::vector<VkWriteDescriptorSet> descriptorWrites;
 		m_vulkan->vol_shader_factory_->getDescriptorSetWriteUniforms(prim_dev, m_volUniformBuffers[prim_dev], descriptorWrites);
