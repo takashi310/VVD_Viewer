@@ -647,6 +647,7 @@ namespace vks
 		uint32_t w, h, d, bytes;
 		uint32_t mipLevels;
 		bool free_sampler;
+		bool is_swapchain_images;
 
 		VTexture()
 		{
@@ -656,18 +657,36 @@ namespace vks
 			view = VK_NULL_HANDLE;
 			device = VK_NULL_HANDLE;
 			free_sampler = true;
+			is_swapchain_images = false;
 		}
 
 		~VTexture()
 		{
-			if (view != VK_NULL_HANDLE)
+			destroy();
+		}
+
+		void destroy()
+		{
+			if (view != VK_NULL_HANDLE && !is_swapchain_images)
+			{
 				vkDestroyImageView(device->logicalDevice, view, nullptr);
-			if (image != VK_NULL_HANDLE)
+				view = VK_NULL_HANDLE;
+			}
+			if (image != VK_NULL_HANDLE && !is_swapchain_images)
+			{
 				vkDestroyImage(device->logicalDevice, image, nullptr);
+				image = VK_NULL_HANDLE;
+			}
 			if (sampler != VK_NULL_HANDLE && free_sampler)
+			{
 				vkDestroySampler(device->logicalDevice, sampler, nullptr);
-			if (deviceMemory != VK_NULL_HANDLE)
+				sampler = VK_NULL_HANDLE;
+			}
+			if (deviceMemory != VK_NULL_HANDLE && !is_swapchain_images)
+			{
 				vkFreeMemory(device->logicalDevice, deviceMemory, nullptr);
+				deviceMemory = VK_NULL_HANDLE;
+			}
 		}
 
 	};
@@ -679,6 +698,7 @@ namespace vks
 		VulkanDevice *device;
 		uint32_t w, h;
 		std::vector<std::shared_ptr<VTexture>> attachments;
+		bool delete_renderpass;
 
 		VFrameBuffer()
 		{
@@ -687,14 +707,26 @@ namespace vks
 			device = VK_NULL_HANDLE;
 			w = 0;
 			h = 0;
+			delete_renderpass = false;
 		}
 
 		~VFrameBuffer()
 		{
-			if (renderPass != VK_NULL_HANDLE)
+			destroy();
+		}
+
+		void destroy()
+		{
+			if (delete_renderpass && renderPass != VK_NULL_HANDLE)
+			{
 				vkDestroyRenderPass(device->logicalDevice, renderPass, nullptr);
+				renderPass = VK_NULL_HANDLE;
+			}
 			if (framebuffer != VK_NULL_HANDLE)
+			{
 				vkDestroyFramebuffer(device->logicalDevice, framebuffer, nullptr);
+				framebuffer = VK_NULL_HANDLE;
+			}
 		}
 
 		uint32_t addAttachment(std::shared_ptr<VTexture> &attachment)
@@ -773,7 +805,18 @@ namespace vks
 			framebufferInfo.layers = maxLayers;
 			VK_CHECK_RESULT(vkCreateFramebuffer(device->logicalDevice, &framebufferInfo, nullptr, &framebuffer));
 
+			delete_renderpass = false;
+
 			return VK_SUCCESS;
+		}
+
+		void replaceRenderPass(VkRenderPass render_pass)
+		{
+			if (render_pass != renderPass)
+			{
+				destroy();
+				setup(render_pass);
+			}
 		}
 
 		/**
@@ -883,6 +926,8 @@ namespace vks
 			framebufferInfo.height = h;
 			framebufferInfo.layers = maxLayers;
 			VK_CHECK_RESULT(vkCreateFramebuffer(device->logicalDevice, &framebufferInfo, nullptr, &framebuffer));
+
+			delete_renderpass = true;
 
 			return VK_SUCCESS;
 		}

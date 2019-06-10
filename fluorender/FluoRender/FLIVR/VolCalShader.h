@@ -53,16 +53,17 @@ namespace FLIVR
 	class EXPORT_API VolCalShader
 	{
 	public:
-		VolCalShader(int type);
+		VolCalShader(VkDevice device, int type);
 		~VolCalShader();
 
 		bool create();
 
+		inline VkDevice device() { return device_; }
 		inline int type() {return type_;}
 
-		inline bool match(int type)
+		inline bool match(VkDevice device, int type)
 		{ 
-			return (type_ == type);
+			return (device_ == device && type_ == type);
 		}
 
 		inline ShaderProgram* program() { return program_; }
@@ -70,6 +71,7 @@ namespace FLIVR
 	protected:
 		bool emit(std::string& s);
 
+		VkDevice device_;
 		int type_;
 
 		ShaderProgram* program_;
@@ -82,7 +84,7 @@ namespace FLIVR
 		VolCalShaderFactory(std::vector<vks::VulkanDevice*> &devices);
 		~VolCalShaderFactory();
 
-		ShaderProgram* shader(int type);
+		ShaderProgram* shader(VkDevice device, int type);
 
 		void init(std::vector<vks::VulkanDevice*> &devices);
 

@@ -45,20 +45,24 @@ namespace FLIVR
 	class EXPORT_API PaintShader
 	{
 	public:
-		PaintShader();
+		PaintShader(VkDevice device);
 		~PaintShader();
 
 		bool create();
 
-		inline bool match()
+		inline VkDevice device() { return device_; }
+
+		inline bool match(VkDevice device)
 		{ 
-			return true; 
+			return (device_ == device);
 		}
 
 		inline ShaderProgram* program() { return program_; }
 
 	protected:
 		bool emit(std::string& s);
+
+		VkDevice device_;
 
 		ShaderProgram* program_;
 	};
@@ -70,7 +74,7 @@ namespace FLIVR
 		PaintShaderFactory(std::vector<vks::VulkanDevice*> &devices);
 		~PaintShaderFactory();
 
-		ShaderProgram* shader();
+		ShaderProgram* shader(VkDevice device);
 
 		void init(std::vector<vks::VulkanDevice*> &devices);
 

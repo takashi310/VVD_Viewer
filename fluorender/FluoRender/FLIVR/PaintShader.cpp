@@ -41,10 +41,10 @@ namespace FLIVR {
 
 #define PAINT_SHADER_CODE \
 	"// PAINT_SHADER_CODE\n" \
-	"layout (push_constant) uniform PushConsts {" \
+	"layout (push_constant) uniform PushConsts {\n" \
 	"	vec4 loc0; //(mouse_x, mouse_y, radius1, radius2)\n" \
 	"	vec4 loc1; //(width, height, 0, 0)\n" \
-	"} ct;" \
+	"} ct;\n" \
 	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
@@ -60,7 +60,7 @@ namespace FLIVR {
 	"}\n"
 
 	/*"	gl_FragColor = pow(c, loc0)*b;\n" \*/
-	PaintShader::PaintShader() : program_(0)
+	PaintShader::PaintShader(VkDevice device) : device_(device), program_(0)
 	{}
 
 	PaintShader::~PaintShader()
@@ -74,6 +74,7 @@ namespace FLIVR {
 		string s;
 		if (emit(s)) return true;
 		program_ = new ShaderProgram(s);
+		program_->create(device_);
 		return false;
 	}
 
@@ -119,25 +120,25 @@ namespace FLIVR {
 		}
 	}
 
-	ShaderProgram* PaintShaderFactory::shader()
+	ShaderProgram* PaintShaderFactory::shader(VkDevice device)
 	{
 		if(prev_shader_ >= 0)
 		{
-			if(shader_[prev_shader_]->match()) 
+			if(shader_[prev_shader_]->match(device))
 			{
 				return shader_[prev_shader_]->program();
 			}
 		}
 		for(unsigned int i=0; i<shader_.size(); i++)
 		{
-			if(shader_[i]->match()) 
+			if(shader_[i]->match(device))
 			{
 				prev_shader_ = i;
 				return shader_[i]->program();
 			}
 		}
 
-		PaintShader* s = new PaintShader();
+		PaintShader* s = new PaintShader(device);
 		if(s->create())
 		{
 			delete s;

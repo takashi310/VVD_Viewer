@@ -61,7 +61,7 @@ namespace FLIVR
 
 #define SEG_UNIFORMS_BASE \
 	"// SEG_UNIFORMS_BASE\n" \
-	"layout (binding = 1) uniform VolFragShaderBaseUBO {" \
+	"layout (binding = 1) uniform VolFragShaderBaseUBO {\n" \
 	"	vec4 loc0;//(lx, ly, lz, alpha)\n" \
 	"	vec4 loc1;//(ka, kd, ks, ns)\n" \
 	"	vec4 loc2;//(scalar_scale, gm_scale, left_thresh, right_thresh)\n" \
@@ -80,7 +80,7 @@ namespace FLIVR
 	"	mat4 matrix1; //modelview matrix\n" \
 	"	mat4 matrix3;//modelview matrix inverse\n" \
 	"	mat4 matrix4;//projection matrix inverse\n" \
-	"} base;" \
+	"} base;\n" \
 	"\n" \
 	"layout (binding = 3) uniform sampler3D tex0;//data volume\n" \
 	"layout (binding = 4) uniform sampler3D tex1;//gm volume\n" \
@@ -88,14 +88,14 @@ namespace FLIVR
 
 #define SEG_UNIFORMS_BRICK \
 	"// VOL_UNIFORMS_BRICK\n" \
-	"layout (push_constant) uniform VolFragShaderBrickConst {" \
+	"layout (push_constant) uniform VolFragShaderBrickConst {\n" \
 	"	vec4 loc4;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
 	"	vec4 loc9;//(nx, ny, nz, 0) (value_var_foff, angle_var_foff, 0, 0)\n" \
 	"	vec4 brkscale;//tex transform for bricking\n" \
 	"	vec4 brktrans;//tex transform for bricking\n" \
 	"	vec4 mskbrkscale;//tex transform for mask bricks\n" \
 	"	vec4 mskbrktrans;//tex transform for mask bricks\n" \
-	"} brk;" \
+	"} brk;\n" \
 	"\n"
 
 #define SEG_UNIFORMS_WMAP_2D \
@@ -529,8 +529,9 @@ namespace FLIVR
 	"		discard;\n" \
 	"\n"
 
-	SegShader::SegShader(int type, int paint_mode, int hr_mode,
+	SegShader::SegShader(VkDevice device, int type, int paint_mode, int hr_mode,
 		bool use_2d, bool shading, int peel, bool clip, bool hiqual, bool use_stroke) :
+	device_(device),
 	type_(type),
 	paint_mode_(paint_mode),
 	hr_mode_(hr_mode),
@@ -554,6 +555,7 @@ namespace FLIVR
 		string fs;
 		if (emit(fs)) return true;
 		program_ = new ShaderProgram(vs, fs);
+		program_->create(device_);
 		return false;
 	}
 
@@ -812,26 +814,26 @@ namespace FLIVR
 		}
 	}
 
-	ShaderProgram* SegShaderFactory::shader(int type, int paint_mode, int hr_mode,
+	ShaderProgram* SegShaderFactory::shader(VkDevice device, int type, int paint_mode, int hr_mode,
 		bool use_2d, bool shading, int peel, bool clip, bool hiqual, bool use_stroke)
 	{
 		if(prev_shader_ >= 0)
 		{
-			if(shader_[prev_shader_]->match(type, paint_mode, hr_mode, use_2d, shading, peel, clip, hiqual, use_stroke)) 
+			if(shader_[prev_shader_]->match(device, type, paint_mode, hr_mode, use_2d, shading, peel, clip, hiqual, use_stroke)) 
 			{
 				return shader_[prev_shader_]->program();
 			}
 		}
 		for(unsigned int i=0; i<shader_.size(); i++)
 		{
-			if(shader_[i]->match(type, paint_mode, hr_mode, use_2d, shading, peel, clip, hiqual, use_stroke)) 
+			if(shader_[i]->match(device, type, paint_mode, hr_mode, use_2d, shading, peel, clip, hiqual, use_stroke)) 
 			{
 				prev_shader_ = i;
 				return shader_[i]->program();
 			}
 		}
 
-		SegShader* s = new SegShader(type, paint_mode, hr_mode, use_2d, shading, peel, clip, hiqual, use_stroke);
+		SegShader* s = new SegShader(device, type, paint_mode, hr_mode, use_2d, shading, peel, clip, hiqual, use_stroke);
 		if(s->create())
 		{
 			delete s;

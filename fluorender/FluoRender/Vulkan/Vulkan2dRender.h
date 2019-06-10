@@ -33,12 +33,12 @@ public:
 	} m_vertices;
 
 	struct V2dPipeline {
-		VkPipeline pipeline;
+		VkPipeline vkpipeline;
 		VkRenderPass pass;
 		int shader;
 		int blend;
 		VkFormat framebuf_format;
-		int framebuf_num;
+		int attachment_num;
 		VkBool32 uniforms[V2DRENDER_UNIFORM_NUM] = { VK_FALSE };
 		VkBool32 samplers[IMG_SHDR_SAMPLER_NUM] = { VK_FALSE };
 	};
@@ -61,14 +61,13 @@ public:
 	void init(std::shared_ptr<VVulkan> vulkan);
 	void generateQuad();
 	void setupVertexDescriptions();
-	VkRenderPass prepareRenderPass(VkFormat framebuf_format, int framebuf_num);
-	V2dPipeline preparePipeline(int shader, int blend_mode, VkFormat framebuf_format, int framebuf_num);
+	VkRenderPass prepareRenderPass(VkFormat framebuf_format, int attachment_num);
+	V2dPipeline preparePipeline(int shader, int blend_mode, VkFormat framebuf_format, int attachment_num);
 
 	void getEnabledUniforms(V2dPipeline pipeline, const std::string &code);
 
 	struct V2DRenderParams {
-		int shader = IMG_SHADER_TEXTURE_LOOKUP;
-		int blend = V2DRENDER_BLEND_OVER;
+		Vulkan2dRender::V2dPipeline pipeline = {};
 		bool clear = false;
 		VkClearColorValue clearColor = { 0.0f, 0.0f, 0.0f, 0.0f };
 		vks::VTexture *tex[IMG_SHDR_SAMPLER_NUM] = { NULL };

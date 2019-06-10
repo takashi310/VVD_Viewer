@@ -289,18 +289,15 @@ VulkanExampleBase::~VulkanExampleBase()
 	}
 	destroyCommandBuffers();
 	vkDestroyRenderPass(device, renderPass, nullptr);
-	for (uint32_t i = 0; i < frameBuffers.size(); i++)
-	{
-		vkDestroyFramebuffer(device, frameBuffers[i], nullptr);
-	}
-
+	
+	frameBuffers.clear();
+	
 	for (auto& shaderModule : shaderModules)
 	{
 		vkDestroyShaderModule(device, shaderModule, nullptr);
 	}
-	vkDestroyImageView(device, depthStencil.view, nullptr);
-	vkDestroyImage(device, depthStencil.image, nullptr);
-	vkFreeMemory(device, depthStencil.mem, nullptr);
+
+	depthStencil->destroy();
 
 	vkDestroyCommandPool(device, cmdPool, nullptr);
 
@@ -441,6 +438,8 @@ void VulkanExampleBase::createCommandPool()
 
 void VulkanExampleBase::setupDepthStencil()
 {
+	depthStencil = std::make_shared<vks::VTexture>();
+
 	VkImageCreateInfo imageCI{};
 	imageCI.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageCI.imageType = VK_IMAGE_TYPE_2D;
@@ -452,21 +451,21 @@ void VulkanExampleBase::setupDepthStencil()
 	imageCI.tiling = VK_IMAGE_TILING_OPTIMAL;
 	imageCI.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
-	VK_CHECK_RESULT(vkCreateImage(device, &imageCI, nullptr, &depthStencil.image));
+	VK_CHECK_RESULT(vkCreateImage(device, &imageCI, nullptr, &depthStencil->image));
 	VkMemoryRequirements memReqs{};
-	vkGetImageMemoryRequirements(device, depthStencil.image, &memReqs);
+	vkGetImageMemoryRequirements(device, depthStencil->image, &memReqs);
 
 	VkMemoryAllocateInfo memAllloc{};
 	memAllloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	memAllloc.allocationSize = memReqs.size;
 	memAllloc.memoryTypeIndex = vulkanDevice->getMemoryType(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	VK_CHECK_RESULT(vkAllocateMemory(device, &memAllloc, nullptr, &depthStencil.mem));
-	VK_CHECK_RESULT(vkBindImageMemory(device, depthStencil.image, depthStencil.mem, 0));
+	VK_CHECK_RESULT(vkAllocateMemory(device, &memAllloc, nullptr, &depthStencil->deviceMemory));
+	VK_CHECK_RESULT(vkBindImageMemory(device, depthStencil->image, depthStencil->deviceMemory, 0));
 
 	VkImageViewCreateInfo imageViewCI{};
 	imageViewCI.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 	imageViewCI.viewType = VK_IMAGE_VIEW_TYPE_2D;
-	imageViewCI.image = depthStencil.image;
+	imageViewCI.image = depthStencil->image;
 	imageViewCI.format = depthFormat;
 	imageViewCI.subresourceRange.baseMipLevel = 0;
 	imageViewCI.subresourceRange.levelCount = 1;
@@ -477,7 +476,17 @@ void VulkanExampleBase::setupDepthStencil()
 	if (depthFormat >= VK_FORMAT_D16_UNORM_S8_UINT) {
 		imageViewCI.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
 	}
-	VK_CHECK_RESULT(vkCreateImageView(device, &imageViewCI, nullptr, &depthStencil.view));
+	VK_CHECK_RESULT(vkCreateImageView(device, &imageViewCI, nullptr, &depthStencil->view));
+
+	depthStencil->format = depthFormat;
+	depthStencil->w = width;
+	depthStencil->h = height;
+	depthStencil->d = 1;
+	depthStencil->bytes = FormatTexelSize(depthFormat);
+	depthStencil->mipLevels = imageCI.mipLevels;
+	depthStencil->usage = imageCI.usage;
+	depthStencil->subresourceRange = imageViewCI.subresourceRange;
+	depthStencil->device = vulkanDevice;
 }
 
 void VulkanExampleBase::setupFrameBuffer()
@@ -485,7 +494,7 @@ void VulkanExampleBase::setupFrameBuffer()
 	VkImageView attachments[2];
 
 	// Depth/Stencil attachment is the same for all frame buffers
-	attachments[1] = depthStencil.view;
+	attachments[1] = depthStencil->view;
 
 	VkFramebufferCreateInfo frameBufferCreateInfo = {};
 	frameBufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -501,8 +510,11 @@ void VulkanExampleBase::setupFrameBuffer()
 	frameBuffers.resize(swapChain.imageCount);
 	for (uint32_t i = 0; i < frameBuffers.size(); i++)
 	{
-		attachments[0] = swapChain.buffers[i].view;
-		VK_CHECK_RESULT(vkCreateFramebuffer(device, &frameBufferCreateInfo, nullptr, &frameBuffers[i]));
+		frameBuffers[i] = std::make_unique<vks::VFrameBuffer>();
+		frameBuffers[i]->addAttachment(swapChain.buffers[i]);
+		frameBuffers[i]->addAttachment(depthStencil);
+		attachments[0] = swapChain.buffers[i]->view;
+		VK_CHECK_RESULT(vkCreateFramebuffer(device, &frameBufferCreateInfo, nullptr, &frameBuffers[i]->framebuffer));
 	}
 }
 
@@ -611,13 +623,10 @@ void VulkanExampleBase::windowResize()
 	setupSwapChain();
 
 	// Recreate the frame buffers
-	vkDestroyImageView(device, depthStencil.view, nullptr);
-	vkDestroyImage(device, depthStencil.image, nullptr);
-	vkFreeMemory(device, depthStencil.mem, nullptr);
+	depthStencil->destroy();
 	setupDepthStencil();	
-	for (uint32_t i = 0; i < frameBuffers.size(); i++) {
-		vkDestroyFramebuffer(device, frameBuffers[i], nullptr);
-	}
+	for (uint32_t i = 0; i < frameBuffers.size(); i++)
+		frameBuffers[i].reset();
 	setupFrameBuffer();
 /*
 	if ((width > 0.0f) && (height > 0.0f)) {

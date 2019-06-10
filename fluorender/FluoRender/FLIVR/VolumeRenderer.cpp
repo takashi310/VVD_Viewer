@@ -124,7 +124,8 @@ namespace FLIVR
 		filter_size_shp_(0.0),
 		inv_(false),
 		compression_(false),
-		m_mask_hide_mode(VOL_MASK_HIDE_NONE)
+		m_mask_hide_mode(VOL_MASK_HIDE_NONE),
+		m_use_fog(false)
 	{
 		//mode
 		mode_ = MODE_OVER;
@@ -984,7 +985,7 @@ namespace FLIVR
 
 		// Attribute descriptions
 		// Describes memory layout and shader positions
-		m_vertices.inputAttributes.resize(3);
+		m_vertices.inputAttributes.resize(2);
 		// Location 0 : Position
 		m_vertices.inputAttributes[0] =
 			vks::initializers::vertexInputAttributeDescription(
@@ -1079,6 +1080,7 @@ namespace FLIVR
 
 		bool use_fog = m_use_fog && colormap_mode_ != 2;
 		ShaderProgram *shader = m_vulkan->vol_shader_factory_->shader(
+			device->logicalDevice,
 			false, tex_->nc(),
 			shading_, use_fog,
 			depth_peel_, true,
@@ -1225,8 +1227,8 @@ namespace FLIVR
 
 		// Load shaders
 		std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages;
-		shaderStages[0] = ret_pipeline.shader->get_vertex_shader();
-		shaderStages[1] = ret_pipeline.shader->get_fragment_shader();
+		shaderStages[0] = shader->get_vertex_shader();
+		shaderStages[1] = shader->get_fragment_shader();
 		pipelineCreateInfo.pStages = shaderStages.data();
 
 		VK_CHECK_RESULT(
@@ -1257,13 +1259,13 @@ namespace FLIVR
 		if (!tex_ || !m_vulkan)
 			return;
 
-		Vector diag = tex_->GetBrickMaxDims();
+		Vector diag = tex_->GetBrickIdSpaceMaxExtent();
 
-		VkDeviceSize num_slices_ = (VkDeviceSize)(diag.length() / dt);
+		VkDeviceSize num_slices = (VkDeviceSize)(diag.length() / dt) + 2;
 		VkDeviceSize brick_num = tex_->get_brick_num();
 
-		VkDeviceSize vertbufsize = num_slices_ * 6 * 6 * sizeof(float) * brick_num;
-		VkDeviceSize idxbufsize = num_slices_ * 4 * 3 * sizeof(unsigned int) * brick_num;
+		VkDeviceSize vertbufsize = num_slices * 6 * 6 * sizeof(float) * brick_num;
+		VkDeviceSize idxbufsize = num_slices * 4 * 3 * sizeof(unsigned int) * brick_num;
 
 		if (m_vertbufs[device].vertexBuffer.buffer && m_vertbufs[device].vertexBuffer.size < vertbufsize)
 			m_vertbufs[device].vertexBuffer.destroy();
@@ -1349,7 +1351,7 @@ namespace FLIVR
 		uint32_t h2 = h;
 		
 		double dt = compute_dt_fac_1px(w, h, sampling_frq_fac) / rate;
-		num_slices_ = (int)(diag.length() / dt);
+		num_slices_ = (int)(tex_->GetBrickIdSpaceMaxExtent().length() / dt);
 
 		vector<float> vertex;
 		vector<uint32_t> index;
@@ -1391,7 +1393,8 @@ namespace FLIVR
 
 		if (blend_num_bits_ > 8)
 		{
-			if (blend_framebuffer_resize_ || pipeline.renderpass != blend_framebuffer_->renderPass)
+			if (blend_framebuffer_ && 
+				(blend_framebuffer_resize_ || pipeline.renderpass != blend_framebuffer_->renderPass))
 			{
 				blend_framebuffer_.reset();
 				blend_tex_id_.reset();
@@ -1597,9 +1600,6 @@ namespace FLIVR
 			memcpy( (unsigned char*)m_vertbufs[prim_dev].indexBuffer.mapped + idxbuf_offset,
 					index.data(),
 					index.size() * sizeof(unsigned int));
-			vertbuf_offset += vertex.size() * sizeof(float);
-			idxbuf_offset += index.size() * sizeof(unsigned int);
-
 
 			VkFilter filter;
 			if (interpolate_ && colormap_mode_ != 3)
@@ -1781,7 +1781,10 @@ namespace FLIVR
 
 			vkCmdBindVertexBuffers(cmdbuf, 0, 1, &m_vertbufs[prim_dev].vertexBuffer.buffer, &vertbuf_offset);
 			vkCmdBindIndexBuffer(cmdbuf, m_vertbufs[prim_dev].indexBuffer.buffer, idxbuf_offset, VK_INDEX_TYPE_UINT32);
-			vkCmdDrawIndexed(cmdbuf, index.size(), 1, 0, 0, 0);
+			vkCmdDrawIndexed(cmdbuf, (uint32_t)index.size(), 1, 0, 0, 0);
+
+			vertbuf_offset += vertex.size() * sizeof(float);
+			idxbuf_offset += index.size() * sizeof(unsigned int);
 
 			if (mem_swap_)
 			{
@@ -1868,7 +1871,18 @@ namespace FLIVR
 			if (noise_red_ && colormap_mode_!=2)
 			{
 				//FILTERING/////////////////////////////////////////////////////////////////
-				if (filter_buffer_resize_)
+				filter_size_min_ = CalcFilterSize(4, w, h, tex_->nx(), tex_->ny(), zoom, sfactor_);
+
+				Vulkan2dRender::V2DRenderParams filter_params;
+				filter_params.pipeline =
+					m_v2drender->preparePipeline(
+						IMG_SHDR_FILTER_BLUR,
+						V2DRENDER_BLEND_OVER,
+						VK_FORMAT_R32G32B32A32_SFLOAT,
+						1);
+
+				if (filter_buffer_ &&
+					(filter_buffer_resize_ || filter_buffer_->renderPass != filter_params.pipeline.pass))
 				{
 					filter_buffer_.reset();
 					filter_tex_id_.reset();
@@ -1887,13 +1901,9 @@ namespace FLIVR
 
 					filter_buffer_->addAttachment(blend_tex_id_);
 
-					filter_buffer_->createRenderPass();
+					filter_buffer_->setup(filter_params.pipeline.pass);
 				}
 
-				filter_size_min_ = CalcFilterSize(4, w, h, tex_->nx(), tex_->ny(), zoom, sfactor_);
-
-				Vulkan2dRender::V2DRenderParams filter_params;
-				filter_params.shader = IMG_SHDR_FILTER_BLUR;
 				filter_params.clear = true;
 				filter_params.loc[0] = { filter_size_min_/w2, filter_size_min_/h2, 1.0/w2, 1.0/h2 };
 				filter_params.tex[0] = blend_tex_id_.get();
@@ -1909,9 +1919,15 @@ namespace FLIVR
 			}
 
 			Vulkan2dRender::V2DRenderParams params;
+
 			if (noise_red_ && colormap_mode_ != 2)
 			{
-				params.shader = IMG_SHDR_FILTER_SHARPEN;
+				params.pipeline =
+					m_v2drender->preparePipeline(
+						IMG_SHDR_FILTER_SHARPEN,
+						V2DRENDER_BLEND_OVER,
+						framebuf->attachments[0]->format,
+						framebuf->attachments.size());
 				params.tex[0] = filter_tex_id_.get();
 				filter_size_shp_ = CalcFilterSize(3, w, h, tex_->nx(), tex_->ny(), zoom, sfactor_);
 				params.loc[0] = { filter_size_shp_/w, filter_size_shp_/h, 0.0, 0.0 };
@@ -1920,7 +1936,12 @@ namespace FLIVR
 			}
 			else
 			{
-				params.shader = IMG_SHADER_TEXTURE_LOOKUP;
+				params.pipeline =
+					m_v2drender->preparePipeline(
+						IMG_SHADER_TEXTURE_LOOKUP,
+						V2DRENDER_BLEND_OVER,
+						framebuf->attachments[0]->format,
+						framebuf->attachments.size());
 				params.tex[0] = blend_tex_id_.get();
 				if (!mem_swap_)
 				{
@@ -1930,6 +1951,8 @@ namespace FLIVR
 			}
 			params.signalSemaphoreCount = semaphores.signalSemaphoreCount;
 			params.signalSemaphores = semaphores.signalSemaphores;
+
+			framebuf->replaceRenderPass(params.pipeline.pass);
 			
 			m_v2drender->render(framebuf, params);
 		}

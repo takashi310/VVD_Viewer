@@ -46,7 +46,7 @@ namespace FLIVR
 	class EXPORT_API VolShader
 	{
 	public:
-		VolShader(bool poly, int channels,
+		VolShader(VkDevice device, bool poly, int channels,
 				bool shading, bool fog,
 				int peel, bool clip,
 				bool hiqual, int mask,
@@ -56,6 +56,7 @@ namespace FLIVR
 
 		bool create();
 
+		inline VkDevice device() { return device_; }
 		inline bool poly() {return poly_; }
 		inline int channels() { return channels_; }
 		inline bool shading() { return shading_; }
@@ -70,14 +71,15 @@ namespace FLIVR
 		inline bool solid() {return solid_;}
 		inline bool mask_hide_mode() {return mask_hide_mode_;}
 
-		inline bool match(bool poly, int channels,
+		inline bool match(VkDevice device, bool poly, int channels,
 						bool shading, bool fog,
 						int peel, bool clip,
 						bool hiqual, int mask,
 						int color_mode, int colormap, int colormap_proj,
 						bool solid, int vertex_shader, int mask_hide_mode)
 		{ 
-			return (poly_ == poly &&
+			return (device_ == device &&
+				poly_ == poly &&
 				channels_ == channels &&
 				shading_ == shading && 
 				fog_ == fog && 
@@ -117,6 +119,8 @@ namespace FLIVR
 		int vertex_type_;
 		int mask_hide_mode_;
 
+		VkDevice device_;
+
 		ShaderProgram* program_;
 	};
 
@@ -129,7 +133,7 @@ namespace FLIVR
 
 		void init(std::vector<vks::VulkanDevice*> &devices);
 
-		ShaderProgram* shader(bool poly, int channels,
+		ShaderProgram* shader(VkDevice device, bool poly, int channels,
 								bool shading, bool fog,
 								int peel, bool clip,
 								bool hiqual, int mask,

@@ -40,7 +40,7 @@ using std::string;
 
 namespace FLIVR
 {
-	string ShaderProgram::glsl_version_ = "#version 450";
+	string ShaderProgram::glsl_version_ = "#version 450\n";
 
 	ShaderProgram::ShaderProgram(const string& frag_shader) :
 	vert_shader_(""), frag_shader_(frag_shader), valid_(false)
@@ -127,8 +127,10 @@ namespace FLIVR
 	{
 		if (device_ != VK_NULL_HANDLE)
 		{
-			if (vert_shader_stage_.module != VK_NULL_HANDLE) vkDestroyShaderModule(device_, vert_shader_stage_.module, NULL);
-			if (frag_shader_stage_.module != VK_NULL_HANDLE) vkDestroyShaderModule(device_, frag_shader_stage_.module, NULL);
+			if (vert_shader_stage_.module != VK_NULL_HANDLE) 
+				vkDestroyShaderModule(device_, vert_shader_stage_.module, NULL);
+			if (frag_shader_stage_.module != VK_NULL_HANDLE) 
+				vkDestroyShaderModule(device_, frag_shader_stage_.module, NULL);
 		}
 	}
 

@@ -137,7 +137,7 @@ public:
 	vks::VulkanDevice *vulkanDevice;
 
 	// List of available frame buffers (same as number of swap chain images)
-	std::vector<VkFramebuffer> frameBuffers;
+	std::vector<std::unique_ptr<vks::VFrameBuffer>> frameBuffers;
 	// Active frame buffer index
 	uint32_t currentBuffer = 0;
 
@@ -181,13 +181,15 @@ public:
 	std::string title = "Vulkan Example";
 	std::string name = "vulkanExample";
 	uint32_t apiVersion = VK_API_VERSION_1_0;
-
+	/*
 	struct 
 	{
 		VkImage image;
 		VkDeviceMemory mem;
 		VkImageView view;
 	} depthStencil;
+*/
+	std::shared_ptr<vks::VTexture> depthStencil;
 
 	struct {
 		glm::vec2 axisLeft = glm::vec2(0.0f);

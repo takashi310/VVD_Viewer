@@ -56,9 +56,9 @@ namespace FLIVR
 #define IMG_VTX_CODE_DRAW_GEOMETRY \
 	"//IMG_VTX_CODE_DRAW_GEOMETRY\n" \
 	"layout(location = 0) in vec3 InVertex;\n" \
-	"layout (push_constant) uniform PushConsts {" \
+	"layout (push_constant) uniform PushConsts {\n" \
 	"	mat4 matrix0;//transformation\n" \
-	"} ct;" \
+	"} ct;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
@@ -70,9 +70,9 @@ namespace FLIVR
 	"layout(location = 0) in vec3 InVertex;\n" \
 	"layout(location = 1) in vec3 InColor;\n" \
 	"out vec3 OutColor;\n" \
-	"layout (push_constant) uniform PushConsts {" \
+	"layout (push_constant) uniform PushConsts {\n" \
 	"	mat4 matrix0;//transformation\n" \
-	"} ct;" \
+	"} ct;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
@@ -85,9 +85,9 @@ namespace FLIVR
 	"layout(location = 0) in vec3 InVertex;\n" \
 	"layout(location = 1) in vec4 InColor;\n" \
 	"out vec4 OutColor;\n" \
-	"layout (push_constant) uniform PushConsts {" \
+	"layout (push_constant) uniform PushConsts {\n" \
 	"	mat4 matrix0;//transformation\n" \
-	"} ct;" \
+	"} ct;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
@@ -98,9 +98,9 @@ namespace FLIVR
 #define IMG_FRG_CODE_DRAW_GEOMETRY \
 	"//IMG_FRG_CODE_DRAW_GEOMETRY\n" \
 	"out vec4 FragColor;\n" \
-	"layout (push_constant) uniform PushConsts {" \
+	"layout (push_constant) uniform PushConsts {\n" \
 	"	uniform vec4 loc0;\n" \
-	"} ct;" \
+	"} ct;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
@@ -169,10 +169,10 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_BRIGHTNESS_CONTRAST\n" \
-	"layout (push_constant) uniform PushConsts {" \
+	"layout (push_constant) uniform PushConsts {\n" \
 	"	vec4 loc0; //(r_gamma, g_gamma, b_gamma, 1.0)\n" \
 	"	vec4 loc1; //(r_brightness, g_brightness, b_brightness, 1.0)\n" \
-	"} ct;" \
+	"} ct;\n" \
 	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
@@ -193,11 +193,11 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_BRIGHTNESS_CONTRAST_HDR\n" \
-	"layout (push_constant) uniform PushConsts {" \
+	"layout (push_constant) uniform PushConsts {\n" \
 	"	vec4 loc0; //(r_gamma, g_gamma, b_gamma, 1.0)\n" \
 	"	vec4 loc1; //(r_brightness, g_brightness, b_brightness, 1.0)\n" \
 	"	vec4 loc2; //(r_hdr, g_hdr, b_hdr, 0.0)\n" \
-	"} ct;" \
+	"} ct;\n" \
 	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
@@ -233,11 +233,11 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_BRIGHTNESS_CONTRAST_HDR\n" \
-	"layout (push_constant) uniform PushConsts {" \
+	"layout (push_constant) uniform PushConsts {\n" \
 	"	vec4 loc0; //(r_gamma, g_gamma, b_gamma, 1.0)\n" \
 	"	vec4 loc1; //(r_brightness, g_brightness, b_brightness, 1.0)\n" \
 	"	vec4 loc2; //(r_hdr, g_hdr, b_hdr, 0.0)\n" \
-	"} ct;" \
+	"} ct;\n" \
 	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
@@ -275,9 +275,9 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_GRADIENT_MAP\n" \
-	"layout (push_constant) uniform PushConsts {" \
+	"layout (push_constant) uniform PushConsts {\n" \
 	"	vec4 loc0; //(lo, hi, hi-lo, alpha) \n" \
-	"} ct;" \
+	"} ct;\n" \
 	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
@@ -301,9 +301,9 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_FILTER_MIN\n" \
-	"layout (push_constant) uniform PushConsts {" \
+	"layout (push_constant) uniform PushConsts {\n" \
 	"	vec4 loc0; //(width, height, thresh, 0.0)\n" \
-	"} ct;" \
+	"} ct;\n" \
 	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
@@ -341,9 +341,9 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_FILTER_MAX\n" \
-	"layout (push_constant) uniform PushConsts {" \
+	"layout (push_constant) uniform PushConsts {\n" \
 	"	vec4 loc0; //(width, height, scale, 0.0)\n" \
-	"} ct;" \
+	"} ct;\n" \
 	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
@@ -377,9 +377,9 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_FILTER_BLUR\n" \
-	"layout (push_constant) uniform PushConsts {" \
+	"layout (push_constant) uniform PushConsts {\n" \
 	"	vec4 loc0; //(width, height, dx, dy)\n" \
-	"} ct;" \
+	"} ct;\n" \
 	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
@@ -405,9 +405,9 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_FILTER_SHARPEN\n" \
-	"layout (push_constant) uniform PushConsts {" \
+	"layout (push_constant) uniform PushConsts {\n" \
 	"	vec4 loc0; //(width, height, 0.0, 0.0)\n" \
-	"} ct;" \
+	"} ct;\n" \
 	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
@@ -433,9 +433,9 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"//IMG_SHADER_CODE_DEPTH_TO_OUTLINES\n" \
-	"layout (push_constant) uniform PushConsts {" \
+	"layout (push_constant) uniform PushConsts {\n" \
 	"	vec4 loc0; //(width, height, 0.0, 0.0)\n" \
-	"} ct;" \
+	"} ct;\n" \
 	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
@@ -463,10 +463,10 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"//IMG_SHADER_CODE_DEPTH_TO_GRADIENT\n" \
-	"layout (push_constant) uniform PushConsts {" \
+	"layout (push_constant) uniform PushConsts {\n" \
 	"	vec4 loc0; //(width, height, scale, 0.0)\n" \
 	"	vec4 loc1; //(pert.x, pert.y, 0.0, 0.0)\n" \
-	"} ct;" \
+	"} ct;\n" \
 	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
@@ -495,10 +495,10 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"//IMG_SHADER_CODE_GRADIENT_TO_SHADOW\n" \
-	"layout (push_constant) uniform PushConsts {" \
+	"layout (push_constant) uniform PushConsts {\n" \
 	"	vec4 loc0; //(1/width, 1/height, zoom, 0.0)\n" \
 	"	vec4 loc1; //(darkness, 0.0, 0.0, 0.0)\n" \
-	"} ct;" \
+	"} ct;\n" \
 	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"layout (binding = 1) uniform sampler2D tex1;\n" \
 	"\n" \
@@ -543,10 +543,10 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"//IMG_SHADER_CODE_GRADIENT_TO_SHADOW_MESH\n" \
-	"layout (push_constant) uniform PushConsts {" \
+	"layout (push_constant) uniform PushConsts {\n" \
 	"	vec4 loc0; //(1/width, 1/height, zoom, 0.0)\n" \
 	"	vec4 loc1; //(darkness, 0.0, 0.0, 0.0)\n" \
-	"} ct;" \
+	"} ct;\n" \
 	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"layout (binding = 1) uniform sampler2D tex1;\n" \
 	"layout (binding = 2) uniform sampler2D tex2;\n" \
@@ -612,11 +612,11 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_BLEND_BRIGHT_BACKGROUND_HDR\n" \
-	"layout (push_constant) uniform PushConsts {" \
+	"layout (push_constant) uniform PushConsts {\n" \
 	"	vec4 loc0; //(r_gamma, g_gamma, b_gamma, 1.0)\n" \
 	"	vec4 loc1; //(r_brightness, g_brightness, b_brightness, 1.0)\n" \
 	"	vec4 loc2; //(r_hdr, g_hdr, b_hdr, 0.0)\n" \
-	"} ct;" \
+	"} ct;\n" \
 	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
@@ -643,11 +643,11 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_BLEND_BRIGHT_BACKGROUND_HDR\n" \
-	"layout (push_constant) uniform PushConsts {" \
+	"layout (push_constant) uniform PushConsts {\n" \
 	"	vec4 loc0; //(r_gamma, g_gamma, b_gamma, 1.0)\n" \
 	"	vec4 loc1; //(r_brightness, g_brightness, b_brightness, 1.0)\n" \
 	"	vec4 loc2; //(r_hdr, g_hdr, b_hdr, 0.0)\n" \
-	"} ct;" \
+	"} ct;\n" \
 	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
@@ -674,10 +674,10 @@ namespace FLIVR
 	"out vec4 FragColor;\n" \
 	"\n" \
 	"// PAINT_SHADER_CODE\n" \
-	"layout (push_constant) uniform PushConsts {" \
+	"layout (push_constant) uniform PushConsts {\n" \
 	"	vec4 loc0; //(mouse_x, mouse_y, radius1, radius2)\n" \
 	"	vec4 loc1; //(width, height, 0, 0)\n" \
-	"} ct;" \
+	"} ct;\n" \
 	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
@@ -737,7 +737,8 @@ namespace FLIVR
 
 //	"	vec4 c = clamp(c_b+c_id, vec4(0.0), vec4(1.0));\n" \
 
-	ImgShader::ImgShader(int type, int colormap) : 
+	ImgShader::ImgShader(VkDevice device, int type, int colormap) : 
+	device_(device),
 	type_(type),
 	colormap_(colormap),
 	program_(0)
@@ -755,6 +756,7 @@ namespace FLIVR
 		string fs;
 		if (emit_f(fs)) return true;
 		program_ = new ShaderProgram(vs, fs);
+		program_->create(device_);
 		return false;
 	}
 
@@ -934,25 +936,25 @@ namespace FLIVR
 	}
 
 	ShaderProgram*
-		ImgShaderFactory::shader(int type, int colormap)
+		ImgShaderFactory::shader(VkDevice device, int type, int colormap)
 	{
 		if(prev_shader_ >= 0)
 		{
-			if(shader_[prev_shader_]->match(type, colormap)) 
+			if(shader_[prev_shader_]->match(device, type, colormap)) 
 			{
 				return shader_[prev_shader_]->program();
 			}
 		}
 		for(unsigned int i=0; i<shader_.size(); i++)
 		{
-			if(shader_[i]->match(type, colormap)) 
+			if(shader_[i]->match(device, type, colormap)) 
 			{
 				prev_shader_ = i;
 				return shader_[i]->program();
 			}
 		}
 
-		ImgShader* s = new ImgShader(type, colormap);
+		ImgShader* s = new ImgShader(device, type, colormap);
 		if(s->create())
 		{
 			delete s;

@@ -24,7 +24,17 @@ void Vulkan2dRender::init(std::shared_ptr<VVulkan> vulkan)
 
 Vulkan2dRender::~Vulkan2dRender()
 {
+	if (m_vulkan)
+	{
+		VkDevice dev = m_vulkan->vulkanDevice->logicalDevice;
+		for (auto& p : m_pipelines)
+		{
+			vkDestroyPipeline(dev, p.vkpipeline, nullptr);
+			vkDestroyRenderPass(dev, p.pass, nullptr);
+		}
 
+		vkFreeCommandBuffers(dev, m_vulkan->vulkanDevice->commandPool, 1, &m_default_cmdbuf);
+	}
 }
 
 void Vulkan2dRender::generateQuad()
@@ -95,7 +105,7 @@ void Vulkan2dRender::setupVertexDescriptions()
 	m_vertices.inputState.pVertexAttributeDescriptions = m_vertices.inputAttributes.data();
 }
 
-VkRenderPass Vulkan2dRender::prepareRenderPass(VkFormat framebuf_format, int framebuf_num)
+VkRenderPass Vulkan2dRender::prepareRenderPass(VkFormat framebuf_format, int attachment_num)
 {
 	VkRenderPass pass = VK_NULL_HANDLE;
 
@@ -105,7 +115,7 @@ VkRenderPass Vulkan2dRender::prepareRenderPass(VkFormat framebuf_format, int fra
 	// Create a separate render pass for the offscreen rendering as it may differ from the one used for scene rendering
 	std::vector<VkAttachmentDescription> attchmentDescriptions = {};
 	std::vector<VkAttachmentReference> colorReferences;
-	for (int i = 0; i < framebuf_num; i++)
+	for (int i = 0; i < attachment_num; i++)
 	{
 		// Color attachment
 		VkAttachmentDescription attd;
@@ -162,20 +172,20 @@ VkRenderPass Vulkan2dRender::prepareRenderPass(VkFormat framebuf_format, int fra
 	return pass;
 }
 
-Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blend_mode, VkFormat framebuf_format, int framebuf_num)
+Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blend_mode, VkFormat framebuf_format, int attachment_num)
 {
 	if (prev_pipeline >= 0) {
 		if (m_pipelines[prev_pipeline].shader == shader &&
 			m_pipelines[prev_pipeline].blend == blend_mode &&
 			m_pipelines[prev_pipeline].framebuf_format == framebuf_format &&
-			m_pipelines[prev_pipeline].framebuf_num == framebuf_num)
+			m_pipelines[prev_pipeline].attachment_num == attachment_num)
 			return m_pipelines[prev_pipeline];
 	}
 	for (int i = 0; i < m_pipelines.size(); i++) {
 		if (m_pipelines[i].shader == shader &&
 			m_pipelines[i].blend == blend_mode &&
 			m_pipelines[i].framebuf_format == framebuf_format &&
-			m_pipelines[i].framebuf_num == framebuf_num)
+			m_pipelines[i].attachment_num == attachment_num)
 		{
 			prev_pipeline = i;
 			return m_pipelines[i];
@@ -219,7 +229,7 @@ Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blen
 		static_cast<uint32_t>(dynamicStateEnables.size()),
 		0);
 
-	VkRenderPass pass = prepareRenderPass(framebuf_format, framebuf_num);
+	VkRenderPass pass = prepareRenderPass(framebuf_format, attachment_num);
 
 	m_img_pipeline_settings = m_vulkan->img_shader_factory_->pipeline_settings_[m_vulkan->vulkanDevice];
 	VkGraphicsPipelineCreateInfo pipelineCreateInfo =
@@ -273,7 +283,7 @@ Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blen
 
 	// Load shaders
 	std::array<VkPipelineShaderStageCreateInfo,2> shaderStages;
-	FLIVR::ShaderProgram *sh = m_vulkan->img_shader_factory_->shader(shader);
+	FLIVR::ShaderProgram *sh = m_vulkan->img_shader_factory_->shader(m_vulkan->getDevice(), shader);
 	shaderStages[0] = sh->get_vertex_shader();
 	shaderStages[1] = sh->get_fragment_shader();
 	pipelineCreateInfo.pStages = shaderStages.data();
@@ -281,12 +291,13 @@ Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blen
 	V2dPipeline v2d_pipeline;
 	v2d_pipeline.shader = shader;
 	v2d_pipeline.blend = blend_mode;
+	v2d_pipeline.pass = pass;
 	v2d_pipeline.framebuf_format = framebuf_format;
-	v2d_pipeline.framebuf_num = framebuf_num;
+	v2d_pipeline.attachment_num = attachment_num;
 	getEnabledUniforms(v2d_pipeline, sh->get_fragment_shader_code());
 
 	VK_CHECK_RESULT(
-		vkCreateGraphicsPipelines(m_vulkan->getDevice(), m_vulkan->getPipelineCache(), 1, &pipelineCreateInfo, nullptr, &v2d_pipeline.pipeline)
+		vkCreateGraphicsPipelines(m_vulkan->getDevice(), m_vulkan->getPipelineCache(), 1, &pipelineCreateInfo, nullptr, &v2d_pipeline.vkpipeline)
 	);
 
 	m_pipelines.push_back(v2d_pipeline);
@@ -401,31 +412,27 @@ void Vulkan2dRender::setupDescriptorSetWrites(const V2DRenderParams& params, con
 	}
 }
 
-void Vulkan2dRender::buildCommandBuffer(VkCommandBuffer commandbufs[], int commandbuf_num, const std::unique_ptr<vks::VFrameBuffer> &framebuf, const V2DRenderParams &params)
+void Vulkan2dRender::buildCommandBuffer(
+	VkCommandBuffer commandbufs[],
+	int commandbuf_num,
+	const std::unique_ptr<vks::VFrameBuffer> &framebuf,
+	const V2DRenderParams &params)
 {
 	if (!commandbufs || commandbuf_num <= 0)
 		return;
 
-	V2dPipeline pipeline = 
-		preparePipeline(
-			params.shader,
-			params.blend,
-			framebuf->attachments[0]->format,
-			framebuf->attachments.size()
-		);
-	
 	std::vector<VkWriteDescriptorSet> descriptorWrites;
-	setupDescriptorSetWrites(params, pipeline, descriptorWrites);
+	setupDescriptorSetWrites(params, params.pipeline, descriptorWrites);
 
 	uint64_t constsize = 0;
 	for (int32_t i = 0; i < V2DRENDER_UNIFORM_VEC_NUM; i++) {
-		if (pipeline.uniforms[i]) {
+		if (params.pipeline.uniforms[i]) {
 			memcpy(constant_buf+constsize, &params.loc[i], sizeof(glm::vec4));
 			constsize += sizeof(glm::vec4);
 		}
 	}
 	for (int32_t i = V2DRENDER_UNIFORM_VEC_NUM; i < V2DRENDER_UNIFORM_NUM; i++) {
-		if (pipeline.uniforms[i]) {
+		if (params.pipeline.uniforms[i]) {
 			memcpy(constant_buf+constsize, &params.matrix[i-V2DRENDER_UNIFORM_VEC_NUM], sizeof(glm::mat4));
 			constsize += sizeof(glm::mat4);
 		}
@@ -438,7 +445,7 @@ void Vulkan2dRender::buildCommandBuffer(VkCommandBuffer commandbufs[], int comma
 	clearValues[0].color = params.clearColor;
 
 	VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
-	renderPassBeginInfo.renderPass = pipeline.pass;
+	renderPassBeginInfo.renderPass = params.pipeline.pass;
 	renderPassBeginInfo.renderArea.offset.x = 0;
 	renderPassBeginInfo.renderArea.offset.y = 0;
 	renderPassBeginInfo.renderArea.extent.width = framebuf->w;
@@ -487,7 +494,7 @@ void Vulkan2dRender::buildCommandBuffer(VkCommandBuffer commandbufs[], int comma
 				&clearRect);
 		}
 
-		vkCmdBindPipeline(commandbufs[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
+		vkCmdBindPipeline(commandbufs[i], VK_PIPELINE_BIND_POINT_GRAPHICS, params.pipeline.vkpipeline);
 
 		//push constants
 		if (constsize > 0)

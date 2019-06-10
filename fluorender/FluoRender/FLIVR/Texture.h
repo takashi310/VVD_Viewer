@@ -222,7 +222,7 @@ namespace FLIVR
 
 		void DeleteCacheFiles();
 
-		Vector GetBrickMaxDims() { return brick_max_dim_; }
+		Vector GetBrickIdSpaceMaxExtent() { return brick_idspace_max_extent_; }
 
 	protected:
 		void build_bricks(vector<TextureBrick*> &bricks,
@@ -231,7 +231,7 @@ namespace FLIVR
 
 		//! data carved up to texture memory sized chunks.
 		vector<TextureBrick*>						*bricks_;
-		Vector										brick_max_dim_;
+		Vector										brick_idspace_max_extent_;
 		//for limited number of bricks during interactions
 		vector<TextureBrick*>						quota_bricks_;
 		//sort texture brick

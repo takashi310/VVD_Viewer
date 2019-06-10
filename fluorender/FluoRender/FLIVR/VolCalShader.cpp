@@ -62,7 +62,7 @@ namespace FLIVR
 	"//CAL_UNIFORMS_COMMON\n" \
 	"layout (binding = 1) uniform sampler3D tex1;//operand A\n" \
 	"layout (binding = 2) uniform sampler3D tex2;//operand B\n" \
-	"layout (push_constant) uniform PushConsts {" \
+	"layout (push_constant) uniform PushConsts {\n" \
 	"	vec4 loc0;//(scale_A, scale_B, 0.0, 0.0)\n" \
 	"} ct;" \
 	"\n"
@@ -73,7 +73,7 @@ namespace FLIVR
 	"layout (binding = 3) uniform sampler3D tex3;//mask of A\n" \
 	"layout (binding = 2) uniform sampler3D tex2;//operand B\n" \
 	"layout (binding = 4) uniform sampler3D tex4;//mask of B\n" \
-	"layout (push_constant) uniform PushConsts {" \
+	"layout (push_constant) uniform PushConsts {\n" \
 	"	vec4 loc0;//(scale_a, scale_b, use_mask_a, use_mask_b)\n" \
 	"} ct;" \
 	"\n"
@@ -148,7 +148,8 @@ namespace FLIVR
 	"}\n" \
 	"\n"
 
-	VolCalShader::VolCalShader(int type) :
+	VolCalShader::VolCalShader(VkDevice device, int type) :
+	device_(device),
 	type_(type),
 	program_(0)
 	{}
@@ -164,6 +165,7 @@ namespace FLIVR
 		string fs;
 		if (emit(fs)) return true;
 		program_ = new ShaderProgram(vs, fs);
+		program_->create(device_);
 		return false;
 	}
 
@@ -264,25 +266,25 @@ namespace FLIVR
 		}
 	}
 
-	ShaderProgram* VolCalShaderFactory::shader(int type)
+	ShaderProgram* VolCalShaderFactory::shader(VkDevice device, int type)
 	{
 		if(prev_shader_ >= 0)
 		{
-			if(shader_[prev_shader_]->match(type)) 
+			if(shader_[prev_shader_]->match(device, type)) 
 			{
 				return shader_[prev_shader_]->program();
 			}
 		}
 		for(unsigned int i=0; i<shader_.size(); i++)
 		{
-			if(shader_[i]->match(type)) 
+			if(shader_[i]->match(device, type)) 
 			{
 				prev_shader_ = i;
 				return shader_[i]->program();
 			}
 		}
 
-		VolCalShader* s = new VolCalShader(type);
+		VolCalShader* s = new VolCalShader(device, type);
 		if(s->create())
 		{
 			delete s;

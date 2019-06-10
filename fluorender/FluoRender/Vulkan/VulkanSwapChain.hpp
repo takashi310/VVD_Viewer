@@ -17,7 +17,9 @@
 #include <vector>
 
 #include <vulkan/vulkan.h>
+#include "VulkanDevice.hpp"
 #include "VulkanTools.h"
+#include "vk_format_utils.h"
 
 #ifdef __ANDROID__
 #include "VulkanAndroid.h"
@@ -72,7 +74,7 @@ public:
 	VkSwapchainKHR swapChain = VK_NULL_HANDLE;	
 	uint32_t imageCount;
 	std::vector<VkImage> images;
-	std::vector<SwapChainBuffer> buffers;
+	std::vector<std::shared_ptr<vks::VTexture>> buffers;
 	/** @brief Queue family index of the detected graphics and presenting device queue */
 	uint32_t queueNodeIndex = UINT32_MAX;
 
@@ -409,7 +411,7 @@ public:
 		{ 
 			for (uint32_t i = 0; i < imageCount; i++)
 			{
-				vkDestroyImageView(device, buffers[i].view, nullptr);
+				vkDestroyImageView(device, buffers[i]->view, nullptr);
 			}
 			fpDestroySwapchainKHR(device, oldSwapchain, nullptr);
 		}
@@ -441,11 +443,21 @@ public:
 			colorAttachmentView.viewType = VK_IMAGE_VIEW_TYPE_2D;
 			colorAttachmentView.flags = 0;
 
-			buffers[i].image = images[i];
+			buffers[i] = std::make_shared<vks::VTexture>();
 
-			colorAttachmentView.image = buffers[i].image;
+			buffers[i]->image = images[i];
 
-			VK_CHECK_RESULT(vkCreateImageView(device, &colorAttachmentView, nullptr, &buffers[i].view));
+			colorAttachmentView.image = buffers[i]->image;
+
+			buffers[i]->w = swapchainExtent.width;
+			buffers[i]->h = swapchainExtent.height;
+			buffers[i]->d = 1;
+			buffers[i]->bytes = FormatTexelSize(colorFormat);
+			buffers[i]->format = colorFormat;
+			buffers[i]->usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+			buffers[i]->is_swapchain_images = true;
+
+			VK_CHECK_RESULT(vkCreateImageView(device, &colorAttachmentView, nullptr, &buffers[i]->view));
 		}
 	}
 
@@ -502,7 +514,7 @@ public:
 		{
 			for (uint32_t i = 0; i < imageCount; i++)
 			{
-				vkDestroyImageView(device, buffers[i].view, nullptr);
+				vkDestroyImageView(device, buffers[i]->view, nullptr);
 			}
 		}
 		if (surface != VK_NULL_HANDLE)

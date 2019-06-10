@@ -94,13 +94,14 @@ namespace FLIVR
 	"}\n"
 
 VolShader::VolShader(
-	bool poly, int channels,
+	VkDevice device, bool poly, int channels,
 	bool shading, bool fog,
 	int peel, bool clip,
 	bool hiqual, int mask,
 	int color_mode, int colormap, int colormap_proj,
 	bool solid, int vertex_shader, int mask_hide_mode)
-	: poly_(poly),
+	: device_(device),
+	poly_(poly),
 	channels_(channels),
 	shading_(shading),
 	fog_(fog),
@@ -129,6 +130,7 @@ VolShader::VolShader(
 		if (emit_f(fs)) return true;
 		if (emit_v(vs)) return true;
 		program_ = new ShaderProgram(vs,fs);
+		program_->create(device_);
 		return false;
 	}
 
@@ -485,6 +487,7 @@ VolShader::VolShader(
 	}
 
 	ShaderProgram* VolShaderFactory::shader(
+		VkDevice device,
 		bool poly, int channels,
 		bool shading, bool fog,
 		int peel, bool clip,
@@ -496,7 +499,7 @@ VolShader::VolShader(
 		if(prev_shader_ >= 0)
 		{
 			if(shader_[prev_shader_]->match(
-				poly, channels,
+				device, poly, channels,
 				shading, fog,
 				peel, clip,
 				hiqual, mask,
@@ -511,7 +514,7 @@ VolShader::VolShader(
 			for(unsigned int i=0; i<shader_.size(); i++)
 			{
 				if(shader_[i]->match(
-					poly, channels,
+					device, poly, channels,
 					shading, fog,
 					peel, clip,
 					hiqual, mask,
@@ -527,7 +530,7 @@ VolShader::VolShader(
 
 		if (!ret)
 		{
-			VolShader* s = new VolShader(poly, channels,
+			VolShader* s = new VolShader(device, poly, channels,
 				shading, fog,
 				peel, clip,
 				hiqual, mask,
