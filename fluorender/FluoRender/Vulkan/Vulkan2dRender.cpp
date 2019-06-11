@@ -82,7 +82,7 @@ void Vulkan2dRender::setupVertexDescriptions()
 
 	// Attribute descriptions
 	// Describes memory layout and shader positions
-	m_vertices.inputAttributes.resize(3);
+	m_vertices.inputAttributes.resize(2);
 	// Location 0 : Position
 	m_vertices.inputAttributes[0] =
 		vks::initializers::vertexInputAttributeDescription(
@@ -118,7 +118,7 @@ VkRenderPass Vulkan2dRender::prepareRenderPass(VkFormat framebuf_format, int att
 	for (int i = 0; i < attachment_num; i++)
 	{
 		// Color attachment
-		VkAttachmentDescription attd;
+		VkAttachmentDescription attd = {};
 		attd.format = framebuf_format;
 		attd.samples = VK_SAMPLE_COUNT_1_BIT;
 		attd.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -129,13 +129,13 @@ VkRenderPass Vulkan2dRender::prepareRenderPass(VkFormat framebuf_format, int att
 		attd.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		attchmentDescriptions.push_back(attd);
 
-		VkAttachmentReference colref = { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+		VkAttachmentReference colref = { i, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
 		colorReferences.push_back(colref);
 	}
 	
 	VkSubpassDescription subpassDescription = {};
 	subpassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpassDescription.colorAttachmentCount = colorReferences.size();
+	subpassDescription.colorAttachmentCount = static_cast<uint32_t>(colorReferences.size());
 	subpassDescription.pColorAttachments = colorReferences.data();
 
 	// Use subpass dependencies for layout transitions
@@ -306,7 +306,7 @@ Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blen
 	return v2d_pipeline;
 }
 
-void Vulkan2dRender::getEnabledUniforms(V2dPipeline pipeline, const std::string &code)
+void Vulkan2dRender::getEnabledUniforms(V2dPipeline &pipeline, const std::string &code)
 {
 	std::vector<int> loc;
 	std::vector<int> mat;
@@ -399,15 +399,15 @@ void Vulkan2dRender::setupDescriptorSetWrites(const V2DRenderParams& params, con
 {
 	for (int i = 0; i < IMG_SHDR_SAMPLER_NUM; i++) {
 		if (params.tex[i] && pipeline.samplers[i]) {
-			VkWriteDescriptorSet dw;
-			dw.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			dw.dstSet = m_img_pipeline_settings.descriptorSet;
-			dw.dstBinding = i;
-			dw.dstArrayElement = 0;
-			dw.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			dw.descriptorCount = 1;
-			dw.pImageInfo = &params.tex[i]->descriptor;
-			descriptorWrites.push_back(dw);
+			descriptorWrites.push_back(
+				vks::initializers::writeDescriptorSet(
+					VK_NULL_HANDLE,
+					VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+					i,
+					&params.tex[i]->descriptor,
+					1
+				)
+			);
 		}
 	}
 }
@@ -457,61 +457,64 @@ void Vulkan2dRender::buildCommandBuffer(
 		renderPassBeginInfo.framebuffer = framebuf->framebuffer;
 
 		VK_CHECK_RESULT(vkBeginCommandBuffer(commandbufs[i], &cmdBufInfo));
-
+		
 		vkCmdBeginRenderPass(commandbufs[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-		VkViewport viewport = vks::initializers::viewport((float)framebuf->w, (float)framebuf->h, 0.0f, 1.0f);
-		vkCmdSetViewport(commandbufs[i], 0, 1, &viewport);
+		//VkViewport viewport = vks::initializers::viewport((float)framebuf->w, (float)framebuf->h, 0.0f, 1.0f);
+		//vkCmdSetViewport(commandbufs[i], 0, 1, &viewport);
 
-		VkRect2D scissor = vks::initializers::rect2D(framebuf->w, framebuf->h, 0, 0);
-		vkCmdSetScissor(commandbufs[i], 0, 1, &scissor);
+		//VkRect2D scissor = vks::initializers::rect2D(framebuf->w, framebuf->h, 0, 0);
+		//vkCmdSetScissor(commandbufs[i], 0, 1, &scissor);
 
-		m_vulkan->vulkanDevice->vkCmdPushDescriptorSetKHR(
-			commandbufs[i], 
-			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			m_img_pipeline_settings.pipelineLayout,
-			0,
-			descriptorWrites.size(),
-			descriptorWrites.data());
+		//if (!descriptorWrites.empty())
+		//{
+		//	m_vulkan->vulkanDevice->vkCmdPushDescriptorSetKHR(
+		//		commandbufs[i],
+		//		VK_PIPELINE_BIND_POINT_GRAPHICS,
+		//		m_img_pipeline_settings.pipelineLayout,
+		//		0,
+		//		descriptorWrites.size(),
+		//		descriptorWrites.data());
+		//}
 
-		if (params.clear)
-		{
-			VkClearAttachment clearAttachments[1] = {};
-			clearAttachments[0].aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			clearAttachments[0].clearValue = clearValues[0];
-			clearAttachments[0].colorAttachment = 0;
+		//if (params.clear)
+		//{
+		//	VkClearAttachment clearAttachments[1] = {};
+		//	clearAttachments[0].aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		//	clearAttachments[0].clearValue = clearValues[0];
+		//	clearAttachments[0].colorAttachment = 0;
 
-			VkClearRect clearRect = {};
-			clearRect.layerCount = 1;
-			clearRect.rect.offset = { 0, 0 };
-			clearRect.rect.extent = { framebuf->w, framebuf->h };
+		//	VkClearRect clearRect = {};
+		//	clearRect.layerCount = 1;
+		//	clearRect.rect.offset = { 0, 0 };
+		//	clearRect.rect.extent = { framebuf->w, framebuf->h };
 
-			vkCmdClearAttachments(
-				commandbufs[i],
-				1,
-				clearAttachments,
-				1,
-				&clearRect);
-		}
+		//	vkCmdClearAttachments(
+		//		commandbufs[i],
+		//		1,
+		//		clearAttachments,
+		//		1,
+		//		&clearRect);
+		//}
 
-		vkCmdBindPipeline(commandbufs[i], VK_PIPELINE_BIND_POINT_GRAPHICS, params.pipeline.vkpipeline);
+		//vkCmdBindPipeline(commandbufs[i], VK_PIPELINE_BIND_POINT_GRAPHICS, params.pipeline.vkpipeline);
 
-		//push constants
-		if (constsize > 0)
-		{
-			vkCmdPushConstants(
-				commandbufs[i],
-				m_img_pipeline_settings.pipelineLayout,
-				VK_SHADER_STAGE_FRAGMENT_BIT,
-				0,
-				constsize,
-				constant_buf);
-		}
+		////push constants
+		//if (constsize > 0)
+		//{
+		//	vkCmdPushConstants(
+		//		commandbufs[i],
+		//		m_img_pipeline_settings.pipelineLayout,
+		//		VK_SHADER_STAGE_FRAGMENT_BIT,
+		//		0,
+		//		constsize,
+		//		constant_buf);
+		//}
 
-		VkDeviceSize offsets[1] = { 0 };
-		vkCmdBindVertexBuffers(commandbufs[i], 0, 1, &m_vertexBuffer.buffer, offsets);
-		vkCmdBindIndexBuffer(commandbufs[i], m_indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-		vkCmdDrawIndexed(commandbufs[i], m_indexCount, 1, 0, 0, 0);
+		//VkDeviceSize offsets[1] = { 0 };
+		//vkCmdBindVertexBuffers(commandbufs[i], 0, 1, &m_vertexBuffer.buffer, offsets);
+		//vkCmdBindIndexBuffer(commandbufs[i], m_indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+		//vkCmdDrawIndexed(commandbufs[i], m_indexCount, 1, 0, 0, 0);
 
 		vkCmdEndRenderPass(commandbufs[i]);
 
@@ -524,10 +527,15 @@ void Vulkan2dRender::render(const std::unique_ptr<vks::VFrameBuffer>& framebuf, 
 	buildCommandBuffer(&m_default_cmdbuf, 1, framebuf, params);
 	
 	VkSubmitInfo submitInfo = vks::initializers::submitInfo();
+	std::vector<VkPipelineStageFlags> waitStages;
+	for (uint32_t i = 0; i < params.waitSemaphoreCount; i++)
+		waitStages.push_back( VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT );
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &m_default_cmdbuf;
 	submitInfo.waitSemaphoreCount = params.waitSemaphoreCount;
 	submitInfo.pWaitSemaphores = params.waitSemaphores;
+	if (!waitStages.empty())
+		submitInfo.pWaitDstStageMask = waitStages.data();
 	submitInfo.signalSemaphoreCount = params.signalSemaphoreCount;
 	submitInfo.pSignalSemaphores = params.signalSemaphores;
 

@@ -512,9 +512,12 @@ void VulkanExampleBase::setupFrameBuffer()
 	{
 		frameBuffers[i] = std::make_unique<vks::VFrameBuffer>();
 		frameBuffers[i]->addAttachment(swapChain.buffers[i]);
-		frameBuffers[i]->addAttachment(depthStencil);
+		//frameBuffers[i]->addAttachment(depthStencil);
+		frameBuffers[i]->device = vulkanDevice;
+		frameBuffers[i]->w = width;
+		frameBuffers[i]->h = height;
 		attachments[0] = swapChain.buffers[i]->view;
-		VK_CHECK_RESULT(vkCreateFramebuffer(device, &frameBufferCreateInfo, nullptr, &frameBuffers[i]->framebuffer));
+		//VK_CHECK_RESULT(vkCreateFramebuffer(device, &frameBufferCreateInfo, nullptr, &frameBuffers[i]->framebuffer));
 	}
 }
 

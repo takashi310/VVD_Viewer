@@ -455,6 +455,8 @@ public:
 			buffers[i]->bytes = FormatTexelSize(colorFormat);
 			buffers[i]->format = colorFormat;
 			buffers[i]->usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+			buffers[i]->subresourceRange = colorAttachmentView.subresourceRange;
+			buffers[i]->mipLevels = 1;
 			buffers[i]->is_swapchain_images = true;
 
 			VK_CHECK_RESULT(vkCreateImageView(device, &colorAttachmentView, nullptr, &buffers[i]->view));

@@ -450,6 +450,9 @@ public:
 		static std::map<vks::VulkanDevice*, VkRenderPass> m_cal_draw_pass;
 		int m_prev_cal_pipeline;
 		//VCalPipeline prepareCalPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode);
+
+
+		void saveScreenshot(const char* filename);
 	};
 
 } // End namespace FLIVR

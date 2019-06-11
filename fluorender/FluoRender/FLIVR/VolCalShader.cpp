@@ -48,8 +48,8 @@ namespace FLIVR
 	"//CAL_VERTEX_CODE\n" \
 	"layout(location = 0) in vec3 InVertex;\n" \
 	"layout(location = 1) in vec3 InTexture;\n" \
-	"out vec3 OutVertex;\n" \
-	"out vec3 OutTexture;\n" \
+	"layout(location = 0) out vec3 OutVertex;\n" \
+	"layout(location = 1) out vec3 OutTexture;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \

@@ -64,7 +64,7 @@ public:
 	VkRenderPass prepareRenderPass(VkFormat framebuf_format, int attachment_num);
 	V2dPipeline preparePipeline(int shader, int blend_mode, VkFormat framebuf_format, int attachment_num);
 
-	void getEnabledUniforms(V2dPipeline pipeline, const std::string &code);
+	void getEnabledUniforms(V2dPipeline &pipeline, const std::string &code);
 
 	struct V2DRenderParams {
 		Vulkan2dRender::V2dPipeline pipeline = {};

@@ -92,6 +92,8 @@ namespace vks
 			else {
 				LOGD("%s", debugMessage.str().c_str());
 			}
+#elif _WIN32
+			OutputDebugStringA(debugMessage.str().c_str()); OutputDebugString(L"\n");
 #else
 			if (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT) {
 				std::cerr << debugMessage.str() << "\n";

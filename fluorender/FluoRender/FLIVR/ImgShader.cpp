@@ -42,9 +42,9 @@ namespace FLIVR
 #define IMG_VERTEX_CODE \
 	"//IMG_VERTEX_CODE\n" \
 	"layout(location = 0) in vec3 InVertex;\n" \
-	"layout(location = 1) in vec3 InTexCoord;\n" \
-	"out vec3 OutVertex;\n" \
-	"out vec3 OutTexCoord;\n" \
+	"layout(location = 1) layout(location = 1) in vec3 InTexCoord;\n" \
+	"layout(location = 0) out vec3 OutVertex;\n" \
+	"layout(location = 1) out vec3 OutTexCoord;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
@@ -69,7 +69,7 @@ namespace FLIVR
 	"//IMG_VTX_CODE_DRAW_GEOMETRY_COLOR3\n" \
 	"layout(location = 0) in vec3 InVertex;\n" \
 	"layout(location = 1) in vec3 InColor;\n" \
-	"out vec3 OutColor;\n" \
+	"layout(location = 0) out vec3 OutColor;\n" \
 	"layout (push_constant) uniform PushConsts {\n" \
 	"	mat4 matrix0;//transformation\n" \
 	"} ct;\n" \
@@ -84,7 +84,7 @@ namespace FLIVR
 	"//IMG_VTX_CODE_DRAW_GEOMETRY_COLOR4\n" \
 	"layout(location = 0) in vec3 InVertex;\n" \
 	"layout(location = 1) in vec4 InColor;\n" \
-	"out vec4 OutColor;\n" \
+	"layout(location = 0) out vec4 OutColor;\n" \
 	"layout (push_constant) uniform PushConsts {\n" \
 	"	mat4 matrix0;//transformation\n" \
 	"} ct;\n" \
@@ -97,7 +97,7 @@ namespace FLIVR
 
 #define IMG_FRG_CODE_DRAW_GEOMETRY \
 	"//IMG_FRG_CODE_DRAW_GEOMETRY\n" \
-	"out vec4 FragColor;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
 	"layout (push_constant) uniform PushConsts {\n" \
 	"	uniform vec4 loc0;\n" \
 	"} ct;\n" \
@@ -109,8 +109,8 @@ namespace FLIVR
 
 #define IMG_FRG_CODE_DRAW_GEOMETRY_COLOR3 \
 	"//IMG_FRG_CODE_DRAW_GEOMETRY_COLOR3\n" \
-	"in vec3 OutColor;\n" \
-	"out vec4 FragColor;\n" \
+	"layout(location = 0) in vec3 OutColor;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
@@ -119,19 +119,35 @@ namespace FLIVR
 
 #define IMG_FRG_CODE_DRAW_GEOMETRY_COLOR4 \
 	"//IMG_FRG_CODE_DRAW_GEOMETRY_COLOR4\n" \
-	"in vec4 OutColor;\n" \
-	"out vec4 FragColor;\n" \
+	"layout(location = 0) in vec4 OutColor;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
 	"	FragColor = OutColor;\n" \
 	"}\n"
 
+//#define IMG_SHADER_CODE_TEXTURE_LOOKUP \
+//	"//IMG_SHADER_CODE_TEXTURE_LOOKUP\n" \
+//	"layout(location = 0) in vec3 OutVertex;\n" \
+//	"layout(location = 1) in vec3 OutTexCoord;\n" \
+//	"layout(location = 0) out vec4 FragColor;\n" \
+//	"\n" \
+//	"// IMG_SHADER_CODE_TEXTURE_LOOKUP\n" \
+//	"layout (binding = 0) uniform sampler2D tex0;\n" \
+//	"\n" \
+//	"void main()\n" \
+//	"{\n" \
+//	"	vec4 t = vec4(OutTexCoord, 1.0);\n" \
+//	"	vec4 c = texture(tex0, t.xy);\n" \
+//	"	c.a = clamp(c.a, 0.0, 1.0);\n" \
+//	"	FragColor = c;\n" \
+//	"}\n"
 #define IMG_SHADER_CODE_TEXTURE_LOOKUP \
 	"//IMG_SHADER_CODE_TEXTURE_LOOKUP\n" \
-	"in vec3 OutVertex;\n" \
-	"in vec3 OutTexCoord;\n" \
-	"out vec4 FragColor;\n" \
+	"layout(location = 0) in vec3 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexCoord;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_TEXTURE_LOOKUP\n" \
 	"layout (binding = 0) uniform sampler2D tex0;\n" \
@@ -141,14 +157,14 @@ namespace FLIVR
 	"	vec4 t = vec4(OutTexCoord, 1.0);\n" \
 	"	vec4 c = texture(tex0, t.xy);\n" \
 	"	c.a = clamp(c.a, 0.0, 1.0);\n" \
-	"	FragColor = c;\n" \
+	"	FragColor = vec4(1.0, 1.0, 1.0, 1.0);\n" \
 	"}\n"
 
 #define IMG_SHADER_CODE_TEXTURE_LOOKUP_BLEND \
 	"//IMG_SHADER_CODE_TEXTURE_LOOKUP\n" \
-	"in vec3 OutVertex;\n" \
-	"in vec3 OutTexCoord;\n" \
-	"out vec4 FragColor;\n" \
+	"layout(location = 0) in vec3 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexCoord;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_TEXTURE_LOOKUP\n" \
 	"layout (binding = 0) uniform sampler2D tex0;\n" \
@@ -164,9 +180,9 @@ namespace FLIVR
 
 #define IMG_SHADER_CODE_BRIGHTNESS_CONTRAST \
 	"//IMG_SHADER_CODE_BRIGHTNESS_CONTRAST\n" \
-	"in vec3 OutVertex;\n" \
-	"in vec3 OutTexCoord;\n" \
-	"out vec4 FragColor;\n" \
+	"layout(location = 0) in vec3 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexCoord;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_BRIGHTNESS_CONTRAST\n" \
 	"layout (push_constant) uniform PushConsts {\n" \
@@ -188,9 +204,9 @@ namespace FLIVR
 
 #define IMG_SHADER_CODE_BRIGHTNESS_CONTRAST_HDR \
 	"//IMG_SHADER_CODE_BRIGHTNESS_CONTRAST_HDR\n" \
-	"in vec3 OutVertex;\n" \
-	"in vec3 OutTexCoord;\n" \
-	"out vec4 FragColor;\n" \
+	"layout(location = 0) in vec3 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexCoord;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_BRIGHTNESS_CONTRAST_HDR\n" \
 	"layout (push_constant) uniform PushConsts {\n" \
@@ -228,9 +244,9 @@ namespace FLIVR
 
 #define IMG_SHADER_CODE_BRIGHTNESS_CONTRAST_HDR_BLEND \
 	"//IMG_SHADER_CODE_BRIGHTNESS_CONTRAST_HDR\n" \
-	"in vec3 OutVertex;\n" \
-	"in vec3 OutTexCoord;\n" \
-	"out vec4 FragColor;\n" \
+	"layout(location = 0) in vec3 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexCoord;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_BRIGHTNESS_CONTRAST_HDR\n" \
 	"layout (push_constant) uniform PushConsts {\n" \
@@ -270,9 +286,9 @@ namespace FLIVR
 
 #define IMG_SHADER_CODE_GRADIENT_MAP \
 	"//IMG_SHADER_CODE_GRADIENT_MAP\n" \
-	"in vec3 OutVertex;\n" \
-	"in vec3 OutTexCoord;\n" \
-	"out vec4 FragColor;\n" \
+	"layout(location = 0) in vec3 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexCoord;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_GRADIENT_MAP\n" \
 	"layout (push_constant) uniform PushConsts {\n" \
@@ -296,9 +312,9 @@ namespace FLIVR
 
 #define IMG_SHADER_CODE_FILTER_MIN \
 	"//IMG_SHADER_CODE_FILTER_MIN\n" \
-	"in vec3 OutVertex;\n" \
-	"in vec3 OutTexCoord;\n" \
-	"out vec4 FragColor;\n" \
+	"layout(location = 0) in vec3 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexCoord;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_FILTER_MIN\n" \
 	"layout (push_constant) uniform PushConsts {\n" \
@@ -336,9 +352,9 @@ namespace FLIVR
 
 #define IMG_SHADER_CODE_FILTER_MAX \
 	"//IMG_SHADER_CODE_FILTER_MAX\n" \
-	"in vec3 OutVertex;\n" \
-	"in vec3 OutTexCoord;\n" \
-	"out vec4 FragColor;\n" \
+	"layout(location = 0) in vec3 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexCoord;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_FILTER_MAX\n" \
 	"layout (push_constant) uniform PushConsts {\n" \
@@ -372,9 +388,9 @@ namespace FLIVR
 
 #define IMG_SHADER_CODE_FILTER_BLUR \
 	"//IMG_SHADER_CODE_FILTER_BLUR\n" \
-	"in vec3 OutVertex;\n" \
-	"in vec3 OutTexCoord;\n" \
-	"out vec4 FragColor;\n" \
+	"layout(location = 0) in vec3 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexCoord;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_FILTER_BLUR\n" \
 	"layout (push_constant) uniform PushConsts {\n" \
@@ -400,9 +416,9 @@ namespace FLIVR
 
 #define IMG_SHADER_CODE_FILTER_SHARPEN \
 	"//IMG_SHADER_CODE_FILTER_SHARPEN\n" \
-	"in vec3 OutVertex;\n" \
-	"in vec3 OutTexCoord;\n" \
-	"out vec4 FragColor;\n" \
+	"layout(location = 0) in vec3 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexCoord;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_FILTER_SHARPEN\n" \
 	"layout (push_constant) uniform PushConsts {\n" \
@@ -428,9 +444,9 @@ namespace FLIVR
 
 #define IMG_SHADER_CODE_DEPTH_TO_OUTLINES \
 	"//IMG_SHADER_CODE_DEPTH_TO_OUTLINES\n" \
-	"in vec3 OutVertex;\n" \
-	"in vec3 OutTexCoord;\n" \
-	"out vec4 FragColor;\n" \
+	"layout(location = 0) in vec3 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexCoord;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
 	"\n" \
 	"//IMG_SHADER_CODE_DEPTH_TO_OUTLINES\n" \
 	"layout (push_constant) uniform PushConsts {\n" \
@@ -458,9 +474,9 @@ namespace FLIVR
 
 #define IMG_SHADER_CODE_DEPTH_TO_GRADIENT \
 	"//IMG_SHADER_CODE_DEPTH_TO_GRADIENT\n" \
-	"in vec3 OutVertex;\n" \
-	"in vec3 OutTexCoord;\n" \
-	"out vec4 FragColor;\n" \
+	"layout(location = 0) in vec3 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexCoord;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
 	"\n" \
 	"//IMG_SHADER_CODE_DEPTH_TO_GRADIENT\n" \
 	"layout (push_constant) uniform PushConsts {\n" \
@@ -490,9 +506,9 @@ namespace FLIVR
 
 #define IMG_SHADER_CODE_GRADIENT_TO_SHADOW \
 	"//IMG_SHADER_CODE_GRADIENT_TO_SHADOW\n" \
-	"in vec3 OutVertex;\n" \
-	"in vec3 OutTexCoord;\n" \
-	"out vec4 FragColor;\n" \
+	"layout(location = 0) in vec3 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexCoord;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
 	"\n" \
 	"//IMG_SHADER_CODE_GRADIENT_TO_SHADOW\n" \
 	"layout (push_constant) uniform PushConsts {\n" \
@@ -538,9 +554,9 @@ namespace FLIVR
 
 #define IMG_SHADER_CODE_GRADIENT_TO_SHADOW_MESH \
 	"//IMG_SHADER_CODE_GRADIENT_TO_SHADOW_MESH\n" \
-	"in vec3 OutVertex;\n" \
-	"in vec3 OutTexCoord;\n" \
-	"out vec4 FragColor;\n" \
+	"layout(location = 0) in vec3 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexCoord;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
 	"\n" \
 	"//IMG_SHADER_CODE_GRADIENT_TO_SHADOW_MESH\n" \
 	"layout (push_constant) uniform PushConsts {\n" \
@@ -588,9 +604,9 @@ namespace FLIVR
 
 #define IMG_SHADER_CODE_BLEND_BRIGHT_BACKGROUND \
 	"//IMG_SHADER_CODE_BLEND_BRIGHT_BACKGROUND\n" \
-	"in vec3 OutVertex;\n" \
-	"in vec3 OutTexCoord;\n" \
-	"out vec4 FragColor;\n" \
+	"layout(location = 0) in vec3 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexCoord;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_BLEND_BRIGHT_BACKGROUND\n" \
 	"layout (binding = 0) uniform sampler2D tex0;\n" \
@@ -607,9 +623,9 @@ namespace FLIVR
 
 #define IMG_SHADER_CODE_BLEND_BRIGHT_BACKGROUND_HDR \
 	"//IMG_SHADER_CODE_BLEND_BRIGHT_BACKGROUND_HDR\n" \
-	"in vec3 OutVertex;\n" \
-	"in vec3 OutTexCoord;\n" \
-	"out vec4 FragColor;\n" \
+	"layout(location = 0) in vec3 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexCoord;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_BLEND_BRIGHT_BACKGROUND_HDR\n" \
 	"layout (push_constant) uniform PushConsts {\n" \
@@ -638,9 +654,9 @@ namespace FLIVR
 
 #define IMG_SHADER_CODE_BLEND_BRIGHT_BACKGROUND_HDR_PREMULTI \
 	"//IMG_SHADER_CODE_BLEND_BRIGHT_BACKGROUND_HDR\n" \
-	"in vec3 OutVertex;\n" \
-	"in vec3 OutTexCoord;\n" \
-	"out vec4 FragColor;\n" \
+	"layout(location = 0) in vec3 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexCoord;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
 	"\n" \
 	"// IMG_SHADER_CODE_BLEND_BRIGHT_BACKGROUND_HDR\n" \
 	"layout (push_constant) uniform PushConsts {\n" \
@@ -669,9 +685,9 @@ namespace FLIVR
 
 #define PAINT_SHADER_CODE \
 	"//PAINT_SHADER_CODE\n" \
-	"in vec3 OutVertex;\n" \
-	"in vec3 OutTexCoord;\n" \
-	"out vec4 FragColor;\n" \
+	"layout(location = 0) in vec3 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexCoord;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
 	"\n" \
 	"// PAINT_SHADER_CODE\n" \
 	"layout (push_constant) uniform PushConsts {\n" \
@@ -694,9 +710,9 @@ namespace FLIVR
 
 #define IMG_SHADER_CODE_BLEND_FOR_DEPTH_MODE \
 	"//IMG_SHADER_CODE_BLEND_FOR_DEPTH_MODE\n" \
-	"in vec3 OutVertex;\n" \
-	"in vec3 OutTexCoord;\n" \
-	"out vec4 FragColor;\n" \
+	"layout(location = 0) in vec3 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexCoord;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
 	"// IMG_SHADER_CODE_BLEND_FOR_DEPTH_MODE\n" \
 	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
@@ -710,8 +726,8 @@ namespace FLIVR
 
 #define IMG_SHADER_CODE_BLEND_ID_COLOR_FOR_DEPTH_MODE \
 	"//IMG_SHADER_CODE_BLEND_ID_COLOR_FOR_DEPTH_MODE\n" \
-	"in vec3 OutVertex;\n" \
-	"in vec3 OutTexCoord;\n" \
+	"layout(location = 0) in vec3 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexCoord;\n" \
 	"layout(location = 0) out vec4 FragColor;\n" \
 	"layout(location = 1) out vec4 IDColor;\n" \
 	"// IMG_SHADER_CODE_BLEND_ID_COLOR_FOR_DEPTH_MODE\n" \
@@ -1000,7 +1016,7 @@ namespace FLIVR
 				vks::initializers::pipelineLayoutCreateInfo(
 				&pipe.descriptorSetLayout,
 				1);
-
+			
 			VkPushConstantRange pushConstantRange = {};
 			pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 			pushConstantRange.size = sizeof(float) * 4 * 4;
@@ -1009,7 +1025,7 @@ namespace FLIVR
 			// Push constant ranges are part of the pipeline layout
 			pPipelineLayoutCreateInfo.pushConstantRangeCount = 1;
 			pPipelineLayoutCreateInfo.pPushConstantRanges = &pushConstantRange;
-
+			
 			VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pPipelineLayoutCreateInfo, nullptr, &pipe.pipelineLayout));
 
 			pipeline_settings_[vdev] = pipe;

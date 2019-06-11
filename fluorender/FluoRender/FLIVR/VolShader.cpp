@@ -617,14 +617,14 @@ VolShader::VolShader(
 		
 		writeDescriptorSets.push_back(
 			vks::initializers::writeDescriptorSet(
-				pipeline_[vdev].descriptorSet,
+				VK_NULL_HANDLE,
 				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 				0,
 				&uniformBuffers.vert.descriptor)
 		);
 		writeDescriptorSets.push_back(
 			vks::initializers::writeDescriptorSet(
-				pipeline_[vdev].descriptorSet,
+				VK_NULL_HANDLE,
 				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 				1,
 				&uniformBuffers.frag_base.descriptor)

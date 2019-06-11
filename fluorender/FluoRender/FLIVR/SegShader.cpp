@@ -49,8 +49,8 @@ namespace FLIVR
 	"//SEG_VERTEX_CODE\n" \
 	"layout(location = 0) in vec3 InVertex;\n" \
 	"layout(location = 1) in vec3 InTexture;\n" \
-	"out vec3 OutVertex;\n" \
-	"out vec3 OutTexture;\n" \
+	"layout(location = 0) out vec3 OutVertex;\n" \
+	"layout(location = 1) out vec3 OutTexture;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
@@ -860,7 +860,7 @@ namespace FLIVR
 				1),
 			};
 
-			int offset = 1;
+			int offset = 2;
 			for (int i = 0; i < ShaderProgram::MAX_SHADER_UNIFORMS; i++)
 			{
 				setLayoutBindings.push_back(
@@ -908,7 +908,7 @@ namespace FLIVR
 
 		writeDescriptorSets.push_back(
 			vks::initializers::writeDescriptorSet(
-				pipeline_[vdev].descriptorSet,
+				VK_NULL_HANDLE,
 				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 				0,
 				&uniformBuffers.frag_base.descriptor)
