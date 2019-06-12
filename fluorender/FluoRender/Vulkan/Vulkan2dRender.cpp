@@ -105,7 +105,7 @@ void Vulkan2dRender::setupVertexDescriptions()
 	m_vertices.inputState.pVertexAttributeDescriptions = m_vertices.inputAttributes.data();
 }
 
-VkRenderPass Vulkan2dRender::prepareRenderPass(VkFormat framebuf_format, int attachment_num)
+VkRenderPass Vulkan2dRender::prepareRenderPass(VkFormat framebuf_format, int attachment_num, bool isSwapChainImage)
 {
 	VkRenderPass pass = VK_NULL_HANDLE;
 
@@ -126,7 +126,7 @@ VkRenderPass Vulkan2dRender::prepareRenderPass(VkFormat framebuf_format, int att
 		attd.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		attd.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		attd.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		attd.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		attd.finalLayout = isSwapChainImage ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		attchmentDescriptions.push_back(attd);
 
 		VkAttachmentReference colref = { i, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
@@ -172,20 +172,22 @@ VkRenderPass Vulkan2dRender::prepareRenderPass(VkFormat framebuf_format, int att
 	return pass;
 }
 
-Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blend_mode, VkFormat framebuf_format, int attachment_num)
+Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blend_mode, VkFormat framebuf_format, int attachment_num, bool isSwapChainImage)
 {
 	if (prev_pipeline >= 0) {
 		if (m_pipelines[prev_pipeline].shader == shader &&
 			m_pipelines[prev_pipeline].blend == blend_mode &&
 			m_pipelines[prev_pipeline].framebuf_format == framebuf_format &&
-			m_pipelines[prev_pipeline].attachment_num == attachment_num)
+			m_pipelines[prev_pipeline].attachment_num == attachment_num &&
+			m_pipelines[prev_pipeline].isSwapChainImage == isSwapChainImage)
 			return m_pipelines[prev_pipeline];
 	}
 	for (int i = 0; i < m_pipelines.size(); i++) {
 		if (m_pipelines[i].shader == shader &&
 			m_pipelines[i].blend == blend_mode &&
 			m_pipelines[i].framebuf_format == framebuf_format &&
-			m_pipelines[i].attachment_num == attachment_num)
+			m_pipelines[i].attachment_num == attachment_num &&
+			m_pipelines[i].isSwapChainImage == isSwapChainImage)
 		{
 			prev_pipeline = i;
 			return m_pipelines[i];
@@ -229,7 +231,7 @@ Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blen
 		static_cast<uint32_t>(dynamicStateEnables.size()),
 		0);
 
-	VkRenderPass pass = prepareRenderPass(framebuf_format, attachment_num);
+	VkRenderPass pass = prepareRenderPass(framebuf_format, attachment_num, isSwapChainImage);
 
 	m_img_pipeline_settings = m_vulkan->img_shader_factory_->pipeline_settings_[m_vulkan->vulkanDevice];
 	VkGraphicsPipelineCreateInfo pipelineCreateInfo =
@@ -294,6 +296,7 @@ Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blen
 	v2d_pipeline.pass = pass;
 	v2d_pipeline.framebuf_format = framebuf_format;
 	v2d_pipeline.attachment_num = attachment_num;
+	v2d_pipeline.isSwapChainImage = isSwapChainImage;
 	getEnabledUniforms(v2d_pipeline, sh->get_fragment_shader_code());
 
 	VK_CHECK_RESULT(
@@ -460,61 +463,61 @@ void Vulkan2dRender::buildCommandBuffer(
 		
 		vkCmdBeginRenderPass(commandbufs[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-		//VkViewport viewport = vks::initializers::viewport((float)framebuf->w, (float)framebuf->h, 0.0f, 1.0f);
-		//vkCmdSetViewport(commandbufs[i], 0, 1, &viewport);
+		VkViewport viewport = vks::initializers::viewport((float)framebuf->w, (float)framebuf->h, 0.0f, 1.0f);
+		vkCmdSetViewport(commandbufs[i], 0, 1, &viewport);
 
-		//VkRect2D scissor = vks::initializers::rect2D(framebuf->w, framebuf->h, 0, 0);
-		//vkCmdSetScissor(commandbufs[i], 0, 1, &scissor);
+		VkRect2D scissor = vks::initializers::rect2D(framebuf->w, framebuf->h, 0, 0);
+		vkCmdSetScissor(commandbufs[i], 0, 1, &scissor);
 
-		//if (!descriptorWrites.empty())
-		//{
-		//	m_vulkan->vulkanDevice->vkCmdPushDescriptorSetKHR(
-		//		commandbufs[i],
-		//		VK_PIPELINE_BIND_POINT_GRAPHICS,
-		//		m_img_pipeline_settings.pipelineLayout,
-		//		0,
-		//		descriptorWrites.size(),
-		//		descriptorWrites.data());
-		//}
+		if (!descriptorWrites.empty())
+		{
+			m_vulkan->vulkanDevice->vkCmdPushDescriptorSetKHR(
+				commandbufs[i],
+				VK_PIPELINE_BIND_POINT_GRAPHICS,
+				m_img_pipeline_settings.pipelineLayout,
+				0,
+				descriptorWrites.size(),
+				descriptorWrites.data());
+		}
 
-		//if (params.clear)
-		//{
-		//	VkClearAttachment clearAttachments[1] = {};
-		//	clearAttachments[0].aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		//	clearAttachments[0].clearValue = clearValues[0];
-		//	clearAttachments[0].colorAttachment = 0;
+		if (params.clear)
+		{
+			VkClearAttachment clearAttachments[1] = {};
+			clearAttachments[0].aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			clearAttachments[0].clearValue = clearValues[0];
+			clearAttachments[0].colorAttachment = 0;
 
-		//	VkClearRect clearRect = {};
-		//	clearRect.layerCount = 1;
-		//	clearRect.rect.offset = { 0, 0 };
-		//	clearRect.rect.extent = { framebuf->w, framebuf->h };
+			VkClearRect clearRect = {};
+			clearRect.layerCount = 1;
+			clearRect.rect.offset = { 0, 0 };
+			clearRect.rect.extent = { framebuf->w, framebuf->h };
 
-		//	vkCmdClearAttachments(
-		//		commandbufs[i],
-		//		1,
-		//		clearAttachments,
-		//		1,
-		//		&clearRect);
-		//}
+			vkCmdClearAttachments(
+				commandbufs[i],
+				1,
+				clearAttachments,
+				1,
+				&clearRect);
+		}
 
-		//vkCmdBindPipeline(commandbufs[i], VK_PIPELINE_BIND_POINT_GRAPHICS, params.pipeline.vkpipeline);
+		vkCmdBindPipeline(commandbufs[i], VK_PIPELINE_BIND_POINT_GRAPHICS, params.pipeline.vkpipeline);
 
-		////push constants
-		//if (constsize > 0)
-		//{
-		//	vkCmdPushConstants(
-		//		commandbufs[i],
-		//		m_img_pipeline_settings.pipelineLayout,
-		//		VK_SHADER_STAGE_FRAGMENT_BIT,
-		//		0,
-		//		constsize,
-		//		constant_buf);
-		//}
+		//push constants
+		if (constsize > 0)
+		{
+			vkCmdPushConstants(
+				commandbufs[i],
+				m_img_pipeline_settings.pipelineLayout,
+				VK_SHADER_STAGE_FRAGMENT_BIT,
+				0,
+				constsize,
+				constant_buf);
+		}
 
-		//VkDeviceSize offsets[1] = { 0 };
-		//vkCmdBindVertexBuffers(commandbufs[i], 0, 1, &m_vertexBuffer.buffer, offsets);
-		//vkCmdBindIndexBuffer(commandbufs[i], m_indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-		//vkCmdDrawIndexed(commandbufs[i], m_indexCount, 1, 0, 0, 0);
+		VkDeviceSize offsets[1] = { 0 };
+		vkCmdBindVertexBuffers(commandbufs[i], 0, 1, &m_vertexBuffer.buffer, offsets);
+		vkCmdBindIndexBuffer(commandbufs[i], m_indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+		vkCmdDrawIndexed(commandbufs[i], m_indexCount, 1, 0, 0, 0);
 
 		vkCmdEndRenderPass(commandbufs[i]);
 

@@ -113,14 +113,7 @@ protected:
 	VkPipelineCache pipelineCache;
 	// Wraps the swap chain to present images (framebuffers) to the windowing system
 	VulkanSwapChain swapChain;
-	// Synchronization semaphores
-	struct {
-		// Swap chain image presentation
-		VkSemaphore presentComplete;
-		// Command buffer submission and execution
-		VkSemaphore renderComplete;
-	} semaphores;
-	std::vector<VkFence> waitFences;
+	
 public: 
 	bool prepared = false;
 	uint32_t width = 1280;
@@ -140,6 +133,14 @@ public:
 	std::vector<std::unique_ptr<vks::VFrameBuffer>> frameBuffers;
 	// Active frame buffer index
 	uint32_t currentBuffer = 0;
+	// Synchronization semaphores
+	struct {
+		// Swap chain image presentation
+		VkSemaphore presentComplete;
+		// Command buffer submission and execution
+		VkSemaphore renderComplete;
+	} semaphores;
+	std::vector<VkFence> waitFences;
 
 	/** @brief Example settings that can be changed e.g. by command line arguments */
 	struct Settings {

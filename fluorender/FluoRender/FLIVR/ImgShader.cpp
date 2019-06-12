@@ -42,7 +42,7 @@ namespace FLIVR
 #define IMG_VERTEX_CODE \
 	"//IMG_VERTEX_CODE\n" \
 	"layout(location = 0) in vec3 InVertex;\n" \
-	"layout(location = 1) layout(location = 1) in vec3 InTexCoord;\n" \
+	"layout(location = 1) in vec3 InTexCoord;\n" \
 	"layout(location = 0) out vec3 OutVertex;\n" \
 	"layout(location = 1) out vec3 OutTexCoord;\n" \
 	"\n" \
@@ -127,22 +127,6 @@ namespace FLIVR
 	"	FragColor = OutColor;\n" \
 	"}\n"
 
-//#define IMG_SHADER_CODE_TEXTURE_LOOKUP \
-//	"//IMG_SHADER_CODE_TEXTURE_LOOKUP\n" \
-//	"layout(location = 0) in vec3 OutVertex;\n" \
-//	"layout(location = 1) in vec3 OutTexCoord;\n" \
-//	"layout(location = 0) out vec4 FragColor;\n" \
-//	"\n" \
-//	"// IMG_SHADER_CODE_TEXTURE_LOOKUP\n" \
-//	"layout (binding = 0) uniform sampler2D tex0;\n" \
-//	"\n" \
-//	"void main()\n" \
-//	"{\n" \
-//	"	vec4 t = vec4(OutTexCoord, 1.0);\n" \
-//	"	vec4 c = texture(tex0, t.xy);\n" \
-//	"	c.a = clamp(c.a, 0.0, 1.0);\n" \
-//	"	FragColor = c;\n" \
-//	"}\n"
 #define IMG_SHADER_CODE_TEXTURE_LOOKUP \
 	"//IMG_SHADER_CODE_TEXTURE_LOOKUP\n" \
 	"layout(location = 0) in vec3 OutVertex;\n" \
@@ -157,7 +141,7 @@ namespace FLIVR
 	"	vec4 t = vec4(OutTexCoord, 1.0);\n" \
 	"	vec4 c = texture(tex0, t.xy);\n" \
 	"	c.a = clamp(c.a, 0.0, 1.0);\n" \
-	"	FragColor = vec4(1.0, 1.0, 1.0, 1.0);\n" \
+	"	FragColor = c;\n" \
 	"}\n"
 
 #define IMG_SHADER_CODE_TEXTURE_LOOKUP_BLEND \

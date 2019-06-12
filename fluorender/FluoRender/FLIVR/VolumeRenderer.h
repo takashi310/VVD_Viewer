@@ -321,10 +321,12 @@ public:
 			uint32_t signalSemaphoreCount = 0;
 			VkSemaphore* waitSemaphores = nullptr;
 			VkSemaphore* signalSemaphores = nullptr;
+			bool wait_before_brk_rendering = false;
 		};
 
 		virtual void draw(
 			const std::unique_ptr<vks::VFrameBuffer>& framebuf,
+			bool clear_framebuf,
 			VSemaphoreSettings semaphores,
 			bool draw_wireframe_p,
 			bool interactive_mode_p,
@@ -335,6 +337,7 @@ public:
 		);
 		void draw_volume(
 			const std::unique_ptr<vks::VFrameBuffer>& framebuf,
+			bool clear_framebuf,
 			VSemaphoreSettings semaphores,
 			bool interactive_mode_p,
 			bool orthographic_p = false,

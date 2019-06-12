@@ -39,6 +39,7 @@ public:
 		int blend;
 		VkFormat framebuf_format;
 		int attachment_num;
+		bool isSwapChainImage;
 		VkBool32 uniforms[V2DRENDER_UNIFORM_NUM] = { VK_FALSE };
 		VkBool32 samplers[IMG_SHDR_SAMPLER_NUM] = { VK_FALSE };
 	};
@@ -61,8 +62,8 @@ public:
 	void init(std::shared_ptr<VVulkan> vulkan);
 	void generateQuad();
 	void setupVertexDescriptions();
-	VkRenderPass prepareRenderPass(VkFormat framebuf_format, int attachment_num);
-	V2dPipeline preparePipeline(int shader, int blend_mode, VkFormat framebuf_format, int attachment_num);
+	VkRenderPass prepareRenderPass(VkFormat framebuf_format, int attachment_num, bool isSwapChainImage=false);
+	V2dPipeline preparePipeline(int shader, int blend_mode, VkFormat framebuf_format, int attachment_num, bool isSwapChainImage=false);
 
 	void getEnabledUniforms(V2dPipeline &pipeline, const std::string &code);
 
