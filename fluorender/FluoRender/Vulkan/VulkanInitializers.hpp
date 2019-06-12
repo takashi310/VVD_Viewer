@@ -445,6 +445,7 @@ namespace vks
 		{
 			VkPipelineColorBlendStateCreateInfo pipelineColorBlendStateCreateInfo {};
 			pipelineColorBlendStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+			pipelineColorBlendStateCreateInfo.pNext = nullptr;
 			pipelineColorBlendStateCreateInfo.attachmentCount = attachmentCount;
 			pipelineColorBlendStateCreateInfo.pAttachments = pAttachments;
 			return pipelineColorBlendStateCreateInfo;

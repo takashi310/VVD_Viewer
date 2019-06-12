@@ -65,8 +65,8 @@ namespace vks
 		offset.x = b->ox();
 		offset.y = b->oy();
 		offset.z = b->oz();
-		ypitch = b->sx() * b->nb(c);
-		zpitch = b->sy() * b->sx() * b->nb(c);
+		ypitch = (VkDeviceSize)b->sx() * b->nb(c);
+		zpitch = (VkDeviceSize)b->sy() * b->sx() * b->nb(c);
 
 		vks::VulkanDevice *device = texp.tex->device;
 		void* data = b->tex_data(c);
@@ -86,7 +86,7 @@ namespace vks
 				//save before deletion
 				return_brick(tex_pool[j]);
 				if (tex_pool[j].comp >= 0 && tex_pool[j].comp < TEXTURE_MAX_COMPONENTS && tex_pool[j].tex->bytes > 0)
-					available_mem += tex_pool[j].tex->w*tex_pool[j].tex->h*tex_pool[j].tex->d*tex_pool[j].tex->bytes/1.04e6;
+					available_mem += (VkDeviceSize)tex_pool[j].tex->w*tex_pool[j].tex->h*tex_pool[j].tex->d*tex_pool[j].tex->bytes/1.04e6;
 				tex_pool.erase(tex_pool.begin()+j);
 			}
 		}
@@ -187,7 +187,7 @@ namespace vks
 				texp.delayed_del = true;
 				comp = texp.comp;
 				deleted.push_back(bd_undisp[i].index);
-				double released_mem = texp.tex->w*texp.tex->h*texp.tex->d*texp.tex->bytes/1.04e6;
+				double released_mem = (VkDeviceSize)texp.tex->w*texp.tex->h*texp.tex->d*texp.tex->bytes/1.04e6;
 				est_avlb_mem += released_mem;
 				if (est_avlb_mem >= new_mem)
 					break;
@@ -228,7 +228,7 @@ namespace vks
 						texp.delayed_del = true;
 						comp = texp.comp;
 						deleted.push_back(bd_others[i].index);
-						double released_mem = texp.tex->w*texp.tex->h*texp.tex->d*texp.tex->bytes/1.04e6;
+						double released_mem = (VkDeviceSize)texp.tex->w*texp.tex->h*texp.tex->d*texp.tex->bytes/1.04e6;
 						est_avlb_mem += released_mem;
 						if (est_avlb_mem >= new_mem)
 							break;
@@ -279,7 +279,7 @@ namespace vks
 			vks::TexParam p = vks::TexParam(comp, ret);
 			p.brick = b;
 			tex_pool.push_back(p);
-			available_mem -= ret->w*ret->h*ret->d*ret->bytes/1.04e6;
+			available_mem -= (VkDeviceSize)ret->w*ret->h*ret->d*ret->bytes/1.04e6;
 		}
 
 		return int(tex_pool.size()) - 1;
@@ -460,7 +460,7 @@ namespace vks
 		ret->bytes = FormatTexelSize(format);
 		ret->mipLevels = 1;
 		ret->format = format;
-		ret->usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+		ret->usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 		ret->image = VK_NULL_HANDLE;
 		ret->deviceMemory = VK_NULL_HANDLE;
 		ret->sampler = VK_NULL_HANDLE;
@@ -511,7 +511,7 @@ namespace vks
 		VK_CHECK_RESULT(vkBindImageMemory(ret->device->logicalDevice, ret->image, ret->deviceMemory, 0));
 
 		// Set sampler
-		if (filter = VK_FILTER_LINEAR)
+		if (filter == VK_FILTER_LINEAR)
 			ret->sampler = linear_sampler;
 		else
 			ret->sampler = nearest_sampler;

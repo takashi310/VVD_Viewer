@@ -1198,32 +1198,11 @@ namespace FLIVR
 				dst_blend,
 				0xf);
 
-		if (colormap_mode_ != 3)
-		{
-			VkPipelineColorBlendStateCreateInfo colorBlendState =
-				vks::initializers::pipelineColorBlendStateCreateInfo(
-					1,
-					&blendAttachmentState);
-			pipelineCreateInfo.pColorBlendState = &colorBlendState;
-		}
-		else
-		{
-			std::array<VkPipelineColorBlendAttachmentState, 2> blendAttStates;
-			blendAttStates[0] = blendAttachmentState;
-			blendAttStates[1] =
-				vks::initializers::pipelineColorBlendAttachmentState(
-					VK_FALSE,
-					blendop,
-					src_blend,
-					dst_blend,
-					0xf);
-
-			VkPipelineColorBlendStateCreateInfo colorBlendState =
-				vks::initializers::pipelineColorBlendStateCreateInfo(
-					2,
-					blendAttStates.data());
-			pipelineCreateInfo.pColorBlendState = &colorBlendState;
-		}
+		VkPipelineColorBlendStateCreateInfo colorBlendState =
+			vks::initializers::pipelineColorBlendStateCreateInfo(
+				1,
+				&blendAttachmentState);
+		pipelineCreateInfo.pColorBlendState = &colorBlendState;
 
 		// Load shaders
 		std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages;

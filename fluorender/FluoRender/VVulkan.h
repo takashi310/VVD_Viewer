@@ -20,7 +20,11 @@
 #include <vector>
 #include <memory>
 
+#ifdef _DEBUG
 #define ENABLE_VALIDATION true
+#else
+#define ENABLE_VALIDATION false
+#endif
 
 #ifndef _VVULKAN_H_
 #define _VVULKAN_H_

@@ -20,6 +20,8 @@ void Vulkan2dRender::init(std::shared_ptr<VVulkan> vulkan)
 	generateQuad();
 	setupVertexDescriptions();
 	m_default_cmdbuf = m_vulkan->vulkanDevice->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+
+	prev_pipeline = -1;
 }
 
 Vulkan2dRender::~Vulkan2dRender()
