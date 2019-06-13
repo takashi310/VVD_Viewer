@@ -810,7 +810,6 @@ namespace FLIVR
 
 			vkDestroyPipelineLayout(device, pipeline_[vdev].pipelineLayout, nullptr);
 			vkDestroyDescriptorSetLayout(device, pipeline_[vdev].descriptorSetLayout, nullptr);
-			vkDestroyDescriptorPool(device, pipeline_[vdev].descriptorPool, nullptr);
 		}
 	}
 

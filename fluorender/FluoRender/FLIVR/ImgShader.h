@@ -115,9 +115,9 @@ namespace FLIVR
 		ShaderProgram* shader(VkDevice device, int type, int colormap_=0);
 
 		struct ImgPipelineSettings {
-			VkDescriptorSetLayout descriptorSetLayout;
-			VkPipelineLayout pipelineLayout;
-			VkDescriptorSet descriptorSet;
+			VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
+			VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+			VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 		};
 		
 		void setupDescriptorSetLayout();

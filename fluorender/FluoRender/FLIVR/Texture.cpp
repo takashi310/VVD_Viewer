@@ -413,7 +413,7 @@ namespace FLIVR
 			b_spcz_ = z;
 			Transform tform;
 			tform.load_identity();
-			Point nmax(nx_*x, ny_*y, nz_*z);
+			Point nmax(nx_*x, ny_*y, -nz_*z);
 			tform.pre_scale(Vector(nmax));
 			set_transform(tform);
 		}
@@ -424,7 +424,7 @@ namespace FLIVR
 			s_spcz_ = z / b_spcz_;
 			Transform tform;
 			tform.load_identity();
-			Point nmax(nx_*spcx_*s_spcx_, ny_*spcy_*s_spcy_, nz_*spcz_*s_spcz_);
+			Point nmax(nx_*spcx_*s_spcx_, ny_*spcy_*s_spcy_, -nz_*spcz_*s_spcz_);
 			tform.pre_scale(Vector(nmax));
 			set_transform(tform);
 		}
@@ -443,7 +443,7 @@ namespace FLIVR
 			spcz_ = z;
 			Transform tform;
 			tform.load_identity();
-			Point nmax(nx_*x, ny_*y, nz_*z);
+			Point nmax(nx_*x, ny_*y, -nz_*z);
 			tform.pre_scale(Vector(nmax));
 			set_transform(tform);
 		}
@@ -532,6 +532,7 @@ namespace FLIVR
 
 		Transform tform;
 		tform.load_identity();
+		tform.pre_scale(Vector(1.0, 1.0, -1.0));
 
 		for (size_t p = 0; p < dim; p++) 
 			size[p] = (int)nv_nrrd->axis[p + offset].size;
@@ -1005,7 +1006,7 @@ namespace FLIVR
 		spcz_ = pyramid_[lv].data->axis[offset + 2].spacing;
 		Transform tform;
 		tform.load_identity();
-		Point nmax(nx_*spcx_*s_spcx_, ny_*spcy_*s_spcy_, nz_*spcz_*s_spcz_);
+		Point nmax(nx_*spcx_*s_spcx_, ny_*spcy_*s_spcy_, -nz_*spcz_*s_spcz_);
 		tform.pre_scale(Vector(nmax));
 		set_transform(tform);
 		set_sort_bricks();

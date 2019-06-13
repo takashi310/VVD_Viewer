@@ -143,9 +143,9 @@ namespace FLIVR
 		//color_mode: 0-normal; 1-rainbow; 2-depth; 3-index; 255-index(depth mode)
 
 		struct VolPipelineSettings {
-			VkDescriptorSetLayout descriptorSetLayout;
-			VkPipelineLayout pipelineLayout;
-			VkDescriptorSet descriptorSet;
+			VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
+			VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+			VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 		};
 		
 		struct VolVertShaderUBO {
