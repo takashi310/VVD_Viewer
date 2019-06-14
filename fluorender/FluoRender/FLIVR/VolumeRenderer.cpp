@@ -1741,6 +1741,8 @@ namespace FLIVR
 			vkCmdBeginRenderPass(cmdbuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 		}
 		
+		int count = 0;
+		int que = 4;
 		for (unsigned int i=0; i < bricks->size(); i++)
 		{
 			TextureBrick* b = (*bricks)[i];
@@ -1900,7 +1902,7 @@ namespace FLIVR
 
 			//////////////////////
 			//build command buffer
-			if (mem_swap_)
+			if (mem_swap_ && count == 0)
 			{
 				VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
 				cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
@@ -1979,8 +1981,11 @@ namespace FLIVR
 			vertbuf_offset += vertex.size() * sizeof(float);
 			idxbuf_offset += index.size() * sizeof(unsigned int);
 
-			if (mem_swap_)
+			count++;
+			if (mem_swap_ && (count >= que || i >= bricks->size()-1) )
 			{
+				count = 0;
+
 				vkCmdEndRenderPass(cmdbuf);
 
 				VK_CHECK_RESULT(vkEndCommandBuffer(cmdbuf));
@@ -2015,7 +2020,7 @@ namespace FLIVR
 			}
 
 			//comment off when debug_ds
-			if (mem_swap_/* && !mask_ && !label_*/)
+			if (mem_swap_/* && !mask_ && !label_*/ && count == 0)
 			{
 				uint32_t rn_time = GET_TICK_COUNT();
 				if (rn_time - st_time_ > get_up_time())
