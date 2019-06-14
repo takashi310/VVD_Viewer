@@ -1167,7 +1167,13 @@ namespace FLIVR
 		enable_blend = VK_TRUE;
 		switch (mode_)
 		{
+		case MODE_MIP:
+			blendop = VK_BLEND_OP_MAX;
+			src_blend = VK_BLEND_FACTOR_ONE;
+			dst_blend = VK_BLEND_FACTOR_ONE;
+			break;
 		case MODE_OVER:
+		default:
 			blendop = VK_BLEND_OP_ADD;
 			if (update_order_ == 0)
 			{
@@ -1179,13 +1185,6 @@ namespace FLIVR
 				src_blend = VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
 				dst_blend = VK_BLEND_FACTOR_ONE;
 			}
-			break;
-		case MODE_MIP:
-			blendop = VK_BLEND_OP_MAX;
-			src_blend = VK_BLEND_FACTOR_ONE;
-			dst_blend = VK_BLEND_FACTOR_ONE;
-			break;
-		default:
 			break;
 		}
 		enable_blend = (colormap_mode_ == 3) ? VK_FALSE : VK_TRUE;
