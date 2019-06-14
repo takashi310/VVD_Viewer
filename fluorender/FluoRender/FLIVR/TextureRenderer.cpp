@@ -1580,8 +1580,8 @@ namespace FLIVR
 				offset.x = brick->ox();
 				offset.y = brick->oy();
 				offset.z = brick->oz();
-				ypitch = brick->sx() * brick->nb(c);
-				zpitch = brick->sy() * brick->sx() * brick->nb(c);
+				ypitch = (uint64_t)brick->sx() * brick->nb(c);
+				zpitch = (uint64_t)brick->sy() * brick->sx() * brick->nb(c);
 
 				// set interpolation method
 				if (filter == VK_FILTER_LINEAR)
@@ -1589,7 +1589,7 @@ namespace FLIVR
 				else if (filter == VK_FILTER_NEAREST)
 					result->sampler = device->nearest_sampler;
 
-				void *texdata = brick->tex_data(c);
+				void *texdata = brick->get_nrrd(c)->data;
 				device->UploadTexture3D(result, texdata, offset, ypitch, zpitch);
 			}
 			else if(tex_->isBrxml())
@@ -1741,8 +1741,8 @@ namespace FLIVR
 			offset.x = brick->ox();
 			offset.y = brick->oy();
 			offset.z = brick->oz();
-			ypitch = brick->sx() * brick->nb(c);
-			zpitch = brick->sy() * brick->sx() * brick->nb(c);
+			ypitch = (uint64_t)brick->sx() * brick->nb(c);
+			zpitch = (uint64_t)brick->sy() * brick->sx() * brick->nb(c);
 
 			// set interpolation method
 			if (filter == VK_FILTER_LINEAR)
