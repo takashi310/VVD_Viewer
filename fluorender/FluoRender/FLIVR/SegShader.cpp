@@ -39,11 +39,32 @@ using std::ostringstream;
 
 namespace FLIVR
 {
+#define SEG_INPUTS \
+	"#pragma optionNV(inline all)\n" \
+	"#pragma optionNV(fastmath on)\n" \
+	"#pragma optionNV(ifcvt none)\n" \
+	"#pragma optionNV(strict on)\n" \
+	"#pragma optionNV(unroll all)\n" \
+	"layout (local_size_x = 8, local_size_y = 8, local_size_z = 8) in;\n" \
+
+#define SEG_HEAD \
+	"//SEG_HEAD\n" \
+	"void main()\n" \
+	"{\n" \
+	"	vec4 TexCoord = vec4((gl_GlobalInvocationID.x+0.5)*loc4.x, (gl_GlobalInvocationID.y+0.5)*loc4.y, (gl_GlobalInvocationID.z+0.5)*loc4.z, 1.0);\n" \
+	"	vec4 t = TexCoord;\n" \
+	"\n"
+
 #define SEG_OUTPUTS \
 	"//SEG_OUTPUTS\n" \
-	"layout(location = 0) out vec4 FragColor;\n"
+	"layout (binding = 0, r8) uniform image3D maskOut;\n"
+
 #define SEG_PAINT_OUTPUTS \
-	"layout(location = 1) out vec4 StrokeColor;\n"
+	"layout (binding = 18, r8) uniform image3D strokeOut;\n"
+
+#define SEG_UNIFORMS_LABEL_OUTPUT \
+	"//SEG_OUTPUTS\n" \
+	"layout (binding = 0, r32ui) uniform image3D labelOut;\n"
 
 #define SEG_VERTEX_CODE \
 	"//SEG_VERTEX_CODE\n" \
@@ -61,15 +82,15 @@ namespace FLIVR
 
 #define SEG_UNIFORMS_BASE \
 	"// SEG_UNIFORMS_BASE\n" \
-	"layout (binding = 1) uniform VolFragShaderBaseUBO {\n" \
+	"layout (binding = 1) uniform SegCompShaderBaseUBO {\n" \
 	"	vec4 loc0;//(lx, ly, lz, alpha)\n" \
 	"	vec4 loc1;//(ka, kd, ks, ns)\n" \
 	"	vec4 loc2;//(scalar_scale, gm_scale, left_thresh, right_thresh)\n" \
 	"	vec4 loc3;//(gamma, gm_thresh, offset, sw)\n" \
 	"	vec4 loc5;//(spcx, spcy, spcz, max_id)\n" \
-	"	vec4 loc6;//(1/vx, 1/vy, luminance, depth_mode)\n" \
-	"	vec4 loc7;//(1/vx, 1/vy, 0, 0)\n" \
-	"	vec4 loc8;//(int, start, end, 0.0)\n" \
+	"	vec4 loc6;//(r, g, b, 0.0) or (1/vx, 1/vy, luminance, depth_mode)\n" \
+	"	vec4 loc7;//(ini_thresh, gm_falloff, scl_falloff, scl_translate)\n" \
+	"	vec4 loc8;//(w2d, bins, 0.0, 0.0)\n" \
 	"	vec4 loc10; //plane0\n" \
 	"	vec4 loc11; //plane1\n" \
 	"	vec4 loc12; //plane2\n" \
@@ -88,7 +109,7 @@ namespace FLIVR
 
 #define SEG_UNIFORMS_BRICK \
 	"// VOL_UNIFORMS_BRICK\n" \
-	"layout (push_constant) uniform VolFragShaderBrickConst {\n" \
+	"layout (push_constant) uniform SegCompShaderBrickConst {\n" \
 	"	vec4 loc4;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
 	"	vec4 loc9;//(nx, ny, nz, 0) (value_var_foff, angle_var_foff, 0, 0)\n" \
 	"	vec4 brkscale;//tex transform for bricking\n" \
@@ -107,11 +128,6 @@ namespace FLIVR
 #define SEG_UNIFORMS_MASK_2D \
 	"//SEG_UNIFORMS_MASK_2D\n" \
 	"layout(location = 8) uniform sampler2D tex6;//2d mask\n" \
-	"\n"
-
-#define SEG_UNIFORMS_LABEL_OUTPUT \
-	"//SEG_UNIFORMS_LABEL_OUTPUT\n" \
-	"out uint FragUint;\n"\
 	"\n"
 
 #define SEG_TAIL \
@@ -136,7 +152,7 @@ namespace FLIVR
 
 #define SEG_BODY_INIT_CLEAR \
 	"	//SEG_BODY_INIT_CLEAR\n" \
-	"	FragColor = vec4(0.0);\n"\
+	"	imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
 	"\n"
 
 #define SEG_BODY_INIT_2D_COORD \
@@ -171,66 +187,66 @@ namespace FLIVR
 #define SEG_BODY_INIT_BLEND_APPEND \
 	"	//SEG_BODY_INIT_BLEND_APPEND\n" \
 	"	vec4 ret = vec4(c.x>0.0?(c.x>base.loc7.x?1.0:0.0):0.0);\n" \
-	"	FragColor = ret;\n" \
+	"	imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), ret);\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_APPEND_STROKE_TAIL \
 	"	//SEG_BODY_INIT_BLEND_APPEND_STROKE_TAIL\n" \
-	"	StrokeColor = vec4(1.0);\n" \
+	"	imageStore(strokeOut, ivec3(gl_GlobalInvocationID.xyz), vec4(1.0));\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_ERASE \
 	"	//SEG_BODY_INIT_BLEND_ERASE\n" \
-	"	FragColor = vec4(0.0);\n" \
+	"	imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_ERASE_STROKE_TAIL \
 	"	//SEG_BODY_INIT_BLEND_ERASE_STROKE_TAIL\n" \
-	"	StrokeColor = vec4(0.0);\n" \
+	"	imageStore(strokeOut, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_DIFFUSE \
 	"	//SEG_BODY_INIT_BLEND_DIFFUSE\n" \
 	"	vec4 ret = texture(tex2, t.stp);\n" \
-	"	FragColor = ret;\n" \
+	"	imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), ret);\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_DIFFUSE_STROKE_TAIL \
 	"	//SEG_BODY_INIT_BLEND_DIFFUSE_STROKE_TAIL\n" \
-	"	StrokeColor = ret;\n" \
+	"	imageStore(strokeOut, ivec3(gl_GlobalInvocationID.xyz), ret);\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_FLOOD \
 	"	//SEG_BODY_INIT_BLEND_FLOOD\n" \
 	"	vec4 ret = vec4(c.x>0.0?(c.x>base.loc7.x?1.0:0.0):0.0);\n" \
-	"	FragColor = ret;\n" \
+	"	imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), ret);\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_FLOOD_STROKE_TAIL \
 	"	//SEG_BODY_INIT_BLEND_FLOOD_STROKE_TAIL\n" \
-	"	StrokeColor = vec4(1.0);\n" \
+	"	imageStore(strokeOut, ivec3(gl_GlobalInvocationID.xyz), vec4(1.0));\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_ALL \
 	"	//SEG_BODY_INIT_BLEND_ALL\n" \
-	"	FragColor = vec4(1.0);\n" \
+	"	imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), vec4(1.0));\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_ALL_STROKE_TAIL \
 	"	//SEG_BODY_INIT_BLEND_ALL_STROKE_TAIL\n" \
-	"	StrokeColor = vec4(1.0);\n" \
+	"	imageStore(strokeOut, ivec3(gl_GlobalInvocationID.xyz), vec4(1.0));\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_HR_ORTHO_STROKE_HEAD \
 	"	//SEG_BODY_INIT_BLEND_HR_ORTHO_STROKE_HEAD\n" \
-	"	StrokeColor = vec4(1.0);\n" \
+	"	imageStore(strokeOut, ivec3(gl_GlobalInvocationID.xyz), vec4(1.0));\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_HR_ORTHO \
 	"	//SEG_BODY_INIT_BLEND_HR_ORTHO\n" \
 	"	if (c.x <= base.loc7.x)\n" \
 	"	{\n" \
-	"		FragColor = vec4(0.0);\n" \
+	"		imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
 	"		return;\n" \
 	"	}\n" \
 	"	vec4 cv = matrix3 * vec4(0.0, 0.0, 1.0, 0.0);\n" \
@@ -253,25 +269,25 @@ namespace FLIVR
 	"		cray = vol_trans_sin_color_l(v);\n" \
 	"		if (cray.x > base.loc7.x && flag)\n" \
 	"		{\n" \
-	"			FragColor = vec4(0.0);\n" \
+	"			imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
 	"			return;\n" \
 	"		}\n" \
 	"		if (cray.x <= base.loc7.x)\n" \
 	"			flag = true;\n" \
 	"	}\n" \
-	"	FragColor = vec4(1.0);\n" \
+	"	imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), vec4(1.0));\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_HR_PERSP_STROKE_HEAD \
 	"	//SEG_BODY_INIT_BLEND_HR_PERSP_STROKE_HEAD\n" \
-	"	StrokeColor = vec4(1.0);\n" \
+	"	imageStore(strokeOut, ivec3(gl_GlobalInvocationID.xyz), vec4(1.0));\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_HR_PERSP \
 	"	//SEG_BODY_INIT_BLEND_HR_PERSP\n" \
 	"	if (c.x <= base.loc7.x)\n" \
 	"	{\n" \
-	"		FragColor = vec4(0.0);\n" \
+	"		imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
 	"		return;\n" \
 	"	}\n" \
 	"	vec4 cv = matrix3 * vec4(0.0, 0.0, 0.0, 1.0);\n" \
@@ -295,24 +311,24 @@ namespace FLIVR
 	"		cray = vol_trans_sin_color_l(v);\n" \
 	"		if (cray.x > base.loc7.x && flag)\n" \
 	"		{\n" \
-	"			FragColor = vec4(0.0);\n" \
+	"			imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
 	"			return;\n" \
 	"		}\n" \
 	"		if (cray.x <= base.loc7.x)\n" \
 	"			flag = true;\n" \
 	"	}\n" \
-	"	FragColor = vec4(1.0);\n" \
+	"	imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), vec4(1.0));\n" \
 	"\n"
 
 #define SEG_BODY_INIT_POSTER \
 	"	//SEG_BODY_INIT_POSTER\n" \
 	"	vec4 ret = vec4(ceil(c.x*base.loc8.y)/base.loc8.y);\n" \
-	"	FragColor = ret;\n" \
+	"	imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), ret);\n" \
 	"\n"
 
 #define SEG_BODY_INIT_POSTER_STROKE_TAIL \
 	"	//SEG_BODY_INIT_POSTER_STROKE_TAIL\n" \
-	"	StrokeColor = ret;\n" \
+	"	imageStore(strokeOut, ivec3(gl_GlobalInvocationID.xyz), ret);\n" \
 	"\n"
 
 #define SEG_BODY_DB_GROW_2D_COORD \
@@ -344,12 +360,12 @@ namespace FLIVR
 
 #define SEG_BODY_DB_GROW_BLEND_APPEND_HEAD \
 	"	//SEG_BODY_DB_GROW_BLEND_APPEND_HEAD\n" \
-	"	StrokeColor = (1.0-stop) * cc;\n" \
+	"	imageStore(strokeOut, ivec3(gl_GlobalInvocationID.xyz), (1.0-stop) * cc);\n" \
 	"\n"
 
 #define SEG_BODY_DB_GROW_BLEND_APPEND \
 	"	//SEG_BODY_DB_GROW_BLEND_APPEND\n" \
-	"	FragColor = (1.0-stop) * cc;\n" \
+	"	vec4 result = (1.0-stop) * cc;\n" \
 	"	vec3 nb;\n" \
 	"	vec3 max_nb = t.stp;\n" \
 	"	float m;\n" \
@@ -373,12 +389,13 @@ namespace FLIVR
 	"		if (m < mx || m - mx > 2.0*base.loc7.y)\n" \
 	"			discard;\n" \
 	"	}\n" \
-	"	FragColor += cc*stop;\n"\
+	"	result += cc*stop;\n"\
+	"	imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), result);\n" \
 	"\n"
 
 #define SEG_BODY_DB_GROW_BLEND_APPEND_TAIL \
 	"	//SEG_BODY_DB_GROW_BLEND_APPEND_HEAD\n" \
-	"	StrokeColor += cc*stop;\n"\
+	"	imageStore(strokeOut, ivec3(gl_GlobalInvocationID.xyz), result);\n" \
 	"\n"
 
 #define SEG_BODY_DB_GROW_BLEND_ERASE0 \
@@ -391,22 +408,22 @@ namespace FLIVR
 	"		cc = vec4(min(cc.x, texture(tex2, nb).x));\n"\
 	"	}\n"\
 	"	vec4 ret = cc*clamp(1.0-stop, 0.0, 1.0);\n"\
-	"	FragColor = ret;\n"\
+	"	imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), ret);\n" \
 	"\n"
 
 #define SEG_BODY_DB_GROW_BLEND_ERASE0_STROKE_TAIL \
 	"	//SEG_BODY_DB_GROW_BLEND_ERASE0_STROKE_TAIL\n" \
-	"	StrokeColor = ret;\n"\
+	"	imageStore(strokeOut, ivec3(gl_GlobalInvocationID.xyz), ret);\n" \
 	"\n"
 
 #define SEG_BODY_DB_GROW_BLEND_ERASE \
 	"	//SEG_BODY_DB_GROW_BLEND_ERASE\n" \
-	"	FragColor = vec4(0.0);\n"\
+	"	imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
 	"\n"
 
 #define SEG_BODY_DB_GROW_BLEND_ERASE_STROKE_TAIL \
 	"	//SEG_BODY_DB_GROW_BLEND_ERASE_STROKE_TAIL\n" \
-	"	StrokeColor = vec4(0.0);\n"\
+	"	imageStore(strokeOut, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
 	"\n"
 
 #define SEG_BODY_LABEL_INITIALIZE \
@@ -414,7 +431,7 @@ namespace FLIVR
 	"	vec4 mask = texture(tex2, t.stp)*c.x;\n" \
 	"	if (mask.x == 0.0 || mask.x < base.loc7.x)\n" \
 	"	{\n" \
-	"		FragUint = uint(0);\n" \
+	"		imageStore(labelOut, ivec3(gl_GlobalInvocationID.xyz), uvec4(0));\n" \
 	"		return;\n" \
 	"	}\n" \
 	"\n"
@@ -423,7 +440,7 @@ namespace FLIVR
 	"	//SEG_BODY_LABEL_INIT_ORDER\n" \
 	"	vec3 int_pos = vec3(t.x*brk.loc9.x, t.y*brk.loc9.y, t.z*brk.loc9.z);\n" \
 	"	uint index = uint(int_pos.z*brk.loc9.x*brk.loc9.y+int_pos.y*brk.loc9.x+int_pos.x+1);\n" \
-	"	FragUint = index;\n" \
+	"	imageStore(labelOut, ivec3(gl_GlobalInvocationID.xyz), uvec4(index));\n" \
 	"\n"
 
 #define SEG_BODY_LABEL_INIT_COPY \
@@ -435,7 +452,7 @@ namespace FLIVR
 	"	//SEG_BODY_LABEL_INITIALIZE_NOMASK\n" \
 	"	if (c.x ==0.0 || c.x <= base.loc7.x)\n" \
 	"	{\n" \
-	"		FragUint = uint(0);\n" \
+	"		imageStore(labelOut, ivec3(gl_GlobalInvocationID.xyz), uvec4(0));\n" \
 	"		return;\n" \
 	"	}\n" \
 	"\n"
@@ -445,7 +462,7 @@ namespace FLIVR
 	"	vec4 mask = texture(tex2, t.stp);\n" \
 	"	if (mask.x < 0.001)\n" \
 	"	{\n" \
-	"		FragUint = uint(0);\n" \
+	"		imageStore(labelOut, ivec3(gl_GlobalInvocationID.xyz), uvec4(0));\n" \
 	"		return;\n" \
 	"	}\n" \
 	"\n"
@@ -482,7 +499,7 @@ namespace FLIVR
 	"	}\n" \
 	"	if (texture(tex0, max_nb).x+base.loc7.y < texture(tex0, t.stp).x)\n" \
 	"		discard;\n" \
-	"	FragUint = int_val;\n" \
+	"	imageStore(labelOut, ivec3(gl_GlobalInvocationID.xyz), uvec4(int_val));\n" \
 	"\n"
 
 #define SEG_BODY_LABEL_MIF_POSTER \
@@ -490,7 +507,7 @@ namespace FLIVR
 	"	uint int_val = texture(tex3, t.stp).x;\n" \
 	"	if (int_val == uint(0))\n" \
 	"	{\n" \
-	"		FragUint = uint(0);\n" \
+	"		imageStore(labelOut, ivec3(gl_GlobalInvocationID.xyz), uvec4(0));\n" \
 	"		return;\n" \
 	"	}\n" \
 	"	float cur_val = texture(tex2, t.stp).x;\n" \
@@ -504,7 +521,7 @@ namespace FLIVR
 	"		if (abs(nb_val-cur_val) < 0.001)\n" \
 	"			int_val = max(int_val, texture(tex3, nb).x);\n" \
 	"	}\n" \
-	"	FragUint = int_val;\n" \
+	"	imageStore(labelOut, ivec3(gl_GlobalInvocationID.xyz), uvec4(int_val));\n" \
 	"\n"
 
 #define FLT_BODY_NR \
@@ -524,7 +541,7 @@ namespace FLIVR
 	"		max_val = (nb_val<vc && nb_val>max_val)?nb_val:max_val;\n" \
 	"	}\n" \
 	"	if (max_val > 0.0)\n" \
-	"		FragColor = vec4(max_val);\n" \
+	"		imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), vec4(max_val));\n" \
 	"	else\n" \
 	"		discard;\n" \
 	"\n"
@@ -551,10 +568,9 @@ namespace FLIVR
 
 	bool SegShader::create()
 	{
-		string vs = ShaderProgram::glsl_version_ + SEG_VERTEX_CODE;
-		string fs;
-		if (emit(fs)) return true;
-		program_ = new ShaderProgram(vs, fs);
+		string cs;
+		if (emit(cs)) return true;
+		program_ = new ShaderProgram(cs);
 		program_->create(device_);
 		return false;
 	}
@@ -564,7 +580,7 @@ namespace FLIVR
 		ostringstream z;
 
 		z << ShaderProgram::glsl_version_;
-		z << VOL_INPUTS;
+		z << SEG_INPUTS;
 
 		z << SEG_UNIFORMS_BASE;
 		z << SEG_UNIFORMS_BRICK;
@@ -852,10 +868,14 @@ namespace FLIVR
 
 			std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = 
 			{
-				// Binding 1 : Base uniform buffer for fragment shader
+				vks::initializers::descriptorSetLayoutBinding(
+				VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+				VK_SHADER_STAGE_COMPUTE_BIT,
+				0),
+				
 				vks::initializers::descriptorSetLayoutBinding(
 				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 
-				VK_SHADER_STAGE_FRAGMENT_BIT, 
+				VK_SHADER_STAGE_COMPUTE_BIT,
 				1),
 			};
 
@@ -865,10 +885,18 @@ namespace FLIVR
 				setLayoutBindings.push_back(
 					vks::initializers::descriptorSetLayoutBinding(
 					VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
-					VK_SHADER_STAGE_FRAGMENT_BIT, 
+					VK_SHADER_STAGE_COMPUTE_BIT,
 					offset+i)
 					);
 			}
+
+			offset += ShaderProgram::MAX_SHADER_UNIFORMS;
+			setLayoutBindings.push_back(
+				vks::initializers::descriptorSetLayoutBinding(
+					VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+					VK_SHADER_STAGE_COMPUTE_BIT,
+					offset)
+			);
 			
 			VkDescriptorSetLayoutCreateInfo descriptorLayout = 
 				vks::initializers::descriptorSetLayoutCreateInfo(
@@ -888,7 +916,7 @@ namespace FLIVR
 
 			VkPushConstantRange pushConstantRange = {};
 			pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-			pushConstantRange.size = sizeof(SegShaderFactory::SegFragShaderBrickConst);
+			pushConstantRange.size = sizeof(SegShaderFactory::SegCompShaderBrickConst);
 			pushConstantRange.offset = 0;
 
 			// Push constant ranges are part of the pipeline layout
@@ -925,7 +953,7 @@ namespace FLIVR
 				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 				&uniformbufs.frag_base,
-				sizeof(SegFragShaderBaseUBO)));
+				sizeof(SegCompShaderBaseUBO)));
 
 			VK_CHECK_RESULT(uniformbufs.frag_base.map());
 
@@ -933,7 +961,7 @@ namespace FLIVR
 		}
 	}
 
-	void SegShaderFactory::updateUniformBuffers(SegUniformBufs& uniformBuffers, SegFragShaderBaseUBO fubo)
+	void SegShaderFactory::updateUniformBuffers(SegUniformBufs& uniformBuffers, SegCompShaderBaseUBO fubo)
 	{
 		memcpy(uniformBuffers.frag_base.mapped, &fubo, sizeof(fubo));
 	}

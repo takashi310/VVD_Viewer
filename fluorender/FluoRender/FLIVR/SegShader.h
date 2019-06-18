@@ -118,7 +118,7 @@ namespace FLIVR
 			VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 		};
 
-		struct SegFragShaderBaseUBO {
+		struct SegCompShaderBaseUBO {
 			glm::vec4 loc0_light_alpha;	//loc0
 			glm::vec4 loc1_material;	//loc1
 			glm::vec4 loc2_scscale_th;	//loc2
@@ -126,8 +126,8 @@ namespace FLIVR
 //			glm::vec4 loc4_dim;			//loc4
 			glm::vec4 loc5_spc_id;		//loc5
 			glm::vec4 loc6_colparam;	//loc6
-			glm::vec4 loc7_view;		//loc7
-			glm::vec4 loc8_fog;			//loc8
+			glm::vec4 loc7_th;			//loc7
+			glm::vec4 loc8_w2d;			//loc8
 			glm::vec4 plane0;			//loc10
 			glm::vec4 plane1;			//loc11
 			glm::vec4 plane2;			//loc12
@@ -135,12 +135,12 @@ namespace FLIVR
 			glm::vec4 plane4;			//loc14
 			glm::vec4 plane5;			//loc15
 			glm::mat4 proj_mat;
-			glm::mat4 model_mat;
-			glm::mat4 model_mat_inv;
+			glm::mat4 mv_mat;
+			glm::mat4 mv_mat_inv;
 			glm::mat4 proj_mat_inv;
 		};
 
-		struct SegFragShaderBrickConst {
+		struct SegCompShaderBrickConst {
 			glm::vec4 loc_dim_inv;	//loc4
 			glm::vec4 loc_dim;		//loc9
 			glm::vec4 b_scale;
@@ -156,8 +156,24 @@ namespace FLIVR
 		void setupDescriptorSetLayout();
 		void getDescriptorSetWriteUniforms(vks::VulkanDevice* vdev, SegUniformBufs& uniformBuffers, std::vector<VkWriteDescriptorSet>& writeDescriptorSets);
 		void prepareUniformBuffers(std::map<vks::VulkanDevice*, SegUniformBufs>& uniformBuffers);
-		void updateUniformBuffers(SegUniformBufs& uniformBuffers, SegFragShaderBaseUBO fubo);
+		static void updateUniformBuffers(SegUniformBufs& uniformBuffers, SegCompShaderBaseUBO fubo);
 		
+		static inline VkWriteDescriptorSet writeDescriptorSetTex(
+			VkDescriptorSet dstSet,
+			uint32_t texid,
+			VkDescriptorImageInfo* imageInfo,
+			uint32_t descriptorCount = 1)
+		{
+			VkWriteDescriptorSet writeDescriptorSet{};
+			writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writeDescriptorSet.dstSet = dstSet;
+			writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			writeDescriptorSet.dstBinding = texid + 2;
+			writeDescriptorSet.pImageInfo = imageInfo;
+			writeDescriptorSet.descriptorCount = descriptorCount;
+			return writeDescriptorSet;
+		}
+
 		std::map<vks::VulkanDevice*, SegPipeline> pipeline_;
 
 		std::vector<vks::VulkanDevice*> vdevices_;

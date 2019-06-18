@@ -150,7 +150,7 @@ namespace FLIVR
 		
 		struct VolVertShaderUBO {
 			glm::mat4 proj_mat;
-			glm::mat4 model_mat;
+			glm::mat4 mv_mat;
 		};
 
 		struct VolFragShaderBaseUBO {

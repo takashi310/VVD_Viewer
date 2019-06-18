@@ -301,6 +301,7 @@ public:
 		std::map<vks::VulkanDevice*, VolShaderFactory::VolUniformBufs> m_volUniformBuffers;
 		std::map<vks::VulkanDevice*, SegShaderFactory::SegUniformBufs> m_segUniformBuffers;
 		std::map<vks::VulkanDevice*, VkCommandBuffer> m_commandBuffers;
+		std::map<vks::VulkanDevice*, VkCommandBuffer> m_seg_commandBuffers;
 		std::map<vks::VulkanDevice*, VkSemaphore> m_volFinishedSemaphores;
 		std::map<vks::VulkanDevice*, VkSemaphore> m_filterFinishedSemaphores;
 		std::map<vks::VulkanDevice*, VkSemaphore> m_renderFinishedSemaphores;
@@ -345,6 +346,15 @@ public:
 			int mode = 0,
 			double sampling_frq_fac = -1.0
 		);
+		//type: 0-initial; 1-diffusion-based growing; 2-masked filtering
+		//paint_mode: 1-select; 2-append; 3-erase; 4-diffuse; 5-flood; 6-clear; 7-all;
+		//			  11-posterize
+		//hr_mode (hidden removal): 0-none; 1-ortho; 2-persp
+		void draw_mask(
+			VSemaphoreSettings semaphores,
+			int type, int paint_mode, int hr_mode,
+			double ini_thresh, double gm_falloff, double scl_falloff,
+			double scl_translate, double w2d, double bins, bool ortho, bool estimate);
 
 		//double calc_hist_3d(GLuint, GLuint, size_t, size_t, size_t);
 		////calculation
@@ -356,13 +366,7 @@ public:
 		//void return_stroke(); //return the stroke volume
 
 		//void draw_wireframe(bool orthographic_p = false, double sampling_frq_fac = -1.0);
-		////type: 0-initial; 1-diffusion-based growing; 2-masked filtering
-		////paint_mode: 1-select; 2-append; 3-erase; 4-diffuse; 5-flood; 6-clear; 7-all;
-		////			  11-posterize
-		////hr_mode (hidden removal): 0-none; 1-ortho; 2-persp
-		//void draw_mask(int type, int paint_mode, int hr_mode,
-		//	double ini_thresh, double gm_falloff, double scl_falloff,
-		//	double scl_translate, double w2d, double bins, bool ortho, bool estimate);
+		
 		//void draw_mask_cpu(int type, int paint_mode, int hr_mode,
 		//	double ini_thresh, double gm_falloff, double scl_falloff,
 		//	double scl_translate, double w2d, double bins, bool ortho, bool estimate);
@@ -414,7 +418,7 @@ public:
 		static void finalize();
 
 		struct VVolPipeline {
-			VkPipeline pipeline;
+			VkPipeline vkpipeline;
 			VkRenderPass renderpass;
 			ShaderProgram* shader;
 			vks::VulkanDevice* device;
@@ -429,7 +433,7 @@ public:
 		VVolPipeline prepareVolPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode);
 
 		struct VSegPipeline {
-			VkPipeline pipeline;
+			VkPipeline vkpipeline;
 			VkRenderPass renderpass;
 			ShaderProgram* shader;
 			vks::VulkanDevice* device;
@@ -439,10 +443,10 @@ public:
 		static std::vector<VSegPipeline> m_seg_pipelines;
 		static std::map<vks::VulkanDevice*, VkRenderPass> m_seg_draw_pass;
 		int m_prev_seg_pipeline;
-		//VSegPipeline prepareSegPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode);
+		VSegPipeline prepareSegPipeline(vks::VulkanDevice* device, int type, int paint_mode, int hr_mode);
 
 		struct VCalPipeline {
-			VkPipeline pipeline;
+			VkPipeline vkpipeline;
 			VkRenderPass renderpass;
 			ShaderProgram* shader;
 			vks::VulkanDevice* device;

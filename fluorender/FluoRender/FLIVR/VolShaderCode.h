@@ -59,7 +59,7 @@ namespace FLIVR
 	"	vec4 loc2;//(scalar_scale, gm_scale, left_thresh, right_thresh)\n" \
 	"	vec4 loc3;//(gamma, gm_thresh, offset, sw)\n" \
 	"	vec4 loc5;//(spcx, spcy, spcz, max_id)\n" \
-	"	vec4 loc6;//(1/vx, 1/vy, luminance, depth_mode)\n" \
+	"	vec4 loc6;//(r, g, b, 0.0) or (1/vx, 1/vy, luminance, depth_mode)\n" \
 	"	vec4 loc7;//(1/vx, 1/vy, 0, 0)\n" \
 	"	vec4 loc8;//(int, start, end, 0.0)\n" \
 	"	vec4 loc10; //plane0\n" \

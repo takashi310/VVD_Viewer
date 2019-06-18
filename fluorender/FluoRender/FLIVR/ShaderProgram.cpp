@@ -42,19 +42,21 @@ namespace FLIVR
 {
 	string ShaderProgram::glsl_version_ = "#version 450\n";
 
-	ShaderProgram::ShaderProgram(const string& frag_shader) :
-	vert_shader_(""), frag_shader_(frag_shader), valid_(false)
+	ShaderProgram::ShaderProgram(const string& compute_shader) :
+	vert_shader_(""), frag_shader_(""), compute_shader_(compute_shader), valid_(false)
 	{
 		device_ = VK_NULL_HANDLE;
 		vert_shader_stage_.module = VK_NULL_HANDLE;
 		frag_shader_stage_.module = VK_NULL_HANDLE;
+		compute_shader_stage_.module = VK_NULL_HANDLE;
 	}
 	ShaderProgram::ShaderProgram(const string& vert_shader, const string& frag_shader) :
-	vert_shader_(vert_shader), frag_shader_(frag_shader), valid_(false)
+	vert_shader_(vert_shader), frag_shader_(frag_shader), compute_shader_(""), valid_(false)
 	{
 		device_ = VK_NULL_HANDLE;
 		vert_shader_stage_.module = VK_NULL_HANDLE;
 		frag_shader_stage_.module = VK_NULL_HANDLE;
+		compute_shader_stage_.module = VK_NULL_HANDLE;
 	}
 
 	ShaderProgram::~ShaderProgram()
@@ -113,6 +115,26 @@ namespace FLIVR
 			VK_CHECK_RESULT( vkCreateShaderModule(device, &moduleCreateInfo, NULL, &frag_shader_stage_.module) );
 		}
 
+		if (!compute_shader_.empty()) {
+			std::vector<unsigned int> compute_spv;
+			compute_shader_stage_.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+			compute_shader_stage_.pNext = NULL;
+			compute_shader_stage_.pSpecializationInfo = NULL;
+			compute_shader_stage_.flags = 0;
+			compute_shader_stage_.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+			compute_shader_stage_.pName = "main";
+
+			if (!GLSLtoSPV(VK_SHADER_STAGE_COMPUTE_BIT, compute_shader_.data(), compute_spv))
+				return true;
+
+			moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+			moduleCreateInfo.pNext = NULL;
+			moduleCreateInfo.flags = 0;
+			moduleCreateInfo.codeSize = compute_spv.size() * sizeof(unsigned int);
+			moduleCreateInfo.pCode = compute_spv.data();
+			VK_CHECK_RESULT(vkCreateShaderModule(device, &moduleCreateInfo, NULL, &compute_shader_stage_.module));
+		}
+
 		device_ = device;
 
 		valid_ = true;
@@ -131,6 +153,8 @@ namespace FLIVR
 				vkDestroyShaderModule(device_, vert_shader_stage_.module, NULL);
 			if (frag_shader_stage_.module != VK_NULL_HANDLE) 
 				vkDestroyShaderModule(device_, frag_shader_stage_.module, NULL);
+			if (compute_shader_stage_.module != VK_NULL_HANDLE)
+				vkDestroyShaderModule(device_, compute_shader_stage_.module, NULL);
 		}
 	}
 

@@ -106,7 +106,7 @@ namespace vks
 	int VulkanDevice::check_swap_memory(FLIVR::TextureBrick* brick, int c)
 	{
 		unsigned int i;
-		double new_mem = brick->nx()*brick->ny()*brick->nz()*brick->nb(c)/1.04e6;
+		double new_mem = (VkDeviceSize)brick->nx()*brick->ny()*brick->nz()*brick->nb(c)/1.04e6;
 
 		int overwrite = -1;
 

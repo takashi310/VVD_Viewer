@@ -34,6 +34,7 @@ namespace vks
 		VkDevice logicalDevice;
 		// Handle to the device graphics queue that command buffers are submitted to
 		VkQueue queue;
+		VkQueue compute_queue;
 		/** @brief Properties of the physical device including limits that the application can check against */
 		VkPhysicalDeviceProperties properties;
 		/** @brief Features of the physical device that an application can use to check if a feature is supported */
@@ -382,6 +383,11 @@ namespace vks
 
 			// Get a graphics queue from the device
 			vkGetDeviceQueue(logicalDevice, queueFamilyIndices.graphics, 0, &queue);
+			// Get a compute queue from the device
+			if (queueFamilyIndices.compute != queueFamilyIndices.graphics)
+				vkGetDeviceQueue(logicalDevice, queueFamilyIndices.compute, 0, &compute_queue);
+			else
+				compute_queue = queue;
 
 			vkCmdPushDescriptorSetKHR = (PFN_vkCmdPushDescriptorSetKHR)vkGetDeviceProcAddr(logicalDevice, "vkCmdPushDescriptorSetKHR");
 

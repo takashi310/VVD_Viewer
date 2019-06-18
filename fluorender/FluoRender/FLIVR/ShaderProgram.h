@@ -49,7 +49,7 @@ namespace FLIVR
 	{
 	public:
 		ShaderProgram(const std::string& vert_shader,const std::string& frag_shader);
-		ShaderProgram(const std::string& frag_shader);
+		ShaderProgram(const std::string& compute_shader);
 		~ShaderProgram();
 
 		bool create(VkDevice device);
@@ -58,8 +58,10 @@ namespace FLIVR
 
 		VkPipelineShaderStageCreateInfo get_vertex_shader() { return vert_shader_stage_; }
 		VkPipelineShaderStageCreateInfo get_fragment_shader() { return frag_shader_stage_; }
+		VkPipelineShaderStageCreateInfo get_compute_shader() { return compute_shader_stage_; }
 		std::string get_vertex_shader_code() { return vert_shader_; }
 		std::string get_fragment_shader_code() { return frag_shader_; }
+		std::string get_compute_shader_code() { return frag_shader_; }
 
 		static const int MAX_SHADER_UNIFORMS = 16;
 		static std::string glsl_version_;
@@ -75,8 +77,10 @@ namespace FLIVR
 	protected:
 		std::string  vert_shader_;
 		std::string  frag_shader_;
+		std::string  compute_shader_;
 		VkPipelineShaderStageCreateInfo vert_shader_stage_;
 		VkPipelineShaderStageCreateInfo frag_shader_stage_;
+		VkPipelineShaderStageCreateInfo compute_shader_stage_;
 
 		//validation
 		bool valid_;

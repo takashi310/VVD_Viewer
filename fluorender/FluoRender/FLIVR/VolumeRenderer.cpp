@@ -141,6 +141,8 @@ namespace FLIVR
 			m_vulkan->seg_shader_factory_->prepareUniformBuffers(m_segUniformBuffers);
 			for (auto dev : m_vulkan->devices)
 				m_commandBuffers[dev] = dev->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+			for (auto dev : m_vulkan->devices)
+				m_seg_commandBuffers[dev] = dev->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
 			VkSemaphoreCreateInfo semaphoreInfo = vks::initializers::semaphoreCreateInfo();
 			for (auto dev : m_vulkan->devices)
@@ -240,6 +242,8 @@ namespace FLIVR
 			m_vulkan->seg_shader_factory_->prepareUniformBuffers(m_segUniformBuffers);
 			for (auto dev : m_vulkan->devices)
 				m_commandBuffers[dev] = dev->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+			for (auto dev : m_vulkan->devices)
+				m_seg_commandBuffers[dev] = dev->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
 			VkSemaphoreCreateInfo semaphoreInfo = vks::initializers::semaphoreCreateInfo();
 			for (auto dev : m_vulkan->devices)
@@ -281,6 +285,7 @@ namespace FLIVR
 			m_volUniformBuffers[vdev].frag_base.destroy();
 			m_segUniformBuffers[vdev].frag_base.destroy();
 			vkFreeCommandBuffers(vdev->logicalDevice, vdev->commandPool, 1, &m_commandBuffers[vdev]);
+			vkFreeCommandBuffers(vdev->logicalDevice, vdev->commandPool, 1, &m_seg_commandBuffers[vdev]);
 			vkDestroySemaphore(vdev->logicalDevice, m_volFinishedSemaphores[vdev], nullptr);
 			vkDestroySemaphore(vdev->logicalDevice, m_filterFinishedSemaphores[vdev], nullptr);
 			vkDestroySemaphore(vdev->logicalDevice, m_renderFinishedSemaphores[vdev], nullptr);
@@ -325,15 +330,15 @@ namespace FLIVR
 
 			for (auto &p : m_vol_pipelines)
 			{
-				vkDestroyPipeline(p.device->logicalDevice, p.pipeline, nullptr);
+				vkDestroyPipeline(p.device->logicalDevice, p.vkpipeline, nullptr);
 			}
 			for (auto& p : m_seg_pipelines)
 			{
-				vkDestroyPipeline(p.device->logicalDevice, p.pipeline, nullptr);
+				vkDestroyPipeline(p.device->logicalDevice, p.vkpipeline, nullptr);
 			}
 			for (auto& p : m_cal_pipelines)
 			{
-				vkDestroyPipeline(p.device->logicalDevice, p.pipeline, nullptr);
+				vkDestroyPipeline(p.device->logicalDevice, p.vkpipeline, nullptr);
 			}
 		}
 	}
@@ -1089,14 +1094,16 @@ namespace FLIVR
 			solid_, 1, tex_->nmask() != -1 ? m_mask_hide_mode : VOL_MASK_HIDE_NONE);
 
 		if (m_prev_vol_pipeline >= 0) {
-			if (m_vol_pipelines[m_prev_vol_pipeline].shader == shader &&
+			if (m_vol_pipelines[m_prev_vol_pipeline].device == device &&
+				m_vol_pipelines[m_prev_vol_pipeline].shader == shader &&
 				m_vol_pipelines[m_prev_vol_pipeline].mode == mode &&
 				m_vol_pipelines[m_prev_vol_pipeline].update_order == update_order &&
 				m_vol_pipelines[m_prev_vol_pipeline].colormap_mode == colormap_mode)
 				return m_vol_pipelines[m_prev_vol_pipeline];
 		}
 		for (int i = 0; i < m_vol_pipelines.size(); i++) {
-			if (m_vol_pipelines[i].shader == shader &&
+			if (m_vol_pipelines[i].device == device &&
+				m_vol_pipelines[i].shader == shader &&
 				m_vol_pipelines[i].mode == mode &&
 				m_vol_pipelines[i].update_order == update_order &&
 				m_vol_pipelines[i].colormap_mode == colormap_mode)
@@ -1216,7 +1223,7 @@ namespace FLIVR
 				1,
 				&pipelineCreateInfo,
 				nullptr,
-				&ret_pipeline.pipeline
+				&ret_pipeline.vkpipeline
 			)
 		);
 
@@ -1546,9 +1553,9 @@ namespace FLIVR
 		vector<float> vertex;
 		vector<uint32_t> index;
 		vector<uint32_t> size;
-		vertex.reserve(num_slices_ * 12);
-		index.reserve(num_slices_ * 6);
-		size.reserve(num_slices_ * 6);
+		vertex.reserve((size_t)num_slices_ * 12);
+		index.reserve((size_t)num_slices_ * 6);
+		size.reserve((size_t)num_slices_ * 6);
 
 		//--------------------------------------------------------------------------
 		bool use_fog = m_use_fog && colormap_mode_ != 2;
@@ -1698,7 +1705,7 @@ namespace FLIVR
 			mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
 		m_mv_mat2 = m_mv_mat * m_mv_mat2;
 		vert_ubo.proj_mat = m_proj_mat;
-		vert_ubo.model_mat = m_mv_mat2;
+		vert_ubo.mv_mat = m_mv_mat2;
 
 		VolShaderFactory::updateUniformBuffers(m_volUniformBuffers[prim_dev], vert_ubo, frag_ubo);
 
@@ -1963,11 +1970,11 @@ namespace FLIVR
 				clear = false;
 			}
 
-			vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
+			vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.vkpipeline);
 
 			vkCmdPushConstants(
 				cmdbuf,
-				m_vulkan->vol_shader_factory_->pipeline_[prim_dev].pipelineLayout,
+				pipelineLayout,
 				VK_SHADER_STAGE_FRAGMENT_BIT,
 				0,
 				sizeof(VolShaderFactory::VolFragShaderBrickConst),
@@ -2274,297 +2281,318 @@ namespace FLIVR
 	//	if (shader && shader->valid())
 	//		shader->release();
 	//}
-//
-//	//type: 0-initial; 1-diffusion-based growing; 2-masked filtering
-//	//paint_mode: 1-select; 2-append; 3-erase; 4-diffuse; 5-flood; 6-clear; 7-all;
-//	//			  11-posterize
-//	//hr_mode (hidden removal): 0-none; 1-ortho; 2-persp
-//	void VolumeRenderer::draw_mask(int type, int paint_mode, int hr_mode,
-//		double ini_thresh, double gm_falloff, double scl_falloff,
-//		double scl_translate, double w2d, double bins, bool orthographic_p,
-//		bool estimate)
-//	{
-///*		if (paint_mode == 1 || paint_mode == 2)
-//		{
-//			draw_mask_cpu(type, paint_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, scl_translate, w2d, bins, orthographic_p, estimate);
-//			return;
-//		}
-//*/
-//		if (estimate && type==0)
-//			est_thresh_ = 0.0;
-//		bool use_2d = glIsTexture(tex_2d_weight1_)&&
-//			glIsTexture(tex_2d_weight2_)?true:false;
-//
-//		bool use_stroke = (tex_->nstroke() >= 0) ? true : false;
-//
-//		Ray view_ray = compute_view();
-//
-//		vector<TextureBrick*> *bricks = tex_->get_sorted_bricks(view_ray, orthographic_p);
-//		if (!bricks || bricks->size() == 0)
-//			return;
-//
-//		//mask frame buffer object
-//        GLint cur_framebuffer_id;
-//        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &cur_framebuffer_id);
-//        static const GLenum draw_buffers[] =
-//        {
-//            GL_COLOR_ATTACHMENT0,
-//            GL_COLOR_ATTACHMENT1
-//        };
-//        static const GLenum attachment0 = GL_COLOR_ATTACHMENT0;
-//        static const GLenum attachment1 = GL_COLOR_ATTACHMENT1;
-//		if (!glIsFramebuffer(fbo_mask_))
-//			glGenFramebuffers(1, &fbo_mask_);
-//        glBindFramebuffer(GL_FRAMEBUFFER, fbo_mask_);
-//
-//		//--------------------------------------------------------------------------
-//		// Set up shaders
-//		//seg shader
-//		ShaderProgram* seg_shader = 0;
-//
-//		switch (type)
-//		{
-//		case 0://initialize
-//			seg_shader = seg_shader_factory_.shader(
-//				SEG_SHDR_INITIALIZE, paint_mode, hr_mode,
-//				use_2d, true, depth_peel_, true, hiqual_, use_stroke);
-//			break;
-//		case 1://diffusion-based growing
-//			seg_shader = seg_shader_factory_.shader(
-//				SEG_SHDR_DB_GROW, paint_mode, hr_mode,
-//				use_2d, true, depth_peel_, true, hiqual_, use_stroke);
-//			break;
-//		case 2://noise removal
-//			seg_shader = seg_shader_factory_.shader(
-//				FLT_SHDR_NR, paint_mode, hr_mode,
-//				false, false, depth_peel_, false, hiqual_, use_stroke);
-//			break;
-//		}
-//
-//		if (seg_shader)
-//		{
-//			if (!seg_shader->valid())
-//				seg_shader->create();
-//			seg_shader->bind();
-//		}
-//
-//		//set uniforms
-//		//set up shading
-//		Vector light = compute_view().direction();
-//		light.safe_normalize();
-//		seg_shader->setLocalParam(0, light.x(), light.y(), light.z(), alpha_);
-//		if (shading_)
-//			seg_shader->setLocalParam(1, 2.0 - ambient_, diffuse_, specular_, shine_);
-//		else
-//			seg_shader->setLocalParam(1, 2.0 - ambient_, 0.0, specular_, shine_);
-//
-//		//spacings
-//		double spcx, spcy, spcz;
-//		tex_->get_spacings(spcx, spcy, spcz);
-//		seg_shader->setLocalParam(5, spcx, spcy, spcz, 1.0);
-//
-//		//transfer function
-//		seg_shader->setLocalParam(2, inv_?-scalar_scale_:scalar_scale_, gm_scale_, lo_thresh_, hi_thresh_);
-//		seg_shader->setLocalParam(3, 1.0/gamma3d_, gm_thresh_, offset_, sw_);
-//		seg_shader->setLocalParam(6, color_.r(), color_.g(), color_.b(), 0.0);
-//
-//		//setup depth peeling
-//		//if (depth_peel_)
-//		//	seg_shader->setLocalParam(7, 1.0/double(w2), 1.0/double(h2), 0.0, 0.0);
-//
-//		//thresh1
-//		seg_shader->setLocalParam(7, ini_thresh, gm_falloff, scl_falloff, scl_translate);
-//		//w2d
-//		seg_shader->setLocalParam(8, w2d, bins, 0.0, 0.0);
-//
-//		//set clipping planes
-//		double abcd[4];
-//		planes_[0]->get(abcd);
-//		seg_shader->setLocalParam(10, abcd[0], abcd[1], abcd[2], abcd[3]);
-//		planes_[1]->get(abcd);
-//		seg_shader->setLocalParam(11, abcd[0], abcd[1], abcd[2], abcd[3]);
-//		planes_[2]->get(abcd);
-//		seg_shader->setLocalParam(12, abcd[0], abcd[1], abcd[2], abcd[3]);
-//		planes_[3]->get(abcd);
-//		seg_shader->setLocalParam(13, abcd[0], abcd[1], abcd[2], abcd[3]);
-//		planes_[4]->get(abcd);
-//		seg_shader->setLocalParam(14, abcd[0], abcd[1], abcd[2], abcd[3]);
-//		planes_[5]->get(abcd);
-//		seg_shader->setLocalParam(15, abcd[0], abcd[1], abcd[2], abcd[3]);
-//
-//		////////////////////////////////////////////////////////
-//		// render bricks
-//		// Set up transform
-//		Transform *tform = tex_->transform();
-//		double mvmat[16];
-//		tform->get_trans(mvmat);
-//		m_mv_mat2 = glm::mat4(
-//			mvmat[0], mvmat[4], mvmat[8], mvmat[12],
-//			mvmat[1], mvmat[5], mvmat[9], mvmat[13],
-//			mvmat[2], mvmat[6], mvmat[10], mvmat[14],
-//			mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
-//		m_mv_mat2 = m_mv_mat * m_mv_mat2;
-//		seg_shader->setLocalParamMatrix(0, glm::value_ptr(m_mv_mat2));
-//		seg_shader->setLocalParamMatrix(1, glm::value_ptr(m_proj_mat));
-//		if (hr_mode > 0)
-//		{
-//			glm::mat4 mv_inv = glm::inverse(m_mv_mat2);
-//			seg_shader->setLocalParamMatrix(3, glm::value_ptr(mv_inv));
-//		}
-//
-//		//bind 2d mask texture
-//		bind_2d_mask();
-//		//bind 2d weight map
-//		if (use_2d) bind_2d_weight();
-//
-//		GLint vp[4];
-//		glGetIntegerv(GL_VIEWPORT, vp);
-//
-//		glDisable(GL_DEPTH_TEST);
-//		glDisable(GL_BLEND);
-//			
-//		GLfloat clear_color[4];
-//		glGetFloatv(GL_COLOR_CLEAR_VALUE, clear_color);
-//		bool clear_stroke = (paint_mode == 1 || paint_mode == 2 || (paint_mode == 4 && type == 0) || paint_mode == 6 || paint_mode == 7);
-//
-//		float matrix[16];
-//		for (unsigned int i=0; i < bricks->size(); i++)
-//		{
-//			//wxString dbgstr = wxString::Format("draw_mask brick: %d %d\n", i, (*bricks)[i]->getBrickData() ? 1 : 0);
-//			//OutputDebugStringA(dbgstr.ToStdString().c_str());
-//
-//			TextureBrick* b = (*bricks)[i];
-//
-//			BBox dbox = b->dbox();
-//			matrix[0] = float(dbox.max().x() - dbox.min().x());
-//			matrix[1] = 0.0f;
-//			matrix[2] = 0.0f;
-//			matrix[3] = 0.0f;
-//			matrix[4] = 0.0f;
-//			matrix[5] = float(dbox.max().y() - dbox.min().y());
-//			matrix[6] = 0.0f;
-//			matrix[7] = 0.0f;
-//			matrix[8] = 0.0f;
-//			matrix[9] = 0.0f;
-//			matrix[10] = float(dbox.max().z() - dbox.min().z());
-//			matrix[11] = 0.0f;
-//			matrix[12] = float(dbox.min().x());
-//			matrix[13] = float(dbox.min().y());
-//			matrix[14] = float(dbox.min().z());
-//			matrix[15] = 1.0f;
-//			seg_shader->setLocalParamMatrix(2, matrix);
-//
-//			//set viewport size the same as the texture
-//			glViewport(0, 0, b->nx(), b->ny());
-//
-//			//load the texture
-//			GLint tex_id = -1;
-//			b->prevent_tex_deletion(true);
-//			GLint vd_id = load_brick(0, 0, bricks, i, GL_NEAREST, compression_);
-//			GLint mask_id = load_brick_mask(bricks, i, GL_NEAREST, false, 0, true);
-//			//OutputDebugStringA("load_brick_stroke: Enter\n");
-//			GLint stroke_tex_id = load_brick_stroke(bricks, i, GL_NEAREST, false, 0, true);
-//			//OutputDebugStringA("load_brick_stroke: Leave\n");
-//			b->prevent_tex_deletion(false);
-//			switch (type)
-//			{
-//			case 0:
-//			case 1:
-//				tex_id = mask_id;
-//				break;
-//			case 2:
-//				tex_id = vd_id;
-//				break;
-//			}
-//
-//			//size and sample rate
-//			seg_shader->setLocalParam(4, 1.0/b->nx(), 1.0/b->ny(), 1.0/b->nz(),
-//				mode_==MODE_OVER?1.0/sampling_rate_:1.0);
-//
-//			//dbgstr = wxString::Format("draw_mask: vd_id %d, mask_id %d, stroke_id %d, tex_id %d\n",
-//			//							vd_id, mask_id, stroke_tex_id, tex_id);
-//			//OutputDebugStringA(dbgstr.ToStdString().c_str());
-//
-//			//draw each slice
-//			for (int z=0; z<b->nz(); z++)
-//			{
-//				glFramebufferTexture3D(GL_FRAMEBUFFER, 
-//					GL_COLOR_ATTACHMENT0,
-//					GL_TEXTURE_3D,
-//					tex_id,
-//					0,
-//					z);
-//
-//				if (use_stroke && glIsTexture(stroke_tex_id) && (type == 0 || type == 1))
-//				{
-//					glFramebufferTexture3D(GL_FRAMEBUFFER, 
-//						GL_COLOR_ATTACHMENT1,
-//						GL_TEXTURE_3D,
-//						stroke_tex_id,
-//						0,
-//						z);
-//					if (clear_stroke)
-//					{
-//						glDrawBuffers(1, &attachment1);
-//						glClearColor(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
-//						glClear(GL_COLOR_BUFFER_BIT);
-//					}
-//					glDrawBuffers(2, draw_buffers);
-//				}
-//				else
-//					glDrawBuffers(1, &attachment0);
-//				
-//
-//				draw_view_quad(double(z+0.5) / double(b->nz()));
-//			}
-//
-//			glFinish();
-//
-//			b->set_dirty(b->nmask(), true);
-//
-//			//test cl
-///*			if (estimate && type == 0)
-//			{
-//				double temp = calc_hist_3d(vd_id, mask_id, b->nx(), b->ny(), b->nz());
-//				est_thresh_ = max(est_thresh_, temp);
-//			}
-//*/
-//		}
-//
-//		glDrawBuffers(1, &attachment0);
-//		glViewport(vp[0], vp[1], vp[2], vp[3]);
-//
-//		//release 2d mask
-//		release_texture(6, GL_TEXTURE_2D);
-//		//release 2d weight map
-//		if (use_2d)
-//		{
-//			release_texture(4, GL_TEXTURE_2D);
-//			release_texture(5, GL_TEXTURE_2D);
-//		}
-//
-//		//release 3d mask
-//		release_texture((*bricks)[0]->nmask(), GL_TEXTURE_3D);
-//
-//		//unbind framebuffer
-//		glBindFramebuffer(GL_FRAMEBUFFER, cur_framebuffer_id);
-//
-//		//release seg shader
-//		if (seg_shader && seg_shader->valid())
-//			seg_shader->release();
-//
-//		// Release texture
-//		release_texture(0, GL_TEXTURE_3D);
-//
-//		// Reset the blend functions after MIP
-//		glBlendEquation(GL_FUNC_ADD);
-//		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-//		glDisable(GL_BLEND);
-//
-//		//enable depth test
-//		glEnable(GL_DEPTH_TEST);
-//	}
-//
+
+	VolumeRenderer::VSegPipeline VolumeRenderer::prepareSegPipeline(vks::VulkanDevice* device, int type, int paint_mode, int hr_mode)
+	{
+		VSegPipeline ret_pipeline;
+
+		bool use_2d = tex_2d_weight1_ && tex_2d_weight2_ ? true : false;
+		bool use_stroke = (tex_->nstroke() >= 0) ? true : false;
+
+		ShaderProgram* seg_shader = nullptr;
+		switch (type)
+		{
+		case 0://initialize
+			seg_shader = m_vulkan->seg_shader_factory_->shader(
+				device->logicalDevice,
+				SEG_SHDR_INITIALIZE, paint_mode, hr_mode,
+				use_2d, true, depth_peel_, true, hiqual_, use_stroke);
+			break;
+		case 1://diffusion-based growing
+			seg_shader = m_vulkan->seg_shader_factory_->shader(
+				device->logicalDevice,
+				SEG_SHDR_DB_GROW, paint_mode, hr_mode,
+				use_2d, true, depth_peel_, true, hiqual_, use_stroke);
+			break;
+		case 2://noise removal
+			seg_shader = m_vulkan->seg_shader_factory_->shader(
+				device->logicalDevice,
+				FLT_SHDR_NR, paint_mode, hr_mode,
+				false, false, depth_peel_, false, hiqual_, use_stroke);
+			break;
+		}
+
+		if (m_prev_seg_pipeline >= 0) {
+			if (m_seg_pipelines[m_prev_seg_pipeline].device == device &&
+				m_seg_pipelines[m_prev_seg_pipeline].shader == seg_shader)
+				return m_seg_pipelines[m_prev_seg_pipeline];
+		}
+		for (int i = 0; i < m_seg_pipelines.size(); i++) {
+			if (m_seg_pipelines[i].device == device &&
+				m_seg_pipelines[i].shader == seg_shader)
+			{
+				m_prev_seg_pipeline = i;
+				return m_seg_pipelines[i];
+			}
+		}
+
+		VkComputePipelineCreateInfo computePipelineCreateInfo =
+			vks::initializers::computePipelineCreateInfo(m_vulkan->seg_shader_factory_->pipeline_[device].pipelineLayout, 0);
+
+		computePipelineCreateInfo.stage = seg_shader->get_compute_shader();
+		VK_CHECK_RESULT(
+			vkCreateComputePipelines(
+				device->logicalDevice,
+				device->pipelineCache,
+				1, 
+				&computePipelineCreateInfo,
+				nullptr,
+				&ret_pipeline.vkpipeline
+			)
+		);
+		
+		ret_pipeline.device = device;
+		ret_pipeline.shader = seg_shader;
+		
+		m_seg_pipelines.push_back(ret_pipeline);
+		m_prev_seg_pipeline = m_seg_pipelines.size() - 1;
+
+		return ret_pipeline;
+	}
+
+	//type: 0-initial; 1-diffusion-based growing; 2-masked filtering
+	//paint_mode: 1-select; 2-append; 3-erase; 4-diffuse; 5-flood; 6-clear; 7-all;
+	//			  11-posterize
+	//hr_mode (hidden removal): 0-none; 1-ortho; 2-persp
+	void VolumeRenderer::draw_mask(
+		VSemaphoreSettings semaphores,
+		int type, int paint_mode, int hr_mode,
+		double ini_thresh, double gm_falloff, double scl_falloff,
+		double scl_translate, double w2d, double bins, bool orthographic_p,
+		bool estimate)
+	{
+/*		if (paint_mode == 1 || paint_mode == 2)
+		{
+			draw_mask_cpu(type, paint_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, scl_translate, w2d, bins, orthographic_p, estimate);
+			return;
+		}
+*/
+		if (estimate && type==0)
+			est_thresh_ = 0.0;
+		bool use_2d = tex_2d_weight1_ && tex_2d_weight2_ ? true : false;
+
+		bool use_stroke = (tex_->nstroke() >= 0 && (type == 0 || type == 1)) ? true : false;
+		
+		Ray view_ray = compute_view();
+
+		vector<TextureBrick*> *bricks = tex_->get_sorted_bricks(view_ray, orthographic_p);
+		if (!bricks || bricks->size() == 0)
+			return;
+
+		vks::VulkanDevice* prim_dev = m_vulkan->devices[0];
+
+		if (m_segUniformBuffers.empty())
+			m_vulkan->seg_shader_factory_->prepareUniformBuffers(m_segUniformBuffers);
+
+		eval_ml_mode();
+
+		VSegPipeline pipeline = prepareSegPipeline(prim_dev, type, paint_mode, hr_mode);
+		VkPipelineLayout pipelineLayout = m_vulkan->seg_shader_factory_->pipeline_[prim_dev].pipelineLayout;
+
+		std::vector<VkWriteDescriptorSet> descriptorWrites;
+		m_vulkan->seg_shader_factory_->getDescriptorSetWriteUniforms(prim_dev, m_segUniformBuffers[prim_dev], descriptorWrites);
+		
+		SegShaderFactory::SegCompShaderBaseUBO seg_ubo;
+		SegShaderFactory::SegCompShaderBrickConst seg_const;
+
+		//set uniforms
+		//set up shading
+		Vector light = compute_view().direction();
+		light.safe_normalize();
+		seg_ubo.loc0_light_alpha = { light.x(), light.y(), light.z(), alpha_ };
+		if (shading_)
+			seg_ubo.loc0_light_alpha = { 2.0 - ambient_, diffuse_, specular_, shine_ };
+		else
+			seg_ubo.loc0_light_alpha = { 2.0 - ambient_, 0.0, specular_, shine_ };
+
+		//spacings
+		double spcx, spcy, spcz;
+		tex_->get_spacings(spcx, spcy, spcz);
+		seg_ubo.loc5_spc_id = { spcx, spcy, spcz, 1.0 };
+
+		//transfer function
+		seg_ubo.loc2_scscale_th = { inv_ ? -scalar_scale_ : scalar_scale_, gm_scale_, lo_thresh_, hi_thresh_ };
+		seg_ubo.loc3_gamma_offset = { 1.0 / gamma3d_, gm_thresh_, offset_, sw_ };
+		seg_ubo.loc6_colparam = { color_.r(), color_.g(), color_.b(), 0.0 };
+
+		//thresh1
+		seg_ubo.loc7_th = { ini_thresh, gm_falloff, scl_falloff, scl_translate };
+		//w2d
+		seg_ubo.loc8_w2d = { w2d, bins, 0.0, 0.0 };
+
+		//set clipping planes
+		double abcd[4];
+		planes_[0]->get(abcd);
+		seg_ubo.plane0 = { abcd[0], abcd[1], abcd[2], abcd[3] };
+		planes_[1]->get(abcd);
+		seg_ubo.plane1 = { abcd[0], abcd[1], abcd[2], abcd[3] };
+		planes_[2]->get(abcd);
+		seg_ubo.plane2 = { abcd[0], abcd[1], abcd[2], abcd[3] };
+		planes_[3]->get(abcd);
+		seg_ubo.plane3 = { abcd[0], abcd[1], abcd[2], abcd[3] };
+		planes_[4]->get(abcd);
+		seg_ubo.plane4 = { abcd[0], abcd[1], abcd[2], abcd[3] };
+		planes_[5]->get(abcd);
+		seg_ubo.plane5 = { abcd[0], abcd[1], abcd[2], abcd[3] };
+
+		////////////////////////////////////////////////////////
+		// render bricks
+		// Set up transform
+		Transform *tform = tex_->transform();
+		double mvmat[16];
+		tform->get_trans(mvmat);
+		m_mv_mat2 = glm::mat4(
+			mvmat[0], mvmat[4], mvmat[8], mvmat[12],
+			mvmat[1], mvmat[5], mvmat[9], mvmat[13],
+			mvmat[2], mvmat[6], mvmat[10], mvmat[14],
+			mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
+		seg_ubo.mv_mat = m_mv_mat * m_mv_mat2;
+		seg_ubo.proj_mat = m_proj_mat;
+		if (hr_mode > 0)
+		{
+			seg_ubo.mv_mat_inv = glm::inverse(m_mv_mat2);
+		}
+
+		//bind 2d mask texture
+		if (tex_2d_mask_)
+			descriptorWrites.push_back(SegShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 6, &tex_2d_mask_->descriptor));
+		//bind 2d weight map
+		if (use_2d)
+		{
+			if (tex_2d_weight1_)
+				descriptorWrites.push_back(SegShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 4, &tex_2d_weight1_->descriptor));
+			if (tex_2d_weight2_)
+				descriptorWrites.push_back(SegShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 5, &tex_2d_weight2_->descriptor));
+		}
+
+		bool clear_stroke = (paint_mode == 1 || paint_mode == 2 || (paint_mode == 4 && type == 0) || paint_mode == 6 || paint_mode == 7);
+
+		SegShaderFactory::updateUniformBuffers(m_segUniformBuffers[prim_dev], seg_ubo);
+
+		bool waitsemaphore = semaphores.wait_before_brk_rendering;
+
+		bool write_to_vol = false;
+		switch (type)
+		{
+		case 0:
+		case 1:
+			write_to_vol = false;
+			break;
+		case 2:
+			write_to_vol = true;
+			break;
+		}
+		
+		//////////////////////////////////////////
+		//render bricks
+
+		// Flush the queue if we're rebuilding the command buffer after a pipeline change to ensure it's not currently in use
+		vkQueueWaitIdle(prim_dev->compute_queue);
+
+		VkCommandBuffer cmdbuf = m_seg_commandBuffers[prim_dev];
+		VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
+		VK_CHECK_RESULT(vkBeginCommandBuffer(cmdbuf, &cmdBufInfo));
+
+		vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.vkpipeline);
+		
+		for (unsigned int i=0; i < bricks->size(); i++)
+		{
+			shared_ptr<vks::VTexture> brktex, msktex, stroketex;
+			
+			b->prevent_tex_deletion(true);
+			brktex = load_brick(prim_dev, 0, 0, bricks, i, VK_FILTER_NEAREST, compression_);
+			if (!brktex) continue;
+			msktex = load_brick_mask(prim_dev, bricks, i, VK_FILTER_NEAREST, false, 0, true);
+			if (!msktex) continue;
+			if (use_stroke)
+			{
+				stroketex = load_brick_stroke(prim_dev, bricks, i, VK_FILTER_NEAREST, false, 0, true);
+				if (!stroketex) continue;
+			}
+			b->prevent_tex_deletion(false);
+
+			if (brktex)
+				descriptorWrites.push_back(VolShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 0, &brktex->descriptor));
+			/*if (msktex)
+				descriptorWrites.push_back(VolShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 2, &brktex->descriptor));
+			if (lbltex)
+				descriptorWrites.push_back(VolShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 3, &brktex->descriptor));*/
+
+			//draw each slice
+			for (int z=0; z<b->nz(); z++)
+			{
+				glFramebufferTexture3D(GL_FRAMEBUFFER, 
+					GL_COLOR_ATTACHMENT0,
+					GL_TEXTURE_3D,
+					tex_id,
+					0,
+					z);
+
+				if (use_stroke && glIsTexture(stroke_tex_id) && (type == 0 || type == 1))
+				{
+					glFramebufferTexture3D(GL_FRAMEBUFFER, 
+						GL_COLOR_ATTACHMENT1,
+						GL_TEXTURE_3D,
+						stroke_tex_id,
+						0,
+						z);
+					if (clear_stroke)
+					{
+						glDrawBuffers(1, &attachment1);
+						glClearColor(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
+						glClear(GL_COLOR_BUFFER_BIT);
+					}
+					glDrawBuffers(2, draw_buffers);
+				}
+				else
+					glDrawBuffers(1, &attachment0);
+				
+
+				draw_view_quad(double(z+0.5) / double(b->nz()));
+			}
+
+			//size and sample rate
+			seg_const.loc_dim_inv = { 1.0 / b->nx(), 1.0 / b->ny(), 1.0 / b->nz(),
+									  mode_ == MODE_OVER ? 1.0 / sampling_rate_ : 1.0 };
+			//for brick transformation
+			BBox dbox = b->dbox();
+			seg_const.b_scale = { float(dbox.max().x() - dbox.min().x()),
+								  float(dbox.max().y() - dbox.min().y()),
+								  float(dbox.max().z() - dbox.min().z()),
+								  1.0f };
+			seg_const.b_trans = { float(dbox.min().x()), float(dbox.min().y()), float(dbox.min().z()), 0.0f };
+
+			if (!descriptorWrites.empty())
+			{
+				prim_dev->vkCmdPushDescriptorSetKHR(
+					cmdbuf,
+					VK_PIPELINE_BIND_POINT_COMPUTE,
+					pipelineLayout,
+					0,
+					descriptorWrites.size(),
+					descriptorWrites.data()
+				);
+			}
+
+			vkCmdPushConstants(
+				cmdbuf,
+				pipelineLayout,
+				VK_SHADER_STAGE_COMPUTE_BIT,
+				0,
+				sizeof(SegShaderFactory::SegCompShaderBrickConst),
+				&seg_const
+			);
+
+			vkCmdDispatch(compute.commandBuffer, textureComputeTarget.width / 16, textureComputeTarget.height / 16, 1);
+
+			b->set_dirty(b->nmask(), true);
+
+		}
+
+		vkEndCommandBuffer(cmdbuf);
+
+	}
+
 //	void VolumeRenderer::draw_mask_cpu(int type, int paint_mode, int hr_mode,
 //		double ini_thresh, double gm_falloff, double scl_falloff,
 //		double scl_translate, double w2d, double bins, bool orthographic_p,
