@@ -17488,10 +17488,16 @@ void VRenderView::OnCapture(wxCommandEvent& event)
 		m_glview->m_cap_file = file_dlg.GetDirectory() + "/" + file_dlg.GetFilename();
 		m_glview->m_capture = true;
 		
-		if (m_cap_resx > 2000 && m_cap_resy > 2000)
-			m_glview->StartTileRendering(m_cap_resx, m_cap_resy, 2000, 2000);
+		if (m_cap_resx > 4000 && m_cap_resy > 4000)
+		{
+			int tilew = m_cap_resx / (m_cap_resx / 2000 + 1) + (m_cap_resx / 2000 + 1);
+			int tileh = m_cap_resy / (m_cap_resy / 2000 + 1) + (m_cap_resy / 2000 + 1);
+			m_glview->StartTileRendering(m_cap_resx, m_cap_resy, tilew, tileh);
+		}
 		else
-			m_glview->StartTileRendering(m_cap_resx, m_cap_resy, m_cap_resx, m_cap_resy);
+			RefreshGL();
+		//else
+		//	m_glview->StartTileRendering(m_cap_resx, m_cap_resy, m_cap_resx, m_cap_resy);
 
 		if (vr_frame && vr_frame->GetSettingDlg() &&
 			vr_frame->GetSettingDlg()->GetProjSave())

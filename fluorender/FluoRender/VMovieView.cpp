@@ -789,10 +789,12 @@ void VMovieView::OnFrameCheck(wxCommandEvent& event) {
 		int x, y, w, h;
 		vrv->CalcFrame();
 		vrv->GetFrame(x, y, w, h);
+		SetEvtHandlerEnabled(false);
 		m_center_x_text->SetValue(wxString::Format("%d", int(x+w/2.0+0.5)));
 		m_center_y_text->SetValue(wxString::Format("%d", int(y+h/2.0+0.5)));
 		m_width_text->SetValue(wxString::Format("%d", w));
 		m_height_text->SetValue(wxString::Format("%d", h));
+		SetEvtHandlerEnabled(true);
 		vrv->EnableFrame();
 	}
 	else
@@ -810,10 +812,12 @@ void VMovieView::OnResetFrame(wxCommandEvent& event) {
 	int x, y, w, h;
 	vrv->CalcFrame();
 	vrv->GetFrame(x, y, w, h);
+	SetEvtHandlerEnabled(false);
 	m_center_x_text->SetValue(wxString::Format("%d", int(x+w/2.0+0.5)));
 	m_center_y_text->SetValue(wxString::Format("%d", int(y+h/2.0+0.5)));
 	m_width_text->SetValue(wxString::Format("%d", w));
 	m_height_text->SetValue(wxString::Format("%d", h));
+	SetEvtHandlerEnabled(true);
 	vrv->RefreshGL();
 }
 
