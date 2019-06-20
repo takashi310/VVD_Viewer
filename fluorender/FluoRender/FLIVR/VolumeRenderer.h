@@ -443,7 +443,7 @@ public:
 		static std::vector<VSegPipeline> m_seg_pipelines;
 		static std::map<vks::VulkanDevice*, VkRenderPass> m_seg_draw_pass;
 		int m_prev_seg_pipeline;
-		VSegPipeline prepareSegPipeline(vks::VulkanDevice* device, int type, int paint_mode, int hr_mode);
+		VSegPipeline prepareSegPipeline(vks::VulkanDevice* device, int type, int paint_mode, int hr_mode, bool use_stroke, bool stroke_clear, int out_bytes);
 
 		struct VCalPipeline {
 			VkPipeline vkpipeline;

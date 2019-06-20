@@ -38,6 +38,8 @@
 
 namespace FLIVR
 {
+#define SEG_SAMPLER_NUM 7
+
 //type definitions
 #define SEG_SHDR_INITIALIZE	1	//initialize the segmentation fragment shader
 #define SEG_SHDR_DB_GROW	2	//diffusion based grow
@@ -51,7 +53,7 @@ namespace FLIVR
 	{
 	public:
 		SegShader(VkDevice device, int type, int paint_mode, int hr_mode,
-			bool use_2d, bool shading, int peel, bool clip, bool hiqual, bool use_stroke);
+			bool use_2d, bool shading, int peel, bool clip, bool hiqual, bool use_stroke, bool stroke_clear, int out_bytes);
 		~SegShader();
 
 		bool create();
@@ -67,7 +69,7 @@ namespace FLIVR
 		inline bool hiqual() {return hiqual_;}
 
 		inline bool match(VkDevice device, int type, int paint_mode, int hr_mode,
-			bool use_2d, bool shading, int peel, bool clip, bool hiqual, bool use_stroke)
+			bool use_2d, bool shading, int peel, bool clip, bool hiqual, bool use_stroke, bool stroke_clear, int out_bytes)
 		{ 
 			return (device_ == device &&
 				type_ == type &&
@@ -78,7 +80,9 @@ namespace FLIVR
 				peel_ == peel &&
 				clip_ == clip &&
 				hiqual_ == hiqual &&
-				use_stroke_ == use_stroke);
+				use_stroke_ == use_stroke &&
+				stroke_clear_ == stroke_clear &&
+				out_bytes_ == out_bytes);
 		}
 
 		inline ShaderProgram* program() { return program_; }
@@ -96,6 +100,8 @@ namespace FLIVR
 		bool clip_;
 		bool hiqual_;
 		bool use_stroke_;
+		bool stroke_clear_;
+		int out_bytes_;
 
 		ShaderProgram* program_;
 	};
@@ -108,7 +114,7 @@ namespace FLIVR
 		~SegShaderFactory();
 
 		ShaderProgram* shader(VkDevice device, int type, int paint_mode, int hr_mode,
-			bool use_2d, bool shading, int peel, bool clip, bool hiqual, bool use_stroke);
+			bool use_2d, bool shading, int peel, bool clip, bool hiqual, bool use_stroke, bool stroke_clear, int out_bytes);
 
 		void init(std::vector<vks::VulkanDevice*> &devices);
 
@@ -172,6 +178,46 @@ namespace FLIVR
 			writeDescriptorSet.pImageInfo = imageInfo;
 			writeDescriptorSet.descriptorCount = descriptorCount;
 			return writeDescriptorSet;
+		}
+
+		static inline VkWriteDescriptorSet writeDescriptorSetStrageImage(
+			VkDescriptorSet dstSet,
+			uint32_t id,
+			VkDescriptorImageInfo* imageInfo,
+			uint32_t descriptorCount = 1)
+		{
+			VkWriteDescriptorSet writeDescriptorSet{};
+			writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writeDescriptorSet.dstSet = dstSet;
+			writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+			writeDescriptorSet.dstBinding = id + SEG_SAMPLER_NUM + 2;
+			writeDescriptorSet.pImageInfo = imageInfo;
+			writeDescriptorSet.descriptorCount = descriptorCount;
+			return writeDescriptorSet;
+		}
+
+		static inline VkWriteDescriptorSet writeDescriptorSetMask(
+			VkDescriptorSet dstSet,
+			VkDescriptorImageInfo* imageInfo,
+			uint32_t descriptorCount = 1)
+		{
+			return writeDescriptorSetStrageImage(dstSet, 0, imageInfo, descriptorCount);
+		}
+
+		static inline VkWriteDescriptorSet writeDescriptorSetLabel(
+			VkDescriptorSet dstSet,
+			VkDescriptorImageInfo* imageInfo,
+			uint32_t descriptorCount = 1)
+		{
+			return writeDescriptorSetStrageImage(dstSet, 1, imageInfo, descriptorCount);
+		}
+
+		static inline VkWriteDescriptorSet writeDescriptorSetStroke(
+			VkDescriptorSet dstSet,
+			VkDescriptorImageInfo* imageInfo,
+			uint32_t descriptorCount = 1)
+		{
+			return writeDescriptorSetStrageImage(dstSet, 2, imageInfo, descriptorCount);
 		}
 
 		std::map<vks::VulkanDevice*, SegPipeline> pipeline_;

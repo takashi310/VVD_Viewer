@@ -45,7 +45,7 @@ namespace FLIVR
 	"#pragma optionNV(ifcvt none)\n" \
 	"#pragma optionNV(strict on)\n" \
 	"#pragma optionNV(unroll all)\n" \
-	"layout (local_size_x = 8, local_size_y = 8, local_size_z = 8) in;\n" \
+	"layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;\n" \
 
 #define SEG_HEAD \
 	"//SEG_HEAD\n" \
@@ -55,16 +55,40 @@ namespace FLIVR
 	"	vec4 t = TexCoord;\n" \
 	"\n"
 
-#define SEG_OUTPUTS \
-	"//SEG_OUTPUTS\n" \
-	"layout (binding = 0, r8) uniform image3D maskOut;\n"
+#define SEG_HEAD_CLIP_FUNC \
+	"	if (vol_clip_func(t))\n" \
+	"	{\n" \
+	"		return;\n" \
+	"	}\n" \
+	"\n"
 
-#define SEG_PAINT_OUTPUTS \
-	"layout (binding = 18, r8) uniform image3D strokeOut;\n"
+#define SEG_HEAD_LIT \
+	"	//SEG_HEAD_LIT\n" \
+	"	vec4 l = base.loc0; // {lx, ly, lz, alpha}\n" \
+	"	vec4 k = base.loc1; // {ka, kd, ks, ns}\n" \
+	"	k.x = k.x>1.0?log2(3.0-k.x):k.x;\n" \
+	"	vec4 n, w;\n" \
+	"	if (l.w == 0.0) { return; }\n" \
+	"\n"
 
-#define SEG_UNIFORMS_LABEL_OUTPUT \
-	"//SEG_OUTPUTS\n" \
-	"layout (binding = 0, r32ui) uniform image3D labelOut;\n"
+#define SEG_MASK_INOUT \
+	"//SEG_MASK_INOUT\n" \
+	"layout (binding = 4) uniform sampler3D tex2;//3d mask volume\n" \
+	"layout (binding = 9, r8) uniform image3D maskimg;\n"
+
+#define SEG_MASK_16BIT_INOUT \
+	"//SEG_MASK_16BIT_INOUT\n" \
+	"layout (binding = 4) uniform sampler3D tex2;//3d mask volume\n" \
+	"layout (binding = 9, r16) uniform image3D maskimg;\n"
+
+#define SEG_LABEL_INOUT \
+	"//SEG_LABEL_INOUT\n" \
+	"layout (binding = 5) uniform usampler3D tex3;//3d label volume\n" \
+	"layout (binding = 10, r32ui) uniform image3D labelimg;\n"
+
+#define SEG_PAINT_INOUT \
+	"//SEG_PAINT_INOUT\n" \
+	"layout (binding = 11, r8) uniform image3D strokeimg;\n"
 
 #define SEG_VERTEX_CODE \
 	"//SEG_VERTEX_CODE\n" \
@@ -104,14 +128,13 @@ namespace FLIVR
 	"} base;\n" \
 	"\n" \
 	"layout (binding = 3) uniform sampler3D tex0;//data volume\n" \
-	"layout (binding = 4) uniform sampler3D tex1;//gm volume\n" \
 	"\n" \
 
 #define SEG_UNIFORMS_BRICK \
 	"// VOL_UNIFORMS_BRICK\n" \
 	"layout (push_constant) uniform SegCompShaderBrickConst {\n" \
 	"	vec4 loc4;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
-	"	vec4 loc9;//(nx, ny, nz, 0) (value_var_foff, angle_var_foff, 0, 0)\n" \
+	"	vec4 loc9;//(nx, ny, nz, 0)\n" \
 	"	vec4 brkscale;//tex transform for bricking\n" \
 	"	vec4 brktrans;//tex transform for bricking\n" \
 	"	vec4 mskbrkscale;//tex transform for mask bricks\n" \
@@ -134,6 +157,19 @@ namespace FLIVR
 	"//SEG_TAIL\n" \
 	"}\n"
 
+#define SEG_BODY_STROKE_CLEAR \
+	"	//SEG_BODY_STROKE_CLEAR\n" \
+	"	imageStore(strokeimg, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
+	"\n"
+
+#define SEG_BODY_BOUND_CHECK \
+	"	//SEG_BODY_BOUND_CHECK\n" \
+	"	if (gl_GlobalInvocationID.x >= loc9.x || gl_GlobalInvocationID.y >= loc9.y || gl_GlobalInvocationID.z >= loc9.z)\n"\
+	"	{\n"\
+	"		return;\n"\
+	"	}\n"\
+	"\n"
+
 #define SEG_BODY_WEIGHT \
 	"	//SEG_BODY_WEIGHT\n" \
 	"	vec4 cw2d;\n" \
@@ -152,7 +188,7 @@ namespace FLIVR
 
 #define SEG_BODY_INIT_CLEAR \
 	"	//SEG_BODY_INIT_CLEAR\n" \
-	"	imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
+	"	imageStore(maskimg, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
 	"\n"
 
 #define SEG_BODY_INIT_2D_COORD \
@@ -166,7 +202,7 @@ namespace FLIVR
 	"	//SEG_BODY_INIT_CULL\n" \
 	"	float cmask2d = texture(tex6, s.xy).x;\n"\
 	"	if (cmask2d < 0.95)\n"\
-	"		discard;\n"\
+	"		return;\n"\
 	"\n"
 
 #define SEG_BODY_INIT_CULL_ERASE \
@@ -174,7 +210,6 @@ namespace FLIVR
 	"	float cmask2d = texture(tex6, s.xy).x;\n"\
 	"	if (cmask2d < 0.45)\n"\
 	"	{\n"\
-	"		discard;\n"\
 	"		return;\n"\
 	"	}\n"\
 	"\n"
@@ -187,66 +222,66 @@ namespace FLIVR
 #define SEG_BODY_INIT_BLEND_APPEND \
 	"	//SEG_BODY_INIT_BLEND_APPEND\n" \
 	"	vec4 ret = vec4(c.x>0.0?(c.x>base.loc7.x?1.0:0.0):0.0);\n" \
-	"	imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), ret);\n" \
+	"	imageStore(maskimg, ivec3(gl_GlobalInvocationID.xyz), ret);\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_APPEND_STROKE_TAIL \
 	"	//SEG_BODY_INIT_BLEND_APPEND_STROKE_TAIL\n" \
-	"	imageStore(strokeOut, ivec3(gl_GlobalInvocationID.xyz), vec4(1.0));\n" \
+	"	imageStore(strokeimg, ivec3(gl_GlobalInvocationID.xyz), vec4(1.0));\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_ERASE \
 	"	//SEG_BODY_INIT_BLEND_ERASE\n" \
-	"	imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
+	"	imageStore(maskimg, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_ERASE_STROKE_TAIL \
 	"	//SEG_BODY_INIT_BLEND_ERASE_STROKE_TAIL\n" \
-	"	imageStore(strokeOut, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
+	"	imageStore(strokeimg, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_DIFFUSE \
 	"	//SEG_BODY_INIT_BLEND_DIFFUSE\n" \
 	"	vec4 ret = texture(tex2, t.stp);\n" \
-	"	imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), ret);\n" \
+	"	imageStore(maskimg, ivec3(gl_GlobalInvocationID.xyz), ret);\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_DIFFUSE_STROKE_TAIL \
 	"	//SEG_BODY_INIT_BLEND_DIFFUSE_STROKE_TAIL\n" \
-	"	imageStore(strokeOut, ivec3(gl_GlobalInvocationID.xyz), ret);\n" \
+	"	imageStore(strokeimg, ivec3(gl_GlobalInvocationID.xyz), ret);\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_FLOOD \
 	"	//SEG_BODY_INIT_BLEND_FLOOD\n" \
 	"	vec4 ret = vec4(c.x>0.0?(c.x>base.loc7.x?1.0:0.0):0.0);\n" \
-	"	imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), ret);\n" \
+	"	imageStore(maskimg, ivec3(gl_GlobalInvocationID.xyz), ret);\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_FLOOD_STROKE_TAIL \
 	"	//SEG_BODY_INIT_BLEND_FLOOD_STROKE_TAIL\n" \
-	"	imageStore(strokeOut, ivec3(gl_GlobalInvocationID.xyz), vec4(1.0));\n" \
+	"	imageStore(strokeimg, ivec3(gl_GlobalInvocationID.xyz), vec4(1.0));\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_ALL \
 	"	//SEG_BODY_INIT_BLEND_ALL\n" \
-	"	imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), vec4(1.0));\n" \
+	"	imageStore(maskimg, ivec3(gl_GlobalInvocationID.xyz), vec4(1.0));\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_ALL_STROKE_TAIL \
 	"	//SEG_BODY_INIT_BLEND_ALL_STROKE_TAIL\n" \
-	"	imageStore(strokeOut, ivec3(gl_GlobalInvocationID.xyz), vec4(1.0));\n" \
+	"	imageStore(strokeimg, ivec3(gl_GlobalInvocationID.xyz), vec4(1.0));\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_HR_ORTHO_STROKE_HEAD \
 	"	//SEG_BODY_INIT_BLEND_HR_ORTHO_STROKE_HEAD\n" \
-	"	imageStore(strokeOut, ivec3(gl_GlobalInvocationID.xyz), vec4(1.0));\n" \
+	"	imageStore(strokeimg, ivec3(gl_GlobalInvocationID.xyz), vec4(1.0));\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_HR_ORTHO \
 	"	//SEG_BODY_INIT_BLEND_HR_ORTHO\n" \
 	"	if (c.x <= base.loc7.x)\n" \
 	"	{\n" \
-	"		imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
+	"		imageStore(maskimg, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
 	"		return;\n" \
 	"	}\n" \
 	"	vec4 cv = matrix3 * vec4(0.0, 0.0, 1.0, 0.0);\n" \
@@ -269,25 +304,25 @@ namespace FLIVR
 	"		cray = vol_trans_sin_color_l(v);\n" \
 	"		if (cray.x > base.loc7.x && flag)\n" \
 	"		{\n" \
-	"			imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
+	"			imageStore(maskimg, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
 	"			return;\n" \
 	"		}\n" \
 	"		if (cray.x <= base.loc7.x)\n" \
 	"			flag = true;\n" \
 	"	}\n" \
-	"	imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), vec4(1.0));\n" \
+	"	imageStore(maskimg, ivec3(gl_GlobalInvocationID.xyz), vec4(1.0));\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_HR_PERSP_STROKE_HEAD \
 	"	//SEG_BODY_INIT_BLEND_HR_PERSP_STROKE_HEAD\n" \
-	"	imageStore(strokeOut, ivec3(gl_GlobalInvocationID.xyz), vec4(1.0));\n" \
+	"	imageStore(strokeimg, ivec3(gl_GlobalInvocationID.xyz), vec4(1.0));\n" \
 	"\n"
 
 #define SEG_BODY_INIT_BLEND_HR_PERSP \
 	"	//SEG_BODY_INIT_BLEND_HR_PERSP\n" \
 	"	if (c.x <= base.loc7.x)\n" \
 	"	{\n" \
-	"		imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
+	"		imageStore(maskimg, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
 	"		return;\n" \
 	"	}\n" \
 	"	vec4 cv = matrix3 * vec4(0.0, 0.0, 0.0, 1.0);\n" \
@@ -311,24 +346,24 @@ namespace FLIVR
 	"		cray = vol_trans_sin_color_l(v);\n" \
 	"		if (cray.x > base.loc7.x && flag)\n" \
 	"		{\n" \
-	"			imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
+	"			imageStore(maskimg, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
 	"			return;\n" \
 	"		}\n" \
 	"		if (cray.x <= base.loc7.x)\n" \
 	"			flag = true;\n" \
 	"	}\n" \
-	"	imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), vec4(1.0));\n" \
+	"	imageStore(maskimg, ivec3(gl_GlobalInvocationID.xyz), vec4(1.0));\n" \
 	"\n"
 
 #define SEG_BODY_INIT_POSTER \
 	"	//SEG_BODY_INIT_POSTER\n" \
 	"	vec4 ret = vec4(ceil(c.x*base.loc8.y)/base.loc8.y);\n" \
-	"	imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), ret);\n" \
+	"	imageStore(maskimg, ivec3(gl_GlobalInvocationID.xyz), ret);\n" \
 	"\n"
 
 #define SEG_BODY_INIT_POSTER_STROKE_TAIL \
 	"	//SEG_BODY_INIT_POSTER_STROKE_TAIL\n" \
-	"	imageStore(strokeOut, ivec3(gl_GlobalInvocationID.xyz), ret);\n" \
+	"	imageStore(strokeimg, ivec3(gl_GlobalInvocationID.xyz), ret);\n" \
 	"\n"
 
 #define SEG_BODY_DB_GROW_2D_COORD \
@@ -343,24 +378,24 @@ namespace FLIVR
 	"	//SEG_BODY_DB_GROW_CULL\n" \
 	"	float cmask2d = texture(tex6, s.xy).x;\n"\
 	"	if (cmask2d < 0.45 /*|| cmask2d > 0.55*/)\n"\
-	"		discard;\n"\
+	"		return;\n"\
 	"\n"
 
 #define SEG_BODY_DB_GROW_STOP_FUNC \
 	"	//SEG_BODY_DB_GROW_STOP_FUNC\n" \
 	"	if (c.x == 0.0)\n" \
-	"		discard;\n" \
+	"		return;\n" \
 	"	v.x = c.x>1.0?1.0:c.x;\n" \
 	"	float stop = \n" \
 	"		(base.loc7.y>=1.0?1.0:(v.y>sqrt(base.loc7.y)*2.12?0.0:exp(-v.y*v.y/base.loc7.y)))*\n" \
 	"		(v.x>base.loc7.w?1.0:(base.loc7.z>0.0?(v.x<base.loc7.w-sqrt(base.loc7.z)*2.12?0.0:exp(-(v.x-base.loc7.w)*(v.x-base.loc7.w)/base.loc7.z)):0.0));\n" \
 	"	if (stop == 0.0)\n" \
-	"		discard;\n" \
+	"		return;\n" \
 	"\n"
 
 #define SEG_BODY_DB_GROW_BLEND_APPEND_HEAD \
 	"	//SEG_BODY_DB_GROW_BLEND_APPEND_HEAD\n" \
-	"	imageStore(strokeOut, ivec3(gl_GlobalInvocationID.xyz), (1.0-stop) * cc);\n" \
+	"	imageStore(strokeimg, ivec3(gl_GlobalInvocationID.xyz), (1.0-stop) * cc);\n" \
 	"\n"
 
 #define SEG_BODY_DB_GROW_BLEND_APPEND \
@@ -387,15 +422,15 @@ namespace FLIVR
 	"		m = texture(tex0, max_nb).x + base.loc7.y;\n" \
 	"		mx = texture(tex0, t.stp).x;\n" \
 	"		if (m < mx || m - mx > 2.0*base.loc7.y)\n" \
-	"			discard;\n" \
+	"			return;\n" \
 	"	}\n" \
 	"	result += cc*stop;\n"\
-	"	imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), result);\n" \
+	"	imageStore(maskimg, ivec3(gl_GlobalInvocationID.xyz), result);\n" \
 	"\n"
 
 #define SEG_BODY_DB_GROW_BLEND_APPEND_TAIL \
 	"	//SEG_BODY_DB_GROW_BLEND_APPEND_HEAD\n" \
-	"	imageStore(strokeOut, ivec3(gl_GlobalInvocationID.xyz), result);\n" \
+	"	imageStore(strokeimg, ivec3(gl_GlobalInvocationID.xyz), result);\n" \
 	"\n"
 
 #define SEG_BODY_DB_GROW_BLEND_ERASE0 \
@@ -408,22 +443,22 @@ namespace FLIVR
 	"		cc = vec4(min(cc.x, texture(tex2, nb).x));\n"\
 	"	}\n"\
 	"	vec4 ret = cc*clamp(1.0-stop, 0.0, 1.0);\n"\
-	"	imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), ret);\n" \
+	"	imageStore(maskimg, ivec3(gl_GlobalInvocationID.xyz), ret);\n" \
 	"\n"
 
 #define SEG_BODY_DB_GROW_BLEND_ERASE0_STROKE_TAIL \
 	"	//SEG_BODY_DB_GROW_BLEND_ERASE0_STROKE_TAIL\n" \
-	"	imageStore(strokeOut, ivec3(gl_GlobalInvocationID.xyz), ret);\n" \
+	"	imageStore(strokeimg, ivec3(gl_GlobalInvocationID.xyz), ret);\n" \
 	"\n"
 
 #define SEG_BODY_DB_GROW_BLEND_ERASE \
 	"	//SEG_BODY_DB_GROW_BLEND_ERASE\n" \
-	"	imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
+	"	imageStore(maskimg, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
 	"\n"
 
 #define SEG_BODY_DB_GROW_BLEND_ERASE_STROKE_TAIL \
 	"	//SEG_BODY_DB_GROW_BLEND_ERASE_STROKE_TAIL\n" \
-	"	imageStore(strokeOut, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
+	"	imageStore(strokeimg, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
 	"\n"
 
 #define SEG_BODY_LABEL_INITIALIZE \
@@ -431,7 +466,7 @@ namespace FLIVR
 	"	vec4 mask = texture(tex2, t.stp)*c.x;\n" \
 	"	if (mask.x == 0.0 || mask.x < base.loc7.x)\n" \
 	"	{\n" \
-	"		imageStore(labelOut, ivec3(gl_GlobalInvocationID.xyz), uvec4(0));\n" \
+	"		imageStore(labelimg, ivec3(gl_GlobalInvocationID.xyz), uvec4(0));\n" \
 	"		return;\n" \
 	"	}\n" \
 	"\n"
@@ -440,19 +475,19 @@ namespace FLIVR
 	"	//SEG_BODY_LABEL_INIT_ORDER\n" \
 	"	vec3 int_pos = vec3(t.x*brk.loc9.x, t.y*brk.loc9.y, t.z*brk.loc9.z);\n" \
 	"	uint index = uint(int_pos.z*brk.loc9.x*brk.loc9.y+int_pos.y*brk.loc9.x+int_pos.x+1);\n" \
-	"	imageStore(labelOut, ivec3(gl_GlobalInvocationID.xyz), uvec4(index));\n" \
+	"	imageStore(labelimg, ivec3(gl_GlobalInvocationID.xyz), uvec4(index));\n" \
 	"\n"
 
 #define SEG_BODY_LABEL_INIT_COPY \
 	"	//SEG_BODY_LABEL_INIT_COPY\n" \
-	"	discard;\n" \
+	"	return;\n" \
 	"\n"
 
 #define SEG_BODY_LABEL_INITIALIZE_NOMASK \
 	"	//SEG_BODY_LABEL_INITIALIZE_NOMASK\n" \
 	"	if (c.x ==0.0 || c.x <= base.loc7.x)\n" \
 	"	{\n" \
-	"		imageStore(labelOut, ivec3(gl_GlobalInvocationID.xyz), uvec4(0));\n" \
+	"		imageStore(labelimg, ivec3(gl_GlobalInvocationID.xyz), uvec4(0));\n" \
 	"		return;\n" \
 	"	}\n" \
 	"\n"
@@ -462,7 +497,7 @@ namespace FLIVR
 	"	vec4 mask = texture(tex2, t.stp);\n" \
 	"	if (mask.x < 0.001)\n" \
 	"	{\n" \
-	"		imageStore(labelOut, ivec3(gl_GlobalInvocationID.xyz), uvec4(0));\n" \
+	"		imageStore(labelimg, ivec3(gl_GlobalInvocationID.xyz), uvec4(0));\n" \
 	"		return;\n" \
 	"	}\n" \
 	"\n"
@@ -479,7 +514,7 @@ namespace FLIVR
 	"	//SEG_BODY_LABEL_MAX_FILTER\n" \
 	"	uint int_val = texture(tex3, t.stp).x;\n" \
 	"	if (int_val == uint(0))\n" \
-	"		discard;\n" \
+	"		return;\n" \
 	"	vec3 nb;\n" \
 	"	vec3 max_nb = t.stp;\n" \
 	"	uint m;\n" \
@@ -498,8 +533,8 @@ namespace FLIVR
 	"		}\n" \
 	"	}\n" \
 	"	if (texture(tex0, max_nb).x+base.loc7.y < texture(tex0, t.stp).x)\n" \
-	"		discard;\n" \
-	"	imageStore(labelOut, ivec3(gl_GlobalInvocationID.xyz), uvec4(int_val));\n" \
+	"		return;\n" \
+	"	imageStore(labelimg, ivec3(gl_GlobalInvocationID.xyz), uvec4(int_val));\n" \
 	"\n"
 
 #define SEG_BODY_LABEL_MIF_POSTER \
@@ -507,7 +542,7 @@ namespace FLIVR
 	"	uint int_val = texture(tex3, t.stp).x;\n" \
 	"	if (int_val == uint(0))\n" \
 	"	{\n" \
-	"		imageStore(labelOut, ivec3(gl_GlobalInvocationID.xyz), uvec4(0));\n" \
+	"		imageStore(labelimg, ivec3(gl_GlobalInvocationID.xyz), uvec4(0));\n" \
 	"		return;\n" \
 	"	}\n" \
 	"	float cur_val = texture(tex2, t.stp).x;\n" \
@@ -521,7 +556,7 @@ namespace FLIVR
 	"		if (abs(nb_val-cur_val) < 0.001)\n" \
 	"			int_val = max(int_val, texture(tex3, nb).x);\n" \
 	"	}\n" \
-	"	imageStore(labelOut, ivec3(gl_GlobalInvocationID.xyz), uvec4(int_val));\n" \
+	"	imageStore(labelimg, ivec3(gl_GlobalInvocationID.xyz), uvec4(int_val));\n" \
 	"\n"
 
 #define FLT_BODY_NR \
@@ -529,7 +564,7 @@ namespace FLIVR
 	"	float vc = texture(tex0, t.stp).x;\n" \
 	"	float mc = texture(tex2, t.stp).x;\n" \
 	"	if (mc < 0.001)\n" \
-	"		discard;\n" \
+	"		return;\n" \
 	"	float nb_val;\n" \
 	"	float max_val = -0.1;\n" \
 	"	for (int i=-2; i<3; i++)\n" \
@@ -541,13 +576,13 @@ namespace FLIVR
 	"		max_val = (nb_val<vc && nb_val>max_val)?nb_val:max_val;\n" \
 	"	}\n" \
 	"	if (max_val > 0.0)\n" \
-	"		imageStore(maskOut, ivec3(gl_GlobalInvocationID.xyz), vec4(max_val));\n" \
+	"		imageStore(maskimg, ivec3(gl_GlobalInvocationID.xyz), vec4(max_val));\n" \
 	"	else\n" \
-	"		discard;\n" \
+	"		return;\n" \
 	"\n"
 
 	SegShader::SegShader(VkDevice device, int type, int paint_mode, int hr_mode,
-		bool use_2d, bool shading, int peel, bool clip, bool hiqual, bool use_stroke) :
+		bool use_2d, bool shading, int peel, bool clip, bool hiqual, bool use_stroke, bool stroke_clear, int out_bytes) :
 	device_(device),
 	type_(type),
 	paint_mode_(paint_mode),
@@ -558,6 +593,8 @@ namespace FLIVR
 	clip_(clip),
 	hiqual_(hiqual),
 	use_stroke_(use_stroke),
+	stroke_clear_(stroke_clear),
+	out_bytes_(out_bytes),
 	program_(0)
 	{}
 
@@ -590,25 +627,27 @@ namespace FLIVR
 		{
 		case SEG_SHDR_INITIALIZE:
 		case SEG_SHDR_DB_GROW:
-			z << SEG_OUTPUTS;
-			if (use_stroke_) z << SEG_PAINT_OUTPUTS;
+			if (out_bytes_ == 2) z << SEG_MASK_16BIT_INOUT;
+			else z << SEG_MASK_INOUT;
+			if (use_stroke_) z << SEG_PAINT_INOUT;
 			z << VOL_UNIFORMS_MASK;
 			z << SEG_UNIFORMS_WMAP_2D;
 			z << SEG_UNIFORMS_MASK_2D;
 			break;
 		case LBL_SHDR_INITIALIZE:
-			z << SEG_UNIFORMS_LABEL_OUTPUT;
+			z << SEG_LABEL_INOUT;
 			if (use_2d_)
 				z << VOL_UNIFORMS_MASK;
 			break;
 		case LBL_SHDR_MIF:
-			z << SEG_UNIFORMS_LABEL_OUTPUT;
+			z << SEG_LABEL_INOUT;
 			z << VOL_UNIFORMS_LABEL;
 			if (paint_mode_==1)
 				z << VOL_UNIFORMS_MASK;
 			break;
 		case FLT_SHDR_NR:
-			z << SEG_OUTPUTS;
+			if (out_bytes_ == 2) z << SEG_MASK_16BIT_INOUT;
+			else z << SEG_MASK_INOUT;
 			z << VOL_UNIFORMS_MASK;
 			break;
 		}
@@ -632,9 +671,14 @@ namespace FLIVR
 		//the common head
 		z << VOL_HEAD;
 
+		z << SEG_BODY_BOUND_CHECK;
+
+		if (use_stroke_ && stroke_clear_)
+			z << SEG_BODY_STROKE_CLEAR;
+
 		//head for clipping planes
 		if (paint_mode_!=6 && clip_)
-			z << VOL_HEAD_CLIP_FUNC;
+			z << SEG_HEAD_CLIP_FUNC;
 
 		if (paint_mode_ == 6)
 		{
@@ -657,7 +701,7 @@ namespace FLIVR
 
 				if (paint_mode_ != 3)
 				{
-					z << VOL_HEAD_LIT;
+					z << SEG_HEAD_LIT;
 					z << VOL_DATA_VOLUME_LOOKUP;
 					z << VOL_GRAD_COMPUTE_HI;
 					z << VOL_COMPUTED_GM_LOOKUP;
@@ -711,7 +755,7 @@ namespace FLIVR
 
 				if (paint_mode_ != 3)
 				{
-					z << VOL_HEAD_LIT;
+					z << SEG_HEAD_LIT;
 					z << VOL_DATA_VOLUME_LOOKUP;
 					z << VOL_GRAD_COMPUTE_HI;
 					z << VOL_COMPUTED_GM_LOOKUP;
@@ -740,7 +784,7 @@ namespace FLIVR
 				}
 				break;
 			case LBL_SHDR_INITIALIZE:
-				z << VOL_HEAD_LIT;
+				z << SEG_HEAD_LIT;
 				z << VOL_DATA_VOLUME_LOOKUP_130;
 				z << VOL_COMPUTED_GM_INVALIDATE;
 				z << VOL_TRANSFER_FUNCTION_SIN_COLOR_L;
@@ -776,7 +820,7 @@ namespace FLIVR
 				//	z << SEG_BODY_LABEL_MAX_FILTER;
 				//else if (paint_mode_==1 || paint_mode_==3)
 				//	z << SEG_BODY_LABEL_MIF_POSTER;
-				z << VOL_HEAD_LIT;
+				z << SEG_HEAD_LIT;
 				z << VOL_DATA_VOLUME_LOOKUP_130;
 				z << VOL_MEASURE_GM_LOOKUP;
 				z << VOL_TRANSFER_FUNCTION_SIN_COLOR_L;
@@ -830,25 +874,25 @@ namespace FLIVR
 	}
 
 	ShaderProgram* SegShaderFactory::shader(VkDevice device, int type, int paint_mode, int hr_mode,
-		bool use_2d, bool shading, int peel, bool clip, bool hiqual, bool use_stroke)
+		bool use_2d, bool shading, int peel, bool clip, bool hiqual, bool use_stroke, bool stroke_clear, int out_bytes)
 	{
 		if(prev_shader_ >= 0)
 		{
-			if(shader_[prev_shader_]->match(device, type, paint_mode, hr_mode, use_2d, shading, peel, clip, hiqual, use_stroke)) 
+			if(shader_[prev_shader_]->match(device, type, paint_mode, hr_mode, use_2d, shading, peel, clip, hiqual, use_stroke, stroke_clear, out_bytes))
 			{
 				return shader_[prev_shader_]->program();
 			}
 		}
 		for(unsigned int i=0; i<shader_.size(); i++)
 		{
-			if(shader_[i]->match(device, type, paint_mode, hr_mode, use_2d, shading, peel, clip, hiqual, use_stroke)) 
+			if(shader_[i]->match(device, type, paint_mode, hr_mode, use_2d, shading, peel, clip, hiqual, use_stroke, stroke_clear, out_bytes))
 			{
 				prev_shader_ = i;
 				return shader_[i]->program();
 			}
 		}
 
-		SegShader* s = new SegShader(device, type, paint_mode, hr_mode, use_2d, shading, peel, clip, hiqual, use_stroke);
+		SegShader* s = new SegShader(device, type, paint_mode, hr_mode, use_2d, shading, peel, clip, hiqual, use_stroke, stroke_clear, out_bytes);
 		if(s->create())
 		{
 			delete s;
@@ -868,11 +912,7 @@ namespace FLIVR
 
 			std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = 
 			{
-				vks::initializers::descriptorSetLayoutBinding(
-				VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-				VK_SHADER_STAGE_COMPUTE_BIT,
-				0),
-				
+				//uniform buffer
 				vks::initializers::descriptorSetLayoutBinding(
 				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 
 				VK_SHADER_STAGE_COMPUTE_BIT,
@@ -880,7 +920,7 @@ namespace FLIVR
 			};
 
 			int offset = 2;
-			for (int i = 0; i < ShaderProgram::MAX_SHADER_UNIFORMS; i++)
+			for (int i = 0; i < SEG_SAMPLER_NUM; i++)
 			{
 				setLayoutBindings.push_back(
 					vks::initializers::descriptorSetLayoutBinding(
@@ -890,12 +930,27 @@ namespace FLIVR
 					);
 			}
 
-			offset += ShaderProgram::MAX_SHADER_UNIFORMS;
+			offset += SEG_SAMPLER_NUM;
+			//mask
 			setLayoutBindings.push_back(
 				vks::initializers::descriptorSetLayoutBinding(
 					VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
 					VK_SHADER_STAGE_COMPUTE_BIT,
 					offset)
+			);
+			//label
+			setLayoutBindings.push_back(
+				vks::initializers::descriptorSetLayoutBinding(
+					VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+					VK_SHADER_STAGE_COMPUTE_BIT,
+					offset + 1)
+			);
+			//stroke
+			setLayoutBindings.push_back(
+				vks::initializers::descriptorSetLayoutBinding(
+					VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+					VK_SHADER_STAGE_COMPUTE_BIT,
+					offset + 2)
 			);
 			
 			VkDescriptorSetLayoutCreateInfo descriptorLayout = 

@@ -347,7 +347,7 @@ namespace vks
 
 	std::shared_ptr<VTexture> VulkanDevice::GenTexture2D(VkFormat format, VkFilter filter, uint32_t w, uint32_t h, VkImageUsageFlags usage)
 	{
-		std::shared_ptr<VTexture> ret = std::make_shared<VTexture>(VTexture());
+		std::shared_ptr<VTexture> ret = std::make_shared<VTexture>();
 
 		ret->w = w;
 		ret->h = h;
@@ -452,7 +452,7 @@ namespace vks
 
 	std::shared_ptr<VTexture> VulkanDevice::GenTexture3D(VkFormat format, VkFilter filter, uint32_t w, uint32_t h, uint32_t d)
 	{
-		std::shared_ptr<VTexture> ret = std::make_shared<VTexture>(VTexture());
+		std::shared_ptr<VTexture> ret = std::make_shared<VTexture>();
 
 		ret->w = w;
 		ret->h = h;

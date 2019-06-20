@@ -1889,9 +1889,9 @@ namespace FLIVR
 
 			descriptorWrites.push_back(VolShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 0, &brktex->descriptor));
 			if (msktex)
-				descriptorWrites.push_back(VolShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 2, &brktex->descriptor));
+				descriptorWrites.push_back(VolShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 2, &msktex->descriptor));
 			if (lbltex)
-				descriptorWrites.push_back(VolShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 3, &brktex->descriptor));
+				descriptorWrites.push_back(VolShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 3, &lbltex->descriptor));
 
 			frag_const.loc_dim_inv = { 1.0 / b->nx(), 1.0 / b->ny(), 1.0 / b->nz(),
 									   mode_ == MODE_OVER ? 1.0 / (rate * minwh * 0.001 * zoom * 2.0) : 1.0 };
@@ -2282,12 +2282,11 @@ namespace FLIVR
 	//		shader->release();
 	//}
 
-	VolumeRenderer::VSegPipeline VolumeRenderer::prepareSegPipeline(vks::VulkanDevice* device, int type, int paint_mode, int hr_mode)
+	VolumeRenderer::VSegPipeline VolumeRenderer::prepareSegPipeline(vks::VulkanDevice* device, int type, int paint_mode, int hr_mode, bool use_stroke, bool stroke_clear, int out_bytes)
 	{
 		VSegPipeline ret_pipeline;
 
 		bool use_2d = tex_2d_weight1_ && tex_2d_weight2_ ? true : false;
-		bool use_stroke = (tex_->nstroke() >= 0) ? true : false;
 
 		ShaderProgram* seg_shader = nullptr;
 		switch (type)
@@ -2296,19 +2295,19 @@ namespace FLIVR
 			seg_shader = m_vulkan->seg_shader_factory_->shader(
 				device->logicalDevice,
 				SEG_SHDR_INITIALIZE, paint_mode, hr_mode,
-				use_2d, true, depth_peel_, true, hiqual_, use_stroke);
+				use_2d, true, depth_peel_, true, hiqual_, use_stroke, stroke_clear, out_bytes);
 			break;
 		case 1://diffusion-based growing
 			seg_shader = m_vulkan->seg_shader_factory_->shader(
 				device->logicalDevice,
 				SEG_SHDR_DB_GROW, paint_mode, hr_mode,
-				use_2d, true, depth_peel_, true, hiqual_, use_stroke);
+				use_2d, true, depth_peel_, true, hiqual_, use_stroke, stroke_clear, out_bytes);
 			break;
 		case 2://noise removal
 			seg_shader = m_vulkan->seg_shader_factory_->shader(
 				device->logicalDevice,
 				FLT_SHDR_NR, paint_mode, hr_mode,
-				false, false, depth_peel_, false, hiqual_, use_stroke);
+				false, false, depth_peel_, false, hiqual_, use_stroke, stroke_clear, out_bytes);
 			break;
 		}
 
@@ -2372,6 +2371,23 @@ namespace FLIVR
 		bool use_2d = tex_2d_weight1_ && tex_2d_weight2_ ? true : false;
 
 		bool use_stroke = (tex_->nstroke() >= 0 && (type == 0 || type == 1)) ? true : false;
+		bool clear_stroke = use_stroke && (paint_mode == 1 || paint_mode == 2 || (paint_mode == 4 && type == 0) || paint_mode == 6 || paint_mode == 7);
+
+		bool write_to_vol = false;
+		switch (type)
+		{
+		case 0:
+		case 1:
+			write_to_vol = false;
+			break;
+		case 2:
+			write_to_vol = true;
+			break;
+		}
+
+		int out_bytes = 1;
+		if (write_to_vol)
+			out_bytes = tex_->nb(0);
 		
 		Ray view_ray = compute_view();
 
@@ -2386,7 +2402,7 @@ namespace FLIVR
 
 		eval_ml_mode();
 
-		VSegPipeline pipeline = prepareSegPipeline(prim_dev, type, paint_mode, hr_mode);
+		VSegPipeline pipeline = prepareSegPipeline(prim_dev, type, paint_mode, hr_mode, use_stroke, clear_stroke, out_bytes);
 		VkPipelineLayout pipelineLayout = m_vulkan->seg_shader_factory_->pipeline_[prim_dev].pipelineLayout;
 
 		std::vector<VkWriteDescriptorSet> descriptorWrites;
@@ -2465,24 +2481,8 @@ namespace FLIVR
 				descriptorWrites.push_back(SegShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 5, &tex_2d_weight2_->descriptor));
 		}
 
-		bool clear_stroke = (paint_mode == 1 || paint_mode == 2 || (paint_mode == 4 && type == 0) || paint_mode == 6 || paint_mode == 7);
-
 		SegShaderFactory::updateUniformBuffers(m_segUniformBuffers[prim_dev], seg_ubo);
 
-		bool waitsemaphore = semaphores.wait_before_brk_rendering;
-
-		bool write_to_vol = false;
-		switch (type)
-		{
-		case 0:
-		case 1:
-			write_to_vol = false;
-			break;
-		case 2:
-			write_to_vol = true;
-			break;
-		}
-		
 		//////////////////////////////////////////
 		//render bricks
 
@@ -2497,6 +2497,7 @@ namespace FLIVR
 		
 		for (unsigned int i=0; i < bricks->size(); i++)
 		{
+			TextureBrick* b = (*bricks)[i];
 			shared_ptr<vks::VTexture> brktex, msktex, stroketex;
 			
 			b->prevent_tex_deletion(true);
@@ -2512,48 +2513,23 @@ namespace FLIVR
 			b->prevent_tex_deletion(false);
 
 			if (brktex)
-				descriptorWrites.push_back(VolShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 0, &brktex->descriptor));
-			/*if (msktex)
-				descriptorWrites.push_back(VolShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 2, &brktex->descriptor));
-			if (lbltex)
-				descriptorWrites.push_back(VolShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 3, &brktex->descriptor));*/
-
-			//draw each slice
-			for (int z=0; z<b->nz(); z++)
 			{
-				glFramebufferTexture3D(GL_FRAMEBUFFER, 
-					GL_COLOR_ATTACHMENT0,
-					GL_TEXTURE_3D,
-					tex_id,
-					0,
-					z);
-
-				if (use_stroke && glIsTexture(stroke_tex_id) && (type == 0 || type == 1))
-				{
-					glFramebufferTexture3D(GL_FRAMEBUFFER, 
-						GL_COLOR_ATTACHMENT1,
-						GL_TEXTURE_3D,
-						stroke_tex_id,
-						0,
-						z);
-					if (clear_stroke)
-					{
-						glDrawBuffers(1, &attachment1);
-						glClearColor(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
-						glClear(GL_COLOR_BUFFER_BIT);
-					}
-					glDrawBuffers(2, draw_buffers);
-				}
-				else
-					glDrawBuffers(1, &attachment0);
-				
-
-				draw_view_quad(double(z+0.5) / double(b->nz()));
+				descriptorWrites.push_back(SegShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 0, &brktex->descriptor));
+				if (write_to_vol) 
+					descriptorWrites.push_back(SegShaderFactory::writeDescriptorSetMask(VK_NULL_HANDLE, &brktex->descriptor));
 			}
-
+				
+			if (msktex)
+			{
+				descriptorWrites.push_back(SegShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 2, &msktex->descriptor));
+				if (!write_to_vol)
+					descriptorWrites.push_back(SegShaderFactory::writeDescriptorSetMask(VK_NULL_HANDLE, &msktex->descriptor));
+			}
+			
 			//size and sample rate
 			seg_const.loc_dim_inv = { 1.0 / b->nx(), 1.0 / b->ny(), 1.0 / b->nz(),
 									  mode_ == MODE_OVER ? 1.0 / sampling_rate_ : 1.0 };
+			seg_const.loc_dim = { b->nx(), b->ny(), b->nz(), 0.0 };
 			//for brick transformation
 			BBox dbox = b->dbox();
 			seg_const.b_scale = { float(dbox.max().x() - dbox.min().x()),
@@ -2583,13 +2559,43 @@ namespace FLIVR
 				&seg_const
 			);
 
-			vkCmdDispatch(compute.commandBuffer, textureComputeTarget.width / 16, textureComputeTarget.height / 16, 1);
+			uint32_t group_count_x = b->nx() / 4 + ((b->nx() % 4) > 0 ? 1 : 0);
+			uint32_t group_count_y = b->ny() / 4 + ((b->ny() % 4) > 0 ? 1 : 0);
+			uint32_t group_count_z = b->nz() / 4 + ((b->nz() % 4) > 0 ? 1 : 0);
+
+			vkCmdDispatch(cmdbuf, group_count_x, group_count_y, group_count_z);
 
 			b->set_dirty(b->nmask(), true);
 
 		}
-
+		
 		vkEndCommandBuffer(cmdbuf);
+
+		VkSubmitInfo submitInfo = vks::initializers::submitInfo();
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &cmdbuf;
+
+		std::vector<VkPipelineStageFlags> waitStages;
+		if (semaphores.waitSemaphoreCount > 0)
+		{
+			for (uint32_t i = 0; i < semaphores.waitSemaphoreCount; i++)
+				waitStages.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+			submitInfo.waitSemaphoreCount = semaphores.waitSemaphoreCount;
+			submitInfo.pWaitSemaphores = semaphores.waitSemaphores;
+			submitInfo.pWaitDstStageMask = waitStages.data();
+		}
+
+		VkFenceCreateInfo fenceInfo = vks::initializers::fenceCreateInfo(VK_FLAGS_NONE);
+		VkFence fence;
+		VK_CHECK_RESULT(vkCreateFence(prim_dev->logicalDevice, &fenceInfo, nullptr, &fence));
+
+		// Submit to the queue
+		VK_CHECK_RESULT(vkQueueSubmit(prim_dev->compute_queue, 1, &submitInfo, fence));
+		// Wait for the fence to signal that command buffer has finished executing
+		VK_CHECK_RESULT(vkWaitForFences(prim_dev->logicalDevice, 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
+
+		vkDestroyFence(prim_dev->logicalDevice, fence, nullptr);
+
 
 	}
 
