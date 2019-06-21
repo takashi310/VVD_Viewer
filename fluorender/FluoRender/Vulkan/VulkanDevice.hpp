@@ -50,6 +50,7 @@ namespace vks
 
 		/** @brief Default command pool for the graphics queue family index */
 		VkCommandPool commandPool = VK_NULL_HANDLE;
+		VkCommandPool compute_commandPool = VK_NULL_HANDLE;
 
 		/** @brief Set to true when the debug marker extension is detected */
 		bool enableDebugMarkers = false;
@@ -94,7 +95,7 @@ namespace vks
 		void prepareSamplers();
 		void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 		void checkStagingBuffer(VkDeviceSize size);
-		std::shared_ptr<VTexture> GenTexture2D(VkFormat format, VkFilter filter, uint32_t w, uint32_t h, VkImageUsageFlags usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+		std::shared_ptr<VTexture> GenTexture2D(VkFormat format, VkFilter filter, uint32_t w, uint32_t h, VkImageUsageFlags usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_STORAGE_BIT);
 		std::shared_ptr<VTexture> GenTexture3D(VkFormat format, VkFilter filter, uint32_t w, uint32_t h, uint32_t d);
 		bool UploadTexture3D(const std::shared_ptr<VTexture> &tex, void *data, VkOffset3D offset, uint32_t ypitch, uint32_t zpitch);
 		bool UploadTexture(const std::shared_ptr<VTexture> &tex, void *data);
@@ -163,9 +164,9 @@ namespace vks
 			if (descriptorPool)
 				vkDestroyDescriptorPool(logicalDevice, descriptorPool, nullptr);
 			if (commandPool)
-			{
 				vkDestroyCommandPool(logicalDevice, commandPool, nullptr);
-			}
+			if (compute_commandPool)
+				vkDestroyCommandPool(logicalDevice, compute_commandPool, nullptr);
 			if (logicalDevice)
 			{
 				vkDestroyDevice(logicalDevice, nullptr);
@@ -377,6 +378,7 @@ namespace vks
 			{
 				// Create a default command pool for graphics command buffers
 				commandPool = createCommandPool(queueFamilyIndices.graphics);
+				compute_commandPool = createCommandPool(queueFamilyIndices.compute);
 			}
 
 			this->enabledFeatures = enabledFeatures;
@@ -581,6 +583,22 @@ namespace vks
 
 			return cmdBuffer;
 		}
+		VkCommandBuffer createComputeCommandBuffer(VkCommandBufferLevel level, bool begin = false)
+		{
+			VkCommandBufferAllocateInfo cmdBufAllocateInfo = vks::initializers::commandBufferAllocateInfo(compute_commandPool, level, 1);
+
+			VkCommandBuffer cmdBuffer;
+			VK_CHECK_RESULT(vkAllocateCommandBuffers(logicalDevice, &cmdBufAllocateInfo, &cmdBuffer));
+
+			// If requested, also start recording for the new command buffer
+			if (begin)
+			{
+				VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
+				VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuffer, &cmdBufInfo));
+			}
+
+			return cmdBuffer;
+		}
 
 		/**
 		* Finish command buffer recording and submit it to a queue
@@ -620,6 +638,37 @@ namespace vks
 			if (free)
 			{
 				vkFreeCommandBuffers(logicalDevice, commandPool, 1, &commandBuffer);
+			}
+		}
+
+		void flushComputeCommandBuffer(VkCommandBuffer commandBuffer, bool free = true)
+		{
+			if (commandBuffer == VK_NULL_HANDLE)
+			{
+				return;
+			}
+
+			VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer));
+
+			VkSubmitInfo submitInfo = vks::initializers::submitInfo();
+			submitInfo.commandBufferCount = 1;
+			submitInfo.pCommandBuffers = &commandBuffer;
+
+			// Create fence to ensure that the command buffer has finished executing
+			VkFenceCreateInfo fenceInfo = vks::initializers::fenceCreateInfo(VK_FLAGS_NONE);
+			VkFence fence;
+			VK_CHECK_RESULT(vkCreateFence(logicalDevice, &fenceInfo, nullptr, &fence));
+
+			// Submit to the queue
+			VK_CHECK_RESULT(vkQueueSubmit(compute_queue, 1, &submitInfo, fence));
+			// Wait for the fence to signal that command buffer has finished executing
+			VK_CHECK_RESULT(vkWaitForFences(logicalDevice, 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
+
+			vkDestroyFence(logicalDevice, fence, nullptr);
+
+			if (free)
+			{
+				vkFreeCommandBuffers(logicalDevice, compute_commandPool, 1, &commandBuffer);
 			}
 		}
 

@@ -1750,7 +1750,7 @@ namespace FLIVR
 			else if (filter == VK_FILTER_NEAREST)
 				result->sampler = device->nearest_sampler;
 
-			void *texdata = brick->tex_data(c);
+			void* texdata = brick->get_nrrd(c)->data;
 			device->UploadTexture3D(result, texdata, offset, ypitch, zpitch);
 		}
 

@@ -142,7 +142,7 @@ namespace FLIVR
 			for (auto dev : m_vulkan->devices)
 				m_commandBuffers[dev] = dev->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 			for (auto dev : m_vulkan->devices)
-				m_seg_commandBuffers[dev] = dev->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+				m_seg_commandBuffers[dev] = dev->createComputeCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
 			VkSemaphoreCreateInfo semaphoreInfo = vks::initializers::semaphoreCreateInfo();
 			for (auto dev : m_vulkan->devices)
@@ -243,7 +243,7 @@ namespace FLIVR
 			for (auto dev : m_vulkan->devices)
 				m_commandBuffers[dev] = dev->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 			for (auto dev : m_vulkan->devices)
-				m_seg_commandBuffers[dev] = dev->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+				m_seg_commandBuffers[dev] = dev->createComputeCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
 			VkSemaphoreCreateInfo semaphoreInfo = vks::initializers::semaphoreCreateInfo();
 			for (auto dev : m_vulkan->devices)
@@ -285,7 +285,7 @@ namespace FLIVR
 			m_volUniformBuffers[vdev].frag_base.destroy();
 			m_segUniformBuffers[vdev].frag_base.destroy();
 			vkFreeCommandBuffers(vdev->logicalDevice, vdev->commandPool, 1, &m_commandBuffers[vdev]);
-			vkFreeCommandBuffers(vdev->logicalDevice, vdev->commandPool, 1, &m_seg_commandBuffers[vdev]);
+			vkFreeCommandBuffers(vdev->logicalDevice, vdev->compute_commandPool, 1, &m_seg_commandBuffers[vdev]);
 			vkDestroySemaphore(vdev->logicalDevice, m_volFinishedSemaphores[vdev], nullptr);
 			vkDestroySemaphore(vdev->logicalDevice, m_filterFinishedSemaphores[vdev], nullptr);
 			vkDestroySemaphore(vdev->logicalDevice, m_renderFinishedSemaphores[vdev], nullptr);
@@ -2489,6 +2489,37 @@ namespace FLIVR
 		// Flush the queue if we're rebuilding the command buffer after a pipeline change to ensure it's not currently in use
 		vkQueueWaitIdle(prim_dev->compute_queue);
 
+		VkCommandBuffer layoutCmd = prim_dev->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+		for (unsigned int i = 0; i < bricks->size(); i++)
+		{
+			TextureBrick* b = (*bricks)[i];
+			shared_ptr<vks::VTexture> brktex, msktex;
+
+			b->prevent_tex_deletion(true);
+			brktex = load_brick(prim_dev, 0, 0, bricks, i, VK_FILTER_NEAREST, compression_);
+			if (!brktex) continue;
+			msktex = load_brick_mask(prim_dev, bricks, i, VK_FILTER_NEAREST, false, 0, true);
+			if (!msktex) continue;
+			b->prevent_tex_deletion(false);
+
+			if (write_to_vol)
+			{
+				vks::tools::setImageLayout(
+					layoutCmd,
+					brktex->image,
+					VK_IMAGE_LAYOUT_UNDEFINED,
+					VK_IMAGE_LAYOUT_GENERAL,
+					brktex->subresourceRange);
+			}
+			vks::tools::setImageLayout(
+				layoutCmd,
+				msktex->image,
+				VK_IMAGE_LAYOUT_UNDEFINED,
+				VK_IMAGE_LAYOUT_GENERAL,
+				msktex->subresourceRange);
+		}
+		prim_dev->flushCommandBuffer(layoutCmd, prim_dev->queue, true);
+
 		VkCommandBuffer cmdbuf = m_seg_commandBuffers[prim_dev];
 		VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
 		VK_CHECK_RESULT(vkBeginCommandBuffer(cmdbuf, &cmdBufInfo));
@@ -2524,6 +2555,7 @@ namespace FLIVR
 				descriptorWrites.push_back(SegShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 2, &msktex->descriptor));
 				if (!write_to_vol)
 					descriptorWrites.push_back(SegShaderFactory::writeDescriptorSetMask(VK_NULL_HANDLE, &msktex->descriptor));
+
 			}
 			
 			//size and sample rate
@@ -2568,7 +2600,6 @@ namespace FLIVR
 			b->set_dirty(b->nmask(), true);
 
 		}
-		
 		vkEndCommandBuffer(cmdbuf);
 
 		VkSubmitInfo submitInfo = vks::initializers::submitInfo();
@@ -2596,7 +2627,36 @@ namespace FLIVR
 
 		vkDestroyFence(prim_dev->logicalDevice, fence, nullptr);
 
+		VkCommandBuffer layoutCmd2 = prim_dev->createComputeCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+		for (unsigned int i = 0; i < bricks->size(); i++)
+		{
+			TextureBrick* b = (*bricks)[i];
+			shared_ptr<vks::VTexture> brktex, msktex;
 
+			b->prevent_tex_deletion(true);
+			brktex = load_brick(prim_dev, 0, 0, bricks, i, VK_FILTER_NEAREST, compression_);
+			if (!brktex) continue;
+			msktex = load_brick_mask(prim_dev, bricks, i, VK_FILTER_NEAREST, false, 0, true);
+			if (!msktex) continue;
+			b->prevent_tex_deletion(false);
+
+			if (write_to_vol)
+			{
+				vks::tools::setImageLayout(
+					layoutCmd2,
+					brktex->image,
+					VK_IMAGE_LAYOUT_GENERAL,
+					brktex->imageLayout,
+					brktex->subresourceRange);
+			}
+			vks::tools::setImageLayout(
+				layoutCmd2,
+				msktex->image,
+				VK_IMAGE_LAYOUT_GENERAL,
+				msktex->imageLayout,
+				msktex->subresourceRange);
+		}
+		prim_dev->flushComputeCommandBuffer(layoutCmd2, true);
 	}
 
 //	void VolumeRenderer::draw_mask_cpu(int type, int paint_mode, int hr_mode,

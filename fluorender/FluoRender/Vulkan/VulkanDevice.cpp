@@ -69,7 +69,7 @@ namespace vks
 		zpitch = (VkDeviceSize)b->sy() * b->sx() * b->nb(c);
 
 		vks::VulkanDevice *device = texp.tex->device;
-		void* data = b->tex_data(c);
+		void* data = b->get_nrrd(c)->data;
 		device->DownloadTexture3D(texp.tex, data, offset, ypitch, zpitch);
 
 		b->set_dirty(c, false);
@@ -460,7 +460,7 @@ namespace vks
 		ret->bytes = FormatTexelSize(format);
 		ret->mipLevels = 1;
 		ret->format = format;
-		ret->usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+		ret->usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
 		ret->image = VK_NULL_HANDLE;
 		ret->deviceMemory = VK_NULL_HANDLE;
 		ret->sampler = VK_NULL_HANDLE;
@@ -572,7 +572,7 @@ namespace vks
 		}
 		if (staging_buf.buffer == VK_NULL_HANDLE)
 		{
-			createBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
+			createBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 				&staging_buf, size);
 			// Map persistent

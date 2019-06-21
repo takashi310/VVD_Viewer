@@ -24,7 +24,7 @@ wxVulkanTutorialApp::wxVulkanTutorialApp()
 {
 #if !defined (NDEBUG) || defined (WIN32)
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
-	//_crtBreakAlloc = 8257;
+	//_crtBreakAlloc = 9679;
 #endif
 }
 

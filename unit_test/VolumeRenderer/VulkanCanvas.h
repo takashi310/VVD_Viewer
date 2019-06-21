@@ -5,6 +5,7 @@
 #include <VolumeRenderer.h>
 #include <base_reader.h>
 #include <nrrd_reader.h>
+#include <nrrd_writer.h>
 #include <string>
 #include <set>
 #include <array>
@@ -38,6 +39,7 @@ private:
 	void HandleProjection(int nx, int ny);
 	void HandleCamera();
 	double CalcCameraDistance();
+	void DrawMask();
     
     virtual void OnPaint(wxPaintEvent& event);
     virtual void OnResize(wxSizeEvent& event);
@@ -56,6 +58,9 @@ private:
 	std::unique_ptr<FLIVR::VolumeRenderer> m_vr;
 	std::unique_ptr<FLIVR::Texture> m_vol;
 	NRRDReader m_reader;
+	NRRDWriter m_writer;
+
+	std::shared_ptr<vks::VTexture> m_paint;
 
 	bool m_init_view;
 	glm::mat4 m_mv_mat, m_proj_mat, m_tex_mat;

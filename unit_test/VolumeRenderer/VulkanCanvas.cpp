@@ -140,6 +140,8 @@ VulkanCanvas::VulkanCanvas(wxWindow *pParent,
 	LoadVolume();
 	InitView(INIT_BOUNDS | INIT_CENTER | INIT_TRANSL | INIT_OBJ_TRANSL | INIT_ROTATE);
 
+	DrawMask();
+
     m_startTime = std::chrono::high_resolution_clock::now();
     m_timer = std::make_unique<wxTimer>(this, TIMERNUMBER);
     m_timer->Start(INTERVAL);
@@ -154,6 +156,8 @@ VulkanCanvas::VulkanCanvas(wxWindow *pParent,
 VulkanCanvas::~VulkanCanvas() noexcept
 {
     m_timer->Stop();
+
+	m_paint.reset();
 
 	m_vr.reset();
 	m_vol.reset();
@@ -206,6 +210,63 @@ void VulkanCanvas::LoadVolume()
 	m_vr->set_mode(FLIVR::TextureRenderer::MODE_OVER);
 
 	m_vr->set_gamma3d(0.6);
+
+	//mask
+	size_t res_x = m_vol->nx();
+	size_t res_y = m_vol->ny();
+	size_t res_z = m_vol->nz();
+
+	//prepare the texture bricks for the mask
+	if (m_vol->add_empty_mask())
+	{
+		//add the nrrd data for mask
+		Nrrd* nrrd_mask = nrrdNew();
+		size_t mem_size = res_x * res_y * res_z;
+		uint8* val8 = new (std::nothrow) uint8[mem_size];
+		if (!val8)
+		{
+			wxMessageBox("Not enough memory. Please save project and restart.");
+			return;
+		}
+		double spcx, spcy, spcz;
+		m_vol->get_spacings(spcx, spcy, spcz);
+		memset((void*)val8, 0, mem_size * sizeof(uint8));
+		nrrdWrap(nrrd_mask, val8, nrrdTypeUChar, 3, res_x, res_y, res_z);
+		nrrdAxisInfoSet(nrrd_mask, nrrdAxisInfoSize, res_x, res_y, res_z);
+		nrrdAxisInfoSet(nrrd_mask, nrrdAxisInfoSpacing, spcx, spcy, spcz);
+		nrrdAxisInfoSet(nrrd_mask, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
+		nrrdAxisInfoSet(nrrd_mask, nrrdAxisInfoMax, spcx * res_x, spcy * res_y, spcz * res_z);
+
+		m_vol->set_nrrd(nrrd_mask, m_vol->nmask());
+	}
+
+	//mask paint tex
+	int pw = 256;
+	int ph = 256;
+	unsigned char *paint = new unsigned char[(size_t)pw * ph];
+	for (int y = 0; y < ph; y++)
+	{
+			for (int x = 0; x < pw; x++)
+			{
+				if (y >= ph / 4 && y <= ph / 4 * 3 &&
+					x >= pw / 4 && x <= pw / 4 * 3)
+					paint[y * pw + x] = 255;
+				else
+					paint[y * pw + x] = 0;
+			}
+	}
+
+	m_paint = std::make_shared<vks::VTexture>();
+	m_paint = m_vulkan->vulkanDevice->GenTexture2D(VK_FORMAT_R8_UNORM, VK_FILTER_NEAREST, 256, 256);
+	m_vulkan->vulkanDevice->UploadTexture(m_paint, paint);
+
+	delete[] paint;
+}
+
+void VulkanCanvas::DrawMask()
+{
+	FLIVR::VolumeRenderer::VSemaphoreSettings semaphores = {};
+	m_vr->draw_mask(semaphores, 0, 2, 0, 0.215, 1.0, 0.0, 0.215, 0.0, 0.0, false, false);
 }
 
 void VulkanCanvas::InitView(unsigned int type)

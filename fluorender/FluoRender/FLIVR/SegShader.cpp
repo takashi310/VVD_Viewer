@@ -51,7 +51,7 @@ namespace FLIVR
 	"//SEG_HEAD\n" \
 	"void main()\n" \
 	"{\n" \
-	"	vec4 TexCoord = vec4((gl_GlobalInvocationID.x+0.5)*loc4.x, (gl_GlobalInvocationID.y+0.5)*loc4.y, (gl_GlobalInvocationID.z+0.5)*loc4.z, 1.0);\n" \
+	"	vec4 TexCoord = vec4((gl_GlobalInvocationID.x+0.5)*brk.loc4.x, (gl_GlobalInvocationID.y+0.5)*brk.loc4.y, (gl_GlobalInvocationID.z+0.5)*brk.loc4.z, 1.0);\n" \
 	"	vec4 t = TexCoord;\n" \
 	"\n"
 
@@ -73,22 +73,19 @@ namespace FLIVR
 
 #define SEG_MASK_INOUT \
 	"//SEG_MASK_INOUT\n" \
-	"layout (binding = 4) uniform sampler3D tex2;//3d mask volume\n" \
-	"layout (binding = 9, r8) uniform image3D maskimg;\n"
+	"layout (binding = 0, r8) uniform image3D maskimg;\n"
 
 #define SEG_MASK_16BIT_INOUT \
 	"//SEG_MASK_16BIT_INOUT\n" \
-	"layout (binding = 4) uniform sampler3D tex2;//3d mask volume\n" \
-	"layout (binding = 9, r16) uniform image3D maskimg;\n"
+	"layout (binding = 0, r16) uniform image3D maskimg;\n"
 
 #define SEG_LABEL_INOUT \
 	"//SEG_LABEL_INOUT\n" \
-	"layout (binding = 5) uniform usampler3D tex3;//3d label volume\n" \
-	"layout (binding = 10, r32ui) uniform image3D labelimg;\n"
+	"layout (binding = 9, r32ui) uniform image3D labelimg;\n"
 
 #define SEG_PAINT_INOUT \
 	"//SEG_PAINT_INOUT\n" \
-	"layout (binding = 11, r8) uniform image3D strokeimg;\n"
+	"layout (binding = 10, r8) uniform image3D strokeimg;\n"
 
 #define SEG_VERTEX_CODE \
 	"//SEG_VERTEX_CODE\n" \
@@ -144,13 +141,13 @@ namespace FLIVR
 
 #define SEG_UNIFORMS_WMAP_2D \
 	"//SEG_UNIFORMS_WMAP_2D\n" \
-	"layout(location = 6) uniform sampler2D tex4;//2d weight map (after tone mapping)\n" \
-	"layout(location = 7) uniform sampler2D tex5;//2d weight map (before tone mapping)\n" \
+	"layout(binding = 6) uniform sampler2D tex4;//2d weight map (after tone mapping)\n" \
+	"layout(binding = 7) uniform sampler2D tex5;//2d weight map (before tone mapping)\n" \
 	"\n"
 
 #define SEG_UNIFORMS_MASK_2D \
 	"//SEG_UNIFORMS_MASK_2D\n" \
-	"layout(location = 8) uniform sampler2D tex6;//2d mask\n" \
+	"layout(binding = 8) uniform sampler2D tex6;//2d mask\n" \
 	"\n"
 
 #define SEG_TAIL \
@@ -164,7 +161,7 @@ namespace FLIVR
 
 #define SEG_BODY_BOUND_CHECK \
 	"	//SEG_BODY_BOUND_CHECK\n" \
-	"	if (gl_GlobalInvocationID.x >= loc9.x || gl_GlobalInvocationID.y >= loc9.y || gl_GlobalInvocationID.z >= loc9.z)\n"\
+	"	if (gl_GlobalInvocationID.x >= brk.loc9.x || gl_GlobalInvocationID.y >= brk.loc9.y || gl_GlobalInvocationID.z >= brk.loc9.z)\n"\
 	"	{\n"\
 	"		return;\n"\
 	"	}\n"\
@@ -193,7 +190,7 @@ namespace FLIVR
 
 #define SEG_BODY_INIT_2D_COORD \
 	"	//SEG_BODY_INIT_2D_COORD\n" \
-	"	vec4 s = matrix1 * matrix0 * matrix2 * t;\n"\
+	"	vec4 s = base.matrix1 * base.matrix0 * ((t + brk.brktrans)*brk.brkscale);\n"\
 	"	s = s / s.w;\n"\
 	"	s.xy = s.xy / 2.0 + 0.5;\n"\
 	"\n"
@@ -284,7 +281,7 @@ namespace FLIVR
 	"		imageStore(maskimg, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
 	"		return;\n" \
 	"	}\n" \
-	"	vec4 cv = matrix3 * vec4(0.0, 0.0, 1.0, 0.0);\n" \
+	"	vec4 cv = base.matrix3 * vec4(0.0, 0.0, 1.0, 0.0);\n" \
 	"	vec3 step = cv.xyz;\n" \
 	"	step = normalize(step);\n" \
 	"	step = step * length(step * brk.loc4.xyz);\n" \
@@ -325,7 +322,7 @@ namespace FLIVR
 	"		imageStore(maskimg, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
 	"		return;\n" \
 	"	}\n" \
-	"	vec4 cv = matrix3 * vec4(0.0, 0.0, 0.0, 1.0);\n" \
+	"	vec4 cv = base.matrix3 * vec4(0.0, 0.0, 0.0, 1.0);\n" \
 	"	cv = cv / cv.w;\n" \
 	"	vec3 step = cv.xyz - t.xyz;\n" \
 	"	step = normalize(step);\n" \
@@ -368,7 +365,7 @@ namespace FLIVR
 
 #define SEG_BODY_DB_GROW_2D_COORD \
 	"	//SEG_BODY_DB_GROW_2D_COORD\n" \
-	"	vec4 s = matrix1 * matrix0 * matrix2 * t;\n"\
+	"	vec4 s = base.matrix1 * base.matrix0 * ((t + brk.brktrans)*brk.brkscale);\n"\
 	"	s = s / s.w;\n"\
 	"	s.xy = s.xy / 2.0 + 0.5;\n"\
 	"	vec4 cc = texture(tex2, t.stp);\n"\
@@ -631,7 +628,8 @@ namespace FLIVR
 			else z << SEG_MASK_INOUT;
 			if (use_stroke_) z << SEG_PAINT_INOUT;
 			z << VOL_UNIFORMS_MASK;
-			z << SEG_UNIFORMS_WMAP_2D;
+			if (use_2d_)
+				z << SEG_UNIFORMS_WMAP_2D;
 			z << SEG_UNIFORMS_MASK_2D;
 			break;
 		case LBL_SHDR_INITIALIZE:
@@ -669,7 +667,7 @@ namespace FLIVR
 			z << VOL_CLIP_FUNC;
 
 		//the common head
-		z << VOL_HEAD;
+		z << SEG_HEAD;
 
 		z << SEG_BODY_BOUND_CHECK;
 
@@ -912,11 +910,17 @@ namespace FLIVR
 
 			std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = 
 			{
+				//mask
+				vks::initializers::descriptorSetLayoutBinding(
+				VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+				VK_SHADER_STAGE_COMPUTE_BIT,
+				0),
+
 				//uniform buffer
 				vks::initializers::descriptorSetLayoutBinding(
 				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 
 				VK_SHADER_STAGE_COMPUTE_BIT,
-				1),
+				1)
 			};
 
 			int offset = 2;
@@ -931,26 +935,19 @@ namespace FLIVR
 			}
 
 			offset += SEG_SAMPLER_NUM;
-			//mask
+			//label
 			setLayoutBindings.push_back(
 				vks::initializers::descriptorSetLayoutBinding(
 					VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
 					VK_SHADER_STAGE_COMPUTE_BIT,
 					offset)
 			);
-			//label
-			setLayoutBindings.push_back(
-				vks::initializers::descriptorSetLayoutBinding(
-					VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-					VK_SHADER_STAGE_COMPUTE_BIT,
-					offset + 1)
-			);
 			//stroke
 			setLayoutBindings.push_back(
 				vks::initializers::descriptorSetLayoutBinding(
 					VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
 					VK_SHADER_STAGE_COMPUTE_BIT,
-					offset + 2)
+					offset + 1)
 			);
 			
 			VkDescriptorSetLayoutCreateInfo descriptorLayout = 
@@ -970,7 +967,7 @@ namespace FLIVR
 				1);
 
 			VkPushConstantRange pushConstantRange = {};
-			pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+			pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 			pushConstantRange.size = sizeof(SegShaderFactory::SegCompShaderBrickConst);
 			pushConstantRange.offset = 0;
 
@@ -992,7 +989,7 @@ namespace FLIVR
 			vks::initializers::writeDescriptorSet(
 				VK_NULL_HANDLE,
 				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-				0,
+				1,
 				&uniformBuffers.frag_base.descriptor)
 		);
 	}

@@ -101,7 +101,9 @@ namespace FLIVR
 			vector<TextureBrick *>().swap(*bricks_);
 		}
 
-		clear_undos();
+		bool mask_undo = !mask_undos_.empty();
+		if (mask_undo)
+			clear_undos();
 
 		//release other data
 		for (int i=0; i<TEXTURE_MAX_COMPONENTS; i++)
@@ -115,7 +117,8 @@ namespace FLIVR
 				//delete [] data_[i]->data;
 				if (!existInPyramid)
 				{
-					if (ntype_[i]!=TYPE_MASK) delete [] data_[i]->data;
+					if (!mask_undo || ntype_[i] != TYPE_MASK)
+						delete [] data_[i]->data;
 					nrrdNix(data_[i]);
 				}
 			}

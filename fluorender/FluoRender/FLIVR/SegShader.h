@@ -190,7 +190,7 @@ namespace FLIVR
 			writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			writeDescriptorSet.dstSet = dstSet;
 			writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-			writeDescriptorSet.dstBinding = id + SEG_SAMPLER_NUM + 2;
+			writeDescriptorSet.dstBinding = id;
 			writeDescriptorSet.pImageInfo = imageInfo;
 			writeDescriptorSet.descriptorCount = descriptorCount;
 			return writeDescriptorSet;
@@ -209,7 +209,7 @@ namespace FLIVR
 			VkDescriptorImageInfo* imageInfo,
 			uint32_t descriptorCount = 1)
 		{
-			return writeDescriptorSetStrageImage(dstSet, 1, imageInfo, descriptorCount);
+			return writeDescriptorSetStrageImage(dstSet, 9, imageInfo, descriptorCount);
 		}
 
 		static inline VkWriteDescriptorSet writeDescriptorSetStroke(
@@ -217,7 +217,7 @@ namespace FLIVR
 			VkDescriptorImageInfo* imageInfo,
 			uint32_t descriptorCount = 1)
 		{
-			return writeDescriptorSetStrageImage(dstSet, 2, imageInfo, descriptorCount);
+			return writeDescriptorSetStrageImage(dstSet, 10, imageInfo, descriptorCount);
 		}
 
 		std::map<vks::VulkanDevice*, SegPipeline> pipeline_;
