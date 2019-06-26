@@ -39,24 +39,21 @@ using std::ostringstream;
 
 namespace FLIVR
 {
-#define CAL_OUTPUTS \
-	"//CAL_OUTPUTS\n" \
-	"out vec4 FragColor;\n" \
-	"\n"
+#define CAL_INPUTS \
+	"#pragma optionNV(inline all)\n" \
+	"#pragma optionNV(fastmath on)\n" \
+	"#pragma optionNV(ifcvt none)\n" \
+	"#pragma optionNV(strict on)\n" \
+	"#pragma optionNV(unroll all)\n" \
+	"layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;\n" \
 
-#define CAL_VERTEX_CODE \
-	"//CAL_VERTEX_CODE\n" \
-	"layout(location = 0) in vec3 InVertex;\n" \
-	"layout(location = 1) in vec3 InTexture;\n" \
-	"layout(location = 0) out vec3 OutVertex;\n" \
-	"layout(location = 1) out vec3 OutTexture;\n" \
-	"\n" \
-	"void main()\n" \
-	"{\n" \
-	"	gl_Position = vec4(InVertex,1.);\n" \
-	"	OutTexture = InTexture;\n" \
-	"	OutVertex  = InVertex;\n" \
-	"}\n" 
+#define CAL_OUTPUTS \
+	"//CAL_INOUT\n" \
+	"layout (binding = 5, r8) uniform image3D outimg;\n"
+
+#define CAL_OUTPUTS_16BIT \
+	"//CAL_OUTPUTS_16BIT\n" \
+	"layout (binding = 5, r16) uniform image3D outimg;\n"
 
 #define CAL_UNIFORMS_COMMON \
 	"//CAL_UNIFORMS_COMMON\n" \
@@ -79,10 +76,10 @@ namespace FLIVR
 	"\n"
 
 #define CAL_HEAD \
-	"//CAL_HEAD\n" \
+	"//SEG_HEAD\n" \
 	"void main()\n" \
 	"{\n" \
-	"	vec4 t = vec4(OutTexture, 1.0);//position in the result volume\n" \
+	"	vec4 t = vec4((gl_GlobalInvocationID.x+0.5)*brk.loc4.x, (gl_GlobalInvocationID.y+0.5)*brk.loc4.y, (gl_GlobalInvocationID.z+0.5)*brk.loc4.z, 1.0);\n" \
 	"	vec4 t1 = t;//position in the operand A\n" \
 	"	vec4 t2 = t;//position in the operand B\n" \
 	"\n"
@@ -140,7 +137,7 @@ namespace FLIVR
 
 #define CAL_RESULT \
 	"	//CAL_RESULT\n" \
-	"	FragColor = c;\n" \
+	"	imageStore(outimg, ivec3(gl_GlobalInvocationID.xyz), c);\n" \
 	"\n"
 
 #define CAL_TAIL \
@@ -148,9 +145,10 @@ namespace FLIVR
 	"}\n" \
 	"\n"
 
-	VolCalShader::VolCalShader(VkDevice device, int type) :
+	VolCalShader::VolCalShader(VkDevice device, int type, int out_bytes) :
 	device_(device),
 	type_(type),
+	out_bytes_(out_bytes),
 	program_(0)
 	{}
 
@@ -161,10 +159,9 @@ namespace FLIVR
 
 	bool VolCalShader::create()
 	{
-		string vs = ShaderProgram::glsl_version_ + CAL_VERTEX_CODE;
-		string fs;
-		if (emit(fs)) return true;
-		program_ = new ShaderProgram(vs, fs);
+		string cs;
+		if (emit(cs)) return true;
+		program_ = new ShaderProgram(cs);
 		program_->create(device_);
 		return false;
 	}
@@ -174,8 +171,9 @@ namespace FLIVR
 		ostringstream z;
 
 		z << ShaderProgram::glsl_version_;
-		z << VOL_INPUTS;
-		z << CAL_OUTPUTS;
+		z << CAL_INPUTS;
+		if (out_bytes_ == 2) z << CAL_OUTPUTS_16BIT;
+		else z << CAL_OUTPUTS;
 
 		switch (type_)
 		{
@@ -266,25 +264,25 @@ namespace FLIVR
 		}
 	}
 
-	ShaderProgram* VolCalShaderFactory::shader(VkDevice device, int type)
+	ShaderProgram* VolCalShaderFactory::shader(VkDevice device, int type, int out_bytes)
 	{
 		if(prev_shader_ >= 0)
 		{
-			if(shader_[prev_shader_]->match(device, type)) 
+			if(shader_[prev_shader_]->match(device, type, out_bytes)) 
 			{
 				return shader_[prev_shader_]->program();
 			}
 		}
 		for(unsigned int i=0; i<shader_.size(); i++)
 		{
-			if(shader_[i]->match(device, type)) 
+			if(shader_[i]->match(device, type, out_bytes)) 
 			{
 				prev_shader_ = i;
 				return shader_[i]->program();
 			}
 		}
 
-		VolCalShader* s = new VolCalShader(device, type);
+		VolCalShader* s = new VolCalShader(device, type, out_bytes);
 		if(s->create())
 		{
 			delete s;
@@ -310,10 +308,19 @@ namespace FLIVR
 				setLayoutBindings.push_back(
 					vks::initializers::descriptorSetLayoutBinding(
 					VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
-					VK_SHADER_STAGE_FRAGMENT_BIT, 
+					VK_SHADER_STAGE_COMPUTE_BIT,
 					offset+i)
 					);
 			}
+			offset += CAL_SAMPLER_NUM;
+
+			//output image
+			setLayoutBindings.push_back(
+				vks::initializers::descriptorSetLayoutBinding(
+					VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+					VK_SHADER_STAGE_COMPUTE_BIT,
+					offset)
+			);
 			
 			VkDescriptorSetLayoutCreateInfo descriptorLayout = 
 				vks::initializers::descriptorSetLayoutCreateInfo(
@@ -332,8 +339,8 @@ namespace FLIVR
 				1);
 
 			VkPushConstantRange pushConstantRange = {};
-			pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-			pushConstantRange.size = sizeof(float)*4;
+			pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+			pushConstantRange.size = sizeof(CalCompShaderBrickConst);
 			pushConstantRange.offset = 0;
 
 			// Push constant ranges are part of the pipeline layout

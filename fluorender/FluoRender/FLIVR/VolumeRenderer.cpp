@@ -63,10 +63,9 @@ namespace FLIVR
 	std::map<vks::VulkanDevice*, VkRenderPass> VolumeRenderer::m_vol_draw_pass;
 	
 	std::vector<VolumeRenderer::VSegPipeline> VolumeRenderer::m_seg_pipelines;
-	std::map<vks::VulkanDevice*, VkRenderPass> VolumeRenderer::m_seg_draw_pass;
 	
 	std::vector<VolumeRenderer::VCalPipeline> VolumeRenderer::m_cal_pipelines;
-	std::map<vks::VulkanDevice*, VkRenderPass> VolumeRenderer::m_cal_draw_pass;
+
 
 	VolumeRenderer::VolumeRenderer(Texture* tex,
 		const vector<Plane*> &planes,
@@ -300,14 +299,6 @@ namespace FLIVR
 			{
 				m_vol_draw_pass[dev] = prepareRenderPass(dev, 1);
 			}
-			for (auto dev : m_vulkan->devices)
-			{
-				m_seg_draw_pass[dev] = prepareRenderPass(dev, 1);
-			}
-			for (auto dev : m_vulkan->devices)
-			{
-				m_cal_draw_pass[dev] = prepareRenderPass(dev, 1);
-			}
 		}
 	}
 
@@ -318,14 +309,6 @@ namespace FLIVR
 			for (auto dev : m_vulkan->devices)
 			{
 				vkDestroyRenderPass(dev->logicalDevice, m_vol_draw_pass[dev], nullptr);
-			}
-			for (auto dev : m_vulkan->devices)
-			{
-				vkDestroyRenderPass(dev->logicalDevice, m_seg_draw_pass[dev], nullptr);
-			}
-			for (auto dev : m_vulkan->devices)
-			{
-				vkDestroyRenderPass(dev->logicalDevice, m_cal_draw_pass[dev], nullptr);
 			}
 
 			for (auto &p : m_vol_pipelines)
@@ -1470,7 +1453,7 @@ namespace FLIVR
 		if (!m_vertbufs[device].vertexBuffer.buffer)
 		{
 			device->createBuffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-								 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+								 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
 								 &m_vertbufs[device].vertexBuffer,
 								 vertbufsize);
 			m_vertbufs[device].vertexBuffer.map();
@@ -1479,7 +1462,7 @@ namespace FLIVR
 		if (!m_vertbufs[device].indexBuffer.buffer)
 		{
 			device->createBuffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-								 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+								 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
 								 &m_vertbufs[device].indexBuffer,
 								 idxbufsize);
 			m_vertbufs[device].indexBuffer.map();
@@ -1614,13 +1597,13 @@ namespace FLIVR
 			}
 		}
 
-		std::vector<VkWriteDescriptorSet> descriptorWrites;
-		m_vulkan->vol_shader_factory_->getDescriptorSetWriteUniforms(prim_dev, m_volUniformBuffers[prim_dev], descriptorWrites);
+		std::vector<VkWriteDescriptorSet> descriptorWritesBase;
+		m_vulkan->vol_shader_factory_->getDescriptorSetWriteUniforms(prim_dev, m_volUniformBuffers[prim_dev], descriptorWritesBase);
 		if (colormap_mode_ == 3)
 		{
 			auto palette = get_palette();
 			if (palette[0])
-				descriptorWrites.push_back(VolShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 7, &palette[prim_dev]->descriptor));
+				descriptorWritesBase.push_back(VolShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 7, &palette[prim_dev]->descriptor));
 		}
 
 		VolShaderFactory::VolVertShaderUBO vert_ubo;
@@ -1752,6 +1735,7 @@ namespace FLIVR
 		for (unsigned int i=0; i < bricks->size(); i++)
 		{
 			TextureBrick* b = (*bricks)[i];
+			std::vector<VkWriteDescriptorSet> descriptorWrites = descriptorWritesBase;
 						
 			if (mem_swap_ && start_update_loop_ && !done_update_loop_)
 			{
@@ -1887,11 +1871,18 @@ namespace FLIVR
 
 			b->prevent_tex_deletion(false);
 
+			brktex->descriptor.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			descriptorWrites.push_back(VolShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 0, &brktex->descriptor));
 			if (msktex)
+			{
+				msktex->descriptor.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 				descriptorWrites.push_back(VolShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 2, &msktex->descriptor));
+			}
 			if (lbltex)
+			{
+				lbltex->descriptor.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 				descriptorWrites.push_back(VolShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 3, &lbltex->descriptor));
+			}
 
 			frag_const.loc_dim_inv = { 1.0 / b->nx(), 1.0 / b->ny(), 1.0 / b->nz(),
 									   mode_ == MODE_OVER ? 1.0 / (rate * minwh * 0.001 * zoom * 2.0) : 1.0 };
@@ -2286,28 +2277,40 @@ namespace FLIVR
 	{
 		VSegPipeline ret_pipeline;
 
-		bool use_2d = tex_2d_weight1_ && tex_2d_weight2_ ? true : false;
+		bool use_2d_weight = tex_2d_weight1_ && tex_2d_weight2_ ? true : false;
 
 		ShaderProgram* seg_shader = nullptr;
 		switch (type)
 		{
-		case 0://initialize
+		case SEG_SHDR_INITIALIZE://initialize
 			seg_shader = m_vulkan->seg_shader_factory_->shader(
 				device->logicalDevice,
 				SEG_SHDR_INITIALIZE, paint_mode, hr_mode,
-				use_2d, true, depth_peel_, true, hiqual_, use_stroke, stroke_clear, out_bytes);
+				use_2d_weight, true, depth_peel_, true, hiqual_, use_stroke, stroke_clear, out_bytes);
 			break;
-		case 1://diffusion-based growing
+		case SEG_SHDR_DB_GROW://diffusion-based growing
 			seg_shader = m_vulkan->seg_shader_factory_->shader(
 				device->logicalDevice,
 				SEG_SHDR_DB_GROW, paint_mode, hr_mode,
-				use_2d, true, depth_peel_, true, hiqual_, use_stroke, stroke_clear, out_bytes);
+				use_2d_weight, true, depth_peel_, true, hiqual_, use_stroke, stroke_clear, out_bytes);
 			break;
-		case 2://noise removal
+		case FLT_SHDR_NR://noise removal
 			seg_shader = m_vulkan->seg_shader_factory_->shader(
 				device->logicalDevice,
 				FLT_SHDR_NR, paint_mode, hr_mode,
 				false, false, depth_peel_, false, hiqual_, use_stroke, stroke_clear, out_bytes);
+			break;
+		case LBL_SHDR_INITIALIZE://initialize label
+			seg_shader = m_vulkan->seg_shader_factory_->shader(
+				device->logicalDevice,
+				LBL_SHDR_INITIALIZE, paint_mode, 0,
+				tex_->nmask() != -1, false, 0, false, false, hiqual_, false, 4);
+			break;
+		case LBL_SHDR_MIF://label maximum filter
+			seg_shader = m_vulkan->seg_shader_factory_->shader(
+				device->logicalDevice,
+				LBL_SHDR_MIF, paint_mode, 0,
+				tex_->nmask() != -1, false, 0, false, false, hiqual_, false, 4);
 			break;
 		}
 
@@ -2354,7 +2357,6 @@ namespace FLIVR
 	//			  11-posterize
 	//hr_mode (hidden removal): 0-none; 1-ortho; 2-persp
 	void VolumeRenderer::draw_mask(
-		VSemaphoreSettings semaphores,
 		int type, int paint_mode, int hr_mode,
 		double ini_thresh, double gm_falloff, double scl_falloff,
 		double scl_translate, double w2d, double bins, bool orthographic_p,
@@ -2402,11 +2404,25 @@ namespace FLIVR
 
 		eval_ml_mode();
 
-		VSegPipeline pipeline = prepareSegPipeline(prim_dev, type, paint_mode, hr_mode, use_stroke, clear_stroke, out_bytes);
+		int seg_shader_type = 0;
+		switch (type)
+		{
+		case 0://initialize
+			seg_shader_type = SEG_SHDR_INITIALIZE;
+			break;
+		case 1://diffusion-based growing
+			seg_shader_type = SEG_SHDR_DB_GROW;
+			break;
+		case 2://noise removal
+			seg_shader_type = FLT_SHDR_NR;
+			break;
+		}
+
+		VSegPipeline pipeline = prepareSegPipeline(prim_dev, seg_shader_type, paint_mode, hr_mode, use_stroke, clear_stroke, out_bytes);
 		VkPipelineLayout pipelineLayout = m_vulkan->seg_shader_factory_->pipeline_[prim_dev].pipelineLayout;
 
-		std::vector<VkWriteDescriptorSet> descriptorWrites;
-		m_vulkan->seg_shader_factory_->getDescriptorSetWriteUniforms(prim_dev, m_segUniformBuffers[prim_dev], descriptorWrites);
+		std::vector<VkWriteDescriptorSet> descriptorWritesBase;
+		m_vulkan->seg_shader_factory_->getDescriptorSetWriteUniforms(prim_dev, m_segUniformBuffers[prim_dev], descriptorWritesBase);
 		
 		SegShaderFactory::SegCompShaderBaseUBO seg_ubo;
 		SegShaderFactory::SegCompShaderBrickConst seg_const;
@@ -2471,14 +2487,14 @@ namespace FLIVR
 
 		//bind 2d mask texture
 		if (tex_2d_mask_)
-			descriptorWrites.push_back(SegShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 6, &tex_2d_mask_->descriptor));
+			descriptorWritesBase.push_back(SegShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 6, &tex_2d_mask_->descriptor));
 		//bind 2d weight map
 		if (use_2d)
 		{
 			if (tex_2d_weight1_)
-				descriptorWrites.push_back(SegShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 4, &tex_2d_weight1_->descriptor));
+				descriptorWritesBase.push_back(SegShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 4, &tex_2d_weight1_->descriptor));
 			if (tex_2d_weight2_)
-				descriptorWrites.push_back(SegShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 5, &tex_2d_weight2_->descriptor));
+				descriptorWritesBase.push_back(SegShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 5, &tex_2d_weight2_->descriptor));
 		}
 
 		SegShaderFactory::updateUniformBuffers(m_segUniformBuffers[prim_dev], seg_ubo);
@@ -2488,48 +2504,12 @@ namespace FLIVR
 
 		// Flush the queue if we're rebuilding the command buffer after a pipeline change to ensure it's not currently in use
 		vkQueueWaitIdle(prim_dev->compute_queue);
-
-		VkCommandBuffer layoutCmd = prim_dev->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
-		for (unsigned int i = 0; i < bricks->size(); i++)
-		{
-			TextureBrick* b = (*bricks)[i];
-			shared_ptr<vks::VTexture> brktex, msktex;
-
-			b->prevent_tex_deletion(true);
-			brktex = load_brick(prim_dev, 0, 0, bricks, i, VK_FILTER_NEAREST, compression_);
-			if (!brktex) continue;
-			msktex = load_brick_mask(prim_dev, bricks, i, VK_FILTER_NEAREST, false, 0, true);
-			if (!msktex) continue;
-			b->prevent_tex_deletion(false);
-
-			if (write_to_vol)
-			{
-				vks::tools::setImageLayout(
-					layoutCmd,
-					brktex->image,
-					VK_IMAGE_LAYOUT_UNDEFINED,
-					VK_IMAGE_LAYOUT_GENERAL,
-					brktex->subresourceRange);
-			}
-			vks::tools::setImageLayout(
-				layoutCmd,
-				msktex->image,
-				VK_IMAGE_LAYOUT_UNDEFINED,
-				VK_IMAGE_LAYOUT_GENERAL,
-				msktex->subresourceRange);
-		}
-		prim_dev->flushCommandBuffer(layoutCmd, prim_dev->queue, true);
-
-		VkCommandBuffer cmdbuf = m_seg_commandBuffers[prim_dev];
-		VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
-		VK_CHECK_RESULT(vkBeginCommandBuffer(cmdbuf, &cmdBufInfo));
-
-		vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.vkpipeline);
 		
 		for (unsigned int i=0; i < bricks->size(); i++)
 		{
 			TextureBrick* b = (*bricks)[i];
 			shared_ptr<vks::VTexture> brktex, msktex, stroketex;
+			std::vector<VkWriteDescriptorSet> descriptorWrites = descriptorWritesBase;
 			
 			b->prevent_tex_deletion(true);
 			brktex = load_brick(prim_dev, 0, 0, bricks, i, VK_FILTER_NEAREST, compression_);
@@ -2543,6 +2523,32 @@ namespace FLIVR
 			}
 			b->prevent_tex_deletion(false);
 
+
+			VkCommandBuffer cmdbuf = m_seg_commandBuffers[prim_dev];
+			VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
+			VK_CHECK_RESULT(vkBeginCommandBuffer(cmdbuf, &cmdBufInfo));
+
+			vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.vkpipeline);
+
+			//layout transition to VK_IMAGE_LAYOUT_GENERAL
+			if (write_to_vol)
+			{
+				vks::tools::setImageLayout(
+					cmdbuf,
+					brktex->image,
+					VK_IMAGE_LAYOUT_UNDEFINED,
+					VK_IMAGE_LAYOUT_GENERAL,
+					brktex->subresourceRange);
+				brktex->descriptor.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+			}
+			vks::tools::setImageLayout(
+				cmdbuf,
+				msktex->image,
+				VK_IMAGE_LAYOUT_UNDEFINED,
+				VK_IMAGE_LAYOUT_GENERAL,
+				msktex->subresourceRange);
+			msktex->descriptor.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
 			if (brktex)
 			{
 				descriptorWrites.push_back(SegShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 0, &brktex->descriptor));
@@ -2555,7 +2561,6 @@ namespace FLIVR
 				descriptorWrites.push_back(SegShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 2, &msktex->descriptor));
 				if (!write_to_vol)
 					descriptorWrites.push_back(SegShaderFactory::writeDescriptorSetMask(VK_NULL_HANDLE, &msktex->descriptor));
-
 			}
 			
 			//size and sample rate
@@ -2597,67 +2602,499 @@ namespace FLIVR
 
 			vkCmdDispatch(cmdbuf, group_count_x, group_count_y, group_count_z);
 
+			vkEndCommandBuffer(cmdbuf);
+
+			VkSubmitInfo submitInfo = vks::initializers::submitInfo();
+			submitInfo.commandBufferCount = 1;
+			submitInfo.pCommandBuffers = &cmdbuf;
+
+			VkFenceCreateInfo fenceInfo = vks::initializers::fenceCreateInfo(VK_FLAGS_NONE);
+			VkFence fence;
+			VK_CHECK_RESULT(vkCreateFence(prim_dev->logicalDevice, &fenceInfo, nullptr, &fence));
+
+			// Submit to the queue
+			VK_CHECK_RESULT(vkQueueSubmit(prim_dev->compute_queue, 1, &submitInfo, fence));
+			// Wait for the fence to signal that command buffer has finished executing
+			VK_CHECK_RESULT(vkWaitForFences(prim_dev->logicalDevice, 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
+
+			vkDestroyFence(prim_dev->logicalDevice, fence, nullptr);
+
 			b->set_dirty(b->nmask(), true);
-
 		}
-		vkEndCommandBuffer(cmdbuf);
+		
+	}
 
-		VkSubmitInfo submitInfo = vks::initializers::submitInfo();
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &cmdbuf;
+	//generate the labeling assuming the mask is already generated
+	//type: 0-initialization; 1-maximum intensity filtering
+	//mode: 0-normal; 1-posterized; 2-copy values; 3-poster, copy
+	void VolumeRenderer::draw_label(int type, int mode, double thresh, double gm_falloff)
+	{
+		vector<TextureBrick*> *bricks = tex_->get_bricks();
+		if (!bricks || bricks->size() == 0)
+			return;
 
-		std::vector<VkPipelineStageFlags> waitStages;
-		if (semaphores.waitSemaphoreCount > 0)
+		vks::VulkanDevice* prim_dev = m_vulkan->devices[0];
+
+		if (m_segUniformBuffers.empty())
+			m_vulkan->seg_shader_factory_->prepareUniformBuffers(m_segUniformBuffers);
+
+		int seg_shader_type = 0;
+		switch (type)
 		{
-			for (uint32_t i = 0; i < semaphores.waitSemaphoreCount; i++)
-				waitStages.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
-			submitInfo.waitSemaphoreCount = semaphores.waitSemaphoreCount;
-			submitInfo.pWaitSemaphores = semaphores.waitSemaphores;
-			submitInfo.pWaitDstStageMask = waitStages.data();
+		case 0://initialize
+			seg_shader_type = LBL_SHDR_INITIALIZE;
+			break;
+		case 1://maximum filter
+			seg_shader_type = LBL_SHDR_MIF;
+			break;
 		}
 
-		VkFenceCreateInfo fenceInfo = vks::initializers::fenceCreateInfo(VK_FLAGS_NONE);
-		VkFence fence;
-		VK_CHECK_RESULT(vkCreateFence(prim_dev->logicalDevice, &fenceInfo, nullptr, &fence));
+		bool has_mask = tex_->nmask() != -1;
 
-		// Submit to the queue
-		VK_CHECK_RESULT(vkQueueSubmit(prim_dev->compute_queue, 1, &submitInfo, fence));
-		// Wait for the fence to signal that command buffer has finished executing
-		VK_CHECK_RESULT(vkWaitForFences(prim_dev->logicalDevice, 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
+		VSegPipeline pipeline = prepareSegPipeline(prim_dev, type, mode, 0, false, false, 4);
+		VkPipelineLayout pipelineLayout = m_vulkan->seg_shader_factory_->pipeline_[prim_dev].pipelineLayout;
 
-		vkDestroyFence(prim_dev->logicalDevice, fence, nullptr);
+		std::vector<VkWriteDescriptorSet> descriptorWritesBase;
+		m_vulkan->seg_shader_factory_->getDescriptorSetWriteUniforms(prim_dev, m_segUniformBuffers[prim_dev], descriptorWritesBase);
 
-		VkCommandBuffer layoutCmd2 = prim_dev->createComputeCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
-		for (unsigned int i = 0; i < bricks->size(); i++)
+		SegShaderFactory::SegCompShaderBaseUBO seg_ubo;
+		SegShaderFactory::SegCompShaderBrickConst seg_const;
+		
+		//set uniforms
+		//set up shading
+		Vector light = compute_view().direction();
+		light.safe_normalize();
+		seg_ubo.loc0_light_alpha = { light.x(), light.y(), light.z(), alpha_ };
+		if (shading_)
+			seg_ubo.loc1_material = { 2.0 - ambient_, diffuse_, specular_, shine_ };
+		else
+			seg_ubo.loc1_material = { 2.0 - ambient_, 0.0, specular_, shine_ };
+
+		//spacings
+		double spcx, spcy, spcz;
+		tex_->get_spacings(spcx, spcy, spcz);
+		seg_ubo.loc5_spc_id = { spcx, spcy, spcz, 1.0 };
+
+		//transfer function
+		seg_ubo.loc2_scscale_th = { inv_ ? -scalar_scale_ : scalar_scale_, gm_scale_, lo_thresh_, hi_thresh_ };
+		seg_ubo.loc3_gamma_offset = { inv_ ? -scalar_scale_ : scalar_scale_, gm_scale_, lo_thresh_, hi_thresh_ };
+		seg_ubo.loc6_colparam = { color_.r(), color_.g(), color_.b(), 0.0 };
+
+		if (type == 0)
+			seg_ubo.loc7_th = { thresh, 0.0, 0.0, 0.0 };
+		else if (type == 1)
+		{
+			//loc7: (initial thresh, gm_gaussian_falloff, scalar_gaussian_falloff, scalar_translate)
+			seg_ubo.loc7_th = { 1.0, gm_falloff, 0.0, 0.0 };
+		}
+
+		SegShaderFactory::updateUniformBuffers(m_segUniformBuffers[prim_dev], seg_ubo);
+
+
+		////////////////////////////////////////////////////////
+		// render bricks
+
+		// Flush the queue if we're rebuilding the command buffer after a pipeline change to ensure it's not currently in use
+		vkQueueWaitIdle(prim_dev->compute_queue);
+
+		for (unsigned int i=0; i < bricks->size(); i++)
 		{
 			TextureBrick* b = (*bricks)[i];
-			shared_ptr<vks::VTexture> brktex, msktex;
+			shared_ptr<vks::VTexture> brktex, msktex, lbltex;
+			std::vector<VkWriteDescriptorSet> descriptorWrites = descriptorWritesBase;
 
 			b->prevent_tex_deletion(true);
 			brktex = load_brick(prim_dev, 0, 0, bricks, i, VK_FILTER_NEAREST, compression_);
 			if (!brktex) continue;
-			msktex = load_brick_mask(prim_dev, bricks, i, VK_FILTER_NEAREST, false, 0, true);
-			if (!msktex) continue;
+			if (has_mask)
+			{
+				msktex = load_brick_mask(prim_dev, bricks, i, VK_FILTER_NEAREST, false, 0, true);
+				if (!msktex) continue;
+			}
+			lbltex = load_brick_label(prim_dev, bricks, i, true);
+			if (!lbltex) continue;
 			b->prevent_tex_deletion(false);
 
-			if (write_to_vol)
-			{
-				vks::tools::setImageLayout(
-					layoutCmd2,
-					brktex->image,
-					VK_IMAGE_LAYOUT_GENERAL,
-					brktex->imageLayout,
-					brktex->subresourceRange);
-			}
+			
+			VkCommandBuffer cmdbuf = m_seg_commandBuffers[prim_dev];
+			VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
+			VK_CHECK_RESULT(vkBeginCommandBuffer(cmdbuf, &cmdBufInfo));
+
+			vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.vkpipeline);
+
+			//layout transition to VK_IMAGE_LAYOUT_GENERAL
 			vks::tools::setImageLayout(
-				layoutCmd2,
-				msktex->image,
+				cmdbuf,
+				lbltex->image,
+				VK_IMAGE_LAYOUT_UNDEFINED,
 				VK_IMAGE_LAYOUT_GENERAL,
-				msktex->imageLayout,
-				msktex->subresourceRange);
+				lbltex->subresourceRange);
+			lbltex->descriptor.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+			if (brktex)
+				descriptorWrites.push_back(SegShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 0, &brktex->descriptor));
+			if (msktex)
+				descriptorWrites.push_back(SegShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 2, &msktex->descriptor));
+			if (lbltex)
+			{
+				descriptorWrites.push_back(SegShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 3, &lbltex->descriptor));
+				descriptorWrites.push_back(SegShaderFactory::writeDescriptorSetLabel(VK_NULL_HANDLE, &lbltex->descriptor));
+			}
+
+			switch (type)
+			{
+			case 0://initialize
+				seg_const.loc_dim = { b->nx(), b->ny(), b->nz(), 0.0f };
+				break;
+			case 1://maximum filter
+				seg_const.loc_dim_inv = { 1.0 / b->nx(), 1.0 / b->ny(), 1.0 / b->nz(), 0.0f };
+				break;
+			}
+
+			if (!descriptorWrites.empty())
+			{
+				prim_dev->vkCmdPushDescriptorSetKHR(
+					cmdbuf,
+					VK_PIPELINE_BIND_POINT_COMPUTE,
+					pipelineLayout,
+					0,
+					descriptorWrites.size(),
+					descriptorWrites.data()
+				);
+			}
+
+			vkCmdPushConstants(
+				cmdbuf,
+				pipelineLayout,
+				VK_SHADER_STAGE_COMPUTE_BIT,
+				0,
+				sizeof(SegShaderFactory::SegCompShaderBrickConst),
+				&seg_const
+			);
+
+			uint32_t group_count_x = b->nx() / 4 + ((b->nx() % 4) > 0 ? 1 : 0);
+			uint32_t group_count_y = b->ny() / 4 + ((b->ny() % 4) > 0 ? 1 : 0);
+			uint32_t group_count_z = b->nz() / 4 + ((b->nz() % 4) > 0 ? 1 : 0);
+
+			vkCmdDispatch(cmdbuf, group_count_x, group_count_y, group_count_z);
+
+			vkEndCommandBuffer(cmdbuf);
+
+			VkSubmitInfo submitInfo = vks::initializers::submitInfo();
+			submitInfo.commandBufferCount = 1;
+			submitInfo.pCommandBuffers = &cmdbuf;
+
+			VkFenceCreateInfo fenceInfo = vks::initializers::fenceCreateInfo(VK_FLAGS_NONE);
+			VkFence fence;
+			VK_CHECK_RESULT(vkCreateFence(prim_dev->logicalDevice, &fenceInfo, nullptr, &fence));
+
+			// Submit to the queue
+			VK_CHECK_RESULT(vkQueueSubmit(prim_dev->compute_queue, 1, &submitInfo, fence));
+			// Wait for the fence to signal that command buffer has finished executing
+			VK_CHECK_RESULT(vkWaitForFences(prim_dev->logicalDevice, 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
+
+			vkDestroyFence(prim_dev->logicalDevice, fence, nullptr);
+
+			b->set_dirty(b->nlabel(), true);
 		}
-		prim_dev->flushComputeCommandBuffer(layoutCmd2, true);
+
 	}
+
+
+	VolumeRenderer::VCalPipeline VolumeRenderer::prepareCalPipeline(vks::VulkanDevice* device, int type, int out_bytes)
+	{
+		VCalPipeline ret_pipeline;
+
+		bool use_2d_weight = tex_2d_weight1_ && tex_2d_weight2_ ? true : false;
+
+		ShaderProgram* cal_shader = m_vulkan->cal_shader_factory_->shader(device->logicalDevice, type, out_bytes);
+		
+		if (m_prev_cal_pipeline >= 0) {
+			if (m_cal_pipelines[m_prev_cal_pipeline].device == device &&
+				m_cal_pipelines[m_prev_cal_pipeline].shader == cal_shader)
+				return m_cal_pipelines[m_prev_cal_pipeline];
+		}
+		for (int i = 0; i < m_cal_pipelines.size(); i++) {
+			if (m_cal_pipelines[i].device == device &&
+				m_cal_pipelines[i].shader == cal_shader)
+			{
+				m_prev_cal_pipeline = i;
+				return m_cal_pipelines[i];
+			}
+		}
+
+		VkComputePipelineCreateInfo computePipelineCreateInfo =
+			vks::initializers::computePipelineCreateInfo(m_vulkan->cal_shader_factory_->pipeline_[device].pipelineLayout, 0);
+
+		computePipelineCreateInfo.stage = cal_shader->get_compute_shader();
+		VK_CHECK_RESULT(
+			vkCreateComputePipelines(
+				device->logicalDevice,
+				device->pipelineCache,
+				1,
+				&computePipelineCreateInfo,
+				nullptr,
+				&ret_pipeline.vkpipeline
+			)
+		);
+
+		ret_pipeline.device = device;
+		ret_pipeline.shader = cal_shader;
+
+		m_cal_pipelines.push_back(ret_pipeline);
+		m_prev_cal_pipeline = m_cal_pipelines.size() - 1;
+
+		return ret_pipeline;
+	}
+
+	//calculation
+	void VolumeRenderer::calculate(int type, FLIVR::VolumeRenderer *vr_a, FLIVR::VolumeRenderer *vr_b)
+	{
+		//sync sorting
+		Ray view_ray(Point(0.802,0.267,0.534), Vector(0.802,0.267,0.534));
+		tex_->set_sort_bricks();
+		vector<TextureBrick*> *bricks = tex_->get_sorted_bricks(view_ray);
+		if (!bricks || bricks->size() == 0)
+			return;
+		vector<TextureBrick*> *bricks_a = 0;
+		vector<TextureBrick*> *bricks_b = 0;
+
+		bricks_a = vr_a->tex_->get_bricks();
+		if (vr_a)
+		{
+			vr_a->tex_->set_sort_bricks();
+			bricks_a = vr_a->tex_->get_sorted_bricks(view_ray);
+		}
+		if (vr_b)
+		{
+			vr_b->tex_->set_sort_bricks();
+			bricks_b = vr_b->tex_->get_sorted_bricks(view_ray);
+		}
+
+		int out_bytes = tex_->nb(0);
+
+		vks::VulkanDevice* prim_dev = m_vulkan->devices[0];
+
+		VCalPipeline pipeline = prepareCalPipeline(prim_dev, type, out_bytes);
+		VkPipelineLayout pipelineLayout = m_vulkan->cal_shader_factory_->pipeline_[prim_dev].pipelineLayout;
+
+		VolCalShaderFactory::CalCompShaderBrickConst cal_const;
+
+		//set uniforms
+		if (type == 1 ||
+			type == 2 ||
+			type == 3 ||
+			type == 4 ||
+			type == 8)
+		{
+			cal_const.loc0_scale_usemask = {
+				vr_a ? vr_a->get_scalar_scale() : 1.0,
+				vr_b ? vr_b->get_scalar_scale() : 1.0,
+				(vr_a && vr_a->tex_ && vr_a->tex_->nmask() != -1) ? 1.0 : 0.0,
+				(vr_b && vr_b->tex_ && vr_b->tex_->nmask() != -1) ? 1.0 : 0.0
+			};
+		}
+		else
+		{
+			cal_const.loc0_scale_usemask = {
+				vr_a ? vr_a->get_scalar_scale() : 1.0,
+				vr_b ? vr_b->get_scalar_scale() : 1.0,
+				(vr_a && vr_a->get_inversion()) ? -1.0 : 0.0,
+				(vr_b && vr_b->get_inversion()) ? -1.0 : 0.0
+			};
+		}
+
+		VkCommandBuffer cmdbuf = prim_dev->createComputeCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+		
+		for (unsigned int i=0; i < bricks->size(); i++)
+		{
+			TextureBrick* b = (*bricks)[i];
+			TextureBrick* b_a = bricks_a ? (*bricks_a)[i] : nullptr;
+			TextureBrick* b_b = bricks_b ? (*bricks_b)[i] : nullptr;
+
+			shared_ptr<vks::VTexture> dsttex, tex_a, tex_b, mask_a, mask_b;
+			std::vector<VkWriteDescriptorSet> descriptorWrites;
+
+			//load the texture
+			b->prevent_tex_deletion(true);
+			if (b_a) b_a->prevent_tex_deletion(true);
+			if (b_b) b_b->prevent_tex_deletion(true);
+
+			dsttex = load_brick(prim_dev, 0, 0, bricks, i, VK_FILTER_NEAREST, false, 0, false);
+			if (!dsttex) continue;
+
+			if (bricks_a)
+			{
+				tex_a = vr_a->load_brick(prim_dev, 0, 0, bricks_a, i, VK_FILTER_NEAREST, false, 0, false);
+				if (!tex_a) continue;
+			}
+				
+			if (bricks_b)
+			{
+				tex_b = vr_b->load_brick(prim_dev, 0, 0, bricks_b, i, VK_FILTER_NEAREST, false, 0, false);
+				if (!tex_b) continue;
+			}
+				
+			if ((type == 5 || type == 6 || type == 7) && bricks_a)
+			{
+				mask_a = vr_a->load_brick_mask(prim_dev, bricks_a, i, VK_FILTER_NEAREST, false, 0, true);
+				if (!mask_a) continue;
+			}
+				
+			if (type==8)
+			{
+				if (bricks_a)
+				{
+					mask_a = vr_a->load_brick_mask(prim_dev, bricks_a, i, VK_FILTER_NEAREST, false, 0, true);
+					if (!mask_a) continue;
+				}
+					
+				if (bricks_b)
+				{
+					mask_b = vr_b->load_brick_mask(prim_dev, bricks_b, i, VK_FILTER_NEAREST, false, 0, true);
+					if (!mask_b) continue;
+				}	
+			}
+
+			b->prevent_tex_deletion(false);
+			if (b_a) b_a->prevent_tex_deletion(false);
+			if (b_b) b_b->prevent_tex_deletion(false);
+
+			VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
+			VK_CHECK_RESULT(vkBeginCommandBuffer(cmdbuf, &cmdBufInfo));
+
+			vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.vkpipeline);
+
+			//layout transition to VK_IMAGE_LAYOUT_GENERAL
+			vks::tools::setImageLayout(
+				cmdbuf,
+				dsttex->image,
+				VK_IMAGE_LAYOUT_UNDEFINED,
+				VK_IMAGE_LAYOUT_GENERAL,
+				dsttex->subresourceRange);
+			dsttex->descriptor.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+			if (dsttex)
+				descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetOutput(VK_NULL_HANDLE, &dsttex->descriptor));
+			if (tex_a)
+				descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 1, &tex_a->descriptor));
+			if (tex_b)
+				descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 2, &tex_b->descriptor));
+			if (mask_a)
+				descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 3, &mask_a->descriptor));
+			if (mask_b)
+				descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 4, &mask_b->descriptor));
+
+			vkCmdPushConstants(
+				cmdbuf,
+				pipelineLayout,
+				VK_SHADER_STAGE_COMPUTE_BIT,
+				0,
+				sizeof(VolCalShaderFactory::CalCompShaderBrickConst),
+				&cal_const
+			);
+
+			uint32_t group_count_x = b->nx() / 4 + ((b->nx() % 4) > 0 ? 1 : 0);
+			uint32_t group_count_y = b->ny() / 4 + ((b->ny() % 4) > 0 ? 1 : 0);
+			uint32_t group_count_z = b->nz() / 4 + ((b->nz() % 4) > 0 ? 1 : 0);
+
+			vkCmdDispatch(cmdbuf, group_count_x, group_count_y, group_count_z);
+
+			vkEndCommandBuffer(cmdbuf);
+
+			VkSubmitInfo submitInfo = vks::initializers::submitInfo();
+			submitInfo.commandBufferCount = 1;
+			submitInfo.pCommandBuffers = &cmdbuf;
+
+			VkFenceCreateInfo fenceInfo = vks::initializers::fenceCreateInfo(VK_FLAGS_NONE);
+			VkFence fence;
+			VK_CHECK_RESULT(vkCreateFence(prim_dev->logicalDevice, &fenceInfo, nullptr, &fence));
+
+			// Submit to the queue
+			VK_CHECK_RESULT(vkQueueSubmit(prim_dev->compute_queue, 1, &submitInfo, fence));
+			// Wait for the fence to signal that command buffer has finished executing
+			VK_CHECK_RESULT(vkWaitForFences(prim_dev->logicalDevice, 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
+
+			vkDestroyFence(prim_dev->logicalDevice, fence, nullptr);
+
+			b->set_dirty(0, true);
+		}
+
+		vkFreeCommandBuffers(prim_dev->logicalDevice, prim_dev->compute_commandPool, 1, &cmdbuf);
+
+	}
+
+	void VolumeRenderer::return_component(int c)
+	{
+		if (c < 0 || c >= TEXTURE_MAX_COMPONENTS)
+			return;
+		if (!tex_)
+			return;
+		vector<TextureBrick*>* bricks = tex_->get_bricks();
+		if (!bricks || bricks->size() == 0)
+			return;
+
+		for (unsigned int i = 0; i < bricks->size(); i++)
+		{
+			TextureBrick* b = (*bricks)[i];
+			if (b->dirty(c))
+			{
+				int nb = b->nb(c);
+				int nx = b->nx();
+				int ny = b->ny();
+				int nz = b->nz();
+				VkFormat texformat = b->tex_format(c);
+
+				int idx = -1;
+				vks::VulkanDevice* vdevice;
+				for (auto dev : m_vulkan->devices)
+				{
+					//! Try to find the existing texture in tex_pool_, for this brick.
+					idx = dev->findTexInPool(b, c, nx, ny, nz, nb, texformat);
+					if (idx != -1)
+					{
+						dev->return_brick(dev->tex_pool[idx]);
+						break;
+					}
+				}
+
+				(*bricks)[i]->set_dirty(c, false);
+			}
+		}
+	}
+
+	//return the data volume
+	void VolumeRenderer::return_volume()
+	{
+		return_component(0);
+	}
+
+	//return the mask volume
+	void VolumeRenderer::return_mask()
+	{
+		if (!tex_)
+			return;
+
+		return_component(tex_->nmask());
+	}
+
+	//return the label volume
+	void VolumeRenderer::return_label()
+	{
+		if (!tex_)
+			return;
+
+		return_component(tex_->nlabel());
+	}
+
+	void VolumeRenderer::return_stroke()
+	{
+		if (!tex_)
+			return;
+
+		return_component(tex_->nstroke());
+	}
+
 
 //	void VolumeRenderer::draw_mask_cpu(int type, int paint_mode, int hr_mode,
 //		double ini_thresh, double gm_falloff, double scl_falloff,
@@ -3844,157 +4281,7 @@ namespace FLIVR
 //
 //		clear_tex_pool();
 //	}
-//
-//	//generate the labeling assuming the mask is already generated
-//	//type: 0-initialization; 1-maximum intensity filtering
-//	//mode: 0-normal; 1-posterized; 2-copy values; 3-poster, copy
-//	void VolumeRenderer::draw_label(int type, int mode, double thresh, double gm_falloff)
-//	{
-//		vector<TextureBrick*> *bricks = tex_->get_bricks();
-//		if (!bricks || bricks->size() == 0)
-//			return;
-//
-//		glActiveTexture(GL_TEXTURE0);
-//		//label frame buffer object
-//		if (!glIsFramebuffer(fbo_label_))
-//			glGenFramebuffers(1, &fbo_label_);
-//		GLint cur_framebuffer_id;
-//		glGetIntegerv(GL_FRAMEBUFFER_BINDING, &cur_framebuffer_id);
-//		glBindFramebuffer(GL_FRAMEBUFFER, fbo_label_);
-//
-//		bool has_mask = tex_->nmask()!=-1;
-//
-//		//--------------------------------------------------------------------------
-//		// Set up shaders
-//		//seg shader
-//		ShaderProgram* seg_shader = 0;
-//
-//		switch (type)
-//		{
-//		case 0://initialize
-//			seg_shader = seg_shader_factory_.shader(
-//				LBL_SHDR_INITIALIZE, mode, 0, has_mask,
-//				false, false, false, hiqual_, false);
-//			break;
-//		case 1://maximum filter
-//			seg_shader = seg_shader_factory_.shader(
-//				LBL_SHDR_MIF, mode, 0, has_mask,
-//				false, false, false, hiqual_, false);
-//			break;
-//		}
-//
-//		if (seg_shader)
-//		{
-//			if (!seg_shader->valid())
-//				seg_shader->create();
-//			seg_shader->bind();
-//		}
-//
-//		//set uniforms
-//		//set up shading
-//		Vector light = compute_view().direction();
-//		light.safe_normalize();
-//		seg_shader->setLocalParam(0, light.x(), light.y(), light.z(), alpha_);
-//		if (shading_)
-//			seg_shader->setLocalParam(1, 2.0 - ambient_, diffuse_, specular_, shine_);
-//		else
-//			seg_shader->setLocalParam(1, 2.0 - ambient_, 0.0, specular_, shine_);
-//
-//		//spacings
-//		double spcx, spcy, spcz;
-//		tex_->get_spacings(spcx, spcy, spcz);
-//		seg_shader->setLocalParam(5, spcx, spcy, spcz, 1.0);
-//
-//		//transfer function
-//		seg_shader->setLocalParam(2, inv_?-scalar_scale_:scalar_scale_, gm_scale_, lo_thresh_, hi_thresh_);
-//		seg_shader->setLocalParam(3, 1.0, gm_thresh_, offset_, sw_);
-//		seg_shader->setLocalParam(6, color_.r(), color_.g(), color_.b(), 0.0);
-//
-//		if (type == 0)
-//			seg_shader->setLocalParam(7, thresh, 0.0, 0.0, 0.0);
-//		else if (type == 1)
-//			//loc7: (initial thresh, gm_gaussian_falloff, scalar_gaussian_falloff, scalar_translate)
-//			seg_shader->setLocalParam(7, 1.0, gm_falloff, 0.0, 0.0);
-//
-//		////////////////////////////////////////////////////////
-//		// render bricks
-//		glDisable(GL_DEPTH_TEST);
-//
-//		GLint vp[4];
-//		glGetIntegerv(GL_VIEWPORT, vp);
-//
-//		for (unsigned int i=0; i < bricks->size(); i++)
-//		{
-//			TextureBrick* b = (*bricks)[i];
-//
-//			switch (type)
-//			{
-//			case 0://initialize
-//				seg_shader->setLocalParam(9, 
-//					b->nx(), 
-//					b->ny(), 
-//					b->nz(), 0.0f);//{nx, ny, nz, 0.0}
-//				break;
-//			case 1://maximum filter
-//				seg_shader->setLocalParam(4, 
-//					1.0/b->nx(),
-//					1.0/b->ny(),
-//					1.0/b->nz(), 0.0f);//{1/spcx, 1/spcy, 1/spcz, 0.0}
-//				break;
-//			}
-//
-//			//set viewport size the same as the texture
-//			glViewport(0, 0, b->nx(), b->ny());
-//
-//			//load the texture
-//			load_brick(0, 0, bricks, i, GL_NEAREST, compression_);
-//			if (has_mask) load_brick_mask(bricks, i);
-//			GLuint label_id = load_brick_label(bricks, i);
-//
-//			//draw each slice
-//			int z;
-//			for (z=0; z<b->nz(); z++)
-//			{
-//				glFramebufferTexture3D(GL_FRAMEBUFFER, 
-//					GL_COLOR_ATTACHMENT0,
-//					GL_TEXTURE_3D,
-//					label_id,
-//					0,
-//					z);
-//
-//				draw_view_quad(double(z+0.5) / double(b->nz()));
-//			}
-//
-//			b->set_dirty(b->nlabel(), true);
-//		}
-//
-//		glViewport(vp[0], vp[1], vp[2], vp[3]);
-//		////////////////////////////////////////////////////////
-//
-//		//release 3d mask
-//		release_texture((*bricks)[0]->nmask(), GL_TEXTURE_3D);
-//		//release 3d label
-//		release_texture((*bricks)[0]->nlabel(), GL_TEXTURE_3D);
-//
-//		//release seg shader
-//		if (seg_shader && seg_shader->valid())
-//			seg_shader->release();
-//
-//		//unbind framebuffer
-//		glBindFramebuffer(GL_FRAMEBUFFER, cur_framebuffer_id);
-//
-//		// Release texture
-//		release_texture(0, GL_TEXTURE_3D);
-//
-//		// Reset the blend functions after MIP
-//		glBlendEquation(GL_FUNC_ADD);
-//		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-//		glDisable(GL_BLEND);
-//
-//		//enable depth test
-//		glEnable(GL_DEPTH_TEST);
-//	}
-//
+
 //	double VolumeRenderer::calc_hist_3d(GLuint data_id, GLuint mask_id,
 //		size_t brick_x, size_t brick_y, size_t brick_z)
 //	{
@@ -4054,327 +4341,5 @@ namespace FLIVR
 //*/		return result;
 //	}
 //
-//	//calculation
-//	void VolumeRenderer::calculate(int type, FLIVR::VolumeRenderer *vr_a, FLIVR::VolumeRenderer *vr_b)
-//	{
-//		//sync sorting
-//		Ray view_ray(Point(0.802,0.267,0.534), Vector(0.802,0.267,0.534));
-//		tex_->set_sort_bricks();
-//		vector<TextureBrick*> *bricks = tex_->get_sorted_bricks(view_ray);
-//		if (!bricks || bricks->size() == 0)
-//			return;
-//		vector<TextureBrick*> *bricks_a = 0;
-//		vector<TextureBrick*> *bricks_b = 0;
-//
-//		bricks_a = vr_a->tex_->get_bricks();
-//		if (vr_a)
-//		{
-//			vr_a->tex_->set_sort_bricks();
-//			bricks_a = vr_a->tex_->get_sorted_bricks(view_ray);
-//		}
-//		if (vr_b)
-//		{
-//			vr_b->tex_->set_sort_bricks();
-//			bricks_b = vr_b->tex_->get_sorted_bricks(view_ray);
-//		}
-//
-//		glActiveTexture(GL_TEXTURE0);
-//		glEnable(GL_TEXTURE_2D);
-//		glEnable(GL_TEXTURE_3D);
-//		//mask frame buffer object
-//		if (!glIsFramebuffer(fbo_label_))
-//			glGenFramebuffers(1, &fbo_label_);
-//		GLint cur_framebuffer_id;
-//		glGetIntegerv(GL_FRAMEBUFFER_BINDING, &cur_framebuffer_id);
-//		glBindFramebuffer(GL_FRAMEBUFFER, fbo_label_);
-//
-//		//--------------------------------------------------------------------------
-//		// Set up shaders
-//		//calculate shader
-//		ShaderProgram* cal_shader = cal_shader_factory_.shader(type);
-//
-//		if (cal_shader)
-//		{
-//			if (!cal_shader->valid())
-//				cal_shader->create();
-//			cal_shader->bind();
-//		}
-//
-//		//set uniforms
-//		if (type==1 ||
-//			type==2 ||
-//			type==3 ||
-//			type==4 ||
-//			type==8)
-//			cal_shader->setLocalParam(0, vr_a?vr_a->get_scalar_scale():1.0,
-//				vr_b?vr_b->get_scalar_scale():1.0,
-//				(vr_a&&vr_a->tex_&&vr_a->tex_->nmask()!=-1)?1.0:0.0,
-//				(vr_b&&vr_b->tex_&&vr_b->tex_->nmask()!=-1)?1.0:0.0);
-//		else
-//			cal_shader->setLocalParam(0, vr_a?vr_a->get_scalar_scale():1.0,
-//				vr_b?vr_b->get_scalar_scale():1.0,
-//				(vr_a&&vr_a->get_inversion())?-1.0:0.0,
-//				(vr_b&&vr_b->get_inversion())?-1.0:0.0);
-//		if (vr_a && (type==6 || type==7))
-//		{
-//			cal_shader->setLocalParam(2, inv_?-scalar_scale_:scalar_scale_, gm_scale_, lo_thresh_, hi_thresh_);
-//			cal_shader->setLocalParam(3, 1.0/gamma3d_, gm_thresh_, offset_, sw_);
-//		}
-//
-//		for (unsigned int i=0; i < bricks->size(); i++)
-//		{
-//			TextureBrick* b = (*bricks)[i];
-//
-//			//set viewport size the same as the texture
-//			glViewport(0, 0, b->nx(), b->ny());
-//
-//			//load the texture
-//			GLuint tex_id = load_brick(0, 0, bricks, i, GL_NEAREST);
-//			if (bricks_a) vr_a->load_brick(1, 0, bricks_a, i, GL_NEAREST);
-//			if (bricks_b) vr_b->load_brick(2, 0, bricks_b, i, GL_NEAREST);
-//			if ((type==5 || type==6 ||type==7) && bricks_a) vr_a->load_brick_mask(bricks_a, i, GL_NEAREST);
-//			if (type==8)
-//			{
-//				if (bricks_a)
-//					vr_a->load_brick_mask(bricks_a, i, GL_NEAREST, false, 3);
-//				if (bricks_b)
-//					vr_b->load_brick_mask(bricks_b, i, GL_NEAREST, false, 4);
-//			}
-//			//draw each slice
-//			for (int z=0; z<b->nz(); z++)
-//			{
-//				glFramebufferTexture3D(GL_FRAMEBUFFER,
-//					GL_COLOR_ATTACHMENT0,
-//					GL_TEXTURE_3D,
-//					tex_id,
-//					0,
-//					z);
-//				draw_view_quad(double(z+0.5) / double(b->nz()));
-//			}
-//
-//			b->set_dirty(0, true);
-//		}
-//
-//		//release 3d mask
-//		release_texture((*bricks)[0]->nmask(), GL_TEXTURE_3D);
-//		release_texture(4, GL_TEXTURE_3D);
-//		//release 3d label
-//		release_texture((*bricks)[0]->nlabel(), GL_TEXTURE_3D);
-//
-//		//unbind framebuffer
-//		glBindFramebuffer(GL_FRAMEBUFFER, cur_framebuffer_id);
-//
-//		//release seg shader
-//		if (cal_shader && cal_shader->valid())
-//			cal_shader->release();
-//
-//		glActiveTexture(GL_TEXTURE0);
-//		glBindTexture(GL_TEXTURE_3D, 0);
-//		//--------------------------------------------------------------------------
-//
-//		// Reset the blend functions after MIP
-//		glBlendEquation(GL_FUNC_ADD);
-//		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-//
-//		glDisable(GL_BLEND);
-//	}
-//
-//	//return the data volume
-//	void VolumeRenderer::return_volume()
-//	{
-//		if (!tex_)
-//			return;
-//		vector<TextureBrick*> *bricks = tex_->get_bricks();
-//		if (!bricks || bricks->size() == 0)
-//			return;
-//
-//		int c = 0;
-//		for (unsigned int i=0; i<bricks->size(); i++)
-//		{
-//			load_brick(0, c, bricks, i, GL_NEAREST);
-//			int nb = (*bricks)[i]->nb(c);
-//			GLenum format;
-//			if (nb < 3)
-//				format = GL_RED;
-//			else
-//				format = GL_RGBA;
-//
-//			// download texture data
-//			int sx = (*bricks)[i]->sx();
-//			int sy = (*bricks)[i]->sy();
-//			glPixelStorei(GL_PACK_ROW_LENGTH, sx);
-//			glPixelStorei(GL_PACK_IMAGE_HEIGHT, sy);
-//			glPixelStorei(GL_PACK_ALIGNMENT, 1);
-//
-//			GLenum type = (*bricks)[i]->tex_type(c);
-//			void* data = (*bricks)[i]->tex_data(c);
-//			glGetTexImage(GL_TEXTURE_3D, 0, format,
-//				type, data);
-//
-//			glPixelStorei(GL_PACK_ROW_LENGTH, 0);
-//			glPixelStorei(GL_PACK_IMAGE_HEIGHT, 0);
-//			glPixelStorei(GL_PACK_ALIGNMENT, 4);
-//
-//			(*bricks)[i]->set_dirty(0, false);
-//		}
-//
-//		//release 3d texture
-//		glActiveTexture(GL_TEXTURE0);
-//		glBindTexture(GL_TEXTURE_3D, 0);
-//	}
-//
-//	//return the mask volume
-//	void VolumeRenderer::return_mask()
-//	{
-//		if (!tex_)
-//			return;
-//		vector<TextureBrick*> *bricks = tex_->get_bricks();
-//		if (!bricks || bricks->size() == 0)
-//			return;
-//
-//		int c = tex_->nmask();
-//		if (c<0 || c>=TEXTURE_MAX_COMPONENTS)
-//			return;
-//
-//		for (unsigned int i=0; i<bricks->size(); i++)
-//		{
-//			if ((*bricks)[i]->dirty(c))
-//			{
-//				load_brick_mask(bricks, i, GL_NEAREST, false, 0, true, false);
-//				glActiveTexture(GL_TEXTURE0+c);
-//
-//				// download texture data
-//				int sx = (*bricks)[i]->sx();
-//				int sy = (*bricks)[i]->sy();
-//				glPixelStorei(GL_PACK_ROW_LENGTH, sx);
-//				glPixelStorei(GL_PACK_IMAGE_HEIGHT, sy);
-//				glPixelStorei(GL_PACK_ALIGNMENT, 1);
-//
-//				GLenum type = (*bricks)[i]->tex_type(c);
-//				void* data = (*bricks)[i]->tex_data(c);
-//				glGetTexImage(GL_TEXTURE_3D, 0, GL_RED, type, data);
-//
-//				glPixelStorei(GL_PACK_ROW_LENGTH, 0);
-//				glPixelStorei(GL_PACK_IMAGE_HEIGHT, 0);
-//				glPixelStorei(GL_PACK_ALIGNMENT, 4);
-//
-//				(*bricks)[i]->set_dirty((*bricks)[i]->nmask(), false);
-//			}
-//		}
-//
-//		/*
-//		size_t nthreads = std::thread::hardware_concurrency();
-//		if (nthreads > bricks->size()) nthreads = bricks->size();
-//		std::vector<std::thread> threads(nthreads);
-//		for(size_t t = 0; t < nthreads; t++)
-//		{
-//			threads[t] = std::thread(std::bind(
-//				[&](const size_t bi, const size_t ei, const size_t t)
-//			{
-//				for(size_t i = bi; i<ei; i++)
-//				{
-//					load_brick_mask(bricks, i);
-//					glActiveTexture(GL_TEXTURE0+c);
-//
-//					// download texture data
-//					int sx = (*bricks)[i]->sx();
-//					int sy = (*bricks)[i]->sy();
-//					glPixelStorei(GL_PACK_ROW_LENGTH, sx);
-//					glPixelStorei(GL_PACK_IMAGE_HEIGHT, sy);
-//					glPixelStorei(GL_PACK_ALIGNMENT, 1);
-//
-//					GLenum type = (*bricks)[i]->tex_type(c);
-//					void* data = (*bricks)[i]->tex_data(c);
-//					glGetTexImage(GL_TEXTURE_3D, 0, GL_RED,
-//						type, data);
-//
-//					glPixelStorei(GL_PACK_ROW_LENGTH, 0);
-//					glPixelStorei(GL_PACK_IMAGE_HEIGHT, 0);
-//					glPixelStorei(GL_PACK_ALIGNMENT, 4);
-//				}
-//			}, t*bricks->size()/nthreads, (t+1)==nthreads ? bricks->size() : (t+1)*bricks->size()/nthreads, t));
-//		}
-//		std::for_each(threads.begin(),threads.end(),[](std::thread& x){x.join();});
-//		*/
-//
-//		//release mask texture
-//		release_texture(c, GL_TEXTURE_3D);
-//	}
-//
-//	//return the label volume
-//	void VolumeRenderer::return_label()
-//	{
-//		if (!tex_)
-//			return;
-//		vector<TextureBrick*> *bricks = tex_->get_bricks();
-//		if (!bricks || bricks->size() == 0)
-//			return;
-//
-//		int c = tex_->nlabel();
-//		if (c<0 || c>=TEXTURE_MAX_COMPONENTS)
-//			return;
-//
-//		for (unsigned int i=0; i<bricks->size(); i++)
-//		{
-//			load_brick_label(bricks, i);
-//			glActiveTexture(GL_TEXTURE0+c);
-//
-//			//download texture data
-//			glPixelStorei(GL_PACK_ROW_LENGTH, (*bricks)[i]->sx());
-//			glPixelStorei(GL_PACK_IMAGE_HEIGHT, (*bricks)[i]->sy());
-//			glPixelStorei(GL_PACK_ALIGNMENT, 4);
-//
-//			glGetTexImage(GL_TEXTURE_3D, 0, GL_RED_INTEGER,
-//				(*bricks)[i]->tex_type(c), (*bricks)[i]->tex_data(c));
-//
-//			glPixelStorei(GL_PACK_ROW_LENGTH, 0);
-//			glPixelStorei(GL_PACK_IMAGE_HEIGHT, 0);
-//			//glPixelStorei(GL_PACK_ALIGNMENT, 4);
-//
-//			(*bricks)[i]->set_dirty((*bricks)[i]->nlabel(), false);
-//		}
-//
-//		//release label texture
-//		release_texture(c, GL_TEXTURE_3D);
-//	}
-//
-//	void VolumeRenderer::return_stroke()
-//	{
-//		if (!tex_)
-//			return;
-//		vector<TextureBrick*> *bricks = tex_->get_bricks();
-//		if (!bricks || bricks->size() == 0)
-//			return;
-//
-//		int c = tex_->nstroke();
-//		if (c<0 || c>=TEXTURE_MAX_COMPONENTS)
-//			return;
-//
-//		for (unsigned int i=0; i<bricks->size(); i++)
-//		{
-//			load_brick_stroke(bricks, i);
-//			glActiveTexture(GL_TEXTURE0+c);
-//
-//			// download texture data
-//			int sx = (*bricks)[i]->sx();
-//			int sy = (*bricks)[i]->sy();
-//			glPixelStorei(GL_PACK_ROW_LENGTH, sx);
-//			glPixelStorei(GL_PACK_IMAGE_HEIGHT, sy);
-//			glPixelStorei(GL_PACK_ALIGNMENT, 1);
-//
-//			GLenum type = (*bricks)[i]->tex_type(c);
-//			void* data = (*bricks)[i]->tex_data(c);
-//			glGetTexImage(GL_TEXTURE_3D, 0, GL_RED,
-//				type, data);
-//
-//			glPixelStorei(GL_PACK_ROW_LENGTH, 0);
-//			glPixelStorei(GL_PACK_IMAGE_HEIGHT, 0);
-//			glPixelStorei(GL_PACK_ALIGNMENT, 4);
-//			(*bricks)[i]->set_dirty((*bricks)[i]->nstroke(), false);
-//		}
-//
-//		//release mask texture
-//		release_texture(c, GL_TEXTURE_3D);
-//	}
-//
+
 } // namespace FLIVR

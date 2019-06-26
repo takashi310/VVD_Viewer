@@ -158,7 +158,7 @@ namespace FLIVR
 
 #define VOL_HEAD_CLIP \
 	"	//VOL_HEAD_CLIP\n" \
-	"	vec4 brickt = (t + brk.brktrans)*brk.brkscale;\n" \
+	"	vec4 brickt = (t*brk.brkscale + brk.brktrans);\n" \
 	"	if (dot(brickt.xyz, base.loc10.xyz)+base.loc10.w < 0.0 ||\n" \
 	"		dot(brickt.xyz, base.loc11.xyz)+base.loc11.w < 0.0 ||\n" \
 	"		dot(brickt.xyz, base.loc12.xyz)+base.loc12.w < 0.0 ||\n" \
@@ -183,7 +183,7 @@ namespace FLIVR
 	"//VOL_CLIP_FUNC\n" \
 	"bool vol_clip_func(vec4 t)\n" \
 	"{\n" \
-	"	vec4 brickt = (t + brk.brktrans)*brk.brkscale;\n" \
+	"	vec4 brickt = (t*brk.brkscale + brk.brktrans);\n" \
 	"	if (dot(brickt.xyz, base.loc10.xyz)+base.loc10.w < 0.0 ||\n" \
 	"		dot(brickt.xyz, base.loc11.xyz)+base.loc11.w < 0.0 ||\n" \
 	"		dot(brickt.xyz, base.loc12.xyz)+base.loc12.w < 0.0 ||\n" \
@@ -198,7 +198,7 @@ namespace FLIVR
 
 #define VOL_HEAD_HIDE_OUTSIDE_MASK \
 	"	//VOL_HEAD_HIDE_OUTSIDE_MASK\n" \
-	"	vec4 maskt = (t + brk.mskbrktrans)*mskbrkscale;\n" \
+	"	vec4 maskt = t*mskbrkscale + brk.mskbrktrans;\n" \
 	"	vec4 maskcheck = texture(tex2, maskt.stp); //get mask value\n" \
 	"	if (maskcheck.x <= 0.5)\n" \
 	"	{\n" \
@@ -209,7 +209,7 @@ namespace FLIVR
 
 #define VOL_HEAD_HIDE_INSIDE_MASK \
 	"	//VOL_HEAD_HIDE_INSIDE_MASK\n" \
-	"	vec4 maskt = (t + brk.mskbrktrans)*mskbrkscale;\n" \
+	"	vec4 maskt = t*mskbrkscale + brk.mskbrktrans;\n" \
 	"	vec4 maskcheck = texture(tex2, maskt.stp); //get mask value\n" \
 	"	if (maskcheck.x > 0.5)\n" \
 	"	{\n" \
@@ -543,17 +543,17 @@ namespace FLIVR
 
 #define VOL_TRANSFER_FUNCTION_COLORMAP_VALU1 \
 	"		//VOL_TRANSFER_FUNCTION_COLORMAP_VALU_Z\n" \
-	"		vec4 tt = (t + brk.brktrans)*brk.mskbrkscale;\n" \
+	"		vec4 tt = t*brk.brkscale + brk.brktrans;\n" \
 	"		float valu = (1.0-tt.z-base.loc6.x)/base.loc6.z;\n"
 
 #define VOL_TRANSFER_FUNCTION_COLORMAP_VALU2 \
 	"		//VOL_TRANSFER_FUNCTION_COLORMAP_VALU_Z\n" \
-	"		vec4 tt = (t + brk.brktrans)*brk.mskbrkscale;\n" \
+	"		vec4 tt = t*brk.brkscale + brk.brktrans;\n" \
 	"		float valu = (1.0-tt.y-base.loc6.x)/base.loc6.z;\n"
 
 #define VOL_TRANSFER_FUNCTION_COLORMAP_VALU3 \
 	"		//VOL_TRANSFER_FUNCTION_COLORMAP_VALU_Z\n" \
-	"		vec4 tt = (t + brk.brktrans)*brk.mskbrkscale;\n" \
+	"		vec4 tt = t*brk.brkscale + brk.brktrans;\n" \
 	"		float valu = (1.0-tt.x-base.loc6.x)/base.loc6.z;\n"
 
 #define VOL_TRANSFER_FUNCTION_COLORMAP_RESULT \

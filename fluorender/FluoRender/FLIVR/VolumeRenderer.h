@@ -351,19 +351,25 @@ public:
 		//			  11-posterize
 		//hr_mode (hidden removal): 0-none; 1-ortho; 2-persp
 		void draw_mask(
-			VSemaphoreSettings semaphores,
 			int type, int paint_mode, int hr_mode,
 			double ini_thresh, double gm_falloff, double scl_falloff,
 			double scl_translate, double w2d, double bins, bool ortho, bool estimate);
 
+		//generate the labeling assuming the mask is already generated
+		//type: 0-initialization; 1-maximum intensity filtering
+		//mode: 0-normal; 1-posterized
+		void draw_label(int type, int mode, double thresh, double gm_falloff);
+
+		//calculation
+		void calculate(int type, VolumeRenderer* vr_a, VolumeRenderer* vr_b);
+
 		//double calc_hist_3d(GLuint, GLuint, size_t, size_t, size_t);
-		////calculation
-		//void calculate(int type, VolumeRenderer* vr_a, VolumeRenderer* vr_b);
 		////return
-		//void return_volume();//return the data volume
-		//void return_mask();//return the mask volume
-		//void return_label(); //return the label volume
-		//void return_stroke(); //return the stroke volume
+		void return_component(int c);//base function
+		void return_volume();//return the data volume
+		void return_mask();//return the mask volume
+		void return_label(); //return the label volume
+		void return_stroke(); //return the stroke volume
 
 		//void draw_wireframe(bool orthographic_p = false, double sampling_frq_fac = -1.0);
 		
@@ -375,11 +381,8 @@ public:
 		//	double ini_thresh, double gm_falloff, double scl_falloff,
 		//	double scl_translate, double w2d, double bins, bool ortho, bool estimate, int dslt_r, int dslt_q, double dslt_c);
 		//void dslt_mask(int rmax, int quality, double c);
-		////generate the labeling assuming the mask is already generated
-		////type: 0-initialization; 1-maximum intensity filtering
-		////mode: 0-normal; 1-posterized
-		//void draw_label(int type, int mode, double thresh, double gm_falloff);
-/*
+
+
 		void set_mask_hide_mode(int mode)
 		{
 			if (tex_ && tex_->isBrxml() && m_mask_hide_mode == VOL_MASK_HIDE_NONE && mode != VOL_MASK_HIDE_NONE)
@@ -400,7 +403,7 @@ public:
 			m_mask_hide_mode = mode;
 		}
 		int get_mask_hide_mode() { return m_mask_hide_mode; }
-*/
+
 
 		static VkRenderPass prepareRenderPass(vks::VulkanDevice* device, int attatchment_num);
 
@@ -434,29 +437,25 @@ public:
 
 		struct VSegPipeline {
 			VkPipeline vkpipeline;
-			VkRenderPass renderpass;
 			ShaderProgram* shader;
 			vks::VulkanDevice* device;
 			VkBool32 uniforms[V2DRENDER_UNIFORM_NUM] = { VK_FALSE };
 			VkBool32 samplers[IMG_SHDR_SAMPLER_NUM] = { VK_FALSE };
 		};
 		static std::vector<VSegPipeline> m_seg_pipelines;
-		static std::map<vks::VulkanDevice*, VkRenderPass> m_seg_draw_pass;
 		int m_prev_seg_pipeline;
 		VSegPipeline prepareSegPipeline(vks::VulkanDevice* device, int type, int paint_mode, int hr_mode, bool use_stroke, bool stroke_clear, int out_bytes);
 
 		struct VCalPipeline {
 			VkPipeline vkpipeline;
-			VkRenderPass renderpass;
 			ShaderProgram* shader;
 			vks::VulkanDevice* device;
 			VkBool32 uniforms[V2DRENDER_UNIFORM_NUM] = { VK_FALSE };
 			VkBool32 samplers[IMG_SHDR_SAMPLER_NUM] = { VK_FALSE };
 		};
 		static std::vector<VCalPipeline> m_cal_pipelines;
-		static std::map<vks::VulkanDevice*, VkRenderPass> m_cal_draw_pass;
 		int m_prev_cal_pipeline;
-		//VCalPipeline prepareCalPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode);
+		VCalPipeline prepareCalPipeline(vks::VulkanDevice* device, int type, int out_bytes);
 
 
 		void saveScreenshot(const char* filename);

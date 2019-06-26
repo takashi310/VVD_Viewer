@@ -59,14 +59,14 @@ void Vulkan2dRender::generateQuad()
 	// Vertex buffer
 	VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
 		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
 		&m_vertexBuffer,
 		quad.size() * sizeof(Vertex),
 		quad.data()));
 	// Index buffer
 	VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
 		VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
 		&m_indexBuffer,
 		indices.size() * sizeof(uint32_t),
 		indices.data()));

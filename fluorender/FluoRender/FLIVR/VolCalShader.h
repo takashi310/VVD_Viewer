@@ -29,6 +29,7 @@
 #ifndef VolCalShader_h
 #define VolCalShader_h
 
+#include <glm/glm.hpp>
 #include <string>
 #include <vector>
 
@@ -53,17 +54,18 @@ namespace FLIVR
 	class EXPORT_API VolCalShader
 	{
 	public:
-		VolCalShader(VkDevice device, int type);
+		VolCalShader(VkDevice device, int type, int out_bytes);
 		~VolCalShader();
 
 		bool create();
 
 		inline VkDevice device() { return device_; }
 		inline int type() {return type_;}
+		inline int out_bytes() { return out_bytes_; }
 
-		inline bool match(VkDevice device, int type)
+		inline bool match(VkDevice device, int type, int out_bytes)
 		{ 
-			return (device_ == device && type_ == type);
+			return (device_ == device && type_ == type && out_bytes_ == out_bytes);
 		}
 
 		inline ShaderProgram* program() { return program_; }
@@ -73,6 +75,7 @@ namespace FLIVR
 
 		VkDevice device_;
 		int type_;
+		int out_bytes_;
 
 		ShaderProgram* program_;
 	};
@@ -84,7 +87,7 @@ namespace FLIVR
 		VolCalShaderFactory(std::vector<vks::VulkanDevice*> &devices);
 		~VolCalShaderFactory();
 
-		ShaderProgram* shader(VkDevice device, int type);
+		ShaderProgram* shader(VkDevice device, int type, int out_bytes);
 
 		void init(std::vector<vks::VulkanDevice*> &devices);
 
@@ -93,6 +96,50 @@ namespace FLIVR
 			VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
 			VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 		};
+
+		struct CalCompShaderBrickConst {
+			glm::vec4 loc0_scale_usemask;	//(scale_a, scale_b, use_mask_a, use_mask_b)
+		};
+
+		static inline VkWriteDescriptorSet writeDescriptorSetTex(
+			VkDescriptorSet dstSet,
+			uint32_t texid,
+			VkDescriptorImageInfo* imageInfo,
+			uint32_t descriptorCount = 1)
+		{
+			VkWriteDescriptorSet writeDescriptorSet{};
+			writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writeDescriptorSet.dstSet = dstSet;
+			writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			writeDescriptorSet.dstBinding = texid;
+			writeDescriptorSet.pImageInfo = imageInfo;
+			writeDescriptorSet.descriptorCount = descriptorCount;
+			return writeDescriptorSet;
+		}
+
+		static inline VkWriteDescriptorSet writeDescriptorSetStrageImage(
+			VkDescriptorSet dstSet,
+			uint32_t id,
+			VkDescriptorImageInfo* imageInfo,
+			uint32_t descriptorCount = 1)
+		{
+			VkWriteDescriptorSet writeDescriptorSet{};
+			writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writeDescriptorSet.dstSet = dstSet;
+			writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+			writeDescriptorSet.dstBinding = id;
+			writeDescriptorSet.pImageInfo = imageInfo;
+			writeDescriptorSet.descriptorCount = descriptorCount;
+			return writeDescriptorSet;
+		}
+
+		static inline VkWriteDescriptorSet writeDescriptorSetOutput(
+			VkDescriptorSet dstSet,
+			VkDescriptorImageInfo* imageInfo,
+			uint32_t descriptorCount = 1)
+		{
+			return writeDescriptorSetStrageImage(dstSet, 5, imageInfo, descriptorCount);
+		}
 
 		void setupDescriptorSetLayout();
 			

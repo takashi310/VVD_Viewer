@@ -573,20 +573,36 @@ namespace vks
 		if (staging_buf.buffer == VK_NULL_HANDLE)
 		{
 			createBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
 				&staging_buf, size);
 			// Map persistent
 			VK_CHECK_RESULT(staging_buf.map());
 		}
 	}
 
+	long long milliseconds_now() {
+		static LARGE_INTEGER s_frequency;
+		static BOOL s_use_qpc = QueryPerformanceFrequency(&s_frequency);
+		if (s_use_qpc) {
+			LARGE_INTEGER now;
+			QueryPerformanceCounter(&now);
+			return (1000LL * now.QuadPart) / s_frequency.QuadPart;
+		}
+		else {
+			return GetTickCount();
+		}
+	}
 
 	bool VulkanDevice::UploadTexture3D(const std::shared_ptr<VTexture> &tex, void *data, VkOffset3D offset, uint32_t ypitch, uint32_t zpitch)
 	{
+		uint64_t st_time, ed_time;
+		char dbgstr[50];
+		st_time = milliseconds_now();
+
 		const VkDeviceSize texMemSize = (VkDeviceSize)tex->w * (VkDeviceSize)tex->h * (VkDeviceSize)tex->d * (VkDeviceSize)tex->bytes;
 
 		checkStagingBuffer(texMemSize);
-
+		
 		// Copy texture data into staging buffer
 		uint64_t poffset = (VkDeviceSize)offset.z*zpitch + (VkDeviceSize)offset.y*ypitch + offset.x*(VkDeviceSize)tex->bytes;
 		uint64_t dst_ypitch = (VkDeviceSize)tex->w * (VkDeviceSize)tex->bytes;
@@ -605,7 +621,13 @@ namespace vks
 			tp += zpitch;
 		}
 
+		staging_buf.flush();
+
 		CopyDataStagingBuf2Tex(tex);
+
+		ed_time = milliseconds_now();
+		sprintf(dbgstr, "uploadTex time: %lld  size: %lld\n", ed_time - st_time, texMemSize);
+		OutputDebugStringA(dbgstr);
 
 		return true;
 	}
@@ -618,6 +640,8 @@ namespace vks
 
 		// Copy texture data into staging buffer
 		memcpy(staging_buf.mapped, data, texMemSize);
+
+		staging_buf.flush();
 
 		CopyDataStagingBuf2Tex(tex);
 
@@ -682,6 +706,8 @@ namespace vks
 		checkStagingBuffer(texMemSize);
 
 		CopyDataTex2StagingBuf(tex);
+
+		staging_buf.invalidate();
 
 		// Copy texture data from staging buffer
 		uint64_t poffset = (VkDeviceSize)offset.z*zpitch + (VkDeviceSize)offset.y*ypitch + offset.x*(VkDeviceSize)tex->bytes;
@@ -757,7 +783,6 @@ namespace vks
 			&imageCopyRegion);
 
 		// Change texture image layout to shader read after all mip levels have been copied
-		tex->imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		vks::tools::setImageLayout(
 			copyCmd,
 			tex->image,

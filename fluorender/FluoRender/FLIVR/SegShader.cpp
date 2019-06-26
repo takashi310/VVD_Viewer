@@ -87,20 +87,6 @@ namespace FLIVR
 	"//SEG_PAINT_INOUT\n" \
 	"layout (binding = 10, r8) uniform image3D strokeimg;\n"
 
-#define SEG_VERTEX_CODE \
-	"//SEG_VERTEX_CODE\n" \
-	"layout(location = 0) in vec3 InVertex;\n" \
-	"layout(location = 1) in vec3 InTexture;\n" \
-	"layout(location = 0) out vec3 OutVertex;\n" \
-	"layout(location = 1) out vec3 OutTexture;\n" \
-	"\n" \
-	"void main()\n" \
-	"{\n" \
-	"	gl_Position = vec4(InVertex,1.);\n" \
-	"	OutTexture = InTexture;\n" \
-	"	OutVertex  = InVertex;\n" \
-	"}\n" 
-
 #define SEG_UNIFORMS_BASE \
 	"// SEG_UNIFORMS_BASE\n" \
 	"layout (binding = 1) uniform SegCompShaderBaseUBO {\n" \
@@ -118,17 +104,17 @@ namespace FLIVR
 	"	vec4 loc13; //plane3\n" \
 	"	vec4 loc14; //plane4\n" \
 	"	vec4 loc15; //plane5\n" \
-	"	mat4 matrix0; //projection matrix\n" \
-	"	mat4 matrix1; //modelview matrix\n" \
+	"	mat4 matrix0; //modelview matrix\n" \
+	"	mat4 matrix1; //projection matrix\n" \
 	"	mat4 matrix3;//modelview matrix inverse\n" \
 	"	mat4 matrix4;//projection matrix inverse\n" \
 	"} base;\n" \
 	"\n" \
-	"layout (binding = 3) uniform sampler3D tex0;//data volume\n" \
+	"layout (binding = 2) uniform sampler3D tex0;//data volume\n" \
 	"\n" \
 
 #define SEG_UNIFORMS_BRICK \
-	"// VOL_UNIFORMS_BRICK\n" \
+	"// SEG_UNIFORMS_BRICK\n" \
 	"layout (push_constant) uniform SegCompShaderBrickConst {\n" \
 	"	vec4 loc4;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
 	"	vec4 loc9;//(nx, ny, nz, 0)\n" \
@@ -190,7 +176,7 @@ namespace FLIVR
 
 #define SEG_BODY_INIT_2D_COORD \
 	"	//SEG_BODY_INIT_2D_COORD\n" \
-	"	vec4 s = base.matrix1 * base.matrix0 * ((t + brk.brktrans)*brk.brkscale);\n"\
+	"	vec4 s = base.matrix1 * base.matrix0 * (t*brk.brkscale + brk.brktrans);\n"\
 	"	s = s / s.w;\n"\
 	"	s.xy = s.xy / 2.0 + 0.5;\n"\
 	"\n"
@@ -365,7 +351,7 @@ namespace FLIVR
 
 #define SEG_BODY_DB_GROW_2D_COORD \
 	"	//SEG_BODY_DB_GROW_2D_COORD\n" \
-	"	vec4 s = base.matrix1 * base.matrix0 * ((t + brk.brktrans)*brk.brkscale);\n"\
+	"	vec4 s = base.matrix1 * base.matrix0 * (t*brk.brkscale + brk.brktrans);\n"\
 	"	s = s / s.w;\n"\
 	"	s.xy = s.xy / 2.0 + 0.5;\n"\
 	"	vec4 cc = texture(tex2, t.stp);\n"\
@@ -701,8 +687,8 @@ namespace FLIVR
 				{
 					z << SEG_HEAD_LIT;
 					z << VOL_DATA_VOLUME_LOOKUP;
-					z << VOL_GRAD_COMPUTE_HI;
-					z << VOL_COMPUTED_GM_LOOKUP;
+					//z << VOL_GRAD_COMPUTE_HI;
+					//z << VOL_COMPUTED_GM_LOOKUP;
 					z << VOL_TRANSFER_FUNCTION_SIN_COLOR_L;
 
 					if (use_2d_)
@@ -1003,7 +989,7 @@ namespace FLIVR
 
 			VK_CHECK_RESULT(vulkanDev->createBuffer(
 				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
 				&uniformbufs.frag_base,
 				sizeof(SegCompShaderBaseUBO)));
 

@@ -85,6 +85,19 @@ you don't need descriptor pool!
 
 */
 
+long long milliseconds_now() {
+	static LARGE_INTEGER s_frequency;
+	static BOOL s_use_qpc = QueryPerformanceFrequency(&s_frequency);
+	if (s_use_qpc) {
+		LARGE_INTEGER now;
+		QueryPerformanceCounter(&now);
+		return (1000LL * now.QuadPart) / s_frequency.QuadPart;
+	}
+	else {
+		return GetTickCount();
+	}
+}
+
 VulkanCanvas::VulkanCanvas(wxWindow *pParent,
     wxWindowID id,
     const wxPoint& pos,
@@ -127,12 +140,13 @@ VulkanCanvas::VulkanCanvas(wxWindow *pParent,
 	m_v2drender = make_shared<Vulkan2dRender>(m_vulkan);
 	FLIVR::TextureRenderer::set_vulkan(m_vulkan, m_v2drender);
 	
-	//FLIVR::TextureRenderer::set_mem_swap(false);
-	FLIVR::TextureRenderer::set_mem_swap(true);
-
+	FLIVR::TextureRenderer::set_mem_swap(false);
+	
+	/*FLIVR::TextureRenderer::set_mem_swap(true);
 	FLIVR::TextureRenderer::set_large_data_size(1.0);
 	FLIVR::TextureRenderer::set_force_brick_size(180);
-	FLIVR::TextureRenderer::set_up_time(100);
+	FLIVR::TextureRenderer::set_up_time(100);*/
+
 	FLIVR::TextureRenderer::set_update_order(1);
 
 	FLIVR::VolumeRenderer::init();
@@ -140,7 +154,67 @@ VulkanCanvas::VulkanCanvas(wxWindow *pParent,
 	LoadVolume();
 	InitView(INIT_BOUNDS | INIT_CENTER | INIT_TRANSL | INIT_OBJ_TRANSL | INIT_ROTATE);
 
+	uint64_t st_time, ed_time;
+	wxString dbgstr;
+
+	////////////////////
+	st_time = milliseconds_now();
+
 	DrawMask();
+
+	ed_time = milliseconds_now();
+	dbgstr = wxString::Format("draw_mask time: %lld\n", ed_time-st_time);
+	OutputDebugStringA(dbgstr.ToStdString().c_str());
+	
+	////////////////////
+	m_vulkan->vulkanDevice->clear_tex_pool();
+	st_time = milliseconds_now();
+
+	DrawMask();
+
+	ed_time = milliseconds_now();
+	dbgstr = wxString::Format("draw_mask time: %lld\n", ed_time - st_time);
+	OutputDebugStringA(dbgstr.ToStdString().c_str());
+
+	////////////////////
+	st_time = milliseconds_now();
+
+	DrawMask();
+
+	ed_time = milliseconds_now();
+	dbgstr = wxString::Format("draw_mask time: %lld\n", ed_time - st_time);
+	OutputDebugStringA(dbgstr.ToStdString().c_str());
+
+	///////////////////
+	st_time = milliseconds_now();
+	
+	m_vr->return_mask();
+
+	ed_time = milliseconds_now();
+	dbgstr = wxString::Format("return_mask time: %lld\n", ed_time - st_time);
+	OutputDebugStringA(dbgstr.ToStdString().c_str());
+
+	///////////////////
+	vector<FLIVR::TextureBrick*>* bricks = m_vol->get_bricks();
+	int c = m_vol->nmask();
+	for (unsigned int i = 0; i < bricks->size(); i++)
+	{
+		FLIVR::TextureBrick* b = (*bricks)[i];
+		b->set_dirty(c, true);
+	}
+
+	st_time = milliseconds_now();
+
+	m_vr->return_mask();
+
+	ed_time = milliseconds_now();
+	dbgstr = wxString::Format("return_mask time: %lld\n", ed_time - st_time);
+	OutputDebugStringA(dbgstr.ToStdString().c_str());
+
+	//////////////////
+	NRRDWriter writer;
+	writer.SetData( m_vol->get_nrrd(m_vol->nmask()) );
+	writer.Save(L"mask.nrrd", 0);
 
     m_startTime = std::chrono::high_resolution_clock::now();
     m_timer = std::make_unique<wxTimer>(this, TIMERNUMBER);
@@ -172,13 +246,13 @@ VulkanCanvas::~VulkanCanvas() noexcept
 void VulkanCanvas::LoadVolume()
 {
 	Nrrd* data = nullptr;
-	std:string fname = ".\\JFRC2.nrrd";
+	std:string fname = ".\\1gb.nrrd";
 
 	m_reader.SetFile(fname);
 	m_reader.Preprocess();
 	data = m_reader.Convert(0, 0, true);
 	if (!data)
-		throw std::runtime_error("could not open JFRC2.nrrd");
+		throw std::runtime_error("could not open 1gb.nrrd");
 
 	m_vol = make_unique<FLIVR::Texture>();
 	m_vol->set_use_priority(false);
@@ -260,13 +334,35 @@ void VulkanCanvas::LoadVolume()
 	m_paint = m_vulkan->vulkanDevice->GenTexture2D(VK_FORMAT_R8_UNORM, VK_FILTER_NEAREST, 256, 256);
 	m_vulkan->vulkanDevice->UploadTexture(m_paint, paint);
 
+	m_vr->set_2d_mask(m_paint);
+
 	delete[] paint;
 }
 
 void VulkanCanvas::DrawMask()
 {
-	FLIVR::VolumeRenderer::VSemaphoreSettings semaphores = {};
-	m_vr->draw_mask(semaphores, 0, 2, 0, 0.215, 1.0, 0.0, 0.215, 0.0, 0.0, false, false);
+	m_scale_factor = 1.3;
+	m_aov = 30.0;
+	m_persp = true;
+
+	wxSize view_size = GetSize();
+
+	HandleProjection(view_size.GetWidth(), view_size.GetHeight());
+	//Transformation
+	HandleCamera();
+	glm::mat4 mv_temp = m_mv_mat;
+	//translate object
+	m_mv_mat = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
+	//rotate object
+	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
+	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
+	//center object
+	m_mv_mat = glm::translate(m_mv_mat, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
+
+	m_vr->set_matrices(m_mv_mat, m_proj_mat, m_tex_mat);
+
+	m_vr->draw_mask(0, 2, 0, 0.215, 1.0, 0.0, 0.215, 0.0, 0.0, false, false);
 }
 
 void VulkanCanvas::InitView(unsigned int type)
@@ -496,7 +592,7 @@ double VulkanCanvas::CalcCameraDistance()
 
 void VulkanCanvas::OnPaint(wxPaintEvent& event)
 {
-	m_scale_factor = 1.2;
+	m_scale_factor = 1.3;
 	m_aov = 30.0;
 	m_persp = true;
 
@@ -546,6 +642,7 @@ void VulkanCanvas::OnPaint(wxPaintEvent& event)
 		semaphores.waitSemaphoreCount = 1;
 		semaphores.waitSemaphores = &m_vulkan->semaphores.presentComplete;
 		semaphores.wait_before_brk_rendering = false;
+		m_vr->set_ml_mode(1);
 		m_vr->draw(m_vulkan->frameBuffers[m_vulkan->currentBuffer], true, semaphores, false, false, !m_persp, m_scale_factor, 0, sampling_frq_fac);
 
 		m_vulkan->submitFrame();
