@@ -70,6 +70,63 @@ void Vulkan2dRender::generateQuad()
 		&m_indexBuffer,
 		indices.size() * sizeof(uint32_t),
 		indices.data()));
+
+	m_dyn_vertsCount = quad.size();
+	m_dyn_indexCount = indices.size();
+	VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+		&m_dyn_vertexBuffer,
+		quad.size() * sizeof(Vertex),
+		quad.data()));
+	// Index buffer
+	VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+		VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+		&m_dyn_indexBuffer,
+		indices.size() * sizeof(uint32_t),
+		indices.data()));
+}
+
+void Vulkan2dRender::updateDynBuffers(Vulkan2dRender::Vertex* verts, int verts_num, uint32_t* indices, int idx_num)
+{
+	if (verts && verts_num > 0)
+	{
+		if (verts_num > m_dyn_vertsCount)
+			m_dyn_vertexBuffer.destroy();
+
+		if (m_dyn_vertexBuffer.buffer == VK_NULL_HANDLE)
+		{
+			VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+				VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+				&m_dyn_vertexBuffer,
+				verts_num * sizeof(Vertex),
+				verts
+			));
+		}
+		else
+			m_dyn_vertexBuffer.copyTo(verts, verts_num * sizeof(Vertex));
+	}
+
+	if (indices && idx_num > 0)
+	{
+		if (idx_num > m_dyn_indexCount)
+			m_dyn_indexBuffer.destroy();
+
+		if (m_dyn_indexBuffer.buffer == VK_NULL_HANDLE)
+		{
+			VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+				VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+				&m_dyn_indexBuffer,
+				idx_num * sizeof(uint32_t),
+				indices
+			));
+		}
+		else
+			m_dyn_indexBuffer.copyTo(indices, idx_num * sizeof(uint32_t));
+	}
 }
 
 void Vulkan2dRender::setupVertexDescriptions()
@@ -443,6 +500,9 @@ void Vulkan2dRender::buildCommandBuffer(
 		}
 	}
 
+	if (params.verts || params.indices)
+		updateDynBuffers(params.verts, params.verts_num, params.indices, params.idx_num);
+
 	VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
 	cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
@@ -517,9 +577,21 @@ void Vulkan2dRender::buildCommandBuffer(
 		}
 
 		VkDeviceSize offsets[1] = { 0 };
-		vkCmdBindVertexBuffers(commandbufs[i], 0, 1, &m_vertexBuffer.buffer, offsets);
-		vkCmdBindIndexBuffer(commandbufs[i], m_indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-		vkCmdDrawIndexed(commandbufs[i], m_indexCount, 1, 0, 0, 0);
+		if (!params.verts)
+			vkCmdBindVertexBuffers(commandbufs[i], 0, 1, &m_vertexBuffer.buffer, offsets);
+		else
+			vkCmdBindVertexBuffers(commandbufs[i], 0, 1, &m_dyn_vertexBuffer.buffer, offsets);
+
+		if (!params.indices)
+		{
+			vkCmdBindIndexBuffer(commandbufs[i], m_indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+			vkCmdDrawIndexed(commandbufs[i], m_indexCount, 1, 0, 0, 0);
+		}	
+		else
+		{
+			vkCmdBindIndexBuffer(commandbufs[i], m_dyn_indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+			vkCmdDrawIndexed(commandbufs[i], m_dyn_indexCount, 1, 0, 0, 0);
+		}
 
 		vkCmdEndRenderPass(commandbufs[i]);
 
@@ -548,3 +620,185 @@ void Vulkan2dRender::render(const std::unique_ptr<vks::VFrameBuffer>& framebuf, 
 	VK_CHECK_RESULT(vkQueueSubmit(m_vulkan->vulkanDevice->queue, 1, &submitInfo, VK_NULL_HANDLE));
 }
 
+void Vulkan2dRender::seq_buildCommandBuffer(VkCommandBuffer commandbufs[], int commandbuf_num, const std::unique_ptr<vks::VFrameBuffer>& framebuf, const V2DRenderParams* params, int num)
+{
+	if (!commandbufs || commandbuf_num <= 0)
+		return;
+
+	VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
+	cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+	VkClearValue clearValues[1];
+	clearValues[0].color = params[0].clearColor;
+
+	VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
+	renderPassBeginInfo.renderPass = params[0].pipeline.pass;
+	renderPassBeginInfo.renderArea.offset.x = 0;
+	renderPassBeginInfo.renderArea.offset.y = 0;
+	renderPassBeginInfo.renderArea.extent.width = framebuf->w;
+	renderPassBeginInfo.renderArea.extent.height = framebuf->h;
+
+	std::vector<Vulkan2dRender::Vertex> verts;
+	std::vector<VkDeviceSize> vert_offsets;
+	VkDeviceSize voffset = 0;
+	std::vector<uint32_t> indices;
+	std::vector<VkDeviceSize> idx_offsets;
+	VkDeviceSize ioffset = 0;
+	for (int s = 0; s < num; s++)
+	{
+		if (params[s].verts)
+		{
+			for (int i = 0; i < params[s].verts_num; i++)
+				verts.push_back(params[s].verts[i]);
+			vert_offsets.push_back(voffset);
+			voffset += params[s].verts_num * sizeof(Vulkan2dRender::Vertex);
+		}
+		else
+			vert_offsets.push_back(0);
+
+		if (params[s].indices)
+		{
+			for (int i = 0; i < params[s].idx_num; i++)
+				indices.push_back(params[s].indices[i]);
+			idx_offsets.push_back(ioffset);
+			ioffset += params[s].idx_num * sizeof(int32_t);
+		}
+		else
+			idx_offsets.push_back(0);
+	}
+	updateDynBuffers(
+		verts.empty() ? nullptr : verts.data(),
+		verts.size(),
+		indices.empty() ? nullptr : indices.data(),
+		indices.size()
+	);
+
+	for (int32_t i = 0; i < commandbuf_num; ++i)
+	{
+		// Set target frame buffer
+		renderPassBeginInfo.framebuffer = framebuf->framebuffer;
+
+		VK_CHECK_RESULT(vkBeginCommandBuffer(commandbufs[i], &cmdBufInfo));
+
+		vkCmdBeginRenderPass(commandbufs[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+		VkViewport viewport = vks::initializers::viewport((float)framebuf->w, (float)framebuf->h, 0.0f, 1.0f);
+		vkCmdSetViewport(commandbufs[i], 0, 1, &viewport);
+
+		VkRect2D scissor = vks::initializers::rect2D(framebuf->w, framebuf->h, 0, 0);
+		vkCmdSetScissor(commandbufs[i], 0, 1, &scissor);
+
+		if (params[0].clear)
+		{
+			VkClearAttachment clearAttachments[1] = {};
+			clearAttachments[0].aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			clearAttachments[0].clearValue = clearValues[0];
+			clearAttachments[0].colorAttachment = 0;
+
+			VkClearRect clearRect = {};
+			clearRect.layerCount = 1;
+			clearRect.rect.offset = { 0, 0 };
+			clearRect.rect.extent = { framebuf->w, framebuf->h };
+
+			vkCmdClearAttachments(
+				commandbufs[i],
+				1,
+				clearAttachments,
+				1,
+				&clearRect);
+		}
+
+		VkPipeline prev_pl = VK_NULL_HANDLE;
+		for (int s = 0; s < num; s++)
+		{
+			std::vector<VkWriteDescriptorSet> descriptorWrites;
+			setupDescriptorSetWrites(params[s], params[s].pipeline, descriptorWrites);
+
+			uint64_t constsize = 0;
+			for (int32_t i = 0; i < V2DRENDER_UNIFORM_VEC_NUM; i++) {
+				if (params[s].pipeline.uniforms[i]) {
+					memcpy(constant_buf + constsize, &params[s].loc[i], sizeof(glm::vec4));
+					constsize += sizeof(glm::vec4);
+				}
+			}
+			for (int32_t i = V2DRENDER_UNIFORM_VEC_NUM; i < V2DRENDER_UNIFORM_NUM; i++) {
+				if (params[s].pipeline.uniforms[i]) {
+					memcpy(constant_buf + constsize, &params[s].matrix[i - V2DRENDER_UNIFORM_VEC_NUM], sizeof(glm::mat4));
+					constsize += sizeof(glm::mat4);
+				}
+			}
+
+			if (!descriptorWrites.empty())
+			{
+				m_vulkan->vulkanDevice->vkCmdPushDescriptorSetKHR(
+					commandbufs[i],
+					VK_PIPELINE_BIND_POINT_GRAPHICS,
+					m_img_pipeline_settings.pipelineLayout,
+					0,
+					descriptorWrites.size(),
+					descriptorWrites.data());
+			}
+
+			if (prev_pl != params[s].pipeline.vkpipeline)
+				vkCmdBindPipeline(commandbufs[i], VK_PIPELINE_BIND_POINT_GRAPHICS, params[s].pipeline.vkpipeline);
+			prev_pl = params[s].pipeline.vkpipeline;
+
+			//push constants
+			if (constsize > 0)
+			{
+				vkCmdPushConstants(
+					commandbufs[i],
+					m_img_pipeline_settings.pipelineLayout,
+					VK_SHADER_STAGE_FRAGMENT_BIT,
+					0,
+					constsize,
+					constant_buf);
+			}
+
+			if (!params[s].verts)
+			{
+				VkDeviceSize offsets[1] = { 0 };
+				vkCmdBindVertexBuffers(commandbufs[i], 0, 1, &m_vertexBuffer.buffer, offsets);
+			}
+			else
+				vkCmdBindVertexBuffers(commandbufs[i], 0, 1, &m_dyn_vertexBuffer.buffer, &vert_offsets[s]);
+
+			if (!params[s].indices)
+			{
+				vkCmdBindIndexBuffer(commandbufs[i], m_indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+				vkCmdDrawIndexed(commandbufs[i], m_indexCount, 1, 0, 0, 0);
+			}
+			else
+			{
+				vkCmdBindIndexBuffer(commandbufs[i], m_indexBuffer.buffer, idx_offsets[s], VK_INDEX_TYPE_UINT32);
+				vkCmdDrawIndexed(commandbufs[i], params[s].idx_num, 1, 0, 0, 0);
+			}
+			
+		}
+
+		vkCmdEndRenderPass(commandbufs[i]);
+
+		VK_CHECK_RESULT(vkEndCommandBuffer(commandbufs[i]));
+	}
+}
+
+void Vulkan2dRender::seq_render(const std::unique_ptr<vks::VFrameBuffer>& framebuf, const V2DRenderParams* params, int num)
+{
+	seq_buildCommandBuffer(&m_default_cmdbuf, 1, framebuf, params, num);
+
+	VkSubmitInfo submitInfo = vks::initializers::submitInfo();
+	std::vector<VkPipelineStageFlags> waitStages;
+	for (uint32_t i = 0; i < params[0].waitSemaphoreCount; i++)
+		waitStages.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &m_default_cmdbuf;
+	submitInfo.waitSemaphoreCount = params[0].waitSemaphoreCount;
+	submitInfo.pWaitSemaphores = params[0].waitSemaphores;
+	if (!waitStages.empty())
+		submitInfo.pWaitDstStageMask = waitStages.data();
+	submitInfo.signalSemaphoreCount = params[0].signalSemaphoreCount;
+	submitInfo.pSignalSemaphores = params[0].signalSemaphores;
+
+	// Submit to the queue
+	VK_CHECK_RESULT(vkQueueSubmit(m_vulkan->vulkanDevice->queue, 1, &submitInfo, VK_NULL_HANDLE));
+}

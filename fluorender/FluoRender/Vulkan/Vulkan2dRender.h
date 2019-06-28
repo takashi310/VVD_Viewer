@@ -20,6 +20,11 @@ public:
 	vks::Buffer m_vertexBuffer;
 	vks::Buffer m_indexBuffer;
 	uint32_t m_indexCount;
+
+	vks::Buffer m_dyn_vertexBuffer;
+	vks::Buffer m_dyn_indexBuffer;
+	uint32_t m_dyn_vertsCount;
+	uint32_t m_dyn_indexCount;
 	
 	struct Vertex {
 		float pos[3];
@@ -61,6 +66,7 @@ public:
 
 	void init(std::shared_ptr<VVulkan> vulkan);
 	void generateQuad();
+	void updateDynBuffers(Vulkan2dRender::Vertex* verts, int verts_num, uint32_t* indices, int idx_num);
 	void setupVertexDescriptions();
 	VkRenderPass prepareRenderPass(VkFormat framebuf_format, int attachment_num, bool isSwapChainImage=false);
 	V2dPipeline preparePipeline(int shader, int blend_mode, VkFormat framebuf_format, int attachment_num, bool isSwapChainImage=false);
@@ -74,6 +80,12 @@ public:
 		vks::VTexture *tex[IMG_SHDR_SAMPLER_NUM] = { NULL };
 		glm::vec4 loc[V2DRENDER_UNIFORM_VEC_NUM] = { glm::vec4(0.0f) };
 		glm::mat4 matrix[V2DRENDER_UNIFORM_MAT_NUM] = { glm::mat4(1.0f) };
+		
+		Vulkan2dRender::Vertex* verts = nullptr;
+		int verts_num = 0;
+		uint32_t* indices = nullptr;
+		int idx_num = 0;
+
 		uint32_t waitSemaphoreCount = 0;
 		uint32_t signalSemaphoreCount = 0;
 		VkSemaphore *waitSemaphores = nullptr;
@@ -81,8 +93,12 @@ public:
 	};
 	
 	void setupDescriptorSetWrites(const V2DRenderParams &params, const V2dPipeline &pipeline, std::vector<VkWriteDescriptorSet> &descriptorWrites);
+	
 	void buildCommandBuffer(VkCommandBuffer commandbufs[], int commandbuf_num, const std::unique_ptr<vks::VFrameBuffer> &framebuf, const V2DRenderParams &params);
 	void render(const std::unique_ptr<vks::VFrameBuffer>& framebuf, const V2DRenderParams& params);
+	
+	void seq_buildCommandBuffer(VkCommandBuffer commandbufs[], int commandbuf_num, const std::unique_ptr<vks::VFrameBuffer>& framebuf, const V2DRenderParams *params, int num);
+	void seq_render(const std::unique_ptr<vks::VFrameBuffer>& framebuf, const V2DRenderParams *params, int num);
 };
 
 #endif

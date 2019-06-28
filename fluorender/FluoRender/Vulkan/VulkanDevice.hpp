@@ -81,7 +81,7 @@ namespace vks
 		void setMemoryLimit(double limit=0);
 		void clear_tex_pool();
 		static bool return_brick(const TexParam &texp);
-		void clean_texpool();
+		void update_texpool();
 		int check_swap_memory(FLIVR::TextureBrick* brick, int c);
 		int findTexInPool(FLIVR::TextureBrick* b, int c, int w, int h, int d, int bytes, VkFormat format);
 		int GenTexture3D_pool(VkFormat format, VkFilter filter, FLIVR::TextureBrick *b, int comp);

@@ -53,6 +53,14 @@ void VVulkan::DestroySubDevices()
 	}
 }
 
+void VVulkan::clearTexPools()
+{
+	for (auto dev : devices)
+	{
+		dev->clear_tex_pool();
+	}
+}
+
 void VVulkan::eraseBricksFromTexpools(const std::vector<FLIVR::TextureBrick*>* bricks, int c)
 {
 	for (auto dev : devices)
@@ -65,7 +73,7 @@ void VVulkan::eraseBricksFromTexpools(const std::vector<FLIVR::TextureBrick*>* b
 					e.delayed_del = true;
 			}
 		}
-		dev->clean_texpool();
+		dev->update_texpool();
 	}
 }
 

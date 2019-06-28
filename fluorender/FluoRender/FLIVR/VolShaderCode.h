@@ -138,7 +138,7 @@ namespace FLIVR
 
 #define VOL_HEAD_DP_2 \
 	"	//VOL_HEAD_DP_POS\n" \
-	"	if (texture(tex15, fcf).r > gl_FragCoord.z) discard;\n" \
+	"	if (texture(tex14, fcf).r > gl_FragCoord.z) discard;\n" \
 	"\n"
 
 #define VOL_HEAD_DP_3 \

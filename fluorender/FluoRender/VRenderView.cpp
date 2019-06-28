@@ -408,7 +408,8 @@ BEGIN_EVENT_TABLE(VRenderVulkanView, wxWindow)
 	EVT_KEY_DOWN(VRenderVulkanView::OnKeyDown)
 END_EVENT_TABLE()
 
-VRenderVulkanView::VRenderVulkanView(wxWindow *parent,
+VRenderVulkanView::VRenderVulkanView(wxWindow* frame,
+	wxWindow *parent,
 	wxWindowID id,
 	const wxPoint& pos,
 	const wxSize& size,
@@ -521,41 +522,8 @@ VRenderVulkanView::VRenderVulkanView(wxWindow *parent,
 	m_draw_brush(false),
 	m_paint_enable(false),
 	m_paint_display(false),
-	//2d frame buffers
-	m_fbo(0),
-	m_tex(0),
-	m_tex_wt2(0),
-	m_fbo_final(0),
-	m_tex_final(0),
-	//temp buffer for large data comp
-	m_fbo_temp(0),
-	m_tex_temp(0),
-	//shading (shadow) overlay
-	m_fbo_ol1(0),
-	m_fbo_ol2(0),
-	m_tex_ol1(0),
-	m_tex_ol2(0),
 	//paint buffer
-	m_fbo_paint(0),
-	m_tex_paint(0),
 	m_clear_paint(true),
-	//pick buffer
-	m_fbo_pick(0),
-	m_tex_pick(0),
-	m_tex_pick_depth(0),
-	//dp buffer
-	m_dp_buf_fbo(0),
-	m_dp_buf_tex(0),
-	//tile buffer
-	m_fbo_tile(0),
-	m_tex_tile(0),
-	m_fbo_tiled_tmp(0),
-	m_tex_tiled_tmp(0),
-	//vert buffer
-	m_quad_vbo(0),
-	m_quad_vao(0),
-	m_quad_tile_vbo(0),
-	m_quad_tile_vao(0),
 	m_tiled_image(NULL),
 	//camera controls
 	m_persp(false),
@@ -710,6 +678,13 @@ VRenderVulkanView::VRenderVulkanView(wxWindow *parent,
 #endif
 	m_vulkan->prepare();
 
+	m_v2drender = make_shared<Vulkan2dRender>(m_vulkan);
+	FLIVR::TextureRenderer::set_vulkan(m_vulkan, m_v2drender);
+	
+	VkSemaphoreCreateInfo semaphoreInfo = vks::initializers::semaphoreCreateInfo();
+	VK_CHECK_RESULT(vkCreateSemaphore(m_vulkan->vulkanDevice->logicalDevice, &semaphoreInfo, nullptr, &m_voldraw_semaphore));
+	VK_CHECK_RESULT(vkCreateSemaphore(m_vulkan->vulkanDevice->logicalDevice, &semaphoreInfo, nullptr, &m_tile_semaphore));
+
 	goTimer = new nv::Timer(10);
 	m_sb_num = "50";
 
@@ -779,6 +754,12 @@ VRenderVulkanView::~VRenderVulkanView()
 			delete m_landmarks[i];
 	}
 
+	vkDestroySemaphore(m_vulkan->vulkanDevice->logicalDevice, m_voldraw_semaphore, nullptr);
+	vkDestroySemaphore(m_vulkan->vulkanDevice->logicalDevice, m_tile_semaphore, nullptr);
+
+	FLIVR::VolumeRenderer::finalize();
+	FLIVR::TextureRenderer::finalize_vulkan();
+	m_v2drender.reset();
 	m_vulkan.reset();
 
 	KernelProgram::clear();
@@ -836,6 +817,11 @@ void VRenderVulkanView::OnResize(wxSizeEvent& event)
 
 void VRenderVulkanView::Resize(bool refresh)
 {
+	wxSize size = GetSize();
+	if (size.GetWidth() == 0 || size.GetHeight() == 0) {
+		return;
+	}
+
 	if (m_vd_pop_dirty)
 		PopVolumeList();
 
@@ -859,7 +845,9 @@ void VRenderVulkanView::Resize(bool refresh)
 	m_resize_ol2 = true;
 	m_resize_paint = true;
 
-	m_vulkan->windowResize();
+	m_vulkan->setSize(size.GetWidth(), size.GetHeight());
+	wxRect refreshRect(size);
+	RefreshRect(refreshRect, false);
 
 	if (refresh) RefreshGL();
 }
@@ -869,38 +857,24 @@ void VRenderVulkanView::Init()
 	if (!m_initialized)
 	{
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-		ShaderProgram::init_shaders_supported(m_vulkan);
 		if (vr_frame)
 		{
 			vr_frame->SetTextureRendererSettings();
 			vr_frame->SetTextureUndos();
 		}
 		goTimer->start();
-		glGenBuffers(1, &m_quad_vbo);
-		m_quad_vao = 0;
-		glGenBuffers(1, &m_quad_tile_vbo);
-		m_quad_tile_vao = 0;
-		glGenBuffers(1, &m_misc_vbo);
-		glGenBuffers(1, &m_misc_ibo);
-		glGenVertexArrays(1, &m_misc_vao);
-		glEnable( GL_MULTISAMPLE );
-
-		if (vr_frame && vr_frame->GetSettingDlg()) KernelProgram::set_device_id(vr_frame->GetSettingDlg()->GetCLDeviceID());
-		KernelProgram::init_kernels_supported();
+		
+		//if (vr_frame && vr_frame->GetSettingDlg()) KernelProgram::set_device_id(vr_frame->GetSettingDlg()->GetCLDeviceID());
+		//KernelProgram::init_kernels_supported();
 
 		m_initialized = true;
 	}
-
-	////query the OGL version to determine actual context info
-	//char version[16];
-	//memcpy(version,glGetString(GL_VERSION),16);
-	//m_GLversion = wxString("OpenGL Version: ") + wxString(version);
 }
 
 void VRenderVulkanView::Clear()
 {
 	m_loader.RemoveAllLoadedBrick();
-	TextureRenderer::clear_tex_pool();
+	m_vulkan->clearTexPools();
 
 	//delete groups
 	for (int i=0; i<(int)m_layer_list.size(); i++)
@@ -1081,15 +1055,7 @@ void VRenderVulkanView::Draw()
 	int nx = m_nx;
 	int ny = m_ny;
 
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-	// clear color and depth buffers
-	glDrawBuffer(GL_BACK);
-	glClearDepth(1.0);
-	glClearColor(m_bg_color.r(), m_bg_color.g(), m_bg_color.b(), 0.0);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glViewport(0, 0, (GLint)nx, (GLint)ny);
+	m_vulkan->prepareFrame();
 
 	//gradient background
 	if (m_grad_bg)
@@ -1110,8 +1076,8 @@ void VRenderVulkanView::Draw()
 		m_mv_mat = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
 		//rotate object
 		m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
-		m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
-		m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
+		m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+		m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
 		//center object
 		m_mv_mat = glm::translate(m_mv_mat, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
 
@@ -1126,11 +1092,6 @@ void VRenderVulkanView::Draw()
 
 			if (m_draw_clip)
 				DrawClippingPlanes(false, BACK_FACE);
-
-			//setup
-			glDisable(GL_DEPTH_TEST);
-			glEnable(GL_BLEND);
-			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 			//draw the volumes
 			if (!m_dpeel) DrawVolumes();
@@ -1157,295 +1118,9 @@ void VRenderVulkanView::Draw()
 		m_mv_mat = mv_temp;
 	}
 
+	m_vulkan->submitFrame();
+
 	m_draw_overlays_only = false;
-}
-
-//draw with depth peeling
-void VRenderVulkanView::DrawDP()
-{
-	int i;
-	int nx = m_nx;
-	int ny = m_ny;
-
-	//clear
-	glDrawBuffer(GL_BACK);
-	glClearDepth(1.0);
-	glClearColor(m_bg_color.r(), m_bg_color.g(), m_bg_color.b(), 0.0);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glViewport(0, 0, (GLint)nx, (GLint)ny);
-
-	//gradient background
-	if (m_grad_bg)
-		DrawGradBg();
-
-	if (VolumeRenderer::get_done_update_loop() && !m_draw_overlays_only) StartLoopUpdate();
-
-	if (m_draw_all)
-	{
-		//projection
-		if (m_tile_rendering) HandleProjection(m_capture_resx, m_capture_resy);
-		else HandleProjection(nx, ny);
-		//Transformation
-		HandleCamera();
-
-		glm::mat4 mv_temp = m_mv_mat;
-		//translate object
-		m_mv_mat = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
-		//rotate object
-		m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
-		m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
-		m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
-		//center object
-		m_mv_mat = glm::translate(m_mv_mat, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
-
-		if (VolumeRenderer::get_done_update_loop() && m_draw_overlays_only) DrawFinalBuffer();
-		else
-		{
-			bool use_fog_save = m_use_fog;
-			if (m_use_fog)
-				CalcFogRange();
-
-			if (m_draw_grid)
-				DrawGrid();
-
-			if (m_draw_clip)
-				DrawClippingPlanes(true, BACK_FACE);
-
-			//generate depth peeling buffers
-			for (i=0; i<m_peeling_layers; i++)
-			{
-				if (i>=(int)m_dp_fbo_list.size())
-				{
-					GLuint fbo_id;
-					GLuint tex_id;
-					glGenFramebuffers(1, &fbo_id);
-					glGenTextures(1, &tex_id);
-					glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
-					glBindTexture(GL_TEXTURE_2D, tex_id);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
-						GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
-					glFramebufferTexture2D(GL_FRAMEBUFFER,
-						GL_DEPTH_ATTACHMENT,
-						GL_TEXTURE_2D, tex_id, 0);
-					m_dp_fbo_list.push_back(fbo_id);
-					m_dp_tex_list.push_back(tex_id);
-				}
-				else if (i>=0 && !glIsFramebuffer(m_dp_fbo_list[i]))
-				{
-					GLuint fbo_id;
-					GLuint tex_id;
-					glGenFramebuffers(1, &fbo_id);
-					glGenTextures(1, &tex_id);
-					glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
-					glBindTexture(GL_TEXTURE_2D, tex_id);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
-						GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
-					glFramebufferTexture2D(GL_FRAMEBUFFER,
-						GL_DEPTH_ATTACHMENT,
-						GL_TEXTURE_2D, tex_id, 0);
-					m_dp_fbo_list[i] = fbo_id;
-					m_dp_tex_list[i] = tex_id;
-				}
-				if (m_resize)
-				{
-					glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[i]);
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
-						GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
-					//m_resize = false;
-				}
-			}
-
-			//setup
-			glDisable(GL_BLEND);
-			glEnable(GL_DEPTH_TEST);
-			glDepthFunc(GL_LEQUAL);
-			m_use_fog = false;
-
-			//draw depth values of each layer into the buffers
-			for (i=0; i<m_peeling_layers; i++)
-			{
-				glBindFramebuffer(GL_FRAMEBUFFER, m_dp_fbo_list[i]);
-				glDrawBuffer(GL_NONE);
-				glReadBuffer(GL_NONE);
-
-				glClearDepth(1.0);
-				glClear(GL_DEPTH_BUFFER_BIT);
-
-				if (i==0)
-				{
-					DrawMeshes(0);
-				}
-				else
-				{
-					glActiveTexture(GL_TEXTURE15);
-					glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[i-1]);
-					glActiveTexture(GL_TEXTURE0);
-					DrawMeshes(1);
-					glActiveTexture(GL_TEXTURE15);
-					glBindTexture(GL_TEXTURE_2D, 0);
-					glActiveTexture(GL_TEXTURE0);
-				}
-			}
-
-			//bind back the framebuffer
-			glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-			//restore fog
-			m_use_fog = use_fog_save;
-
-			//draw depth peeling
-			for (i=m_peeling_layers; i>=0; i--)
-			{
-				if (i==0)
-				{
-					//draw volumes before the depth
-					glActiveTexture(GL_TEXTURE15);
-					glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[0]);
-					glActiveTexture(GL_TEXTURE0);
-					DrawVolumes(1);
-					glActiveTexture(GL_TEXTURE15);
-					glBindTexture(GL_TEXTURE_2D, 0);
-					glActiveTexture(GL_TEXTURE0);
-				}
-				else
-				{
-					if (m_peeling_layers == 1)
-					{
-						//i == m_peeling_layers == 1
-						glActiveTexture(GL_TEXTURE15);
-						glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[0]);
-						glActiveTexture(GL_TEXTURE0);
-					}
-					else if (m_peeling_layers == 2)
-					{
-						glActiveTexture(GL_TEXTURE14);
-						glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[0]);
-						glActiveTexture(GL_TEXTURE15);
-						glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[1]);
-						glActiveTexture(GL_TEXTURE0);
-					}
-					else if (m_peeling_layers > 2)
-					{
-						if (i == m_peeling_layers)
-						{
-							glActiveTexture(GL_TEXTURE14);
-							glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[i-2]);
-							glActiveTexture(GL_TEXTURE15);
-							glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[i-1]);
-							glActiveTexture(GL_TEXTURE0);
-						}
-						else if (i == 1)
-						{
-							glActiveTexture(GL_TEXTURE14);
-							glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[0]);
-							glActiveTexture(GL_TEXTURE15);
-							glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[1]);
-							glActiveTexture(GL_TEXTURE0);
-						}
-						else
-						{
-							glActiveTexture(GL_TEXTURE13);
-							glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[i-2]);
-							glActiveTexture(GL_TEXTURE14);
-							glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[i-1]);
-							glActiveTexture(GL_TEXTURE15);
-							glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[i]);
-							glActiveTexture(GL_TEXTURE0);
-						}
-					}
-
-					//draw volumes
-					if (m_peeling_layers == 1)
-						//i == m_peeling_layers == 1
-							DrawVolumes(5);//draw volume after 15
-					else if (m_peeling_layers == 2)
-					{
-						if (i == 2)
-							DrawVolumes(2);//draw volume after 15
-						else if (i == 1)
-							DrawVolumes(4);//draw volume after 14 and before 15
-					}
-					else if (m_peeling_layers > 2)
-					{
-						if (i == m_peeling_layers)
-							DrawVolumes(2);//draw volume after 15
-						else if (i == 1)
-							DrawVolumes(4);//draw volume after 14 and before 15
-						else
-							DrawVolumes(3);//draw volume after 14 and before 15
-					}
-
-					//draw meshes
-					glEnable(GL_DEPTH_TEST);
-					glDepthFunc(GL_LEQUAL);
-					glEnable(GL_BLEND);
-					glBlendEquation(GL_FUNC_ADD);
-					glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-					if (m_peeling_layers == 1)
-						//i == m_peeling_layers == 1
-							DrawMeshes(5);//draw mesh at 15
-					else if (m_peeling_layers == 2)
-					{
-						if (i == 2)
-							DrawMeshes(2);//draw mesh after 14
-						else if (i == 1)
-							DrawMeshes(4);//draw mesh before 15
-					}
-					else if (m_peeling_layers > 2)
-					{
-						if (i == m_peeling_layers)
-							DrawMeshes(2);//draw mesh after 14
-						else if (i == 1)
-							DrawMeshes(4);//draw mesh before 15
-						else
-							DrawMeshes(3);//draw mesh after 13 and before 15
-					}
-
-					glActiveTexture(GL_TEXTURE13);
-					glBindTexture(GL_TEXTURE_2D, 0);
-					glActiveTexture(GL_TEXTURE14);
-					glBindTexture(GL_TEXTURE_2D, 0);
-					glActiveTexture(GL_TEXTURE15);
-					glBindTexture(GL_TEXTURE_2D, 0);
-					glActiveTexture(GL_TEXTURE0);
-
-				}
-			}
-
-			if (m_dp_tex_list.size()>0)
-			{
-				double darkness;
-				if (GetMeshShadow(darkness))
-					DrawOLShadowsMesh(m_dp_tex_list[0], darkness);
-			}
-		}
-
-		if (m_draw_clip)
-			DrawClippingPlanes(false, FRONT_FACE);
-
-		if (m_draw_bounds)
-			DrawBounds();
-
-		if (m_draw_annotations)
-			DrawAnnotations();
-
-		if (m_draw_rulers)
-			DrawRulers();
-
-		//traces
-		DrawTraces();
-
-		m_mv_mat = mv_temp;
-	}
 }
 
 //draw meshes
@@ -1500,6 +1175,7 @@ void VRenderVulkanView::DrawVolumes(int peel)
 	PrepFinalBuffer();
 
 	bool dp = (m_md_pop_list.size() > 0);
+	vks::VulkanDevice* prim_dev = m_vulkan->devices[0];
 
 	//draw
 	if ((!m_drawing_coord &&
@@ -1523,7 +1199,6 @@ void VRenderVulkanView::DrawVolumes(int peel)
 			vr_frame->GetSettingDlg() &&
 			vr_frame->GetSettingDlg()->GetUpdateOrder() == 1)
 		{
-			//if (m_interactive) // deleted by takashi
 			ClearFinalBuffer();
 		}
 		else
@@ -1541,124 +1216,47 @@ void VRenderVulkanView::DrawVolumes(int peel)
 			if (!m_mdtrans) peeling_layers = 1;
 			else peeling_layers = m_peeling_layers;
 
+			if (m_resize)
+			{
+				m_dp_fbo_list.clear();
+				m_dp_ctex_list.clear();
+				m_dp_tex_list.clear();
+			}
+
+			if (m_dp_fbo_list.size() < peeling_layers)
+			{
+				m_dp_fbo_list.resize(peeling_layers);
+				m_dp_ctex_list.resize(peeling_layers);
+				m_dp_tex_list.resize(peeling_layers);
+			}
+
 			for (int i = 0; i < peeling_layers; i++)
 			{
-				if (i >= (int)m_dp_fbo_list.size())
+				if (!m_dp_fbo_list[i])
 				{
-					GLuint fbo_id;
-					GLuint tex_id;
-					GLuint ctex_id;
-					glGenFramebuffers(1, &fbo_id);
-					glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
+					m_dp_fbo_list[i] = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+					m_dp_fbo_list[i]->w = m_nx;
+					m_dp_fbo_list[i]->h = m_ny;
+					m_dp_fbo_list[i]->device = prim_dev;
 
-					glGenTextures(1, &ctex_id);
-					glBindTexture(GL_TEXTURE_2D, ctex_id);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-						GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-					glFramebufferTexture2D(GL_FRAMEBUFFER,
-						GL_COLOR_ATTACHMENT0,
-						GL_TEXTURE_2D, ctex_id, 0);
-					m_dp_ctex_list.push_back(ctex_id);
+					m_dp_ctex_list[i] = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+					m_dp_fbo_list[i]->addAttachment(m_dp_ctex_list[i]);
 
-					glGenTextures(1, &tex_id);
-					glBindTexture(GL_TEXTURE_2D, tex_id);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
-						GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
-					glFramebufferTexture2D(GL_FRAMEBUFFER,
-						GL_DEPTH_ATTACHMENT,
-						GL_TEXTURE_2D, tex_id, 0);
-					m_dp_tex_list.push_back(tex_id);
-
-					m_dp_fbo_list.push_back(fbo_id);
-				}
-				else if (i >= 0 && !glIsFramebuffer(m_dp_fbo_list[i]))
-				{
-					GLuint fbo_id;
-					GLuint tex_id;
-					GLuint ctex_id;
-					glGenFramebuffers(1, &fbo_id);
-					glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
-
-					if (!glIsTexture(m_dp_ctex_list[i]))
-						glGenTextures(1, &ctex_id);
-					else
-						ctex_id = m_dp_ctex_list[i];
-					glBindTexture(GL_TEXTURE_2D, ctex_id);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-						GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-					glFramebufferTexture2D(GL_FRAMEBUFFER,
-						GL_COLOR_ATTACHMENT0,
-						GL_TEXTURE_2D, ctex_id, 0);
-					m_dp_ctex_list[i] = ctex_id;
-
-					if (!glIsTexture(m_dp_tex_list[i]))
-						glGenTextures(1, &tex_id);
-					else
-						tex_id = m_dp_tex_list[i];
-					glBindTexture(GL_TEXTURE_2D, tex_id);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
-						GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
-					glFramebufferTexture2D(GL_FRAMEBUFFER,
-						GL_DEPTH_ATTACHMENT,
-						GL_TEXTURE_2D, tex_id, 0);
-					m_dp_tex_list[i] = tex_id;
-
-					m_dp_fbo_list[i] = fbo_id;
-
-				}
-				else
-				{
-					glBindFramebuffer(GL_FRAMEBUFFER, m_dp_fbo_list[i]);
-					glFramebufferTexture2D(GL_FRAMEBUFFER,
-						GL_COLOR_ATTACHMENT0,
-						GL_TEXTURE_2D, m_dp_ctex_list[i], 0);
-					glFramebufferTexture2D(GL_FRAMEBUFFER,
-						GL_DEPTH_ATTACHMENT,
-						GL_TEXTURE_2D, m_dp_tex_list[i], 0);
+					m_dp_tex_list[i] = prim_dev->GenTexture2D(
+						m_vulkan->depthFormat,
+						VK_FILTER_LINEAR,
+						m_nx, m_ny,
+						VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+						VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+						VK_IMAGE_USAGE_SAMPLED_BIT |
+						VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+						VK_IMAGE_USAGE_STORAGE_BIT
+					);
+					m_dp_fbo_list[i]->addAttachment(m_dp_tex_list[i]);
 				}
 
-				if (m_resize)
-				{
-					glBindTexture(GL_TEXTURE_2D, m_dp_ctex_list[i]);
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-						GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-
-					glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[i]);
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
-						GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
-					//m_resize = false;
-				}
-
-				glBindTexture(GL_TEXTURE_2D, 0);
-
-				glActiveTexture(GL_TEXTURE15);
-				glEnable(GL_TEXTURE_2D);
-				glActiveTexture(GL_TEXTURE0);
-				glEnable(GL_TEXTURE_2D);
-				glEnable(GL_BLEND);
-				glBlendFunc(GL_ONE, GL_ZERO);
-				glEnable(GL_DEPTH_TEST);
-				glDepthFunc(GL_LEQUAL);
-
-				glClearColor(0.0, 0.0, 0.0, 0.0);
-				glClearDepth(1.0);
-				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+				//TODO: clear in MeshRenderer
+				//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 				if (i==0)
 				{
@@ -1666,59 +1264,33 @@ void VRenderVulkanView::DrawVolumes(int peel)
 				}
 				else
 				{
-					glActiveTexture(GL_TEXTURE15);
-					glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[i-1]);
-					glActiveTexture(GL_TEXTURE0);
+					m_msh_dp_fr_tex = m_dp_tex_list[i - 1];
 					DrawMeshes(1);
-					glActiveTexture(GL_TEXTURE15);
-					glBindTexture(GL_TEXTURE_2D, 0);
-					glActiveTexture(GL_TEXTURE0);
 				}
-
-				glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			}
 
-			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_final);
-			glFramebufferTexture2D(GL_FRAMEBUFFER,
-				GL_COLOR_ATTACHMENT0,
-				GL_TEXTURE_2D, m_tex_final, 0);
-
-			glActiveTexture(GL_TEXTURE0);
-			glEnable(GL_TEXTURE_2D);
-			glEnable(GL_BLEND);
-			glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-			glDisable(GL_DEPTH_TEST);
-
-			ShaderProgram* img_shader = m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP_BLEND);
-			if (img_shader)
-			{
-				if (!img_shader->valid())
-					img_shader->create();
-				img_shader->bind();
-			}
-
+			//combine result images of mesh renderer
+			std::vector<Vulkan2dRender::V2DRenderParams> v2drender_params;
+			Vulkan2dRender::V2dPipeline pl = 
+				m_v2drender->preparePipeline(
+					IMG_SHADER_TEXTURE_LOOKUP,
+					V2DRENDER_BLEND_OVER,
+					VK_FORMAT_R32G32B32A32_SFLOAT,
+					1,
+					m_fbo_final->attachments[0]->is_swapchain_images);
 			for (int i = peeling_layers-1; i >= 0; i--)
 			{
-				glActiveTexture(GL_TEXTURE0);
-				glBindTexture(GL_TEXTURE_2D, m_dp_ctex_list[i]);
-				DrawViewQuad();
-				glBindTexture(GL_TEXTURE_2D, 0);
+				Vulkan2dRender::V2DRenderParams param;
+				param.pipeline = pl;
+				param.clear = true;
+				param.tex[0] = m_dp_ctex_list[i].get();
+				v2drender_params.push_back(param);
 			}
-
-			if (img_shader && img_shader->valid())
-				img_shader->release();
-
-			glBindTexture(GL_TEXTURE_2D, 0);
+			m_fbo_final->replaceRenderPass(pl.pass);
+			m_v2drender->seq_render(m_fbo_final, v2drender_params.data(), v2drender_params.size());
 		}
 
 		//setup
-		glDisable(GL_DEPTH_TEST);
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-		GLboolean bCull = glIsEnabled(GL_CULL_FACE);
-		glDisable(GL_CULL_FACE);
-
 		PopVolumeList();
 
 		vector<VolumeData*> quota_vd_list;
@@ -1733,18 +1305,10 @@ void VRenderVulkanView::DrawVolumes(int peel)
 		//handle intermixing modes
 		if (m_vol_method == VOL_METHOD_MULTI)
 		{
-			//if (m_draw_mask)
-			//	DrawVolumesComp(m_vd_pop_list, true, peel);
-
 			if (dp)
 			{
-				glActiveTexture(GL_TEXTURE15);
-				glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[0]);
-				glActiveTexture(GL_TEXTURE0);
+				m_vol_dp_bk_tex = m_dp_tex_list[0];
 				DrawVolumesMulti(m_vd_pop_list, 1);
-				glActiveTexture(GL_TEXTURE15);
-				glBindTexture(GL_TEXTURE_2D, 0);
-				glActiveTexture(GL_TEXTURE0);
 			}
 			else DrawVolumesMulti(m_vd_pop_list, peel);
 			
@@ -1814,19 +1378,12 @@ void VRenderVulkanView::DrawVolumes(int peel)
 						}
 						if (!list.empty())
 						{
-							//if (m_draw_mask)
-							//	DrawVolumesComp(list, true, peel);
 							if (group->GetBlendMode() == VOL_METHOD_MULTI)
 							{
 								if (dp)
 								{
-									glActiveTexture(GL_TEXTURE15);
-									glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[0]);
-									glActiveTexture(GL_TEXTURE0);
+									m_vol_dp_bk_tex = m_dp_tex_list[0];
 									DrawVolumesMulti(list, 1);
-									glActiveTexture(GL_TEXTURE15);
-									glBindTexture(GL_TEXTURE_2D, 0);
-									glActiveTexture(GL_TEXTURE0);
 								}
 								DrawVolumesMulti(list, peel);
 							}
@@ -1842,130 +1399,95 @@ void VRenderVulkanView::DrawVolumes(int peel)
 				}
 			}
 		}
-
-		if (bCull) glEnable(GL_CULL_FACE);
 	}
 
 	//final composition
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		
+	vkQueueWaitIdle(m_vulkan->vulkanDevice->queue);
+	
 	if (m_tile_rendering) {
 		//generate textures & buffer objects
 		//frame buffer for final
-		if (!glIsFramebuffer(m_fbo_tiled_tmp))
+		if (!m_fbo_tiled_tmp)
 		{
-			glGenFramebuffers(1, &m_fbo_tiled_tmp);
-			//color buffer/texture for final
-			if (!glIsTexture(m_tex_tiled_tmp))
-				glGenTextures(1, &m_tex_tiled_tmp);
-			//fbo_final
-			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_tiled_tmp);
-			//color buffer for final
-			glBindTexture(GL_TEXTURE_2D, m_tex_tiled_tmp);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, GetSize().x, GetSize().y, 0,
-				GL_RGBA, GL_FLOAT, NULL);
-			glFramebufferTexture2D(GL_FRAMEBUFFER,
-				GL_COLOR_ATTACHMENT0,
-				GL_TEXTURE_2D, m_tex_tiled_tmp, 0);
-		}
-		else
-		{
-			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_tiled_tmp);
-			glBindTexture(GL_TEXTURE_2D, m_tex_tiled_tmp);
-			if (m_current_tileid == 0)
-				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, GetSize().x, GetSize().y, 0, GL_RGBA, GL_FLOAT, NULL);
+			m_fbo_tiled_tmp = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+			m_fbo_tiled_tmp->w = m_nx;
+			m_fbo_tiled_tmp->h = m_ny;
+			m_fbo_tiled_tmp->device = prim_dev;
+
+			m_tex_tiled_tmp = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+			m_fbo_tiled_tmp->addAttachment(m_tex_tiled_tmp);
 		}
 
-		glActiveTexture(GL_TEXTURE0);
-		glEnable(GL_TEXTURE_2D);
+		Vulkan2dRender::V2DRenderParams params;
+		params.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHADER_TEXTURE_LOOKUP,
+				V2DRENDER_BLEND_OVER,
+				m_fbo_tiled_tmp->attachments[0]->format,
+				m_fbo_tiled_tmp->attachments.size(),
+				m_fbo_tiled_tmp->attachments[0]->is_swapchain_images);
+		params.tex[0] = m_tex_final.get();
+		if (m_current_tileid == 0)
+			params.clear = true;
+
+		std::vector<Vulkan2dRender::Vertex> tile_verts;
+		GetTiledViewQuadVerts(m_current_tileid, tile_verts);
+		params.verts = tile_verts.data();
+		params.verts_num = tile_verts.size();
+
+		params.signalSemaphores = &m_tile_semaphore;
+		params.signalSemaphoreCount = 1;
+
+		m_fbo_tiled_tmp->replaceRenderPass(params.pipeline.pass);
+
+		m_v2drender->render(m_fbo_tiled_tmp, params);
+
+
+		Vulkan2dRender::V2DRenderParams params2;
+		vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+		params2.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR,
+				V2DRENDER_BLEND_OVER,
+				current_fbo->attachments[0]->format,
+				current_fbo->attachments.size(),
+				current_fbo->attachments[0]->is_swapchain_images);
+		params2.tex[0] = m_tex_tiled_tmp.get();
+		params2.loc[0] = { 1.0, 1.0, 1.0, 1.0 };
+		params2.loc[1] = { 1.0, 1.0, 1.0, 1.0 };
+		params2.loc[2] = { 0.0, 0.0, 0.0, 0.0 };
 		
-		glViewport(0, 0, (GLint)GetSize().x, (GLint)GetSize().y);
-		if (m_current_tileid == 0) {
-			glClearColor(0.0, 0.0, 0.0, 0.0);
-			glClear(GL_COLOR_BUFFER_BIT);
-		}
-		
-		glBindTexture(GL_TEXTURE_2D, m_tex_final);
-		glDisable(GL_BLEND);
-		glDisable(GL_DEPTH_TEST);
+		params2.waitSemaphores = &m_tile_semaphore;
+		params2.waitSemaphoreCount = 1;
+		params2.signalSemaphores = &m_voldraw_semaphore;
+		params2.signalSemaphoreCount = 1;
 
-		//2d adjustment
-		ShaderProgram* img_shader = m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
-		if (img_shader)
-		{
-			if (!img_shader->valid())
-				img_shader->create();
-			img_shader->bind();
-		}
+		current_fbo->replaceRenderPass(params2.pipeline.pass);
 
-		DrawViewQuadTile(m_current_tileid);
-
-		if (img_shader && img_shader->valid())
-			img_shader->release();
-
-		glBindTexture(GL_TEXTURE_2D, 0);
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-		//draw the final buffer to the windows buffer
-		glActiveTexture(GL_TEXTURE0);
-		glEnable(GL_TEXTURE_2D);
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-		glBindTexture(GL_TEXTURE_2D, m_tex_tiled_tmp);
-		glDisable(GL_DEPTH_TEST);
-
-		//2d adjustment
-		img_shader = m_img_shader_factory.shader(IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR);
-		if (img_shader)
-		{
-			if (!img_shader->valid())
-				img_shader->create();
-			img_shader->bind();
-		}
-
-		img_shader->setLocalParam(0, 1.0, 1.0, 1.0, 1.0);
-		img_shader->setLocalParam(1, 1.0, 1.0, 1.0, 1.0);
-		img_shader->setLocalParam(2, 0.0, 0.0, 0.0, 0.0);
-
-		DrawViewQuad();
-		if (img_shader && img_shader->valid())
-			img_shader->release();
-		glBindTexture(GL_TEXTURE_2D, 0);
+		m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params2);
 	}
 	else {
 		//draw the final buffer to the windows buffer
-		glActiveTexture(GL_TEXTURE0);
-		glEnable(GL_TEXTURE_2D);
-		glBindTexture(GL_TEXTURE_2D, m_tex_final);
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-		glDisable(GL_DEPTH_TEST);
+		Vulkan2dRender::V2DRenderParams params;
+		vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+		params.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR,
+				V2DRENDER_BLEND_OVER,
+				current_fbo->attachments[0]->format,
+				current_fbo->attachments.size(),
+				current_fbo->attachments[0]->is_swapchain_images);
+		params.tex[0] = m_tex_final.get();
+		params.loc[0] = { 1.0, 1.0, 1.0, 1.0 };
+		params.loc[1] = { 1.0, 1.0, 1.0, 1.0 };
+		params.loc[2] = { 0.0, 0.0, 0.0, 0.0 };
 
-		//2d adjustment
-		ShaderProgram* img_shader =
-			m_img_shader_factory.shader(IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR);
-		if (img_shader)
-		{
-			if (!img_shader->valid())
-				img_shader->create();
-			img_shader->bind();
-		}
+		params.signalSemaphores = &m_voldraw_semaphore;
+		params.signalSemaphoreCount = 1;
 
-		img_shader->setLocalParam(0, 1.0, 1.0, 1.0, 1.0);
-		img_shader->setLocalParam(1, 1.0, 1.0, 1.0, 1.0);
-		img_shader->setLocalParam(2, 0.0, 0.0, 0.0, 0.0);
+		current_fbo->replaceRenderPass(params.pipeline.pass);
 
-		//2d adjustment
-
-		DrawViewQuad();
-		if (img_shader && img_shader->valid())
-			img_shader->release();
-
-		glBindTexture(GL_TEXTURE_2D, 0);
+		m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
 	}
 
 	bool refresh = false;
@@ -2031,6 +1553,8 @@ void VRenderVulkanView::DrawVolumesDP()
 	int nx = m_nx;
 	int ny = m_ny;
 
+	vks::VulkanDevice* prim_dev = m_vulkan->devices[0];
+
 	PrepFinalBuffer();
 	glClearColor(0.0, 0.0, 0.0, 0.0);
 
@@ -2068,159 +1592,62 @@ void VRenderVulkanView::DrawVolumesDP()
 
 			if (m_finished_peeling_layer == 0 && TextureRenderer::get_cur_brick_num() == 0 && m_md_pop_list.size() > 0)
 			{
-				glBindFramebuffer(GL_FRAMEBUFFER, 0);
 				int dptexnum = peeling_layers > 0 ? peeling_layers : 1;
+
+				if (m_resize)
+				{
+					m_dp_fbo_list.clear();
+					m_dp_ctex_list.clear();
+					m_dp_tex_list.clear();
+				}
+
+				if (m_dp_fbo_list.size() < dptexnum)
+				{
+					m_dp_fbo_list.resize(dptexnum+1);
+					m_dp_ctex_list.resize(dptexnum+1);
+					m_dp_tex_list.resize(dptexnum+1);
+				}
+
 				for (int i = 0; i <= dptexnum; i++)
 				{
-					if (i >= (int)m_dp_fbo_list.size())
+					if (!m_dp_fbo_list[i])
 					{
-						GLuint fbo_id;
-						GLuint tex_id;
-						GLuint ctex_id;
-						glGenFramebuffers(1, &fbo_id);
-						glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
+						m_dp_fbo_list[i] = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+						m_dp_fbo_list[i]->w = m_nx;
+						m_dp_fbo_list[i]->h = m_ny;
+						m_dp_fbo_list[i]->device = prim_dev;
 
-						glGenTextures(1, &ctex_id);
-						glBindTexture(GL_TEXTURE_2D, ctex_id);
-						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-						glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-							GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-						glFramebufferTexture2D(GL_FRAMEBUFFER,
-							GL_COLOR_ATTACHMENT0,
-							GL_TEXTURE_2D, ctex_id, 0);
-						m_dp_ctex_list.push_back(ctex_id);
+						m_dp_ctex_list[i] = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+						m_dp_fbo_list[i]->addAttachment(m_dp_ctex_list[i]);
 
-						glGenTextures(1, &tex_id);
-						glBindTexture(GL_TEXTURE_2D, tex_id);
-						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-						glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
-							GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
-						glFramebufferTexture2D(GL_FRAMEBUFFER,
-							GL_DEPTH_ATTACHMENT,
-							GL_TEXTURE_2D, tex_id, 0);
-						m_dp_tex_list.push_back(tex_id);
-
-						m_dp_fbo_list.push_back(fbo_id);
-					}
-					else if (i >= 0 && !glIsFramebuffer(m_dp_fbo_list[i]))
-					{
-						GLuint fbo_id;
-						GLuint tex_id;
-						GLuint ctex_id;
-						glGenFramebuffers(1, &fbo_id);
-						glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
-
-						if (!glIsTexture(m_dp_ctex_list[i]))
-							glGenTextures(1, &ctex_id);
-						else
-							ctex_id = m_dp_ctex_list[i];
-						glBindTexture(GL_TEXTURE_2D, ctex_id);
-						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-						glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-							GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-						glFramebufferTexture2D(GL_FRAMEBUFFER,
-							GL_COLOR_ATTACHMENT0,
-							GL_TEXTURE_2D, ctex_id, 0);
-						m_dp_ctex_list[i] = ctex_id;
-
-						if (!glIsTexture(m_dp_tex_list[i]))
-							glGenTextures(1, &tex_id);
-						else
-							tex_id = m_dp_tex_list[i];
-						glBindTexture(GL_TEXTURE_2D, tex_id);
-						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-						glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
-							GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
-						glFramebufferTexture2D(GL_FRAMEBUFFER,
-							GL_DEPTH_ATTACHMENT,
-							GL_TEXTURE_2D, tex_id, 0);
-						m_dp_tex_list[i] = tex_id;
-
-						m_dp_fbo_list[i] = fbo_id;
-
-					}
-					else
-					{
-						glBindFramebuffer(GL_FRAMEBUFFER, m_dp_fbo_list[i]);
-						glFramebufferTexture2D(GL_FRAMEBUFFER,
-							GL_COLOR_ATTACHMENT0,
-							GL_TEXTURE_2D, m_dp_ctex_list[i], 0);
-						glFramebufferTexture2D(GL_FRAMEBUFFER,
-							GL_DEPTH_ATTACHMENT,
-							GL_TEXTURE_2D, m_dp_tex_list[i], 0);
+						m_dp_tex_list[i] = prim_dev->GenTexture2D(
+							m_vulkan->depthFormat,
+							VK_FILTER_LINEAR,
+							m_nx, m_ny,
+							VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+							VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+							VK_IMAGE_USAGE_SAMPLED_BIT |
+							VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+							VK_IMAGE_USAGE_STORAGE_BIT
+						);
+						m_dp_fbo_list[i]->addAttachment(m_dp_tex_list[i]);
 					}
 
-					if (m_resize)
-					{
-						glBindTexture(GL_TEXTURE_2D, m_dp_ctex_list[i]);
-						glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-							GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-
-						glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[i]);
-						glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
-							GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
-						//m_resize = false;
-					}
-
-					glBindTexture(GL_TEXTURE_2D, 0);
-
-					glActiveTexture(GL_TEXTURE15);
-					glEnable(GL_TEXTURE_2D);
-					glActiveTexture(GL_TEXTURE0);
-					glEnable(GL_TEXTURE_2D);
-					glEnable(GL_BLEND);
-					glBlendFunc(GL_ONE, GL_ZERO);
-					glEnable(GL_DEPTH_TEST);
-					glDepthFunc(GL_LEQUAL);
-
-					glClearColor(0.0, 0.0, 0.0, 0.0);
-					glClearDepth(1.0);
-					glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+					//TODO: clear in MeshRenderer
+					//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 					if (i==0)
 					{
 						DrawMeshes(0);
-						/*
-						glFinish();
-						float *image = new float[nx*ny];
-						glReadPixels(0, 0, nx, ny, GL_DEPTH_COMPONENT, GL_FLOAT, image);
-						for (int ii = 0; ii < nx*ny; ii++) {
-							if (image[ii] > 0.0f && image[ii] < 1.0f) {
-								float dummy = image[ii];
-								dummy = 0;
-							}
-						}
-						delete[] image;
-						*/
 					}
 					else
 					{
-						glActiveTexture(GL_TEXTURE15);
-						glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[i-1]);
-						glActiveTexture(GL_TEXTURE0);
+						m_msh_dp_fr_tex = m_dp_tex_list[i - 1];
 						DrawMeshes(1);
-						glActiveTexture(GL_TEXTURE15);
-						glBindTexture(GL_TEXTURE_2D, 0);
-						glActiveTexture(GL_TEXTURE0);
 					}
 
-					glBindFramebuffer(GL_FRAMEBUFFER, 0);
 				}
 			}
-
-			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_final);
 
 			int peel = 0;
 			if (m_dp_tex_list.size() >= peeling_layers && !m_dp_tex_list.empty() && m_md_pop_list.size() > 0)
@@ -2230,25 +1657,18 @@ void VRenderVulkanView::DrawVolumesDP()
 					if (s == 0)
 					{
 						peel = 2;
-						glActiveTexture(GL_TEXTURE15);
-						glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[(peeling_layers-1)-s]);
-						glActiveTexture(GL_TEXTURE0);
+						m_vol_dp_fr_tex = m_dp_tex_list[(peeling_layers-1)-s];
 					}
 					else if (s == peeling_layers)
 					{
 						peel = 1;
-						glActiveTexture(GL_TEXTURE15);
-						glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[(peeling_layers-1)-(s-1)]);
-						glActiveTexture(GL_TEXTURE0);
+						m_vol_dp_bk_tex = m_dp_tex_list[(peeling_layers-1)-(s-1)];
 					}
 					else
 					{
 						peel = 3;
-						glActiveTexture(GL_TEXTURE14);
-						glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[(peeling_layers-1)-s]);
-						glActiveTexture(GL_TEXTURE15);
-						glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[(peeling_layers-1)-(s-1)]);
-						glActiveTexture(GL_TEXTURE0);
+						m_vol_dp_fr_tex = m_dp_tex_list[(peeling_layers-1)-s];
+						m_vol_dp_bk_tex = m_dp_tex_list[(peeling_layers-1)-(s-1)];
 					}
 				}
 				else
@@ -2256,37 +1676,23 @@ void VRenderVulkanView::DrawVolumesDP()
 					if (s == 0)
 					{
 						peel = 1;
-						glActiveTexture(GL_TEXTURE15);
-						glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[s]);
-						glActiveTexture(GL_TEXTURE0);
+						m_vol_dp_bk_tex = m_dp_tex_list[s];
 					}
 					else if (s == peeling_layers)
 					{
 						peel = 2;
-						glActiveTexture(GL_TEXTURE15);
-						glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[s-1]);
-						glActiveTexture(GL_TEXTURE0);
+						m_vol_dp_fr_tex = m_dp_tex_list[s-1];
 					}
 					else
 					{
 						peel = 3;
-						glActiveTexture(GL_TEXTURE14);
-						glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[s-1]);
-						glActiveTexture(GL_TEXTURE15);
-						glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[s]);
-						glActiveTexture(GL_TEXTURE0);
+						m_vol_dp_fr_tex = m_dp_tex_list[s-1];
+						m_vol_dp_bk_tex = m_dp_tex_list[s];
 					}
 				}
 			}
 
 			//setup
-			glDisable(GL_DEPTH_TEST);
-			glEnable(GL_BLEND);
-			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-			GLboolean bCull = glIsEnabled(GL_CULL_FACE);
-			glDisable(GL_CULL_FACE);
-
 			PopVolumeList();
 
 			vector<VolumeData*> quota_vd_list;
@@ -2379,13 +1785,7 @@ void VRenderVulkanView::DrawVolumesDP()
 					}
 				}
 			}
-
-			glActiveTexture(GL_TEXTURE14);
-			glBindTexture(GL_TEXTURE_2D, 0);
-			glActiveTexture(GL_TEXTURE15);
-			glBindTexture(GL_TEXTURE_2D, 0);
-			glActiveTexture(GL_TEXTURE0);
-
+			
 			int texid = TextureRenderer::get_update_order() == 0 ? (peeling_layers-1)-s : s;
 			if (m_dp_ctex_list.size() > texid && m_md_pop_list.size() > 0 &&
 				((TextureRenderer::get_start_update_loop() && TextureRenderer::get_done_update_loop()) || !TextureRenderer::get_mem_swap() || TextureRenderer::get_total_brick_num() == 0) )
@@ -8015,22 +7415,12 @@ void VRenderVulkanView::OnDraw(wxPaintEvent& event)
 	int ny = m_ny;
 
 	PopMeshList();
-//	if (m_md_pop_list.size()>0 && m_vd_pop_list.size()>0 && m_vol_method == VOL_METHOD_MULTI)
-//		m_draw_type = 2;
-//	else
-		m_draw_type = 1;
+
+	m_draw_type = 1;
 
 	PreDraw();
 
-	switch (m_draw_type)
-	{
-	case 1:  //draw volumes only
-		Draw();
-		break;
-	case 2:  //draw volumes and meshes with depth peeling
-		DrawDP();
-		break;
-	}
+	Draw();
 
 	if (m_draw_camctr)
 		DrawCamCtr();
@@ -15870,8 +15260,11 @@ void VRenderVulkanView::DrawViewQuad()
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-void VRenderVulkanView::DrawViewQuadTile(int tileid)
+void VRenderVulkanView::GetTiledViewQuadVerts(int tileid, vector<Vulkan2dRender::Vertex> &verts)
 {
+	if (!verts.empty())
+		verts.clear();
+
 	int w = GetSize().x;
 	int h = GetSize().y;
 
@@ -15923,32 +15316,12 @@ void VRenderVulkanView::DrawViewQuadTile(int tileid)
 		tex_y = 1.0 - (edpos_y - ybound) / tileh;
 		stpos_y = ybound;
 	}
+
+	verts.push_back(Vulkan2dRender::Vertex{ {(float)edpos_x, (float)edpos_y, 0.0f}, {(float)tex_x, 1.0f,         0.0f} });
+	verts.push_back(Vulkan2dRender::Vertex{ {(float)stpos_x, (float)edpos_y, 0.0f}, {0.0f,         1.0f,         0.0f} });
+	verts.push_back(Vulkan2dRender::Vertex{ {(float)stpos_x, (float)stpos_y, 0.0f}, {0.0f,         (float)tex_y, 0.0f} });
+	verts.push_back(Vulkan2dRender::Vertex{ {(float)edpos_x, (float)stpos_y, 0.0f}, {(float)tex_x, (float)tex_y, 0.0f} });
 	
-	glEnable(GL_TEXTURE_2D);
-	
-	float points[] = {
-		(float)stpos_x, (float)stpos_y, 0.0f, 0.0f,         (float)tex_y, 0.0f,
-		(float)edpos_x, (float)stpos_y, 0.0f, (float)tex_x, (float)tex_y, 0.0f,
-		(float)stpos_x, (float)edpos_y, 0.0f, 0.0f,         1.0f,         0.0f,
-		(float)edpos_x, (float)edpos_y, 0.0f, (float)tex_x, 1.0f,         0.0f};
-
-	glBindBuffer(GL_ARRAY_BUFFER, m_quad_tile_vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(float)*24, points, GL_DYNAMIC_DRAW);
-
-	glGenVertexArrays(1, &m_quad_tile_vao);
-	glBindVertexArray(m_quad_tile_vao);
-
-	glBindBuffer(GL_ARRAY_BUFFER, m_quad_tile_vbo);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)0);
-	glEnableVertexAttribArray(1);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)12);
-	
-
-	glBindVertexArray(m_quad_tile_vao);
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-	glBindVertexArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -2188,7 +2188,7 @@ namespace FLIVR
 			
 			m_v2drender->render(framebuf, params);
 			
-			VK_CHECK_RESULT(vkQueueWaitIdle(prim_dev->queue));
+			//VK_CHECK_RESULT(vkQueueWaitIdle(prim_dev->queue));
 		}
 
 	}

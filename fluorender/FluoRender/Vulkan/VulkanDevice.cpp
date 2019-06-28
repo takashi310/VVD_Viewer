@@ -77,7 +77,7 @@ namespace vks
 		return true;
 	}
 
-	void VulkanDevice::clean_texpool()
+	void VulkanDevice::update_texpool()
 	{
 		for (int j=int(tex_pool.size()-1); j>=0; j--)
 		{
@@ -236,7 +236,7 @@ namespace vks
 				}
 			}
 
-			clean_texpool();
+			update_texpool();
 			if (use_mem_limit)
 				available_mem = est_avlb_mem;
 

@@ -214,7 +214,8 @@ class EXPORT_API VRenderVulkanView: public wxWindow
 	};
 
 public:
-	VRenderVulkanView(wxWindow *parent,
+	VRenderVulkanView(wxWindow* frame,
+		wxWindow *parent,
         wxWindowID id,
         const wxPoint& pos = wxDefaultPosition,
         const wxSize& size = wxDefaultSize,
@@ -773,6 +774,7 @@ public:
 
 private:
 	shared_ptr<VVulkan> m_vulkan;
+	std::shared_ptr<Vulkan2dRender> m_v2drender;
 
 	wxWindow* m_frame;
 	VRenderView* m_vrv;
@@ -841,40 +843,52 @@ private:
 	bool m_paint_enable;
 	bool m_paint_display;
 	//2d frame buffers
-	GLuint m_fbo;
-	GLuint m_tex;
-	GLuint m_tex_wt2;  //use this texture instead of m_tex when the volume for segmentation is rendered
-	GLuint m_fbo_final;
-	GLuint m_tex_final;
+	std::unique_ptr<vks::VFrameBuffer> m_fbo;
+	std::shared_ptr<vks::VTexture> m_tex;
+	std::shared_ptr<vks::VTexture> m_tex_wt2;  //use this texture instead of m_tex when the volume for segmentation is rendered
+	std::unique_ptr<vks::VFrameBuffer> m_fbo_final;
+	std::shared_ptr<vks::VTexture> m_tex_final;
 	//temp buffer for large data compositing
-	GLuint m_fbo_temp;
-	GLuint m_tex_temp;
+	std::unique_ptr<vks::VFrameBuffer> m_fbo_temp;
+	std::shared_ptr<vks::VTexture> m_tex_temp;
 	//shading (shadow) overlay
-	GLuint m_fbo_ol1;
-	GLuint m_fbo_ol2;
-	GLuint m_tex_ol1;
-	GLuint m_tex_ol2;
+	std::unique_ptr<vks::VFrameBuffer> m_fbo_ol1;
+	std::unique_ptr<vks::VFrameBuffer> m_fbo_ol2;
+	std::shared_ptr<vks::VTexture> m_tex_ol1;
+	std::shared_ptr<vks::VTexture> m_tex_ol2;
 	//paint buffer
-	GLuint m_fbo_paint;
-	GLuint m_tex_paint;
+	std::unique_ptr<vks::VFrameBuffer> m_fbo_paint;
+	std::shared_ptr<vks::VTexture> m_tex_paint;
 	bool m_clear_paint;
 	//depth peeling buffers
-	vector<GLuint> m_dp_fbo_list;
-	vector<GLuint> m_dp_tex_list;
-	vector<GLuint> m_dp_ctex_list;
-	GLuint m_dp_buf_fbo;
-	GLuint m_dp_buf_tex;
+	vector<std::unique_ptr<vks::VFrameBuffer>> m_dp_fbo_list;
+	vector<std::shared_ptr<vks::VTexture>> m_dp_tex_list;
+	vector<std::shared_ptr<vks::VTexture>> m_dp_ctex_list;
+	std::unique_ptr<vks::VFrameBuffer> m_dp_buf_fbo;
+	std::shared_ptr<vks::VTexture> m_dp_buf_tex;
+
+	//depth front tex for volume renderer (tex14)
+	std::shared_ptr<vks::VTexture> m_vol_dp_fr_tex;
+	//depth back tex for volume renderer (tex15)
+	std::shared_ptr<vks::VTexture> m_vol_dp_bk_tex;
+	//depth front tex for mesh renderer (tex15)
+	std::shared_ptr<vks::VTexture> m_msh_dp_fr_tex;
+
 	//vert buffer
-	GLuint m_quad_vbo, m_quad_vao;
-	GLuint m_quad_tile_vbo, m_quad_tile_vao;
-	GLuint m_misc_vbo, m_misc_ibo, m_misc_vao;
+	//GLuint m_quad_vbo, m_quad_vao;
+	//GLuint m_quad_tile_vbo, m_quad_tile_vao;
+	//GLuint m_misc_vbo, m_misc_ibo, m_misc_vao;
 	//mesh picking buffer
-	GLuint m_fbo_pick, m_tex_pick, m_tex_pick_depth;
+	std::unique_ptr<vks::VFrameBuffer> m_fbo_pick;
+	std::shared_ptr<vks::VTexture> m_tex_pick, m_tex_pick_depth;
 	//tile buffer
-	GLuint m_fbo_tile;
-	GLuint m_tex_tile;
-	GLuint m_fbo_tiled_tmp;
-	GLuint m_tex_tiled_tmp;
+	std::unique_ptr<vks::VFrameBuffer> m_fbo_tile;
+	std::shared_ptr<vks::VTexture> m_tex_tile;
+	std::unique_ptr<vks::VFrameBuffer> m_fbo_tiled_tmp;
+	std::shared_ptr<vks::VTexture> m_tex_tiled_tmp;
+	//semaphores
+	VkSemaphore m_voldraw_semaphore;
+	VkSemaphore m_tile_semaphore;
 
 	//camera controls
 	bool m_persp;
@@ -1145,7 +1159,7 @@ private:
 	void StartTileRendering(int w, int h, int tilew, int tileh);
 	void EndTileRendering();
 	void DrawTile();
-	void DrawViewQuadTile(int tileid);
+	void GetTiledViewQuadVerts(int tileid, vector<Vulkan2dRender::Vertex> &verts);
 	void Get1x1DispSize(int &w, int &h);
 
 	//get mesh shadow

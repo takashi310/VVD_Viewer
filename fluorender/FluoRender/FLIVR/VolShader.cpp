@@ -258,7 +258,7 @@ VolShader::VolShader(
 		//head for depth peeling
 		if (peel_ == 1)//draw volume before 15
 			z << VOL_HEAD_DP_1;
-		else if (peel_ == 2 || peel_ == 5)//draw volume after 15
+		else if (peel_ == 2 || peel_ == 5)//draw volume after 14
 			z << VOL_HEAD_DP_2;
 		else if (peel_ == 3 || peel_ == 4)//draw volume after 14 and before 15
 			z << VOL_HEAD_DP_3;

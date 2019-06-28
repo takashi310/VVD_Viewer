@@ -92,8 +92,6 @@ protected:
 	VkDevice device;
 	// Handle to the device graphics queue that command buffers are submitted to
 	VkQueue queue;
-	// Depth buffer format (selected during Vulkan initialization)
-	VkFormat depthFormat;
 	// Command buffer pool
 	VkCommandPool cmdPool;
 	/** @brief Pipeline stages used to wait at for graphics queue submissions */
@@ -120,6 +118,9 @@ public:
 	uint32_t height = 720;
 
 	//vks::UIOverlay UIOverlay;
+
+	// Depth buffer format (selected during Vulkan initialization)
+	VkFormat depthFormat;
 
 	/** @brief Last frame time measured using a high performance timer (if available) */
 	float frameTimer = 1.0f;
