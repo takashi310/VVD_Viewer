@@ -42,6 +42,7 @@ public:
 		VkRenderPass pass;
 		int shader;
 		int blend;
+		int colormap;
 		VkFormat framebuf_format;
 		int attachment_num;
 		bool isSwapChainImage;
@@ -69,7 +70,7 @@ public:
 	void updateDynBuffers(Vulkan2dRender::Vertex* verts, int verts_num, uint32_t* indices, int idx_num);
 	void setupVertexDescriptions();
 	VkRenderPass prepareRenderPass(VkFormat framebuf_format, int attachment_num, bool isSwapChainImage=false);
-	V2dPipeline preparePipeline(int shader, int blend_mode, VkFormat framebuf_format, int attachment_num, bool isSwapChainImage=false);
+	V2dPipeline preparePipeline(int shader, int blend_mode, VkFormat framebuf_format, int attachment_num, int colormap=0, bool isSwapChainImage=false);
 
 	void getEnabledUniforms(V2dPipeline &pipeline, const std::string &code);
 
@@ -99,6 +100,8 @@ public:
 	
 	void seq_buildCommandBuffer(VkCommandBuffer commandbufs[], int commandbuf_num, const std::unique_ptr<vks::VFrameBuffer>& framebuf, const V2DRenderParams *params, int num);
 	void seq_render(const std::unique_ptr<vks::VFrameBuffer>& framebuf, const V2DRenderParams *params, int num);
+
+	Vulkan2dRender::V2DRenderParams GetNextV2dRenderSemaphoreSettings();
 };
 
 #endif

@@ -793,4 +793,46 @@ namespace vks
 		flushCommandBuffer(copyCmd, queue, true);
 	}
 
+	void VulkanDevice::ResetRenderSemaphores()
+	{
+		m_cur_semaphore_id = -1;
+	}
+
+	VulkanSemaphoreSettings VulkanDevice::GetNextRenderSemaphoreSettings()
+	{
+		VulkanSemaphoreSettings ret;
+
+		VkSemaphore* cur = GetCurrentRenderSemaphore();
+		if (cur)
+		{
+			ret.waitSemaphores = cur;
+			ret.waitSemaphoreCount = 1;
+		}
+
+		VkSemaphore* next = GetNextRenderSemaphore();
+		if (next)
+		{
+			ret.signalSemaphores = next;
+			ret.signalSemaphoreCount = 1;
+		}
+
+		return ret;
+	}
+
+	VkSemaphore* VulkanDevice::GetNextRenderSemaphore()
+	{
+		m_cur_semaphore_id++;
+		if (m_cur_semaphore_id >= m_render_semaphore.size())
+			m_render_semaphore.resize(m_cur_semaphore_id + 1);
+		if (m_render_semaphore[m_cur_semaphore_id].vksemaphore == VK_NULL_HANDLE)
+			m_render_semaphore[m_cur_semaphore_id].init(this);
+		return &m_render_semaphore[m_cur_semaphore_id].vksemaphore;
+	}
+
+	VkSemaphore* VulkanDevice::GetCurrentRenderSemaphore()
+	{
+		if (m_cur_semaphore_id < 0 || m_cur_semaphore_id >= m_render_semaphore.size())
+			return nullptr;
+		return &m_render_semaphore[m_cur_semaphore_id].vksemaphore;
+	}
 }

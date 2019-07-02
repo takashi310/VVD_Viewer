@@ -2395,7 +2395,9 @@ void VolumeData::SetMatrices(glm::mat4 &mv_mat,
 }
 
 //draw volume
-void VolumeData::Draw(bool ortho, bool interactive, double zoom, double sampling_frq_fac)
+void VolumeData::Draw(
+	std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf,
+	bool ortho, bool interactive, double zoom, double sampling_frq_fac)
 {
 	if (m_vr)
 	{
@@ -2406,7 +2408,7 @@ void VolumeData::Draw(bool ortho, bool interactive, double zoom, double sampling
 			SetLevel(GetMaskLv());
 		}
 		
-		m_vr->draw(m_test_wiref, interactive, ortho, zoom, m_stream_mode, sampling_frq_fac);
+		m_vr->draw(framebuf, clear_framebuf, m_test_wiref, interactive, ortho, zoom, m_stream_mode, sampling_frq_fac);
 		
 		if ( isBrxml() && (m_vr->is_mask_active() || m_vr->is_label_active()) )
 			SetLevel(curlv);

@@ -86,12 +86,12 @@ VolumeData* VolumeSelector::GetVolume()
 	return m_vd;
 }
 
-void VolumeSelector::Set2DMask(GLuint mask)
+void VolumeSelector::Set2DMask(const std::shared_ptr<vks::VTexture> &mask)
 {
 	m_2d_mask = mask;
 }
 
-void VolumeSelector::Set2DWeight(GLuint weight1, GLuint weight2)
+void VolumeSelector::Set2DWeight(const std::shared_ptr<vks::VTexture> &weight1, const std::shared_ptr<vks::VTexture> &weight2)
 {
 	m_2d_weight1 = weight1;
 	m_2d_weight2 = weight2;

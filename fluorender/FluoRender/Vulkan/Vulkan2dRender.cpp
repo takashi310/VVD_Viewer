@@ -231,11 +231,12 @@ VkRenderPass Vulkan2dRender::prepareRenderPass(VkFormat framebuf_format, int att
 	return pass;
 }
 
-Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blend_mode, VkFormat framebuf_format, int attachment_num, bool isSwapChainImage)
+Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blend_mode, VkFormat framebuf_format, int attachment_num, int colormap, bool isSwapChainImage)
 {
 	if (prev_pipeline >= 0) {
 		if (m_pipelines[prev_pipeline].shader == shader &&
 			m_pipelines[prev_pipeline].blend == blend_mode &&
+			m_pipelines[prev_pipeline].colormap == colormap &&
 			m_pipelines[prev_pipeline].framebuf_format == framebuf_format &&
 			m_pipelines[prev_pipeline].attachment_num == attachment_num &&
 			m_pipelines[prev_pipeline].isSwapChainImage == isSwapChainImage)
@@ -244,6 +245,7 @@ Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blen
 	for (int i = 0; i < m_pipelines.size(); i++) {
 		if (m_pipelines[i].shader == shader &&
 			m_pipelines[i].blend == blend_mode &&
+			m_pipelines[i].colormap == colormap &&
 			m_pipelines[i].framebuf_format == framebuf_format &&
 			m_pipelines[i].attachment_num == attachment_num &&
 			m_pipelines[i].isSwapChainImage == isSwapChainImage)
@@ -344,7 +346,7 @@ Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blen
 
 	// Load shaders
 	std::array<VkPipelineShaderStageCreateInfo,2> shaderStages;
-	FLIVR::ShaderProgram *sh = m_vulkan->img_shader_factory_->shader(m_vulkan->getDevice(), shader);
+	FLIVR::ShaderProgram *sh = m_vulkan->img_shader_factory_->shader(m_vulkan->getDevice(), shader, colormap);
 	shaderStages[0] = sh->get_vertex_shader();
 	shaderStages[1] = sh->get_fragment_shader();
 	pipelineCreateInfo.pStages = shaderStages.data();
@@ -352,6 +354,7 @@ Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blen
 	V2dPipeline v2d_pipeline;
 	v2d_pipeline.shader = shader;
 	v2d_pipeline.blend = blend_mode;
+	v2d_pipeline.colormap = colormap;
 	v2d_pipeline.pass = pass;
 	v2d_pipeline.framebuf_format = framebuf_format;
 	v2d_pipeline.attachment_num = attachment_num;
@@ -802,3 +805,26 @@ void Vulkan2dRender::seq_render(const std::unique_ptr<vks::VFrameBuffer>& frameb
 	// Submit to the queue
 	VK_CHECK_RESULT(vkQueueSubmit(m_vulkan->vulkanDevice->queue, 1, &submitInfo, VK_NULL_HANDLE));
 }
+
+Vulkan2dRender::V2DRenderParams Vulkan2dRender::GetNextV2dRenderSemaphoreSettings()
+{
+	Vulkan2dRender::V2DRenderParams ret;
+
+	VkSemaphore* cur = m_vulkan->vulkanDevice->GetCurrentRenderSemaphore();
+	if (cur)
+	{
+		ret.waitSemaphores = cur;
+		ret.waitSemaphoreCount = 1;
+	}
+
+	VkSemaphore* next = m_vulkan->vulkanDevice->GetNextRenderSemaphore();
+	if (next)
+	{
+		ret.signalSemaphores = next;
+		ret.signalSemaphoreCount = 1;
+	}
+
+	return ret;
+}
+
+

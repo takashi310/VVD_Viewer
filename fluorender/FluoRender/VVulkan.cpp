@@ -127,3 +127,11 @@ bool VVulkan::UploadTextures(std::map<vks::VulkanDevice*, std::shared_ptr<vks::V
 
 	return true;
 }
+
+void VVulkan::ResetRenderSemaphores()
+{
+	for (auto dev : devices)
+	{
+		dev->ResetRenderSemaphores();
+	}
+}

@@ -43,8 +43,8 @@ public:
 
 	void SetVolume(VolumeData *vd);
 	VolumeData* GetVolume();
-	void Set2DMask(GLuint mask);
-	void Set2DWeight(GLuint weight1, GLuint weight2);
+	void Set2DMask(const std::shared_ptr<vks::VTexture> &mask);
+	void Set2DWeight(const std::shared_ptr<vks::VTexture> &weight1, const std::shared_ptr<vks::VTexture> &weight2);
 	void SetProjection(double* mvmat, double *prjmat);
 	void SetBrushIteration(int num) {m_iter_num = num;}
 	int GetBrushIteration() {return m_iter_num;}
@@ -133,9 +133,9 @@ public:
 
 private:
 	VolumeData *m_vd;	//volume data for segmentation
-	GLuint m_2d_mask;	//2d mask from painting
-	GLuint m_2d_weight1;//2d weight map (after tone mapping)
-	GLuint m_2d_weight2;//2d weight map	(before tone mapping)
+	std::shared_ptr<vks::VTexture> m_2d_mask;	//2d mask from painting
+	std::shared_ptr<vks::VTexture> m_2d_weight1;//2d weight map (after tone mapping)
+	std::shared_ptr<vks::VTexture> m_2d_weight2;//2d weight map	(before tone mapping)
 	double m_mvmat[16];	//modelview matrix
 	double m_prjmat[16];//projection matrix
 	int m_iter_num;		//iteration number for growing

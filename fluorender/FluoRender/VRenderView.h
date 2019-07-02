@@ -845,9 +845,11 @@ private:
 	//2d frame buffers
 	std::unique_ptr<vks::VFrameBuffer> m_fbo;
 	std::shared_ptr<vks::VTexture> m_tex;
+	std::unique_ptr<vks::VFrameBuffer> m_fbo_wt2;
 	std::shared_ptr<vks::VTexture> m_tex_wt2;  //use this texture instead of m_tex when the volume for segmentation is rendered
 	std::unique_ptr<vks::VFrameBuffer> m_fbo_final;
 	std::shared_ptr<vks::VTexture> m_tex_final;
+	bool m_clear_final_buffer;
 	//temp buffer for large data compositing
 	std::unique_ptr<vks::VFrameBuffer> m_fbo_temp;
 	std::shared_ptr<vks::VTexture> m_tex_temp;
@@ -886,9 +888,6 @@ private:
 	std::shared_ptr<vks::VTexture> m_tex_tile;
 	std::unique_ptr<vks::VFrameBuffer> m_fbo_tiled_tmp;
 	std::shared_ptr<vks::VTexture> m_tex_tiled_tmp;
-	//semaphores
-	VkSemaphore m_voldraw_semaphore;
-	VkSemaphore m_tile_semaphore;
 
 	//camera controls
 	bool m_persp;
@@ -1145,15 +1144,15 @@ private:
 	//draw out the framebuffer after composition
 	void PrepFinalBuffer();
 	void ClearFinalBuffer();
-	void DrawFinalBuffer();
+	void DrawFinalBuffer(bool clear);
 	//different volume drawing modes
 	void DrawVolumesMulti(vector<VolumeData*> &list, int peel=0);
 	void DrawVolumesComp(vector<VolumeData*> &list, bool mask=false, int peel=0);
-	void DrawMIP(VolumeData* vd, GLuint tex, int peel=0, double sampling_frq_fac = -1.0);
-	void DrawOVER(VolumeData* vd, GLuint tex, int peel=0, double sampling_frq_fac = -1.0);
+	void DrawMIP(VolumeData* vd, std::unique_ptr<vks::VFrameBuffer> &fb, int peel=0, double sampling_frq_fac = -1.0);
+	void DrawOVER(VolumeData* vd, std::unique_ptr<vks::VFrameBuffer>& fb, int peel=0, double sampling_frq_fac = -1.0);
 	//overlay passes
 	void DrawOLShading(VolumeData* vd);
-	void DrawOLShadows(vector<VolumeData*> &vlist, GLuint tex);
+	void DrawOLShadows(vector<VolumeData*> &vlist, std::unique_ptr<vks::VFrameBuffer>& fb);
 	void DrawOLShadowsMesh(GLuint tex_depth, double darkenss);
 	
 	void StartTileRendering(int w, int h, int tilew, int tileh);

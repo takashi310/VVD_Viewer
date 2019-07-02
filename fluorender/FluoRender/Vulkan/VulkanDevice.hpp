@@ -25,6 +25,7 @@ namespace vks
 	class VTexture;
 	class VFrameBuffer;
 	struct TexParam;
+	struct VulkanSemaphoreSettings;
 	
 	struct VulkanDevice
 	{
@@ -85,6 +86,15 @@ namespace vks
 		int check_swap_memory(FLIVR::TextureBrick* brick, int c);
 		int findTexInPool(FLIVR::TextureBrick* b, int c, int w, int h, int d, int bytes, VkFormat format);
 		int GenTexture3D_pool(VkFormat format, VkFilter filter, FLIVR::TextureBrick *b, int comp);
+
+		//semaphores
+		std::vector<vks::VSemaphore> m_render_semaphore;
+		int m_cur_semaphore_id;
+
+		void ResetRenderSemaphores();
+		VulkanSemaphoreSettings GetNextRenderSemaphoreSettings();
+		VkSemaphore* GetNextRenderSemaphore();
+		VkSemaphore* GetCurrentRenderSemaphore();
 
 		VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 		void setupDescriptorPool();
@@ -154,6 +164,7 @@ namespace vks
 		*/
 		~VulkanDevice()
 		{
+			m_render_semaphore.clear();
 			staging_buf.destroy();
 			if (linear_sampler)
 				vkDestroySampler(logicalDevice, linear_sampler, nullptr);
@@ -1001,6 +1012,48 @@ namespace vks
 		TexParam(int c, const std::shared_ptr<VTexture> &t) :
 			tex(t), brick(0), comp(c), delayed_del(false)
 		{}
+	};
+
+	class VSemaphore {
+	public:
+		VkSemaphore vksemaphore;
+		VulkanDevice* device;
+		VSemaphore()
+		{
+			device = nullptr;
+			vksemaphore = VK_NULL_HANDLE;
+		}
+		VSemaphore(VulkanDevice *dev) 
+		{
+			init(dev);
+		}
+		~VSemaphore()
+		{
+			destroy();
+		}
+		void init(VulkanDevice* dev)
+		{
+			if (vksemaphore != VK_NULL_HANDLE)
+				destroy();
+			device = dev;
+			VkSemaphoreCreateInfo semaphoreInfo = vks::initializers::semaphoreCreateInfo();
+			VK_CHECK_RESULT(vkCreateSemaphore(device->logicalDevice, &semaphoreInfo, nullptr, &vksemaphore));
+		}
+		void destroy()
+		{
+			if (vksemaphore != VK_NULL_HANDLE)
+			{
+				vkDestroySemaphore(device->logicalDevice, vksemaphore, nullptr);
+				vksemaphore = VK_NULL_HANDLE;
+			}
+		}
+	};
+
+	struct VulkanSemaphoreSettings {
+		uint32_t waitSemaphoreCount = 0;
+		uint32_t signalSemaphoreCount = 0;
+		VkSemaphore* waitSemaphores = nullptr;
+		VkSemaphore* signalSemaphores = nullptr;
 	};
 
 }

@@ -1473,11 +1473,10 @@ namespace FLIVR
 	void VolumeRenderer::draw(
 		const std::unique_ptr<vks::VFrameBuffer>& framebuf,
 		bool clear_framebuf,
-		VSemaphoreSettings semaphores,
 		bool draw_wireframe_p, bool interactive_mode_p,
 		bool orthographic_p, double zoom, int mode, double sampling_frq_fac)
 	{
-		draw_volume(framebuf, clear_framebuf, semaphores, interactive_mode_p, orthographic_p, zoom, mode, sampling_frq_fac);
+		draw_volume(framebuf, clear_framebuf, interactive_mode_p, orthographic_p, zoom, mode, sampling_frq_fac);
 		//if(draw_wireframe_p)
 		//	draw_wireframe(orthographic_p);
 	}
@@ -1485,7 +1484,6 @@ namespace FLIVR
 	void VolumeRenderer::draw_volume(
 		const std::unique_ptr<vks::VFrameBuffer>& framebuf,
 		bool clear_framebuf,
-		VSemaphoreSettings semaphores,
 		bool interactive_mode_p, bool orthographic_p, double zoom, int mode, double sampling_frq_fac)
 	{
 		if (!tex_ || !m_vulkan)
@@ -1693,7 +1691,8 @@ namespace FLIVR
 		VolShaderFactory::updateUniformBuffers(m_volUniformBuffers[prim_dev], vert_ubo, frag_ubo);
 
 		bool clear = false;
-		bool waitsemaphore = semaphores.wait_before_brk_rendering;
+		bool waitsemaphore = true;
+		vks::VulkanSemaphoreSettings semaphores = prim_dev->GetNextRenderSemaphoreSettings();
 		if (!mem_swap_ || (mem_swap_ && cur_chan_brick_num_ == 0))
 		{
 			prepareVertexBuffers(prim_dev, dt);
@@ -2034,8 +2033,8 @@ namespace FLIVR
 			VkSubmitInfo submitInfo = vks::initializers::submitInfo();
 			submitInfo.commandBufferCount = 1;
 			submitInfo.pCommandBuffers = &cmdbuf;
-			submitInfo.signalSemaphoreCount = 1;
-			submitInfo.pSignalSemaphores = &m_volFinishedSemaphores[prim_dev];
+			submitInfo.signalSemaphoreCount = semaphores.signalSemaphoreCount;
+			submitInfo.pSignalSemaphores = semaphores.signalSemaphores;
 
 			std::vector<VkPipelineStageFlags> waitStages;
 			if (waitsemaphore && semaphores.waitSemaphoreCount > 0)
@@ -2094,6 +2093,7 @@ namespace FLIVR
 						V2DRENDER_BLEND_OVER,
 						VK_FORMAT_R32G32B32A32_SFLOAT,
 						1,
+						0,
 						filter_buffer_->attachments[0]->is_swapchain_images);
 
 				if (filter_buffer_ &&
@@ -2122,19 +2122,21 @@ namespace FLIVR
 				filter_params.clear = true;
 				filter_params.loc[0] = { filter_size_min_/w2, filter_size_min_/h2, 1.0/w2, 1.0/h2 };
 				filter_params.tex[0] = blend_tex_id_.get();
+
+				vks::VulkanSemaphoreSettings sem = prim_dev->GetNextRenderSemaphoreSettings();
 				if (!mem_swap_)
 				{
-					filter_params.waitSemaphoreCount = 1;
-					filter_params.waitSemaphores = &m_volFinishedSemaphores[prim_dev];
+					filter_params.waitSemaphoreCount = sem.waitSemaphoreCount;
+					filter_params.waitSemaphores = sem.waitSemaphores;
 				}
-				filter_params.signalSemaphoreCount = 1;
-				filter_params.signalSemaphores = &m_filterFinishedSemaphores[prim_dev];
+				filter_params.signalSemaphoreCount = sem.signalSemaphoreCount;
+				filter_params.signalSemaphores = sem.signalSemaphores;
 
 				m_v2drender->render(filter_buffer_, filter_params);
 			}
 
 			Vulkan2dRender::V2DRenderParams params;
-			std::vector<VkSemaphore> waitsemaphores;
+			vks::VulkanSemaphoreSettings semfinal = prim_dev->GetNextRenderSemaphoreSettings();
 
 			if (noise_red_ && colormap_mode_ != 2)
 			{
@@ -2144,11 +2146,11 @@ namespace FLIVR
 						V2DRENDER_BLEND_OVER,
 						framebuf->attachments[0]->format,
 						framebuf->attachments.size(),
+						0,
 						framebuf->attachments[0]->is_swapchain_images);
 				params.tex[0] = filter_tex_id_.get();
 				filter_size_shp_ = CalcFilterSize(3, w, h, tex_->nx(), tex_->ny(), zoom, sfactor_);
 				params.loc[0] = { filter_size_shp_/w, filter_size_shp_/h, 0.0, 0.0 };
-				waitsemaphores.push_back(m_filterFinishedSemaphores[prim_dev]);
 			}
 			else
 			{
@@ -2158,29 +2160,18 @@ namespace FLIVR
 						V2DRENDER_BLEND_OVER,
 						framebuf->attachments[0]->format,
 						framebuf->attachments.size(),
+						0,
 						framebuf->attachments[0]->is_swapchain_images);
 				params.tex[0] = blend_tex_id_.get();
-				if (!mem_swap_)
-				{
-					waitsemaphores.push_back(m_volFinishedSemaphores[prim_dev]);
-				}
-			}
-			std::vector<VkPipelineStageFlags> waitStages;
-			if (!semaphores.wait_before_brk_rendering && semaphores.waitSemaphoreCount > 0)
-			{
-				for (int s = 0; s < semaphores.waitSemaphoreCount; s++)
-				{
-					waitsemaphores.push_back(semaphores.waitSemaphores[s]);
-				}
 			}
 
-			if (!waitsemaphores.empty())
+			if (!mem_swap_ || (noise_red_ && colormap_mode_ != 2))
 			{
-				params.waitSemaphoreCount = waitsemaphores.size();
-				params.waitSemaphores = waitsemaphores.data();
+				params.waitSemaphoreCount = semfinal.waitSemaphoreCount;
+				params.waitSemaphores = semfinal.waitSemaphores;
 			}
-			params.signalSemaphoreCount = semaphores.signalSemaphoreCount;
-			params.signalSemaphores = semaphores.signalSemaphores;
+			params.signalSemaphoreCount = semfinal.signalSemaphoreCount;
+			params.signalSemaphores = semfinal.signalSemaphores;
 
 			params.clear = clear_framebuf;
 

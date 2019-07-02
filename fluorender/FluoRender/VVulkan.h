@@ -58,6 +58,8 @@ public:
 								VkFormat format, VkFilter filter, uint32_t w, uint32_t h,
 								VkImageUsageFlags usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT);
 	bool UploadTextures(std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> &tex, void *data);
+
+	void ResetRenderSemaphores();
 };
 
 #endif
