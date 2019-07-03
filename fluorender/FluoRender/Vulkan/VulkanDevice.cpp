@@ -800,7 +800,7 @@ namespace vks
 
 	VulkanSemaphoreSettings VulkanDevice::GetNextRenderSemaphoreSettings()
 	{
-		VulkanSemaphoreSettings ret;
+		vks::VulkanSemaphoreSettings ret;
 
 		VkSemaphore* cur = GetCurrentRenderSemaphore();
 		if (cur)
@@ -823,16 +823,16 @@ namespace vks
 	{
 		m_cur_semaphore_id++;
 		if (m_cur_semaphore_id >= m_render_semaphore.size())
-			m_render_semaphore.resize(m_cur_semaphore_id + 1);
-		if (m_render_semaphore[m_cur_semaphore_id].vksemaphore == VK_NULL_HANDLE)
-			m_render_semaphore[m_cur_semaphore_id].init(this);
-		return &m_render_semaphore[m_cur_semaphore_id].vksemaphore;
+			m_render_semaphore.resize((size_t)m_cur_semaphore_id + 1);
+		if (!m_render_semaphore[m_cur_semaphore_id])
+			m_render_semaphore[m_cur_semaphore_id] = std::make_unique<vks::VSemaphore>(this);
+		return &m_render_semaphore[m_cur_semaphore_id]->vksemaphore;
 	}
 
 	VkSemaphore* VulkanDevice::GetCurrentRenderSemaphore()
 	{
 		if (m_cur_semaphore_id < 0 || m_cur_semaphore_id >= m_render_semaphore.size())
 			return nullptr;
-		return &m_render_semaphore[m_cur_semaphore_id].vksemaphore;
+		return &m_render_semaphore[m_cur_semaphore_id]->vksemaphore;
 	}
 }

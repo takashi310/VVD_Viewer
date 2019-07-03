@@ -142,22 +142,6 @@ namespace FLIVR
 				m_commandBuffers[dev] = dev->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 			for (auto dev : m_vulkan->devices)
 				m_seg_commandBuffers[dev] = dev->createComputeCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-
-			VkSemaphoreCreateInfo semaphoreInfo = vks::initializers::semaphoreCreateInfo();
-			for (auto dev : m_vulkan->devices)
-			{
-				VkSemaphore tmp;
-				VK_CHECK_RESULT(vkCreateSemaphore(dev->logicalDevice, &semaphoreInfo, nullptr, &tmp));
-				m_volFinishedSemaphores[dev] = tmp;
-
-				VkSemaphore tmp2;
-				VK_CHECK_RESULT(vkCreateSemaphore(dev->logicalDevice, &semaphoreInfo, nullptr, &tmp2));
-				m_filterFinishedSemaphores[dev] = tmp2;
-
-				VkSemaphore tmp3;
-				VK_CHECK_RESULT(vkCreateSemaphore(dev->logicalDevice, &semaphoreInfo, nullptr, &tmp3));
-				m_renderFinishedSemaphores[dev] = tmp3;
-			}
 		}
 
 		setupVertexDescriptions();
@@ -243,22 +227,6 @@ namespace FLIVR
 				m_commandBuffers[dev] = dev->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 			for (auto dev : m_vulkan->devices)
 				m_seg_commandBuffers[dev] = dev->createComputeCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-
-			VkSemaphoreCreateInfo semaphoreInfo = vks::initializers::semaphoreCreateInfo();
-			for (auto dev : m_vulkan->devices)
-			{
-				VkSemaphore tmp;
-				VK_CHECK_RESULT(vkCreateSemaphore(dev->logicalDevice, &semaphoreInfo, nullptr, &tmp));
-				m_volFinishedSemaphores[dev] = tmp;
-
-				VkSemaphore tmp2;
-				VK_CHECK_RESULT(vkCreateSemaphore(dev->logicalDevice, &semaphoreInfo, nullptr, &tmp2));
-				m_filterFinishedSemaphores[dev] = tmp2;
-
-				VkSemaphore tmp3;
-				VK_CHECK_RESULT(vkCreateSemaphore(dev->logicalDevice, &semaphoreInfo, nullptr, &tmp3));
-				m_renderFinishedSemaphores[dev] = tmp3;
-			}
 		}
 
 		setupVertexDescriptions();
@@ -280,14 +248,16 @@ namespace FLIVR
 
 		for (auto vdev : m_vulkan->devices)
 		{
-			m_volUniformBuffers[vdev].vert.destroy();
-			m_volUniformBuffers[vdev].frag_base.destroy();
-			m_segUniformBuffers[vdev].frag_base.destroy();
-			vkFreeCommandBuffers(vdev->logicalDevice, vdev->commandPool, 1, &m_commandBuffers[vdev]);
-			vkFreeCommandBuffers(vdev->logicalDevice, vdev->compute_commandPool, 1, &m_seg_commandBuffers[vdev]);
-			vkDestroySemaphore(vdev->logicalDevice, m_volFinishedSemaphores[vdev], nullptr);
-			vkDestroySemaphore(vdev->logicalDevice, m_filterFinishedSemaphores[vdev], nullptr);
-			vkDestroySemaphore(vdev->logicalDevice, m_renderFinishedSemaphores[vdev], nullptr);
+			if (m_vertbufs.count(vdev) > 0)
+			{
+				m_vertbufs[vdev].vertexBuffer.destroy();
+				m_vertbufs[vdev].indexBuffer.destroy();
+			}
+			if (m_volUniformBuffers.count(vdev) > 0) m_volUniformBuffers[vdev].vert.destroy();
+			if (m_volUniformBuffers.count(vdev) > 0) m_volUniformBuffers[vdev].frag_base.destroy();
+			if (m_volUniformBuffers.count(vdev) > 0) m_segUniformBuffers[vdev].frag_base.destroy();
+			if (m_commandBuffers.count(vdev) > 0) vkFreeCommandBuffers(vdev->logicalDevice, vdev->commandPool, 1, &m_commandBuffers[vdev]);
+			if (m_seg_commandBuffers.count(vdev) > 0) vkFreeCommandBuffers(vdev->logicalDevice, vdev->compute_commandPool, 1, &m_seg_commandBuffers[vdev]);
 		}
 	}
 
@@ -1474,9 +1444,9 @@ namespace FLIVR
 		const std::unique_ptr<vks::VFrameBuffer>& framebuf,
 		bool clear_framebuf,
 		bool draw_wireframe_p, bool interactive_mode_p,
-		bool orthographic_p, double zoom, int mode, double sampling_frq_fac)
+		bool orthographic_p, double zoom, int mode, double sampling_frq_fac, VkClearColorValue clearColor)
 	{
-		draw_volume(framebuf, clear_framebuf, interactive_mode_p, orthographic_p, zoom, mode, sampling_frq_fac);
+		draw_volume(framebuf, clear_framebuf, interactive_mode_p, orthographic_p, zoom, mode, sampling_frq_fac, clearColor);
 		//if(draw_wireframe_p)
 		//	draw_wireframe(orthographic_p);
 	}
@@ -1484,7 +1454,7 @@ namespace FLIVR
 	void VolumeRenderer::draw_volume(
 		const std::unique_ptr<vks::VFrameBuffer>& framebuf,
 		bool clear_framebuf,
-		bool interactive_mode_p, bool orthographic_p, double zoom, int mode, double sampling_frq_fac)
+		bool interactive_mode_p, bool orthographic_p, double zoom, int mode, double sampling_frq_fac, VkClearColorValue clearColor)
 	{
 		if (!tex_ || !m_vulkan)
 			return;
@@ -2174,6 +2144,7 @@ namespace FLIVR
 			params.signalSemaphores = semfinal.signalSemaphores;
 
 			params.clear = clear_framebuf;
+			params.clearColor = clearColor;
 
 			framebuf->replaceRenderPass(params.pipeline.pass);
 			

@@ -24,6 +24,7 @@ namespace vks
 {	
 	class VTexture;
 	class VFrameBuffer;
+	class VSemaphore;
 	struct TexParam;
 	struct VulkanSemaphoreSettings;
 	
@@ -88,7 +89,7 @@ namespace vks
 		int GenTexture3D_pool(VkFormat format, VkFilter filter, FLIVR::TextureBrick *b, int comp);
 
 		//semaphores
-		std::vector<vks::VSemaphore> m_render_semaphore;
+		std::vector<std::unique_ptr<vks::VSemaphore>> m_render_semaphore;
 		int m_cur_semaphore_id;
 
 		void ResetRenderSemaphores();
@@ -1025,6 +1026,8 @@ namespace vks
 		}
 		VSemaphore(VulkanDevice *dev) 
 		{
+			device = nullptr;
+			vksemaphore = VK_NULL_HANDLE;
 			init(dev);
 		}
 		~VSemaphore()

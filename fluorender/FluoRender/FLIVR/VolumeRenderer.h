@@ -302,9 +302,6 @@ public:
 		std::map<vks::VulkanDevice*, SegShaderFactory::SegUniformBufs> m_segUniformBuffers;
 		std::map<vks::VulkanDevice*, VkCommandBuffer> m_commandBuffers;
 		std::map<vks::VulkanDevice*, VkCommandBuffer> m_seg_commandBuffers;
-		std::map<vks::VulkanDevice*, VkSemaphore> m_volFinishedSemaphores;
-		std::map<vks::VulkanDevice*, VkSemaphore> m_filterFinishedSemaphores;
-		std::map<vks::VulkanDevice*, VkSemaphore> m_renderFinishedSemaphores;
 		
 		struct Vertex {
 			float pos[3];
@@ -333,7 +330,8 @@ public:
 			bool orthographic_p = false,
 			double zoom = 1.0,
 			int mode = 0,
-			double sampling_frq_fac = -1.0
+			double sampling_frq_fac = -1.0,
+			VkClearColorValue clearColor = { 0.0f, 0.0f, 0.0f, 0.0f }
 		);
 		void draw_volume(
 			const std::unique_ptr<vks::VFrameBuffer>& framebuf,
@@ -342,7 +340,8 @@ public:
 			bool orthographic_p = false,
 			double zoom = 1.0,
 			int mode = 0,
-			double sampling_frq_fac = -1.0
+			double sampling_frq_fac = -1.0,
+			VkClearColorValue clearColor = { 0.0f, 0.0f, 0.0f, 0.0f }
 		);
 		//type: 0-initial; 1-diffusion-based growing; 2-masked filtering
 		//paint_mode: 1-select; 2-append; 3-erase; 4-diffuse; 5-flood; 6-clear; 7-all;

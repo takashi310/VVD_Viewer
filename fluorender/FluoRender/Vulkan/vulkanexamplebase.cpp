@@ -181,8 +181,11 @@ VkPipelineShaderStageCreateInfo VulkanExampleBase::loadShader(std::string fileNa
 
 void VulkanExampleBase::prepareFrame()
 {
+	vulkanDevice->ResetRenderSemaphores();
+	VkSemaphore* present_complete = vulkanDevice->GetNextRenderSemaphore();
+
 	// Acquire the next image from the swap chain
-	VkResult err = swapChain.acquireNextImage(semaphores.presentComplete, &currentBuffer);
+	VkResult err = swapChain.acquireNextImage(present_complete ? *present_complete : semaphores.presentComplete, &currentBuffer);
 	// Recreate the swapchain if it's no longer compatible with the surface (OUT_OF_DATE) or no longer optimal for presentation (SUBOPTIMAL)
 	if ((err == VK_ERROR_OUT_OF_DATE_KHR) || (err == VK_SUBOPTIMAL_KHR)) {
 		windowResize();
@@ -194,7 +197,9 @@ void VulkanExampleBase::prepareFrame()
 
 void VulkanExampleBase::submitFrame()
 {
-	VkResult res = swapChain.queuePresent(queue, currentBuffer, semaphores.renderComplete);
+	VkSemaphore* render_complete = vulkanDevice->GetCurrentRenderSemaphore();
+
+	VkResult res = swapChain.queuePresent(queue, currentBuffer, render_complete ? *render_complete : semaphores.renderComplete);
 	if (!((res == VK_SUCCESS) || (res == VK_SUBOPTIMAL_KHR))) {
 		if (res == VK_ERROR_OUT_OF_DATE_KHR) {
 			// Swap chain is no longer compatible with the surface and needs to be recreated

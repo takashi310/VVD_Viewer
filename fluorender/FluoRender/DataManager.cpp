@@ -2397,7 +2397,7 @@ void VolumeData::SetMatrices(glm::mat4 &mv_mat,
 //draw volume
 void VolumeData::Draw(
 	std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf,
-	bool ortho, bool interactive, double zoom, double sampling_frq_fac)
+	bool ortho, bool interactive, double zoom, double sampling_frq_fac, VkClearColorValue clearColor)
 {
 	if (m_vr)
 	{
@@ -2408,7 +2408,7 @@ void VolumeData::Draw(
 			SetLevel(GetMaskLv());
 		}
 		
-		m_vr->draw(framebuf, clear_framebuf, m_test_wiref, interactive, ortho, zoom, m_stream_mode, sampling_frq_fac);
+		m_vr->draw(framebuf, clear_framebuf, m_test_wiref, interactive, ortho, zoom, m_stream_mode, sampling_frq_fac, clearColor);
 		
 		if ( isBrxml() && (m_vr->is_mask_active() || m_vr->is_label_active()) )
 			SetLevel(curlv);
@@ -2535,20 +2535,20 @@ void VolumeData::Calculate(int type, VolumeData *vd_a, VolumeData *vd_b)
 }
 
 //set 2d mask for segmentation
-void VolumeData::Set2dMask(GLuint mask)
+void VolumeData::Set2dMask(std::shared_ptr<vks::VTexture>& mask)
 {
 	m_2d_mask = mask;
 }
 
 //set 2d weight map for segmentation
-void VolumeData::Set2DWeight(GLuint weight1, GLuint weight2)
+void VolumeData::Set2DWeight(std::shared_ptr<vks::VTexture>& weight1, std::shared_ptr<vks::VTexture>& weight2)
 {
 	m_2d_weight1 = weight1;
 	m_2d_weight2 = weight2;
 }
 
 //set 2d depth map for rendering shadows
-void VolumeData::Set2dDmap(GLuint dmap)
+void VolumeData::Set2dDmap(std::shared_ptr<vks::VTexture>& dmap)
 {
 	m_2d_dmap = dmap;
 	if (m_vr)

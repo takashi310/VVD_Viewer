@@ -1050,8 +1050,6 @@ void VRenderVulkanView::Draw()
 	int nx = m_nx;
 	int ny = m_ny;
 
-	m_vulkan->prepareFrame();
-
 	//gradient background
 	if (m_grad_bg)
 	{
@@ -1115,8 +1113,6 @@ void VRenderVulkanView::Draw()
 
 		m_mv_mat = mv_temp;
 	}
-
-	m_vulkan->submitFrame();
 
 	m_draw_overlays_only = false;
 }
@@ -4233,9 +4229,6 @@ void VRenderVulkanView::DrawOVER(VolumeData* vd, std::unique_ptr<vks::VFrameBuff
 		vd->Draw(fb, clear, !m_persp, m_interactive, m_scale_factor, sampling_frq_fac);
 	}
 
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
 	if (vd->GetShadow() && vd->GetVR()->get_done_loop(0))
 	{
 		vector<VolumeData*> list;
@@ -4386,8 +4379,6 @@ void VRenderVulkanView::DrawMIP(VolumeData* vd, std::unique_ptr<vks::VFrameBuffe
 			(TextureRenderer::get_mem_swap() &&
 			TextureRenderer::get_clear_chan_buffer()))
 		{
-			glClearColor(0.0, 0.0, 0.0, 0.0);
-			glClear(GL_COLOR_BUFFER_BIT);
 			TextureRenderer::reset_clear_chan_buffer();
 			clear = true;
 		}
@@ -4459,7 +4450,7 @@ void VRenderVulkanView::DrawMIP(VolumeData* vd, std::unique_ptr<vks::VFrameBuffe
 
 	if (shading && vd->GetVR()->get_done_loop(1))
 	{
-		DrawOLShading(vd);
+		DrawOLShading(vd, fb);
 	}
 
 	if (shadow && vd->GetVR()->get_done_loop(2))
@@ -4515,7 +4506,7 @@ void VRenderVulkanView::DrawMIP(VolumeData* vd, std::unique_ptr<vks::VFrameBuffe
 	vd->SetColormapMode(color_mode);
 }
 
-void VRenderVulkanView::DrawOLShading(VolumeData* vd)
+void VRenderVulkanView::DrawOLShading(VolumeData* vd, std::unique_ptr<vks::VFrameBuffer>& fb)
 {
 	if (TextureRenderer::get_mem_swap() &&
 		TextureRenderer::get_start_update_loop() &&
@@ -4534,11 +4525,6 @@ void VRenderVulkanView::DrawOLShading(VolumeData* vd)
 	}
 
 	//shading pass
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_ol1);
-	glClearColor(1.0, 1.0, 1.0, 1.0);
-	glClear(GL_COLOR_BUFFER_BIT);
-	
 	vd->GetVR()->set_shading(true);
 	vd->SetMode(2);
 	int colormode = vd->GetColormapMode();
@@ -4546,40 +4532,27 @@ void VRenderVulkanView::DrawOLShading(VolumeData* vd)
 	vd->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
 	vd->SetFog(m_use_fog, m_fog_intensity, m_fog_start, m_fog_end);
 	double sampling_frq_fac = 2 / min(m_ortho_right-m_ortho_left, m_ortho_top-m_ortho_bottom);
-	vd->Draw(!m_persp, m_interactive, m_scale_factor, sampling_frq_fac);
+	VkClearColorValue clear_color = { 1.0, 1.0, 1.0, 1.0 };
+	vd->Draw(m_fbo_ol1, true, !m_persp, m_interactive, m_scale_factor, sampling_frq_fac, clear_color);
 	vd->RestoreMode();
 	vd->SetColormapMode(colormode);
 
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glClearColor(0.0, 0.0, 0.0, 0.0);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
 	//bind fbo for final composition
-	glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, m_tex_ol1);
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_ZERO, GL_SRC_COLOR);
-	//glBlendEquation(GL_MIN);
-	glDisable(GL_DEPTH_TEST);
+	Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 
-	ShaderProgram* img_shader =
-		m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
-	if (img_shader)
-	{
-		if (!img_shader->valid())
-			img_shader->create();
-		img_shader->bind();
-	}
-	DrawViewQuad();
-	if (img_shader && img_shader->valid())
-		img_shader->release();
+	params.clear = true;
+	params.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHADER_TEXTURE_LOOKUP,
+			V2DRENDER_BLEND_SHADE_SHADOW,
+			fb->attachments[0]->format,
+			fb->attachments.size(),
+			0,
+			fb->attachments[0]->is_swapchain_images);
+	params.tex[0] = m_tex_ol1.get();
 
-	glBlendEquation(GL_FUNC_ADD);
-	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	fb->replaceRenderPass(params.pipeline.pass);
+	m_v2drender->render(fb, params);
 }
 
 //get mesh shadow
@@ -4619,114 +4592,77 @@ bool VRenderVulkanView::GetMeshShadow(double &val)
 	return false;
 }
 
-void VRenderVulkanView::DrawOLShadowsMesh(GLuint tex_depth, double darkness)
+void VRenderVulkanView::DrawOLShadowsMesh(const std::shared_ptr<vks::VTexture>& tex_depth, double darkness)
 {
 	int nx, ny;
 	nx = m_nx;
 	ny = m_ny;
 
-	//shadow pass
-	if (!glIsFramebuffer(m_fbo_ol2))
-	{
-		glGenFramebuffers(1, &m_fbo_ol2);
-		if (!glIsTexture(m_tex_ol2))
-			glGenTextures(1, &m_tex_ol2);
-		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_ol2);
-		glBindTexture(GL_TEXTURE_2D, m_tex_ol2);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-			GL_RGBA, GL_FLOAT, NULL);
-		glFramebufferTexture2D(GL_FRAMEBUFFER,
-			GL_COLOR_ATTACHMENT0,
-			GL_TEXTURE_2D, m_tex_ol2, 0);
-	}
+	vks::VulkanDevice* prim_dev = m_vulkan->vulkanDevice;
 
-	if (m_resize_ol2)
+	if (m_fbo_ol2 && m_fbo_ol2->w != nx || m_fbo_ol2->h != ny)
 	{
-		glBindTexture(GL_TEXTURE_2D, m_tex_ol2);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-			GL_RGBA, GL_FLOAT, NULL);
-		m_resize_ol2 = false;
+		m_fbo_ol2.reset();
+		m_tex_ol2.reset();
 	}
+	if (!m_fbo_ol2)
+	{
+		m_fbo_ol2 = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+		m_fbo_ol2->w = m_nx;
+		m_fbo_ol2->h = m_ny;
+		m_fbo_ol2->device = prim_dev;
 
+		m_tex_ol2 = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+		m_fbo_ol2->addAttachment(m_tex_ol2);
+	}
+	
 	//bind the fbo
-	glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_ol2);
-	glClearColor(1.0, 1.0, 1.0, 1.0);
-	glClear(GL_COLOR_BUFFER_BIT);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, tex_depth);
-	glDisable(GL_BLEND);
-	glDisable(GL_DEPTH_TEST);
+	Vulkan2dRender::V2DRenderParams params_ol2 = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 
-	//2d adjustment
-	ShaderProgram* img_shader =
-		m_img_shader_factory.shader(IMG_SHDR_DEPTH_TO_GRADIENT);
-	if (img_shader)
-	{
-		if (!img_shader->valid())
-		{
-			img_shader->create();
-		}
-		img_shader->bind();
-	}
-	img_shader->setLocalParam(0, 1.0/nx, 1.0/ny, m_persp?2e10:1e6, 0.0);
+	params_ol2.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_DEPTH_TO_GRADIENT,
+			V2DRENDER_BLEND_DISABLE,
+			m_fbo_ol2->attachments[0]->format,
+			m_fbo_ol2->attachments.size(),
+			0,
+			m_fbo_ol2->attachments[0]->is_swapchain_images);
+	params_ol2.tex[0] = tex_depth.get();
+	
 	double dir_x = 0.0, dir_y = 0.0;
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (vr_frame && vr_frame->GetSettingDlg())
 		vr_frame->GetSettingDlg()->GetShadowDir(dir_x, dir_y);
-	img_shader->setLocalParam(1, dir_x, dir_y, 0.0, 0.0);
-	//2d adjustment
 
-	DrawViewQuad();
+	params_ol2.loc[0] = { 1.0f/nx, 1.0f/ny, m_persp ? 2e10f : 1e6f, 0.0f };
+	params_ol2.loc[1] = { (float)dir_x, (float)dir_y, 0.0f, 0.0f };
 
-	if (img_shader && img_shader->valid())
-	{
-		img_shader->release();
-	}
+	params_ol2.clear = true;
+	params_ol2.clearColor = { 1.0, 1.0, 1.0, 1.0 };
 
+	m_fbo_ol2->replaceRenderPass(params_ol2.pipeline.pass);
+	m_v2drender->render(m_fbo_ol2, params_ol2);
+	
 	//
 	//bind fbo for final composition
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, m_tex_ol2);
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_ZERO, GL_SRC_COLOR);
-	glDisable(GL_DEPTH_TEST);
+	Vulkan2dRender::V2DRenderParams params_final = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 
-	//2d adjustment
-	img_shader =
-		m_img_shader_factory.shader(IMG_SHDR_GRADIENT_TO_SHADOW_MESH);
-	if (img_shader)
-	{
-		if (!img_shader->valid())
-			img_shader->create();
-		img_shader->bind();
-	}
-	img_shader->setLocalParam(0, 1.0/nx, 1.0/ny, max(m_scale_factor, 1.0), 0.0);
-	img_shader->setLocalParam(1, darkness, 0.0, 0.0, 0.0);
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, tex_depth);
-	glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_2D, m_tex_final);
-	//2d adjustment
+	params_final.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_GRADIENT_TO_SHADOW_MESH,
+			V2DRENDER_BLEND_SHADE_SHADOW,
+			m_vulkan->frameBuffers[m_vulkan->currentBuffer]->attachments[0]->format,
+			m_vulkan->frameBuffers[m_vulkan->currentBuffer]->attachments.size(),
+			0,
+			m_vulkan->frameBuffers[m_vulkan->currentBuffer]->attachments[0]->is_swapchain_images);
+	params_final.tex[0] = m_tex_ol2.get();
+	params_final.tex[1] = tex_depth.get();
+	params_final.tex[2] = m_tex_final.get();
+	params_final.loc[0] = { 1.0f/nx, 1.0f/ny, max(m_scale_factor, 1.0), 0.0f };
+	params_final.loc[1] = { (float)darkness, 0.0f, 0.0f, 0.0f };
 
-	DrawViewQuad();
-
-	if (img_shader && img_shader->valid())
-	{
-		img_shader->release();
-	}
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, 0);
-
-	glBlendEquation(GL_FUNC_ADD);
-	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-	glEnable(GL_DEPTH_TEST);
+	m_vulkan->frameBuffers[m_vulkan->currentBuffer]->replaceRenderPass(params_final.pipeline.pass);
+	m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params_final);
 }
 
 void VRenderVulkanView::DrawOLShadows(vector<VolumeData*> &vlist, std::unique_ptr<vks::VFrameBuffer>& fb)
@@ -4761,46 +4697,36 @@ void VRenderVulkanView::DrawOLShadows(vector<VolumeData*> &vlist, std::unique_pt
 	nx = m_nx;
 	ny = m_ny;
 
+	vks::VulkanDevice* prim_dev = m_vulkan->vulkanDevice;
+	
 	//gradient pass
-	if (!glIsFramebuffer(m_fbo_ol1))
+	if (m_fbo_ol1 && m_fbo_ol1->w != nx || m_fbo_ol1->h != ny)
 	{
-		glGenFramebuffers(1, &m_fbo_ol1);
-		if (!glIsTexture(m_tex_ol1))
-			glGenTextures(1, &m_tex_ol1);
-		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_ol1);
-		glBindTexture(GL_TEXTURE_2D, m_tex_ol1);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-			GL_RGBA, GL_FLOAT, NULL);
-		glFramebufferTexture2D(GL_FRAMEBUFFER,
-			GL_COLOR_ATTACHMENT0,
-			GL_TEXTURE_2D, m_tex_ol1, 0);
+		m_fbo_ol1.reset();
+		m_tex_ol1.reset();
 	}
-
-	if (m_resize_ol1)
+	if (!m_fbo_ol1)
 	{
-		glBindTexture(GL_TEXTURE_2D, m_tex_ol1);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-			GL_RGBA, GL_FLOAT, NULL);
-		m_resize_ol1 = false;
-	}
+		m_fbo_ol1 = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+		m_fbo_ol1->w = m_nx;
+		m_fbo_ol1->h = m_ny;
+		m_fbo_ol1->device = prim_dev;
 
-	glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_ol1);
+		m_tex_ol1 = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+		m_fbo_ol1->addAttachment(m_tex_ol1);
+	}
+	
+	bool clear = false;
 	if (!TextureRenderer::get_mem_swap() ||
 		(TextureRenderer::get_mem_swap() &&
 		TextureRenderer::get_clear_chan_buffer()))
 	{
-		glClearColor(1.0, 1.0, 1.0, 1.0);
-		glClear(GL_COLOR_BUFFER_BIT);
 		TextureRenderer::reset_clear_chan_buffer();
+		clear = true;
 	}
-	glDisable(GL_BLEND);
-	glDisable(GL_DEPTH_TEST);
 
 	double shadow_darkness = 0.0;
+	VkClearColorValue clear_color = { 1.0, 1.0, 1.0, 1.0 };
 
 	if (vlist.size() == 1 && vlist[0]->GetShadow())
 	{
@@ -4823,7 +4749,7 @@ void VRenderVulkanView::DrawOLShadows(vector<VolumeData*> &vlist, std::unique_pt
 			vd->GetTexture()->set_sort_bricks();
 			vd->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
 			vd->SetFog(m_use_fog, m_fog_intensity, m_fog_start, m_fog_end);
-			vd->Draw(!m_persp, m_interactive, m_scale_factor, sampling_frq_fac);
+			vd->Draw(m_fbo_ol1, clear, !m_persp, m_interactive, m_scale_factor, sampling_frq_fac, clear_color);
 			//restore
 			vd->RestoreMode();
 			vd->SetColormapMode(colormode);
@@ -4895,112 +4821,73 @@ void VRenderVulkanView::DrawOLShadows(vector<VolumeData*> &vlist, std::unique_pt
 		TextureRenderer::set_update_order(uporder);
 	}
 
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
 	//
 	if (!TextureRenderer::get_mem_swap() ||
 		(TextureRenderer::get_mem_swap() &&
 		TextureRenderer::get_clear_chan_buffer()))
 	{
-		//shadow pass
-		if (!glIsFramebuffer(m_fbo_ol2))
+		if (m_fbo_ol2 && m_fbo_ol2->w != nx || m_fbo_ol2->h != ny)
 		{
-			glGenFramebuffers(1, &m_fbo_ol2);
-			if (!glIsTexture(m_tex_ol2))
-				glGenTextures(1, &m_tex_ol2);
-			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_ol2);
-			glBindTexture(GL_TEXTURE_2D, m_tex_ol2);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-				GL_RGBA, GL_FLOAT, NULL);
-			glFramebufferTexture2D(GL_FRAMEBUFFER,
-				GL_COLOR_ATTACHMENT0,
-				GL_TEXTURE_2D, m_tex_ol2, 0);
+			m_fbo_ol2.reset();
+			m_tex_ol2.reset();
 		}
-
-		if (m_resize_ol2)
+		if (!m_fbo_ol2)
 		{
-			glBindTexture(GL_TEXTURE_2D, m_tex_ol2);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-				GL_RGBA, GL_FLOAT, NULL);
-			m_resize_ol2 = false;
+			m_fbo_ol2 = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+			m_fbo_ol2->w = m_nx;
+			m_fbo_ol2->h = m_ny;
+			m_fbo_ol2->device = prim_dev;
+
+			m_tex_ol2 = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+			m_fbo_ol2->addAttachment(m_tex_ol2);
 		}
 
 		//bind the fbo
-		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_ol2);
-		glClearColor(1.0, 1.0, 1.0, 1.0);
-		glClear(GL_COLOR_BUFFER_BIT);
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, m_tex_ol1);
-		glDisable(GL_BLEND);
-		glDisable(GL_DEPTH_TEST);
+		Vulkan2dRender::V2DRenderParams params_ol2 = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 
-		//2d adjustment
-		ShaderProgram* img_shader =
-			m_img_shader_factory.shader(IMG_SHDR_DEPTH_TO_GRADIENT);
-		if (img_shader)
-		{
-			if (!img_shader->valid())
-				img_shader->create();
-			img_shader->bind();
-		}
-		img_shader->setLocalParam(0, 1.0/nx, 1.0/ny, m_persp?2e10:1e6, 0.0);
+		params_ol2.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHDR_DEPTH_TO_GRADIENT,
+				V2DRENDER_BLEND_DISABLE,
+				m_fbo_ol2->attachments[0]->format,
+				m_fbo_ol2->attachments.size(),
+				0,
+				m_fbo_ol2->attachments[0]->is_swapchain_images);
+		params_ol2.tex[0] = m_tex_ol1.get();
+
 		double dir_x = 0.0, dir_y = 0.0;
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 		if (vr_frame && vr_frame->GetSettingDlg())
 			vr_frame->GetSettingDlg()->GetShadowDir(dir_x, dir_y);
-		img_shader->setLocalParam(1, dir_x, dir_y, 0.0, 0.0);
-		//2d adjustment
 
-		DrawViewQuad();
+		params_ol2.loc[0] = { 1.0f / nx, 1.0f / ny, m_persp ? 2e10f : 1e6f, 0.0f };
+		params_ol2.loc[1] = { (float)dir_x, (float)dir_y, 0.0f, 0.0f };
 
-		if (img_shader && img_shader->valid())
-			img_shader->release();
+		params_ol2.clear = true;
+		params_ol2.clearColor = { 1.0f, 1.0f, 1.0f, 1.0f };
 
-		glBindTexture(GL_TEXTURE_2D, 0);
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		m_fbo_ol2->replaceRenderPass(params_ol2.pipeline.pass);
+		m_v2drender->render(m_fbo_ol2, params_ol2);
 
 		//bind fbo for final composition
-		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, m_tex_ol2);
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_ZERO, GL_SRC_COLOR);
-		glDisable(GL_DEPTH_TEST);
+		Vulkan2dRender::V2DRenderParams params_final = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 
-		//2d adjustment
-		img_shader =
-			m_img_shader_factory.shader(IMG_SHDR_GRADIENT_TO_SHADOW);
-		if (img_shader)
-		{
-			if (!img_shader->valid())
-				img_shader->create();
-			img_shader->bind();
-		}
-		img_shader->setLocalParam(0, 1.0/nx, 1.0/ny, max(m_scale_factor, 1.0), 0.0);
-		img_shader->setLocalParam(1, shadow_darkness, 0.0, 0.0, 0.0);
-		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D, tex);
-		//2d adjustment
+		params_final.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHDR_GRADIENT_TO_SHADOW,
+				V2DRENDER_BLEND_SHADE_SHADOW,
+				fb->attachments[0]->format,
+				fb->attachments.size(),
+				0,
+				fb->attachments[0]->is_swapchain_images);
+		params_final.tex[0] = m_tex_ol2.get();
+		params_final.tex[1] = fb->attachments[0].get();
+		params_final.loc[0] = { 1.0f / nx, 1.0f / ny, max(m_scale_factor, 1.0), 0.0f };
+		params_final.loc[1] = { (float)shadow_darkness, 0.0f, 0.0f, 0.0f };
 
-		DrawViewQuad();
-
-		if (img_shader && img_shader->valid())
-			img_shader->release();
-
-		glBindTexture(GL_TEXTURE_2D, 0);
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		fb->replaceRenderPass(params_final.pipeline.pass);
+		m_v2drender->render(fb, params_final);
 	}
-
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, 0);
-
-	glActiveTexture(GL_TEXTURE0);
-	glBlendEquation(GL_FUNC_ADD);
 }
 
 //draw multi volumes with depth consideration
@@ -5074,55 +4961,44 @@ void VRenderVulkanView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 	nx = m_nx;
 	ny = m_ny;
 
+	vks::VulkanDevice* prim_dev = m_vulkan->vulkanDevice;
+	if (TextureRenderer::get_mem_swap() && m_fbo_temp && (m_fbo_temp->w != m_nx || m_fbo_temp->h != m_ny))
+	{
+		m_fbo_temp.reset();
+		m_tex_temp.reset();
+	}
+	if (TextureRenderer::get_mem_swap() && !m_fbo_temp)
+	{
+		m_fbo_temp = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+		m_fbo_temp->w = m_nx;
+		m_fbo_temp->h = m_ny;
+		m_fbo_temp->device = prim_dev;
+
+		m_tex_temp = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+		m_fbo_temp->addAttachment(m_tex_temp);
+	}
+
 	if (TextureRenderer::get_mem_swap() &&
 		TextureRenderer::get_start_update_loop() &&
 		TextureRenderer::get_save_final_buffer())
 	{
 		TextureRenderer::reset_save_final_buffer();
 
-		if (glIsFramebuffer(m_fbo_temp)!=GL_TRUE)
-		{
-			glGenFramebuffers(1, &m_fbo_temp);
-			if (glIsTexture(m_tex_temp)!=GL_TRUE)
-				glGenTextures(1, &m_tex_temp);
-			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_temp);
-			//color buffer for each volume
-			glBindTexture(GL_TEXTURE_2D, m_tex_temp);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-				GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-			glFramebufferTexture2D(GL_FRAMEBUFFER,
-				GL_COLOR_ATTACHMENT0,
-				GL_TEXTURE_2D, m_tex_temp, 0);
-		}
-		else
-			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_temp);
+		Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 
-		glClearColor(0.0, 0.0, 0.0, 0.0);
-		glClear(GL_COLOR_BUFFER_BIT);
-		glActiveTexture(GL_TEXTURE0);
-		glEnable(GL_TEXTURE_2D);
-		glBindTexture(GL_TEXTURE_2D, m_tex_final);
-		glDisable(GL_BLEND);
-		glDisable(GL_DEPTH_TEST);
+		params.clear = true;
+		params.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHADER_TEXTURE_LOOKUP,
+				V2DRENDER_BLEND_OVER,
+				m_fbo_temp->attachments[0]->format,
+				m_fbo_temp->attachments.size(),
+				0,
+				m_fbo_temp->attachments[0]->is_swapchain_images);
+		params.tex[0] = m_tex_final.get();
 
-		img_shader =
-			m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
-		if (img_shader)
-		{
-			if (!img_shader->valid())
-				img_shader->create();
-			img_shader->bind();
-		}
-		DrawViewQuad();
-		if (img_shader && img_shader->valid())
-			img_shader->release();
-
-		glBindTexture(GL_TEXTURE_2D, 0);
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		m_fbo_temp->replaceRenderPass(params.pipeline.pass);
+		m_v2drender->render(m_fbo_temp, params);
 	}
 
 	if (!doMulti && !(shadow && doShadow))
@@ -5132,58 +5008,35 @@ void VRenderVulkanView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 
 	//generate textures & buffer objects
 	//frame buffer for each volume
-	if (glIsFramebuffer(m_fbo)!=GL_TRUE)
+	if (m_fbo && (m_fbo->w != nx || m_fbo->h != ny))
 	{
-		glGenFramebuffers(1, &m_fbo);
-		//fbo
-		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-		//color buffer/texture for each volume
-		if (glIsTexture(m_tex)!=GL_TRUE)
-			glGenTextures(1, &m_tex);
-		//color buffer for each volume
-		glBindTexture(GL_TEXTURE_2D, m_tex);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-			GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-		glFramebufferTexture2D(GL_FRAMEBUFFER,
-			GL_COLOR_ATTACHMENT0,
-			GL_TEXTURE_2D, m_tex, 0);
+		m_fbo.reset();
+		m_tex.reset();
 	}
-	if (use_tex_wt2)
+	if (use_tex_wt2 && m_fbo_wt2 && (m_fbo_wt2->w != nx || m_fbo_wt2->h != ny))
 	{
-		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-		if (glIsTexture(m_tex_wt2)!=GL_TRUE)
-			glGenTextures(1, &m_tex_wt2);
-		//color buffer for current segmented volume
-		glBindTexture(GL_TEXTURE_2D, m_tex_wt2);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-			GL_RGBA, GL_FLOAT, NULL);
-		glFramebufferTexture2D(GL_FRAMEBUFFER,
-			GL_COLOR_ATTACHMENT0,
-			GL_TEXTURE_2D, m_tex_wt2, 0);
+		m_fbo_wt2.reset();
+		m_tex_wt2.reset();
 	}
+	if (!m_fbo)
+	{
+		m_fbo = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+		m_fbo->w = m_nx;
+		m_fbo->h = m_ny;
+		m_fbo->device = prim_dev;
 
-	if (m_resize)
+		m_tex = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+		m_fbo->addAttachment(m_tex);
+	}
+	if (use_tex_wt2 && !m_fbo_wt2)
 	{
-		if (use_tex_wt2)
-		{
-			glBindTexture(GL_TEXTURE_2D, m_tex_wt2);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-				GL_RGBA, GL_FLOAT, NULL);
-		}
-		else
-		{
-			glBindTexture(GL_TEXTURE_2D, m_tex);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-				GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-		}
+		m_fbo_wt2 = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+		m_fbo_wt2->w = m_nx;
+		m_fbo_wt2->h = m_ny;
+		m_fbo_wt2->device = prim_dev;
+
+		m_tex_wt2 = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+		m_fbo_wt2->addAttachment(m_tex_wt2);
 	}
 
 	if (doMulti)
@@ -5204,70 +5057,45 @@ void VRenderVulkanView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 		m_mvr->draw(m_test_wiref, m_interactive, !m_persp, m_scale_factor, m_intp, sampling_frq_fac);
 	}
 
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
 	if (shadow && doShadow && vrfirst && vrfirst->get_done_loop(0))
 	{
 		//draw shadows
-		DrawOLShadows(list, use_tex_wt2?m_tex_wt2:m_tex);
+		DrawOLShadows(list, use_tex_wt2 ? m_fbo_wt2 : m_fbo);
 	}
 
 	//bind fbo for final composition
-	glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_final);
-
-	if (TextureRenderer::get_mem_swap() && glIsFramebuffer(m_fbo_temp) == GL_TRUE && glIsTexture(m_tex_temp) == GL_TRUE)
+	if (TextureRenderer::get_mem_swap() && m_fbo_temp && m_tex_temp)
 	{
 		//restore m_fbo_temp to m_fbo_final
-		glClearColor(0.0, 0.0, 0.0, 0.0);
-		glClear(GL_COLOR_BUFFER_BIT);
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, m_tex_temp);
-		glDisable(GL_BLEND);
-		glDisable(GL_DEPTH_TEST);
+		Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 
-		img_shader =
-			m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
-		if (img_shader)
-		{
-			if (!img_shader->valid())
-				img_shader->create();
-			img_shader->bind();
-		}
-		DrawViewQuad();
-		if (img_shader && img_shader->valid())
-			img_shader->release();
+		params.clear = true;
+		params.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHADER_TEXTURE_LOOKUP,
+				V2DRENDER_BLEND_OVER,
+				m_fbo_final->attachments[0]->format,
+				m_fbo_final->attachments.size(),
+				0,
+				m_fbo_final->attachments[0]->is_swapchain_images);
+		params.tex[0] = m_tex_temp.get();
 
-		glBindTexture(GL_TEXTURE_2D, 0);
+		m_fbo_final->replaceRenderPass(params.pipeline.pass);
+		m_v2drender->render(m_fbo_final, params);
 	}
 
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, use_tex_wt2?m_tex_wt2:m_tex);
-	//build mipmap
-	glGenerateMipmap(GL_TEXTURE_2D);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-	glEnable(GL_BLEND);
-//	if (m_vol_method == VOL_METHOD_COMP)
-//		glBlendFunc(GL_ONE, GL_ONE);
-//	else
-	{
-		if (TextureRenderer::get_update_order() == 0)
-			glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-		else if (TextureRenderer::get_update_order() == 1)
-			glBlendFunc(GL_ONE_MINUS_DST_ALPHA, GL_ONE);
-	}
-	glDisable(GL_DEPTH_TEST);
+	Vulkan2dRender::V2DRenderParams params_final = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 
-	//2d adjustment
-	img_shader = m_img_shader_factory.shader(IMG_SHDR_BRIGHTNESS_CONTRAST_HDR);
-	if (img_shader)
-	{
-		if (!img_shader->valid())
-		{
-			img_shader->create();
-		}
-		img_shader->bind();
-	}
+	params_final.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_BRIGHTNESS_CONTRAST_HDR,
+			TextureRenderer::get_update_order() == 0 ? V2DRENDER_BLEND_OVER : V2DRENDER_BLEND_OVER_INV,
+			m_fbo_final->attachments[0]->format,
+			m_fbo_final->attachments.size(),
+			0,
+			m_fbo_final->attachments[0]->is_swapchain_images);
+	params_final.tex[0] = use_tex_wt2 ? m_fbo_wt2->attachments[0].get() : m_fbo->attachments[0].get();
+	
 	Color gamma, brightness, hdr;
 	if (m_vol_method == VOL_METHOD_MULTI)
 	{
@@ -5282,27 +5110,12 @@ void VRenderVulkanView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 		brightness = vd->GetBrightness();
 		hdr = vd->GetHdr();
 	}
-	img_shader->setLocalParam(0, gamma.r(), gamma.g(), gamma.b(), 1.0);
-	img_shader->setLocalParam(1, brightness.r(), brightness.g(), brightness.b(), 1.0);
-	img_shader->setLocalParam(2, hdr.r(), hdr.g(), hdr.b(), 0.0);
-	//2d adjustment
+	params_final.loc[0] = glm::vec4((float)gamma.r(), (float)gamma.g(), (float)gamma.b(), 1.0f);
+	params_final.loc[1] = glm::vec4((float)brightness.r(), (float)brightness.g(), (float)brightness.b(), 1.0f);
+	params_final.loc[2] = glm::vec4((float)hdr.r(), (float)hdr.g(), (float)hdr.b(), 0.0f);
 
-	DrawViewQuad();
-
-	if (img_shader && img_shader->valid())
-		img_shader->release();
-
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-	if (use_tex_wt2)
-	{
-		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-		glFramebufferTexture2D(GL_FRAMEBUFFER,
-			GL_COLOR_ATTACHMENT0,
-			GL_TEXTURE_2D, m_tex, 0);
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	}
+	m_fbo_final->replaceRenderPass(params_final.pipeline.pass);
+	m_v2drender->render(m_fbo_final, params_final);
 }
 
 void VRenderVulkanView::SetBrush(int mode)
@@ -7217,7 +7030,8 @@ void VRenderVulkanView::OnDraw(wxPaintEvent& event)
 	Init();
 	wxPaintDC dc(this);
 	
-	ResetRenderSemaphores();
+	m_vulkan->ResetRenderSemaphores();
+	m_vulkan->prepareFrame();
 
 	//SetEvtHandlerEnabled(false);
 	m_nx = GetSize().x;
@@ -7298,6 +7112,8 @@ void VRenderVulkanView::OnDraw(wxPaintEvent& event)
 	if (m_tile_rendering && m_current_tileid >= m_tile_xnum*m_tile_ynum) {
 		EndTileRendering();
 	}
+
+	m_vulkan->submitFrame();
 
 	//SetEvtHandlerEnabled(true);
 }

@@ -166,55 +166,55 @@ VulkanCanvas::VulkanCanvas(wxWindow *pParent,
 	dbgstr = wxString::Format("draw_mask time: %lld\n", ed_time-st_time);
 	OutputDebugStringA(dbgstr.ToStdString().c_str());
 	
+	//////////////////////
+	//m_vulkan->vulkanDevice->clear_tex_pool();
+	//st_time = milliseconds_now();
+
+	//DrawMask();
+
+	//ed_time = milliseconds_now();
+	//dbgstr = wxString::Format("draw_mask time: %lld\n", ed_time - st_time);
+	//OutputDebugStringA(dbgstr.ToStdString().c_str());
+
+	//////////////////////
+	//st_time = milliseconds_now();
+
+	//DrawMask();
+
+	//ed_time = milliseconds_now();
+	//dbgstr = wxString::Format("draw_mask time: %lld\n", ed_time - st_time);
+	//OutputDebugStringA(dbgstr.ToStdString().c_str());
+
+	/////////////////////
+	//st_time = milliseconds_now();
+	//
+	//m_vr->return_mask();
+
+	//ed_time = milliseconds_now();
+	//dbgstr = wxString::Format("return_mask time: %lld\n", ed_time - st_time);
+	//OutputDebugStringA(dbgstr.ToStdString().c_str());
+
+	/////////////////////
+	//vector<FLIVR::TextureBrick*>* bricks = m_vol->get_bricks();
+	//int c = m_vol->nmask();
+	//for (unsigned int i = 0; i < bricks->size(); i++)
+	//{
+	//	FLIVR::TextureBrick* b = (*bricks)[i];
+	//	b->set_dirty(c, true);
+	//}
+
+	//st_time = milliseconds_now();
+
+	//m_vr->return_mask();
+
+	//ed_time = milliseconds_now();
+	//dbgstr = wxString::Format("return_mask time: %lld\n", ed_time - st_time);
+	//OutputDebugStringA(dbgstr.ToStdString().c_str());
+
 	////////////////////
-	m_vulkan->vulkanDevice->clear_tex_pool();
-	st_time = milliseconds_now();
-
-	DrawMask();
-
-	ed_time = milliseconds_now();
-	dbgstr = wxString::Format("draw_mask time: %lld\n", ed_time - st_time);
-	OutputDebugStringA(dbgstr.ToStdString().c_str());
-
-	////////////////////
-	st_time = milliseconds_now();
-
-	DrawMask();
-
-	ed_time = milliseconds_now();
-	dbgstr = wxString::Format("draw_mask time: %lld\n", ed_time - st_time);
-	OutputDebugStringA(dbgstr.ToStdString().c_str());
-
-	///////////////////
-	st_time = milliseconds_now();
-	
-	m_vr->return_mask();
-
-	ed_time = milliseconds_now();
-	dbgstr = wxString::Format("return_mask time: %lld\n", ed_time - st_time);
-	OutputDebugStringA(dbgstr.ToStdString().c_str());
-
-	///////////////////
-	vector<FLIVR::TextureBrick*>* bricks = m_vol->get_bricks();
-	int c = m_vol->nmask();
-	for (unsigned int i = 0; i < bricks->size(); i++)
-	{
-		FLIVR::TextureBrick* b = (*bricks)[i];
-		b->set_dirty(c, true);
-	}
-
-	st_time = milliseconds_now();
-
-	m_vr->return_mask();
-
-	ed_time = milliseconds_now();
-	dbgstr = wxString::Format("return_mask time: %lld\n", ed_time - st_time);
-	OutputDebugStringA(dbgstr.ToStdString().c_str());
-
-	//////////////////
-	NRRDWriter writer;
-	writer.SetData( m_vol->get_nrrd(m_vol->nmask()) );
-	writer.Save(L"mask.nrrd", 0);
+	//NRRDWriter writer;
+	//writer.SetData( m_vol->get_nrrd(m_vol->nmask()) );
+	//writer.Save(L"mask.nrrd", 0);
 
     m_startTime = std::chrono::high_resolution_clock::now();
     m_timer = std::make_unique<wxTimer>(this, TIMERNUMBER);
@@ -636,14 +636,8 @@ void VulkanCanvas::OnPaint(wxPaintEvent& event)
 		
 		m_vr->set_matrices(m_mv_mat, m_proj_mat, m_tex_mat);
 
-		FLIVR::VolumeRenderer::VSemaphoreSettings semaphores = {};
-		semaphores.signalSemaphoreCount = 1;
-		semaphores.signalSemaphores = &m_vulkan->semaphores.renderComplete;
-		semaphores.waitSemaphoreCount = 1;
-		semaphores.waitSemaphores = &m_vulkan->semaphores.presentComplete;
-		semaphores.wait_before_brk_rendering = false;
 		m_vr->set_ml_mode(1);
-		m_vr->draw(m_vulkan->frameBuffers[m_vulkan->currentBuffer], true, semaphores, false, false, !m_persp, m_scale_factor, 0, sampling_frq_fac);
+		m_vr->draw(m_vulkan->frameBuffers[m_vulkan->currentBuffer], true, false, false, !m_persp, m_scale_factor, 0, sampling_frq_fac);
 
 		m_vulkan->submitFrame();
     }

@@ -406,7 +406,15 @@ public:
 
 	//draw volume
 	void SetMatrices(glm::mat4 &mv_mat, glm::mat4 &proj_mat, glm::mat4 &tex_mat);
-	void Draw(std::unique_ptr<vks::VFrameBuffer> &framebuf, bool clear_framebuf, bool otho = false, bool intactive = false, double zoom = 1.0, double sampling_frq_fac = -1.0);
+	void Draw(
+		std::unique_ptr<vks::VFrameBuffer> &framebuf,
+		bool clear_framebuf,
+		bool otho = false,
+		bool intactive = false,
+		double zoom = 1.0,
+		double sampling_frq_fac = -1.0,
+		VkClearColorValue clearColor = {0.0f, 0.0f, 0.0f, 0.0f}
+	);
 	void DrawBounds();
 	//draw mask (create the mask)
 	//type: 0-initial; 1-diffusion-based growing
@@ -428,11 +436,11 @@ public:
 	void Calculate(int type, VolumeData* vd_a, VolumeData* vd_b);
 
 	//set 2d mask for segmentation
-	void Set2dMask(GLuint mask);
+	void Set2dMask(std::shared_ptr<vks::VTexture>& mask);
 	//set 2d weight map for segmentation
-	void Set2DWeight(GLuint weight1, GLuint weight2);
+	void Set2DWeight(std::shared_ptr<vks::VTexture>& weight1, std::shared_ptr<vks::VTexture>& weight2);
 	//set 2d depth map for rendering shadows
-	void Set2dDmap(GLuint dmap);
+	void Set2dDmap(std::shared_ptr<vks::VTexture>& dmap);
 
 	//properties
 	//transfer function
@@ -731,13 +739,13 @@ private:
 	int m_blend_mode;	//0: ignore; 1: layered; 2: depth; 3: composite
 
 	//2d mask texture for segmentation
-	GLuint m_2d_mask;
+	std::shared_ptr<vks::VTexture> m_2d_mask;
 	//2d weight map for segmentation
-	GLuint m_2d_weight1;	//after tone mapping
-	GLuint m_2d_weight2;	//before tone mapping
+	std::shared_ptr<vks::VTexture> m_2d_weight1;	//after tone mapping
+	std::shared_ptr<vks::VTexture> m_2d_weight2;	//before tone mapping
 
 	//2d depth map texture for rendering shadows
-	GLuint m_2d_dmap;
+	std::shared_ptr<vks::VTexture> m_2d_dmap;
 
 	//reader
 	BaseReader *m_reader;

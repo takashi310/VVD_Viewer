@@ -35,6 +35,11 @@ Vulkan2dRender::~Vulkan2dRender()
 			vkDestroyRenderPass(dev, p.pass, nullptr);
 		}
 
+		m_vertexBuffer.destroy();
+		m_indexBuffer.destroy();
+		m_dyn_vertexBuffer.destroy();
+		m_dyn_indexBuffer.destroy();
+
 		vkFreeCommandBuffers(dev, m_vulkan->vulkanDevice->commandPool, 1, &m_default_cmdbuf);
 	}
 }
@@ -312,20 +317,35 @@ Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blen
 	
 	//blend mode
 	VkBool32 enable_blend;
+	VkBlendOp blend_op;
 	VkBlendFactor src_blend, dst_blend;
 	switch(blend_mode)
 	{
 	case V2DRENDER_BLEND_OVER:
 		enable_blend = VK_TRUE;
+		blend_op = VK_BLEND_OP_ADD;
 		src_blend = VK_BLEND_FACTOR_ONE;
 		dst_blend = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
 		break;
+	case V2DRENDER_BLEND_OVER_INV:
+		enable_blend = VK_TRUE;
+		blend_op = VK_BLEND_OP_ADD;
+		src_blend = VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+		dst_blend = VK_BLEND_FACTOR_ONE;
+		break;
 	case V2DRENDER_BLEND_ADD:
 		enable_blend = VK_TRUE;
+		blend_op = VK_BLEND_OP_ADD;
 		src_blend = VK_BLEND_FACTOR_ONE;
 		dst_blend = VK_BLEND_FACTOR_ONE;
+	case V2DRENDER_BLEND_SHADE_SHADOW:
+		enable_blend = VK_TRUE;
+		blend_op = VK_BLEND_OP_MIN;
+		src_blend = VK_BLEND_FACTOR_ZERO;
+		dst_blend = VK_BLEND_FACTOR_SRC_COLOR;
 	default:
 		enable_blend = VK_FALSE;
+		blend_op = VK_BLEND_OP_ADD;
 		src_blend = VK_BLEND_FACTOR_ONE;
 		dst_blend = VK_BLEND_FACTOR_ZERO;
 	}
@@ -333,7 +353,7 @@ Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blen
 	VkPipelineColorBlendAttachmentState blendAttachmentState =
 		vks::initializers::pipelineColorBlendAttachmentState(
 		enable_blend,
-		VK_BLEND_OP_ADD,
+		blend_op,
 		src_blend,
 		dst_blend,
 		0xf);

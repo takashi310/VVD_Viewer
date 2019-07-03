@@ -1151,9 +1151,9 @@ private:
 	void DrawMIP(VolumeData* vd, std::unique_ptr<vks::VFrameBuffer> &fb, int peel=0, double sampling_frq_fac = -1.0);
 	void DrawOVER(VolumeData* vd, std::unique_ptr<vks::VFrameBuffer>& fb, int peel=0, double sampling_frq_fac = -1.0);
 	//overlay passes
-	void DrawOLShading(VolumeData* vd);
+	void DrawOLShading(VolumeData* vd, std::unique_ptr<vks::VFrameBuffer>& fb);
 	void DrawOLShadows(vector<VolumeData*> &vlist, std::unique_ptr<vks::VFrameBuffer>& fb);
-	void DrawOLShadowsMesh(GLuint tex_depth, double darkenss);
+	void DrawOLShadowsMesh(const std::shared_ptr<vks::VTexture>& tex_depth, double darkenss);
 	
 	void StartTileRendering(int w, int h, int tilew, int tileh);
 	void EndTileRendering();
