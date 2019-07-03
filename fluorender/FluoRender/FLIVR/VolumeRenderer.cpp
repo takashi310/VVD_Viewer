@@ -253,11 +253,17 @@ namespace FLIVR
 				m_vertbufs[vdev].vertexBuffer.destroy();
 				m_vertbufs[vdev].indexBuffer.destroy();
 			}
-			if (m_volUniformBuffers.count(vdev) > 0) m_volUniformBuffers[vdev].vert.destroy();
-			if (m_volUniformBuffers.count(vdev) > 0) m_volUniformBuffers[vdev].frag_base.destroy();
-			if (m_volUniformBuffers.count(vdev) > 0) m_segUniformBuffers[vdev].frag_base.destroy();
-			if (m_commandBuffers.count(vdev) > 0) vkFreeCommandBuffers(vdev->logicalDevice, vdev->commandPool, 1, &m_commandBuffers[vdev]);
-			if (m_seg_commandBuffers.count(vdev) > 0) vkFreeCommandBuffers(vdev->logicalDevice, vdev->compute_commandPool, 1, &m_seg_commandBuffers[vdev]);
+			if (m_volUniformBuffers.count(vdev) > 0)
+			{
+				m_volUniformBuffers[vdev].vert.destroy();
+				m_volUniformBuffers[vdev].frag_base.destroy();
+			}
+			if (m_segUniformBuffers.count(vdev) > 0) 
+				m_segUniformBuffers[vdev].frag_base.destroy();
+			if (m_commandBuffers.count(vdev) > 0) 
+				vkFreeCommandBuffers(vdev->logicalDevice, vdev->commandPool, 1, &m_commandBuffers[vdev]);
+			if (m_seg_commandBuffers.count(vdev) > 0) 
+				vkFreeCommandBuffers(vdev->logicalDevice, vdev->compute_commandPool, 1, &m_seg_commandBuffers[vdev]);
 		}
 	}
 
