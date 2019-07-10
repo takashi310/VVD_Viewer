@@ -32,8 +32,8 @@
 #include <FLIVR/VolCalShader.h>
 #include <FLIVR/ShaderProgram.h>
 #include <FLIVR/TextureBrick.h>
-//#include <FLIVR/KernelProgram.h>
-//#include <FLIVR/VolKernel.h>
+#include <FLIVR/KernelProgram.h>
+#include <FLIVR/VolKernel.h>
 #include "utility.h"
 #include "../compatibility.h"
 #include <fstream>
@@ -65,6 +65,8 @@ namespace FLIVR
 	std::vector<VolumeRenderer::VSegPipeline> VolumeRenderer::m_seg_pipelines;
 	
 	std::vector<VolumeRenderer::VCalPipeline> VolumeRenderer::m_cal_pipelines;
+
+	VolKernelFactory TextureRenderer::vol_kernel_factory_;
 
 
 	VolumeRenderer::VolumeRenderer(Texture* tex,
@@ -273,7 +275,8 @@ namespace FLIVR
 		{
 			for (auto dev : m_vulkan->devices)
 			{
-				m_vol_draw_pass[dev] = prepareRenderPass(dev, 1);
+				if (m_vol_draw_pass.count(dev) == 0)
+					m_vol_draw_pass[dev] = prepareRenderPass(dev, 1);
 			}
 		}
 	}

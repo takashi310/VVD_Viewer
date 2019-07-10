@@ -19,18 +19,19 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #ifdef _WIN32
-#include <vtkVersion.h>
-#include <vtkSmartPointer.h>
-#include <vtkImageImport.h>
-#include <vtkFlyingEdges3D.h>
-#include <vtkImageData.h>
-#include <vtkFloatArray.h>
-#include <vtkDoubleArray.h>
-#include <vtkPoints.h>
-#include <vtkPolyData.h>
-#include <vtkPolyDataNormals.h>
-#include <vtkPointData.h>
-#include <vtkCellData.h>
+//
+//#include <vtkVersion.h>
+//#include <vtkSmartPointer.h>
+//#include <vtkImageImport.h>
+//#include <vtkFlyingEdges3D.h>
+//#include <vtkImageData.h>
+//#include <vtkFloatArray.h>
+//#include <vtkDoubleArray.h>
+//#include <vtkPoints.h>
+//#include <vtkPolyData.h>
+//#include <vtkPolyDataNormals.h>
+//#include <vtkPointData.h>
+//#include <vtkCellData.h>
 
 #include <omp.h>
 #  undef min
@@ -2450,7 +2451,7 @@ void VolumeData::DrawMask(int type, int paint_mode, int hr_mode,
 
 void VolumeData::DrawMaskThreshold(float th, bool ortho)
 {
-	if (m_vr)
+	/*if (m_vr)
 	{
 		int curlv = -1;
 		if (isBrxml())
@@ -2463,14 +2464,14 @@ void VolumeData::DrawMaskThreshold(float th, bool ortho)
 
 		if (isBrxml())
 			SetLevel(curlv);
-	}
+	}*/
 }
 
 void VolumeData::DrawMaskDSLT(int type, int paint_mode, int hr_mode,
 							  double ini_thresh, double gm_falloff, double scl_falloff, double scl_translate,
 							  double w2d, double bins, int dslt_r, int dslt_q, double dslt_c, bool ortho)
 {
-	if (m_vr)
+	/*if (m_vr)
 	{
 		int curlv = -1;
 		if (isBrxml())
@@ -2484,7 +2485,7 @@ void VolumeData::DrawMaskDSLT(int type, int paint_mode, int hr_mode,
 
 		if (isBrxml())
 			SetLevel(curlv);
-	}
+	}*/
 }
 
 //draw label (create the label)
@@ -3240,146 +3241,146 @@ bool VolumeData::isBrxml()
 MeshData *VolumeData::ExportMeshMask()
 {
     MeshData *result = NULL;
-    
-#ifdef _WIN32
-    
-	if (!m_tex || m_tex->nmask() == -1) return NULL;
-
-	int curlv = -1;
-	if (isBrxml())
-	{
-		curlv = GetLevel();
-		SetLevel(GetMaskLv());
-	}
-	
-	m_vr->return_mask();
-	
-	Nrrd *nrrd = m_tex->get_nrrd(m_tex->nmask());
-	double spcx = 1.0, spcy = 1.0, spcz = 1.0;
-	GetSpacings(spcx, spcy, spcz);
-	size_t res_x = m_tex->nx();
-	size_t res_y = m_tex->ny();
-	size_t res_z = m_tex->nz();
-
-	vtkSmartPointer<vtkImageImport> imageImport = vtkSmartPointer<vtkImageImport>::New();
-	imageImport->SetDataSpacing(spcx, spcy, spcz);
-	imageImport->SetDataOrigin(0, 0, 0);
-	imageImport->SetWholeExtent(0, res_x-1, 0, res_y-1, 0, res_z-1);
-	imageImport->SetDataExtentToWholeExtent();
-	imageImport->SetDataScalarTypeToUnsignedChar();
-	imageImport->SetNumberOfScalarComponents(1);
-	imageImport->SetImportVoidPointer(nrrd->data);
-	imageImport->Update();
-	vtkSmartPointer<vtkImageData> volume = imageImport->GetOutput();
-
-	vtkSmartPointer<vtkFlyingEdges3D> surface = vtkSmartPointer<vtkFlyingEdges3D>::New();
-	surface->SetInputData(imageImport->GetOutput());
-	surface->ComputeNormalsOn();
-	surface->SetValue(0, 0.5);
-	surface->Update();
-/*	vtkSmartPointer<vtkPolyDataNormals> normalGenerator = vtkSmartPointer<vtkPolyDataNormals>::New();
-	normalGenerator->SetInputData(surface->GetOutput());
-	normalGenerator->ComputePointNormalsOn();
-	normalGenerator->ComputeCellNormalsOff();
-	normalGenerator->SetOutputPointsPrecision(vtkAlgorithm::DesiredOutputPrecision::SINGLE_PRECISION);
-	normalGenerator->Update();
-	vtkSmartPointer<vtkPolyData> mesh = normalGenerator->GetOutput();
-*/	
-	vtkSmartPointer<vtkPolyData> mesh = surface->GetOutput();
-
-	//Convert to MeshData
-	vtkSmartPointer<vtkPoints> points = mesh->GetPoints();
-	vtkSmartPointer<vtkCellArray> faces = mesh->GetPolys();
-	vtkSmartPointer<vtkFloatArray> normals = vtkFloatArray::SafeDownCast(mesh->GetPointData()->GetNormals());
-	float *raw_normals = normals->GetPointer(0); 
-	
-	vtkIdType vnum = points->GetNumberOfPoints();
-	vtkIdType fnum = faces->GetNumberOfCells();
-
-	GLMmodel *model = (GLMmodel*)malloc(sizeof(GLMmodel));
-	GLfloat *verts = (GLfloat*)malloc(sizeof(GLfloat)*vnum*3);
-	GLfloat *norms = (GLfloat*)malloc(sizeof(GLfloat)*vnum*3);
-	GLMtriangle *tris = (GLMtriangle*)malloc(sizeof(GLMtriangle)*fnum);
-	GLuint *gtris = (GLuint*)malloc(sizeof(GLuint)*fnum);
-
-	#pragma omp parallel
-	{
-		#pragma omp for
-		for (int i = 0; i < vnum; i++)
-		{
-			double v[3];
-			points->GetPoint(i, v);
-			verts[3*i  ] = (GLfloat)v[0];
-			verts[3*i+1] = (GLfloat)v[1];
-			verts[3*i+2] = (GLfloat)v[2];
-			norms[3*i  ] = raw_normals[3*i  ];
-			norms[3*i+1] = raw_normals[3*i+1];
-			norms[3*i+2] = raw_normals[3*i+2];
-		}
-
-		#pragma omp for
-		for (vtkIdType i = 0; i < fnum; i++)
-		{
-			vtkIdType numIds;
-			vtkIdType *pointIds;
-
-			faces->GetCell(4*i, numIds, pointIds);
-
-			if (numIds != 3)
-				break;
-
-			tris[i].vindices[0] = pointIds[0];
-			tris[i].nindices[0] = pointIds[0];
-			tris[i].vindices[1] = pointIds[1];
-			tris[i].nindices[1] = pointIds[1];
-			tris[i].vindices[2] = pointIds[2];
-			tris[i].nindices[2] = pointIds[2];
-			gtris[i] = i;
-		}
-	}
-
-	model->pathname    = STRDUP(m_name.ToStdString().c_str());
-	model->mtllibname    = NULL;
-	model->numvertices   = vnum;
-	model->vertices    = verts;
-	model->numnormals    = fnum;
-	model->normals     = norms;
-	model->numtexcoords  = 0;
-	model->texcoords       = NULL;
-	model->numfacetnorms = 0;
-	model->facetnorms    = NULL;
-	model->numtriangles  = fnum;
-	model->triangles       = tris;
-	model->numlines = 0;
-	model->lines = NULL;
-	model->nummaterials  = 0;
-	model->materials       = NULL;
-	model->numgroups       = 0;
-	model->groups      = NULL;
-	model->position[0]   = 0.0;
-	model->position[1]   = 0.0;
-	model->position[2]   = 0.0;
-	model->hastexture = GL_FALSE;
-	
-	GLMgroup* group;
-	group = (GLMgroup*)malloc(sizeof(GLMgroup));
-	group->name = STRDUP("default");
-	group->material = 0;
-	group->numtriangles = fnum;
-	group->triangles = gtris;
-	group->next = model->groups;
-	model->groups = group;
-	model->numgroups++;
-
-	result = new MeshData();
-	result->Load(model);
-	wxString newname = m_name + wxT("_MeshMask");
-	result->SetName(newname);
-    
-#endif
-
-	if (isBrxml())
-		SetLevel(curlv);
+//    
+//#ifdef _WIN32
+//    
+//	if (!m_tex || m_tex->nmask() == -1) return NULL;
+//
+//	int curlv = -1;
+//	if (isBrxml())
+//	{
+//		curlv = GetLevel();
+//		SetLevel(GetMaskLv());
+//	}
+//	
+//	m_vr->return_mask();
+//	
+//	Nrrd *nrrd = m_tex->get_nrrd(m_tex->nmask());
+//	double spcx = 1.0, spcy = 1.0, spcz = 1.0;
+//	GetSpacings(spcx, spcy, spcz);
+//	size_t res_x = m_tex->nx();
+//	size_t res_y = m_tex->ny();
+//	size_t res_z = m_tex->nz();
+//
+//	vtkSmartPointer<vtkImageImport> imageImport = vtkSmartPointer<vtkImageImport>::New();
+//	imageImport->SetDataSpacing(spcx, spcy, spcz);
+//	imageImport->SetDataOrigin(0, 0, 0);
+//	imageImport->SetWholeExtent(0, res_x-1, 0, res_y-1, 0, res_z-1);
+//	imageImport->SetDataExtentToWholeExtent();
+//	imageImport->SetDataScalarTypeToUnsignedChar();
+//	imageImport->SetNumberOfScalarComponents(1);
+//	imageImport->SetImportVoidPointer(nrrd->data);
+//	imageImport->Update();
+//	vtkSmartPointer<vtkImageData> volume = imageImport->GetOutput();
+//
+//	vtkSmartPointer<vtkFlyingEdges3D> surface = vtkSmartPointer<vtkFlyingEdges3D>::New();
+//	surface->SetInputData(imageImport->GetOutput());
+//	surface->ComputeNormalsOn();
+//	surface->SetValue(0, 0.5);
+//	surface->Update();
+///*	vtkSmartPointer<vtkPolyDataNormals> normalGenerator = vtkSmartPointer<vtkPolyDataNormals>::New();
+//	normalGenerator->SetInputData(surface->GetOutput());
+//	normalGenerator->ComputePointNormalsOn();
+//	normalGenerator->ComputeCellNormalsOff();
+//	normalGenerator->SetOutputPointsPrecision(vtkAlgorithm::DesiredOutputPrecision::SINGLE_PRECISION);
+//	normalGenerator->Update();
+//	vtkSmartPointer<vtkPolyData> mesh = normalGenerator->GetOutput();
+//*/	
+//	vtkSmartPointer<vtkPolyData> mesh = surface->GetOutput();
+//
+//	//Convert to MeshData
+//	vtkSmartPointer<vtkPoints> points = mesh->GetPoints();
+//	vtkSmartPointer<vtkCellArray> faces = mesh->GetPolys();
+//	vtkSmartPointer<vtkFloatArray> normals = vtkFloatArray::SafeDownCast(mesh->GetPointData()->GetNormals());
+//	float *raw_normals = normals->GetPointer(0); 
+//	
+//	vtkIdType vnum = points->GetNumberOfPoints();
+//	vtkIdType fnum = faces->GetNumberOfCells();
+//
+//	GLMmodel *model = (GLMmodel*)malloc(sizeof(GLMmodel));
+//	GLfloat *verts = (GLfloat*)malloc(sizeof(GLfloat)*vnum*3);
+//	GLfloat *norms = (GLfloat*)malloc(sizeof(GLfloat)*vnum*3);
+//	GLMtriangle *tris = (GLMtriangle*)malloc(sizeof(GLMtriangle)*fnum);
+//	GLuint *gtris = (GLuint*)malloc(sizeof(GLuint)*fnum);
+//
+//	#pragma omp parallel
+//	{
+//		#pragma omp for
+//		for (int i = 0; i < vnum; i++)
+//		{
+//			double v[3];
+//			points->GetPoint(i, v);
+//			verts[3*i  ] = (GLfloat)v[0];
+//			verts[3*i+1] = (GLfloat)v[1];
+//			verts[3*i+2] = (GLfloat)v[2];
+//			norms[3*i  ] = raw_normals[3*i  ];
+//			norms[3*i+1] = raw_normals[3*i+1];
+//			norms[3*i+2] = raw_normals[3*i+2];
+//		}
+//
+//		#pragma omp for
+//		for (vtkIdType i = 0; i < fnum; i++)
+//		{
+//			vtkIdType numIds;
+//			vtkIdType *pointIds;
+//
+//			faces->GetCell(4*i, numIds, pointIds);
+//
+//			if (numIds != 3)
+//				break;
+//
+//			tris[i].vindices[0] = pointIds[0];
+//			tris[i].nindices[0] = pointIds[0];
+//			tris[i].vindices[1] = pointIds[1];
+//			tris[i].nindices[1] = pointIds[1];
+//			tris[i].vindices[2] = pointIds[2];
+//			tris[i].nindices[2] = pointIds[2];
+//			gtris[i] = i;
+//		}
+//	}
+//
+//	model->pathname    = STRDUP(m_name.ToStdString().c_str());
+//	model->mtllibname    = NULL;
+//	model->numvertices   = vnum;
+//	model->vertices    = verts;
+//	model->numnormals    = fnum;
+//	model->normals     = norms;
+//	model->numtexcoords  = 0;
+//	model->texcoords       = NULL;
+//	model->numfacetnorms = 0;
+//	model->facetnorms    = NULL;
+//	model->numtriangles  = fnum;
+//	model->triangles       = tris;
+//	model->numlines = 0;
+//	model->lines = NULL;
+//	model->nummaterials  = 0;
+//	model->materials       = NULL;
+//	model->numgroups       = 0;
+//	model->groups      = NULL;
+//	model->position[0]   = 0.0;
+//	model->position[1]   = 0.0;
+//	model->position[2]   = 0.0;
+//	model->hastexture = GL_FALSE;
+//	
+//	GLMgroup* group;
+//	group = (GLMgroup*)malloc(sizeof(GLMgroup));
+//	group->name = STRDUP("default");
+//	group->material = 0;
+//	group->numtriangles = fnum;
+//	group->triangles = gtris;
+//	group->next = model->groups;
+//	model->groups = group;
+//	model->numgroups++;
+//
+//	result = new MeshData();
+//	result->Load(model);
+//	wxString newname = m_name + wxT("_MeshMask");
+//	result->SetName(newname);
+//    
+//#endif
+//
+//	if (isBrxml())
+//		SetLevel(curlv);
     
     return result;
 }

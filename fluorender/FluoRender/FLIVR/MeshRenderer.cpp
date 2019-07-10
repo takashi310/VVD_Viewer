@@ -198,291 +198,291 @@ namespace FLIVR
 
 	void MeshRenderer::draw()
 	{
-		if (!data_ || !data_->vertices || !data_->triangles)
-			return;
+		//if (!data_ || !data_->vertices || !data_->triangles)
+		//	return;
 
-		//set up vertex array object
-		if (update_)
-		{
-			update();
-			update_ = false;
-		}
-        
-        if (!glIsBuffer(m_vbo))
-            glGenBuffers(1, &m_vbo);
-        if (!glIsVertexArray(m_vao))
-            glGenVertexArrays(1, &m_vao);
+		////set up vertex array object
+		//if (update_)
+		//{
+		//	update();
+		//	update_ = false;
+		//}
+  //      
+  //      if (!glIsBuffer(m_vbo))
+  //          glGenBuffers(1, &m_vbo);
+  //      if (!glIsVertexArray(m_vao))
+  //          glGenVertexArrays(1, &m_vao);
 
-		GLint vp[4];
-		glGetIntegerv(GL_VIEWPORT, vp);
+		//GLint vp[4];
+		//glGetIntegerv(GL_VIEWPORT, vp);
 
-		ShaderProgram* shader = 0;
+		//ShaderProgram* shader = 0;
 
-		glBindVertexArray(m_vao);
-		glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-		glEnableVertexAttribArray(0);
+		//glBindVertexArray(m_vao);
+		//glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+		//glEnableVertexAttribArray(0);
 
-		GLMgroup* group = data_->groups;
-		GLint pos = 0;
-		bool tex = data_->hastexture==GL_TRUE;
-		while (group)
-		{
-			if (group->numtriangles == 0)
-			{
-				group = group->next;
-				continue;
-			}
+		//GLMgroup* group = data_->groups;
+		//GLint pos = 0;
+		//bool tex = data_->hastexture==GL_TRUE;
+		//while (group)
+		//{
+		//	if (group->numtriangles == 0)
+		//	{
+		//		group = group->next;
+		//		continue;
+		//	}
 
-            
-            
-			//set up shader
-			shader = msh_shader_factory_.shader(0,
-				depth_peel_, tex, fog_, light_);
-			if (shader)
-			{
-				if (!shader->valid())
-					shader->create();
-				shader->bind();
-			}
-			//uniforms
-			shader->setLocalParamMatrix(0, glm::value_ptr(m_proj_mat));
-			shader->setLocalParamMatrix(1, glm::value_ptr(m_mv_mat));
-			if (light_)
-			{
-				glm::mat4 normal_mat = glm::mat4(glm::inverseTranspose(glm::mat3(m_mv_mat)));
-				shader->setLocalParamMatrix(2, glm::value_ptr(normal_mat));
-				GLMmaterial* material = &data_->materials[group->material];
-				if (material)
-				{
-					shader->setLocalParam(0, material->ambient[0], material->ambient[1], material->ambient[2], material->ambient[3]);
-					shader->setLocalParam(1, material->diffuse[0], material->diffuse[1], material->diffuse[2], material->diffuse[3]);
-					shader->setLocalParam(2, material->specular[0], material->specular[1], material->specular[2], material->specular[3]);
-					shader->setLocalParam(3, material->shininess, alpha_, 0.0, 0.0);
-				}
-			}
-			else
-			{//color
-				GLMmaterial* material = &data_->materials[group->material];
-				if (material)
-					shader->setLocalParam(0, material->diffuse[0], material->diffuse[1], material->diffuse[2], material->diffuse[3]);
-				else
-					shader->setLocalParam(0, 1.0, 0.0, 0.0, 1.0);//color
-				shader->setLocalParam(3, 0.0, alpha_, 0.0, 0.0);//alpha
-			}
-			if (tex)
-			{
-				GLMmaterial* material = &data_->materials[group->material];
-				if (material)
-				{
-					glActiveTexture(GL_TEXTURE0);
-					glBindTexture(GL_TEXTURE_2D,
-						material->textureID);
-				}
-			}
-			if (fog_)
-				shader->setLocalParam(8, m_fog_intensity, m_fog_start, m_fog_end, 0.0);
+  //          
+  //          
+		//	//set up shader
+		//	shader = msh_shader_factory_.shader(0,
+		//		depth_peel_, tex, fog_, light_);
+		//	if (shader)
+		//	{
+		//		if (!shader->valid())
+		//			shader->create();
+		//		shader->bind();
+		//	}
+		//	//uniforms
+		//	shader->setLocalParamMatrix(0, glm::value_ptr(m_proj_mat));
+		//	shader->setLocalParamMatrix(1, glm::value_ptr(m_mv_mat));
+		//	if (light_)
+		//	{
+		//		glm::mat4 normal_mat = glm::mat4(glm::inverseTranspose(glm::mat3(m_mv_mat)));
+		//		shader->setLocalParamMatrix(2, glm::value_ptr(normal_mat));
+		//		GLMmaterial* material = &data_->materials[group->material];
+		//		if (material)
+		//		{
+		//			shader->setLocalParam(0, material->ambient[0], material->ambient[1], material->ambient[2], material->ambient[3]);
+		//			shader->setLocalParam(1, material->diffuse[0], material->diffuse[1], material->diffuse[2], material->diffuse[3]);
+		//			shader->setLocalParam(2, material->specular[0], material->specular[1], material->specular[2], material->specular[3]);
+		//			shader->setLocalParam(3, material->shininess, alpha_, 0.0, 0.0);
+		//		}
+		//	}
+		//	else
+		//	{//color
+		//		GLMmaterial* material = &data_->materials[group->material];
+		//		if (material)
+		//			shader->setLocalParam(0, material->diffuse[0], material->diffuse[1], material->diffuse[2], material->diffuse[3]);
+		//		else
+		//			shader->setLocalParam(0, 1.0, 0.0, 0.0, 1.0);//color
+		//		shader->setLocalParam(3, 0.0, alpha_, 0.0, 0.0);//alpha
+		//	}
+		//	if (tex)
+		//	{
+		//		GLMmaterial* material = &data_->materials[group->material];
+		//		if (material)
+		//		{
+		//			glActiveTexture(GL_TEXTURE0);
+		//			glBindTexture(GL_TEXTURE_2D,
+		//				material->textureID);
+		//		}
+		//	}
+		//	if (fog_)
+		//		shader->setLocalParam(8, m_fog_intensity, m_fog_start, m_fog_end, 0.0);
 
-			if (depth_peel_)
-				shader->setLocalParam(7, 1.0/double(vp[2]), 1.0/double(vp[3]), 0.0, 0.0);
+		//	if (depth_peel_)
+		//		shader->setLocalParam(7, 1.0/double(vp[2]), 1.0/double(vp[3]), 0.0, 0.0);
 
-			BBox dbox = bounds_;
-			glm::mat4 gmat = glm::mat4(float(dbox.max().x()-dbox.min().x()), 0.0f, 0.0f, float(dbox.min().x()),
-									   0.0f, float(dbox.max().y()-dbox.min().y()), 0.0f, float(dbox.min().y()),
-									   0.0f, 0.0f, float(dbox.max().z()-dbox.min().z()), float(dbox.min().z()),
-									   0.0f, 0.0f, 0.0f, 1.0f);
-			glm::mat4 invmat = glm::inverseTranspose(gmat);
-			shader->setLocalParamMatrix(3, glm::value_ptr(invmat));
+		//	BBox dbox = bounds_;
+		//	glm::mat4 gmat = glm::mat4(float(dbox.max().x()-dbox.min().x()), 0.0f, 0.0f, float(dbox.min().x()),
+		//							   0.0f, float(dbox.max().y()-dbox.min().y()), 0.0f, float(dbox.min().y()),
+		//							   0.0f, 0.0f, float(dbox.max().z()-dbox.min().z()), float(dbox.min().z()),
+		//							   0.0f, 0.0f, 0.0f, 1.0f);
+		//	glm::mat4 invmat = glm::inverseTranspose(gmat);
+		//	shader->setLocalParamMatrix(3, glm::value_ptr(invmat));
 
-			//set clipping planes
-			double abcd[4];
-			planes_[0]->get(abcd);
-			shader->setLocalParam(10, abcd[0], abcd[1], abcd[2], abcd[3]);
-			planes_[1]->get(abcd);
-			shader->setLocalParam(11, abcd[0], abcd[1], abcd[2], abcd[3]);
-			planes_[2]->get(abcd);
-			shader->setLocalParam(12, abcd[0], abcd[1], abcd[2], abcd[3]);
-			planes_[3]->get(abcd);
-			shader->setLocalParam(13, abcd[0], abcd[1], abcd[2], abcd[3]);
-			planes_[4]->get(abcd);
-			shader->setLocalParam(14, abcd[0], abcd[1], abcd[2], abcd[3]);
-			planes_[5]->get(abcd);
-			shader->setLocalParam(15, abcd[0], abcd[1], abcd[2], abcd[3]);
+		//	//set clipping planes
+		//	double abcd[4];
+		//	planes_[0]->get(abcd);
+		//	shader->setLocalParam(10, abcd[0], abcd[1], abcd[2], abcd[3]);
+		//	planes_[1]->get(abcd);
+		//	shader->setLocalParam(11, abcd[0], abcd[1], abcd[2], abcd[3]);
+		//	planes_[2]->get(abcd);
+		//	shader->setLocalParam(12, abcd[0], abcd[1], abcd[2], abcd[3]);
+		//	planes_[3]->get(abcd);
+		//	shader->setLocalParam(13, abcd[0], abcd[1], abcd[2], abcd[3]);
+		//	planes_[4]->get(abcd);
+		//	shader->setLocalParam(14, abcd[0], abcd[1], abcd[2], abcd[3]);
+		//	planes_[5]->get(abcd);
+		//	shader->setLocalParam(15, abcd[0], abcd[1], abcd[2], abcd[3]);
 
-			//draw
-			glDrawArrays(GL_TRIANGLES, pos, (GLsizei)(group->numtriangles*3));
-			pos += group->numtriangles*3;
-			group = group->next;
-		}
-		glDisableVertexAttribArray(0);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindVertexArray(0);
+		//	//draw
+		//	glDrawArrays(GL_TRIANGLES, pos, (GLsizei)(group->numtriangles*3));
+		//	pos += group->numtriangles*3;
+		//	group = group->next;
+		//}
+		//glDisableVertexAttribArray(0);
+		//glBindBuffer(GL_ARRAY_BUFFER, 0);
+		//glBindVertexArray(0);
 
-		// Release shader.
-		if (shader && shader->valid())
-			shader->release();
-		//release texture
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, 0);
+		//// Release shader.
+		//if (shader && shader->valid())
+		//	shader->release();
+		////release texture
+		//glActiveTexture(GL_TEXTURE0);
+		//glBindTexture(GL_TEXTURE_2D, 0);
 	}
 
 	void MeshRenderer::draw_wireframe()
 	{
-		if (!data_ || !data_->vertices || !data_->triangles)
-			return;
+		//if (!data_ || !data_->vertices || !data_->triangles)
+		//	return;
 
-		//set up vertex array object
-		if (update_)
-		{
-			update();
-			update_ = false;
-		}
-        
-        if (!glIsBuffer(m_vbo))
-            glGenBuffers(1, &m_vbo);
-        if (!glIsVertexArray(m_vao))
-            glGenVertexArrays(1, &m_vao);
+		////set up vertex array object
+		//if (update_)
+		//{
+		//	update();
+		//	update_ = false;
+		//}
+  //      
+  //      if (!glIsBuffer(m_vbo))
+  //          glGenBuffers(1, &m_vbo);
+  //      if (!glIsVertexArray(m_vao))
+  //          glGenVertexArrays(1, &m_vao);
 
-		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-		ShaderProgram* shader = 0;
+		//ShaderProgram* shader = 0;
 
-		glBindVertexArray(m_vao);
-		glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-		glEnableVertexAttribArray(0);
+		//glBindVertexArray(m_vao);
+		//glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+		//glEnableVertexAttribArray(0);
 
-		GLMgroup* group = data_->groups;
-		GLint pos = 0;
-		int peel = 0;
-		bool tex = false;
-		bool light = false;
-		
-		//set up shader
-		shader = msh_shader_factory_.shader(0,
-			peel, tex, fog_, light);
-		if (shader)
-		{
-			if (!shader->valid())
-				shader->create();
-			shader->bind();
-		}
-		//uniforms
-		shader->setLocalParamMatrix(0, glm::value_ptr(m_proj_mat));
-		shader->setLocalParamMatrix(1, glm::value_ptr(m_mv_mat));
-		GLMmaterial* material = &data_->materials[0];
-		if (material)
-			shader->setLocalParam(0, material->diffuse[0], material->diffuse[1], material->diffuse[2], material->diffuse[3]);
-		else
-			shader->setLocalParam(0, 1.0, 0.0, 0.0, 1.0);
-		shader->setLocalParam(3, 0.0, 1.0, 0.0, 0.0);//alpha
-		if (fog_)
-			shader->setLocalParam(8, m_fog_intensity, m_fog_start, m_fog_end, 0.0);
+		//GLMgroup* group = data_->groups;
+		//GLint pos = 0;
+		//int peel = 0;
+		//bool tex = false;
+		//bool light = false;
+		//
+		////set up shader
+		//shader = msh_shader_factory_.shader(0,
+		//	peel, tex, fog_, light);
+		//if (shader)
+		//{
+		//	if (!shader->valid())
+		//		shader->create();
+		//	shader->bind();
+		//}
+		////uniforms
+		//shader->setLocalParamMatrix(0, glm::value_ptr(m_proj_mat));
+		//shader->setLocalParamMatrix(1, glm::value_ptr(m_mv_mat));
+		//GLMmaterial* material = &data_->materials[0];
+		//if (material)
+		//	shader->setLocalParam(0, material->diffuse[0], material->diffuse[1], material->diffuse[2], material->diffuse[3]);
+		//else
+		//	shader->setLocalParam(0, 1.0, 0.0, 0.0, 1.0);
+		//shader->setLocalParam(3, 0.0, 1.0, 0.0, 0.0);//alpha
+		//if (fog_)
+		//	shader->setLocalParam(8, m_fog_intensity, m_fog_start, m_fog_end, 0.0);
 
-		BBox dbox = bounds_;
-		glm::mat4 gmat = glm::mat4(float(dbox.max().x()-dbox.min().x()), 0.0f, 0.0f, float(dbox.min().x()),
-								   0.0f, float(dbox.max().y()-dbox.min().y()), 0.0f, float(dbox.min().y()),
-								   0.0f, 0.0f, float(dbox.max().z()-dbox.min().z()), float(dbox.min().z()),
-								   0.0f, 0.0f, 0.0f, 1.0f);
-		glm::mat4 invmat = glm::inverseTranspose(gmat);
-		shader->setLocalParamMatrix(3, glm::value_ptr(invmat));
+		//BBox dbox = bounds_;
+		//glm::mat4 gmat = glm::mat4(float(dbox.max().x()-dbox.min().x()), 0.0f, 0.0f, float(dbox.min().x()),
+		//						   0.0f, float(dbox.max().y()-dbox.min().y()), 0.0f, float(dbox.min().y()),
+		//						   0.0f, 0.0f, float(dbox.max().z()-dbox.min().z()), float(dbox.min().z()),
+		//						   0.0f, 0.0f, 0.0f, 1.0f);
+		//glm::mat4 invmat = glm::inverseTranspose(gmat);
+		//shader->setLocalParamMatrix(3, glm::value_ptr(invmat));
 
-		//set clipping planes
-		double abcd[4];
-		planes_[0]->get(abcd);
-		shader->setLocalParam(10, abcd[0], abcd[1], abcd[2], abcd[3]);
-		planes_[1]->get(abcd);
-		shader->setLocalParam(11, abcd[0], abcd[1], abcd[2], abcd[3]);
-		planes_[2]->get(abcd);
-		shader->setLocalParam(12, abcd[0], abcd[1], abcd[2], abcd[3]);
-		planes_[3]->get(abcd);
-		shader->setLocalParam(13, abcd[0], abcd[1], abcd[2], abcd[3]);
-		planes_[4]->get(abcd);
-		shader->setLocalParam(14, abcd[0], abcd[1], abcd[2], abcd[3]);
-		planes_[5]->get(abcd);
-		shader->setLocalParam(15, abcd[0], abcd[1], abcd[2], abcd[3]);
-		
-		while (group)
-		{
-			if (group->numtriangles == 0)
-			{
-				group = group->next;
-				continue;
-			}
+		////set clipping planes
+		//double abcd[4];
+		//planes_[0]->get(abcd);
+		//shader->setLocalParam(10, abcd[0], abcd[1], abcd[2], abcd[3]);
+		//planes_[1]->get(abcd);
+		//shader->setLocalParam(11, abcd[0], abcd[1], abcd[2], abcd[3]);
+		//planes_[2]->get(abcd);
+		//shader->setLocalParam(12, abcd[0], abcd[1], abcd[2], abcd[3]);
+		//planes_[3]->get(abcd);
+		//shader->setLocalParam(13, abcd[0], abcd[1], abcd[2], abcd[3]);
+		//planes_[4]->get(abcd);
+		//shader->setLocalParam(14, abcd[0], abcd[1], abcd[2], abcd[3]);
+		//planes_[5]->get(abcd);
+		//shader->setLocalParam(15, abcd[0], abcd[1], abcd[2], abcd[3]);
+		//
+		//while (group)
+		//{
+		//	if (group->numtriangles == 0)
+		//	{
+		//		group = group->next;
+		//		continue;
+		//	}
 
-			//draw
-			glDrawArrays(GL_TRIANGLES, pos, (GLsizei)(group->numtriangles*3));
-			pos += group->numtriangles*3;
-			group = group->next;
-		}
-		glDisableVertexAttribArray(0);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindVertexArray(0);
+		//	//draw
+		//	glDrawArrays(GL_TRIANGLES, pos, (GLsizei)(group->numtriangles*3));
+		//	pos += group->numtriangles*3;
+		//	group = group->next;
+		//}
+		//glDisableVertexAttribArray(0);
+		//glBindBuffer(GL_ARRAY_BUFFER, 0);
+		//glBindVertexArray(0);
 
-		// Release shader.
-		if (shader && shader->valid())
-			shader->release();
-		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+		//// Release shader.
+		//if (shader && shader->valid())
+		//	shader->release();
+		//glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 	}
 
 	void MeshRenderer::draw_integer(unsigned int name)
 	{
-		if (!data_ || !data_->vertices || !data_->triangles)
-			return;
+		//if (!data_ || !data_->vertices || !data_->triangles)
+		//	return;
 
-		//set up vertex array object
-		if (update_)
-		{
-			update();
-			update_ = false;
-		}
-        
-        if (!glIsBuffer(m_vbo))
-            glGenBuffers(1, &m_vbo);
-        if (!glIsVertexArray(m_vao))
-            glGenVertexArrays(1, &m_vao);
+		////set up vertex array object
+		//if (update_)
+		//{
+		//	update();
+		//	update_ = false;
+		//}
+  //      
+  //      if (!glIsBuffer(m_vbo))
+  //          glGenBuffers(1, &m_vbo);
+  //      if (!glIsVertexArray(m_vao))
+  //          glGenVertexArrays(1, &m_vao);
 
-		ShaderProgram* shader = 0;
+		//ShaderProgram* shader = 0;
 
-		glBindVertexArray(m_vao);
-		glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-		glEnableVertexAttribArray(0);
+		//glBindVertexArray(m_vao);
+		//glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+		//glEnableVertexAttribArray(0);
 
-		GLMgroup* group = data_->groups;
-		GLint pos = 0;
+		//GLMgroup* group = data_->groups;
+		//GLint pos = 0;
 
-		//set up shader
-		shader = msh_shader_factory_.shader(1,
-			0, false, false, false);
-		if (shader)
-		{
-			if (!shader->valid())
-				shader->create();
-			shader->bind();
-		}
-		//uniforms
-		shader->setLocalParamMatrix(0, glm::value_ptr(m_proj_mat));
-		shader->setLocalParamMatrix(1, glm::value_ptr(m_mv_mat));
-		shader->setLocalParamUInt(0, name);
+		////set up shader
+		//shader = msh_shader_factory_.shader(1,
+		//	0, false, false, false);
+		//if (shader)
+		//{
+		//	if (!shader->valid())
+		//		shader->create();
+		//	shader->bind();
+		//}
+		////uniforms
+		//shader->setLocalParamMatrix(0, glm::value_ptr(m_proj_mat));
+		//shader->setLocalParamMatrix(1, glm::value_ptr(m_mv_mat));
+		//shader->setLocalParamUInt(0, name);
 
-		while (group)
-		{
-			if (group->numtriangles == 0)
-			{
-				group = group->next;
-				continue;
-			}
+		//while (group)
+		//{
+		//	if (group->numtriangles == 0)
+		//	{
+		//		group = group->next;
+		//		continue;
+		//	}
 
-			//draw
-			glDrawArrays(GL_TRIANGLES, pos, (GLsizei)(group->numtriangles*3));
-			pos += group->numtriangles*3;
-			group = group->next;
-		}
-		glDisableVertexAttribArray(0);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindVertexArray(0);
+		//	//draw
+		//	glDrawArrays(GL_TRIANGLES, pos, (GLsizei)(group->numtriangles*3));
+		//	pos += group->numtriangles*3;
+		//	group = group->next;
+		//}
+		//glDisableVertexAttribArray(0);
+		//glBindBuffer(GL_ARRAY_BUFFER, 0);
+		//glBindVertexArray(0);
 
-		// Release shader.
-		if (shader && shader->valid())
-			shader->release();
+		//// Release shader.
+		//if (shader && shader->valid())
+		//	shader->release();
 	}
 
 } // namespace FLIVR

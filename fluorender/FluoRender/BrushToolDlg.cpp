@@ -835,7 +835,7 @@ void BrushToolDlg::OnBrushUndo(wxCommandEvent &event)
 	if (sel_vol && sel_vol->GetTexture())
 	{
 		sel_vol->GetTexture()->mask_undos_backward();
-		sel_vol->GetVR()->clear_tex_pool();
+		sel_vol->GetVR()->clear_tex_current_mask();
 	}
 	vr_frame->RefreshVRenderViews();
 	UpdateUndoRedo();
@@ -850,7 +850,7 @@ void BrushToolDlg::OnBrushRedo(wxCommandEvent &event)
 	if (sel_vol && sel_vol->GetTexture())
 	{
 		sel_vol->GetTexture()->mask_undos_forward();
-		sel_vol->GetVR()->clear_tex_pool();
+		sel_vol->GetVR()->clear_tex_current_mask();
 	}
 	vr_frame->RefreshVRenderViews();
 	UpdateUndoRedo();

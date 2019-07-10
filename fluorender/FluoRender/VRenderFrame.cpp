@@ -749,8 +749,7 @@ wxString VRenderFrame::CreateView(int row)
 	VRenderView* vrv = 0;
 	if (m_vrv_list.size()>0)
 	{
-		wxGLContext* sharedContext = m_vrv_list[0]->GetContext();
-		vrv = new VRenderView(this, this, wxID_ANY, sharedContext);
+		vrv = new VRenderView(this, this, wxID_ANY, m_vrv_list[0]->GetContext());
 		m_aui_mgr.AddPane(vrv, wxAuiPaneInfo().
 			Name(vrv->GetName()).Caption(vrv->GetName()).
 			Dockable(true).CloseButton(false).

@@ -670,7 +670,7 @@ VRenderVulkanView::VRenderVulkanView(wxWindow* frame,
 	SetEvtHandlerEnabled(false);
 	Freeze();
 
-	m_vulkan = make_shared<VVulkan>(VVulkan());
+	m_vulkan = make_shared<VVulkan>();
 	m_vulkan->initVulkan();
 #if defined(_WIN32)
 	m_vulkan->setWindow((HWND)GetHWND(), GetModuleHandle(NULL));
@@ -683,6 +683,8 @@ VRenderVulkanView::VRenderVulkanView(wxWindow* frame,
 	FLIVR::TextureRenderer::set_vulkan(m_vulkan, m_v2drender);
 
 	m_vulkan->ResetRenderSemaphores();
+
+	FLIVR::VolumeRenderer::init();
 
 	goTimer = new nv::Timer(10);
 	m_sb_num = "50";
@@ -2757,8 +2759,8 @@ void VRenderVulkanView::Segment()
 	m_mv_mat = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
 	//rotate object
 	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
-	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
-	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
+	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
 	//center object
 	m_mv_mat = glm::translate(m_mv_mat, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
 
@@ -5042,19 +5044,18 @@ void VRenderVulkanView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 	if (doMulti)
 	{
 		//bind the fbo
-		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
+		bool clear = false;
 		if (!TextureRenderer::get_mem_swap() ||
 			(TextureRenderer::get_mem_swap() &&
 			TextureRenderer::get_clear_chan_buffer()))
 		{
-			glClearColor(0.0, 0.0, 0.0, 0.0);
-			glClear(GL_COLOR_BUFFER_BIT);
+			clear = true;
 			TextureRenderer::reset_clear_chan_buffer();
 		}
 
 		//draw multiple volumes at the same time
 		double sampling_frq_fac = 2 / min(m_ortho_right-m_ortho_left, m_ortho_top-m_ortho_bottom);
-		m_mvr->draw(m_test_wiref, m_interactive, !m_persp, m_scale_factor, m_intp, sampling_frq_fac);
+		//m_mvr->draw(m_fbo, clear, m_test_wiref, m_interactive, !m_persp, m_scale_factor, m_intp, sampling_frq_fac);
 	}
 
 	if (shadow && doShadow && vrfirst && vrfirst->get_done_loop(0))
@@ -5291,126 +5292,112 @@ void VRenderVulkanView::Pick()
 
 void VRenderVulkanView::PickMesh()
 {
-    SetCurrent(*m_glRC);
-    
-	int i;
-	int nx = GetSize().x;
-	int ny = GetSize().y;
-	if (nx<=0 || ny<=0)
-		return;
-	wxPoint mouse_pos = ScreenToClient(wxGetMousePosition());
-	if (mouse_pos.x<0 || mouse_pos.x>=nx ||
-		mouse_pos.y<=0 || mouse_pos.y>ny)
-		return;
+	//int i;
+	//int nx = GetSize().x;
+	//int ny = GetSize().y;
+	//if (nx<=0 || ny<=0)
+	//	return;
+	//wxPoint mouse_pos = ScreenToClient(wxGetMousePosition());
+	//if (mouse_pos.x<0 || mouse_pos.x>=nx ||
+	//	mouse_pos.y<=0 || mouse_pos.y>ny)
+	//	return;
 
-	//projection
-	HandleProjection(nx, ny);
-	//Transformation
-	HandleCamera();
-	//obj
-	glm::mat4 mv_temp = m_mv_mat;
-	//translate object
-	m_mv_mat = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
-	//rotate object
-	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
-	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
-	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
-	//center object
-	m_mv_mat = glm::translate(m_mv_mat, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
+	////projection
+	//HandleProjection(nx, ny);
+	////Transformation
+	//HandleCamera();
+	////obj
+	//glm::mat4 mv_temp = m_mv_mat;
+	////translate object
+	//m_mv_mat = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
+	////rotate object
+	//m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
+	//m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+	//m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
+	////center object
+	//m_mv_mat = glm::translate(m_mv_mat, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
 
-	//set up fbo
-	GLint cur_framebuffer_id;
-	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &cur_framebuffer_id);
-	if (glIsFramebuffer(m_fbo_pick)!=GL_TRUE)
-	{
-		glGenFramebuffers(1, &m_fbo_pick);
-		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_pick);
-		if (glIsTexture(m_tex_pick)!=GL_TRUE)
-			glGenTextures(1, &m_tex_pick);
-		glBindTexture(GL_TEXTURE_2D, m_tex_pick);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_R32UI, nx, ny, 0,
-			GL_RED_INTEGER, GL_UNSIGNED_INT, 0);
-		glFramebufferTexture2D(GL_FRAMEBUFFER,
-			GL_COLOR_ATTACHMENT0,
-			GL_TEXTURE_2D, m_tex_pick, 0);
-		if (glIsTexture(m_tex_pick_depth)!=GL_TRUE)
-			glGenTextures(1, &m_tex_pick_depth);
-		glBindTexture(GL_TEXTURE_2D, m_tex_pick_depth);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
-			GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-		glFramebufferTexture2D(GL_FRAMEBUFFER,
-			GL_DEPTH_ATTACHMENT,
-			GL_TEXTURE_2D, m_tex_pick_depth, 0);
-		glBindTexture(GL_TEXTURE_2D, 0);
-	}
-	if (m_resize)
-	{
-		glBindTexture(GL_TEXTURE_2D, m_tex_pick);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_R32UI, nx, ny, 0,
-			GL_RED_INTEGER, GL_UNSIGNED_INT, NULL);
-		glBindTexture(GL_TEXTURE_2D, m_tex_pick_depth);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
-			GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-		glBindTexture(GL_TEXTURE_2D, 0);
-	}
+	////set up fbo
+	//vks::VulkanDevice *prim_dev = m_vulkan->vulkanDevice;
+	//if (m_fbo_pick && (m_fbo_pick->w != nx || m_fbo_pick->h != ny))
+	//{
+	//	m_fbo_pick.reset();
+	//	m_tex_pick.reset();
+	//	m_tex_pick_depth.reset();
+	//}
+	//if (!m_fbo_pick)
+	//{
+	//	m_fbo_pick = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+	//	m_fbo_pick->w = m_nx;
+	//	m_fbo_pick->h = m_ny;
+	//	m_fbo_pick->device = prim_dev;
 
-	//bind
-	glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_pick);
-	GLenum Status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-	glClearColor(0.0, 0.0, 0.0, 0.0);
-	glClearDepth(1.0);
-	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+	//	m_tex_pick = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+	//	m_fbo_pick->addAttachment(m_tex_pick);
 
-	glScissor(mouse_pos.x, ny-mouse_pos.y, 1, 1);
-	glEnable(GL_SCISSOR_TEST);
-	glEnable(GL_DEPTH_TEST);
-	glDepthFunc(GL_LEQUAL);
-	for (i=0; i<(int)m_md_pop_list.size(); i++)
-	{
-		MeshData* md = m_md_pop_list[i];
-		if (md)
-		{
-			md->SetMatrices(m_mv_mat, m_proj_mat);
-			md->DrawInt(i+1);
-		}
-	}
-	glDisable(GL_SCISSOR_TEST);
+	//	m_tex_pick_depth = prim_dev->GenTexture2D(
+	//		m_vulkan->depthFormat,
+	//		VK_FILTER_LINEAR,
+	//		m_nx, m_ny,
+	//		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+	//		VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+	//		VK_IMAGE_USAGE_SAMPLED_BIT |
+	//		VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+	//		VK_IMAGE_USAGE_STORAGE_BIT
+	//	);
+	//	m_fbo_pick->addAttachment(m_tex_pick_depth);
+	//}
+	//
+	////bind
+	//glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_pick);
+	//GLenum Status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+	//glClearColor(0.0, 0.0, 0.0, 0.0);
+	//glClearDepth(1.0);
+	//glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
 
-	unsigned int choose = 0;
-	glReadPixels(mouse_pos.x, ny-mouse_pos.y, 1, 1, GL_RED_INTEGER,
-		GL_UNSIGNED_INT, (GLvoid*)&choose);
-	glBindFramebuffer(GL_FRAMEBUFFER, cur_framebuffer_id);
+	//glScissor(mouse_pos.x, ny-mouse_pos.y, 1, 1);
+	//glEnable(GL_SCISSOR_TEST);
+	//glEnable(GL_DEPTH_TEST);
+	//glDepthFunc(GL_LEQUAL);
+	//for (i=0; i<(int)m_md_pop_list.size(); i++)
+	//{
+	//	MeshData* md = m_md_pop_list[i];
+	//	if (md)
+	//	{
+	//		md->SetMatrices(m_mv_mat, m_proj_mat);
+	//		md->DrawInt(i+1);
+	//	}
+	//}
+	//glDisable(GL_SCISSOR_TEST);
 
-	if (choose >0 && choose<=(int)m_md_pop_list.size())
-	{
-		MeshData* md = m_md_pop_list[choose-1];
-		if (md)
-		{
-			VRenderFrame* frame = (VRenderFrame*)m_frame;
-			if (frame && frame->GetTree())
-			{
-				frame->GetTree()->SetFocus();
-				frame->GetTree()->Select(m_vrv->GetName(), md->GetName());
-			}
-		}
-	}
-	else
-	{
-		VRenderFrame* frame = (VRenderFrame*)m_frame;
-		if (frame && frame->GetCurSelType()==3 && frame->GetTree())
-			frame->GetTree()->Select(m_vrv->GetName(), "");
-	}
-	m_mv_mat = mv_temp;
+	//unsigned int choose = 0;
+	//glReadPixels(mouse_pos.x, ny-mouse_pos.y, 1, 1, GL_RED_INTEGER,
+	//	GL_UNSIGNED_INT, (GLvoid*)&choose);
+
+	//if (choose >0 && choose<=(int)m_md_pop_list.size())
+	//{
+	//	MeshData* md = m_md_pop_list[choose-1];
+	//	if (md)
+	//	{
+	//		VRenderFrame* frame = (VRenderFrame*)m_frame;
+	//		if (frame && frame->GetTree())
+	//		{
+	//			frame->GetTree()->SetFocus();
+	//			frame->GetTree()->Select(m_vrv->GetName(), md->GetName());
+	//		}
+	//	}
+	//}
+	//else
+	//{
+	//	VRenderFrame* frame = (VRenderFrame*)m_frame;
+	//	if (frame && frame->GetCurSelType()==3 && frame->GetTree())
+	//		frame->GetTree()->Select(m_vrv->GetName(), "");
+	//}
+	//m_mv_mat = mv_temp;
 }
 
 void VRenderVulkanView::PickVolume()
 {
-    SetCurrent(*m_glRC);
-    
 	double dist = 0.0;
 	double min_dist = -1.0;
 	Point p;
@@ -5470,8 +5457,6 @@ void VRenderVulkanView::PickVolume()
 
 bool VRenderVulkanView::SelSegVolume(int mode)
 {
-    SetCurrent(*m_glRC);
-    
 	double dist = 0.0;
 	double min_dist = -1.0;
 	Point p;
@@ -6306,7 +6291,7 @@ void VRenderVulkanView::Set4DSeqFrame(int frame, bool run_script)
 			}
 
 			if (clear_pool && vd->GetVR())
-				vd->GetVR()->clear_tex_pool();
+				vd->GetVR()->clear_tex_current();
 		}
 	}
 	RefreshGL();
@@ -6457,7 +6442,7 @@ void VRenderVulkanView::Set3DBatFrame(int offset)
 				//else
 				//	vd->SetSpacings(reader->GetXSpc(), reader->GetYSpc(), reader->GetZSpc());
 				if (vd->GetVR())
-					vd->GetVR()->clear_tex_pool();
+					vd->GetVR()->clear_tex_current();
 			}
 		}
 	}
@@ -6536,45 +6521,47 @@ void VRenderVulkanView::PostDraw()
 			h = m_ny;
 		}
 
-		int chann = 3; //RGB or RGBA
-		glPixelStorei(GL_PACK_ROW_LENGTH, w);
-		glPixelStorei(GL_PACK_ALIGNMENT, 1);
-		unsigned char *image = new unsigned char[w*h*chann];
-		if (m_tile_rendering && m_tiled_image != NULL) {
-			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_tile);
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, m_tex_tile);
-			glReadPixels(x, y, w, h, chann==3?GL_RGB:GL_RGBA, GL_UNSIGNED_BYTE, image);
-			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_tile);
-			glBindTexture(GL_TEXTURE_2D, 0);
-			glBindFramebuffer(GL_FRAMEBUFFER, 0);
-			glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+		vks::VulkanDevice* prim_dev = m_vulkan->vulkanDevice;
 
-			size_t stx = (m_current_tileid-1) % m_tile_xnum * m_tile_w;
-			size_t sty = (m_current_tileid-1) / m_tile_xnum * m_tile_h;
+		int chann = 4;
+		int dst_chann = 3;
+		unsigned char* image = new unsigned char[w * h * chann];
+		if (m_tile_rendering && m_tiled_image != NULL) {
+
+			prim_dev->DownloadTexture(m_tex_tile, image);
+			size_t stx = (m_current_tileid - 1) % m_tile_xnum * m_tile_w;
+			size_t sty = (m_current_tileid - 1) / m_tile_xnum * m_tile_h;
 			size_t edx = stx + m_tile_w;
 			size_t edy = sty + m_tile_h;
 			if (edx > m_capture_resx) edx = m_capture_resx;
 			if (edy > m_capture_resy) edy = m_capture_resy;
-			for(size_t y = sty; y < edy; y++) {
+			for (size_t y = sty; y < edy; y++) {
 				for (size_t x = stx; x < edx; x++) {
-					for (int c = 0; c < chann; c++) {
-						m_tiled_image[(y*m_capture_resx + x)*chann + c] = image[((m_tile_h-(y-sty)-1)*m_tile_w + (x-stx))*chann + c];
+					for (int c = 0; c < dst_chann; c++) {
+						m_tiled_image[(y * m_capture_resx + x) * dst_chann + c] = image[((m_tile_h - (y - sty) - 1) * m_tile_w + (x - stx)) * chann + c];
 					}
 				}
 			}
 		}
 		else {
-			glReadBuffer(GL_BACK);
-			glReadPixels(x, y, w, h, chann==3?GL_RGB:GL_RGBA, GL_UNSIGNED_BYTE, image);
-			glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+			prim_dev->DownloadTexture(m_tex_tile, image);
+
+			unsigned char* rgb_image = new unsigned char[w * h * dst_chann];
+			for (size_t y = 0; y < h; y++) {
+				for (size_t x = 0; x < w; x++) {
+					for (int c = 0; c < dst_chann; c++) {
+						rgb_image[(y * w + x) * dst_chann + c] = image[(y * w + x) * chann + c];
+					}
+				}
+			}
+			
 			string str_fn = outputfilename.ToStdString();
-			TIFF *out = TIFFOpen(str_fn.c_str(), "wb");
+			TIFF* out = TIFFOpen(str_fn.c_str(), "wb");
 			if (!out)
 				return;
 			TIFFSetField(out, TIFFTAG_IMAGEWIDTH, w);
 			TIFFSetField(out, TIFFTAG_IMAGELENGTH, h);
-			TIFFSetField(out, TIFFTAG_SAMPLESPERPIXEL, chann);
+			TIFFSetField(out, TIFFTAG_SAMPLESPERPIXEL, dst_chann);
 			TIFFSetField(out, TIFFTAG_BITSPERSAMPLE, 8);
 			TIFFSetField(out, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
 			TIFFSetField(out, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
@@ -6582,23 +6569,25 @@ void VRenderVulkanView::PostDraw()
 			if (VRenderFrame::GetCompression())
 				TIFFSetField(out, TIFFTAG_COMPRESSION, COMPRESSION_LZW);
 
-			tsize_t linebytes = chann * w;
-			unsigned char *buf = NULL;
-			buf = (unsigned char *)_TIFFmalloc(linebytes);
+			tsize_t linebytes = dst_chann * w;
+			unsigned char* buf = NULL;
+			buf = (unsigned char*)_TIFFmalloc(linebytes);
 			TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(out, 0));
 			for (uint32 row = 0; row < (uint32)h; row++)
 			{
-				memcpy(buf, &image[(h-row-1)*linebytes], linebytes);// check the index here, and figure out why not using h*linebytes
+				memcpy(buf, &rgb_image[(h - row - 1) * linebytes], linebytes);// check the index here, and figure out why not using h*linebytes
 				if (TIFFWriteScanline(out, buf, row, 0) < 0)
 					break;
 			}
 			TIFFClose(out);
 			if (buf)
 				_TIFFfree(buf);
-		}
 
+			delete[] rgb_image;
+		}
+		
 		if (image)
-			delete []image;
+			delete[] image;
 
 		m_capture = false;
 		
@@ -6619,7 +6608,7 @@ void VRenderVulkanView::PostDraw()
 					return;
 				TIFFSetField(out, TIFFTAG_IMAGEWIDTH, cap_w);
 				TIFFSetField(out, TIFFTAG_IMAGELENGTH, cap_h);
-				TIFFSetField(out, TIFFTAG_SAMPLESPERPIXEL, chann);
+				TIFFSetField(out, TIFFTAG_SAMPLESPERPIXEL, dst_chann);
 				TIFFSetField(out, TIFFTAG_BITSPERSAMPLE, 8);
 				TIFFSetField(out, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
 				TIFFSetField(out, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
@@ -6627,14 +6616,14 @@ void VRenderVulkanView::PostDraw()
 				if (VRenderFrame::GetCompression())
 					TIFFSetField(out, TIFFTAG_COMPRESSION, COMPRESSION_LZW);
 
-				tsize_t linebytes = chann * cap_w;
-				tsize_t pitchX = chann * m_capture_resx;
+				tsize_t linebytes = dst_chann * cap_w;
+				tsize_t pitchX = dst_chann * m_capture_resx;
 				unsigned char *buf = NULL;
 				buf = (unsigned char *)_TIFFmalloc(linebytes);
 				TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(out, 0));
 				for (uint32 row = 0; row < (uint32)cap_h; row++)
 				{
-					memcpy(buf, &m_tiled_image[(row+cap_oy)*pitchX + cap_ox*chann], linebytes);// check the index here, and figure out why not using h*linebytes
+					memcpy(buf, &m_tiled_image[(row+cap_oy)*pitchX + cap_ox*dst_chann], linebytes);// check the index here, and figure out why not using h*linebytes
 					if (TIFFWriteScanline(out, buf, row, 0) < 0)
 						break;
 				}
@@ -7103,8 +7092,6 @@ void VRenderVulkanView::OnDraw(wxPaintEvent& event)
 		m_int_mode = 7;
 
 	goTimer->sample();
-
-	SwapBuffers();
 
 	if (m_resize)
 		m_resize = false;
@@ -8997,7 +8984,7 @@ void VRenderVulkanView::InitView(unsigned int type)
 
 void VRenderVulkanView::DrawBounds()
 {
-	glDisable(GL_DEPTH_TEST);
+	/*glDisable(GL_DEPTH_TEST);
 	glDisable(GL_BLEND);
 
 	vector<float> vertex;
@@ -9051,7 +9038,7 @@ void VRenderVulkanView::DrawBounds()
 		shader->release();
 
 	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
+	glEnable(GL_BLEND);*/
 }
 
 double VRenderVulkanView::CalcCameraDistance()
@@ -9061,8 +9048,8 @@ double VRenderVulkanView::CalcCameraDistance()
 	mv_temp = glm::translate(mv_temp, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
 	//rotate object
 	mv_temp = glm::rotate(mv_temp, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
-	mv_temp = glm::rotate(mv_temp, float(m_obj_roty + 180.0), glm::vec3(0.0, 1.0, 0.0));
-	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz + 180.0), glm::vec3(0.0, 0.0, 1.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
 	//center object
 	mv_temp = glm::translate(mv_temp, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
 
@@ -9179,639 +9166,639 @@ double VRenderVulkanView::CalcCameraDistance()
 
 void VRenderVulkanView::DrawClippingPlanes(bool border, int face_winding)
 {
-	int i;
-	bool link = false;
-	int plane_mode = PM_NORMAL;
-	int draw_type = 2;
-	VolumeData *cur_vd = NULL;
-	MeshData *cur_md = NULL;
+	//int i;
+	//bool link = false;
+	//int plane_mode = PM_NORMAL;
+	//int draw_type = 2;
+	//VolumeData *cur_vd = NULL;
+	//MeshData *cur_md = NULL;
 
-	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-	if (vr_frame && vr_frame->GetClippingView())
-	{
-		link = vr_frame->GetClippingView()->GetChannLink();
-		plane_mode = vr_frame->GetClippingView()->GetPlaneMode();
-		draw_type = vr_frame->GetClippingView()->GetSelType();
-		if (draw_type == 2)
-		{
-			cur_vd = vr_frame->GetClippingView()->GetVolumeData();
-			if (!cur_vd) return;
-		}
-		if (draw_type == 3)
-		{
-			cur_md = vr_frame->GetClippingView()->GetMeshData();
-			if (!cur_md) return;
-		}
-	}
+	//VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	//if (vr_frame && vr_frame->GetClippingView())
+	//{
+	//	link = vr_frame->GetClippingView()->GetChannLink();
+	//	plane_mode = vr_frame->GetClippingView()->GetPlaneMode();
+	//	draw_type = vr_frame->GetClippingView()->GetSelType();
+	//	if (draw_type == 2)
+	//	{
+	//		cur_vd = vr_frame->GetClippingView()->GetVolumeData();
+	//		if (!cur_vd) return;
+	//	}
+	//	if (draw_type == 3)
+	//	{
+	//		cur_md = vr_frame->GetClippingView()->GetMeshData();
+	//		if (!cur_md) return;
+	//	}
+	//}
 
-	bool draw_plane = plane_mode != PM_FRAME;
-	if ((plane_mode == PM_LOWTRANSBACK ||
-		plane_mode == PM_NORMALBACK) &&
-		m_clip_mask == -1)
-	{
-		glCullFace(GL_FRONT);
-		if (face_winding == BACK_FACE)
-			face_winding = FRONT_FACE;
-		else
-			draw_plane = false;
-	}
-	else
-		glCullFace(GL_BACK);
+	//bool draw_plane = plane_mode != PM_FRAME;
+	//if ((plane_mode == PM_LOWTRANSBACK ||
+	//	plane_mode == PM_NORMALBACK) &&
+	//	m_clip_mask == -1)
+	//{
+	//	glCullFace(GL_FRONT);
+	//	if (face_winding == BACK_FACE)
+	//		face_winding = FRONT_FACE;
+	//	else
+	//		draw_plane = false;
+	//}
+	//else
+	//	glCullFace(GL_BACK);
 
-	if (!border && plane_mode == PM_FRAME)
-		return;
+	//if (!border && plane_mode == PM_FRAME)
+	//	return;
 
-	glDisable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	//glDisable(GL_DEPTH_TEST);
+	//glEnable(GL_BLEND);
+	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	if (face_winding == FRONT_FACE)
-	{
-		glEnable(GL_CULL_FACE);
-		glFrontFace(GL_CCW);
-	}
-	else if (face_winding == BACK_FACE)
-	{
-		glEnable(GL_CULL_FACE);
-		glFrontFace(GL_CW);
-	}
-	else if (face_winding == CULL_OFF)
-		glDisable(GL_CULL_FACE);
+	//if (face_winding == FRONT_FACE)
+	//{
+	//	glEnable(GL_CULL_FACE);
+	//	glFrontFace(GL_CCW);
+	//}
+	//else if (face_winding == BACK_FACE)
+	//{
+	//	glEnable(GL_CULL_FACE);
+	//	glFrontFace(GL_CW);
+	//}
+	//else if (face_winding == CULL_OFF)
+	//	glDisable(GL_CULL_FACE);
 
-	ShaderProgram* shader =
-		m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY);
-	if (shader)
-	{
-		if (!shader->valid())
-			shader->create();
-		shader->bind();
-	}
+	//ShaderProgram* shader =
+	//	m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY);
+	//if (shader)
+	//{
+	//	if (!shader->valid())
+	//		shader->create();
+	//	shader->bind();
+	//}
 
-	if (draw_type == 2)
-	{
-		for (i=0; i<GetDispVolumeNum(); i++)
-		{
-			VolumeData* vd = GetDispVolumeData(i);
-			if (!vd)
-				continue;
+	//if (draw_type == 2)
+	//{
+	//	for (i=0; i<GetDispVolumeNum(); i++)
+	//	{
+	//		VolumeData* vd = GetDispVolumeData(i);
+	//		if (!vd)
+	//			continue;
 
-			if (vd!=cur_vd)
-				continue;
+	//		if (vd!=cur_vd)
+	//			continue;
 
-			VolumeRenderer *vr = vd->GetVR();
-			if (!vr)
-				continue;
+	//		VolumeRenderer *vr = vd->GetVR();
+	//		if (!vr)
+	//			continue;
 
-			vector<Plane*> *planes = vr->get_planes();
-			if (planes->size() != 6)
-				continue;
+	//		vector<Plane*> *planes = vr->get_planes();
+	//		if (planes->size() != 6)
+	//			continue;
 
-			//calculating planes
-			//get six planes
-			Plane* px1 = (*planes)[0];
-			Plane* px2 = (*planes)[1];
-			Plane* py1 = (*planes)[2];
-			Plane* py2 = (*planes)[3];
-			Plane* pz1 = (*planes)[4];
-			Plane* pz2 = (*planes)[5];
+	//		//calculating planes
+	//		//get six planes
+	//		Plane* px1 = (*planes)[0];
+	//		Plane* px2 = (*planes)[1];
+	//		Plane* py1 = (*planes)[2];
+	//		Plane* py2 = (*planes)[3];
+	//		Plane* pz1 = (*planes)[4];
+	//		Plane* pz2 = (*planes)[5];
 
-			//calculate 4 lines
-			Vector lv_x1z1, lv_x1z2, lv_x2z1, lv_x2z2;
-			Point lp_x1z1, lp_x1z2, lp_x2z1, lp_x2z2;
-			//x1z1
-			if (!px1->Intersect(*pz1, lp_x1z1, lv_x1z1))
-				continue;
-			//x1z2
-			if (!px1->Intersect(*pz2, lp_x1z2, lv_x1z2))
-				continue;
-			//x2z1
-			if (!px2->Intersect(*pz1, lp_x2z1, lv_x2z1))
-				continue;
-			//x2z2
-			if (!px2->Intersect(*pz2, lp_x2z2, lv_x2z2))
-				continue;
+	//		//calculate 4 lines
+	//		Vector lv_x1z1, lv_x1z2, lv_x2z1, lv_x2z2;
+	//		Point lp_x1z1, lp_x1z2, lp_x2z1, lp_x2z2;
+	//		//x1z1
+	//		if (!px1->Intersect(*pz1, lp_x1z1, lv_x1z1))
+	//			continue;
+	//		//x1z2
+	//		if (!px1->Intersect(*pz2, lp_x1z2, lv_x1z2))
+	//			continue;
+	//		//x2z1
+	//		if (!px2->Intersect(*pz1, lp_x2z1, lv_x2z1))
+	//			continue;
+	//		//x2z2
+	//		if (!px2->Intersect(*pz2, lp_x2z2, lv_x2z2))
+	//			continue;
 
-			//calculate 8 points
-			Point pp[8];
-			//p0 = l_x1z1 * py1
-			if (!py1->Intersect(lp_x1z1, lv_x1z1, pp[0]))
-				continue;
-			//p1 = l_x1z2 * py1
-			if (!py1->Intersect(lp_x1z2, lv_x1z2, pp[1]))
-				continue;
-			//p2 = l_x2z1 *py1
-			if (!py1->Intersect(lp_x2z1, lv_x2z1, pp[2]))
-				continue;
-			//p3 = l_x2z2 * py1
-			if (!py1->Intersect(lp_x2z2, lv_x2z2, pp[3]))
-				continue;
-			//p4 = l_x1z1 * py2
-			if (!py2->Intersect(lp_x1z1, lv_x1z1, pp[4]))
-				continue;
-			//p5 = l_x1z2 * py2
-			if (!py2->Intersect(lp_x1z2, lv_x1z2, pp[5]))
-				continue;
-			//p6 = l_x2z1 * py2
-			if (!py2->Intersect(lp_x2z1, lv_x2z1, pp[6]))
-				continue;
-			//p7 = l_x2z2 * py2
-			if (!py2->Intersect(lp_x2z2, lv_x2z2, pp[7]))
-				continue;
+	//		//calculate 8 points
+	//		Point pp[8];
+	//		//p0 = l_x1z1 * py1
+	//		if (!py1->Intersect(lp_x1z1, lv_x1z1, pp[0]))
+	//			continue;
+	//		//p1 = l_x1z2 * py1
+	//		if (!py1->Intersect(lp_x1z2, lv_x1z2, pp[1]))
+	//			continue;
+	//		//p2 = l_x2z1 *py1
+	//		if (!py1->Intersect(lp_x2z1, lv_x2z1, pp[2]))
+	//			continue;
+	//		//p3 = l_x2z2 * py1
+	//		if (!py1->Intersect(lp_x2z2, lv_x2z2, pp[3]))
+	//			continue;
+	//		//p4 = l_x1z1 * py2
+	//		if (!py2->Intersect(lp_x1z1, lv_x1z1, pp[4]))
+	//			continue;
+	//		//p5 = l_x1z2 * py2
+	//		if (!py2->Intersect(lp_x1z2, lv_x1z2, pp[5]))
+	//			continue;
+	//		//p6 = l_x2z1 * py2
+	//		if (!py2->Intersect(lp_x2z1, lv_x2z1, pp[6]))
+	//			continue;
+	//		//p7 = l_x2z2 * py2
+	//		if (!py2->Intersect(lp_x2z2, lv_x2z2, pp[7]))
+	//			continue;
 
-			//draw the six planes out of the eight points
-			//get color
-			Color color(1.0, 1.0, 1.0);
-			double plane_trans = 0.0;
-			if (face_winding == BACK_FACE &&
-				(m_clip_mask == 3 ||
-				m_clip_mask == 12 ||
-				m_clip_mask == 48 ||
-				m_clip_mask == 1 ||
-				m_clip_mask == 2 ||
-				m_clip_mask == 4 ||
-				m_clip_mask == 8 ||
-				m_clip_mask == 16 ||
-				m_clip_mask == 32 ||
-				m_clip_mask == 64)
-				)
-				plane_trans = plane_mode == PM_LOWTRANS ||
-				plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
+	//		//draw the six planes out of the eight points
+	//		//get color
+	//		Color color(1.0, 1.0, 1.0);
+	//		double plane_trans = 0.0;
+	//		if (face_winding == BACK_FACE &&
+	//			(m_clip_mask == 3 ||
+	//			m_clip_mask == 12 ||
+	//			m_clip_mask == 48 ||
+	//			m_clip_mask == 1 ||
+	//			m_clip_mask == 2 ||
+	//			m_clip_mask == 4 ||
+	//			m_clip_mask == 8 ||
+	//			m_clip_mask == 16 ||
+	//			m_clip_mask == 32 ||
+	//			m_clip_mask == 64)
+	//			)
+	//			plane_trans = plane_mode == PM_LOWTRANS ||
+	//			plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
 
-			if (face_winding == FRONT_FACE)
-			{
-				plane_trans = plane_mode == PM_LOWTRANS ||
-					plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
-			}
+	//		if (face_winding == FRONT_FACE)
+	//		{
+	//			plane_trans = plane_mode == PM_LOWTRANS ||
+	//				plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
+	//		}
 
-			if (plane_mode == PM_NORMAL ||
-				plane_mode == PM_NORMALBACK)
-			{
-				if (!link)
-					color = vd->GetColor();
-			}
-			else
-				color = GetTextColor();
+	//		if (plane_mode == PM_NORMAL ||
+	//			plane_mode == PM_NORMALBACK)
+	//		{
+	//			if (!link)
+	//				color = vd->GetColor();
+	//		}
+	//		else
+	//			color = GetTextColor();
 
-			//transform
-			if (!vd->GetTexture())
-				continue;
-			Transform *tform = vd->GetTexture()->transform();
-			if (!tform)
-				continue;
-			double mvmat[16];
-			tform->get_trans(mvmat);
-			double sclx, scly, sclz;
-			vd->GetScalings(sclx, scly, sclz);
-			glm::mat4 mv_mat = glm::scale(m_mv_mat,
-				glm::vec3(float(sclx), float(scly), float(sclz)));
-			glm::mat4 mv_mat2 = glm::mat4(
-				mvmat[0], mvmat[4], mvmat[8], mvmat[12],
-				mvmat[1], mvmat[5], mvmat[9], mvmat[13],
-				mvmat[2], mvmat[6], mvmat[10], mvmat[14],
-				mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
-			mv_mat = mv_mat * mv_mat2;
-			glm::mat4 matrix = m_proj_mat * mv_mat;
-			shader->setLocalParamMatrix(0, glm::value_ptr(matrix));
+	//		//transform
+	//		if (!vd->GetTexture())
+	//			continue;
+	//		Transform *tform = vd->GetTexture()->transform();
+	//		if (!tform)
+	//			continue;
+	//		double mvmat[16];
+	//		tform->get_trans(mvmat);
+	//		double sclx, scly, sclz;
+	//		vd->GetScalings(sclx, scly, sclz);
+	//		glm::mat4 mv_mat = glm::scale(m_mv_mat,
+	//			glm::vec3(float(sclx), float(scly), float(sclz)));
+	//		glm::mat4 mv_mat2 = glm::mat4(
+	//			mvmat[0], mvmat[4], mvmat[8], mvmat[12],
+	//			mvmat[1], mvmat[5], mvmat[9], mvmat[13],
+	//			mvmat[2], mvmat[6], mvmat[10], mvmat[14],
+	//			mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
+	//		mv_mat = mv_mat * mv_mat2;
+	//		glm::mat4 matrix = m_proj_mat * mv_mat;
+	//		shader->setLocalParamMatrix(0, glm::value_ptr(matrix));
 
-			vector<float> vertex;
-			vertex.reserve(8*3);
-			vector<uint32_t> index;
-			index.reserve(6*4*2);
+	//		vector<float> vertex;
+	//		vertex.reserve(8*3);
+	//		vector<uint32_t> index;
+	//		index.reserve(6*4*2);
 
-			//vertices
-			for (size_t pi=0; pi<8; ++pi)
-			{
-				vertex.push_back(pp[pi].x());
-				vertex.push_back(pp[pi].y());
-				vertex.push_back(pp[pi].z());
-			}
-			//indices
-			index.push_back(4); index.push_back(0); index.push_back(5); index.push_back(1);
-			index.push_back(4); index.push_back(0); index.push_back(1); index.push_back(5);
-			index.push_back(7); index.push_back(3); index.push_back(6); index.push_back(2);
-			index.push_back(7); index.push_back(3); index.push_back(2); index.push_back(6);
-			index.push_back(1); index.push_back(0); index.push_back(3); index.push_back(2);
-			index.push_back(1); index.push_back(0); index.push_back(2); index.push_back(3);
-			index.push_back(4); index.push_back(5); index.push_back(6); index.push_back(7);
-			index.push_back(4); index.push_back(5); index.push_back(7); index.push_back(6);
-			index.push_back(0); index.push_back(4); index.push_back(2); index.push_back(6);
-			index.push_back(0); index.push_back(4); index.push_back(6); index.push_back(2);
-			index.push_back(5); index.push_back(1); index.push_back(7); index.push_back(3);
-			index.push_back(5); index.push_back(1); index.push_back(3); index.push_back(7);
+	//		//vertices
+	//		for (size_t pi=0; pi<8; ++pi)
+	//		{
+	//			vertex.push_back(pp[pi].x());
+	//			vertex.push_back(pp[pi].y());
+	//			vertex.push_back(pp[pi].z());
+	//		}
+	//		//indices
+	//		index.push_back(4); index.push_back(0); index.push_back(5); index.push_back(1);
+	//		index.push_back(4); index.push_back(0); index.push_back(1); index.push_back(5);
+	//		index.push_back(7); index.push_back(3); index.push_back(6); index.push_back(2);
+	//		index.push_back(7); index.push_back(3); index.push_back(2); index.push_back(6);
+	//		index.push_back(1); index.push_back(0); index.push_back(3); index.push_back(2);
+	//		index.push_back(1); index.push_back(0); index.push_back(2); index.push_back(3);
+	//		index.push_back(4); index.push_back(5); index.push_back(6); index.push_back(7);
+	//		index.push_back(4); index.push_back(5); index.push_back(7); index.push_back(6);
+	//		index.push_back(0); index.push_back(4); index.push_back(2); index.push_back(6);
+	//		index.push_back(0); index.push_back(4); index.push_back(6); index.push_back(2);
+	//		index.push_back(5); index.push_back(1); index.push_back(7); index.push_back(3);
+	//		index.push_back(5); index.push_back(1); index.push_back(3); index.push_back(7);
 
-			glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-			glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_misc_ibo);
-			glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*index.size(), &index[0], GL_DYNAMIC_DRAW);
+	//		glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
+	//		glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
+	//		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_misc_ibo);
+	//		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*index.size(), &index[0], GL_DYNAMIC_DRAW);
 
-			glBindVertexArray(m_misc_vao);
-			glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-			glEnableVertexAttribArray(0);
-			glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
-			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_misc_ibo);
+	//		glBindVertexArray(m_misc_vao);
+	//		glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
+	//		glEnableVertexAttribArray(0);
+	//		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
+	//		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_misc_ibo);
 
-			//draw
-			//x1 = (p4, p0, p1, p5)
-			if (m_clip_mask & 1)
-			{
-				if (draw_plane)
-				{
-					if (plane_mode == PM_NORMAL ||
-						plane_mode == PM_NORMALBACK)
-						shader->setLocalParam(0, 1.0, 0.5, 0.5, plane_trans);
-					else
-						shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-					glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)0);
-				}
-				if (border)
-				{
-					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-					glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(4*4));
-				}
-			}
-			//x2 = (p7, p3, p2, p6)
-			if (m_clip_mask & 2)
-			{
-				if (draw_plane)
-				{
-					if (plane_mode == PM_NORMAL ||
-						plane_mode == PM_NORMALBACK)
-						shader->setLocalParam(0, 1.0, 0.5, 1.0, plane_trans);
-					else
-						shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-					glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(8 * 4));
-				}
-				if (border)
-				{
-					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-					glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(12*4));
-				}
-			}
-			//y1 = (p1, p0, p2, p3)
-			if (m_clip_mask & 4)
-			{
-				if (draw_plane)
-				{
-					if (plane_mode == PM_NORMAL ||
-						plane_mode == PM_NORMALBACK)
-						shader->setLocalParam(0, 0.5, 1.0, 0.5, plane_trans);
-					else
-						shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-					glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(16 * 4));
-				}
-				if (border)
-				{
-					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-					glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(20*4));
-				}
-			}
-			//y2 = (p4, p5, p7, p6)
-			if (m_clip_mask & 8)
-			{
-				if (draw_plane)
-				{
-					if (plane_mode == PM_NORMAL ||
-						plane_mode == PM_NORMALBACK)
-						shader->setLocalParam(0, 1.0, 1.0, 0.5, plane_trans);
-					else
-						shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-					glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(24 * 4));
-				}
-				if (border)
-				{
-					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-					glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(28*4));
-				}
-			}
-			//z1 = (p0, p4, p6, p2)
-			if (m_clip_mask & 16)
-			{
-				if (draw_plane)
-				{
-					if (plane_mode == PM_NORMAL ||
-						plane_mode == PM_NORMALBACK)
-						shader->setLocalParam(0, 0.5, 0.5, 1.0, plane_trans);
-					else
-						shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-					glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(32 * 4));
-				}
-				if (border)
-				{
-					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-					glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(36*4));
-				}
-			}
-			//z2 = (p5, p1, p3, p7)
-			if (m_clip_mask & 32)
-			{
-				if (draw_plane)
-				{
-					if (plane_mode == PM_NORMAL ||
-						plane_mode == PM_NORMALBACK)
-						shader->setLocalParam(0, 0.5, 1.0, 1.0, plane_trans);
-					else
-						shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-					glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(40 * 4));
-				}
-				if (border)
-				{
-					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-					glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(44*4));
-				}
-			}
+	//		//draw
+	//		//x1 = (p4, p0, p1, p5)
+	//		if (m_clip_mask & 1)
+	//		{
+	//			if (draw_plane)
+	//			{
+	//				if (plane_mode == PM_NORMAL ||
+	//					plane_mode == PM_NORMALBACK)
+	//					shader->setLocalParam(0, 1.0, 0.5, 0.5, plane_trans);
+	//				else
+	//					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+	//				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)0);
+	//			}
+	//			if (border)
+	//			{
+	//				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+	//				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(4*4));
+	//			}
+	//		}
+	//		//x2 = (p7, p3, p2, p6)
+	//		if (m_clip_mask & 2)
+	//		{
+	//			if (draw_plane)
+	//			{
+	//				if (plane_mode == PM_NORMAL ||
+	//					plane_mode == PM_NORMALBACK)
+	//					shader->setLocalParam(0, 1.0, 0.5, 1.0, plane_trans);
+	//				else
+	//					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+	//				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(8 * 4));
+	//			}
+	//			if (border)
+	//			{
+	//				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+	//				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(12*4));
+	//			}
+	//		}
+	//		//y1 = (p1, p0, p2, p3)
+	//		if (m_clip_mask & 4)
+	//		{
+	//			if (draw_plane)
+	//			{
+	//				if (plane_mode == PM_NORMAL ||
+	//					plane_mode == PM_NORMALBACK)
+	//					shader->setLocalParam(0, 0.5, 1.0, 0.5, plane_trans);
+	//				else
+	//					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+	//				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(16 * 4));
+	//			}
+	//			if (border)
+	//			{
+	//				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+	//				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(20*4));
+	//			}
+	//		}
+	//		//y2 = (p4, p5, p7, p6)
+	//		if (m_clip_mask & 8)
+	//		{
+	//			if (draw_plane)
+	//			{
+	//				if (plane_mode == PM_NORMAL ||
+	//					plane_mode == PM_NORMALBACK)
+	//					shader->setLocalParam(0, 1.0, 1.0, 0.5, plane_trans);
+	//				else
+	//					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+	//				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(24 * 4));
+	//			}
+	//			if (border)
+	//			{
+	//				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+	//				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(28*4));
+	//			}
+	//		}
+	//		//z1 = (p0, p4, p6, p2)
+	//		if (m_clip_mask & 16)
+	//		{
+	//			if (draw_plane)
+	//			{
+	//				if (plane_mode == PM_NORMAL ||
+	//					plane_mode == PM_NORMALBACK)
+	//					shader->setLocalParam(0, 0.5, 0.5, 1.0, plane_trans);
+	//				else
+	//					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+	//				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(32 * 4));
+	//			}
+	//			if (border)
+	//			{
+	//				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+	//				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(36*4));
+	//			}
+	//		}
+	//		//z2 = (p5, p1, p3, p7)
+	//		if (m_clip_mask & 32)
+	//		{
+	//			if (draw_plane)
+	//			{
+	//				if (plane_mode == PM_NORMAL ||
+	//					plane_mode == PM_NORMALBACK)
+	//					shader->setLocalParam(0, 0.5, 1.0, 1.0, plane_trans);
+	//				else
+	//					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+	//				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(40 * 4));
+	//			}
+	//			if (border)
+	//			{
+	//				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+	//				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(44*4));
+	//			}
+	//		}
 
-			glDisableVertexAttribArray(0);
-			//unbind
-			glBindBuffer(GL_ARRAY_BUFFER, 0);
-			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-			glBindVertexArray(0);
-		}
-	}
+	//		glDisableVertexAttribArray(0);
+	//		//unbind
+	//		glBindBuffer(GL_ARRAY_BUFFER, 0);
+	//		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	//		glBindVertexArray(0);
+	//	}
+	//}
 
-	if (draw_type == 3)
-	{
-		for (i=0; i<GetMeshNum(); i++)
-		{
-			MeshData* md = GetMeshData(i);
-			if (!md)
-				continue;
+	//if (draw_type == 3)
+	//{
+	//	for (i=0; i<GetMeshNum(); i++)
+	//	{
+	//		MeshData* md = GetMeshData(i);
+	//		if (!md)
+	//			continue;
 
-			if (md!=cur_md)
-				continue;
+	//		if (md!=cur_md)
+	//			continue;
 
-			MeshRenderer *mr = md->GetMR();
-			if (!mr)
-				continue;
+	//		MeshRenderer *mr = md->GetMR();
+	//		if (!mr)
+	//			continue;
 
-			vector<Plane*> *planes = mr->get_planes();
-			if (planes->size() != 6)
-				continue;
+	//		vector<Plane*> *planes = mr->get_planes();
+	//		if (planes->size() != 6)
+	//			continue;
 
-			//calculating planes
-			//get six planes
-			Plane* px1 = (*planes)[0];
-			Plane* px2 = (*planes)[1];
-			Plane* py1 = (*planes)[2];
-			Plane* py2 = (*planes)[3];
-			Plane* pz1 = (*planes)[4];
-			Plane* pz2 = (*planes)[5];
+	//		//calculating planes
+	//		//get six planes
+	//		Plane* px1 = (*planes)[0];
+	//		Plane* px2 = (*planes)[1];
+	//		Plane* py1 = (*planes)[2];
+	//		Plane* py2 = (*planes)[3];
+	//		Plane* pz1 = (*planes)[4];
+	//		Plane* pz2 = (*planes)[5];
 
-			//calculate 4 lines
-			Vector lv_x1z1, lv_x1z2, lv_x2z1, lv_x2z2;
-			Point lp_x1z1, lp_x1z2, lp_x2z1, lp_x2z2;
-			//x1z1
-			if (!px1->Intersect(*pz1, lp_x1z1, lv_x1z1))
-				continue;
-			//x1z2
-			if (!px1->Intersect(*pz2, lp_x1z2, lv_x1z2))
-				continue;
-			//x2z1
-			if (!px2->Intersect(*pz1, lp_x2z1, lv_x2z1))
-				continue;
-			//x2z2
-			if (!px2->Intersect(*pz2, lp_x2z2, lv_x2z2))
-				continue;
+	//		//calculate 4 lines
+	//		Vector lv_x1z1, lv_x1z2, lv_x2z1, lv_x2z2;
+	//		Point lp_x1z1, lp_x1z2, lp_x2z1, lp_x2z2;
+	//		//x1z1
+	//		if (!px1->Intersect(*pz1, lp_x1z1, lv_x1z1))
+	//			continue;
+	//		//x1z2
+	//		if (!px1->Intersect(*pz2, lp_x1z2, lv_x1z2))
+	//			continue;
+	//		//x2z1
+	//		if (!px2->Intersect(*pz1, lp_x2z1, lv_x2z1))
+	//			continue;
+	//		//x2z2
+	//		if (!px2->Intersect(*pz2, lp_x2z2, lv_x2z2))
+	//			continue;
 
-			//calculate 8 points
-			Point pp[8];
-			//p0 = l_x1z1 * py1
-			if (!py1->Intersect(lp_x1z1, lv_x1z1, pp[0]))
-				continue;
-			//p1 = l_x1z2 * py1
-			if (!py1->Intersect(lp_x1z2, lv_x1z2, pp[1]))
-				continue;
-			//p2 = l_x2z1 *py1
-			if (!py1->Intersect(lp_x2z1, lv_x2z1, pp[2]))
-				continue;
-			//p3 = l_x2z2 * py1
-			if (!py1->Intersect(lp_x2z2, lv_x2z2, pp[3]))
-				continue;
-			//p4 = l_x1z1 * py2
-			if (!py2->Intersect(lp_x1z1, lv_x1z1, pp[4]))
-				continue;
-			//p5 = l_x1z2 * py2
-			if (!py2->Intersect(lp_x1z2, lv_x1z2, pp[5]))
-				continue;
-			//p6 = l_x2z1 * py2
-			if (!py2->Intersect(lp_x2z1, lv_x2z1, pp[6]))
-				continue;
-			//p7 = l_x2z2 * py2
-			if (!py2->Intersect(lp_x2z2, lv_x2z2, pp[7]))
-				continue;
+	//		//calculate 8 points
+	//		Point pp[8];
+	//		//p0 = l_x1z1 * py1
+	//		if (!py1->Intersect(lp_x1z1, lv_x1z1, pp[0]))
+	//			continue;
+	//		//p1 = l_x1z2 * py1
+	//		if (!py1->Intersect(lp_x1z2, lv_x1z2, pp[1]))
+	//			continue;
+	//		//p2 = l_x2z1 *py1
+	//		if (!py1->Intersect(lp_x2z1, lv_x2z1, pp[2]))
+	//			continue;
+	//		//p3 = l_x2z2 * py1
+	//		if (!py1->Intersect(lp_x2z2, lv_x2z2, pp[3]))
+	//			continue;
+	//		//p4 = l_x1z1 * py2
+	//		if (!py2->Intersect(lp_x1z1, lv_x1z1, pp[4]))
+	//			continue;
+	//		//p5 = l_x1z2 * py2
+	//		if (!py2->Intersect(lp_x1z2, lv_x1z2, pp[5]))
+	//			continue;
+	//		//p6 = l_x2z1 * py2
+	//		if (!py2->Intersect(lp_x2z1, lv_x2z1, pp[6]))
+	//			continue;
+	//		//p7 = l_x2z2 * py2
+	//		if (!py2->Intersect(lp_x2z2, lv_x2z2, pp[7]))
+	//			continue;
 
-			//draw the six planes out of the eight points
-			//get color
-			Color color(1.0, 1.0, 1.0);
-			double plane_trans = 0.0;
-			if (face_winding == BACK_FACE &&
-				(m_clip_mask == 3 ||
-				m_clip_mask == 12 ||
-				m_clip_mask == 48 ||
-				m_clip_mask == 1 ||
-				m_clip_mask == 2 ||
-				m_clip_mask == 4 ||
-				m_clip_mask == 8 ||
-				m_clip_mask == 16 ||
-				m_clip_mask == 32 ||
-				m_clip_mask == 64)
-				)
-				plane_trans = plane_mode == PM_LOWTRANS ||
-				plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
+	//		//draw the six planes out of the eight points
+	//		//get color
+	//		Color color(1.0, 1.0, 1.0);
+	//		double plane_trans = 0.0;
+	//		if (face_winding == BACK_FACE &&
+	//			(m_clip_mask == 3 ||
+	//			m_clip_mask == 12 ||
+	//			m_clip_mask == 48 ||
+	//			m_clip_mask == 1 ||
+	//			m_clip_mask == 2 ||
+	//			m_clip_mask == 4 ||
+	//			m_clip_mask == 8 ||
+	//			m_clip_mask == 16 ||
+	//			m_clip_mask == 32 ||
+	//			m_clip_mask == 64)
+	//			)
+	//			plane_trans = plane_mode == PM_LOWTRANS ||
+	//			plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
 
-			if (face_winding == FRONT_FACE)
-			{
-				plane_trans = plane_mode == PM_LOWTRANS ||
-					plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
-			}
+	//		if (face_winding == FRONT_FACE)
+	//		{
+	//			plane_trans = plane_mode == PM_LOWTRANS ||
+	//				plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
+	//		}
 
-			if (plane_mode == PM_NORMAL ||
-				plane_mode == PM_NORMALBACK)
-			{
-				if (!link)
-				{
-					Color amb, diff, spec;
-					double shine, alpha;
-					md->GetMaterial(amb, diff, spec, shine, alpha);
-					color = diff;
-				}
-			}
-			else
-				color = GetTextColor();
+	//		if (plane_mode == PM_NORMAL ||
+	//			plane_mode == PM_NORMALBACK)
+	//		{
+	//			if (!link)
+	//			{
+	//				Color amb, diff, spec;
+	//				double shine, alpha;
+	//				md->GetMaterial(amb, diff, spec, shine, alpha);
+	//				color = diff;
+	//			}
+	//		}
+	//		else
+	//			color = GetTextColor();
 
-			//transform
-			BBox dbox = md->GetBounds();
-			glm::mat4 mvmat = glm::mat4(float(dbox.max().x()-dbox.min().x()), 0.0f, 0.0f, 0.0f,
-										0.0f, float(dbox.max().y()-dbox.min().y()), 0.0f, 0.0f,
-										0.0f, 0.0f, float(dbox.max().z()-dbox.min().z()), 0.0f,
-										float(dbox.min().x()), float(dbox.min().y()), float(dbox.min().z()), 1.0f);
-			glm::mat4 matrix = m_proj_mat * m_mv_mat * mvmat;
-			shader->setLocalParamMatrix(0, glm::value_ptr(matrix));
+	//		//transform
+	//		BBox dbox = md->GetBounds();
+	//		glm::mat4 mvmat = glm::mat4(float(dbox.max().x()-dbox.min().x()), 0.0f, 0.0f, 0.0f,
+	//									0.0f, float(dbox.max().y()-dbox.min().y()), 0.0f, 0.0f,
+	//									0.0f, 0.0f, float(dbox.max().z()-dbox.min().z()), 0.0f,
+	//									float(dbox.min().x()), float(dbox.min().y()), float(dbox.min().z()), 1.0f);
+	//		glm::mat4 matrix = m_proj_mat * m_mv_mat * mvmat;
+	//		shader->setLocalParamMatrix(0, glm::value_ptr(matrix));
 
-			vector<float> vertex;
-			vertex.reserve(8*3);
-			vector<uint32_t> index;
-			index.reserve(6*4*2);
+	//		vector<float> vertex;
+	//		vertex.reserve(8*3);
+	//		vector<uint32_t> index;
+	//		index.reserve(6*4*2);
 
-			//vertices
-			for (size_t pi=0; pi<8; ++pi)
-			{
-				vertex.push_back(pp[pi].x());
-				vertex.push_back(pp[pi].y());
-				vertex.push_back(pp[pi].z());
-			}
-			//indices
-			index.push_back(4); index.push_back(0); index.push_back(5); index.push_back(1);
-			index.push_back(4); index.push_back(0); index.push_back(1); index.push_back(5);
-			index.push_back(7); index.push_back(3); index.push_back(6); index.push_back(2);
-			index.push_back(7); index.push_back(3); index.push_back(2); index.push_back(6);
-			index.push_back(1); index.push_back(0); index.push_back(3); index.push_back(2);
-			index.push_back(1); index.push_back(0); index.push_back(2); index.push_back(3);
-			index.push_back(4); index.push_back(5); index.push_back(6); index.push_back(7);
-			index.push_back(4); index.push_back(5); index.push_back(7); index.push_back(6);
-			index.push_back(0); index.push_back(4); index.push_back(2); index.push_back(6);
-			index.push_back(0); index.push_back(4); index.push_back(6); index.push_back(2);
-			index.push_back(5); index.push_back(1); index.push_back(7); index.push_back(3);
-			index.push_back(5); index.push_back(1); index.push_back(3); index.push_back(7);
+	//		//vertices
+	//		for (size_t pi=0; pi<8; ++pi)
+	//		{
+	//			vertex.push_back(pp[pi].x());
+	//			vertex.push_back(pp[pi].y());
+	//			vertex.push_back(pp[pi].z());
+	//		}
+	//		//indices
+	//		index.push_back(4); index.push_back(0); index.push_back(5); index.push_back(1);
+	//		index.push_back(4); index.push_back(0); index.push_back(1); index.push_back(5);
+	//		index.push_back(7); index.push_back(3); index.push_back(6); index.push_back(2);
+	//		index.push_back(7); index.push_back(3); index.push_back(2); index.push_back(6);
+	//		index.push_back(1); index.push_back(0); index.push_back(3); index.push_back(2);
+	//		index.push_back(1); index.push_back(0); index.push_back(2); index.push_back(3);
+	//		index.push_back(4); index.push_back(5); index.push_back(6); index.push_back(7);
+	//		index.push_back(4); index.push_back(5); index.push_back(7); index.push_back(6);
+	//		index.push_back(0); index.push_back(4); index.push_back(2); index.push_back(6);
+	//		index.push_back(0); index.push_back(4); index.push_back(6); index.push_back(2);
+	//		index.push_back(5); index.push_back(1); index.push_back(7); index.push_back(3);
+	//		index.push_back(5); index.push_back(1); index.push_back(3); index.push_back(7);
 
-			glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-			glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_misc_ibo);
-			glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*index.size(), &index[0], GL_DYNAMIC_DRAW);
+	//		glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
+	//		glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
+	//		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_misc_ibo);
+	//		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*index.size(), &index[0], GL_DYNAMIC_DRAW);
 
-			glBindVertexArray(m_misc_vao);
-			glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-			glEnableVertexAttribArray(0);
-			glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
-			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_misc_ibo);
+	//		glBindVertexArray(m_misc_vao);
+	//		glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
+	//		glEnableVertexAttribArray(0);
+	//		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
+	//		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_misc_ibo);
 
-			//draw
-			//x1 = (p4, p0, p1, p5)
-			if (m_clip_mask & 1)
-			{
-				if (draw_plane)
-				{
-					if (plane_mode == PM_NORMAL ||
-						plane_mode == PM_NORMALBACK)
-						shader->setLocalParam(0, 1.0, 0.5, 0.5, plane_trans);
-					else
-						shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-					glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)0);
-				}
-				if (border)
-				{
-					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-					glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(4*4));
-				}
-			}
-			//x2 = (p7, p3, p2, p6)
-			if (m_clip_mask & 2)
-			{
-				if (draw_plane)
-				{
-					if (plane_mode == PM_NORMAL ||
-						plane_mode == PM_NORMALBACK)
-						shader->setLocalParam(0, 1.0, 0.5, 1.0, plane_trans);
-					else
-						shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-					glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(8 * 4));
-				}
-				if (border)
-				{
-					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-					glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(12*4));
-				}
-			}
-			//y1 = (p1, p0, p2, p3)
-			if (m_clip_mask & 4)
-			{
-				if (draw_plane)
-				{
-					if (plane_mode == PM_NORMAL ||
-						plane_mode == PM_NORMALBACK)
-						shader->setLocalParam(0, 0.5, 1.0, 0.5, plane_trans);
-					else
-						shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-					glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(16 * 4));
-				}
-				if (border)
-				{
-					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-					glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(20*4));
-				}
-			}
-			//y2 = (p4, p5, p7, p6)
-			if (m_clip_mask & 8)
-			{
-				if (draw_plane)
-				{
-					if (plane_mode == PM_NORMAL ||
-						plane_mode == PM_NORMALBACK)
-						shader->setLocalParam(0, 1.0, 1.0, 0.5, plane_trans);
-					else
-						shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-					glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(24 * 4));
-				}
-				if (border)
-				{
-					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-					glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(28*4));
-				}
-			}
-			//z1 = (p0, p4, p6, p2)
-			if (m_clip_mask & 16)
-			{
-				if (draw_plane)
-				{
-					if (plane_mode == PM_NORMAL ||
-						plane_mode == PM_NORMALBACK)
-						shader->setLocalParam(0, 0.5, 0.5, 1.0, plane_trans);
-					else
-						shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-					glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(32 * 4));
-				}
-				if (border)
-				{
-					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-					glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(36*4));
-				}
-			}
-			//z2 = (p5, p1, p3, p7)
-			if (m_clip_mask & 32)
-			{
-				if (draw_plane)
-				{
-					if (plane_mode == PM_NORMAL ||
-						plane_mode == PM_NORMALBACK)
-						shader->setLocalParam(0, 0.5, 1.0, 1.0, plane_trans);
-					else
-						shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-					glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(40 * 4));
-				}
-				if (border)
-				{
-					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-					glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(44*4));
-				}
-			}
+	//		//draw
+	//		//x1 = (p4, p0, p1, p5)
+	//		if (m_clip_mask & 1)
+	//		{
+	//			if (draw_plane)
+	//			{
+	//				if (plane_mode == PM_NORMAL ||
+	//					plane_mode == PM_NORMALBACK)
+	//					shader->setLocalParam(0, 1.0, 0.5, 0.5, plane_trans);
+	//				else
+	//					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+	//				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)0);
+	//			}
+	//			if (border)
+	//			{
+	//				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+	//				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(4*4));
+	//			}
+	//		}
+	//		//x2 = (p7, p3, p2, p6)
+	//		if (m_clip_mask & 2)
+	//		{
+	//			if (draw_plane)
+	//			{
+	//				if (plane_mode == PM_NORMAL ||
+	//					plane_mode == PM_NORMALBACK)
+	//					shader->setLocalParam(0, 1.0, 0.5, 1.0, plane_trans);
+	//				else
+	//					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+	//				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(8 * 4));
+	//			}
+	//			if (border)
+	//			{
+	//				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+	//				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(12*4));
+	//			}
+	//		}
+	//		//y1 = (p1, p0, p2, p3)
+	//		if (m_clip_mask & 4)
+	//		{
+	//			if (draw_plane)
+	//			{
+	//				if (plane_mode == PM_NORMAL ||
+	//					plane_mode == PM_NORMALBACK)
+	//					shader->setLocalParam(0, 0.5, 1.0, 0.5, plane_trans);
+	//				else
+	//					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+	//				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(16 * 4));
+	//			}
+	//			if (border)
+	//			{
+	//				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+	//				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(20*4));
+	//			}
+	//		}
+	//		//y2 = (p4, p5, p7, p6)
+	//		if (m_clip_mask & 8)
+	//		{
+	//			if (draw_plane)
+	//			{
+	//				if (plane_mode == PM_NORMAL ||
+	//					plane_mode == PM_NORMALBACK)
+	//					shader->setLocalParam(0, 1.0, 1.0, 0.5, plane_trans);
+	//				else
+	//					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+	//				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(24 * 4));
+	//			}
+	//			if (border)
+	//			{
+	//				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+	//				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(28*4));
+	//			}
+	//		}
+	//		//z1 = (p0, p4, p6, p2)
+	//		if (m_clip_mask & 16)
+	//		{
+	//			if (draw_plane)
+	//			{
+	//				if (plane_mode == PM_NORMAL ||
+	//					plane_mode == PM_NORMALBACK)
+	//					shader->setLocalParam(0, 0.5, 0.5, 1.0, plane_trans);
+	//				else
+	//					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+	//				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(32 * 4));
+	//			}
+	//			if (border)
+	//			{
+	//				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+	//				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(36*4));
+	//			}
+	//		}
+	//		//z2 = (p5, p1, p3, p7)
+	//		if (m_clip_mask & 32)
+	//		{
+	//			if (draw_plane)
+	//			{
+	//				if (plane_mode == PM_NORMAL ||
+	//					plane_mode == PM_NORMALBACK)
+	//					shader->setLocalParam(0, 0.5, 1.0, 1.0, plane_trans);
+	//				else
+	//					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+	//				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(40 * 4));
+	//			}
+	//			if (border)
+	//			{
+	//				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
+	//				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(44*4));
+	//			}
+	//		}
 
-			glDisableVertexAttribArray(0);
-			//unbind
-			glBindBuffer(GL_ARRAY_BUFFER, 0);
-			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-			glBindVertexArray(0);
-		}
-	}
+	//		glDisableVertexAttribArray(0);
+	//		//unbind
+	//		glBindBuffer(GL_ARRAY_BUFFER, 0);
+	//		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	//		glBindVertexArray(0);
+	//	}
+	//}
 
-	if (shader && shader->valid())
-		shader->release();
+	//if (shader && shader->valid())
+	//	shader->release();
 
-	glFrontFace(GL_CCW);
-	glCullFace(GL_BACK);
+	//glFrontFace(GL_CCW);
+	//glCullFace(GL_BACK);
 }
 
 void VRenderVulkanView::DrawGrid()
 {
-	glDisable(GL_DEPTH_TEST);
+	/*glDisable(GL_DEPTH_TEST);
 	glDisable(GL_BLEND);
 
 	size_t grid_num = 5;
@@ -9868,12 +9855,12 @@ void VRenderVulkanView::DrawGrid()
 		shader->release();
 
 	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
+	glEnable(GL_BLEND);*/
 }
 
 void VRenderVulkanView::DrawCamCtr()
 {
-	glDisable(GL_DEPTH_TEST);
+	/*glDisable(GL_DEPTH_TEST);
 	glDisable(GL_BLEND);
 
 	double len;
@@ -9925,54 +9912,54 @@ void VRenderVulkanView::DrawCamCtr()
 		shader->release();
 
 	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
+	glEnable(GL_BLEND);*/
 }
 
 void VRenderVulkanView::DrawFrame()
 {
-	int nx, ny;
-	nx = GetSize().x;
-	ny = GetSize().y;
-	glm::mat4 proj_mat = glm::ortho(float(0), float(nx), float(0), float(ny));
+	//int nx, ny;
+	//nx = GetSize().x;
+	//ny = GetSize().y;
+	//glm::mat4 proj_mat = glm::ortho(float(0), float(nx), float(0), float(ny));
 
-	glDisable(GL_DEPTH_TEST);
-	GLfloat line_width = 1.0f;
+	//glDisable(GL_DEPTH_TEST);
+	//GLfloat line_width = 1.0f;
 
-	vector<float> vertex;
-	vertex.reserve(4*3);
+	//vector<float> vertex;
+	//vertex.reserve(4*3);
 
-	vertex.push_back(m_frame_x-1); vertex.push_back(m_frame_y-1); vertex.push_back(0.0);
-	vertex.push_back(m_frame_x+m_frame_w+1); vertex.push_back(m_frame_y-1); vertex.push_back(0.0);
-	vertex.push_back(m_frame_x+m_frame_w+1); vertex.push_back(m_frame_y+m_frame_h+1); vertex.push_back(0.0);
-	vertex.push_back(m_frame_x-1); vertex.push_back(m_frame_y+m_frame_h+1); vertex.push_back(0.0);
+	//vertex.push_back(m_frame_x-1); vertex.push_back(m_frame_y-1); vertex.push_back(0.0);
+	//vertex.push_back(m_frame_x+m_frame_w+1); vertex.push_back(m_frame_y-1); vertex.push_back(0.0);
+	//vertex.push_back(m_frame_x+m_frame_w+1); vertex.push_back(m_frame_y+m_frame_h+1); vertex.push_back(0.0);
+	//vertex.push_back(m_frame_x-1); vertex.push_back(m_frame_y+m_frame_h+1); vertex.push_back(0.0);
 
-	ShaderProgram* shader =
-		m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY);
-	if (shader)
-	{
-		if (!shader->valid())
-			shader->create();
-		shader->bind();
-	}
-	shader->setLocalParam(0, 1.0, 1.0, 0.0, 1.0);
-	shader->setLocalParamMatrix(0, glm::value_ptr(proj_mat));
+	//ShaderProgram* shader =
+	//	m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY);
+	//if (shader)
+	//{
+	//	if (!shader->valid())
+	//		shader->create();
+	//	shader->bind();
+	//}
+	//shader->setLocalParam(0, 1.0, 1.0, 0.0, 1.0);
+	//shader->setLocalParamMatrix(0, glm::value_ptr(proj_mat));
 
-	//draw frame
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-	glBindVertexArray(m_misc_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
-	glDrawArrays(GL_LINE_LOOP, 0, 4);
-	glDisableVertexAttribArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
+	////draw frame
+	//glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
+	//glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
+	//glBindVertexArray(m_misc_vao);
+	//glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
+	//glEnableVertexAttribArray(0);
+	//glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
+	//glDrawArrays(GL_LINE_LOOP, 0, 4);
+	//glDisableVertexAttribArray(0);
+	//glBindBuffer(GL_ARRAY_BUFFER, 0);
+	//glBindVertexArray(0);
 
-	if (shader && shader->valid())
-		shader->release();
+	//if (shader && shader->valid())
+	//	shader->release();
 
-	glEnable(GL_DEPTH_TEST);
+	//glEnable(GL_DEPTH_TEST);
 }
 
 void VRenderVulkanView::FixScaleBarLen(bool fix, double len)
@@ -10053,350 +10040,350 @@ void VRenderVulkanView::GetScaleBarFixed(bool &fix, double &len, int &unitid)
 
 void VRenderVulkanView::DrawScaleBar()
 {
-	double offset = 0.0;
-	if (m_draw_legend)
-		offset = m_sb_height;
-
-	int nx = GetSize().x;
-	int ny = GetSize().y;
-	float sx, sy;
-	sx = 2.0/nx;
-	sy = 2.0/ny;
-	float px, py, ph;
-
-	glm::mat4 proj_mat = glm::ortho(0.0f, 1.0f, 0.0f, 1.0f);
-
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_BLEND);
-	
-	if (m_fix_sclbar)
-		m_sb_length = m_fixed_sclbar_fac/(m_scale_factor*min(nx,ny));
-	double len = m_sb_length / (m_ortho_right-m_ortho_left);
-
-	double len_txt = m_sb_length;
-	int unit_id = m_sb_unit;
-	wxString unit_txt = m_sb_text;
-
-	wxString num_txt;
-	
-	if (m_sclbar_digit == 0)
-		num_txt = wxString::Format(wxT("%i "), (int)len_txt);
-	else if (m_sclbar_digit > 0)
-	{
-		wxString f = wxT("%.9f");
-		num_txt = wxString::Format(f, len_txt);
-		wxString intstr = num_txt.BeforeFirst(wxT('.'));
-		wxString fracstr = num_txt.AfterFirst(wxT('.'));
-		int fractextlen = m_sclbar_digit;
-		if (fractextlen > fracstr.Length()) fractextlen = fracstr.Length();
-		num_txt = intstr + wxT(".") + fracstr.Mid(0, fractextlen) + wxT(" ");
-	}
-
-/*
-	if (m_sclbar_digit == 0)
-		num_txt = wxString::Format(wxT("%i "), (int)len_txt);
-	else if (m_sclbar_digit > 0)
-	{
-		wxString f = wxT("%.15f");
-		num_txt = wxString::Format(f, len_txt);
-		wxString intstr = num_txt.BeforeFirst(wxT('.'));
-		if (intstr.Length() >= m_sclbar_digit)
-			num_txt = intstr;
-		else if (intstr.GetChar(0) != wxT('0'))
-		{
-			int textlen = m_sclbar_digit+1;
-			if (textlen >= num_txt.Length()) textlen = num_txt.Length();
-			num_txt = num_txt.Mid(0, m_sclbar_digit+1);
-		}
-		else
-		{
-			int count;
-			bool zero = true;
-			for(count = 0; count < num_txt.Length(); count++)
-			{
-				if (num_txt.GetChar(count) != wxT('0') && num_txt.GetChar(count) != wxT('.'))
-				{
-					zero = false;
-					break;
-				}
-			}
-			if (!zero)
-			{
-				count += m_sclbar_digit;
-				if (count >= num_txt.Length()) count = num_txt.Length()-1;
-			}
-			else
-				count = 1;
-			num_txt = num_txt.Mid(0, count);
-		}
-		num_txt += wxT(" ");
-	}
-*/
-
-/*	wxString num_txt = (len_txt==(int)len_txt) ? wxString::Format(wxT("%i "), (int)len_txt) :
-												 wxString::Format( ((int)(len_txt*100.0))%10==0 ? wxT("%.1f ") : wxT("%.2f "), len_txt);
-	if (m_fix_sclbar)
-	{
-		if (log10(len_txt) < 0.0)
-		{
-			while (log10(len_txt) < 0.0 && unit_id > 0)
-			{
-				len_txt *= 1000.0;
-				unit_id--;
-			}
-		}
-		else if (log10(len_txt) >= 3.0)
-		{
-			while (log10(len_txt) >= 3.0 && unit_id < 2)
-			{
-				len_txt *= 0.001;
-				unit_id++;
-			}
-		}
-
-		switch (unit_id)
-		{
-		case 0:
-			unit_txt = "nm";
-			break;
-		case 1:
-		default:
-			unit_txt = wxString::Format("%c%c", 181, 'm');
-			break;
-		case 2:
-			unit_txt = "mm";
-			break;
-		}
-
-		if (log10(len_txt) >= 2.0)
-			num_txt = wxString::Format(wxT("%i "), (int)len_txt);
-		else if (len_txt < 1.0)
-			num_txt = wxString::Format(wxT("%.3f "), len_txt);
-		else
-		{
-			int pr = 2.0 - (int)log10(len_txt);
-			wxString f = wxT("%.") + wxString::Format(wxT("%i"), pr) + wxT("f ");
-			num_txt = wxString::Format(f, len_txt);
-		}
-	}
-*/
-	wstring wsb_text;
-	wsb_text = num_txt + unit_txt.ToStdWstring();
-	
-	double textlen = m_text_renderer?
-		m_text_renderer->RenderTextLen(wsb_text):0.0;
-	vector<float> vertex;
-	vertex.reserve(4*3);
-
-	Color text_color = GetTextColor();
-
-	if (m_draw_frame)
-	{
-		px = (0.95*m_frame_w+m_frame_x)/nx;
-		py = (0.05*m_frame_h+m_frame_y+offset)/ny;
-		ph = 5.0/ny;
-		vertex.push_back(px); vertex.push_back(py); vertex.push_back(0.0);
-		vertex.push_back(px-len); vertex.push_back(py); vertex.push_back(0.0);
-		vertex.push_back(px); vertex.push_back(py-ph); vertex.push_back(0.0);
-		vertex.push_back(px-len); vertex.push_back(py-ph); vertex.push_back(0.0);
-
-		if (m_disp_scale_bar_text)
-		{
-			px = 0.95*m_frame_w+m_frame_x-(len*nx+textlen+nx)/2.0;
-			py = ny/2.0-ny+0.065*m_frame_h+m_frame_y+offset;
-			if (m_text_renderer)
-				m_text_renderer->RenderText(
-				wsb_text, text_color,
-				px*sx, py*sy, sx, sy);
-		}
-	}
-	else
-	{
-		px = 0.95;
-		py = 0.05+offset/ny;
-		ph = 5.0/ny;
-		vertex.push_back(px); vertex.push_back(py); vertex.push_back(0.0);
-		vertex.push_back(px-len); vertex.push_back(py); vertex.push_back(0.0);
-		vertex.push_back(px); vertex.push_back(py-ph); vertex.push_back(0.0);
-		vertex.push_back(px-len); vertex.push_back(py-ph); vertex.push_back(0.0);
-
-		if (m_disp_scale_bar_text)
-		{
-			px = 0.95*nx-(len*nx+textlen+nx)/2.0;
-			py = ny/2.0-0.935*ny+offset;
-			if (m_text_renderer)
-				m_text_renderer->RenderText(
-				wsb_text, text_color,
-				px*sx, py*sy, sx, sy);
-		}
-	}
-
-	ShaderProgram* shader =
-		m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY);
-	if (shader)
-	{
-		if (!shader->valid())
-			shader->create();
-		shader->bind();
-	}
-	shader->setLocalParamMatrix(0, glm::value_ptr(proj_mat));
-
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-	glBindVertexArray(m_misc_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
-
-	shader->setLocalParam(0, text_color.r(), text_color.g(), text_color.b(), 1.0);
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
-	glDisableVertexAttribArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
-
-	if (shader && shader->valid())
-		shader->release();
-
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
+//	double offset = 0.0;
+//	if (m_draw_legend)
+//		offset = m_sb_height;
+//
+//	int nx = GetSize().x;
+//	int ny = GetSize().y;
+//	float sx, sy;
+//	sx = 2.0/nx;
+//	sy = 2.0/ny;
+//	float px, py, ph;
+//
+//	glm::mat4 proj_mat = glm::ortho(0.0f, 1.0f, 0.0f, 1.0f);
+//
+//	glDisable(GL_DEPTH_TEST);
+//	glDisable(GL_BLEND);
+//	
+//	if (m_fix_sclbar)
+//		m_sb_length = m_fixed_sclbar_fac/(m_scale_factor*min(nx,ny));
+//	double len = m_sb_length / (m_ortho_right-m_ortho_left);
+//
+//	double len_txt = m_sb_length;
+//	int unit_id = m_sb_unit;
+//	wxString unit_txt = m_sb_text;
+//
+//	wxString num_txt;
+//	
+//	if (m_sclbar_digit == 0)
+//		num_txt = wxString::Format(wxT("%i "), (int)len_txt);
+//	else if (m_sclbar_digit > 0)
+//	{
+//		wxString f = wxT("%.9f");
+//		num_txt = wxString::Format(f, len_txt);
+//		wxString intstr = num_txt.BeforeFirst(wxT('.'));
+//		wxString fracstr = num_txt.AfterFirst(wxT('.'));
+//		int fractextlen = m_sclbar_digit;
+//		if (fractextlen > fracstr.Length()) fractextlen = fracstr.Length();
+//		num_txt = intstr + wxT(".") + fracstr.Mid(0, fractextlen) + wxT(" ");
+//	}
+//
+///*
+//	if (m_sclbar_digit == 0)
+//		num_txt = wxString::Format(wxT("%i "), (int)len_txt);
+//	else if (m_sclbar_digit > 0)
+//	{
+//		wxString f = wxT("%.15f");
+//		num_txt = wxString::Format(f, len_txt);
+//		wxString intstr = num_txt.BeforeFirst(wxT('.'));
+//		if (intstr.Length() >= m_sclbar_digit)
+//			num_txt = intstr;
+//		else if (intstr.GetChar(0) != wxT('0'))
+//		{
+//			int textlen = m_sclbar_digit+1;
+//			if (textlen >= num_txt.Length()) textlen = num_txt.Length();
+//			num_txt = num_txt.Mid(0, m_sclbar_digit+1);
+//		}
+//		else
+//		{
+//			int count;
+//			bool zero = true;
+//			for(count = 0; count < num_txt.Length(); count++)
+//			{
+//				if (num_txt.GetChar(count) != wxT('0') && num_txt.GetChar(count) != wxT('.'))
+//				{
+//					zero = false;
+//					break;
+//				}
+//			}
+//			if (!zero)
+//			{
+//				count += m_sclbar_digit;
+//				if (count >= num_txt.Length()) count = num_txt.Length()-1;
+//			}
+//			else
+//				count = 1;
+//			num_txt = num_txt.Mid(0, count);
+//		}
+//		num_txt += wxT(" ");
+//	}
+//*/
+//
+///*	wxString num_txt = (len_txt==(int)len_txt) ? wxString::Format(wxT("%i "), (int)len_txt) :
+//												 wxString::Format( ((int)(len_txt*100.0))%10==0 ? wxT("%.1f ") : wxT("%.2f "), len_txt);
+//	if (m_fix_sclbar)
+//	{
+//		if (log10(len_txt) < 0.0)
+//		{
+//			while (log10(len_txt) < 0.0 && unit_id > 0)
+//			{
+//				len_txt *= 1000.0;
+//				unit_id--;
+//			}
+//		}
+//		else if (log10(len_txt) >= 3.0)
+//		{
+//			while (log10(len_txt) >= 3.0 && unit_id < 2)
+//			{
+//				len_txt *= 0.001;
+//				unit_id++;
+//			}
+//		}
+//
+//		switch (unit_id)
+//		{
+//		case 0:
+//			unit_txt = "nm";
+//			break;
+//		case 1:
+//		default:
+//			unit_txt = wxString::Format("%c%c", 181, 'm');
+//			break;
+//		case 2:
+//			unit_txt = "mm";
+//			break;
+//		}
+//
+//		if (log10(len_txt) >= 2.0)
+//			num_txt = wxString::Format(wxT("%i "), (int)len_txt);
+//		else if (len_txt < 1.0)
+//			num_txt = wxString::Format(wxT("%.3f "), len_txt);
+//		else
+//		{
+//			int pr = 2.0 - (int)log10(len_txt);
+//			wxString f = wxT("%.") + wxString::Format(wxT("%i"), pr) + wxT("f ");
+//			num_txt = wxString::Format(f, len_txt);
+//		}
+//	}
+//*/
+//	wstring wsb_text;
+//	wsb_text = num_txt + unit_txt.ToStdWstring();
+//	
+//	double textlen = m_text_renderer?
+//		m_text_renderer->RenderTextLen(wsb_text):0.0;
+//	vector<float> vertex;
+//	vertex.reserve(4*3);
+//
+//	Color text_color = GetTextColor();
+//
+//	if (m_draw_frame)
+//	{
+//		px = (0.95*m_frame_w+m_frame_x)/nx;
+//		py = (0.05*m_frame_h+m_frame_y+offset)/ny;
+//		ph = 5.0/ny;
+//		vertex.push_back(px); vertex.push_back(py); vertex.push_back(0.0);
+//		vertex.push_back(px-len); vertex.push_back(py); vertex.push_back(0.0);
+//		vertex.push_back(px); vertex.push_back(py-ph); vertex.push_back(0.0);
+//		vertex.push_back(px-len); vertex.push_back(py-ph); vertex.push_back(0.0);
+//
+//		if (m_disp_scale_bar_text)
+//		{
+//			px = 0.95*m_frame_w+m_frame_x-(len*nx+textlen+nx)/2.0;
+//			py = ny/2.0-ny+0.065*m_frame_h+m_frame_y+offset;
+//			if (m_text_renderer)
+//				m_text_renderer->RenderText(
+//				wsb_text, text_color,
+//				px*sx, py*sy, sx, sy);
+//		}
+//	}
+//	else
+//	{
+//		px = 0.95;
+//		py = 0.05+offset/ny;
+//		ph = 5.0/ny;
+//		vertex.push_back(px); vertex.push_back(py); vertex.push_back(0.0);
+//		vertex.push_back(px-len); vertex.push_back(py); vertex.push_back(0.0);
+//		vertex.push_back(px); vertex.push_back(py-ph); vertex.push_back(0.0);
+//		vertex.push_back(px-len); vertex.push_back(py-ph); vertex.push_back(0.0);
+//
+//		if (m_disp_scale_bar_text)
+//		{
+//			px = 0.95*nx-(len*nx+textlen+nx)/2.0;
+//			py = ny/2.0-0.935*ny+offset;
+//			if (m_text_renderer)
+//				m_text_renderer->RenderText(
+//				wsb_text, text_color,
+//				px*sx, py*sy, sx, sy);
+//		}
+//	}
+//
+//	ShaderProgram* shader =
+//		m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY);
+//	if (shader)
+//	{
+//		if (!shader->valid())
+//			shader->create();
+//		shader->bind();
+//	}
+//	shader->setLocalParamMatrix(0, glm::value_ptr(proj_mat));
+//
+//	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
+//	glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
+//	glBindVertexArray(m_misc_vao);
+//	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
+//	glEnableVertexAttribArray(0);
+//	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
+//
+//	shader->setLocalParam(0, text_color.r(), text_color.g(), text_color.b(), 1.0);
+//	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+//
+//	glDisableVertexAttribArray(0);
+//	glBindBuffer(GL_ARRAY_BUFFER, 0);
+//	glBindVertexArray(0);
+//
+//	if (shader && shader->valid())
+//		shader->release();
+//
+//	glEnable(GL_DEPTH_TEST);
+//	glEnable(GL_BLEND);
 }
 
 void VRenderVulkanView::DrawLegend()
 {
-	if (!m_text_renderer)
-		return;
-	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-	if (!vr_frame)
-		return;
+	//if (!m_text_renderer)
+	//	return;
+	//VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	//if (!vr_frame)
+	//	return;
 
-	double font_height = m_text_renderer->GetSize() + 3.0;
+	//double font_height = m_text_renderer->GetSize() + 3.0;
 
-	int nx = GetSize().x;
-	int ny = GetSize().y;
+	//int nx = GetSize().x;
+	//int ny = GetSize().y;
 
-	double xoffset = 10.0;
-	double yoffset = 10.0;
-	if (m_draw_frame)
-	{
-		xoffset = 10.0+m_frame_x;
-		yoffset = ny-m_frame_h-m_frame_y+10.0;
-	}
+	//double xoffset = 10.0;
+	//double yoffset = 10.0;
+	//if (m_draw_frame)
+	//{
+	//	xoffset = 10.0+m_frame_x;
+	//	yoffset = ny-m_frame_h-m_frame_y+10.0;
+	//}
 
-	wxString wxstr;
-	wstring wstr;
-	double length = 0.0;
-	double name_len = 0.0;
-	double gap_width = font_height*1.5;
-	int lines = 0;
-	int i;
-	//first pass
-	for (i=0; i<(int)m_vd_pop_list.size(); i++)
-	{
-		if (m_vd_pop_list[i] && m_vd_pop_list[i]->GetLegend())
-		{
-			wxstr = m_vd_pop_list[i]->GetName();
-			wstr = wxstr.ToStdWstring();
-			name_len = m_text_renderer->RenderTextLen(wstr)+font_height;
-			length += name_len;
-			if (length < double(m_draw_frame?m_frame_w:nx)-gap_width)
-			{
-				length += gap_width;
-			}
-			else
-			{
-				length = name_len + gap_width;
-				lines++;
-			}
-		}
-	}
-	for (i=0; i<(int)m_md_pop_list.size(); i++)
-	{
-		if (m_md_pop_list[i] && m_md_pop_list[i]->GetLegend())
-		{
-			wxstr = m_md_pop_list[i]->GetName();
-			wstr = wxstr.ToStdWstring();
-			name_len = m_text_renderer->RenderTextLen(wstr)+font_height;
-			length += name_len;
-			if (length < double(m_draw_frame?m_frame_w:nx)-gap_width)
-			{
-				length += gap_width;
-			}
-			else
-			{
-				length = name_len + gap_width;
-				lines++;
-			}
-		}
-	}
+	//wxString wxstr;
+	//wstring wstr;
+	//double length = 0.0;
+	//double name_len = 0.0;
+	//double gap_width = font_height*1.5;
+	//int lines = 0;
+	//int i;
+	////first pass
+	//for (i=0; i<(int)m_vd_pop_list.size(); i++)
+	//{
+	//	if (m_vd_pop_list[i] && m_vd_pop_list[i]->GetLegend())
+	//	{
+	//		wxstr = m_vd_pop_list[i]->GetName();
+	//		wstr = wxstr.ToStdWstring();
+	//		name_len = m_text_renderer->RenderTextLen(wstr)+font_height;
+	//		length += name_len;
+	//		if (length < double(m_draw_frame?m_frame_w:nx)-gap_width)
+	//		{
+	//			length += gap_width;
+	//		}
+	//		else
+	//		{
+	//			length = name_len + gap_width;
+	//			lines++;
+	//		}
+	//	}
+	//}
+	//for (i=0; i<(int)m_md_pop_list.size(); i++)
+	//{
+	//	if (m_md_pop_list[i] && m_md_pop_list[i]->GetLegend())
+	//	{
+	//		wxstr = m_md_pop_list[i]->GetName();
+	//		wstr = wxstr.ToStdWstring();
+	//		name_len = m_text_renderer->RenderTextLen(wstr)+font_height;
+	//		length += name_len;
+	//		if (length < double(m_draw_frame?m_frame_w:nx)-gap_width)
+	//		{
+	//			length += gap_width;
+	//		}
+	//		else
+	//		{
+	//			length = name_len + gap_width;
+	//			lines++;
+	//		}
+	//	}
+	//}
 
-	//second pass
-	int cur_line = 0;
-	double xpos;
-	length = 0.0;
-	for (i=0; i<(int)m_vd_pop_list.size(); i++)
-	{
-		if (m_vd_pop_list[i] && m_vd_pop_list[i]->GetLegend())
-		{
-			wxstr = m_vd_pop_list[i]->GetName();
-			xpos = length;
-			wstr = wxstr.ToStdWstring();
-			name_len = m_text_renderer->RenderTextLen(wstr)+font_height;
-			length += name_len;
-			if (length < double(m_draw_frame?m_frame_w:nx)-gap_width)
-			{
-				length += gap_width;
-			}
-			else
-			{
-				length = name_len + gap_width;
-				xpos = 0.0;
-				cur_line++;
-			}
-			bool highlighted = false;
-			if (vr_frame->GetCurSelType() == 2 &&
-				vr_frame->GetCurSelVol() &&
-				vr_frame->GetCurSelVol()->GetName() == wxstr)
-				highlighted = true;
-			DrawName(xpos+xoffset, ny-(lines-cur_line+0.1)*font_height-yoffset,
-				nx, ny, wxstr, m_vd_pop_list[i]->GetColor(),
-				font_height, highlighted);
-		}
-	}
-	for (i=0; i<(int)m_md_pop_list.size(); i++)
-	{
-		if (m_md_pop_list[i] && m_md_pop_list[i]->GetLegend())
-		{
-			wxstr = m_md_pop_list[i]->GetName();
-			xpos = length;
-			wstr = wxstr.ToStdWstring();
-			name_len = m_text_renderer->RenderTextLen(wstr)+font_height;
-			length += name_len;
-			if (length < double(m_draw_frame?m_frame_w:nx)-gap_width)
-			{
-				length += gap_width;
-			}
-			else
-			{
-				length = name_len + gap_width;
-				xpos = 0.0;
-				cur_line++;
-			}
-			Color amb, diff, spec;
-			double shine, alpha;
-			m_md_pop_list[i]->GetMaterial(amb, diff, spec, shine, alpha);
-			Color c(diff.r(), diff.g(), diff.b());
-			bool highlighted = false;
-			if (vr_frame->GetCurSelType() == 3 &&
-				vr_frame->GetCurSelMesh() &&
-				vr_frame->GetCurSelMesh()->GetName() == wxstr)
-				highlighted = true;
-			DrawName(xpos+xoffset, ny-(lines-cur_line+0.1)*font_height-yoffset,
-				nx, ny, wxstr, c, font_height, highlighted);
-		}
-	}
+	////second pass
+	//int cur_line = 0;
+	//double xpos;
+	//length = 0.0;
+	//for (i=0; i<(int)m_vd_pop_list.size(); i++)
+	//{
+	//	if (m_vd_pop_list[i] && m_vd_pop_list[i]->GetLegend())
+	//	{
+	//		wxstr = m_vd_pop_list[i]->GetName();
+	//		xpos = length;
+	//		wstr = wxstr.ToStdWstring();
+	//		name_len = m_text_renderer->RenderTextLen(wstr)+font_height;
+	//		length += name_len;
+	//		if (length < double(m_draw_frame?m_frame_w:nx)-gap_width)
+	//		{
+	//			length += gap_width;
+	//		}
+	//		else
+	//		{
+	//			length = name_len + gap_width;
+	//			xpos = 0.0;
+	//			cur_line++;
+	//		}
+	//		bool highlighted = false;
+	//		if (vr_frame->GetCurSelType() == 2 &&
+	//			vr_frame->GetCurSelVol() &&
+	//			vr_frame->GetCurSelVol()->GetName() == wxstr)
+	//			highlighted = true;
+	//		DrawName(xpos+xoffset, ny-(lines-cur_line+0.1)*font_height-yoffset,
+	//			nx, ny, wxstr, m_vd_pop_list[i]->GetColor(),
+	//			font_height, highlighted);
+	//	}
+	//}
+	//for (i=0; i<(int)m_md_pop_list.size(); i++)
+	//{
+	//	if (m_md_pop_list[i] && m_md_pop_list[i]->GetLegend())
+	//	{
+	//		wxstr = m_md_pop_list[i]->GetName();
+	//		xpos = length;
+	//		wstr = wxstr.ToStdWstring();
+	//		name_len = m_text_renderer->RenderTextLen(wstr)+font_height;
+	//		length += name_len;
+	//		if (length < double(m_draw_frame?m_frame_w:nx)-gap_width)
+	//		{
+	//			length += gap_width;
+	//		}
+	//		else
+	//		{
+	//			length = name_len + gap_width;
+	//			xpos = 0.0;
+	//			cur_line++;
+	//		}
+	//		Color amb, diff, spec;
+	//		double shine, alpha;
+	//		m_md_pop_list[i]->GetMaterial(amb, diff, spec, shine, alpha);
+	//		Color c(diff.r(), diff.g(), diff.b());
+	//		bool highlighted = false;
+	//		if (vr_frame->GetCurSelType() == 3 &&
+	//			vr_frame->GetCurSelMesh() &&
+	//			vr_frame->GetCurSelMesh()->GetName() == wxstr)
+	//			highlighted = true;
+	//		DrawName(xpos+xoffset, ny-(lines-cur_line+0.1)*font_height-yoffset,
+	//			nx, ny, wxstr, c, font_height, highlighted);
+	//	}
+	//}
 
-	m_sb_height = (lines+1)*font_height;
+	//m_sb_height = (lines+1)*font_height;
 }
 
 void VRenderVulkanView::DrawName(
@@ -10405,7 +10392,7 @@ void VRenderVulkanView::DrawName(
 	double font_height,
 	bool highlighted)
 {
-	float sx, sy;
+	/*float sx, sy;
 	sx = 2.0/nx;
 	sy = 2.0/ny;
 
@@ -10479,12 +10466,12 @@ void VRenderVulkanView::DrawName(
 	}
 
 	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
+	glEnable(GL_BLEND);*/
 }
 
 void VRenderVulkanView::DrawGradBg()
 {
-	glm::mat4 proj_mat = glm::ortho(0.0f, 1.0f, 0.0f, 1.0f);
+	/*glm::mat4 proj_mat = glm::ortho(0.0f, 1.0f, 0.0f, 1.0f);
 
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_BLEND);
@@ -10571,7 +10558,7 @@ void VRenderVulkanView::DrawGradBg()
 		shader->release();
 
 	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
+	glEnable(GL_BLEND);*/
 }
 
 void VRenderVulkanView::SetColormapColors(int colormap)
@@ -10628,414 +10615,414 @@ void VRenderVulkanView::SetColormapColors(int colormap)
 
 void VRenderVulkanView::DrawColormap()
 {
-	bool draw = false;
+	//bool draw = false;
 
-	int num = 0;
-	int vd_index;
-	double max_val = 255.0;
-	bool enable_alpha = false;
+	//int num = 0;
+	//int vd_index;
+	//double max_val = 255.0;
+	//bool enable_alpha = false;
 
-	for (int i=0; i<GetDispVolumeNum(); i++)
-	{
-		VolumeData* vd = GetDispVolumeData(i);
-		if (vd && vd->GetColormapMode() == 1 && vd->GetDisp())
-		{
-			num++;
-			vd_index = i;
-		}
-	}
+	//for (int i=0; i<GetDispVolumeNum(); i++)
+	//{
+	//	VolumeData* vd = GetDispVolumeData(i);
+	//	if (vd && vd->GetColormapMode() == 1 && vd->GetDisp())
+	//	{
+	//		num++;
+	//		vd_index = i;
+	//	}
+	//}
 
-	if (num == 0)
-		return;
-	else if (num == 1)
-	{
-		VolumeData* vd_view = GetDispVolumeData(vd_index);
-		if (vd_view)
-		{
-			draw = true;
-			double low, high;
-			vd_view->GetColormapValues(low, high);
-			m_value_2 = low;
-			m_value_6 = high;
-			m_value_4 = (low+high)/2.0;
-			m_value_3 = (low+m_value_4)/2.0;
-			m_value_5 = (m_value_4+high)/2.0;
-			max_val = vd_view->GetMaxValue();
-			enable_alpha = vd_view->GetEnableAlpha();
-			SetColormapColors(vd_view->GetColormap());
-		}
-	}
-	else if (num > 1)
-	{
-		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-		if (vr_frame)
-		{
-			VolumeData* vd = vr_frame->GetCurSelVol();
-			if (vd && vd->GetDisp())
-			{
-				wxString str = vd->GetName();
-				VolumeData* vd_view = GetVolumeData(str);
-				if (vd_view && vd_view->GetColormapDisp())
-				{
-					draw = true;
-					double low, high;
-					vd_view->GetColormapValues(low, high);
-					m_value_2 = low;
-					m_value_6 = high;
-					m_value_4 = (low+high)/2.0;
-					m_value_3 = (low+m_value_4)/2.0;
-					m_value_5 = (m_value_4+high)/2.0;
-					max_val = vd_view->GetMaxValue();
-					enable_alpha = vd_view->GetEnableAlpha();
-					SetColormapColors(vd_view->GetColormap());
-				}
-			}
-		}
-	}
+	//if (num == 0)
+	//	return;
+	//else if (num == 1)
+	//{
+	//	VolumeData* vd_view = GetDispVolumeData(vd_index);
+	//	if (vd_view)
+	//	{
+	//		draw = true;
+	//		double low, high;
+	//		vd_view->GetColormapValues(low, high);
+	//		m_value_2 = low;
+	//		m_value_6 = high;
+	//		m_value_4 = (low+high)/2.0;
+	//		m_value_3 = (low+m_value_4)/2.0;
+	//		m_value_5 = (m_value_4+high)/2.0;
+	//		max_val = vd_view->GetMaxValue();
+	//		enable_alpha = vd_view->GetEnableAlpha();
+	//		SetColormapColors(vd_view->GetColormap());
+	//	}
+	//}
+	//else if (num > 1)
+	//{
+	//	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	//	if (vr_frame)
+	//	{
+	//		VolumeData* vd = vr_frame->GetCurSelVol();
+	//		if (vd && vd->GetDisp())
+	//		{
+	//			wxString str = vd->GetName();
+	//			VolumeData* vd_view = GetVolumeData(str);
+	//			if (vd_view && vd_view->GetColormapDisp())
+	//			{
+	//				draw = true;
+	//				double low, high;
+	//				vd_view->GetColormapValues(low, high);
+	//				m_value_2 = low;
+	//				m_value_6 = high;
+	//				m_value_4 = (low+high)/2.0;
+	//				m_value_3 = (low+m_value_4)/2.0;
+	//				m_value_5 = (m_value_4+high)/2.0;
+	//				max_val = vd_view->GetMaxValue();
+	//				enable_alpha = vd_view->GetEnableAlpha();
+	//				SetColormapColors(vd_view->GetColormap());
+	//			}
+	//		}
+	//	}
+	//}
 
-	if (!draw)
-		return;
+	//if (!draw)
+	//	return;
 
-	double offset = 0.0;
-	if (m_draw_legend)
-		offset = m_sb_height;
+	//double offset = 0.0;
+	//if (m_draw_legend)
+	//	offset = m_sb_height;
 
-	int nx = GetSize().x;
-	int ny = GetSize().y;
-	float sx, sy;
-	sx = 2.0/nx;
-	sy = 2.0/ny;
+	//int nx = GetSize().x;
+	//int ny = GetSize().y;
+	//float sx, sy;
+	//sx = 2.0/nx;
+	//sy = 2.0/ny;
 
-	glm::mat4 proj_mat = glm::ortho(0.0f, 1.0f, 0.0f, 1.0f);
+	//glm::mat4 proj_mat = glm::ortho(0.0f, 1.0f, 0.0f, 1.0f);
 
-	vector<float> vertex;
-	vertex.reserve(14*7);
+	//vector<float> vertex;
+	//vertex.reserve(14*7);
 
-	float px, py;
-	//draw colormap
-	if (m_draw_frame)
-	{
-		px = (0.01*m_frame_w+m_frame_x)/nx;
-		py = (0.05*m_frame_w+m_frame_x)/nx;
-		vertex.push_back(px); vertex.push_back((0.1*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_1.r()); vertex.push_back(m_color_1.g()); vertex.push_back(m_color_1.b()); vertex.push_back(enable_alpha?0.0:1.0);
-		vertex.push_back(py); vertex.push_back((0.1*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_1.r()); vertex.push_back(m_color_1.g()); vertex.push_back(m_color_1.b()); vertex.push_back(enable_alpha?0.0:1.0);
-		vertex.push_back(px); vertex.push_back(((0.1+0.4*m_value_2)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_2.r()); vertex.push_back(m_color_2.g()); vertex.push_back(m_color_2.b()); vertex.push_back(enable_alpha?m_value_2:1.0);
-		vertex.push_back(py); vertex.push_back(((0.1+0.4*m_value_2)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_2.r()); vertex.push_back(m_color_2.g()); vertex.push_back(m_color_2.b()); vertex.push_back(enable_alpha?m_value_2:1.0);
-		vertex.push_back(px); vertex.push_back(((0.1+0.4*m_value_3)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_3.r()); vertex.push_back(m_color_3.g()); vertex.push_back(m_color_3.b()); vertex.push_back(enable_alpha?m_value_3:1.0);
-		vertex.push_back(py); vertex.push_back(((0.1+0.4*m_value_3)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_3.r()); vertex.push_back(m_color_3.g()); vertex.push_back(m_color_3.b()); vertex.push_back(enable_alpha?m_value_3:1.0);
-		vertex.push_back(px); vertex.push_back(((0.1+0.4*m_value_4)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_4.r()); vertex.push_back(m_color_4.g()); vertex.push_back(m_color_4.b()); vertex.push_back(enable_alpha?m_value_4:1.0);
-		vertex.push_back(py); vertex.push_back(((0.1+0.4*m_value_4)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_4.r()); vertex.push_back(m_color_4.g()); vertex.push_back(m_color_4.b()); vertex.push_back(enable_alpha?m_value_4:1.0);
-		vertex.push_back(px); vertex.push_back(((0.1+0.4*m_value_5)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_5.r()); vertex.push_back(m_color_5.g()); vertex.push_back(m_color_5.b()); vertex.push_back(enable_alpha?m_value_5:1.0);
-		vertex.push_back(py); vertex.push_back(((0.1+0.4*m_value_5)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_5.r()); vertex.push_back(m_color_5.g()); vertex.push_back(m_color_5.b()); vertex.push_back(enable_alpha?m_value_5:1.0);
-		vertex.push_back(px); vertex.push_back(((0.1+0.4*m_value_6)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_6.r()); vertex.push_back(m_color_6.g()); vertex.push_back(m_color_6.b()); vertex.push_back(enable_alpha?m_value_6:1.0);
-		vertex.push_back(py); vertex.push_back(((0.1+0.4*m_value_6)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_6.r()); vertex.push_back(m_color_6.g()); vertex.push_back(m_color_6.b()); vertex.push_back(enable_alpha?m_value_6:1.0);
-		vertex.push_back(px); vertex.push_back((0.5*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_7.r()); vertex.push_back(m_color_7.g()); vertex.push_back(m_color_7.b()); vertex.push_back(1.0);
-		vertex.push_back(py); vertex.push_back((0.5*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_7.r()); vertex.push_back(m_color_7.g()); vertex.push_back(m_color_7.b()); vertex.push_back(1.0);
+	//float px, py;
+	////draw colormap
+	//if (m_draw_frame)
+	//{
+	//	px = (0.01*m_frame_w+m_frame_x)/nx;
+	//	py = (0.05*m_frame_w+m_frame_x)/nx;
+	//	vertex.push_back(px); vertex.push_back((0.1*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_1.r()); vertex.push_back(m_color_1.g()); vertex.push_back(m_color_1.b()); vertex.push_back(enable_alpha?0.0:1.0);
+	//	vertex.push_back(py); vertex.push_back((0.1*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_1.r()); vertex.push_back(m_color_1.g()); vertex.push_back(m_color_1.b()); vertex.push_back(enable_alpha?0.0:1.0);
+	//	vertex.push_back(px); vertex.push_back(((0.1+0.4*m_value_2)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_2.r()); vertex.push_back(m_color_2.g()); vertex.push_back(m_color_2.b()); vertex.push_back(enable_alpha?m_value_2:1.0);
+	//	vertex.push_back(py); vertex.push_back(((0.1+0.4*m_value_2)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_2.r()); vertex.push_back(m_color_2.g()); vertex.push_back(m_color_2.b()); vertex.push_back(enable_alpha?m_value_2:1.0);
+	//	vertex.push_back(px); vertex.push_back(((0.1+0.4*m_value_3)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_3.r()); vertex.push_back(m_color_3.g()); vertex.push_back(m_color_3.b()); vertex.push_back(enable_alpha?m_value_3:1.0);
+	//	vertex.push_back(py); vertex.push_back(((0.1+0.4*m_value_3)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_3.r()); vertex.push_back(m_color_3.g()); vertex.push_back(m_color_3.b()); vertex.push_back(enable_alpha?m_value_3:1.0);
+	//	vertex.push_back(px); vertex.push_back(((0.1+0.4*m_value_4)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_4.r()); vertex.push_back(m_color_4.g()); vertex.push_back(m_color_4.b()); vertex.push_back(enable_alpha?m_value_4:1.0);
+	//	vertex.push_back(py); vertex.push_back(((0.1+0.4*m_value_4)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_4.r()); vertex.push_back(m_color_4.g()); vertex.push_back(m_color_4.b()); vertex.push_back(enable_alpha?m_value_4:1.0);
+	//	vertex.push_back(px); vertex.push_back(((0.1+0.4*m_value_5)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_5.r()); vertex.push_back(m_color_5.g()); vertex.push_back(m_color_5.b()); vertex.push_back(enable_alpha?m_value_5:1.0);
+	//	vertex.push_back(py); vertex.push_back(((0.1+0.4*m_value_5)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_5.r()); vertex.push_back(m_color_5.g()); vertex.push_back(m_color_5.b()); vertex.push_back(enable_alpha?m_value_5:1.0);
+	//	vertex.push_back(px); vertex.push_back(((0.1+0.4*m_value_6)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_6.r()); vertex.push_back(m_color_6.g()); vertex.push_back(m_color_6.b()); vertex.push_back(enable_alpha?m_value_6:1.0);
+	//	vertex.push_back(py); vertex.push_back(((0.1+0.4*m_value_6)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_6.r()); vertex.push_back(m_color_6.g()); vertex.push_back(m_color_6.b()); vertex.push_back(enable_alpha?m_value_6:1.0);
+	//	vertex.push_back(px); vertex.push_back((0.5*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_7.r()); vertex.push_back(m_color_7.g()); vertex.push_back(m_color_7.b()); vertex.push_back(1.0);
+	//	vertex.push_back(py); vertex.push_back((0.5*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_7.r()); vertex.push_back(m_color_7.g()); vertex.push_back(m_color_7.b()); vertex.push_back(1.0);
 
-		if (m_text_renderer)
-		{
-			wxString str;
-			wstring wstr;
+	//	if (m_text_renderer)
+	//	{
+	//		wxString str;
+	//		wstring wstr;
 
-			Color text_color = GetTextColor();
+	//		Color text_color = GetTextColor();
 
-			//value 1
-			px = 0.052*m_frame_w+m_frame_x-nx/2.0;
-			py = 0.1*m_frame_h+m_frame_y+offset-ny/2.0;
-			str = wxString::Format("%d", 0);
-			wstr = str.ToStdWstring();
-			m_text_renderer->RenderText(
-				wstr, text_color,
-				px*sx, py*sy, sx, sy);
-			//value 2
-			px = 0.052*m_frame_w+m_frame_x-nx/2.0;
-			py = (0.1+0.4*m_value_2)*m_frame_h+m_frame_y+offset-ny/2.0;
-			str = wxString::Format("%d", int(m_value_2*max_val));
-			wstr = str.ToStdWstring();
-			m_text_renderer->RenderText(
-				wstr, text_color,
-				px*sx, py*sy, sx, sy);
-			//value 4
-			px = 0.052*m_frame_w+m_frame_x-nx/2.0;
-			py = (0.1+0.4*m_value_4)*m_frame_h+m_frame_y+offset-ny/2.0;
-			str = wxString::Format("%d", int(m_value_4*max_val));
-			wstr = str.ToStdWstring();
-			m_text_renderer->RenderText(
-				wstr, text_color,
-				px*sx, py*sy, sx, sy);
-			//value 6
-			px = 0.052*m_frame_w+m_frame_x-nx/2.0;
-			py = (0.1+0.4*m_value_6)*m_frame_h+m_frame_y+offset-ny/2.0;
-			str = wxString::Format("%d", int(m_value_6*max_val));
-			wstr = str.ToStdWstring();
-			m_text_renderer->RenderText(
-				wstr, text_color,
-				px*sx, py*sy, sx, sy);
-			//value 7
-			px = 0.052*m_frame_w+m_frame_x-nx/2.0;
-			py = 0.5*m_frame_h+m_frame_y+offset-ny/2.0;
-			str = wxString::Format("%d", int(max_val));
-			wstr = str.ToStdWstring();
-			m_text_renderer->RenderText(
-				wstr, text_color,
-				px*sx, py*sy, sx, sy);
-		}
-	}
-	else
-	{
-		vertex.push_back(0.01); vertex.push_back(0.1+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_1.r()); vertex.push_back(m_color_1.g()); vertex.push_back(m_color_1.b()); vertex.push_back(enable_alpha?0.0:1.0);
-		vertex.push_back(0.05); vertex.push_back(0.1+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_1.r()); vertex.push_back(m_color_1.g()); vertex.push_back(m_color_1.b()); vertex.push_back(enable_alpha?0.0:1.0);
-		vertex.push_back(0.01); vertex.push_back(0.1+0.4*m_value_2+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_2.r()); vertex.push_back(m_color_2.g()); vertex.push_back(m_color_2.b()); vertex.push_back(enable_alpha?m_value_2:1.0);
-		vertex.push_back(0.05); vertex.push_back(0.1+0.4*m_value_2+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_2.r()); vertex.push_back(m_color_2.g()); vertex.push_back(m_color_2.b()); vertex.push_back(enable_alpha?m_value_2:1.0);
-		vertex.push_back(0.01); vertex.push_back(0.1+0.4*m_value_3+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_3.r()); vertex.push_back(m_color_3.g()); vertex.push_back(m_color_3.b()); vertex.push_back(enable_alpha?m_value_3:1.0);
-		vertex.push_back(0.05); vertex.push_back(0.1+0.4*m_value_3+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_3.r()); vertex.push_back(m_color_3.g()); vertex.push_back(m_color_3.b()); vertex.push_back(enable_alpha?m_value_3:1.0);
-		vertex.push_back(0.01); vertex.push_back(0.1+0.4*m_value_4+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_4.r()); vertex.push_back(m_color_4.g()); vertex.push_back(m_color_4.b()); vertex.push_back(enable_alpha?m_value_4:1.0);
-		vertex.push_back(0.05); vertex.push_back(0.1+0.4*m_value_4+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_4.r()); vertex.push_back(m_color_4.g()); vertex.push_back(m_color_4.b()); vertex.push_back(enable_alpha?m_value_4:1.0);
-		vertex.push_back(0.01); vertex.push_back(0.1+0.4*m_value_5+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_5.r()); vertex.push_back(m_color_5.g()); vertex.push_back(m_color_5.b()); vertex.push_back(enable_alpha?m_value_5:1.0);
-		vertex.push_back(0.05); vertex.push_back(0.1+0.4*m_value_5+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_5.r()); vertex.push_back(m_color_5.g()); vertex.push_back(m_color_5.b()); vertex.push_back(enable_alpha?m_value_5:1.0);
-		vertex.push_back(0.01); vertex.push_back(0.1+0.4*m_value_6+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_6.r()); vertex.push_back(m_color_6.g()); vertex.push_back(m_color_6.b()); vertex.push_back(enable_alpha?m_value_6:1.0);
-		vertex.push_back(0.05); vertex.push_back(0.1+0.4*m_value_6+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_6.r()); vertex.push_back(m_color_6.g()); vertex.push_back(m_color_6.b()); vertex.push_back(enable_alpha?m_value_6:1.0);
-		vertex.push_back(0.01); vertex.push_back(0.5+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_7.r()); vertex.push_back(m_color_7.g()); vertex.push_back(m_color_7.b()); vertex.push_back(1.0);
-		vertex.push_back(0.05); vertex.push_back(0.5+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_7.r()); vertex.push_back(m_color_7.g()); vertex.push_back(m_color_7.b()); vertex.push_back(1.0);
+	//		//value 1
+	//		px = 0.052*m_frame_w+m_frame_x-nx/2.0;
+	//		py = 0.1*m_frame_h+m_frame_y+offset-ny/2.0;
+	//		str = wxString::Format("%d", 0);
+	//		wstr = str.ToStdWstring();
+	//		m_text_renderer->RenderText(
+	//			wstr, text_color,
+	//			px*sx, py*sy, sx, sy);
+	//		//value 2
+	//		px = 0.052*m_frame_w+m_frame_x-nx/2.0;
+	//		py = (0.1+0.4*m_value_2)*m_frame_h+m_frame_y+offset-ny/2.0;
+	//		str = wxString::Format("%d", int(m_value_2*max_val));
+	//		wstr = str.ToStdWstring();
+	//		m_text_renderer->RenderText(
+	//			wstr, text_color,
+	//			px*sx, py*sy, sx, sy);
+	//		//value 4
+	//		px = 0.052*m_frame_w+m_frame_x-nx/2.0;
+	//		py = (0.1+0.4*m_value_4)*m_frame_h+m_frame_y+offset-ny/2.0;
+	//		str = wxString::Format("%d", int(m_value_4*max_val));
+	//		wstr = str.ToStdWstring();
+	//		m_text_renderer->RenderText(
+	//			wstr, text_color,
+	//			px*sx, py*sy, sx, sy);
+	//		//value 6
+	//		px = 0.052*m_frame_w+m_frame_x-nx/2.0;
+	//		py = (0.1+0.4*m_value_6)*m_frame_h+m_frame_y+offset-ny/2.0;
+	//		str = wxString::Format("%d", int(m_value_6*max_val));
+	//		wstr = str.ToStdWstring();
+	//		m_text_renderer->RenderText(
+	//			wstr, text_color,
+	//			px*sx, py*sy, sx, sy);
+	//		//value 7
+	//		px = 0.052*m_frame_w+m_frame_x-nx/2.0;
+	//		py = 0.5*m_frame_h+m_frame_y+offset-ny/2.0;
+	//		str = wxString::Format("%d", int(max_val));
+	//		wstr = str.ToStdWstring();
+	//		m_text_renderer->RenderText(
+	//			wstr, text_color,
+	//			px*sx, py*sy, sx, sy);
+	//	}
+	//}
+	//else
+	//{
+	//	vertex.push_back(0.01); vertex.push_back(0.1+offset/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_1.r()); vertex.push_back(m_color_1.g()); vertex.push_back(m_color_1.b()); vertex.push_back(enable_alpha?0.0:1.0);
+	//	vertex.push_back(0.05); vertex.push_back(0.1+offset/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_1.r()); vertex.push_back(m_color_1.g()); vertex.push_back(m_color_1.b()); vertex.push_back(enable_alpha?0.0:1.0);
+	//	vertex.push_back(0.01); vertex.push_back(0.1+0.4*m_value_2+offset/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_2.r()); vertex.push_back(m_color_2.g()); vertex.push_back(m_color_2.b()); vertex.push_back(enable_alpha?m_value_2:1.0);
+	//	vertex.push_back(0.05); vertex.push_back(0.1+0.4*m_value_2+offset/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_2.r()); vertex.push_back(m_color_2.g()); vertex.push_back(m_color_2.b()); vertex.push_back(enable_alpha?m_value_2:1.0);
+	//	vertex.push_back(0.01); vertex.push_back(0.1+0.4*m_value_3+offset/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_3.r()); vertex.push_back(m_color_3.g()); vertex.push_back(m_color_3.b()); vertex.push_back(enable_alpha?m_value_3:1.0);
+	//	vertex.push_back(0.05); vertex.push_back(0.1+0.4*m_value_3+offset/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_3.r()); vertex.push_back(m_color_3.g()); vertex.push_back(m_color_3.b()); vertex.push_back(enable_alpha?m_value_3:1.0);
+	//	vertex.push_back(0.01); vertex.push_back(0.1+0.4*m_value_4+offset/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_4.r()); vertex.push_back(m_color_4.g()); vertex.push_back(m_color_4.b()); vertex.push_back(enable_alpha?m_value_4:1.0);
+	//	vertex.push_back(0.05); vertex.push_back(0.1+0.4*m_value_4+offset/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_4.r()); vertex.push_back(m_color_4.g()); vertex.push_back(m_color_4.b()); vertex.push_back(enable_alpha?m_value_4:1.0);
+	//	vertex.push_back(0.01); vertex.push_back(0.1+0.4*m_value_5+offset/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_5.r()); vertex.push_back(m_color_5.g()); vertex.push_back(m_color_5.b()); vertex.push_back(enable_alpha?m_value_5:1.0);
+	//	vertex.push_back(0.05); vertex.push_back(0.1+0.4*m_value_5+offset/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_5.r()); vertex.push_back(m_color_5.g()); vertex.push_back(m_color_5.b()); vertex.push_back(enable_alpha?m_value_5:1.0);
+	//	vertex.push_back(0.01); vertex.push_back(0.1+0.4*m_value_6+offset/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_6.r()); vertex.push_back(m_color_6.g()); vertex.push_back(m_color_6.b()); vertex.push_back(enable_alpha?m_value_6:1.0);
+	//	vertex.push_back(0.05); vertex.push_back(0.1+0.4*m_value_6+offset/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_6.r()); vertex.push_back(m_color_6.g()); vertex.push_back(m_color_6.b()); vertex.push_back(enable_alpha?m_value_6:1.0);
+	//	vertex.push_back(0.01); vertex.push_back(0.5+offset/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_7.r()); vertex.push_back(m_color_7.g()); vertex.push_back(m_color_7.b()); vertex.push_back(1.0);
+	//	vertex.push_back(0.05); vertex.push_back(0.5+offset/ny); vertex.push_back(0.0);
+	//	vertex.push_back(m_color_7.r()); vertex.push_back(m_color_7.g()); vertex.push_back(m_color_7.b()); vertex.push_back(1.0);
 
-		if (m_text_renderer)
-		{
-			wxString str;
-			wstring wstr;
+	//	if (m_text_renderer)
+	//	{
+	//		wxString str;
+	//		wstring wstr;
 
-			Color text_color = GetTextColor();
+	//		Color text_color = GetTextColor();
 
-			//value 1
-			px = 0.052*nx-nx/2.0;
-			py = ny/2.0-0.9*ny+offset;
-			str = wxString::Format("%d", 0);
-			wstr = str.ToStdWstring();
-			m_text_renderer->RenderText(
-				wstr, text_color,
-				px*sx, py*sy, sx, sy);
-			//value 2
-			px = 0.052*nx-nx/2.0;
-			py = ny/2.0-(0.9-0.4*m_value_2)*ny+offset;
-			str = wxString::Format("%d", int(m_value_2*max_val));
-			wstr = str.ToStdWstring();
-			m_text_renderer->RenderText(
-				wstr, text_color,
-				px*sx, py*sy, sx, sy);
-			//value 4
-			px = 0.052*nx-nx/2.0;
-			py = ny/2.0-(0.9-0.4*m_value_4)*ny+offset;
-			str = wxString::Format("%d", int(m_value_4*max_val));
-			wstr = str.ToStdWstring();
-			m_text_renderer->RenderText(
-				wstr, text_color,
-				px*sx, py*sy, sx, sy);
-			//value 6
-			px = 0.052*nx-nx/2.0;
-			py = ny/2.0-(0.9-0.4*m_value_6)*ny+offset;
-			str = wxString::Format("%d", int(m_value_6*max_val));
-			wstr = str.ToStdWstring();
-			m_text_renderer->RenderText(
-				wstr, text_color,
-				px*sx, py*sy, sx, sy);
-			//value 7
-			px = 0.052*nx-nx/2.0;
-			py = ny/2.0-0.5*ny+offset;
-			str = wxString::Format("%d", int(max_val));
-			wstr = str.ToStdWstring();
-			m_text_renderer->RenderText(
-				wstr, text_color,
-				px*sx, py*sy, sx, sy);
-		}
-	}
+	//		//value 1
+	//		px = 0.052*nx-nx/2.0;
+	//		py = ny/2.0-0.9*ny+offset;
+	//		str = wxString::Format("%d", 0);
+	//		wstr = str.ToStdWstring();
+	//		m_text_renderer->RenderText(
+	//			wstr, text_color,
+	//			px*sx, py*sy, sx, sy);
+	//		//value 2
+	//		px = 0.052*nx-nx/2.0;
+	//		py = ny/2.0-(0.9-0.4*m_value_2)*ny+offset;
+	//		str = wxString::Format("%d", int(m_value_2*max_val));
+	//		wstr = str.ToStdWstring();
+	//		m_text_renderer->RenderText(
+	//			wstr, text_color,
+	//			px*sx, py*sy, sx, sy);
+	//		//value 4
+	//		px = 0.052*nx-nx/2.0;
+	//		py = ny/2.0-(0.9-0.4*m_value_4)*ny+offset;
+	//		str = wxString::Format("%d", int(m_value_4*max_val));
+	//		wstr = str.ToStdWstring();
+	//		m_text_renderer->RenderText(
+	//			wstr, text_color,
+	//			px*sx, py*sy, sx, sy);
+	//		//value 6
+	//		px = 0.052*nx-nx/2.0;
+	//		py = ny/2.0-(0.9-0.4*m_value_6)*ny+offset;
+	//		str = wxString::Format("%d", int(m_value_6*max_val));
+	//		wstr = str.ToStdWstring();
+	//		m_text_renderer->RenderText(
+	//			wstr, text_color,
+	//			px*sx, py*sy, sx, sy);
+	//		//value 7
+	//		px = 0.052*nx-nx/2.0;
+	//		py = ny/2.0-0.5*ny+offset;
+	//		str = wxString::Format("%d", int(max_val));
+	//		wstr = str.ToStdWstring();
+	//		m_text_renderer->RenderText(
+	//			wstr, text_color,
+	//			px*sx, py*sy, sx, sy);
+	//	}
+	//}
 
-	glDisable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	//glDisable(GL_DEPTH_TEST);
+	//glEnable(GL_BLEND);
+	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	ShaderProgram* shader =
-		m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY_COLOR4);
-	if (shader)
-	{
-		if (!shader->valid())
-			shader->create();
-		shader->bind();
-	}
-	shader->setLocalParamMatrix(0, glm::value_ptr(proj_mat));
+	//ShaderProgram* shader =
+	//	m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY_COLOR4);
+	//if (shader)
+	//{
+	//	if (!shader->valid())
+	//		shader->create();
+	//	shader->bind();
+	//}
+	//shader->setLocalParamMatrix(0, glm::value_ptr(proj_mat));
 
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-	glBindVertexArray(m_misc_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 7*sizeof(float), (const GLvoid*)0);
-	glEnableVertexAttribArray(1);
-	glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 7*sizeof(float), (const GLvoid*)12);
+	//glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
+	//glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
+	//glBindVertexArray(m_misc_vao);
+	//glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
+	//glEnableVertexAttribArray(0);
+	//glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 7*sizeof(float), (const GLvoid*)0);
+	//glEnableVertexAttribArray(1);
+	//glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 7*sizeof(float), (const GLvoid*)12);
 
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 14);
+	//glDrawArrays(GL_TRIANGLE_STRIP, 0, 14);
 
-	glDisableVertexAttribArray(0);
-	glDisableVertexAttribArray(1);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
+	//glDisableVertexAttribArray(0);
+	//glDisableVertexAttribArray(1);
+	//glBindBuffer(GL_ARRAY_BUFFER, 0);
+	//glBindVertexArray(0);
 
-	if (shader && shader->valid())
-		shader->release();
+	//if (shader && shader->valid())
+	//	shader->release();
 
-	glEnable(GL_DEPTH_TEST);
+	//glEnable(GL_DEPTH_TEST);
 }
 
 void VRenderVulkanView::DrawInfo(int nx, int ny)
 {
-	if (!m_text_renderer)
-		return;
+	//if (!m_text_renderer)
+	//	return;
 
-	float sx, sy;
-	sx = 2.0/nx;
-	sy = 2.0/ny;
-	float px, py;
-	float gapw = m_text_renderer->GetSize();
-	float gaph = gapw*2;
+	//float sx, sy;
+	//sx = 2.0/nx;
+	//sy = 2.0/ny;
+	//float px, py;
+	//float gapw = m_text_renderer->GetSize();
+	//float gaph = gapw*2;
 
-	double fps_ = 1.0/goTimer->average();
-	wxString str;
-	Color text_color = GetTextColor();
-	if (TextureRenderer::get_mem_swap())
-	{
-		str = wxString::Format(
-			"FPS: %.2f, Bricks: %d, Quota: %d, Int: %s, Time: %lu, Dist: %f",
-			fps_>=0.0&&fps_<300.0?fps_:0.0,
-			TextureRenderer::get_total_brick_num(),
-			TextureRenderer::get_quota_bricks(),
-			m_interactive?"Yes":"No",
-			TextureRenderer::get_cor_up_time(),
-			CalcCameraDistance());
-		////budget_test
-		//if (m_interactive)
-		//  tos <<
-		//  TextureRenderer::get_quota_bricks()
-		//  << "\t" <<
-		//  TextureRenderer::get_finished_bricks()
-		//  << "\t" <<
-		//  TextureRenderer::get_queue_last()
-		//  << "\t" <<
-		//  int(TextureRenderer::get_finished_bricks()*
-		//    TextureRenderer::get_up_time()/
-		//    TextureRenderer::get_consumed_time())
-		//  << "\n";
-	}
-	else
-		str = wxString::Format("FPS: %.2f", fps_>=0.0&&fps_<300.0?fps_:0.0);
+	//double fps_ = 1.0/goTimer->average();
+	//wxString str;
+	//Color text_color = GetTextColor();
+	//if (TextureRenderer::get_mem_swap())
+	//{
+	//	str = wxString::Format(
+	//		"FPS: %.2f, Bricks: %d, Quota: %d, Int: %s, Time: %lu, Dist: %f",
+	//		fps_>=0.0&&fps_<300.0?fps_:0.0,
+	//		TextureRenderer::get_total_brick_num(),
+	//		TextureRenderer::get_quota_bricks(),
+	//		m_interactive?"Yes":"No",
+	//		TextureRenderer::get_cor_up_time(),
+	//		CalcCameraDistance());
+	//	////budget_test
+	//	//if (m_interactive)
+	//	//  tos <<
+	//	//  TextureRenderer::get_quota_bricks()
+	//	//  << "\t" <<
+	//	//  TextureRenderer::get_finished_bricks()
+	//	//  << "\t" <<
+	//	//  TextureRenderer::get_queue_last()
+	//	//  << "\t" <<
+	//	//  int(TextureRenderer::get_finished_bricks()*
+	//	//    TextureRenderer::get_up_time()/
+	//	//    TextureRenderer::get_consumed_time())
+	//	//  << "\n";
+	//}
+	//else
+	//	str = wxString::Format("FPS: %.2f", fps_>=0.0&&fps_<300.0?fps_:0.0);
 
-	if (m_cur_vol && m_cur_vol->isBrxml())
-	{
-		int resx=0, resy=0, resz=0;
-		if (m_cur_vol->GetTexture())
-		{
-			resx = m_cur_vol->GetTexture()->nx();
-			resy = m_cur_vol->GetTexture()->ny();
-			resz = m_cur_vol->GetTexture()->nz();
-		}
-		str += wxString::Format(" VVD_Level: %d/%d W:%d H:%d D:%d,", m_cur_vol->GetLevel()+1, m_cur_vol->GetLevelNum(), resx, resy, resz);
-		long long used_mem;
-		int dtnum, qnum, dqnum;
-		m_loader.GetPalams(used_mem, dtnum, qnum, dqnum);
-		str += wxString::Format(" Mem:%lld(MB) Th: %d Q: %d DQ: %d,", used_mem/(1024LL*1024LL), dtnum, qnum, dqnum);
-	}
+	//if (m_cur_vol && m_cur_vol->isBrxml())
+	//{
+	//	int resx=0, resy=0, resz=0;
+	//	if (m_cur_vol->GetTexture())
+	//	{
+	//		resx = m_cur_vol->GetTexture()->nx();
+	//		resy = m_cur_vol->GetTexture()->ny();
+	//		resz = m_cur_vol->GetTexture()->nz();
+	//	}
+	//	str += wxString::Format(" VVD_Level: %d/%d W:%d H:%d D:%d,", m_cur_vol->GetLevel()+1, m_cur_vol->GetLevelNum(), resx, resy, resz);
+	//	long long used_mem;
+	//	int dtnum, qnum, dqnum;
+	//	m_loader.GetPalams(used_mem, dtnum, qnum, dqnum);
+	//	str += wxString::Format(" Mem:%lld(MB) Th: %d Q: %d DQ: %d,", used_mem/(1024LL*1024LL), dtnum, qnum, dqnum);
+	//}
 
-	wstring wstr_temp = str.ToStdWstring();
-	px = gapw-nx/2;
-	py = ny/2-gaph/2;
-	m_text_renderer->RenderText(
-		wstr_temp, text_color,
-		px*sx, py*sy, sx, sy);
+	//wstring wstr_temp = str.ToStdWstring();
+	//px = gapw-nx/2;
+	//py = ny/2-gaph/2;
+	//m_text_renderer->RenderText(
+	//	wstr_temp, text_color,
+	//	px*sx, py*sy, sx, sy);
 
-	if (m_draw_coord)
-	{
-		Point p;
-		wxPoint mouse_pos = ScreenToClient(wxGetMousePosition());
-		if ((m_cur_vol && GetPointVolumeBox(p, mouse_pos.x, mouse_pos.y, m_cur_vol)>0.0) ||
-			GetPointPlane(p, mouse_pos.x, mouse_pos.y)>0.0)
-		{
-			str = wxString::Format("T: %d  X: %.2f  Y: %.2f  Z: %.2f",
-				m_tseq_cur_num, p.x(), p.y(), p.z());
-			wstr_temp = str.ToStdWstring();
-			px = gapw-nx/2;
-			py = ny/2-gaph;
-			m_text_renderer->RenderText(
-				wstr_temp, text_color,
-				px*sx, py*sy, sx, sy);
-		}
-	}
-	else
-	{
-		str = wxString::Format("T: %d", m_tseq_cur_num);
-		wstr_temp = str.ToStdWstring();
-		px = gapw-nx/2;
-		py = ny/2-gaph;
-		m_text_renderer->RenderText(
-			wstr_temp, text_color,
-			px*sx, py*sy, sx, sy);
-	}
+	//if (m_draw_coord)
+	//{
+	//	Point p;
+	//	wxPoint mouse_pos = ScreenToClient(wxGetMousePosition());
+	//	if ((m_cur_vol && GetPointVolumeBox(p, mouse_pos.x, mouse_pos.y, m_cur_vol)>0.0) ||
+	//		GetPointPlane(p, mouse_pos.x, mouse_pos.y)>0.0)
+	//	{
+	//		str = wxString::Format("T: %d  X: %.2f  Y: %.2f  Z: %.2f",
+	//			m_tseq_cur_num, p.x(), p.y(), p.z());
+	//		wstr_temp = str.ToStdWstring();
+	//		px = gapw-nx/2;
+	//		py = ny/2-gaph;
+	//		m_text_renderer->RenderText(
+	//			wstr_temp, text_color,
+	//			px*sx, py*sy, sx, sy);
+	//	}
+	//}
+	//else
+	//{
+	//	str = wxString::Format("T: %d", m_tseq_cur_num);
+	//	wstr_temp = str.ToStdWstring();
+	//	px = gapw-nx/2;
+	//	py = ny/2-gaph;
+	//	m_text_renderer->RenderText(
+	//		wstr_temp, text_color,
+	//		px*sx, py*sy, sx, sy);
+	//}
 
-	if (m_test_wiref)
-	{
-		if (m_vol_method == VOL_METHOD_MULTI && m_mvr)
-		{
-			str = wxString::Format("SLICES: %d", m_mvr->get_slice_num());
-			wstr_temp = str.ToStdWstring();
-			px = gapw-nx/2;
-			py = ny/2-gaph*1.5;
-			m_text_renderer->RenderText(
-				wstr_temp, text_color,
-				px*sx, py*sy, sx, sy);
-		}
-		else
-		{
-			for (int i=0; i<(int)m_vd_pop_list.size(); i++)
-			{
-				VolumeData* vd = m_vd_pop_list[i];
-				if (vd && vd->GetVR())
-				{
-					str = wxString::Format("SLICES_%d: %d", i+1, vd->GetVR()->get_slice_num());
-					wstr_temp = str.ToStdWstring();
-					px = gapw-nx/2;
-					py = ny/2-gaph*(3+i)/2;
-					if (m_text_renderer)
-						m_text_renderer->RenderText(
-						wstr_temp, text_color,
-						px*sx, py*sy, sx, sy);
-				}
-			}
-		}
-	}
+	//if (m_test_wiref)
+	//{
+	//	if (m_vol_method == VOL_METHOD_MULTI && m_mvr)
+	//	{
+	//		str = wxString::Format("SLICES: %d", m_mvr->get_slice_num());
+	//		wstr_temp = str.ToStdWstring();
+	//		px = gapw-nx/2;
+	//		py = ny/2-gaph*1.5;
+	//		m_text_renderer->RenderText(
+	//			wstr_temp, text_color,
+	//			px*sx, py*sy, sx, sy);
+	//	}
+	//	else
+	//	{
+	//		for (int i=0; i<(int)m_vd_pop_list.size(); i++)
+	//		{
+	//			VolumeData* vd = m_vd_pop_list[i];
+	//			if (vd && vd->GetVR())
+	//			{
+	//				str = wxString::Format("SLICES_%d: %d", i+1, vd->GetVR()->get_slice_num());
+	//				wstr_temp = str.ToStdWstring();
+	//				px = gapw-nx/2;
+	//				py = ny/2-gaph*(3+i)/2;
+	//				if (m_text_renderer)
+	//					m_text_renderer->RenderText(
+	//					wstr_temp, text_color,
+	//					px*sx, py*sy, sx, sy);
+	//			}
+	//		}
+	//	}
+	//}
 }
 
 Quaternion VRenderVulkanView::Trackball(int p1x, int p1y, int p2x, int p2y)
@@ -11529,8 +11516,8 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 	m_mv_mat = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
 	//rotate object
 	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
-	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
-	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
+	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
 	//center object
 	m_mv_mat = glm::translate(m_mv_mat, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
 
@@ -12133,8 +12120,8 @@ double VRenderVulkanView::GetPointVolume(Point& mp, int mx, int my,
 	//translate object
 	mv_temp = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
 	//rotate object
-	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
-	mv_temp = glm::rotate(mv_temp, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
 	mv_temp = glm::rotate(mv_temp, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
 	//center object
 	mv_temp = glm::translate(mv_temp, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
@@ -12300,8 +12287,8 @@ double VRenderVulkanView::GetPointAndIntVolume(Point& mp, double &intensity, boo
 	//translate object
 	mv_temp = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
 	//rotate object
-	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
-	mv_temp = glm::rotate(mv_temp, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
 	mv_temp = glm::rotate(mv_temp, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
 	//center object
 	mv_temp = glm::translate(mv_temp, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
@@ -12464,8 +12451,8 @@ double VRenderVulkanView::GetPointVolumeBox(Point &mp, int mx, int my, VolumeDat
 		//translate object
 		mv_temp = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
 		//rotate object
-		mv_temp = glm::rotate(mv_temp, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
-		mv_temp = glm::rotate(mv_temp, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
+		mv_temp = glm::rotate(mv_temp, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+		mv_temp = glm::rotate(mv_temp, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
 		mv_temp = glm::rotate(mv_temp, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
 		//center object
 		mv_temp = glm::translate(mv_temp, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
@@ -12572,8 +12559,8 @@ double VRenderVulkanView::GetPointVolumeBox2(Point &p1, Point &p2, int mx, int m
 	//translate object
 	mv_temp = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
 	//rotate object
-	mv_temp = glm::rotate(mv_temp, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
-	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
 	mv_temp = glm::rotate(mv_temp, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
 	//center object
 	mv_temp = glm::translate(mv_temp, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
@@ -12686,8 +12673,8 @@ double VRenderVulkanView::GetPointPlane(Point &mp, int mx, int my, Point* planep
 		//translate object
 		mv_temp = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
 		//rotate object
-		mv_temp = glm::rotate(mv_temp, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
-		mv_temp = glm::rotate(mv_temp, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
+		mv_temp = glm::rotate(mv_temp, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+		mv_temp = glm::rotate(mv_temp, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
 		mv_temp = glm::rotate(mv_temp, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
 		//center object
 		mv_temp = glm::translate(mv_temp, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
@@ -12760,8 +12747,8 @@ Point* VRenderVulkanView::GetEditingRulerPoint(int mx, int my)
 	//translate object
 	mv_temp = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
 	//rotate object
-	mv_temp = glm::rotate(mv_temp, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
-	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
 	mv_temp = glm::rotate(mv_temp, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
 	//center object
 	mv_temp = glm::translate(mv_temp, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
@@ -12865,8 +12852,8 @@ bool VRenderVulkanView::SwitchRulerBalloonVisibility_Point(int mx, int my)
 	//translate object
 	mv_temp = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
 	//rotate object
-	mv_temp = glm::rotate(mv_temp, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
-	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
 	mv_temp = glm::rotate(mv_temp, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
 	//center object
 	mv_temp = glm::translate(mv_temp, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
@@ -13508,7 +13495,7 @@ void VRenderVulkanView::DrawRulers()
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////
-	if (!verts.empty())
+	/*if (!verts.empty())
 	{
 		double width = m_text_renderer->GetSize()/10.0;
 		glEnable(GL_LINE_SMOOTH);
@@ -13588,7 +13575,7 @@ void VRenderVulkanView::DrawRulers()
 
 		glDisable(GL_LINE_SMOOTH);
 		glLineWidth(1.0);
-	}
+	}*/
 }
 
 vector<Ruler*>* VRenderVulkanView::GetRulerList()
@@ -13635,7 +13622,7 @@ void VRenderVulkanView::ExportTrace(wxString filename, unsigned int id)
 
 void VRenderVulkanView::DrawTraces()
 {
-	if (m_cur_vol && m_trace_group && m_text_renderer)
+	/*if (m_cur_vol && m_trace_group && m_text_renderer)
 	{
 		vector<float> verts;
 		unsigned int num = m_trace_group->Draw(verts);
@@ -13687,7 +13674,7 @@ void VRenderVulkanView::DrawTraces()
 			glDisable(GL_LINE_SMOOTH);
 			glLineWidth(1.0);
 		}
-	}
+	}*/
 }
 
 void VRenderVulkanView::GetTraces()
@@ -14455,8 +14442,8 @@ void VRenderVulkanView::CalcFrame()
 		mv_temp = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
 		//rotate object
 		mv_temp = glm::rotate(mv_temp, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
-		mv_temp = glm::rotate(mv_temp, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
-		mv_temp = glm::rotate(mv_temp, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
+		mv_temp = glm::rotate(mv_temp, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+		mv_temp = glm::rotate(mv_temp, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
 		//center object
 		mv_temp = glm::translate(mv_temp, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
 
@@ -14863,7 +14850,7 @@ void VRenderVulkanView::SetManipParams(double t)
 
 void VRenderVulkanView::DrawViewQuad()
 {
-	glEnable(GL_TEXTURE_2D);
+	/*glEnable(GL_TEXTURE_2D);
 	if (!glIsVertexArray(m_quad_vao))
 	{
 		float points[] = {
@@ -14889,7 +14876,7 @@ void VRenderVulkanView::DrawViewQuad()
 	glBindVertexArray(m_quad_vao);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 	glBindVertexArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);*/
 }
 
 void VRenderVulkanView::GetTiledViewQuadVerts(int tileid, vector<Vulkan2dRender::Vertex> &verts)
@@ -15026,7 +15013,7 @@ wxTextCtrl* VRenderView::m_cap_h_txt = NULL;
 VRenderView::VRenderView(wxWindow* frame,
 	wxWindow* parent,
 	wxWindowID id,
-	wxGLContext* sharedContext,
+	std::shared_ptr<VVulkan> &sharedContext,
 	const wxPoint& pos,
 	const wxSize& size,
 	long style) :
@@ -15087,7 +15074,7 @@ wxPanel(parent, id, pos, size, style),
 		WX_GL_MINOR_VERSION, gl_minor_ver,
 		0, 0
 	};
-	m_glview = new VRenderVulkanView(frame, this, wxID_ANY, attriblist, sharedContext);
+	m_glview = new VRenderVulkanView(frame, this, wxID_ANY);
 	m_glview->SetCanFocus(false);
 	//m_view_sizer->Add(m_glview, 1, wxEXPAND);
 #ifdef _WIN32
@@ -15112,9 +15099,6 @@ wxPanel(parent, id, pos, size, style),
 	// 0,                     // reserved  
 	// 0, 0, 0                // layer masks ignored  
 	// }; 
-	PIXELFORMATDESCRIPTOR  pfd;
-	//check ret. this is an error code when the pixel format is invalid.
-	int ret = m_glview->GetPixelFormat(&pfd);
 #endif
 	CreateBar();
 	if (m_glview) {
@@ -15128,20 +15112,6 @@ wxPanel(parent, id, pos, size, style),
 
 	m_idleTimer = new wxTimer(this, ID_Timer);
 	m_idleTimer->Start(100);
-}
-
-#ifdef _WIN32
-int VRenderVulkanView::GetPixelFormat(PIXELFORMATDESCRIPTOR *pfd) {
-	int pixelFormat = ::GetPixelFormat(m_hDC);
-	if (pixelFormat == 0) return GetLastError();
-	pixelFormat = DescribePixelFormat(m_hDC, pixelFormat, sizeof(PIXELFORMATDESCRIPTOR), pfd);
-	if (pixelFormat == 0) return GetLastError();
-	return pixelFormat;
-}
-#endif
-
-wxString VRenderVulkanView::GetOGLVersion() {
-	return m_GLversion;
 }
 
 VRenderView::~VRenderView()
@@ -16048,12 +16018,12 @@ void VRenderView::ResetID()
 }
 
 //get rendering context
-wxGLContext* VRenderView::GetContext()
+std::shared_ptr<VVulkan> VRenderView::GetContext()
 {
 	if (m_glview)
-		return m_glview->m_glRC/*GetContext()*/;
+		return m_glview->m_vulkan;
 	else
-		return 0;
+		return nullptr;
 }
 
 void VRenderView::RefreshGL(bool interactive, bool start_loop)

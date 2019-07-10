@@ -1049,13 +1049,8 @@ void BRKXMLReader::build_bricks(vector<FLIVR::TextureBrick*> &tbrks, int lv)
 	bsize[2] = m_pyramid[lev].brick_baseD;
 
 	bool force_pow2 = false;
-	if (FLIVR::ShaderProgram::init())
-		force_pow2 = !FLIVR::ShaderProgram::texture_non_power_of_two();
-
-	int max_texture_size = 2048;
-	if (FLIVR::ShaderProgram::init())
-		max_texture_size = FLIVR::ShaderProgram::max_texture_size();
-
+	int max_texture_size = 65535;
+	
 	int numb[1];
 	if (m_pyramid[lev].bit_depth == 8 || m_pyramid[lev].bit_depth == 16 || m_pyramid[lev].bit_depth == 32)
 		numb[0] = m_pyramid[lev].bit_depth / 8;

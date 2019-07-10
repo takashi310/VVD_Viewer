@@ -345,81 +345,81 @@ namespace FLIVR
 
 		z << ShaderProgram::glsl_version_;
 
-		if (type_ == 0)
-		{
-			z << MSH_FRAG_OUTPUTS;
-			//inputs
-			z << MSH_FRAG_INPUTS_POS;
-			z << MSH_UNIFORMS_CLIP;
-			if (light_)
-				z << MSH_FRAG_INPUTS_N;
-			if (tex_)
-				z << MSH_FRAG_INPUTS_T;
-			if (fog_)
-				z << MSH_FRAG_INPUTS_FOG;
-			//uniforms
-			if (light_)
-				z << MSH_FRAG_UNIFORMS_MATERIAL;
-			else
-				z << MSH_FRAG_UNIFORMS_NOMAT;
-			if (tex_)
-				z << MSH_FRAG_UNIFORMS_TEX;
-			if (fog_)
-				z << VOL_UNIFORMS_FOG_LOC;
-			if (peel_)
-				z << MSH_FRAG_UNIFORMS_DP;
+		//if (type_ == 0)
+		//{
+		//	z << MSH_FRAG_OUTPUTS;
+		//	//inputs
+		//	z << MSH_FRAG_INPUTS_POS;
+		//	z << MSH_UNIFORMS_CLIP;
+		//	if (light_)
+		//		z << MSH_FRAG_INPUTS_N;
+		//	if (tex_)
+		//		z << MSH_FRAG_INPUTS_T;
+		//	if (fog_)
+		//		z << MSH_FRAG_INPUTS_FOG;
+		//	//uniforms
+		//	if (light_)
+		//		z << MSH_FRAG_UNIFORMS_MATERIAL;
+		//	else
+		//		z << MSH_FRAG_UNIFORMS_NOMAT;
+		//	if (tex_)
+		//		z << MSH_FRAG_UNIFORMS_TEX;
+		//	if (fog_)
+		//		z << VOL_UNIFORMS_FOG_LOC;
+		//	if (peel_)
+		//		z << MSH_FRAG_UNIFORMS_DP;
 
-			z << MSH_HEAD;
-			z << MSH_HEAD_CLIP;
+		//	z << MSH_HEAD;
+		//	z << MSH_HEAD_CLIP;
 
-			//body
-			switch (peel_)
-			{
-			case 1:
-				z << MSH_FRAG_BODY_DP_1;
-				break;
-			case 2:
-				z << MSH_FRAG_BODY_DP_2;
-				break;
-			case 3:
-				z << MSH_FRAG_BODY_DP_3;
-				break;
-			case 4:
-				z << MSH_FRAG_BODY_DP_4;
-				break;
-			case 5:
-				z << MSH_FRAG_BODY_DP_5;
-				break;
-			}
+		//	//body
+		//	switch (peel_)
+		//	{
+		//	case 1:
+		//		z << MSH_FRAG_BODY_DP_1;
+		//		break;
+		//	case 2:
+		//		z << MSH_FRAG_BODY_DP_2;
+		//		break;
+		//	case 3:
+		//		z << MSH_FRAG_BODY_DP_3;
+		//		break;
+		//	case 4:
+		//		z << MSH_FRAG_BODY_DP_4;
+		//		break;
+		//	case 5:
+		//		z << MSH_FRAG_BODY_DP_5;
+		//		break;
+		//	}
 
-			if (fog_)
-				z << VOL_HEAD_FOG;
+		//	if (fog_)
+		//		z << VOL_HEAD_FOG;
 
-			z << MSH_FRAG_BODY_COLOR;
-			if (light_)
-				z << MSH_FRAG_BODY_COLOR_LIGHT;
-			if (tex_)
-				z << MSH_FRAG_BODY_TEXTURE;
-			if (!light_ && !tex_)
-				z << MSH_FRAG_BODY_SIMPLE;
-			if (fog_)
-			{
-				z << MSH_FRAG_BODY_FOG_V;
-				z << VOL_FOG_BODY;
-			}
-			z << MSH_FRAG_BODY_COLOR_OUT;
-		}
-		else if (type_ == 1)
-		{
-			z << MSH_FRAG_OUTPUTS_INT;
-			z << MSH_FRAG_UNIFORMS_INT;
-			z << MSH_HEAD;
-			z << MSH_FRAG_BODY_INT;
-		}
+		//	z << MSH_FRAG_BODY_COLOR;
+		//	if (light_)
+		//		z << MSH_FRAG_BODY_COLOR_LIGHT;
+		//	if (tex_)
+		//		z << MSH_FRAG_BODY_TEXTURE;
+		//	if (!light_ && !tex_)
+		//		z << MSH_FRAG_BODY_SIMPLE;
+		//	if (fog_)
+		//	{
+		//		z << MSH_FRAG_BODY_FOG_V;
+		//		z << VOL_FOG_BODY;
+		//	}
+		//	z << MSH_FRAG_BODY_COLOR_OUT;
+		//}
+		//else if (type_ == 1)
+		//{
+		//	z << MSH_FRAG_OUTPUTS_INT;
+		//	z << MSH_FRAG_UNIFORMS_INT;
+		//	z << MSH_HEAD;
+		//	z << MSH_FRAG_BODY_INT;
+		//}
 
-		z << MSH_TAIL;
+		//z << MSH_TAIL;
 
-		s = z.str();
+		//s = z.str();
 
 		return false;
 	}

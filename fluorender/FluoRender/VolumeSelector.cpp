@@ -111,10 +111,13 @@ void VolumeSelector::Select(double radius)
 	//insert the mask volume into m_vd
 	m_vd->AddEmptyMask();
 	m_vd->Set2dMask(m_2d_mask);
-	if (m_use2d && glIsTexture(m_2d_weight1) && glIsTexture(m_2d_weight2))
+	if (m_use2d && m_2d_weight1 && m_2d_weight2)
 		m_vd->Set2DWeight(m_2d_weight1, m_2d_weight2);
 	else
-		m_vd->Set2DWeight(0, 0);
+	{
+		auto blank = std::shared_ptr<vks::VTexture>();
+		m_vd->Set2DWeight(blank, blank);
+	}
 
 	//segment the volume with 2d mask
 	//result in 3d mask
@@ -188,7 +191,7 @@ void VolumeSelector::Select(double radius)
 		m_vd->GetVR())
 	{
 		m_vd->GetVR()->return_mask();
-		TextureRenderer::clear_tex_pool();
+		m_vd->GetVR()->clear_tex_current_mask();
 	}
 }
 
@@ -256,10 +259,13 @@ int VolumeSelector::CompAnalysis(double min_voxels, double max_voxels, double th
 		m_total_pr = m_iter_label+nx*2;
 		//first, grow in the whole volume
 		m_vd->AddEmptyMask();
-		if (m_use2d && glIsTexture(m_2d_weight1) && glIsTexture(m_2d_weight2))
+		if (m_use2d && m_2d_weight1 && m_2d_weight2)
 			m_vd->Set2DWeight(m_2d_weight1, m_2d_weight2);
 		else
-			m_vd->Set2DWeight(0, 0);
+		{
+			auto blank = std::shared_ptr<vks::VTexture>();
+			m_vd->Set2DWeight(blank, blank);
+		}
 
 		m_vd->DrawMask(0, 5, 0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
 		//next do the same as when it's selected by brush
@@ -594,7 +600,8 @@ int VolumeSelector::CompIslandCount(double min_voxels, double max_voxels)
 		}
 	}*/
 
-	TextureRenderer::clear_tex_pool();
+	if (m_vd->GetVR())
+		m_vd->GetVR()->clear_tex_current();
 
 	//count
 	for (comp_iter = m_comps.begin(); comp_iter != m_comps.end(); comp_iter++)
@@ -1266,10 +1273,13 @@ int VolumeSelector::NoiseAnalysis(double min_voxels, double max_voxels, double b
 
 	//first posterize the volume and put it into the mask
 	m_vd->AddEmptyMask();
-	if (m_use2d && glIsTexture(m_2d_weight1) && glIsTexture(m_2d_weight2))
+	if (m_use2d && m_2d_weight1 && m_2d_weight2)
 		m_vd->Set2DWeight(m_2d_weight1, m_2d_weight2);
 	else
-		m_vd->Set2DWeight(0, 0);
+	{
+		auto blank = std::shared_ptr<vks::VTexture>();
+		m_vd->Set2DWeight(blank, blank);
+	}
 	double ini_thresh, gm_falloff, scl_falloff;
 	if (m_ini_thresh > 0.0)
 		ini_thresh = m_ini_thresh;

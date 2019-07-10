@@ -1,6 +1,10 @@
 #include "VulkanDevice.hpp"
 #include "vk_format_utils.h"
 
+#ifdef _WIN32
+#include <omp.h>
+#endif
+
 namespace vks
 {
 	void VulkanDevice::setMemoryLimit(double limit)
@@ -589,7 +593,7 @@ namespace vks
 			return (1000LL * now.QuadPart) / s_frequency.QuadPart;
 		}
 		else {
-			return GetTickCount();
+			return GetTickCount64();
 		}
 	}
 
@@ -604,11 +608,30 @@ namespace vks
 		checkStagingBuffer(texMemSize);
 		
 		// Copy texture data into staging buffer
-		uint64_t poffset = (VkDeviceSize)offset.z*zpitch + (VkDeviceSize)offset.y*ypitch + offset.x*(VkDeviceSize)tex->bytes;
+		/*uint64_t poffset = (VkDeviceSize)offset.z*zpitch + (VkDeviceSize)offset.y*ypitch + offset.x*(VkDeviceSize)tex->bytes;
+		uint64_t dst_ypitch = (VkDeviceSize)tex->w * (VkDeviceSize)tex->bytes;
+		uint64_t dst_zpitch = (VkDeviceSize)tex->w * (VkDeviceSize)tex->h * (VkDeviceSize)tex->bytes;
+		unsigned char* dstp = (unsigned char*)staging_buf.mapped;
+		unsigned char* stp = (unsigned char *)data + poffset;
+		
+		#pragma omp parallel for
+		for (uint32_t z = 0; z < tex->d; z++)
+		{
+			unsigned char* src_p = stp + (VkDeviceSize)z * zpitch;
+			unsigned char* dst_p = dstp + (VkDeviceSize)z * dst_zpitch;
+			for (uint32_t y = 0; y < tex->h; y++)
+			{
+				memcpy(dst_p, src_p, dst_ypitch);
+				dst_p += dst_ypitch;
+				src_p += ypitch;
+			}
+		}*/
+
+		uint64_t poffset = (VkDeviceSize)offset.z * zpitch + (VkDeviceSize)offset.y * ypitch + offset.x * (VkDeviceSize)tex->bytes;
 		uint64_t dst_ypitch = (VkDeviceSize)tex->w * (VkDeviceSize)tex->bytes;
 		unsigned char* dstp = (unsigned char*)staging_buf.mapped;
-		unsigned char* tp = (unsigned char *)data + poffset;
-		unsigned char* tp2; 
+		unsigned char* tp = (unsigned char*)data + poffset;
+		unsigned char* tp2;
 		for (uint32_t z = 0; z < tex->d; z++)
 		{
 			tp2 = tp;

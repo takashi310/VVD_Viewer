@@ -1390,7 +1390,7 @@ void TraceDlg::CompDelete()
 			data_mask[index] = 0;
 	}
 	//invalidate label mask in gpu
-	vd->GetVR()->clear_tex_pool();
+	vd->GetVR()->clear_tex_current();
 	//update view
 	CellUpdate();
 }
@@ -1514,7 +1514,7 @@ void TraceDlg::OnCompAppend(wxCommandEvent &event)
 			}
 		}
 		//invalidate label mask in gpu
-		vd->GetVR()->clear_tex_pool();
+		vd->GetVR()->clear_tex_current();
 	}
 
 	//update view
@@ -1567,7 +1567,7 @@ void TraceDlg::OnCompExclusive(wxCommandEvent &event)
 				data_mask[index] = 0;
 		}
 		//invalidate label mask in gpu
-		vd->GetVR()->clear_tex_pool();
+		vd->GetVR()->clear_tex_current();
 	}
 
 	//update view
@@ -1671,7 +1671,7 @@ void TraceDlg::CellFull()
 				}
 			}
 	//invalidate label mask in gpu
-	vd->GetVR()->clear_tex_pool();
+	vd->GetVR()->clear_tex_current();
 	//update view
 	CellUpdate();
 }
@@ -1869,7 +1869,7 @@ void TraceDlg::CellNewID(bool append)
 		trace_group->AddCell(cell, m_cur_time);
 
 	//invalidate label mask in gpu
-	vd->GetVR()->clear_tex_pool();
+	vd->GetVR()->clear_tex_current();
 	//save label mask to disk
 	BaseReader* reader = vd->GetReader();
 	if (reader)
@@ -1950,7 +1950,7 @@ void TraceDlg::CellEraseID()
 		}
 
 		//invalidate label mask in gpu
-		vd->GetVR()->clear_tex_pool();
+		vd->GetVR()->clear_tex_current();
 		//save label mask to disk
 		BaseReader* reader = vd->GetReader();
 		if (reader)
@@ -2341,7 +2341,7 @@ void TraceDlg::OnCellReplaceID(wxCommandEvent &event)
 		}
 	}
 	//invalidate label mask in gpu
-	vd->GetVR()->clear_tex_pool();
+	vd->GetVR()->clear_tex_current();
 	//save label mask to disk
 	BaseReader* reader = vd->GetReader();
 	if (reader)
@@ -2450,7 +2450,7 @@ void TraceDlg::OnCellCombineID(wxCommandEvent &event)
 			data_label[index] = cell->Id();
 	}
 	//invalidate label mask in gpu
-	vd->GetVR()->clear_tex_pool();
+	vd->GetVR()->clear_tex_current();
 	//save label mask to disk
 	BaseReader* reader = vd->GetReader();
 	if (reader)

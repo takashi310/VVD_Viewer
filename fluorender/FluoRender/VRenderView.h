@@ -223,11 +223,6 @@ public:
         const wxString& name = "VulkanCanvasName");
 	~VRenderVulkanView();
 
-	//for degugging, this allows inspection of the pixel format actually given.
-#ifdef _WIN32
-	int GetPixelFormat(PIXELFORMATDESCRIPTOR *pfd);
-#endif
-	wxString GetOGLVersion();
 	//initialization
 	void Init();
 
@@ -1287,7 +1282,7 @@ public:
 	VRenderView(wxWindow* frame,
 		wxWindow* parent,
 		wxWindowID id,
-		wxGLContext* sharedContext=0,
+		std::shared_ptr<VVulkan> &sharedContext = std::shared_ptr<VVulkan>(),
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize,
 		long style = 0);
@@ -1440,7 +1435,7 @@ public:
 	static void ResetID();
 
 	//get rendering context
-	wxGLContext* GetContext();
+	std::shared_ptr<VVulkan> GetContext();
 
 	//refresh glview
 	void RefreshGL(bool intactive=false, bool start_loop=true);
