@@ -167,49 +167,49 @@ VulkanCanvas::VulkanCanvas(wxWindow *pParent,
 	OutputDebugStringA(dbgstr.ToStdString().c_str());
 	
 	//////////////////////
-	m_vulkan->vulkanDevice->clear_tex_pool();
-	st_time = milliseconds_now();
+	//m_vulkan->vulkanDevice->clear_tex_pool();
+	//st_time = milliseconds_now();
 
-	DrawMask();
+	//DrawMask();
 
-	ed_time = milliseconds_now();
-	dbgstr = wxString::Format("draw_mask time: %lld\n", ed_time - st_time);
-	OutputDebugStringA(dbgstr.ToStdString().c_str());
+	//ed_time = milliseconds_now();
+	//dbgstr = wxString::Format("draw_mask time: %lld\n", ed_time - st_time);
+	//OutputDebugStringA(dbgstr.ToStdString().c_str());
 
-	//////////////////////
-	st_time = milliseconds_now();
+	////////////////////////
+	//st_time = milliseconds_now();
 
-	DrawMask();
+	//DrawMask();
 
-	ed_time = milliseconds_now();
-	dbgstr = wxString::Format("draw_mask time: %lld\n", ed_time - st_time);
-	OutputDebugStringA(dbgstr.ToStdString().c_str());
+	//ed_time = milliseconds_now();
+	//dbgstr = wxString::Format("draw_mask time: %lld\n", ed_time - st_time);
+	//OutputDebugStringA(dbgstr.ToStdString().c_str());
 
-	/////////////////////
-	st_time = milliseconds_now();
-	
-	m_vr->return_mask();
+	///////////////////////
+	//st_time = milliseconds_now();
+	//
+	//m_vr->return_mask();
 
-	ed_time = milliseconds_now();
-	dbgstr = wxString::Format("return_mask time: %lld\n", ed_time - st_time);
-	OutputDebugStringA(dbgstr.ToStdString().c_str());
+	//ed_time = milliseconds_now();
+	//dbgstr = wxString::Format("return_mask time: %lld\n", ed_time - st_time);
+	//OutputDebugStringA(dbgstr.ToStdString().c_str());
 
-	/////////////////////
-	vector<FLIVR::TextureBrick*>* bricks = m_vol->get_bricks();
-	int c = m_vol->nmask();
-	for (unsigned int i = 0; i < bricks->size(); i++)
-	{
-		FLIVR::TextureBrick* b = (*bricks)[i];
-		b->set_dirty(c, true);
-	}
+	///////////////////////
+	//vector<FLIVR::TextureBrick*>* bricks = m_vol->get_bricks();
+	//int c = m_vol->nmask();
+	//for (unsigned int i = 0; i < bricks->size(); i++)
+	//{
+	//	FLIVR::TextureBrick* b = (*bricks)[i];
+	//	b->set_dirty(c, true);
+	//}
 
-	st_time = milliseconds_now();
+	//st_time = milliseconds_now();
 
-	m_vr->return_mask();
+	//m_vr->return_mask();
 
-	ed_time = milliseconds_now();
-	dbgstr = wxString::Format("return_mask time: %lld\n", ed_time - st_time);
-	OutputDebugStringA(dbgstr.ToStdString().c_str());
+	//ed_time = milliseconds_now();
+	//dbgstr = wxString::Format("return_mask time: %lld\n", ed_time - st_time);
+	//OutputDebugStringA(dbgstr.ToStdString().c_str());
 
 	////////////////////
 	//NRRDWriter writer;

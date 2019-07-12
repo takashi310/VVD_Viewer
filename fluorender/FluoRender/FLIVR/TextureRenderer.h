@@ -336,7 +336,7 @@ namespace FLIVR
 				   if (m_v2drender) m_v2drender.reset();
 			   }
 
-			   static VolKernelFactory vol_kernel_factory_;
+			   //static VolKernelFactory vol_kernel_factory_;
 
       public:
                struct BrickDist

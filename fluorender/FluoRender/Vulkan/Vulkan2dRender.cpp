@@ -19,7 +19,6 @@ void Vulkan2dRender::init(std::shared_ptr<VVulkan> vulkan)
 
 	generateQuad();
 	setupVertexDescriptions();
-	m_default_cmdbuf = m_vulkan->vulkanDevice->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
 	prev_pipeline = -1;
 }
@@ -37,10 +36,6 @@ Vulkan2dRender::~Vulkan2dRender()
 
 		m_vertexBuffer.destroy();
 		m_indexBuffer.destroy();
-		m_dyn_vertexBuffer.destroy();
-		m_dyn_indexBuffer.destroy();
-
-		vkFreeCommandBuffers(dev, m_vulkan->vulkanDevice->commandPool, 1, &m_default_cmdbuf);
 	}
 }
 
@@ -75,62 +70,27 @@ void Vulkan2dRender::generateQuad()
 		&m_indexBuffer,
 		indices.size() * sizeof(uint32_t),
 		indices.data()));
-
-	m_dyn_vertsCount = quad.size();
-	m_dyn_indexCount = indices.size();
-	VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
-		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
-		&m_dyn_vertexBuffer,
-		quad.size() * sizeof(Vertex),
-		quad.data()));
-	// Index buffer
-	VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
-		VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
-		&m_dyn_indexBuffer,
-		indices.size() * sizeof(uint32_t),
-		indices.data()));
 }
 
 void Vulkan2dRender::updateDynBuffers(Vulkan2dRender::Vertex* verts, int verts_num, uint32_t* indices, int idx_num)
 {
+	vks::VulkanDevice* prim_dev = m_vulkan->vulkanDevice;
 	if (verts && verts_num > 0)
 	{
-		if (verts_num > m_dyn_vertsCount)
-			m_dyn_vertexBuffer.destroy();
-
-		if (m_dyn_vertexBuffer.buffer == VK_NULL_HANDLE)
-		{
-			VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
-				VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
-				&m_dyn_vertexBuffer,
-				verts_num * sizeof(Vertex),
-				verts
-			));
-		}
-		else
-			m_dyn_vertexBuffer.copyTo(verts, verts_num * sizeof(Vertex));
+		prim_dev->GetNextBuffer(verts_num * sizeof(Vertex), m_dyn_vertexBuffer, m_dyn_vert_offset);
+		m_dyn_vertexBuffer.map(verts_num * sizeof(Vertex), m_dyn_vert_offset);
+		m_dyn_vertexBuffer.copyTo(verts, verts_num * sizeof(Vertex), m_dyn_vert_offset);
+		m_dyn_vertexBuffer.flush(verts_num * sizeof(Vertex), m_dyn_vert_offset);
+		m_dyn_vertexBuffer.unmap();
 	}
 
 	if (indices && idx_num > 0)
 	{
-		if (idx_num > m_dyn_indexCount)
-			m_dyn_indexBuffer.destroy();
-
-		if (m_dyn_indexBuffer.buffer == VK_NULL_HANDLE)
-		{
-			VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
-				VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
-				&m_dyn_indexBuffer,
-				idx_num * sizeof(uint32_t),
-				indices
-			));
-		}
-		else
-			m_dyn_indexBuffer.copyTo(indices, idx_num * sizeof(uint32_t));
+		prim_dev->GetNextBuffer(idx_num * sizeof(uint32_t), m_dyn_indexBuffer, m_dyn_idx_offset);
+		m_dyn_indexBuffer.map(idx_num * sizeof(uint32_t), m_dyn_idx_offset);
+		m_dyn_indexBuffer.copyTo(indices, idx_num * sizeof(uint32_t), m_dyn_idx_offset);
+		m_dyn_indexBuffer.flush(idx_num * sizeof(uint32_t), m_dyn_idx_offset);
+		m_dyn_vertexBuffer.unmap();
 	}
 }
 
@@ -603,7 +563,7 @@ void Vulkan2dRender::buildCommandBuffer(
 		if (!params.verts)
 			vkCmdBindVertexBuffers(commandbufs[i], 0, 1, &m_vertexBuffer.buffer, offsets);
 		else
-			vkCmdBindVertexBuffers(commandbufs[i], 0, 1, &m_dyn_vertexBuffer.buffer, offsets);
+			vkCmdBindVertexBuffers(commandbufs[i], 0, 1, &m_dyn_vertexBuffer.buffer, &m_dyn_vert_offset);
 
 		if (!params.indices)
 		{
@@ -612,7 +572,7 @@ void Vulkan2dRender::buildCommandBuffer(
 		}	
 		else
 		{
-			vkCmdBindIndexBuffer(commandbufs[i], m_dyn_indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+			vkCmdBindIndexBuffer(commandbufs[i], m_dyn_indexBuffer.buffer, m_dyn_idx_offset, VK_INDEX_TYPE_UINT32);
 			vkCmdDrawIndexed(commandbufs[i], m_dyn_indexCount, 1, 0, 0, 0);
 		}
 
@@ -624,14 +584,15 @@ void Vulkan2dRender::buildCommandBuffer(
 
 void Vulkan2dRender::render(const std::unique_ptr<vks::VFrameBuffer>& framebuf, const V2DRenderParams& params)
 {
-	buildCommandBuffer(&m_default_cmdbuf, 1, framebuf, params);
+	VkCommandBuffer default_cmdbuf = m_vulkan->vulkanDevice->GetNextCommandBuffer();
+	buildCommandBuffer(&default_cmdbuf, 1, framebuf, params);
 	
 	VkSubmitInfo submitInfo = vks::initializers::submitInfo();
 	std::vector<VkPipelineStageFlags> waitStages;
 	for (uint32_t i = 0; i < params.waitSemaphoreCount; i++)
 		waitStages.push_back( VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT );
 	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &m_default_cmdbuf;
+	submitInfo.pCommandBuffers = &default_cmdbuf;
 	submitInfo.waitSemaphoreCount = params.waitSemaphoreCount;
 	submitInfo.pWaitSemaphores = params.waitSemaphores;
 	if (!waitStages.empty())
@@ -695,6 +656,10 @@ void Vulkan2dRender::seq_buildCommandBuffer(VkCommandBuffer commandbufs[], int c
 		indices.empty() ? nullptr : indices.data(),
 		indices.size()
 	);
+	for (int i = 0; i < vert_offsets.size(); i++)
+		vert_offsets[i] += m_dyn_vert_offset;
+	for (int i = 0; i < idx_offsets.size(); i++)
+		idx_offsets[i] += m_dyn_idx_offset;
 
 	for (int32_t i = 0; i < commandbuf_num; ++i)
 	{
@@ -793,7 +758,7 @@ void Vulkan2dRender::seq_buildCommandBuffer(VkCommandBuffer commandbufs[], int c
 			}
 			else
 			{
-				vkCmdBindIndexBuffer(commandbufs[i], m_indexBuffer.buffer, idx_offsets[s], VK_INDEX_TYPE_UINT32);
+				vkCmdBindIndexBuffer(commandbufs[i], m_dyn_indexBuffer.buffer, idx_offsets[s], VK_INDEX_TYPE_UINT32);
 				vkCmdDrawIndexed(commandbufs[i], params[s].idx_num, 1, 0, 0, 0);
 			}
 			
@@ -807,14 +772,15 @@ void Vulkan2dRender::seq_buildCommandBuffer(VkCommandBuffer commandbufs[], int c
 
 void Vulkan2dRender::seq_render(const std::unique_ptr<vks::VFrameBuffer>& framebuf, const V2DRenderParams* params, int num)
 {
-	seq_buildCommandBuffer(&m_default_cmdbuf, 1, framebuf, params, num);
+	VkCommandBuffer default_cmdbuf = m_vulkan->vulkanDevice->GetNextCommandBuffer();
+	seq_buildCommandBuffer(&default_cmdbuf, 1, framebuf, params, num);
 
 	VkSubmitInfo submitInfo = vks::initializers::submitInfo();
 	std::vector<VkPipelineStageFlags> waitStages;
 	for (uint32_t i = 0; i < params[0].waitSemaphoreCount; i++)
 		waitStages.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &m_default_cmdbuf;
+	submitInfo.pCommandBuffers = &default_cmdbuf;
 	submitInfo.waitSemaphoreCount = params[0].waitSemaphoreCount;
 	submitInfo.pWaitSemaphores = params[0].waitSemaphores;
 	if (!waitStages.empty())

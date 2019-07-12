@@ -25,8 +25,10 @@ public:
 
 	vks::Buffer m_dyn_vertexBuffer;
 	vks::Buffer m_dyn_indexBuffer;
-	uint32_t m_dyn_vertsCount;
-	uint32_t m_dyn_indexCount;
+	uint64_t m_dyn_vertsCount;
+	uint64_t m_dyn_indexCount;
+	uint64_t m_dyn_vert_offset;
+	uint64_t m_dyn_idx_offset;
 	
 	struct Vertex {
 		float pos[3];

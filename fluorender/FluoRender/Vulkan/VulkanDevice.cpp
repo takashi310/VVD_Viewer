@@ -314,6 +314,118 @@ namespace vks
 		VK_CHECK_RESULT(vkCreateDescriptorPool(logicalDevice, &descriptorPoolInfo, nullptr, &descriptorPool));
 	}
 
+	void VulkanDevice::PrepareMainRenderBuffers()
+	{
+		VkCommandBuffer cmdbuf = createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+		m_cmdbufs.push_back(cmdbuf);
+
+		VkDeviceSize max_ubo_range = properties.limits.maxUniformBufferRange;
+		VkDeviceSize ubo_size = max_ubo_range > 65536 ? 65536 : max_ubo_range;
+		VK_CHECK_RESULT(
+			createBuffer(
+				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+				&m_ubo,
+				ubo_size
+			)
+		);
+		m_ubo.map();
+
+		VkDeviceSize buf_size = 65536;
+		VK_CHECK_RESULT(
+			createBuffer(
+				VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+				&m_buf,
+				buf_size
+			)
+		);
+	}
+	void VulkanDevice::ResetMainRenderBuffers()
+	{
+		m_cur_cmdbuf_id = 0;
+		m_ubo_offset = 0;
+		m_buf_offset = 0;
+		if (m_bufs.size() > 0)
+		{
+			VkDeviceSize newsize = m_buf.size;
+			for (auto b : m_bufs)
+			{
+				newsize += b.size;
+				b.destroy();
+			}
+			m_bufs.clear();
+
+			m_buf.destroy();
+			VK_CHECK_RESULT(
+				createBuffer(
+					VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+					&m_buf,
+					newsize
+				)
+			);
+		}
+	}
+	void VulkanDevice::GetNextUniformBuffer(VkDeviceSize req_size, vks::Buffer& buf, VkDeviceSize& offset)
+	{
+		offset = m_ubo_offset;
+		
+		if (m_ubo.alignment > 0)
+			req_size = (req_size + m_ubo.alignment - 1) & ~(m_ubo.alignment - 1);
+		m_ubo_offset += req_size;
+
+		buf = m_ubo;
+		buf.descriptor.offset = offset;
+		buf.descriptor.range = req_size;
+	}
+	VkDeviceSize VulkanDevice::GetCurrentUniformBufferOffset()
+	{
+		return m_ubo_offset;
+	}
+	void VulkanDevice::GetNextBuffer(VkDeviceSize req_size, vks::Buffer& buf, VkDeviceSize& offset)
+	{
+		offset = m_buf_offset;
+
+		if (m_buf.alignment > 0)
+			req_size = (req_size + m_buf.alignment - 1) & ~(m_buf.alignment - 1);
+
+		if (m_buf.size >= m_buf_offset + req_size)
+			m_buf_offset += req_size;
+		else
+		{
+			offset = 0;
+			m_bufs.push_back(m_buf);
+			VK_CHECK_RESULT(
+				createBuffer(
+					VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+					&m_buf,
+					req_size
+				)
+			);
+			m_buf_offset = req_size;
+		}
+		buf = m_buf;
+		buf.descriptor.offset = offset;
+		buf.descriptor.range = req_size;
+	}
+	VkDeviceSize VulkanDevice::GetCurrentBufferOffset()
+	{
+		return m_buf_offset;
+	}
+
+	VkCommandBuffer VulkanDevice::GetNextCommandBuffer()
+	{
+		if (m_cur_cmdbuf_id >= m_cmdbufs.size())
+		{
+			VkCommandBuffer cmdbuf = createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+			m_cmdbufs.push_back(cmdbuf);
+		}
+
+		return m_cmdbufs[m_cur_cmdbuf_id++];
+	}
+
 	void VulkanDevice::prepareSamplers()
 	{
 		// Create samplers

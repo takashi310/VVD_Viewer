@@ -91,11 +91,24 @@ namespace vks
 		//semaphores
 		std::vector<std::unique_ptr<vks::VSemaphore>> m_render_semaphore;
 		int m_cur_semaphore_id;
-
 		void ResetRenderSemaphores();
 		VulkanSemaphoreSettings GetNextRenderSemaphoreSettings();
 		VkSemaphore* GetNextRenderSemaphore();
 		VkSemaphore* GetCurrentRenderSemaphore();
+
+		std::vector<VkCommandBuffer> m_cmdbufs;
+		vks::Buffer m_ubo, m_buf;
+		std::vector<vks::Buffer> m_bufs;
+		VkDeviceSize m_cur_cmdbuf_id = 0;
+		VkDeviceSize m_ubo_offset = 0;
+		VkDeviceSize m_buf_offset = 0;
+		void PrepareMainRenderBuffers();
+		void ResetMainRenderBuffers();
+		VkCommandBuffer GetNextCommandBuffer();
+		void GetNextUniformBuffer(VkDeviceSize req_size, vks::Buffer& buf, VkDeviceSize &offset);
+		void GetNextBuffer(VkDeviceSize req_size, vks::Buffer& buf, VkDeviceSize& offset);
+		VkDeviceSize GetCurrentUniformBufferOffset();
+		VkDeviceSize GetCurrentBufferOffset();
 
 		VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 		void setupDescriptorPool();
@@ -167,6 +180,15 @@ namespace vks
 		{
 			m_render_semaphore.clear();
 			staging_buf.destroy();
+			m_ubo.destroy();
+			m_buf.destroy();
+			if (!m_bufs.empty())
+			{
+				for (auto b : m_bufs)
+					b.destroy();
+				m_bufs.clear();
+			}
+			vkFreeCommandBuffers(logicalDevice,commandPool, 1, m_cmdbufs.data());
 			if (linear_sampler)
 				vkDestroySampler(logicalDevice, linear_sampler, nullptr);
 			if (nearest_sampler)
@@ -408,6 +430,8 @@ namespace vks
 			createPipelineCache();
 			setupDescriptorPool();
 			setMemoryLimit();
+
+			PrepareMainRenderBuffers();
 
 			linear_sampler = VK_NULL_HANDLE;
 			nearest_sampler = VK_NULL_HANDLE;

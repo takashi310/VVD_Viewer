@@ -102,6 +102,19 @@ namespace vks
 			memcpy(mapped, data, size);
 		}
 
+		/**
+		* Copies the specified data to the mapped buffer
+		*
+		* @param data Pointer to the data to copy
+		* @param size Size of the data to copy in machine units
+		*
+		*/
+		void copyTo(void* data, VkDeviceSize size, VkDeviceSize offset)
+		{
+			assert(mapped);
+			memcpy((uint8_t*)mapped+offset, data, size);
+		}
+
 		/** 
 		* Flush a memory range of the buffer to make it visible to the device
 		*

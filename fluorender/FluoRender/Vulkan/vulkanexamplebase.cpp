@@ -183,6 +183,7 @@ void VulkanExampleBase::prepareFrame()
 {
 	vulkanDevice->ResetRenderSemaphores();
 	VkSemaphore* present_complete = vulkanDevice->GetNextRenderSemaphore();
+	vulkanDevice->ResetMainRenderBuffers();
 
 	// Acquire the next image from the swap chain
 	VkResult err = swapChain.acquireNextImage(present_complete ? *present_complete : semaphores.presentComplete, &currentBuffer);

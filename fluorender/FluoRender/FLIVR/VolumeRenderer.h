@@ -410,8 +410,6 @@ public:
 			uint32_t indexCount;
 		};
 		std::map<vks::VulkanDevice*, VVolVertexBuffers> m_vertbufs;
-		VkDeviceSize vertbuf_offset;
-		VkDeviceSize idxbuf_offset;
 		void prepareVertexBuffers(vks::VulkanDevice* device, double dt);
 
 		static void init();

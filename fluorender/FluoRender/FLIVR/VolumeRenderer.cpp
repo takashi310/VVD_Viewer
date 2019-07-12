@@ -32,8 +32,8 @@
 #include <FLIVR/VolCalShader.h>
 #include <FLIVR/ShaderProgram.h>
 #include <FLIVR/TextureBrick.h>
-#include <FLIVR/KernelProgram.h>
-#include <FLIVR/VolKernel.h>
+//#include <FLIVR/KernelProgram.h>
+//#include <FLIVR/VolKernel.h>
 #include "utility.h"
 #include "../compatibility.h"
 #include <fstream>
@@ -66,7 +66,7 @@ namespace FLIVR
 	
 	std::vector<VolumeRenderer::VCalPipeline> VolumeRenderer::m_cal_pipelines;
 
-	VolKernelFactory TextureRenderer::vol_kernel_factory_;
+	//VolKernelFactory TextureRenderer::vol_kernel_factory_;
 
 
 	VolumeRenderer::VolumeRenderer(Texture* tex,
@@ -1538,9 +1538,13 @@ namespace FLIVR
 		h2 = int(h/**sfactor_*/ * buffer_scale_ + 0.5);
 
 		vks::VulkanDevice* prim_dev = m_vulkan->devices[0];
-
-		if (m_volUniformBuffers.empty())
-			m_vulkan->vol_shader_factory_->prepareUniformBuffers(m_volUniformBuffers);
+		vks::Buffer vert_ubuf, frag_ubuf;
+		VkDeviceSize vert_ubuf_offset, frag_ubuf_offset;
+		prim_dev->GetNextUniformBuffer(sizeof(VolShaderFactory::VolVertShaderUBO), vert_ubuf, vert_ubuf_offset);
+		prim_dev->GetNextUniformBuffer(sizeof(VolShaderFactory::VolFragShaderBaseUBO), frag_ubuf, frag_ubuf_offset);
+		
+		std::vector<VkWriteDescriptorSet> descriptorWritesBase;
+		m_vulkan->vol_shader_factory_->getDescriptorSetWriteUniforms(prim_dev, vert_ubuf, frag_ubuf, descriptorWritesBase);
 
 		eval_ml_mode();
 
@@ -1574,8 +1578,6 @@ namespace FLIVR
 			}
 		}
 
-		std::vector<VkWriteDescriptorSet> descriptorWritesBase;
-		m_vulkan->vol_shader_factory_->getDescriptorSetWriteUniforms(prim_dev, m_volUniformBuffers[prim_dev], descriptorWritesBase);
 		if (colormap_mode_ == 3)
 		{
 			auto palette = get_palette();
@@ -1667,16 +1669,21 @@ namespace FLIVR
 		vert_ubo.proj_mat = m_proj_mat;
 		vert_ubo.mv_mat = m_mv_mat2;
 
-		VolShaderFactory::updateUniformBuffers(m_volUniformBuffers[prim_dev], vert_ubo, frag_ubo);
-
+		vert_ubuf.copyTo(&vert_ubo, sizeof(VolShaderFactory::VolVertShaderUBO), vert_ubuf_offset);
+		frag_ubuf.copyTo(&frag_ubo, sizeof(VolShaderFactory::VolFragShaderBaseUBO), frag_ubuf_offset);
+		if (vert_ubuf.buffer == frag_ubuf.buffer)
+			vert_ubuf.flush(prim_dev->GetCurrentUniformBufferOffset() - vert_ubuf_offset, vert_ubuf_offset);
+		else
+		{
+			vert_ubuf.flush(sizeof(VolShaderFactory::VolVertShaderUBO), vert_ubuf_offset);
+			frag_ubuf.flush(sizeof(VolShaderFactory::VolFragShaderBaseUBO), frag_ubuf_offset);
+		}
+		
 		bool clear = false;
 		bool waitsemaphore = true;
 		vks::VulkanSemaphoreSettings semaphores = prim_dev->GetNextRenderSemaphoreSettings();
 		if (!mem_swap_ || (mem_swap_ && cur_chan_brick_num_ == 0))
 		{
-			prepareVertexBuffers(prim_dev, dt);
-			vertbuf_offset = 0;
-			idxbuf_offset = 0;
 			clear = true;
 		}
 
@@ -1688,7 +1695,7 @@ namespace FLIVR
 		if (mask_)  bmode = TEXTURE_RENDER_MODE_MASK;
 		if (label_) bmode = TEXTURE_RENDER_MODE_LABEL;
 
-		VkCommandBuffer cmdbuf = m_commandBuffers[prim_dev];
+		VkCommandBuffer cmdbuf = prim_dev->GetNextCommandBuffer();
 		if (!mem_swap_)
 		{
 			VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
@@ -1753,13 +1760,32 @@ namespace FLIVR
 				}
 				continue;
 			}
+			
+			vks::Buffer vertbuf, idxbuf;
+			VkDeviceSize vert_offset, idx_offset;
+			prim_dev->GetNextBuffer(vertex.size() * sizeof(float), vertbuf, vert_offset);
+			prim_dev->GetNextBuffer(index.size() * sizeof(unsigned int), idxbuf, idx_offset);
+			if (vertbuf.buffer == idxbuf.buffer)
+			{
+				VkDeviceSize total_size = prim_dev->GetCurrentBufferOffset() - vert_offset;
+				vertbuf.map(total_size, vert_offset);
+				vertbuf.copyTo(vertex.data(), vertex.size() * sizeof(float), 0);
+				vertbuf.copyTo(index.data(), index.size() * sizeof(unsigned int), idx_offset - vert_offset);
+				vertbuf.flush(total_size, vert_offset);
+				vertbuf.unmap();
+			}
+			else
+			{
+				vertbuf.map(vertex.size() * sizeof(float), vert_offset);
+				vertbuf.copyTo(vertex.data(), vertex.size() * sizeof(float));
+				vertbuf.flush(vertex.size() * sizeof(float), vert_offset);
+				vertbuf.unmap();
 
-			memcpy( (unsigned char*)m_vertbufs[prim_dev].vertexBuffer.mapped + vertbuf_offset,
-					vertex.data(), 
-					vertex.size()*sizeof(float) );
-			memcpy( (unsigned char*)m_vertbufs[prim_dev].indexBuffer.mapped + idxbuf_offset,
-					index.data(),
-					index.size() * sizeof(unsigned int));
+				idxbuf.map(index.size() * sizeof(unsigned int), idx_offset);
+				idxbuf.copyTo(index.data(), index.size() * sizeof(unsigned int));
+				idxbuf.flush(index.size() * sizeof(unsigned int), idx_offset);
+				idxbuf.unmap();
+			}
 
 			VkFilter filter;
 			if (interpolate_ && colormap_mode_ != 3)
@@ -1949,12 +1975,9 @@ namespace FLIVR
 				sizeof(VolShaderFactory::VolFragShaderBrickConst),
 				&frag_const);
 
-			vkCmdBindVertexBuffers(cmdbuf, 0, 1, &m_vertbufs[prim_dev].vertexBuffer.buffer, &vertbuf_offset);
-			vkCmdBindIndexBuffer(cmdbuf, m_vertbufs[prim_dev].indexBuffer.buffer, idxbuf_offset, VK_INDEX_TYPE_UINT32);
+			vkCmdBindVertexBuffers(cmdbuf, 0, 1, &vertbuf.buffer, &vert_offset);
+			vkCmdBindIndexBuffer(cmdbuf, idxbuf.buffer, idx_offset, VK_INDEX_TYPE_UINT32);
 			vkCmdDrawIndexed(cmdbuf, (uint32_t)index.size(), 1, 0, 0, 0);
-
-			vertbuf_offset += vertex.size() * sizeof(float);
-			idxbuf_offset += index.size() * sizeof(unsigned int);
 
 			count++;
 			if (mem_swap_ && (count >= que || i >= bricks->size()-1) )

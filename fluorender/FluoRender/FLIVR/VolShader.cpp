@@ -631,6 +631,26 @@ VolShader::VolShader(
 		);
 	}
 
+	void VolShaderFactory::getDescriptorSetWriteUniforms(vks::VulkanDevice* vdev, vks::Buffer& vert, vks::Buffer& frag, std::vector<VkWriteDescriptorSet>& writeDescriptorSets)
+	{
+		VkDevice device = vdev->logicalDevice;
+
+		writeDescriptorSets.push_back(
+			vks::initializers::writeDescriptorSet(
+				VK_NULL_HANDLE,
+				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+				0,
+				&vert.descriptor)
+		);
+		writeDescriptorSets.push_back(
+			vks::initializers::writeDescriptorSet(
+				VK_NULL_HANDLE,
+				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+				1,
+				&frag.descriptor)
+		);
+	}
+
 	// Prepare and initialize uniform buffer containing shader uniforms
 	void VolShaderFactory::prepareUniformBuffers(std::map<vks::VulkanDevice*, VolUniformBufs>& uniformBuffers)
 	{
