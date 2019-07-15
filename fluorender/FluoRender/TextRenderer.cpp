@@ -88,14 +88,14 @@ TextRenderer::TextRenderer(const string &lib_name)
 
 TextRenderer::~TextRenderer()
 {
-	if (glIsTexture(m_tex))
+	/*if (glIsTexture(m_tex))
 		glDeleteTextures(1, &m_tex);
 	if (glIsBuffer(m_vbo))
 		glDeleteBuffers(1, &m_vbo);
 	if (glIsVertexArray(m_vao))
 		glDeleteVertexArrays(1, &m_vao);
 	if (glIsProgram(m_prog))
-		glDeleteProgram(m_prog);
+		glDeleteProgram(m_prog);*/
 }
 
 void TextRenderer::LoadNewFace(const string &lib_name)

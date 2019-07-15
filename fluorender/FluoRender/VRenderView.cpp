@@ -758,7 +758,7 @@ VRenderVulkanView::~VRenderVulkanView()
 	FLIVR::VolumeRenderer::finalize();
 	FLIVR::TextureRenderer::finalize_vulkan();
 	m_v2drender.reset();
-	m_vulkan.reset();
+	//m_vulkan.reset();
 
 	KernelProgram::clear();
 }
@@ -917,7 +917,7 @@ void VRenderVulkanView::HandleProjection(int nx, int ny)
 	}
 	if (m_persp)
 	{
-		m_proj_mat = glm::perspective(m_aov, aspect, m_near_clip, m_far_clip);
+		m_proj_mat = glm::perspective(glm::radians(m_aov), aspect, m_near_clip, m_far_clip);
 		if (m_tile_rendering) {
 			int tilex = m_current_tileid % m_tile_xnum;
 			int tiley = m_current_tileid / m_tile_xnum;
@@ -1457,6 +1457,7 @@ void VRenderVulkanView::DrawVolumes(int peel)
 		params2.loc[0] = glm::vec4( 1.0f, 1.0f, 1.0f, 1.0f );
 		params2.loc[1] = glm::vec4( 1.0f, 1.0f, 1.0f, 1.0f );
 		params2.loc[2] = glm::vec4( 0.0f, 0.0f, 0.0f, 0.0f );
+		params2.clear = true;
 		
 		current_fbo->replaceRenderPass(params2.pipeline.pass);
 
@@ -1478,6 +1479,7 @@ void VRenderVulkanView::DrawVolumes(int peel)
 		params.loc[0] = glm::vec4( 1.0f, 1.0f, 1.0f, 1.0f );
 		params.loc[1] = glm::vec4( 1.0f, 1.0f, 1.0f, 1.0f );
 		params.loc[2] = glm::vec4( 0.0f, 0.0f, 0.0f, 0.0f );
+		params.clear = true;
 		
 		current_fbo->replaceRenderPass(params.pipeline.pass);
 
@@ -4155,6 +4157,7 @@ void VRenderVulkanView::DrawOVER(VolumeData* vd, std::unique_ptr<vks::VFrameBuff
 	{
 		m_fbo_temp.reset();
 		m_tex_temp.reset();
+		m_fbo_temp_restore.reset();
 	}
 	if (TextureRenderer::get_mem_swap() && !m_fbo_temp)
 	{
@@ -4165,6 +4168,12 @@ void VRenderVulkanView::DrawOVER(VolumeData* vd, std::unique_ptr<vks::VFrameBuff
 
 		m_tex_temp = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
 		m_fbo_temp->addAttachment(m_tex_temp);
+
+		m_fbo_temp_restore = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+		m_fbo_temp_restore->w = m_nx;
+		m_fbo_temp_restore->h = m_ny;
+		m_fbo_temp_restore->device = prim_dev;
+		m_fbo_temp_restore->addAttachment(m_fbo_final->attachments[0]);
 	}
 
 	if (TextureRenderer::get_mem_swap() &&
@@ -4249,14 +4258,14 @@ void VRenderVulkanView::DrawOVER(VolumeData* vd, std::unique_ptr<vks::VFrameBuff
 			m_v2drender->preparePipeline(
 				IMG_SHADER_TEXTURE_LOOKUP,
 				V2DRENDER_BLEND_OVER,
-				m_fbo_final->attachments[0]->format,
-				m_fbo_final->attachments.size(),
+				m_fbo_temp_restore->attachments[0]->format,
+				m_fbo_temp_restore->attachments.size(),
 				0,
-				m_fbo_final->attachments[0]->is_swapchain_images);
+				m_fbo_temp_restore->attachments[0]->is_swapchain_images);
 		params.tex[0] = m_tex_temp.get();
 
-		m_fbo_final->replaceRenderPass(params.pipeline.pass);
-		m_v2drender->render(m_fbo_final, params);
+		m_fbo_temp_restore->replaceRenderPass(params.pipeline.pass);
+		m_v2drender->render(m_fbo_temp_restore, params);
 	}
 	
 	Vulkan2dRender::V2DRenderParams params_final = m_v2drender->GetNextV2dRenderSemaphoreSettings();
@@ -4276,6 +4285,8 @@ void VRenderVulkanView::DrawOVER(VolumeData* vd, std::unique_ptr<vks::VFrameBuff
 	params_final.loc[0] = glm::vec4((float)gamma.r(), (float)gamma.g(), (float)gamma.b(), 1.0f);
 	params_final.loc[1] = glm::vec4((float)brightness.r(), (float)brightness.g(), (float)brightness.b(), 1.0f);
 	params_final.loc[2] = glm::vec4((float)hdr.r(), (float)hdr.g(), (float)hdr.b(), 0.0f);
+	params_final.clear = m_clear_final_buffer;
+	m_clear_final_buffer = false;
 
 	m_fbo_final->replaceRenderPass(params_final.pipeline.pass);
 	m_v2drender->render(m_fbo_final, params_final);
@@ -4500,6 +4511,8 @@ void VRenderVulkanView::DrawMIP(VolumeData* vd, std::unique_ptr<vks::VFrameBuffe
 	params_final.loc[0] = glm::vec4((float)gamma.r(), (float)gamma.g(), (float)gamma.b(), 1.0f);
 	params_final.loc[1] = glm::vec4((float)brightness.r(), (float)brightness.g(), (float)brightness.b(), 1.0f);
 	params_final.loc[2] = glm::vec4((float)hdr.r(), (float)hdr.g(), (float)hdr.b(), 0.0f);
+	params_final.clear = m_clear_final_buffer;
+	m_clear_final_buffer = false;
 
 	m_fbo_final->replaceRenderPass(params_final.pipeline.pass);
 	m_v2drender->render(m_fbo_final, params_final);
@@ -11044,7 +11057,7 @@ Quaternion VRenderVulkanView::Trackball(int p1x, int p1y, int p2x, int p2y)
 			return q;
 	}
 
-	a = Vector(p1y-p2y, p2x-p1x, 0.0);
+	a = Vector(p2y-p1y, p2x-p1x, 0.0);
 	phi = a.length()/3.0;
 	a.normalize();
 	Quaternion q_a(a);
@@ -11081,7 +11094,7 @@ Quaternion VRenderVulkanView::TrackballClip(int p1x, int p1y, int p2x, int p2y)
 		return q;
 	}
 
-	a = Vector(p2y-p1y, p2x-p1x, 0.0);
+	a = Vector(p1y-p2y, p2x-p1x, 0.0);
 	phi = a.length()/3.0;
 	a.normalize();
 	Quaternion q_a(a);

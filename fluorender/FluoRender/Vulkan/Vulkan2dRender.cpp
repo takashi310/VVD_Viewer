@@ -359,7 +359,7 @@ void Vulkan2dRender::getEnabledUniforms(V2dPipeline &pipeline, const std::string
 
 	if (V2DRENDER_UNIFORM_VEC_NUM > 0) {
 		std::vector<std::string> v = {};
-		std::regex pt{ "uniform vec4 loc[0-9]+" };
+		std::regex pt{ "vec4 loc[0-9]+" };
 		std::sregex_iterator end, ite{ code.begin(), code.end(), pt };
 		for (; ite != end; ++ite) {
 			v.push_back(ite->str());
@@ -382,7 +382,7 @@ void Vulkan2dRender::getEnabledUniforms(V2dPipeline &pipeline, const std::string
 
 	if (V2DRENDER_UNIFORM_MAT_NUM > 0) {
 		std::vector<std::string> v = {};
-		std::regex pt{ "uniform mat4 matrix[0-9]+" };
+		std::regex pt{ "mat4 matrix[0-9]+" };
 		std::sregex_iterator end, ite{ code.begin(), code.end(), pt };
 		for (; ite != end; ++ite) {
 			v.push_back(ite->str());
@@ -590,7 +590,7 @@ void Vulkan2dRender::render(const std::unique_ptr<vks::VFrameBuffer>& framebuf, 
 	VkSubmitInfo submitInfo = vks::initializers::submitInfo();
 	std::vector<VkPipelineStageFlags> waitStages;
 	for (uint32_t i = 0; i < params.waitSemaphoreCount; i++)
-		waitStages.push_back( VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT );
+		waitStages.push_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &default_cmdbuf;
 	submitInfo.waitSemaphoreCount = params.waitSemaphoreCount;
@@ -778,7 +778,7 @@ void Vulkan2dRender::seq_render(const std::unique_ptr<vks::VFrameBuffer>& frameb
 	VkSubmitInfo submitInfo = vks::initializers::submitInfo();
 	std::vector<VkPipelineStageFlags> waitStages;
 	for (uint32_t i = 0; i < params[0].waitSemaphoreCount; i++)
-		waitStages.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+		waitStages.push_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &default_cmdbuf;
 	submitInfo.waitSemaphoreCount = params[0].waitSemaphoreCount;

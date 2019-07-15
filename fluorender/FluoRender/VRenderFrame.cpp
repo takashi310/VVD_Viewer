@@ -698,7 +698,7 @@ VRenderFrame::~VRenderFrame()
 	//m_timer->Stop();
 	//wxDELETE(m_timer);
 	//Finalize plugins
-	VolumeRenderer::vol_kernel_factory_.clean();
+	//VolumeRenderer::vol_kernel_factory_.clean();
 	m_plugin_manager->FinalizePligins();
 
 	for (int i=0; i<(int)m_vrv_list.size(); i++)

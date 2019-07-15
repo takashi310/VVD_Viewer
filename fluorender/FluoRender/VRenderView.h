@@ -848,6 +848,7 @@ private:
 	//temp buffer for large data compositing
 	std::unique_ptr<vks::VFrameBuffer> m_fbo_temp;
 	std::shared_ptr<vks::VTexture> m_tex_temp;
+	std::unique_ptr<vks::VFrameBuffer> m_fbo_temp_restore;
 	//shading (shadow) overlay
 	std::unique_ptr<vks::VFrameBuffer> m_fbo_ol1;
 	std::unique_ptr<vks::VFrameBuffer> m_fbo_ol2;

@@ -1768,6 +1768,11 @@ namespace FLIVR
 			if (vertbuf.buffer == idxbuf.buffer)
 			{
 				VkDeviceSize total_size = prim_dev->GetCurrentBufferOffset() - vert_offset;
+				VkDeviceSize atom = prim_dev->properties.limits.nonCoherentAtomSize;
+				if (atom > 0)
+					total_size = (total_size + atom - 1) & ~(atom - 1);
+				if (total_size + vert_offset > prim_dev->m_buf.size)
+					total_size = prim_dev->m_buf.size - vert_offset;
 				vertbuf.map(total_size, vert_offset);
 				vertbuf.copyTo(vertex.data(), vertex.size() * sizeof(float), 0);
 				vertbuf.copyTo(index.data(), index.size() * sizeof(unsigned int), idx_offset - vert_offset);
@@ -1776,14 +1781,26 @@ namespace FLIVR
 			}
 			else
 			{
-				vertbuf.map(vertex.size() * sizeof(float), vert_offset);
+				VkDeviceSize total_size = vertex.size() * sizeof(float);
+				VkDeviceSize atom = prim_dev->properties.limits.nonCoherentAtomSize;
+				if (atom > 0)
+					total_size = (total_size + atom - 1) & ~(atom - 1);
+				if (total_size + vert_offset > prim_dev->m_buf.size)
+					total_size = prim_dev->m_buf.size - vert_offset;
+				vertbuf.map(total_size, vert_offset);
 				vertbuf.copyTo(vertex.data(), vertex.size() * sizeof(float));
-				vertbuf.flush(vertex.size() * sizeof(float), vert_offset);
+				vertbuf.flush(total_size, vert_offset);
 				vertbuf.unmap();
 
-				idxbuf.map(index.size() * sizeof(unsigned int), idx_offset);
+				total_size = index.size() * sizeof(unsigned int);
+				atom = prim_dev->properties.limits.nonCoherentAtomSize;
+				if (atom > 0)
+					total_size = (total_size + atom - 1) & ~(atom - 1);
+				if (total_size + idx_offset > prim_dev->m_buf.size)
+					total_size = prim_dev->m_buf.size - idx_offset;
+				idxbuf.map(total_size, idx_offset);
 				idxbuf.copyTo(index.data(), index.size() * sizeof(unsigned int));
-				idxbuf.flush(index.size() * sizeof(unsigned int), idx_offset);
+				idxbuf.flush(total_size, idx_offset);
 				idxbuf.unmap();
 			}
 
@@ -1996,7 +2013,7 @@ namespace FLIVR
 				if (waitsemaphore && semaphores.waitSemaphoreCount > 0)
 				{
 					for (uint32_t i = 0; i < semaphores.waitSemaphoreCount; i++)
-						waitStages.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+						waitStages.push_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 					submitInfo.waitSemaphoreCount = semaphores.waitSemaphoreCount;
 					submitInfo.pWaitSemaphores = semaphores.waitSemaphores;
 					submitInfo.pWaitDstStageMask = waitStages.data();
@@ -2042,7 +2059,7 @@ namespace FLIVR
 			if (waitsemaphore && semaphores.waitSemaphoreCount > 0)
 			{
 				for (uint32_t i = 0; i < semaphores.waitSemaphoreCount; i++)
-					waitStages.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+					waitStages.push_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 				submitInfo.waitSemaphoreCount = semaphores.waitSemaphoreCount;
 				submitInfo.pWaitSemaphores = semaphores.waitSemaphores;
 				submitInfo.pWaitDstStageMask = waitStages.data();

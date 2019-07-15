@@ -342,8 +342,8 @@ void VulkanCanvas::LoadVolume()
 void VulkanCanvas::DrawMask()
 {
 	m_scale_factor = 1.3;
-	m_aov = 30.0;
-	m_persp = true;
+	//m_aov = 30.0;
+	//m_persp = true;
 
 	wxSize view_size = GetSize();
 
@@ -593,8 +593,8 @@ double VulkanCanvas::CalcCameraDistance()
 void VulkanCanvas::OnPaint(wxPaintEvent& event)
 {
 	m_scale_factor = 1.3;
-	m_aov = 30.0;
-	m_persp = true;
+	//m_aov = 30.0;
+	//m_persp = true;
 
 	wxPaintDC dc(this);
 
