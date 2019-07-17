@@ -85,4 +85,5 @@ private:
 
 	void LoadVolume();
 
+	int fcount = 0;
 };

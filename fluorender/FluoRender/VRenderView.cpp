@@ -1049,6 +1049,8 @@ void VRenderVulkanView::CalcFogRange()
 //draw the volume data only
 void VRenderVulkanView::Draw()
 {
+
+
 	int nx = m_nx;
 	int ny = m_ny;
 
@@ -10917,14 +10919,14 @@ void VRenderVulkanView::DrawInfo(int nx, int ny)
 	//if (!m_text_renderer)
 	//	return;
 
-	//float sx, sy;
-	//sx = 2.0/nx;
-	//sy = 2.0/ny;
-	//float px, py;
-	//float gapw = m_text_renderer->GetSize();
-	//float gaph = gapw*2;
+	float sx, sy;
+	sx = 2.0/nx;
+	sy = 2.0/ny;
+	float px, py;
+	float gapw = m_text_renderer->GetSize();
+	float gaph = gapw*2;
 
-	//double fps_ = 1.0/goTimer->average();
+	double fps_ = 1.0/goTimer->average();
 	//wxString str;
 	//Color text_color = GetTextColor();
 	//if (TextureRenderer::get_mem_swap())
@@ -11036,6 +11038,9 @@ void VRenderVulkanView::DrawInfo(int nx, int ny)
 	//		}
 	//	}
 	//}
+
+	wxString dbgstr = wxString::Format("fps: %.2f\n", fps_ >= 0.0 && fps_ < 300.0 ? fps_ : 0.0);
+	OutputDebugStringA(dbgstr.ToStdString().c_str());
 }
 
 Quaternion VRenderVulkanView::Trackball(int p1x, int p1y, int p2x, int p2y)

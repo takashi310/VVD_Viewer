@@ -320,7 +320,7 @@ namespace vks
 		m_cmdbufs.push_back(cmdbuf);
 
 		VkDeviceSize max_ubo_range = properties.limits.maxUniformBufferRange;
-		VkDeviceSize ubo_size = max_ubo_range > 65536 ? 65536 : max_ubo_range;
+		VkDeviceSize ubo_size = 1024;//max_ubo_range > 65536 ? 65536 : max_ubo_range;
 		VK_CHECK_RESULT(
 			createBuffer(
 				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,

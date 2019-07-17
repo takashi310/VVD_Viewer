@@ -111,7 +111,7 @@ VulkanCanvas::VulkanCanvas(wxWindow *pParent,
 	m_init_view = false;
 	m_persp = false;
 	m_aov = 15.0;
-	m_scale_factor = 1.0;
+	m_scale_factor = 1.99;
 
 	m_distance = 10.0;
 	m_init_dist = 10.0;
@@ -158,13 +158,13 @@ VulkanCanvas::VulkanCanvas(wxWindow *pParent,
 	wxString dbgstr;
 
 	////////////////////
-	st_time = milliseconds_now();
+	/*st_time = milliseconds_now();
 
 	DrawMask();
 
 	ed_time = milliseconds_now();
 	dbgstr = wxString::Format("draw_mask time: %lld\n", ed_time-st_time);
-	OutputDebugStringA(dbgstr.ToStdString().c_str());
+	OutputDebugStringA(dbgstr.ToStdString().c_str());*/
 	
 	//////////////////////
 	//m_vulkan->vulkanDevice->clear_tex_pool();
@@ -592,7 +592,13 @@ double VulkanCanvas::CalcCameraDistance()
 
 void VulkanCanvas::OnPaint(wxPaintEvent& event)
 {
-	m_scale_factor = 1.3;
+	uint64_t st_time, ed_time;
+	wxString dbgstr;
+
+	if (fcount > 60)
+		st_time = milliseconds_now();
+
+	m_scale_factor = 1.99;
 	//m_aov = 30.0;
 	//m_persp = true;
 
@@ -636,7 +642,7 @@ void VulkanCanvas::OnPaint(wxPaintEvent& event)
 		
 		m_vr->set_matrices(m_mv_mat, m_proj_mat, m_tex_mat);
 
-		m_vr->set_ml_mode(1);
+		//m_vr->set_ml_mode(1);
 		m_vr->draw(m_vulkan->frameBuffers[m_vulkan->currentBuffer], true, false, false, !m_persp, m_scale_factor, 0, sampling_frq_fac);
 
 		m_vulkan->submitFrame();
@@ -655,6 +661,15 @@ void VulkanCanvas::OnPaint(wxPaintEvent& event)
     }
 
 	m_mv_mat = mv_temp;
+
+	if (fcount > 60)
+	{
+		ed_time = milliseconds_now();
+		dbgstr = wxString::Format("draw time: %lld\n", ed_time - st_time);
+		OutputDebugStringA(dbgstr.ToStdString().c_str());
+		fcount = 0;
+	}
+	fcount++;
 }
 
 void VulkanCanvas::OnResize(wxSizeEvent& event)
