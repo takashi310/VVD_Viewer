@@ -1460,6 +1460,19 @@ namespace FLIVR
 		//	draw_wireframe(orthographic_p);
 	}
 
+	long long milliseconds_now() {
+		static LARGE_INTEGER s_frequency;
+		static BOOL s_use_qpc = QueryPerformanceFrequency(&s_frequency);
+		if (s_use_qpc) {
+			LARGE_INTEGER now;
+			QueryPerformanceCounter(&now);
+			return (1000LL * now.QuadPart) / s_frequency.QuadPart;
+		}
+		else {
+			return GetTickCount64();
+		}
+	}
+
 	void VolumeRenderer::draw_volume(
 		const std::unique_ptr<vks::VFrameBuffer>& framebuf,
 		bool clear_framebuf,
@@ -1475,6 +1488,10 @@ namespace FLIVR
 			if (rn_time - st_time_ > get_up_time())
 				return;
 		}
+
+		uint64_t st_time, ed_time;
+		char dbgstr[50];
+		st_time = milliseconds_now();
 
 		Ray view_ray = compute_view();
 		Ray snapview = compute_snapview(0.4);
@@ -2202,6 +2219,9 @@ namespace FLIVR
 			//VK_CHECK_RESULT(vkQueueWaitIdle(prim_dev->queue));
 		}
 
+		ed_time = milliseconds_now();
+		sprintf(dbgstr, "VR time: %lld\n", ed_time - st_time);
+		OutputDebugStringA(dbgstr);
 	}
 	//
 	//void VolumeRenderer::draw_wireframe(bool orthographic_p, double sampling_frq_fac)
