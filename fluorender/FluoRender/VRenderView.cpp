@@ -14088,7 +14088,7 @@ void VRenderVulkanView::OnMouse(wxMouseEvent& event)
 					Vector side = Cross(m_up, m_head);
 					Vector trans = -(
 						side*(double(dx)*(m_ortho_right-m_ortho_left)/double(GetSize().x))+
-						m_up*(double(dy)*(m_ortho_top-m_ortho_bottom)/double(GetSize().y)));
+						m_up*(double(-dy)*(m_ortho_top-m_ortho_bottom)/double(GetSize().y)));
 					m_obj_transx += trans.x();
 					m_obj_transy += trans.y();
 					m_obj_transz += trans.z();

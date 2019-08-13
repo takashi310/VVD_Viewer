@@ -1489,9 +1489,9 @@ namespace FLIVR
 				return;
 		}
 
-		uint64_t st_time, ed_time;
+		/*uint64_t st_time, ed_time;
 		char dbgstr[50];
-		st_time = milliseconds_now();
+		st_time = milliseconds_now();*/
 
 		Ray view_ray = compute_view();
 		Ray snapview = compute_snapview(0.4);
@@ -1696,14 +1696,9 @@ namespace FLIVR
 			frag_ubuf.flush(sizeof(VolShaderFactory::VolFragShaderBaseUBO), frag_ubuf_offset);
 		}
 		
-		bool clear = false;
+		bool clear = true;
 		bool waitsemaphore = true;
 		vks::VulkanSemaphoreSettings semaphores = prim_dev->GetNextRenderSemaphoreSettings();
-		if (!mem_swap_ || (mem_swap_ && cur_chan_brick_num_ == 0))
-		{
-			clear = true;
-		}
-
 
 		//////////////////////////////////////////
 		//render bricks
@@ -2218,10 +2213,10 @@ namespace FLIVR
 			
 			//VK_CHECK_RESULT(vkQueueWaitIdle(prim_dev->queue));
 		}
-
+/*
 		ed_time = milliseconds_now();
 		sprintf(dbgstr, "VR time: %lld\n", ed_time - st_time);
-		OutputDebugStringA(dbgstr);
+		OutputDebugStringA(dbgstr);*/
 	}
 	//
 	//void VolumeRenderer::draw_wireframe(bool orthographic_p, double sampling_frq_fac)
