@@ -425,7 +425,7 @@ int VolumeSelector::CompIslandCount(double min_voxels, double max_voxels)
 		m_total_pr = nz;
 		m_progress = 0;
 
-		int label_th_i = orig_nrrd->type == nrrdTypeUChar ? (unsigned int)(m_label_thresh * 255.0) : (unsigned int)(m_label_thresh * 65535.0);
+		int label_th_i = orig_nrrd->type == nrrdTypeUChar ? (unsigned int)(m_label_thresh * 255.0) : (unsigned int)(m_label_thresh * m_vd->GetMaxValue());
 
 		unsigned int segid = 1;
 		unsigned int finalid = 1;
@@ -466,7 +466,7 @@ int VolumeSelector::CompIslandCount(double min_voxels, double max_voxels)
 							cy = (tmp >> 16) & 0xFFFF;
 							cz = tmp & 0xFFFF;
 
-							int cid = (size_t)nx*(size_t)ny*cz + (size_t)nx*cy + cx;
+							size_t cid = (size_t)nx*(size_t)ny*cz + (size_t)nx*cy + cx;
 							pts.push_back(cid);
 							comp.counter++;
 							comp.acc_pos += Vector(cx, cy, cz);

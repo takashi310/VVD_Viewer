@@ -1708,6 +1708,19 @@ namespace FLIVR
 			shader->release();
 	}
 
+	long long milliseconds_now() {
+		static LARGE_INTEGER s_frequency;
+		static BOOL s_use_qpc = QueryPerformanceFrequency(&s_frequency);
+		if (s_use_qpc) {
+			LARGE_INTEGER now;
+			QueryPerformanceCounter(&now);
+			return (1000LL * now.QuadPart) / s_frequency.QuadPart;
+		}
+		else {
+			return GetTickCount();
+		}
+	}
+
 	//type: 0-initial; 1-diffusion-based growing; 2-masked filtering
 	//paint_mode: 1-select; 2-append; 3-erase; 4-diffuse; 5-flood; 6-clear; 7-all;
 	//			  11-posterize
@@ -1717,6 +1730,10 @@ namespace FLIVR
 		double scl_translate, double w2d, double bins, bool orthographic_p,
 		bool estimate)
 	{
+		uint64_t st_time, ed_time;
+		wxString dbgstr;
+		st_time = milliseconds_now();
+
 /*		if (paint_mode == 1 || paint_mode == 2)
 		{
 			draw_mask_cpu(type, paint_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, scl_translate, w2d, bins, orthographic_p, estimate);
@@ -1728,7 +1745,7 @@ namespace FLIVR
 		bool use_2d = glIsTexture(tex_2d_weight1_)&&
 			glIsTexture(tex_2d_weight2_)?true:false;
 
-		bool use_stroke = (tex_->nstroke() >= 0) ? true : false;
+		bool use_stroke = false;//(tex_->nstroke() >= 0) ? true : false;
 
 		Ray view_ray = compute_view();
 
@@ -1894,10 +1911,18 @@ namespace FLIVR
 			GLint tex_id = -1;
 			b->prevent_tex_deletion(true);
 			GLint vd_id = load_brick(0, 0, bricks, i, GL_NEAREST, compression_);
+
+			uint64_t st_time2, ed_time2;
+			wxString dbgstr2;
+			st_time2 = milliseconds_now();
+
 			GLint mask_id = load_brick_mask(bricks, i, GL_NEAREST, false, 0, true);
-			//OutputDebugStringA("load_brick_stroke: Enter\n");
-			GLint stroke_tex_id = load_brick_stroke(bricks, i, GL_NEAREST, false, 0, true);
-			//OutputDebugStringA("load_brick_stroke: Leave\n");
+
+			ed_time2 = milliseconds_now();
+			dbgstr2 = wxString::Format("mask texture upload time: %lld\n", ed_time2 - st_time2);
+			OutputDebugStringA(dbgstr2.ToStdString().c_str());
+
+			GLint stroke_tex_id = -1;//load_brick_stroke(bricks, i, GL_NEAREST, false, 0, true);
 			b->prevent_tex_deletion(false);
 			switch (type)
 			{
@@ -1996,6 +2021,10 @@ namespace FLIVR
 
 		//enable depth test
 		glEnable(GL_DEPTH_TEST);
+
+		ed_time = milliseconds_now();
+		dbgstr = wxString::Format("draw_mask time: %lld\n", ed_time - st_time);
+		OutputDebugStringA(dbgstr.ToStdString().c_str());
 	}
 
 	void VolumeRenderer::draw_mask_cpu(int type, int paint_mode, int hr_mode,
@@ -3614,6 +3643,10 @@ namespace FLIVR
 	//return the mask volume
 	void VolumeRenderer::return_mask()
 	{
+		uint64_t st_time, ed_time;
+		wxString dbgstr;
+		st_time = milliseconds_now();
+
 		if (!tex_)
 			return;
 		vector<TextureBrick*> *bricks = tex_->get_bricks();
@@ -3717,6 +3750,10 @@ namespace FLIVR
 
 		//release mask texture
 		release_texture(c, GL_TEXTURE_3D);
+
+		ed_time = milliseconds_now();
+		dbgstr = wxString::Format("mask_return time: %lld\n", ed_time - st_time);
+		OutputDebugStringA(dbgstr.ToStdString().c_str());
 	}
 
 	//return the label volume

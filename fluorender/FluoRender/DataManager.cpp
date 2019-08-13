@@ -1401,6 +1401,7 @@ Nrrd* VolumeData::GetVolume(bool ret)
 
 Nrrd* VolumeData::GetMask(bool ret)
 {
+	Nrrd* result = NULL;
 	if (m_vr && m_tex && m_tex->nmask()!=-1)
 	{
 		int curlv = -1;
@@ -1409,19 +1410,20 @@ Nrrd* VolumeData::GetMask(bool ret)
 			curlv = GetLevel();
 			SetLevel(GetMaskLv());
 		}
-
+		
 		if (ret) m_vr->return_mask();
-		return m_tex->get_nrrd(m_tex->nmask());
+		result = m_tex->get_nrrd(m_tex->nmask());
 
 		if (isBrxml())
 			SetLevel(curlv);
 	}
 
-	return 0;
+	return result;
 }
 
 Nrrd* VolumeData::GetLabel(bool ret)
 {
+	Nrrd* result = NULL;
 	if (m_vr && m_tex && m_tex->nlabel() != -1)
 	{
 
@@ -1433,17 +1435,18 @@ Nrrd* VolumeData::GetLabel(bool ret)
 		}
 
 		if (ret) m_vr->return_label();
-		return m_tex->get_nrrd(m_tex->nlabel());
+		result = m_tex->get_nrrd(m_tex->nlabel());
 
 		if (isBrxml())
 			SetLevel(curlv);
 	}
 
-	return 0;
+	return result;
 }
 
 Nrrd* VolumeData::GetStroke(bool ret)
 {
+	Nrrd* result = NULL;
 	if (m_vr && m_tex && m_tex->nstroke()!=-1)
 	{
 		int curlv = -1;
@@ -1454,13 +1457,13 @@ Nrrd* VolumeData::GetStroke(bool ret)
 		}
 
 		if (ret) m_vr->return_stroke();
-		return m_tex->get_nrrd(m_tex->nstroke());
+		result = m_tex->get_nrrd(m_tex->nstroke());
 
 		if (isBrxml())
 			SetLevel(curlv);
 	}
 
-	return 0;
+	return result;
 }
 
 double VolumeData::GetOriginalValue(int i, int j, int k, bool normalize)
