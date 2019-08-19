@@ -695,7 +695,7 @@ namespace vks
 			VK_CHECK_RESULT(staging_buf.map());
 		}
 	}
-
+/*
 	long long milliseconds_now() {
 		static LARGE_INTEGER s_frequency;
 		static BOOL s_use_qpc = QueryPerformanceFrequency(&s_frequency);
@@ -708,13 +708,13 @@ namespace vks
 			return GetTickCount64();
 		}
 	}
-
+*/
 	bool VulkanDevice::UploadTexture3D(const std::shared_ptr<VTexture> &tex, void *data, VkOffset3D offset, uint32_t ypitch, uint32_t zpitch)
 	{
-		uint64_t st_time, ed_time;
+/*		uint64_t st_time, ed_time;
 		char dbgstr[50];
 		st_time = milliseconds_now();
-
+*/
 		const VkDeviceSize texMemSize = (VkDeviceSize)tex->w * (VkDeviceSize)tex->h * (VkDeviceSize)tex->d * (VkDeviceSize)tex->bytes;
 
 		checkStagingBuffer(texMemSize);
@@ -759,11 +759,11 @@ namespace vks
 		staging_buf.flush();
 
 		CopyDataStagingBuf2Tex(tex);
-
+/*
 		ed_time = milliseconds_now();
 		sprintf(dbgstr, "uploadTex time: %lld  size: %lld\n", ed_time - st_time, texMemSize);
-		OutputDebugStringA(dbgstr);
-
+		//OutputDebugStringA(dbgstr);
+*/
 		return true;
 	}
 

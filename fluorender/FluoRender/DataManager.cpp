@@ -1,4 +1,4 @@
-﻿#include "DataManager.h"
+#include "DataManager.h"
 #include "teem/Nrrd/nrrd.h"
 #include <wx/msgdlg.h>
 #include <wx/progdlg.h>
@@ -2012,7 +2012,8 @@ void VolumeData::ImportMask(wxString &filename)
 {
 	MSKReader msk_reader;
 	msk_reader.SetAddExt(false);
-	msk_reader.SetFile(filename.ToStdString());
+    std::string str = filename.ToStdString();
+	msk_reader.SetFile(str);
 	Nrrd* mask = msk_reader.Convert(0, 0, true);
 	if (mask)
 	{

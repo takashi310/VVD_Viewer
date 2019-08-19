@@ -34,11 +34,7 @@
 
 #include "vulkan/vulkan.h"
 
-#if (defined(VK_USE_PLATFORM_IOS_MVK) || defined(VK_USE_PLATFORM_MACOS_MVK))
-#include <MoltenVKGLSLToSPIRVConverter/GLSLToSPIRVConverter.h>
-#else
 #include "SPIRV/GlslangToSpv.h"
-#endif
 
 #include "DLLExport.h"
 
@@ -66,10 +62,8 @@ namespace FLIVR
 		static const int MAX_SHADER_UNIFORMS = 16;
 		static std::string glsl_version_;
 
-#if !(defined(VK_USE_PLATFORM_IOS_MVK) || defined(VK_USE_PLATFORM_MACOS_MVK))
 		static EShLanguage FindLanguage(const VkShaderStageFlagBits shader_type);
 		static void init_resources(TBuiltInResource &Resources);
-#endif
 		static bool GLSLtoSPV(const VkShaderStageFlagBits shader_type, const char *pshader, std::vector<unsigned int> &spirv);
 		static void init_glslang();
 		static void finalize_glslang();

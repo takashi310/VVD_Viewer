@@ -5186,6 +5186,7 @@ void VRenderFrame::SetTextureRendererSettings()
 	//check amount of graphic memory
 	if (m_gpu_max_mem <= 0.0)
 	{
+/*
 		GLenum error = glGetError();
 		GLint mem_info[4] = {0, 0, 0, 0};
 		glGetIntegerv(GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX, mem_info);
@@ -5201,6 +5202,7 @@ void VRenderFrame::SetTextureRendererSettings()
 		if (m_gpu_max_mem >= 4096.0) m_gpu_max_mem -= 1024.0 + 512.0;
 		else if (m_gpu_max_mem >= 1024.0) m_gpu_max_mem -= 512.0;
 		else m_gpu_max_mem *= 0.7;
+ */
 	}
 
     double user_mem_limit = m_setting_dlg->GetGraphicsMem();

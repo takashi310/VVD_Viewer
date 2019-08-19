@@ -96,7 +96,7 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 set(wxWidgets_EXCLUDE_COMMON_LIBRARIES TRUE)
 find_package(wxWidgets COMPONENTS core base aui html xml net adv gl stc scintilla png tiff regex expat REQUIRED)
 else()
-find_package(wxWidgets COMPONENTS core base aui html xml net adv gl stc scintilla REQUIRED)
+find_package(wxWidgets COMPONENTS core base aui html xml net adv gl stc REQUIRED)
 endif()
 
 include(${wxWidgets_USE_FILE})
@@ -313,6 +313,24 @@ else()
     include_directories(${FREETYPE_INCLUDE_DIRS})
 endif()
 
+#Vulkan
+file(GLOB vsrc ${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/Vulkan/*.cpp)
+file(GLOB vhdr ${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/Vulkan/*.h)
+include_directories(${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/Vulkan)
+include_directories(${VVDViewer_SOURCE_DIR}/external)
+include_directories(${VVDViewer_SOURCE_DIR}/external/assimp)
+include_directories(${VVDViewer_SOURCE_DIR}/external/gli)
+#include_directories(${VVDViewer_SOURCE_DIR}/external/glm)
+include_directories(${VVDViewer_SOURCE_DIR}/external/imgui)
+find_package(vulkan REQUIRED)
+include_directories(${Vulkan_INCLUDE_DIR})
+if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+	add_definitions(-DVK_USE_PLATFORM_MACOS_MVK)
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
+	add_definitions(-DVK_USE_PLATFORM_WIN32_KHR)
+endif()
+add_definitions(-DGLM_FORCE_DEPTH_ZERO_TO_ONE)
+
 #other sources
 file(GLOB srcall ${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/*.cpp)
 set(src)
@@ -329,6 +347,9 @@ foreach(f ${hdrall})
   endif()
 endforeach()
 file(GLOB rsc ${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/img/*.xpm)
+
+set(src ${src} ${vsrc})
+set(hdr ${hdr} ${vhdr})
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 	add_library(VVDMainFrame SHARED
@@ -473,8 +494,9 @@ else()
 endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-   set(CMAKE_EXE_LINKER_FLAGS "-L/usr/local/lib -L/usr/lib ${CMAKE_EXE_LINKER_FLAGS} -lbz2 -framework OpenCL -framework CoreFoundation -framework CoreVideo -framework VideoDecodeAcceleration")
-   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mmacosx-version-min=10.9 -DWX_PRECOMP -std=c++11 -stdlib=libc++")
+   set(CMAKE_EXE_LINKER_FLAGS "-L/usr/local/lib -L/usr/lib ${CMAKE_EXE_LINKER_FLAGS} -lpng -lbz2 -framework IOSurface -framework Metal -framework VideoToolbox -framework CoreMedia -framework Security -framework OpenCL -framework CoreFoundation -framework CoreVideo -framework VideoDecodeAcceleration -framework QuartzCore")
+   set(CMAKE_SHARED_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS})
+   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mmacosx-version-min=10.9 -DWX_PRECOMP -std=c++14 -stdlib=libc++")
    #make sure png is static linked
    string(REGEX REPLACE "-lpng" "/usr/local/lib/libpng.a" 
 			wxWidgets_LIBRARIES ${wxWidgets_LIBRARIES})
@@ -491,6 +513,7 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	   ${CURL_LIBRARIES}
 	   ${JPEG_LIBRARIES}
 	   ${ZLIB_LIBRARIES}
+	   ${TIFF_LIBRARIES}
 	   ${OPENSSL_LIBRARIES} ws2_32.lib Wldap32.lib
 	   ${ffmpeg_LIBRARIES} Secur32.lib  Normaliz.lib crypt32.lib Bcrypt.lib
 	   ${OPENGL_LIBRARIES}
@@ -498,17 +521,18 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	   ${OPENCL_LIBRARIES}
 	   ${FREETYPE_LIBRARIES}
 	   ${wxWidgets_LIBRARIES}
-	   ${hdf5_LIBRARIES})
+	   ${hdf5_LIBRARIES}
+	   ${Vulkan_LIBRARY})
 	target_link_libraries(VVDViewer
 	   VVDMainFrame
 	   ws2_32.lib Wldap32.lib
 	   ${wxWidgets_LIBRARIES})
 elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-	target_link_libraries(VVDViewer
-	   VVDMainFrame
+	target_link_libraries(VVDMainFrame
 	   ${CURL_LIBRARIES}
 	   ${JPEG_LIBRARIES}
 	   ${ZLIB_LIBRARIES}
+	   ${TIFF_LIBRARIES}
 	   ${OPENSSL_LIBRARIES}
 	   ${SSL_DEP_LIBRARIES}
 	   ${ffmpeg_LIBRARIES}
@@ -517,7 +541,8 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 	   ${OPENCL_LIBRARIES}
 	   ${FREETYPE_LIBRARIES}
 	   ${wxWidgets_LIBRARIES}
-	   ${hdf5_LIBRARIES})
+	   ${hdf5_LIBRARIES}
+       ${Vulkan_LIBRARY})
 	target_link_libraries(VVDViewer
 	   VVDMainFrame
 	   ${wxWidgets_LIBRARIES})

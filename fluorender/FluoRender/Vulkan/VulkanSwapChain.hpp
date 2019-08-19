@@ -312,6 +312,9 @@ public:
 			*width = surfCaps.currentExtent.width;
 			*height = surfCaps.currentExtent.height;
 		}
+        
+        if (surfCaps.currentExtent.width <= 0 || surfCaps.currentExtent.height <= 0)
+            return;
 
 
 		// Select a present mode for the swapchain

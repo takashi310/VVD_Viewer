@@ -1,11 +1,5 @@
-///////////////////////////////////////////////////////////////////////////////////////////////////
-// OpenGL Mathematics Copyright (c) 2005 - 2014 G-Truc Creation (www.g-truc.net)
-///////////////////////////////////////////////////////////////////////////////////////////////////
-// Created : 2005-12-24
-// Updated : 2011-10-13
-// Licence : This source is under MIT License
-// File    : glm/gtx/integer.inl
-///////////////////////////////////////////////////////////////////////////////////////////////////
+/// @ref gtx_integer
+/// @file glm/gtx/integer.inl
 
 namespace glm
 {
@@ -53,21 +47,7 @@ namespace detail
 		x += (x >> 16);
 		return(x & 0x0000003f);
 	}
-
-	template <>
-	struct compute_log2<false>
-	{
-		template <typename T>
-		GLM_FUNC_QUALIFIER T operator() (T const & Value) const
-		{
-#if(GLM_COMPILER & (GLM_COMPILER_VC | GLM_COMPILER_GCC))
-			return Value <= static_cast<T>(1) ? T(0) : T(32) - nlz(Value - T(1));
-#else
-			return T(32) - nlz(Value - T(1));
-#endif
-		}
-	};
-}//namespace _detail
+}//namespace detail
 
 	// Henry Gordon Dietz: http://aggregate.org/MAGIC/
 /*
@@ -89,7 +69,7 @@ namespace detail
 	}
 
 	// factorial (!12 max, integer only)
-	template <typename genType>
+	template<typename genType>
 	GLM_FUNC_QUALIFIER genType factorial(genType const & x)
 	{
 		genType Temp = x;
@@ -99,30 +79,30 @@ namespace detail
 		return Result;
 	}
 
-	template <typename T, precision P>
-	GLM_FUNC_QUALIFIER detail::tvec2<T, P> factorial(
-		detail::tvec2<T, P> const & x)
+	template<typename T, precision P>
+	GLM_FUNC_QUALIFIER vec<2, T, P> factorial(
+		vec<2, T, P> const & x)
 	{
-		return detail::tvec2<T, P>(
+		return vec<2, T, P>(
 			factorial(x.x),
 			factorial(x.y));
 	}
 
-	template <typename T, precision P>
-	GLM_FUNC_QUALIFIER detail::tvec3<T, P> factorial(
-		detail::tvec3<T, P> const & x)
+	template<typename T, precision P>
+	GLM_FUNC_QUALIFIER vec<3, T, P> factorial(
+		vec<3, T, P> const & x)
 	{
-		return detail::tvec3<T, P>(
+		return vec<3, T, P>(
 			factorial(x.x),
 			factorial(x.y),
 			factorial(x.z));
 	}
 
-	template <typename T, precision P>
-	GLM_FUNC_QUALIFIER detail::tvec4<T, P> factorial(
-		detail::tvec4<T, P> const & x)
+	template<typename T, precision P>
+	GLM_FUNC_QUALIFIER vec<4, T, P> factorial(
+		vec<4, T, P> const & x)
 	{
-		return detail::tvec4<T, P>(
+		return vec<4, T, P>(
 			factorial(x.x),
 			factorial(x.y),
 			factorial(x.z),

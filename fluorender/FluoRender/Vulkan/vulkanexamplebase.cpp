@@ -621,7 +621,6 @@ void VulkanExampleBase::windowResize()
 	{
 		return;
 	}
-	prepared = false;
 
 	// Ensure all operations on the device have been finished before destroying resources
 	vkDeviceWaitIdle(device);
@@ -630,6 +629,13 @@ void VulkanExampleBase::windowResize()
 	width = destWidth;
 	height = destHeight;
 	setupSwapChain();
+    
+    if (width <= 0 || height <= 0)
+    {
+        return;
+    }
+    
+    prepared = false;
 
 	// Recreate the frame buffers
 	depthStencil->destroy();

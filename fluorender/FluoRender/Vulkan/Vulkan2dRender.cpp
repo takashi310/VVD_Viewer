@@ -153,7 +153,7 @@ VkRenderPass Vulkan2dRender::prepareRenderPass(VkFormat framebuf_format, int att
 		attd.finalLayout = isSwapChainImage ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		attchmentDescriptions.push_back(attd);
 
-		VkAttachmentReference colref = { i, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+		VkAttachmentReference colref = { (uint32_t)i, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
 		colorReferences.push_back(colref);
 	}
 	

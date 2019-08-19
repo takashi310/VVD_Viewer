@@ -1,15 +1,9 @@
-///////////////////////////////////////////////////////////////////////////////////////////////////
-// OpenGL Mathematics Copyright (c) 2005 - 2012 G-Truc Creation (www.g-truc.net)
-///////////////////////////////////////////////////////////////////////////////////////////////////
-// Created : 2013-02-04
-// Updated : 2013-02-04
-// Licence : This source is under MIT License
-// File    : glm/gtx/scalar_relational.inl
-///////////////////////////////////////////////////////////////////////////////////////////////////
+/// @ref gtx_scalar_relational
+/// @file glm/gtx/scalar_relational.inl
 
 namespace glm
 {
-	template <typename T>
+	template<typename T>
 	GLM_FUNC_QUALIFIER bool lessThan
 	(
 		T const & x, 
@@ -19,7 +13,7 @@ namespace glm
 		return x < y;
 	}
 
-	template <typename T>
+	template<typename T>
 	GLM_FUNC_QUALIFIER bool lessThanEqual
 	(
 		T const & x, 
@@ -29,7 +23,7 @@ namespace glm
 		return x <= y;
 	}
 
-	template <typename T>
+	template<typename T>
 	GLM_FUNC_QUALIFIER bool greaterThan
 	(
 		T const & x, 
@@ -39,7 +33,7 @@ namespace glm
 		return x > y;
 	}
 
-	template <typename T>
+	template<typename T>
 	GLM_FUNC_QUALIFIER bool greaterThanEqual
 	(
 		T const & x, 
@@ -49,7 +43,7 @@ namespace glm
 		return x >= y;
 	}
 
-	template <typename T>
+	template<typename T>
 	GLM_FUNC_QUALIFIER bool equal
 	(
 		T const & x, 
@@ -59,7 +53,7 @@ namespace glm
 		return x == y;
 	}
 
-	template <typename T>
+	template<typename T>
 	GLM_FUNC_QUALIFIER bool notEqual
 	(
 		T const & x, 

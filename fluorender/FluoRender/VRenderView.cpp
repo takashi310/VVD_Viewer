@@ -1,4 +1,4 @@
-﻿/*
+/*
 For more information, please see: http://software.sci.utah.edu
 
 The MIT License
@@ -47,6 +47,9 @@ DEALINGS IN THE SOFTWARE.
 //#include <boost/process.hpp>
 #ifdef _WIN32
 #include <Windows.h>
+#endif
+#ifdef __WXMAC__
+#include "MetalCompatibility.h"
 #endif
 
 int VRenderView::m_id = 1;
@@ -665,7 +668,8 @@ VRenderVulkanView::VRenderVulkanView(wxWindow* frame,
 	m_fixed_sclbar_len(0.0),
 	m_fixed_sclbar_fac(0.0),
 	m_sclbar_digit(3),
-	m_clear_final_buffer(false)
+	m_clear_final_buffer(false),
+    m_refresh(false)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -675,6 +679,7 @@ VRenderVulkanView::VRenderVulkanView(wxWindow* frame,
 #if defined(_WIN32)
 	m_vulkan->setWindow((HWND)GetHWND(), GetModuleHandle(NULL));
 #elif (defined(__WXMAC__))
+    makeViewMetalCompatible(GetHandle());
 	m_vulkan->setWindow(GetHandle());
 #endif
 	m_vulkan->prepare();
@@ -685,6 +690,9 @@ VRenderVulkanView::VRenderVulkanView(wxWindow* frame,
 	m_vulkan->ResetRenderSemaphores();
 
 	FLIVR::VolumeRenderer::init();
+    
+    wxSize wsize = GetSize();
+    m_vulkan->setSize(wsize.GetWidth(), wsize.GetHeight());
 
 	goTimer = new nv::Timer(10);
 	m_sb_num = "50";
@@ -1207,8 +1215,6 @@ void VRenderVulkanView::DrawVolumes(int peel)
 			int nx = m_nx;
 			int ny = m_ny;
 
-			glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
 			int peeling_layers;
 
 			if (!m_mdtrans) peeling_layers = 1;
@@ -1488,25 +1494,23 @@ void VRenderVulkanView::DrawVolumes(int peel)
 		m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
 	}
 
-	bool refresh = false;
-
 	if (m_interactive)
 	{
 		m_interactive = false;
 		m_clear_buffer = true;
-		refresh = true;
+		m_refresh = true;
 	}
 
 	if (m_int_res)
 	{
 		m_int_res = false;
-		refresh = true;
+		m_refresh = true;
 	}
 
 	if (m_manip)
 	{
 		m_pre_draw = true;
-		refresh = true;
+		m_refresh = true;
 	}
 
 	if (m_tile_rendering && m_current_tileid < m_tile_xnum*m_tile_ynum) {
@@ -1517,7 +1521,7 @@ void VRenderVulkanView::DrawVolumes(int peel)
 			DrawTile();
 			m_current_tileid++;
 			if (m_capture) m_postdraw = true;
-			if (m_current_tileid < m_tile_xnum*m_tile_ynum) refresh = true;
+			if (m_current_tileid < m_tile_xnum*m_tile_ynum) m_refresh = true;
 		}
 	}
 
@@ -1529,8 +1533,8 @@ void VRenderVulkanView::DrawVolumes(int peel)
 			TextureRenderer::reset_update_loop();
 	}
 
-	if (refresh)
-		RefreshGL();
+	//if (refresh)
+	//	RefreshGL();
 }
 
 void VRenderVulkanView::DrawVolumesDP()
@@ -5573,7 +5577,7 @@ bool VRenderVulkanView::SelSegVolume(int mode)
 
 void VRenderVulkanView::OnIdle(wxTimerEvent& event)
 {
-	bool refresh = false;
+	bool refresh = m_refresh;
 	bool ref_stat = false;
 	bool start_loop = true;
 	m_drawing_coord = false;
@@ -5881,6 +5885,7 @@ void VRenderVulkanView::OnIdle(wxTimerEvent& event)
 
 	if (refresh)
 	{
+        m_refresh = false;
 		m_updating = true;
 		RefreshGL(ref_stat, start_loop);
 	}
@@ -7033,6 +7038,8 @@ void VRenderVulkanView::OnDraw(wxPaintEvent& event)
 {
 	Init();
 	wxPaintDC dc(this);
+    
+    SetEvtHandlerEnabled(false);
 	
 	m_vulkan->ResetRenderSemaphores();
 	m_vulkan->prepareFrame();
@@ -7047,6 +7054,11 @@ void VRenderVulkanView::OnDraw(wxPaintEvent& event)
 
 	int nx = m_nx;
 	int ny = m_ny;
+    
+    if (nx <= 0 || ny <= 0)
+    {
+        return;
+    }
 
 	PopMeshList();
 
@@ -7117,7 +7129,7 @@ void VRenderVulkanView::OnDraw(wxPaintEvent& event)
 
 	m_vulkan->submitFrame();
 
-	//SetEvtHandlerEnabled(true);
+	SetEvtHandlerEnabled(true);
 }
 
 void VRenderVulkanView::SetRadius(double r)
@@ -11040,7 +11052,7 @@ void VRenderVulkanView::DrawInfo(int nx, int ny)
 	//}
 
 	wxString dbgstr = wxString::Format("fps: %.2f\n", fps_ >= 0.0 && fps_ < 300.0 ? fps_ : 0.0);
-	OutputDebugStringA(dbgstr.ToStdString().c_str());
+	//OutputDebugStringA(dbgstr.ToStdString().c_str());
 }
 
 Quaternion VRenderVulkanView::Trackball(int p1x, int p1y, int p2x, int p2y)
@@ -12108,6 +12120,14 @@ void VRenderVulkanView::RefreshGLOverlays(bool erase)
 	Refresh(erase);
 
 }
+
+#ifdef __WXMAC__
+void VRenderVulkanView::Refresh( bool eraseBackground, const wxRect *rect)
+{
+    wxPaintEvent ev;
+    OnDraw(ev);
+}
+#endif
 
 double VRenderVulkanView::GetPointVolume(Point& mp, int mx, int my,
 									 VolumeData* vd, int mode, bool use_transf, double thresh)
@@ -15031,7 +15051,7 @@ wxTextCtrl* VRenderView::m_cap_h_txt = NULL;
 VRenderView::VRenderView(wxWindow* frame,
 	wxWindow* parent,
 	wxWindowID id,
-	std::shared_ptr<VVulkan> &sharedContext,
+	const std::shared_ptr<VVulkan> &sharedContext,
 	const wxPoint& pos,
 	const wxSize& size,
 	long style) :
@@ -15042,8 +15062,8 @@ wxPanel(parent, id, pos, size, style),
 	m_use_dft_settings(false),
 	m_res_mode(0)
 {
-	//SetEvtHandlerEnabled(false);
-	//Freeze();
+	SetEvtHandlerEnabled(false);
+	Freeze();
 
 	//full frame
 	m_full_frame = new wxFrame((wxFrame*)NULL, wxID_ANY, "FluoRender");
@@ -15125,8 +15145,8 @@ wxPanel(parent, id, pos, size, style),
 	}
 	LoadSettings();
 
-	//Thaw();
-	//SetEvtHandlerEnabled(true);
+	Thaw();
+	SetEvtHandlerEnabled(true);
 
 	m_idleTimer = new wxTimer(this, ID_Timer);
 	m_idleTimer->Start(100);

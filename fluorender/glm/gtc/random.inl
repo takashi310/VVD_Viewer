@@ -1,30 +1,5 @@
-///////////////////////////////////////////////////////////////////////////////////
-/// OpenGL Mathematics (glm.g-truc.net)
-///
-/// Copyright (c) 2005 - 2014 G-Truc Creation (www.g-truc.net)
-/// Permission is hereby granted, free of charge, to any person obtaining a copy
-/// of this software and associated documentation files (the "Software"), to deal
-/// in the Software without restriction, including without limitation the rights
-/// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-/// copies of the Software, and to permit persons to whom the Software is
-/// furnished to do so, subject to the following conditions:
-/// 
-/// The above copyright notice and this permission notice shall be included in
-/// all copies or substantial portions of the Software.
-/// 
-/// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-/// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-/// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-/// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-/// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-/// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-/// THE SOFTWARE.
-///
 /// @ref gtc_random
 /// @file glm/gtc/random.inl
-/// @date 2011-09-19 / 2012-04-07
-/// @author Christophe Riccio
-///////////////////////////////////////////////////////////////////////////////////
 
 #include "../geometric.hpp"
 #include "../exponential.hpp"
@@ -35,55 +10,267 @@
 namespace glm{
 namespace detail
 {
-	struct compute_linearRand
+	template<length_t L, typename T, precision P, template<length_t, class, precision> class vecType>
+	struct compute_rand
 	{
-		template <typename T>
-		GLM_FUNC_QUALIFIER T operator() (T const & Min, T const & Max) const;
-/*
-		{
-			GLM_STATIC_ASSERT(0, "'linearRand' invalid template parameter type. GLM_GTC_random only supports floating-point template types.");
-			return Min;
-		}
-*/
+		GLM_FUNC_QUALIFIER static vecType<L, T, P> call();
 	};
 
-	template <>
-	GLM_FUNC_QUALIFIER float compute_linearRand::operator()<float> (float const & Min, float const & Max) const
+	template<precision P>
+	struct compute_rand<1, uint8, P, vec>
 	{
-		return float(std::rand()) / float(RAND_MAX) * (Max - Min) + Min;
-	}
+		GLM_FUNC_QUALIFIER static vec<1, uint8, P> call()
+		{
+			return vec<1, uint8, P>(
+				std::rand() % std::numeric_limits<uint8>::max());
+		}
+	};
 
-	template <>
-	GLM_FUNC_QUALIFIER double compute_linearRand::operator()<double> (double const & Min, double const & Max) const
+	template<precision P>
+	struct compute_rand<2, uint8, P, vec>
 	{
-		return double(std::rand()) / double(RAND_MAX) * (Max - Min) + Min;
-	}
+		GLM_FUNC_QUALIFIER static vec<2, uint8, P> call()
+		{
+			return vec<2, uint8, P>(
+				std::rand() % std::numeric_limits<uint8>::max(),
+				std::rand() % std::numeric_limits<uint8>::max());
+		}
+	};
 
-	template <>
-	GLM_FUNC_QUALIFIER long double compute_linearRand::operator()<long double> (long double const & Min, long double const & Max) const
+	template<precision P>
+	struct compute_rand<3, uint8, P, vec>
 	{
-		return (long double)(std::rand()) / (long double)(RAND_MAX) * (Max - Min) + Min;
-	}
+		GLM_FUNC_QUALIFIER static vec<3, uint8, P> call()
+		{
+			return vec<3, uint8, P>(
+				std::rand() % std::numeric_limits<uint8>::max(),
+				std::rand() % std::numeric_limits<uint8>::max(),
+				std::rand() % std::numeric_limits<uint8>::max());
+		}
+	};
+
+	template<precision P>
+	struct compute_rand<4, uint8, P, vec>
+	{
+		GLM_FUNC_QUALIFIER static vec<4, uint8, P> call()
+		{
+			return vec<4, uint8, P>(
+				std::rand() % std::numeric_limits<uint8>::max(),
+				std::rand() % std::numeric_limits<uint8>::max(),
+				std::rand() % std::numeric_limits<uint8>::max(),
+				std::rand() % std::numeric_limits<uint8>::max());
+		}
+	};
+
+	template<length_t L, precision P, template<length_t, typename, precision> class vecType>
+	struct compute_rand<L, uint16, P, vecType>
+	{
+		GLM_FUNC_QUALIFIER static vecType<L, uint16, P> call()
+		{
+			return
+				(vecType<L, uint16, P>(compute_rand<L, uint8, P, vecType>::call()) << static_cast<uint16>(8)) |
+				(vecType<L, uint16, P>(compute_rand<L, uint8, P, vecType>::call()) << static_cast<uint16>(0));
+		}
+	};
+
+	template<length_t L, precision P, template<length_t, typename, precision> class vecType>
+	struct compute_rand<L, uint32, P, vecType>
+	{
+		GLM_FUNC_QUALIFIER static vecType<L, uint32, P> call()
+		{
+			return
+				(vecType<L, uint32, P>(compute_rand<L, uint16, P, vecType>::call()) << static_cast<uint32>(16)) |
+				(vecType<L, uint32, P>(compute_rand<L, uint16, P, vecType>::call()) << static_cast<uint32>(0));
+		}
+	};
+
+	template<length_t L, precision P, template<length_t, typename, precision> class vecType>
+	struct compute_rand<L, uint64, P, vecType>
+	{
+		GLM_FUNC_QUALIFIER static vecType<L, uint64, P> call()
+		{
+			return
+				(vecType<L, uint64, P>(compute_rand<L, uint32, P, vecType>::call()) << static_cast<uint64>(32)) |
+				(vecType<L, uint64, P>(compute_rand<L, uint32, P, vecType>::call()) << static_cast<uint64>(0));
+		}
+	};
+
+	template<length_t L, typename T, precision P, template<length_t, typename, precision> class vecType>
+	struct compute_linearRand
+	{
+		GLM_FUNC_QUALIFIER static vecType<L, T, P> call(vecType<L, T, P> const & Min, vecType<L, T, P> const & Max);
+	};
+
+	template<length_t L, precision P, template<length_t, typename, precision> class vecType>
+	struct compute_linearRand<L, int8, P, vecType>
+	{
+		GLM_FUNC_QUALIFIER static vecType<L, int8, P> call(vecType<L, int8, P> const & Min, vecType<L, int8, P> const & Max)
+		{
+			return (vecType<L, int8, P>(compute_rand<L, uint8, P, vecType>::call() % vecType<L, uint8, P>(Max + static_cast<int8>(1) - Min))) + Min;
+		}
+	};
+
+	template<length_t L, precision P, template<length_t, typename, precision> class vecType>
+	struct compute_linearRand<L, uint8, P, vecType>
+	{
+		GLM_FUNC_QUALIFIER static vecType<L, uint8, P> call(vecType<L, uint8, P> const & Min, vecType<L, uint8, P> const & Max)
+		{
+			return (compute_rand<L, uint8, P, vecType>::call() % (Max + static_cast<uint8>(1) - Min)) + Min;
+		}
+	};
+
+	template<length_t L, precision P, template<length_t, typename, precision> class vecType>
+	struct compute_linearRand<L, int16, P, vecType>
+	{
+		GLM_FUNC_QUALIFIER static vecType<L, int16, P> call(vecType<L, int16, P> const & Min, vecType<L, int16, P> const & Max)
+		{
+			return (vecType<L, int16, P>(compute_rand<L, uint16, P, vecType>::call() % vecType<L, uint16, P>(Max + static_cast<int16>(1) - Min))) + Min;
+		}
+	};
+
+	template<length_t L, precision P, template<length_t, typename, precision> class vecType>
+	struct compute_linearRand<L, uint16, P, vecType>
+	{
+		GLM_FUNC_QUALIFIER static vecType<L, uint16, P> call(vecType<L, uint16, P> const & Min, vecType<L, uint16, P> const & Max)
+		{
+			return (compute_rand<L, uint16, P, vecType>::call() % (Max + static_cast<uint16>(1) - Min)) + Min;
+		}
+	};
+
+	template<length_t L, precision P, template<length_t, typename, precision> class vecType>
+	struct compute_linearRand<L, int32, P, vecType>
+	{
+		GLM_FUNC_QUALIFIER static vecType<L, int32, P> call(vecType<L, int32, P> const & Min, vecType<L, int32, P> const & Max)
+		{
+			return (vecType<L, int32, P>(compute_rand<L, uint32, P, vecType>::call() % vecType<L, uint32, P>(Max + static_cast<int32>(1) - Min))) + Min;
+		}
+	};
+
+	template<length_t L, precision P, template<length_t, typename, precision> class vecType>
+	struct compute_linearRand<L, uint32, P, vecType>
+	{
+		GLM_FUNC_QUALIFIER static vecType<L, uint32, P> call(vecType<L, uint32, P> const & Min, vecType<L, uint32, P> const & Max)
+		{
+			return (compute_rand<L, uint32, P, vecType>::call() % (Max + static_cast<uint32>(1) - Min)) + Min;
+		}
+	};
+ 
+	template<length_t L, precision P, template<length_t, typename, precision> class vecType>
+	struct compute_linearRand<L, int64, P, vecType>
+	{
+		GLM_FUNC_QUALIFIER static vecType<L, int64, P> call(vecType<L, int64, P> const & Min, vecType<L, int64, P> const & Max)
+		{
+			return (vecType<L, int64, P>(compute_rand<L, uint64, P, vecType>::call() % vecType<L, uint64, P>(Max + static_cast<int64>(1) - Min))) + Min;
+		}
+	};
+
+	template<length_t L, precision P, template<length_t, typename, precision> class vecType>
+	struct compute_linearRand<L, uint64, P, vecType>
+	{
+		GLM_FUNC_QUALIFIER static vecType<L, uint64, P> call(vecType<L, uint64, P> const & Min, vecType<L, uint64, P> const & Max)
+		{
+			return (compute_rand<L, uint64, P, vecType>::call() % (Max + static_cast<uint64>(1) - Min)) + Min;
+		}
+	};
+
+	template<length_t L, template<length_t, typename, precision> class vecType>
+	struct compute_linearRand<L, float, lowp, vecType>
+	{
+		GLM_FUNC_QUALIFIER static vecType<L, float, lowp> call(vecType<L, float, lowp> const & Min, vecType<L, float, lowp> const & Max)
+		{
+			return vecType<L, float, lowp>(compute_rand<L, uint8, lowp, vecType>::call()) / static_cast<float>(std::numeric_limits<uint8>::max()) * (Max - Min) + Min;
+		}
+	};
+
+	template<length_t L, template<length_t, typename, precision> class vecType>
+	struct compute_linearRand<L, float, mediump, vecType>
+	{
+		GLM_FUNC_QUALIFIER static vecType<L, float, mediump> call(vecType<L, float, mediump> const & Min, vecType<L, float, mediump> const & Max)
+		{
+			return vecType<L, float, mediump>(compute_rand<L, uint16, mediump, vecType>::call()) / static_cast<float>(std::numeric_limits<uint16>::max()) * (Max - Min) + Min;
+		}
+	};
+
+	template<length_t L, template<length_t, typename, precision> class vecType>
+	struct compute_linearRand<L, float, highp, vecType>
+	{
+		GLM_FUNC_QUALIFIER static vecType<L, float, highp> call(vecType<L, float, highp> const & Min, vecType<L, float, highp> const & Max)
+		{
+			return vecType<L, float, highp>(compute_rand<L, uint32, highp, vecType>::call()) / static_cast<float>(std::numeric_limits<uint32>::max()) * (Max - Min) + Min;
+		}
+	};
+
+	template<length_t L, template<length_t, typename, precision> class vecType>
+	struct compute_linearRand<L, double, lowp, vecType>
+	{
+		GLM_FUNC_QUALIFIER static vecType<L, double, lowp> call(vecType<L, double, lowp> const & Min, vecType<L, double, lowp> const & Max)
+		{
+			return vecType<L, double, lowp>(compute_rand<L, uint16, lowp, vecType>::call()) / static_cast<double>(std::numeric_limits<uint16>::max()) * (Max - Min) + Min;
+		}
+	};
+
+	template<length_t L, template<length_t, typename, precision> class vecType>
+	struct compute_linearRand<L, double, mediump, vecType>
+	{
+		GLM_FUNC_QUALIFIER static vecType<L, double, mediump> call(vecType<L, double, mediump> const & Min, vecType<L, double, mediump> const & Max)
+		{
+			return vecType<L, double, mediump>(compute_rand<L, uint32, mediump, vecType>::call()) / static_cast<double>(std::numeric_limits<uint32>::max()) * (Max - Min) + Min;
+		}
+	};
+
+	template<length_t L, template<length_t, typename, precision> class vecType>
+	struct compute_linearRand<L, double, highp, vecType>
+	{
+		GLM_FUNC_QUALIFIER static vecType<L, double, highp> call(vecType<L, double, highp> const & Min, vecType<L, double, highp> const & Max)
+		{
+			return vecType<L, double, highp>(compute_rand<L, uint64, highp, vecType>::call()) / static_cast<double>(std::numeric_limits<uint64>::max()) * (Max - Min) + Min;
+		}
+	};
+
+	template<length_t L, template<length_t, typename, precision> class vecType>
+	struct compute_linearRand<L, long double, lowp, vecType>
+	{
+		GLM_FUNC_QUALIFIER static vecType<L, long double, lowp> call(vecType<L, long double, lowp> const & Min, vecType<L, long double, lowp> const & Max)
+		{
+			return vecType<L, long double, lowp>(compute_rand<L, uint32, lowp, vecType>::call()) / static_cast<long double>(std::numeric_limits<uint32>::max()) * (Max - Min) + Min;
+		}
+	};
+
+	template<length_t L, template<length_t, typename, precision> class vecType>
+	struct compute_linearRand<L, long double, mediump, vecType>
+	{
+		GLM_FUNC_QUALIFIER static vecType<L, long double, mediump> call(vecType<L, long double, mediump> const & Min, vecType<L, long double, mediump> const & Max)
+		{
+			return vecType<L, long double, mediump>(compute_rand<L, uint64, mediump, vecType>::call()) / static_cast<long double>(std::numeric_limits<uint64>::max()) * (Max - Min) + Min;
+		}
+	};
+
+	template<length_t L, template<length_t, typename, precision> class vecType>
+	struct compute_linearRand<L, long double, highp, vecType>
+	{
+		GLM_FUNC_QUALIFIER static vecType<L, long double, highp> call(vecType<L, long double, highp> const & Min, vecType<L, long double, highp> const & Max)
+		{
+			return vecType<L, long double, highp>(compute_rand<L, uint64, highp, vecType>::call()) / static_cast<long double>(std::numeric_limits<uint64>::max()) * (Max - Min) + Min;
+		}
+	};
 }//namespace detail
 
-	template <typename genType> 
-	GLM_FUNC_QUALIFIER genType linearRand
-	(
-		genType const & Min,
-		genType const & Max
-	)
+	template<typename genType>
+	GLM_FUNC_QUALIFIER genType linearRand(genType Min, genType Max)
 	{
-		return detail::compute_linearRand()(Min, Max);
+		return detail::compute_linearRand<1, genType, highp, vec>::call(
+			vec<1, genType, highp>(Min),
+			vec<1, genType, highp>(Max)).x;
 	}
 
-	VECTORIZE_VEC_VEC(linearRand)
+	template<length_t L, typename T, precision P, template<length_t, typename, precision> class vecType>
+	GLM_FUNC_QUALIFIER vecType<L, T, P> linearRand(vecType<L, T, P> const & Min, vecType<L, T, P> const & Max)
+	{
+		return detail::compute_linearRand<L, T, P, vecType>::call(Min, Max);
+	}
 
-	template <typename genType> 
-	GLM_FUNC_QUALIFIER genType gaussRand
-	(
-		genType const & Mean,	
-		genType const & Deviation
-	)
+	template<typename genType>
+	GLM_FUNC_QUALIFIER genType gaussRand(genType Mean, genType Deviation)
 	{
 		genType w, x1, x2;
 	
@@ -98,22 +285,23 @@ namespace detail
 		return x2 * Deviation * Deviation * sqrt((genType(-2) * log(w)) / w) + Mean;
 	}
 
-	VECTORIZE_VEC_VEC(gaussRand)
+	template<length_t L, typename T, precision P, template<length_t, typename, precision> class vecType>
+	GLM_FUNC_QUALIFIER vecType<L, T, P> gaussRand(vecType<L, T, P> const & Mean, vecType<L, T, P> const & Deviation)
+	{
+		return detail::functor2<L, T, P>::call(gaussRand, Mean, Deviation);
+	}
 
-	template <typename T>
-	GLM_FUNC_QUALIFIER detail::tvec2<T, defaultp> diskRand
-	(
-		T const & Radius
-	)
+	template<typename T>
+	GLM_FUNC_QUALIFIER vec<2, T, defaultp> diskRand(T Radius)
 	{		
-		detail::tvec2<T, defaultp> Result(T(0));
+		vec<2, T, defaultp> Result(T(0));
 		T LenRadius(T(0));
 		
 		do
 		{
 			Result = linearRand(
-				detail::tvec2<T, defaultp>(-Radius),
-				detail::tvec2<T, defaultp>(Radius));
+				vec<2, T, defaultp>(-Radius),
+				vec<2, T, defaultp>(Radius));
 			LenRadius = length(Result);
 		}
 		while(LenRadius > Radius);
@@ -121,20 +309,17 @@ namespace detail
 		return Result;
 	}
 	
-	template <typename T>
-	GLM_FUNC_QUALIFIER detail::tvec3<T, defaultp> ballRand
-	(
-		T const & Radius
-	)
+	template<typename T>
+	GLM_FUNC_QUALIFIER vec<3, T, defaultp> ballRand(T Radius)
 	{		
-		detail::tvec3<T, defaultp> Result(T(0));
+		vec<3, T, defaultp> Result(T(0));
 		T LenRadius(T(0));
 		
 		do
 		{
 			Result = linearRand(
-				detail::tvec3<T, defaultp>(-Radius),
-				detail::tvec3<T, defaultp>(Radius));
+				vec<3, T, defaultp>(-Radius),
+				vec<3, T, defaultp>(Radius));
 			LenRadius = length(Result);
 		}
 		while(LenRadius > Radius);
@@ -142,21 +327,15 @@ namespace detail
 		return Result;
 	}
 	
-	template <typename T>
-	GLM_FUNC_QUALIFIER detail::tvec2<T, defaultp> circularRand
-	(
-		T const & Radius
-	)
+	template<typename T>
+	GLM_FUNC_QUALIFIER vec<2, T, defaultp> circularRand(T Radius)
 	{
 		T a = linearRand(T(0), T(6.283185307179586476925286766559f));
-		return detail::tvec2<T, defaultp>(cos(a), sin(a)) * Radius;		
+		return vec<2, T, defaultp>(cos(a), sin(a)) * Radius;		
 	}
 	
-	template <typename T>
-	GLM_FUNC_QUALIFIER detail::tvec3<T, defaultp> sphericalRand
-	(
-		T const & Radius
-	)
+	template<typename T>
+	GLM_FUNC_QUALIFIER vec<3, T, defaultp> sphericalRand(T Radius)
 	{
 		T z = linearRand(T(-1), T(1));
 		T a = linearRand(T(0), T(6.283185307179586476925286766559f));
@@ -166,6 +345,6 @@ namespace detail
 		T x = r * cos(a);
 		T y = r * sin(a);
 	
-		return detail::tvec3<T, defaultp>(x, y, z) * Radius;	
+		return vec<3, T, defaultp>(x, y, z) * Radius;	
 	}
 }//namespace glm

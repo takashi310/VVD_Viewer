@@ -1460,19 +1460,6 @@ namespace FLIVR
 		//	draw_wireframe(orthographic_p);
 	}
 
-	long long milliseconds_now() {
-		static LARGE_INTEGER s_frequency;
-		static BOOL s_use_qpc = QueryPerformanceFrequency(&s_frequency);
-		if (s_use_qpc) {
-			LARGE_INTEGER now;
-			QueryPerformanceCounter(&now);
-			return (1000LL * now.QuadPart) / s_frequency.QuadPart;
-		}
-		else {
-			return GetTickCount64();
-		}
-	}
-
 	void VolumeRenderer::draw_volume(
 		const std::unique_ptr<vks::VFrameBuffer>& framebuf,
 		bool clear_framebuf,
@@ -1797,8 +1784,8 @@ namespace FLIVR
 				VkDeviceSize atom = prim_dev->properties.limits.nonCoherentAtomSize;
 				if (atom > 0)
 					total_size = (total_size + atom - 1) & ~(atom - 1);
-				if (total_size + vert_offset > prim_dev->m_buf.size)
-					total_size = prim_dev->m_buf.size - vert_offset;
+				if (total_size + vert_offset > vertbuf.size)
+					total_size = vertbuf.size - vert_offset;
 				vertbuf.map(total_size, vert_offset);
 				vertbuf.copyTo(vertex.data(), vertex.size() * sizeof(float));
 				vertbuf.flush(total_size, vert_offset);
@@ -1808,8 +1795,8 @@ namespace FLIVR
 				atom = prim_dev->properties.limits.nonCoherentAtomSize;
 				if (atom > 0)
 					total_size = (total_size + atom - 1) & ~(atom - 1);
-				if (total_size + idx_offset > prim_dev->m_buf.size)
-					total_size = prim_dev->m_buf.size - idx_offset;
+				if (total_size + idx_offset > idxbuf.size)
+					total_size = idxbuf.size - idx_offset;
 				idxbuf.map(total_size, idx_offset);
 				idxbuf.copyTo(index.data(), index.size() * sizeof(unsigned int));
 				idxbuf.flush(total_size, idx_offset);

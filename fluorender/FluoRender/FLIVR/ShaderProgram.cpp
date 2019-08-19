@@ -158,50 +158,6 @@ namespace FLIVR
 		}
 	}
 
-	
-#if (defined(VK_USE_PLATFORM_IOS_MVK) || defined(VK_USE_PLATFORM_MACOS_MVK))
-
-	void ShaderProgram::init_glslang() {}
-
-	void ShaderProgram::finalize_glslang() {}
-
-	bool ShaderProgram::GLSLtoSPV(const VkShaderStageFlagBits shader_type, const char *pshader, std::vector<unsigned int> &spirv) {
-		MVKShaderStage shaderStage;
-		switch (shader_type) {
-		case VK_SHADER_STAGE_VERTEX_BIT:
-			shaderStage = kMVKShaderStageVertex;
-			break;
-		case VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT:
-			shaderStage = kMVKShaderStageTessControl;
-			break;
-		case VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT:
-			shaderStage = kMVKShaderStageTessEval;
-			break;
-		case VK_SHADER_STAGE_GEOMETRY_BIT:
-			shaderStage = kMVKShaderStageGeometry;
-			break;
-		case VK_SHADER_STAGE_FRAGMENT_BIT:
-			shaderStage = kMVKShaderStageFragment;
-			break;
-		case VK_SHADER_STAGE_COMPUTE_BIT:
-			shaderStage = kMVKShaderStageCompute;
-			break;
-		default:
-			shaderStage = kMVKShaderStageAuto;
-			break;
-		}
-
-		mvk::GLSLToSPIRVConverter glslConverter;
-		glslConverter.setGLSL(pshader);
-		bool wasConverted = glslConverter.convert(shaderStage, false, false);
-		if (wasConverted) {
-			spirv = glslConverter.getSPIRV();
-		}
-		return wasConverted;
-	}
-
-#else  // not IOS OR macOS
-
 	EShLanguage ShaderProgram::FindLanguage(const VkShaderStageFlagBits shader_type) {
 		switch (shader_type) {
 		case VK_SHADER_STAGE_VERTEX_BIT:
@@ -379,7 +335,6 @@ namespace FLIVR
 		glslang::GlslangToSpv(*program.getIntermediate(stage), spirv);
 		return true;
 	}
-#endif  // IOS or macOS
 
 
 

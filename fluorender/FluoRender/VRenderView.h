@@ -608,6 +608,10 @@ public:
 	void HaltLoopUpdate();
 	void RefreshGL(bool erase=false, bool start_loop=true);
 	void RefreshGLOverlays(bool erase=false);
+#ifdef __WXMAC__
+    virtual void Refresh( bool eraseBackground = true,
+                         const wxRect *rect = NULL ) wxOVERRIDE;
+#endif
 
 	//rulers
 	int GetRulerType();
@@ -1009,6 +1013,8 @@ private:
 
 	//timer
 	nv::Timer *goTimer;
+    
+    bool m_refresh;
 
 	//wacom support
 #ifdef _WIN32
@@ -1283,7 +1289,7 @@ public:
 	VRenderView(wxWindow* frame,
 		wxWindow* parent,
 		wxWindowID id,
-		std::shared_ptr<VVulkan> &sharedContext = std::shared_ptr<VVulkan>(),
+		const std::shared_ptr<VVulkan> &sharedContext = std::shared_ptr<VVulkan>(),
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize,
 		long style = 0);

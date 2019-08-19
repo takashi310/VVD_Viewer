@@ -1,223 +1,188 @@
-///////////////////////////////////////////////////////////////////////////////////////////////////
-// OpenGL Mathematics Copyright (c) 2005 - 2014 G-Truc Creation (www.g-truc.net)
-///////////////////////////////////////////////////////////////////////////////////////////////////
-// Created : 2006-11-02
-// Updated : 2009-02-19
-// Licence : This source is under MIT License
-// File    : glm/gtx/rotate_vector.inl
-///////////////////////////////////////////////////////////////////////////////////////////////////
+/// @ref gtx_rotate_vector
+/// @file glm/gtx/rotate_vector.inl
 
 namespace glm
 {
-	template <typename T, precision P>
-	GLM_FUNC_QUALIFIER detail::tvec2<T, P> rotate
+	template<typename T, precision P>
+	GLM_FUNC_QUALIFIER vec<3, T, P> slerp
 	(
-		detail::tvec2<T, P> const & v,
+		vec<3, T, P> const & x,
+		vec<3, T, P> const & y,
+		T const & a
+	)
+	{
+		// get cosine of angle between vectors (-1 -> 1)
+		T CosAlpha = dot(x, y);
+		// get angle (0 -> pi)
+		T Alpha = acos(CosAlpha);
+		// get sine of angle between vectors (0 -> 1)
+		T SinAlpha = sin(Alpha);
+		// this breaks down when SinAlpha = 0, i.e. Alpha = 0 or pi
+		T t1 = sin((static_cast<T>(1) - a) * Alpha) / SinAlpha;
+		T t2 = sin(a * Alpha) / SinAlpha;
+
+		// interpolate src vectors
+		return x * t1 + y * t2;
+	}
+
+	template<typename T, precision P>
+	GLM_FUNC_QUALIFIER vec<2, T, P> rotate
+	(
+		vec<2, T, P> const & v,
 		T const & angle
 	)
 	{
-		detail::tvec2<T, P> Result;
-#ifdef GLM_FORCE_RADIANS
+		vec<2, T, P> Result;
 		T const Cos(cos(angle));
 		T const Sin(sin(angle));
-#else
-#		pragma message("GLM: rotate function taking degrees as parameters is deprecated. #define GLM_FORCE_RADIANS before including GLM headers to remove this message.")
-		T const Cos = cos(radians(angle));
-		T const Sin = sin(radians(angle));
-#endif
+
 		Result.x = v.x * Cos - v.y * Sin;
 		Result.y = v.x * Sin + v.y * Cos;
 		return Result;
 	}
 
-	template <typename T, precision P>
-	GLM_FUNC_QUALIFIER detail::tvec3<T, P> rotate
+	template<typename T, precision P>
+	GLM_FUNC_QUALIFIER vec<3, T, P> rotate
 	(
-		detail::tvec3<T, P> const & v,
+		vec<3, T, P> const & v,
 		T const & angle,
-		detail::tvec3<T, P> const & normal
+		vec<3, T, P> const & normal
 	)
 	{
-		return detail::tmat3x3<T, P>(glm::rotate(angle, normal)) * v;
+		return mat<3, 3, T, P>(glm::rotate(angle, normal)) * v;
 	}
 	/*
-	template <typename T, precision P>
-	GLM_FUNC_QUALIFIER detail::tvec3<T, P> rotateGTX(
-		const detail::tvec3<T, P>& x,
+	template<typename T, precision P>
+	GLM_FUNC_QUALIFIER vec<3, T, P> rotateGTX(
+		const vec<3, T, P>& x,
 		T angle,
-		const detail::tvec3<T, P>& normal)
+		const vec<3, T, P>& normal)
 	{
 		const T Cos = cos(radians(angle));
 		const T Sin = sin(radians(angle));
 		return x * Cos + ((x * normal) * (T(1) - Cos)) * normal + cross(x, normal) * Sin;
 	}
 	*/
-	template <typename T, precision P>
-	GLM_FUNC_QUALIFIER detail::tvec4<T, P> rotate
+	template<typename T, precision P>
+	GLM_FUNC_QUALIFIER vec<4, T, P> rotate
 	(
-		detail::tvec4<T, P> const & v,
+		vec<4, T, P> const & v,
 		T const & angle,
-		detail::tvec3<T, P> const & normal
+		vec<3, T, P> const & normal
 	)
 	{
 		return rotate(angle, normal) * v;
 	}
 
-	template <typename T, precision P>
-	GLM_FUNC_QUALIFIER detail::tvec3<T, P> rotateX
+	template<typename T, precision P>
+	GLM_FUNC_QUALIFIER vec<3, T, P> rotateX
 	(
-		detail::tvec3<T, P> const & v,
+		vec<3, T, P> const & v,
 		T const & angle
 	)
 	{
-		detail::tvec3<T, P> Result(v);
-
-#ifdef GLM_FORCE_RADIANS
+		vec<3, T, P> Result(v);
 		T const Cos(cos(angle));
 		T const Sin(sin(angle));
-#else
-#		pragma message("GLM: rotateX function taking degrees as parameters is deprecated. #define GLM_FORCE_RADIANS before including GLM headers to remove this message.")
-		T const Cos = cos(radians(angle));
-		T const Sin = sin(radians(angle));
-#endif
 
 		Result.y = v.y * Cos - v.z * Sin;
 		Result.z = v.y * Sin + v.z * Cos;
 		return Result;
 	}
 
-	template <typename T, precision P>
-	GLM_FUNC_QUALIFIER detail::tvec3<T, P> rotateY
+	template<typename T, precision P>
+	GLM_FUNC_QUALIFIER vec<3, T, P> rotateY
 	(
-		detail::tvec3<T, P> const & v,
+		vec<3, T, P> const & v,
 		T const & angle
 	)
 	{
-		detail::tvec3<T, P> Result = v;
-
-#ifdef GLM_FORCE_RADIANS
+		vec<3, T, P> Result = v;
 		T const Cos(cos(angle));
 		T const Sin(sin(angle));
-#else
-#		pragma message("GLM: rotateY function taking degrees as parameters is deprecated. #define GLM_FORCE_RADIANS before including GLM headers to remove this message.")
-		T const Cos(cos(radians(angle)));
-		T const Sin(sin(radians(angle)));
-#endif
 
 		Result.x =  v.x * Cos + v.z * Sin;
 		Result.z = -v.x * Sin + v.z * Cos;
 		return Result;
 	}
 
-	template <typename T, precision P>
-	GLM_FUNC_QUALIFIER detail::tvec3<T, P> rotateZ
+	template<typename T, precision P>
+	GLM_FUNC_QUALIFIER vec<3, T, P> rotateZ
 	(
-		detail::tvec3<T, P> const & v,
+		vec<3, T, P> const & v,
 		T const & angle
 	)
 	{
-		detail::tvec3<T, P> Result = v;
-
-#ifdef GLM_FORCE_RADIANS
+		vec<3, T, P> Result = v;
 		T const Cos(cos(angle));
 		T const Sin(sin(angle));
-#else
-#		pragma message("GLM: rotateZ function taking degrees as parameters is deprecated. #define GLM_FORCE_RADIANS before including GLM headers to remove this message.")
-		T const Cos(cos(radians(angle)));
-		T const Sin(sin(radians(angle)));
-#endif
 
 		Result.x = v.x * Cos - v.y * Sin;
 		Result.y = v.x * Sin + v.y * Cos;
 		return Result;
 	}
 
-	template <typename T, precision P>
-	GLM_FUNC_QUALIFIER detail::tvec4<T, P> rotateX
+	template<typename T, precision P>
+	GLM_FUNC_QUALIFIER vec<4, T, P> rotateX
 	(
-		detail::tvec4<T, P> const & v,
+		vec<4, T, P> const & v,
 		T const & angle
 	)
 	{
-		detail::tvec4<T, P> Result = v;
-
-#ifdef GLM_FORCE_RADIANS
+		vec<4, T, P> Result = v;
 		T const Cos(cos(angle));
 		T const Sin(sin(angle));
-#else
-#		pragma message("GLM: rotateX function taking degrees as parameters is deprecated. #define GLM_FORCE_RADIANS before including GLM headers to remove this message.")
-		T const Cos(cos(radians(angle)));
-		T const Sin(sin(radians(angle)));
-#endif
 
 		Result.y = v.y * Cos - v.z * Sin;
 		Result.z = v.y * Sin + v.z * Cos;
 		return Result;
 	}
 
-	template <typename T, precision P>
-	GLM_FUNC_QUALIFIER detail::tvec4<T, P> rotateY
+	template<typename T, precision P>
+	GLM_FUNC_QUALIFIER vec<4, T, P> rotateY
 	(
-		detail::tvec4<T, P> const & v,
+		vec<4, T, P> const & v,
 		T const & angle
 	)
 	{
-		detail::tvec4<T, P> Result = v;
-
-#ifdef GLM_FORCE_RADIANS
+		vec<4, T, P> Result = v;
 		T const Cos(cos(angle));
 		T const Sin(sin(angle));
-#else
-#		pragma message("GLM: rotateX function taking degrees as parameters is deprecated. #define GLM_FORCE_RADIANS before including GLM headers to remove this message.")
-		T const Cos(cos(radians(angle)));
-		T const Sin(sin(radians(angle)));
-#endif
 
 		Result.x =  v.x * Cos + v.z * Sin;
 		Result.z = -v.x * Sin + v.z * Cos;
 		return Result;
 	}
 
-	template <typename T, precision P>
-	GLM_FUNC_QUALIFIER detail::tvec4<T, P> rotateZ
+	template<typename T, precision P>
+	GLM_FUNC_QUALIFIER vec<4, T, P> rotateZ
 	(
-		detail::tvec4<T, P> const & v,
+		vec<4, T, P> const & v,
 		T const & angle
 	)
 	{
-		detail::tvec4<T, P> Result = v;
-
-#ifdef GLM_FORCE_RADIANS
+		vec<4, T, P> Result = v;
 		T const Cos(cos(angle));
 		T const Sin(sin(angle));
-#else
-#		pragma message("GLM: rotateZ function taking degrees as parameters is deprecated. #define GLM_FORCE_RADIANS before including GLM headers to remove this message.")
-		T const Cos(cos(radians(angle)));
-		T const Sin(sin(radians(angle)));
-#endif
 
 		Result.x = v.x * Cos - v.y * Sin;
 		Result.y = v.x * Sin + v.y * Cos;
 		return Result;
 	}
 
-	template <typename T, precision P>
-	GLM_FUNC_QUALIFIER detail::tmat4x4<T, P> orientation
+	template<typename T, precision P>
+	GLM_FUNC_QUALIFIER mat<4, 4, T, P> orientation
 	(
-		detail::tvec3<T, P> const & Normal,
-		detail::tvec3<T, P> const & Up
+		vec<3, T, P> const & Normal,
+		vec<3, T, P> const & Up
 	)
 	{
 		if(all(equal(Normal, Up)))
-			return detail::tmat4x4<T, P>(T(1));
+			return mat<4, 4, T, P>(T(1));
 
-		detail::tvec3<T, P> RotationAxis = cross(Up, Normal);
-#		ifdef GLM_FORCE_RADIANS
-			T Angle = acos(dot(Normal, Up));
-#		else
-#			pragma message("GLM: rotateZ function taking degrees as parameters is deprecated. #define GLM_FORCE_RADIANS before including GLM headers to remove this message.")
-			T Angle = degrees(acos(dot(Normal, Up)));
-#		endif
+		vec<3, T, P> RotationAxis = cross(Up, Normal);
+		T Angle = acos(dot(Normal, Up));
+
 		return rotate(Angle, RotationAxis);
 	}
 }//namespace glm
