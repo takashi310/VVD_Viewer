@@ -94,7 +94,7 @@ elseif(${CMAKE_BUILD_TYPE} MATCHES "Debug")
 endif()
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 set(wxWidgets_EXCLUDE_COMMON_LIBRARIES TRUE)
-find_package(wxWidgets COMPONENTS core base aui html xml net adv gl stc scintilla png tiff regex expat REQUIRED)
+find_package(wxWidgets COMPONENTS core base aui html xml net adv gl stc scintilla png tiff regex expat zlib REQUIRED)
 else()
 find_package(wxWidgets COMPONENTS core base aui html xml net adv gl stc REQUIRED)
 endif()
@@ -332,7 +332,19 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     file(GLOB SPIRV_LIBRARIES ${VULKAN_LIB_DIR}/*.a)
 elseif(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	add_definitions(-DVK_USE_PLATFORM_WIN32_KHR)
-    file(GLOB SPIRV_LIBRARIES "$ENV{VULKAN_SDK}/glslang/lib/*.lib")
+    file(GLOB SPIRV_LIBRARIES_R "$ENV{VULKAN_SDK}/glslang/lib/*.lib")
+	file(GLOB SPIRV_LIBRARIES_D "$ENV{VULKAN_SDK}/glslang/lib/Debug/*.lib")
+	foreach(f ${SPIRV_LIBRARIES_R})
+		if( NOT f MATCHES "SPIRV-Tools-shared.lib$" )
+			set(SPIRV_LIBRARIES ${SPIRV_LIBRARIES} optimized ${f})
+		endif()
+	endforeach()
+	foreach(f ${SPIRV_LIBRARIES_D})
+		if( NOT f MATCHES "SPIRV-Tools-sharedd.lib$" )
+			set(SPIRV_LIBRARIES ${SPIRV_LIBRARIES} debug ${f})
+		endif()
+	endforeach()
+	include_directories("$ENV{VULKAN_SDK}/glslang/include")
 endif()
 add_definitions(-DGLM_FORCE_DEPTH_ZERO_TO_ONE)
 
@@ -532,7 +544,8 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	   ${FREETYPE_LIBRARIES}
 	   ${wxWidgets_LIBRARIES}
 	   ${hdf5_LIBRARIES}
-	   ${Vulkan_LIBRARY})
+	   ${Vulkan_LIBRARY}
+	   ${SPIRV_LIBRARIES})
 	target_link_libraries(VVDViewer
 	   VVDMainFrame
 	   ws2_32.lib Wldap32.lib
