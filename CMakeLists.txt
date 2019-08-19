@@ -316,6 +316,8 @@ endif()
 #Vulkan
 file(GLOB vsrc ${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/Vulkan/*.cpp)
 file(GLOB vhdr ${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/Vulkan/*.h)
+file(GLOB imgui_src ${VVDViewer_SOURCE_DIR}/external/imgui/*.cpp)
+file(GLOB imgui_hdr ${VVDViewer_SOURCE_DIR}/external/imgui/*.h)
 include_directories(${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/Vulkan)
 include_directories(${VVDViewer_SOURCE_DIR}/external)
 include_directories(${VVDViewer_SOURCE_DIR}/external/assimp)
@@ -326,8 +328,11 @@ find_package(vulkan REQUIRED)
 include_directories(${Vulkan_INCLUDE_DIR})
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 	add_definitions(-DVK_USE_PLATFORM_MACOS_MVK)
+    get_filename_component(VULKAN_LIB_DIR ${Vulkan_LIBRARY} DIRECTORY)
+    file(GLOB SPIRV_LIBRARIES ${VULKAN_LIB_DIR}/*.a)
 elseif(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	add_definitions(-DVK_USE_PLATFORM_WIN32_KHR)
+    file(GLOB SPIRV_LIBRARIES "$ENV{VULKAN_SDK}/glslang/lib/*.lib")
 endif()
 add_definitions(-DGLM_FORCE_DEPTH_ZERO_TO_ONE)
 
@@ -348,8 +353,13 @@ foreach(f ${hdrall})
 endforeach()
 file(GLOB rsc ${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/img/*.xpm)
 
-set(src ${src} ${vsrc})
-set(hdr ${hdr} ${vhdr})
+if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+    file(GLOB mac_src ${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/*.m)
+    set(src ${src} ${mac_src})
+endif()
+
+set(src ${src} ${vsrc} ${imgui_src})
+set(hdr ${hdr} ${vhdr} ${imgui_hdr})
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 	add_library(VVDMainFrame SHARED
@@ -542,7 +552,8 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 	   ${FREETYPE_LIBRARIES}
 	   ${wxWidgets_LIBRARIES}
 	   ${hdf5_LIBRARIES}
-       ${Vulkan_LIBRARY})
+       ${Vulkan_LIBRARY}
+       ${SPIRV_LIBRARIES})
 	target_link_libraries(VVDViewer
 	   VVDMainFrame
 	   ${wxWidgets_LIBRARIES})
