@@ -2525,165 +2525,103 @@ void VRenderVulkanView::DrawBrush()
 //paint strokes on the paint fbo
 void VRenderVulkanView::PaintStroke()
 {
-	//int nx, ny;
-	//nx = m_nx;
-	//ny = m_ny;
+	int nx, ny;
+	nx = m_nx;
+	ny = m_ny;
 
-	//double pressure = m_use_pres?m_pressure:1.0;
+	double pressure = m_use_pres?m_pressure:1.0;
 
-	////generate texture and buffer objects
-	//glEnable(GL_TEXTURE_2D);
-	////painting fbo
-	//if (!glIsFramebuffer(m_fbo_paint))
-	//{
-	//	glGenFramebuffers(1, &m_fbo_paint);
-	//	//painting texture
-	//	if (!glIsTexture(m_tex_paint))
-	//		glGenTextures(1, &m_tex_paint);
+	vks::VulkanDevice* prim_dev = m_vulkan->devices[0];
 
-	//	//set up the painting fbo
-	//	glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_paint);
-	//	//color buffer of painting
-	//	glBindTexture(GL_TEXTURE_2D, m_tex_paint);
-	//	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	//	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	//	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-	//	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-	//	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, nx, ny, 0,
-	//		GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-	//	glFramebufferTexture2D(GL_FRAMEBUFFER,
-	//		GL_COLOR_ATTACHMENT0,
-	//		GL_TEXTURE_2D, m_tex_paint, 0); 
-	//}
-	//else
-	//{
-	//	glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_paint);
+	if (!m_fbo_paint)
+	{
+		m_fbo_paint = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+		m_fbo_paint->w = m_nx;
+		m_fbo_paint->h = m_ny;
+		m_fbo_paint->device = prim_dev;
 
-	//	glFramebufferTexture2D(GL_FRAMEBUFFER,
-	//		GL_COLOR_ATTACHMENT0,
-	//		GL_TEXTURE_2D, m_tex_paint, 0);
-	//}
+		m_tex_paint = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+		m_fbo_paint->addAttachment(m_tex_paint);
+	}
 
-	//if (m_resize_paint)
-	//{
-	//	glBindTexture(GL_TEXTURE_2D, m_tex_paint);
-	//	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, nx, ny, 0,
-	//		GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-	//	glBindTexture(GL_TEXTURE_2D, 0);
-	//	m_resize_paint = false;
-	//}
+	double px = double(old_mouse_X - prv_mouse_X);
+	double py = double(old_mouse_Y - prv_mouse_Y);
+	double dist = sqrt(px * px + py * py);
+	double step = m_brush_radius1 * pressure * m_brush_spacing;
+	int repeat = int(dist / step + 0.5);
+	double spx = (double)prv_mouse_X;
+	double spy = (double)prv_mouse_Y;
+	if (repeat > 0)
+	{
+		px /= repeat;
+		py /= repeat;
+	}
 
-	////clear if asked so
-	//if (m_clear_paint)
-	//{
-	//	glClearColor(0.0, 0.0, 0.0, 0.0);
-	//	glClear(GL_COLOR_BUFFER_BIT);
-	//	m_clear_paint = false;
-	//}
-	//else
-	//{
-	//	//paint shader
-	//	ShaderProgram* paint_shader =
-	//		m_img_shader_factory.shader(IMG_SHDR_PAINT);
-	//	if (paint_shader)
-	//	{
-	//		if (!paint_shader->valid())
-	//			paint_shader->create();
-	//		paint_shader->bind();
-	//	}
-
-	//	//paint to texture
-	//	//bind fbo for final composition
-	//	glActiveTexture(GL_TEXTURE0);
-	//	glEnable(GL_TEXTURE_2D);
-	//	glBindTexture(GL_TEXTURE_2D, m_tex_paint);
-	//	glDisable(GL_BLEND);
-	//	glDisable(GL_DEPTH_TEST);
-
-	//	double px = double(old_mouse_X-prv_mouse_X);
-	//	double py = double(old_mouse_Y-prv_mouse_Y);
-	//	double dist = sqrt(px*px+py*py);
-	//	double step = m_brush_radius1*pressure*m_brush_spacing;
-	//	int repeat = int(dist/step+0.5);
-	//	double spx = (double)prv_mouse_X;
-	//	double spy = (double)prv_mouse_Y;
-	//	if (repeat > 0)
-	//	{
-	//		px /= repeat;
-	//		py /= repeat;
-	//	}
-
-	//	//set the width and height
-	//	paint_shader->setLocalParam(1, nx, ny, 0.0f, 0.0f);
-
-	//	double x, y;
-	//	double radius1 = m_brush_radius1;
-	//	double radius2 = m_brush_radius2;
-	//	for (int i=0; i<=repeat; i++)
-	//	{
-	//		x = spx + i*px;
-	//		y = spy + i*py;
-	//		switch (m_selector.GetMode())
-	//		{
-	//		case 3:
-	//			radius1 = m_brush_radius2;
-	//			break;
-	//		case 4:
-	//			radius1 = 0.0;
-	//			break;
-	//		case 8:
-	//			radius2 = radius1;
-	//			break;
-	//		default:
-	//			break;
-	//		}
-	//		//send uniforms to paint shader
-	//		paint_shader->setLocalParam(0,
-	//			x, double(ny)-y,
-	//			radius1*pressure,
-	//			radius2*pressure);
-	//		//draw a square
-	//		DrawViewQuad();
-	//	}
-
-	//	//release paint shader
-	//	if (paint_shader && paint_shader->valid())
-	//		paint_shader->release();
-	//}
-
-	////bind back the window frame buffer
-	//glBindTexture(GL_TEXTURE_2D, 0);
-	//glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
+	double x, y;
+	double radius1 = m_brush_radius1;
+	double radius2 = m_brush_radius2;
+	for (int i = 0; i <= repeat; i++)
+	{
+		x = spx + i * px;
+		y = spy + i * py;
+		switch (m_selector.GetMode())
+		{
+		case 3:
+			radius1 = m_brush_radius2;
+			break;
+		case 4:
+			radius1 = 0.0;
+			break;
+		case 8:
+			radius2 = radius1;
+			break;
+		default:
+			break;
+		}
+		
+		Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+		params.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHDR_PAINT,
+				V2DRENDER_BLEND_DISABLE,
+				m_fbo_paint->attachments[0]->format,
+				m_fbo_paint->attachments.size(),
+				0,
+				m_fbo_paint->attachments[0]->is_swapchain_images);
+		params.tex[0] = m_tex_paint.get();
+		params.loc[0] = glm::vec4(float(x), float(y), float(radius1 * pressure), float(radius2 * pressure));
+		params.loc[1] = glm::vec4((float)nx, (float)ny, 0.0f, 0.0f);
+		params.clear = m_clear_paint;
+		m_clear_paint = false;
+		
+		m_fbo_paint->replaceRenderPass(params.pipeline.pass);
+		m_v2drender->render(m_fbo_paint, params);
+	}
 }
 
 //show the stroke buffer
 void VRenderVulkanView::DisplayStroke()
 {
-	////painting texture
-	//if (!glIsTexture(m_tex_paint))
-	//	return;
+	if (!m_tex_paint)
+		return;
 
-	////draw the final buffer to the windows buffer
-	//glActiveTexture(GL_TEXTURE0);
-	//glBindTexture(GL_TEXTURE_2D, m_tex_paint);
-	//glEnable(GL_BLEND);
-	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	//glDisable(GL_DEPTH_TEST);
+	Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+	vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+	params.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHADER_TEXTURE_LOOKUP,
+			V2DRENDER_BLEND_OVER_UI,
+			current_fbo->attachments[0]->format,
+			current_fbo->attachments.size(),
+			0,
+			current_fbo->attachments[0]->is_swapchain_images);
+	params.tex[0] = m_tex_paint.get();
+	params.clear = false;
 
-	//ShaderProgram* img_shader =
-	//	m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
-	//if (img_shader)
-	//{
-	//	if (!img_shader->valid())
-	//		img_shader->create();
-	//	img_shader->bind();
-	//}
-	//DrawViewQuad();
-	//if (img_shader && img_shader->valid())
-	//	img_shader->release();
+	if (!current_fbo->renderPass)
+		current_fbo->replaceRenderPass(params.pipeline.pass);
 
-	//glEnable(GL_DEPTH_TEST);
+	m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
 }
 
 //set 2d weights
@@ -4209,7 +4147,7 @@ void VRenderVulkanView::DrawOVER(VolumeData* vd, std::unique_ptr<vks::VFrameBuff
 				params.pipeline =
 					m_v2drender->preparePipeline(
 						IMG_SHADER_TEXTURE_LOOKUP,
-						V2DRENDER_BLEND_OVER,
+						V2DRENDER_BLEND_DISABLE,
 						m_fbo_temp->attachments[0]->format,
 						m_fbo_temp->attachments.size(),
 						0,
@@ -4263,7 +4201,7 @@ void VRenderVulkanView::DrawOVER(VolumeData* vd, std::unique_ptr<vks::VFrameBuff
 		params.pipeline =
 			m_v2drender->preparePipeline(
 				IMG_SHADER_TEXTURE_LOOKUP,
-				V2DRENDER_BLEND_OVER,
+				V2DRENDER_BLEND_DISABLE,
 				m_fbo_temp_restore->attachments[0]->format,
 				m_fbo_temp_restore->attachments.size(),
 				0,
@@ -4347,7 +4285,7 @@ void VRenderVulkanView::DrawMIP(VolumeData* vd, std::unique_ptr<vks::VFrameBuffe
 				params.pipeline =
 					m_v2drender->preparePipeline(
 						IMG_SHADER_TEXTURE_LOOKUP,
-						V2DRENDER_BLEND_OVER,
+						V2DRENDER_BLEND_DISABLE,
 						m_fbo_temp->attachments[0]->format,
 						m_fbo_temp->attachments.size(),
 						0,
@@ -4489,7 +4427,7 @@ void VRenderVulkanView::DrawMIP(VolumeData* vd, std::unique_ptr<vks::VFrameBuffe
 		params.pipeline =
 			m_v2drender->preparePipeline(
 				IMG_SHADER_TEXTURE_LOOKUP,
-				V2DRENDER_BLEND_OVER,
+				V2DRENDER_BLEND_DISABLE,
 				m_fbo_final->attachments[0]->format,
 				m_fbo_final->attachments.size(),
 				0,
@@ -5011,7 +4949,7 @@ void VRenderVulkanView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 		params.pipeline =
 			m_v2drender->preparePipeline(
 				IMG_SHADER_TEXTURE_LOOKUP,
-				V2DRENDER_BLEND_OVER,
+				V2DRENDER_BLEND_DISABLE,
 				m_fbo_temp->attachments[0]->format,
 				m_fbo_temp->attachments.size(),
 				0,
@@ -5093,7 +5031,7 @@ void VRenderVulkanView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 		params.pipeline =
 			m_v2drender->preparePipeline(
 				IMG_SHADER_TEXTURE_LOOKUP,
-				V2DRENDER_BLEND_OVER,
+				V2DRENDER_BLEND_DISABLE,
 				m_fbo_final->attachments[0]->format,
 				m_fbo_final->attachments.size(),
 				0,
@@ -13911,7 +13849,7 @@ void VRenderVulkanView::OnMouse(wxMouseEvent& event)
 			prv_mouse_X = old_mouse_X;
 			prv_mouse_Y = old_mouse_Y;
 			m_paint_enable = true;
-			//			m_clear_paint = true;
+			m_clear_paint = true;
 			RefreshGLOverlays();
 		}
 		return;
@@ -13945,11 +13883,9 @@ void VRenderVulkanView::OnMouse(wxMouseEvent& event)
 		else if (m_int_mode == 2)
 		{
 			//segment volumes
-			m_paint_enable = true;
 			Segment();
 			m_int_mode = 4;
 			m_force_clear = true;
-			m_clear_paint = true;
 		}
 		else if (m_int_mode == 5 &&
 			!event.AltDown())
@@ -13966,7 +13902,6 @@ void VRenderVulkanView::OnMouse(wxMouseEvent& event)
 		else if (m_int_mode == 7)
 		{
 			//segment volume, calculate center, add ruler point
-			m_paint_enable = true;
 			Segment();
 			if (m_ruler_type == 3)
 				AddRulerPoint(event.GetX(), event.GetY());

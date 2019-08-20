@@ -293,6 +293,12 @@ Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blen
 		src_blend = VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
 		dst_blend = VK_BLEND_FACTOR_ONE;
 		break;
+	case V2DRENDER_BLEND_OVER_UI:
+		enable_blend = VK_TRUE;
+		blend_op = VK_BLEND_OP_ADD;
+		src_blend = VK_BLEND_FACTOR_SRC_ALPHA;
+		dst_blend = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+		break;
 	case V2DRENDER_BLEND_ADD:
 		enable_blend = VK_TRUE;
 		blend_op = VK_BLEND_OP_ADD;
