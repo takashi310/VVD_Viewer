@@ -315,9 +315,9 @@ endif()
 
 #Vulkan
 file(GLOB vsrc ${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/Vulkan/*.cpp)
-file(GLOB vhdr ${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/Vulkan/*.h)
+file(GLOB vhdr ${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/Vulkan/*.h ${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/Vulkan/*.hpp)
 file(GLOB imgui_src ${VVDViewer_SOURCE_DIR}/external/imgui/*.cpp)
-file(GLOB imgui_hdr ${VVDViewer_SOURCE_DIR}/external/imgui/*.h)
+file(GLOB imgui_hdr ${VVDViewer_SOURCE_DIR}/external/imgui/*.h )
 include_directories(${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/Vulkan)
 include_directories(${VVDViewer_SOURCE_DIR}/external)
 include_directories(${VVDViewer_SOURCE_DIR}/external/assimp)

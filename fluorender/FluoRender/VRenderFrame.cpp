@@ -347,18 +347,6 @@ VRenderFrame::VRenderFrame(
 	m_adjust_view = new AdjustView(this, this, wxID_ANY,
 		wxDefaultPosition, wxSize(130, 700));
 
-	wxString font_file = m_setting_dlg->GetFontFile();
-	std::string exePath = wxStandardPaths::Get().GetExecutablePath().ToStdString();
-	exePath = exePath.substr(0,exePath.find_last_of(std::string()+GETSLASH()));
-	if (font_file != "")
-		font_file = wxString(exePath) + GETSLASH() + wxString("Fonts") +
-			GETSLASH() + font_file;
-	else
-		font_file = wxString(exePath) + GETSLASH() + wxString("Fonts") +
-			GETSLASH() + wxString("FreeSans.ttf");
-	m_text_renderer = new TextRenderer(font_file.ToStdString());
-	m_text_renderer->SetSize(m_setting_dlg->GetTextSize());
-
 	//settings dialog
 	if (m_setting_dlg->GetTestMode(1))
 		m_vrv_list[0]->m_glview->m_test_speed = true;
@@ -382,7 +370,6 @@ VRenderFrame::VRenderFrame(
 	m_vrv_list[0]->SetPointVolumeMode(m_setting_dlg->GetPointVolumeMode());
 	m_vrv_list[0]->SetRulerUseTransf(m_setting_dlg->GetRulerUseTransf());
 	m_vrv_list[0]->SetRulerTimeDep(m_setting_dlg->GetRulerTimeDep());
-	m_vrv_list[0]->SetTextRenderer(m_text_renderer);
 	m_time_id = m_setting_dlg->GetTimeId();
 	m_data_mgr.SetOverrideVox(m_setting_dlg->GetOverrideVox());
 	m_data_mgr.SetPvxmlFlipX(m_setting_dlg->GetPvxmlFlipX());
@@ -706,8 +693,6 @@ VRenderFrame::~VRenderFrame()
 		VRenderView* vrv = m_vrv_list[i];
 		if (vrv) vrv->Clear();
 	}
-	if (m_text_renderer)
-		delete m_text_renderer;
 	m_aui_mgr.UnInit();
 
 	curl_easy_cleanup(_g_curl);//add by takashi
@@ -785,7 +770,6 @@ wxString VRenderFrame::CreateView(int row)
 		vrv->SetPointVolumeMode(m_setting_dlg->GetPointVolumeMode());
 		vrv->SetRulerUseTransf(m_setting_dlg->GetRulerUseTransf());
 		vrv->SetRulerTimeDep(m_setting_dlg->GetRulerTimeDep());
-		vrv->SetTextRenderer(m_text_renderer);
 	}
 
 	//m_aui_mgr.Update();

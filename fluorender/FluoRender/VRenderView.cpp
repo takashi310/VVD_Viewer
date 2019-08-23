@@ -694,6 +694,24 @@ VRenderVulkanView::VRenderVulkanView(wxWindow* frame,
     wxSize wsize = GetSize();
     m_vulkan->setSize(wsize.GetWidth(), wsize.GetHeight());
 
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (vr_frame)
+	{
+		auto setting_dlg = vr_frame->GetSettingDlg();
+		wxString font_file = setting_dlg ? setting_dlg->GetFontFile() : "";
+		std::string exePath = wxStandardPaths::Get().GetExecutablePath().ToStdString();
+		exePath = exePath.substr(0, exePath.find_last_of(std::string() + GETSLASH()));
+		if (font_file != "")
+			font_file = wxString(exePath) + GETSLASH() + wxString("Fonts") +
+			GETSLASH() + font_file;
+		else
+			font_file = wxString(exePath) + GETSLASH() + wxString("Fonts") +
+			GETSLASH() + wxString("FreeSans.ttf");
+		m_text_renderer = new TextRenderer(font_file.ToStdString(), m_v2drender);
+		if (setting_dlg)
+			m_text_renderer->SetSize(setting_dlg->GetTextSize());
+	}
+
 	goTimer = new nv::Timer(10);
 	m_sb_num = "50";
 
@@ -1442,9 +1460,8 @@ void VRenderVulkanView::DrawVolumes(int peel)
 			params.clear = true;
 
 		std::vector<Vulkan2dRender::Vertex> tile_verts;
-		GetTiledViewQuadVerts(m_current_tileid, tile_verts);
-		params.verts = tile_verts.data();
-		params.verts_num = tile_verts.size();
+		m_tile_vobj.vertOffset = sizeof(Vulkan2dRender::Vertex) * 4 * m_current_tileid;
+		params.obj = &m_tile_vobj;
 
 		m_fbo_tiled_tmp->replaceRenderPass(params.pipeline.pass);
 
@@ -2119,8 +2136,9 @@ void VRenderVulkanView::DrawAnnotations()
 						px = pos.x()*nx/2.0;
 						py = pos.y()*ny/2.0;
 						m_text_renderer->RenderText(
+							m_vulkan->frameBuffers[m_vulkan->currentBuffer],
 							wstr, text_color,
-							px*sx, py*sy, sx, sy);
+							px*sx, py*sy);
 					}
 				}
 			}
@@ -2404,122 +2422,143 @@ int VRenderVulkanView::GetPaintMode()
 void VRenderVulkanView::DrawCircle(double cx, double cy,
 							   double radius, Color &color, glm::mat4 &matrix)
 {
-	/*int secs = 60;
+
+	int secs = 60;
 	double deg = 0.0;
 
-	vector<float> vertex;
-	vertex.reserve(secs*3);
-
-	for (size_t i=0; i<secs; ++i)
+	vector<Vulkan2dRender::Vertex> vertex;
+	vector<uint32_t> index;
+	vertex.reserve(secs * 6);
+	for (size_t i = 0; i < secs; ++i)
 	{
-		deg = i*2*PI/secs;
-		vertex.push_back(cx + radius*sin(deg));
-		vertex.push_back(cy + radius*cos(deg));
-		vertex.push_back(0.0f);
+		deg = i * 2 * PI / secs;
+		vertex.push_back(
+			Vulkan2dRender::Vertex{
+				{(float)(cx + radius * sin(deg)), (float)(cy + radius * cos(deg)), 0.0f},
+				{0.0f, 0.0f, 0.0f}
+			}
+		);
+		index.push_back(i);
 	}
+	index.push_back(0);
 
-	ShaderProgram* shader =
-		m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY);
-	if (shader)
+	if (m_brush_vobj.vertBuf.buffer == VK_NULL_HANDLE)
 	{
-		if (!shader->valid())
-			shader->create();
-		shader->bind();
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_brush_vobj.vertBuf,
+			vertex.size() * sizeof(Vulkan2dRender::Vertex),
+			vertex.data()));
+
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_brush_vobj.idxBuf,
+			index.size() * sizeof(uint32_t),
+			index.data()));
+
+		m_brush_vobj.idxCount = index.size();
+		m_brush_vobj.idxOffset = 0;
+		m_brush_vobj.vertCount = vertex.size();
+		m_brush_vobj.vertOffset = 0;
 	}
+	m_brush_vobj.vertBuf.map();
+	m_brush_vobj.idxBuf.map();
+	m_brush_vobj.vertBuf.copyTo(vertex.data(), vertex.size()*sizeof(Vulkan2dRender::Vertex));
+	m_brush_vobj.idxBuf.copyTo(index.data(), index.size() * sizeof(uint32_t));
+	m_brush_vobj.vertBuf.unmap();
+	m_brush_vobj.idxBuf.unmap();
 
-	shader->setLocalParam(0, color.r(), color.g(), color.b(), 1.0);
-	shader->setLocalParamMatrix(0, glm::value_ptr(matrix));
 
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-	glBindVertexArray(m_misc_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
-	glDrawArrays(GL_LINE_LOOP, 0, secs);
-	glDisableVertexAttribArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
+	Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+	vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+	params.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_DRAW_GEOMETRY,
+			V2DRENDER_BLEND_OVER_UI,
+			current_fbo->attachments[0]->format,
+			current_fbo->attachments.size(),
+			0,
+			current_fbo->attachments[0]->is_swapchain_images);
+	params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), 1.0f);
+	params.matrix[0] = matrix;
+	params.clear = false;
 
-	if (shader && shader->valid())
-		shader->release();*/
+	params.obj = &m_brush_vobj;
+
+	if (!current_fbo->renderPass)
+		current_fbo->replaceRenderPass(params.pipeline.pass);
+
+	m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
 }
 
 //draw the brush shape
 void VRenderVulkanView::DrawBrush()
 {
-	//double pressure = m_use_pres&&m_on_press?m_pressure:1.0;
+	double pressure = m_use_pres&&m_on_press?m_pressure:1.0;
 
-	//wxPoint pos1(old_mouse_X, old_mouse_Y);
-	//wxRect reg = GetClientRect();
-	//if (reg.Contains(pos1))
-	//{
-	//	int i;
-	//	int nx, ny;
-	//	nx = m_nx;
-	//	ny = m_ny;
-	//	double cx = pos1.x;
-	//	double cy = ny - pos1.y;
-	//	float sx, sy;
-	//	sx = 2.0/nx;
-	//	sy = 2.0/ny;
+	wxPoint pos1(old_mouse_X, old_mouse_Y);
+	wxRect reg = GetClientRect();
+	if (reg.Contains(pos1))
+	{
+		int i;
+		int nx, ny;
+		nx = m_nx;
+		ny = m_ny;
+		double cx = pos1.x;
+		double cy = pos1.y;
+		float sx, sy;
+		sx = 2.0/nx;
+		sy = 2.0/ny;
 
-	//	//draw the circles
-	//	//set up the matrices
-	//	glm::mat4 proj_mat = glm::ortho(float(0), float(nx), float(0), float(ny));
+		//draw the circles
+		//set up the matrices
+		glm::mat4 proj_mat = glm::ortho(float(0), float(nx), float(0), float(ny));
 
-	//	//attributes
-	//	glDisable(GL_DEPTH_TEST);
-	//	GLfloat line_width = 1.0f;
+		//attributes
+		int mode = m_selector.GetMode();
+		Color text_color = GetTextColor();
 
-	//	int mode = m_selector.GetMode();
+		if (mode == 1 ||
+			mode == 2 ||
+			mode == 8)
+		{
+			DrawCircle(cx, cy, m_brush_radius1*pressure,
+				text_color, proj_mat);
+		}
 
-	//	Color text_color = GetTextColor();
+		if (mode == 1 ||
+			mode == 2 ||
+			mode == 3 ||
+			mode == 4)
+		{
+			DrawCircle(cx, cy, m_brush_radius2*pressure,
+				text_color, proj_mat);
+		}
 
-	//	if (mode == 1 ||
-	//		mode == 2 ||
-	//		mode == 8)
-	//	{
-	//		glLineWidth(0.5);
-	//		DrawCircle(cx, cy, m_brush_radius1*pressure,
-	//			text_color, proj_mat);
-	//	}
+		float px, py;
+		px = cx-7-nx/2.0;
+		py = cy-3-ny/2.0;
+		wstring wstr;
+		switch (mode)
+		{
+		case 1:
+			wstr = L"S";
+			break;
+		case 2:
+			wstr = L"+";
+			break;
+		case 3:
+			wstr = L"-";
+			break;
+		case 4:
+			wstr = L"*";
+			break;
+		}
+		//m_text_renderer->RenderText(wstr, text_color, px*sx, py*sy, sx, sy);
 
-	//	if (mode == 1 ||
-	//		mode == 2 ||
-	//		mode == 3 ||
-	//		mode == 4)
-	//	{
-	//		glLineWidth(0.5);
-	//		DrawCircle(cx, cy, m_brush_radius2*pressure,
-	//			text_color, proj_mat);
-	//	}
-
-	//	float px, py;
-	//	px = cx-7-nx/2.0;
-	//	py = cy-3-ny/2.0;
-	//	wstring wstr;
-	//	switch (mode)
-	//	{
-	//	case 1:
-	//		wstr = L"S";
-	//		break;
-	//	case 2:
-	//		wstr = L"+";
-	//		break;
-	//	case 3:
-	//		wstr = L"-";
-	//		break;
-	//	case 4:
-	//		wstr = L"*";
-	//		break;
-	//	}
-	//	m_text_renderer->RenderText(wstr, text_color, px*sx, py*sy, sx, sy);
-
-	//	glLineWidth(line_width);
-	//	glEnable(GL_DEPTH_TEST);
-
-	//}
+	}
 }
 
 //paint strokes on the paint fbo
@@ -3488,16 +3527,16 @@ void VRenderVulkanView::Calculate(int type, wxString prev_group, bool add)
 		CalculateSingle(type, prev_group, add);
 }
 
-void VRenderVulkanView::StartTileRendering(int w, int h, int tilew, int tileh)
+void VRenderVulkanView::StartTileRendering(int w_, int h_, int tilew_, int tileh_)
 {
 	m_tile_rendering = true;
 	m_capture_change_res = true;
-	m_capture_resx = w;
-	m_capture_resy = h;
-	m_tile_w = tilew;
-	m_tile_h = tileh;
-	m_tile_xnum = w/tilew + (w%tilew > 0);
-	m_tile_ynum = h/tileh + (h%tileh > 0);
+	m_capture_resx = w_;
+	m_capture_resy = h_;
+	m_tile_w = tilew_;
+	m_tile_h = tileh_;
+	m_tile_xnum = w_/tilew_ + (w_%tilew_ > 0);
+	m_tile_ynum = h_/tileh_ + (h_%tileh_ > 0);
 	m_current_tileid = 0;
 	Resize();
 
@@ -3518,6 +3557,95 @@ void VRenderVulkanView::StartTileRendering(int w, int h, int tilew, int tileh)
 			delete [] m_tiled_image;
 		m_tiled_image = new unsigned char [(size_t)m_capture_resx*(size_t)m_capture_resy*3];
 	}
+
+	if (m_tile_vobj.vertBuf.buffer != VK_NULL_HANDLE)
+		m_tile_vobj.vertBuf.destroy();
+	if (m_tile_vobj.idxBuf.buffer != VK_NULL_HANDLE)
+		m_tile_vobj.idxBuf.destroy();
+
+	vector<Vulkan2dRender::Vertex> verts;
+	std::vector<uint32_t> indices = { 0,1,2, 2,3,0 };
+
+	int w = GetSize().x;
+	int h = GetSize().y;
+
+	double win_aspect = (double)w / (double)h;
+	double ren_aspect = (double)m_capture_resx / (double)m_capture_resy;
+	double stpos_x = -1.0;
+	double stpos_y = -1.0;
+	double edpos_x = 1.0;
+	double edpos_y = 1.0;
+	double tilew = 1.0;
+	double tileh = 1.0;
+
+	double xbound = 1.0;
+	double ybound = -1.0;
+
+	for (int tileid = 0; tileid < m_tile_xnum * m_tile_ynum; tileid++) {
+
+		if (win_aspect > ren_aspect) {
+			tilew = 2.0 * m_tile_w * h / m_capture_resy / w;
+			tileh = 2.0 * m_tile_h * h / m_capture_resy / h;
+			stpos_x = -1.0 + 2.0 * (w - h * ren_aspect) / 2.0 / w;
+			stpos_y = 1.0;
+			xbound = stpos_x + 2.0 * h * ren_aspect / w;
+			ybound = -1.0;
+
+			stpos_x = stpos_x + tilew * (tileid % m_tile_xnum);
+			stpos_y = stpos_y - tileh * (tileid / m_tile_xnum + 1);
+			edpos_x = stpos_x + tilew;
+			edpos_y = stpos_y + tileh;
+		}
+		else {
+			tilew = 2.0 * m_tile_w * w / m_capture_resx / w;
+			tileh = 2.0 * m_tile_h * w / m_capture_resx / h;
+			stpos_x = -1.0;
+			stpos_y = 1.0 - 2.0 * (h - w / ren_aspect) / 2.0 / h;
+			xbound = 1.0;
+			ybound = stpos_y - 2.0 * w / ren_aspect / h;
+
+			stpos_x = stpos_x + tilew * (tileid % m_tile_xnum);
+			stpos_y = stpos_y - tileh * (tileid / m_tile_xnum + 1);
+			edpos_x = stpos_x + tilew;
+			edpos_y = stpos_y + tileh;
+		}
+
+		double tex_x = 1.0;
+		double tex_y = 0.0;
+		if (edpos_x > xbound) {
+			tex_x = (xbound - stpos_x) / tilew;
+			edpos_x = xbound;
+		}
+		if (stpos_y < ybound) {
+			tex_y = 1.0 - (edpos_y - ybound) / tileh;
+			stpos_y = ybound;
+		}
+
+		verts.push_back(Vulkan2dRender::Vertex{ {(float)edpos_x, (float)edpos_y, 0.0f}, {(float)tex_x, 1.0f,         0.0f} });
+		verts.push_back(Vulkan2dRender::Vertex{ {(float)stpos_x, (float)edpos_y, 0.0f}, {0.0f,         1.0f,         0.0f} });
+		verts.push_back(Vulkan2dRender::Vertex{ {(float)stpos_x, (float)stpos_y, 0.0f}, {0.0f,         (float)tex_y, 0.0f} });
+		verts.push_back(Vulkan2dRender::Vertex{ {(float)edpos_x, (float)stpos_y, 0.0f}, {(float)tex_x, (float)tex_y, 0.0f} });
+
+	}
+
+	VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+		&m_tile_vobj.vertBuf,
+		verts.size() * sizeof(Vulkan2dRender::Vertex),
+		verts.data()));
+
+	VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+		VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+		&m_tile_vobj.idxBuf,
+		indices.size() * sizeof(uint32_t),
+		indices.data()));
+
+	m_tile_vobj.idxCount = indices.size();
+	m_tile_vobj.idxOffset = 0;
+	m_tile_vobj.vertCount = verts.size();
+	m_tile_vobj.vertOffset = 0;
 
 	RefreshGL();
 }
@@ -10877,8 +11005,8 @@ void VRenderVulkanView::DrawInfo(int nx, int ny)
 	float gaph = gapw*2;
 
 	double fps_ = 1.0/goTimer->average();
-	//wxString str;
-	//Color text_color = GetTextColor();
+	wxString str;
+	Color text_color = GetTextColor();
 	//if (TextureRenderer::get_mem_swap())
 	//{
 	//	str = wxString::Format(
@@ -10904,7 +11032,7 @@ void VRenderVulkanView::DrawInfo(int nx, int ny)
 	//	//  << "\n";
 	//}
 	//else
-	//	str = wxString::Format("FPS: %.2f", fps_>=0.0&&fps_<300.0?fps_:0.0);
+		str = wxString::Format("FPS: %.2f", fps_>=0.0&&fps_<300.0?fps_:0.0);
 
 	//if (m_cur_vol && m_cur_vol->isBrxml())
 	//{
@@ -10922,12 +11050,13 @@ void VRenderVulkanView::DrawInfo(int nx, int ny)
 	//	str += wxString::Format(" Mem:%lld(MB) Th: %d Q: %d DQ: %d,", used_mem/(1024LL*1024LL), dtnum, qnum, dqnum);
 	//}
 
-	//wstring wstr_temp = str.ToStdWstring();
-	//px = gapw-nx/2;
-	//py = ny/2-gaph/2;
-	//m_text_renderer->RenderText(
-	//	wstr_temp, text_color,
-	//	px*sx, py*sy, sx, sy);
+	wstring wstr_temp = str.ToStdWstring();
+	px = gapw-nx/2;
+	py = gaph/2-ny/2;
+	m_text_renderer->RenderText(
+		m_vulkan->frameBuffers[m_vulkan->currentBuffer],
+		wstr_temp, text_color,
+		px*sx, py*sy);
 
 	//if (m_draw_coord)
 	//{
@@ -13125,9 +13254,10 @@ void VRenderVulkanView::DrawRulers()
 					p2x = p2.x()*nx/2.0;
 					p2y = p2.y()*ny/2.0;
 					m_text_renderer->RenderText(
+						m_vulkan->frameBuffers[m_vulkan->currentBuffer],
 						ruler->GetNameDisp().ToStdWstring(),
 						color,
-						(p2x+w)*sx, (p2y+w)*sy, sx, sy);
+						(p2x+w)*sx, (p2y+w)*sy);
 				}
 				if (j > 0)
 				{
@@ -13169,9 +13299,10 @@ void VRenderVulkanView::DrawRulers()
 						for(int i = 0; i < lnum; i++)
 						{
 							wstring wstr_temp = ann.Item(i).ToStdWstring();
-							m_text_renderer->RenderText(wstr_temp, color,
-								p2x*sx+margin_x*sx, p2y*sy-(lh*(i+1)+line_spc*i+margin_top)*sy, sx, sy);
-							lw = m_text_renderer->RenderTextLen(wstr_temp);
+							m_text_renderer->RenderText(m_vulkan->frameBuffers[m_vulkan->currentBuffer],
+								wstr_temp, color,
+								p2x*sx+margin_x*sx, p2y*sy-(lh*(i+1)+line_spc*i+margin_top)*sy);
+							lw = m_text_renderer->RenderTextDims(wstr_temp).width;
 							if (lw > maxlw) maxlw = lw;
 						}
 
@@ -13372,9 +13503,10 @@ void VRenderVulkanView::DrawRulers()
 						p2x = p2.x()*nx/2.0;
 						p2y = p2.y()*ny/2.0;
 						m_text_renderer->RenderText(
+							m_vulkan->frameBuffers[m_vulkan->currentBuffer],
 							ruler->GetNameDisp().ToStdWstring(),
 							color,
-							(p2x+w)*sx, (p2y+w)*sy, sx, sy);
+							(p2x+w)*sx, (p2y+w)*sy);
 					}
 					if (j > 0)
 					{
@@ -13410,15 +13542,16 @@ void VRenderVulkanView::DrawRulers()
 							double maxlw, lw, lh;
 
 							lh = m_text_renderer->GetSize();
-							margin_bottom += lh/2;//�e�L�X�g��Y���W��baseline�Ɉ��v���邽��
+							margin_bottom += lh/2;
 							maxlw = 0.0;
 
 							for(int i = 0; i < lnum; i++)
 							{
 								wstring wstr_temp = ann.Item(i).ToStdWstring();
-								m_text_renderer->RenderText(wstr_temp, color,
-									p2x*sx+margin_x*sx, p2y*sy-(lh*(i+1)+line_spc*i+margin_top)*sy, sx, sy);
-								lw = m_text_renderer->RenderTextLen(wstr_temp);
+								m_text_renderer->RenderText(m_vulkan->frameBuffers[m_vulkan->currentBuffer],
+									wstr_temp, color,
+									p2x*sx+margin_x*sx, p2y*sy-(lh*(i+1)+line_spc*i+margin_top)*sy);
+								lw = m_text_renderer->RenderTextDims(wstr_temp).width;
 								if (lw > maxlw) maxlw = lw;
 							}
 

@@ -99,14 +99,26 @@ namespace FLIVR
 	"//IMG_FRG_CODE_DRAW_GEOMETRY\n" \
 	"layout(location = 0) out vec4 FragColor;\n" \
 	"layout (push_constant) uniform PushConsts {\n" \
-	"	uniform vec4 loc0;\n" \
+	"	mat4 matrix0;//transformation\n" \
 	"} ct;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
-	"	FragColor = ct.loc0;\n" \
+	"	FragColor = vec4(1.0);\n" \
 	"}\n"
-
+//
+//#define IMG_FRG_CODE_DRAW_GEOMETRY \
+//	"//IMG_FRG_CODE_DRAW_GEOMETRY\n" \
+//	"layout(location = 0) out vec4 FragColor;\n" \
+//	"layout (push_constant) uniform PushConsts {\n" \
+//	"	uniform vec4 loc0;\n" \
+//	"} ct;\n" \
+//	"\n" \
+//	"void main()\n" \
+//	"{\n" \
+//	"	FragColor = ct.loc0;\n" \
+//	"}\n"
+//
 #define IMG_FRG_CODE_DRAW_GEOMETRY_COLOR3 \
 	"//IMG_FRG_CODE_DRAW_GEOMETRY_COLOR3\n" \
 	"layout(location = 0) in vec3 OutColor;\n" \
@@ -734,8 +746,44 @@ namespace FLIVR
 	"	else IDColor = c_id_ref;\n" \
 	"	FragColor = clamp(c, vec4(0.0), vec4(1.0));\n" \
 	"}\n"
-
 //	"	vec4 c = clamp(c_b+c_id, vec4(0.0), vec4(1.0));\n" \
+
+#define TXT_RENDER_VTX_CODE \
+	"//TXT_RENDER_VTX_CODE\n" \
+	"layout(location = 0) in vec3 InVertex;\n" \
+	"layout(location = 1) in vec3 InTexCoord;\n" \
+	"layout(location = 0) out vec3 OutVertex;\n" \
+	"layout(location = 1) out vec3 OutTexCoord;\n" \
+	"layout (push_constant) uniform PushConsts {\n" \
+	"	uniform vec4 loc0; //xy: vert scale, zw: tex scale \n" \
+	"	uniform vec4 loc1; //xy: vert trans, zw: tex trans \n" \
+	"	uniform vec4 loc2; //color \n" \
+	"} ct;\n" \
+	"\n" \
+	"void main()\n" \
+	"{\n" \
+	"	vec2 v = vec2(InVertex.xy);\n" \
+	"	gl_Position = vec4(v*ct.loc0.xy + ct.loc1.xy, 0.0, 1.0);\n" \
+	"	OutVertex = gl_Position.xyz;\n" \
+	"	vec2 t = vec2(InTexCoord.xy);\n" \
+	"	OutTexCoord = vec3(t*ct.loc0.zw + ct.loc1.zw, 0.0);\n" \
+	"}\n"
+#define TXT_RENDER_FRG_CODE \
+	"//TXT_RENDER_FRG_CODE\n" \
+	"layout(location = 0) in vec3 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexCoord;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
+	"layout (binding = 0) uniform sampler2D tex0;\n" \
+	"layout (push_constant) uniform PushConsts {\n" \
+	"	uniform vec4 loc0; //xy: vert scale, zw: tex scale \n" \
+	"	uniform vec4 loc1; //xy: vert trans, zw: tex trans \n" \
+	"	uniform vec4 loc2; //color \n" \
+	"} ct;\n" \
+	"\n" \
+	"void main(void)\n" \
+	"{\n" \
+	"	FragColor = vec4(1, 1, 1, texture(tex0, OutTexCoord.xy).r) * ct.loc2;\n" \
+	"}\n"
 
 	ImgShader::ImgShader(VkDevice device, int type, int colormap) : 
 	device_(device),
@@ -775,6 +823,9 @@ namespace FLIVR
 			break;
 		case IMG_SHDR_DRAW_GEOMETRY_COLOR4:
 			z << IMG_VTX_CODE_DRAW_GEOMETRY_COLOR4;
+			break;
+		case IMG_SHDR_TEXT:
+			z << TXT_RENDER_VTX_CODE;
 			break;
 		case IMG_SHADER_TEXTURE_LOOKUP:
 		case IMG_SHDR_BRIGHTNESS_CONTRAST:
@@ -893,6 +944,9 @@ namespace FLIVR
 		case IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR_PREMULTI:
 			z << IMG_SHADER_CODE_BLEND_BRIGHT_BACKGROUND_HDR_PREMULTI;
 			break;
+		case IMG_SHDR_TEXT:
+			z << TXT_RENDER_FRG_CODE;
+			break;
 		default:
 			z << IMG_SHADER_CODE_TEXTURE_LOOKUP;
 		}
@@ -1002,7 +1056,7 @@ namespace FLIVR
 				1);
 			
 			VkPushConstantRange pushConstantRange = {};
-			pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+			pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT;
 			pushConstantRange.size = sizeof(float) * 4 * 4;
 			pushConstantRange.offset = 0;
 

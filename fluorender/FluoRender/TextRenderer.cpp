@@ -28,43 +28,20 @@ DEALINGS IN THE SOFTWARE.
 
 #include "TextRenderer.h"
 #include <FLIVR/ShaderProgram.h>
+#include <sstream>
 
 bool TextRenderer::m_init = false;
 FT_Library TextRenderer::m_ft;
 
-#define TXT_RENDER_VTX_CODE \
-	"//TXT_RENDER_VTX_CODE\n" \
-	"layout(location = 0) in vec4 coord;\n" \
-	"out vec2 texcoord;\n" \
-	"\n" \
-	"void main(void)\n" \
-	"{\n" \
-	"	gl_Position = vec4(coord.xy, 0, 1);\n" \
-	"	texcoord = coord.zw;\n" \
-	"}\n"
-
-#define TXT_RENDER_FRG_CODE \
-	"//TXT_RENDER_FRG_CODE\n" \
-	"in vec2 texcoord;\n" \
-	"out vec4 FragColor;\n" \
-	"uniform sampler2D tex;\n" \
-	"uniform vec4 color;\n" \
-	"\n" \
-	"void main(void)\n" \
-	"{\n" \
-	"	FragColor = vec4(1, 1, 1, texture(tex, texcoord).r) * color;\n" \
-	"//	FragColor = vec4(1.0, 0.0, 0.0, 1.0);\n" \
-	"}\n"
-
-TextRenderer::TextRenderer(const string &lib_name)
+TextRenderer::TextRenderer(const string &lib_name, std::shared_ptr<Vulkan2dRender> v2drender)
 	: m_valid(false),
-	m_size(14),
-	m_init_gl(false),
-	m_tex(0),
-	m_vbo(0),
-	m_vao(0),
-	m_prog(0)
+	m_size(14)
 {
+	m_v2drender = v2drender;
+
+	m_textureAtlas = std::make_shared<TextureAtlas>();
+	m_textureAtlas->Initialize(m_v2drender->m_vulkan->vulkanDevice, 1024, 1024);
+
 	FT_Error err;
 	if (!m_init)
 	{
@@ -75,30 +52,29 @@ TextRenderer::TextRenderer(const string &lib_name)
 
 	if (!m_init) return;
 
-	err = FT_New_Face(m_ft, lib_name.c_str(), 0, &m_face);
+	FT_Face face;
+	err = FT_New_Face(m_ft, lib_name.c_str(), 0, &face);
 	if (!err)
 		m_valid = true;
 
 	if (m_valid)
 	{
-		err = FT_Select_Charmap(m_face, FT_ENCODING_UNICODE); 
-		err = FT_Set_Pixel_Sizes(m_face, 0, m_size);
+		err = FT_Select_Charmap(face, FT_ENCODING_UNICODE);
+		err = FT_Set_Pixel_Sizes(face, 0, m_size);
+		m_cur_font = std::make_shared<Font>(face, m_textureAtlas);
+		std::stringstream ss;
+		ss << lib_name.c_str() << "?" << m_size;
+		m_fonts[ss.str()] = m_cur_font;
+		m_cur_libname = lib_name.c_str();
 	}
 }
 
 TextRenderer::~TextRenderer()
 {
-	/*if (glIsTexture(m_tex))
-		glDeleteTextures(1, &m_tex);
-	if (glIsBuffer(m_vbo))
-		glDeleteBuffers(1, &m_vbo);
-	if (glIsVertexArray(m_vao))
-		glDeleteVertexArrays(1, &m_vao);
-	if (glIsProgram(m_prog))
-		glDeleteProgram(m_prog);*/
+
 }
 
-void TextRenderer::LoadNewFace(const string &lib_name)
+void TextRenderer::LoadNewFace(const string &lib_name, int size)
 {
 	FT_Error err;
 	if (!m_init)
@@ -110,30 +86,41 @@ void TextRenderer::LoadNewFace(const string &lib_name)
 
 	if (!m_init) return;
 
-	if (m_valid)
-	{
-		FT_Done_Face(m_face);
-		m_valid = false;
+	if (size > 0)
+		m_size = size;
+
+	std::stringstream ss;
+	ss << lib_name.c_str() << "?" << m_size;
+
+	auto foundIt = m_fonts.find(ss.str());
+	if (foundIt != m_fonts.end()) {
+		m_cur_font = foundIt->second;
+		m_cur_libname = lib_name.c_str();
+		return;
 	}
 
-	err = FT_New_Face(m_ft, lib_name.c_str(), 0, &m_face);
+	FT_Face face;
+	err = FT_New_Face(m_ft, lib_name.c_str(), 0, &face);
 	if (!err)
 		m_valid = true;
 
 	if (m_valid)
 	{
-		err = FT_Select_Charmap(m_face, FT_ENCODING_UNICODE); 
-		err = FT_Set_Pixel_Sizes(m_face, 0, m_size);
+		err = FT_Select_Charmap(face, FT_ENCODING_UNICODE); 
+		err = FT_Set_Pixel_Sizes(face, 0, m_size);
+		m_cur_font = std::make_shared<Font>(face, m_textureAtlas);
+		m_fonts[ss.str()] = m_cur_font;
+		m_cur_libname = lib_name.c_str();
 	}
 }
 
-void TextRenderer::SetSize(unsigned int size)
+void TextRenderer::SetSize(int size)
 {
-	if (!m_valid)
+	if (!m_valid || size <= 0)
 		return;
 
-	FT_Set_Pixel_Sizes(m_face, 0, size);
 	m_size = size;
+	LoadNewFace(m_cur_libname);
 }
 
 unsigned int TextRenderer::GetSize()
@@ -144,152 +131,66 @@ unsigned int TextRenderer::GetSize()
 		return m_size;
 }
 
-void TextRenderer::RenderText(const wstring& text, Color &color,
-	float x, float y, float sx, float sy)
+void TextRenderer::RenderText(const std::unique_ptr<vks::VFrameBuffer>& framebuf,
+	const wstring& text, Color& color, float x, float y)
 {
 	if (!m_valid)
 		return;
+	
+	vks::VulkanDevice* prim_dev = m_v2drender->m_vulkan->vulkanDevice;
+	TextDimensions dims = m_cur_font->Measure(text);
 
-	GLint loc;
-	if (!m_init_gl)
-	{
-		//texture
-		glActiveTexture(GL_TEXTURE0);
-		glGenTextures(1, &m_tex);
-		glBindTexture(GL_TEXTURE_2D, m_tex);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	int w = framebuf->w;
+	int h = framebuf->h;
 
-		//shader
-		m_prog = glCreateProgram();
-		GLuint v_shader, f_shader;
-		v_shader = glCreateShader(GL_VERTEX_SHADER);
-		f_shader = glCreateShader(GL_FRAGMENT_SHADER);
+	std::vector<Vulkan2dRender::V2DRenderParams> v2drender_params;
+	Vulkan2dRender::V2dPipeline pl =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_TEXT,
+			V2DRENDER_BLEND_OVER,
+			framebuf->attachments[0]->format,
+			framebuf->attachments.size(),
+			0,
+			framebuf->attachments[0]->is_swapchain_images);
 
-		string v_source_str, f_source_str;
-		const char *v_source[1], *f_source[1];
-		v_source_str = ShaderProgram::glsl_version_ + TXT_RENDER_VTX_CODE;
-		f_source_str = ShaderProgram::glsl_version_ + TXT_RENDER_FRG_CODE;
-		GLint lengths[1];
+	float pos = x;
+	for (auto c : text) {
+		auto glyph = m_cur_font->GetGlyph(c);
+		auto texture = glyph->GetTexture();
+		if (texture) {
 
-		v_source[0] = v_source_str.c_str();
-		lengths[0] = (GLint)v_source_str.length();
-		glShaderSource(v_shader, 1, v_source, lengths);
-		glCompileShader(v_shader);
+			float x0 = pos + (float)glyph->GetLeft() / w;
+			float y0 = y + (float)glyph->GetTop() / h;
+			float gw = (float)glyph->GetWidth() / w;
+			float gh = (float)glyph->GetHeight() / h;
 
-		f_source[0] = f_source_str.c_str();
-		lengths[0] = (GLint)f_source_str.length();
-		glShaderSource(f_shader, 1, f_source, lengths);
-		glCompileShader(f_shader);
+			TextureWindow tw = texture->GetTextureWindow();
 
-		glAttachShader(m_prog, v_shader);
-		glAttachShader(m_prog, f_shader);
-		glLinkProgram(m_prog);
-		glDetachShader(m_prog, v_shader);
-		glDetachShader(m_prog, f_shader);
-		glDeleteShader(v_shader);
-		glDeleteShader(f_shader);
-
-		glUseProgram(m_prog);
-		loc = glGetUniformLocation(m_prog, "tex");
-		if (loc != -1)
-			glUniform1i(loc, 0);
-		m_color_loc = glGetUniformLocation(m_prog, "color");
-
-		//vertex
-		glGenVertexArrays(1, &m_vao);
-		glBindVertexArray(m_vao);
-		glGenBuffers(1, &m_vbo);
-		glEnableVertexAttribArray(0);
-		glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-		glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, 0);
-
-		m_init_gl = true;
+			Vulkan2dRender::V2DRenderParams param;
+			param.pipeline = pl;
+			param.clear = false;
+			param.tex[0] = m_textureAtlas->m_tex.get();
+			param.loc[0] = glm::vec4(gw, gh, tw.x1-tw.x0, tw.y1-tw.y0);
+			param.loc[1] = glm::vec4(x0, y0, tw.x0, tw.y0);
+			param.loc[2] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), 1.0f);
+			v2drender_params.push_back(param);
+		}
+		pos += (float)glyph->GetAdvance() / w;
 	}
 
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_CULL_FACE);
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+	vks::VulkanSemaphoreSettings sem = prim_dev->GetNextRenderSemaphoreSettings();
+	v2drender_params[0].waitSemaphores = sem.waitSemaphores;
+	v2drender_params[0].waitSemaphoreCount = sem.waitSemaphoreCount;
+	v2drender_params[0].signalSemaphores = sem.signalSemaphores;
+	v2drender_params[0].signalSemaphoreCount = sem.signalSemaphoreCount;
 
-	//texture
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, m_tex);
-	//shader
-	glUseProgram(m_prog);
-	glUniform4f(m_color_loc, color.r(), color.g(), color.b(), 1.0f);
-	//vertex
-	glBindVertexArray(m_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+	if (!framebuf->renderPass)
+		framebuf->replaceRenderPass(pl.pass);
 
-	const wchar_t *p;
-	for(p = text.c_str(); *p; p++)
-	{
-		if(FT_Load_Char(m_face, *p, FT_LOAD_RENDER))
-			continue;
-
-		FT_GlyphSlot g = m_face->glyph;
-
-		glTexImage2D(
-			GL_TEXTURE_2D,
-			0,
-			GL_RED,
-			g->bitmap.width,
-			g->bitmap.rows,
-			0,
-			GL_RED,
-			GL_UNSIGNED_BYTE,
-			g->bitmap.buffer
-			);
-
-		float x2 = x + g->bitmap_left * sx;
-		float y2 = -y - g->bitmap_top * sy;
-		float w = g->bitmap.width * sx;
-		float h = g->bitmap.rows * sy;
-
-		GLfloat box[4][4] =
-		{
-			{x2,     -y2    , 0, 0},
-			{x2 + w, -y2    , 1, 0},
-			{x2,     -y2 - h, 0, 1},
-			{x2 + w, -y2 - h, 1, 1},
-		};
-
-		glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)*16, box, GL_DYNAMIC_DRAW);
-		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
-		x += (g->advance.x >> 6) * sx;
-		y += (g->advance.y >> 6) * sy;
-	}
-
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glUseProgram(0);
-	glBindVertexArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-	glDisable(GL_BLEND);
-	glEnable(GL_DEPTH_TEST);
+	m_v2drender->seq_render(framebuf, v2drender_params.data(), v2drender_params.size());
 }
 
-float TextRenderer::RenderTextLen(wstring& text)
+TextDimensions TextRenderer::RenderTextDims(wstring& text)
 {
-	float len = 0.0f;
-	if (!m_valid)
-		return len;
-
-	const wchar_t *p;
-	for(p = text.c_str(); *p; p++)
-	{
-		if(FT_Load_Char(m_face, *p, FT_LOAD_RENDER))
-			continue;
-
-		FT_GlyphSlot g = m_face->glyph;
-        len += (g->advance.x >> 6);
-		//len += g->bitmap.width;
-	}
-	return len;
+	return m_cur_font->Measure(text);
 }

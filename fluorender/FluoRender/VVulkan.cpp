@@ -7,6 +7,8 @@ VVulkan::VVulkan() : VulkanExampleBase(ENABLE_VALIDATION)
 	enabledDeviceExtensions.push_back("VK_KHR_maintenance3");
 	enabledFeatures.textureCompressionBC = VK_TRUE;
 	enabledFeatures.shaderStorageImageExtendedFormats = VK_TRUE;
+	enabledFeatures.wideLines = VK_TRUE;
+	enabledFeatures.fillModeNonSolid = VK_TRUE;
 }
 
 VVulkan::~VVulkan()

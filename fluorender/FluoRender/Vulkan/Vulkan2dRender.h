@@ -24,13 +24,6 @@ public:
 	vks::Buffer m_indexBuffer;
 	uint32_t m_indexCount;
 
-	vks::Buffer m_dyn_vertexBuffer;
-	vks::Buffer m_dyn_indexBuffer;
-	uint64_t m_dyn_vertsCount;
-	uint64_t m_dyn_indexCount;
-	uint64_t m_dyn_vert_offset;
-	uint64_t m_dyn_idx_offset;
-	
 	struct Vertex {
 		float pos[3];
 		float uv[3];
@@ -72,12 +65,20 @@ public:
 
 	void init(std::shared_ptr<VVulkan> vulkan);
 	void generateQuad();
-	void updateDynBuffers(Vulkan2dRender::Vertex* verts, int verts_num, uint32_t* indices, int idx_num);
 	void setupVertexDescriptions();
 	VkRenderPass prepareRenderPass(VkFormat framebuf_format, int attachment_num, bool isSwapChainImage=false);
 	V2dPipeline preparePipeline(int shader, int blend_mode, VkFormat framebuf_format, int attachment_num, int colormap=0, bool isSwapChainImage=false);
 
 	void getEnabledUniforms(V2dPipeline &pipeline, const std::string &code);
+
+	struct V2dObject {
+		vks::Buffer vertBuf;
+		vks::Buffer idxBuf;
+		uint64_t vertCount = 0;
+		uint64_t idxCount = 0;
+		uint64_t vertOffset = 0;
+		uint64_t idxOffset = 0;
+	};
 
 	struct V2DRenderParams {
 		Vulkan2dRender::V2dPipeline pipeline = {};
@@ -87,10 +88,7 @@ public:
 		glm::vec4 loc[V2DRENDER_UNIFORM_VEC_NUM] = { glm::vec4(0.0f) };
 		glm::mat4 matrix[V2DRENDER_UNIFORM_MAT_NUM] = { glm::mat4(1.0f) };
 		
-		Vulkan2dRender::Vertex* verts = nullptr;
-		int verts_num = 0;
-		uint32_t* indices = nullptr;
-		int idx_num = 0;
+		Vulkan2dRender::V2dObject* obj = nullptr;
 
 		uint32_t waitSemaphoreCount = 0;
 		uint32_t signalSemaphoreCount = 0;

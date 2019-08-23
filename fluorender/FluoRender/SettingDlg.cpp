@@ -1614,13 +1614,14 @@ void SettingDlg::OnFontChange(wxCommandEvent &event)
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 		if (vr_frame)
 		{
-			vr_frame->GetTextRenderer()->LoadNewFace(loc);
-			vr_frame->GetTextRenderer()->SetSize(m_text_size);
 			for (int i=0 ; i<(int)vr_frame->GetViewList()->size() ; i++)
 			{
 				VRenderView* vrv = (*vr_frame->GetViewList())[i];
 				if (vrv)
+				{
+					vrv->GetTextRenderer()->LoadNewFace(loc, m_text_size);
 					vrv->RefreshGL();
+				}
 			}
 		}
 	}
@@ -1637,12 +1638,14 @@ void SettingDlg::OnFontSizeChange(wxCommandEvent &event)
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 		if (vr_frame)
 		{
-			vr_frame->GetTextRenderer()->SetSize(m_text_size);
 			for (int i=0 ; i<(int)vr_frame->GetViewList()->size() ; i++)
 			{
 				VRenderView* vrv = (*vr_frame->GetViewList())[i];
 				if (vrv)
+				{
+					vrv->GetTextRenderer()->SetSize(m_text_size);
 					vrv->RefreshGL();
+				}
 			}
 		}
 	}

@@ -639,6 +639,8 @@ public:
 	//text renderer
 	void SetTextRenderer(TextRenderer* text_renderer)
 	{ m_text_renderer = text_renderer; }
+	TextRenderer* GetTextRenderer()
+	{ return m_text_renderer; }
 
 	void SetPreDraw(bool pre_draw) { m_pre_draw = pre_draw; }//added by takashi
 
@@ -1098,6 +1100,9 @@ private:
 	double m_fixed_sclbar_len;
 	double m_fixed_sclbar_fac;
 	int m_sclbar_digit;
+
+	Vulkan2dRender::V2dObject m_tile_vobj;
+	Vulkan2dRender::V2dObject m_brush_vobj;
 
 private:
 #ifdef _WIN32
@@ -1859,6 +1864,8 @@ public:
 
 	VolumeLoader* GetVolumeLoader() { if (m_glview) return m_glview->GetVolumeLoader(); else return NULL; }
 	 
+	TextRenderer* GetTextRenderer() { if (m_glview) return m_glview->GetTextRenderer(); else return nullptr; }
+
 public:
 	wxWindow* m_frame;
 	static int m_id;

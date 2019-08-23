@@ -331,9 +331,6 @@ public:
 	//show info
 	void OnInfo(wxCommandEvent& WXUNUSED(event));
 
-	TextRenderer* GetTextRenderer()
-	{ return m_text_renderer; }
-
 	void SetKeyLock(bool lock);
 
 	PluginManager* GetPluginManager() const { return m_plugin_manager ; }
@@ -425,9 +422,6 @@ private:
 
 	//mac address
 	wxString m_address;
-
-	//draw text
-	TextRenderer *m_text_renderer;
 
 	map<wxString, bool> m_ui_state_cache;
 

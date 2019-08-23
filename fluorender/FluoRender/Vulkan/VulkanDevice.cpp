@@ -756,7 +756,11 @@ namespace vks
 			tp += zpitch;
 		}
 
-		staging_buf.flush();
+		VkDeviceSize atom = properties.limits.nonCoherentAtomSize;
+		if (atom > 0)
+			staging_buf.flush((texMemSize + atom - 1) & ~(atom - 1));
+		if (texMemSize > staging_buf.size)
+			staging_buf.flush();
 
 		CopyDataStagingBuf2Tex(tex);
 /*
@@ -764,6 +768,26 @@ namespace vks
 		sprintf(dbgstr, "uploadTex time: %lld  size: %lld\n", ed_time - st_time, texMemSize);
 		//OutputDebugStringA(dbgstr);
 */
+		return true;
+	}
+
+	bool VulkanDevice::UploadSubTexture2D(const std::shared_ptr<VTexture>& tex, void* data, VkOffset2D offset, VkExtent2D extent)
+	{
+		const VkDeviceSize texMemSize = (VkDeviceSize)extent.width * (VkDeviceSize)extent.height * (VkDeviceSize)tex->bytes;
+
+		checkStagingBuffer(texMemSize);
+
+		// Copy texture data into staging buffer
+		memcpy(staging_buf.mapped, data, texMemSize);
+
+		VkDeviceSize atom = properties.limits.nonCoherentAtomSize;
+		if (atom > 0)
+			staging_buf.flush((texMemSize + atom - 1) & ~(atom - 1));
+		if (texMemSize > staging_buf.size)
+			staging_buf.flush();
+
+		CopyDataStagingBuf2SubTex2D(tex, offset, extent);
+
 		return true;
 	}
 
@@ -776,7 +800,11 @@ namespace vks
 		// Copy texture data into staging buffer
 		memcpy(staging_buf.mapped, data, texMemSize);
 
-		staging_buf.flush();
+		VkDeviceSize atom = properties.limits.nonCoherentAtomSize;
+		if (atom > 0)
+			staging_buf.flush((texMemSize + atom - 1) & ~(atom - 1));
+		if (texMemSize > staging_buf.size)
+			staging_buf.flush();
 
 		CopyDataStagingBuf2Tex(tex);
 
@@ -813,6 +841,60 @@ namespace vks
 		bufferCopyRegion.imageExtent.width = tex->w;
 		bufferCopyRegion.imageExtent.height = tex->h;
 		bufferCopyRegion.imageExtent.depth = tex->d;
+
+		vkCmdCopyBufferToImage(
+			copyCmd,
+			staging_buf.buffer,
+			tex->image,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			1,
+			&bufferCopyRegion);
+
+		// Change texture image layout to shader read after all mip levels have been copied
+		tex->imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		vks::tools::setImageLayout(
+			copyCmd,
+			tex->image,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			tex->imageLayout,
+			subresourceRange);
+
+		flushCommandBuffer(copyCmd, queue, true);
+	}
+
+	void VulkanDevice::CopyDataStagingBuf2SubTex2D(const std::shared_ptr<VTexture>& tex, VkOffset2D offset, VkExtent2D extent)
+	{
+		VkCommandBuffer copyCmd = createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+
+		// The sub resource range describes the regions of the image we will be transitioned
+		VkImageSubresourceRange subresourceRange = {};
+		subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		subresourceRange.baseMipLevel = 0;
+		subresourceRange.baseArrayLayer = 0;
+		subresourceRange.levelCount = 1;
+		subresourceRange.layerCount = 1;
+
+		// Optimal image will be used as destination for the copy, so we must transfer from our
+		// initial undefined image layout to the transfer destination layout
+		vks::tools::setImageLayout(
+			copyCmd,
+			tex->image,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			subresourceRange);
+
+		// Setup buffer copy regions
+		VkBufferImageCopy bufferCopyRegion{};
+		bufferCopyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		bufferCopyRegion.imageSubresource.mipLevel = 0;
+		bufferCopyRegion.imageSubresource.baseArrayLayer = 0;
+		bufferCopyRegion.imageSubresource.layerCount = 1;
+		bufferCopyRegion.imageExtent.width = extent.width;
+		bufferCopyRegion.imageExtent.height = extent.height;
+		bufferCopyRegion.imageExtent.depth = 1;
+		bufferCopyRegion.imageOffset.x = offset.x;
+		bufferCopyRegion.imageOffset.y = offset.y;
+		bufferCopyRegion.imageOffset.z = 0;
 
 		vkCmdCopyBufferToImage(
 			copyCmd,

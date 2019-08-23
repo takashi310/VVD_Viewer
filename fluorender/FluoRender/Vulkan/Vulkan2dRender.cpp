@@ -72,28 +72,6 @@ void Vulkan2dRender::generateQuad()
 		indices.data()));
 }
 
-void Vulkan2dRender::updateDynBuffers(Vulkan2dRender::Vertex* verts, int verts_num, uint32_t* indices, int idx_num)
-{
-	vks::VulkanDevice* prim_dev = m_vulkan->vulkanDevice;
-	if (verts && verts_num > 0)
-	{
-		prim_dev->GetNextBuffer(verts_num * sizeof(Vertex), m_dyn_vertexBuffer, m_dyn_vert_offset);
-		m_dyn_vertexBuffer.map(verts_num * sizeof(Vertex), m_dyn_vert_offset);
-		m_dyn_vertexBuffer.copyTo(verts, verts_num * sizeof(Vertex), m_dyn_vert_offset);
-		m_dyn_vertexBuffer.flush(verts_num * sizeof(Vertex), m_dyn_vert_offset);
-		m_dyn_vertexBuffer.unmap();
-	}
-
-	if (indices && idx_num > 0)
-	{
-		prim_dev->GetNextBuffer(idx_num * sizeof(uint32_t), m_dyn_indexBuffer, m_dyn_idx_offset);
-		m_dyn_indexBuffer.map(idx_num * sizeof(uint32_t), m_dyn_idx_offset);
-		m_dyn_indexBuffer.copyTo(indices, idx_num * sizeof(uint32_t), m_dyn_idx_offset);
-		m_dyn_indexBuffer.flush(idx_num * sizeof(uint32_t), m_dyn_idx_offset);
-		m_dyn_vertexBuffer.unmap();
-	}
-}
-
 void Vulkan2dRender::setupVertexDescriptions()
 {
 	// Binding description
@@ -220,18 +198,35 @@ Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blen
 		}
 	}
 
+	VkPrimitiveTopology topo;
+	VkPolygonMode polymode;
+	float linewidth = 0.5f;
+
+	switch (shader) {
+	case IMG_SHDR_DRAW_GEOMETRY:
+	case IMG_SHDR_DRAW_GEOMETRY_COLOR3:
+	case IMG_SHDR_DRAW_GEOMETRY_COLOR4:
+		topo = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
+		polymode = VK_POLYGON_MODE_FILL;
+		break;
+	default:
+		topo = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+		polymode = VK_POLYGON_MODE_FILL;
+	}
+
 	VkPipelineInputAssemblyStateCreateInfo inputAssemblyState =
 		vks::initializers::pipelineInputAssemblyStateCreateInfo(
-		VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+		topo,
 		0,
 		VK_FALSE);
 
 	VkPipelineRasterizationStateCreateInfo rasterizationState =
 		vks::initializers::pipelineRasterizationStateCreateInfo(
-		VK_POLYGON_MODE_FILL,
+		polymode,
 		VK_CULL_MODE_NONE,
 		VK_FRONT_FACE_COUNTER_CLOCKWISE,
 		0);
+	rasterizationState.lineWidth = linewidth;
 
 	VkPipelineDepthStencilStateCreateInfo depthStencilState =
 		vks::initializers::pipelineDepthStencilStateCreateInfo(
@@ -491,9 +486,6 @@ void Vulkan2dRender::buildCommandBuffer(
 		}
 	}
 
-	if (params.verts || params.indices)
-		updateDynBuffers(params.verts, params.verts_num, params.indices, params.idx_num);
-
 	VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
 	cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
@@ -561,27 +553,24 @@ void Vulkan2dRender::buildCommandBuffer(
 			vkCmdPushConstants(
 				commandbufs[i],
 				m_img_pipeline_settings.pipelineLayout,
-				VK_SHADER_STAGE_FRAGMENT_BIT,
+				VK_SHADER_STAGE_FRAGMENT_BIT|VK_SHADER_STAGE_VERTEX_BIT,
 				0,
 				constsize,
 				constant_buf);
 		}
 
-		VkDeviceSize offsets[1] = { 0 };
-		if (!params.verts)
-			vkCmdBindVertexBuffers(commandbufs[i], 0, 1, &m_vertexBuffer.buffer, offsets);
-		else
-			vkCmdBindVertexBuffers(commandbufs[i], 0, 1, &m_dyn_vertexBuffer.buffer, &m_dyn_vert_offset);
-
-		if (!params.indices)
+		if (!params.obj)
 		{
+			VkDeviceSize offsets[1] = { 0 };
+			vkCmdBindVertexBuffers(commandbufs[i], 0, 1, &m_vertexBuffer.buffer, offsets);
 			vkCmdBindIndexBuffer(commandbufs[i], m_indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 			vkCmdDrawIndexed(commandbufs[i], m_indexCount, 1, 0, 0, 0);
 		}	
 		else
 		{
-			vkCmdBindIndexBuffer(commandbufs[i], m_dyn_indexBuffer.buffer, m_dyn_idx_offset, VK_INDEX_TYPE_UINT32);
-			vkCmdDrawIndexed(commandbufs[i], m_dyn_indexCount, 1, 0, 0, 0);
+			vkCmdBindVertexBuffers(commandbufs[i], 0, 1, &params.obj->vertBuf.buffer, &params.obj->vertOffset);
+			vkCmdBindIndexBuffer(commandbufs[i], params.obj->idxBuf.buffer, params.obj->idxOffset, VK_INDEX_TYPE_UINT32);
+			vkCmdDrawIndexed(commandbufs[i], params.obj->idxCount, 1, 0, 0, 0);
 		}
 
 		vkCmdEndRenderPass(commandbufs[i]);
@@ -629,45 +618,6 @@ void Vulkan2dRender::seq_buildCommandBuffer(VkCommandBuffer commandbufs[], int c
 	renderPassBeginInfo.renderArea.offset.y = 0;
 	renderPassBeginInfo.renderArea.extent.width = framebuf->w;
 	renderPassBeginInfo.renderArea.extent.height = framebuf->h;
-
-	std::vector<Vulkan2dRender::Vertex> verts;
-	std::vector<VkDeviceSize> vert_offsets;
-	VkDeviceSize voffset = 0;
-	std::vector<uint32_t> indices;
-	std::vector<VkDeviceSize> idx_offsets;
-	VkDeviceSize ioffset = 0;
-	for (int s = 0; s < num; s++)
-	{
-		if (params[s].verts)
-		{
-			for (int i = 0; i < params[s].verts_num; i++)
-				verts.push_back(params[s].verts[i]);
-			vert_offsets.push_back(voffset);
-			voffset += params[s].verts_num * sizeof(Vulkan2dRender::Vertex);
-		}
-		else
-			vert_offsets.push_back(0);
-
-		if (params[s].indices)
-		{
-			for (int i = 0; i < params[s].idx_num; i++)
-				indices.push_back(params[s].indices[i]);
-			idx_offsets.push_back(ioffset);
-			ioffset += params[s].idx_num * sizeof(int32_t);
-		}
-		else
-			idx_offsets.push_back(0);
-	}
-	updateDynBuffers(
-		verts.empty() ? nullptr : verts.data(),
-		verts.size(),
-		indices.empty() ? nullptr : indices.data(),
-		indices.size()
-	);
-	for (int i = 0; i < vert_offsets.size(); i++)
-		vert_offsets[i] += m_dyn_vert_offset;
-	for (int i = 0; i < idx_offsets.size(); i++)
-		idx_offsets[i] += m_dyn_idx_offset;
 
 	for (int32_t i = 0; i < commandbuf_num; ++i)
 	{
@@ -745,29 +695,24 @@ void Vulkan2dRender::seq_buildCommandBuffer(VkCommandBuffer commandbufs[], int c
 				vkCmdPushConstants(
 					commandbufs[i],
 					m_img_pipeline_settings.pipelineLayout,
-					VK_SHADER_STAGE_FRAGMENT_BIT,
+					VK_SHADER_STAGE_FRAGMENT_BIT| VK_SHADER_STAGE_VERTEX_BIT,
 					0,
 					constsize,
 					constant_buf);
 			}
 
-			if (!params[s].verts)
+			if (!params[s].obj)
 			{
 				VkDeviceSize offsets[1] = { 0 };
 				vkCmdBindVertexBuffers(commandbufs[i], 0, 1, &m_vertexBuffer.buffer, offsets);
-			}
-			else
-				vkCmdBindVertexBuffers(commandbufs[i], 0, 1, &m_dyn_vertexBuffer.buffer, &vert_offsets[s]);
-
-			if (!params[s].indices)
-			{
 				vkCmdBindIndexBuffer(commandbufs[i], m_indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 				vkCmdDrawIndexed(commandbufs[i], m_indexCount, 1, 0, 0, 0);
 			}
 			else
 			{
-				vkCmdBindIndexBuffer(commandbufs[i], m_dyn_indexBuffer.buffer, idx_offsets[s], VK_INDEX_TYPE_UINT32);
-				vkCmdDrawIndexed(commandbufs[i], params[s].idx_num, 1, 0, 0, 0);
+				vkCmdBindVertexBuffers(commandbufs[i], 0, 1, &params[s].obj->vertBuf.buffer, &params[s].obj->vertOffset);
+				vkCmdBindIndexBuffer(commandbufs[i], params[s].obj->idxBuf.buffer, params[s].obj->idxOffset, VK_INDEX_TYPE_UINT32);
+				vkCmdDrawIndexed(commandbufs[i], params[s].obj->idxCount, 1, 0, 0, 0);
 			}
 			
 		}
