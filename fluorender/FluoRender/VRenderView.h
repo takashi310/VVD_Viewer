@@ -1103,6 +1103,9 @@ private:
 
 	Vulkan2dRender::V2dObject m_tile_vobj;
 	Vulkan2dRender::V2dObject m_brush_vobj;
+	Vulkan2dRender::V2dObject m_grid_vobj;
+
+	bool m_frame_clear;
 
 private:
 #ifdef _WIN32

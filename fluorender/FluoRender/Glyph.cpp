@@ -54,9 +54,9 @@ void Glyph::CreateTextureFromBitmap(std::shared_ptr<TextureAtlas> &ta) {
             auto value = *src;
             src++;
 
-            buffer[dst++] = 0xff;
-            buffer[dst++] = 0xff;
-            buffer[dst++] = 0xff;
+            buffer[dst++] = value;
+            buffer[dst++] = value;
+            buffer[dst++] = value;
             buffer[dst++] = value;
         }
         startOfLine += glyphSlot->bitmap.pitch;

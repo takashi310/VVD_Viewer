@@ -57,6 +57,7 @@ namespace FLIVR
 	"//IMG_VTX_CODE_DRAW_GEOMETRY\n" \
 	"layout(location = 0) in vec3 InVertex;\n" \
 	"layout (push_constant) uniform PushConsts {\n" \
+	"	uniform vec4 loc0; //color\n" \
 	"	mat4 matrix0;//transformation\n" \
 	"} ct;\n" \
 	"\n" \
@@ -94,31 +95,32 @@ namespace FLIVR
 	"	gl_Position = ct.matrix0 * vec4(InVertex, 1.0);\n" \
 	"	OutColor = InColor;\n" \
 	"}\n"
-
-#define IMG_FRG_CODE_DRAW_GEOMETRY \
-	"//IMG_FRG_CODE_DRAW_GEOMETRY\n" \
-	"layout(location = 0) out vec4 FragColor;\n" \
-	"layout (push_constant) uniform PushConsts {\n" \
-	"	mat4 matrix0;//transformation\n" \
-	"} ct;\n" \
-	"\n" \
-	"void main()\n" \
-	"{\n" \
-	"	FragColor = vec4(1.0);\n" \
-	"}\n"
 //
 //#define IMG_FRG_CODE_DRAW_GEOMETRY \
 //	"//IMG_FRG_CODE_DRAW_GEOMETRY\n" \
 //	"layout(location = 0) out vec4 FragColor;\n" \
 //	"layout (push_constant) uniform PushConsts {\n" \
-//	"	uniform vec4 loc0;\n" \
+//	"	mat4 matrix0;//transformation\n" \
 //	"} ct;\n" \
 //	"\n" \
 //	"void main()\n" \
 //	"{\n" \
-//	"	FragColor = ct.loc0;\n" \
+//	"	FragColor = vec4(1.0);\n" \
 //	"}\n"
 //
+#define IMG_FRG_CODE_DRAW_GEOMETRY \
+	"//IMG_FRG_CODE_DRAW_GEOMETRY\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
+	"layout (push_constant) uniform PushConsts {\n" \
+	"	uniform vec4 loc0; //color\n" \
+	"	mat4 matrix0; //transformation\n" \
+	"} ct;\n" \
+	"\n" \
+	"void main()\n" \
+	"{\n" \
+	"	FragColor = ct.loc0;\n" \
+	"}\n"
+
 #define IMG_FRG_CODE_DRAW_GEOMETRY_COLOR3 \
 	"//IMG_FRG_CODE_DRAW_GEOMETRY_COLOR3\n" \
 	"layout(location = 0) in vec3 OutColor;\n" \
@@ -762,10 +764,10 @@ namespace FLIVR
 	"\n" \
 	"void main()\n" \
 	"{\n" \
-	"	vec2 v = vec2(InVertex.xy);\n" \
+	"	vec2 v = (InVertex.xy + vec2(1.0)) / 2.0;\n" \
 	"	gl_Position = vec4(v*ct.loc0.xy + ct.loc1.xy, 0.0, 1.0);\n" \
 	"	OutVertex = gl_Position.xyz;\n" \
-	"	vec2 t = vec2(InTexCoord.xy);\n" \
+	"	vec2 t = InTexCoord.xy;\n" \
 	"	OutTexCoord = vec3(t*ct.loc0.zw + ct.loc1.zw, 0.0);\n" \
 	"}\n"
 #define TXT_RENDER_FRG_CODE \
@@ -1057,7 +1059,7 @@ namespace FLIVR
 			
 			VkPushConstantRange pushConstantRange = {};
 			pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT;
-			pushConstantRange.size = sizeof(float) * 4 * 4;
+			pushConstantRange.size = sizeof(float) * 4 * 5;
 			pushConstantRange.offset = 0;
 
 			// Push constant ranges are part of the pipeline layout

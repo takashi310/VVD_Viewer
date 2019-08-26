@@ -147,7 +147,7 @@ void TextRenderer::RenderText(const std::unique_ptr<vks::VFrameBuffer>& framebuf
 	Vulkan2dRender::V2dPipeline pl =
 		m_v2drender->preparePipeline(
 			IMG_SHDR_TEXT,
-			V2DRENDER_BLEND_OVER,
+			V2DRENDER_BLEND_OVER_UI,
 			framebuf->attachments[0]->format,
 			framebuf->attachments.size(),
 			0,
@@ -159,10 +159,10 @@ void TextRenderer::RenderText(const std::unique_ptr<vks::VFrameBuffer>& framebuf
 		auto texture = glyph->GetTexture();
 		if (texture) {
 
-			float x0 = pos + (float)glyph->GetLeft() / w;
-			float y0 = y + (float)glyph->GetTop() / h;
-			float gw = (float)glyph->GetWidth() / w;
-			float gh = (float)glyph->GetHeight() / h;
+			float gw = (float)glyph->GetWidth() * 2.0f / w;
+			float gh = (float)glyph->GetHeight() * 2.0f / h;
+			float x0 = pos + (float)glyph->GetLeft() * 2.0f / w;
+			float y0 = y - (float)glyph->GetTop() * 2.0f / h;
 
 			TextureWindow tw = texture->GetTextureWindow();
 
@@ -175,7 +175,7 @@ void TextRenderer::RenderText(const std::unique_ptr<vks::VFrameBuffer>& framebuf
 			param.loc[2] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), 1.0f);
 			v2drender_params.push_back(param);
 		}
-		pos += (float)glyph->GetAdvance() / w;
+		pos += (float)glyph->GetAdvance() * 2.0f / w;
 	}
 
 	vks::VulkanSemaphoreSettings sem = prim_dev->GetNextRenderSemaphoreSettings();

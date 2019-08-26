@@ -174,7 +174,18 @@ VkRenderPass Vulkan2dRender::prepareRenderPass(VkFormat framebuf_format, int att
 	return pass;
 }
 
-Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blend_mode, VkFormat framebuf_format, int attachment_num, int colormap, bool isSwapChainImage)
+Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(
+	int shader,
+	int blend_mode,
+	VkFormat framebuf_format,
+	int attachment_num,
+	int colormap,
+	bool isSwapChainImage,
+	VkPrimitiveTopology topology,
+	VkPolygonMode polymode,
+	VkCullModeFlags cullmode,
+	VkFrontFace frontface
+)
 {
 	if (prev_pipeline >= 0) {
 		if (m_pipelines[prev_pipeline].shader == shader &&
@@ -182,7 +193,11 @@ Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blen
 			m_pipelines[prev_pipeline].colormap == colormap &&
 			m_pipelines[prev_pipeline].framebuf_format == framebuf_format &&
 			m_pipelines[prev_pipeline].attachment_num == attachment_num &&
-			m_pipelines[prev_pipeline].isSwapChainImage == isSwapChainImage)
+			m_pipelines[prev_pipeline].isSwapChainImage == isSwapChainImage &&
+			m_pipelines[prev_pipeline].topology == topology &&
+			m_pipelines[prev_pipeline].polymode == polymode &&
+			m_pipelines[prev_pipeline].cullmode == cullmode &&
+			m_pipelines[prev_pipeline].frontface == frontface)
 			return m_pipelines[prev_pipeline];
 	}
 	for (int i = 0; i < m_pipelines.size(); i++) {
@@ -191,41 +206,33 @@ Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blen
 			m_pipelines[i].colormap == colormap &&
 			m_pipelines[i].framebuf_format == framebuf_format &&
 			m_pipelines[i].attachment_num == attachment_num &&
-			m_pipelines[i].isSwapChainImage == isSwapChainImage)
+			m_pipelines[i].isSwapChainImage == isSwapChainImage &&
+			m_pipelines[i].topology == topology &&
+			m_pipelines[i].polymode == polymode &&
+			m_pipelines[i].cullmode == cullmode &&
+			m_pipelines[i].frontface == frontface)
 		{
 			prev_pipeline = i;
 			return m_pipelines[i];
 		}
 	}
 
-	VkPrimitiveTopology topo;
-	VkPolygonMode polymode;
 	float linewidth = 0.5f;
-
-	switch (shader) {
-	case IMG_SHDR_DRAW_GEOMETRY:
-	case IMG_SHDR_DRAW_GEOMETRY_COLOR3:
-	case IMG_SHDR_DRAW_GEOMETRY_COLOR4:
-		topo = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
-		polymode = VK_POLYGON_MODE_FILL;
-		break;
-	default:
-		topo = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-		polymode = VK_POLYGON_MODE_FILL;
-	}
 
 	VkPipelineInputAssemblyStateCreateInfo inputAssemblyState =
 		vks::initializers::pipelineInputAssemblyStateCreateInfo(
-		topo,
-		0,
-		VK_FALSE);
+			topology,
+			0,
+			VK_FALSE
+		);
 
 	VkPipelineRasterizationStateCreateInfo rasterizationState =
 		vks::initializers::pipelineRasterizationStateCreateInfo(
-		polymode,
-		VK_CULL_MODE_NONE,
-		VK_FRONT_FACE_COUNTER_CLOCKWISE,
-		0);
+			polymode,
+			cullmode,
+			frontface,
+			0
+		);
 	rasterizationState.lineWidth = linewidth;
 
 	VkPipelineDepthStencilStateCreateInfo depthStencilState =
@@ -342,6 +349,10 @@ Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(int shader, int blen
 	v2d_pipeline.framebuf_format = framebuf_format;
 	v2d_pipeline.attachment_num = attachment_num;
 	v2d_pipeline.isSwapChainImage = isSwapChainImage;
+	v2d_pipeline.topology = topology;
+	v2d_pipeline.polymode = polymode;
+	v2d_pipeline.cullmode = cullmode;
+	v2d_pipeline.frontface = frontface;
 	getEnabledUniforms(v2d_pipeline, sh->get_fragment_shader_code());
 
 	VK_CHECK_RESULT(

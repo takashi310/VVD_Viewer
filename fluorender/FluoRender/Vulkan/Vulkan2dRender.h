@@ -44,6 +44,11 @@ public:
 		VkFormat framebuf_format;
 		int attachment_num;
 		bool isSwapChainImage;
+		VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+		VkPolygonMode polymode = VK_POLYGON_MODE_FILL;
+		VkCullModeFlags cullmode = VK_CULL_MODE_NONE;
+		VkFrontFace frontface = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+
 		VkBool32 uniforms[V2DRENDER_UNIFORM_NUM] = { VK_FALSE };
 		VkBool32 samplers[IMG_SHDR_SAMPLER_NUM] = { VK_FALSE };
 	};
@@ -67,7 +72,17 @@ public:
 	void generateQuad();
 	void setupVertexDescriptions();
 	VkRenderPass prepareRenderPass(VkFormat framebuf_format, int attachment_num, bool isSwapChainImage=false);
-	V2dPipeline preparePipeline(int shader, int blend_mode, VkFormat framebuf_format, int attachment_num, int colormap=0, bool isSwapChainImage=false);
+	V2dPipeline preparePipeline(
+		int shader,
+		int blend_mode,
+		VkFormat framebuf_format,
+		int attachment_num,
+		int colormap=0,
+		bool isSwapChainImage=false,
+		VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+		VkPolygonMode polymode = VK_POLYGON_MODE_FILL,
+		VkCullModeFlags cullmode = VK_CULL_MODE_NONE,
+		VkFrontFace frontface = VK_FRONT_FACE_COUNTER_CLOCKWISE);
 
 	void getEnabledUniforms(V2dPipeline &pipeline, const std::string &code);
 

@@ -715,7 +715,7 @@ namespace vks
 		char dbgstr[50];
 		st_time = milliseconds_now();
 */
-		const VkDeviceSize texMemSize = (VkDeviceSize)tex->w * (VkDeviceSize)tex->h * (VkDeviceSize)tex->d * (VkDeviceSize)tex->bytes;
+		VkDeviceSize texMemSize = (VkDeviceSize)tex->w * (VkDeviceSize)tex->h * (VkDeviceSize)tex->d * (VkDeviceSize)tex->bytes;
 
 		checkStagingBuffer(texMemSize);
 		
@@ -758,9 +758,11 @@ namespace vks
 
 		VkDeviceSize atom = properties.limits.nonCoherentAtomSize;
 		if (atom > 0)
-			staging_buf.flush((texMemSize + atom - 1) & ~(atom - 1));
+			texMemSize = (texMemSize + atom - 1) & ~(atom - 1);
 		if (texMemSize > staging_buf.size)
 			staging_buf.flush();
+		else
+			staging_buf.flush(texMemSize);
 
 		CopyDataStagingBuf2Tex(tex);
 /*
@@ -773,7 +775,7 @@ namespace vks
 
 	bool VulkanDevice::UploadSubTexture2D(const std::shared_ptr<VTexture>& tex, void* data, VkOffset2D offset, VkExtent2D extent)
 	{
-		const VkDeviceSize texMemSize = (VkDeviceSize)extent.width * (VkDeviceSize)extent.height * (VkDeviceSize)tex->bytes;
+		VkDeviceSize texMemSize = (VkDeviceSize)extent.width * (VkDeviceSize)extent.height * (VkDeviceSize)tex->bytes;
 
 		checkStagingBuffer(texMemSize);
 
@@ -782,9 +784,11 @@ namespace vks
 
 		VkDeviceSize atom = properties.limits.nonCoherentAtomSize;
 		if (atom > 0)
-			staging_buf.flush((texMemSize + atom - 1) & ~(atom - 1));
+			texMemSize = (texMemSize + atom - 1) & ~(atom - 1);
 		if (texMemSize > staging_buf.size)
 			staging_buf.flush();
+		else
+			staging_buf.flush(texMemSize);
 
 		CopyDataStagingBuf2SubTex2D(tex, offset, extent);
 
@@ -793,7 +797,7 @@ namespace vks
 
 	bool VulkanDevice::UploadTexture(const std::shared_ptr<VTexture> &tex, void *data)
 	{
-		const VkDeviceSize texMemSize = (VkDeviceSize)tex->w * (VkDeviceSize)tex->h * (VkDeviceSize)tex->d * (VkDeviceSize)tex->bytes;
+		VkDeviceSize texMemSize = (VkDeviceSize)tex->w * (VkDeviceSize)tex->h * (VkDeviceSize)tex->d * (VkDeviceSize)tex->bytes;
 
 		checkStagingBuffer(texMemSize);
 
@@ -802,9 +806,11 @@ namespace vks
 
 		VkDeviceSize atom = properties.limits.nonCoherentAtomSize;
 		if (atom > 0)
-			staging_buf.flush((texMemSize + atom - 1) & ~(atom - 1));
+			texMemSize = (texMemSize + atom - 1) & ~(atom - 1);
 		if (texMemSize > staging_buf.size)
 			staging_buf.flush();
+		else
+			staging_buf.flush(texMemSize);
 
 		CopyDataStagingBuf2Tex(tex);
 

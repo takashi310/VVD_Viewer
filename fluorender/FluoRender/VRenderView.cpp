@@ -1482,7 +1482,8 @@ void VRenderVulkanView::DrawVolumes(int peel)
 		params2.loc[0] = glm::vec4( 1.0f, 1.0f, 1.0f, 1.0f );
 		params2.loc[1] = glm::vec4( 1.0f, 1.0f, 1.0f, 1.0f );
 		params2.loc[2] = glm::vec4( 0.0f, 0.0f, 0.0f, 0.0f );
-		params2.clear = true;
+		params2.clear = m_frame_clear;
+		m_frame_clear = false;
 		
 		current_fbo->replaceRenderPass(params2.pipeline.pass);
 
@@ -1504,7 +1505,8 @@ void VRenderVulkanView::DrawVolumes(int peel)
 		params.loc[0] = glm::vec4( 1.0f, 1.0f, 1.0f, 1.0f );
 		params.loc[1] = glm::vec4( 1.0f, 1.0f, 1.0f, 1.0f );
 		params.loc[2] = glm::vec4( 0.0f, 0.0f, 0.0f, 0.0f );
-		params.clear = true;
+		params.clear = m_frame_clear;
+		m_frame_clear = false;
 		
 		current_fbo->replaceRenderPass(params.pipeline.pass);
 
@@ -2480,10 +2482,12 @@ void VRenderVulkanView::DrawCircle(double cx, double cy,
 			current_fbo->attachments[0]->format,
 			current_fbo->attachments.size(),
 			0,
-			current_fbo->attachments[0]->is_swapchain_images);
+			current_fbo->attachments[0]->is_swapchain_images,
+			VK_PRIMITIVE_TOPOLOGY_LINE_STRIP);
 	params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), 1.0f);
 	params.matrix[0] = matrix;
-	params.clear = false;
+	params.clear = m_frame_clear;
+	m_frame_clear = false;
 
 	params.obj = &m_brush_vobj;
 
@@ -2539,7 +2543,7 @@ void VRenderVulkanView::DrawBrush()
 
 		float px, py;
 		px = cx-7-nx/2.0;
-		py = cy-3-ny/2.0;
+		py = cy+3-ny/2.0;
 		wstring wstr;
 		switch (mode)
 		{
@@ -2556,7 +2560,8 @@ void VRenderVulkanView::DrawBrush()
 			wstr = L"*";
 			break;
 		}
-		//m_text_renderer->RenderText(wstr, text_color, px*sx, py*sy, sx, sy);
+		m_text_renderer->RenderText(m_vulkan->frameBuffers[m_vulkan->currentBuffer], 
+			wstr, text_color, px*sx, py*sy);
 
 	}
 }
@@ -2655,7 +2660,8 @@ void VRenderVulkanView::DisplayStroke()
 			0,
 			current_fbo->attachments[0]->is_swapchain_images);
 	params.tex[0] = m_tex_paint.get();
-	params.clear = false;
+	params.clear = m_frame_clear;
+	m_frame_clear = false;
 
 	if (!current_fbo->renderPass)
 		current_fbo->replaceRenderPass(params.pipeline.pass);
@@ -3805,6 +3811,7 @@ void VRenderVulkanView::DrawFinalBuffer(bool clear)
 	params.loc[2] = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
 
 	params.clear = clear;
+	m_frame_clear = false;
 	
 	current_fbo->replaceRenderPass(params.pipeline.pass);
 
@@ -7109,6 +7116,7 @@ void VRenderVulkanView::OnDraw(wxPaintEvent& event)
 	
 	m_vulkan->ResetRenderSemaphores();
 	m_vulkan->prepareFrame();
+	m_frame_clear = true;
 
 	//SetEvtHandlerEnabled(false);
 	m_nx = GetSize().x;
@@ -9891,64 +9899,102 @@ void VRenderVulkanView::DrawClippingPlanes(bool border, int face_winding)
 
 void VRenderVulkanView::DrawGrid()
 {
-	/*glDisable(GL_DEPTH_TEST);
-	glDisable(GL_BLEND);
-
 	size_t grid_num = 5;
 	size_t line_num = grid_num*2 + 1;
-	size_t i;
-	vector<float> vertex;
-	vertex.reserve(line_num*4*3);
-
 	double gap = m_distance / grid_num;
-	for (i=0; i<line_num; ++i)
+	size_t i;
+	vector<Vulkan2dRender::Vertex> vertex;
+	vector<uint32_t> index;
+	vertex.reserve(line_num * 2 * 2);
+	index.reserve(line_num * 2 * 2);
+
+	for (i = 0; i < line_num; ++i)
 	{
-		vertex.push_back(float(-m_distance+gap*i));
-		vertex.push_back(float(0.0));
-		vertex.push_back(float(-m_distance));
-		vertex.push_back(float(-m_distance+gap*i));
-		vertex.push_back(float(0.0));
-		vertex.push_back(float(m_distance));
+		vertex.push_back(
+			Vulkan2dRender::Vertex{
+				{float(-m_distance + gap*i), 0.0f, float(-m_distance)},
+				{0.0f, 0.0f, 0.0f}
+			}
+		);
+		vertex.push_back(
+			Vulkan2dRender::Vertex{
+				{float(-m_distance + gap*i), 0.0f, float(m_distance)},
+				{0.0f, 0.0f, 0.0f}
+			}
+		);
+		index.push_back(2*i);
+		index.push_back(2*i + 1);
 	}
-	for (i=0; i<line_num; ++i)
+	for (i = 0; i < line_num; ++i)
 	{
-		vertex.push_back(float(-m_distance));
-		vertex.push_back(float(0.0));
-		vertex.push_back(float(-m_distance+gap*i));
-		vertex.push_back(float(m_distance));
-		vertex.push_back(float(0.0));
-		vertex.push_back(float(-m_distance+gap*i));
+		vertex.push_back(
+			Vulkan2dRender::Vertex{
+				{float(-m_distance), 0.0f, float(-m_distance + gap * i)},
+				{0.0f, 0.0f, 0.0f}
+			}
+		);
+		vertex.push_back(
+			Vulkan2dRender::Vertex{
+				{float(m_distance), 0.0f, float(-m_distance + gap * i)},
+				{0.0f, 0.0f, 0.0f}
+			}
+		);
+		index.push_back(2*line_num + 2*i);
+		index.push_back(2*line_num + 2*i + 1);
 	}
 
-	ShaderProgram* shader =
-		m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY);
-	if (shader)
+	if (m_grid_vobj.vertBuf.buffer == VK_NULL_HANDLE)
 	{
-		if (!shader->valid())
-			shader->create();
-		shader->bind();
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_grid_vobj.vertBuf,
+			vertex.size() * sizeof(Vulkan2dRender::Vertex),
+			vertex.data()));
+
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_grid_vobj.idxBuf,
+			index.size() * sizeof(uint32_t),
+			index.data()));
+
+		m_grid_vobj.idxCount = index.size();
+		m_grid_vobj.idxOffset = 0;
+		m_grid_vobj.vertCount = vertex.size();
+		m_grid_vobj.vertOffset = 0;
 	}
+	m_grid_vobj.vertBuf.map();
+	m_grid_vobj.idxBuf.map();
+	m_grid_vobj.vertBuf.copyTo(vertex.data(), vertex.size() * sizeof(Vulkan2dRender::Vertex));
+	m_grid_vobj.idxBuf.copyTo(index.data(), index.size() * sizeof(uint32_t));
+	m_grid_vobj.vertBuf.unmap();
+	m_grid_vobj.idxBuf.unmap();
+
+
+	Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+	vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+	params.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_DRAW_GEOMETRY,
+			V2DRENDER_BLEND_OVER_UI,
+			current_fbo->attachments[0]->format,
+			current_fbo->attachments.size(),
+			0,
+			current_fbo->attachments[0]->is_swapchain_images,
+			VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
 	Color text_color = GetTextColor();
-	shader->setLocalParam(0, text_color.r(), text_color.g(), text_color.b(), 1.0);
-	glm::mat4 matrix = m_proj_mat * m_mv_mat;
-	shader->setLocalParamMatrix(0, glm::value_ptr(matrix));
+	params.loc[0] = glm::vec4((float)text_color.r(), (float)text_color.g(), (float)text_color.b(), 1.0f);
+	params.matrix[0] = m_proj_mat * m_mv_mat;
+	params.clear = m_frame_clear;
+	m_frame_clear = false;
 
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-	glBindVertexArray(m_misc_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
-	glDrawArrays(GL_LINES, 0, line_num*4);
-	glDisableVertexAttribArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
+	params.obj = &m_grid_vobj;
 
-	if (shader && shader->valid())
-		shader->release();
+	if (!current_fbo->renderPass)
+		current_fbo->replaceRenderPass(params.pipeline.pass);
 
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);*/
+	m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
 }
 
 void VRenderVulkanView::DrawCamCtr()
@@ -11002,89 +11048,93 @@ void VRenderVulkanView::DrawInfo(int nx, int ny)
 	sy = 2.0/ny;
 	float px, py;
 	float gapw = m_text_renderer->GetSize();
-	float gaph = gapw*2;
+	float gaph = gapw;
 
 	double fps_ = 1.0/goTimer->average();
 	wxString str;
 	Color text_color = GetTextColor();
-	//if (TextureRenderer::get_mem_swap())
-	//{
-	//	str = wxString::Format(
-	//		"FPS: %.2f, Bricks: %d, Quota: %d, Int: %s, Time: %lu, Dist: %f",
-	//		fps_>=0.0&&fps_<300.0?fps_:0.0,
-	//		TextureRenderer::get_total_brick_num(),
-	//		TextureRenderer::get_quota_bricks(),
-	//		m_interactive?"Yes":"No",
-	//		TextureRenderer::get_cor_up_time(),
-	//		CalcCameraDistance());
-	//	////budget_test
-	//	//if (m_interactive)
-	//	//  tos <<
-	//	//  TextureRenderer::get_quota_bricks()
-	//	//  << "\t" <<
-	//	//  TextureRenderer::get_finished_bricks()
-	//	//  << "\t" <<
-	//	//  TextureRenderer::get_queue_last()
-	//	//  << "\t" <<
-	//	//  int(TextureRenderer::get_finished_bricks()*
-	//	//    TextureRenderer::get_up_time()/
-	//	//    TextureRenderer::get_consumed_time())
-	//	//  << "\n";
-	//}
-	//else
+	if (TextureRenderer::get_mem_swap())
+	{
+		str = wxString::Format(
+			"FPS: %.2f, Bricks: %d, Quota: %d, Int: %s, Time: %lu, Dist: %f",
+			fps_>=0.0&&fps_<300.0?fps_:0.0,
+			TextureRenderer::get_total_brick_num(),
+			TextureRenderer::get_quota_bricks(),
+			m_interactive?"Yes":"No",
+			TextureRenderer::get_cor_up_time(),
+			CalcCameraDistance());
+		////budget_test
+		//if (m_interactive)
+		//  tos <<
+		//  TextureRenderer::get_quota_bricks()
+		//  << "\t" <<
+		//  TextureRenderer::get_finished_bricks()
+		//  << "\t" <<
+		//  TextureRenderer::get_queue_last()
+		//  << "\t" <<
+		//  int(TextureRenderer::get_finished_bricks()*
+		//    TextureRenderer::get_up_time()/
+		//    TextureRenderer::get_consumed_time())
+		//  << "\n";
+	}
+	else
 		str = wxString::Format("FPS: %.2f", fps_>=0.0&&fps_<300.0?fps_:0.0);
 
-	//if (m_cur_vol && m_cur_vol->isBrxml())
-	//{
-	//	int resx=0, resy=0, resz=0;
-	//	if (m_cur_vol->GetTexture())
-	//	{
-	//		resx = m_cur_vol->GetTexture()->nx();
-	//		resy = m_cur_vol->GetTexture()->ny();
-	//		resz = m_cur_vol->GetTexture()->nz();
-	//	}
-	//	str += wxString::Format(" VVD_Level: %d/%d W:%d H:%d D:%d,", m_cur_vol->GetLevel()+1, m_cur_vol->GetLevelNum(), resx, resy, resz);
-	//	long long used_mem;
-	//	int dtnum, qnum, dqnum;
-	//	m_loader.GetPalams(used_mem, dtnum, qnum, dqnum);
-	//	str += wxString::Format(" Mem:%lld(MB) Th: %d Q: %d DQ: %d,", used_mem/(1024LL*1024LL), dtnum, qnum, dqnum);
-	//}
+	if (m_cur_vol && m_cur_vol->isBrxml())
+	{
+		int resx=0, resy=0, resz=0;
+		if (m_cur_vol->GetTexture())
+		{
+			resx = m_cur_vol->GetTexture()->nx();
+			resy = m_cur_vol->GetTexture()->ny();
+			resz = m_cur_vol->GetTexture()->nz();
+		}
+		str += wxString::Format(" VVD_Level: %d/%d W:%d H:%d D:%d,", m_cur_vol->GetLevel()+1, m_cur_vol->GetLevelNum(), resx, resy, resz);
+		long long used_mem;
+		int dtnum, qnum, dqnum;
+		m_loader.GetPalams(used_mem, dtnum, qnum, dqnum);
+		str += wxString::Format(" Mem:%lld(MB) Th: %d Q: %d DQ: %d,", used_mem/(1024LL*1024LL), dtnum, qnum, dqnum);
+	}
 
 	wstring wstr_temp = str.ToStdWstring();
-	px = gapw-nx/2;
-	py = gaph/2-ny/2;
+	px = gapw - nx/2.0f;
+	py = gaph - ny/2.0f;
 	m_text_renderer->RenderText(
 		m_vulkan->frameBuffers[m_vulkan->currentBuffer],
 		wstr_temp, text_color,
 		px*sx, py*sy);
 
-	//if (m_draw_coord)
-	//{
-	//	Point p;
-	//	wxPoint mouse_pos = ScreenToClient(wxGetMousePosition());
-	//	if ((m_cur_vol && GetPointVolumeBox(p, mouse_pos.x, mouse_pos.y, m_cur_vol)>0.0) ||
-	//		GetPointPlane(p, mouse_pos.x, mouse_pos.y)>0.0)
-	//	{
-	//		str = wxString::Format("T: %d  X: %.2f  Y: %.2f  Z: %.2f",
-	//			m_tseq_cur_num, p.x(), p.y(), p.z());
-	//		wstr_temp = str.ToStdWstring();
-	//		px = gapw-nx/2;
-	//		py = ny/2-gaph;
-	//		m_text_renderer->RenderText(
-	//			wstr_temp, text_color,
-	//			px*sx, py*sy, sx, sy);
-	//	}
-	//}
-	//else
-	//{
-	//	str = wxString::Format("T: %d", m_tseq_cur_num);
-	//	wstr_temp = str.ToStdWstring();
-	//	px = gapw-nx/2;
-	//	py = ny/2-gaph;
-	//	m_text_renderer->RenderText(
-	//		wstr_temp, text_color,
-	//		px*sx, py*sy, sx, sy);
-	//}
+	gaph += m_text_renderer->GetSize();
+
+	if (m_draw_coord)
+	{
+		Point p;
+		wxPoint mouse_pos = ScreenToClient(wxGetMousePosition());
+		if ((m_cur_vol && GetPointVolumeBox(p, mouse_pos.x, mouse_pos.y, m_cur_vol)>0.0) ||
+			GetPointPlane(p, mouse_pos.x, mouse_pos.y)>0.0)
+		{
+			str = wxString::Format("T: %d  X: %.2f  Y: %.2f  Z: %.2f",
+				m_tseq_cur_num, p.x(), p.y(), p.z());
+			wstr_temp = str.ToStdWstring();
+			px = gapw-nx/2;
+			py = gaph-ny/2;
+			m_text_renderer->RenderText(
+				m_vulkan->frameBuffers[m_vulkan->currentBuffer],
+				wstr_temp, text_color,
+				px*sx, py*sy);
+		}
+	}
+	else
+	{
+		str = wxString::Format("T: %d", m_tseq_cur_num);
+		wstr_temp = str.ToStdWstring();
+		px = gapw - nx / 2;
+		py = gaph - ny / 2;
+		m_text_renderer->RenderText(
+			m_vulkan->frameBuffers[m_vulkan->currentBuffer],
+			wstr_temp, text_color,
+			px*sx, py*sy);
+	}
 
 	//if (m_test_wiref)
 	//{
@@ -11118,7 +11168,7 @@ void VRenderVulkanView::DrawInfo(int nx, int ny)
 	//	}
 	//}
 
-	wxString dbgstr = wxString::Format("fps: %.2f\n", fps_ >= 0.0 && fps_ < 300.0 ? fps_ : 0.0);
+	//wxString dbgstr = wxString::Format("fps: %.2f\n", fps_ >= 0.0 && fps_ < 300.0 ? fps_ : 0.0);
 	//OutputDebugStringA(dbgstr.ToStdString().c_str());
 }
 
