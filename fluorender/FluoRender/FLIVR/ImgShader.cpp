@@ -125,6 +125,9 @@ namespace FLIVR
 	"//IMG_FRG_CODE_DRAW_GEOMETRY_COLOR3\n" \
 	"layout(location = 0) in vec3 OutColor;\n" \
 	"layout(location = 0) out vec4 FragColor;\n" \
+	"layout (push_constant) uniform PushConsts {\n" \
+	"	mat4 matrix0; //transformation\n" \
+	"} ct;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \

@@ -9999,106 +9999,146 @@ void VRenderVulkanView::DrawGrid()
 
 void VRenderVulkanView::DrawCamCtr()
 {
-	/*glDisable(GL_DEPTH_TEST);
-	glDisable(GL_BLEND);
-
-	double len;
+	float len;
 	if (m_camctr_size > 0.0)
-		len = m_distance*tan(d2r(m_aov/2.0))*m_camctr_size/10.0;
+		len = m_distance * tan(d2r(m_aov / 2.0)) * m_camctr_size / 10.0;
 	else
 		len = fabs(m_camctr_size);
 
-	vector<float> vertex;
-	vertex.reserve(6*3);
+	vector<Vulkan2dRender::Vertex> vertex;
+	vector<uint32_t> index = { 0,1,2,3,4,5 };
+	vertex.reserve(6);
 
-	vertex.push_back(0.0); vertex.push_back(0.0); vertex.push_back(0.0);
-	vertex.push_back(len); vertex.push_back(0.0); vertex.push_back(0.0);
-	vertex.push_back(0.0); vertex.push_back(0.0); vertex.push_back(0.0);
-	vertex.push_back(0.0); vertex.push_back(len); vertex.push_back(0.0);
-	vertex.push_back(0.0); vertex.push_back(0.0); vertex.push_back(0.0);
-	vertex.push_back(0.0); vertex.push_back(0.0); vertex.push_back(len);
-
-	ShaderProgram* shader =
-		m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY);
-	if (shader)
+	vertex.push_back(Vulkan2dRender::Vertex{ {0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {len,  0.0f, 0.0f}, {1.0f, 0.0f, 0.0f} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {0.0f, len,  0.0f}, {0.0f, 1.0f, 0.0f} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {0.0f, 0.0f, len }, {0.0f, 0.0f, 1.0f} });
+	
+	if (m_camctr_vobj.vertBuf.buffer == VK_NULL_HANDLE)
 	{
-		if (!shader->valid())
-			shader->create();
-		shader->bind();
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_camctr_vobj.vertBuf,
+			vertex.size() * sizeof(Vulkan2dRender::Vertex),
+			vertex.data()));
+
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_camctr_vobj.idxBuf,
+			index.size() * sizeof(uint32_t),
+			index.data()));
+
+		m_camctr_vobj.idxCount = index.size();
+		m_camctr_vobj.idxOffset = 0;
+		m_camctr_vobj.vertCount = vertex.size();
+		m_camctr_vobj.vertOffset = 0;
 	}
-	glm::mat4 matrix = m_proj_mat * m_mv_mat;
-	shader->setLocalParamMatrix(0, glm::value_ptr(matrix));
+	m_camctr_vobj.vertBuf.map();
+	m_camctr_vobj.idxBuf.map();
+	m_camctr_vobj.vertBuf.copyTo(vertex.data(), vertex.size() * sizeof(Vulkan2dRender::Vertex));
+	m_camctr_vobj.idxBuf.copyTo(index.data(), index.size() * sizeof(uint32_t));
+	m_camctr_vobj.vertBuf.unmap();
+	m_camctr_vobj.idxBuf.unmap();
 
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-	glBindVertexArray(m_misc_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
 
-	shader->setLocalParam(0, 1.0, 0.0, 0.0, 1.0);
-	glDrawArrays(GL_LINES, 0, 2);
-	shader->setLocalParam(0, 0.0, 1.0, 0.0, 1.0);
-	glDrawArrays(GL_LINES, 2, 2);
-	shader->setLocalParam(0, 0.0, 0.0, 1.0, 1.0);
-	glDrawArrays(GL_LINES, 4, 2);
+	Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+	vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+	params.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_DRAW_GEOMETRY_COLOR3,
+			V2DRENDER_BLEND_OVER_UI,
+			current_fbo->attachments[0]->format,
+			current_fbo->attachments.size(),
+			0,
+			current_fbo->attachments[0]->is_swapchain_images,
+			VK_PRIMITIVE_TOPOLOGY_LINE_LIST
+		);
+	params.matrix[0] = m_proj_mat * m_mv_mat;
+	params.clear = m_frame_clear;
+	m_frame_clear = false;
 
-	glDisableVertexAttribArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
+	params.obj = &m_camctr_vobj;
 
-	if (shader && shader->valid())
-		shader->release();
+	if (!current_fbo->renderPass)
+		current_fbo->replaceRenderPass(params.pipeline.pass);
 
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);*/
+	m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
 }
 
 void VRenderVulkanView::DrawFrame()
 {
-	//int nx, ny;
-	//nx = GetSize().x;
-	//ny = GetSize().y;
-	//glm::mat4 proj_mat = glm::ortho(float(0), float(nx), float(0), float(ny));
+	int nx, ny;
+	nx = GetSize().x;
+	ny = GetSize().y;
+	glm::mat4 proj_mat = glm::ortho(float(0), float(nx), float(0), float(ny));
 
-	//glDisable(GL_DEPTH_TEST);
-	//GLfloat line_width = 1.0f;
+	GLfloat line_width = 1.0f;
 
-	//vector<float> vertex;
-	//vertex.reserve(4*3);
+	vector<Vulkan2dRender::Vertex> vertex;
+	vector<uint32_t> index = { 0,1,2,3,0 };
+	vertex.reserve(4);
 
-	//vertex.push_back(m_frame_x-1); vertex.push_back(m_frame_y-1); vertex.push_back(0.0);
-	//vertex.push_back(m_frame_x+m_frame_w+1); vertex.push_back(m_frame_y-1); vertex.push_back(0.0);
-	//vertex.push_back(m_frame_x+m_frame_w+1); vertex.push_back(m_frame_y+m_frame_h+1); vertex.push_back(0.0);
-	//vertex.push_back(m_frame_x-1); vertex.push_back(m_frame_y+m_frame_h+1); vertex.push_back(0.0);
+	vertex.push_back(Vulkan2dRender::Vertex{ {(float)(m_frame_x - 1), (float)(m_frame_y - 1), 0.0f}, {0.0f, 0.0f, 0.0f} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {(float)(m_frame_x + m_frame_w + 1), (float)(m_frame_y - 1), 0.0f}, {0.0f, 0.0f, 0.0f} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {(float)(m_frame_x + m_frame_w + 1), (float)(m_frame_y + m_frame_h + 1), 0.0f}, {0.0f, 0.0f, 0.0f} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {(float)(m_frame_x - 1), (float)(m_frame_y + m_frame_h + 1), 0.0f}, {0.0f, 0.0f, 0.0f} });
 
-	//ShaderProgram* shader =
-	//	m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY);
-	//if (shader)
-	//{
-	//	if (!shader->valid())
-	//		shader->create();
-	//	shader->bind();
-	//}
-	//shader->setLocalParam(0, 1.0, 1.0, 0.0, 1.0);
-	//shader->setLocalParamMatrix(0, glm::value_ptr(proj_mat));
+	if (m_frame_vobj.vertBuf.buffer == VK_NULL_HANDLE)
+	{
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_frame_vobj.vertBuf,
+			vertex.size() * sizeof(Vulkan2dRender::Vertex),
+			vertex.data()));
 
-	////draw frame
-	//glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	//glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-	//glBindVertexArray(m_misc_vao);
-	//glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	//glEnableVertexAttribArray(0);
-	//glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
-	//glDrawArrays(GL_LINE_LOOP, 0, 4);
-	//glDisableVertexAttribArray(0);
-	//glBindBuffer(GL_ARRAY_BUFFER, 0);
-	//glBindVertexArray(0);
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_frame_vobj.idxBuf,
+			index.size() * sizeof(uint32_t),
+			index.data()));
 
-	//if (shader && shader->valid())
-	//	shader->release();
+		m_frame_vobj.idxCount = index.size();
+		m_frame_vobj.idxOffset = 0;
+		m_frame_vobj.vertCount = vertex.size();
+		m_frame_vobj.vertOffset = 0;
+	}
+	m_frame_vobj.vertBuf.map();
+	m_frame_vobj.idxBuf.map();
+	m_frame_vobj.vertBuf.copyTo(vertex.data(), vertex.size() * sizeof(Vulkan2dRender::Vertex));
+	m_frame_vobj.idxBuf.copyTo(index.data(), index.size() * sizeof(uint32_t));
+	m_frame_vobj.vertBuf.unmap();
+	m_frame_vobj.idxBuf.unmap();
 
-	//glEnable(GL_DEPTH_TEST);
+
+	Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+	vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+	params.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_DRAW_GEOMETRY,
+			V2DRENDER_BLEND_OVER_UI,
+			current_fbo->attachments[0]->format,
+			current_fbo->attachments.size(),
+			0,
+			current_fbo->attachments[0]->is_swapchain_images,
+			VK_PRIMITIVE_TOPOLOGY_LINE_STRIP
+		);
+	params.loc[0] = glm::vec4(1.0f, 1.0f, 0.0f, 1.0f);
+	params.matrix[0] = proj_mat;
+	params.clear = m_frame_clear;
+	m_frame_clear = false;
+
+	params.obj = &m_frame_vobj;
+
+	if (!current_fbo->renderPass)
+		current_fbo->replaceRenderPass(params.pipeline.pass);
+
+	m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
 }
 
 void VRenderVulkanView::FixScaleBarLen(bool fix, double len)
@@ -10179,350 +10219,372 @@ void VRenderVulkanView::GetScaleBarFixed(bool &fix, double &len, int &unitid)
 
 void VRenderVulkanView::DrawScaleBar()
 {
-//	double offset = 0.0;
-//	if (m_draw_legend)
-//		offset = m_sb_height;
-//
-//	int nx = GetSize().x;
-//	int ny = GetSize().y;
-//	float sx, sy;
-//	sx = 2.0/nx;
-//	sy = 2.0/ny;
-//	float px, py, ph;
-//
-//	glm::mat4 proj_mat = glm::ortho(0.0f, 1.0f, 0.0f, 1.0f);
-//
-//	glDisable(GL_DEPTH_TEST);
-//	glDisable(GL_BLEND);
-//	
-//	if (m_fix_sclbar)
-//		m_sb_length = m_fixed_sclbar_fac/(m_scale_factor*min(nx,ny));
-//	double len = m_sb_length / (m_ortho_right-m_ortho_left);
-//
-//	double len_txt = m_sb_length;
-//	int unit_id = m_sb_unit;
-//	wxString unit_txt = m_sb_text;
-//
-//	wxString num_txt;
-//	
-//	if (m_sclbar_digit == 0)
-//		num_txt = wxString::Format(wxT("%i "), (int)len_txt);
-//	else if (m_sclbar_digit > 0)
-//	{
-//		wxString f = wxT("%.9f");
-//		num_txt = wxString::Format(f, len_txt);
-//		wxString intstr = num_txt.BeforeFirst(wxT('.'));
-//		wxString fracstr = num_txt.AfterFirst(wxT('.'));
-//		int fractextlen = m_sclbar_digit;
-//		if (fractextlen > fracstr.Length()) fractextlen = fracstr.Length();
-//		num_txt = intstr + wxT(".") + fracstr.Mid(0, fractextlen) + wxT(" ");
-//	}
-//
-///*
-//	if (m_sclbar_digit == 0)
-//		num_txt = wxString::Format(wxT("%i "), (int)len_txt);
-//	else if (m_sclbar_digit > 0)
-//	{
-//		wxString f = wxT("%.15f");
-//		num_txt = wxString::Format(f, len_txt);
-//		wxString intstr = num_txt.BeforeFirst(wxT('.'));
-//		if (intstr.Length() >= m_sclbar_digit)
-//			num_txt = intstr;
-//		else if (intstr.GetChar(0) != wxT('0'))
-//		{
-//			int textlen = m_sclbar_digit+1;
-//			if (textlen >= num_txt.Length()) textlen = num_txt.Length();
-//			num_txt = num_txt.Mid(0, m_sclbar_digit+1);
-//		}
-//		else
-//		{
-//			int count;
-//			bool zero = true;
-//			for(count = 0; count < num_txt.Length(); count++)
-//			{
-//				if (num_txt.GetChar(count) != wxT('0') && num_txt.GetChar(count) != wxT('.'))
-//				{
-//					zero = false;
-//					break;
-//				}
-//			}
-//			if (!zero)
-//			{
-//				count += m_sclbar_digit;
-//				if (count >= num_txt.Length()) count = num_txt.Length()-1;
-//			}
-//			else
-//				count = 1;
-//			num_txt = num_txt.Mid(0, count);
-//		}
-//		num_txt += wxT(" ");
-//	}
-//*/
-//
-///*	wxString num_txt = (len_txt==(int)len_txt) ? wxString::Format(wxT("%i "), (int)len_txt) :
-//												 wxString::Format( ((int)(len_txt*100.0))%10==0 ? wxT("%.1f ") : wxT("%.2f "), len_txt);
-//	if (m_fix_sclbar)
-//	{
-//		if (log10(len_txt) < 0.0)
-//		{
-//			while (log10(len_txt) < 0.0 && unit_id > 0)
-//			{
-//				len_txt *= 1000.0;
-//				unit_id--;
-//			}
-//		}
-//		else if (log10(len_txt) >= 3.0)
-//		{
-//			while (log10(len_txt) >= 3.0 && unit_id < 2)
-//			{
-//				len_txt *= 0.001;
-//				unit_id++;
-//			}
-//		}
-//
-//		switch (unit_id)
-//		{
-//		case 0:
-//			unit_txt = "nm";
-//			break;
-//		case 1:
-//		default:
-//			unit_txt = wxString::Format("%c%c", 181, 'm');
-//			break;
-//		case 2:
-//			unit_txt = "mm";
-//			break;
-//		}
-//
-//		if (log10(len_txt) >= 2.0)
-//			num_txt = wxString::Format(wxT("%i "), (int)len_txt);
-//		else if (len_txt < 1.0)
-//			num_txt = wxString::Format(wxT("%.3f "), len_txt);
-//		else
-//		{
-//			int pr = 2.0 - (int)log10(len_txt);
-//			wxString f = wxT("%.") + wxString::Format(wxT("%i"), pr) + wxT("f ");
-//			num_txt = wxString::Format(f, len_txt);
-//		}
-//	}
-//*/
-//	wstring wsb_text;
-//	wsb_text = num_txt + unit_txt.ToStdWstring();
-//	
-//	double textlen = m_text_renderer?
-//		m_text_renderer->RenderTextLen(wsb_text):0.0;
-//	vector<float> vertex;
-//	vertex.reserve(4*3);
-//
-//	Color text_color = GetTextColor();
-//
-//	if (m_draw_frame)
-//	{
-//		px = (0.95*m_frame_w+m_frame_x)/nx;
-//		py = (0.05*m_frame_h+m_frame_y+offset)/ny;
-//		ph = 5.0/ny;
-//		vertex.push_back(px); vertex.push_back(py); vertex.push_back(0.0);
-//		vertex.push_back(px-len); vertex.push_back(py); vertex.push_back(0.0);
-//		vertex.push_back(px); vertex.push_back(py-ph); vertex.push_back(0.0);
-//		vertex.push_back(px-len); vertex.push_back(py-ph); vertex.push_back(0.0);
-//
-//		if (m_disp_scale_bar_text)
-//		{
-//			px = 0.95*m_frame_w+m_frame_x-(len*nx+textlen+nx)/2.0;
-//			py = ny/2.0-ny+0.065*m_frame_h+m_frame_y+offset;
-//			if (m_text_renderer)
-//				m_text_renderer->RenderText(
-//				wsb_text, text_color,
-//				px*sx, py*sy, sx, sy);
-//		}
-//	}
-//	else
-//	{
-//		px = 0.95;
-//		py = 0.05+offset/ny;
-//		ph = 5.0/ny;
-//		vertex.push_back(px); vertex.push_back(py); vertex.push_back(0.0);
-//		vertex.push_back(px-len); vertex.push_back(py); vertex.push_back(0.0);
-//		vertex.push_back(px); vertex.push_back(py-ph); vertex.push_back(0.0);
-//		vertex.push_back(px-len); vertex.push_back(py-ph); vertex.push_back(0.0);
-//
-//		if (m_disp_scale_bar_text)
-//		{
-//			px = 0.95*nx-(len*nx+textlen+nx)/2.0;
-//			py = ny/2.0-0.935*ny+offset;
-//			if (m_text_renderer)
-//				m_text_renderer->RenderText(
-//				wsb_text, text_color,
-//				px*sx, py*sy, sx, sy);
-//		}
-//	}
-//
-//	ShaderProgram* shader =
-//		m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY);
-//	if (shader)
-//	{
-//		if (!shader->valid())
-//			shader->create();
-//		shader->bind();
-//	}
-//	shader->setLocalParamMatrix(0, glm::value_ptr(proj_mat));
-//
-//	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-//	glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-//	glBindVertexArray(m_misc_vao);
-//	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-//	glEnableVertexAttribArray(0);
-//	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
-//
-//	shader->setLocalParam(0, text_color.r(), text_color.g(), text_color.b(), 1.0);
-//	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-//
-//	glDisableVertexAttribArray(0);
-//	glBindBuffer(GL_ARRAY_BUFFER, 0);
-//	glBindVertexArray(0);
-//
-//	if (shader && shader->valid())
-//		shader->release();
-//
-//	glEnable(GL_DEPTH_TEST);
-//	glEnable(GL_BLEND);
+	double offset = 0.0;
+	if (m_draw_legend)
+		offset = m_sb_height;
+
+	int nx = GetSize().x;
+	int ny = GetSize().y;
+	float sx, sy;
+	sx = 2.0/nx;
+	sy = 2.0/ny;
+	float px, py, ph;
+
+	glm::mat4 proj_mat = glm::ortho(0.0f, 1.0f, 0.0f, 1.0f);
+	
+	if (m_fix_sclbar)
+		m_sb_length = m_fixed_sclbar_fac/(m_scale_factor*min(nx,ny));
+	float len = m_sb_length / (m_ortho_right-m_ortho_left);
+
+	double len_txt = m_sb_length;
+	int unit_id = m_sb_unit;
+	wxString unit_txt = m_sb_text;
+
+	wxString num_txt;
+	
+	if (m_sclbar_digit == 0)
+		num_txt = wxString::Format(wxT("%i "), (int)len_txt);
+	else if (m_sclbar_digit > 0)
+	{
+		wxString f = wxT("%.9f");
+		num_txt = wxString::Format(f, len_txt);
+		wxString intstr = num_txt.BeforeFirst(wxT('.'));
+		wxString fracstr = num_txt.AfterFirst(wxT('.'));
+		int fractextlen = m_sclbar_digit;
+		if (fractextlen > fracstr.Length()) fractextlen = fracstr.Length();
+		num_txt = intstr + wxT(".") + fracstr.Mid(0, fractextlen) + wxT(" ");
+	}
+
+/*
+	if (m_sclbar_digit == 0)
+		num_txt = wxString::Format(wxT("%i "), (int)len_txt);
+	else if (m_sclbar_digit > 0)
+	{
+		wxString f = wxT("%.15f");
+		num_txt = wxString::Format(f, len_txt);
+		wxString intstr = num_txt.BeforeFirst(wxT('.'));
+		if (intstr.Length() >= m_sclbar_digit)
+			num_txt = intstr;
+		else if (intstr.GetChar(0) != wxT('0'))
+		{
+			int textlen = m_sclbar_digit+1;
+			if (textlen >= num_txt.Length()) textlen = num_txt.Length();
+			num_txt = num_txt.Mid(0, m_sclbar_digit+1);
+		}
+		else
+		{
+			int count;
+			bool zero = true;
+			for(count = 0; count < num_txt.Length(); count++)
+			{
+				if (num_txt.GetChar(count) != wxT('0') && num_txt.GetChar(count) != wxT('.'))
+				{
+					zero = false;
+					break;
+				}
+			}
+			if (!zero)
+			{
+				count += m_sclbar_digit;
+				if (count >= num_txt.Length()) count = num_txt.Length()-1;
+			}
+			else
+				count = 1;
+			num_txt = num_txt.Mid(0, count);
+		}
+		num_txt += wxT(" ");
+	}
+*/
+
+/*	wxString num_txt = (len_txt==(int)len_txt) ? wxString::Format(wxT("%i "), (int)len_txt) :
+												 wxString::Format( ((int)(len_txt*100.0))%10==0 ? wxT("%.1f ") : wxT("%.2f "), len_txt);
+	if (m_fix_sclbar)
+	{
+		if (log10(len_txt) < 0.0)
+		{
+			while (log10(len_txt) < 0.0 && unit_id > 0)
+			{
+				len_txt *= 1000.0;
+				unit_id--;
+			}
+		}
+		else if (log10(len_txt) >= 3.0)
+		{
+			while (log10(len_txt) >= 3.0 && unit_id < 2)
+			{
+				len_txt *= 0.001;
+				unit_id++;
+			}
+		}
+
+		switch (unit_id)
+		{
+		case 0:
+			unit_txt = "nm";
+			break;
+		case 1:
+		default:
+			unit_txt = wxString::Format("%c%c", 181, 'm');
+			break;
+		case 2:
+			unit_txt = "mm";
+			break;
+		}
+
+		if (log10(len_txt) >= 2.0)
+			num_txt = wxString::Format(wxT("%i "), (int)len_txt);
+		else if (len_txt < 1.0)
+			num_txt = wxString::Format(wxT("%.3f "), len_txt);
+		else
+		{
+			int pr = 2.0 - (int)log10(len_txt);
+			wxString f = wxT("%.") + wxString::Format(wxT("%i"), pr) + wxT("f ");
+			num_txt = wxString::Format(f, len_txt);
+		}
+	}
+*/
+	wstring wsb_text;
+	wsb_text = num_txt + unit_txt.ToStdWstring();
+	
+	float textlen = m_text_renderer?
+		m_text_renderer->RenderTextDims(wsb_text).width : 0.0f;
+	Color text_color = GetTextColor();
+
+	vector<Vulkan2dRender::Vertex> vertex;
+	vector<uint32_t> index = { 0,1,2, 2,3,0 };
+	vertex.reserve(4);
+
+	if (m_draw_frame)
+	{
+		px = (0.95 * m_frame_w + m_frame_x) / nx;
+		py = (0.95 * m_frame_h + m_frame_y - offset) / ny;
+		ph = 5.0 / ny;
+		vertex.push_back(Vulkan2dRender::Vertex{ {px, py, 0}, {0.0f, 0.0f, 0.0f} });
+		vertex.push_back(Vulkan2dRender::Vertex{ {px - len, py, 0}, {0.0f, 0.0f, 0.0f} });
+		vertex.push_back(Vulkan2dRender::Vertex{ {px - len, py + ph, 0}, {0.0f, 0.0f, 0.0f} });
+		vertex.push_back(Vulkan2dRender::Vertex{ {px, py + ph, 0}, {0.0f, 0.0f, 0.0f} });
+
+		if (m_disp_scale_bar_text)
+		{
+			px = 0.95 * m_frame_w + m_frame_x - (len * nx + textlen + nx) / 2.0;
+			py = 0.95 * m_frame_h + m_frame_y - 15.0f - offset - ny / 2.0;
+			if (m_text_renderer)
+				m_text_renderer->RenderText(
+					m_vulkan->frameBuffers[m_vulkan->currentBuffer],
+					wsb_text, text_color,
+					px * sx, py * sy);
+		}
+	}
+	else
+	{
+		px = 0.95;
+		py = 0.95 - offset / ny;
+		ph = 5.0 / ny;
+		vertex.push_back(Vulkan2dRender::Vertex{ {px, py, 0}, {0.0f, 0.0f, 0.0f} });
+		vertex.push_back(Vulkan2dRender::Vertex{ {px - len, py, 0}, {0.0f, 0.0f, 0.0f} });
+		vertex.push_back(Vulkan2dRender::Vertex{ {px - len, py + ph, 0}, {0.0f, 0.0f, 0.0f} });
+		vertex.push_back(Vulkan2dRender::Vertex{ {px, py + ph, 0}, {0.0f, 0.0f, 0.0f} });
+
+		if (m_disp_scale_bar_text)
+		{
+			px = 0.95 * nx - (len * nx + textlen + nx) / 2.0;
+			py = 0.95 * ny - 15.0f - offset - ny / 2.0;
+			if (m_text_renderer)
+				m_text_renderer->RenderText(
+					m_vulkan->frameBuffers[m_vulkan->currentBuffer],
+					wsb_text, text_color,
+					px * sx, py * sy);
+		}
+	}
+
+	if (m_scbar_vobj.vertBuf.buffer == VK_NULL_HANDLE)
+	{
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_scbar_vobj.vertBuf,
+			vertex.size() * sizeof(Vulkan2dRender::Vertex),
+			vertex.data()));
+
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_scbar_vobj.idxBuf,
+			index.size() * sizeof(uint32_t),
+			index.data()));
+
+		m_scbar_vobj.idxCount = index.size();
+		m_scbar_vobj.idxOffset = 0;
+		m_scbar_vobj.vertCount = vertex.size();
+		m_scbar_vobj.vertOffset = 0;
+	}
+	m_scbar_vobj.vertBuf.map();
+	m_scbar_vobj.idxBuf.map();
+	m_scbar_vobj.vertBuf.copyTo(vertex.data(), vertex.size() * sizeof(Vulkan2dRender::Vertex));
+	m_scbar_vobj.idxBuf.copyTo(index.data(), index.size() * sizeof(uint32_t));
+	m_scbar_vobj.vertBuf.unmap();
+	m_scbar_vobj.idxBuf.unmap();
+
+
+	Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+	vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+	params.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_DRAW_GEOMETRY,
+			V2DRENDER_BLEND_OVER_UI,
+			current_fbo->attachments[0]->format,
+			current_fbo->attachments.size(),
+			0,
+			current_fbo->attachments[0]->is_swapchain_images
+		);
+	params.loc[0] = glm::vec4((float)text_color.r(), (float)text_color.g(), (float)text_color.b(), 1.0f);
+	params.matrix[0] = proj_mat;
+	params.clear = m_frame_clear;
+	m_frame_clear = false;
+
+	params.obj = &m_scbar_vobj;
+
+	if (!current_fbo->renderPass)
+		current_fbo->replaceRenderPass(params.pipeline.pass);
+
+	m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
 }
 
 void VRenderVulkanView::DrawLegend()
 {
-	//if (!m_text_renderer)
-	//	return;
-	//VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-	//if (!vr_frame)
-	//	return;
+	if (!m_text_renderer)
+		return;
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame)
+		return;
 
-	//double font_height = m_text_renderer->GetSize() + 3.0;
+	double font_height = m_text_renderer->GetSize() + 3.0;
 
-	//int nx = GetSize().x;
-	//int ny = GetSize().y;
+	int nx = GetSize().x;
+	int ny = GetSize().y;
 
-	//double xoffset = 10.0;
-	//double yoffset = 10.0;
-	//if (m_draw_frame)
-	//{
-	//	xoffset = 10.0+m_frame_x;
-	//	yoffset = ny-m_frame_h-m_frame_y+10.0;
-	//}
+	float xoffset = 10.0;
+	float yoffset = 10.0;
+	if (m_draw_frame)
+	{
+		xoffset = 10.0+m_frame_x;
+		yoffset = 10.0+m_frame_y;
+	}
 
-	//wxString wxstr;
-	//wstring wstr;
-	//double length = 0.0;
-	//double name_len = 0.0;
-	//double gap_width = font_height*1.5;
-	//int lines = 0;
-	//int i;
-	////first pass
-	//for (i=0; i<(int)m_vd_pop_list.size(); i++)
-	//{
-	//	if (m_vd_pop_list[i] && m_vd_pop_list[i]->GetLegend())
-	//	{
-	//		wxstr = m_vd_pop_list[i]->GetName();
-	//		wstr = wxstr.ToStdWstring();
-	//		name_len = m_text_renderer->RenderTextLen(wstr)+font_height;
-	//		length += name_len;
-	//		if (length < double(m_draw_frame?m_frame_w:nx)-gap_width)
-	//		{
-	//			length += gap_width;
-	//		}
-	//		else
-	//		{
-	//			length = name_len + gap_width;
-	//			lines++;
-	//		}
-	//	}
-	//}
-	//for (i=0; i<(int)m_md_pop_list.size(); i++)
-	//{
-	//	if (m_md_pop_list[i] && m_md_pop_list[i]->GetLegend())
-	//	{
-	//		wxstr = m_md_pop_list[i]->GetName();
-	//		wstr = wxstr.ToStdWstring();
-	//		name_len = m_text_renderer->RenderTextLen(wstr)+font_height;
-	//		length += name_len;
-	//		if (length < double(m_draw_frame?m_frame_w:nx)-gap_width)
-	//		{
-	//			length += gap_width;
-	//		}
-	//		else
-	//		{
-	//			length = name_len + gap_width;
-	//			lines++;
-	//		}
-	//	}
-	//}
+	wxString wxstr;
+	wstring wstr;
+	double length = 0.0;
+	double name_len = 0.0;
+	double gap_width = font_height*1.5;
+	int lines = 0;
+	int i;
+	//first pass
+	for (i=0; i<(int)m_vd_pop_list.size(); i++)
+	{
+		if (m_vd_pop_list[i] && m_vd_pop_list[i]->GetLegend())
+		{
+			wxstr = m_vd_pop_list[i]->GetName();
+			wstr = wxstr.ToStdWstring();
+			name_len = m_text_renderer->RenderTextDims(wstr).width+font_height;
+			length += name_len;
+			if (length < double(m_draw_frame?m_frame_w:nx)-gap_width)
+			{
+				length += gap_width;
+			}
+			else
+			{
+				length = name_len + gap_width;
+				lines++;
+			}
+		}
+	}
+	for (i=0; i<(int)m_md_pop_list.size(); i++)
+	{
+		if (m_md_pop_list[i] && m_md_pop_list[i]->GetLegend())
+		{
+			wxstr = m_md_pop_list[i]->GetName();
+			wstr = wxstr.ToStdWstring();
+			name_len = m_text_renderer->RenderTextDims(wstr).width+font_height;
+			length += name_len;
+			if (length < double(m_draw_frame?m_frame_w:nx)-gap_width)
+			{
+				length += gap_width;
+			}
+			else
+			{
+				length = name_len + gap_width;
+				lines++;
+			}
+		}
+	}
 
-	////second pass
-	//int cur_line = 0;
-	//double xpos;
-	//length = 0.0;
-	//for (i=0; i<(int)m_vd_pop_list.size(); i++)
-	//{
-	//	if (m_vd_pop_list[i] && m_vd_pop_list[i]->GetLegend())
-	//	{
-	//		wxstr = m_vd_pop_list[i]->GetName();
-	//		xpos = length;
-	//		wstr = wxstr.ToStdWstring();
-	//		name_len = m_text_renderer->RenderTextLen(wstr)+font_height;
-	//		length += name_len;
-	//		if (length < double(m_draw_frame?m_frame_w:nx)-gap_width)
-	//		{
-	//			length += gap_width;
-	//		}
-	//		else
-	//		{
-	//			length = name_len + gap_width;
-	//			xpos = 0.0;
-	//			cur_line++;
-	//		}
-	//		bool highlighted = false;
-	//		if (vr_frame->GetCurSelType() == 2 &&
-	//			vr_frame->GetCurSelVol() &&
-	//			vr_frame->GetCurSelVol()->GetName() == wxstr)
-	//			highlighted = true;
-	//		DrawName(xpos+xoffset, ny-(lines-cur_line+0.1)*font_height-yoffset,
-	//			nx, ny, wxstr, m_vd_pop_list[i]->GetColor(),
-	//			font_height, highlighted);
-	//	}
-	//}
-	//for (i=0; i<(int)m_md_pop_list.size(); i++)
-	//{
-	//	if (m_md_pop_list[i] && m_md_pop_list[i]->GetLegend())
-	//	{
-	//		wxstr = m_md_pop_list[i]->GetName();
-	//		xpos = length;
-	//		wstr = wxstr.ToStdWstring();
-	//		name_len = m_text_renderer->RenderTextLen(wstr)+font_height;
-	//		length += name_len;
-	//		if (length < double(m_draw_frame?m_frame_w:nx)-gap_width)
-	//		{
-	//			length += gap_width;
-	//		}
-	//		else
-	//		{
-	//			length = name_len + gap_width;
-	//			xpos = 0.0;
-	//			cur_line++;
-	//		}
-	//		Color amb, diff, spec;
-	//		double shine, alpha;
-	//		m_md_pop_list[i]->GetMaterial(amb, diff, spec, shine, alpha);
-	//		Color c(diff.r(), diff.g(), diff.b());
-	//		bool highlighted = false;
-	//		if (vr_frame->GetCurSelType() == 3 &&
-	//			vr_frame->GetCurSelMesh() &&
-	//			vr_frame->GetCurSelMesh()->GetName() == wxstr)
-	//			highlighted = true;
-	//		DrawName(xpos+xoffset, ny-(lines-cur_line+0.1)*font_height-yoffset,
-	//			nx, ny, wxstr, c, font_height, highlighted);
-	//	}
-	//}
+	//second pass
+	int cur_line = 0;
+	double xpos;
+	length = 0.0;
+	for (i=0; i<(int)m_vd_pop_list.size(); i++)
+	{
+		if (m_vd_pop_list[i] && m_vd_pop_list[i]->GetLegend())
+		{
+			wxstr = m_vd_pop_list[i]->GetName();
+			xpos = length;
+			wstr = wxstr.ToStdWstring();
+			name_len = m_text_renderer->RenderTextDims(wstr).width+font_height;
+			length += name_len;
+			if (length < double(m_draw_frame?m_frame_w:nx)-gap_width)
+			{
+				length += gap_width;
+			}
+			else
+			{
+				length = name_len + gap_width;
+				xpos = 0.0;
+				cur_line++;
+			}
+			bool highlighted = false;
+			if (vr_frame->GetCurSelType() == 2 &&
+				vr_frame->GetCurSelVol() &&
+				vr_frame->GetCurSelVol()->GetName() == wxstr)
+				highlighted = true;
+			DrawName(xpos+xoffset, ny-(lines-cur_line+0.1)*font_height-yoffset,
+				nx, ny, wxstr, m_vd_pop_list[i]->GetColor(),
+				font_height, highlighted);
+		}
+	}
+	for (i=0; i<(int)m_md_pop_list.size(); i++)
+	{
+		if (m_md_pop_list[i] && m_md_pop_list[i]->GetLegend())
+		{
+			wxstr = m_md_pop_list[i]->GetName();
+			xpos = length;
+			wstr = wxstr.ToStdWstring();
+			name_len = m_text_renderer->RenderTextDims(wstr).width+font_height;
+			length += name_len;
+			if (length < double(m_draw_frame?m_frame_w:nx)-gap_width)
+			{
+				length += gap_width;
+			}
+			else
+			{
+				length = name_len + gap_width;
+				xpos = 0.0;
+				cur_line++;
+			}
+			Color amb, diff, spec;
+			double shine, alpha;
+			m_md_pop_list[i]->GetMaterial(amb, diff, spec, shine, alpha);
+			Color c(diff.r(), diff.g(), diff.b());
+			bool highlighted = false;
+			if (vr_frame->GetCurSelType() == 3 &&
+				vr_frame->GetCurSelMesh() &&
+				vr_frame->GetCurSelMesh()->GetName() == wxstr)
+				highlighted = true;
+			DrawName(xpos+xoffset, ny-(lines-cur_line+0.1)*font_height-yoffset,
+				nx, ny, wxstr, c, font_height, highlighted);
+		}
+	}
 
-	//m_sb_height = (lines+1)*font_height;
+	m_sb_height = (lines+1)*font_height;
 }
 
 void VRenderVulkanView::DrawName(
@@ -10531,81 +10593,114 @@ void VRenderVulkanView::DrawName(
 	double font_height,
 	bool highlighted)
 {
-	/*float sx, sy;
-	sx = 2.0/nx;
-	sy = 2.0/ny;
+	float sx, sy;
+	sx = 2.0 / nx;
+	sy = 2.0 / ny;
 
 	wstring wstr;
 
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_BLEND);
-
 	glm::mat4 proj_mat = glm::ortho(0.0f, float(nx), 0.0f, float(ny));
 	vector<float> vertex;
-	vertex.reserve(8*3);
+	vertex.reserve(8 * 3);
 
-	float px1, py1, px2, py2;
-	px1 = x+0.2*font_height;
-	py1 = ny-y+0.2*font_height;
-	px2 = x+0.8*font_height;
-	py2 = ny-y+0.8*font_height;
-	vertex.push_back(px1-1.0); vertex.push_back(py2+1.0); vertex.push_back(0.0);
-	vertex.push_back(px2+1.0); vertex.push_back(py2+1.0); vertex.push_back(0.0);
-	vertex.push_back(px1-1.0); vertex.push_back(py1-1.0); vertex.push_back(0.0);
-	vertex.push_back(px2+1.0); vertex.push_back(py1-1.0); vertex.push_back(0.0);
+	glm::vec3 trans1 = glm::vec3((float)(x + 0.2 * font_height - 1.0), (float)(y - 0.2 * font_height + 1.0), 0.0f);
+	glm::vec3 scale1 = glm::vec3((float)(0.6 * font_height + 2.0), (float)(0.6 * font_height + 2.0), 1.0f);
 
-	vertex.push_back(px1); vertex.push_back(py2); vertex.push_back(0.0);
-	vertex.push_back(px2); vertex.push_back(py2); vertex.push_back(0.0);
-	vertex.push_back(px1); vertex.push_back(py1); vertex.push_back(0.0);
-	vertex.push_back(px2); vertex.push_back(py1); vertex.push_back(0.0);
+	glm::vec3 trans2 = glm::vec3((float)(x + 0.2 * font_height), (float)(y - 0.2 * font_height), 0.0f);
+	glm::vec3 scale2 = glm::vec3((float)(0.6 * font_height), (float)(0.6 * font_height), 1.0f);
 
-	ShaderProgram* shader =
-		m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY);
-	if (shader)
+	if (m_name_vobj.vertBuf.buffer == VK_NULL_HANDLE)
 	{
-		if (!shader->valid())
-			shader->create();
-		shader->bind();
-	}
-	shader->setLocalParamMatrix(0, glm::value_ptr(proj_mat));
+		vector<Vulkan2dRender::Vertex> vertex;
+		vector<uint32_t> index = { 0,1,2,2,3,0 };
+		vertex.reserve(4);
 
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-	glBindVertexArray(m_misc_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
+		vertex.push_back(Vulkan2dRender::Vertex{ {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} });
+		vertex.push_back(Vulkan2dRender::Vertex{ {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} });
+		vertex.push_back(Vulkan2dRender::Vertex{ {1.0f, -1.0f, 0.0f}, {0.0f, 0.0f, 0.0f} });
+		vertex.push_back(Vulkan2dRender::Vertex{ {0.0f, -1.0f, 0.0f}, {0.0f, 0.0f, 0.0f} });
+
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_name_vobj.vertBuf,
+			vertex.size() * sizeof(Vulkan2dRender::Vertex),
+			vertex.data()));
+
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_name_vobj.idxBuf,
+			index.size() * sizeof(uint32_t),
+			index.data()));
+
+		m_name_vobj.idxCount = index.size();
+		m_name_vobj.idxOffset = 0;
+		m_name_vobj.vertCount = vertex.size();
+		m_name_vobj.vertOffset = 0;
+
+		m_name_vobj.vertBuf.map();
+		m_name_vobj.idxBuf.map();
+		m_name_vobj.vertBuf.copyTo(vertex.data(), vertex.size() * sizeof(Vulkan2dRender::Vertex));
+		m_name_vobj.idxBuf.copyTo(index.data(), index.size() * sizeof(uint32_t));
+		m_name_vobj.vertBuf.unmap();
+		m_name_vobj.idxBuf.unmap();
+	}
+
+	std::vector<Vulkan2dRender::V2DRenderParams> v2drender_params;
+
+	vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+	Vulkan2dRender::V2dPipeline pl =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_DRAW_GEOMETRY,
+			V2DRENDER_BLEND_DISABLE,
+			current_fbo->attachments[0]->format,
+			current_fbo->attachments.size(),
+			0,
+			current_fbo->attachments[0]->is_swapchain_images
+		);
 
 	Color text_color = GetTextColor();
-	shader->setLocalParam(0, text_color.r(), text_color.g(), text_color.b(), 1.0);
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-	shader->setLocalParam(0, color.r(), color.g(), color.b(), 1.0);
-	glDrawArrays(GL_TRIANGLE_STRIP, 4, 4);
+	Vulkan2dRender::V2DRenderParams params1 = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+	params1.pipeline = pl;
+	params1.loc[0] = glm::vec4((float)text_color.r(), (float)text_color.g(), (float)text_color.b(), 1.0f);
+	params1.matrix[0] = proj_mat * glm::translate(trans1) * glm::scale(scale1);
+	params1.clear = m_frame_clear;
+	m_frame_clear = false;
+	params1.obj = &m_name_vobj;
 
-	glDisableVertexAttribArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
+	Vulkan2dRender::V2DRenderParams params2;
+	params2.pipeline = pl;
+	params2.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), 1.0f);
+	params2.matrix[0] = proj_mat * glm::translate(trans2) * glm::scale(scale2);
+	params2.clear = false;
+	params2.obj = &m_name_vobj;
 
-	if (shader && shader->valid())
-		shader->release();
+	v2drender_params.push_back(params1);
+	v2drender_params.push_back(params2);
 
-	px1 = x+font_height-nx/2;
-	py1 = ny/2-y+0.25*font_height;
+	if (!current_fbo->renderPass)
+		current_fbo->replaceRenderPass(pl.pass);
+
+	m_v2drender->seq_render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], v2drender_params.data(), v2drender_params.size());
+	
+	float px1 = x + font_height - nx / 2;
+	float py1 = y - 0.25 * font_height - ny / 2;
 	wstr = name.ToStdWstring();
 	m_text_renderer->RenderText(
+		m_vulkan->frameBuffers[m_vulkan->currentBuffer],
 		wstr, text_color,
-		px1*sx, py1*sy, sx, sy);
+		px1 * sx, py1 * sy);
 	if (highlighted)
 	{
 		px1 -= 0.5;
-		py1 += 0.5;
+		py1 -= 0.5;
 		m_text_renderer->RenderText(
+			m_vulkan->frameBuffers[m_vulkan->currentBuffer],
 			wstr, color,
-			px1*sx, py1*sy, sx, sy);
+			px1 * sx, py1 * sy);
 	}
 
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);*/
 }
 
 void VRenderVulkanView::DrawGradBg()

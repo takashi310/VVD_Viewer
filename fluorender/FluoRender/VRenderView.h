@@ -1104,6 +1104,10 @@ private:
 	Vulkan2dRender::V2dObject m_tile_vobj;
 	Vulkan2dRender::V2dObject m_brush_vobj;
 	Vulkan2dRender::V2dObject m_grid_vobj;
+	Vulkan2dRender::V2dObject m_scbar_vobj;
+	Vulkan2dRender::V2dObject m_frame_vobj;
+	Vulkan2dRender::V2dObject m_camctr_vobj;
+	Vulkan2dRender::V2dObject m_name_vobj;
 
 	bool m_frame_clear;
 
