@@ -267,6 +267,7 @@ namespace FLIVR {
 		virtual void* tex_data_brk(int c, const FileLocInfo* finfo);
 		
 		bool compute_t_index_min_max(Ray& view, double dt);
+		void compute_slicenum(Ray& view, double dt, double& r_tmax, double& r_tmin, unsigned int& r_slicenum);
 
 		void compute_polygons(Ray& view, double tmin, double tmax, double dt,
 			vector<double>& vertex, vector<double>& texcoord,

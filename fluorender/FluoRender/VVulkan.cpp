@@ -35,6 +35,7 @@ void VVulkan::prepare()
 	seg_shader_factory_ = std::make_unique<FLIVR::SegShaderFactory>(devices);
 	paint_shader_factory_ = std::make_unique<FLIVR::PaintShaderFactory>(devices);
 	img_shader_factory_ = std::make_unique<FLIVR::ImgShaderFactory>(devices);
+	vslice_shader_factory_ = std::make_unique<FLIVR::VolSliceShaderFactory>(devices);
 	
 	prepared = true;
 }

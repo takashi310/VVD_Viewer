@@ -410,7 +410,7 @@ public:
 			uint32_t indexCount;
 		};
 		std::map<vks::VulkanDevice*, VVolVertexBuffers> m_vertbufs;
-		void prepareVertexBuffers(vks::VulkanDevice* device, double dt);
+		void prepareVertexBuffers(vks::VulkanDevice* device, unsigned int total_slicenum);
 
 		static void init();
 		static void finalize();
@@ -429,6 +429,15 @@ public:
 		static std::map<vks::VulkanDevice*, VkRenderPass> m_vol_draw_pass;
 		int m_prev_vol_pipeline;
 		VVolPipeline prepareVolPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode);
+		
+		struct VSlicePipeline {
+			VkPipeline vkpipeline;
+			ShaderProgram* shader;
+			vks::VulkanDevice* device;
+		};
+		static std::vector<VSlicePipeline> m_vslice_pipelines;
+		int m_prev_vslice_pipeline;
+		VSlicePipeline prepareVSlicePipeline(vks::VulkanDevice* device, int update_order);
 
 		struct VSegPipeline {
 			VkPipeline vkpipeline;

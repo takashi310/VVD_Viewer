@@ -66,6 +66,8 @@ namespace FLIVR
 	
 	std::vector<VolumeRenderer::VCalPipeline> VolumeRenderer::m_cal_pipelines;
 
+	std::vector<VolumeRenderer::VSlicePipeline> VolumeRenderer::m_vslice_pipelines;
+
 	//VolKernelFactory TextureRenderer::vol_kernel_factory_;
 
 
@@ -151,6 +153,7 @@ namespace FLIVR
 		m_prev_vol_pipeline = -1;
 		m_prev_seg_pipeline = -1;
 		m_prev_cal_pipeline = -1;
+		m_prev_vslice_pipeline = -1;
 	}
 
 	VolumeRenderer::VolumeRenderer(const VolumeRenderer& copy)
@@ -236,6 +239,7 @@ namespace FLIVR
 		m_prev_vol_pipeline = copy.m_prev_vol_pipeline;
 		m_prev_seg_pipeline = copy.m_prev_seg_pipeline;
 		m_prev_cal_pipeline = copy.m_prev_cal_pipeline;
+		m_prev_vslice_pipeline = copy.m_prev_vslice_pipeline;
 	}
 
 	VolumeRenderer::~VolumeRenderer()
@@ -299,6 +303,10 @@ namespace FLIVR
 				vkDestroyPipeline(p.device->logicalDevice, p.vkpipeline, nullptr);
 			}
 			for (auto& p : m_cal_pipelines)
+			{
+				vkDestroyPipeline(p.device->logicalDevice, p.vkpipeline, nullptr);
+			}
+			for (auto& p : m_vslice_pipelines)
 			{
 				vkDestroyPipeline(p.device->logicalDevice, p.vkpipeline, nullptr);
 			}
@@ -1077,7 +1085,7 @@ namespace FLIVR
 
 		VkPipelineInputAssemblyStateCreateInfo inputAssemblyState =
 			vks::initializers::pipelineInputAssemblyStateCreateInfo(
-				VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+				VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN,
 				0,
 				VK_FALSE);
 
@@ -1411,18 +1419,62 @@ namespace FLIVR
 		vkDestroyImage(device, dstImage, nullptr);
 	}
 
-	void VolumeRenderer::prepareVertexBuffers(vks::VulkanDevice* device, double dt)
+	VolumeRenderer::VSlicePipeline VolumeRenderer::prepareVSlicePipeline(vks::VulkanDevice* device, int update_order)
+	{
+		VSlicePipeline ret_pipeline;
+
+		bool use_2d_weight = tex_2d_weight1_ && tex_2d_weight2_ ? true : false;
+
+		ShaderProgram* slice_shader = nullptr;
+		slice_shader = m_vulkan->vslice_shader_factory_->shader(device->logicalDevice, update_order);
+		
+		if (m_prev_vslice_pipeline >= 0) {
+			if (m_vslice_pipelines[m_prev_vslice_pipeline].device == device &&
+				m_vslice_pipelines[m_prev_vslice_pipeline].shader == slice_shader)
+				return m_vslice_pipelines[m_prev_vslice_pipeline];
+		}
+		for (int i = 0; i < m_seg_pipelines.size(); i++) {
+			if (m_vslice_pipelines[i].device == device &&
+				m_vslice_pipelines[i].shader == slice_shader)
+			{
+				m_prev_vslice_pipeline = i;
+				return m_vslice_pipelines[i];
+			}
+		}
+
+		VkComputePipelineCreateInfo computePipelineCreateInfo =
+			vks::initializers::computePipelineCreateInfo(m_vulkan->vslice_shader_factory_->pipeline_[device].pipelineLayout, 0);
+
+		computePipelineCreateInfo.stage = slice_shader->get_compute_shader();
+		VK_CHECK_RESULT(
+			vkCreateComputePipelines(
+				device->logicalDevice,
+				device->pipelineCache,
+				1,
+				&computePipelineCreateInfo,
+				nullptr,
+				&ret_pipeline.vkpipeline
+			)
+		);
+
+		ret_pipeline.device = device;
+		ret_pipeline.shader = slice_shader;
+
+		m_vslice_pipelines.push_back(ret_pipeline);
+		m_prev_vslice_pipeline = m_vslice_pipelines.size() - 1;
+
+		return ret_pipeline;
+	}
+
+	void VolumeRenderer::prepareVertexBuffers(vks::VulkanDevice* device, unsigned int total_slicenum)
 	{
 		if (!tex_ || !m_vulkan)
 			return;
 
 		Vector diag = tex_->GetBrickIdSpaceMaxExtent();
 
-		VkDeviceSize num_slices = (VkDeviceSize)(diag.length() / dt) + 2;
-		VkDeviceSize brick_num = tex_->get_brick_num();
-
-		VkDeviceSize vertbufsize = num_slices * 6 * 6 * sizeof(float) * brick_num;
-		VkDeviceSize idxbufsize = num_slices * 4 * 3 * sizeof(unsigned int) * brick_num;
+		VkDeviceSize vertbufsize = (size_t)(total_slicenum*1.2) * 6 * 6 * sizeof(float);
+		VkDeviceSize idxbufsize = (size_t)(total_slicenum*1.2) * 6 * sizeof(unsigned int);
 
 		if (m_vertbufs[device].vertexBuffer.buffer && m_vertbufs[device].vertexBuffer.size < vertbufsize)
 			m_vertbufs[device].vertexBuffer.destroy();
@@ -1432,7 +1484,7 @@ namespace FLIVR
 		if (!m_vertbufs[device].vertexBuffer.buffer)
 		{
 			device->createBuffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-								 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+								 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 								 &m_vertbufs[device].vertexBuffer,
 								 vertbufsize);
 			m_vertbufs[device].vertexBuffer.map();
@@ -1441,7 +1493,7 @@ namespace FLIVR
 		if (!m_vertbufs[device].indexBuffer.buffer)
 		{
 			device->createBuffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-								 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+								 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 								 &m_vertbufs[device].indexBuffer,
 								 idxbufsize);
 			m_vertbufs[device].indexBuffer.map();
@@ -1514,13 +1566,6 @@ namespace FLIVR
 		double dt = compute_dt_fac_1px(w, h, sampling_frq_fac) / rate;
 		num_slices_ = (int)(tex_->GetBrickIdSpaceMaxExtent().length() / dt);
 
-		vector<float> vertex;
-		vector<uint32_t> index;
-		vector<uint32_t> size;
-		vertex.reserve((size_t)num_slices_ * 12);
-		index.reserve((size_t)num_slices_ * 6);
-		size.reserve((size_t)num_slices_ * 6);
-
 		//--------------------------------------------------------------------------
 		bool use_fog = m_use_fog && colormap_mode_ != 2;
 
@@ -1554,6 +1599,9 @@ namespace FLIVR
 
 		VVolPipeline pipeline = prepareVolPipeline(prim_dev, mode_, update_order_, colormap_mode_);
 		VkPipelineLayout pipelineLayout = m_vulkan->vol_shader_factory_->pipeline_[prim_dev].pipelineLayout;
+
+		VSlicePipeline slice_pipeline = prepareVSlicePipeline(prim_dev, update_order_);
+		VkPipelineLayout slice_pipelineLayout = m_vulkan->vslice_shader_factory_->pipeline_[prim_dev].pipelineLayout;
 		
 		if (blend_num_bits_ > 8)
 		{
@@ -1687,6 +1735,7 @@ namespace FLIVR
 		bool waitsemaphore = true;
 		vks::VulkanSemaphoreSettings semaphores = prim_dev->GetNextRenderSemaphoreSettings();
 
+		
 		//////////////////////////////////////////
 		//render bricks
 
@@ -1695,23 +1744,20 @@ namespace FLIVR
 		if (label_) bmode = TEXTURE_RENDER_MODE_LABEL;
 
 		VkCommandBuffer cmdbuf = prim_dev->GetNextCommandBuffer();
+		VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
+		renderPassBeginInfo.renderPass = pipeline.renderpass;
+		renderPassBeginInfo.renderArea.offset.x = 0;
+		renderPassBeginInfo.renderArea.offset.y = 0;
+		renderPassBeginInfo.renderArea.extent.width = blend_framebuffer_->w;
+		renderPassBeginInfo.renderArea.extent.height = blend_framebuffer_->h;
+		renderPassBeginInfo.framebuffer = blend_framebuffer_->framebuffer;
+
 		if (!mem_swap_)
 		{
 			VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
 			cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-			VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
-			renderPassBeginInfo.renderPass = pipeline.renderpass;
-			renderPassBeginInfo.renderArea.offset.x = 0;
-			renderPassBeginInfo.renderArea.offset.y = 0;
-			renderPassBeginInfo.renderArea.extent.width = blend_framebuffer_->w;
-			renderPassBeginInfo.renderArea.extent.height = blend_framebuffer_->h;
-
-			renderPassBeginInfo.framebuffer = blend_framebuffer_->framebuffer;
-
 			VK_CHECK_RESULT(vkBeginCommandBuffer(cmdbuf, &cmdBufInfo));
-
-			vkCmdBeginRenderPass(cmdbuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 		}
 		
 		int count = 0;
@@ -1742,12 +1788,10 @@ namespace FLIVR
 				continue;
 			}
 
-			vertex.clear();
-			index.clear();
-			size.clear();
-			b->compute_polygons(view_ray, dt, vertex, index, size);
-
-			if (vertex.size() == 0){
+			unsigned int slicenum;
+			double tmax, tmin;
+			b->compute_slicenum(view_ray, dt, tmax, tmin, slicenum);
+			if (slicenum == 0){
 				if (mem_swap_ && start_update_loop_ && !done_update_loop_)
 				{
 					if (!b->drawn(bmode))
@@ -1759,50 +1803,11 @@ namespace FLIVR
 				}
 				continue;
 			}
-			
 			vks::Buffer vertbuf, idxbuf;
 			VkDeviceSize vert_offset, idx_offset;
-			prim_dev->GetNextBuffer(vertex.size() * sizeof(float), vertbuf, vert_offset);
-			prim_dev->GetNextBuffer(index.size() * sizeof(unsigned int), idxbuf, idx_offset);
-			if (vertbuf.buffer == idxbuf.buffer)
-			{
-				VkDeviceSize total_size = prim_dev->GetCurrentBufferOffset() - vert_offset;
-				VkDeviceSize atom = prim_dev->properties.limits.nonCoherentAtomSize;
-				if (atom > 0)
-					total_size = (total_size + atom - 1) & ~(atom - 1);
-				if (total_size + vert_offset > prim_dev->m_buf.size)
-					total_size = prim_dev->m_buf.size - vert_offset;
-				vertbuf.map(total_size, vert_offset);
-				vertbuf.copyTo(vertex.data(), vertex.size() * sizeof(float), 0);
-				vertbuf.copyTo(index.data(), index.size() * sizeof(unsigned int), idx_offset - vert_offset);
-				vertbuf.flush(total_size, vert_offset);
-				vertbuf.unmap();
-			}
-			else
-			{
-				VkDeviceSize total_size = vertex.size() * sizeof(float);
-				VkDeviceSize atom = prim_dev->properties.limits.nonCoherentAtomSize;
-				if (atom > 0)
-					total_size = (total_size + atom - 1) & ~(atom - 1);
-				if (total_size + vert_offset > vertbuf.size)
-					total_size = vertbuf.size - vert_offset;
-				vertbuf.map(total_size, vert_offset);
-				vertbuf.copyTo(vertex.data(), vertex.size() * sizeof(float));
-				vertbuf.flush(total_size, vert_offset);
-				vertbuf.unmap();
-
-				total_size = index.size() * sizeof(unsigned int);
-				atom = prim_dev->properties.limits.nonCoherentAtomSize;
-				if (atom > 0)
-					total_size = (total_size + atom - 1) & ~(atom - 1);
-				if (total_size + idx_offset > idxbuf.size)
-					total_size = idxbuf.size - idx_offset;
-				idxbuf.map(total_size, idx_offset);
-				idxbuf.copyTo(index.data(), index.size() * sizeof(unsigned int));
-				idxbuf.flush(total_size, idx_offset);
-				idxbuf.unmap();
-			}
-
+			prim_dev->GetNextVertexBuffer((VkDeviceSize)slicenum * 6 * 6 * sizeof(float), vertbuf, vert_offset);
+			prim_dev->GetNextIndexBuffer((VkDeviceSize)slicenum * 6 * sizeof(unsigned int), idxbuf, idx_offset);
+			
 			VkFilter filter;
 			if (interpolate_ && colormap_mode_ != 3)
 				filter = VK_FILTER_LINEAR;
@@ -1924,19 +1929,97 @@ namespace FLIVR
 				VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
 				cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-				VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
-				renderPassBeginInfo.renderPass = pipeline.renderpass;
-				renderPassBeginInfo.renderArea.offset.x = 0;
-				renderPassBeginInfo.renderArea.offset.y = 0;
-				renderPassBeginInfo.renderArea.extent.width = blend_framebuffer_->w;
-				renderPassBeginInfo.renderArea.extent.height = blend_framebuffer_->h;
-
-				renderPassBeginInfo.framebuffer = blend_framebuffer_->framebuffer;
-
 				VK_CHECK_RESULT(vkBeginCommandBuffer(cmdbuf, &cmdBufInfo));
-
-				vkCmdBeginRenderPass(cmdbuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 			}
+
+			//compute vertices and indices
+			{
+				vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_COMPUTE, slice_pipeline.vkpipeline);
+				
+				std::vector<VkWriteDescriptorSet> slice_dw;
+				slice_dw.push_back(VolSliceShaderFactory::writeDescriptorSetStrageBuf(VK_NULL_HANDLE, 0, &vertbuf.descriptor));
+				slice_dw.push_back(VolSliceShaderFactory::writeDescriptorSetStrageBuf(VK_NULL_HANDLE, 1, &idxbuf.descriptor));
+				prim_dev->vkCmdPushDescriptorSetKHR(
+					cmdbuf,
+					VK_PIPELINE_BIND_POINT_COMPUTE,
+					slice_pipelineLayout,
+					0,
+					slice_dw.size(),
+					slice_dw.data()
+				);
+
+				BBox bb = b->bbox();
+				BBox tb = b->tbox();
+				Vector vdir = view_ray.direction();
+				Vector up;
+				switch (MinIndex(fabs(vdir.x()),
+					fabs(vdir.y()),
+					fabs(vdir.z())))
+				{
+				case 0:
+					up.x(0.0); up.y(-vdir.z()); up.z(vdir.y());
+					break;
+				case 1:
+					up.x(-vdir.z()); up.y(0.0); up.z(vdir.x());
+					break;
+				case 2:
+					up.x(-vdir.y()); up.y(vdir.x()); up.z(0.0);
+					break;
+				}
+				up.normalize();
+
+				VolSliceShaderFactory::VolSliceShaderBrickConst slice_const;
+				slice_const.b_min_tmin = glm::vec4((float)bb.min().x(), (float)bb.min().y(), (float)bb.min().z(), (float)tmin);
+				slice_const.b_max_tmax = glm::vec4((float)bb.max().x(), (float)bb.max().y(), (float)bb.max().z(), (float)tmax);
+				slice_const.tb_min = glm::vec4((float)tb.min().x(), (float)tb.min().y(), (float)tb.min().z(), 0.0f);
+				slice_const.tb_max = glm::vec4((float)tb.max().x(), (float)tb.max().y(), (float)tb.max().z(), 0.0f);
+				slice_const.view_origin_dt = glm::vec4((float)view_ray.origin().x(), (float)view_ray.origin().y(), (float)view_ray.origin().z(), (float)dt);
+				slice_const.view_direction = glm::vec4((float)view_ray.direction().x(), (float)view_ray.direction().y(), (float)view_ray.direction().z(), 0.0f);
+				slice_const.up = glm::vec4((float)up.x(), (float)up.y(), (float)up.z(), 0.0f);
+				slice_const.range = glm::uvec4(slicenum);
+
+				vkCmdPushConstants(
+					cmdbuf,
+					slice_pipelineLayout,
+					VK_SHADER_STAGE_COMPUTE_BIT,
+					0,
+					sizeof(VolSliceShaderFactory::VolSliceShaderBrickConst),
+					&slice_const
+				);
+
+				uint32_t group_count_x = slicenum / 64 + (slicenum % 64) > 0 ? 1 : 0;
+				vkCmdDispatch(cmdbuf, group_count_x, 1, 1);
+
+				VkBufferMemoryBarrier bufferBarriers[2];
+				bufferBarriers[0] = vks::initializers::bufferMemoryBarrier();
+				bufferBarriers[0].buffer = vertbuf.buffer;
+				bufferBarriers[0].offset = vertbuf.descriptor.offset;
+				bufferBarriers[0].size = vertbuf.descriptor.range;
+				bufferBarriers[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+				bufferBarriers[0].dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+				bufferBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+				bufferBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+
+				bufferBarriers[1] = vks::initializers::bufferMemoryBarrier();
+				bufferBarriers[1].buffer = vertbuf.buffer;
+				bufferBarriers[1].offset = vertbuf.descriptor.offset;
+				bufferBarriers[1].size = vertbuf.descriptor.range;
+				bufferBarriers[1].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+				bufferBarriers[1].dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+				bufferBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+				bufferBarriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+
+				vkCmdPipelineBarrier(
+					cmdbuf,
+					VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+					VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
+					VK_FLAGS_NONE,
+					0, nullptr,
+					2, bufferBarriers,
+					0, nullptr);
+			}
+
+			vkCmdBeginRenderPass(cmdbuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 			VkViewport viewport = vks::initializers::viewport((float)w2, (float)h2, 0.0f, 1.0f);
 			vkCmdSetViewport(cmdbuf, 0, 1, &viewport);
@@ -1993,14 +2076,14 @@ namespace FLIVR
 
 			vkCmdBindVertexBuffers(cmdbuf, 0, 1, &vertbuf.buffer, &vert_offset);
 			vkCmdBindIndexBuffer(cmdbuf, idxbuf.buffer, idx_offset, VK_INDEX_TYPE_UINT32);
-			vkCmdDrawIndexed(cmdbuf, (uint32_t)index.size(), 1, 0, 0, 0);
+			vkCmdDrawIndexed(cmdbuf, (uint32_t)slicenum*6, 1, 0, 0, 0);
+
+			vkCmdEndRenderPass(cmdbuf);
 
 			count++;
 			if (mem_swap_ && (count >= que || i >= bricks->size()-1) )
 			{
 				count = 0;
-
-				vkCmdEndRenderPass(cmdbuf);
 
 				VK_CHECK_RESULT(vkEndCommandBuffer(cmdbuf));
 

@@ -97,18 +97,21 @@ namespace vks
 		VkSemaphore* GetCurrentRenderSemaphore();
 
 		std::vector<VkCommandBuffer> m_cmdbufs;
-		vks::Buffer m_ubo, m_buf;
-		std::vector<vks::Buffer> m_bufs;
+		vks::Buffer m_ubo, m_vbuf, m_ibuf;
+		std::vector<vks::Buffer> m_vbufs, m_ibufs;
 		VkDeviceSize m_cur_cmdbuf_id = 0;
 		VkDeviceSize m_ubo_offset = 0;
-		VkDeviceSize m_buf_offset = 0;
+		VkDeviceSize m_vbuf_offset = 0;
+		VkDeviceSize m_ibuf_offset = 0;
 		void PrepareMainRenderBuffers();
 		void ResetMainRenderBuffers();
 		VkCommandBuffer GetNextCommandBuffer();
 		void GetNextUniformBuffer(VkDeviceSize req_size, vks::Buffer& buf, VkDeviceSize &offset);
-		void GetNextBuffer(VkDeviceSize req_size, vks::Buffer& buf, VkDeviceSize& offset);
+		void GetNextVertexBuffer(VkDeviceSize req_size, vks::Buffer& buf, VkDeviceSize& offset);
+		void GetNextIndexBuffer(VkDeviceSize req_size, vks::Buffer& buf, VkDeviceSize& offset);
 		VkDeviceSize GetCurrentUniformBufferOffset();
-		VkDeviceSize GetCurrentBufferOffset();
+		VkDeviceSize GetCurrentVertexBufferOffset();
+		VkDeviceSize GetCurrentIndexBufferOffset();
 
 		VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 		void setupDescriptorPool();
@@ -183,12 +186,12 @@ namespace vks
 			m_render_semaphore.clear();
 			staging_buf.destroy();
 			m_ubo.destroy();
-			m_buf.destroy();
-			if (!m_bufs.empty())
+			m_vbuf.destroy();
+			if (!m_vbufs.empty())
 			{
-				for (auto b : m_bufs)
+				for (auto b : m_vbufs)
 					b.destroy();
-				m_bufs.clear();
+				m_vbufs.clear();
 			}
 			vkFreeCommandBuffers(logicalDevice,commandPool, 1, m_cmdbufs.data());
 			if (linear_sampler)

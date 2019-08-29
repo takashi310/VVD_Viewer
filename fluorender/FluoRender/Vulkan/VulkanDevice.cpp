@@ -331,12 +331,20 @@ namespace vks
 		);
 		m_ubo.map();
 
-		VkDeviceSize buf_size = 65536;
+		VkDeviceSize buf_size = 4096;
 		VK_CHECK_RESULT(
 			createBuffer(
-				VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
-				&m_buf,
+				VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+				&m_vbuf,
+				buf_size
+			)
+		);
+		VK_CHECK_RESULT(
+			createBuffer(
+				VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+				&m_ibuf,
 				buf_size
 			)
 		);
@@ -345,23 +353,44 @@ namespace vks
 	{
 		m_cur_cmdbuf_id = 0;
 		m_ubo_offset = 0;
-		m_buf_offset = 0;
-		if (m_bufs.size() > 0)
+		m_vbuf_offset = 0;
+		m_ibuf_offset = 0;
+		if (m_vbufs.size() > 0)
 		{
-			VkDeviceSize newsize = m_buf.size;
-			for (auto b : m_bufs)
+			VkDeviceSize newsize = m_vbuf.size;
+			for (auto b : m_vbufs)
 			{
 				newsize += b.size;
 				b.destroy();
 			}
-			m_bufs.clear();
+			m_vbufs.clear();
 
-			m_buf.destroy();
+			m_vbuf.destroy();
 			VK_CHECK_RESULT(
 				createBuffer(
-					VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
-					&m_buf,
+					VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+					VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+					&m_vbuf,
+					newsize
+				)
+			);
+		}
+		if (m_ibufs.size() > 0)
+		{
+			VkDeviceSize newsize = m_ibuf.size;
+			for (auto b : m_ibufs)
+			{
+				newsize += b.size;
+				b.destroy();
+			}
+			m_ibufs.clear();
+
+			m_ibuf.destroy();
+			VK_CHECK_RESULT(
+				createBuffer(
+					VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+					VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+					&m_ibuf,
 					newsize
 				)
 			);
@@ -383,36 +412,67 @@ namespace vks
 	{
 		return m_ubo_offset;
 	}
-	void VulkanDevice::GetNextBuffer(VkDeviceSize req_size, vks::Buffer& buf, VkDeviceSize& offset)
+	void VulkanDevice::GetNextVertexBuffer(VkDeviceSize req_size, vks::Buffer& buf, VkDeviceSize& offset)
 	{
-		offset = m_buf_offset;
+		offset = m_vbuf_offset;
 
-		if (m_buf.alignment > 0)
-			req_size = (req_size + m_buf.alignment - 1) & ~(m_buf.alignment - 1);
+		if (m_vbuf.alignment > 0)
+			req_size = (req_size + m_vbuf.alignment - 1) & ~(m_vbuf.alignment - 1);
 
-		if (m_buf.size >= m_buf_offset + req_size)
-			m_buf_offset += req_size;
+		if (m_vbuf.size >= m_vbuf_offset + req_size)
+			m_vbuf_offset += req_size;
 		else
 		{
 			offset = 0;
-			m_bufs.push_back(m_buf);
+			m_vbufs.push_back(m_vbuf);
 			VK_CHECK_RESULT(
 				createBuffer(
-					VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
-					&m_buf,
+					VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+					VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+					&m_vbuf,
 					req_size
 				)
 			);
-			m_buf_offset = req_size;
+			m_vbuf_offset = req_size;
 		}
-		buf = m_buf;
+		buf = m_vbuf;
 		buf.descriptor.offset = offset;
 		buf.descriptor.range = req_size;
 	}
-	VkDeviceSize VulkanDevice::GetCurrentBufferOffset()
+	void VulkanDevice::GetNextIndexBuffer(VkDeviceSize req_size, vks::Buffer& buf, VkDeviceSize& offset)
 	{
-		return m_buf_offset;
+		offset = m_ibuf_offset;
+
+		if (m_ibuf.alignment > 0)
+			req_size = (req_size + m_ibuf.alignment - 1) & ~(m_ibuf.alignment - 1);
+
+		if (m_ibuf.size >= m_ibuf_offset + req_size)
+			m_ibuf_offset += req_size;
+		else
+		{
+			offset = 0;
+			m_ibufs.push_back(m_ibuf);
+			VK_CHECK_RESULT(
+				createBuffer(
+					VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+					VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+					&m_ibuf,
+					req_size
+				)
+			);
+			m_ibuf_offset = req_size;
+		}
+		buf = m_ibuf;
+		buf.descriptor.offset = offset;
+		buf.descriptor.range = req_size;
+	}
+	VkDeviceSize VulkanDevice::GetCurrentVertexBufferOffset()
+	{
+		return m_vbuf_offset;
+	}
+	VkDeviceSize VulkanDevice::GetCurrentIndexBufferOffset()
+	{
+		return m_ibuf_offset;
 	}
 
 	VkCommandBuffer VulkanDevice::GetNextCommandBuffer()

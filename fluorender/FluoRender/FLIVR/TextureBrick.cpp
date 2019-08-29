@@ -290,6 +290,41 @@ z
 	  return (timax_ - timin_) >= 0 ? true : false;
    }
 
+   void TextureBrick::compute_slicenum(Ray& view, double dt, double& r_tmax, double& r_tmin, unsigned int& r_slicenum)
+   {
+	   Point corner[8];
+	   corner[0] = bbox_.min();
+	   corner[1] = Point(bbox_.min().x(), bbox_.min().y(), bbox_.max().z());
+	   corner[2] = Point(bbox_.min().x(), bbox_.max().y(), bbox_.min().z());
+	   corner[3] = Point(bbox_.min().x(), bbox_.max().y(), bbox_.max().z());
+	   corner[4] = Point(bbox_.max().x(), bbox_.min().y(), bbox_.min().z());
+	   corner[5] = Point(bbox_.max().x(), bbox_.min().y(), bbox_.max().z());
+	   corner[6] = Point(bbox_.max().x(), bbox_.max().y(), bbox_.min().z());
+	   corner[7] = bbox_.max();
+
+	   double tmin = Dot(corner[0] - view.origin(), view.direction());
+	   double tmax = tmin;
+	   int maxi = 0;
+	   int mini = 0;
+	   for (int i = 1; i < 8; i++)
+	   {
+		   double t = Dot(corner[i] - view.origin(), view.direction());
+		   if (t < tmin) { mini = i; tmin = t; }
+		   if (t > tmax) { maxi = i; tmax = t; }
+	   }
+
+	   bool order = TextureRenderer::get_update_order();
+	   double tanchor = Dot(corner[order ? mini : maxi], view.direction());
+	   double tanchor0 = (floor(tanchor / dt) + 1) * dt;
+	   double tanchordiff = tanchor - tanchor0;
+	   if (order) tmin -= tanchordiff;
+	   else tmax -= tanchordiff;
+
+	   r_tmax = tmax;
+	   r_tmin = tmin;
+	   r_slicenum = (unsigned int)( (tmax-tmin) / dt );
+   }
+
    void TextureBrick::compute_polygons(Ray& view, double dt,
          vector<double>& vertex, vector<double>& texcoord,
          vector<int>& size)
