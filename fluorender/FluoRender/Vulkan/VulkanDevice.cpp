@@ -436,6 +436,7 @@ namespace vks
 			m_vbuf_offset = req_size;
 		}
 		buf = m_vbuf;
+		buf.descriptor.buffer = buf.buffer;
 		buf.descriptor.offset = offset;
 		buf.descriptor.range = req_size;
 	}
@@ -463,6 +464,7 @@ namespace vks
 			m_ibuf_offset = req_size;
 		}
 		buf = m_ibuf;
+		buf.descriptor.buffer = buf.buffer;
 		buf.descriptor.offset = offset;
 		buf.descriptor.range = req_size;
 	}

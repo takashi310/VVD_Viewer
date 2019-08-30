@@ -955,7 +955,7 @@ namespace FLIVR
 		m_vertices.inputBinding[0] =
 			vks::initializers::vertexInputBindingDescription(
 				0,
-				sizeof(Vertex),
+				sizeof(float)*4*2,
 				VK_VERTEX_INPUT_RATE_VERTEX);
 
 		// Attribute descriptions
@@ -967,14 +967,14 @@ namespace FLIVR
 				0,
 				0,
 				VK_FORMAT_R32G32B32_SFLOAT,
-				offsetof(Vertex, pos));
+				0);
 		// Location 1 : Texture coordinates
 		m_vertices.inputAttributes[1] =
 			vks::initializers::vertexInputAttributeDescription(
 				0,
 				1,
 				VK_FORMAT_R32G32B32_SFLOAT,
-				offsetof(Vertex, uv));
+				sizeof(float)*4);
 
 		m_vertices.inputState = vks::initializers::pipelineVertexInputStateCreateInfo();
 		m_vertices.inputState.vertexBindingDescriptionCount = static_cast<uint32_t>(m_vertices.inputBinding.size());
@@ -1085,7 +1085,7 @@ namespace FLIVR
 
 		VkPipelineInputAssemblyStateCreateInfo inputAssemblyState =
 			vks::initializers::pipelineInputAssemblyStateCreateInfo(
-				VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN,
+				VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
 				0,
 				VK_FALSE);
 
@@ -1474,7 +1474,7 @@ namespace FLIVR
 		Vector diag = tex_->GetBrickIdSpaceMaxExtent();
 
 		VkDeviceSize vertbufsize = (size_t)(total_slicenum*1.2) * 6 * 6 * sizeof(float);
-		VkDeviceSize idxbufsize = (size_t)(total_slicenum*1.2) * 6 * sizeof(unsigned int);
+		VkDeviceSize idxbufsize = (size_t)(total_slicenum*1.2) * 12 * sizeof(unsigned int);
 
 		if (m_vertbufs[device].vertexBuffer.buffer && m_vertbufs[device].vertexBuffer.size < vertbufsize)
 			m_vertbufs[device].vertexBuffer.destroy();
@@ -1484,7 +1484,7 @@ namespace FLIVR
 		if (!m_vertbufs[device].vertexBuffer.buffer)
 		{
 			device->createBuffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-								 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+								 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
 								 &m_vertbufs[device].vertexBuffer,
 								 vertbufsize);
 			m_vertbufs[device].vertexBuffer.map();
@@ -1493,7 +1493,7 @@ namespace FLIVR
 		if (!m_vertbufs[device].indexBuffer.buffer)
 		{
 			device->createBuffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-								 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+								 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
 								 &m_vertbufs[device].indexBuffer,
 								 idxbufsize);
 			m_vertbufs[device].indexBuffer.map();
@@ -1805,8 +1805,8 @@ namespace FLIVR
 			}
 			vks::Buffer vertbuf, idxbuf;
 			VkDeviceSize vert_offset, idx_offset;
-			prim_dev->GetNextVertexBuffer((VkDeviceSize)slicenum * 6 * 6 * sizeof(float), vertbuf, vert_offset);
-			prim_dev->GetNextIndexBuffer((VkDeviceSize)slicenum * 6 * sizeof(unsigned int), idxbuf, idx_offset);
+			prim_dev->GetNextVertexBuffer((VkDeviceSize)slicenum * 6 * 8 * sizeof(float), vertbuf, vert_offset);
+			prim_dev->GetNextIndexBuffer((VkDeviceSize)slicenum * 12 * sizeof(unsigned int), idxbuf, idx_offset);
 			
 			VkFilter filter;
 			if (interpolate_ && colormap_mode_ != 3)
@@ -1931,7 +1931,7 @@ namespace FLIVR
 
 				VK_CHECK_RESULT(vkBeginCommandBuffer(cmdbuf, &cmdBufInfo));
 			}
-
+			
 			//compute vertices and indices
 			{
 				vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_COMPUTE, slice_pipeline.vkpipeline);
@@ -1987,7 +1987,7 @@ namespace FLIVR
 					&slice_const
 				);
 
-				uint32_t group_count_x = slicenum / 64 + (slicenum % 64) > 0 ? 1 : 0;
+				uint32_t group_count_x = slicenum / 64 + ((slicenum % 64) > 0 ? 1 : 0);
 				vkCmdDispatch(cmdbuf, group_count_x, 1, 1);
 
 				VkBufferMemoryBarrier bufferBarriers[2];
@@ -2001,9 +2001,9 @@ namespace FLIVR
 				bufferBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 
 				bufferBarriers[1] = vks::initializers::bufferMemoryBarrier();
-				bufferBarriers[1].buffer = vertbuf.buffer;
-				bufferBarriers[1].offset = vertbuf.descriptor.offset;
-				bufferBarriers[1].size = vertbuf.descriptor.range;
+				bufferBarriers[1].buffer = idxbuf.buffer;
+				bufferBarriers[1].offset = idxbuf.descriptor.offset;
+				bufferBarriers[1].size = idxbuf.descriptor.range;
 				bufferBarriers[1].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
 				bufferBarriers[1].dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
 				bufferBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -2018,6 +2018,15 @@ namespace FLIVR
 					2, bufferBarriers,
 					0, nullptr);
 			}
+			/*
+			prepareVertexBuffers(prim_dev, slicenum);
+			vector<float> vert;
+			vector<uint32_t> index;
+			vector<uint32_t> size;
+			b->compute_polygons(view_ray, dt, vert, index, size);
+			m_vertbufs[prim_dev].vertexBuffer.copyTo(vert.data(), vert.size()*sizeof(float));
+			m_vertbufs[prim_dev].indexBuffer.copyTo(index.data(), index.size()*sizeof(uint32_t));
+*/
 
 			vkCmdBeginRenderPass(cmdbuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -2076,7 +2085,11 @@ namespace FLIVR
 
 			vkCmdBindVertexBuffers(cmdbuf, 0, 1, &vertbuf.buffer, &vert_offset);
 			vkCmdBindIndexBuffer(cmdbuf, idxbuf.buffer, idx_offset, VK_INDEX_TYPE_UINT32);
-			vkCmdDrawIndexed(cmdbuf, (uint32_t)slicenum*6, 1, 0, 0, 0);
+			vkCmdDrawIndexed(cmdbuf, (uint32_t)slicenum*12, 1, 0, 0, 0);
+			/*VkDeviceSize tmpoffset = 0;
+			vkCmdBindVertexBuffers(cmdbuf, 0, 1, &m_vertbufs[prim_dev].vertexBuffer.buffer, &tmpoffset);
+			vkCmdBindIndexBuffer(cmdbuf, m_vertbufs[prim_dev].indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+			vkCmdDrawIndexed(cmdbuf, index.size(), 1, 0, 0, 0);*/
 
 			vkCmdEndRenderPass(cmdbuf);
 
