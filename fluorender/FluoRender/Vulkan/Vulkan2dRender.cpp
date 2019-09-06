@@ -581,7 +581,14 @@ void Vulkan2dRender::buildCommandBuffer(
 		{
 			vkCmdBindVertexBuffers(commandbufs[i], 0, 1, &params.obj->vertBuf.buffer, &params.obj->vertOffset);
 			vkCmdBindIndexBuffer(commandbufs[i], params.obj->idxBuf.buffer, params.obj->idxOffset, VK_INDEX_TYPE_UINT32);
-			vkCmdDrawIndexed(commandbufs[i], params.obj->idxCount, 1, 0, 0, 0);
+			vkCmdDrawIndexed(
+				commandbufs[i],
+				params.render_idxCount > 0 ? params.render_idxCount : params.obj->idxCount,
+				1, 
+				params.render_idxBase,
+				0,
+				0
+			);
 		}
 
 		vkCmdEndRenderPass(commandbufs[i]);
@@ -723,7 +730,14 @@ void Vulkan2dRender::seq_buildCommandBuffer(VkCommandBuffer commandbufs[], int c
 			{
 				vkCmdBindVertexBuffers(commandbufs[i], 0, 1, &params[s].obj->vertBuf.buffer, &params[s].obj->vertOffset);
 				vkCmdBindIndexBuffer(commandbufs[i], params[s].obj->idxBuf.buffer, params[s].obj->idxOffset, VK_INDEX_TYPE_UINT32);
-				vkCmdDrawIndexed(commandbufs[i], params[s].obj->idxCount, 1, 0, 0, 0);
+				vkCmdDrawIndexed(
+					commandbufs[i], 
+					params[s].render_idxCount > 0 ? params[s].render_idxCount : params[s].obj->idxCount,
+					1,
+					params[s].render_idxBase,
+					0,
+					0
+				);
 			}
 			
 		}
@@ -777,4 +791,19 @@ Vulkan2dRender::V2DRenderParams Vulkan2dRender::GetNextV2dRenderSemaphoreSetting
 	return ret;
 }
 
+void Vulkan2dRender::GetNextV2dRenderSemaphoreSettings(Vulkan2dRender::V2DRenderParams& params)
+{
+	VkSemaphore* cur = m_vulkan->vulkanDevice->GetCurrentRenderSemaphore();
+	if (cur)
+	{
+		params.waitSemaphores = cur;
+		params.waitSemaphoreCount = 1;
+	}
 
+	VkSemaphore* next = m_vulkan->vulkanDevice->GetNextRenderSemaphore();
+	if (next)
+	{
+		params.signalSemaphores = next;
+		params.signalSemaphoreCount = 1;
+	}
+}

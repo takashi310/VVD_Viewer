@@ -1761,7 +1761,7 @@ namespace FLIVR
 		}
 		
 		int count = 0;
-		int que = 4;
+		int que = 1;
 		for (unsigned int i=0; i < bricks->size(); i++)
 		{
 			TextureBrick* b = (*bricks)[i];

@@ -1108,6 +1108,7 @@ private:
 	Vulkan2dRender::V2dObject m_frame_vobj;
 	Vulkan2dRender::V2dObject m_camctr_vobj;
 	Vulkan2dRender::V2dObject m_name_vobj;
+	Vulkan2dRender::V2dObject m_clip_vobj;
 
 	bool m_frame_clear;
 

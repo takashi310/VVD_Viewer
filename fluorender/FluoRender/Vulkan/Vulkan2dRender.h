@@ -104,6 +104,8 @@ public:
 		glm::mat4 matrix[V2DRENDER_UNIFORM_MAT_NUM] = { glm::mat4(1.0f) };
 		
 		Vulkan2dRender::V2dObject* obj = nullptr;
+		uint64_t render_idxCount = 0;
+		uint32_t render_idxBase = 0;
 
 		uint32_t waitSemaphoreCount = 0;
 		uint32_t signalSemaphoreCount = 0;
@@ -120,6 +122,8 @@ public:
 	void seq_render(const std::unique_ptr<vks::VFrameBuffer>& framebuf, const V2DRenderParams *params, int num);
 
 	Vulkan2dRender::V2DRenderParams GetNextV2dRenderSemaphoreSettings();
+
+	void GetNextV2dRenderSemaphoreSettings(Vulkan2dRender::V2DRenderParams &params);
 };
 
 #endif

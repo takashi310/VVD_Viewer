@@ -978,7 +978,7 @@ void VRenderVulkanView::HandleCamera()
 	Vector pos(m_transx, m_transy, m_transz);
 	pos.normalize();
 	if (m_free)
-		pos *= 0.1;
+		pos *= m_radius*0.01;
 	else
 		pos *= m_distance;
 	m_transx = pos.x();
@@ -1305,10 +1305,12 @@ void VRenderVulkanView::DrawVolumes(int peel)
 			{
 				Vulkan2dRender::V2DRenderParams param;
 				param.pipeline = pl;
-				param.clear = true;
+				param.clear = false;
 				param.tex[0] = m_dp_ctex_list[i].get();
 				v2drender_params.push_back(param);
 			}
+			v2drender_params[0].clear = m_clear_final_buffer;
+			m_clear_final_buffer = false;
 			vks::VulkanSemaphoreSettings sem = prim_dev->GetNextRenderSemaphoreSettings();
 			v2drender_params[0].waitSemaphores = sem.waitSemaphores;
 			v2drender_params[0].waitSemaphoreCount = sem.waitSemaphoreCount;
@@ -7334,7 +7336,7 @@ void VRenderVulkanView::SetFree(bool free)
 		Vector d = pos;
 		d.normalize();
 		Vector ctr;
-		ctr = pos - 0.1*d;
+		ctr = pos - m_radius*0.01*d;
 		m_ctrx = ctr.x();
 		m_ctry = ctr.y();
 		m_ctrz = ctr.z();
@@ -9267,64 +9269,61 @@ double VRenderVulkanView::CalcCameraDistance()
 
 void VRenderVulkanView::DrawClippingPlanes(bool border, int face_winding)
 {
-	//int i;
-	//bool link = false;
-	//int plane_mode = PM_NORMAL;
-	//int draw_type = 2;
-	//VolumeData *cur_vd = NULL;
-	//MeshData *cur_md = NULL;
+	int i;
+	bool link = false;
+	int plane_mode = PM_NORMAL;
+	int draw_type = 2;
+	VolumeData *cur_vd = NULL;
+	MeshData *cur_md = NULL;
 
-	//VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-	//if (vr_frame && vr_frame->GetClippingView())
-	//{
-	//	link = vr_frame->GetClippingView()->GetChannLink();
-	//	plane_mode = vr_frame->GetClippingView()->GetPlaneMode();
-	//	draw_type = vr_frame->GetClippingView()->GetSelType();
-	//	if (draw_type == 2)
-	//	{
-	//		cur_vd = vr_frame->GetClippingView()->GetVolumeData();
-	//		if (!cur_vd) return;
-	//	}
-	//	if (draw_type == 3)
-	//	{
-	//		cur_md = vr_frame->GetClippingView()->GetMeshData();
-	//		if (!cur_md) return;
-	//	}
-	//}
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (vr_frame && vr_frame->GetClippingView())
+	{
+		link = vr_frame->GetClippingView()->GetChannLink();
+		plane_mode = vr_frame->GetClippingView()->GetPlaneMode();
+		draw_type = vr_frame->GetClippingView()->GetSelType();
+		if (draw_type == 2)
+		{
+			cur_vd = vr_frame->GetClippingView()->GetVolumeData();
+			if (!cur_vd) return;
+		}
+		if (draw_type == 3)
+		{
+			cur_md = vr_frame->GetClippingView()->GetMeshData();
+			if (!cur_md) return;
+		}
+	}
 
-	//bool draw_plane = plane_mode != PM_FRAME;
-	//if ((plane_mode == PM_LOWTRANSBACK ||
-	//	plane_mode == PM_NORMALBACK) &&
-	//	m_clip_mask == -1)
-	//{
-	//	glCullFace(GL_FRONT);
-	//	if (face_winding == BACK_FACE)
-	//		face_winding = FRONT_FACE;
-	//	else
-	//		draw_plane = false;
-	//}
-	//else
-	//	glCullFace(GL_BACK);
+	VkCullModeFlags cullmode = VK_CULL_MODE_NONE;
+	bool draw_plane = plane_mode != PM_FRAME;
+	if ((plane_mode == PM_LOWTRANSBACK ||
+		plane_mode == PM_NORMALBACK) &&
+		m_clip_mask == -1)
+	{
+		cullmode = VK_CULL_MODE_FRONT_BIT;
+		if (face_winding == BACK_FACE)
+			face_winding = FRONT_FACE;
+		else
+			draw_plane = false;
+	}
+	else
+		cullmode = VK_CULL_MODE_BACK_BIT;
 
-	//if (!border && plane_mode == PM_FRAME)
-	//	return;
+	if (!border && plane_mode == PM_FRAME)
+		return;
 
-	//glDisable(GL_DEPTH_TEST);
-	//glEnable(GL_BLEND);
-	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-	//if (face_winding == FRONT_FACE)
-	//{
-	//	glEnable(GL_CULL_FACE);
-	//	glFrontFace(GL_CCW);
-	//}
-	//else if (face_winding == BACK_FACE)
-	//{
-	//	glEnable(GL_CULL_FACE);
-	//	glFrontFace(GL_CW);
-	//}
-	//else if (face_winding == CULL_OFF)
-	//	glDisable(GL_CULL_FACE);
+	bool cull = false;
+	VkFrontFace frontface = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+	if (face_winding == FRONT_FACE)
+	{
+		cull = true;
+		frontface = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+	}
+	else if (face_winding == BACK_FACE)
+	{
+		cull = true;
+		frontface = VK_FRONT_FACE_CLOCKWISE;
+	}
 
 	//ShaderProgram* shader =
 	//	m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY);
@@ -9335,566 +9334,741 @@ void VRenderVulkanView::DrawClippingPlanes(bool border, int face_winding)
 	//	shader->bind();
 	//}
 
-	//if (draw_type == 2)
-	//{
-	//	for (i=0; i<GetDispVolumeNum(); i++)
-	//	{
-	//		VolumeData* vd = GetDispVolumeData(i);
-	//		if (!vd)
-	//			continue;
+	if (draw_type == 2)
+	{
+		for (i=0; i<GetDispVolumeNum(); i++)
+		{
+			VolumeData* vd = GetDispVolumeData(i);
+			if (!vd)
+				continue;
 
-	//		if (vd!=cur_vd)
-	//			continue;
+			if (vd!=cur_vd)
+				continue;
 
-	//		VolumeRenderer *vr = vd->GetVR();
-	//		if (!vr)
-	//			continue;
+			VolumeRenderer *vr = vd->GetVR();
+			if (!vr)
+				continue;
 
-	//		vector<Plane*> *planes = vr->get_planes();
-	//		if (planes->size() != 6)
-	//			continue;
+			vector<Plane*> *planes = vr->get_planes();
+			if (planes->size() != 6)
+				continue;
 
-	//		//calculating planes
-	//		//get six planes
-	//		Plane* px1 = (*planes)[0];
-	//		Plane* px2 = (*planes)[1];
-	//		Plane* py1 = (*planes)[2];
-	//		Plane* py2 = (*planes)[3];
-	//		Plane* pz1 = (*planes)[4];
-	//		Plane* pz2 = (*planes)[5];
+			//calculating planes
+			//get six planes
+			Plane* px1 = (*planes)[0];
+			Plane* px2 = (*planes)[1];
+			Plane* py1 = (*planes)[2];
+			Plane* py2 = (*planes)[3];
+			Plane* pz1 = (*planes)[4];
+			Plane* pz2 = (*planes)[5];
 
-	//		//calculate 4 lines
-	//		Vector lv_x1z1, lv_x1z2, lv_x2z1, lv_x2z2;
-	//		Point lp_x1z1, lp_x1z2, lp_x2z1, lp_x2z2;
-	//		//x1z1
-	//		if (!px1->Intersect(*pz1, lp_x1z1, lv_x1z1))
-	//			continue;
-	//		//x1z2
-	//		if (!px1->Intersect(*pz2, lp_x1z2, lv_x1z2))
-	//			continue;
-	//		//x2z1
-	//		if (!px2->Intersect(*pz1, lp_x2z1, lv_x2z1))
-	//			continue;
-	//		//x2z2
-	//		if (!px2->Intersect(*pz2, lp_x2z2, lv_x2z2))
-	//			continue;
+			//calculate 4 lines
+			Vector lv_x1z1, lv_x1z2, lv_x2z1, lv_x2z2;
+			Point lp_x1z1, lp_x1z2, lp_x2z1, lp_x2z2;
+			//x1z1
+			if (!px1->Intersect(*pz1, lp_x1z1, lv_x1z1))
+				continue;
+			//x1z2
+			if (!px1->Intersect(*pz2, lp_x1z2, lv_x1z2))
+				continue;
+			//x2z1
+			if (!px2->Intersect(*pz1, lp_x2z1, lv_x2z1))
+				continue;
+			//x2z2
+			if (!px2->Intersect(*pz2, lp_x2z2, lv_x2z2))
+				continue;
 
-	//		//calculate 8 points
-	//		Point pp[8];
-	//		//p0 = l_x1z1 * py1
-	//		if (!py1->Intersect(lp_x1z1, lv_x1z1, pp[0]))
-	//			continue;
-	//		//p1 = l_x1z2 * py1
-	//		if (!py1->Intersect(lp_x1z2, lv_x1z2, pp[1]))
-	//			continue;
-	//		//p2 = l_x2z1 *py1
-	//		if (!py1->Intersect(lp_x2z1, lv_x2z1, pp[2]))
-	//			continue;
-	//		//p3 = l_x2z2 * py1
-	//		if (!py1->Intersect(lp_x2z2, lv_x2z2, pp[3]))
-	//			continue;
-	//		//p4 = l_x1z1 * py2
-	//		if (!py2->Intersect(lp_x1z1, lv_x1z1, pp[4]))
-	//			continue;
-	//		//p5 = l_x1z2 * py2
-	//		if (!py2->Intersect(lp_x1z2, lv_x1z2, pp[5]))
-	//			continue;
-	//		//p6 = l_x2z1 * py2
-	//		if (!py2->Intersect(lp_x2z1, lv_x2z1, pp[6]))
-	//			continue;
-	//		//p7 = l_x2z2 * py2
-	//		if (!py2->Intersect(lp_x2z2, lv_x2z2, pp[7]))
-	//			continue;
+			//calculate 8 points
+			Point pp[8];
+			//p0 = l_x1z1 * py1
+			if (!py1->Intersect(lp_x1z1, lv_x1z1, pp[0]))
+				continue;
+			//p1 = l_x1z2 * py1
+			if (!py1->Intersect(lp_x1z2, lv_x1z2, pp[1]))
+				continue;
+			//p2 = l_x2z1 *py1
+			if (!py1->Intersect(lp_x2z1, lv_x2z1, pp[2]))
+				continue;
+			//p3 = l_x2z2 * py1
+			if (!py1->Intersect(lp_x2z2, lv_x2z2, pp[3]))
+				continue;
+			//p4 = l_x1z1 * py2
+			if (!py2->Intersect(lp_x1z1, lv_x1z1, pp[4]))
+				continue;
+			//p5 = l_x1z2 * py2
+			if (!py2->Intersect(lp_x1z2, lv_x1z2, pp[5]))
+				continue;
+			//p6 = l_x2z1 * py2
+			if (!py2->Intersect(lp_x2z1, lv_x2z1, pp[6]))
+				continue;
+			//p7 = l_x2z2 * py2
+			if (!py2->Intersect(lp_x2z2, lv_x2z2, pp[7]))
+				continue;
 
-	//		//draw the six planes out of the eight points
-	//		//get color
-	//		Color color(1.0, 1.0, 1.0);
-	//		double plane_trans = 0.0;
-	//		if (face_winding == BACK_FACE &&
-	//			(m_clip_mask == 3 ||
-	//			m_clip_mask == 12 ||
-	//			m_clip_mask == 48 ||
-	//			m_clip_mask == 1 ||
-	//			m_clip_mask == 2 ||
-	//			m_clip_mask == 4 ||
-	//			m_clip_mask == 8 ||
-	//			m_clip_mask == 16 ||
-	//			m_clip_mask == 32 ||
-	//			m_clip_mask == 64)
-	//			)
-	//			plane_trans = plane_mode == PM_LOWTRANS ||
-	//			plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
+			//draw the six planes out of the eight points
+			//get color
+			Color color(1.0, 1.0, 1.0);
+			double plane_trans = 0.0;
+			if (face_winding == BACK_FACE &&
+				(m_clip_mask == 3 ||
+				m_clip_mask == 12 ||
+				m_clip_mask == 48 ||
+				m_clip_mask == 1 ||
+				m_clip_mask == 2 ||
+				m_clip_mask == 4 ||
+				m_clip_mask == 8 ||
+				m_clip_mask == 16 ||
+				m_clip_mask == 32 ||
+				m_clip_mask == 64)
+				)
+				plane_trans = plane_mode == PM_LOWTRANS ||
+				plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
 
-	//		if (face_winding == FRONT_FACE)
-	//		{
-	//			plane_trans = plane_mode == PM_LOWTRANS ||
-	//				plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
-	//		}
+			if (face_winding == FRONT_FACE)
+			{
+				plane_trans = plane_mode == PM_LOWTRANS ||
+					plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
+			}
 
-	//		if (plane_mode == PM_NORMAL ||
-	//			plane_mode == PM_NORMALBACK)
-	//		{
-	//			if (!link)
-	//				color = vd->GetColor();
-	//		}
-	//		else
-	//			color = GetTextColor();
+			if (plane_mode == PM_NORMAL ||
+				plane_mode == PM_NORMALBACK)
+			{
+				if (!link)
+					color = vd->GetColor();
+			}
+			else
+				color = GetTextColor();
 
-	//		//transform
-	//		if (!vd->GetTexture())
-	//			continue;
-	//		Transform *tform = vd->GetTexture()->transform();
-	//		if (!tform)
-	//			continue;
-	//		double mvmat[16];
-	//		tform->get_trans(mvmat);
-	//		double sclx, scly, sclz;
-	//		vd->GetScalings(sclx, scly, sclz);
-	//		glm::mat4 mv_mat = glm::scale(m_mv_mat,
-	//			glm::vec3(float(sclx), float(scly), float(sclz)));
-	//		glm::mat4 mv_mat2 = glm::mat4(
-	//			mvmat[0], mvmat[4], mvmat[8], mvmat[12],
-	//			mvmat[1], mvmat[5], mvmat[9], mvmat[13],
-	//			mvmat[2], mvmat[6], mvmat[10], mvmat[14],
-	//			mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
-	//		mv_mat = mv_mat * mv_mat2;
-	//		glm::mat4 matrix = m_proj_mat * mv_mat;
-	//		shader->setLocalParamMatrix(0, glm::value_ptr(matrix));
+			//transform
+			if (!vd->GetTexture())
+				continue;
+			Transform *tform = vd->GetTexture()->transform();
+			if (!tform)
+				continue;
+			double mvmat[16];
+			tform->get_trans(mvmat);
+			double sclx, scly, sclz;
+			vd->GetScalings(sclx, scly, sclz);
+			glm::mat4 mv_mat = glm::scale(m_mv_mat,
+				glm::vec3(float(sclx), float(scly), float(sclz)));
+			glm::mat4 mv_mat2 = glm::mat4(
+				mvmat[0], mvmat[4], mvmat[8], mvmat[12],
+				mvmat[1], mvmat[5], mvmat[9], mvmat[13],
+				mvmat[2], mvmat[6], mvmat[10], mvmat[14],
+				mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
+			mv_mat = mv_mat * mv_mat2;
+			glm::mat4 matrix = m_proj_mat * mv_mat;
 
-	//		vector<float> vertex;
-	//		vertex.reserve(8*3);
-	//		vector<uint32_t> index;
-	//		index.reserve(6*4*2);
+			vector<Vulkan2dRender::Vertex> vertex;
+			vector<uint32_t> index;
+			vertex.reserve(8);
+			index.reserve(6 * 4 + 6 * 5);
 
-	//		//vertices
-	//		for (size_t pi=0; pi<8; ++pi)
-	//		{
-	//			vertex.push_back(pp[pi].x());
-	//			vertex.push_back(pp[pi].y());
-	//			vertex.push_back(pp[pi].z());
-	//		}
-	//		//indices
-	//		index.push_back(4); index.push_back(0); index.push_back(5); index.push_back(1);
-	//		index.push_back(4); index.push_back(0); index.push_back(1); index.push_back(5);
-	//		index.push_back(7); index.push_back(3); index.push_back(6); index.push_back(2);
-	//		index.push_back(7); index.push_back(3); index.push_back(2); index.push_back(6);
-	//		index.push_back(1); index.push_back(0); index.push_back(3); index.push_back(2);
-	//		index.push_back(1); index.push_back(0); index.push_back(2); index.push_back(3);
-	//		index.push_back(4); index.push_back(5); index.push_back(6); index.push_back(7);
-	//		index.push_back(4); index.push_back(5); index.push_back(7); index.push_back(6);
-	//		index.push_back(0); index.push_back(4); index.push_back(2); index.push_back(6);
-	//		index.push_back(0); index.push_back(4); index.push_back(6); index.push_back(2);
-	//		index.push_back(5); index.push_back(1); index.push_back(7); index.push_back(3);
-	//		index.push_back(5); index.push_back(1); index.push_back(3); index.push_back(7);
+			//vertices
+			for (size_t pi = 0; pi < 8; ++pi)
+			{
+				vertex.push_back(Vulkan2dRender::Vertex{
+					{ (float)pp[pi].x(), (float)pp[pi].y(), (float)pp[pi].z() },
+					{ 0.0f, 0.0f, 0.0f }
+				});
+			}
 
-	//		glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	//		glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-	//		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_misc_ibo);
-	//		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*index.size(), &index[0], GL_DYNAMIC_DRAW);
+			if (m_clip_vobj.vertBuf.buffer == VK_NULL_HANDLE)
+			{
+				//indices
+				index.push_back(4); index.push_back(0); index.push_back(5); index.push_back(1);
+				index.push_back(7); index.push_back(3); index.push_back(6); index.push_back(2);
+				index.push_back(1); index.push_back(0); index.push_back(3); index.push_back(2);
+				index.push_back(4); index.push_back(5); index.push_back(6); index.push_back(7);
+				index.push_back(0); index.push_back(4); index.push_back(2); index.push_back(6);
+				index.push_back(5); index.push_back(1); index.push_back(7); index.push_back(3);
+				index.push_back(4); index.push_back(0); index.push_back(1); index.push_back(5); index.push_back(4);
+				index.push_back(7); index.push_back(3); index.push_back(2); index.push_back(6); index.push_back(7);
+				index.push_back(1); index.push_back(0); index.push_back(2); index.push_back(3); index.push_back(1);
+				index.push_back(4); index.push_back(5); index.push_back(7); index.push_back(6); index.push_back(4);
+				index.push_back(0); index.push_back(4); index.push_back(6); index.push_back(2); index.push_back(0);
+				index.push_back(5); index.push_back(1); index.push_back(3); index.push_back(7); index.push_back(5);
 
-	//		glBindVertexArray(m_misc_vao);
-	//		glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	//		glEnableVertexAttribArray(0);
-	//		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
-	//		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_misc_ibo);
+				VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+					VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+					&m_clip_vobj.vertBuf,
+					vertex.size() * sizeof(Vulkan2dRender::Vertex),
+					vertex.data()));
 
-	//		//draw
-	//		//x1 = (p4, p0, p1, p5)
-	//		if (m_clip_mask & 1)
-	//		{
-	//			if (draw_plane)
-	//			{
-	//				if (plane_mode == PM_NORMAL ||
-	//					plane_mode == PM_NORMALBACK)
-	//					shader->setLocalParam(0, 1.0, 0.5, 0.5, plane_trans);
-	//				else
-	//					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-	//				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)0);
-	//			}
-	//			if (border)
-	//			{
-	//				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-	//				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(4*4));
-	//			}
-	//		}
-	//		//x2 = (p7, p3, p2, p6)
-	//		if (m_clip_mask & 2)
-	//		{
-	//			if (draw_plane)
-	//			{
-	//				if (plane_mode == PM_NORMAL ||
-	//					plane_mode == PM_NORMALBACK)
-	//					shader->setLocalParam(0, 1.0, 0.5, 1.0, plane_trans);
-	//				else
-	//					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-	//				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(8 * 4));
-	//			}
-	//			if (border)
-	//			{
-	//				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-	//				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(12*4));
-	//			}
-	//		}
-	//		//y1 = (p1, p0, p2, p3)
-	//		if (m_clip_mask & 4)
-	//		{
-	//			if (draw_plane)
-	//			{
-	//				if (plane_mode == PM_NORMAL ||
-	//					plane_mode == PM_NORMALBACK)
-	//					shader->setLocalParam(0, 0.5, 1.0, 0.5, plane_trans);
-	//				else
-	//					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-	//				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(16 * 4));
-	//			}
-	//			if (border)
-	//			{
-	//				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-	//				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(20*4));
-	//			}
-	//		}
-	//		//y2 = (p4, p5, p7, p6)
-	//		if (m_clip_mask & 8)
-	//		{
-	//			if (draw_plane)
-	//			{
-	//				if (plane_mode == PM_NORMAL ||
-	//					plane_mode == PM_NORMALBACK)
-	//					shader->setLocalParam(0, 1.0, 1.0, 0.5, plane_trans);
-	//				else
-	//					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-	//				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(24 * 4));
-	//			}
-	//			if (border)
-	//			{
-	//				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-	//				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(28*4));
-	//			}
-	//		}
-	//		//z1 = (p0, p4, p6, p2)
-	//		if (m_clip_mask & 16)
-	//		{
-	//			if (draw_plane)
-	//			{
-	//				if (plane_mode == PM_NORMAL ||
-	//					plane_mode == PM_NORMALBACK)
-	//					shader->setLocalParam(0, 0.5, 0.5, 1.0, plane_trans);
-	//				else
-	//					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-	//				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(32 * 4));
-	//			}
-	//			if (border)
-	//			{
-	//				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-	//				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(36*4));
-	//			}
-	//		}
-	//		//z2 = (p5, p1, p3, p7)
-	//		if (m_clip_mask & 32)
-	//		{
-	//			if (draw_plane)
-	//			{
-	//				if (plane_mode == PM_NORMAL ||
-	//					plane_mode == PM_NORMALBACK)
-	//					shader->setLocalParam(0, 0.5, 1.0, 1.0, plane_trans);
-	//				else
-	//					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-	//				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(40 * 4));
-	//			}
-	//			if (border)
-	//			{
-	//				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-	//				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(44*4));
-	//			}
-	//		}
+				VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+					VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+					&m_clip_vobj.idxBuf,
+					index.size() * sizeof(uint32_t),
+					index.data()));
 
-	//		glDisableVertexAttribArray(0);
-	//		//unbind
-	//		glBindBuffer(GL_ARRAY_BUFFER, 0);
-	//		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-	//		glBindVertexArray(0);
-	//	}
-	//}
+				m_clip_vobj.idxCount = index.size();
+				m_clip_vobj.idxOffset = 0;
+				m_clip_vobj.vertCount = vertex.size();
+				m_clip_vobj.vertOffset = 0;
 
-	//if (draw_type == 3)
-	//{
-	//	for (i=0; i<GetMeshNum(); i++)
-	//	{
-	//		MeshData* md = GetMeshData(i);
-	//		if (!md)
-	//			continue;
+				m_clip_vobj.idxBuf.map();
+				m_clip_vobj.idxBuf.copyTo(index.data(), index.size() * sizeof(uint32_t));
+				m_clip_vobj.idxBuf.unmap();
+			}
+			m_clip_vobj.vertBuf.map();
+			m_clip_vobj.vertBuf.copyTo(vertex.data(), vertex.size() * sizeof(Vulkan2dRender::Vertex));
+			m_clip_vobj.vertBuf.unmap();
 
-	//		if (md!=cur_md)
-	//			continue;
+			vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+			Vulkan2dRender::V2dPipeline pipeline_line =
+				m_v2drender->preparePipeline(
+					IMG_SHDR_DRAW_GEOMETRY,
+					V2DRENDER_BLEND_OVER_UI,
+					current_fbo->attachments[0]->format,
+					current_fbo->attachments.size(),
+					0,
+					current_fbo->attachments[0]->is_swapchain_images,
+					VK_PRIMITIVE_TOPOLOGY_LINE_STRIP,
+					VK_POLYGON_MODE_FILL,
+					cull ? cullmode : VK_CULL_MODE_NONE,
+					frontface);
+			Vulkan2dRender::V2dPipeline pipeline_tri =
+				m_v2drender->preparePipeline(
+					IMG_SHDR_DRAW_GEOMETRY,
+					V2DRENDER_BLEND_OVER_UI,
+					current_fbo->attachments[0]->format,
+					current_fbo->attachments.size(),
+					0,
+					current_fbo->attachments[0]->is_swapchain_images,
+					VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
+					VK_POLYGON_MODE_FILL,
+					cull ? cullmode : VK_CULL_MODE_NONE,
+					frontface);
+			if (!current_fbo->renderPass)
+				current_fbo->replaceRenderPass(pipeline_line.pass);
+			
+			std::vector<Vulkan2dRender::V2DRenderParams> params_list;
+			Vulkan2dRender::V2DRenderParams params;
+			params.matrix[0] = matrix;
+			params.clear = m_frame_clear;
+			m_frame_clear = false;
+			params.obj = &m_clip_vobj;
 
-	//		MeshRenderer *mr = md->GetMR();
-	//		if (!mr)
-	//			continue;
+			//draw
+			//x1 = (p4, p0, p1, p5)
+			if (m_clip_mask & 1)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						params.loc[0] = glm::vec4(1.0f, 0.5f, 0.5f, plane_trans);
+					else
+						params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_tri;
+					params.render_idxCount = 4;
+					params.render_idxBase = 4 * 0;
+					params_list.push_back(params);
+				}
+				if (border)
+				{
+					params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_line;
+					params.render_idxCount = 5;
+					params.render_idxBase = 4 * 6 + 5 * 0;
+					params_list.push_back(params);
+				}
+			}
+			//x2 = (p7, p3, p2, p6)
+			if (m_clip_mask & 2)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						params.loc[0] = glm::vec4(1.0f, 0.5f, 1.0f, plane_trans);
+					else
+						params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_tri;
+					params.render_idxCount = 4;
+					params.render_idxBase = 4 * 1;
+					params_list.push_back(params);
+				}
+				if (border)
+				{
+					params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_line;
+					params.render_idxCount = 5;
+					params.render_idxBase = 4 * 6 + 5 * 1;
+					params_list.push_back(params);
+				}
+			}
+			//y1 = (p1, p0, p2, p3)
+			if (m_clip_mask & 4)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						params.loc[0] = glm::vec4(0.5f, 1.0f, 0.5f, plane_trans);
+					else
+						params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_tri;
+					params.render_idxCount = 4;
+					params.render_idxBase = 4 * 2;
+					params_list.push_back(params);
+				}
+				if (border)
+				{
+					params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_line;
+					params.render_idxCount = 5;
+					params.render_idxBase = 4 * 6 + 5 * 2;
+					params_list.push_back(params);
+				}
+			}
+			//y2 = (p4, p5, p7, p6)
+			if (m_clip_mask & 8)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						params.loc[0] = glm::vec4(1.0f, 1.0f, 0.5f, plane_trans);
+					else
+						params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_tri;
+					params.render_idxCount = 4;
+					params.render_idxBase = 4 * 3;
+					params_list.push_back(params);
+				}
+				if (border)
+				{
+					params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_line;
+					params.render_idxCount = 5;
+					params.render_idxBase = 4 * 6 + 5 * 3;
+					params_list.push_back(params);
+				}
+			}
+			//z1 = (p0, p4, p6, p2)
+			if (m_clip_mask & 16)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						params.loc[0] = glm::vec4(0.5f, 0.5f, 1.0f, plane_trans);
+					else
+						params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_tri;
+					params.render_idxCount = 4;
+					params.render_idxBase = 4 * 4;
+					params_list.push_back(params);
+				}
+				if (border)
+				{
+					params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_line;
+					params.render_idxCount = 5;
+					params.render_idxBase = 4 * 6 + 5 * 4;
+					params_list.push_back(params);
+				}
+			}
+			//z2 = (p5, p1, p3, p7)
+			if (m_clip_mask & 32)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						params.loc[0] = glm::vec4(0.5f, 1.0f, 1.0f, plane_trans);
+					else
+						params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_tri;
+					params.render_idxCount = 4;
+					params.render_idxBase = 4 * 5;
+					params_list.push_back(params);
+				}
+				if (border)
+				{
+					params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_line;
+					params.render_idxCount = 5;
+					params.render_idxBase = 4 * 6 + 5 * 5;
+					params_list.push_back(params);
+				}
+			}
 
-	//		vector<Plane*> *planes = mr->get_planes();
-	//		if (planes->size() != 6)
-	//			continue;
+			if (params_list.size() > 0)
+			{
+				m_v2drender->GetNextV2dRenderSemaphoreSettings(params_list[0]);
+				m_v2drender->seq_render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params_list.data(), params_list.size());
+			}
+		}
+	}
 
-	//		//calculating planes
-	//		//get six planes
-	//		Plane* px1 = (*planes)[0];
-	//		Plane* px2 = (*planes)[1];
-	//		Plane* py1 = (*planes)[2];
-	//		Plane* py2 = (*planes)[3];
-	//		Plane* pz1 = (*planes)[4];
-	//		Plane* pz2 = (*planes)[5];
+	if (draw_type == 3)
+	{
+		for (i=0; i<GetMeshNum(); i++)
+		{
+			MeshData* md = GetMeshData(i);
+			if (!md)
+				continue;
 
-	//		//calculate 4 lines
-	//		Vector lv_x1z1, lv_x1z2, lv_x2z1, lv_x2z2;
-	//		Point lp_x1z1, lp_x1z2, lp_x2z1, lp_x2z2;
-	//		//x1z1
-	//		if (!px1->Intersect(*pz1, lp_x1z1, lv_x1z1))
-	//			continue;
-	//		//x1z2
-	//		if (!px1->Intersect(*pz2, lp_x1z2, lv_x1z2))
-	//			continue;
-	//		//x2z1
-	//		if (!px2->Intersect(*pz1, lp_x2z1, lv_x2z1))
-	//			continue;
-	//		//x2z2
-	//		if (!px2->Intersect(*pz2, lp_x2z2, lv_x2z2))
-	//			continue;
+			if (md!=cur_md)
+				continue;
 
-	//		//calculate 8 points
-	//		Point pp[8];
-	//		//p0 = l_x1z1 * py1
-	//		if (!py1->Intersect(lp_x1z1, lv_x1z1, pp[0]))
-	//			continue;
-	//		//p1 = l_x1z2 * py1
-	//		if (!py1->Intersect(lp_x1z2, lv_x1z2, pp[1]))
-	//			continue;
-	//		//p2 = l_x2z1 *py1
-	//		if (!py1->Intersect(lp_x2z1, lv_x2z1, pp[2]))
-	//			continue;
-	//		//p3 = l_x2z2 * py1
-	//		if (!py1->Intersect(lp_x2z2, lv_x2z2, pp[3]))
-	//			continue;
-	//		//p4 = l_x1z1 * py2
-	//		if (!py2->Intersect(lp_x1z1, lv_x1z1, pp[4]))
-	//			continue;
-	//		//p5 = l_x1z2 * py2
-	//		if (!py2->Intersect(lp_x1z2, lv_x1z2, pp[5]))
-	//			continue;
-	//		//p6 = l_x2z1 * py2
-	//		if (!py2->Intersect(lp_x2z1, lv_x2z1, pp[6]))
-	//			continue;
-	//		//p7 = l_x2z2 * py2
-	//		if (!py2->Intersect(lp_x2z2, lv_x2z2, pp[7]))
-	//			continue;
+			MeshRenderer *mr = md->GetMR();
+			if (!mr)
+				continue;
 
-	//		//draw the six planes out of the eight points
-	//		//get color
-	//		Color color(1.0, 1.0, 1.0);
-	//		double plane_trans = 0.0;
-	//		if (face_winding == BACK_FACE &&
-	//			(m_clip_mask == 3 ||
-	//			m_clip_mask == 12 ||
-	//			m_clip_mask == 48 ||
-	//			m_clip_mask == 1 ||
-	//			m_clip_mask == 2 ||
-	//			m_clip_mask == 4 ||
-	//			m_clip_mask == 8 ||
-	//			m_clip_mask == 16 ||
-	//			m_clip_mask == 32 ||
-	//			m_clip_mask == 64)
-	//			)
-	//			plane_trans = plane_mode == PM_LOWTRANS ||
-	//			plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
+			vector<Plane*> *planes = mr->get_planes();
+			if (planes->size() != 6)
+				continue;
 
-	//		if (face_winding == FRONT_FACE)
-	//		{
-	//			plane_trans = plane_mode == PM_LOWTRANS ||
-	//				plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
-	//		}
+			//calculating planes
+			//get six planes
+			Plane* px1 = (*planes)[0];
+			Plane* px2 = (*planes)[1];
+			Plane* py1 = (*planes)[2];
+			Plane* py2 = (*planes)[3];
+			Plane* pz1 = (*planes)[4];
+			Plane* pz2 = (*planes)[5];
 
-	//		if (plane_mode == PM_NORMAL ||
-	//			plane_mode == PM_NORMALBACK)
-	//		{
-	//			if (!link)
-	//			{
-	//				Color amb, diff, spec;
-	//				double shine, alpha;
-	//				md->GetMaterial(amb, diff, spec, shine, alpha);
-	//				color = diff;
-	//			}
-	//		}
-	//		else
-	//			color = GetTextColor();
+			//calculate 4 lines
+			Vector lv_x1z1, lv_x1z2, lv_x2z1, lv_x2z2;
+			Point lp_x1z1, lp_x1z2, lp_x2z1, lp_x2z2;
+			//x1z1
+			if (!px1->Intersect(*pz1, lp_x1z1, lv_x1z1))
+				continue;
+			//x1z2
+			if (!px1->Intersect(*pz2, lp_x1z2, lv_x1z2))
+				continue;
+			//x2z1
+			if (!px2->Intersect(*pz1, lp_x2z1, lv_x2z1))
+				continue;
+			//x2z2
+			if (!px2->Intersect(*pz2, lp_x2z2, lv_x2z2))
+				continue;
 
-	//		//transform
-	//		BBox dbox = md->GetBounds();
-	//		glm::mat4 mvmat = glm::mat4(float(dbox.max().x()-dbox.min().x()), 0.0f, 0.0f, 0.0f,
-	//									0.0f, float(dbox.max().y()-dbox.min().y()), 0.0f, 0.0f,
-	//									0.0f, 0.0f, float(dbox.max().z()-dbox.min().z()), 0.0f,
-	//									float(dbox.min().x()), float(dbox.min().y()), float(dbox.min().z()), 1.0f);
-	//		glm::mat4 matrix = m_proj_mat * m_mv_mat * mvmat;
-	//		shader->setLocalParamMatrix(0, glm::value_ptr(matrix));
+			//calculate 8 points
+			Point pp[8];
+			//p0 = l_x1z1 * py1
+			if (!py1->Intersect(lp_x1z1, lv_x1z1, pp[0]))
+				continue;
+			//p1 = l_x1z2 * py1
+			if (!py1->Intersect(lp_x1z2, lv_x1z2, pp[1]))
+				continue;
+			//p2 = l_x2z1 *py1
+			if (!py1->Intersect(lp_x2z1, lv_x2z1, pp[2]))
+				continue;
+			//p3 = l_x2z2 * py1
+			if (!py1->Intersect(lp_x2z2, lv_x2z2, pp[3]))
+				continue;
+			//p4 = l_x1z1 * py2
+			if (!py2->Intersect(lp_x1z1, lv_x1z1, pp[4]))
+				continue;
+			//p5 = l_x1z2 * py2
+			if (!py2->Intersect(lp_x1z2, lv_x1z2, pp[5]))
+				continue;
+			//p6 = l_x2z1 * py2
+			if (!py2->Intersect(lp_x2z1, lv_x2z1, pp[6]))
+				continue;
+			//p7 = l_x2z2 * py2
+			if (!py2->Intersect(lp_x2z2, lv_x2z2, pp[7]))
+				continue;
 
-	//		vector<float> vertex;
-	//		vertex.reserve(8*3);
-	//		vector<uint32_t> index;
-	//		index.reserve(6*4*2);
+			//draw the six planes out of the eight points
+			//get color
+			Color color(1.0, 1.0, 1.0);
+			double plane_trans = 0.0;
+			if (face_winding == BACK_FACE &&
+				(m_clip_mask == 3 ||
+				m_clip_mask == 12 ||
+				m_clip_mask == 48 ||
+				m_clip_mask == 1 ||
+				m_clip_mask == 2 ||
+				m_clip_mask == 4 ||
+				m_clip_mask == 8 ||
+				m_clip_mask == 16 ||
+				m_clip_mask == 32 ||
+				m_clip_mask == 64)
+				)
+				plane_trans = plane_mode == PM_LOWTRANS ||
+				plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
 
-	//		//vertices
-	//		for (size_t pi=0; pi<8; ++pi)
-	//		{
-	//			vertex.push_back(pp[pi].x());
-	//			vertex.push_back(pp[pi].y());
-	//			vertex.push_back(pp[pi].z());
-	//		}
-	//		//indices
-	//		index.push_back(4); index.push_back(0); index.push_back(5); index.push_back(1);
-	//		index.push_back(4); index.push_back(0); index.push_back(1); index.push_back(5);
-	//		index.push_back(7); index.push_back(3); index.push_back(6); index.push_back(2);
-	//		index.push_back(7); index.push_back(3); index.push_back(2); index.push_back(6);
-	//		index.push_back(1); index.push_back(0); index.push_back(3); index.push_back(2);
-	//		index.push_back(1); index.push_back(0); index.push_back(2); index.push_back(3);
-	//		index.push_back(4); index.push_back(5); index.push_back(6); index.push_back(7);
-	//		index.push_back(4); index.push_back(5); index.push_back(7); index.push_back(6);
-	//		index.push_back(0); index.push_back(4); index.push_back(2); index.push_back(6);
-	//		index.push_back(0); index.push_back(4); index.push_back(6); index.push_back(2);
-	//		index.push_back(5); index.push_back(1); index.push_back(7); index.push_back(3);
-	//		index.push_back(5); index.push_back(1); index.push_back(3); index.push_back(7);
+			if (face_winding == FRONT_FACE)
+			{
+				plane_trans = plane_mode == PM_LOWTRANS ||
+					plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
+			}
 
-	//		glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	//		glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-	//		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_misc_ibo);
-	//		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*index.size(), &index[0], GL_DYNAMIC_DRAW);
+			if (plane_mode == PM_NORMAL ||
+				plane_mode == PM_NORMALBACK)
+			{
+				if (!link)
+				{
+					Color amb, diff, spec;
+					double shine, alpha;
+					md->GetMaterial(amb, diff, spec, shine, alpha);
+					color = diff;
+				}
+			}
+			else
+				color = GetTextColor();
 
-	//		glBindVertexArray(m_misc_vao);
-	//		glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	//		glEnableVertexAttribArray(0);
-	//		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
-	//		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_misc_ibo);
+			//transform
+			BBox dbox = md->GetBounds();
+			glm::mat4 mvmat = glm::mat4(float(dbox.max().x()-dbox.min().x()), 0.0f, 0.0f, 0.0f,
+										0.0f, float(dbox.max().y()-dbox.min().y()), 0.0f, 0.0f,
+										0.0f, 0.0f, float(dbox.max().z()-dbox.min().z()), 0.0f,
+										float(dbox.min().x()), float(dbox.min().y()), float(dbox.min().z()), 1.0f);
+			glm::mat4 matrix = m_proj_mat * m_mv_mat * mvmat;
 
-	//		//draw
-	//		//x1 = (p4, p0, p1, p5)
-	//		if (m_clip_mask & 1)
-	//		{
-	//			if (draw_plane)
-	//			{
-	//				if (plane_mode == PM_NORMAL ||
-	//					plane_mode == PM_NORMALBACK)
-	//					shader->setLocalParam(0, 1.0, 0.5, 0.5, plane_trans);
-	//				else
-	//					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-	//				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)0);
-	//			}
-	//			if (border)
-	//			{
-	//				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-	//				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(4*4));
-	//			}
-	//		}
-	//		//x2 = (p7, p3, p2, p6)
-	//		if (m_clip_mask & 2)
-	//		{
-	//			if (draw_plane)
-	//			{
-	//				if (plane_mode == PM_NORMAL ||
-	//					plane_mode == PM_NORMALBACK)
-	//					shader->setLocalParam(0, 1.0, 0.5, 1.0, plane_trans);
-	//				else
-	//					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-	//				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(8 * 4));
-	//			}
-	//			if (border)
-	//			{
-	//				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-	//				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(12*4));
-	//			}
-	//		}
-	//		//y1 = (p1, p0, p2, p3)
-	//		if (m_clip_mask & 4)
-	//		{
-	//			if (draw_plane)
-	//			{
-	//				if (plane_mode == PM_NORMAL ||
-	//					plane_mode == PM_NORMALBACK)
-	//					shader->setLocalParam(0, 0.5, 1.0, 0.5, plane_trans);
-	//				else
-	//					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-	//				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(16 * 4));
-	//			}
-	//			if (border)
-	//			{
-	//				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-	//				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(20*4));
-	//			}
-	//		}
-	//		//y2 = (p4, p5, p7, p6)
-	//		if (m_clip_mask & 8)
-	//		{
-	//			if (draw_plane)
-	//			{
-	//				if (plane_mode == PM_NORMAL ||
-	//					plane_mode == PM_NORMALBACK)
-	//					shader->setLocalParam(0, 1.0, 1.0, 0.5, plane_trans);
-	//				else
-	//					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-	//				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(24 * 4));
-	//			}
-	//			if (border)
-	//			{
-	//				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-	//				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(28*4));
-	//			}
-	//		}
-	//		//z1 = (p0, p4, p6, p2)
-	//		if (m_clip_mask & 16)
-	//		{
-	//			if (draw_plane)
-	//			{
-	//				if (plane_mode == PM_NORMAL ||
-	//					plane_mode == PM_NORMALBACK)
-	//					shader->setLocalParam(0, 0.5, 0.5, 1.0, plane_trans);
-	//				else
-	//					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-	//				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(32 * 4));
-	//			}
-	//			if (border)
-	//			{
-	//				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-	//				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(36*4));
-	//			}
-	//		}
-	//		//z2 = (p5, p1, p3, p7)
-	//		if (m_clip_mask & 32)
-	//		{
-	//			if (draw_plane)
-	//			{
-	//				if (plane_mode == PM_NORMAL ||
-	//					plane_mode == PM_NORMALBACK)
-	//					shader->setLocalParam(0, 0.5, 1.0, 1.0, plane_trans);
-	//				else
-	//					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-	//				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(40 * 4));
-	//			}
-	//			if (border)
-	//			{
-	//				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-	//				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(44*4));
-	//			}
-	//		}
+			vector<Vulkan2dRender::Vertex> vertex;
+			vector<uint32_t> index;
+			vertex.reserve(8);
+			index.reserve(6 * 4 + 6 * 5);
 
-	//		glDisableVertexAttribArray(0);
-	//		//unbind
-	//		glBindBuffer(GL_ARRAY_BUFFER, 0);
-	//		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-	//		glBindVertexArray(0);
-	//	}
-	//}
+			//vertices
+			for (size_t pi = 0; pi < 8; ++pi)
+			{
+				vertex.push_back(Vulkan2dRender::Vertex{
+					{ (float)pp[pi].x(), (float)pp[pi].y(), (float)pp[pi].z() },
+					{ 0.0f, 0.0f, 0.0f }
+					});
+			}
 
-	//if (shader && shader->valid())
-	//	shader->release();
+			if (m_clip_vobj.vertBuf.buffer == VK_NULL_HANDLE)
+			{
+				//indices
+				index.push_back(4); index.push_back(0); index.push_back(5); index.push_back(1);
+				index.push_back(7); index.push_back(3); index.push_back(6); index.push_back(2);
+				index.push_back(1); index.push_back(0); index.push_back(3); index.push_back(2);
+				index.push_back(4); index.push_back(5); index.push_back(6); index.push_back(7);
+				index.push_back(0); index.push_back(4); index.push_back(2); index.push_back(6);
+				index.push_back(5); index.push_back(1); index.push_back(7); index.push_back(3);
+				index.push_back(4); index.push_back(0); index.push_back(1); index.push_back(5); index.push_back(4);
+				index.push_back(7); index.push_back(3); index.push_back(2); index.push_back(6); index.push_back(7);
+				index.push_back(1); index.push_back(0); index.push_back(2); index.push_back(3); index.push_back(1);
+				index.push_back(4); index.push_back(5); index.push_back(7); index.push_back(6); index.push_back(4);
+				index.push_back(0); index.push_back(4); index.push_back(6); index.push_back(2); index.push_back(0);
+				index.push_back(5); index.push_back(1); index.push_back(3); index.push_back(7); index.push_back(5);
 
-	//glFrontFace(GL_CCW);
-	//glCullFace(GL_BACK);
+				VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+					VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+					&m_clip_vobj.vertBuf,
+					vertex.size() * sizeof(Vulkan2dRender::Vertex),
+					vertex.data()));
+
+				VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+					VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+					&m_clip_vobj.idxBuf,
+					index.size() * sizeof(uint32_t),
+					index.data()));
+
+				m_clip_vobj.idxCount = index.size();
+				m_clip_vobj.idxOffset = 0;
+				m_clip_vobj.vertCount = vertex.size();
+				m_clip_vobj.vertOffset = 0;
+
+				m_clip_vobj.idxBuf.map();
+				m_clip_vobj.idxBuf.copyTo(index.data(), index.size() * sizeof(uint32_t));
+				m_clip_vobj.idxBuf.unmap();
+			}
+			m_clip_vobj.vertBuf.map();
+			m_clip_vobj.vertBuf.copyTo(vertex.data(), vertex.size() * sizeof(Vulkan2dRender::Vertex));
+			m_clip_vobj.vertBuf.unmap();
+
+			vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+			Vulkan2dRender::V2dPipeline pipeline_line =
+				m_v2drender->preparePipeline(
+					IMG_SHDR_DRAW_GEOMETRY,
+					V2DRENDER_BLEND_OVER_UI,
+					current_fbo->attachments[0]->format,
+					current_fbo->attachments.size(),
+					0,
+					current_fbo->attachments[0]->is_swapchain_images,
+					VK_PRIMITIVE_TOPOLOGY_LINE_STRIP,
+					VK_POLYGON_MODE_FILL,
+					cull ? cullmode : VK_CULL_MODE_NONE,
+					frontface);
+			Vulkan2dRender::V2dPipeline pipeline_tri =
+				m_v2drender->preparePipeline(
+					IMG_SHDR_DRAW_GEOMETRY,
+					V2DRENDER_BLEND_OVER_UI,
+					current_fbo->attachments[0]->format,
+					current_fbo->attachments.size(),
+					0,
+					current_fbo->attachments[0]->is_swapchain_images,
+					VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
+					VK_POLYGON_MODE_FILL,
+					cull ? cullmode : VK_CULL_MODE_NONE,
+					frontface);
+			if (!current_fbo->renderPass)
+				current_fbo->replaceRenderPass(pipeline_line.pass);
+
+			std::vector<Vulkan2dRender::V2DRenderParams> params_list;
+			Vulkan2dRender::V2DRenderParams params;
+			params.matrix[0] = matrix;
+			params.clear = m_frame_clear;
+			m_frame_clear = false;
+			params.obj = &m_clip_vobj;
+
+			//draw
+			//x1 = (p4, p0, p1, p5)
+			if (m_clip_mask & 1)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						params.loc[0] = glm::vec4(1.0f, 0.5f, 0.5f, plane_trans);
+					else
+						params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_tri;
+					params.render_idxCount = 4;
+					params.render_idxBase = 4 * 0;
+					params_list.push_back(params);
+				}
+				if (border)
+				{
+					params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_line;
+					params.render_idxCount = 5;
+					params.render_idxBase = 4 * 6 + 5 * 0;
+					params_list.push_back(params);
+				}
+			}
+			//x2 = (p7, p3, p2, p6)
+			if (m_clip_mask & 2)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						params.loc[0] = glm::vec4(1.0f, 0.5f, 1.0f, plane_trans);
+					else
+						params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_tri;
+					params.render_idxCount = 4;
+					params.render_idxBase = 4 * 1;
+					params_list.push_back(params);
+				}
+				if (border)
+				{
+					params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_line;
+					params.render_idxCount = 5;
+					params.render_idxBase = 4 * 6 + 5 * 1;
+					params_list.push_back(params);
+				}
+			}
+			//y1 = (p1, p0, p2, p3)
+			if (m_clip_mask & 4)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						params.loc[0] = glm::vec4(0.5f, 1.0f, 0.5f, plane_trans);
+					else
+						params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_tri;
+					params.render_idxCount = 4;
+					params.render_idxBase = 4 * 2;
+					params_list.push_back(params);
+				}
+				if (border)
+				{
+					params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_line;
+					params.render_idxCount = 5;
+					params.render_idxBase = 4 * 6 + 5 * 2;
+					params_list.push_back(params);
+				}
+			}
+			//y2 = (p4, p5, p7, p6)
+			if (m_clip_mask & 8)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						params.loc[0] = glm::vec4(1.0f, 1.0f, 0.5f, plane_trans);
+					else
+						params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_tri;
+					params.render_idxCount = 4;
+					params.render_idxBase = 4 * 3;
+					params_list.push_back(params);
+				}
+				if (border)
+				{
+					params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_line;
+					params.render_idxCount = 5;
+					params.render_idxBase = 4 * 6 + 5 * 3;
+					params_list.push_back(params);
+				}
+			}
+			//z1 = (p0, p4, p6, p2)
+			if (m_clip_mask & 16)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						params.loc[0] = glm::vec4(0.5f, 0.5f, 1.0f, plane_trans);
+					else
+						params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_tri;
+					params.render_idxCount = 4;
+					params.render_idxBase = 4 * 4;
+					params_list.push_back(params);
+				}
+				if (border)
+				{
+					params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_line;
+					params.render_idxCount = 5;
+					params.render_idxBase = 4 * 6 + 5 * 4;
+					params_list.push_back(params);
+				}
+			}
+			//z2 = (p5, p1, p3, p7)
+			if (m_clip_mask & 32)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						params.loc[0] = glm::vec4(0.5f, 1.0f, 1.0f, plane_trans);
+					else
+						params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_tri;
+					params.render_idxCount = 4;
+					params.render_idxBase = 4 * 5;
+					params_list.push_back(params);
+				}
+				if (border)
+				{
+					params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_line;
+					params.render_idxCount = 5;
+					params.render_idxBase = 4 * 6 + 5 * 5;
+					params_list.push_back(params);
+				}
+			}
+
+			if (params_list.size() > 0)
+			{
+				m_v2drender->GetNextV2dRenderSemaphoreSettings(params_list[0]);
+				m_v2drender->seq_render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params_list.data(), params_list.size());
+			}
+		}
+	}
+
 }
 
 void VRenderVulkanView::DrawGrid()
@@ -14345,7 +14519,7 @@ void VRenderVulkanView::OnMouse(wxMouseEvent& event)
 						Vector pos(m_transx, m_transy, m_transz);
 						pos.normalize();
 						Vector ctr(m_ctrx, m_ctry, m_ctrz);
-						ctr -= delta * pos * m_radius * 2;//1000;
+						ctr -= delta * pos * m_radius * 10;//1000;
 						m_ctrx = ctr.x();
 						m_ctry = ctr.y();
 						m_ctrz = ctr.z();
