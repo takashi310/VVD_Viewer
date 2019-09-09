@@ -1200,8 +1200,8 @@ void BrushToolDlg::OnCAThreshText(wxCommandEvent &event)
    VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
    if (vr_frame)
       sel_vol = vr_frame->GetCurSelVol();
-   if (sel_vol)
-      sel_vol->SetMaskThreshold(m_dft_ca_thresh);
+   //if (sel_vol)
+   //   sel_vol->SetMaskThreshold(m_dft_ca_thresh);
    vr_frame->RefreshVRenderViews();
 }
 
@@ -1224,11 +1224,11 @@ void BrushToolDlg::OnCAAnalyzeBtn(wxCommandEvent &event)
       VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
       if (vr_frame)
          sel_vol = vr_frame->GetCurSelVol();
-      if (sel_vol)
+      /*if (sel_vol)
       {
          sel_vol->SetUseMaskThreshold(true);
          sel_vol->SetMaskThreshold(m_dft_ca_thresh);
-      }
+      }*/
       m_ca_comps_text->SetValue(wxString::Format("%d", comps));
       m_ca_volume_text->SetValue(wxString::Format("%d", volume));
       if (vr_frame)
@@ -1300,11 +1300,11 @@ void BrushToolDlg::OnNRAnalyzeBtn(wxCommandEvent &event)
       VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
       if (vr_frame)
          sel_vol = vr_frame->GetCurSelVol();
-      if (sel_vol)
-      {
-         sel_vol->SetUseMaskThreshold(true);
-         sel_vol->SetMaskThreshold(m_dft_ca_thresh);
-      }
+      //if (sel_vol)
+      //{
+      //   sel_vol->SetUseMaskThreshold(true);
+      //   sel_vol->SetMaskThreshold(m_dft_ca_thresh);
+      //}
       m_ca_comps_text->SetValue(wxString::Format("%d", comps));
       m_ca_volume_text->SetValue(wxString::Format("%d", volume));
       if (vr_frame)

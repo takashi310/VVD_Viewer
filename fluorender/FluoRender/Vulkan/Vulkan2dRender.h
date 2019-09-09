@@ -21,6 +21,7 @@ class Vulkan2dRender
 
 public:
 	vks::Buffer m_vertexBuffer;
+	vks::Buffer m_vertexBuffer34;
 	vks::Buffer m_indexBuffer;
 	uint32_t m_indexCount;
 
@@ -28,12 +29,16 @@ public:
 		float pos[3];
 		float uv[3];
 	};
+	struct Vertex34 {
+		float pos[3];
+		float uv[4];
+	};
 
 	struct V2dVertexSettings{
 		VkPipelineVertexInputStateCreateInfo inputState;
 		std::vector<VkVertexInputBindingDescription> inputBinding;
 		std::vector<VkVertexInputAttributeDescription> inputAttributes;
-	} m_vertices;
+	} m_vertices, m_vertices34;
 
 	struct V2dPipeline {
 		VkPipeline vkpipeline;

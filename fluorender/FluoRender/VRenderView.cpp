@@ -1107,7 +1107,7 @@ void VRenderVulkanView::Draw()
 		m_mv_mat = glm::translate(m_mv_mat, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
 
 		if (VolumeRenderer::get_done_update_loop() && m_draw_overlays_only)
-			DrawFinalBuffer(true);
+			DrawFinalBuffer(m_frame_clear);
 		else
 		{
 			if (m_use_fog)
@@ -1485,6 +1485,7 @@ void VRenderVulkanView::DrawVolumes(int peel)
 		params2.loc[1] = glm::vec4( 1.0f, 1.0f, 1.0f, 1.0f );
 		params2.loc[2] = glm::vec4( 0.0f, 0.0f, 0.0f, 0.0f );
 		params2.clear = m_frame_clear;
+		params2.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
 		m_frame_clear = false;
 		
 		current_fbo->replaceRenderPass(params2.pipeline.pass);
@@ -1508,6 +1509,7 @@ void VRenderVulkanView::DrawVolumes(int peel)
 		params.loc[1] = glm::vec4( 1.0f, 1.0f, 1.0f, 1.0f );
 		params.loc[2] = glm::vec4( 0.0f, 0.0f, 0.0f, 0.0f );
 		params.clear = m_frame_clear;
+		params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
 		m_frame_clear = false;
 		
 		current_fbo->replaceRenderPass(params.pipeline.pass);
@@ -2135,7 +2137,7 @@ void VRenderVulkanView::DrawAnnotations()
 					{
 						if (m_persp && (pos.z()<=0.0 || pos.z()>=1.0))
 							continue;
-						if (!m_persp && (pos.z()>=0.0 || pos.z()<=-1.0))
+						if (!m_persp && (pos.z()<=0.0 || pos.z()>=1.0))
 							continue;
 						px = pos.x()*nx/2.0;
 						py = pos.y()*ny/2.0;
@@ -2489,6 +2491,7 @@ void VRenderVulkanView::DrawCircle(double cx, double cy,
 	params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), 1.0f);
 	params.matrix[0] = matrix;
 	params.clear = m_frame_clear;
+	params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
 	m_frame_clear = false;
 
 	params.obj = &m_brush_vobj;
@@ -2663,6 +2666,7 @@ void VRenderVulkanView::DisplayStroke()
 			current_fbo->attachments[0]->is_swapchain_images);
 	params.tex[0] = m_tex_paint.get();
 	params.clear = m_frame_clear;
+	params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
 	m_frame_clear = false;
 
 	if (!current_fbo->renderPass)
@@ -3813,6 +3817,7 @@ void VRenderVulkanView::DrawFinalBuffer(bool clear)
 	params.loc[2] = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
 
 	params.clear = clear;
+	params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b(), 0.0f };
 	m_frame_clear = false;
 	
 	current_fbo->replaceRenderPass(params.pipeline.pass);
@@ -9548,6 +9553,7 @@ void VRenderVulkanView::DrawClippingPlanes(bool border, int face_winding)
 			Vulkan2dRender::V2DRenderParams params;
 			params.matrix[0] = matrix;
 			params.clear = m_frame_clear;
+			params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
 			m_frame_clear = false;
 			params.obj = &m_clip_vobj;
 
@@ -9912,6 +9918,7 @@ void VRenderVulkanView::DrawClippingPlanes(bool border, int face_winding)
 			Vulkan2dRender::V2DRenderParams params;
 			params.matrix[0] = matrix;
 			params.clear = m_frame_clear;
+			params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
 			m_frame_clear = false;
 			params.obj = &m_clip_vobj;
 
@@ -10161,6 +10168,7 @@ void VRenderVulkanView::DrawGrid()
 	params.loc[0] = glm::vec4((float)text_color.r(), (float)text_color.g(), (float)text_color.b(), 1.0f);
 	params.matrix[0] = m_proj_mat * m_mv_mat;
 	params.clear = m_frame_clear;
+	params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
 	m_frame_clear = false;
 
 	params.obj = &m_grid_vobj;
@@ -10233,6 +10241,7 @@ void VRenderVulkanView::DrawCamCtr()
 		);
 	params.matrix[0] = m_proj_mat * m_mv_mat;
 	params.clear = m_frame_clear;
+	params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
 	m_frame_clear = false;
 
 	params.obj = &m_camctr_vobj;
@@ -10305,6 +10314,7 @@ void VRenderVulkanView::DrawFrame()
 	params.loc[0] = glm::vec4(1.0f, 1.0f, 0.0f, 1.0f);
 	params.matrix[0] = proj_mat;
 	params.clear = m_frame_clear;
+	params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
 	m_frame_clear = false;
 
 	params.obj = &m_frame_vobj;
@@ -10614,6 +10624,7 @@ void VRenderVulkanView::DrawScaleBar()
 	params.loc[0] = glm::vec4((float)text_color.r(), (float)text_color.g(), (float)text_color.b(), 1.0f);
 	params.matrix[0] = proj_mat;
 	params.clear = m_frame_clear;
+	params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
 	m_frame_clear = false;
 
 	params.obj = &m_scbar_vobj;
@@ -10840,6 +10851,7 @@ void VRenderVulkanView::DrawName(
 	params1.loc[0] = glm::vec4((float)text_color.r(), (float)text_color.g(), (float)text_color.b(), 1.0f);
 	params1.matrix[0] = proj_mat * glm::translate(trans1) * glm::scale(scale1);
 	params1.clear = m_frame_clear;
+	params1.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
 	m_frame_clear = false;
 	params1.obj = &m_name_vobj;
 
@@ -10879,10 +10891,7 @@ void VRenderVulkanView::DrawName(
 
 void VRenderVulkanView::DrawGradBg()
 {
-	/*glm::mat4 proj_mat = glm::ortho(0.0f, 1.0f, 0.0f, 1.0f);
-
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_BLEND);
+	glm::mat4 proj_mat = glm::ortho(0.0f, 1.0f, 0.0f, 1.0f);
 
 	Color color1, color2;
 	HSVColor hsv_color1(m_bg_color);
@@ -10917,56 +10926,72 @@ void VRenderVulkanView::DrawGradBg()
 			Min(hsv_color1.val() + 0.5, 1.0)));
 	}
 
-	vector<float> vertex;
-	vertex.reserve(16*3);
-	vertex.push_back(0.0); vertex.push_back(0.0); vertex.push_back(0.0);
-	vertex.push_back(m_bg_color.r()); vertex.push_back(m_bg_color.g()); vertex.push_back(m_bg_color.b());
-	vertex.push_back(1.0); vertex.push_back(0.0); vertex.push_back(0.0);
-	vertex.push_back(m_bg_color.r()); vertex.push_back(m_bg_color.g()); vertex.push_back(m_bg_color.b());
-	vertex.push_back(0.0); vertex.push_back(0.3); vertex.push_back(0.0);
-	vertex.push_back(color1.r()); vertex.push_back(color1.g()); vertex.push_back(color1.b());
-	vertex.push_back(1.0); vertex.push_back(0.3); vertex.push_back(0.0);
-	vertex.push_back(color1.r()); vertex.push_back(color1.g()); vertex.push_back(color1.b());
-	vertex.push_back(0.0); vertex.push_back(0.5); vertex.push_back(0.0);
-	vertex.push_back(color2.r()); vertex.push_back(color2.g()); vertex.push_back(color2.b());
-	vertex.push_back(1.0); vertex.push_back(0.5); vertex.push_back(0.0);
-	vertex.push_back(color2.r()); vertex.push_back(color2.g()); vertex.push_back(color2.b());
-	vertex.push_back(0.0); vertex.push_back(1.0); vertex.push_back(0.0);
-	vertex.push_back(m_bg_color.r()); vertex.push_back(m_bg_color.g()); vertex.push_back(m_bg_color.b());
-	vertex.push_back(1.0); vertex.push_back(1.0); vertex.push_back(0.0);
-	vertex.push_back(m_bg_color.r()); vertex.push_back(m_bg_color.g()); vertex.push_back(m_bg_color.b());
+	vector<Vulkan2dRender::Vertex> vertex;
+	vertex.reserve(8);
 
-	ShaderProgram* shader =
-		m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY_COLOR3);
-	if (shader)
+	vertex.push_back(Vulkan2dRender::Vertex{ {0.0f, 1.0f, 0.0f}, {(float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b()} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {1.0f, 1.0f, 0.0f}, {(float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b()} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {0.0f, 0.7f, 0.0f}, {(float)color1.r(), (float)color1.g(), (float)color1.b()} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {1.0f, 0.7f, 0.0f}, {(float)color1.r(), (float)color1.g(), (float)color1.b()} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {0.0f, 0.5f, 0.0f}, {(float)color2.r(), (float)color2.g(), (float)color2.b()} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {1.0f, 0.5f, 0.0f}, {(float)color2.r(), (float)color2.g(), (float)color2.b()} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {0.0f, 0.0f, 0.0f}, {(float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b()} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {1.0f, 0.0f, 0.0f}, {(float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b()} });
+
+	if (m_grad_vobj.vertBuf.buffer == VK_NULL_HANDLE)
 	{
-		if (!shader->valid())
-			shader->create();
-		shader->bind();
+		vector<uint32_t> index = { 0,1,2,3,4,5,6,7 };
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_grad_vobj.vertBuf,
+			vertex.size() * sizeof(Vulkan2dRender::Vertex),
+			vertex.data()));
+
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_grad_vobj.idxBuf,
+			index.size() * sizeof(uint32_t),
+			index.data()));
+
+		m_grad_vobj.idxCount = index.size();
+		m_grad_vobj.idxOffset = 0;
+		m_grad_vobj.vertCount = vertex.size();
+		m_grad_vobj.vertOffset = 0;
+
+		m_grad_vobj.idxBuf.map();
+		m_grad_vobj.idxBuf.copyTo(index.data(), index.size() * sizeof(uint32_t));
+		m_grad_vobj.idxBuf.unmap();
 	}
-	shader->setLocalParamMatrix(0, glm::value_ptr(proj_mat));
+	m_grad_vobj.vertBuf.map();
+	m_grad_vobj.vertBuf.copyTo(vertex.data(), vertex.size() * sizeof(Vulkan2dRender::Vertex));
+	m_grad_vobj.vertBuf.unmap();
+	
+	Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+	vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+	params.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_DRAW_GEOMETRY_COLOR3,
+			V2DRENDER_BLEND_OVER_UI,
+			current_fbo->attachments[0]->format,
+			current_fbo->attachments.size(),
+			0,
+			current_fbo->attachments[0]->is_swapchain_images,
+			VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP
+		);
+	params.matrix[0] = proj_mat;
+	params.clear = m_frame_clear;
+	params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
+	m_frame_clear = false;
 
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-	glBindVertexArray(m_misc_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)0);
-	glEnableVertexAttribArray(1);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)12);
+	params.obj = &m_grad_vobj;
 
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 8);
+	if (!current_fbo->renderPass)
+		current_fbo->replaceRenderPass(params.pipeline.pass);
 
-	glDisableVertexAttribArray(0);
-	glDisableVertexAttribArray(1);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
+	m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
 
-	if (shader && shader->valid())
-		shader->release();
-
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);*/
 }
 
 void VRenderVulkanView::SetColormapColors(int colormap)
@@ -11023,288 +11048,272 @@ void VRenderVulkanView::SetColormapColors(int colormap)
 
 void VRenderVulkanView::DrawColormap()
 {
-	//bool draw = false;
+	bool draw = false;
 
-	//int num = 0;
-	//int vd_index;
-	//double max_val = 255.0;
-	//bool enable_alpha = false;
+	int num = 0;
+	int vd_index;
+	double max_val = 255.0;
+	bool enable_alpha = false;
 
-	//for (int i=0; i<GetDispVolumeNum(); i++)
-	//{
-	//	VolumeData* vd = GetDispVolumeData(i);
-	//	if (vd && vd->GetColormapMode() == 1 && vd->GetDisp())
-	//	{
-	//		num++;
-	//		vd_index = i;
-	//	}
-	//}
+	for (int i=0; i<GetDispVolumeNum(); i++)
+	{
+		VolumeData* vd = GetDispVolumeData(i);
+		if (vd && vd->GetColormapMode() == 1 && vd->GetDisp())
+		{
+			num++;
+			vd_index = i;
+		}
+	}
 
-	//if (num == 0)
-	//	return;
-	//else if (num == 1)
-	//{
-	//	VolumeData* vd_view = GetDispVolumeData(vd_index);
-	//	if (vd_view)
-	//	{
-	//		draw = true;
-	//		double low, high;
-	//		vd_view->GetColormapValues(low, high);
-	//		m_value_2 = low;
-	//		m_value_6 = high;
-	//		m_value_4 = (low+high)/2.0;
-	//		m_value_3 = (low+m_value_4)/2.0;
-	//		m_value_5 = (m_value_4+high)/2.0;
-	//		max_val = vd_view->GetMaxValue();
-	//		enable_alpha = vd_view->GetEnableAlpha();
-	//		SetColormapColors(vd_view->GetColormap());
-	//	}
-	//}
-	//else if (num > 1)
-	//{
-	//	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-	//	if (vr_frame)
-	//	{
-	//		VolumeData* vd = vr_frame->GetCurSelVol();
-	//		if (vd && vd->GetDisp())
-	//		{
-	//			wxString str = vd->GetName();
-	//			VolumeData* vd_view = GetVolumeData(str);
-	//			if (vd_view && vd_view->GetColormapDisp())
-	//			{
-	//				draw = true;
-	//				double low, high;
-	//				vd_view->GetColormapValues(low, high);
-	//				m_value_2 = low;
-	//				m_value_6 = high;
-	//				m_value_4 = (low+high)/2.0;
-	//				m_value_3 = (low+m_value_4)/2.0;
-	//				m_value_5 = (m_value_4+high)/2.0;
-	//				max_val = vd_view->GetMaxValue();
-	//				enable_alpha = vd_view->GetEnableAlpha();
-	//				SetColormapColors(vd_view->GetColormap());
-	//			}
-	//		}
-	//	}
-	//}
+	if (num == 0)
+		return;
+	else if (num == 1)
+	{
+		VolumeData* vd_view = GetDispVolumeData(vd_index);
+		if (vd_view)
+		{
+			draw = true;
+			double low, high;
+			vd_view->GetColormapValues(low, high);
+			m_value_2 = low;
+			m_value_6 = high;
+			m_value_4 = (low+high)/2.0;
+			m_value_3 = (low+m_value_4)/2.0;
+			m_value_5 = (m_value_4+high)/2.0;
+			max_val = vd_view->GetMaxValue();
+			enable_alpha = vd_view->GetEnableAlpha();
+			SetColormapColors(vd_view->GetColormap());
+		}
+	}
+	else if (num > 1)
+	{
+		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+		if (vr_frame)
+		{
+			VolumeData* vd = vr_frame->GetCurSelVol();
+			if (vd && vd->GetDisp())
+			{
+				wxString str = vd->GetName();
+				VolumeData* vd_view = GetVolumeData(str);
+				if (vd_view && vd_view->GetColormapDisp())
+				{
+					draw = true;
+					double low, high;
+					vd_view->GetColormapValues(low, high);
+					m_value_2 = low;
+					m_value_6 = high;
+					m_value_4 = (low+high)/2.0;
+					m_value_3 = (low+m_value_4)/2.0;
+					m_value_5 = (m_value_4+high)/2.0;
+					max_val = vd_view->GetMaxValue();
+					enable_alpha = vd_view->GetEnableAlpha();
+					SetColormapColors(vd_view->GetColormap());
+				}
+			}
+		}
+	}
 
-	//if (!draw)
-	//	return;
+	if (!draw)
+		return;
 
-	//double offset = 0.0;
-	//if (m_draw_legend)
-	//	offset = m_sb_height;
+	float offset = 0.0f;
+	if (m_draw_legend)
+		offset = m_sb_height;
 
-	//int nx = GetSize().x;
-	//int ny = GetSize().y;
-	//float sx, sy;
-	//sx = 2.0/nx;
-	//sy = 2.0/ny;
+	int nx = GetSize().x;
+	int ny = GetSize().y;
+	float sx, sy;
+	sx = 2.0/nx;
+	sy = 2.0/ny;
 
-	//glm::mat4 proj_mat = glm::ortho(0.0f, 1.0f, 0.0f, 1.0f);
+	glm::mat4 proj_mat = glm::ortho(0.0f, 1.0f, 0.0f, 1.0f);
 
-	//vector<float> vertex;
-	//vertex.reserve(14*7);
+	vector<Vulkan2dRender::Vertex34> vertex;
+	vertex.reserve(8);
 
-	//float px, py;
-	////draw colormap
-	//if (m_draw_frame)
-	//{
-	//	px = (0.01*m_frame_w+m_frame_x)/nx;
-	//	py = (0.05*m_frame_w+m_frame_x)/nx;
-	//	vertex.push_back(px); vertex.push_back((0.1*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_1.r()); vertex.push_back(m_color_1.g()); vertex.push_back(m_color_1.b()); vertex.push_back(enable_alpha?0.0:1.0);
-	//	vertex.push_back(py); vertex.push_back((0.1*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_1.r()); vertex.push_back(m_color_1.g()); vertex.push_back(m_color_1.b()); vertex.push_back(enable_alpha?0.0:1.0);
-	//	vertex.push_back(px); vertex.push_back(((0.1+0.4*m_value_2)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_2.r()); vertex.push_back(m_color_2.g()); vertex.push_back(m_color_2.b()); vertex.push_back(enable_alpha?m_value_2:1.0);
-	//	vertex.push_back(py); vertex.push_back(((0.1+0.4*m_value_2)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_2.r()); vertex.push_back(m_color_2.g()); vertex.push_back(m_color_2.b()); vertex.push_back(enable_alpha?m_value_2:1.0);
-	//	vertex.push_back(px); vertex.push_back(((0.1+0.4*m_value_3)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_3.r()); vertex.push_back(m_color_3.g()); vertex.push_back(m_color_3.b()); vertex.push_back(enable_alpha?m_value_3:1.0);
-	//	vertex.push_back(py); vertex.push_back(((0.1+0.4*m_value_3)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_3.r()); vertex.push_back(m_color_3.g()); vertex.push_back(m_color_3.b()); vertex.push_back(enable_alpha?m_value_3:1.0);
-	//	vertex.push_back(px); vertex.push_back(((0.1+0.4*m_value_4)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_4.r()); vertex.push_back(m_color_4.g()); vertex.push_back(m_color_4.b()); vertex.push_back(enable_alpha?m_value_4:1.0);
-	//	vertex.push_back(py); vertex.push_back(((0.1+0.4*m_value_4)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_4.r()); vertex.push_back(m_color_4.g()); vertex.push_back(m_color_4.b()); vertex.push_back(enable_alpha?m_value_4:1.0);
-	//	vertex.push_back(px); vertex.push_back(((0.1+0.4*m_value_5)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_5.r()); vertex.push_back(m_color_5.g()); vertex.push_back(m_color_5.b()); vertex.push_back(enable_alpha?m_value_5:1.0);
-	//	vertex.push_back(py); vertex.push_back(((0.1+0.4*m_value_5)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_5.r()); vertex.push_back(m_color_5.g()); vertex.push_back(m_color_5.b()); vertex.push_back(enable_alpha?m_value_5:1.0);
-	//	vertex.push_back(px); vertex.push_back(((0.1+0.4*m_value_6)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_6.r()); vertex.push_back(m_color_6.g()); vertex.push_back(m_color_6.b()); vertex.push_back(enable_alpha?m_value_6:1.0);
-	//	vertex.push_back(py); vertex.push_back(((0.1+0.4*m_value_6)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_6.r()); vertex.push_back(m_color_6.g()); vertex.push_back(m_color_6.b()); vertex.push_back(enable_alpha?m_value_6:1.0);
-	//	vertex.push_back(px); vertex.push_back((0.5*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_7.r()); vertex.push_back(m_color_7.g()); vertex.push_back(m_color_7.b()); vertex.push_back(1.0);
-	//	vertex.push_back(py); vertex.push_back((0.5*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_7.r()); vertex.push_back(m_color_7.g()); vertex.push_back(m_color_7.b()); vertex.push_back(1.0);
+	float px, py;
+	float fx, fy, fw, fh;
+	if (m_draw_frame)
+	{
+		fx = m_frame_x;
+		fy = m_frame_y;
+		fw = m_frame_w;
+		fh = m_frame_h;
+	}
+	else
+	{
+		fx = 0.0f;
+		fy = 0.0f;
+		fw = nx;
+		fh = ny;
+	}
 
-	//	if (m_text_renderer)
-	//	{
-	//		wxString str;
-	//		wstring wstr;
+	px = (0.01 * fw + fx) / nx;
+	py = (0.05 * fw + fx) / nx;
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{px, (fh - (0.1f * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_1.r(), (float)m_color_1.g(), (float)m_color_1.b(), enable_alpha ? 0.0f : 1.0f}
+		});
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{py, (fh - (0.1f * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_1.r(), (float)m_color_1.g(), (float)m_color_1.b(), enable_alpha ? 0.0f : 1.0f}
+		});
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{px, (fh - ((0.1f + 0.4f * m_value_2) * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_2.r(), (float)m_color_2.g(), (float)m_color_2.b(), enable_alpha ? m_value_2 : 1.0f}
+		});
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{py, (fh - ((0.1f + 0.4f * m_value_2) * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_2.r(), (float)m_color_2.g(), (float)m_color_2.b(), enable_alpha ? m_value_2 : 1.0f}
+		});
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{px, (fh - ((0.1f + 0.4f * m_value_3) * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_3.r(), (float)m_color_3.g(), (float)m_color_3.b(), enable_alpha ? m_value_3 : 1.0f}
+		});
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{py, (fh - ((0.1f + 0.4f * m_value_3) * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_3.r(), (float)m_color_3.g(), (float)m_color_3.b(), enable_alpha ? m_value_3 : 1.0f}
+		});
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{px, (fh - ((0.1f + 0.4f * m_value_4) * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_4.r(), (float)m_color_4.g(), (float)m_color_4.b(), enable_alpha ? m_value_4 : 1.0f}
+		});
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{py, (fh - ((0.1f + 0.4f * m_value_4) * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_4.r(), (float)m_color_4.g(), (float)m_color_4.b(), enable_alpha ? m_value_4 : 1.0f}
+		});
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{px, (fh - ((0.1f + 0.4f * m_value_5) * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_5.r(), (float)m_color_5.g(), (float)m_color_5.b(), enable_alpha ? m_value_5 : 1.0f}
+		});
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{py, (fh - ((0.1f + 0.4f * m_value_5) * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_5.r(), (float)m_color_5.g(), (float)m_color_5.b(), enable_alpha ? m_value_5 : 1.0f}
+		});
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{px, (fh - ((0.1f + 0.4f * m_value_6) * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_6.r(), (float)m_color_6.g(), (float)m_color_6.b(), enable_alpha ? m_value_6 : 1.0f}
+		});
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{py, (fh - ((0.1f + 0.4f * m_value_6) * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_6.r(), (float)m_color_6.g(), (float)m_color_6.b(), enable_alpha ? m_value_6 : 1.0f}
+		});
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{px, (fh - (0.5f * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_7.r(), (float)m_color_7.g(), (float)m_color_7.b(), 1.0f}
+		});
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{py, (fh - (0.5f * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_7.r(), (float)m_color_7.g(), (float)m_color_7.b(), 1.0f}
+		});
 
-	//		Color text_color = GetTextColor();
+	if (m_cmap_vobj.vertBuf.buffer == VK_NULL_HANDLE)
+	{
+		vector<uint32_t> index = { 0,1,2,3,4,5,6,7,8,9,10,11,12,13 };
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_cmap_vobj.vertBuf,
+			vertex.size() * sizeof(Vulkan2dRender::Vertex34),
+			vertex.data()));
 
-	//		//value 1
-	//		px = 0.052*m_frame_w+m_frame_x-nx/2.0;
-	//		py = 0.1*m_frame_h+m_frame_y+offset-ny/2.0;
-	//		str = wxString::Format("%d", 0);
-	//		wstr = str.ToStdWstring();
-	//		m_text_renderer->RenderText(
-	//			wstr, text_color,
-	//			px*sx, py*sy, sx, sy);
-	//		//value 2
-	//		px = 0.052*m_frame_w+m_frame_x-nx/2.0;
-	//		py = (0.1+0.4*m_value_2)*m_frame_h+m_frame_y+offset-ny/2.0;
-	//		str = wxString::Format("%d", int(m_value_2*max_val));
-	//		wstr = str.ToStdWstring();
-	//		m_text_renderer->RenderText(
-	//			wstr, text_color,
-	//			px*sx, py*sy, sx, sy);
-	//		//value 4
-	//		px = 0.052*m_frame_w+m_frame_x-nx/2.0;
-	//		py = (0.1+0.4*m_value_4)*m_frame_h+m_frame_y+offset-ny/2.0;
-	//		str = wxString::Format("%d", int(m_value_4*max_val));
-	//		wstr = str.ToStdWstring();
-	//		m_text_renderer->RenderText(
-	//			wstr, text_color,
-	//			px*sx, py*sy, sx, sy);
-	//		//value 6
-	//		px = 0.052*m_frame_w+m_frame_x-nx/2.0;
-	//		py = (0.1+0.4*m_value_6)*m_frame_h+m_frame_y+offset-ny/2.0;
-	//		str = wxString::Format("%d", int(m_value_6*max_val));
-	//		wstr = str.ToStdWstring();
-	//		m_text_renderer->RenderText(
-	//			wstr, text_color,
-	//			px*sx, py*sy, sx, sy);
-	//		//value 7
-	//		px = 0.052*m_frame_w+m_frame_x-nx/2.0;
-	//		py = 0.5*m_frame_h+m_frame_y+offset-ny/2.0;
-	//		str = wxString::Format("%d", int(max_val));
-	//		wstr = str.ToStdWstring();
-	//		m_text_renderer->RenderText(
-	//			wstr, text_color,
-	//			px*sx, py*sy, sx, sy);
-	//	}
-	//}
-	//else
-	//{
-	//	vertex.push_back(0.01); vertex.push_back(0.1+offset/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_1.r()); vertex.push_back(m_color_1.g()); vertex.push_back(m_color_1.b()); vertex.push_back(enable_alpha?0.0:1.0);
-	//	vertex.push_back(0.05); vertex.push_back(0.1+offset/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_1.r()); vertex.push_back(m_color_1.g()); vertex.push_back(m_color_1.b()); vertex.push_back(enable_alpha?0.0:1.0);
-	//	vertex.push_back(0.01); vertex.push_back(0.1+0.4*m_value_2+offset/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_2.r()); vertex.push_back(m_color_2.g()); vertex.push_back(m_color_2.b()); vertex.push_back(enable_alpha?m_value_2:1.0);
-	//	vertex.push_back(0.05); vertex.push_back(0.1+0.4*m_value_2+offset/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_2.r()); vertex.push_back(m_color_2.g()); vertex.push_back(m_color_2.b()); vertex.push_back(enable_alpha?m_value_2:1.0);
-	//	vertex.push_back(0.01); vertex.push_back(0.1+0.4*m_value_3+offset/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_3.r()); vertex.push_back(m_color_3.g()); vertex.push_back(m_color_3.b()); vertex.push_back(enable_alpha?m_value_3:1.0);
-	//	vertex.push_back(0.05); vertex.push_back(0.1+0.4*m_value_3+offset/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_3.r()); vertex.push_back(m_color_3.g()); vertex.push_back(m_color_3.b()); vertex.push_back(enable_alpha?m_value_3:1.0);
-	//	vertex.push_back(0.01); vertex.push_back(0.1+0.4*m_value_4+offset/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_4.r()); vertex.push_back(m_color_4.g()); vertex.push_back(m_color_4.b()); vertex.push_back(enable_alpha?m_value_4:1.0);
-	//	vertex.push_back(0.05); vertex.push_back(0.1+0.4*m_value_4+offset/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_4.r()); vertex.push_back(m_color_4.g()); vertex.push_back(m_color_4.b()); vertex.push_back(enable_alpha?m_value_4:1.0);
-	//	vertex.push_back(0.01); vertex.push_back(0.1+0.4*m_value_5+offset/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_5.r()); vertex.push_back(m_color_5.g()); vertex.push_back(m_color_5.b()); vertex.push_back(enable_alpha?m_value_5:1.0);
-	//	vertex.push_back(0.05); vertex.push_back(0.1+0.4*m_value_5+offset/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_5.r()); vertex.push_back(m_color_5.g()); vertex.push_back(m_color_5.b()); vertex.push_back(enable_alpha?m_value_5:1.0);
-	//	vertex.push_back(0.01); vertex.push_back(0.1+0.4*m_value_6+offset/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_6.r()); vertex.push_back(m_color_6.g()); vertex.push_back(m_color_6.b()); vertex.push_back(enable_alpha?m_value_6:1.0);
-	//	vertex.push_back(0.05); vertex.push_back(0.1+0.4*m_value_6+offset/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_6.r()); vertex.push_back(m_color_6.g()); vertex.push_back(m_color_6.b()); vertex.push_back(enable_alpha?m_value_6:1.0);
-	//	vertex.push_back(0.01); vertex.push_back(0.5+offset/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_7.r()); vertex.push_back(m_color_7.g()); vertex.push_back(m_color_7.b()); vertex.push_back(1.0);
-	//	vertex.push_back(0.05); vertex.push_back(0.5+offset/ny); vertex.push_back(0.0);
-	//	vertex.push_back(m_color_7.r()); vertex.push_back(m_color_7.g()); vertex.push_back(m_color_7.b()); vertex.push_back(1.0);
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_cmap_vobj.idxBuf,
+			index.size() * sizeof(uint32_t),
+			index.data()));
 
-	//	if (m_text_renderer)
-	//	{
-	//		wxString str;
-	//		wstring wstr;
+		m_cmap_vobj.idxCount = index.size();
+		m_cmap_vobj.idxOffset = 0;
+		m_cmap_vobj.vertCount = vertex.size();
+		m_cmap_vobj.vertOffset = 0;
 
-	//		Color text_color = GetTextColor();
+		m_cmap_vobj.idxBuf.map();
+		m_cmap_vobj.idxBuf.copyTo(index.data(), index.size() * sizeof(uint32_t));
+		m_cmap_vobj.idxBuf.unmap();
+	}
+	m_cmap_vobj.vertBuf.map();
+	m_cmap_vobj.vertBuf.copyTo(vertex.data(), vertex.size() * sizeof(Vulkan2dRender::Vertex34));
+	m_cmap_vobj.vertBuf.unmap();
 
-	//		//value 1
-	//		px = 0.052*nx-nx/2.0;
-	//		py = ny/2.0-0.9*ny+offset;
-	//		str = wxString::Format("%d", 0);
-	//		wstr = str.ToStdWstring();
-	//		m_text_renderer->RenderText(
-	//			wstr, text_color,
-	//			px*sx, py*sy, sx, sy);
-	//		//value 2
-	//		px = 0.052*nx-nx/2.0;
-	//		py = ny/2.0-(0.9-0.4*m_value_2)*ny+offset;
-	//		str = wxString::Format("%d", int(m_value_2*max_val));
-	//		wstr = str.ToStdWstring();
-	//		m_text_renderer->RenderText(
-	//			wstr, text_color,
-	//			px*sx, py*sy, sx, sy);
-	//		//value 4
-	//		px = 0.052*nx-nx/2.0;
-	//		py = ny/2.0-(0.9-0.4*m_value_4)*ny+offset;
-	//		str = wxString::Format("%d", int(m_value_4*max_val));
-	//		wstr = str.ToStdWstring();
-	//		m_text_renderer->RenderText(
-	//			wstr, text_color,
-	//			px*sx, py*sy, sx, sy);
-	//		//value 6
-	//		px = 0.052*nx-nx/2.0;
-	//		py = ny/2.0-(0.9-0.4*m_value_6)*ny+offset;
-	//		str = wxString::Format("%d", int(m_value_6*max_val));
-	//		wstr = str.ToStdWstring();
-	//		m_text_renderer->RenderText(
-	//			wstr, text_color,
-	//			px*sx, py*sy, sx, sy);
-	//		//value 7
-	//		px = 0.052*nx-nx/2.0;
-	//		py = ny/2.0-0.5*ny+offset;
-	//		str = wxString::Format("%d", int(max_val));
-	//		wstr = str.ToStdWstring();
-	//		m_text_renderer->RenderText(
-	//			wstr, text_color,
-	//			px*sx, py*sy, sx, sy);
-	//	}
-	//}
+	Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+	vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+	params.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_DRAW_GEOMETRY_COLOR4,
+			V2DRENDER_BLEND_OVER_UI,
+			current_fbo->attachments[0]->format,
+			current_fbo->attachments.size(),
+			0,
+			current_fbo->attachments[0]->is_swapchain_images,
+			VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP
+		);
+	params.matrix[0] = proj_mat;
+	params.clear = m_frame_clear;
+	params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
+	m_frame_clear = false;
 
-	//glDisable(GL_DEPTH_TEST);
-	//glEnable(GL_BLEND);
-	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	params.obj = &m_cmap_vobj;
 
-	//ShaderProgram* shader =
-	//	m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY_COLOR4);
-	//if (shader)
-	//{
-	//	if (!shader->valid())
-	//		shader->create();
-	//	shader->bind();
-	//}
-	//shader->setLocalParamMatrix(0, glm::value_ptr(proj_mat));
+	if (!current_fbo->renderPass)
+		current_fbo->replaceRenderPass(params.pipeline.pass);
 
-	//glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	//glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-	//glBindVertexArray(m_misc_vao);
-	//glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	//glEnableVertexAttribArray(0);
-	//glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 7*sizeof(float), (const GLvoid*)0);
-	//glEnableVertexAttribArray(1);
-	//glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 7*sizeof(float), (const GLvoid*)12);
+	m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
 
-	//glDrawArrays(GL_TRIANGLE_STRIP, 0, 14);
+	if (m_text_renderer)
+	{
+		wxString str;
+		wstring wstr;
 
-	//glDisableVertexAttribArray(0);
-	//glDisableVertexAttribArray(1);
-	//glBindBuffer(GL_ARRAY_BUFFER, 0);
-	//glBindVertexArray(0);
+		Color text_color = GetTextColor();
 
-	//if (shader && shader->valid())
-	//	shader->release();
-
-	//glEnable(GL_DEPTH_TEST);
+		//value 1
+		px = 0.052 * fw + fx - nx / 2.0;
+		py = fh - (0.1 * fh + fy + offset) - ny / 2.0;
+		str = wxString::Format("%d", 0);
+		wstr = str.ToStdWstring();
+		m_text_renderer->RenderText(
+			m_vulkan->frameBuffers[m_vulkan->currentBuffer],
+			wstr, text_color,
+			px * sx, py * sy);
+		//value 2
+		px = 0.052 * fw + fx - nx / 2.0;
+		py = fh - ((0.1 + 0.4 * m_value_2) * fh + fy + offset) - ny / 2.0;
+		str = wxString::Format("%d", int(m_value_2 * max_val));
+		wstr = str.ToStdWstring();
+		m_text_renderer->RenderText(
+			m_vulkan->frameBuffers[m_vulkan->currentBuffer],
+			wstr, text_color,
+			px * sx, py * sy);
+		//value 4
+		px = 0.052 * fw + fx - nx / 2.0;
+		py = fh - ((0.1 + 0.4 * m_value_4) * fh + fy + offset) - ny / 2.0;
+		str = wxString::Format("%d", int(m_value_4 * max_val));
+		wstr = str.ToStdWstring();
+		m_text_renderer->RenderText(
+			m_vulkan->frameBuffers[m_vulkan->currentBuffer],
+			wstr, text_color,
+			px * sx, py * sy);
+		//value 6
+		px = 0.052 * fw + fx - nx / 2.0;
+		py = fh - ((0.1 + 0.4 * m_value_6) * fh + fy + offset) - ny / 2.0;
+		str = wxString::Format("%d", int(m_value_6 * max_val));
+		wstr = str.ToStdWstring();
+		m_text_renderer->RenderText(
+			m_vulkan->frameBuffers[m_vulkan->currentBuffer],
+			wstr, text_color,
+			px * sx, py * sy);
+		//value 7
+		px = 0.052 * fw + fx - nx / 2.0;
+		py = fh - (0.5 * fh + fy + offset) - ny / 2.0;
+		str = wxString::Format("%d", int(max_val));
+		wstr = str.ToStdWstring();
+		m_text_renderer->RenderText(
+			m_vulkan->frameBuffers[m_vulkan->currentBuffer],
+			wstr, text_color,
+			px * sx, py * sy);
+	}
 }
 
 void VRenderVulkanView::DrawInfo(int nx, int ny)

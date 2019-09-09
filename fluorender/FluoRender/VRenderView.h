@@ -976,15 +976,15 @@ private:
 	//volume color map
 	//double m_value_1;
 	Color m_color_1;
-	double m_value_2;
+	float m_value_2;
 	Color m_color_2;
-	double m_value_3;
+	float m_value_3;
 	Color m_color_3;
-	double m_value_4;
+	float m_value_4;
 	Color m_color_4;
-	double m_value_5;
+	float m_value_5;
 	Color m_color_5;
-	double m_value_6;
+	float m_value_6;
 	Color m_color_6;
 	//double m_value_7;
 	Color m_color_7;
@@ -1109,6 +1109,8 @@ private:
 	Vulkan2dRender::V2dObject m_camctr_vobj;
 	Vulkan2dRender::V2dObject m_name_vobj;
 	Vulkan2dRender::V2dObject m_clip_vobj;
+	Vulkan2dRender::V2dObject m_grad_vobj;
+	Vulkan2dRender::V2dObject m_cmap_vobj;
 
 	bool m_frame_clear;
 

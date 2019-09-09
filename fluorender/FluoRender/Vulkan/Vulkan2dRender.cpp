@@ -105,6 +105,39 @@ void Vulkan2dRender::setupVertexDescriptions()
 	m_vertices.inputState.pVertexBindingDescriptions = m_vertices.inputBinding.data();
 	m_vertices.inputState.vertexAttributeDescriptionCount = static_cast<uint32_t>(m_vertices.inputAttributes.size());
 	m_vertices.inputState.pVertexAttributeDescriptions = m_vertices.inputAttributes.data();
+
+	
+	// Binding description
+	m_vertices34.inputBinding.resize(1);
+	m_vertices34.inputBinding[0] =
+		vks::initializers::vertexInputBindingDescription(
+			0,
+			sizeof(Vertex34),
+			VK_VERTEX_INPUT_RATE_VERTEX);
+
+	// Attribute descriptions
+	// Describes memory layout and shader positions
+	m_vertices34.inputAttributes.resize(2);
+	// Location 0 : Position
+	m_vertices34.inputAttributes[0] =
+		vks::initializers::vertexInputAttributeDescription(
+			0,
+			0,
+			VK_FORMAT_R32G32B32_SFLOAT,
+			offsetof(Vertex34, pos));
+	// Location 1 : Texture coordinates
+	m_vertices34.inputAttributes[1] =
+		vks::initializers::vertexInputAttributeDescription(
+			0,
+			1,
+			VK_FORMAT_R32G32B32A32_SFLOAT,
+			offsetof(Vertex34, uv));
+
+	m_vertices34.inputState = vks::initializers::pipelineVertexInputStateCreateInfo();
+	m_vertices34.inputState.vertexBindingDescriptionCount = static_cast<uint32_t>(m_vertices34.inputBinding.size());
+	m_vertices34.inputState.pVertexBindingDescriptions = m_vertices34.inputBinding.data();
+	m_vertices34.inputState.vertexAttributeDescriptionCount = static_cast<uint32_t>(m_vertices34.inputAttributes.size());
+	m_vertices34.inputState.pVertexAttributeDescriptions = m_vertices34.inputAttributes.data();
 }
 
 VkRenderPass Vulkan2dRender::prepareRenderPass(VkFormat framebuf_format, int attachment_num, bool isSwapChainImage)
@@ -268,7 +301,17 @@ Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(
 		pass,
 		0);
 
-	pipelineCreateInfo.pVertexInputState = &m_vertices.inputState;
+	VkPipelineVertexInputStateCreateInfo *inputState = nullptr;
+	switch (shader)
+	{
+	case IMG_SHDR_DRAW_GEOMETRY_COLOR4:
+		inputState = &m_vertices34.inputState;
+		break;
+	default:
+		inputState = &m_vertices.inputState;
+	}
+
+	pipelineCreateInfo.pVertexInputState = inputState;
 	pipelineCreateInfo.pInputAssemblyState = &inputAssemblyState;
 	pipelineCreateInfo.pRasterizationState = &rasterizationState;
 	pipelineCreateInfo.pMultisampleState = &multisampleState;

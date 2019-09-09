@@ -792,7 +792,7 @@ void VolumeSelector::CompExportMultiChann(bool select)
 			spc_x, spc_y, spc_z);
 		vd->SetSpcFromFile(true);
 		vd->SetName(m_vd->GetName() +
-			wxString::Format("_COMP%d_SIZE%d", i++, comp_iter->second.counter));
+			wxString::Format("_COMP%d_SIZE%llu", i++, comp_iter->second.counter));
 
 		//populate the volume
 		//the actual data
