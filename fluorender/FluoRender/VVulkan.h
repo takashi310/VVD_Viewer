@@ -51,6 +51,8 @@ public:
 	void initSubDevices();
 	void DestroySubDevices();
 	void clearTexPools();
+    
+    virtual void getEnabledFeatures();
 
 	void eraseBricksFromTexpools(const std::vector<FLIVR::TextureBrick*>* bricks, int c=-1);
 	bool findTexInPools(FLIVR::TextureBrick* b, int c, int w, int h, int d, int bytes, VkFormat format, vks::VulkanDevice* &ret_dev, int &ret_id);

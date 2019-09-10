@@ -51,8 +51,9 @@ DEALINGS IN THE SOFTWARE.
 #ifdef _WIN32
 #define WINDOWS_LEAN_AND_MEAN
 #include <windows.h>
+#elif _DARWIN
+#include <unistd.h>
 #endif
-// includes for other OSes will go here
 
 
 //
@@ -132,6 +133,11 @@ private:
     LARGE_INTEGER _nStopCount;
     
     LARGE_INTEGER _nFrequency;
+#elif _DARWIN
+    uint64_t _nStartCount;
+    uint64_t _nStopCount;
+    uint64_t _nFrequency;
+    uint64_t monotonicTimeNanos();
 #endif
 // Data for other OSes potentially goes here
 

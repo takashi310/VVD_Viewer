@@ -5,10 +5,6 @@ VVulkan::VVulkan() : VulkanExampleBase(ENABLE_VALIDATION)
 	enabledInstanceExtensions.push_back("VK_KHR_get_physical_device_properties2");
 	enabledDeviceExtensions.push_back("VK_KHR_push_descriptor");
 	enabledDeviceExtensions.push_back("VK_KHR_maintenance3");
-	enabledFeatures.textureCompressionBC = VK_TRUE;
-	enabledFeatures.shaderStorageImageExtendedFormats = VK_TRUE;
-	enabledFeatures.wideLines = VK_TRUE;
-	enabledFeatures.fillModeNonSolid = VK_TRUE;
 }
 
 VVulkan::~VVulkan()
@@ -20,6 +16,16 @@ VVulkan::~VVulkan()
 	img_shader_factory_.reset();
 
 	DestroySubDevices();
+}
+
+void VVulkan::getEnabledFeatures()
+{
+    enabledFeatures.textureCompressionBC = VK_TRUE;
+    enabledFeatures.shaderStorageImageExtendedFormats = VK_TRUE;
+    enabledFeatures.fillModeNonSolid = VK_TRUE;
+    
+    if (deviceFeatures.wideLines == VK_TRUE)
+        enabledFeatures.wideLines = VK_TRUE;
 }
 
 void VVulkan::prepare()

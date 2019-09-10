@@ -250,7 +250,7 @@ Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(
 		}
 	}
 
-	float linewidth = 0.5f;
+	float linewidth = 1.0f;
 
 	VkPipelineInputAssemblyStateCreateInfo inputAssemblyState =
 		vks::initializers::pipelineInputAssemblyStateCreateInfo(
