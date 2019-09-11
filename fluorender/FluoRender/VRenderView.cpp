@@ -2135,9 +2135,7 @@ void VRenderVulkanView::DrawAnnotations()
 					if (pos.x() >= -1.0 && pos.x() <= 1.0 &&
 						pos.y() >= -1.0 && pos.y() <= 1.0)
 					{
-						if (m_persp && (pos.z()<=0.0 || pos.z()>=1.0))
-							continue;
-						if (!m_persp && (pos.z()<=0.0 || pos.z()>=1.0))
+						if (pos.z()<=0.0 || pos.z()>=1.0)
 							continue;
 						px = pos.x()*nx/2.0;
 						py = pos.y()*ny/2.0;
@@ -12566,7 +12564,7 @@ double VRenderVulkanView::GetPointVolume(Point& mp, int mx, int my,
 
 	double x, y;
 	x = double(mx) * 2.0 / double(nx) - 1.0;
-	y = 1.0 - double(my) * 2.0 / double(ny);
+	y = double(my) * 2.0 / double(ny) - 1.0;
 	p.invert();
 	mv.invert();
 	//transform mp1 and mp2 to object space
@@ -12582,7 +12580,6 @@ double VRenderVulkanView::GetPointVolume(Point& mp, int mx, int my,
 	int yy = -1;
 	int zz = -1;
 	int tmp_xx, tmp_yy, tmp_zz;
-	Point nmp;
 	double spcx, spcy, spcz;
 	vd->GetSpacings(spcx, spcy, spcz);
 	int resx, resy, resz;
@@ -12599,21 +12596,25 @@ double VRenderVulkanView::GetPointVolume(Point& mp, int mx, int my,
 	double mspc = 1.0;
 	double return_val = -1.0;
 	if (vd->GetSampleRate() > 0.0)
-		mspc = sqrt(spcx*spcx + spcy*spcy + spcz*spcz)/vd->GetSampleRate();
+		mspc = sqrt(1.0/(resx*resx) + 1.0/(resy*resy) + 1.0/(resz*resz))/vd->GetSampleRate();
 	if (vd->GetVR())
 		planes = vd->GetVR()->get_planes();
 	if (bbox.intersect(mp1, vv, hit))
 	{
+		Transform *textrans = tex->transform();
+		Vector vv2 = textrans->unproject(vv);
+		vv2.normalize();
+		Point hp1 = textrans->unproject(hit);
 		while (true)
 		{
-			tmp_xx = int(hit.x() / spcx);
-			tmp_yy = int(hit.y() / spcy);
-			tmp_zz = int(hit.z() / spcz);
+			tmp_xx = int(hp1.x() * resx);
+			tmp_yy = int(hp1.y() * resy);
+			tmp_zz = int(hp1.z() * resz);
 			if (mode==1 &&
 				tmp_xx==xx && tmp_yy==yy && tmp_zz==zz)
 			{
 				//same, skip
-				hit += vv*mspc;
+				hp1 += vv2 * mspc;
 				continue;
 			}
 			else
@@ -12627,52 +12628,55 @@ double VRenderVulkanView::GetPointVolume(Point& mp, int mx, int my,
 				yy<0 || yy>resy ||
 				zz<0 || zz>resz)
 				break;
-			//normalize
-			nmp.x(hit.x() / bbox.max().x());
-			nmp.y(hit.y() / bbox.max().y());
-			nmp.z(hit.z() / bbox.max().z());
+
 			bool inside = true;
 			if (planes)
-				for (int i=0; i<6; i++)
+			{
+				for (int i = 0; i < 6; i++)
+				{
 					if ((*planes)[i] &&
-						(*planes)[i]->eval_point(nmp)<0.0)
+						(*planes)[i]->eval_point(hp1) < 0.0)
 					{
 						inside = false;
 						break;
 					}
-					if (inside)
+				}
+			}
+			if (inside)
+			{
+				xx = xx == resx ? resx - 1 : xx;
+				yy = yy == resy ? resy - 1 : yy;
+				zz = zz == resz ? resz - 1 : zz;
+
+				if (use_transf)
+					value = vd->GetTransferedValue(xx, yy, zz);
+				else
+					value = vd->GetOriginalValue(xx, yy, zz);
+
+				if (mode == 1)
+				{
+					if (value > max_int)
 					{
-						xx = xx==resx?resx-1:xx;
-						yy = yy==resy?resy-1:yy;
-						zz = zz==resz?resz-1:zz;
-
-						if (use_transf)
-							value = vd->GetTransferedValue(xx, yy, zz);
-						else
-							value = vd->GetOriginalValue(xx, yy, zz);
-
-						if (mode == 1)
-						{
-							if (value > max_int)
-							{
-								mp = Point((xx+0.5)*spcx, (yy+0.5)*spcy, (zz+0.5)*spcz);
-								max_int = value;
-							}
-						}
-						else if (mode == 2)
-						{
-							//accumulate
-							if (value > 0.0)
-							{
-								alpha = 1.0 - pow(Clamp(1.0-value, 0.0, 1.0), vd->GetSampleRate());
-								max_int += alpha*(1.0-max_int);
-								mp = Point((xx+0.5)*spcx, (yy+0.5)*spcy, (zz+0.5)*spcz);
-							}
-							if (max_int >= thresh)
-								break;
-						}
+						mp = Point((xx + 0.5) / resx, (yy + 0.5) / resy, (zz + 0.5) / resz);
+						mp = textrans->project(mp);
+						max_int = value;
 					}
-					hit += vv*mspc;
+				}
+				else if (mode == 2)
+				{
+					//accumulate
+					if (value > 0.0)
+					{
+						alpha = 1.0 - pow(Clamp(1.0 - value, 0.0, 1.0), vd->GetSampleRate());
+						max_int += alpha * (1.0 - max_int);
+						mp = Point((xx + 0.5) / resx, (yy + 0.5) / resy, (zz + 0.5) / resz);
+						mp = textrans->project(mp);
+					}
+					if (max_int >= thresh)
+						break;
+				}
+			}
+			hp1 += vv2 * mspc;
 		}
 	}
 
@@ -12733,7 +12737,7 @@ double VRenderVulkanView::GetPointAndIntVolume(Point& mp, double &intensity, boo
 
 	double x, y;
 	x = double(mx) * 2.0 / double(nx) - 1.0;
-	y = 1.0 - double(my) * 2.0 / double(ny);
+	y = double(my) * 2.0 / double(ny) - 1.0;
 	p.invert();
 	mv.invert();
 	//transform mp1 and mp2 to object space
@@ -12749,7 +12753,6 @@ double VRenderVulkanView::GetPointAndIntVolume(Point& mp, double &intensity, boo
 	int yy = -1;
 	int zz = -1;
 	int tmp_xx, tmp_yy, tmp_zz;
-	Point nmp;
 	double spcx, spcy, spcz;
 	vd->GetSpacings(spcx, spcy, spcz);
 	int resx, resy, resz;
@@ -12766,20 +12769,24 @@ double VRenderVulkanView::GetPointAndIntVolume(Point& mp, double &intensity, boo
 	double mspc = 1.0;
 	double return_val = -1.0;
 	if (vd->GetSampleRate() > 0.0)
-		mspc = sqrt(spcx*spcx + spcy*spcy + spcz*spcz)/vd->GetSampleRate();
+		mspc = sqrt(1.0/(resx*resx) + 1.0/(resy*resy) + 1.0/(resz*resz))/vd->GetSampleRate();
 	if (vd->GetVR())
 		planes = vd->GetVR()->get_planes();
 	if (bbox.intersect(mp1, vv, hit))
 	{
+		Transform* textrans = tex->transform();
+		Vector vv2 = textrans->unproject(vv);
+		vv2.normalize();
+		Point hp1 = textrans->unproject(hit);
 		while (true)
 		{
-			tmp_xx = int(hit.x() / spcx);
-			tmp_yy = int(hit.y() / spcy);
-			tmp_zz = int(hit.z() / spcz);
+			tmp_xx = int(hp1.x() * resx);
+			tmp_yy = int(hp1.y() * resy);
+			tmp_zz = int(hp1.z() * resz);
 			if (tmp_xx==xx && tmp_yy==yy && tmp_zz==zz)
 			{
 				//same, skip
-				hit += vv*mspc;
+				hp1 += vv2 * mspc;
 				continue;
 			}
 			else
@@ -12793,17 +12800,14 @@ double VRenderVulkanView::GetPointAndIntVolume(Point& mp, double &intensity, boo
 				yy<0 || yy>resy ||
 				zz<0 || zz>resz)
 				break;
-			//normalize
-			nmp.x(hit.x() / bbox.max().x());
-			nmp.y(hit.y() / bbox.max().y());
-			nmp.z(hit.z() / bbox.max().z());
+
 			bool inside = true;
 			if (planes)
 			{
-				for (int i=0; i<6; i++)
+				for (int i = 0; i < 6; i++)
 				{
 					if ((*planes)[i] &&
-						(*planes)[i]->eval_point(nmp)<0.0)
+						(*planes)[i]->eval_point(hp1) < 0.0)
 					{
 						inside = false;
 						break;
@@ -12824,19 +12828,20 @@ double VRenderVulkanView::GetPointAndIntVolume(Point& mp, double &intensity, boo
 					vd->GetRenderedIDColor(r, g, b, (int)value);
 					if (r == 0 && g == 0 && b == 0)
 					{
-						hit += vv*mspc;
+						hp1 += vv2 * mspc;
 						continue;
 					}
 				}
 
 				if (value >= thresh)
 				{
-					mp = Point((xx+0.5)*spcx, (yy+0.5)*spcy, (zz+0.5)*spcz);
+					mp = Point((xx + 0.5) / resx, (yy + 0.5) / resy, (zz + 0.5) / resz);
+					mp = textrans->project(mp);
 					p_int = value;
 					break;
 				}
 			}
-			hit += vv*mspc;
+			hp1 += vv2 * mspc;
 		}
 	}
 
@@ -12905,7 +12910,7 @@ double VRenderVulkanView::GetPointVolumeBox(Point &mp, int mx, int my, VolumeDat
 
 	double x, y;
 	x = double(mx) * 2.0 / double(nx) - 1.0;
-	y = 1.0 - double(my) * 2.0 / double(ny);
+	y = double(my) * 2.0 / double(ny) - 1.0;
 	p.invert();
 	mv.invert();
 	//transform mp1 and mp2 to object space
@@ -13014,7 +13019,7 @@ double VRenderVulkanView::GetPointVolumeBox2(Point &p1, Point &p2, int mx, int m
 
 	double x, y;
 	x = double(mx) * 2.0 / double(nx) - 1.0;
-	y = 1.0 - double(my) * 2.0 / double(ny);
+	y = double(my) * 2.0 / double(ny) - 1.0;
 	p.invert();
 	mv.invert();
 	//transform mp1 and mp2 to object space
@@ -13129,7 +13134,7 @@ double VRenderVulkanView::GetPointPlane(Point &mp, int mx, int my, Point* planep
 	}
 	double x, y;
 	x = double(mx) * 2.0 / double(nx) - 1.0;
-	y = 1.0 - double(my) * 2.0 / double(ny);
+	y = double(my) * 2.0 / double(ny) - 1.0;
 	p.invert();
 	mv.invert();
 	//transform mp1 and mp2 to eye space
@@ -13166,7 +13171,7 @@ Point* VRenderVulkanView::GetEditingRulerPoint(int mx, int my)
 
 	double x, y;
 	x = double(mx) * 2.0 / double(nx) - 1.0;
-	y = 1.0 - double(my) * 2.0 / double(ny);
+	y = double(my) * 2.0 / double(ny) - 1.0;
 	double aspect = (double)nx / (double)ny;
 
 	glm::mat4 cur_mv_mat = m_mv_mat;
@@ -13206,8 +13211,7 @@ Point* VRenderVulkanView::GetEditingRulerPoint(int mx, int my)
 			ptemp = *point;
 			ptemp = mv.transform(ptemp);
 			ptemp = p.transform(ptemp);
-			if ((m_persp && (ptemp.z()<=0.0 || ptemp.z()>=1.0)) ||
-				(!m_persp && (ptemp.z()>=0.0 || ptemp.z()<=-1.0)))
+			if (ptemp.z()<=0.0 || ptemp.z()>=1.0)
 				continue;
 			if (x<ptemp.x()+0.02/aspect &&
 				x>ptemp.x()-0.02/aspect &&
@@ -13234,8 +13238,7 @@ Point* VRenderVulkanView::GetEditingRulerPoint(int mx, int my)
 				ptemp = *point;
 				ptemp = mv.transform(ptemp);
 				ptemp = p.transform(ptemp);
-				if ((m_persp && (ptemp.z()<=0.0 || ptemp.z()>=1.0)) ||
-					(!m_persp && (ptemp.z()>=0.0 || ptemp.z()<=-1.0)))
+				if (ptemp.z()<=0.0 || ptemp.z()>=1.0)
 					continue;
 				if (x<ptemp.x()+0.02/aspect &&
 					x>ptemp.x()-0.02/aspect &&
@@ -13271,7 +13274,7 @@ bool VRenderVulkanView::SwitchRulerBalloonVisibility_Point(int mx, int my)
 
 	double x, y;
 	x = double(mx) * 2.0 / double(nx) - 1.0;
-	y = 1.0 - double(my) * 2.0 / double(ny);
+	y = double(my) * 2.0 / double(ny) - 1.0;
 	double aspect = (double)nx / (double)ny;
 
 	glm::mat4 cur_mv_mat = m_mv_mat;
@@ -13311,8 +13314,7 @@ bool VRenderVulkanView::SwitchRulerBalloonVisibility_Point(int mx, int my)
 			ptemp = *point;
 			ptemp = mv.transform(ptemp);
 			ptemp = p.transform(ptemp);
-			if ((m_persp && (ptemp.z()<=0.0 || ptemp.z()>=1.0)) ||
-				(!m_persp && (ptemp.z()>=0.0 || ptemp.z()<=-1.0)))
+			if (ptemp.z()<=0.0 || ptemp.z()>=1.0)
 				continue;
 			if (x<ptemp.x()+0.02/aspect &&
 				x>ptemp.x()-0.02/aspect &&
@@ -13340,8 +13342,7 @@ bool VRenderVulkanView::SwitchRulerBalloonVisibility_Point(int mx, int my)
 				ptemp = *point;
 				ptemp = mv.transform(ptemp);
 				ptemp = p.transform(ptemp);
-				if ((m_persp && (ptemp.z()<=0.0 || ptemp.z()>=1.0)) ||
-					(!m_persp && (ptemp.z()>=0.0 || ptemp.z()<=-1.0)))
+				if (ptemp.z()<=0.0 || ptemp.z()>=1.0)
 					continue;
 				if (x<ptemp.x()+0.02/aspect &&
 					x>ptemp.x()-0.02/aspect &&
@@ -13512,26 +13513,28 @@ void VRenderVulkanView::DrawRulers()
 	float w = m_text_renderer->GetSize()/4.0f;
 	float px, py, p2x, p2y;
 
-	vector<float> verts;
+	vector<Vulkan2dRender::Vertex> verts;
+	vector<uint32_t> index;
 	int vert_num = 0;
 	for (size_t i=0; i<m_ruler_list.size(); ++i)
 		if (m_ruler_list[i])
 			vert_num += m_ruler_list[i]->GetNumPoint();
-	verts.reserve(vert_num*10*3);
+	verts.reserve(vert_num*4);
+	index.reserve(vert_num*8);
 
 	Transform mv;
 	Transform p;
 	mv.set(glm::value_ptr(m_mv_mat));
 	p.set(glm::value_ptr(m_proj_mat));
 	Point p1, p2;
-	unsigned int num;
-	vector<unsigned int> nums;
 	Color color;
 	Color text_color = GetTextColor();
 
 	double spcx = 1.0;
 	double spcy = 1.0;
 	double spcz = 1.0;
+
+	int fsize = m_text_renderer->GetSize();
 
 	if(m_cur_vol){
 		Texture *vtex = m_cur_vol->GetTexture();
@@ -13545,6 +13548,7 @@ void VRenderVulkanView::DrawRulers()
 		}
 	}
 
+	uint32_t vnum = 0;
 	for (size_t i=0; i<m_ruler_list.size(); i++)
 	{
 		Ruler* ruler = m_ruler_list[i];
@@ -13553,7 +13557,6 @@ void VRenderVulkanView::DrawRulers()
 			(ruler->GetTimeDep() &&
 			ruler->GetTime() == m_tseq_cur_num))
 		{
-			num = 0;
 			if (ruler->GetUseColor())
 				color = ruler->GetColor();
 			else
@@ -13563,20 +13566,18 @@ void VRenderVulkanView::DrawRulers()
 				p2 = *(ruler->GetPoint(j));
 				p2 = mv.transform(p2);
 				p2 = p.transform(p2);
-				if ((m_persp && (p2.z()<=0.0 || p2.z()>=1.0)) ||
-					(!m_persp && (p2.z()>=0.0 || p2.z()<=-1.0)))
+				if (p2.z() <= 0.0 || p2.z() >= 1.0)
 					continue;
 				px = (p2.x()+1.0)*nx/2.0;
 				py = (p2.y()+1.0)*ny/2.0;
-				verts.push_back(px-w); verts.push_back(py-w); verts.push_back(0.0);
-				verts.push_back(px+w); verts.push_back(py-w); verts.push_back(0.0);
-				verts.push_back(px+w); verts.push_back(py-w); verts.push_back(0.0);
-				verts.push_back(px+w); verts.push_back(py+w); verts.push_back(0.0);
-				verts.push_back(px+w); verts.push_back(py+w); verts.push_back(0.0);
-				verts.push_back(px-w); verts.push_back(py+w); verts.push_back(0.0);
-				verts.push_back(px-w); verts.push_back(py+w); verts.push_back(0.0);
-				verts.push_back(px-w); verts.push_back(py-w); verts.push_back(0.0);
-				num += 8;
+				verts.push_back(Vulkan2dRender::Vertex{ {px - w, py - w, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+				verts.push_back(Vulkan2dRender::Vertex{ {px + w, py - w, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+				verts.push_back(Vulkan2dRender::Vertex{ {px + w, py + w, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+				verts.push_back(Vulkan2dRender::Vertex{ {px - w, py + w, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+				uint32_t tmp[] = { vnum+0, vnum+1, vnum+1, vnum+2, vnum+2, vnum+3, vnum+3, vnum+0 };
+				index.insert(index.end(), tmp, tmp + 8);
+				vnum += 4;
+
 				if (j+1 == ruler->GetNumPoint())
 				{
 					p2x = p2.x()*nx/2.0;
@@ -13585,21 +13586,21 @@ void VRenderVulkanView::DrawRulers()
 						m_vulkan->frameBuffers[m_vulkan->currentBuffer],
 						ruler->GetNameDisp().ToStdWstring(),
 						color,
-						(p2x+w)*sx, (p2y+w)*sy);
+						(p2x+w)*sx, (p2y-w)*sy);
 				}
 				if (j > 0)
 				{
 					p1 = *(ruler->GetPoint(j-1));
 					p1 = mv.transform(p1);
 					p1 = p.transform(p1);
-					if ((m_persp && (p1.z()<=0.0 || p1.z()>=1.0)) ||
-						(!m_persp && (p1.z()>=0.0 || p1.z()<=-1.0)))
+					if (p1.z() <= 0.0 || p1.z() >= 1.0)
 						continue;
-					verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
+					verts.push_back(Vulkan2dRender::Vertex{ {px, py, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
 					px = (p1.x()+1.0)*nx/2.0;
 					py = (p1.y()+1.0)*ny/2.0;
-					verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
-					num += 2;
+					verts.push_back(Vulkan2dRender::Vertex{ {px, py, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+					index.push_back(vnum); index.push_back(vnum+1);
+					vnum += 2;
 				}
 
 				if(ruler->GetBalloonVisibility(j))
@@ -13621,7 +13622,7 @@ void VRenderVulkanView::DrawRulers()
 						double maxlw, lw, lh;
 
 						lh = m_text_renderer->GetSize();
-						margin_bottom += lh/2;//�e�L�X�g��Y���W��baseline�Ɉ��v���邽��
+						margin_bottom += lh/2;
 						maxlw = 0.0;
 
 						for(int i = 0; i < lnum; i++)
@@ -13629,25 +13630,23 @@ void VRenderVulkanView::DrawRulers()
 							wstring wstr_temp = ann.Item(i).ToStdWstring();
 							m_text_renderer->RenderText(m_vulkan->frameBuffers[m_vulkan->currentBuffer],
 								wstr_temp, color,
-								p2x*sx+margin_x*sx, p2y*sy-(lh*(i+1)+line_spc*i+margin_top)*sy);
+								p2x*sx+margin_x*sx, p2y*sy+(lh*(i+1)+line_spc*i+margin_top)*sy);
 							lw = m_text_renderer->RenderTextDims(wstr_temp).width;
 							if (lw > maxlw) maxlw = lw;
 						}
 
-						double bw = (margin_x*2 + maxlw);
-						double bh = (margin_top + margin_bottom + lh*lnum + line_spc*(lnum-1));
+						float bw = (margin_x*2 + maxlw);
+						float bh = (margin_top + margin_bottom + lh*lnum + line_spc*(lnum-1));
 
 						px = (p2.x()+1.0)*nx/2.0;
 						py = (p2.y()+1.0)*ny/2.0;
-						verts.push_back(px);    verts.push_back(py);    verts.push_back(0.0);
-						verts.push_back(px+bw); verts.push_back(py);    verts.push_back(0.0);
-						verts.push_back(px+bw); verts.push_back(py);    verts.push_back(0.0);
-						verts.push_back(px+bw); verts.push_back(py-bh); verts.push_back(0.0);
-						verts.push_back(px+bw); verts.push_back(py-bh); verts.push_back(0.0);
-						verts.push_back(px);    verts.push_back(py-bh); verts.push_back(0.0);
-						verts.push_back(px);    verts.push_back(py-bh); verts.push_back(0.0);
-						verts.push_back(px);    verts.push_back(py);    verts.push_back(0.0);
-						num += 8;
+						verts.push_back(Vulkan2dRender::Vertex{ {px,      py,      0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+						verts.push_back(Vulkan2dRender::Vertex{ {px + bw, py,      0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+						verts.push_back(Vulkan2dRender::Vertex{ {px + bw, py + bh, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+						verts.push_back(Vulkan2dRender::Vertex{ {px,      py + bh, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+						uint32_t tmp[] = { vnum+0, vnum+1, vnum+1, vnum+2, vnum+2, vnum+3, vnum+3, vnum+0 };
+						index.insert(index.end(), tmp, tmp + 8);
+						vnum += 4;
 					}
 				}
 			}
@@ -13667,17 +13666,17 @@ void VRenderVulkanView::DrawRulers()
 					p1 = p.transform(p1);
 					px = (p1.x()+1.0)*nx/2.0;
 					py = (p1.y()+1.0)*ny/2.0;
-					verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
+					verts.push_back(Vulkan2dRender::Vertex{ {px, py, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
 					p1 = center + v2*w;
 					p1 = mv.transform(p1);
 					p1 = p.transform(p1);
 					px = (p1.x()+1.0)*nx/2.0;
 					py = (p1.y()+1.0)*ny/2.0;
-					verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
-					num += 2;
+					verts.push_back(Vulkan2dRender::Vertex{ {px, py, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+					index.push_back(vnum); index.push_back(vnum + 1);
+					vnum += 2;
 				}
 			}
-			nums.push_back(num);
 		}
 	}
 
@@ -13716,8 +13715,8 @@ void VRenderVulkanView::DrawRulers()
 			break;
 		}
 	}
-	sort(displist.begin(), displist.end());
-	sort(m_lm_vdlist.begin(), m_lm_vdlist.end());
+	std::sort(displist.begin(), displist.end());
+	std::sort(m_lm_vdlist.begin(), m_lm_vdlist.end());
 
 	if (m_lm_vdlist != displist)
 	{
@@ -13802,7 +13801,6 @@ void VRenderVulkanView::DrawRulers()
 				(ruler->GetTimeDep() &&
 				ruler->GetTime() == m_tseq_cur_num))
 			{
-				num = 0;
 				if (ruler->GetUseColor())
 					color = ruler->GetColor();
 				else
@@ -13812,20 +13810,18 @@ void VRenderVulkanView::DrawRulers()
 					p2 = *(ruler->GetPoint(j));
 					p2 = mv.transform(p2);
 					p2 = p.transform(p2);
-					if ((m_persp && (p2.z()<=0.0 || p2.z()>=1.0)) ||
-						(!m_persp && (p2.z()>=0.0 || p2.z()<=-1.0)))
+					if (p2.z() <= 0.0 || p2.z() >= 1.0)
 						continue;
 					px = (p2.x()+1.0)*nx/2.0;
 					py = (p2.y()+1.0)*ny/2.0;
-					verts.push_back(px-w); verts.push_back(py-w); verts.push_back(0.0);
-					verts.push_back(px+w); verts.push_back(py-w); verts.push_back(0.0);
-					verts.push_back(px+w); verts.push_back(py-w); verts.push_back(0.0);
-					verts.push_back(px+w); verts.push_back(py+w); verts.push_back(0.0);
-					verts.push_back(px+w); verts.push_back(py+w); verts.push_back(0.0);
-					verts.push_back(px-w); verts.push_back(py+w); verts.push_back(0.0);
-					verts.push_back(px-w); verts.push_back(py+w); verts.push_back(0.0);
-					verts.push_back(px-w); verts.push_back(py-w); verts.push_back(0.0);
-					num += 8;
+					verts.push_back(Vulkan2dRender::Vertex{ {px - w, py - w, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+					verts.push_back(Vulkan2dRender::Vertex{ {px + w, py - w, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+					verts.push_back(Vulkan2dRender::Vertex{ {px + w, py + w, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+					verts.push_back(Vulkan2dRender::Vertex{ {px - w, py + w, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+					uint32_t tmp[] = { vnum+0, vnum+1, vnum+1, vnum+2, vnum+2, vnum+3, vnum+3, vnum+0 };
+					index.insert(index.end(), tmp, tmp + 8);
+					vnum += 4;
+
 					if (j+1 == ruler->GetNumPoint())
 					{
 						p2x = p2.x()*nx/2.0;
@@ -13834,21 +13830,21 @@ void VRenderVulkanView::DrawRulers()
 							m_vulkan->frameBuffers[m_vulkan->currentBuffer],
 							ruler->GetNameDisp().ToStdWstring(),
 							color,
-							(p2x+w)*sx, (p2y+w)*sy);
+							(p2x+w)*sx, (p2y-w)*sy);
 					}
 					if (j > 0)
 					{
 						p1 = *(ruler->GetPoint(j-1));
 						p1 = mv.transform(p1);
 						p1 = p.transform(p1);
-						if ((m_persp && (p1.z()<=0.0 || p1.z()>=1.0)) ||
-							(!m_persp && (p1.z()>=0.0 || p1.z()<=-1.0)))
+						if (p1.z() <= 0.0 || p1.z() >= 1.0)
 							continue;
-						verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
-						px = (p1.x()+1.0)*nx/2.0;
-						py = (p1.y()+1.0)*ny/2.0;
-						verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
-						num += 2;
+						verts.push_back(Vulkan2dRender::Vertex{ {px, py, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+						px = (p1.x() + 1.0) * nx / 2.0;
+						py = (p1.y() + 1.0) * ny / 2.0;
+						verts.push_back(Vulkan2dRender::Vertex{ {px, py, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+						index.push_back(vnum); index.push_back(vnum + 1);
+						vnum += 2;
 					}
 
 					if(ruler->GetBalloonVisibility(j))
@@ -13878,25 +13874,23 @@ void VRenderVulkanView::DrawRulers()
 								wstring wstr_temp = ann.Item(i).ToStdWstring();
 								m_text_renderer->RenderText(m_vulkan->frameBuffers[m_vulkan->currentBuffer],
 									wstr_temp, color,
-									p2x*sx+margin_x*sx, p2y*sy-(lh*(i+1)+line_spc*i+margin_top)*sy);
+									p2x*sx+margin_x*sx, p2y*sy+(lh*(i+1)+line_spc*i+margin_top)*sy);
 								lw = m_text_renderer->RenderTextDims(wstr_temp).width;
 								if (lw > maxlw) maxlw = lw;
 							}
 
-							double bw = (margin_x*2 + maxlw);
-							double bh = (margin_top + margin_bottom + lh*lnum + line_spc*(lnum-1));
+							float bw = (margin_x*2 + maxlw);
+							float bh = (margin_top + margin_bottom + lh*lnum + line_spc*(lnum-1));
 
-							px = (p2.x()+1.0)*nx/2.0;
-							py = (p2.y()+1.0)*ny/2.0;
-							verts.push_back(px);    verts.push_back(py);    verts.push_back(0.0);
-							verts.push_back(px+bw); verts.push_back(py);    verts.push_back(0.0);
-							verts.push_back(px+bw); verts.push_back(py);    verts.push_back(0.0);
-							verts.push_back(px+bw); verts.push_back(py-bh); verts.push_back(0.0);
-							verts.push_back(px+bw); verts.push_back(py-bh); verts.push_back(0.0);
-							verts.push_back(px);    verts.push_back(py-bh); verts.push_back(0.0);
-							verts.push_back(px);    verts.push_back(py-bh); verts.push_back(0.0);
-							verts.push_back(px);    verts.push_back(py);    verts.push_back(0.0);
-							num += 8;
+							px = (p2.x() + 1.0) * nx / 2.0;
+							py = (p2.y() + 1.0) * ny / 2.0;
+							verts.push_back(Vulkan2dRender::Vertex{ {px,      py,      0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+							verts.push_back(Vulkan2dRender::Vertex{ {px + bw, py,      0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+							verts.push_back(Vulkan2dRender::Vertex{ {px + bw, py + bh, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+							verts.push_back(Vulkan2dRender::Vertex{ {px,      py + bh, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+							uint32_t tmp[] = { vnum + 0, vnum + 1, vnum + 1, vnum + 2, vnum + 2, vnum + 3, vnum + 3, vnum + 0 };
+							index.insert(index.end(), tmp, tmp + 8);
+							vnum += 4;
 						}
 					}
 				}
@@ -13916,103 +13910,80 @@ void VRenderVulkanView::DrawRulers()
 						p1 = p.transform(p1);
 						px = (p1.x()+1.0)*nx/2.0;
 						py = (p1.y()+1.0)*ny/2.0;
-						verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
+						verts.push_back(Vulkan2dRender::Vertex{ {px, py, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
 						p1 = center + v2*w;
 						p1 = mv.transform(p1);
 						p1 = p.transform(p1);
 						px = (p1.x()+1.0)*nx/2.0;
 						py = (p1.y()+1.0)*ny/2.0;
-						verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
-						num += 2;
+						verts.push_back(Vulkan2dRender::Vertex{ {px, py, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+						index.push_back(vnum); index.push_back(vnum + 1);
+						vnum += 2;
 					}
 				}
-				nums.push_back(num);
 			}
 		}
 	}
-
-	///////////////////////////////////////////////////////////////////////////////////////////
-	/*if (!verts.empty())
+	if (!verts.empty() && !index.empty())
 	{
-		double width = m_text_renderer->GetSize()/10.0;
-		glEnable(GL_LINE_SMOOTH);
-		glLineWidth(GLfloat(width));
-		glEnable(GL_DEPTH_TEST);
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-
-		glm::mat4 matrix = glm::ortho(float(0), float(nx), float(0), float(ny));
-
-		ShaderProgram* shader =
-			m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY);
-		if (shader)
+		if (m_ruler_vobj.vertCount != verts.size())
 		{
-			if (!shader->valid())
-				shader->create();
-			shader->bind();
+			if (m_ruler_vobj.vertBuf.buffer != VK_NULL_HANDLE)
+				m_ruler_vobj.vertBuf.destroy();
+			VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+				VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+				&m_ruler_vobj.vertBuf,
+				verts.size() * sizeof(Vulkan2dRender::Vertex),
+				verts.data()));
+			m_ruler_vobj.vertCount = verts.size();
+			m_ruler_vobj.vertOffset = 0;
 		}
-		shader->setLocalParamMatrix(0, glm::value_ptr(matrix));
-
-		glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(float)*verts.size(), &verts[0], GL_DYNAMIC_DRAW);
-		glBindVertexArray(m_misc_vao);
-		glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
-
-		GLint pos = 0;
-		size_t j = 0;
-		for (size_t i=0; i<m_ruler_list.size(); i++)
+		if (m_ruler_vobj.idxCount != index.size())
 		{
-			Ruler* ruler = m_ruler_list[i];
-			if (!ruler) continue;
-			if (!ruler->GetTimeDep() ||
-				(ruler->GetTimeDep() &&
-				ruler->GetTime() == m_tseq_cur_num))
-			{
-				num = 0;
-				if (ruler->GetUseColor())
-					color = ruler->GetColor();
-				else
-					color = text_color;
-				shader->setLocalParam(0, color.r(), color.g(), color.b(), 1.0);
-				glDrawArrays(GL_LINES, pos, (GLsizei)(nums[j++]));
-				pos += nums[j-1];
-			}
+			if (m_ruler_vobj.idxBuf.buffer != VK_NULL_HANDLE)
+				m_ruler_vobj.idxBuf.destroy();
+			VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+				VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+				&m_ruler_vobj.idxBuf,
+				index.size() * sizeof(uint32_t),
+				index.data()));
+
+			m_ruler_vobj.idxCount = index.size();
+			m_ruler_vobj.idxOffset = 0;
 		}
+		m_ruler_vobj.vertBuf.map();
+		m_ruler_vobj.idxBuf.map();
+		m_ruler_vobj.vertBuf.copyTo(verts.data(), verts.size() * sizeof(Vulkan2dRender::Vertex));
+		m_ruler_vobj.idxBuf.copyTo(index.data(), index.size() * sizeof(uint32_t));
+		m_ruler_vobj.vertBuf.unmap();
+		m_ruler_vobj.idxBuf.unmap();
 
-		if(m_draw_landmarks)
-		{
-			for (size_t i=0; i<m_landmarks.size(); i++)
-			{
-				Ruler* ruler = m_landmarks[i];
-				if (!ruler) continue;
-				if (!ruler->GetTimeDep() ||
-					(ruler->GetTimeDep() &&
-					ruler->GetTime() == m_tseq_cur_num))
-				{
-					num = 0;
-					if (ruler->GetUseColor())
-						color = ruler->GetColor();
-					else
-						color = text_color;
-					shader->setLocalParam(0, color.r(), color.g(), color.b(), 1.0);
-					glDrawArrays(GL_LINES, pos, (GLsizei)(nums[j++]));
-					pos += nums[j-1];
-				}
-			}
-		}
+		Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+		vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+		params.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHDR_DRAW_GEOMETRY_COLOR3,
+				V2DRENDER_BLEND_OVER_UI,
+				current_fbo->attachments[0]->format,
+				current_fbo->attachments.size(),
+				0,
+				current_fbo->attachments[0]->is_swapchain_images,
+				VK_PRIMITIVE_TOPOLOGY_LINE_LIST
+			);
+		params.matrix[0] = glm::ortho(float(0), float(nx), float(0), float(ny));
+		params.clear = m_frame_clear;
+		params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
+		m_frame_clear = false;
 
-		glDisableVertexAttribArray(0);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindVertexArray(0);
+		params.obj = &m_ruler_vobj;
 
-		if (shader && shader->valid())
-			shader->release();
+		if (!current_fbo->renderPass)
+			current_fbo->replaceRenderPass(params.pipeline.pass);
 
-		glDisable(GL_LINE_SMOOTH);
-		glLineWidth(1.0);
-	}*/
+		m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
+	}
 }
 
 vector<Ruler*>* VRenderVulkanView::GetRulerList()

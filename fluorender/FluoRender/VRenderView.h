@@ -1111,6 +1111,7 @@ private:
 	Vulkan2dRender::V2dObject m_clip_vobj;
 	Vulkan2dRender::V2dObject m_grad_vobj;
 	Vulkan2dRender::V2dObject m_cmap_vobj;
+	Vulkan2dRender::V2dObject m_ruler_vobj;
 
 	bool m_frame_clear;
 
