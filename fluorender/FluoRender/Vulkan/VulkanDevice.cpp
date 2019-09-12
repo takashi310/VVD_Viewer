@@ -59,7 +59,7 @@ namespace vks
 	{
 		FLIVR::TextureBrick* b = texp.brick;
 		int c = texp.comp;
-		if (!b->dirty(c) || c <= 0 || c >= TEXTURE_MAX_COMPONENTS)
+		if (!b->dirty(c) || c < 0 || c >= TEXTURE_MAX_COMPONENTS)
 			return false;
 
 		VkOffset3D offset;

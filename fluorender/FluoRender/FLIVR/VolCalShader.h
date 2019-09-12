@@ -47,7 +47,7 @@ namespace FLIVR
 	#define CAL_APPLYMASKINV2	7	//apply the inverted mask
 	#define CAL_INTERSECTION_WITH_MASK	8	//minimum of two with mask
 
-	#define CAL_SAMPLER_NUM 5
+	#define CAL_SAMPLER_NUM 4
 
 	class ShaderProgram;
 
@@ -99,6 +99,7 @@ namespace FLIVR
 
 		struct CalCompShaderBrickConst {
 			glm::vec4 loc0_scale_usemask;	//(scale_a, scale_b, use_mask_a, use_mask_b)
+			glm::vec4 loc1_dim_inv;
 		};
 
 		static inline VkWriteDescriptorSet writeDescriptorSetTex(
@@ -111,7 +112,7 @@ namespace FLIVR
 			writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			writeDescriptorSet.dstSet = dstSet;
 			writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			writeDescriptorSet.dstBinding = texid;
+			writeDescriptorSet.dstBinding = texid+1;
 			writeDescriptorSet.pImageInfo = imageInfo;
 			writeDescriptorSet.descriptorCount = descriptorCount;
 			return writeDescriptorSet;
@@ -138,7 +139,7 @@ namespace FLIVR
 			VkDescriptorImageInfo* imageInfo,
 			uint32_t descriptorCount = 1)
 		{
-			return writeDescriptorSetStrageImage(dstSet, 5, imageInfo, descriptorCount);
+			return writeDescriptorSetStrageImage(dstSet, 0, imageInfo, descriptorCount);
 		}
 
 		void setupDescriptorSetLayout();

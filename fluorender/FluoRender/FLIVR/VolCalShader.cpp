@@ -49,11 +49,11 @@ namespace FLIVR
 
 #define CAL_OUTPUTS \
 	"//CAL_INOUT\n" \
-	"layout (binding = 5, r8) uniform image3D outimg;\n"
+	"layout (binding = 0, r8) uniform image3D outimg;\n"
 
 #define CAL_OUTPUTS_16BIT \
 	"//CAL_OUTPUTS_16BIT\n" \
-	"layout (binding = 5, r16) uniform image3D outimg;\n"
+	"layout (binding = 0, r16) uniform image3D outimg;\n"
 
 #define CAL_UNIFORMS_COMMON \
 	"//CAL_UNIFORMS_COMMON\n" \
@@ -61,6 +61,7 @@ namespace FLIVR
 	"layout (binding = 2) uniform sampler3D tex2;//operand B\n" \
 	"layout (push_constant) uniform PushConsts {\n" \
 	"	vec4 loc0;//(scale_A, scale_B, 0.0, 0.0)\n" \
+	"	vec4 loc1;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
 	"} ct;" \
 	"\n"
 
@@ -72,14 +73,15 @@ namespace FLIVR
 	"layout (binding = 4) uniform sampler3D tex4;//mask of B\n" \
 	"layout (push_constant) uniform PushConsts {\n" \
 	"	vec4 loc0;//(scale_a, scale_b, use_mask_a, use_mask_b)\n" \
+	"	vec4 loc1;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
 	"} ct;" \
 	"\n"
 
 #define CAL_HEAD \
-	"//SEG_HEAD\n" \
+	"//CAL_HEAD\n" \
 	"void main()\n" \
 	"{\n" \
-	"	vec4 t = vec4((gl_GlobalInvocationID.x+0.5)*brk.loc4.x, (gl_GlobalInvocationID.y+0.5)*brk.loc4.y, (gl_GlobalInvocationID.z+0.5)*brk.loc4.z, 1.0);\n" \
+	"	vec4 t = vec4((gl_GlobalInvocationID.x+0.5)*ct.loc1.x, (gl_GlobalInvocationID.y+0.5)*ct.loc1.y, (gl_GlobalInvocationID.z+0.5)*ct.loc1.z, 1.0);\n" \
 	"	vec4 t1 = t;//position in the operand A\n" \
 	"	vec4 t2 = t;//position in the operand B\n" \
 	"\n"
@@ -169,7 +171,7 @@ namespace FLIVR
 	bool VolCalShader::emit(string& s)
 	{
 		ostringstream z;
-
+		
 		z << ShaderProgram::glsl_version_;
 		z << CAL_INPUTS;
 		if (out_bytes_ == 2) z << CAL_OUTPUTS_16BIT;
@@ -301,8 +303,17 @@ namespace FLIVR
 			VkDevice device = vdev->logicalDevice;
 
 			std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {};
-
+			
 			int offset = 0;
+			//output image
+			setLayoutBindings.push_back(
+				vks::initializers::descriptorSetLayoutBinding(
+					VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+					VK_SHADER_STAGE_COMPUTE_BIT,
+					offset)
+			);
+			offset++;
+
 			for (int i = 0; i < CAL_SAMPLER_NUM; i++)
 			{
 				setLayoutBindings.push_back(
@@ -313,14 +324,6 @@ namespace FLIVR
 					);
 			}
 			offset += CAL_SAMPLER_NUM;
-
-			//output image
-			setLayoutBindings.push_back(
-				vks::initializers::descriptorSetLayoutBinding(
-					VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-					VK_SHADER_STAGE_COMPUTE_BIT,
-					offset)
-			);
 			
 			VkDescriptorSetLayoutCreateInfo descriptorLayout = 
 				vks::initializers::descriptorSetLayoutCreateInfo(

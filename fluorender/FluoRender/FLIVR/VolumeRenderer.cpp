@@ -2957,6 +2957,16 @@ namespace FLIVR
 	}
 
 	//calculation
+	//calculation type
+	//1:substraction;
+	//2:addition;
+	//3:division;
+	//4:intersection
+	//5:apply mask (single volume multiplication)
+	//6:apply mask inverted (multiplication with mask's complement in volume)
+	//7:apply mask inverted, then replace volume a
+	//8:intersection with masks if available
+	//9:fill holes
 	void VolumeRenderer::calculate(int type, FLIVR::VolumeRenderer *vr_a, FLIVR::VolumeRenderer *vr_b)
 	{
 		//sync sorting
@@ -3013,6 +3023,8 @@ namespace FLIVR
 			};
 		}
 
+		vkQueueWaitIdle(prim_dev->compute_queue);
+
 		VkCommandBuffer cmdbuf = prim_dev->createComputeCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 		
 		for (unsigned int i=0; i < bricks->size(); i++)
@@ -3020,6 +3032,9 @@ namespace FLIVR
 			TextureBrick* b = (*bricks)[i];
 			TextureBrick* b_a = bricks_a ? (*bricks_a)[i] : nullptr;
 			TextureBrick* b_b = bricks_b ? (*bricks_b)[i] : nullptr;
+
+			//size and sample rate
+			cal_const.loc1_dim_inv = { 1.0 / b->nx(), 1.0 / b->ny(), 1.0 / b->nz(), 1.0 / sampling_rate_ };
 
 			shared_ptr<vks::VTexture> dsttex, tex_a, tex_b, mask_a, mask_b;
 			std::vector<VkWriteDescriptorSet> descriptorWrites;
@@ -3031,23 +3046,27 @@ namespace FLIVR
 
 			dsttex = load_brick(prim_dev, 0, 0, bricks, i, VK_FILTER_NEAREST, false, 0, false);
 			if (!dsttex) continue;
+			descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetOutput(VK_NULL_HANDLE, &dsttex->descriptor));
 
 			if (bricks_a)
 			{
 				tex_a = vr_a->load_brick(prim_dev, 0, 0, bricks_a, i, VK_FILTER_NEAREST, false, 0, false);
 				if (!tex_a) continue;
+				descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 0, &tex_a->descriptor));
 			}
 				
 			if (bricks_b)
 			{
 				tex_b = vr_b->load_brick(prim_dev, 0, 0, bricks_b, i, VK_FILTER_NEAREST, false, 0, false);
 				if (!tex_b) continue;
+				descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 1, &tex_b->descriptor));
 			}
 				
 			if ((type == 5 || type == 6 || type == 7) && bricks_a)
 			{
 				mask_a = vr_a->load_brick_mask(prim_dev, bricks_a, i, VK_FILTER_NEAREST, false, 0, true);
 				if (!mask_a) continue;
+				descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 1, &mask_a->descriptor));
 			}
 				
 			if (type==8)
@@ -3056,12 +3075,14 @@ namespace FLIVR
 				{
 					mask_a = vr_a->load_brick_mask(prim_dev, bricks_a, i, VK_FILTER_NEAREST, false, 0, true);
 					if (!mask_a) continue;
+					descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 2, &mask_a->descriptor));
 				}
 					
 				if (bricks_b)
 				{
 					mask_b = vr_b->load_brick_mask(prim_dev, bricks_b, i, VK_FILTER_NEAREST, false, 0, true);
 					if (!mask_b) continue;
+					descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 3, &mask_b->descriptor));
 				}	
 			}
 
@@ -3083,16 +3104,17 @@ namespace FLIVR
 				dsttex->subresourceRange);
 			dsttex->descriptor.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
-			if (dsttex)
-				descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetOutput(VK_NULL_HANDLE, &dsttex->descriptor));
-			if (tex_a)
-				descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 1, &tex_a->descriptor));
-			if (tex_b)
-				descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 2, &tex_b->descriptor));
-			if (mask_a)
-				descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 3, &mask_a->descriptor));
-			if (mask_b)
-				descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 4, &mask_b->descriptor));
+			if (!descriptorWrites.empty())
+			{
+				prim_dev->vkCmdPushDescriptorSetKHR(
+					cmdbuf,
+					VK_PIPELINE_BIND_POINT_COMPUTE,
+					pipelineLayout,
+					0,
+					descriptorWrites.size(),
+					descriptorWrites.data()
+				);
+			}
 
 			vkCmdPushConstants(
 				cmdbuf,
