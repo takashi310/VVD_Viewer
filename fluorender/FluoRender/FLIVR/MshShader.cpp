@@ -39,6 +39,23 @@ using std::ostringstream;
 
 namespace FLIVR
 {
+#define VTX_SHADER_CODE_CORE_PROFILE \
+	"//VTX_SHADER_CODE_CORE_PROFILE\n" \
+	"layout (binding = 0) uniform VolVertShaderUBO {" \
+	"	mat4 matrix0; //projection matrix\n" \
+	"	mat4 matrix1; //modelview matrix\n" \
+	"} vubo;" \
+	"layout(location = 0) in vec3 InVertex;  //w will be set to 1.0 automatically\n" \
+	"layout(location = 1) in vec3 InTexture;\n" \
+	"layout(location = 0) out vec3 OutVertex;\n" \
+	"layout(location = 1) out vec3 OutTexture;\n" \
+	"//-------------------\n" \
+	"void main()\n" \
+	"{\n" \
+	"	gl_Position = vubo.matrix0 * vubo.matrix1 * vec4(InVertex,1.);\n" \
+	"	OutTexture = InTexture;\n" \
+	"	OutVertex  = InVertex;\n" \
+	"}\n" 
 #define MSH_VERTEX_INPUTS_V \
 	"//MSH_VERTEX_INPUTS_V\n" \
 	"layout(location = 0) in vec3 InVertex;\n"
@@ -57,28 +74,27 @@ namespace FLIVR
 
 #define MSH_VERTEX_OUTPUTS_N \
 	"//MSH_VERTEX_OUTPUTS_N\n" \
-	"out vec3 OutNormal;\n"
+	"layout(location = 1) out vec3 OutNormal;\n"
 
 #define MSH_VERTEX_OUTPUTS_T \
 	"//MSH_VERTEX_OUTPUTS_T\n" \
-	"out vec2 OutTexcoord;\n"
+	"layout(location = 2) out vec2 OutTexcoord;\n"
 
 #define MSH_VERTEX_OUTPUTS_FOG \
 	"//MSH_VERTEX_OUTPUTS_FOG\n" \
-	"out vec4 OutFogCoord;\n"
+	"layout(location = 3) out vec4 OutFogCoord;\n"
 
 #define MSH_VERTEX_OUTPUTS_POS \
 	"//MSH_VERTEX_OUTPUTS_POS\n" \
-	"out vec4 OutPosition;\n"
+	"layout(location = 0) out vec4 OutPosition;\n"
 
 #define MSH_VERTEX_UNIFORM_MATRIX \
 	"//MSH_VERTEX_UNIFORM_MATRIX\n" \
-	"uniform mat4 matrix0;//projection\n" \
-	"uniform mat4 matrix1;//model view\n"
-
-#define MSH_VERTEX_UNIFORM_MATRIX_NORMAL \
-	"//MSH_VERTEX_UNIFORM_MATRIX_NORMAL\n" \
-	"uniform mat4 matrix2;//normal\n"
+	"layout (binding = 0) uniform MshVertShaderUBO {" \
+	"	mat4 matrix0; //projection matrix\n" \
+	"	mat4 matrix1; //modelview matrix\n" \
+	"	mat4 matrix2; //normal\n" \
+	"} vubo;" \
 
 #define MSH_HEAD \
 	"// MSH_HEAD\n" \
@@ -87,12 +103,12 @@ namespace FLIVR
 
 #define MSH_VERTEX_BODY_POS \
 	"//MSH_VERTEX_BODY_POS\n" \
-	"	gl_Position = matrix0 * matrix1 * vec4(InVertex, 1.0);\n" \
+	"	gl_Position = vubo.matrix0 * vubo.matrix1 * vec4(InVertex, 1.0);\n" \
 	"	OutPosition = vec4(InVertex, 1.0);\n"
 
 #define MSH_VERTEX_BODY_NORMAL \
 	"//MSH_VERTEX_BODY_NORMAL\n" \
-	"	OutNormal = normalize((matrix2 * vec4(InNormal, 0.0)).xyz);\n"
+	"	OutNormal = normalize((vubo.matrix2 * vec4(InNormal, 0.0)).xyz);\n"
 
 #define MSH_VERTEX_BODY_TEX \
 	"//MSH_VERTEX_BODY_TEX\n" \
@@ -100,90 +116,69 @@ namespace FLIVR
 
 #define MSH_VERTEX_BODY_FOG \
 	"//MSH_VERTEX_BODY_FOG\n" \
-	"	OutFogCoord = matrix1 * vec4(InVertex,1.);\n"
+	"	OutFogCoord = vubo.matrix1 * vec4(InVertex,1.);\n"
 
 #define MSH_FRAG_OUTPUTS \
 	"//MSH_FRAG_OUTPUTS\n" \
-	"out vec4 FragColor;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
 	"\n"
 
 #define MSH_FRAG_OUTPUTS_INT \
 	"//MSH_FRAG_OUTPUTS_INT\n" \
-	"out uint FragUint;\n"\
+	"layout(location = 0) out uint FragUint;\n"\
 	"\n"
 
 #define MSH_FRAG_INPUTS_N \
 	"//MSH_FRAG_INPUTS_N\n" \
-	"in vec3 OutNormal;\n"
+	"layout(location = 1) in vec3 OutNormal;\n"
 
 #define MSH_FRAG_INPUTS_T \
 	"//MSH_FRAG_INPUTS_T\n" \
-	"in vec2 OutTexcoord;\n"
+	"layout(location = 2) in vec2 OutTexcoord;\n"
 
 #define MSH_FRAG_INPUTS_FOG \
 	"//MSH_FRAG_INPUTS_FOG\n" \
-	"in vec4 OutFogCoord;\n"
+	"layout(location = 3) in vec4 OutFogCoord;\n"
 
 #define MSH_FRAG_INPUTS_POS \
 	"//MSH_FRAG_INPUTS_POS\n" \
-	"in vec4 OutPosition;\n"
+	"layout(location = 4) in vec4 OutPosition;\n"
 
-#define MSH_FRAG_UNIFORMS_COLOR \
+#define MSH_FRAG_UNIFORMS \
 	"//MSH_FRAG_UNIFORMS_COLOR\n" \
-	"uniform vec4 loc0;//color\n"
-
-#define MSH_FRAG_UNIFORMS_NOMAT \
-	"//MSH_FRAG_UNIFORMS_NOMAT\n" \
-	"uniform vec4 loc0;//color\n" \
-	"uniform vec4 loc3;//(0, alpha, 0, 0)\n"
+	"layout (binding = 1) uniform MshVertShaderUBO {" \
+	"	vec4 loc0;//ambient color\n" \
+	"	vec4 loc1;//diffuse color\n" \
+	"	vec4 loc2;//specular color\n" \
+	"	vec4 loc3;//(shine, alpha, 0, 0)\n" \
+	"	vec4 loc7;//(1/vx, 1/vy, 0, 0)\n" \
+	"	vec4 loc10; //plane0\n" \
+	"	vec4 loc11; //plane1\n" \
+	"	vec4 loc12; //plane2\n" \
+	"	vec4 loc13; //plane3\n" \
+	"	vec4 loc14; //plane4\n" \
+	"	vec4 loc15; //plane5\n" \
+	"	mat4 matrix3;\n" \
+	"	uint loci0;//name\n" \
+	"} fubo;\n" \
 
 #define MSH_FRAG_UNIFORMS_TEX \
 	"// MSH_FRAG_UNIFORMS_TEX\n" \
-	"uniform sampler2D tex0;\n"
+	"layout (binding = 2) uniform sampler2D tex0;\n"
 
-#define MSH_FRAG_UNIFORMS_MATERIAL \
-	"//MSH_FRAG_UNIFORMS_MATERIAL\n" \
-	"uniform vec4 loc0;//ambient color\n" \
-	"uniform vec4 loc1;//diffuse color\n" \
-	"uniform vec4 loc2;//specular color\n" \
-	"uniform vec4 loc3;//(shine, alpha, 0, 0)\n"
-/*
 #define MSH_FRAG_UNIFORMS_DP \
 	"// MSH_FRAG_UNIFORMS_DP\n" \
-	"uniform vec4 loc7;//(1/vx, 1/vy, 0, 0)\n" \
-	"uniform sampler2D tex13;\n" \
-	"uniform sampler2D tex14;\n" \
-	"uniform sampler2D tex15;\n"
-*/
-#define MSH_FRAG_UNIFORMS_DP \
-	"// MSH_FRAG_UNIFORMS_DP\n" \
-	"uniform vec4 loc7;//(1/vx, 1/vy, 0, 0)\n" \
-	"uniform sampler2D tex15;\n"
-
-#define MSH_FRAG_UNIFORMS_INT \
-	"//MSH_FRAG_UNIFORMS_INT\n" \
-	"uniform uint loci0;//name\n"
-
-#define MSH_UNIFORMS_CLIP \
-	"//VOL_UNIFORMS_CLIP\n" \
-	"uniform vec4 loc10; //plane0\n" \
-	"uniform vec4 loc11; //plane1\n" \
-	"uniform vec4 loc12; //plane2\n" \
-	"uniform vec4 loc13; //plane3\n" \
-	"uniform vec4 loc14; //plane4\n" \
-	"uniform vec4 loc15; //plane5\n" \
-	"uniform mat4 matrix3;\n" \
-	"\n"
+	"layout (binding = 3) uniform sampler2D tex1; //tex15 \n"
 
 #define MSH_HEAD_CLIP \
 	"	//VOL_HEAD_CLIP\n" \
-	"	vec4 fp = matrix3*OutPosition;\n" \
-	"	if (dot(fp.xyz, loc10.xyz)+loc10.w < 0.0 ||\n" \
-	"		dot(fp.xyz, loc11.xyz)+loc11.w < 0.0 ||\n" \
-	"		dot(fp.xyz, loc12.xyz)+loc12.w < 0.0 ||\n" \
-	"		dot(fp.xyz, loc13.xyz)+loc13.w < 0.0 ||\n" \
-	"		dot(fp.xyz, loc14.xyz)+loc14.w < 0.0 ||\n" \
-	"		dot(fp.xyz, loc15.xyz)+loc15.w < 0.0)\n" \
+	"	vec4 fp = fubo.matrix3*OutPosition;\n" \
+	"	if (dot(fp.xyz, fubo.loc10.xyz)+fubo.loc10.w < 0.0 ||\n" \
+	"		dot(fp.xyz, fubo.loc11.xyz)+fubo.loc11.w < 0.0 ||\n" \
+	"		dot(fp.xyz, fubo.loc12.xyz)+fubo.loc12.w < 0.0 ||\n" \
+	"		dot(fp.xyz, fubo.loc13.xyz)+fubo.loc13.w < 0.0 ||\n" \
+	"		dot(fp.xyz, fubo.loc14.xyz)+fubo.loc14.w < 0.0 ||\n" \
+	"		dot(fp.xyz, fubo.loc15.xyz)+fubo.loc15.w < 0.0)\n" \
 	"	{\n" \
 	"		discard;//FragColor = vec4(0.0);\n" \
 	"		return;\n" \
@@ -193,33 +188,33 @@ namespace FLIVR
 //1: draw depth after 15 (15)
 #define MSH_FRAG_BODY_DP_1 \
 	"	// MSH_FRAG_BODY_DP_1\n" \
-	"	vec2 t = vec2(gl_FragCoord.x*loc7.x, gl_FragCoord.y*loc7.y);\n" \
-	"	if (texture(tex15, t).r >= gl_FragCoord.z-1e-6) discard;\n"
+	"	vec2 t = vec2(gl_FragCoord.x*fubo.loc7.x, gl_FragCoord.y*fubo.loc7.y);\n" \
+	"	if (texture(tex1, t).r >= gl_FragCoord.z-1e-6) discard;\n"
 
 //2: draw mesh after 14 (14, 15)
 #define MSH_FRAG_BODY_DP_2 \
 	"	// MSH_FRAG_BODY_DP_2\n" \
-	"	vec2 t = vec2(gl_FragCoord.x*loc7.x, gl_FragCoord.y*loc7.y);\n" \
+	"	vec2 t = vec2(gl_FragCoord.x*fubo.loc7.x, gl_FragCoord.y*fubo.loc7.y);\n" \
 	"	if (texture(tex14, t).r >= gl_FragCoord.z-1e-6) discard;\n" \
 
 //3: draw mesh after 13 and before 15 (13, 14, 15)
 #define MSH_FRAG_BODY_DP_3 \
 	"	// MSH_FRAG_BODY_DP_3\n" \
-	"	vec2 t = vec2(gl_FragCoord.x*loc7.x, gl_FragCoord.y*loc7.y);\n" \
-	"	if (texture(tex15, t).r <= gl_FragCoord.z+1e-6) discard;\n" \
+	"	vec2 t = vec2(gl_FragCoord.x*fubo.loc7.x, gl_FragCoord.y*fubo.loc7.y);\n" \
+	"	if (texture(tex1, t).r <= gl_FragCoord.z+1e-6) discard;\n" \
 	"	else if (texture(tex13, t).r >= gl_FragCoord.z-1e-6) discard;\n"
 
 //4: draw mesh before 15 (at 14) (14, 15)
 #define MSH_FRAG_BODY_DP_4 \
 	"	// MSH_FRAG_BODY_DP_4\n" \
-	"	vec2 t = vec2(gl_FragCoord.x*loc7.x, gl_FragCoord.y*loc7.y);\n" \
-	"	if (texture(tex15, t).r <= gl_FragCoord.z+1e-6) discard;\n" \
+	"	vec2 t = vec2(gl_FragCoord.x*fubo.loc7.x, gl_FragCoord.y*fubo.loc7.y);\n" \
+	"	if (texture(tex1, t).r <= gl_FragCoord.z+1e-6) discard;\n" \
 
 //5: draw mesh at 15 (15)
 #define MSH_FRAG_BODY_DP_5 \
 	"	// MSH_FRAG_BODY_DP_5\n" \
-	"	vec2 t = vec2(gl_FragCoord.x*loc7.x, gl_FragCoord.y*loc7.y);\n" \
-	"	if (texture(tex15, t).r <= gl_FragCoord.z-1e-6) discard;\n" \
+	"	vec2 t = vec2(gl_FragCoord.x*fubo.loc7.x, gl_FragCoord.y*fubo.loc7.y);\n" \
+	"	if (texture(tex1, t).r <= gl_FragCoord.z-1e-6) discard;\n" \
 
 #define MSH_FRAG_BODY_COLOR \
 	"	//MSH_FRAG_BODY_COLOR\n" \
@@ -227,11 +222,11 @@ namespace FLIVR
 
 #define MSH_FRAG_BODY_COLOR_OUT \
 	"	// MSH_FRAG_BODY_COLOR_OUT\n" \
-	"	FragColor = vec4(c.xyz, c.w*loc3.y);\n"
+	"	FragColor = vec4(c.xyz, c.w*fubo.loc3.y);\n"
 
 #define MSH_FRAG_BODY_SIMPLE \
 	"	//MSH_FRAG_BODY_SIMPLE\n" \
-	"	c = loc0;\n"
+	"	c = fubo.loc0;\n"
 
 #define MSH_FRAG_BODY_COLOR_LIGHT \
 	"	//MSH_FRAG_BODY_COLOR_LIGHT\n" \
@@ -244,9 +239,9 @@ namespace FLIVR
 	"	{\n" \
 	"		vec3 h = normalize(l_dir+eye);\n" \
 	"		float intSpec = max(dot(h, n), 0.0);\n" \
-	"		spec = loc2 * pow(intSpec, loc3.x);\n" \
+	"		spec = fubo.loc2 * pow(intSpec, fubo.loc3.x);\n" \
 	"	}\n" \
-	"	c.xyz = max(intensity * loc1 + spec, loc0).xyz;\n"
+	"	c.xyz = max(intensity * fubo.loc1 + spec, fubo.loc0).xyz;\n"
 
 #define MSH_FRAG_BODY_TEXTURE \
 	"	//MSH_FRAG_BODY_TEXTURE\n" \
@@ -258,15 +253,17 @@ namespace FLIVR
 
 #define MSH_FRAG_BODY_INT \
 	"	//MSH_FRAG_BODY_INT\n" \
-	"	FragUint = loci0;\n"
+	"	FragUint = fubo.loci0;\n"
 
 #define MSH_TAIL \
 	"}\n"
 
-	MshShader::MshShader(int type,
+	MshShader::MshShader(VkDevice device, 
+		int type,
 		int peel, bool tex,
 		bool fog, bool light)
-		: type_(type),
+		: device_(device),
+		type_(type),
 		peel_(peel),
 		tex_(tex),
 		fog_(fog),
@@ -313,8 +310,6 @@ namespace FLIVR
 				z << MSH_VERTEX_OUTPUTS_FOG;
 			//uniforms
 			z << MSH_VERTEX_UNIFORM_MATRIX;
-			if (light_)
-				z << MSH_VERTEX_UNIFORM_MATRIX_NORMAL;
 		}
 		else if (type_ == 1)
 			z << MSH_VERTEX_UNIFORM_MATRIX;
@@ -345,81 +340,75 @@ namespace FLIVR
 
 		z << ShaderProgram::glsl_version_;
 
-		//if (type_ == 0)
-		//{
-		//	z << MSH_FRAG_OUTPUTS;
-		//	//inputs
-		//	z << MSH_FRAG_INPUTS_POS;
-		//	z << MSH_UNIFORMS_CLIP;
-		//	if (light_)
-		//		z << MSH_FRAG_INPUTS_N;
-		//	if (tex_)
-		//		z << MSH_FRAG_INPUTS_T;
-		//	if (fog_)
-		//		z << MSH_FRAG_INPUTS_FOG;
-		//	//uniforms
-		//	if (light_)
-		//		z << MSH_FRAG_UNIFORMS_MATERIAL;
-		//	else
-		//		z << MSH_FRAG_UNIFORMS_NOMAT;
-		//	if (tex_)
-		//		z << MSH_FRAG_UNIFORMS_TEX;
-		//	if (fog_)
-		//		z << VOL_UNIFORMS_FOG_LOC;
-		//	if (peel_)
-		//		z << MSH_FRAG_UNIFORMS_DP;
+		if (type_ == 0)
+		{
+			z << MSH_FRAG_OUTPUTS;
+			//inputs
+			z << MSH_FRAG_INPUTS_POS;
+			z << MSH_FRAG_UNIFORMS;
+			if (light_)
+				z << MSH_FRAG_INPUTS_N;
+			if (tex_)
+				z << MSH_FRAG_INPUTS_T;
+			if (fog_)
+				z << MSH_FRAG_INPUTS_FOG;
+			//uniforms
+			if (tex_)
+				z << MSH_FRAG_UNIFORMS_TEX;
+			if (peel_)
+				z << MSH_FRAG_UNIFORMS_DP;
 
-		//	z << MSH_HEAD;
-		//	z << MSH_HEAD_CLIP;
+			z << MSH_HEAD;
+			z << MSH_HEAD_CLIP;
 
-		//	//body
-		//	switch (peel_)
-		//	{
-		//	case 1:
-		//		z << MSH_FRAG_BODY_DP_1;
-		//		break;
-		//	case 2:
-		//		z << MSH_FRAG_BODY_DP_2;
-		//		break;
-		//	case 3:
-		//		z << MSH_FRAG_BODY_DP_3;
-		//		break;
-		//	case 4:
-		//		z << MSH_FRAG_BODY_DP_4;
-		//		break;
-		//	case 5:
-		//		z << MSH_FRAG_BODY_DP_5;
-		//		break;
-		//	}
+			//body
+			switch (peel_)
+			{
+			case 1:
+				z << MSH_FRAG_BODY_DP_1;
+				break;
+			case 2:
+				z << MSH_FRAG_BODY_DP_2;
+				break;
+			case 3:
+				z << MSH_FRAG_BODY_DP_3;
+				break;
+			case 4:
+				z << MSH_FRAG_BODY_DP_4;
+				break;
+			case 5:
+				z << MSH_FRAG_BODY_DP_5;
+				break;
+			}
 
-		//	if (fog_)
-		//		z << VOL_HEAD_FOG;
+			if (fog_)
+				z << VOL_HEAD_FOG;
 
-		//	z << MSH_FRAG_BODY_COLOR;
-		//	if (light_)
-		//		z << MSH_FRAG_BODY_COLOR_LIGHT;
-		//	if (tex_)
-		//		z << MSH_FRAG_BODY_TEXTURE;
-		//	if (!light_ && !tex_)
-		//		z << MSH_FRAG_BODY_SIMPLE;
-		//	if (fog_)
-		//	{
-		//		z << MSH_FRAG_BODY_FOG_V;
-		//		z << VOL_FOG_BODY;
-		//	}
-		//	z << MSH_FRAG_BODY_COLOR_OUT;
-		//}
-		//else if (type_ == 1)
-		//{
-		//	z << MSH_FRAG_OUTPUTS_INT;
-		//	z << MSH_FRAG_UNIFORMS_INT;
-		//	z << MSH_HEAD;
-		//	z << MSH_FRAG_BODY_INT;
-		//}
+			z << MSH_FRAG_BODY_COLOR;
+			if (light_)
+				z << MSH_FRAG_BODY_COLOR_LIGHT;
+			if (tex_)
+				z << MSH_FRAG_BODY_TEXTURE;
+			if (!light_ && !tex_)
+				z << MSH_FRAG_BODY_SIMPLE;
+			if (fog_)
+			{
+				z << MSH_FRAG_BODY_FOG_V;
+				z << VOL_FOG_BODY;
+			}
+			z << MSH_FRAG_BODY_COLOR_OUT;
+		}
+		else if (type_ == 1)
+		{
+			z << MSH_FRAG_OUTPUTS_INT;
+			z << MSH_FRAG_UNIFORMS;
+			z << MSH_HEAD;
+			z << MSH_FRAG_BODY_INT;
+		}
 
-		//z << MSH_TAIL;
+		z << MSH_TAIL;
 
-		//s = z.str();
+		s = z.str();
 
 		return false;
 	}
@@ -429,33 +418,55 @@ namespace FLIVR
 		: prev_shader_(-1)
 	{}
 
+	MshShaderFactory::MshShaderFactory(std::vector<vks::VulkanDevice*>& devices)
+		: prev_shader_(-1)
+	{
+		init(devices);
+	}
+
+	void MshShaderFactory::init(std::vector<vks::VulkanDevice*>& devices)
+	{
+		vdevices_ = devices;
+		setupDescriptorSetLayout();
+	}
+
 	MshShaderFactory::~MshShaderFactory()
 	{
 		for(unsigned int i=0; i<shader_.size(); i++)
 			delete shader_[i];
+
+		for (auto vdev : vdevices_)
+		{
+			VkDevice device = vdev->logicalDevice;
+
+			vkDestroyPipelineLayout(device, pipeline_[vdev].pipelineLayout, nullptr);
+			vkDestroyDescriptorSetLayout(device, pipeline_[vdev].descriptorSetLayout, nullptr);
+
+		}
 	}
 
-	ShaderProgram* MshShaderFactory::shader(int type,
+	ShaderProgram* MshShaderFactory::shader(VkDevice device,
+		int type,
 		int peel, bool tex,
 		bool fog, bool light)
 	{
 		if(prev_shader_ >= 0)
 		{
-			if(shader_[prev_shader_]->match(type, peel, tex, fog, light))
+			if(shader_[prev_shader_]->match(device, type, peel, tex, fog, light))
 			{
 				return shader_[prev_shader_]->program();
 			}
 		}
 		for(unsigned int i=0; i<shader_.size(); i++)
 		{
-			if(shader_[i]->match(type, peel, tex, fog, light)) 
+			if(shader_[i]->match(device, type, peel, tex, fog, light)) 
 			{
 				prev_shader_ = i;
 				return shader_[i]->program();
 			}
 		}
 
-		MshShader* s = new MshShader(type, peel, tex, fog, light);
+		MshShader* s = new MshShader(device, type, peel, tex, fog, light);
 		if(s->create())
 		{
 			delete s;
@@ -464,6 +475,132 @@ namespace FLIVR
 		shader_.push_back(s);
 		prev_shader_ = (int)shader_.size()-1;
 		return s->program();
+	}
+
+	void MshShaderFactory::setupDescriptorSetLayout()
+	{
+		for (auto vdev : vdevices_)
+		{
+			VkDevice device = vdev->logicalDevice;
+
+			std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings =
+			{
+				// Binding 0 : Uniform buffer for vertex shader
+				vks::initializers::descriptorSetLayoutBinding(
+				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+				VK_SHADER_STAGE_VERTEX_BIT,
+				0),
+				// Binding 1 : Base uniform buffer for fragment shader
+				vks::initializers::descriptorSetLayoutBinding(
+				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+				VK_SHADER_STAGE_FRAGMENT_BIT,
+				1),
+			};
+
+			int offset = 2;
+			for (int i = 0; i < MshShader::MSH_SAMPLER_NUM; i++)
+			{
+				setLayoutBindings.push_back(
+					vks::initializers::descriptorSetLayoutBinding(
+						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+						VK_SHADER_STAGE_FRAGMENT_BIT,
+						offset + i)
+				);
+			}
+
+			VkDescriptorSetLayoutCreateInfo descriptorLayout =
+				vks::initializers::descriptorSetLayoutCreateInfo(
+					setLayoutBindings.data(),
+					static_cast<uint32_t>(setLayoutBindings.size()));
+
+			descriptorLayout.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
+			descriptorLayout.pNext = nullptr;
+
+			MshPipelineSettings pipe;
+			VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &pipe.descriptorSetLayout));
+
+			VkPipelineLayoutCreateInfo pPipelineLayoutCreateInfo =
+				vks::initializers::pipelineLayoutCreateInfo(
+					&pipe.descriptorSetLayout,
+					1);
+
+			VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pPipelineLayoutCreateInfo, nullptr, &pipe.pipelineLayout));
+
+			pipeline_[vdev] = pipe;
+		}
+	}
+
+	void MshShaderFactory::getDescriptorSetWriteUniforms(vks::VulkanDevice* vdev, MshUniformBufs& uniformBuffers, std::vector<VkWriteDescriptorSet>& writeDescriptorSets)
+	{
+		VkDevice device = vdev->logicalDevice;
+
+		writeDescriptorSets.push_back(
+			vks::initializers::writeDescriptorSet(
+				VK_NULL_HANDLE,
+				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+				0,
+				&uniformBuffers.vert.descriptor)
+		);
+		writeDescriptorSets.push_back(
+			vks::initializers::writeDescriptorSet(
+				VK_NULL_HANDLE,
+				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+				1,
+				&uniformBuffers.frag.descriptor)
+		);
+	}
+
+	void MshShaderFactory::getDescriptorSetWriteUniforms(vks::VulkanDevice* vdev, vks::Buffer& vert, vks::Buffer& frag, std::vector<VkWriteDescriptorSet>& writeDescriptorSets)
+	{
+		VkDevice device = vdev->logicalDevice;
+
+		writeDescriptorSets.push_back(
+			vks::initializers::writeDescriptorSet(
+				VK_NULL_HANDLE,
+				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+				0,
+				&vert.descriptor)
+		);
+		writeDescriptorSets.push_back(
+			vks::initializers::writeDescriptorSet(
+				VK_NULL_HANDLE,
+				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+				1,
+				&frag.descriptor)
+		);
+	}
+
+	// Prepare and initialize uniform buffer containing shader uniforms
+	void MshShaderFactory::prepareUniformBuffers(std::map<vks::VulkanDevice*, MshUniformBufs>& uniformBuffers)
+	{
+		for (auto vulkanDev : vdevices_)
+		{
+			MshUniformBufs uniformbufs;
+
+			VK_CHECK_RESULT(vulkanDev->createBuffer(
+				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+				&uniformbufs.vert,
+				sizeof(MshVertShaderUBO)));
+
+			VK_CHECK_RESULT(vulkanDev->createBuffer(
+				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+				&uniformbufs.frag,
+				sizeof(MshFragShaderUBO)));
+
+			// Map persistent
+			VK_CHECK_RESULT(uniformbufs.vert.map());
+			VK_CHECK_RESULT(uniformbufs.frag.map());
+
+			uniformBuffers[vulkanDev] = uniformbufs;
+		}
+	}
+
+	void MshShaderFactory::updateUniformBuffers(MshUniformBufs& uniformBuffers, MshVertShaderUBO vubo, MshFragShaderUBO fubo)
+	{
+		memcpy(uniformBuffers.vert.mapped, &vubo, sizeof(vubo));
+		memcpy(uniformBuffers.frag.mapped, &fubo, sizeof(fubo));
 	}
 
 } // end namespace FLIVR

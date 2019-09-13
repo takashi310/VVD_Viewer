@@ -299,13 +299,14 @@ namespace FLIVR
 public:
 		VkClearColorValue m_clear_color;
 		std::map<vks::VulkanDevice*, VolShaderFactory::VolUniformBufs> m_volUniformBuffers;
+		std::map<vks::VulkanDevice*, VRayShaderFactory::VRayUniformBufs> m_vrayUniformBuffers;
 		std::map<vks::VulkanDevice*, SegShaderFactory::SegUniformBufs> m_segUniformBuffers;
 		std::map<vks::VulkanDevice*, VkCommandBuffer> m_commandBuffers;
 		std::map<vks::VulkanDevice*, VkCommandBuffer> m_seg_commandBuffers;
 		
 		struct Vertex {
-			float pos[3];
-			float uv[3];
+			float pos[4];
+			float uv[4];
 		};
 		struct {
 			VkPipelineVertexInputStateCreateInfo inputState;
@@ -334,6 +335,16 @@ public:
 			VkClearColorValue clearColor = { 0.0f, 0.0f, 0.0f, 0.0f }
 		);
 		void draw_volume(
+			const std::unique_ptr<vks::VFrameBuffer>& framebuf,
+			bool clear_framebuf,
+			bool interactive_mode_p,
+			bool orthographic_p = false,
+			double zoom = 1.0,
+			int mode = 0,
+			double sampling_frq_fac = -1.0,
+			VkClearColorValue clearColor = { 0.0f, 0.0f, 0.0f, 0.0f }
+		);
+		void draw_volume_ray(
 			const std::unique_ptr<vks::VFrameBuffer>& framebuf,
 			bool clear_framebuf,
 			bool interactive_mode_p,
@@ -414,6 +425,30 @@ public:
 
 		static void init();
 		static void finalize();
+
+		struct VRayPipeline {
+			VkPipeline vkpipeline;
+			VkRenderPass renderpass;
+			ShaderProgram* shader;
+			vks::VulkanDevice* device;
+			int mode;
+			int update_order;
+			int colormap_mode;
+			VkBool32 samplers[IMG_SHDR_SAMPLER_NUM] = { VK_FALSE };
+		};
+		static std::vector<VRayPipeline> m_vray_pipelines;
+		static std::map<vks::VulkanDevice*, VkRenderPass> m_vray_draw_pass;
+		int m_prev_vray_pipeline;
+		VRayPipeline prepareVRayPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode);
+		
+		struct VRayVertexBuffers {
+			vks::Buffer vertexBuffer;
+			vks::Buffer indexBuffer;
+			uint32_t indexCount;
+		};
+		std::map<vks::VulkanDevice*, VRayVertexBuffers> m_vray_vbufs;
+		void prepareVRayVertexBuffers(vks::VulkanDevice* device);
+
 
 		struct VVolPipeline {
 			VkPipeline vkpipeline;

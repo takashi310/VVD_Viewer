@@ -12,6 +12,7 @@
 
 #include <FLIVR/ShaderProgram.h>
 #include <FLIVR/VolShader.h>
+#include <FLIVR/VRayShader.h>
 #include <FLIVR/VolCalShader.h>
 #include <FLIVR/SegShader.h>
 #include <FLIVR/PaintShader.h>
@@ -41,6 +42,7 @@ public:
 	~VVulkan();
 
 	std::unique_ptr<FLIVR::VolShaderFactory> vol_shader_factory_;
+	std::unique_ptr<FLIVR::VRayShaderFactory> vray_shader_factory_;
 	std::unique_ptr<FLIVR::VolCalShaderFactory> cal_shader_factory_;
 	std::unique_ptr<FLIVR::SegShaderFactory> seg_shader_factory_;
 	std::unique_ptr<FLIVR::PaintShaderFactory> paint_shader_factory_;

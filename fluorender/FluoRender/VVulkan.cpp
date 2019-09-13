@@ -10,6 +10,7 @@ VVulkan::VVulkan() : VulkanExampleBase(ENABLE_VALIDATION)
 VVulkan::~VVulkan()
 {
 	vol_shader_factory_.reset();
+	vray_shader_factory_.reset();
 	cal_shader_factory_.reset();
 	seg_shader_factory_.reset();
 	paint_shader_factory_.reset();
@@ -37,6 +38,7 @@ void VVulkan::prepare()
 	initSubDevices();
 	
 	vol_shader_factory_ = std::make_unique<FLIVR::VolShaderFactory>(devices);
+	vray_shader_factory_ = std::make_unique<FLIVR::VRayShaderFactory>(devices);
 	cal_shader_factory_ = std::make_unique<FLIVR::VolCalShaderFactory>(devices);
 	seg_shader_factory_ = std::make_unique<FLIVR::SegShaderFactory>(devices);
 	paint_shader_factory_ = std::make_unique<FLIVR::PaintShaderFactory>(devices);
