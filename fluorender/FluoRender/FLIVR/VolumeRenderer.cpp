@@ -1278,7 +1278,7 @@ namespace FLIVR
 			vks::initializers::pipelineRasterizationStateCreateInfo(
 				VK_POLYGON_MODE_FILL,
 				VK_CULL_MODE_BACK_BIT,
-				VK_FRONT_FACE_COUNTER_CLOCKWISE,
+				VK_FRONT_FACE_CLOCKWISE,
 				0);
 
 		VkPipelineDepthStencilStateCreateInfo depthStencilState =
@@ -2699,8 +2699,8 @@ namespace FLIVR
 		}
 
 		//setup depth peeling
-		if (depth_peel_ || colormap_mode_ == 2)
-			frag_ubo.loc7_view = { 1.0 / double(w2), 1.0 / double(h2), 0.0, 0.0 };
+		frag_ubo.loc7_view = { 1.0 / double(w2), 1.0 / double(h2), 
+			mode_ == MODE_OVER ? 1.0 / (rate * minwh * 0.001 * zoom * 2.0) : 1.0 , 0.0 };
 
 		//fog
 		if (m_use_fog)
@@ -2734,6 +2734,9 @@ namespace FLIVR
 		vert_ubo.proj_mat = m_proj_mat;
 		vert_ubo.mv_mat = m_mv_mat2;
 
+		frag_ubo.proj_mat_inv = glm::inverse(m_proj_mat);
+		frag_ubo.mv_mat_inv = glm::inverse(m_mv_mat2);
+
 		vert_ubuf.copyTo(&vert_ubo, sizeof(VRayShaderFactory::VRayVertShaderUBO), vert_ubuf_offset);
 		frag_ubuf.copyTo(&frag_ubo, sizeof(VRayShaderFactory::VRayFragShaderBaseUBO), frag_ubuf_offset);
 		if (vert_ubuf.buffer == frag_ubuf.buffer)
@@ -2749,7 +2752,7 @@ namespace FLIVR
 		vks::VulkanSemaphoreSettings semaphores = prim_dev->GetNextRenderSemaphoreSettings();
 
 		Transform mv;
-		mv.set(glm::value_ptr(m_mv_mat));
+		mv.set_trans(glm::value_ptr(m_mv_mat));
 
 		//////////////////////////////////////////
 		//render bricks
@@ -2920,11 +2923,16 @@ namespace FLIVR
 				descriptorWrites.push_back(VRayShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 3, &lbltex->descriptor));
 			}
 
+			Vector vtest = tform->project(mv.unproject(Vector(0, 0, 1)));
+			Point ptest = mv.unproject(Point(0, 0, 0));
+			vtest.normalize();
 			Vector p = view_ray.direction() * tmin;
 			Vector p2 = view_ray.direction() * tmax;
-			p = tform->project(p);
+			Vector tmp = tform->unproject(p);
+			tmp.normalize();
+			p = Dot(tform->project(p), tmp) * tmp;
 			p = mv.project(p);
-			p2 = tform->project(p2);
+			p2 = Dot(tform->project(p2), tmp) * tmp;
 			p2 = mv.project(p2);
 			frag_const.loc_zmin_zmax_dz = { p.z(), p2.z(), (p2.z()-p.z())/slicenum  };
 			frag_const.stepnum = slicenum;
@@ -2938,6 +2946,11 @@ namespace FLIVR
 
 			frag_const.b_trans = { float(dbox.min().x()), float(dbox.min().y()), float(dbox.min().z()), 0.0f };
 
+			glm::vec4 tst = glm::vec4(0.0, 0.0, 0.5, 1.0);
+			tst = frag_ubo.proj_mat_inv * tst;
+			tst = glm::normalize(tst);
+			glm::vec4 st = glm::vec4(0.0, 0.0, -2300.0, 1.0);
+			glm::vec4 TexCoord = frag_ubo.mv_mat_inv * st;
 
 
 			//////////////////////

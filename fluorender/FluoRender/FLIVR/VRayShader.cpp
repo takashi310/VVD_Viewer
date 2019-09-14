@@ -59,14 +59,14 @@ namespace FLIVR
 	"\n" \
 	"layout(location = 0) in vec3 InVertex;  //w will be set to 1.0 automatically\n" \
 	"layout(location = 1) in vec3 InTexture;\n" \
-	"layout(location = 0) out vec3 OutVertex;\n" \
+	"layout(location = 0) out vec4 OutVertex;\n" \
 	"layout(location = 1) out vec3 OutTexture;\n" \
 	"//-------------------\n" \
 	"void main()\n" \
 	"{\n" \
 	"	gl_Position = vubo.matrix0 * vubo.matrix1 * (vec4(InVertex,1.)*brk.brkscale + brk.brktrans);\n" \
 	"	OutTexture = InTexture;\n" \
-	"	OutVertex  = InVertex;\n" \
+	"	OutVertex  = gl_Position;\n" \
 	"}\n" 
 
 #define VRAY_FRG_SHADER_CODE_TEST \
@@ -76,7 +76,7 @@ namespace FLIVR
 	"#pragma optionNV(ifcvt none)\n" \
 	"#pragma optionNV(strict on)\n" \
 	"#pragma optionNV(unroll all)\n" \
-	"layout(location = 0) in vec3 OutVertex;\n" \
+	"layout(location = 0) in vec4 OutVertex;\n" \
 	"layout(location = 1) in vec3 OutTexture;\n" \
 	"layout(location = 0) out vec4 FragColor;\n" \
 	"// VOL_UNIFORMS_BASE\n" \
@@ -87,7 +87,7 @@ namespace FLIVR
 	"	vec4 loc3;//(gamma, gm_thresh, offset, sw)\n" \
 	"	vec4 loc5;//(spcx, spcy, spcz, max_id)\n" \
 	"	vec4 loc6;//(r, g, b, 0.0) or (1/vx, 1/vy, luminance, depth_mode)\n" \
-	"	vec4 loc7;//(1/vx, 1/vy, 0.0, 0.0)\n" \
+	"	vec4 loc7;//(1/vx, 1/vy, 1/sample_rate, 0.0)\n" \
 	"	vec4 loc8;//(int, start, end, 0.0)\n" \
 	"	vec4 loc10; //plane0\n" \
 	"	vec4 loc11; //plane1\n" \
@@ -131,19 +131,18 @@ namespace FLIVR
 	"void main()\n" \
 	"{\n" \
 	"	vec4 view = vec4(0.0, 0.0, brk.loc4.x, 1.0);\n" \
-	"	vec4 ray = normalize(base.matrix0 * gl_FragCoord);\n" \
+	"	vec4 ray = normalize(base.matrix0 * OutVertex);\n" \
 	"	vec4 st = (brk.loc4.x / ray.z) * ray;\n" \
 	"	const float step = brk.loc4.z / ray.z;\n" \
-	"	const float invstnum = 1.0 / float(brk.stnum);\n" \
 	"	vec4 outcol = vec4(0.0);\n" \
-	"	vec4 dir = vec4(1.0/brk.brkscale.x, 1.0/brk.brkscale.y, 1.0/brk.brkscale.z, 0.0);\n" \
+	"	vec4 dir = vec4(1.0/1200.0, 1.0/566.0, 1.0/180.0, 0.0);\n" \
 	"\n" \
 	"	for (uint i = 0; i < brk.stnum; i++)\n" \
 	"	{\n" \
 	"		vec4 TexCoord = ((base.matrix1 * (st + ray*step*float(i))) - brk.brktrans) / brk.brkscale;\n" \
 	"		vec4 t = vec4(TexCoord.xyz, 1.0);\n" \
 	"\n" \
-	"		if (!vol_clip_func(t) && t.x >= 0.0 && t.x <= 1.0 && t.y >= 0.0 && t.y <= 1.0 && t.z >= 0.0 && t.z <= 1.0)\n" \
+	"		if (!vol_clip_func(t) && t.x >= 0.0 && t.x <= 1.0 && t.y >= 0.0 && t.y <= 1.0 && t.z >= 0.0 && t.z <= 1.0 && outcol.w <= 0.99995)\n" \
 	"		{\n" \
 	"			//VOL_HEAD_LIT\n" \
 	"			vec4 l = base.loc0; // {lx, ly, lz, alpha}\n" \
@@ -214,7 +213,171 @@ namespace FLIVR
 	"				tf_alp = pow(clamp(v.x / base.loc3.z,\n" \
 	"					base.loc3.x < 1.0 ? -(base.loc3.x - 1.0) * 0.00001 : 0.0,\n" \
 	"					base.loc3.x>1.0 ? 0.9999 : 1.0), base.loc3.x);\n" \
-	"				alpha = (1.0 - pow(clamp(1.0 - tf_alp * l.w, 0.0, 1.0), invstnum)) / l.w;\n" \
+	"				alpha = (1.0 - pow(clamp(1.0 - tf_alp * l.w, 0.0, 1.0), base.loc7.z)) / l.w;\n" \
+	"				c = vec4(base.loc6.rgb * alpha * tf_alp, alpha);\n" \
+	"			}\n" \
+	"\n" \
+	"			//VOL_COLOR_OUTPUT\n" \
+	"			c.xyz = c.xyz * clamp(1.0 - base.loc1.x, 0.0, 1.0) + base.loc1.x * c.xyz * (base.loc1.y > 0.0 ? (n.w + n.z) : 1.0);\n" \
+	"			c.xyz *= pow(1.0 - base.loc1.x / 2.0, 2.0) + 1.0;\n" \
+	"\n" \
+	"			//VOL_RASTER_BLEND\n" \
+	"			c = c * l.w;\n" \
+	"			outcol = outcol + (1.0 - outcol.w) * c; // VOL_RASTER_BLEND\n" \
+	"		}\n" \
+	"	}\n" \
+	"\n" \
+	"	FragColor = outcol;\n" \
+	"\n" \
+	"	//VOL_TAIL\n" \
+	"}\n" 
+
+
+#define VRAY_FRG_SHADER_CODE_TEST_ORTHO \
+	"#version 450\n" \
+	"#pragma optionNV(inline all)\n" \
+	"#pragma optionNV(fastmath on)\n" \
+	"#pragma optionNV(ifcvt none)\n" \
+	"#pragma optionNV(strict on)\n" \
+	"#pragma optionNV(unroll all)\n" \
+	"layout(location = 0) in vec4 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexture;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
+	"// VOL_UNIFORMS_BASE\n" \
+	"layout(binding = 1) uniform VolFragShaderBaseUBO {\n" \
+	"	vec4 loc0;//(lx, ly, lz, alpha)\n" \
+	"	vec4 loc1;//(ka, kd, ks, ns)\n" \
+	"	vec4 loc2;//(scalar_scale, gm_scale, left_thresh, right_thresh)\n" \
+	"	vec4 loc3;//(gamma, gm_thresh, offset, sw)\n" \
+	"	vec4 loc5;//(spcx, spcy, spcz, max_id)\n" \
+	"	vec4 loc6;//(r, g, b, 0.0) or (1/vx, 1/vy, luminance, depth_mode)\n" \
+	"	vec4 loc7;//(1/vx, 1/vy, 1/sample_rate, 0.0)\n" \
+	"	vec4 loc8;//(int, start, end, 0.0)\n" \
+	"	vec4 loc10; //plane0\n" \
+	"	vec4 loc11; //plane1\n" \
+	"	vec4 loc12; //plane2\n" \
+	"	vec4 loc13; //plane3\n" \
+	"	vec4 loc14; //plane4\n" \
+	"	vec4 loc15; //plane5\n" \
+	"	mat4 matrix0; //inverted projection matrix\n" \
+	"	mat4 matrix1; //inverted modelview matrix\n" \
+	"} base;\n" \
+	"\n" \
+	"layout(binding = 2) uniform sampler3D tex0;//data volume\n" \
+	"layout(binding = 3) uniform sampler3D tex1;//gm volume\n" \
+	"\n" \
+	"// VOL_UNIFORMS_BRICK\n" \
+	"layout(push_constant) uniform VolFragShaderBrickConst {\n" \
+	"	vec4 brkscale;//tex transform for bricking\n" \
+	"	vec4 brktrans;//tex transform for bricking\n" \
+	"	vec4 mskbrkscale;//tex transform for mask bricks\n" \
+	"	vec4 mskbrktrans;//tex transform for mask bricks\n" \
+	"	vec3 loc4;//(zmin, zmax, dz)\n" \
+	"	uint stnum;\n" \
+	"} brk;\n" \
+	"\n" \
+	"//VOL_CLIP_FUNC\n" \
+	"bool vol_clip_func(vec4 t)\n" \
+	"{\n" \
+	"	vec4 brickt = (t * brk.brkscale + brk.brktrans);\n" \
+	"	if (dot(brickt.xyz, base.loc10.xyz) + base.loc10.w < 0.0 ||\n" \
+	"		dot(brickt.xyz, base.loc11.xyz) + base.loc11.w < 0.0 ||\n" \
+	"		dot(brickt.xyz, base.loc12.xyz) + base.loc12.w < 0.0 ||\n" \
+	"		dot(brickt.xyz, base.loc13.xyz) + base.loc13.w < 0.0 ||\n" \
+	"		dot(brickt.xyz, base.loc14.xyz) + base.loc14.w < 0.0 ||\n" \
+	"		dot(brickt.xyz, base.loc15.xyz) + base.loc15.w < 0.0)\n" \
+	"		return true;\n" \
+	"	else\n" \
+	"		return false;\n" \
+	"}\n" \
+	"\n" \
+	"//VOL_HEAD\n" \
+	"void main()\n" \
+	"{\n" \
+	"	vec4 ray = vec4(0.0, 0.0, 1.0, 0.0);\n" \
+	"	vec4 o = vec4((base.matrix0 * OutVertex).xy, 0.0, 1.0);\n" \
+	"	vec4 st = o + (brk.loc4.x / ray.z) * ray;\n" \
+	"	const float step = brk.loc4.z / ray.z;\n" \
+	"	vec4 outcol = vec4(0.0);\n" \
+	"	vec4 dir = vec4(1.0/1200.0, 1.0/566.0, 1.0/180.0, 0.0);\n" \
+	"\n" \
+	"	//VOL_HEAD_LIT\n" \
+	"	vec4 l = base.loc0; // {lx, ly, lz, alpha}\n" \
+	"	vec4 k = base.loc1; // {ka, kd, ks, ns}\n" \
+	"	k.x = k.x > 1.0 ? log2(3.0 - k.x) : k.x;\n" \
+	"	vec4 n, w;\n" \
+	"	if (l.w == 0.0) { discard; return; }\n" \
+	"\n" \
+	"	for (uint i = 0; i < brk.stnum; i++)\n" \
+	"	{\n" \
+	"		vec4 TexCoord = ((base.matrix1 * (st + ray*step*float(i))) - brk.brktrans) / brk.brkscale;\n" \
+	"		vec4 t = vec4(TexCoord.xyz, 1.0);\n" \
+	"\n" \
+	"		if (!vol_clip_func(t) && t.x >= 0.0 && t.x <= 1.0 && t.y >= 0.0 && t.y <= 1.0 && t.z >= 0.0 && t.z <= 1.0 && outcol.w <= 0.99995)\n" \
+	"		{\n" \
+	"			//VOL_DATA_VOLUME_LOOKUP\n" \
+	"			vec4 v = texture(tex0, t.stp);\n" \
+	"\n" \
+	"			// VOL_GRAD_COMPUTE_HI\n" \
+	"			vec4 r, p;\n" \
+	"			v = vec4(v.x);\n" \
+	"			n = vec4(0.0);\n" \
+	"			w = vec4(0.0);\n" \
+	"			w.x = dir.x;\n" \
+	"			p = clamp(TexCoord + w, 0.0, 1.0);\n" \
+	"			r = texture(tex0, p.stp);\n" \
+	"			n.x = r.x + n.x;\n" \
+	"			p = clamp(TexCoord - w, 0.0, 1.0);\n" \
+	"			r = texture(tex0, p.stp);\n" \
+	"			n.x = r.x - n.x;\n" \
+	"			w = vec4(0.0);\n" \
+	"			w.y = dir.y;\n" \
+	"			p = clamp(TexCoord + w, 0.0, 1.0);\n" \
+	"			r = texture(tex0, p.stp);\n" \
+	"			n.y = r.x + n.y;\n" \
+	"			p = clamp(TexCoord - w, 0.0, 1.0);\n" \
+	"			r = texture(tex0, p.stp);\n" \
+	"			n.y = r.x - n.y;\n" \
+	"			w = vec4(0.0);\n" \
+	"			w.z = dir.z;\n" \
+	"			p = clamp(TexCoord + w, 0.0, 1.0);\n" \
+	"			r = texture(tex0, p.stp);\n" \
+	"			n.z = r.x + n.z;\n" \
+	"			p = clamp(TexCoord - w, 0.0, 1.0);\n" \
+	"			r = texture(tex0, p.stp);\n" \
+	"			n.z = r.x - n.z;\n" \
+	"			p.y = length(n.xyz);\n" \
+	"			p.y = 0.5 * (base.loc2.x < 0.0 ? (1.0 + p.y * base.loc2.x) : p.y * base.loc2.x);\n" \
+	"\n" \
+	"			//VOL_BODY_SHADING\n" \
+	"			n.xyz = normalize(n.xyz);\n" \
+	"			n.w = dot(l.xyz, n.xyz); // calculate angle between light and normal. \n" \
+	"			n.w = clamp(abs(n.w), 0.0, 1.0); // two-sided lighting, n.w = abs(cos(angle))  \n" \
+	"			w = k; // w.x = weight*ka, w.y = weight*kd, w.z = weight*ks \n" \
+	"			w.x = k.x - w.y; // w.x = ka - kd*weight \n" \
+	"			w.x = w.x + k.y; // w.x = ka + kd - kd*weight \n" \
+	"			n.z = pow(n.w, k.w); // n.z = abs(cos(angle))^ns \n" \
+	"			n.w = (n.w * w.y) + w.x; // n.w = abs(cos(angle))*kd+ka\n" \
+	"			n.z = w.z * n.z; // n.z = weight*ks*abs(cos(angle))^ns \n" \
+	"\n" \
+	"			//VOL_COMPUTED_GM_LOOKUP\n" \
+	"			v.y = p.y;\n" \
+	"\n" \
+	"			//VOL_TRANSFER_FUNCTION_SIN_COLOR\n" \
+	"			vec4 c;\n" \
+	"			float tf_alp = 0.0;\n" \
+	"			float alpha = 0.0;\n" \
+	"			v.x = base.loc2.x < 0.0 ? (1.0 + v.x * base.loc2.x) : v.x * base.loc2.x;\n" \
+	"			if (v.x<base.loc2.z - base.loc3.w || v.x>base.loc2.w + base.loc3.w || v.y < base.loc3.y - base.loc3.w)\n" \
+	"				c = vec4(0.0);\n" \
+	"			else\n" \
+	"			{\n" \
+	"				v.x = (v.x < base.loc2.z ? (base.loc3.w - base.loc2.z + v.x) / base.loc3.w : (v.x > base.loc2.w ? (base.loc3.w - v.x + base.loc2.w) / base.loc3.w : 1.0)) * v.x;\n" \
+	"				v.x = (v.y < base.loc3.y ? (base.loc3.w - base.loc3.y + v.y) / base.loc3.w : 1.0) * v.x;\n" \
+	"				tf_alp = pow(clamp(v.x / base.loc3.z,\n" \
+	"					base.loc3.x < 1.0 ? -(base.loc3.x - 1.0) * 0.00001 : 0.0,\n" \
+	"					base.loc3.x>1.0 ? 0.9999 : 1.0), base.loc3.x);\n" \
+	"				alpha = (1.0 - pow(clamp(1.0 - tf_alp * l.w, 0.0, 1.0), base.loc7.z)) / l.w;\n" \
 	"				c = vec4(base.loc6.rgb * alpha * tf_alp, alpha);\n" \
 	"			}\n" \
 	"\n" \
@@ -240,7 +403,7 @@ namespace FLIVR
 	"#pragma optionNV(ifcvt none)\n" \
 	"#pragma optionNV(strict on)\n" \
 	"#pragma optionNV(unroll all)\n" \
-	"layout(location = 0) in vec3 OutVertex;\n" \
+	"layout(location = 0) in vec4 OutVertex;\n" \
 	"layout(location = 1) in vec3 OutTexture;\n" \
 	"layout(location = 0) out vec4 FragColor;\n" \
 	"// VOL_UNIFORMS_BASE\n" \
@@ -294,8 +457,22 @@ namespace FLIVR
 	"//VOL_HEAD\n" \
 	"void main()\n" \
 	"{\n" \
-	"	FragColor = vec4(1.0);\n" \
-	"}\n"
+	"	vec4 view = vec4(0.0, 0.0, brk.loc4.x, 0.0);\n" \
+	"	vec4 ray = normalize(view);//normalize(base.matrix0 * OutVertex);\n" \
+	"	vec4 o = vec4((base.matrix0 * OutVertex).xy, 0.0, 1.0);\n" \
+	"	vec4 st = o + (brk.loc4.x / ray.z) * ray;\n" \
+	"	st.w = 1.0;\n" \
+	"	const float step = brk.loc4.z / ray.z;\n" \
+	"	const float invstnum = 1.0 / float(brk.stnum);\n" \
+	"	vec4 outcol = vec4(0.0);\n" \
+	"	vec4 dir = vec4(1.0/brk.brkscale.x, 1.0/brk.brkscale.y, 1.0/brk.brkscale.z, 0.0);\n" \
+	"\n" \
+	"	vec4 TexCoord = ((base.matrix1 * (st + ray*step*float(0))) - brk.brktrans) / brk.brkscale;\n" \
+	"	vec4 t = vec4(TexCoord.xyz, 1.0);\n" \
+	"	FragColor = t;\n" \
+	"\n" \
+	"	//VOL_TAIL\n" \
+	"}\n" 
 
 VRayShader::VRayShader(
 	VkDevice device, bool poly, int channels,
@@ -389,7 +566,7 @@ VRayShader::VRayShader(
 	{
 		ostringstream z;
 
-		z << VRAY_FRG_SHADER_CODE_TEST;
+		z << VRAY_FRG_SHADER_CODE_TEST_ORTHO;
 
 		//if (poly_)
 		//{
