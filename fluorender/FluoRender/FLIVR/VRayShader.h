@@ -174,9 +174,9 @@ namespace FLIVR
 		};
 
 		struct VRayFragShaderBrickConst {
-			glm::vec4 b_scale;
-			glm::vec4 b_trans;
-			glm::vec4 mask_b_scale;
+			glm::vec4 b_scale_invnx;
+			glm::vec4 b_trans_invny;
+			glm::vec4 mask_b_scale_invnz;
 			glm::vec4 mask_b_trans;
 			glm::vec3 loc_zmin_zmax_dz;
 			uint32_t stepnum;

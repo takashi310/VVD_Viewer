@@ -64,12 +64,12 @@ namespace FLIVR
 	"//-------------------\n" \
 	"void main()\n" \
 	"{\n" \
-	"	gl_Position = vubo.matrix0 * vubo.matrix1 * (vec4(InVertex,1.)*brk.brkscale + brk.brktrans);\n" \
+	"	gl_Position = vubo.matrix0 * vubo.matrix1 * vec4(InVertex*brk.brkscale.xyz + brk.brktrans.xyz, 1.0);\n" \
 	"	OutTexture = InTexture;\n" \
 	"	OutVertex  = gl_Position;\n" \
 	"}\n" 
 
-#define VRAY_FRG_SHADER_CODE_TEST \
+#define VRAY_FRG_SHADER_CODE_TEST_PERSP \
 	"#version 450\n" \
 	"#pragma optionNV(inline all)\n" \
 	"#pragma optionNV(fastmath on)\n" \
@@ -104,9 +104,9 @@ namespace FLIVR
 	"\n" \
 	"// VOL_UNIFORMS_BRICK\n" \
 	"layout(push_constant) uniform VolFragShaderBrickConst {\n" \
-	"	vec4 brkscale;//tex transform for bricking\n" \
-	"	vec4 brktrans;//tex transform for bricking\n" \
-	"	vec4 mskbrkscale;//tex transform for mask bricks\n" \
+	"	vec4 brkscale;//tex transform for bricking and 1/nx\n" \
+	"	vec4 brktrans;//tex transform for bricking and 1/ny\n" \
+	"	vec4 mskbrkscale;//tex transform for mask bricks and 1/nz\n" \
 	"	vec4 mskbrktrans;//tex transform for mask bricks\n" \
 	"	vec3 loc4;//(zmin, zmax, dz)\n" \
 	"	uint stnum;\n" \
@@ -115,7 +115,7 @@ namespace FLIVR
 	"//VOL_CLIP_FUNC\n" \
 	"bool vol_clip_func(vec4 t)\n" \
 	"{\n" \
-	"	vec4 brickt = (t * brk.brkscale + brk.brktrans);\n" \
+	"	vec3 brickt = (t.xyz * brk.brkscale.xyz + brk.brktrans.xyz);\n" \
 	"	if (dot(brickt.xyz, base.loc10.xyz) + base.loc10.w < 0.0 ||\n" \
 	"		dot(brickt.xyz, base.loc11.xyz) + base.loc11.w < 0.0 ||\n" \
 	"		dot(brickt.xyz, base.loc12.xyz) + base.loc12.w < 0.0 ||\n" \
@@ -130,27 +130,27 @@ namespace FLIVR
 	"//VOL_HEAD\n" \
 	"void main()\n" \
 	"{\n" \
-	"	vec4 view = vec4(0.0, 0.0, brk.loc4.x, 1.0);\n" \
-	"	vec4 ray = normalize(base.matrix0 * OutVertex);\n" \
-	"	vec4 st = (brk.loc4.x / ray.z) * ray;\n" \
-	"	const float step = brk.loc4.z / ray.z;\n" \
+	"	const vec3 vray = normalize(base.matrix0 * OutVertex).xyz;\n" \
+	"	const vec4 ray = base.matrix1 * vec4(vray, 0.0) / vec4(brk.brkscale.xyz, 1.);\n" \
+	"	const vec4 st = base.matrix1 * vec4((brk.loc4.x / vray.z) * vray, 1.0) / vec4(brk.brkscale.xyz, 1.) - vec4(brk.brktrans.xyz / brk.brkscale.xyz, 0.0);\n" \
+	"	const float step = brk.loc4.z / vray.z;\n" \
 	"	vec4 outcol = vec4(0.0);\n" \
-	"	vec4 dir = vec4(1.0/1200.0, 1.0/566.0, 1.0/180.0, 0.0);\n" \
+	"	vec4 dir = vec4(brk.brkscale.w, brk.brktrans.w, brk.mskbrkscale.w, 0.0);\n" \
+	"\n" \
+	"	//VOL_HEAD_LIT\n" \
+	"	vec4 l = base.loc0; // {lx, ly, lz, alpha}\n" \
+	"	vec4 k = base.loc1; // {ka, kd, ks, ns}\n" \
+	"	k.x = k.x > 1.0 ? log2(3.0 - k.x) : k.x;\n" \
+	"	vec4 n, w;\n" \
+	"	if (l.w == 0.0) { discard; return; }\n" \
 	"\n" \
 	"	for (uint i = 0; i < brk.stnum; i++)\n" \
 	"	{\n" \
-	"		vec4 TexCoord = ((base.matrix1 * (st + ray*step*float(i))) - brk.brktrans) / brk.brkscale;\n" \
+	"		vec4 TexCoord = st + ray*step*float(i);\n" \
 	"		vec4 t = vec4(TexCoord.xyz, 1.0);\n" \
 	"\n" \
 	"		if (!vol_clip_func(t) && t.x >= 0.0 && t.x <= 1.0 && t.y >= 0.0 && t.y <= 1.0 && t.z >= 0.0 && t.z <= 1.0 && outcol.w <= 0.99995)\n" \
 	"		{\n" \
-	"			//VOL_HEAD_LIT\n" \
-	"			vec4 l = base.loc0; // {lx, ly, lz, alpha}\n" \
-	"			vec4 k = base.loc1; // {ka, kd, ks, ns}\n" \
-	"			k.x = k.x > 1.0 ? log2(3.0 - k.x) : k.x;\n" \
-	"			vec4 n, w;\n" \
-	"			if (l.w == 0.0) { discard; return; }\n" \
-	"\n" \
 	"			//VOL_DATA_VOLUME_LOOKUP\n" \
 	"			vec4 v = texture(tex0, t.stp);\n" \
 	"\n" \
@@ -268,9 +268,9 @@ namespace FLIVR
 	"\n" \
 	"// VOL_UNIFORMS_BRICK\n" \
 	"layout(push_constant) uniform VolFragShaderBrickConst {\n" \
-	"	vec4 brkscale;//tex transform for bricking\n" \
-	"	vec4 brktrans;//tex transform for bricking\n" \
-	"	vec4 mskbrkscale;//tex transform for mask bricks\n" \
+	"	vec4 brkscale;//tex transform for bricking and 1/nx\n" \
+	"	vec4 brktrans;//tex transform for bricking and 1/ny\n" \
+	"	vec4 mskbrkscale;//tex transform for mask bricks and 1/nz\n" \
 	"	vec4 mskbrktrans;//tex transform for mask bricks\n" \
 	"	vec3 loc4;//(zmin, zmax, dz)\n" \
 	"	uint stnum;\n" \
@@ -279,7 +279,7 @@ namespace FLIVR
 	"//VOL_CLIP_FUNC\n" \
 	"bool vol_clip_func(vec4 t)\n" \
 	"{\n" \
-	"	vec4 brickt = (t * brk.brkscale + brk.brktrans);\n" \
+	"	vec3 brickt = (t.xyz * brk.brkscale.xyz + brk.brktrans.xyz);\n" \
 	"	if (dot(brickt.xyz, base.loc10.xyz) + base.loc10.w < 0.0 ||\n" \
 	"		dot(brickt.xyz, base.loc11.xyz) + base.loc11.w < 0.0 ||\n" \
 	"		dot(brickt.xyz, base.loc12.xyz) + base.loc12.w < 0.0 ||\n" \
@@ -294,12 +294,12 @@ namespace FLIVR
 	"//VOL_HEAD\n" \
 	"void main()\n" \
 	"{\n" \
-	"	vec4 ray = vec4(0.0, 0.0, 1.0, 0.0);\n" \
-	"	vec4 o = vec4((base.matrix0 * OutVertex).xy, 0.0, 1.0);\n" \
-	"	vec4 st = o + (brk.loc4.x / ray.z) * ray;\n" \
-	"	const float step = brk.loc4.z / ray.z;\n" \
+	"	vec4 view = vec4(0.0, 0.0, brk.loc4.x, 0.0);\n" \
+	"	const vec4 ray = base.matrix1 * vec4(0.0, 0.0, 1.0, 0.0) / vec4(brk.brkscale.xyz, 1.);\n" \
+	"	const vec4 st = base.matrix1 * vec4((base.matrix0 * OutVertex).xy, brk.loc4.x, 1.0) / vec4(brk.brkscale.xyz, 1.) - vec4(brk.brktrans.xyz / brk.brkscale.xyz, 0.0);\n" \
+	"	const float step = brk.loc4.z;\n" \
 	"	vec4 outcol = vec4(0.0);\n" \
-	"	vec4 dir = vec4(1.0/1200.0, 1.0/566.0, 1.0/180.0, 0.0);\n" \
+	"	vec4 dir = vec4(brk.brkscale.w, brk.brktrans.w, brk.mskbrkscale.w, 0.0);\n" \
 	"\n" \
 	"	//VOL_HEAD_LIT\n" \
 	"	vec4 l = base.loc0; // {lx, ly, lz, alpha}\n" \
@@ -310,7 +310,7 @@ namespace FLIVR
 	"\n" \
 	"	for (uint i = 0; i < brk.stnum; i++)\n" \
 	"	{\n" \
-	"		vec4 TexCoord = ((base.matrix1 * (st + ray*step*float(i))) - brk.brktrans) / brk.brkscale;\n" \
+	"		vec4 TexCoord = st + ray*step*float(i);\n" \
 	"		vec4 t = vec4(TexCoord.xyz, 1.0);\n" \
 	"\n" \
 	"		if (!vol_clip_func(t) && t.x >= 0.0 && t.x <= 1.0 && t.y >= 0.0 && t.y <= 1.0 && t.z >= 0.0 && t.z <= 1.0 && outcol.w <= 0.99995)\n" \
@@ -396,7 +396,7 @@ namespace FLIVR
 	"	//VOL_TAIL\n" \
 	"}\n" 
 
-#define VRAY_FRG_SHADER_CODE_TEST2 \
+#define VRAY_FRG_SHADER_CODE_TEST_PERSP_UV \
 	"#version 450\n" \
 	"#pragma optionNV(inline all)\n" \
 	"#pragma optionNV(fastmath on)\n" \
@@ -442,7 +442,82 @@ namespace FLIVR
 	"//VOL_CLIP_FUNC\n" \
 	"bool vol_clip_func(vec4 t)\n" \
 	"{\n" \
-	"	vec4 brickt = (t * brk.brkscale + brk.brktrans);\n" \
+	"	vec3 brickt = (t.xyz * brk.brkscale.xyz + brk.brktrans.xyz);\n" \
+	"	if (dot(brickt.xyz, base.loc10.xyz) + base.loc10.w < 0.0 ||\n" \
+	"		dot(brickt.xyz, base.loc11.xyz) + base.loc11.w < 0.0 ||\n" \
+	"		dot(brickt.xyz, base.loc12.xyz) + base.loc12.w < 0.0 ||\n" \
+	"		dot(brickt.xyz, base.loc13.xyz) + base.loc13.w < 0.0 ||\n" \
+	"		dot(brickt.xyz, base.loc14.xyz) + base.loc14.w < 0.0 ||\n" \
+	"		dot(brickt.xyz, base.loc15.xyz) + base.loc15.w < 0.0)\n" \
+	"		return true;\n" \
+	"	else\n" \
+	"		return false;\n" \
+	"}\n" \
+	"\n" \
+	"//VOL_HEAD\n" \
+	"void main()\n" \
+	"{\n" \
+	"	const vec3 vray = normalize(base.matrix0 * OutVertex).xyz;\n" \
+	"	const vec4 ray = normalize(base.matrix1 * vec4(vray, 0.0) / vec4(brk.brkscale.xyz, 1.));\n" \
+	"	const vec4 st = base.matrix1 * vec4((brk.loc4.x / vray.z) * vray, 1.0) / vec4(brk.brkscale.xyz, 1.) - vec4(brk.brktrans.xyz / brk.brkscale.xyz, 0.0);\n" \
+	"	const float step = brk.loc4.z / vray.z;\n" \
+	"	vec4 outcol = vec4(0.0);\n" \
+	"	const vec4 dir = vec4(brk.brkscale.w, brk.brktrans.w, brk.mskbrkscale.w, 0.0);\n" \
+	"\n" \
+	"	vec4 TexCoord = st + ray*step*float(0);\n" \
+	"	vec4 t = vec4(TexCoord.xyz, 1.0);\n" \
+	"	FragColor = t;\n" \
+	"\n" \
+	"	//VOL_TAIL\n" \
+	"}\n" 
+
+#define VRAY_FRG_SHADER_CODE_TEST_ORTHO_UV \
+	"#version 450\n" \
+	"#pragma optionNV(inline all)\n" \
+	"#pragma optionNV(fastmath on)\n" \
+	"#pragma optionNV(ifcvt none)\n" \
+	"#pragma optionNV(strict on)\n" \
+	"#pragma optionNV(unroll all)\n" \
+	"layout(location = 0) in vec4 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexture;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
+	"// VOL_UNIFORMS_BASE\n" \
+	"layout(binding = 1) uniform VolFragShaderBaseUBO {\n" \
+	"	vec4 loc0;//(lx, ly, lz, alpha)\n" \
+	"	vec4 loc1;//(ka, kd, ks, ns)\n" \
+	"	vec4 loc2;//(scalar_scale, gm_scale, left_thresh, right_thresh)\n" \
+	"	vec4 loc3;//(gamma, gm_thresh, offset, sw)\n" \
+	"	vec4 loc5;//(spcx, spcy, spcz, max_id)\n" \
+	"	vec4 loc6;//(r, g, b, 0.0) or (1/vx, 1/vy, luminance, depth_mode)\n" \
+	"	vec4 loc7;//(1/vx, 1/vy, 0.0, 0.0)\n" \
+	"	vec4 loc8;//(int, start, end, 0.0)\n" \
+	"	vec4 loc10; //plane0\n" \
+	"	vec4 loc11; //plane1\n" \
+	"	vec4 loc12; //plane2\n" \
+	"	vec4 loc13; //plane3\n" \
+	"	vec4 loc14; //plane4\n" \
+	"	vec4 loc15; //plane5\n" \
+	"	mat4 matrix0; //inverted projection matrix\n" \
+	"	mat4 matrix1; //inverted modelview matrix\n" \
+	"} base;\n" \
+	"\n" \
+	"layout(binding = 2) uniform sampler3D tex0;//data volume\n" \
+	"layout(binding = 3) uniform sampler3D tex1;//gm volume\n" \
+	"\n" \
+	"// VOL_UNIFORMS_BRICK\n" \
+	"layout(push_constant) uniform VolFragShaderBrickConst {\n" \
+	"	vec4 brkscale;//tex transform for bricking\n" \
+	"	vec4 brktrans;//tex transform for bricking\n" \
+	"	vec4 mskbrkscale;//tex transform for mask bricks\n" \
+	"	vec4 mskbrktrans;//tex transform for mask bricks\n" \
+	"	vec3 loc4;//(zmin, zmax, dz)\n" \
+	"	uint stnum;\n" \
+	"} brk;\n" \
+	"\n" \
+	"//VOL_CLIP_FUNC\n" \
+	"bool vol_clip_func(vec4 t)\n" \
+	"{\n" \
+	"	vec3 brickt = (t.xyz * brk.brkscale.xyz + brk.brktrans.xyz);\n" \
 	"	if (dot(brickt.xyz, base.loc10.xyz) + base.loc10.w < 0.0 ||\n" \
 	"		dot(brickt.xyz, base.loc11.xyz) + base.loc11.w < 0.0 ||\n" \
 	"		dot(brickt.xyz, base.loc12.xyz) + base.loc12.w < 0.0 ||\n" \
@@ -458,16 +533,14 @@ namespace FLIVR
 	"void main()\n" \
 	"{\n" \
 	"	vec4 view = vec4(0.0, 0.0, brk.loc4.x, 0.0);\n" \
-	"	vec4 ray = normalize(view);//normalize(base.matrix0 * OutVertex);\n" \
-	"	vec4 o = vec4((base.matrix0 * OutVertex).xy, 0.0, 1.0);\n" \
-	"	vec4 st = o + (brk.loc4.x / ray.z) * ray;\n" \
-	"	st.w = 1.0;\n" \
-	"	const float step = brk.loc4.z / ray.z;\n" \
+	"	const vec4 ray = normalize(base.matrix1 * vec4(0.0, 0.0, 1.0, 0.0) / vec4(brk.brkscale.xyz, 1.));\n" \
+	"	const vec4 st = base.matrix1 * vec4((base.matrix0 * OutVertex).xy, brk.loc4.x, 1.0) / vec4(brk.brkscale.xyz, 1.) - vec4(brk.brktrans.xyz / brk.brkscale.xyz, 0.0);\n" \
+	"	const float step = brk.loc4.z;\n" \
 	"	const float invstnum = 1.0 / float(brk.stnum);\n" \
 	"	vec4 outcol = vec4(0.0);\n" \
-	"	vec4 dir = vec4(1.0/brk.brkscale.x, 1.0/brk.brkscale.y, 1.0/brk.brkscale.z, 0.0);\n" \
+	"	vec4 dir = vec4(brk.brkscale.w, brk.brktrans.w, brk.mskbrkscale.w, 0.0);\n" \
 	"\n" \
-	"	vec4 TexCoord = ((base.matrix1 * (st + ray*step*float(0))) - brk.brktrans) / brk.brkscale;\n" \
+	"	vec4 TexCoord = st + ray*step*float(0);\n" \
 	"	vec4 t = vec4(TexCoord.xyz, 1.0);\n" \
 	"	FragColor = t;\n" \
 	"\n" \

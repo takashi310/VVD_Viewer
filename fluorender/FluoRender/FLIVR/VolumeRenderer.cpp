@@ -2884,7 +2884,7 @@ namespace FLIVR
 					double scale_y = (endy_d - oy_d) / ny;
 					double scale_z = (endz_d - oz_d) / nz;
 
-					frag_const.mask_b_scale = { (float)scale_x, (float)scale_y, (float)scale_z, 1.0f };
+					frag_const.mask_b_scale_invnz = { (float)scale_x, (float)scale_y, (float)scale_z , 1.0f};
 					frag_const.mask_b_trans = { (float)trans_x, (float)trans_y, (float)trans_z, 0.0f };
 
 					b->nx(cnx); b->ny(cny); b->nz(cnz);
@@ -2899,7 +2899,7 @@ namespace FLIVR
 				{
 					msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, false);
 
-					frag_const.mask_b_scale = { 1.0f, 1.0f, 1.0f, 1.0f };
+					frag_const.mask_b_scale_invnz = { 1.0f, 1.0f, 1.0f, 1.0f };
 					frag_const.mask_b_trans = { 0.0f, 0.0f, 0.0f, 0.0f };
 				}
 #endif
@@ -2939,12 +2939,13 @@ namespace FLIVR
 
 			//for brick transformation
 			BBox dbox = b->dbox();
-			frag_const.b_scale = { float(dbox.max().x() - dbox.min().x()),
-								   float(dbox.max().y() - dbox.min().y()),
-								   float(dbox.max().z() - dbox.min().z()),
-								   1.0f };
+			frag_const.b_scale_invnx = { float(dbox.max().x() - dbox.min().x()),
+										 float(dbox.max().y() - dbox.min().y()),
+										 float(dbox.max().z() - dbox.min().z()),
+										  1.0f / b->nx() };
 
-			frag_const.b_trans = { float(dbox.min().x()), float(dbox.min().y()), float(dbox.min().z()), 0.0f };
+			frag_const.b_trans_invny = { float(dbox.min().x()), float(dbox.min().y()), float(dbox.min().z()), 1.0f / b->ny() };
+			frag_const.mask_b_scale_invnz.w = 1.0f / b->nz();
 
 			glm::vec4 tst = glm::vec4(0.0, 0.0, 0.5, 1.0);
 			tst = frag_ubo.proj_mat_inv * tst;
