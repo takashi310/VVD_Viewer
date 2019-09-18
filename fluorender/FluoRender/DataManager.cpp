@@ -3973,34 +3973,32 @@ void MeshData::SetMatrices(glm::mat4 &mv_mat, glm::mat4 &proj_mat)
 	}
 }
 
-void MeshData::Draw(int peel)
+void MeshData::Draw(const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf, int peel)
 {
 	if (!m_mr)
 		return;
 
-	glDisable(GL_CULL_FACE);
 	m_mr->set_depth_peel(peel);
 	m_mr->set_bounds(m_bounds);
-	m_mr->draw();
+	m_mr->draw(framebuf, clear_framebuf);
 	if (m_draw_bounds)
-		DrawBounds();
-	glEnable(GL_CULL_FACE);
+		DrawBounds(framebuf, false);
 }
 
-void MeshData::DrawBounds()
+void MeshData::DrawBounds(const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf)
 {
 	if (!m_mr)
 		return;
 
-	m_mr->draw_wireframe();
+	m_mr->draw_wireframe(framebuf, clear_framebuf);
 }
 
-void MeshData::DrawInt(unsigned int name)
+void MeshData::DrawInt(unsigned int name, const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf)
 {
 	if (!m_mr)
 		return;
 
-	m_mr->draw_integer(name);
+	m_mr->draw_integer(name, framebuf, clear_framebuf);
 }
 
 //lighting

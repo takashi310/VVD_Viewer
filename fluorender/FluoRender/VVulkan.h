@@ -18,6 +18,7 @@
 #include <FLIVR/PaintShader.h>
 #include <FLIVR/ImgShader.h>
 #include <FLIVR/VolSliceShader.h>
+#include <FLIVR/MshShader.h>
 
 #include <vector>
 #include <memory>
@@ -48,6 +49,7 @@ public:
 	std::unique_ptr<FLIVR::PaintShaderFactory> paint_shader_factory_;
 	std::unique_ptr<FLIVR::ImgShaderFactory> img_shader_factory_;
 	std::unique_ptr<FLIVR::VolSliceShaderFactory> vslice_shader_factory_;
+	std::unique_ptr<FLIVR::MshShaderFactory> msh_shader_factory_;
 
 	void prepare();
 	void initSubDevices();

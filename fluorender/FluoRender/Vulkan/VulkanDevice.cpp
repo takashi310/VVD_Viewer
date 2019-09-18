@@ -320,7 +320,7 @@ namespace vks
 		m_cmdbufs.push_back(cmdbuf);
 
 		VkDeviceSize max_ubo_range = properties.limits.maxUniformBufferRange;
-		VkDeviceSize ubo_size = 4096;//max_ubo_range > 65536 ? 65536 : max_ubo_range;
+		VkDeviceSize ubo_size = 1024;//max_ubo_range > 65536 ? 65536 : max_ubo_range;
 		VK_CHECK_RESULT(
 			createBuffer(
 				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -331,7 +331,7 @@ namespace vks
 		);
 		m_ubo.map();
 
-		VkDeviceSize buf_size = 4096;
+		VkDeviceSize buf_size = 1024;
 		VK_CHECK_RESULT(
 			createBuffer(
 				VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
@@ -355,6 +355,27 @@ namespace vks
 		m_ubo_offset = 0;
 		m_vbuf_offset = 0;
 		m_ibuf_offset = 0;
+		if (m_ubos.size() > 0)
+		{
+			VkDeviceSize newsize = m_ubo.size;
+			for (auto b : m_ubos)
+			{
+				newsize += b.size;
+				b.destroy();
+			}
+			m_ubos.clear();
+
+			m_ubo.destroy();
+			VK_CHECK_RESULT(
+				createBuffer(
+					VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+					&m_ubo,
+					newsize
+				)
+			);
+			m_ubo.map();
+		}
 		if (m_vbufs.size() > 0)
 		{
 			VkDeviceSize newsize = m_vbuf.size;
@@ -403,6 +424,24 @@ namespace vks
 		if (m_ubo.alignment > 0)
 			req_size = (req_size + m_ubo.alignment - 1) & ~(m_ubo.alignment - 1);
 		m_ubo_offset += req_size;
+
+		if (m_ubo.size >= m_ubo_offset + req_size)
+			m_ubo_offset += req_size;
+		else
+		{
+			offset = 0;
+			m_ubos.push_back(m_ubo);
+			VK_CHECK_RESULT(
+				createBuffer(
+					VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+					&m_ubo,
+					req_size
+				)
+			);
+			m_ubo_offset = req_size;
+			m_ubo.map();
+		}
 
 		buf = m_ubo;
 		buf.descriptor.offset = offset;
@@ -1119,5 +1158,31 @@ namespace vks
 		if (m_cur_semaphore_id < 0 || m_cur_semaphore_id >= m_render_semaphore.size())
 			return nullptr;
 		return &m_render_semaphore[m_cur_semaphore_id]->vksemaphore;
+	}
+
+	void VulkanDevice::UploadData2Buffer(void* data, vks::Buffer* dst, VkDeviceSize offset, VkDeviceSize size)
+	{
+		VkDeviceSize bufsize = size;
+		VkDeviceSize atom = properties.limits.nonCoherentAtomSize;
+		if (atom > 0)
+			bufsize = (bufsize + atom - 1) & ~(atom - 1);
+
+		checkStagingBuffer(bufsize);
+
+		memcpy(staging_buf.mapped, data, size);
+
+		if (bufsize > staging_buf.size)
+			staging_buf.flush();
+		else
+			staging_buf.flush(bufsize);
+
+		VkBufferCopy bc;
+		bc.size = size;
+		bc.srcOffset = 0;
+		bc.dstOffset = offset;
+
+		copyBuffer(&staging_buf, dst, queue, &bc);
+
+		staging_buf.invalidate();
 	}
 }

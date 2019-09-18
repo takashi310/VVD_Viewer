@@ -1144,7 +1144,13 @@ private:
 	void Draw();//draw volumes only
 	void DrawDP();//draw volumes and meshes with depth peeling
 	//mesh and volume
-	void DrawMeshes(int peel=0);//0: no dp
+	void DrawMeshes(const std::unique_ptr<
+		vks::VFrameBuffer>& framebuf,
+		bool clear_framebuf,
+		int peel=0,
+		const std::shared_ptr<vks::VTexture> depth_tex=std::shared_ptr<vks::VTexture>()
+	);
+	//0: no dp
 	//1: draw depth after 15 (15)
 	//2: draw mesh after 14 (14, 15)
 	//3: draw mesh after 13 and before 15 (13, 14, 15)

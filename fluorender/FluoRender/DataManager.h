@@ -219,9 +219,9 @@ public:
 
 	//draw
 	void SetMatrices(glm::mat4 &mv_mat, glm::mat4 &proj_mat);
-	void Draw(int peel);
-	void DrawBounds();
-	void DrawInt(unsigned int name);
+	void Draw(const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf, int peel);
+	void DrawBounds(const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf);
+	void DrawInt(unsigned int name, const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf);
 
 	//lighting
 	void SetLighting(bool bVal);
@@ -277,6 +277,23 @@ public:
 
 	void SetClipDistance(int distx, int disty, int distz);
 	void GetClipDistance(int &distx, int &disty, int &distz);
+
+	void SetDepthTex(const std::shared_ptr<vks::VTexture>& depth_tex)
+	{
+		if (m_mr) m_mr->set_depth_tex(depth_tex);
+	}
+	std::shared_ptr<vks::VTexture> GetDepthTex()
+	{
+		return m_mr ? m_mr->m_depth_tex : std::shared_ptr<vks::VTexture>();
+	}
+	void SetDevice(vks::VulkanDevice* device)
+	{
+		if (m_mr) m_mr->set_device(device);
+	}
+	vks::VulkanDevice* GetDevice()
+	{
+		return m_mr ? m_mr->get_device() : nullptr;
+	}
 
 private:
 	//wxString m_name;

@@ -98,7 +98,7 @@ namespace vks
 
 		std::vector<VkCommandBuffer> m_cmdbufs;
 		vks::Buffer m_ubo, m_vbuf, m_ibuf;
-		std::vector<vks::Buffer> m_vbufs, m_ibufs;
+		std::vector<vks::Buffer> m_ubos, m_vbufs, m_ibufs;
 		VkDeviceSize m_cur_cmdbuf_id = 0;
 		VkDeviceSize m_ubo_offset = 0;
 		VkDeviceSize m_vbuf_offset = 0;
@@ -132,6 +132,8 @@ namespace vks
 		bool DownloadTexture3D(const std::shared_ptr<VTexture> &tex, void *data, VkOffset3D offset, uint32_t ypitch, uint32_t zpitch);
 		bool DownloadTexture(const std::shared_ptr<VTexture> &tex, void *data);
 		void CopyDataTex2StagingBuf(const std::shared_ptr<VTexture> &tex);
+		
+		void UploadData2Buffer(void* data, vks::Buffer* dst, VkDeviceSize offset, VkDeviceSize size);
 
 		/**  @brief Typecast to VkDevice */
 		operator VkDevice() { return logicalDevice; };

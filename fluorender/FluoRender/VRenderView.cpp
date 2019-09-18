@@ -690,6 +690,7 @@ VRenderVulkanView::VRenderVulkanView(wxWindow* frame,
 	m_vulkan->ResetRenderSemaphores();
 
 	FLIVR::VolumeRenderer::init();
+	FLIVR::MeshRenderer::init(m_vulkan);
     
     wxSize wsize = GetSize();
     m_vulkan->setSize(wsize.GetWidth(), wsize.GetHeight());
@@ -1149,7 +1150,7 @@ void VRenderVulkanView::Draw()
 
 //draw meshes
 //peel==true -- depth peeling
-void VRenderVulkanView::DrawMeshes(int peel)
+void VRenderVulkanView::DrawMeshes(const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf, int peel, const std::shared_ptr<vks::VTexture> depth_tex)
 {
 	for (int i=0 ; i<(int)m_layer_list.size() ; i++)
 	{
@@ -1162,7 +1163,9 @@ void VRenderVulkanView::DrawMeshes(int peel)
 			{
 				md->SetMatrices(m_mv_mat, m_proj_mat);
 				md->SetFog(m_use_fog, m_fog_intensity, m_fog_start, m_fog_end);
-				md->Draw(peel);
+				md->SetDepthTex(depth_tex);
+				md->SetDevice(m_vulkan->devices[0]);
+				md->Draw(framebuf, clear_framebuf, peel);
 			}
 		}
 		else if (m_layer_list[i]->IsA() == 6)
@@ -1177,7 +1180,9 @@ void VRenderVulkanView::DrawMeshes(int peel)
 					{
 						md->SetMatrices(m_mv_mat, m_proj_mat);
 						md->SetFog(m_use_fog, m_fog_intensity, m_fog_start, m_fog_end);
-						md->Draw(peel);
+						md->SetDepthTex(depth_tex);
+						md->SetDevice(m_vulkan->devices[0]);
+						md->Draw(framebuf, clear_framebuf, peel);
 					}
 				}
 			}
@@ -1271,8 +1276,7 @@ void VRenderVulkanView::DrawVolumes(int peel)
 						VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
 						VK_IMAGE_USAGE_TRANSFER_DST_BIT |
 						VK_IMAGE_USAGE_SAMPLED_BIT |
-						VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-						VK_IMAGE_USAGE_STORAGE_BIT
+						VK_IMAGE_USAGE_TRANSFER_SRC_BIT
 					);
 					m_dp_fbo_list[i]->addAttachment(m_dp_tex_list[i]);
 				}
@@ -1282,12 +1286,12 @@ void VRenderVulkanView::DrawVolumes(int peel)
 
 				if (i==0)
 				{
-					DrawMeshes(0);
+					DrawMeshes(m_dp_fbo_list[i], true, 0);
 				}
 				else
 				{
 					m_msh_dp_fr_tex = m_dp_tex_list[i - 1];
-					DrawMeshes(1);
+					DrawMeshes(m_dp_fbo_list[i], true, 1);
 				}
 			}
 

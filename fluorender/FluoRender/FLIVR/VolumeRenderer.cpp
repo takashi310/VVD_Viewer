@@ -1913,8 +1913,11 @@ namespace FLIVR
 			vert_ubuf.flush(prim_dev->GetCurrentUniformBufferOffset() - vert_ubuf_offset, vert_ubuf_offset);
 		else
 		{
-			vert_ubuf.flush(sizeof(VolShaderFactory::VolVertShaderUBO), vert_ubuf_offset);
-			frag_ubuf.flush(sizeof(VolShaderFactory::VolFragShaderBaseUBO), frag_ubuf_offset);
+			if (vert_ubuf_offset == 0)
+				vert_ubuf.flush();
+			else
+				vert_ubuf.flush(sizeof(VolShaderFactory::VolVertShaderUBO), vert_ubuf_offset);
+			frag_ubuf.flush();
 		}
 		
 		bool clear = true;
@@ -2743,8 +2746,11 @@ namespace FLIVR
 			vert_ubuf.flush(prim_dev->GetCurrentUniformBufferOffset() - vert_ubuf_offset, vert_ubuf_offset);
 		else
 		{
-			vert_ubuf.flush(sizeof(VRayShaderFactory::VRayVertShaderUBO), vert_ubuf_offset);
-			frag_ubuf.flush(sizeof(VRayShaderFactory::VRayFragShaderBaseUBO), frag_ubuf_offset);
+			if (vert_ubuf_offset == 0)
+				vert_ubuf.flush();
+			else
+				vert_ubuf.flush(sizeof(VRayShaderFactory::VRayVertShaderUBO), vert_ubuf_offset);
+			frag_ubuf.flush();
 		}
 
 		bool clear = true;

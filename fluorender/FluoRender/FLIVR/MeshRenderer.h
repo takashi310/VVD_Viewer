@@ -34,6 +34,7 @@
 #include "glm.h"
 #include "Plane.h"
 #include "BBox.h"
+#include "VVulkan.h"
 #include <vector>
 #include <glm/glm.hpp>
 
@@ -48,14 +49,21 @@ namespace FLIVR
 	class EXPORT_API MeshRenderer
 	{
 	public:
+		static constexpr int MSHRENDER_BLEND_DISABLE = 0;
+		static constexpr int MSHRENDER_BLEND_OVER = 1;
+		static constexpr int MSHRENDER_BLEND_OVER_INV = 2;
+		static constexpr int MSHRENDER_BLEND_OVER_UI = 3;
+		static constexpr int MSHRENDER_BLEND_ADD = 4;
+		static constexpr int MSHRENDER_BLEND_SHADE_SHADOW = 5;
+
 		MeshRenderer(GLMmodel* data);
 		MeshRenderer(MeshRenderer&);
 		~MeshRenderer();
 
 		//draw
-		void draw();
-		void draw_wireframe();
-		void draw_integer(unsigned int name);
+		void draw(const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf);
+		void draw_wireframe(const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf);
+		void draw_integer(unsigned int name, const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf);
 		void update();
 
 		//depth peeling
@@ -89,8 +97,76 @@ namespace FLIVR
 		bool get_fog()
 		{ return fog_; }
 
+		std::shared_ptr<vks::VTexture> m_depth_tex;
+
+		void set_depth_tex(const std::shared_ptr<vks::VTexture> &depth_tex)
+		{
+			m_depth_tex = depth_tex;
+		}
+		std::shared_ptr<vks::VTexture> get_depth_tex()
+		{
+			return m_depth_tex;
+		}
+
+		void set_device(vks::VulkanDevice* device)
+		{
+			device_ = device;
+		}
+		vks::VulkanDevice* get_device()
+		{
+			return device_;
+		}
+
 		void set_bounds(BBox b) { bounds_ = b; }
 		BBox get_bounds() { return bounds_; } 
+
+		struct MeshVertexBuffers {
+			vks::Buffer vertexBuffer;
+			vks::Buffer indexBuffer;
+			uint32_t indexCount;
+		};
+		
+		struct Vertex4 {
+			float pos[4];
+		};
+		struct Vertex44 {
+			float pos[4];
+			float att[4];
+		};
+		struct Vertex442 {
+			float pos[4];
+			float att1[4];
+			float att2[2];
+		};
+
+		struct MshVertexSettings {
+			VkPipelineVertexInputStateCreateInfo inputState;
+			std::vector<VkVertexInputBindingDescription> inputBinding;
+			std::vector<VkVertexInputAttributeDescription> inputAttributes;
+		};
+
+		struct MeshPipeline {
+			VkPipeline vkpipeline;
+			VkRenderPass renderpass;
+			ShaderProgram* shader;
+			vks::VulkanDevice* device;
+			int blend_mode;
+			VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+			VkPolygonMode polymode = VK_POLYGON_MODE_FILL;
+		};
+
+		MeshPipeline prepareMeshPipeline(
+			vks::VulkanDevice* device,
+			int type,
+			int blend,
+			bool tex,
+			VkPrimitiveTopology topo = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+			VkPolygonMode poly = VK_POLYGON_MODE_FILL);
+
+		static VkRenderPass prepareRenderPass(vks::VulkanDevice* device, VkFormat framebuf_format, int attachment_num, bool isSwapChainImage);
+
+		static void init(std::shared_ptr<VVulkan> vulkan);
+		static void finalize();
 
 	protected:
 		//data and display list
@@ -112,13 +188,23 @@ namespace FLIVR
 		double m_fog_start;
 		double m_fog_end;
 		float alpha_;
-		//vertex buffer
-		GLuint m_vbo, m_vao;
 		//bool update
 		bool update_;
 		BBox bounds_;
 
-		static MshShaderFactory msh_shader_factory_;
+		vks::VulkanDevice* device_;
+		MshVertexSettings m_vertices4, m_vertices42, m_vertices44, m_vertices442;
+		VkFormat depthformat_;
+		//vertex buffer
+		std::vector<MeshVertexBuffers> m_vertbufs;
+		int m_prev_msh_pipeline;
+
+		static std::vector<MeshPipeline> m_msh_pipelines;
+		static std::map<vks::VulkanDevice*, VkRenderPass> m_msh_draw_pass;
+
+		static std::shared_ptr<VVulkan> m_vulkan;
+
+		void setupVertexDescriptions();
 	};
 
 } // End namespace FLIVR

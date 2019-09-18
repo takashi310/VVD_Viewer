@@ -56,37 +56,33 @@ namespace FLIVR
 	"	OutTexture = InTexture;\n" \
 	"	OutVertex  = InVertex;\n" \
 	"}\n" 
-#define MSH_VERTEX_INPUTS_V \
+#define MSH_VERTEX_INPUTS_V(i) \
 	"//MSH_VERTEX_INPUTS_V\n" \
-	"layout(location = 0) in vec3 InVertex;\n"
+	"layout(location = " #i ") in vec4 InVertex;\n"
 
-#define MSH_VERTEX_INPUTS_N \
+#define MSH_VERTEX_INPUTS_N(i) \
 	"//MSH_VERTEX_INPUTS_N\n" \
-	"layout(location = 1) in vec3 InNormal;\n"
+	"layout(location = " #i ") in vec4 InNormal;\n"
 
-#define MSH_VERTEX_INPUTS_T1 \
-	"//MSH_VERTEX_INPUTS_T1\n" \
-	"layout(location = 1) in vec2 InTexcoord;\n"
+#define MSH_VERTEX_INPUTS_T(i) \
+	"//MSH_VERTEX_INPUTS_T\n" \
+	"layout(location = " #i ") in vec2 InTexcoord;\n"
 
-#define MSH_VERTEX_INPUTS_T2 \
-	"//MSH_VERTEX_INPUTS_T1\n" \
-	"layout(location = 2) in vec2 InTexcoord;\n"
-
-#define MSH_VERTEX_OUTPUTS_N \
+#define MSH_VERTEX_OUTPUTS_N(i) \
 	"//MSH_VERTEX_OUTPUTS_N\n" \
-	"layout(location = 1) out vec3 OutNormal;\n"
+	"layout(location = " #i ") out vec3 OutNormal;\n"
 
-#define MSH_VERTEX_OUTPUTS_T \
+#define MSH_VERTEX_OUTPUTS_T(i) \
 	"//MSH_VERTEX_OUTPUTS_T\n" \
-	"layout(location = 2) out vec2 OutTexcoord;\n"
+	"layout(location = " #i ") out vec2 OutTexcoord;\n"
 
-#define MSH_VERTEX_OUTPUTS_FOG \
+#define MSH_VERTEX_OUTPUTS_FOG(i) \
 	"//MSH_VERTEX_OUTPUTS_FOG\n" \
-	"layout(location = 3) out vec4 OutFogCoord;\n"
+	"layout(location = " #i ") out vec4 OutFogCoord;\n"
 
-#define MSH_VERTEX_OUTPUTS_POS \
+#define MSH_VERTEX_OUTPUTS_POS(i) \
 	"//MSH_VERTEX_OUTPUTS_POS\n" \
-	"layout(location = 0) out vec4 OutPosition;\n"
+	"layout(location = " #i ") out vec4 OutPosition;\n"
 
 #define MSH_VERTEX_UNIFORM_MATRIX \
 	"//MSH_VERTEX_UNIFORM_MATRIX\n" \
@@ -103,12 +99,12 @@ namespace FLIVR
 
 #define MSH_VERTEX_BODY_POS \
 	"//MSH_VERTEX_BODY_POS\n" \
-	"	gl_Position = vubo.matrix0 * vubo.matrix1 * vec4(InVertex, 1.0);\n" \
-	"	OutPosition = vec4(InVertex, 1.0);\n"
+	"	gl_Position = vubo.matrix0 * vubo.matrix1 * vec4(InVertex.xyz, 1.0);\n" \
+	"	OutPosition = vec4(InVertex.xyz, 1.0);\n"
 
 #define MSH_VERTEX_BODY_NORMAL \
 	"//MSH_VERTEX_BODY_NORMAL\n" \
-	"	OutNormal = normalize((vubo.matrix2 * vec4(InNormal, 0.0)).xyz);\n"
+	"	OutNormal = normalize((vubo.matrix2 * vec4(InNormal.xyz, 0.0)).xyz);\n"
 
 #define MSH_VERTEX_BODY_TEX \
 	"//MSH_VERTEX_BODY_TEX\n" \
@@ -116,7 +112,7 @@ namespace FLIVR
 
 #define MSH_VERTEX_BODY_FOG \
 	"//MSH_VERTEX_BODY_FOG\n" \
-	"	OutFogCoord = vubo.matrix1 * vec4(InVertex,1.);\n"
+	"	OutFogCoord = vubo.matrix1 * vec4(InVertex.xyz,1.);\n"
 
 #define MSH_FRAG_OUTPUTS \
 	"//MSH_FRAG_OUTPUTS\n" \
@@ -128,21 +124,21 @@ namespace FLIVR
 	"layout(location = 0) out uint FragUint;\n"\
 	"\n"
 
-#define MSH_FRAG_INPUTS_N \
+#define MSH_FRAG_INPUTS_N(i) \
 	"//MSH_FRAG_INPUTS_N\n" \
-	"layout(location = 1) in vec3 OutNormal;\n"
+	"layout(location = " #i ") in vec3 OutNormal;\n"
 
-#define MSH_FRAG_INPUTS_T \
+#define MSH_FRAG_INPUTS_T(i) \
 	"//MSH_FRAG_INPUTS_T\n" \
-	"layout(location = 2) in vec2 OutTexcoord;\n"
+	"layout(location = " #i ") in vec2 OutTexcoord;\n"
 
-#define MSH_FRAG_INPUTS_FOG \
+#define MSH_FRAG_INPUTS_FOG(i) \
 	"//MSH_FRAG_INPUTS_FOG\n" \
-	"layout(location = 3) in vec4 OutFogCoord;\n"
+	"layout(location = " #i ") in vec4 OutFogCoord;\n"
 
-#define MSH_FRAG_INPUTS_POS \
+#define MSH_FRAG_INPUTS_POS(i) \
 	"//MSH_FRAG_INPUTS_POS\n" \
-	"layout(location = 4) in vec4 OutPosition;\n"
+	"layout(location = " #i ") in vec4 OutPosition;\n"
 
 #define MSH_FRAG_UNIFORMS \
 	"//MSH_FRAG_UNIFORMS_COLOR\n" \
@@ -152,6 +148,7 @@ namespace FLIVR
 	"	vec4 loc2;//specular color\n" \
 	"	vec4 loc3;//(shine, alpha, 0, 0)\n" \
 	"	vec4 loc7;//(1/vx, 1/vy, 0, 0)\n" \
+	"	vec4 loc8;//(int, start, end, 0.0)\n" \
 	"	vec4 loc10; //plane0\n" \
 	"	vec4 loc11; //plane1\n" \
 	"	vec4 loc12; //plane2\n" \
@@ -283,6 +280,7 @@ namespace FLIVR
 		string fs;
 		if (emit_f(fs)) return true;
 		program_ = new ShaderProgram(vs, fs);
+		program_->create(device_);
 		return false;
 	}
 
@@ -293,21 +291,38 @@ namespace FLIVR
 		z << ShaderProgram::glsl_version_;
 
 		//inputs
-		z << MSH_VERTEX_INPUTS_V;
-		z << MSH_VERTEX_OUTPUTS_POS;
+		z << MSH_VERTEX_INPUTS_V(0);
+		z << MSH_VERTEX_OUTPUTS_POS(0);
 		if (type_ == 0)
 		{
-			if (light_)
-				z << MSH_VERTEX_INPUTS_N;
-			if (tex_)
-				z << MSH_VERTEX_INPUTS_T2;
-			//outputs
-			if (light_)
-				z << MSH_VERTEX_OUTPUTS_N;
-			if (tex_)
-				z << MSH_VERTEX_OUTPUTS_T;
-			if (fog_)
-				z << MSH_VERTEX_OUTPUTS_FOG;
+			if (light_ && tex_)
+			{
+				z << MSH_VERTEX_INPUTS_N(1);
+				z << MSH_VERTEX_INPUTS_T(2);
+			}
+			else if (light_)
+				z << MSH_VERTEX_INPUTS_N(1);
+			else if (tex_)
+				z << MSH_VERTEX_INPUTS_T(2);
+			
+			if (light_ && tex_)
+			{
+				z << MSH_VERTEX_OUTPUTS_N(1);
+				z << MSH_VERTEX_OUTPUTS_T(2);
+				if (fog_) z << MSH_VERTEX_OUTPUTS_FOG(3);
+			}
+			else if (light_)
+			{
+				z << MSH_VERTEX_OUTPUTS_N(1);
+				if (fog_) z << MSH_VERTEX_OUTPUTS_FOG(2);
+			}
+			else if (tex_)
+			{
+				z << MSH_VERTEX_OUTPUTS_T(1);
+				if (fog_) z << MSH_VERTEX_OUTPUTS_FOG(2);
+			}
+			else if (fog_) z << MSH_VERTEX_OUTPUTS_FOG(1);
+
 			//uniforms
 			z << MSH_VERTEX_UNIFORM_MATRIX;
 		}
@@ -344,14 +359,26 @@ namespace FLIVR
 		{
 			z << MSH_FRAG_OUTPUTS;
 			//inputs
-			z << MSH_FRAG_INPUTS_POS;
+			z << MSH_FRAG_INPUTS_POS(0);
 			z << MSH_FRAG_UNIFORMS;
-			if (light_)
-				z << MSH_FRAG_INPUTS_N;
-			if (tex_)
-				z << MSH_FRAG_INPUTS_T;
-			if (fog_)
-				z << MSH_FRAG_INPUTS_FOG;
+			if (light_ && tex_)
+			{
+				z << MSH_FRAG_INPUTS_N(1);
+				z << MSH_FRAG_INPUTS_T(2);
+				if (fog_) z << MSH_FRAG_INPUTS_FOG(3);
+			}
+			else if (light_)
+			{
+				z << MSH_FRAG_INPUTS_N(1);
+				if (fog_) z << MSH_FRAG_INPUTS_FOG(2);
+			}
+			else if (tex_)
+			{
+				z << MSH_FRAG_INPUTS_T(1);
+				if (fog_) z << MSH_FRAG_INPUTS_FOG(2);
+			}
+			else if (fog_) z << MSH_FRAG_INPUTS_FOG(1);
+
 			//uniforms
 			if (tex_)
 				z << MSH_FRAG_UNIFORMS_TEX;

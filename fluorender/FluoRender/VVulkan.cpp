@@ -15,6 +15,7 @@ VVulkan::~VVulkan()
 	seg_shader_factory_.reset();
 	paint_shader_factory_.reset();
 	img_shader_factory_.reset();
+	msh_shader_factory_.reset();
 
 	DestroySubDevices();
 }
@@ -44,6 +45,7 @@ void VVulkan::prepare()
 	paint_shader_factory_ = std::make_unique<FLIVR::PaintShaderFactory>(devices);
 	img_shader_factory_ = std::make_unique<FLIVR::ImgShaderFactory>(devices);
 	vslice_shader_factory_ = std::make_unique<FLIVR::VolSliceShaderFactory>(devices);
+	msh_shader_factory_ = std::make_unique<FLIVR::MshShaderFactory>(devices);
 	
 	prepared = true;
 }
