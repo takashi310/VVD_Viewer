@@ -1166,6 +1166,7 @@ void VRenderVulkanView::DrawMeshes(const std::unique_ptr<vks::VFrameBuffer>& fra
 				md->SetDepthTex(depth_tex);
 				md->SetDevice(m_vulkan->devices[0]);
 				md->Draw(framebuf, clear_framebuf, peel);
+				clear_framebuf = false;
 			}
 		}
 		else if (m_layer_list[i]->IsA() == 6)
@@ -1183,6 +1184,7 @@ void VRenderVulkanView::DrawMeshes(const std::unique_ptr<vks::VFrameBuffer>& fra
 						md->SetDepthTex(depth_tex);
 						md->SetDevice(m_vulkan->devices[0]);
 						md->Draw(framebuf, clear_framebuf, peel);
+						clear_framebuf = false;
 					}
 				}
 			}
@@ -1281,9 +1283,6 @@ void VRenderVulkanView::DrawVolumes(int peel)
 					m_dp_fbo_list[i]->addAttachment(m_dp_tex_list[i]);
 				}
 
-				//TODO: clear in MeshRenderer
-				//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
 				if (i==0)
 				{
 					DrawMeshes(m_dp_fbo_list[i], true, 0);
@@ -1291,7 +1290,7 @@ void VRenderVulkanView::DrawVolumes(int peel)
 				else
 				{
 					m_msh_dp_fr_tex = m_dp_tex_list[i - 1];
-					DrawMeshes(m_dp_fbo_list[i], true, 1);
+					DrawMeshes(m_dp_fbo_list[i], true, 1, m_dp_tex_list[i-1]);
 				}
 			}
 
@@ -1299,7 +1298,7 @@ void VRenderVulkanView::DrawVolumes(int peel)
 			std::vector<Vulkan2dRender::V2DRenderParams> v2drender_params;
 			Vulkan2dRender::V2dPipeline pl = 
 				m_v2drender->preparePipeline(
-					IMG_SHADER_TEXTURE_LOOKUP,
+					IMG_SHADER_TEXTURE_LOOKUP_BLEND,
 					V2DRENDER_BLEND_OVER,
 					VK_FORMAT_R32G32B32A32_SFLOAT,
 					1,

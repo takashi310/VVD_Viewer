@@ -736,6 +736,7 @@ namespace vks
 		VkImageLayout imageLayout;
 		VkDeviceMemory deviceMemory;
 		VkImageView view;
+		VkImageView stencil_view;
 		VkDescriptorImageInfo descriptor;
 		VkFormat format;
 		VkImageUsageFlags usage;
@@ -753,6 +754,7 @@ namespace vks
 			image = VK_NULL_HANDLE;
 			deviceMemory = VK_NULL_HANDLE;
 			view = VK_NULL_HANDLE;
+			stencil_view = VK_NULL_HANDLE;
 			device = VK_NULL_HANDLE;
 			free_sampler = true;
 			is_swapchain_images = false;
@@ -769,6 +771,11 @@ namespace vks
 			{
 				vkDestroyImageView(device->logicalDevice, view, nullptr);
 				view = VK_NULL_HANDLE;
+			}
+			if (stencil_view != VK_NULL_HANDLE && !is_swapchain_images)
+			{
+				vkDestroyImageView(device->logicalDevice, stencil_view, nullptr);
+				stencil_view = VK_NULL_HANDLE;
 			}
 			if (image != VK_NULL_HANDLE && !is_swapchain_images)
 			{

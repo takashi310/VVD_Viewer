@@ -645,7 +645,7 @@ namespace vks
 		view.viewType = VK_IMAGE_VIEW_TYPE_2D;
 		view.format = ret->format;
 		if (usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)
-			view.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+			view.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 		else
 		{
 			view.components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
@@ -658,9 +658,19 @@ namespace vks
 		ret->subresourceRange = view.subresourceRange;
 		VK_CHECK_RESULT(vkCreateImageView(ret->device->logicalDevice, &view, nullptr, &ret->view));
 
+		if (usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)
+		{
+			if (format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT || format == VK_FORMAT_D16_UNORM_S8_UINT)
+			{
+				view.subresourceRange.aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT;
+				VK_CHECK_RESULT(vkCreateImageView(ret->device->logicalDevice, &view, nullptr, &ret->stencil_view));
+				ret->subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+			}
+		}
+
 		// Fill image descriptor image info to be used descriptor set setup
 		ret->descriptor.imageLayout = 
-			(usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			(usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		ret->descriptor.imageView = ret->view;
 		ret->descriptor.sampler = ret->sampler;
 
@@ -1182,7 +1192,5 @@ namespace vks
 		bc.dstOffset = offset;
 
 		copyBuffer(&staging_buf, dst, queue, &bc);
-
-		staging_buf.invalidate();
 	}
 }

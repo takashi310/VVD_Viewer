@@ -299,9 +299,9 @@ namespace FLIVR
 		VkAttachmentDescription attd_d = {};
 		attd_d.format = m_vulkan->depthFormat;
 		attd_d.samples = VK_SAMPLE_COUNT_1_BIT;
-		attd_d.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+		attd_d.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		attd_d.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-		attd_d.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+		attd_d.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		attd_d.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		attd_d.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		attd_d.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
@@ -395,9 +395,9 @@ namespace FLIVR
 
 		VkPipelineDepthStencilStateCreateInfo depthStencilState =
 			vks::initializers::pipelineDepthStencilStateCreateInfo(
-				VK_FALSE,
-				VK_FALSE,
-				VK_COMPARE_OP_NEVER);
+				VK_TRUE,
+				VK_TRUE,
+				VK_COMPARE_OP_LESS_OR_EQUAL);
 
 		VkPipelineViewportStateCreateInfo viewportState =
 			vks::initializers::pipelineViewportStateCreateInfo(1, 1, 0);
@@ -619,7 +619,7 @@ namespace FLIVR
 					VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 					&v.indexBuffer,
 					ids.size() * sizeof(uint32_t)));
-				device_->UploadData2Buffer(verts.data(), &v.indexBuffer, 0, ids.size() * sizeof(uint32_t));
+				device_->UploadData2Buffer(ids.data(), &v.indexBuffer, 0, ids.size() * sizeof(uint32_t));
 			}
 
 			v.indexCount = ids.size();
@@ -645,7 +645,7 @@ namespace FLIVR
 
 		bool tex = data_->hastexture == GL_TRUE;
 
-		MeshPipeline pipeline = prepareMeshPipeline(device_, 0, MSHRENDER_BLEND_OVER, tex);
+		MeshPipeline pipeline = prepareMeshPipeline(device_, 0, -1, tex);
 		VkPipelineLayout pipelineLayout = m_vulkan->msh_shader_factory_->pipeline_[device_].pipelineLayout;
 
 		framebuf->replaceRenderPass(pipeline.renderpass);
@@ -655,17 +655,6 @@ namespace FLIVR
 		VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
 		cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-		vector<VkClearValue> clearValues;
-		if (clear_framebuf)
-		{
-			clearValues.resize(framebuf->attachments.size());
-			for (int i = 0; i < framebuf->attachments.size() - 1; i++)
-			{
-				clearValues[i].color = { 0.0f, 0.0f, 0.0f, 0.0f };
-				clearValues[i].depthStencil = { 1.0f, 0 };
-			}
-		}
-
 		VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
 		renderPassBeginInfo.renderPass = pipeline.renderpass;
 		renderPassBeginInfo.renderArea.offset.x = 0;
@@ -673,13 +662,22 @@ namespace FLIVR
 		renderPassBeginInfo.renderArea.extent.width = framebuf->w;
 		renderPassBeginInfo.renderArea.extent.height = framebuf->h;
 		renderPassBeginInfo.framebuffer = framebuf->framebuffer;
-		if (clear_framebuf)
-		{
-			renderPassBeginInfo.clearValueCount = clearValues.size();
-			renderPassBeginInfo.pClearValues = clearValues.data();
-		}
 
 		VK_CHECK_RESULT(vkBeginCommandBuffer(cmdbuf, &cmdBufInfo));
+
+		size_t anum = framebuf->attachments.size();
+		//layout transition
+		if (depth_peel_)
+		{
+			vks::tools::setImageLayout(
+				cmdbuf,
+				m_depth_tex->image,
+				VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+				VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+				m_depth_tex->subresourceRange);
+			m_depth_tex->descriptor.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+		}
+
 		vkCmdBeginRenderPass(cmdbuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 		VkViewport viewport = vks::initializers::viewport((float)framebuf->w, (float)framebuf->h, 0.0f, 1.0f);
@@ -689,6 +687,33 @@ namespace FLIVR
 		vkCmdSetScissor(cmdbuf, 0, 1, &scissor);
 
 		vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.vkpipeline);
+
+		if (clear_framebuf)
+		{
+			vector<VkClearAttachment> clearAttachments;
+			clearAttachments.resize(anum);
+			for (int i = 0; i < anum-1; i++)
+			{
+				clearAttachments[i].aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+				clearAttachments[i].clearValue = {0.0f, 0.0f, 0.0f, 0.0f};
+				clearAttachments[i].colorAttachment = i;
+			}
+			clearAttachments[anum-1].aspectMask = framebuf->attachments[anum - 1]->subresourceRange.aspectMask;
+			clearAttachments[anum-1].clearValue = { 1.0f, 0.0f, 0.0f, 0.0f };
+			clearAttachments[anum-1].colorAttachment = 0;
+
+			VkClearRect clearRect[1] = {};
+			clearRect[0].layerCount = 1;
+			clearRect[0].rect.offset = { 0, 0 };
+			clearRect[0].rect.extent = { framebuf->w, framebuf->h };
+
+			vkCmdClearAttachments(
+				cmdbuf,
+				anum,
+				clearAttachments.data(),
+				1,
+				clearRect);
+		}
 
 		MshShaderFactory::MshVertShaderUBO vubo;
 		MshShaderFactory::MshFragShaderUBO fubo;
@@ -726,7 +751,7 @@ namespace FLIVR
 		fubo.plane4 = { abcd[0], abcd[1], abcd[2], abcd[3] };
 		planes_[5]->get(abcd);
 		fubo.plane5 = { abcd[0], abcd[1], abcd[2], abcd[3] };
-		
+
 		GLMgroup* group = data_->groups;
 		int count = 0;
 		while (group)
@@ -813,6 +838,18 @@ namespace FLIVR
 		}
 
 		vkCmdEndRenderPass(cmdbuf);
+
+		//layout transition
+		if (depth_peel_)
+		{
+			m_depth_tex->descriptor.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+			vks::tools::setImageLayout(
+				cmdbuf,
+				m_depth_tex->image,
+				VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+				VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+				m_depth_tex->subresourceRange);
+		}
 
 		VK_CHECK_RESULT(vkEndCommandBuffer(cmdbuf));
 
