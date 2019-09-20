@@ -38,6 +38,7 @@ namespace FLIVR
 {
 	std::vector<MeshRenderer::MeshPipeline> MeshRenderer::m_msh_pipelines;
 	std::map<vks::VulkanDevice*, VkRenderPass> MeshRenderer::m_msh_draw_pass;
+	std::map<vks::VulkanDevice*, VkRenderPass> MeshRenderer::m_msh_intdraw_pass;
 
 	std::shared_ptr<VVulkan> MeshRenderer::m_vulkan;
 
@@ -126,6 +127,8 @@ namespace FLIVR
 		{
 			if (m_msh_draw_pass.count(dev) == 0)
 				m_msh_draw_pass[dev] = prepareRenderPass(dev, VK_FORMAT_R32G32B32A32_SFLOAT, 1, false);
+			if (m_msh_intdraw_pass.count(dev) == 0)
+				m_msh_intdraw_pass[dev] = prepareRenderPass(dev, VK_FORMAT_R32_UINT, 1, false);
 		}
 	}
 
@@ -136,6 +139,7 @@ namespace FLIVR
 			for (auto dev : m_vulkan->devices)
 			{
 				vkDestroyRenderPass(dev->logicalDevice, m_msh_draw_pass[dev], nullptr);
+				vkDestroyRenderPass(dev->logicalDevice, m_msh_intdraw_pass[dev], nullptr);
 			}
 
 			for (auto& p : m_msh_pipelines)
@@ -417,11 +421,13 @@ namespace FLIVR
 				static_cast<uint32_t>(dynamicStateEnables.size()),
 				0);
 
+		VkRenderPass renderpass = type != 1 ? m_msh_draw_pass[device] : m_msh_intdraw_pass[device];
+
 		MshShaderFactory::MshPipelineSettings pipeline_settings = m_vulkan->msh_shader_factory_->pipeline_[device];
 		VkGraphicsPipelineCreateInfo pipelineCreateInfo =
 			vks::initializers::pipelineCreateInfo(
 				pipeline_settings.pipelineLayout,
-				m_msh_draw_pass[device],
+				renderpass,
 				0);
 
 		VkPipelineVertexInputStateCreateInfo* vin = &m_vertices4.inputState;
@@ -519,7 +525,7 @@ namespace FLIVR
 		);
 
 		ret_pipeline.device = device;
-		ret_pipeline.renderpass = m_msh_draw_pass[device];
+		ret_pipeline.renderpass = renderpass;
 		ret_pipeline.shader = shader;
 		ret_pipeline.blend_mode = blend;
 		ret_pipeline.topology = topo;
@@ -645,7 +651,7 @@ namespace FLIVR
 
 		bool tex = data_->hastexture == GL_TRUE;
 
-		MeshPipeline pipeline = prepareMeshPipeline(device_, 0, -1, tex);
+		MeshPipeline pipeline = prepareMeshPipeline(device_, 0, MSHRENDER_BLEND_DISABLE, tex);
 		VkPipelineLayout pipelineLayout = m_vulkan->msh_shader_factory_->pipeline_[device_].pipelineLayout;
 
 		framebuf->replaceRenderPass(pipeline.renderpass);
@@ -878,162 +884,381 @@ namespace FLIVR
 
 	void MeshRenderer::draw_wireframe(const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf)
 	{
-		//if (!data_ || !data_->vertices || !data_->triangles)
-		//	return;
+		if (!data_ || !data_->vertices || !data_->triangles)
+			return;
 
-		////set up vertex array object
-		//if (update_)
-		//{
-		//	update();
-		//	update_ = false;
-		//}
-  //      
-  //      if (!glIsBuffer(m_vbo))
-  //          glGenBuffers(1, &m_vbo);
-  //      if (!glIsVertexArray(m_vao))
-  //          glGenVertexArrays(1, &m_vao);
+		//set up vertex array object
+		if (update_)
+		{
+			update();
+			update_ = false;
+		}
 
-		//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		bool tex = data_->hastexture == GL_TRUE;
 
-		//ShaderProgram* shader = 0;
+		MeshPipeline pipeline = prepareMeshPipeline(device_, 0, MSHRENDER_BLEND_DISABLE, tex, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_LINE);
+		VkPipelineLayout pipelineLayout = m_vulkan->msh_shader_factory_->pipeline_[device_].pipelineLayout;
 
-		//glBindVertexArray(m_vao);
-		//glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-		//glEnableVertexAttribArray(0);
+		framebuf->replaceRenderPass(pipeline.renderpass);
 
-		//GLMgroup* group = data_->groups;
-		//GLint pos = 0;
-		//int peel = 0;
-		//bool tex = false;
-		//bool light = false;
-		//
-		////set up shader
-		//shader = msh_shader_factory_.shader(0,
-		//	peel, tex, fog_, light);
-		//if (shader)
-		//{
-		//	if (!shader->valid())
-		//		shader->create();
-		//	shader->bind();
-		//}
-		////uniforms
-		//shader->setLocalParamMatrix(0, glm::value_ptr(m_proj_mat));
-		//shader->setLocalParamMatrix(1, glm::value_ptr(m_mv_mat));
-		//GLMmaterial* material = &data_->materials[0];
-		//if (material)
-		//	shader->setLocalParam(0, material->diffuse[0], material->diffuse[1], material->diffuse[2], material->diffuse[3]);
-		//else
-		//	shader->setLocalParam(0, 1.0, 0.0, 0.0, 1.0);
-		//shader->setLocalParam(3, 0.0, 1.0, 0.0, 0.0);//alpha
-		//if (fog_)
-		//	shader->setLocalParam(8, m_fog_intensity, m_fog_start, m_fog_end, 0.0);
+		VkCommandBuffer cmdbuf = device_->GetNextCommandBuffer();
 
-		//BBox dbox = bounds_;
-		//glm::mat4 gmat = glm::mat4(float(dbox.max().x()-dbox.min().x()), 0.0f, 0.0f, float(dbox.min().x()),
-		//						   0.0f, float(dbox.max().y()-dbox.min().y()), 0.0f, float(dbox.min().y()),
-		//						   0.0f, 0.0f, float(dbox.max().z()-dbox.min().z()), float(dbox.min().z()),
-		//						   0.0f, 0.0f, 0.0f, 1.0f);
-		//glm::mat4 invmat = glm::inverseTranspose(gmat);
-		//shader->setLocalParamMatrix(3, glm::value_ptr(invmat));
+		VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
+		cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-		////set clipping planes
-		//double abcd[4];
-		//planes_[0]->get(abcd);
-		//shader->setLocalParam(10, abcd[0], abcd[1], abcd[2], abcd[3]);
-		//planes_[1]->get(abcd);
-		//shader->setLocalParam(11, abcd[0], abcd[1], abcd[2], abcd[3]);
-		//planes_[2]->get(abcd);
-		//shader->setLocalParam(12, abcd[0], abcd[1], abcd[2], abcd[3]);
-		//planes_[3]->get(abcd);
-		//shader->setLocalParam(13, abcd[0], abcd[1], abcd[2], abcd[3]);
-		//planes_[4]->get(abcd);
-		//shader->setLocalParam(14, abcd[0], abcd[1], abcd[2], abcd[3]);
-		//planes_[5]->get(abcd);
-		//shader->setLocalParam(15, abcd[0], abcd[1], abcd[2], abcd[3]);
-		//
-		//while (group)
-		//{
-		//	if (group->numtriangles == 0)
-		//	{
-		//		group = group->next;
-		//		continue;
-		//	}
+		VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
+		renderPassBeginInfo.renderPass = pipeline.renderpass;
+		renderPassBeginInfo.renderArea.offset.x = 0;
+		renderPassBeginInfo.renderArea.offset.y = 0;
+		renderPassBeginInfo.renderArea.extent.width = framebuf->w;
+		renderPassBeginInfo.renderArea.extent.height = framebuf->h;
+		renderPassBeginInfo.framebuffer = framebuf->framebuffer;
 
-		//	//draw
-		//	glDrawArrays(GL_TRIANGLES, pos, (GLsizei)(group->numtriangles*3));
-		//	pos += group->numtriangles*3;
-		//	group = group->next;
-		//}
-		//glDisableVertexAttribArray(0);
-		//glBindBuffer(GL_ARRAY_BUFFER, 0);
-		//glBindVertexArray(0);
+		VK_CHECK_RESULT(vkBeginCommandBuffer(cmdbuf, &cmdBufInfo));
 
-		//// Release shader.
-		//if (shader && shader->valid())
-		//	shader->release();
-		//glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+		//layout transition
+		if (depth_peel_)
+		{
+			vks::tools::setImageLayout(
+				cmdbuf,
+				m_depth_tex->image,
+				VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+				VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+				m_depth_tex->subresourceRange);
+			m_depth_tex->descriptor.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+		}
+
+		vkCmdBeginRenderPass(cmdbuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+		VkViewport viewport = vks::initializers::viewport((float)framebuf->w, (float)framebuf->h, 0.0f, 1.0f);
+		vkCmdSetViewport(cmdbuf, 0, 1, &viewport);
+
+		VkRect2D scissor = vks::initializers::rect2D(framebuf->w, framebuf->h, 0, 0);
+		vkCmdSetScissor(cmdbuf, 0, 1, &scissor);
+
+		vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.vkpipeline);
+
+		size_t anum = framebuf->attachments.size();
+		if (clear_framebuf)
+		{
+			vector<VkClearAttachment> clearAttachments;
+			clearAttachments.resize(anum);
+			for (int i = 0; i < anum - 1; i++)
+			{
+				clearAttachments[i].aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+				clearAttachments[i].clearValue = { 0.0f, 0.0f, 0.0f, 0.0f };
+				clearAttachments[i].colorAttachment = i;
+			}
+			clearAttachments[anum - 1].aspectMask = framebuf->attachments[anum - 1]->subresourceRange.aspectMask;
+			clearAttachments[anum - 1].clearValue = { 1.0f, 0.0f, 0.0f, 0.0f };
+			clearAttachments[anum - 1].colorAttachment = 0;
+
+			VkClearRect clearRect[1] = {};
+			clearRect[0].layerCount = 1;
+			clearRect[0].rect.offset = { 0, 0 };
+			clearRect[0].rect.extent = { framebuf->w, framebuf->h };
+
+			vkCmdClearAttachments(
+				cmdbuf,
+				anum,
+				clearAttachments.data(),
+				1,
+				clearRect);
+		}
+
+		MshShaderFactory::MshVertShaderUBO vubo;
+		MshShaderFactory::MshFragShaderUBO fubo;
+
+		vubo.proj_mat = m_proj_mat;
+		vubo.mv_mat = m_mv_mat;
+		GLMmaterial* material = &data_->materials[0];
+		if (material)
+			fubo.loc0 = { material->diffuse[0], material->diffuse[1], material->diffuse[2], material->diffuse[3] };
+		else
+			fubo.loc0 = { 1.0f, 0.0f, 0.0f, 1.0f };//color
+		fubo.loc3 = { 0.0f, alpha_, 0.0f, 0.0f };//alpha
+		if (fog_)
+			fubo.loc8 = { m_fog_intensity, m_fog_start, m_fog_end, 0.0f };
+
+		if (depth_peel_)
+			fubo.loc7 = { 1.0f / float(framebuf->w), 1.0f / float(framebuf->h), 0.0f, 0.0f };
+
+		BBox dbox = bounds_;
+		glm::mat4 gmat = glm::mat4(float(dbox.max().x() - dbox.min().x()), 0.0f, 0.0f, float(dbox.min().x()),
+			0.0f, float(dbox.max().y() - dbox.min().y()), 0.0f, float(dbox.min().y()),
+			0.0f, 0.0f, float(dbox.max().z() - dbox.min().z()), float(dbox.min().z()),
+			0.0f, 0.0f, 0.0f, 1.0f);
+		glm::mat4 invmat = glm::inverseTranspose(gmat);
+		fubo.matrix3 = invmat;
+
+		//set clipping planes
+		double abcd[4];
+		planes_[0]->get(abcd);
+		fubo.plane0 = { abcd[0], abcd[1], abcd[2], abcd[3] };
+		planes_[1]->get(abcd);
+		fubo.plane1 = { abcd[0], abcd[1], abcd[2], abcd[3] };
+		planes_[2]->get(abcd);
+		fubo.plane2 = { abcd[0], abcd[1], abcd[2], abcd[3] };
+		planes_[3]->get(abcd);
+		fubo.plane3 = { abcd[0], abcd[1], abcd[2], abcd[3] };
+		planes_[4]->get(abcd);
+		fubo.plane4 = { abcd[0], abcd[1], abcd[2], abcd[3] };
+		planes_[5]->get(abcd);
+		fubo.plane5 = { abcd[0], abcd[1], abcd[2], abcd[3] };
+
+		vks::Buffer vert_ubuf, frag_ubuf;
+		VkDeviceSize vert_ubuf_offset, frag_ubuf_offset;
+		device_->GetNextUniformBuffer(sizeof(MshShaderFactory::MshVertShaderUBO), vert_ubuf, vert_ubuf_offset);
+		device_->GetNextUniformBuffer(sizeof(MshShaderFactory::MshFragShaderUBO), frag_ubuf, frag_ubuf_offset);
+
+		std::vector<VkWriteDescriptorSet> descriptorWritesBase;
+		m_vulkan->msh_shader_factory_->getDescriptorSetWriteUniforms(device_, vert_ubuf, frag_ubuf, descriptorWritesBase);
+
+		vert_ubuf.copyTo(&vubo, sizeof(MshShaderFactory::MshVertShaderUBO), vert_ubuf_offset);
+		frag_ubuf.copyTo(&fubo, sizeof(MshShaderFactory::MshFragShaderUBO), frag_ubuf_offset);
+		if (vert_ubuf.buffer == frag_ubuf.buffer)
+			vert_ubuf.flush(device_->GetCurrentUniformBufferOffset() - vert_ubuf_offset, vert_ubuf_offset);
+		else
+		{
+			if (vert_ubuf_offset == 0)
+				vert_ubuf.flush();
+			else
+				vert_ubuf.flush(sizeof(MshShaderFactory::MshVertShaderUBO), vert_ubuf_offset);
+			frag_ubuf.flush();
+		}
+		if (depth_peel_)
+			descriptorWritesBase.push_back(MshShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 1, &m_depth_tex->descriptor));
+
+		if (!descriptorWritesBase.empty())
+		{
+			device_->vkCmdPushDescriptorSetKHR(
+				cmdbuf,
+				VK_PIPELINE_BIND_POINT_GRAPHICS,
+				pipelineLayout,
+				0,
+				descriptorWritesBase.size(),
+				descriptorWritesBase.data()
+			);
+		}
+
+		GLMgroup* group = data_->groups;
+		int count = 0;
+		while (group)
+		{
+			if (m_vertbufs[count].indexCount == 0)
+			{
+				group = group->next;
+				count++;
+				continue;
+			}
+
+			VkDeviceSize offsets[1] = { 0 };
+			vkCmdBindVertexBuffers(cmdbuf, 0, 1, &m_vertbufs[count].vertexBuffer.buffer, offsets);
+			vkCmdBindIndexBuffer(cmdbuf, m_vertbufs[count].indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+			vkCmdDrawIndexed(cmdbuf, m_vertbufs[count].indexCount, 1, 0, 0, 0);
+
+			group = group->next;
+			count++;
+		}
+
+		vkCmdEndRenderPass(cmdbuf);
+
+		//layout transition
+		if (depth_peel_)
+		{
+			m_depth_tex->descriptor.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+			vks::tools::setImageLayout(
+				cmdbuf,
+				m_depth_tex->image,
+				VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+				VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+				m_depth_tex->subresourceRange);
+		}
+
+		VK_CHECK_RESULT(vkEndCommandBuffer(cmdbuf));
+
+		vks::VulkanSemaphoreSettings semaphores = device_->GetNextRenderSemaphoreSettings();
+
+		VkSubmitInfo submitInfo = vks::initializers::submitInfo();
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &cmdbuf;
+		submitInfo.signalSemaphoreCount = semaphores.signalSemaphoreCount;
+		submitInfo.pSignalSemaphores = semaphores.signalSemaphores;
+
+		std::vector<VkPipelineStageFlags> waitStages;
+		if (semaphores.waitSemaphoreCount > 0)
+		{
+			for (uint32_t i = 0; i < semaphores.waitSemaphoreCount; i++)
+				waitStages.push_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+			submitInfo.waitSemaphoreCount = semaphores.waitSemaphoreCount;
+			submitInfo.pWaitSemaphores = semaphores.waitSemaphores;
+			submitInfo.pWaitDstStageMask = waitStages.data();
+		}
+
+		// Submit to the queue
+		VK_CHECK_RESULT(vkQueueSubmit(device_->queue, 1, &submitInfo, VK_NULL_HANDLE));
+
 	}
 
-	void MeshRenderer::draw_integer(unsigned int name, const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf)
+	void MeshRenderer::draw_integer(unsigned int name, const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf, VkRect2D scissor)
 	{
-		//if (!data_ || !data_->vertices || !data_->triangles)
-		//	return;
+		if (!data_ || !data_->vertices || !data_->triangles)
+			return;
 
-		////set up vertex array object
-		//if (update_)
-		//{
-		//	update();
-		//	update_ = false;
-		//}
-  //      
-  //      if (!glIsBuffer(m_vbo))
-  //          glGenBuffers(1, &m_vbo);
-  //      if (!glIsVertexArray(m_vao))
-  //          glGenVertexArrays(1, &m_vao);
+		//set up vertex array object
+		if (update_)
+		{
+			update();
+			update_ = false;
+		}
 
-		//ShaderProgram* shader = 0;
+		bool tex = data_->hastexture == GL_TRUE;
 
-		//glBindVertexArray(m_vao);
-		//glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-		//glEnableVertexAttribArray(0);
+		MeshPipeline pipeline = prepareMeshPipeline(device_, 1, MSHRENDER_BLEND_DISABLE, false);
+		VkPipelineLayout pipelineLayout = m_vulkan->msh_shader_factory_->pipeline_[device_].pipelineLayout;
 
-		//GLMgroup* group = data_->groups;
-		//GLint pos = 0;
+		framebuf->replaceRenderPass(pipeline.renderpass);
 
-		////set up shader
-		//shader = msh_shader_factory_.shader(1,
-		//	0, false, false, false);
-		//if (shader)
-		//{
-		//	if (!shader->valid())
-		//		shader->create();
-		//	shader->bind();
-		//}
-		////uniforms
-		//shader->setLocalParamMatrix(0, glm::value_ptr(m_proj_mat));
-		//shader->setLocalParamMatrix(1, glm::value_ptr(m_mv_mat));
-		//shader->setLocalParamUInt(0, name);
+		VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
+		cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-		//while (group)
-		//{
-		//	if (group->numtriangles == 0)
-		//	{
-		//		group = group->next;
-		//		continue;
-		//	}
+		VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
+		renderPassBeginInfo.renderPass = pipeline.renderpass;
+		renderPassBeginInfo.renderArea.offset.x = 0;
+		renderPassBeginInfo.renderArea.offset.y = 0;
+		renderPassBeginInfo.renderArea.extent.width = framebuf->w;
+		renderPassBeginInfo.renderArea.extent.height = framebuf->h;
+		renderPassBeginInfo.framebuffer = framebuf->framebuffer;
+		
+		VkCommandBuffer cmdbuf = device_->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
 
-		//	//draw
-		//	glDrawArrays(GL_TRIANGLES, pos, (GLsizei)(group->numtriangles*3));
-		//	pos += group->numtriangles*3;
-		//	group = group->next;
-		//}
-		//glDisableVertexAttribArray(0);
-		//glBindBuffer(GL_ARRAY_BUFFER, 0);
-		//glBindVertexArray(0);
+		vkCmdBeginRenderPass(cmdbuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-		//// Release shader.
-		//if (shader && shader->valid())
-		//	shader->release();
+		VkViewport viewport = vks::initializers::viewport((float)framebuf->w, (float)framebuf->h, 0.0f, 1.0f);
+		vkCmdSetViewport(cmdbuf, 0, 1, &viewport);
+
+		if (scissor.extent.width == 0 || scissor.extent.height == 0)
+			scissor = vks::initializers::rect2D(framebuf->w, framebuf->h, 0, 0);
+		vkCmdSetScissor(cmdbuf, 0, 1, &scissor);
+
+		vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.vkpipeline);
+
+		size_t anum = framebuf->attachments.size();
+		if (clear_framebuf)
+		{
+			vector<VkClearAttachment> clearAttachments;
+			clearAttachments.resize(anum);
+			for (int i = 0; i < anum - 1; i++)
+			{
+				clearAttachments[i].aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+				clearAttachments[i].clearValue = { 0.0f, 0.0f, 0.0f, 0.0f };
+				clearAttachments[i].colorAttachment = i;
+			}
+			clearAttachments[anum - 1].aspectMask = framebuf->attachments[anum - 1]->subresourceRange.aspectMask;
+			clearAttachments[anum - 1].clearValue = { 1.0f, 0.0f, 0.0f, 0.0f };
+			clearAttachments[anum - 1].colorAttachment = 0;
+
+			VkClearRect clearRect[1] = {};
+			clearRect[0].layerCount = 1;
+			clearRect[0].rect.offset = { 0, 0 };
+			clearRect[0].rect.extent = { framebuf->w, framebuf->h };
+
+			vkCmdClearAttachments(
+				cmdbuf,
+				anum,
+				clearAttachments.data(),
+				1,
+				clearRect);
+		}
+
+		MshShaderFactory::MshVertShaderUBO vubo;
+		MshShaderFactory::MshFragShaderUBO fubo;
+
+		vubo.proj_mat = m_proj_mat;
+		vubo.mv_mat = m_mv_mat;
+		GLMmaterial* material = &data_->materials[0];
+		fubo.loci0 = name;
+
+		//set clipping planes
+		double abcd[4];
+		planes_[0]->get(abcd);
+		fubo.plane0 = { abcd[0], abcd[1], abcd[2], abcd[3] };
+		planes_[1]->get(abcd);
+		fubo.plane1 = { abcd[0], abcd[1], abcd[2], abcd[3] };
+		planes_[2]->get(abcd);
+		fubo.plane2 = { abcd[0], abcd[1], abcd[2], abcd[3] };
+		planes_[3]->get(abcd);
+		fubo.plane3 = { abcd[0], abcd[1], abcd[2], abcd[3] };
+		planes_[4]->get(abcd);
+		fubo.plane4 = { abcd[0], abcd[1], abcd[2], abcd[3] };
+		planes_[5]->get(abcd);
+		fubo.plane5 = { abcd[0], abcd[1], abcd[2], abcd[3] };
+
+		BBox dbox = bounds_;
+		glm::mat4 gmat = glm::mat4(float(dbox.max().x() - dbox.min().x()), 0.0f, 0.0f, float(dbox.min().x()),
+			0.0f, float(dbox.max().y() - dbox.min().y()), 0.0f, float(dbox.min().y()),
+			0.0f, 0.0f, float(dbox.max().z() - dbox.min().z()), float(dbox.min().z()),
+			0.0f, 0.0f, 0.0f, 1.0f);
+		glm::mat4 invmat = glm::inverseTranspose(gmat);
+		fubo.matrix3 = invmat;
+
+		vks::Buffer vert_ubuf, frag_ubuf;
+		VkDeviceSize vert_ubuf_offset, frag_ubuf_offset;
+		device_->GetNextUniformBuffer(sizeof(MshShaderFactory::MshVertShaderUBO), vert_ubuf, vert_ubuf_offset);
+		device_->GetNextUniformBuffer(sizeof(MshShaderFactory::MshFragShaderUBO), frag_ubuf, frag_ubuf_offset);
+
+		std::vector<VkWriteDescriptorSet> descriptorWritesBase;
+		m_vulkan->msh_shader_factory_->getDescriptorSetWriteUniforms(device_, vert_ubuf, frag_ubuf, descriptorWritesBase);
+
+		vert_ubuf.copyTo(&vubo, sizeof(MshShaderFactory::MshVertShaderUBO), vert_ubuf_offset);
+		frag_ubuf.copyTo(&fubo, sizeof(MshShaderFactory::MshFragShaderUBO), frag_ubuf_offset);
+		if (vert_ubuf.buffer == frag_ubuf.buffer)
+			vert_ubuf.flush(device_->GetCurrentUniformBufferOffset() - vert_ubuf_offset, vert_ubuf_offset);
+		else
+		{
+			if (vert_ubuf_offset == 0)
+				vert_ubuf.flush();
+			else
+				vert_ubuf.flush(sizeof(MshShaderFactory::MshVertShaderUBO), vert_ubuf_offset);
+			frag_ubuf.flush();
+		}
+		
+		if (!descriptorWritesBase.empty())
+		{
+			device_->vkCmdPushDescriptorSetKHR(
+				cmdbuf,
+				VK_PIPELINE_BIND_POINT_GRAPHICS,
+				pipelineLayout,
+				0,
+				descriptorWritesBase.size(),
+				descriptorWritesBase.data()
+			);
+		}
+
+		GLMgroup* group = data_->groups;
+		int count = 0;
+		while (group)
+		{
+			if (m_vertbufs[count].indexCount == 0)
+			{
+				group = group->next;
+				count++;
+				continue;
+			}
+
+			VkDeviceSize offsets[1] = { 0 };
+			vkCmdBindVertexBuffers(cmdbuf, 0, 1, &m_vertbufs[count].vertexBuffer.buffer, offsets);
+			vkCmdBindIndexBuffer(cmdbuf, m_vertbufs[count].indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+			vkCmdDrawIndexed(cmdbuf, m_vertbufs[count].indexCount, 1, 0, 0, 0);
+
+			group = group->next;
+			count++;
+		}
+
+		vkCmdEndRenderPass(cmdbuf);
+
+		device_->flushCommandBuffer(cmdbuf, device_->queue, true);
+
 	}
 
 } // namespace FLIVR

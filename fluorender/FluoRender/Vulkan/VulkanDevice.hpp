@@ -131,7 +131,9 @@ namespace vks
 		void CopyDataStagingBuf2SubTex2D(const std::shared_ptr<VTexture>& tex, VkOffset2D offset, VkExtent2D extent);
 		bool DownloadTexture3D(const std::shared_ptr<VTexture> &tex, void *data, VkOffset3D offset, uint32_t ypitch, uint32_t zpitch);
 		bool DownloadTexture(const std::shared_ptr<VTexture> &tex, void *data);
+		bool DownloadSubTexture2D(const std::shared_ptr<VTexture>& tex, void* data, VkOffset2D offset, VkExtent2D extent);
 		void CopyDataTex2StagingBuf(const std::shared_ptr<VTexture> &tex);
+		void CopyDataSubTex2StagingBuf2D(const std::shared_ptr<VTexture>& tex, VkOffset2D offset, VkExtent2D extent);
 		
 		void UploadData2Buffer(void* data, vks::Buffer* dst, VkDeviceSize offset, VkDeviceSize size);
 
@@ -733,7 +735,6 @@ namespace vks
 	public:
 		VkSampler sampler;
 		VkImage image;
-		VkImageLayout imageLayout;
 		VkDeviceMemory deviceMemory;
 		VkImageView view;
 		VkImageView stencil_view;

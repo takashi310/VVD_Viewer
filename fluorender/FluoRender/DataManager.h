@@ -221,7 +221,7 @@ public:
 	void SetMatrices(glm::mat4 &mv_mat, glm::mat4 &proj_mat);
 	void Draw(const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf, int peel);
 	void DrawBounds(const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf);
-	void DrawInt(unsigned int name, const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf);
+	void DrawInt(unsigned int name, const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf, VkRect2D scissor = {0,0,0,0});
 
 	//lighting
 	void SetLighting(bool bVal);

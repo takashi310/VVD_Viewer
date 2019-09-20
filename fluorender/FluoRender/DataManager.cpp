@@ -3993,12 +3993,12 @@ void MeshData::DrawBounds(const std::unique_ptr<vks::VFrameBuffer>& framebuf, bo
 	m_mr->draw_wireframe(framebuf, clear_framebuf);
 }
 
-void MeshData::DrawInt(unsigned int name, const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf)
+void MeshData::DrawInt(unsigned int name, const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf, VkRect2D scissor)
 {
 	if (!m_mr)
 		return;
 
-	m_mr->draw_integer(name, framebuf, clear_framebuf);
+	m_mr->draw_integer(name, framebuf, clear_framebuf, scissor);
 }
 
 //lighting

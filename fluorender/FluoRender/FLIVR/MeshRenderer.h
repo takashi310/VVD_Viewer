@@ -63,7 +63,7 @@ namespace FLIVR
 		//draw
 		void draw(const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf);
 		void draw_wireframe(const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf);
-		void draw_integer(unsigned int name, const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf);
+		void draw_integer(unsigned int name, const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf, VkRect2D scissor = { 0,0,0,0 });
 		void update();
 
 		//depth peeling
@@ -201,6 +201,7 @@ namespace FLIVR
 
 		static std::vector<MeshPipeline> m_msh_pipelines;
 		static std::map<vks::VulkanDevice*, VkRenderPass> m_msh_draw_pass;
+		static std::map<vks::VulkanDevice*, VkRenderPass> m_msh_intdraw_pass;
 
 		static std::shared_ptr<VVulkan> m_vulkan;
 

@@ -968,12 +968,11 @@ namespace vks
 			&bufferCopyRegion);
 
 		// Change texture image layout to shader read after all mip levels have been copied
-		tex->imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		vks::tools::setImageLayout(
 			copyCmd,
 			tex->image,
 			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			tex->imageLayout,
+			tex->descriptor.imageLayout,
 			subresourceRange);
 
 		flushCommandBuffer(copyCmd, queue, true);
@@ -1022,12 +1021,11 @@ namespace vks
 			&bufferCopyRegion);
 
 		// Change texture image layout to shader read after all mip levels have been copied
-		tex->imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		vks::tools::setImageLayout(
 			copyCmd,
 			tex->image,
 			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			tex->imageLayout,
+			tex->descriptor.imageLayout,
 			subresourceRange);
 
 		flushCommandBuffer(copyCmd, queue, true);
@@ -1077,6 +1075,19 @@ namespace vks
 		return true;
 	}
 
+	bool VulkanDevice::DownloadSubTexture2D(const std::shared_ptr<VTexture>& tex, void* data, VkOffset2D offset, VkExtent2D extent)
+	{
+		const VkDeviceSize texMemSize = (VkDeviceSize)extent.width * (VkDeviceSize)extent.height * (VkDeviceSize)tex->bytes;
+
+		checkStagingBuffer(texMemSize);
+
+		CopyDataSubTex2StagingBuf2D(tex, offset, extent);
+
+		memcpy(data, staging_buf.mapped, texMemSize);
+
+		return true;
+	}
+
 	void VulkanDevice::CopyDataTex2StagingBuf(const std::shared_ptr<VTexture> &tex)
 	{
 		VkCommandBuffer copyCmd = createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
@@ -1121,7 +1132,60 @@ namespace vks
 			copyCmd,
 			tex->image,
 			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-			tex->imageLayout,
+			tex->descriptor.imageLayout,
+			subresourceRange);
+
+		flushCommandBuffer(copyCmd, queue, true);
+	}
+
+	void VulkanDevice::CopyDataSubTex2StagingBuf2D(const std::shared_ptr<VTexture>& tex, VkOffset2D offset, VkExtent2D extent)
+	{
+		VkCommandBuffer copyCmd = createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+
+		// The sub resource range describes the regions of the image we will be transitioned
+		VkImageSubresourceRange subresourceRange = {};
+		subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		subresourceRange.baseMipLevel = 0;
+		subresourceRange.baseArrayLayer = 0;
+		subresourceRange.levelCount = 1;
+		subresourceRange.layerCount = 1;
+
+		// Optimal image will be used as destination for the copy, so we must transfer from our
+		// initial undefined image layout to the transfer destination layout
+		vks::tools::setImageLayout(
+			copyCmd,
+			tex->image,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			subresourceRange);
+
+		// Setup image copy regions
+		VkBufferImageCopy imageCopyRegion{};
+		imageCopyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		imageCopyRegion.imageSubresource.mipLevel = 0;
+		imageCopyRegion.imageSubresource.baseArrayLayer = 0;
+		imageCopyRegion.imageSubresource.layerCount = 1;
+		imageCopyRegion.imageExtent.width = extent.width;;
+		imageCopyRegion.imageExtent.height = extent.height;;
+		imageCopyRegion.imageExtent.depth = 1;
+		imageCopyRegion.imageOffset.x = offset.x;
+		imageCopyRegion.imageOffset.y = offset.y;
+		imageCopyRegion.imageOffset.z = 0;
+
+		vkCmdCopyImageToBuffer(
+			copyCmd,
+			tex->image,
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			staging_buf.buffer,
+			1,
+			&imageCopyRegion);
+
+		// Change texture image layout to shader read after all mip levels have been copied
+		vks::tools::setImageLayout(
+			copyCmd,
+			tex->image,
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			tex->descriptor.imageLayout,
 			subresourceRange);
 
 		flushCommandBuffer(copyCmd, queue, true);

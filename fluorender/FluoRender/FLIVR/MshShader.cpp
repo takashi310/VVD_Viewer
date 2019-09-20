@@ -428,8 +428,10 @@ namespace FLIVR
 		else if (type_ == 1)
 		{
 			z << MSH_FRAG_OUTPUTS_INT;
+			z << MSH_FRAG_INPUTS_POS(0);
 			z << MSH_FRAG_UNIFORMS;
 			z << MSH_HEAD;
+			z << MSH_HEAD_CLIP;
 			z << MSH_FRAG_BODY_INT;
 		}
 

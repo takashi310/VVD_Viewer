@@ -5392,108 +5392,100 @@ void VRenderVulkanView::Pick()
 
 void VRenderVulkanView::PickMesh()
 {
-	//int i;
-	//int nx = GetSize().x;
-	//int ny = GetSize().y;
-	//if (nx<=0 || ny<=0)
-	//	return;
-	//wxPoint mouse_pos = ScreenToClient(wxGetMousePosition());
-	//if (mouse_pos.x<0 || mouse_pos.x>=nx ||
-	//	mouse_pos.y<=0 || mouse_pos.y>ny)
-	//	return;
+	int i;
+	int nx = GetSize().x;
+	int ny = GetSize().y;
+	if (nx<=0 || ny<=0)
+		return;
+	wxPoint mouse_pos = ScreenToClient(wxGetMousePosition());
+	if (mouse_pos.x<0 || mouse_pos.x>=nx ||
+		mouse_pos.y<=0 || mouse_pos.y>ny)
+		return;
 
-	////projection
-	//HandleProjection(nx, ny);
-	////Transformation
-	//HandleCamera();
-	////obj
-	//glm::mat4 mv_temp = m_mv_mat;
-	////translate object
-	//m_mv_mat = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
-	////rotate object
-	//m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
-	//m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
-	//m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
-	////center object
-	//m_mv_mat = glm::translate(m_mv_mat, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
+	//projection
+	HandleProjection(nx, ny);
+	//Transformation
+	HandleCamera();
+	//obj
+	glm::mat4 mv_temp = m_mv_mat;
+	//translate object
+	m_mv_mat = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
+	//rotate object
+	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
+	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
+	//center object
+	m_mv_mat = glm::translate(m_mv_mat, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
 
-	////set up fbo
-	//vks::VulkanDevice *prim_dev = m_vulkan->vulkanDevice;
-	//if (m_fbo_pick && (m_fbo_pick->w != nx || m_fbo_pick->h != ny))
-	//{
-	//	m_fbo_pick.reset();
-	//	m_tex_pick.reset();
-	//	m_tex_pick_depth.reset();
-	//}
-	//if (!m_fbo_pick)
-	//{
-	//	m_fbo_pick = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
-	//	m_fbo_pick->w = m_nx;
-	//	m_fbo_pick->h = m_ny;
-	//	m_fbo_pick->device = prim_dev;
+	//set up fbo
+	vks::VulkanDevice *prim_dev = m_vulkan->vulkanDevice;
+	if (m_fbo_pick && (m_fbo_pick->w != nx || m_fbo_pick->h != ny))
+	{
+		m_fbo_pick.reset();
+		m_tex_pick.reset();
+		m_tex_pick_depth.reset();
+	}
+	if (!m_fbo_pick)
+	{
+		m_fbo_pick = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+		m_fbo_pick->w = m_nx;
+		m_fbo_pick->h = m_ny;
+		m_fbo_pick->device = prim_dev;
 
-	//	m_tex_pick = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
-	//	m_fbo_pick->addAttachment(m_tex_pick);
+		m_tex_pick = prim_dev->GenTexture2D(VK_FORMAT_R32_UINT, VK_FILTER_NEAREST, m_nx, m_ny);
+		m_fbo_pick->addAttachment(m_tex_pick);
 
-	//	m_tex_pick_depth = prim_dev->GenTexture2D(
-	//		m_vulkan->depthFormat,
-	//		VK_FILTER_LINEAR,
-	//		m_nx, m_ny,
-	//		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-	//		VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-	//		VK_IMAGE_USAGE_SAMPLED_BIT |
-	//		VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-	//		VK_IMAGE_USAGE_STORAGE_BIT
-	//	);
-	//	m_fbo_pick->addAttachment(m_tex_pick_depth);
-	//}
-	//
-	////bind
-	//glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_pick);
-	//GLenum Status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-	//glClearColor(0.0, 0.0, 0.0, 0.0);
-	//glClearDepth(1.0);
-	//glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
-
-	//glScissor(mouse_pos.x, ny-mouse_pos.y, 1, 1);
-	//glEnable(GL_SCISSOR_TEST);
-	//glEnable(GL_DEPTH_TEST);
-	//glDepthFunc(GL_LEQUAL);
-	//for (i=0; i<(int)m_md_pop_list.size(); i++)
-	//{
-	//	MeshData* md = m_md_pop_list[i];
-	//	if (md)
-	//	{
-	//		md->SetMatrices(m_mv_mat, m_proj_mat);
-	//		md->DrawInt(i+1);
-	//	}
-	//}
-	//glDisable(GL_SCISSOR_TEST);
-
-	//unsigned int choose = 0;
-	//glReadPixels(mouse_pos.x, ny-mouse_pos.y, 1, 1, GL_RED_INTEGER,
-	//	GL_UNSIGNED_INT, (GLvoid*)&choose);
-
-	//if (choose >0 && choose<=(int)m_md_pop_list.size())
-	//{
-	//	MeshData* md = m_md_pop_list[choose-1];
-	//	if (md)
-	//	{
-	//		VRenderFrame* frame = (VRenderFrame*)m_frame;
-	//		if (frame && frame->GetTree())
-	//		{
-	//			frame->GetTree()->SetFocus();
-	//			frame->GetTree()->Select(m_vrv->GetName(), md->GetName());
-	//		}
-	//	}
-	//}
-	//else
-	//{
-	//	VRenderFrame* frame = (VRenderFrame*)m_frame;
-	//	if (frame && frame->GetCurSelType()==3 && frame->GetTree())
-	//		frame->GetTree()->Select(m_vrv->GetName(), "");
-	//}
-	//m_mv_mat = mv_temp;
+		m_tex_pick_depth = prim_dev->GenTexture2D(
+			m_vulkan->depthFormat,
+			VK_FILTER_NEAREST,
+			m_nx, m_ny,
+			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+			VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+			VK_IMAGE_USAGE_SAMPLED_BIT |
+			VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+		);
+		m_fbo_pick->addAttachment(m_tex_pick_depth);
+	}
+	
+	//bind
+	VkRect2D scissor = { mouse_pos.x, mouse_pos.y, 1, 1 };
+	bool clear = true;
+	for (i=0; i<(int)m_md_pop_list.size(); i++)
+	{
+		MeshData* md = m_md_pop_list[i];
+		if (md)
+		{
+			md->SetMatrices(m_mv_mat, m_proj_mat);
+			md->DrawInt(i+1, m_fbo_pick, clear);
+			clear = false;
+		}
+	}
+	
+	unsigned int choose = 0;
+	VkOffset2D offset = { mouse_pos.x, mouse_pos.y };
+	VkExtent2D extent = { 1, 1 };
+	prim_dev->DownloadSubTexture2D(m_fbo_pick->attachments[0], &choose, offset, extent);
+	
+	if (choose >0 && choose<=(int)m_md_pop_list.size())
+	{
+		MeshData* md = m_md_pop_list[choose-1];
+		if (md)
+		{
+			VRenderFrame* frame = (VRenderFrame*)m_frame;
+			if (frame && frame->GetTree())
+			{
+				frame->GetTree()->SetFocus();
+				frame->GetTree()->Select(m_vrv->GetName(), md->GetName());
+			}
+		}
+	}
+	else
+	{
+		VRenderFrame* frame = (VRenderFrame*)m_frame;
+		if (frame && frame->GetCurSelType()==3 && frame->GetTree())
+			frame->GetTree()->Select(m_vrv->GetName(), "");
+	}
+	m_mv_mat = mv_temp;
 }
 
 void VRenderVulkanView::PickVolume()
