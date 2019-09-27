@@ -1318,13 +1318,16 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv)
 		}
 	}
 
+	//if (vrv)
+	//	vrv->InitView(INIT_BOUNDS | INIT_CENTER);
+
 	if (md_sel)
 		UpdateTree(md_sel->GetName(), 3);
 	else
 		UpdateTree();
 
-	if (vrv)
-		vrv->InitView(INIT_BOUNDS|INIT_CENTER);
+	//if (vrv)
+	//	vrv->InitView(INIT_BOUNDS|INIT_CENTER);
 
 	delete prg_diag;
 }

@@ -71,6 +71,8 @@ namespace FLIVR
 
 		setupVertexDescriptions();
 
+		m_vin = nullptr;
+
 		m_prev_msh_pipeline = -1;
 	}
 
@@ -98,6 +100,8 @@ namespace FLIVR
 		m_vertices44 = copy.m_vertices44;
 		m_vertices42 = copy.m_vertices42;
 		m_vertices442 = copy.m_vertices442;
+
+		m_vin = copy.m_vin;
 
 		m_prev_msh_pipeline = copy.m_prev_msh_pipeline;
 	}
@@ -160,7 +164,7 @@ namespace FLIVR
 				VK_VERTEX_INPUT_RATE_VERTEX);
 		// Attribute descriptions
 		// Describes memory layout and shader positions
-		m_vertices4.inputAttributes.resize(2);
+		m_vertices4.inputAttributes.resize(1);
 		// Location 0 : Position
 		m_vertices4.inputAttributes[0] =
 			vks::initializers::vertexInputAttributeDescription(
@@ -246,7 +250,7 @@ namespace FLIVR
 				VK_VERTEX_INPUT_RATE_VERTEX);
 		// Attribute descriptions
 		// Describes memory layout and shader positions
-		m_vertices442.inputAttributes.resize(2);
+		m_vertices442.inputAttributes.resize(3);
 		// Location 0 : Position
 		m_vertices442.inputAttributes[0] =
 			vks::initializers::vertexInputAttributeDescription(
@@ -260,7 +264,7 @@ namespace FLIVR
 				1,
 				VK_FORMAT_R32G32B32A32_SFLOAT,
 				offsetof(Vertex442, att1));
-		m_vertices442.inputAttributes[1] =
+		m_vertices442.inputAttributes[2] =
 			vks::initializers::vertexInputAttributeDescription(
 				0,
 				2,
@@ -362,7 +366,7 @@ namespace FLIVR
 
 		ShaderProgram* shader = m_vulkan->msh_shader_factory_->shader(
 			device->logicalDevice,
-			type, depth_peel_, tex, fog_, light_);
+			type, depth_peel_, tex && data_->texcoords, fog_, light_ && data_->normals);
 
 		if (m_prev_msh_pipeline >= 0) {
 			if (m_msh_pipelines[m_prev_msh_pipeline].device == device &&
@@ -430,16 +434,7 @@ namespace FLIVR
 				renderpass,
 				0);
 
-		VkPipelineVertexInputStateCreateInfo* vin = &m_vertices4.inputState;
-
-		if (light_ & tex)
-			vin = &m_vertices442.inputState;
-		else if (light_)
-			vin = &m_vertices44.inputState;
-		else if (tex)
-			vin = &m_vertices42.inputState;
-
-		pipelineCreateInfo.pVertexInputState = vin;
+		pipelineCreateInfo.pVertexInputState = m_vin;
 		pipelineCreateInfo.pInputAssemblyState = &inputAssemblyState;
 		pipelineCreateInfo.pRasterizationState = &rasterizationState;
 		pipelineCreateInfo.pMultisampleState = &multisampleState;
@@ -575,6 +570,16 @@ namespace FLIVR
         
 		bool bnormal = data_->normals;
 		bool btexcoord = data_->texcoords;
+
+		if (bnormal && btexcoord)
+			m_vin = &m_vertices442.inputState;
+		else if (bnormal)
+			m_vin = &m_vertices44.inputState;
+		else if (btexcoord)
+			m_vin = &m_vertices42.inputState;
+		else
+			m_vin = &m_vertices4.inputState;
+
 		vector<float> verts;
 		vector<uint32_t> ids;
 
@@ -726,7 +731,7 @@ namespace FLIVR
 
 		vubo.proj_mat = m_proj_mat;
 		vubo.mv_mat = m_mv_mat;
-		if (light_)
+		if (light_ && data_->normals)
 			vubo.normal_mat = glm::mat4(glm::inverseTranspose(glm::mat3(m_mv_mat)));
 
 		if (fog_)
@@ -778,7 +783,7 @@ namespace FLIVR
 			m_vulkan->msh_shader_factory_->getDescriptorSetWriteUniforms(device_, vert_ubuf, frag_ubuf, descriptorWritesBase);
 
 			//uniforms
-			if (light_)
+			if (light_ && data_->normals)
 			{
 				GLMmaterial* material = &data_->materials[group->material];
 				if (material)
@@ -799,7 +804,7 @@ namespace FLIVR
 				fubo.loc3 = { 0.0f, alpha_, 0.0f, 0.0f };//alpha
 			}
 			//This won't happen now.
-			if (tex)
+			if (tex && data_->texcoords)
 			{
 				GLMmaterial* material = &data_->materials[group->material];
 				//descriptorWritesBase.push_back(MshShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 0, material->textureID))

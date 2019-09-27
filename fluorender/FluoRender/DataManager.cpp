@@ -4328,6 +4328,21 @@ int MeshData::GetLimitNumber()
 	return m_limit;
 }
 
+void MeshData::RecalcBounds()
+{
+	GLfloat fbounds[6];
+	glmBoundingBox(m_data, fbounds);
+	BBox bounds;
+	Point pmin(fbounds[0], fbounds[2], fbounds[4]);
+	Point pmax(fbounds[1], fbounds[3], fbounds[5]);
+	bounds.extend(pmin);
+	bounds.extend(pmax);
+	m_bounds = bounds;
+	m_center = Point((m_bounds.min().x() + m_bounds.max().x()) * 0.5,
+		(m_bounds.min().y() + m_bounds.max().y()) * 0.5,
+		(m_bounds.min().z() + m_bounds.max().z()) * 0.5);
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 AText::AText()
 {

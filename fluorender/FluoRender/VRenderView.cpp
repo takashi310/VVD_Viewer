@@ -1121,7 +1121,34 @@ void VRenderVulkanView::Draw()
 				DrawClippingPlanes(false, BACK_FACE);
 
 			//draw the volumes
-			if (!m_dpeel) DrawVolumes();
+			if (m_md_pop_list.empty() && m_vd_pop_list.empty())
+			{
+				if (m_frame_clear) {
+					vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+					
+					if (current_fbo)
+					{
+						Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+						if (!current_fbo->renderPass)
+						{
+							params.pipeline =
+								m_v2drender->preparePipeline(
+									IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR,
+									V2DRENDER_BLEND_OVER,
+									current_fbo->attachments[0]->format,
+									current_fbo->attachments.size(),
+									0,
+									current_fbo->attachments[0]->is_swapchain_images);
+							current_fbo->replaceRenderPass(params.pipeline.pass);
+						}
+						params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
+						m_v2drender->clear(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
+						m_frame_clear = false;
+					}
+
+				}
+			}
+			else if (!m_dpeel) DrawVolumes();
 			else DrawVolumesDP();
 		}
 
@@ -1196,6 +1223,7 @@ void VRenderVulkanView::DrawMeshes(const std::unique_ptr<vks::VFrameBuffer>& fra
 //peel==true -- depth peeling
 void VRenderVulkanView::DrawVolumes(int peel)
 {
+
 	int finished_bricks = 0;
 	if (TextureRenderer::get_mem_swap())
 	{
@@ -1321,6 +1349,13 @@ void VRenderVulkanView::DrawVolumes(int peel)
 			v2drender_params[0].signalSemaphoreCount = sem.signalSemaphoreCount;
 			m_fbo_final->replaceRenderPass(pl.pass);
 			m_v2drender->seq_render(m_fbo_final, v2drender_params.data(), v2drender_params.size());
+
+			if (m_md_pop_list[0]->GetShadow())
+			{
+				double darkness = 0.0;
+				m_md_pop_list[0]->GetShadowParams(darkness);
+				DrawOLShadowsMesh(m_dp_tex_list[0], (float)darkness);
+			}
 		}
 
 		//setup
@@ -4375,7 +4410,8 @@ void VRenderVulkanView::DrawOVER(VolumeData* vd, std::unique_ptr<vks::VFrameBuff
 	params_final.clear = m_clear_final_buffer;
 	m_clear_final_buffer = false;
 
-	m_fbo_final->replaceRenderPass(params_final.pipeline.pass);
+	if (!m_fbo_final->renderPass)
+		m_fbo_final->replaceRenderPass(params_final.pipeline.pass);
 	m_v2drender->render(m_fbo_final, params_final);
 }
 
@@ -4601,7 +4637,8 @@ void VRenderVulkanView::DrawMIP(VolumeData* vd, std::unique_ptr<vks::VFrameBuffe
 	params_final.clear = m_clear_final_buffer;
 	m_clear_final_buffer = false;
 
-	m_fbo_final->replaceRenderPass(params_final.pipeline.pass);
+	if (!m_fbo_final->renderPass)
+		m_fbo_final->replaceRenderPass(params_final.pipeline.pass);
 	m_v2drender->render(m_fbo_final, params_final);
 
 	vd->GetVR()->set_shading(shading);
@@ -4653,7 +4690,8 @@ void VRenderVulkanView::DrawOLShading(VolumeData* vd, std::unique_ptr<vks::VFram
 			fb->attachments[0]->is_swapchain_images);
 	params.tex[0] = m_tex_ol1.get();
 
-	fb->replaceRenderPass(params.pipeline.pass);
+	if (!fb->renderPass)
+		fb->replaceRenderPass(params.pipeline.pass);
 	m_v2drender->render(fb, params);
 }
 
@@ -4702,7 +4740,8 @@ void VRenderVulkanView::DrawOLShadowsMesh(const std::shared_ptr<vks::VTexture>& 
 
 	vks::VulkanDevice* prim_dev = m_vulkan->vulkanDevice;
 
-	if (m_fbo_ol2 && m_fbo_ol2->w != nx || m_fbo_ol2->h != ny)
+	//generate gradient map from depth map
+	if (m_fbo_ol2 && (m_fbo_ol2->w != nx || m_fbo_ol2->h != ny))
 	{
 		m_fbo_ol2.reset();
 		m_tex_ol2.reset();
@@ -4718,9 +4757,7 @@ void VRenderVulkanView::DrawOLShadowsMesh(const std::shared_ptr<vks::VTexture>& 
 		m_fbo_ol2->addAttachment(m_tex_ol2);
 	}
 	
-	//bind the fbo
 	Vulkan2dRender::V2DRenderParams params_ol2 = m_v2drender->GetNextV2dRenderSemaphoreSettings();
-
 	params_ol2.pipeline =
 		m_v2drender->preparePipeline(
 			IMG_SHDR_DEPTH_TO_GRADIENT,
@@ -4741,30 +4778,175 @@ void VRenderVulkanView::DrawOLShadowsMesh(const std::shared_ptr<vks::VTexture>& 
 
 	params_ol2.clear = true;
 	params_ol2.clearColor = { 1.0, 1.0, 1.0, 1.0 };
-
-	m_fbo_ol2->replaceRenderPass(params_ol2.pipeline.pass);
+	
+	if (!m_fbo_ol2->renderPass)
+		m_fbo_ol2->replaceRenderPass(params_ol2.pipeline.pass);
 	m_v2drender->render(m_fbo_ol2, params_ol2);
 	
-	//
-	//bind fbo for final composition
-	Vulkan2dRender::V2DRenderParams params_final = m_v2drender->GetNextV2dRenderSemaphoreSettings();
-
+	//draw shadow
+	Vulkan2dRender::V2DRenderParams params_final;
 	params_final.pipeline =
 		m_v2drender->preparePipeline(
 			IMG_SHDR_GRADIENT_TO_SHADOW_MESH,
 			V2DRENDER_BLEND_SHADE_SHADOW,
-			m_vulkan->frameBuffers[m_vulkan->currentBuffer]->attachments[0]->format,
-			m_vulkan->frameBuffers[m_vulkan->currentBuffer]->attachments.size(),
+			m_fbo_final->attachments[0]->format,
+			m_fbo_final->attachments.size(),
 			0,
-			m_vulkan->frameBuffers[m_vulkan->currentBuffer]->attachments[0]->is_swapchain_images);
+			m_fbo_final->attachments[0]->is_swapchain_images);
 	params_final.tex[0] = m_tex_ol2.get();
 	params_final.tex[1] = tex_depth.get();
 	params_final.tex[2] = m_tex_final.get();
-	params_final.loc[0] = { 1.0f/nx, 1.0f/ny, max(m_scale_factor, 1.0), 0.0f };
+	params_final.loc[0] = { 1.0f / nx, 1.0f / ny, max(m_scale_factor, 1.0), 0.0f };
 	params_final.loc[1] = { (float)darkness, 0.0f, 0.0f, 0.0f };
+	params_final.clear = m_clear_final_buffer;
+	m_clear_final_buffer = false;
 
-	m_vulkan->frameBuffers[m_vulkan->currentBuffer]->replaceRenderPass(params_final.pipeline.pass);
-	m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params_final);
+	if (!m_fbo_final->renderPass)
+		m_fbo_final->replaceRenderPass(params_final.pipeline.pass);
+	m_v2drender->render(m_fbo_final, params_final);
+
+	//bool drawshadow = false;
+	//for (int i = 0; i < (int)m_md_pop_list.size(); i++)
+	//{
+	//	MeshData* md = m_md_pop_list[i];
+	//	if (md && md->GetShadow())
+	//	{
+	//		drawshadow = true;
+	//		break;
+	//	}
+	//}
+	//if (!drawshadow)
+	//	return;
+
+	//int nx, ny;
+	//nx = m_nx;
+	//ny = m_ny;
+
+	//vks::VulkanDevice* prim_dev = m_vulkan->vulkanDevice;
+
+	////write ID and depth map
+	//if (m_fbo_pick && (m_fbo_pick->w != nx || m_fbo_pick->h != ny))
+	//{
+	//	m_fbo_pick.reset();
+	//	m_tex_pick.reset();
+	//	m_tex_pick_depth.reset();
+	//}
+	//if (!m_fbo_pick)
+	//{
+	//	m_fbo_pick = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+	//	m_fbo_pick->w = m_nx;
+	//	m_fbo_pick->h = m_ny;
+	//	m_fbo_pick->device = prim_dev;
+
+	//	m_tex_pick = prim_dev->GenTexture2D(VK_FORMAT_R32_UINT, VK_FILTER_NEAREST, m_nx, m_ny);
+	//	m_fbo_pick->addAttachment(m_tex_pick);
+
+	//	m_tex_pick_depth = prim_dev->GenTexture2D(
+	//		m_vulkan->depthFormat,
+	//		VK_FILTER_NEAREST,
+	//		m_nx, m_ny,
+	//		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+	//		VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+	//		VK_IMAGE_USAGE_SAMPLED_BIT |
+	//		VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+	//	);
+	//	m_fbo_pick->addAttachment(m_tex_pick_depth);
+	//}
+
+	//VkRect2D scissor = { 0, 0, m_nx, m_ny };
+	//bool clear = true;
+	//for (int i = 0; i < (int)m_md_pop_list.size(); i++)
+	//{
+	//	MeshData* md = m_md_pop_list[i];
+	//	if (md)
+	//	{
+	//		md->SetMatrices(m_mv_mat, m_proj_mat);
+	//		md->DrawInt(i + 1, m_fbo_pick, clear);
+	//		clear = false;
+	//	}
+	//}
+
+	////generate gradient map from depth map
+	//if (m_fbo_ol2 && (m_fbo_ol2->w != nx || m_fbo_ol2->h != ny))
+	//{
+	//	m_fbo_ol2.reset();
+	//	m_tex_ol2.reset();
+	//}
+	//if (!m_fbo_ol2)
+	//{
+	//	m_fbo_ol2 = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+	//	m_fbo_ol2->w = m_nx;
+	//	m_fbo_ol2->h = m_ny;
+	//	m_fbo_ol2->device = prim_dev;
+
+	//	m_tex_ol2 = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+	//	m_fbo_ol2->addAttachment(m_tex_ol2);
+	//}
+	//
+	//Vulkan2dRender::V2DRenderParams params_ol2 = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+	//params_ol2.pipeline =
+	//	m_v2drender->preparePipeline(
+	//		IMG_SHDR_DEPTH_TO_GRADIENT,
+	//		V2DRENDER_BLEND_DISABLE,
+	//		m_fbo_ol2->attachments[0]->format,
+	//		m_fbo_ol2->attachments.size(),
+	//		0,
+	//		m_fbo_ol2->attachments[0]->is_swapchain_images);
+	//params_ol2.tex[0] = m_tex_pick_depth.get();
+	//
+	//double dir_x = 0.0, dir_y = 0.0;
+	//VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	//if (vr_frame && vr_frame->GetSettingDlg())
+	//	vr_frame->GetSettingDlg()->GetShadowDir(dir_x, dir_y);
+
+	//params_ol2.loc[0] = { 1.0f/nx, 1.0f/ny, m_persp ? 2e10f : 1e6f, 0.0f };
+	//params_ol2.loc[1] = { (float)dir_x, (float)dir_y, 0.0f, 0.0f };
+
+	//params_ol2.clear = true;
+	//params_ol2.clearColor = { 1.0, 1.0, 1.0, 1.0 };
+
+	//m_fbo_ol2->replaceRenderPass(params_ol2.pipeline.pass);
+	//m_v2drender->render(m_fbo_ol2, params_ol2);
+	//
+	////draw shadow
+	//std::vector<Vulkan2dRender::V2DRenderParams> v2drender_params;
+	//Vulkan2dRender::V2dPipeline pl =
+	//	m_v2drender->preparePipeline(
+	//		IMG_SHDR_GRADIENT_TO_SHADOW_MESH,
+	//		V2DRENDER_BLEND_SHADE_SHADOW,
+	//		m_fbo_final->attachments[0]->format,
+	//		m_fbo_final->attachments.size(),
+	//		0,
+	//		m_fbo_final->attachments[0]->is_swapchain_images);
+	//for (int i = 0; i < (int)m_md_pop_list.size(); i++)
+	//{
+	//	MeshData* md = m_md_pop_list[i];
+	//	if (md && md->GetShadow())
+	//	{
+	//		double darkness = 0.0;
+	//		md->GetShadowParams(darkness);
+
+	//		Vulkan2dRender::V2DRenderParams param;
+	//		param.pipeline = pl;
+	//		param.clear = false;
+	//		param.tex[0] = m_tex_ol2.get();
+	//		param.tex[1] = m_tex_pick.get();
+	//		param.tex[2] = m_tex_final.get();
+	//		param.loc[0] = { 1.0f / nx, 1.0f / ny, max(m_scale_factor, 1.0), 0.0f };
+	//		param.loc[1] = { (float)darkness, (float)(i+1), 0.0f, 0.0f };
+	//		v2drender_params.push_back(param);
+	//	}
+	//}
+	//v2drender_params[0].clear = m_clear_final_buffer;
+	//m_clear_final_buffer = false;
+	//vks::VulkanSemaphoreSettings sem = prim_dev->GetNextRenderSemaphoreSettings();
+	//v2drender_params[0].waitSemaphores = sem.waitSemaphores;
+	//v2drender_params[0].waitSemaphoreCount = sem.waitSemaphoreCount;
+	//v2drender_params[0].signalSemaphores = sem.signalSemaphores;
+	//v2drender_params[0].signalSemaphoreCount = sem.signalSemaphoreCount;
+	//m_fbo_final->replaceRenderPass(pl.pass);
+	//m_v2drender->seq_render(m_fbo_final, v2drender_params.data(), v2drender_params.size());
+
 }
 
 void VRenderVulkanView::DrawOLShadows(vector<VolumeData*> &vlist, std::unique_ptr<vks::VFrameBuffer>& fb)
@@ -7838,6 +8020,8 @@ DataGroup* VRenderVulkanView::AddVolumeData(VolumeData* vd, wxString group_name)
 		}
 	}
 
+	InitView(INIT_BOUNDS | INIT_CENTER);
+
 	return group;
 }
 
@@ -7876,6 +8060,8 @@ void VRenderVulkanView::AddMeshData(MeshData* md)
 		}
 	}
 	m_md_pop_dirty = true;
+
+	InitView(INIT_BOUNDS | INIT_CENTER);
 }
 
 void VRenderVulkanView::AddAnnotations(Annotations* ann)
@@ -7964,6 +8150,8 @@ void VRenderVulkanView::ReplaceVolumeData(wxString &name, VolumeData *dst)
 			}
 		}
 	}
+
+	InitView(INIT_BOUNDS | INIT_CENTER);
 }
 
 void VRenderVulkanView::RemoveVolumeData(wxString &name)
@@ -7992,6 +8180,7 @@ void VRenderVulkanView::RemoveVolumeData(wxString &name)
 					m_loader.RemoveBrickVD(vd);
 					vd->GetVR()->clear_tex_current();
 					dm->RemoveVolumeData(name);
+					InitView(INIT_BOUNDS | INIT_CENTER);
 					return;
 				}
 			}
@@ -8010,6 +8199,7 @@ void VRenderVulkanView::RemoveVolumeData(wxString &name)
 						m_loader.RemoveBrickVD(vd);
 						vd->GetVR()->clear_tex_current();
 						dm->RemoveVolumeData(name);
+						InitView(INIT_BOUNDS | INIT_CENTER);
 						return;
 					}
 				}
@@ -8068,6 +8258,7 @@ void VRenderVulkanView::RemoveVolumeDataset(BaseReader *reader, int channel)
 			break;
 		}
 	}
+	InitView(INIT_BOUNDS | INIT_CENTER);
 }
 
 void VRenderVulkanView::RemoveMeshData(wxString &name)
@@ -8093,6 +8284,7 @@ void VRenderVulkanView::RemoveMeshData(wxString &name)
 					m_layer_list.erase(m_layer_list.begin()+i);
 					m_md_pop_dirty = true;
 					dm->RemoveMeshData(name);
+					InitView(INIT_BOUNDS | INIT_CENTER);
 					return;
 				}
 			}
@@ -8109,6 +8301,7 @@ void VRenderVulkanView::RemoveMeshData(wxString &name)
 						group->RemoveMeshData(j);
 						m_md_pop_dirty = true;
 						dm->RemoveMeshData(name);
+						InitView(INIT_BOUNDS | INIT_CENTER);
 						return;
 					}
 				}
@@ -8201,6 +8394,7 @@ void VRenderVulkanView::RemoveGroup(wxString &name)
 			break;
 		}
 	}
+	InitView(INIT_BOUNDS | INIT_CENTER);
 }
 
 //isolate
@@ -9024,10 +9218,24 @@ void VRenderVulkanView::InitView(unsigned int type)
 		PopVolumeList();
 		PopMeshList();
 
-		for (i=0 ; i<(int)m_vd_pop_list.size() ; i++)
-			m_bounds.extend(m_vd_pop_list[i]->GetBounds());
-		for (i=0 ; i<(int)m_md_pop_list.size() ; i++)
-			m_bounds.extend(m_md_pop_list[i]->GetBounds());
+		if (m_vd_pop_list.size() > 0)
+		{
+			for (i = 0; i < (int)m_vd_pop_list.size(); i++)
+				m_bounds.extend(m_vd_pop_list[i]->GetBounds());
+			for (i = 0; i < (int)m_md_pop_list.size(); i++)
+			{
+				m_md_pop_list[i]->RecalcBounds();
+				m_bounds.extend(m_md_pop_list[i]->GetBounds());
+			}
+		}
+		else
+		{
+			for (i = 0; i < (int)m_md_pop_list.size(); i++)
+			{
+				m_md_pop_list[i]->RecalcBounds();
+				m_bounds.extend(m_md_pop_list[i]->GetBounds());
+			}
+		}
 
 		if (m_bounds.valid())
 		{

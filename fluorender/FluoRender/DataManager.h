@@ -295,6 +295,8 @@ public:
 		return m_mr ? m_mr->get_device() : nullptr;
 	}
 
+	void RecalcBounds();
+
 private:
 	//wxString m_name;
 	wxString m_data_path;

@@ -1278,7 +1278,7 @@ namespace FLIVR
 			vks::initializers::pipelineRasterizationStateCreateInfo(
 				VK_POLYGON_MODE_FILL,
 				VK_CULL_MODE_BACK_BIT,
-				VK_FRONT_FACE_CLOCKWISE,
+				VK_FRONT_FACE_COUNTER_CLOCKWISE,
 				0);
 
 		VkPipelineDepthStencilStateCreateInfo depthStencilState =
@@ -2446,7 +2446,7 @@ namespace FLIVR
 				params.pipeline =
 					m_v2drender->preparePipeline(
 						IMG_SHDR_FILTER_SHARPEN,
-						V2DRENDER_BLEND_OVER,
+						V2DRENDER_BLEND_OVER_INV,
 						framebuf->attachments[0]->format,
 						framebuf->attachments.size(),
 						0,
@@ -2460,7 +2460,7 @@ namespace FLIVR
 				params.pipeline =
 					m_v2drender->preparePipeline(
 						IMG_SHADER_TEXTURE_LOOKUP,
-						V2DRENDER_BLEND_OVER,
+						V2DRENDER_BLEND_OVER_INV,
 						framebuf->attachments[0]->format,
 						framebuf->attachments.size(),
 						0,
@@ -2755,8 +2755,7 @@ namespace FLIVR
 
 		bool clear = true;
 		bool waitsemaphore = true;
-		vks::VulkanSemaphoreSettings semaphores = prim_dev->GetNextRenderSemaphoreSettings();
-
+		
 		Transform mv;
 		mv.set_trans(glm::value_ptr(m_mv_mat));
 
@@ -2767,7 +2766,7 @@ namespace FLIVR
 		if (mask_)  bmode = TEXTURE_RENDER_MODE_MASK;
 		if (label_) bmode = TEXTURE_RENDER_MODE_LABEL;
 
-		VkCommandBuffer cmdbuf = prim_dev->GetNextCommandBuffer();
+		VkCommandBuffer cmdbuf = VK_NULL_HANDLE;
 		VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
 		renderPassBeginInfo.renderPass = pipeline.renderpass;
 		renderPassBeginInfo.renderArea.offset.x = 0;
@@ -2780,7 +2779,8 @@ namespace FLIVR
 		{
 			VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
 			cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
+			
+			cmdbuf = prim_dev->GetNextCommandBuffer();
 			VK_CHECK_RESULT(vkBeginCommandBuffer(cmdbuf, &cmdBufInfo));
 		}
 
@@ -2928,13 +2928,16 @@ namespace FLIVR
 				lbltex->descriptor.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 				descriptorWrites.push_back(VRayShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 3, &lbltex->descriptor));
 			}
-
+/*
 			Vector vtest = tform->project(mv.unproject(Vector(0, 0, 1)));
 			Point ptest = mv.unproject(Point(0, 0, 0));
 			vtest.normalize();
+*/
+			if (tmin < 0.0)
+				tmin = 0.0;
 			Vector p = view_ray.direction() * tmin;
 			Vector p2 = view_ray.direction() * tmax;
-			Vector tmp = tform->unproject(p);
+			Vector tmp = tform->unproject(p2);
 			tmp.normalize();
 			p = Dot(tform->project(p), tmp) * tmp;
 			p = mv.project(p);
@@ -2953,17 +2956,22 @@ namespace FLIVR
 			frag_const.b_trans_invny = { float(dbox.min().x()), float(dbox.min().y()), float(dbox.min().z()), 1.0f / b->ny() };
 			frag_const.mask_b_scale_invnz.w = 1.0f / b->nz();
 
+			BBox tbox = b->tbox();
+			frag_const.tbmin = { (float)tbox.min().x(), (float)tbox.min().y(), (float)tbox.min().z(), 0.0f };
+			frag_const.tbmax = { (float)tbox.max().x(), (float)tbox.max().y(), (float)tbox.max().z(), 0.0f };
+/*
 			glm::vec4 tst = glm::vec4(0.0, 0.0, 0.5, 1.0);
 			tst = frag_ubo.proj_mat_inv * tst;
 			tst = glm::normalize(tst);
 			glm::vec4 st = glm::vec4(0.0, 0.0, -2300.0, 1.0);
 			glm::vec4 TexCoord = frag_ubo.mv_mat_inv * st;
-
+*/
 
 			//////////////////////
 			//build command buffer
 			if (mem_swap_ && count == 0)
 			{
+				cmdbuf = prim_dev->GetNextCommandBuffer();
 				VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
 				cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
@@ -3030,12 +3038,12 @@ namespace FLIVR
 			vkCmdBindIndexBuffer(cmdbuf, m_vray_vbufs[prim_dev].indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 			vkCmdDrawIndexed(cmdbuf, m_vray_vbufs[prim_dev].indexCount, 1, 0, 0, 0);
 
-			vkCmdEndRenderPass(cmdbuf);
-
 			count++;
 			if (mem_swap_ && (count >= que || i >= bricks->size() - 1))
 			{
 				count = 0;
+
+				vkCmdEndRenderPass(cmdbuf);
 
 				VK_CHECK_RESULT(vkEndCommandBuffer(cmdbuf));
 
@@ -3043,27 +3051,33 @@ namespace FLIVR
 				submitInfo.commandBufferCount = 1;
 				submitInfo.pCommandBuffers = &cmdbuf;
 
+				vks::VulkanSemaphoreSettings semaphores = prim_dev->GetNextRenderSemaphoreSettings();
+
+				submitInfo.signalSemaphoreCount = semaphores.signalSemaphoreCount;
+				submitInfo.pSignalSemaphores = semaphores.signalSemaphores;
+
 				std::vector<VkPipelineStageFlags> waitStages;
-				if (waitsemaphore && semaphores.waitSemaphoreCount > 0)
+				if (semaphores.waitSemaphoreCount > 0)
 				{
 					for (uint32_t i = 0; i < semaphores.waitSemaphoreCount; i++)
 						waitStages.push_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 					submitInfo.waitSemaphoreCount = semaphores.waitSemaphoreCount;
 					submitInfo.pWaitSemaphores = semaphores.waitSemaphores;
 					submitInfo.pWaitDstStageMask = waitStages.data();
-					waitsemaphore = false;
 				}
 
-				VkFenceCreateInfo fenceInfo = vks::initializers::fenceCreateInfo(VK_FLAGS_NONE);
-				VkFence fence;
-				VK_CHECK_RESULT(vkCreateFence(prim_dev->logicalDevice, &fenceInfo, nullptr, &fence));
+				VK_CHECK_RESULT(vkQueueSubmit(prim_dev->queue, 1, &submitInfo, VK_NULL_HANDLE));
 
-				// Submit to the queue
-				VK_CHECK_RESULT(vkQueueSubmit(prim_dev->queue, 1, &submitInfo, fence));
-				// Wait for the fence to signal that command buffer has finished executing
-				VK_CHECK_RESULT(vkWaitForFences(prim_dev->logicalDevice, 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
+				//VkFenceCreateInfo fenceInfo = vks::initializers::fenceCreateInfo(VK_FLAGS_NONE);
+				//VkFence fence;
+				//VK_CHECK_RESULT(vkCreateFence(prim_dev->logicalDevice, &fenceInfo, nullptr, &fence));
 
-				vkDestroyFence(prim_dev->logicalDevice, fence, nullptr);
+				//// Submit to the queue
+				//VK_CHECK_RESULT(vkQueueSubmit(prim_dev->queue, 1, &submitInfo, fence));
+				//// Wait for the fence to signal that command buffer has finished executing
+				//VK_CHECK_RESULT(vkWaitForFences(prim_dev->logicalDevice, 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
+
+				//vkDestroyFence(prim_dev->logicalDevice, fence, nullptr);
 
 				finished_bricks_++;
 			}
@@ -3073,7 +3087,10 @@ namespace FLIVR
 			{
 				uint32_t rn_time = GET_TICK_COUNT();
 				if (rn_time - st_time_ > get_up_time())
+				{
+					VK_CHECK_RESULT(vkQueueWaitIdle(prim_dev->queue));
 					break;
+				}	
 			}
 		}
 
@@ -3082,6 +3099,8 @@ namespace FLIVR
 			vkCmdEndRenderPass(cmdbuf);
 
 			VK_CHECK_RESULT(vkEndCommandBuffer(cmdbuf));
+
+			vks::VulkanSemaphoreSettings semaphores = prim_dev->GetNextRenderSemaphoreSettings();
 
 			VkSubmitInfo submitInfo = vks::initializers::submitInfo();
 			submitInfo.commandBufferCount = 1;
@@ -3177,11 +3196,8 @@ namespace FLIVR
 				filter_params.tex[0] = blend_tex_id_.get();
 
 				vks::VulkanSemaphoreSettings sem = prim_dev->GetNextRenderSemaphoreSettings();
-				if (!mem_swap_)
-				{
-					filter_params.waitSemaphoreCount = sem.waitSemaphoreCount;
-					filter_params.waitSemaphores = sem.waitSemaphores;
-				}
+				filter_params.waitSemaphoreCount = sem.waitSemaphoreCount;
+				filter_params.waitSemaphores = sem.waitSemaphores;
 				filter_params.signalSemaphoreCount = sem.signalSemaphoreCount;
 				filter_params.signalSemaphores = sem.signalSemaphores;
 
@@ -3189,14 +3205,12 @@ namespace FLIVR
 			}
 
 			Vulkan2dRender::V2DRenderParams params;
-			vks::VulkanSemaphoreSettings semfinal = prim_dev->GetNextRenderSemaphoreSettings();
-
 			if (noise_red_ && colormap_mode_ != 2)
 			{
 				params.pipeline =
 					m_v2drender->preparePipeline(
 						IMG_SHDR_FILTER_SHARPEN,
-						V2DRENDER_BLEND_OVER,
+						V2DRENDER_BLEND_OVER_INV,
 						framebuf->attachments[0]->format,
 						framebuf->attachments.size(),
 						0,
@@ -3210,7 +3224,7 @@ namespace FLIVR
 				params.pipeline =
 					m_v2drender->preparePipeline(
 						IMG_SHADER_TEXTURE_LOOKUP,
-						V2DRENDER_BLEND_OVER,
+						V2DRENDER_BLEND_OVER_INV,
 						framebuf->attachments[0]->format,
 						framebuf->attachments.size(),
 						0,
@@ -3218,11 +3232,9 @@ namespace FLIVR
 				params.tex[0] = blend_tex_id_.get();
 			}
 
-			if (!mem_swap_ || (noise_red_ && colormap_mode_ != 2))
-			{
-				params.waitSemaphoreCount = semfinal.waitSemaphoreCount;
-				params.waitSemaphores = semfinal.waitSemaphores;
-			}
+			vks::VulkanSemaphoreSettings semfinal = prim_dev->GetNextRenderSemaphoreSettings();
+			params.waitSemaphoreCount = semfinal.waitSemaphoreCount;
+			params.waitSemaphores = semfinal.waitSemaphores;
 			params.signalSemaphoreCount = semfinal.signalSemaphoreCount;
 			params.signalSemaphores = semfinal.signalSemaphores;
 

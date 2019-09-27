@@ -194,6 +194,7 @@ namespace FLIVR
 
 		vks::VulkanDevice* device_;
 		MshVertexSettings m_vertices4, m_vertices42, m_vertices44, m_vertices442;
+		VkPipelineVertexInputStateCreateInfo* m_vin;
 		VkFormat depthformat_;
 		//vertex buffer
 		std::vector<MeshVertexBuffers> m_vertbufs;

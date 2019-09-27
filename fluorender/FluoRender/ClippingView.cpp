@@ -513,6 +513,14 @@ void ClippingView::RefreshVRenderViewsOverlay()
 	vrender_frame->RefreshVRenderViewsOverlay(false);
 }
 
+void ClippingView::ClearData()
+{
+	m_vd = NULL;
+	m_md = NULL;
+	m_sel_type = -1;
+	DisableAll();
+}
+
 void ClippingView::GetSettings()
 {
 	if ( !((m_sel_type==2 && m_vd) || (m_sel_type==3 && m_md)) )

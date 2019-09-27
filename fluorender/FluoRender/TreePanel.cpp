@@ -176,6 +176,23 @@ void DataTreeCtrl::DeleteSelection()
 
 	if (sel_item.IsOk() && vr_frame)
 	{
+		MeshData* clmd = NULL;
+		VolumeData* clvd = NULL;
+		wxString clmdname, clvdname;
+		int cl_sel_type = vr_frame->GetClippingView()->GetSelType();
+		if (cl_sel_type == 2)
+		{
+			clvd = vr_frame->GetClippingView()->GetVolumeData();
+			if (clvd)
+				clvdname = clvd->GetName();
+		}
+		else if (cl_sel_type == 3)
+		{
+			clmd = vr_frame->GetClippingView()->GetMeshData();
+			if (clmd)
+				clmdname = clmd->GetName();
+		}
+
 		wxString name_data = GetItemBaseText(sel_item);
 		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
 		if (!item_data)
@@ -328,7 +345,16 @@ void DataTreeCtrl::DeleteSelection()
 					vr_frame->UpdateTree();
 					vr_frame->RefreshVRenderViews();
 					vr_frame->OnSelection(1);
+					if ((cl_sel_type == 2 && !vr_frame->GetDataManager()->GetVolumeData(clvdname)) ||
+						(cl_sel_type == 3 && !vr_frame->GetDataManager()->GetMeshData(clmdname)))
+						vr_frame->GetClippingView()->ClearData();
 				}
+			}
+			else
+			{
+				if ((cl_sel_type == 2 && !vr_frame->GetDataManager()->GetVolumeData(clvdname)) ||
+					(cl_sel_type == 3 && !vr_frame->GetDataManager()->GetMeshData(clmdname)))
+					vr_frame->GetClippingView()->ClearData();
 			}
 		}
 	}

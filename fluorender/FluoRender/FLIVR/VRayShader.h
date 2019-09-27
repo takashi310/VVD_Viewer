@@ -178,6 +178,8 @@ namespace FLIVR
 			glm::vec4 b_trans_invny;
 			glm::vec4 mask_b_scale_invnz;
 			glm::vec4 mask_b_trans;
+			glm::vec4 tbmin;
+			glm::vec4 tbmax;
 			glm::vec3 loc_zmin_zmax_dz;
 			uint32_t stepnum;
 		};

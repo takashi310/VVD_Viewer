@@ -567,16 +567,66 @@ namespace FLIVR
 	"	vec4 loc0; //(1/width, 1/height, zoom, 0.0)\n" \
 	"	vec4 loc1; //(darkness, 0.0, 0.0, 0.0)\n" \
 	"} ct;\n" \
-	"layout (binding = 0) uniform sampler2D tex0;\n" \
-	"layout (binding = 1) uniform sampler2D tex1;\n" \
-	"layout (binding = 2) uniform sampler2D tex2;\n" \
+	"layout (binding = 0) uniform sampler2D tex0;// gradient\n" \
+	"layout (binding = 1) uniform sampler2D tex1;// depth map\n" \
+	"layout (binding = 2) uniform sampler2D tex2;// color\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
 	"	vec4 t = vec4(OutTexCoord, 1.0);\n" \
 	"	vec4 c1 = texture(tex1, t.xy);\n" \
 	"	vec4 c2 = texture(tex2, t.xy);\n" \
-	"	if (c1.x==1.0 && (c1.x<1.0 || c2.w==0.0))\n" \
+	"	if (c2.w == 0.0 || c1.x >= 1.0)\n" \
+	"	{\n" \
+	"		FragColor = vec4(1.0);\n" \
+	"		return;\n" \
+	"	}\n" \
+	"	float c = 0.0;\n" \
+	"	vec2 d = ct.loc0.xy;\n" \
+	"	vec2 nb;\n" \
+	"	vec2 delta;\n" \
+	"	vec4 c_nb;\n" \
+	"	float ang;\n" \
+	"	float dist;\n" \
+	"	float dense;\n" \
+	"	for (int i=-15; i<15; i++)\n" \
+	"	for (int j=-15; j<15; j++)\n" \
+	"	{\n" \
+	"		delta = vec2(float(i)*d.x, float(j)*d.y);\n" \
+	"		nb = t.st + delta;\n" \
+	"		c_nb = texture(tex0, nb);\n" \
+	"		ang = dot(normalize(delta), normalize(c_nb.xy));\n" \
+	"		dist = pow(float(i)*float(i)+float(j)*float(j), 0.8);\n" \
+	"		dist = dist==0.0?0.0:1.0/dist*clamp(ct.loc0.z, 0.4, 3.0);\n" \
+	"		dense = clamp(0.02+(3.0-ct.loc0.z)*0.015, 0.02, 0.05);\n" \
+	"		c += dense*(ang<-0.3?1.0:max(-ang+0.7, 0.0))*c_nb.z*dist;\n" \
+	"	}\n" \
+	"	c = clamp(1.0-clamp(c, 0.0, 1.0)*ct.loc1.x, 0.01, 1.0);\n" \
+	"	FragColor = vec4(vec3(c), 1.0);\n" \
+	"}\n" \
+	"\n"
+
+#define IMG_SHADER_CODE_GRADIENT_TO_SHADOW_MESH_ID \
+	"//IMG_SHADER_CODE_GRADIENT_TO_SHADOW_MESH\n" \
+	"layout(location = 0) in vec3 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexCoord;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
+	"\n" \
+	"//IMG_SHADER_CODE_GRADIENT_TO_SHADOW_MESH\n" \
+	"layout (push_constant) uniform PushConsts {\n" \
+	"	vec4 loc0; //(1/width, 1/height, zoom, 0.0)\n" \
+	"	vec4 loc1; //(darkness, name, 0.0, 0.0)\n" \
+	"} ct;\n" \
+	"layout (binding = 0) uniform sampler2D tex0;// gradient\n" \
+	"layout (binding = 1) uniform sampler2D tex1;// id map\n" \
+	"layout (binding = 2) uniform sampler2D tex2;// color\n" \
+	"\n" \
+	"void main()\n" \
+	"{\n" \
+	"	vec4 t = vec4(OutTexCoord, 1.0);\n" \
+	"	vec4 c1 = texture(tex1, t.xy);\n" \
+	"	vec4 c2 = texture(tex2, t.xy);\n" \
+	"	if (c2.w == 0.0 || c1.x != ct.loc1.x)\n" \
 	"	{\n" \
 	"		FragColor = vec4(1.0);\n" \
 	"		return;\n" \

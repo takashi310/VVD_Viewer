@@ -106,6 +106,7 @@ public:
 	MeshData* GetMeshData();
 	void RefreshVRenderViews(bool interactive=false);
 	void RefreshVRenderViewsOverlay();
+	void ClearData();
 
 	bool GetChannLink()
 	{

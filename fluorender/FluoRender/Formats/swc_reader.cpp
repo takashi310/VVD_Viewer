@@ -508,7 +508,7 @@ void SWCReader::Preprocess()
 			fval = STOD(tokens[3].c_str());
 			v4.y = fval;
 			fval = STOD(tokens[4].c_str());
-			v4.z = fval;
+			v4.z = -fval;
 			if (tokens[5] != "NA")
 			{
 				fval = STOD(tokens[5].c_str());

@@ -553,12 +553,44 @@ void Vulkan2dRender::buildCommandBuffer(
 	renderPassBeginInfo.renderArea.extent.width = framebuf->w;
 	renderPassBeginInfo.renderArea.extent.height = framebuf->h;
 
+	VkImageLayout layout[IMG_SHDR_SAMPLER_NUM];
+
 	for (int32_t i = 0; i < commandbuf_num; ++i)
 	{
 		// Set target frame buffer
 		renderPassBeginInfo.framebuffer = framebuf->framebuffer;
 
 		VK_CHECK_RESULT(vkBeginCommandBuffer(commandbufs[i], &cmdBufInfo));
+
+		for (int j = 0; j < IMG_SHDR_SAMPLER_NUM; j++)
+		{
+			if (params.tex[j] && params.pipeline.samplers[j])
+			{
+				VkImageLayout src = params.tex[j]->descriptor.imageLayout;
+				VkImageLayout dst = VK_IMAGE_LAYOUT_UNDEFINED;
+				layout[j] = params.tex[j]->descriptor.imageLayout;
+				switch (params.tex[j]->descriptor.imageLayout) {
+				case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+					dst = layout[j] = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+					break;
+				}
+
+				if (dst != VK_IMAGE_LAYOUT_UNDEFINED)
+				{
+					params.tex[j]->descriptor.imageLayout = dst;
+					vks::tools::setImageLayout(
+						commandbufs[i],
+						params.tex[j]->image,
+						src,
+						dst,
+						params.tex[j]->subresourceRange);
+				}
+			}
+			else
+			{
+				layout[j] = VK_IMAGE_LAYOUT_UNDEFINED;
+			}
+		}
 		
 		vkCmdBeginRenderPass(commandbufs[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -635,6 +667,23 @@ void Vulkan2dRender::buildCommandBuffer(
 		}
 
 		vkCmdEndRenderPass(commandbufs[i]);
+
+		for (int j = 0; j < IMG_SHDR_SAMPLER_NUM; j++)
+		{
+			if (params.tex[j] && params.pipeline.samplers[j])
+			{
+				if (layout[j] != params.tex[j]->descriptor.imageLayout)
+				{
+					vks::tools::setImageLayout(
+						commandbufs[i],
+						params.tex[j]->image,
+						params.tex[j]->descriptor.imageLayout,
+						layout[j],
+						params.tex[j]->subresourceRange);
+					params.tex[j]->descriptor.imageLayout = layout[j];
+				}
+			}
+		}
 
 		VK_CHECK_RESULT(vkEndCommandBuffer(commandbufs[i]));
 	}
@@ -808,6 +857,88 @@ void Vulkan2dRender::seq_render(const std::unique_ptr<vks::VFrameBuffer>& frameb
 		submitInfo.pWaitDstStageMask = waitStages.data();
 	submitInfo.signalSemaphoreCount = params[0].signalSemaphoreCount;
 	submitInfo.pSignalSemaphores = params[0].signalSemaphores;
+
+	// Submit to the queue
+	VK_CHECK_RESULT(vkQueueSubmit(m_vulkan->vulkanDevice->queue, 1, &submitInfo, VK_NULL_HANDLE));
+}
+
+void Vulkan2dRender::buildCommandBufferClear(
+	VkCommandBuffer commandbufs[],
+	int commandbuf_num,
+	const std::unique_ptr<vks::VFrameBuffer>& framebuf,
+	const V2DRenderParams& params)
+{
+	if (!commandbufs || commandbuf_num <= 0)
+		return;
+
+	VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
+	cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+	VkClearValue clearValues[1];
+	clearValues[0].color = params.clearColor;
+
+	VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
+	renderPassBeginInfo.renderPass = framebuf->renderPass;
+	renderPassBeginInfo.renderArea.offset.x = 0;
+	renderPassBeginInfo.renderArea.offset.y = 0;
+	renderPassBeginInfo.renderArea.extent.width = framebuf->w;
+	renderPassBeginInfo.renderArea.extent.height = framebuf->h;
+
+	for (int32_t i = 0; i < commandbuf_num; ++i)
+	{
+		// Set target frame buffer
+		renderPassBeginInfo.framebuffer = framebuf->framebuffer;
+
+		VK_CHECK_RESULT(vkBeginCommandBuffer(commandbufs[i], &cmdBufInfo));
+
+		vkCmdBeginRenderPass(commandbufs[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+		VkViewport viewport = vks::initializers::viewport((float)framebuf->w, (float)framebuf->h, 0.0f, 1.0f);
+		vkCmdSetViewport(commandbufs[i], 0, 1, &viewport);
+
+		VkRect2D scissor = vks::initializers::rect2D(framebuf->w, framebuf->h, 0, 0);
+		vkCmdSetScissor(commandbufs[i], 0, 1, &scissor);
+
+		VkClearAttachment clearAttachments[1] = {};
+		clearAttachments[0].aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		clearAttachments[0].clearValue = clearValues[0];
+		clearAttachments[0].colorAttachment = 0;
+
+		VkClearRect clearRect = {};
+		clearRect.layerCount = 1;
+		clearRect.rect.offset = { 0, 0 };
+		clearRect.rect.extent = { framebuf->w, framebuf->h };
+
+		vkCmdClearAttachments(
+			commandbufs[i],
+			1,
+			clearAttachments,
+			1,
+			&clearRect);
+
+		vkCmdEndRenderPass(commandbufs[i]);
+
+		VK_CHECK_RESULT(vkEndCommandBuffer(commandbufs[i]));
+	}
+}
+
+void Vulkan2dRender::clear(const std::unique_ptr<vks::VFrameBuffer>& framebuf, const V2DRenderParams& params)
+{
+	VkCommandBuffer default_cmdbuf = m_vulkan->vulkanDevice->GetNextCommandBuffer();
+	buildCommandBufferClear(&default_cmdbuf, 1, framebuf, params);
+
+	VkSubmitInfo submitInfo = vks::initializers::submitInfo();
+	std::vector<VkPipelineStageFlags> waitStages;
+	for (uint32_t i = 0; i < params.waitSemaphoreCount; i++)
+		waitStages.push_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &default_cmdbuf;
+	submitInfo.waitSemaphoreCount = params.waitSemaphoreCount;
+	submitInfo.pWaitSemaphores = params.waitSemaphores;
+	if (!waitStages.empty())
+		submitInfo.pWaitDstStageMask = waitStages.data();
+	submitInfo.signalSemaphoreCount = params.signalSemaphoreCount;
+	submitInfo.pSignalSemaphores = params.signalSemaphores;
 
 	// Submit to the queue
 	VK_CHECK_RESULT(vkQueueSubmit(m_vulkan->vulkanDevice->queue, 1, &submitInfo, VK_NULL_HANDLE));

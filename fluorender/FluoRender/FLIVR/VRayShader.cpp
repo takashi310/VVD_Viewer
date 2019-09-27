@@ -108,6 +108,8 @@ namespace FLIVR
 	"	vec4 brktrans;//tex transform for bricking and 1/ny\n" \
 	"	vec4 mskbrkscale;//tex transform for mask bricks and 1/nz\n" \
 	"	vec4 mskbrktrans;//tex transform for mask bricks\n" \
+	"	vec4 tbmin;//tex bbox min\n" \
+	"	vec4 tbmax;//tex bbox max\n" \
 	"	vec3 loc4;//(zmin, zmax, dz)\n" \
 	"	uint stnum;\n" \
 	"} brk;\n" \
@@ -149,7 +151,7 @@ namespace FLIVR
 	"		vec4 TexCoord = st + ray*step*float(i);\n" \
 	"		vec4 t = vec4(TexCoord.xyz, 1.0);\n" \
 	"\n" \
-	"		if (!vol_clip_func(t) && t.x >= 0.0 && t.x <= 1.0 && t.y >= 0.0 && t.y <= 1.0 && t.z >= 0.0 && t.z <= 1.0 && outcol.w <= 0.99995)\n" \
+	"		if (!vol_clip_func(t) && t.x >= brk.tbmin.x && t.x <= brk.tbmax.x && t.y >= brk.tbmin.y && t.y <= brk.tbmax.y && t.z >= brk.tbmin.z && t.z <= brk.tbmax.z && outcol.w <= 0.99995)\n" \
 	"		{\n" \
 	"			//VOL_DATA_VOLUME_LOOKUP\n" \
 	"			vec4 v = texture(tex0, t.stp);\n" \
@@ -272,6 +274,8 @@ namespace FLIVR
 	"	vec4 brktrans;//tex transform for bricking and 1/ny\n" \
 	"	vec4 mskbrkscale;//tex transform for mask bricks and 1/nz\n" \
 	"	vec4 mskbrktrans;//tex transform for mask bricks\n" \
+	"	vec4 tbmin;//tex bbox min\n" \
+	"	vec4 tbmax;//tex bbox max\n" \
 	"	vec3 loc4;//(zmin, zmax, dz)\n" \
 	"	uint stnum;\n" \
 	"} brk;\n" \
@@ -313,7 +317,7 @@ namespace FLIVR
 	"		vec4 TexCoord = st + ray*step*float(i);\n" \
 	"		vec4 t = vec4(TexCoord.xyz, 1.0);\n" \
 	"\n" \
-	"		if (!vol_clip_func(t) && t.x >= 0.0 && t.x <= 1.0 && t.y >= 0.0 && t.y <= 1.0 && t.z >= 0.0 && t.z <= 1.0 && outcol.w <= 0.99995)\n" \
+	"		if (!vol_clip_func(t) && t.x >= brk.tbmin.x && t.x <= brk.tbmax.x && t.y >= brk.tbmin.y && t.y <= brk.tbmax.y && t.z >= brk.tbmin.z && t.z <= brk.tbmax.z && outcol.w <= 0.99995)\n" \
 	"		{\n" \
 	"			//VOL_DATA_VOLUME_LOOKUP\n" \
 	"			vec4 v = texture(tex0, t.stp);\n" \
@@ -431,10 +435,12 @@ namespace FLIVR
 	"\n" \
 	"// VOL_UNIFORMS_BRICK\n" \
 	"layout(push_constant) uniform VolFragShaderBrickConst {\n" \
-	"	vec4 brkscale;//tex transform for bricking\n" \
-	"	vec4 brktrans;//tex transform for bricking\n" \
-	"	vec4 mskbrkscale;//tex transform for mask bricks\n" \
+	"	vec4 brkscale;//tex transform for bricking and 1/nx\n" \
+	"	vec4 brktrans;//tex transform for bricking and 1/ny\n" \
+	"	vec4 mskbrkscale;//tex transform for mask bricks and 1/nz\n" \
 	"	vec4 mskbrktrans;//tex transform for mask bricks\n" \
+	"	vec4 tbmin;//tex bbox min\n" \
+	"	vec4 tbmax;//tex bbox max\n" \
 	"	vec3 loc4;//(zmin, zmax, dz)\n" \
 	"	uint stnum;\n" \
 	"} brk;\n" \
@@ -506,10 +512,12 @@ namespace FLIVR
 	"\n" \
 	"// VOL_UNIFORMS_BRICK\n" \
 	"layout(push_constant) uniform VolFragShaderBrickConst {\n" \
-	"	vec4 brkscale;//tex transform for bricking\n" \
-	"	vec4 brktrans;//tex transform for bricking\n" \
-	"	vec4 mskbrkscale;//tex transform for mask bricks\n" \
+	"	vec4 brkscale;//tex transform for bricking and 1/nx\n" \
+	"	vec4 brktrans;//tex transform for bricking and 1/ny\n" \
+	"	vec4 mskbrkscale;//tex transform for mask bricks and 1/nz\n" \
 	"	vec4 mskbrktrans;//tex transform for mask bricks\n" \
+	"	vec4 tbmin;//tex bbox min\n" \
+	"	vec4 tbmax;//tex bbox max\n" \
 	"	vec3 loc4;//(zmin, zmax, dz)\n" \
 	"	uint stnum;\n" \
 	"} brk;\n" \
@@ -639,7 +647,7 @@ VRayShader::VRayShader(
 	{
 		ostringstream z;
 
-		z << VRAY_FRG_SHADER_CODE_TEST_ORTHO;
+		z << VRAY_FRG_SHADER_CODE_TEST_PERSP;
 
 		//if (poly_)
 		//{

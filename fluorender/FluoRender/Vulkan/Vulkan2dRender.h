@@ -126,6 +126,9 @@ public:
 	void seq_buildCommandBuffer(VkCommandBuffer commandbufs[], int commandbuf_num, const std::unique_ptr<vks::VFrameBuffer>& framebuf, const V2DRenderParams *params, int num);
 	void seq_render(const std::unique_ptr<vks::VFrameBuffer>& framebuf, const V2DRenderParams *params, int num);
 
+	void buildCommandBufferClear(VkCommandBuffer commandbufs[], int commandbuf_num, const std::unique_ptr<vks::VFrameBuffer>& framebuf, const V2DRenderParams& params);
+	void clear(const std::unique_ptr<vks::VFrameBuffer>& framebuf, const V2DRenderParams& params);
+
 	Vulkan2dRender::V2DRenderParams GetNextV2dRenderSemaphoreSettings();
 
 	void GetNextV2dRenderSemaphoreSettings(Vulkan2dRender::V2DRenderParams &params);

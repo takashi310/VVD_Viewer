@@ -1177,7 +1177,7 @@ private:
 	//overlay passes
 	void DrawOLShading(VolumeData* vd, std::unique_ptr<vks::VFrameBuffer>& fb);
 	void DrawOLShadows(vector<VolumeData*> &vlist, std::unique_ptr<vks::VFrameBuffer>& fb);
-	void DrawOLShadowsMesh(const std::shared_ptr<vks::VTexture>& tex_depth, double darkenss);
+	void DrawOLShadowsMesh(const std::shared_ptr<vks::VTexture>& tex_depth, double darkness);
 	
 	void StartTileRendering(int w, int h, int tilew, int tileh);
 	void EndTileRendering();

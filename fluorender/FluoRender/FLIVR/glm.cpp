@@ -756,6 +756,7 @@ static GLvoid glmSecondPass(GLMmodel* model, char* file)
 					&vertices[3 * numvertices + 0],
 					&vertices[3 * numvertices + 1],
 					&vertices[3 * numvertices + 2]);
+				vertices[3 * numvertices + 2] *= -1;
 				numvertices++;
 				break;
 			case 'n':           /* normal */
@@ -763,6 +764,7 @@ static GLvoid glmSecondPass(GLMmodel* model, char* file)
 					&normals[3 * numnormals + 0],
 					&normals[3 * numnormals + 1],
 					&normals[3 * numnormals + 2]);
+				normals[3 * numnormals + 2] *= -1;
 				numnormals++;
 				break;
 			case 't':           /* texcoord */
@@ -1869,7 +1871,7 @@ GLvoid glmWriteOBJ(GLMmodel* model, char* filename, GLuint mode)
 		fprintf(file, "v %f %f %f\n",
 			model->vertices[3 * i + 0],
 			model->vertices[3 * i + 1],
-			model->vertices[3 * i + 2]);
+			-1*model->vertices[3 * i + 2]);
 	}
 
 	/* spit out the smooth/flat normals */
@@ -1880,7 +1882,7 @@ GLvoid glmWriteOBJ(GLMmodel* model, char* filename, GLuint mode)
 			fprintf(file, "vn %f %f %f\n",
 				model->normals[3 * i + 0],
 				model->normals[3 * i + 1],
-				model->normals[3 * i + 2]);
+				-1*model->normals[3 * i + 2]);
 		}
 	} else if (mode & GLM_FLAT) {
 		fprintf(file, "\n");
@@ -1889,7 +1891,7 @@ GLvoid glmWriteOBJ(GLMmodel* model, char* filename, GLuint mode)
 			fprintf(file, "vn %f %f %f\n",
 				model->facetnorms[3 * i + 0],
 				model->facetnorms[3 * i + 1],
-				model->facetnorms[3 * i + 2]);
+				-1*model->facetnorms[3 * i + 2]);
 		}
 	}
 
