@@ -608,10 +608,10 @@ public:
 	void HaltLoopUpdate();
 	void RefreshGL(bool erase=false, bool start_loop=true);
 	void RefreshGLOverlays(bool erase=false);
-#ifdef __WXMAC__
+//#ifdef __WXMAC__
     virtual void Refresh( bool eraseBackground = true,
                          const wxRect *rect = NULL ) wxOVERRIDE;
-#endif
+//#endif
 
 	//rulers
 	int GetRulerType();
@@ -1017,6 +1017,7 @@ private:
 	nv::Timer *goTimer;
     
     bool m_refresh;
+	bool m_refresh_start_loop;
 
 	//wacom support
 #ifdef _WIN32

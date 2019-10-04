@@ -200,7 +200,7 @@ void VulkanExampleBase::submitFrame()
 {
 	VkSemaphore* render_complete = vulkanDevice->GetCurrentRenderSemaphore();
 
-	VkResult res = swapChain.queuePresent(queue, currentBuffer, render_complete ? *render_complete : semaphores.renderComplete);
+	VkResult res = swapChain.queuePresent(vulkanDevice->queue, currentBuffer, render_complete ? *render_complete : semaphores.renderComplete);
 	if (!((res == VK_SUCCESS) || (res == VK_SUBOPTIMAL_KHR))) {
 		if (res == VK_ERROR_OUT_OF_DATE_KHR) {
 			// Swap chain is no longer compatible with the surface and needs to be recreated
@@ -211,7 +211,8 @@ void VulkanExampleBase::submitFrame()
 			VK_CHECK_RESULT(res);
 		}
 	}
-	VK_CHECK_RESULT(vkQueueWaitIdle(queue));
+	VK_CHECK_RESULT(vkQueueWaitIdle(vulkanDevice->queue));
+	VK_CHECK_RESULT(vkQueueWaitIdle(vulkanDevice->transfer_queue));
 }
 
 VulkanExampleBase::VulkanExampleBase(bool enableValidation)

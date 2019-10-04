@@ -465,15 +465,60 @@ namespace FLIVR
 
                //load texture bricks for drawing
                //unit:assigned unit, c:channel
-			   std::shared_ptr<vks::VTexture> load_brick(vks::VulkanDevice *device, int unit, int c, vector<TextureBrick*> *b, int i, VkFilter filter=VK_FILTER_LINEAR, bool compression=false, int mode=0, bool set_drawn=true);
+			   std::shared_ptr<vks::VTexture> load_brick(
+				   vks::VulkanDevice *device,
+				   int unit,
+				   int c,
+				   vector<TextureBrick*> *b,
+				   int i,
+				   VkFilter filter=VK_FILTER_LINEAR,
+				   bool compression=false,
+				   int mode=0,
+				   bool set_drawn=true,
+				   bool *updated=nullptr,
+				   vks::VulkanSemaphoreSettings* semaphore=nullptr);
                //load the texture for volume mask into texture pool
-               std::shared_ptr<vks::VTexture> load_brick_mask(vks::VulkanDevice *device, vector<TextureBrick*> *b, int i, VkFilter filter=VK_FILTER_NEAREST, bool compression=false, int unit=0, bool swap_mem=false, bool set_drawn=true);
+               std::shared_ptr<vks::VTexture> load_brick_mask(
+				   vks::VulkanDevice *device,
+				   vector<TextureBrick*> *b, 
+				   int i,
+				   VkFilter filter=VK_FILTER_NEAREST,
+				   bool compression=false,
+				   int unit=0,
+				   bool swap_mem=false,
+				   bool set_drawn=true,
+				   bool* updated = nullptr,
+				   vks::VulkanSemaphoreSettings* semaphore = nullptr);
 			   //load the texture for volume labeling into texture pool
-               std::shared_ptr<vks::VTexture> load_brick_label(vks::VulkanDevice *device, vector<TextureBrick*> *b, int i, bool swap_mem=false, bool set_drawn=true);
+               std::shared_ptr<vks::VTexture> load_brick_label(
+				   vks::VulkanDevice *device,
+				   vector<TextureBrick*> *b,
+				   int i,
+				   bool swap_mem=false,
+				   bool set_drawn=true,
+				   bool* updated = nullptr,
+				   vks::VulkanSemaphoreSettings* semaphore = nullptr);
 			   //load the texture for volume stroke into texture pool
-               std::shared_ptr<vks::VTexture> load_brick_stroke(vks::VulkanDevice *device, vector<TextureBrick*> *b, int i, VkFilter filter=VK_FILTER_NEAREST, bool compression=false, int unit=0, bool swap_mem=false);
+               std::shared_ptr<vks::VTexture> load_brick_stroke(
+				   vks::VulkanDevice *device,
+				   vector<TextureBrick*> *b,
+				   int i,
+				   VkFilter filter=VK_FILTER_NEAREST,
+				   bool compression=false,
+				   int unit=0,
+				   bool swap_mem=false,
+				   bool* updated = nullptr,
+				   vks::VulkanSemaphoreSettings* semaphore = nullptr);
                
-			   std::shared_ptr<vks::VTexture> base_fanc_load_brick_comp(vks::VulkanDevice *device, int c, TextureBrick* brick, VkFilter filter, bool compression, bool swap_mem);
+			   std::shared_ptr<vks::VTexture> base_fanc_load_brick_comp(
+				   vks::VulkanDevice *device,
+				   int c,
+				   TextureBrick* brick,
+				   VkFilter filter,
+				   bool compression,
+				   bool swap_mem,
+				   bool* updated = nullptr,
+				   vks::VulkanSemaphoreSettings* semaphore = nullptr);
       //         
 			   //void release_texture(int unit, GLenum target);
 

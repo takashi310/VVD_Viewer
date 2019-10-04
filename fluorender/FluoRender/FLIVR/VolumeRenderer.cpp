@@ -2497,7 +2497,7 @@ namespace FLIVR
 			return;
 		
 		VkDeviceSize idxbufsize = 6 * 6 * sizeof(unsigned int);
-		if (!m_vertbufs[device].vertexBuffer.buffer)
+		if (!m_vray_vbufs[device].vertexBuffer.buffer)
 		{
 			vector<VolumeRenderer::Vertex> vertex;
 			vertex.reserve(8);
@@ -2517,7 +2517,7 @@ namespace FLIVR
 				vertex.data());
 		}
 
-		if (!m_vertbufs[device].indexBuffer.buffer)
+		if (!m_vray_vbufs[device].indexBuffer.buffer)
 		{
 			vector<uint32_t> index = { 0,1,2, 2,3,0, 0,4,5, 5,1,0, 1,5,6, 6,2,1, 2,6,7, 7,3,2, 3,7,4, 4,0,3, 4,7,6, 6,5,4 };
 			device->createBuffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
@@ -2786,8 +2786,20 @@ namespace FLIVR
 
 		int count = 0;
 		int que = 1;
+		int cur_finished_bricks = finished_bricks_;
 		for (unsigned int i = 0; i < bricks->size(); i++)
 		{
+			//comment off when debug_ds
+			if (mem_swap_/* && !mask_ && !label_*/ && count == 0)
+			{
+				uint32_t rn_time = GET_TICK_COUNT();
+				if (rn_time - st_time_ > get_up_time())
+				{
+					VK_CHECK_RESULT(vkQueueWaitIdle(prim_dev->queue));
+					break;
+				}
+			}
+
 			TextureBrick* b = (*bricks)[i];
 			std::vector<VkWriteDescriptorSet> descriptorWrites = descriptorWritesBase;
 
@@ -2834,13 +2846,27 @@ namespace FLIVR
 			else
 				filter = VK_FILTER_NEAREST;
 
+			vector<vks::VulkanSemaphoreSettings> semaphores;
+			semaphores.push_back(prim_dev->GetNextRenderSemaphoreSettings());
+
+			bool tex_updated = false;
+			bool mask_updated = false;
+			bool label_updated = false;
 			shared_ptr<vks::VTexture> brktex, msktex, lbltex;
-			brktex = load_brick(prim_dev, 0, 0, bricks, i, filter, compression_, mode, (mask_ || label_) ? false : true);
+
+			brktex = load_brick(prim_dev, 0, 0, bricks, i, filter, compression_, mode,
+				(mask_ || label_) ? false : true, &tex_updated, &(semaphores.back()));
 			if (!brktex)
+			{
+				prim_dev->m_cur_semaphore_id--;
 				continue;
+			}
 			b->prevent_tex_deletion(true);
+			if (tex_updated)
+				semaphores.push_back(prim_dev->GetNextRenderSemaphoreSettings());
+
 			if (mask_)
-				msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true);
+				msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, true, &mask_updated, &(semaphores.back()));
 			else if (tex_->nmask() != -1 && m_mask_hide_mode != VOL_MASK_HIDE_NONE)
 			{
 #ifndef _UNIT_TEST_VOLUME_RENDERER_
@@ -2881,7 +2907,7 @@ namespace FLIVR
 					b->nx(nx); b->ny(ny); b->nz(nz);
 					b->mx(nx); b->my(ny); b->mz(nz);
 
-					msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, false);
+					msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, false, &mask_updated, &(semaphores.back()));
 
 					double trans_x = (ox_d - ox) / nx;
 					double trans_y = (oy_d - oy) / ny;
@@ -2903,16 +2929,20 @@ namespace FLIVR
 				}
 				else
 				{
-					msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, false);
+					msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, false, &mask_updated, &(semaphores.back()));
 
 					frag_const.mask_b_scale_invnz = { 1.0f, 1.0f, 1.0f, 1.0f };
 					frag_const.mask_b_trans = { 0.0f, 0.0f, 0.0f, 0.0f };
 				}
 #endif
 			}
+			if (mask_updated)
+				semaphores.push_back(prim_dev->GetNextRenderSemaphoreSettings());
 
 			if (label_)
-				lbltex = load_brick_label(prim_dev, bricks, i);
+				lbltex = load_brick_label(prim_dev, bricks, i, false, true, &label_updated, &(semaphores.back()));
+			if (label_updated)
+				semaphores.push_back(prim_dev->GetNextRenderSemaphoreSettings());
 
 			b->prevent_tex_deletion(false);
 
@@ -3051,33 +3081,53 @@ namespace FLIVR
 				submitInfo.commandBufferCount = 1;
 				submitInfo.pCommandBuffers = &cmdbuf;
 
-				vks::VulkanSemaphoreSettings semaphores = prim_dev->GetNextRenderSemaphoreSettings();
-
-				submitInfo.signalSemaphoreCount = semaphores.signalSemaphoreCount;
-				submitInfo.pSignalSemaphores = semaphores.signalSemaphores;
-
-				std::vector<VkPipelineStageFlags> waitStages;
-				if (semaphores.waitSemaphoreCount > 0)
+				if (tex_updated | mask_updated | label_updated)
 				{
-					for (uint32_t i = 0; i < semaphores.waitSemaphoreCount; i++)
-						waitStages.push_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
-					submitInfo.waitSemaphoreCount = semaphores.waitSemaphoreCount;
-					submitInfo.pWaitSemaphores = semaphores.waitSemaphores;
-					submitInfo.pWaitDstStageMask = waitStages.data();
+					vks::VulkanSemaphoreSettings brksem = semaphores.back();
+					submitInfo.signalSemaphoreCount = brksem.signalSemaphoreCount;
+					submitInfo.pSignalSemaphores = brksem.signalSemaphores;
+					std::vector<VkSemaphore> waitSems;
+					for (int i = 0 ; i < semaphores.size()-1; i++)
+						waitSems.push_back(semaphores[i].signalSemaphores[0]);
+					std::vector<VkPipelineStageFlags> waitStages;
+					if (waitSems.size() > 0)
+					{
+						for (uint32_t i = 0; i < waitSems.size(); i++)
+							waitStages.push_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+						submitInfo.waitSemaphoreCount = waitSems.size();
+						submitInfo.pWaitSemaphores = waitSems.data();
+						submitInfo.pWaitDstStageMask = waitStages.data();
+					}
+					VK_CHECK_RESULT(vkQueueSubmit(prim_dev->queue, 1, &submitInfo, VK_NULL_HANDLE));
+
+					//VkFenceCreateInfo fenceInfo = vks::initializers::fenceCreateInfo(VK_FLAGS_NONE);
+					//VkFence fence;
+					//VK_CHECK_RESULT(vkCreateFence(prim_dev->logicalDevice, &fenceInfo, nullptr, &fence));
+
+					//// Submit to the queue
+					//VK_CHECK_RESULT(vkQueueSubmit(prim_dev->queue, 1, &submitInfo, fence));
+					//// Wait for the fence to signal that command buffer has finished executing
+					//VK_CHECK_RESULT(vkWaitForFences(prim_dev->logicalDevice, 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
+
+					//vkDestroyFence(prim_dev->logicalDevice, fence, nullptr);
 				}
+				else
+				{
+					submitInfo.signalSemaphoreCount = semaphores[0].signalSemaphoreCount;
+					submitInfo.pSignalSemaphores = semaphores[0].signalSemaphores;
 
-				VK_CHECK_RESULT(vkQueueSubmit(prim_dev->queue, 1, &submitInfo, VK_NULL_HANDLE));
+					std::vector<VkPipelineStageFlags> waitStages;
+					if (semaphores[0].waitSemaphoreCount > 0)
+					{
+						for (uint32_t i = 0; i < semaphores[0].waitSemaphoreCount; i++)
+							waitStages.push_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+						submitInfo.waitSemaphoreCount = semaphores[0].waitSemaphoreCount;
+						submitInfo.pWaitSemaphores = semaphores[0].waitSemaphores;
+						submitInfo.pWaitDstStageMask = waitStages.data();
+					}
 
-				//VkFenceCreateInfo fenceInfo = vks::initializers::fenceCreateInfo(VK_FLAGS_NONE);
-				//VkFence fence;
-				//VK_CHECK_RESULT(vkCreateFence(prim_dev->logicalDevice, &fenceInfo, nullptr, &fence));
-
-				//// Submit to the queue
-				//VK_CHECK_RESULT(vkQueueSubmit(prim_dev->queue, 1, &submitInfo, fence));
-				//// Wait for the fence to signal that command buffer has finished executing
-				//VK_CHECK_RESULT(vkWaitForFences(prim_dev->logicalDevice, 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
-
-				//vkDestroyFence(prim_dev->logicalDevice, fence, nullptr);
+					VK_CHECK_RESULT(vkQueueSubmit(prim_dev->queue, 1, &submitInfo, VK_NULL_HANDLE));
+				}
 
 				finished_bricks_++;
 			}
@@ -3149,7 +3199,7 @@ namespace FLIVR
 
 		////////////////////////////////////////////////////////
 		//output result
-		if (blend_num_bits_ > 8)
+		if (blend_num_bits_ > 8 && (!mem_swap_ || finished_bricks_- cur_finished_bricks > 0))
 		{
 			ShaderProgram* img_shader = 0;
 
@@ -3245,12 +3295,26 @@ namespace FLIVR
 
 			m_v2drender->render(framebuf, params);
 
-			//VK_CHECK_RESULT(vkQueueWaitIdle(prim_dev->queue));
 		}
-		/*
-				ed_time = milliseconds_now();
-				sprintf(dbgstr, "VR time: %lld\n", ed_time - st_time);
-				OutputDebugStringA(dbgstr);*/
+		else if(clear_framebuf && framebuf)
+		{
+			Vulkan2dRender::V2DRenderParams params;
+			if (!framebuf->renderPass)
+			{
+				params.pipeline =
+					m_v2drender->preparePipeline(
+						IMG_SHADER_TEXTURE_LOOKUP,
+						V2DRENDER_BLEND_OVER_INV,
+						framebuf->attachments[0]->format,
+						framebuf->attachments.size(),
+						0,
+						framebuf->attachments[0]->is_swapchain_images);
+				framebuf->replaceRenderPass(params.pipeline.pass);
+			}
+			params.clearColor = clearColor;
+			m_v2drender->clear(framebuf, params);
+		}
+
 	}
 	//
 	//void VolumeRenderer::draw_wireframe(bool orthographic_p, double sampling_frq_fac)

@@ -54,6 +54,22 @@ DEALINGS IN THE SOFTWARE.
 
 int VRenderView::m_id = 1;
 ImgShaderFactory VRenderVulkanView::m_img_shader_factory;
+
+uint64_t st_time, ed_time;
+char dbgstr[50];
+long long milliseconds_now() {
+	static LARGE_INTEGER s_frequency;
+	static BOOL s_use_qpc = QueryPerformanceFrequency(&s_frequency);
+	if (s_use_qpc) {
+		LARGE_INTEGER now;
+		QueryPerformanceCounter(&now);
+		return (1000LL * now.QuadPart) / s_frequency.QuadPart;
+	}
+	else {
+		return GetTickCount64();
+	}
+}
+
 ////////////////////////////////////////////////////////////////////////
 
 
@@ -669,7 +685,8 @@ VRenderVulkanView::VRenderVulkanView(wxWindow* frame,
 	m_fixed_sclbar_fac(0.0),
 	m_sclbar_digit(3),
 	m_clear_final_buffer(false),
-    m_refresh(false)
+    m_refresh(false),
+	m_refresh_start_loop(false)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -1141,7 +1158,7 @@ void VRenderVulkanView::Draw()
 									current_fbo->attachments[0]->is_swapchain_images);
 							current_fbo->replaceRenderPass(params.pipeline.pass);
 						}
-						params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
+						params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b(), 1.0f };
 						m_v2drender->clear(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
 						m_frame_clear = false;
 					}
@@ -1237,18 +1254,8 @@ void VRenderVulkanView::DrawVolumes(int peel)
 	vks::VulkanDevice* prim_dev = m_vulkan->devices[0];
 
 	//draw
-	if ((!m_drawing_coord &&
-		m_int_mode!=7 &&
-		m_updating) ||
-		(!m_drawing_coord &&
-		(m_int_mode == 1 ||
-		m_int_mode == 3 ||
-		m_int_mode == 4 ||
-		m_int_mode == 5 ||
-		(m_int_mode == 6 &&
-		!m_editing_ruler_point) ||
-		m_int_mode == 8 ||
-		m_force_clear)))
+	if ( (!m_drawing_coord && m_int_mode!=7 && m_updating) ||
+		(!m_drawing_coord && (m_int_mode == 1 || m_int_mode == 3 || m_int_mode == 4 || m_int_mode == 5 || (m_int_mode == 6 && !m_editing_ruler_point) || m_int_mode == 8 || m_force_clear)) )
 	{
 		m_updating = false;
 		m_force_clear = false;
@@ -1469,9 +1476,27 @@ void VRenderVulkanView::DrawVolumes(int peel)
 		}
 	}
 
+	if (m_clear_final_buffer && m_fbo_final) {
+		Vulkan2dRender::V2DRenderParams params_final = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+
+		if (!m_fbo_final->renderPass)
+		{
+			params_final.pipeline =
+				m_v2drender->preparePipeline(
+					IMG_SHDR_BRIGHTNESS_CONTRAST_HDR,
+					V2DRENDER_BLEND_ADD,
+					m_fbo_final->attachments[0]->format,
+					m_fbo_final->attachments.size(),
+					0,
+					m_fbo_final->attachments[0]->is_swapchain_images);
+			m_fbo_final->replaceRenderPass(params_final.pipeline.pass);
+		}
+		params_final.clearColor = { 0.0f, 0.0f, 0.0f, 0.0f };
+		m_clear_final_buffer = false;
+		m_v2drender->clear(m_fbo_final, params_final);
+	}
+
 	//final composition
-	vkQueueWaitIdle(m_vulkan->vulkanDevice->queue);
-	
 	if (m_tile_rendering) {
 		//generate textures & buffer objects
 		//frame buffer for final
@@ -1559,19 +1584,19 @@ void VRenderVulkanView::DrawVolumes(int peel)
 	{
 		m_interactive = false;
 		m_clear_buffer = true;
-		m_refresh = true;
+		m_refresh_start_loop = true;
 	}
 
 	if (m_int_res)
 	{
 		m_int_res = false;
-		m_refresh = true;
+		m_refresh_start_loop = true;
 	}
 
 	if (m_manip)
 	{
 		m_pre_draw = true;
-		m_refresh = true;
+		m_refresh_start_loop = true;
 	}
 
 	if (m_tile_rendering && m_current_tileid < m_tile_xnum*m_tile_ynum) {
@@ -1591,7 +1616,13 @@ void VRenderVulkanView::DrawVolumes(int peel)
 		TextureRenderer::set_consumed_time(GET_TICK_COUNT() - TextureRenderer::get_st_time());
 		if (TextureRenderer::get_start_update_loop() &&
 			TextureRenderer::get_done_update_loop())
+		{
 			TextureRenderer::reset_update_loop();
+			vkQueueWaitIdle(m_vulkan->vulkanDevice->queue);
+			ed_time = milliseconds_now();
+			sprintf(dbgstr, "Frame Draw: %lld \n", ed_time - st_time);
+			OutputDebugStringA(dbgstr);
+		}
 	}
 
 	//if (refresh)
@@ -5832,7 +5863,7 @@ bool VRenderVulkanView::SelSegVolume(int mode)
 
 void VRenderVulkanView::OnIdle(wxTimerEvent& event)
 {
-	bool refresh = m_refresh;
+	bool refresh = m_refresh | m_refresh_start_loop;
 	bool ref_stat = false;
 	bool start_loop = true;
 	m_drawing_coord = false;
@@ -5845,8 +5876,10 @@ void VRenderVulkanView::OnIdle(wxTimerEvent& event)
 		!TextureRenderer::get_done_update_loop())
 	{
 		refresh = true;
-		start_loop = false;
+		start_loop = m_refresh_start_loop;
 	}
+	m_refresh_start_loop = false;
+
 	if (m_capture_rotat ||
 		m_capture_tsequ ||
 		m_capture_param ||
@@ -7293,14 +7326,7 @@ void VRenderVulkanView::OnDraw(wxPaintEvent& event)
 {
 	Init();
 	wxPaintDC dc(this);
-    
-    SetEvtHandlerEnabled(false);
-	
-	m_vulkan->ResetRenderSemaphores();
-	m_vulkan->prepareFrame();
-	m_frame_clear = true;
 
-	//SetEvtHandlerEnabled(false);
 	m_nx = GetSize().x;
 	m_ny = GetSize().y;
 	if (m_tile_rendering) {
@@ -7310,11 +7336,17 @@ void VRenderVulkanView::OnDraw(wxPaintEvent& event)
 
 	int nx = m_nx;
 	int ny = m_ny;
+
+	if (nx <= 0 || ny <= 0)
+	{
+		return;
+	}
     
-    if (nx <= 0 || ny <= 0)
-    {
-        return;
-    }
+    SetEvtHandlerEnabled(false);
+	
+	m_vulkan->ResetRenderSemaphores();
+	m_vulkan->prepareFrame();
+	m_frame_clear = true;
 
 	PopMeshList();
 
@@ -12113,6 +12145,8 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 	//  !TextureRenderer::get_done_update_loop())
 	//  return;
 
+	st_time = milliseconds_now();
+
 	if (reset_peeling_layer)
 		m_finished_peeling_layer = 0;
 
@@ -12717,13 +12751,13 @@ void VRenderVulkanView::RefreshGLOverlays(bool erase)
 
 }
 
-#ifdef __WXMAC__
+//#ifdef __WXMAC__
 void VRenderVulkanView::Refresh( bool eraseBackground, const wxRect *rect)
 {
     wxPaintEvent ev;
     OnDraw(ev);
 }
-#endif
+//#endif
 
 double VRenderVulkanView::GetPointVolume(Point& mp, int mx, int my,
 									 VolumeData* vd, int mode, bool use_transf, double thresh)

@@ -1,5 +1,6 @@
 #include "VulkanDevice.hpp"
 #include "vk_format_utils.h"
+#include <thread>
 
 #ifdef _WIN32
 #include <omp.h>
@@ -107,7 +108,7 @@ namespace vks
 		return bd1.dist > bd2.dist;
 	}
 
-	int VulkanDevice::check_swap_memory(FLIVR::TextureBrick* brick, int c)
+	int VulkanDevice::check_swap_memory(FLIVR::TextureBrick* brick, int c, bool *swapped)
 	{
 		unsigned int i;
 		double new_mem = (VkDeviceSize)brick->nx()*brick->ny()*brick->nz()*brick->nb(c)/1.04e6;
@@ -117,12 +118,25 @@ namespace vks
 		if (use_mem_limit)
 		{
 			if (available_mem >= new_mem)
+			{
+				if (swapped)
+					*swapped = false;
 				return overwrite;
+			}
 		}
 		else
 		{
+			if (swapped)
+				*swapped = false;
 			return overwrite;
 		}
+
+		VK_CHECK_RESULT(vkQueueWaitIdle(queue));
+		if (transfer_queue != queue)
+			VK_CHECK_RESULT(vkQueueWaitIdle(transfer_queue));
+
+		if (swapped)
+			*swapped = true;
 
 		std::vector<BrickDist> bd_list;
 		BrickDist bd;
@@ -318,6 +332,8 @@ namespace vks
 	{
 		VkCommandBuffer cmdbuf = createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 		m_cmdbufs.push_back(cmdbuf);
+		VkCommandBuffer trans_cmdbuf = createTransferCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+		m_trans_cmdbufs.push_back(trans_cmdbuf);
 
 		VkDeviceSize max_ubo_range = properties.limits.maxUniformBufferRange;
 		VkDeviceSize ubo_size = 1024;//max_ubo_range > 65536 ? 65536 : max_ubo_range;
@@ -352,6 +368,7 @@ namespace vks
 	void VulkanDevice::ResetMainRenderBuffers()
 	{
 		m_cur_cmdbuf_id = 0;
+		m_cur_trans_cmdbuf_id = 0;
 		m_ubo_offset = 0;
 		m_vbuf_offset = 0;
 		m_ibuf_offset = 0;
@@ -527,6 +544,17 @@ namespace vks
 		return m_cmdbufs[m_cur_cmdbuf_id++];
 	}
 
+	VkCommandBuffer VulkanDevice::GetNextTransferCommandBuffer()
+	{
+		if (m_cur_trans_cmdbuf_id >= m_trans_cmdbufs.size())
+		{
+			VkCommandBuffer cmdbuf = createTransferCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+			m_trans_cmdbufs.push_back(cmdbuf);
+		}
+
+		return m_trans_cmdbufs[m_cur_trans_cmdbuf_id++];
+	}
+
 	void VulkanDevice::prepareSamplers()
 	{
 		// Create samplers
@@ -604,13 +632,20 @@ namespace vks
 		imageCreateInfo.arrayLayers = 1;
 		imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 		imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-		imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		imageCreateInfo.extent.width = ret->w;
 		imageCreateInfo.extent.height = ret->h;
 		imageCreateInfo.extent.depth = ret->d;
 		// Set initial layout of the image to undefined
 		imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		imageCreateInfo.usage = usage;
+		if (uniqueQueueFamilyCount > 1)
+		{
+			imageCreateInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
+			imageCreateInfo.pQueueFamilyIndices = uniqueQueueFamilyIndices;
+			imageCreateInfo.queueFamilyIndexCount = uniqueQueueFamilyCount;
+		}
+		else
+			imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		VK_CHECK_RESULT(vkCreateImage(ret->device->logicalDevice, &imageCreateInfo, nullptr, &ret->image));
 
 		// Device local memory to back up image
@@ -687,7 +722,7 @@ namespace vks
 		ret->bytes = FormatTexelSize(format);
 		ret->mipLevels = 1;
 		ret->format = format;
-		ret->usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+		ret->usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
 		ret->image = VK_NULL_HANDLE;
 		ret->deviceMemory = VK_NULL_HANDLE;
 		ret->sampler = VK_NULL_HANDLE;
@@ -719,13 +754,20 @@ namespace vks
 		imageCreateInfo.arrayLayers = 1;
 		imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 		imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-		imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		imageCreateInfo.extent.width = ret->w;
 		imageCreateInfo.extent.height = ret->h;
 		imageCreateInfo.extent.depth = ret->d;
 		// Set initial layout of the image to undefined
 		imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		imageCreateInfo.usage = ret->usage;
+		if (uniqueQueueFamilyCount > 1)
+		{
+			imageCreateInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
+			imageCreateInfo.pQueueFamilyIndices = uniqueQueueFamilyIndices;
+			imageCreateInfo.queueFamilyIndexCount = uniqueQueueFamilyCount;
+		}
+		else
+			imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		VK_CHECK_RESULT(vkCreateImage(ret->device->logicalDevice, &imageCreateInfo, nullptr, &ret->image));
 
 		// Device local memory to back up image
@@ -806,7 +848,7 @@ namespace vks
 			VK_CHECK_RESULT(staging_buf.map());
 		}
 	}
-/*
+
 	long long milliseconds_now() {
 		static LARGE_INTEGER s_frequency;
 		static BOOL s_use_qpc = QueryPerformanceFrequency(&s_frequency);
@@ -819,53 +861,72 @@ namespace vks
 			return GetTickCount64();
 		}
 	}
-*/
-	bool VulkanDevice::UploadTexture3D(const std::shared_ptr<VTexture> &tex, void *data, VkOffset3D offset, uint32_t ypitch, uint32_t zpitch)
+
+	bool VulkanDevice::UploadTexture3D(
+		const std::shared_ptr<VTexture> &tex, void *data, VkOffset3D offset, uint32_t ypitch, uint32_t zpitch,
+		bool flush, vks::VulkanSemaphoreSettings* semaphore, bool sync 
+	)
 	{
-/*		uint64_t st_time, ed_time;
+		uint64_t st_time, ed_time;
 		char dbgstr[50];
 		st_time = milliseconds_now();
-*/
+
 		VkDeviceSize texMemSize = (VkDeviceSize)tex->w * (VkDeviceSize)tex->h * (VkDeviceSize)tex->d * (VkDeviceSize)tex->bytes;
 
+		if (sync)
+			VK_CHECK_RESULT(vkQueueWaitIdle(transfer_queue));
+
 		checkStagingBuffer(texMemSize);
+
+		st_time = milliseconds_now();
 		
 		// Copy texture data into staging buffer
-		/*uint64_t poffset = (VkDeviceSize)offset.z*zpitch + (VkDeviceSize)offset.y*ypitch + offset.x*(VkDeviceSize)tex->bytes;
-		uint64_t dst_ypitch = (VkDeviceSize)tex->w * (VkDeviceSize)tex->bytes;
-		uint64_t dst_zpitch = (VkDeviceSize)tex->w * (VkDeviceSize)tex->h * (VkDeviceSize)tex->bytes;
-		unsigned char* dstp = (unsigned char*)staging_buf.mapped;
-		unsigned char* stp = (unsigned char *)data + poffset;
-		
-		#pragma omp parallel for
-		for (uint32_t z = 0; z < tex->d; z++)
-		{
-			unsigned char* src_p = stp + (VkDeviceSize)z * zpitch;
-			unsigned char* dst_p = dstp + (VkDeviceSize)z * dst_zpitch;
-			for (uint32_t y = 0; y < tex->h; y++)
-			{
-				memcpy(dst_p, src_p, dst_ypitch);
-				dst_p += dst_ypitch;
-				src_p += ypitch;
-			}
-		}*/
-
 		uint64_t poffset = (VkDeviceSize)offset.z * zpitch + (VkDeviceSize)offset.y * ypitch + offset.x * (VkDeviceSize)tex->bytes;
 		uint64_t dst_ypitch = (VkDeviceSize)tex->w * (VkDeviceSize)tex->bytes;
-		unsigned char* dstp = (unsigned char*)staging_buf.mapped;
-		unsigned char* tp = (unsigned char*)data + poffset;
-		unsigned char* tp2;
-		for (uint32_t z = 0; z < tex->d; z++)
-		{
-			tp2 = tp;
-			for (uint32_t y = 0; y < tex->h; y++)
+		uint64_t dst_zpitch = (VkDeviceSize)tex->w * (VkDeviceSize)tex->h * (VkDeviceSize)tex->bytes;
+		unsigned char* dst = (unsigned char*)staging_buf.mapped;
+		unsigned char* src = (unsigned char*)data + poffset;
+
+		size_t nthreads = std::thread::hardware_concurrency();
+		if (nthreads > 8) nthreads = 8;
+		std::vector<std::thread> threads(nthreads);
+		int grain_size = tex->d / nthreads;
+		auto worker = [&zpitch, &dst_zpitch, &ypitch, &dst_ypitch](unsigned char* dst, unsigned char* src, int d, int texh) {
+			int xite = dst_ypitch / 4096;
+			unsigned char *src_p, *dst_p, *tmp_xsrc_p, *tmp_xdst_p;
+			for (uint32_t z = 0; z < d; z++)
 			{
-				memcpy(dstp, tp2, dst_ypitch);
-				dstp += dst_ypitch;
-				tp2 += ypitch;
+				src_p = src + (VkDeviceSize)z * zpitch;
+				dst_p = dst + (VkDeviceSize)z * dst_zpitch;
+				
+				for (uint32_t y = 0; y < texh; y++)
+				{
+					tmp_xsrc_p = src_p + (VkDeviceSize)y * ypitch;
+					tmp_xdst_p = dst_p + (VkDeviceSize)y * dst_ypitch;
+					for (int x = 0; x < xite - 1; x++)
+					{
+						memcpy(tmp_xdst_p, tmp_xsrc_p, 4096);
+						tmp_xdst_p += 4096;
+						tmp_xsrc_p += 4096;
+					}
+					memcpy(tmp_xdst_p, tmp_xsrc_p, dst_ypitch - 4096LL * (xite >= 1 ? xite - 1 : 0));
+				}
 			}
-			tp += zpitch;
+		};
+		for (uint32_t i = 0; i < nthreads - 1; i++)
+		{
+			threads[i] = std::thread(worker, dst, src, grain_size, tex->h);
+			dst += grain_size * dst_zpitch;
+			src += grain_size * zpitch;
 		}
+		threads.back() = std::thread(worker, dst, src, tex->d - grain_size * (nthreads - 1), tex->h);
+		for (auto&& i : threads) {
+			i.join();
+		}
+
+		ed_time = milliseconds_now();
+		sprintf(dbgstr, "memcpy time: %lld  size: %lld\n", ed_time - st_time, texMemSize);
+		OutputDebugStringA(dbgstr);
 
 		VkDeviceSize atom = properties.limits.nonCoherentAtomSize;
 		if (atom > 0)
@@ -875,18 +936,23 @@ namespace vks
 		else
 			staging_buf.flush(texMemSize);
 
-		CopyDataStagingBuf2Tex(tex);
-/*
+		st_time = milliseconds_now();
+
+		CopyDataStagingBuf2Tex(tex, flush, semaphore);
+
 		ed_time = milliseconds_now();
-		sprintf(dbgstr, "uploadTex time: %lld  size: %lld\n", ed_time - st_time, texMemSize);
-		//OutputDebugStringA(dbgstr);
-*/
+		sprintf(dbgstr, "tex upload time: %lld  size: %lld\n", ed_time - st_time, texMemSize);
+		OutputDebugStringA(dbgstr);
+
 		return true;
 	}
 
-	bool VulkanDevice::UploadSubTexture2D(const std::shared_ptr<VTexture>& tex, void* data, VkOffset2D offset, VkExtent2D extent)
+	bool VulkanDevice::UploadSubTexture2D(const std::shared_ptr<VTexture>& tex, void* data, VkOffset2D offset, VkExtent2D extent, bool sync)
 	{
 		VkDeviceSize texMemSize = (VkDeviceSize)extent.width * (VkDeviceSize)extent.height * (VkDeviceSize)tex->bytes;
+
+		if (sync)
+			VK_CHECK_RESULT(vkQueueWaitIdle(transfer_queue));
 
 		checkStagingBuffer(texMemSize);
 
@@ -906,14 +972,42 @@ namespace vks
 		return true;
 	}
 
-	bool VulkanDevice::UploadTexture(const std::shared_ptr<VTexture> &tex, void *data)
+	bool VulkanDevice::UploadTexture(const std::shared_ptr<VTexture> &tex, void *data, bool flush, vks::VulkanSemaphoreSettings* semaphore, bool sync)
 	{
 		VkDeviceSize texMemSize = (VkDeviceSize)tex->w * (VkDeviceSize)tex->h * (VkDeviceSize)tex->d * (VkDeviceSize)tex->bytes;
+
+		if (sync)
+			VK_CHECK_RESULT(vkQueueWaitIdle(transfer_queue));
 
 		checkStagingBuffer(texMemSize);
 
 		// Copy texture data into staging buffer
-		memcpy(staging_buf.mapped, data, texMemSize);
+		size_t nthreads = std::thread::hardware_concurrency();
+		if (nthreads > 8) nthreads = 8;
+		std::vector<std::thread> threads(nthreads);
+		size_t grain_size = texMemSize / nthreads;
+		auto worker = [](unsigned char* dst, unsigned char* src, size_t size) {
+			int ite = size / 4096;
+			for (int i = 0; i < ite - 1; i++)
+			{
+				memcpy(dst, src, 4096);
+				dst += 4096;
+				src += 4096;
+			}
+			memcpy(dst, src, size-4096LL*(ite >= 1 ? ite-1 : 0));
+		};
+		unsigned char* dstp = (unsigned char*)staging_buf.mapped;
+		unsigned char* stp = (unsigned char*)data;
+		for (uint32_t i = 0; i < nthreads-1; i++)
+		{
+			threads[i] = std::thread(worker, dstp, stp, grain_size);
+			dstp += grain_size;
+			stp += grain_size;
+		}
+		threads.back() = std::thread(worker, dstp, stp, texMemSize - grain_size*(nthreads-1));
+		for (auto&& i : threads) {
+			i.join();
+		}
 
 		VkDeviceSize atom = properties.limits.nonCoherentAtomSize;
 		if (atom > 0)
@@ -922,15 +1016,23 @@ namespace vks
 			staging_buf.flush();
 		else
 			staging_buf.flush(texMemSize);
-
-		CopyDataStagingBuf2Tex(tex);
+		
+		CopyDataStagingBuf2Tex(tex, flush, semaphore);
 
 		return true;
 	}
 
-	void VulkanDevice::CopyDataStagingBuf2Tex(const std::shared_ptr<VTexture> &tex)
+	void VulkanDevice::CopyDataStagingBuf2Tex(const std::shared_ptr<VTexture> &tex, bool flush, vks::VulkanSemaphoreSettings* semaphore)
 	{
-		VkCommandBuffer copyCmd = createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+		VkCommandBuffer copyCmd = VK_NULL_HANDLE;
+		if (flush)
+			copyCmd = createTransferCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+		else
+		{
+			copyCmd = GetNextTransferCommandBuffer();
+			VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
+			VK_CHECK_RESULT(vkBeginCommandBuffer(copyCmd, &cmdBufInfo));
+		}
 
 		// The sub resource range describes the regions of the image we will be transitioned
 		VkImageSubresourceRange subresourceRange = {};
@@ -967,15 +1069,32 @@ namespace vks
 			1,
 			&bufferCopyRegion);
 
-		// Change texture image layout to shader read after all mip levels have been copied
-		vks::tools::setImageLayout(
-			copyCmd,
-			tex->image,
-			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			tex->descriptor.imageLayout,
-			subresourceRange);
+		if (flush)
+			flushTransferCommandBuffer(copyCmd, true);
+		else
+		{
+			VK_CHECK_RESULT(vkEndCommandBuffer(copyCmd));
+			VkSubmitInfo submitInfo = vks::initializers::submitInfo();
+			submitInfo.commandBufferCount = 1;
+			submitInfo.pCommandBuffers = &copyCmd;
 
-		flushCommandBuffer(copyCmd, queue, true);
+			std::vector<VkPipelineStageFlags> waitStages;
+			if (semaphore)
+			{
+				submitInfo.pSignalSemaphores = semaphore->signalSemaphores;
+				submitInfo.signalSemaphoreCount = semaphore->signalSemaphoreCount;
+				if (semaphore->waitSemaphoreCount > 0)
+				{
+					for (uint32_t i = 0; i < semaphore->waitSemaphoreCount; i++)
+						waitStages.push_back(VK_PIPELINE_STAGE_TRANSFER_BIT);
+					submitInfo.waitSemaphoreCount = semaphore->waitSemaphoreCount;
+					submitInfo.pWaitSemaphores = semaphore->waitSemaphores;
+					submitInfo.pWaitDstStageMask = waitStages.data();
+				}
+			}
+			// Submit to the queue
+			VK_CHECK_RESULT(vkQueueSubmit(transfer_queue, 1, &submitInfo, VK_NULL_HANDLE));
+		}
 	}
 
 	void VulkanDevice::CopyDataStagingBuf2SubTex2D(const std::shared_ptr<VTexture>& tex, VkOffset2D offset, VkExtent2D extent)

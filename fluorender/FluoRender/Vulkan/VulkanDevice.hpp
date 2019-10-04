@@ -37,6 +37,7 @@ namespace vks
 		// Handle to the device graphics queue that command buffers are submitted to
 		VkQueue queue;
 		VkQueue compute_queue;
+		VkQueue transfer_queue;
 		/** @brief Properties of the physical device including limits that the application can check against */
 		VkPhysicalDeviceProperties properties;
 		/** @brief Features of the physical device that an application can use to check if a feature is supported */
@@ -53,6 +54,7 @@ namespace vks
 		/** @brief Default command pool for the graphics queue family index */
 		VkCommandPool commandPool = VK_NULL_HANDLE;
 		VkCommandPool compute_commandPool = VK_NULL_HANDLE;
+		VkCommandPool transfer_commandPool = VK_NULL_HANDLE;
 
 		/** @brief Set to true when the debug marker extension is detected */
 		bool enableDebugMarkers = false;
@@ -64,6 +66,8 @@ namespace vks
 			uint32_t compute;
 			uint32_t transfer;
 		} queueFamilyIndices;
+		uint32_t uniqueQueueFamilyIndices[3];
+		uint32_t uniqueQueueFamilyCount;
 
 		PFN_vkCmdPushDescriptorSetKHR vkCmdPushDescriptorSetKHR;
 
@@ -84,7 +88,7 @@ namespace vks
 		void clear_tex_pool();
 		static bool return_brick(const TexParam &texp);
 		void update_texpool();
-		int check_swap_memory(FLIVR::TextureBrick* brick, int c);
+		int check_swap_memory(FLIVR::TextureBrick* brick, int c, bool *swapped=nullptr);
 		int findTexInPool(FLIVR::TextureBrick* b, int c, int w, int h, int d, int bytes, VkFormat format);
 		int GenTexture3D_pool(VkFormat format, VkFilter filter, FLIVR::TextureBrick *b, int comp);
 
@@ -96,16 +100,18 @@ namespace vks
 		VkSemaphore* GetNextRenderSemaphore();
 		VkSemaphore* GetCurrentRenderSemaphore();
 
-		std::vector<VkCommandBuffer> m_cmdbufs;
+		std::vector<VkCommandBuffer> m_cmdbufs, m_trans_cmdbufs;
 		vks::Buffer m_ubo, m_vbuf, m_ibuf;
 		std::vector<vks::Buffer> m_ubos, m_vbufs, m_ibufs;
 		VkDeviceSize m_cur_cmdbuf_id = 0;
+		VkDeviceSize m_cur_trans_cmdbuf_id = 0;
 		VkDeviceSize m_ubo_offset = 0;
 		VkDeviceSize m_vbuf_offset = 0;
 		VkDeviceSize m_ibuf_offset = 0;
 		void PrepareMainRenderBuffers();
 		void ResetMainRenderBuffers();
 		VkCommandBuffer GetNextCommandBuffer();
+		VkCommandBuffer GetNextTransferCommandBuffer();
 		void GetNextUniformBuffer(VkDeviceSize req_size, vks::Buffer& buf, VkDeviceSize &offset);
 		void GetNextVertexBuffer(VkDeviceSize req_size, vks::Buffer& buf, VkDeviceSize& offset);
 		void GetNextIndexBuffer(VkDeviceSize req_size, vks::Buffer& buf, VkDeviceSize& offset);
@@ -124,10 +130,10 @@ namespace vks
 		void checkStagingBuffer(VkDeviceSize size);
 		std::shared_ptr<VTexture> GenTexture2D(VkFormat format, VkFilter filter, uint32_t w, uint32_t h, VkImageUsageFlags usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_STORAGE_BIT);
 		std::shared_ptr<VTexture> GenTexture3D(VkFormat format, VkFilter filter, uint32_t w, uint32_t h, uint32_t d);
-		bool UploadTexture3D(const std::shared_ptr<VTexture> &tex, void *data, VkOffset3D offset, uint32_t ypitch, uint32_t zpitch);
-		bool UploadSubTexture2D(const std::shared_ptr<VTexture>& tex, void* data, VkOffset2D offset, VkExtent2D extent);
-		bool UploadTexture(const std::shared_ptr<VTexture> &tex, void *data);
-		void CopyDataStagingBuf2Tex(const std::shared_ptr<VTexture> &tex);
+		bool UploadTexture3D(const std::shared_ptr<VTexture> &tex, void *data, VkOffset3D offset, uint32_t ypitch, uint32_t zpitch, bool flush=true, vks::VulkanSemaphoreSettings* semaphore=nullptr, bool sync=true);
+		bool UploadSubTexture2D(const std::shared_ptr<VTexture>& tex, void* data, VkOffset2D offset, VkExtent2D extent, bool sync=true);
+		bool UploadTexture(const std::shared_ptr<VTexture> &tex, void *data, bool flush=true, vks::VulkanSemaphoreSettings* semaphore=nullptr, bool sync=true);
+		void CopyDataStagingBuf2Tex(const std::shared_ptr<VTexture> &tex, bool flush, vks::VulkanSemaphoreSettings* semaphore);
 		void CopyDataStagingBuf2SubTex2D(const std::shared_ptr<VTexture>& tex, VkOffset2D offset, VkExtent2D extent);
 		bool DownloadTexture3D(const std::shared_ptr<VTexture> &tex, void *data, VkOffset3D offset, uint32_t ypitch, uint32_t zpitch);
 		bool DownloadTexture(const std::shared_ptr<VTexture> &tex, void *data);
@@ -198,6 +204,7 @@ namespace vks
 				m_vbufs.clear();
 			}
 			vkFreeCommandBuffers(logicalDevice,commandPool, 1, m_cmdbufs.data());
+			vkFreeCommandBuffers(logicalDevice, transfer_commandPool, 1, m_trans_cmdbufs.data());
 			if (linear_sampler)
 				vkDestroySampler(logicalDevice, linear_sampler, nullptr);
 			if (nearest_sampler)
@@ -210,6 +217,8 @@ namespace vks
 				vkDestroyCommandPool(logicalDevice, commandPool, nullptr);
 			if (compute_commandPool)
 				vkDestroyCommandPool(logicalDevice, compute_commandPool, nullptr);
+			if (transfer_commandPool)
+				vkDestroyCommandPool(logicalDevice, transfer_commandPool, nullptr);
 			if (logicalDevice)
 			{
 				vkDestroyDevice(logicalDevice, nullptr);
@@ -317,7 +326,7 @@ namespace vks
 		*
 		* @return VkResult of the device creation call
 		*/
-		VkResult createLogicalDevice(VkPhysicalDeviceFeatures enabledFeatures, std::vector<const char*> enabledExtensions, bool useSwapChain = true, VkQueueFlags requestedQueueTypes = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT)
+		VkResult createLogicalDevice(VkPhysicalDeviceFeatures enabledFeatures, std::vector<const char*> enabledExtensions, bool useSwapChain = true, VkQueueFlags requestedQueueTypes = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT)
 		{			
 			// Desired queues need to be requested upon logical device creation
 			// Due to differing queue family configurations of Vulkan implementations this can be a bit tricky, especially if the application
@@ -422,17 +431,34 @@ namespace vks
 				// Create a default command pool for graphics command buffers
 				commandPool = createCommandPool(queueFamilyIndices.graphics);
 				compute_commandPool = createCommandPool(queueFamilyIndices.compute);
+				transfer_commandPool = createCommandPool(queueFamilyIndices.transfer);
 			}
 
 			this->enabledFeatures = enabledFeatures;
 
 			// Get a graphics queue from the device
+			uniqueQueueFamilyCount = 0;
 			vkGetDeviceQueue(logicalDevice, queueFamilyIndices.graphics, 0, &queue);
+			uniqueQueueFamilyIndices[uniqueQueueFamilyCount] = queueFamilyIndices.graphics;
+			uniqueQueueFamilyCount++;
 			// Get a compute queue from the device
 			if (queueFamilyIndices.compute != queueFamilyIndices.graphics)
+			{
 				vkGetDeviceQueue(logicalDevice, queueFamilyIndices.compute, 0, &compute_queue);
+				uniqueQueueFamilyIndices[uniqueQueueFamilyCount] = queueFamilyIndices.compute;
+				uniqueQueueFamilyCount++;
+			}
 			else
 				compute_queue = queue;
+			// Get a transfer queue from the device
+			if (queueFamilyIndices.transfer != queueFamilyIndices.graphics)
+			{
+				vkGetDeviceQueue(logicalDevice, queueFamilyIndices.transfer, 0, &transfer_queue);
+				uniqueQueueFamilyIndices[uniqueQueueFamilyCount] = queueFamilyIndices.transfer;
+				uniqueQueueFamilyCount++;
+			}
+			else
+				transfer_queue = queue;
 
 			vkCmdPushDescriptorSetKHR = (PFN_vkCmdPushDescriptorSetKHR)vkGetDeviceProcAddr(logicalDevice, "vkCmdPushDescriptorSetKHR");
 
@@ -644,6 +670,22 @@ namespace vks
 
 			return cmdBuffer;
 		}
+		VkCommandBuffer createTransferCommandBuffer(VkCommandBufferLevel level, bool begin = false)
+		{
+			VkCommandBufferAllocateInfo cmdBufAllocateInfo = vks::initializers::commandBufferAllocateInfo(transfer_commandPool, level, 1);
+
+			VkCommandBuffer cmdBuffer;
+			VK_CHECK_RESULT(vkAllocateCommandBuffers(logicalDevice, &cmdBufAllocateInfo, &cmdBuffer));
+
+			// If requested, also start recording for the new command buffer
+			if (begin)
+			{
+				VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
+				VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuffer, &cmdBufInfo));
+			}
+
+			return cmdBuffer;
+		}
 
 		/**
 		* Finish command buffer recording and submit it to a queue
@@ -714,6 +756,37 @@ namespace vks
 			if (free)
 			{
 				vkFreeCommandBuffers(logicalDevice, compute_commandPool, 1, &commandBuffer);
+			}
+		}
+
+		void flushTransferCommandBuffer(VkCommandBuffer commandBuffer, bool free = true)
+		{
+			if (commandBuffer == VK_NULL_HANDLE)
+			{
+				return;
+			}
+
+			VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer));
+
+			VkSubmitInfo submitInfo = vks::initializers::submitInfo();
+			submitInfo.commandBufferCount = 1;
+			submitInfo.pCommandBuffers = &commandBuffer;
+
+			// Create fence to ensure that the command buffer has finished executing
+			VkFenceCreateInfo fenceInfo = vks::initializers::fenceCreateInfo(VK_FLAGS_NONE);
+			VkFence fence;
+			VK_CHECK_RESULT(vkCreateFence(logicalDevice, &fenceInfo, nullptr, &fence));
+
+			// Submit to the queue
+			VK_CHECK_RESULT(vkQueueSubmit(transfer_queue, 1, &submitInfo, fence));
+			// Wait for the fence to signal that command buffer has finished executing
+			VK_CHECK_RESULT(vkWaitForFences(logicalDevice, 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
+
+			vkDestroyFence(logicalDevice, fence, nullptr);
+
+			if (free)
+			{
+				vkFreeCommandBuffers(logicalDevice, transfer_commandPool, 1, &commandBuffer);
 			}
 		}
 
