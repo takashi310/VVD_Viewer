@@ -1234,7 +1234,7 @@ namespace FLIVR
 		return ret_pipeline;
 	}
 
-	VolumeRenderer::VRayPipeline VolumeRenderer::prepareVRayPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode)
+	VolumeRenderer::VRayPipeline VolumeRenderer::prepareVRayPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode, bool persp)
 	{
 		VRayPipeline ret_pipeline;
 
@@ -1246,7 +1246,7 @@ namespace FLIVR
 			depth_peel_, true,
 			hiqual_, ml_mode_,
 			colormap_mode_, colormap_, colormap_proj_,
-			solid_, 1, tex_->nmask() != -1 ? m_mask_hide_mode : VOL_MASK_HIDE_NONE);
+			solid_, 1, tex_->nmask() != -1 ? m_mask_hide_mode : VOL_MASK_HIDE_NONE, persp);
 
 		if (m_prev_vray_pipeline >= 0) {
 			if (m_vray_pipelines[m_prev_vray_pipeline].device == device &&
@@ -2614,7 +2614,7 @@ namespace FLIVR
 
 		eval_ml_mode();
 
-		VRayPipeline pipeline = prepareVRayPipeline(prim_dev, mode_, update_order_, colormap_mode_);
+		VRayPipeline pipeline = prepareVRayPipeline(prim_dev, mode_, update_order_, colormap_mode_, !orthographic_p);
 		VkPipelineLayout pipelineLayout = m_vulkan->vray_shader_factory_->pipeline_[prim_dev].pipelineLayout;
 
 		prepareVRayVertexBuffers(prim_dev);
@@ -2958,6 +2958,10 @@ namespace FLIVR
 				lbltex->descriptor.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 				descriptorWrites.push_back(VRayShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 3, &lbltex->descriptor));
 			}
+
+			if (colormap_mode_ == 3)
+				descriptorWrites.push_back(VRayShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 7, &palette_tex_id_[prim_dev]->descriptor));
+
 /*
 			Vector vtest = tform->project(mv.unproject(Vector(0, 0, 1)));
 			Point ptest = mv.unproject(Point(0, 0, 0));

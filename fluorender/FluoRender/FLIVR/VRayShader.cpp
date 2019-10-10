@@ -31,7 +31,6 @@
 #include <regex>
 #include <FLIVR/VRayShader.h>
 #include <FLIVR/ShaderProgram.h>
-#include <FLIVR/VolShaderCode.h>
 
 using std::string;
 using std::vector;
@@ -49,10 +48,12 @@ namespace FLIVR
 	"} vubo;\n" \
 	"// VOL_UNIFORMS_BRICK\n" \
 	"layout(push_constant) uniform VolFragShaderBrickConst {\n" \
-	"	vec4 brkscale;//tex transform for bricking\n" \
-	"	vec4 brktrans;//tex transform for bricking\n" \
-	"	vec4 mskbrkscale;//tex transform for mask bricks\n" \
+	"	vec4 brkscale;//tex transform for bricking and 1/nx\n" \
+	"	vec4 brktrans;//tex transform for bricking and 1/ny\n" \
+	"	vec4 mskbrkscale;//tex transform for mask bricks and 1/nz\n" \
 	"	vec4 mskbrktrans;//tex transform for mask bricks\n" \
+	"	vec4 tbmin;//tex bbox min\n" \
+	"	vec4 tbmax;//tex bbox max\n" \
 	"	vec3 loc4;//(zmin, zmax, dz)\n" \
 	"	uint stnum;\n" \
 	"} brk;\n" \
@@ -67,6 +68,764 @@ namespace FLIVR
 	"	gl_Position = vubo.matrix0 * vubo.matrix1 * vec4(InVertex*brk.brkscale.xyz + brk.brktrans.xyz, 1.0);\n" \
 	"	OutTexture = InTexture;\n" \
 	"	OutVertex  = gl_Position;\n" \
+	"}\n" 
+
+#define VRAY_FRG_HEADER \
+	"#pragma optionNV(inline all)\n" \
+	"#pragma optionNV(fastmath on)\n" \
+	"#pragma optionNV(ifcvt none)\n" \
+	"#pragma optionNV(strict on)\n" \
+	"#pragma optionNV(unroll all)\n" \
+	"layout(location = 0) in vec4 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexture;\n" \
+	"layout(location = 0) out vec4 FragColor;\n" \
+	"\n" \
+	"layout(binding = 1) uniform VolFragShaderBaseUBO {\n" \
+	"	vec4 loc0;//(lx, ly, lz, alpha)\n" \
+	"	vec4 loc1;//(ka, kd, ks, ns)\n" \
+	"	vec4 loc2;//(scalar_scale, gm_scale, left_thresh, right_thresh)\n" \
+	"	vec4 loc3;//(gamma, gm_thresh, offset, sw)\n" \
+	"	vec4 loc5;//(spcx, spcy, spcz, max_id)\n" \
+	"	vec4 loc6;//(r, g, b, 0.0) or (1/vx, 1/vy, luminance, depth_mode)\n" \
+	"	vec4 loc7;//(1/vx, 1/vy, 1/sample_rate, 0.0)\n" \
+	"	vec4 loc8;//(int, start, end, 0.0)\n" \
+	"	vec4 loc10; //plane0\n" \
+	"	vec4 loc11; //plane1\n" \
+	"	vec4 loc12; //plane2\n" \
+	"	vec4 loc13; //plane3\n" \
+	"	vec4 loc14; //plane4\n" \
+	"	vec4 loc15; //plane5\n" \
+	"	mat4 matrix0; //inverted projection matrix\n" \
+	"	mat4 matrix1; //inverted modelview matrix\n" \
+	"} base;\n" \
+	"\n" \
+	"layout(binding = 2) uniform sampler3D tex0;//data volume\n" \
+	"layout(binding = 3) uniform sampler3D tex1;//gm volume\n" \
+	"\n" \
+	"layout(push_constant) uniform VolFragShaderBrickConst {\n" \
+	"	vec4 brkscale;//tex transform for bricking and 1/nx\n" \
+	"	vec4 brktrans;//tex transform for bricking and 1/ny\n" \
+	"	vec4 mskbrkscale;//tex transform for mask bricks and 1/nz\n" \
+	"	vec4 mskbrktrans;//tex transform for mask bricks\n" \
+	"	vec4 tbmin;//tex bbox min\n" \
+	"	vec4 tbmax;//tex bbox max\n" \
+	"	vec3 loc4;//(zmin, zmax, dz)\n" \
+	"	uint stnum;\n" \
+	"} brk;\n" \
+	"\n" 
+
+#define VRAY_UNIFORMS_INDEX_COLOR \
+	"//VRAY_UNIFORMS_INDEX_COLOR\n" \
+	"layout (binding = 9) uniform sampler2D tex7;\n" \
+	"\n"
+
+#define VRAY_UNIFORMS_INDEX_COLOR_D \
+    "//VRAY_UNIFORMS_INDEX_COLOR_D\n" \
+	"layout (binding = 9) uniform sampler2D tex7;\n" \
+    "\n"
+
+#define VRAY_UNIFORMS_DP \
+	"//VRAY_UNIFORMS_DP\n" \
+	"layout (binding = 16) uniform sampler2D tex14;//depth texture 1\n" \
+	"layout (binding = 17) uniform sampler2D tex15;//depth texture 2\n" \
+	"\n"
+
+#define VRAY_UNIFORMS_MASK \
+	"//VRAY_UNIFORMS_MASK\n" \
+	"layout (binding = 4) uniform sampler3D tex2;//3d mask volume\n" \
+	"\n"
+
+#define VRAY_UNIFORMS_LABEL \
+	"//VRAY_UNIFORMS_LABEL\n" \
+	"layout (binding = 5) uniform usampler3D tex3;//3d label volume\n" \
+	"\n"
+
+#define VRAY_UNIFORMS_DEPTHMAP \
+	"//VRAY_UNIFORMS_DEPTHMAP\n" \
+	"layout (binding = 6) uniform sampler2D tex4;//2d depth map\n" \
+	"\n"
+
+#define VRAY_CLIP_FUNC \
+	"//VRAY_CLIP_FUNC\n" \
+	"bool vol_clip_func(vec4 t)\n" \
+	"{\n" \
+	"	vec3 brickt = (t.xyz * brk.brkscale.xyz + brk.brktrans.xyz);\n" \
+	"	if (dot(brickt.xyz, base.loc10.xyz) + base.loc10.w < 0.0 ||\n" \
+	"		dot(brickt.xyz, base.loc11.xyz) + base.loc11.w < 0.0 ||\n" \
+	"		dot(brickt.xyz, base.loc12.xyz) + base.loc12.w < 0.0 ||\n" \
+	"		dot(brickt.xyz, base.loc13.xyz) + base.loc13.w < 0.0 ||\n" \
+	"		dot(brickt.xyz, base.loc14.xyz) + base.loc14.w < 0.0 ||\n" \
+	"		dot(brickt.xyz, base.loc15.xyz) + base.loc15.w < 0.0)\n" \
+	"		return true;\n" \
+	"	else\n" \
+	"		return false;\n" \
+	"}\n" \
+	"\n"
+
+#define VRAY_HEAD_PERSP \
+	"//VRAY_HEAD_PERSP\n" \
+	"void main()\n" \
+	"{\n" \
+	"	const vec3 vray = normalize(base.matrix0 * OutVertex).xyz;\n" \
+	"	const vec4 ray = base.matrix1 * vec4(vray, 0.0) / vec4(brk.brkscale.xyz, 1.);\n" \
+	"	const vec4 st = base.matrix1 * vec4((brk.loc4.x / vray.z) * vray, 1.0) / vec4(brk.brkscale.xyz, 1.) - vec4(brk.brktrans.xyz / brk.brkscale.xyz, 0.0);\n" \
+	"	const float step = brk.loc4.z / vray.z;\n" \
+	"	vec4 outcol = vec4(0.0);\n" \
+	"	vec4 dir = vec4(brk.brkscale.w, brk.brktrans.w, brk.mskbrkscale.w, 0.0);\n" \
+	"\n"
+	
+
+#define VRAY_HEAD_ORTHO \
+	"//VRAY_HEAD_ORTHO\n" \
+	"void main()\n" \
+	"{\n" \
+	"	vec4 view = vec4(0.0, 0.0, brk.loc4.x, 0.0);\n" \
+	"	const vec4 ray = base.matrix1 * vec4(0.0, 0.0, 1.0, 0.0) / vec4(brk.brkscale.xyz, 1.);\n" \
+	"	const vec4 st = base.matrix1 * vec4((base.matrix0 * OutVertex).xy, brk.loc4.x, 1.0) / vec4(brk.brkscale.xyz, 1.) - vec4(brk.brktrans.xyz / brk.brkscale.xyz, 0.0);\n" \
+	"	const float step = brk.loc4.z;\n" \
+	"	vec4 outcol = vec4(0.0);\n" \
+	"	vec4 dir = vec4(brk.brkscale.w, brk.brktrans.w, brk.mskbrkscale.w, 0.0);\n" \
+	"\n"
+
+#define VRAY_HEAD_PERSP_DMAP \
+	"//VRAY_HEAD_PERSP\n" \
+	"void main()\n" \
+	"{\n" \
+	"	const vec3 vray = normalize(base.matrix0 * OutVertex).xyz;\n" \
+	"	const vec4 ray = base.matrix1 * vec4(vray, 0.0) / vec4(brk.brkscale.xyz, 1.);\n" \
+	"	const vec4 st = base.matrix1 * vec4((brk.loc4.y / vray.z) * vray, 1.0) / vec4(brk.brkscale.xyz, 1.) - vec4(brk.brktrans.xyz / brk.brkscale.xyz, 0.0);\n" \
+	"	const float step = -brk.loc4.z / vray.z;\n" \
+	"	vec4 outcol = vec4(0.0);\n" \
+	"	vec4 dir = vec4(brk.brkscale.w, brk.brktrans.w, brk.mskbrkscale.w, 0.0);\n" \
+	"\n"
+
+
+#define VRAY_HEAD_ORTHO_DMAP \
+	"//VRAY_HEAD_ORTHO\n" \
+	"void main()\n" \
+	"{\n" \
+	"	vec4 view = vec4(0.0, 0.0, brk.loc4.x, 0.0);\n" \
+	"	const vec4 ray = base.matrix1 * vec4(0.0, 0.0, 1.0, 0.0) / vec4(brk.brkscale.xyz, 1.);\n" \
+	"	const vec4 st = base.matrix1 * vec4((base.matrix0 * OutVertex).xy, brk.loc4.y, 1.0) / vec4(brk.brkscale.xyz, 1.) - vec4(brk.brktrans.xyz / brk.brkscale.xyz, 0.0);\n" \
+	"	const float step = -brk.loc4.z;\n" \
+	"	vec4 outcol = vec4(0.0);\n" \
+	"	vec4 dir = vec4(brk.brkscale.w, brk.brktrans.w, brk.mskbrkscale.w, 0.0);\n" \
+	"\n"
+
+#define VRAY_MASK_RAY_PERSP \
+	"//VRAY_MASK_RAY_PERSP\n" \
+	"	const vec4 msk_ray = base.matrix1 * vec4(vray, 0.0) / vec4(brk.mskbrkscale.xyz, 1.);\n" \
+	"	const vec4 msk_st = base.matrix1 * vec4((brk.loc4.x / vray.z) * vray, 1.0) / vec4(brk.mskbrkscale.xyz, 1.) - vec4(brk.mskbrktrans.xyz / brk.mskbrkscale.xyz, 0.0);\n" \
+	"\n"
+
+#define VRAY_MASK_RAY_ORTHO \
+	"//VRAY_MASK_RAY_ORTHO\n" \
+	"	const vec4 msk_ray = base.matrix1 * vec4(0.0, 0.0, 1.0, 0.0) / vec4(brk.brkscale.xyz, 1.);\n" \
+	"	const vec4 msk_st = base.matrix1 * vec4((base.matrix0 * OutVertex).xy, brk.loc4.x, 1.0) / vec4(brk.mskbrkscale.xyz, 1.) - vec4(brk.mskbrktrans.xyz / brk.mskbrkscale.xyz, 0.0);\n" \
+	"\n"
+
+#define VRAY_HEAD_DMAP_PERSP \
+	"	const vec4 dmap_ray = inverse(base.matrix0) * vec4(vray, 0.0);\n" \
+	"	const vec4 dmap_st = inverse(base.matrix0) * vec4((brk.loc4.y / vray.z) * vray, 1.0);\n" \
+	"	float prevz = 1.0;\n" \
+	"\n"
+
+#define VRAY_HEAD_DMAP_ORTHO \
+	"	const vec4 dmap_ray = inverse(base.matrix0) * vec4(0.0, 0.0, 1.0, 0.0);\n" \
+	"	const vec4 dmap_st = inverse(base.matrix0) * vec4((base.matrix0 * OutVertex).xy, brk.loc4.y, 1.0);\n" \
+	"	float prevz = 1.0;\n" \
+	"\n"
+
+#define VRAY_HEAD_LIT \
+	"	//VRAY_HEAD_LIT\n" \
+	"	vec4 l = base.loc0; // {lx, ly, lz, alpha}\n" \
+	"	vec4 k = base.loc1; // {ka, kd, ks, ns}\n" \
+	"	k.x = k.x > 1.0 ? log2(3.0 - k.x) : k.x;\n" \
+	"	vec4 n, w;\n" \
+	"	if (l.w == 0.0) { discard; return; }\n" \
+	"\n" 
+
+#define VRAY_HEAD_2DMAP_LOC \
+	"	//VRAY_HEAD_2DMAP_LOC\n" \
+	"	vec2 fcf = vec2(gl_FragCoord.x*base.loc7.x, gl_FragCoord.y*base.loc7.y);\n" \
+	"\n"
+
+#define VRAY_HEAD_DP_1_STEP \
+	"	//VRAY_HEAD_DP_1_STEP\n" \
+	"	float dp_far = ((base.matrix0 * vec4(fcf, texture(tex15, fcf).r, 1.0)).z - brk.loc4.x) / brk.loc4.z;\n" \
+	"\n"
+#define VRAY_HEAD_DP_2_STEP \
+	"	//VRAY_HEAD_DP_2_STEP\n" \
+	"	float dp_near = ((base.matrix0 * vec4(fcf, texture(tex14, fcf).r, 1.0)).z - brk.loc4.x) / brk.loc4.z;\n" \
+	"\n"
+
+#define VRAY_HEAD_FOG \
+	"	//VOL_HEAD_FOG\n" \
+	"	vec4 fp;\n" \
+	"	fp.x = base.loc8.x;\n" \
+	"	fp.y = base.loc8.y;\n" \
+	"	fp.z = base.loc8.z;\n" \
+	"	mat4 mvmat = inverse(base.matrix1) * ;\n" \
+	"\n"
+
+#define VRAY_HEAD_ID_INITIALIZE \
+	"	//VRAY_HEAD_ID_INITIALIZE\n" \
+	"	vec4 prev_pos = st - ray*step;\n" \
+	"	uint prev_id = uint(texture(tex0, prev_pos.stp).x*base.loc5.w+0.5);\n" \
+	"	prev_id = !vol_clip_func(prev_pos) ? prev_id : 0;\n" \
+	"\n"
+
+#define VRAY_LOOP_HEAD \
+	"	//VRAY_LOOP_HEAD\n" \
+	"	for (uint i = 0; i < brk.stnum; i++)\n" \
+	"	{\n" \
+	"		vec4 TexCoord = st + ray*step*float(i);\n" \
+	"		vec4 t = vec4(TexCoord.xyz, 1.0);\n" \
+	"\n"
+
+#define VRAY_MASK_VAL\
+	"		//VRAY_MASK_VAL\n" \
+	"		float maskval = texture(tex2, (msk_st + msk_ray*step*float(i)).stp).r; //get mask value\n" \
+
+#define VRAY_LOOP_CONDITION_START \
+	"		if ("
+
+#define VRAY_LOOP_CONDITION_DP_1 \
+	"i < dp_far && " 
+
+#define VRAY_LOOP_CONDITION_DP_2 \
+	"i > dp_near && " 
+
+#define VRAY_LOOP_CONDITION_DP_3 \
+	"i > dp_near && i < dp_far && "
+
+#define VRAY_LOOP_CONDITION_HIDE_OUTSIDE_MASK \
+	"maskval <= 0.5 && "
+
+#define VRAY_LOOP_CONDITION_HIDE_INSIDE_MASK \
+	"maskval > 0.5 && "
+
+#define VRAY_LOOP_CONDITION_END \
+	"!vol_clip_func(t) && t.x >= brk.tbmin.x && t.x <= brk.tbmax.x && t.y >= brk.tbmin.y && t.y <= brk.tbmax.y && t.z >= brk.tbmin.z && t.z <= brk.tbmax.z && outcol.w <= 0.99995)\n" \
+	"		{\n" 
+
+#define VRAY_INDEX_COLOR_BODY \
+	"			//VRAY_INDEX_COLOR_BODY\n" \
+	"			vec4 v;\n" \
+	"			uint label = uint(texture(tex0, t.stp).x*base.loc5.w+0.5); //get mask value\n" \
+	"			vec4 c = texture(tex7, vec2((float(label%uint(256))+0.5)/256.0, (float(label/256)+0.5)/256.0));\n" \
+	"			c.rgb = (label != 0 && prev_id != label) ? c.rgb * base.loc6.z : vec3(0.0);\n" \
+	"			prev_id = (label != 0) ? label : prev_id;\n" \
+	"\n"
+
+#define VRAY_INDEX_COLOR_BODY_SHADE \
+	"			//VRAY_INDEX_COLOR_BODY_SHADE\n" \
+	"			vec4 v;\n" \
+	"			uint id = uint(texture(tex0, t.stp).x*base.loc5.w+0.5);\n" \
+	"			vec4 c = vec4(0.0);\n" \
+	"			if (id != prev_id)" \
+	"			{\n" \
+	"				c = texture(tex7, vec2((float(id%uint(256))+0.5)/256.0, (float(id/256)+0.5)/256.0));\n" \
+	"				dir = dir * 2.0;\n" \
+	"				vec4 p; \n" \
+	"				uint r; \n" \
+	"				v = vec4(0.0); \n" \
+	"				n = vec4(0.0); \n" \
+	"				w = vec4(0.0);\n" \
+	"				w.x = dir.x; \n" \
+	"				p = clamp(TexCoord + w, 0.0, 1.0); \n" \
+	"				r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
+	"				v.x = (id==r?0.5:0.0) ; \n" \
+	"				n.x = v.x + n.x; \n" \
+	"				p = clamp(TexCoord - w, 0.0, 1.0); \n" \
+	"				r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
+	"				v.x = (id==r?0.5:0.0) ; \n" \
+	"				n.x = v.x - n.x; \n" \
+	"				w = vec4(0.0); \n" \
+	"				w.y = dir.y; \n" \
+	"				p = clamp(TexCoord + w, 0.0, 1.0); \n" \
+	"				r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
+	"				v.x = (id==r?0.5:0.0) ; \n" \
+	"				n.y = v.x + n.y; \n" \
+	"				p = clamp(TexCoord - w, 0.0, 1.0); \n" \
+	"				r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
+	"				v.x = (id==r?0.5:0.0) ; \n" \
+	"				n.y = v.x - n.y; \n" \
+	"				w = vec4(0.0); \n" \
+	"				w.z = dir.z; \n" \
+	"				p = clamp(TexCoord + w, 0.0, 1.0); \n" \
+	"				r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
+	"				v.x = (id==r?0.5:0.0) ; \n" \
+	"				n.z = v.x + n.z; \n" \
+	"				p = clamp(TexCoord - w, 0.0, 1.0); \n" \
+	"				r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
+	"				v.x = (id==r?0.5:0.0) ; \n" \
+	"				n.z = v.x - n.z; \n" \
+	"				p.y = length(n.xyz); \n" \
+	"				p.y = 0.5 * (base.loc2.x<0.0?(1.0+p.y*base.loc2.x):p.y*base.loc2.x); \n" \
+	"\n" \
+	"				//VOL_BODY_SHADING\n" \
+	"				n.xyz = normalize(n.xyz);\n" \
+	"				n.w = dot(l.xyz, n.xyz); // calculate angle between light and normal. \n" \
+	"				n.w = clamp(abs(n.w), 0.0, 1.0); // two-sided lighting, n.w = abs(cos(angle))  \n" \
+	"				w = k; // w.x = weight*ka, w.y = weight*kd, w.z = weight*ks \n" \
+	"				w.x = k.x - w.y; // w.x = ka - kd*weight \n" \
+	"				w.x = w.x + k.y; // w.x = ka + kd - kd*weight \n" \
+	"				n.z = pow(n.w, k.w); // n.z = abs(cos(angle))^ns \n" \
+	"				n.w = (n.w * w.y) + w.x; // n.w = abs(cos(angle))*kd+ka\n" \
+	"				n.z = w.z * n.z; // n.z = weight*ks*abs(cos(angle))^ns \n" \
+	"\n" \
+	"				//VOL_COMPUTED_GM_LOOKUP\n" \
+	"				v.y = p.y;\n" \
+	"\n" \
+	"				//VOL_COLOR_OUTPUT\n" \
+	"				c.xyz = c.xyz*clamp(1.0-base.loc1.x, 0.0, 1.0) + base.loc1.x*c.xyz*(base.loc1.y > 0.0?(n.w + n.z):1.0);\n" \
+	"				c.xyz *= pow(1.0 - base.loc1.x/2.0, 2.0) + 1.0;\n" \
+	"				c.rgb = c.rgb*base.loc6.z;\n" \
+	"			}\n" \
+	"			prev_id = id;\n" \
+	"\n"
+
+#define VRAY_INDEX_COLOR_D_BODY \
+	"			//VRAY_INDEX_COLOR_D_BODY\n" \
+	"			vec4 v;\n" \
+	"			uint label = uint(texture(tex0, t.stp).x*base.loc5.w+0.5); //get mask value\n" \
+	"			vec4 c = texture(tex7, vec2((float(label%256)+0.5)/256.0, (float(label/256)+0.5)/256.0));\n" \
+	"			c.rgb = c.rgb*base.loc6.z;\n" \
+	"\n"
+
+#define VRAY_DATA_VOLUME_LOOKUP \
+	"			//VRAY_DATA_VOLUME_LOOKUP\n" \
+	"			vec4 v = texture(tex0, t.stp);\n" \
+	"\n"
+
+#define VRAY_GRAD_COMPUTE_LO \
+	"			//VRAY_GRAD_COMPUTE_LO\n" \
+	"			vec4 r, p; \n" \
+	"			v = vec4(v.x); \n" \
+	"			n = vec4(0.0); \n" \
+	"			w = vec4(0.0);\n" \
+	"			w.x = dir.x; \n" \
+	"			p = clamp(TexCoord + w, 0.0, 1.0); \n" \
+	"			r = texture(tex0, p.stp); \n" \
+	"			n.x = v.x - r.x; \n" \
+	"			w = vec4(0.0); \n" \
+	"			w.y = dir.y; \n" \
+	"			p = clamp(TexCoord + w, 0.0, 1.0); \n" \
+	"			r = texture(tex0, p.stp); \n" \
+	"			n.y = v.y - r.x; \n" \
+	"			w = vec4(0.0); \n" \
+	"			w.z = dir.z; \n" \
+	"			p = clamp(TexCoord + w, 0.0, 1.0); \n" \
+	"			r = texture(tex0, p.stp); \n" \
+	"			n.z = v.z - r.x; \n" \
+	"			p.y = length(n.xyz); \n" \
+	"			p.y = 0.5 * (base.loc2.x<0.0?(1.0+p.y*base.loc2.x):p.y*base.loc2.x); \n" \
+	"\n"
+
+#define VRAY_GRAD_COMPUTE_HI \
+	"			// VOL_GRAD_COMPUTE_HI\n" \
+	"			vec4 r, p;\n" \
+	"			v = vec4(v.x);\n" \
+	"			n = vec4(0.0);\n" \
+	"			w = vec4(0.0);\n" \
+	"			w.x = dir.x;\n" \
+	"			p = clamp(TexCoord + w, 0.0, 1.0);\n" \
+	"			r = texture(tex0, p.stp);\n" \
+	"			n.x = r.x + n.x;\n" \
+	"			p = clamp(TexCoord - w, 0.0, 1.0);\n" \
+	"			r = texture(tex0, p.stp);\n" \
+	"			n.x = r.x - n.x;\n" \
+	"			w = vec4(0.0);\n" \
+	"			w.y = dir.y;\n" \
+	"			p = clamp(TexCoord + w, 0.0, 1.0);\n" \
+	"			r = texture(tex0, p.stp);\n" \
+	"			n.y = r.x + n.y;\n" \
+	"			p = clamp(TexCoord - w, 0.0, 1.0);\n" \
+	"			r = texture(tex0, p.stp);\n" \
+	"			n.y = r.x - n.y;\n" \
+	"			w = vec4(0.0);\n" \
+	"			w.z = dir.z;\n" \
+	"			p = clamp(TexCoord + w, 0.0, 1.0);\n" \
+	"			r = texture(tex0, p.stp);\n" \
+	"			n.z = r.x + n.z;\n" \
+	"			p = clamp(TexCoord - w, 0.0, 1.0);\n" \
+	"			r = texture(tex0, p.stp);\n" \
+	"			n.z = r.x - n.z;\n" \
+	"			p.y = length(n.xyz);\n" \
+	"			p.y = 0.5 * (base.loc2.x < 0.0 ? (1.0 + p.y * base.loc2.x) : p.y * base.loc2.x);\n" \
+	"\n"
+
+#define VRAY_BODY_SHADING \
+	"			//VRAY_BODY_SHADING\n" \
+	"			n.xyz = normalize(n.xyz);\n" \
+	"			n.w = dot(l.xyz, n.xyz); // calculate angle between light and normal. \n" \
+	"			n.w = clamp(abs(n.w), 0.0, 1.0); // two-sided lighting, n.w = abs(cos(angle))  \n" \
+	"			w = k; // w.x = weight*ka, w.y = weight*kd, w.z = weight*ks \n" \
+	"			w.x = k.x - w.y; // w.x = ka - kd*weight \n" \
+	"			w.x = w.x + k.y; // w.x = ka + kd - kd*weight \n" \
+	"			n.z = pow(n.w, k.w); // n.z = abs(cos(angle))^ns \n" \
+	"			n.w = (n.w * w.y) + w.x; // n.w = abs(cos(angle))*kd+ka\n" \
+	"			n.z = w.z * n.z; // n.z = weight*ks*abs(cos(angle))^ns \n" \
+	"\n"
+
+#define VRAY_COMPUTED_GM_LOOKUP \
+	"			//VRAY_COMPUTED_GM_LOOKUP\n" \
+	"			v.y = p.y;\n" \
+	"\n"
+
+#define VRAY_COMPUTED_GM_INVALIDATE \
+	"			//VRAY_COMPUTED_GM_INVALIDATE\n" \
+	"			v.y = base.loc3.y;\n" \
+	"\n"
+
+#define VRAY_TEXTURE_GM_LOOKUP \
+	"			//VRAY_TEXTURE_GM_LOOKUP\n" \
+	"			v.y = texture(tex1, t.stp).x;\n" \
+	"\n"
+
+#define VRAY_TRANSFER_FUNCTION_SIN_COLOR \
+	"			//VRAY_TRANSFER_FUNCTION_SIN_COLOR\n" \
+	"			vec4 c;\n" \
+	"			float tf_alp = 0.0;\n" \
+	"			float alpha = 0.0;\n" \
+	"			v.x = base.loc2.x < 0.0 ? (1.0 + v.x * base.loc2.x) : v.x * base.loc2.x;\n" \
+	"			if (v.x<base.loc2.z - base.loc3.w || v.x>base.loc2.w + base.loc3.w || v.y < base.loc3.y - base.loc3.w)\n" \
+	"				c = vec4(0.0);\n" \
+	"			else\n" \
+	"			{\n" \
+	"				v.x = (v.x < base.loc2.z ? (base.loc3.w - base.loc2.z + v.x) / base.loc3.w : (v.x > base.loc2.w ? (base.loc3.w - v.x + base.loc2.w) / base.loc3.w : 1.0)) * v.x;\n" \
+	"				v.x = (v.y < base.loc3.y ? (base.loc3.w - base.loc3.y + v.y) / base.loc3.w : 1.0) * v.x;\n" \
+	"				tf_alp = pow(clamp(v.x / base.loc3.z,\n" \
+	"					base.loc3.x < 1.0 ? -(base.loc3.x - 1.0) * 0.00001 : 0.0,\n" \
+	"					base.loc3.x>1.0 ? 0.9999 : 1.0), base.loc3.x);\n" \
+	"				alpha = (1.0 - pow(clamp(1.0 - tf_alp * l.w, 0.0, 1.0), base.loc7.z)) / l.w;\n" \
+	"				c = vec4(base.loc6.rgb * alpha * tf_alp, alpha);\n" \
+	"			}\n" \
+	"\n" \
+
+#define VRAY_TRANSFER_FUNCTION_SIN_COLOR_SOLID \
+	"			//VRAY_TRANSFER_FUNCTION_SIN_COLOR_SOLID\n" \
+	"			vec4 c;\n" \
+	"			float tf_alp = 0.0;\n" \
+	"			float alpha = 0.0;\n" \
+	"			v.x = base.loc2.x<0.0?(1.0+v.x*base.loc2.x):v.x*base.loc2.x;\n" \
+	"			if (v.x<base.loc2.z-base.loc3.w || v.x>base.loc2.w+base.loc3.w || v.y<base.loc3.y)\n" \
+	"				c = vec4(0.0, 0.0, 0.0, 1.0);\n" \
+	"			else\n" \
+	"			{\n" \
+	"				v.x = (v.x<base.loc2.z?(base.loc3.w-base.loc2.z+v.x)/base.loc3.w:(v.x>base.loc2.w?(base.loc3.w-v.x+base.loc2.w)/base.loc3.w:1.0))*v.x;\n" \
+	"				tf_alp = pow(clamp(v.x/base.loc3.z,\n" \
+	"					base.loc3.x<1.0?-(base.loc3.x-1.0)*0.00001:0.0,\n" \
+	"					base.loc3.x>1.0?0.9999:1.0), base.loc3.x);\n" \
+	"				c = vec4(base.loc6.rgb*tf_alp, 1.0);\n" \
+	"			}\n" \
+	"\n"
+
+#define VRAY_TRANSFER_FUNCTION_COLORMAP \
+	"			//VRAY_TRANSFER_FUNCTION_COLORMAP\n" \
+	"			vec4 c;\n" \
+	"			float tf_alp = 0.0;\n" \
+	"			float alpha = 0.0;\n" \
+	"			v.x = base.loc2.x<0.0?(1.0+v.x*base.loc2.x):v.x*base.loc2.x;\n" \
+	"			if (v.x<base.loc2.z-base.loc3.w || v.x>base.loc2.w+base.loc3.w || v.y<base.loc3.y)\n" \
+	"				c = vec4(0.0);\n" \
+	"			else\n" \
+	"			{\n" \
+	"				v.x = (v.x<base.loc2.z?(base.loc3.w-base.loc2.z+v.x)/base.loc3.w:(v.x>base.loc2.w?(base.loc3.w-v.x+base.loc2.w)/base.loc3.w:1.0))*v.x;\n" \
+	"				vec4 rb = vec4(0.0);\n"
+
+#define VRAY_TRANSFER_FUNCTION_COLORMAP_SOLID \
+	"			//VRAY_TRANSFER_FUNCTION_COLORMAP_SOLID\n" \
+	"			vec4 c;\n" \
+	"			float tf_alp = 0.0;\n" \
+	"			float alpha = 0.0;\n" \
+	"			v.x = base.loc2.x<0.0?(1.0+v.x*base.loc2.x):v.x*base.loc2.x;\n" \
+	"			if (v.x<base.loc2.z-base.loc3.w || v.x>base.loc2.w+base.loc3.w || v.y<base.loc3.y)\n" \
+	"				c = vec4(0.0, 0.0, 0.0, 1.0);\n" \
+	"			else\n" \
+	"			{\n" \
+	"				v.x = (v.x<base.loc2.z?(base.loc3.w-base.loc2.z+v.x)/base.loc3.w:(v.x>base.loc2.w?(base.loc3.w-v.x+base.loc2.w)/base.loc3.w:1.0))*v.x;\n" \
+	"				vec4 rb = vec4(0.0);\n"
+
+#define VRAY_TRANSFER_FUNCTION_COLORMAP_VALU0 \
+	"				//VRAY_TRANSFER_FUNCTION_COLORMAP_VALU\n" \
+	"				float valu = (v.x-base.loc6.x)/base.loc6.z;\n"
+
+#define VRAY_TRANSFER_FUNCTION_COLORMAP_VALU1 \
+	"				//VRAY_TRANSFER_FUNCTION_COLORMAP_VALU_Z\n" \
+	"				vec4 tt = t*brk.brkscale + brk.brktrans;\n" \
+	"				float valu = (1.0-tt.z-base.loc6.x)/base.loc6.z;\n"
+
+#define VRAY_TRANSFER_FUNCTION_COLORMAP_VALU2 \
+	"				//VRAY_TRANSFER_FUNCTION_COLORMAP_VALU_Z\n" \
+	"				vec4 tt = t*brk.brkscale + brk.brktrans;\n" \
+	"				float valu = (1.0-tt.y-base.loc6.x)/base.loc6.z;\n"
+
+#define VRAY_TRANSFER_FUNCTION_COLORMAP_VALU3 \
+	"				//VRAY_TRANSFER_FUNCTION_COLORMAP_VALU_Z\n" \
+	"				vec4 tt = t*brk.brkscale + brk.brktrans;\n" \
+	"				float valu = (1.0-tt.x-base.loc6.x)/base.loc6.z;\n"
+
+#define VRAY_COLORMAP_CALC0 \
+	"				//VRAY_COLORMAP_CALC0\n" \
+	"				rb.r = clamp(4.0*valu - 2.0, 0.0, 1.0);\n" \
+	"				rb.g = clamp(valu<0.5 ? 4.0*valu : -4.0*valu+4.0, 0.0, 1.0);\n" \
+	"				rb.b = clamp(-4.0*valu+2.0, 0.0, 1.0);\n"
+
+#define VRAY_COLORMAP_CALC1 \
+	"				//VRAY_COLORMAP_CALC1\n" \
+	"				rb.r = clamp(-4.0*valu+2.0, 0.0, 1.0);\n" \
+	"				rb.g = clamp(valu<0.5 ? 4.0*valu : -4.0*valu+4.0, 0.0, 1.0);\n" \
+	"				rb.b = clamp(4.0*valu - 2.0, 0.0, 1.0);\n"
+
+#define VRAY_COLORMAP_CALC2 \
+	"				//VRAY_COLORMAP_CALC2\n" \
+	"				rb.r = clamp(2.0*valu, 0.0, 1.0);\n" \
+	"				rb.g = clamp(4.0*valu - 2.0, 0.0, 1.0);\n" \
+	"				rb.b = clamp(4.0*valu - 3.0, 0.0, 1.0);\n"
+
+#define VRAY_COLORMAP_CALC3 \
+	"				//VRAY_COLORMAP_CALC3\n" \
+	"				rb.r = clamp(valu, 0.0, 1.0);\n" \
+	"				rb.g = clamp(1.0-valu, 0.0, 1.0);\n" \
+	"				rb.b = 1.0;\n"
+
+#define VRAY_COLORMAP_CALC4 \
+	"				//VRAY_COLORMAP_CALC4\n" \
+	"				rb.r = clamp(valu<0.5?valu*0.9+0.25:0.7, 0.0, 1.0);\n" \
+	"				rb.g = clamp(valu<0.5?valu*0.8+0.3:(1.0-valu)*1.4, 0.0, 1.0);\n" \
+	"				rb.b = clamp(valu<0.5?valu*(-0.1)+0.75:(1.0-valu)*1.1+0.15, 0.0, 1.0);\n"
+
+#define VRAY_TRANSFER_FUNCTION_COLORMAP_RESULT \
+	"				//VRAY_TRANSFER_FUNCTION_COLORMAP_RESULT\n" \
+	"				float alpha = (1.0 - pow(clamp(1.0-tf_alp*l.w, 0.0, 1.0), base.loc7.z)) / l.w;\n" \
+	"				c = vec4(rb.rgb*alpha*tf_alp, alpha);\n" \
+	"			}\n" \
+	"\n"
+
+#define VRAY_TRANSFER_FUNCTION_COLORMAP_SOLID_RESULT \
+	"				//VRAY_TRANSFER_FUNCTION_COLORMAP_SOLID_RESULT\n" \
+	"				c = vec4(rb.rgb, 1.0);\n" \
+	"			}\n" \
+	"\n"
+
+#define VRAY_COMMON_TRANSFER_FUNCTION_CALC \
+	"				//VRAY_COMMON_TRANSFER_FUNCTION_CALC\n" \
+	"				tf_alp = pow(clamp(v.x/base.loc3.z,\n" \
+	"					base.loc3.x<1.0?-(base.loc3.x-1.0)*0.00001:0.0,\n" \
+	"					base.loc3.x>1.0?0.9999:1.0), base.loc3.x);\n"
+
+#define VRAY_TRANSFER_FUNCTION_DEPTHMAP \
+	"			//VRAY_TRANSFER_FUNCTION_DEPTHMAP\n" \
+	"			vec4 c;\n" \
+	"			float tf_alp = 0.0;\n" \
+	"			float alpha = 0.0;\n" \
+	"			v.x = base.loc2.x<0.0?(1.0+v.x*base.loc2.x):v.x*base.loc2.x;\n" \
+	"			if (v.x<base.loc2.z-base.loc3.w || v.x>base.loc2.w+base.loc3.w || v.y<base.loc3.y)\n" \
+	"				c = vec4(0.0);\n" \
+	"			else\n" \
+	"			{\n" \
+	"				v.x = (v.x<base.loc2.z?(base.loc3.w-base.loc2.z+v.x)/base.loc3.w:(v.x>base.loc2.w?(base.loc3.w-v.x+base.loc2.w)/base.loc3.w:1.0))*v.x;\n" \
+	"				tf_alp = pow(clamp(v.x/base.loc3.z,\n" \
+	"					base.loc3.x<1.0?-(base.loc3.x-1.0)*0.00001:0.0,\n" \
+	"					base.loc3.x>1.0?0.9999:1.0), base.loc3.x);\n" \
+	"				float alpha = tf_alp;\n" \
+	"				c = vec4(vec3(alpha*tf_alp), alpha);\n" \
+	"			}\n" \
+	"\n"
+
+#define VRAY_COLOR_OUTPUT \
+	"			//VRAY_COLOR_OUTPUT\n" \
+	"			c.xyz = c.xyz * clamp(1.0 - base.loc1.x, 0.0, 1.0) + base.loc1.x * c.xyz * (base.loc1.y > 0.0 ? (n.w + n.z) : 1.0);\n" \
+	"			c.xyz *= pow(1.0 - base.loc1.x / 2.0, 2.0) + 1.0;\n" \
+	"\n"
+
+#define VRAY_FOG_BODY \
+	"			//VRAY_FOG_BODY\n" \
+	"			vec4 fogcoord = mvmat * vec4(t.xyz * brk.brkscale.xyz + brk.brktrans.xyz, 1.0);\n" \
+	"			fp.w = abs(fogcoord.z/fogcoord.w);\n" \
+	"			v.x = (fp.z-fp.w)/(fp.z-fp.y);\n" \
+	"			v.x = 1.0-clamp(v.x, 0.0, 1.0);\n" \
+	"			v.x = 1.0-exp(-pow(v.x*2.5, 2.0));\n" \
+	"			c.xyz = mix(c.xyz, vec3(0.0), v.x*fp.x); \n" \
+	"\n"
+
+#define VRAY_RASTER_BLEND \
+	"			//VRAY_RASTER_BLEND\n" \
+	"			c = c*l.w; // VOL_RASTER_BLEND\n" \
+	"\n"
+
+#define VRAY_RASTER_BLEND_SOLID \
+	"			//VOL_RASTER_BLEND_SOLID\n" \
+	"			//do nothing\n" \
+	"\n"
+
+#define VRAY_RASTER_BLEND_ID \
+	"			//VOL_RASTER_BLEND_ID\n" \
+	"			c = c*l.w;\n" \
+	"\n"
+
+#define VRAY_RASTER_BLEND_DMAP \
+	"			//VRAY_RASTER_BLEND_DMAP\n" \
+	"			float currz = (dmap_st + dmap_ray*step*float(i)).z;\n" \
+	"			float intpo = (c*l.w).r;\n" \
+	"			c = vec4(vec3(intpo>0.05?currz:prevz), 1.0);\n" \
+	"			prevz = intpo > 0.05 ? currz : prevz;\n" \
+	"\n"
+
+#define VRAY_RASTER_BLEND_NOMASK \
+	"			//VRAY_RASTER_BLEND_NOMASK\n" \
+	"			vec4 cmask = texture(tex2, t.stp); //get mask value\n" \
+	"			c = vec4(1.0-cmask.x)*c*l.w;\n" \
+	"\n"
+
+#define VRAY_RASTER_BLEND_NOMASK_SOLID \
+	"			//VRAY_RASTER_BLEND_NOMASK_SOLID\n" \
+	"			vec4 cmask = texture(tex2, t.stp); //get mask value\n" \
+	"			c = vec4(1.0-cmask.x)*c;\n" \
+	"\n"
+
+#define VRAY_RASTER_BLEND_NOMASK_ID \
+	"			//VRAY_RASTER_BLEND_NOMASK_ID\n" \
+	"			vec4 cmask = texture(tex2, t.stp); //get mask value\n" \
+	"			c = vec4(1.0-cmask.x)*c*l.w;\n" \
+	"\n"
+
+#define VRAY_RASTER_BLEND_NOMASK_DMAP \
+	"			//VRAY_RASTER_BLEND_NOMASK_DMAP\n" \
+	"			float currz = (dmap_st + dmap_ray*step*float(i)).z;\n" \
+	"			vec4 cmask = texture(tex2, t.stp); //get mask value\n" \
+	"			float intpo = (vec4(1.0-cmask.x)*c*l.w).r;\n" \
+	"			c = vec4(vec3(intpo>0.05?currz:prevz), 1.0);\n" \
+	"			prevz = intpo > 0.05 ? currz : prevz;\n" \
+	"\n"
+
+#define VRAY_RASTER_BLEND_MASK \
+	"			//VRAY_RASTER_BLEND_MASK\n" \
+	"			vec4 cmask = texture(tex2, t.stp); //get mask value\n" \
+	"			c = tf_alp*cmask.x<base.loc6.w?vec4(cmask.x*0.0002):vec4(cmask.x*0.0002)+vec4(cmask.x)*c*l.w;\n" \
+	"\n"
+
+#define VRAY_RASTER_BLEND_MASK_SOLID \
+	"			//VRAY_RASTER_BLEND_MASK_SOLID\n" \
+	"			vec4 cmask = texture(tex2, t.stp); //get mask value\n" \
+	"			c = tf_alp*cmask.x<base.loc6.w?vec4(0.0):vec4(cmask.x)*c;\n" \
+	"\n"
+
+#define VRAY_RASTER_BLEND_MASK_ID \
+	"			//VRAY_RASTER_BLEND_MASK_ID\n" \
+	"			vec4 cmask = texture(tex2, t.stp); //get mask value\n" \
+	"			c = vec4(cmask.x)*c*l.w;\n" \
+	"\n"
+
+#define VRAY_RASTER_BLEND_MASK_DMAP \
+	"			//VRAY_RASTER_BLEND_MASK_DMAP\n" \
+	"			float currz = (dmap_st + dmap_ray*step*float(i)).z;\n" \
+	"			vec4 cmask = texture(tex2, t.stp); //get mask value\n" \
+	"			float intpo = (vec4(cmask.x)*c*l.w).r;\n" \
+	"			c = vec4(vec3(intpo>0.05?currz:prevz), 1.0);\n" \
+	"			prevz = intpo > 0.05 ? currz : prevz;\n" \
+	"\n"
+
+#define VRAY_RASTER_BLEND_LABEL \
+	"			//VRAY_RASTER_BLEND_LABEL\n" \
+	"			uint label = texture(tex3, t.stp).x; //get mask value\n" \
+	"			vec4 sel = vec4(0.2,\n" \
+	"							0.4,\n" \
+	"							0.4, 1.0);\n" \
+	"			float hue, p2, p3;\n" \
+	"			if (label > uint(0))\n" \
+	"			{\n" \
+	"				hue = float(label%uint(360))/60.0;\n" \
+	"				p2 = 1.0 - hue + floor(hue);\n" \
+	"				p3 = hue - floor(hue);\n" \
+	"				if (hue < 1.0)\n" \
+	"					sel = vec4(1.0, p3, 1.0, 1.0);\n" \
+	"				else if (hue < 2.0)\n" \
+	"					sel = vec4(p2, 1.0, 1.0, 1.0);\n" \
+	"				else if (hue < 3.0)\n" \
+	"					sel = vec4(1.0, 1.0, p3, 1.0);\n" \
+	"				else if (hue < 4.0)\n" \
+	"					sel = vec4(1.0, p2, 1.0, 1.0);\n" \
+	"				else if (hue < 5.0)\n" \
+	"					sel = vec4(p3, 1.0, 1.0, 1.0);\n" \
+	"				else\n" \
+	"					sel = vec4(1.0, 1.0, p2, 1.0);\n" \
+	"			}\n" \
+	"			sel.xyz = sel.xyz*clamp(1.0-base.loc1.x, 0.0, 1.0) + base.loc1.x*sel.xyz*(base.loc1.y > 0.0?(n.w + n.z):1.0);\n" \
+	"			sel.xyz *= pow(1.0 - base.loc1.x / 2.0, 2.0) + 1.0;\n" \
+	"			c = sel*l.w;\n" \
+	"\n"
+
+#define VRAY_RASTER_BLEND_LABEL_MASK \
+	"			//VRAY_RASTER_BLEND_LABEL_MASK\n" \
+	"			vec4 cmask = texture(tex2, t.stp); //get mask value\n" \
+	"			if (cmask.x <= base.loc6.w)\n" \
+	"			{\n" \
+	"				c = c*l.w;\n" \
+	"			}\n" \
+	"			else \n" \
+	"			{\n" \
+	"				uint label = texture(tex3, t.stp).x; //get mask value\n" \
+	"				vec4 sel = vec4(0.1,\n" \
+	"								0.2,\n" \
+	"								0.2, 0.5);\n" \
+	"				float hue, p2, p3;\n" \
+	"				if (label > uint(0))\n" \
+	"				{\n" \
+	"					hue = float(label%uint(360))/60.0;\n" \
+	"					p2 = 1.0 - hue + floor(hue);\n" \
+	"					p3 = hue - floor(hue);\n" \
+	"					if (hue < 1.0)\n" \
+	"						sel = vec4(1.0, p3, 0.0, 1.0);\n" \
+	"					else if (hue < 2.0)\n" \
+	"						sel = vec4(p2, 1.0, 0.0, 1.0);\n" \
+	"					else if (hue < 3.0)\n" \
+	"						sel = vec4(0.0, 1.0, p3, 1.0);\n" \
+	"					else if (hue < 4.0)\n" \
+	"						sel = vec4(0.0, p2, 1.0, 1.0);\n" \
+	"					else if (hue < 5.0)\n" \
+	"						sel = vec4(p3, 0.0, 1.0, 1.0);\n" \
+	"					else\n" \
+	"						sel = vec4(1.0, 0.0, p2, 1.0);\n" \
+	"				}\n" \
+	"				sel.xyz = sel.xyz*clamp(1.0-base.loc1.x, 0.0, 1.0) + base.loc1.x*sel.xyz*(base.loc1.y > 0.0?(n.w + n.z):1.0);\n" \
+	"				sel.xyz *= pow(1.0 - base.loc1.x / 2.0, 2.0) + 1.0;\n" \
+	"				c = sel*alpha*tf_alp*l.w;\n" \
+	"			}\n" \
+	"\n"
+
+#define VRAY_BLEND_OVER \
+	"			//VRAY_BLEND_OVER\n" \
+	"			outcol = outcol + (1.0 - outcol.w) * c;\n" \
+	"\n"
+
+#define VRAY_BLEND_DMAP \
+	"			//VRAY_BLEND_DMAP\n" \
+	"			outcol = c;\n" \
+	"\n"
+
+#define VRAY_LOOP_TAIL \
+	"		}\n" \
+	"	}\n" \
+	"\n" \
+	"	FragColor = outcol;\n" \
+	"\n" 
+
+#define VRAY_LOOP_TAIL_INDEX_COLOR_BODY_SHADE \
+	"		}\n" \
+	"		else\n" \
+	"		{\n" \
+	"			prev_id = 0;\n" \
+	"		}\n" \
+	"	}\n" \
+	"\n" \
+	"	FragColor = outcol;\n" \
+	"\n" 
+
+#define VRAY_TAIL \
+	"	//VRAY_TAIL\n" \
 	"}\n" 
 
 #define VRAY_FRG_SHADER_CODE_TEST_PERSP \
@@ -561,7 +1320,7 @@ VRayShader::VRayShader(
 	int peel, bool clip,
 	bool hiqual, int mask,
 	int color_mode, int colormap, int colormap_proj,
-	bool solid, int vertex_shader, int mask_hide_mode)
+	bool solid, int vertex_shader, int mask_hide_mode, bool persp)
 	: device_(device),
 	poly_(poly),
 	channels_(channels),
@@ -577,6 +1336,7 @@ VRayShader::VRayShader(
 	solid_(solid),
 	vertex_type_(vertex_shader),
 	mask_hide_mode_(mask_hide_mode),
+	persp_(persp),
 	program_(0)
 	{
 	}
@@ -600,10 +1360,8 @@ VRayShader::VRayShader(
 	{
 		ostringstream z;
 		z << ShaderProgram::glsl_version_;
-		/*if (fog_)
-			z << VTX_SHADER_CODE_FOG;
-		else*/
-			z << VRAY_VTX_SHADER_CODE_CORE_PROFILE;
+		
+		z << VRAY_VTX_SHADER_CODE_CORE_PROFILE;
 
 		s = z.str();
 		return false;
@@ -614,17 +1372,17 @@ VRayShader::VRayShader(
 		switch (colormap_)
 		{
 		case 0:
-			return string(VOL_COLORMAP_CALC0);
+			return string(VRAY_COLORMAP_CALC0);
 		case 1:
-			return string(VOL_COLORMAP_CALC1);
+			return string(VRAY_COLORMAP_CALC1);
 		case 2:
-			return string(VOL_COLORMAP_CALC2);
+			return string(VRAY_COLORMAP_CALC2);
 		case 3:
-			return string(VOL_COLORMAP_CALC3);
+			return string(VRAY_COLORMAP_CALC3);
 		case 4:
-			return string(VOL_COLORMAP_CALC4);
+			return string(VRAY_COLORMAP_CALC4);
 		}
-		return string(VOL_COLORMAP_CALC0);
+		return string(VRAY_COLORMAP_CALC0);
 	}
 
 	string VRayShader::get_colormap_proj()
@@ -632,285 +1390,309 @@ VRayShader::VRayShader(
 		switch (colormap_proj_)
 		{
 		case 0:
-			return string(VOL_TRANSFER_FUNCTION_COLORMAP_VALU0);
+			return string(VRAY_TRANSFER_FUNCTION_COLORMAP_VALU0);
 		case 1:
-			return string(VOL_TRANSFER_FUNCTION_COLORMAP_VALU1);
+			return string(VRAY_TRANSFER_FUNCTION_COLORMAP_VALU1);
 		case 2:
-			return string(VOL_TRANSFER_FUNCTION_COLORMAP_VALU2);
+			return string(VRAY_TRANSFER_FUNCTION_COLORMAP_VALU2);
 		case 3:
-			return string(VOL_TRANSFER_FUNCTION_COLORMAP_VALU3);
+			return string(VRAY_TRANSFER_FUNCTION_COLORMAP_VALU3);
 		}
-		return string(VOL_TRANSFER_FUNCTION_COLORMAP_VALU0);
+		return string(VRAY_TRANSFER_FUNCTION_COLORMAP_VALU0);
 	}
 
 	bool VRayShader::emit_f(string& s)
 	{
 		ostringstream z;
 
-		z << VRAY_FRG_SHADER_CODE_TEST_PERSP;
+		//version info
+		z << ShaderProgram::glsl_version_;
+		z << VRAY_FRG_HEADER;
 
-		//if (poly_)
-		//{
-		//	z << ShaderProgram::glsl_version_;
-		//	z << FRG_SHADER_CODE_CORE_PROFILE;
-		//	//output
-		//	s = z.str();
-		//	return false;
-		//}
+		//color modes
+		switch (color_mode_)
+		{
+		case 2://depth map
+			z << VRAY_UNIFORMS_DEPTHMAP;
+			break;
+		case 3://index color
+			z << VRAY_UNIFORMS_INDEX_COLOR;
+			break;
+        case 255://index color (depth mode)
+            z << VRAY_UNIFORMS_INDEX_COLOR_D;
+            break;
+                
+		}
 
-		////version info
-		//z << ShaderProgram::glsl_version_;
-		//z << VOL_INPUTS;
-		//if (fog_)
-		//	z << VOL_INPUTS_FOG;
-		//z << VOL_OUTPUTS;
-		//if (color_mode_ == 3) z << VOL_ID_COLOR_OUTPUTS;
+		// add uniform for depth peeling
+		if (peel_ != 0)
+			z << VRAY_UNIFORMS_DP;
 
-		////the common uniforms
-		//z << VOL_UNIFORMS_BASE;
+		// add uniforms for masking
+		switch (mask_)
+		{
+		case 1:
+		case 2:
+			z << VRAY_UNIFORMS_MASK;
+			break;
+		case 3:
+			z << VRAY_UNIFORMS_LABEL;
+			break;
+		case 4:
+			z << VRAY_UNIFORMS_MASK;
+			z << VRAY_UNIFORMS_LABEL;
+			break;
+		}
 
-		////the brick uniforms
-		//z << VOL_UNIFORMS_BRICK;
+		if ( (mask_ <= 0 || mask_ == 3)  && mask_hide_mode_ > 0)
+			z << VRAY_UNIFORMS_MASK;
 
-		////color modes
-		//switch (color_mode_)
-		//{
-		//case 2://depth map
-		//	z << VOL_UNIFORMS_DEPTHMAP;
-		//	break;
-		//case 3://index color
-		//	z << VOL_UNIFORMS_INDEX_COLOR;
-		//	break;
-  //      case 255://index color (depth mode)
-  //          z << VOL_UNIFORMS_INDEX_COLOR_D;
-  //          break;
-  //              
-		//}
+		//functions
+		if (clip_)
+			z << VRAY_CLIP_FUNC;
+		
+		//the common head
+		if (persp_)
+		{
+			if (color_mode_ == 2)
+				z << VRAY_HEAD_PERSP_DMAP;
+			else
+				z << VRAY_HEAD_PERSP;
 
-		//// add uniform for depth peeling
-		//if (peel_ != 0)
-		//	z << VOL_UNIFORMS_DP;
+			if (mask_hide_mode_ > 0)
+				z << VRAY_MASK_RAY_PERSP;
+		}
+		else
+		{
+			if (color_mode_ == 2)
+				z << VRAY_HEAD_ORTHO_DMAP;
+			else
+				z << VRAY_HEAD_ORTHO;
 
-		//// add uniforms for masking
-		//switch (mask_)
-		//{
-		//case 1:
-		//case 2:
-		//	z << VOL_UNIFORMS_MASK;
-		//	break;
-		//case 3:
-		//	z << VOL_UNIFORMS_LABEL;
-		//	break;
-		//case 4:
-		//	z << VOL_UNIFORMS_MASK;
-		//	z << VOL_UNIFORMS_LABEL;
-		//	break;
-		//}
+			if (mask_hide_mode_ > 0)
+				z << VRAY_MASK_RAY_ORTHO;
+		}
+			
+		// Set up light variables and input parameters.
+		z << VRAY_HEAD_LIT;
 
-		//if ( (mask_ <= 0 || mask_ == 3)  && mask_hide_mode_ > 0)
-		//	z << VOL_UNIFORMS_MASK;
+		if (peel_ != 0 || color_mode_ == 2)
+			z << VRAY_HEAD_2DMAP_LOC;
 
-		////functions
-		//if (clip_)
-		//	z << VOL_CLIP_FUNC;
-		////the common head
-		//z << VOL_HEAD;
+		//head for depth peeling
+		if (peel_ == 1)//draw volume before 15
+			z << VRAY_HEAD_DP_1_STEP;
+		else if (peel_ == 2 || peel_ == 5)//draw volume after 14
+			z << VRAY_HEAD_DP_2_STEP;
+		else if (peel_ == 3 || peel_ == 4)//draw volume after 14 and before 15
+			z << VRAY_HEAD_DP_1_STEP << VRAY_HEAD_DP_2_STEP;
 
-		//if (peel_ != 0 || color_mode_ == 2)
-		//	z << VOL_HEAD_2DMAP_LOC;
+		// Set up fog variables and input parameters.
+		if (fog_)
+			z << VRAY_HEAD_FOG;
 
-		////head for depth peeling
-		//if (peel_ == 1)//draw volume before 15
-		//	z << VOL_HEAD_DP_1;
-		//else if (peel_ == 2 || peel_ == 5)//draw volume after 14
-		//	z << VOL_HEAD_DP_2;
-		//else if (peel_ == 3 || peel_ == 4)//draw volume after 14 and before 15
-		//	z << VOL_HEAD_DP_3;
+		if (color_mode_ == 3 || color_mode_ == 255)
+			z << VRAY_HEAD_ID_INITIALIZE;
 
-		////head for clipping planes
-		//if (clip_)
-		//	z << VOL_HEAD_CLIP_FUNC;
+		z << VRAY_LOOP_HEAD;
 
-		//// Set up light variables and input parameters.
-		//z << VOL_HEAD_LIT;
+		if (mask_hide_mode_ > 0)
+			z << VRAY_MASK_VAL;
 
-		//if ( mask_hide_mode_ == 1)
-		//	z << VOL_HEAD_HIDE_OUTSIDE_MASK;
-		//else if ( mask_hide_mode_ == 2)
-		//	z << VOL_HEAD_HIDE_INSIDE_MASK;
+		z << VRAY_LOOP_CONDITION_START;
 
-		//// Set up fog variables and input parameters.
-		//if (fog_)
-		//	z << VOL_HEAD_FOG;
+		if (peel_ == 1)//draw volume before 15
+			z << VRAY_LOOP_CONDITION_DP_1;
+		else if (peel_ == 2 || peel_ == 5)//draw volume after 14
+			z << VRAY_LOOP_CONDITION_DP_2;
+		else if (peel_ == 3 || peel_ == 4)//draw volume after 14 and before 15
+			z << VRAY_LOOP_CONDITION_DP_3;
 
-		////bodies
-		//if (color_mode_ == 3)
-		//{
-		//	if (shading_)
-		//		z << VOL_INDEX_COLOR_BODY_SHADE;
-		//	else
-		//		z << VOL_INDEX_COLOR_BODY;
-		//}
-  //      else if (color_mode_ == 255)
-  //      {
-  //          z << VOL_INDEX_COLOR_D_BODY;
-  //      }
-		//else if (shading_)
-		//{
-		//	//no gradient volume, need to calculate in real-time
-		//	z << VOL_DATA_VOLUME_LOOKUP;
+		if (mask_hide_mode_ == 1)
+			z << VRAY_LOOP_CONDITION_HIDE_OUTSIDE_MASK;
+		else if (mask_hide_mode_ == 2)
+			z << VRAY_LOOP_CONDITION_HIDE_INSIDE_MASK;
 
-		//	if (hiqual_)
-		//		z << VOL_GRAD_COMPUTE_HI;
-		//	else
-		//		z << VOL_GRAD_COMPUTE_LO;
+		z << VRAY_LOOP_CONDITION_END;
 
-		//	z << VOL_BODY_SHADING;
+		//bodies
+		if (color_mode_ == 3)
+		{
+			if (shading_)
+				z << VRAY_INDEX_COLOR_BODY_SHADE;
+			else
+				z << VRAY_INDEX_COLOR_BODY;
+		}
+        else if (color_mode_ == 255)
+        {
+            z << VRAY_INDEX_COLOR_D_BODY;
+        }
+		else if (shading_)
+		{
+			//no gradient volume, need to calculate in real-time
+			z << VRAY_DATA_VOLUME_LOOKUP;
 
-		//	if (channels_ == 1)
-		//		z << VOL_COMPUTED_GM_LOOKUP;
-		//	else
-		//		z << VOL_TEXTURE_GM_LOOKUP;
+			if (hiqual_)
+				z << VRAY_GRAD_COMPUTE_HI;
+			else
+				z << VRAY_GRAD_COMPUTE_LO;
 
-		//	switch (color_mode_)
-		//	{
-		//	case 0://normal
-		//		if (solid_)
-		//			z << VOL_TRANSFER_FUNCTION_SIN_COLOR_SOLID;
-		//		else
-		//			z << VOL_TRANSFER_FUNCTION_SIN_COLOR;
-		//		break;
-		//	case 1://colormap
-		//		if (solid_)
-		//		{
-		//			z << VOL_TRANSFER_FUNCTION_COLORMAP_SOLID;
-		//			z << get_colormap_proj();
-		//			z << get_colormap_code();
-		//			z << VOL_COMMON_TRANSFER_FUNCTION_CALC;
-		//			z << VOL_TRANSFER_FUNCTION_COLORMAP_SOLID_RESULT;
-		//		}
-		//		else
-		//		{
-		//			z << VOL_TRANSFER_FUNCTION_COLORMAP;
-		//			z << get_colormap_proj();
-		//			z << get_colormap_code();
-		//			z << VOL_COMMON_TRANSFER_FUNCTION_CALC;
-		//			z << VOL_TRANSFER_FUNCTION_COLORMAP_RESULT;
-		//		}
-		//		break;
-		//	}
+			z << VRAY_BODY_SHADING;
 
-		//	z << VOL_COLOR_OUTPUT;
-		//}
-		//else // No shading
-		//{
-		//	z << VOL_DATA_VOLUME_LOOKUP;
+			if (channels_ == 1)
+				z << VRAY_COMPUTED_GM_LOOKUP;
+			else
+				z << VRAY_TEXTURE_GM_LOOKUP;
 
-		//	if (channels_ == 1)
-		//	{
-		//		// Compute Gradient magnitude and use it.
-		//		if (hiqual_)
-		//			z << VOL_GRAD_COMPUTE_HI;
-		//		else
-		//			z << VOL_GRAD_COMPUTE_LO;
+			switch (color_mode_)
+			{
+			case 0://normal
+				if (solid_)
+					z << VRAY_TRANSFER_FUNCTION_SIN_COLOR_SOLID;
+				else
+					z << VRAY_TRANSFER_FUNCTION_SIN_COLOR;
+				break;
+			case 1://colormap
+				if (solid_)
+				{
+					z << VRAY_TRANSFER_FUNCTION_COLORMAP_SOLID;
+					z << get_colormap_proj();
+					z << get_colormap_code();
+					z << VRAY_COMMON_TRANSFER_FUNCTION_CALC;
+					z << VRAY_TRANSFER_FUNCTION_COLORMAP_SOLID_RESULT;
+				}
+				else
+				{
+					z << VRAY_TRANSFER_FUNCTION_COLORMAP;
+					z << get_colormap_proj();
+					z << get_colormap_code();
+					z << VRAY_COMMON_TRANSFER_FUNCTION_CALC;
+					z << VRAY_TRANSFER_FUNCTION_COLORMAP_RESULT;
+				}
+				break;
+			}
 
-		//		z << VOL_COMPUTED_GM_LOOKUP;
-		//	}
-		//	else
-		//	{
-		//		z << VOL_TEXTURE_GM_LOOKUP;
-		//	}
+			z << VRAY_COLOR_OUTPUT;
+		}
+		else // No shading
+		{
+			z << VRAY_DATA_VOLUME_LOOKUP;
 
-		//	switch (color_mode_)
-		//	{
-		//	case 0://normal
-		//		if (solid_)
-		//			z << VOL_TRANSFER_FUNCTION_SIN_COLOR_SOLID;
-		//		else
-		//			z << VOL_TRANSFER_FUNCTION_SIN_COLOR;
-		//		break;
-		//	case 1://colormap
-		//		if (solid_)
-		//		{
-		//			z << VOL_TRANSFER_FUNCTION_COLORMAP_SOLID;
-		//			z << get_colormap_proj();
-		//			z << get_colormap_code();
-		//			z << VOL_COMMON_TRANSFER_FUNCTION_CALC;
-		//			z << VOL_TRANSFER_FUNCTION_COLORMAP_SOLID_RESULT;
-		//		}
-		//		else
-		//		{
-		//			z << VOL_TRANSFER_FUNCTION_COLORMAP;
-		//			z << get_colormap_proj();
-		//			z << get_colormap_code();
-		//			z << VOL_COMMON_TRANSFER_FUNCTION_CALC;
-		//			z << VOL_TRANSFER_FUNCTION_COLORMAP_RESULT;
-		//		}
-		//		break;
-		//	case 2://depth map
-		//		z << VOL_TRANSFER_FUNCTION_DEPTHMAP;
-		//		break;
-		//	}
-		//}
+			if (channels_ == 1)
+			{
+				// Compute Gradient magnitude and use it.
+				if (hiqual_)
+					z << VRAY_GRAD_COMPUTE_HI;
+				else
+					z << VRAY_GRAD_COMPUTE_LO;
 
-		//// fog
-		//if (fog_)
-		//{
-		//	z << VOL_FOG_BODY;
-		//}
+				z << VRAY_COMPUTED_GM_LOOKUP;
+			}
+			else
+			{
+				z << VRAY_TEXTURE_GM_LOOKUP;
+			}
 
-		////final blend
-		//switch (mask_)
-		//{
-		//case 0:
-		//	if (color_mode_ == 3 || color_mode_ == 255)
-		//		z << VOL_RASTER_BLEND_ID;
-		//	else if (color_mode_ == 2)
-		//		z << VOL_RASTER_BLEND_DMAP;
-		//	else
-		//	{
-		//		if (solid_)
-		//			z << VOL_RASTER_BLEND_SOLID;
-		//		else
-		//			z << VOL_RASTER_BLEND;
-		//	}
-		//	break;
-		//case 1:
-		//	if (color_mode_ == 3 || color_mode_ == 255)
-		//		z << VOL_RASTER_BLEND_MASK_ID;
-		//	else if (color_mode_ == 2)
-		//		z << VOL_RASTER_BLEND_MASK_DMAP;
-		//	else
-		//	{
-		//		if (solid_)
-		//			z << VOL_RASTER_BLEND_MASK_SOLID;
-		//		else
-		//			z << VOL_RASTER_BLEND_MASK;
-		//	}
-		//	break;
-		//case 2:
-		//	if (color_mode_ == 3 || color_mode_ == 255)
-		//		z << VOL_RASTER_BLEND_NOMASK_ID;
-		//	else if (color_mode_ == 2)
-		//		z << VOL_RASTER_BLEND_NOMASK_DMAP;
-		//	else
-		//	{
-		//		if (solid_)
-		//			z << VOL_RASTER_BLEND_NOMASK_SOLID;
-		//		else
-		//			z << VOL_RASTER_BLEND_NOMASK;
-		//	}
-		//	break;
-		//case 3:
-		//	z << VOL_RASTER_BLEND_LABEL;
-		//	break;
-		//case 4:
-		//	z << VOL_RASTER_BLEND_LABEL_MASK;
-		//	break;
-		//}
+			switch (color_mode_)
+			{
+			case 0://normal
+				if (solid_)
+					z << VRAY_TRANSFER_FUNCTION_SIN_COLOR_SOLID;
+				else
+					z << VRAY_TRANSFER_FUNCTION_SIN_COLOR;
+				break;
+			case 1://colormap
+				if (solid_)
+				{
+					z << VRAY_TRANSFER_FUNCTION_COLORMAP_SOLID;
+					z << get_colormap_proj();
+					z << get_colormap_code();
+					z << VRAY_COMMON_TRANSFER_FUNCTION_CALC;
+					z << VRAY_TRANSFER_FUNCTION_COLORMAP_SOLID_RESULT;
+				}
+				else
+				{
+					z << VRAY_TRANSFER_FUNCTION_COLORMAP;
+					z << get_colormap_proj();
+					z << get_colormap_code();
+					z << VRAY_COMMON_TRANSFER_FUNCTION_CALC;
+					z << VRAY_TRANSFER_FUNCTION_COLORMAP_RESULT;
+				}
+				break;
+			case 2://depth map
+				z << VRAY_TRANSFER_FUNCTION_DEPTHMAP;
+				break;
+			}
+		}
 
-		////the common tail
-		//z << VOL_TAIL;
+		// fog
+		if (fog_)
+		{
+			z << VRAY_FOG_BODY;
+		}
+
+		//final blend
+		switch (mask_)
+		{
+		case 0:
+			if (color_mode_ == 3 || color_mode_ == 255)
+				z << VRAY_RASTER_BLEND_ID;
+			else if (color_mode_ == 2)
+				z << VRAY_RASTER_BLEND_DMAP;
+			else
+			{
+				if (solid_)
+					z << VRAY_RASTER_BLEND_SOLID;
+				else
+					z << VRAY_RASTER_BLEND;
+			}
+			break;
+		case 1:
+			if (color_mode_ == 3 || color_mode_ == 255)
+				z << VRAY_RASTER_BLEND_MASK_ID;
+			else if (color_mode_ == 2)
+				z << VRAY_RASTER_BLEND_MASK_DMAP;
+			else
+			{
+				if (solid_)
+					z << VRAY_RASTER_BLEND_MASK_SOLID;
+				else
+					z << VRAY_RASTER_BLEND_MASK;
+			}
+			break;
+		case 2:
+			if (color_mode_ == 3 || color_mode_ == 255)
+				z << VRAY_RASTER_BLEND_NOMASK_ID;
+			else if (color_mode_ == 2)
+				z << VRAY_RASTER_BLEND_NOMASK_DMAP;
+			else
+			{
+				if (solid_)
+					z << VRAY_RASTER_BLEND_NOMASK_SOLID;
+				else
+					z << VRAY_RASTER_BLEND_NOMASK;
+			}
+			break;
+		case 3:
+			z << VRAY_RASTER_BLEND_LABEL;
+			break;
+		case 4:
+			z << VRAY_RASTER_BLEND_LABEL_MASK;
+			break;
+		}
+
+		if (color_mode_ == 2)
+			z << VRAY_BLEND_DMAP;
+		else
+			z << VRAY_BLEND_OVER;
+
+		if (color_mode_ == 3 && shading_)
+			z << VRAY_LOOP_TAIL_INDEX_COLOR_BODY_SHADE;
+		else
+			z << VRAY_LOOP_TAIL;
+
+		//the common tail
+		z << VRAY_TAIL;
 
 		//output
 		s = z.str();
@@ -957,7 +1739,7 @@ VRayShader::VRayShader(
 		int peel, bool clip,
 		bool hiqual, int mask,
 		int color_mode, int colormap, int colormap_proj,
-		bool solid, int vertex_shader, int mask_hide_mode)
+		bool solid, int vertex_shader, int mask_hide_mode, bool persp)
 	{
 		VRayShader*ret = nullptr;
 		if(prev_shader_ >= 0)
@@ -968,7 +1750,7 @@ VRayShader::VRayShader(
 				peel, clip,
 				hiqual, mask,
 				color_mode, colormap, colormap_proj,
-				solid, vertex_shader, mask_hide_mode))
+				solid, vertex_shader, mask_hide_mode, persp))
 			{
 				ret = shader_[prev_shader_];
 			}
@@ -983,7 +1765,7 @@ VRayShader::VRayShader(
 					peel, clip,
 					hiqual, mask,
 					color_mode, colormap, colormap_proj,
-					solid, vertex_shader, mask_hide_mode))
+					solid, vertex_shader, mask_hide_mode, persp))
 				{
 					prev_shader_ = i;
 					ret = shader_[i];
@@ -999,7 +1781,7 @@ VRayShader::VRayShader(
 				peel, clip,
 				hiqual, mask,
 				color_mode, colormap, colormap_proj,
-				solid, vertex_shader, mask_hide_mode);
+				solid, vertex_shader, mask_hide_mode, persp);
 			if(s->create())
 				delete s;
 			else

@@ -1560,9 +1560,9 @@ namespace FLIVR
 		{
 			result = device->tex_pool[idx].tex;
 			if (filter == VK_FILTER_LINEAR)
-				result->sampler = device->linear_sampler;
+				result->descriptor.sampler = device->linear_sampler;
 			else if (filter == VK_FILTER_NEAREST)
-				result->sampler = device->nearest_sampler;
+				result->descriptor.sampler = device->nearest_sampler;
 		} 
 		else //idx == -1
 		{
@@ -1602,9 +1602,9 @@ namespace FLIVR
 
 				// set interpolation method
 				if (filter == VK_FILTER_LINEAR)
-					result->sampler = device->linear_sampler;
+					result->descriptor.sampler = device->linear_sampler;
 				else if (filter == VK_FILTER_NEAREST)
-					result->sampler = device->nearest_sampler;
+					result->descriptor.sampler = device->nearest_sampler;
 
 				void *texdata = brick->get_nrrd(c)->data;
 				device->UploadTexture3D(result, texdata, offset, ypitch, zpitch, !mem_swap_, semaphore, !swapped);
@@ -1633,9 +1633,9 @@ namespace FLIVR
 					result = device->tex_pool[idx].tex;
 
 					if (filter == VK_FILTER_LINEAR)
-						result->sampler = device->linear_sampler;
+						result->descriptor.sampler = device->linear_sampler;
 					else if (filter == VK_FILTER_NEAREST)
-						result->sampler = device->nearest_sampler;
+						result->descriptor.sampler = device->nearest_sampler;
 
 					bool brkerror = false;
 					void *texdata = brick->tex_data_brk(c, NULL);
@@ -1680,9 +1680,9 @@ namespace FLIVR
 						result = device->tex_pool[idx].tex;
 
 						if (filter == VK_FILTER_LINEAR)
-							result->sampler = device->linear_sampler;
+							result->descriptor.sampler = device->linear_sampler;
 						else if (filter == VK_FILTER_NEAREST)
-							result->sampler = device->nearest_sampler;
+							result->descriptor.sampler = device->nearest_sampler;
 
 						bool brkerror = false;
 						void *texdata = brick->tex_data_brk(c, NULL);
@@ -1742,9 +1742,9 @@ namespace FLIVR
 		{
 			result = device->tex_pool[idx].tex;
 			if (filter == VK_FILTER_LINEAR)
-				result->sampler = device->linear_sampler;
+				result->descriptor.sampler = device->linear_sampler;
 			else if (filter == VK_FILTER_NEAREST)
-				result->sampler = device->nearest_sampler;
+				result->descriptor.sampler = device->nearest_sampler;
 		}
 		else //idx == -1
 		{
@@ -1777,9 +1777,9 @@ namespace FLIVR
 
 			// set interpolation method
 			if (filter == VK_FILTER_LINEAR)
-				result->sampler = device->linear_sampler;
+				result->descriptor.sampler = device->linear_sampler;
 			else if (filter == VK_FILTER_NEAREST)
-				result->sampler = device->nearest_sampler;
+				result->descriptor.sampler = device->nearest_sampler;
 
 			void* texdata = brick->get_nrrd(c)->data;
 			device->UploadTexture3D(result, texdata, offset, ypitch, zpitch, !mem_swap_, semaphore, !swapped);

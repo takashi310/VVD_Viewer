@@ -88,7 +88,7 @@ namespace FLIVR
 #define VOL_UNIFORMS_INDEX_COLOR \
 	"//VOL_UNIFORMS_INDEX_COLOR\n" \
 	"layout (binding = 7) uniform sampler2D tex5;\n" \
-	"layout (binding = 9) uniform sampler2D tex7;\n" \
+	"layout (binding = 8) uniform sampler2D tex7;\n" \
 	"\n"
 
 #define VOL_UNIFORMS_INDEX_COLOR_D \
