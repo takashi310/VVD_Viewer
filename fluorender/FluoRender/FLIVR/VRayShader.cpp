@@ -323,8 +323,6 @@ namespace FLIVR
 	"			if ( (inside && id != prev_id) || (!inside && (vol_clip_func(prev_pos) || id != prev_id)) )" \
 	"			{\n" \
 	"				c = texture(tex7, vec2((float(id%uint(256))+0.5)/256.0, (float(id/256)+0.5)/256.0));\n" \
-	"				vec4 col = texture(tex7, vec2((float(prev_id%uint(256))+0.5)/256.0, (float(prev_id/256)+0.5)/256.0));\n" \
-	"				c.xyz = id != 0 ? c.xyz : c.xyz + col.xyz;" \
 	"				vec4 p; \n" \
 	"				uint r; \n" \
 	"				v = vec4(0.0); \n" \
