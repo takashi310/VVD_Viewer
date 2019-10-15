@@ -679,15 +679,18 @@ namespace FLIVR
 		double tx0, ty0, tz0, tx1, ty1, tz1;
 		double bx1, by1, bz1;
 		double dx0, dy0, dz0, dx1, dy1, dz1;
+		const int overlapx = 2 + sz_x / 512;
+		const int overlapy = 2 + sz_y / 512;
+		const int overlapz = 2 + sz_z / 512;
 		for (k = 0; k < sz_z; k += bsize[2])
 		{
-			if (k) k--;
+			if (k) k -= overlapz;
 			for (j = 0; j < sz_y; j += bsize[1])
 			{
-				if (j) j--;
+				if (j) j -= overlapy;
 				for (i = 0; i < sz_x; i += bsize[0])
 				{
-					if (i) i--;
+					if (i) i -= overlapx;
 					mx = Min(bsize[0], sz_x - i);
 					my = Min(bsize[1], sz_y - j);
 					mz = Min(bsize[2], sz_z - k);
@@ -703,37 +706,37 @@ namespace FLIVR
 					}
 
 					// Compute Texture Box.
-					tx0 = i?((mx2 - mx + 0.5) / mx2): 0.0;
-					ty0 = j?((my2 - my + 0.5) / my2): 0.0;
-					tz0 = k?((mz2 - mz + 0.5) / mz2): 0.0;
+					tx0 = i?((mx2 - mx + overlapx / 2.0) / mx2): 0.0;
+					ty0 = j?((my2 - my + overlapy / 2.0) / my2): 0.0;
+					tz0 = k?((mz2 - mz + overlapz / 2.0) / mz2): 0.0;
 
-					tx1 = 1.0 - 0.5 / mx2;
+					tx1 = 1.0 - overlapx / 2.0 / mx2;
 					if (mx < bsize[0]) tx1 = 1.0;
 					if (sz_x - i == bsize[0]) tx1 = 1.0;
 
-					ty1 = 1.0 - 0.5 / my2;
+					ty1 = 1.0 - overlapy / 2.0 / my2;
 					if (my < bsize[1]) ty1 = 1.0;
 					if (sz_y - j == bsize[1]) ty1 = 1.0;
 
-					tz1 = 1.0 - 0.5 / mz2;
+					tz1 = 1.0 - overlapz / 2.0 / mz2;
 					if (mz < bsize[2]) tz1 = 1.0;
 					if (sz_z - k == bsize[2]) tz1 = 1.0;
 
 					BBox tbox(Point(tx0, ty0, tz0), Point(tx1, ty1, tz1));
 
 					// Compute BBox.
-					bx1 = Min((i + bsize[0] - 0.5) / (double)sz_x, 1.0);
+					bx1 = Min((i + bsize[0] - overlapx / 2.0) / (double)sz_x, 1.0);
 					if (sz_x - i == bsize[0]) bx1 = 1.0;
 
-					by1 = Min((j + bsize[1] - 0.5) / (double)sz_y, 1.0);
+					by1 = Min((j + bsize[1] - overlapy / 2.0) / (double)sz_y, 1.0);
 					if (sz_y - j == bsize[1]) by1 = 1.0;
 
-					bz1 = Min((k + bsize[2] - 0.5) / (double)sz_z, 1.0);
+					bz1 = Min((k + bsize[2] - overlapz / 2.0) / (double)sz_z, 1.0);
 					if (sz_z - k == bsize[2]) bz1 = 1.0;
 
-					BBox bbox(Point(i==0?0:(i+0.5) / (double)sz_x,
-						j==0?0:(j+0.5) / (double)sz_y,
-						k==0?0:(k+0.5) / (double)sz_z),
+					BBox bbox(Point(i==0?0:(i+overlapx/2.0) / (double)sz_x,
+						j==0?0:(j+overlapy/2.0) / (double)sz_y,
+						k==0?0:(k+overlapz/2.0) / (double)sz_z),
 						Point(bx1, by1, bz1));
 
 					ox = i-(mx2-mx);

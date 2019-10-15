@@ -1349,7 +1349,7 @@ namespace FLIVR
 			}
 			break;
 		}
-		enable_blend = (colormap_mode_ == 3) ? VK_FALSE : VK_TRUE;
+		enable_blend = VK_TRUE;
 
 		VkPipelineColorBlendAttachmentState blendAttachmentState =
 			vks::initializers::pipelineColorBlendAttachmentState(
@@ -2649,7 +2649,7 @@ namespace FLIVR
 		if (colormap_mode_ == 3)
 		{
 			auto palette = get_palette();
-			if (palette[0])
+			if (palette.count(prim_dev) > 0)
 				descriptorWritesBase.push_back(VRayShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 7, &palette[prim_dev]->descriptor));
 		}
 
@@ -2959,25 +2959,20 @@ namespace FLIVR
 				descriptorWrites.push_back(VRayShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 3, &lbltex->descriptor));
 			}
 
-			if (colormap_mode_ == 3)
-				descriptorWrites.push_back(VRayShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 7, &palette_tex_id_[prim_dev]->descriptor));
-
 /*
 			Vector vtest = tform->project(mv.unproject(Vector(0, 0, 1)));
 			Point ptest = mv.unproject(Point(0, 0, 0));
 			vtest.normalize();
 */
 			if (tmin < 0.0)
-				tmin = 0.0;
-			Vector p = view_ray.direction() * tmin;
-			Vector p2 = view_ray.direction() * tmax;
-			Vector tmp = tform->unproject(p2);
-			tmp.normalize();
-			p = Dot(tform->project(p), tmp) * tmp;
-			p = mv.project(p);
-			p2 = Dot(tform->project(p2), tmp) * tmp;
-			p2 = mv.project(p2);
-			frag_const.loc_zmin_zmax_dz = { p.z(), p2.z(), (p2.z()-p.z())/slicenum  };
+				tmin = tmin - dt * ceil(tmin / dt);
+			Point p = view_ray.origin() + view_ray.direction() * tmin;
+			Point p2 = view_ray.origin() + view_ray.direction() * tmax;
+			Vector dv = view_ray.direction() * dt;
+			p = mv.project(tform->project(p));
+			p2 = mv.project(tform->project(p2));
+			dv = mv.project(tform->project(dv));
+			frag_const.loc_zmin_zmax_dz = { p.z(), p2.z(), dv.z() };
 			frag_const.stepnum = slicenum;
 
 			//for brick transformation

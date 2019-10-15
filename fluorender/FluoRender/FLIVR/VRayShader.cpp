@@ -273,11 +273,12 @@ namespace FLIVR
 	"	vec4 prev_pos = st - ray*step;\n" \
 	"	uint prev_id = uint(texture(tex0, prev_pos.stp).x*base.loc5.w+0.5);\n" \
 	"	prev_id = !vol_clip_func(prev_pos) ? prev_id : 0;\n" \
+	"	bool inside = false;\n" \
 	"\n"
 
 #define VRAY_LOOP_HEAD \
 	"	//VRAY_LOOP_HEAD\n" \
-	"	for (uint i = 0; i < brk.stnum; i++)\n" \
+	"	for (uint i = 0; i <= brk.stnum; i++)\n" \
 	"	{\n" \
 	"		vec4 TexCoord = st + ray*step*float(i);\n" \
 	"		vec4 t = vec4(TexCoord.xyz, 1.0);\n" \
@@ -310,12 +311,67 @@ namespace FLIVR
 	"		{\n" 
 
 #define VRAY_INDEX_COLOR_BODY \
-	"			//VRAY_INDEX_COLOR_BODY\n" \
+	"			//VRAY_INDEX_COLOR_BODY_SHADE\n" \
 	"			vec4 v;\n" \
-	"			uint label = uint(texture(tex0, t.stp).x*base.loc5.w+0.5); //get mask value\n" \
-	"			vec4 c = texture(tex7, vec2((float(label%uint(256))+0.5)/256.0, (float(label/256)+0.5)/256.0));\n" \
-	"			c.rgb = (label != 0 && prev_id != label) ? c.rgb * base.loc6.z : vec3(0.0);\n" \
-	"			prev_id = (label != 0) ? label : prev_id;\n" \
+	"			uint id = uint(texture(tex0, t.stp).x*base.loc5.w+0.5);\n" \
+	"			vec4 c = vec4(0.0);\n" \
+	"			if (!inside) \n" \
+	"			{\n" \
+	"				prev_pos = vec4((t - ray*step).xyz, 1.0);\n" \
+	"				prev_id = uint(texture(tex0, prev_pos.xyz).x * base.loc5.w + 0.5);\n" \
+	"			}\n" \
+	"			if ( (inside && id != prev_id) || (!inside && (vol_clip_func(prev_pos) || id != prev_id)) )" \
+	"			{\n" \
+	"				c = texture(tex7, vec2((float(id%uint(256))+0.5)/256.0, (float(id/256)+0.5)/256.0));\n" \
+	"				vec4 col = texture(tex7, vec2((float(prev_id%uint(256))+0.5)/256.0, (float(prev_id/256)+0.5)/256.0));\n" \
+	"				c.xyz = id != 0 ? c.xyz : c.xyz + col.xyz;" \
+	"				vec4 p; \n" \
+	"				uint r; \n" \
+	"				v = vec4(0.0); \n" \
+	"				n = vec4(0.0); \n" \
+	"				w = vec4(0.0);\n" \
+	"				w.x = dir.x; \n" \
+	"				p = clamp(TexCoord + w, 0.0, 1.0); \n" \
+	"				r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
+	"				v.x = (id==r?0.5:0.0) ; \n" \
+	"				n.x = v.x + n.x; \n" \
+	"				p = clamp(TexCoord - w, 0.0, 1.0); \n" \
+	"				r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
+	"				v.x = (id==r?0.5:0.0) ; \n" \
+	"				n.x = v.x - n.x; \n" \
+	"				w = vec4(0.0); \n" \
+	"				w.y = dir.y; \n" \
+	"				p = clamp(TexCoord + w, 0.0, 1.0); \n" \
+	"				r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
+	"				v.x = (id==r?0.5:0.0) ; \n" \
+	"				n.y = v.x + n.y; \n" \
+	"				p = clamp(TexCoord - w, 0.0, 1.0); \n" \
+	"				r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
+	"				v.x = (id==r?0.5:0.0) ; \n" \
+	"				n.y = v.x - n.y; \n" \
+	"				w = vec4(0.0); \n" \
+	"				w.z = dir.z; \n" \
+	"				p = clamp(TexCoord + w, 0.0, 1.0); \n" \
+	"				r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
+	"				v.x = (id==r?0.5:0.0) ; \n" \
+	"				n.z = v.x + n.z; \n" \
+	"				p = clamp(TexCoord - w, 0.0, 1.0); \n" \
+	"				r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
+	"				v.x = (id==r?0.5:0.0) ; \n" \
+	"				n.z = v.x - n.z; \n" \
+	"				p.y = length(n.xyz); \n" \
+	"				p.y = 0.5 * (base.loc2.x<0.0?(1.0+p.y*base.loc2.x):p.y*base.loc2.x); \n" \
+	"\n" \
+	"				//VOL_COMPUTED_GM_LOOKUP\n" \
+	"				v.y = p.y;\n" \
+	"\n" \
+	"				//VOL_COLOR_OUTPUT\n" \
+	"				c.xyz = c.xyz*clamp(1.0-base.loc1.x, 0.0, 1.0) + base.loc1.x*c.xyz*(base.loc1.y > 0.0?(n.w + n.z):1.0);\n" \
+	"				c.xyz *= pow(1.0 - base.loc1.x/2.0, 2.0) + 1.0;\n" \
+	"				c.rgb = c.rgb*base.loc6.z;\n" \
+	"			}\n" \
+	"			prev_id = id;\n" \
+	"			inside = true;\n" \
 	"\n"
 
 #define VRAY_INDEX_COLOR_BODY_SHADE \
@@ -323,10 +379,14 @@ namespace FLIVR
 	"			vec4 v;\n" \
 	"			uint id = uint(texture(tex0, t.stp).x*base.loc5.w+0.5);\n" \
 	"			vec4 c = vec4(0.0);\n" \
-	"			if (id != prev_id)" \
+	"			if (!inside) \n" \
+	"			{\n" \
+	"				prev_pos = vec4((t - ray*step).xyz, 1.0);\n" \
+	"				prev_id = uint(texture(tex0, prev_pos.xyz).x * base.loc5.w + 0.5);\n" \
+	"			}\n" \
+	"			if ( (inside && id != prev_id) || (!inside && (vol_clip_func(prev_pos) || id != prev_id)) )" \
 	"			{\n" \
 	"				c = texture(tex7, vec2((float(id%uint(256))+0.5)/256.0, (float(id/256)+0.5)/256.0));\n" \
-	"				dir = dir * 2.0;\n" \
 	"				vec4 p; \n" \
 	"				uint r; \n" \
 	"				v = vec4(0.0); \n" \
@@ -384,6 +444,7 @@ namespace FLIVR
 	"				c.rgb = c.rgb*base.loc6.z;\n" \
 	"			}\n" \
 	"			prev_id = id;\n" \
+	"			inside = true;\n" \
 	"\n"
 
 #define VRAY_INDEX_COLOR_D_BODY \
@@ -657,12 +718,12 @@ namespace FLIVR
 	"\n"
 
 #define VRAY_RASTER_BLEND_SOLID \
-	"			//VOL_RASTER_BLEND_SOLID\n" \
+	"			//VRAY_RASTER_BLEND_SOLID\n" \
 	"			//do nothing\n" \
 	"\n"
 
 #define VRAY_RASTER_BLEND_ID \
-	"			//VOL_RASTER_BLEND_ID\n" \
+	"			//VRAY_RASTER_BLEND_ID\n" \
 	"			c = c*l.w;\n" \
 	"\n"
 
@@ -813,7 +874,7 @@ namespace FLIVR
 	"	FragColor = outcol;\n" \
 	"\n" 
 
-#define VRAY_LOOP_TAIL_INDEX_COLOR_BODY_SHADE \
+#define VRAY_LOOP_TAIL_INDEX_COLOR \
 	"		}\n" \
 	"		else\n" \
 	"		{\n" \
@@ -1686,8 +1747,8 @@ VRayShader::VRayShader(
 		else
 			z << VRAY_BLEND_OVER;
 
-		if (color_mode_ == 3 && shading_)
-			z << VRAY_LOOP_TAIL_INDEX_COLOR_BODY_SHADE;
+		if (color_mode_ == 3)
+			z << VRAY_LOOP_TAIL_INDEX_COLOR;
 		else
 			z << VRAY_LOOP_TAIL;
 
