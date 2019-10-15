@@ -244,6 +244,7 @@ namespace FLIVR
 	void TextureRenderer::update_palette_tex()
 	{
 		m_vulkan->UploadTextures(palette_tex_id_, palette_);
+		m_vulkan->UploadTextures(base_palette_tex_id_, base_palette_);
 	}
 
 	std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> TextureRenderer::get_palette()
@@ -823,12 +824,13 @@ namespace FLIVR
 
 	void TextureRenderer::set_desel_palette_mode_dark(float fac)
 	{
-		for (int i = 0; i < PALETTE_SIZE; i++)
+		for (int i = 1; i < PALETTE_SIZE; i++)
 		{
 			for (int j = 0; j < 3; j++)
 				palette_[i*PALETTE_ELEM_COMP+j] = (unsigned char)(base_palette_[i*PALETTE_ELEM_COMP+j]*fac);
-			//palette_[i*PALETTE_ELEM_COMP+3] = base_palette_[i*PALETTE_ELEM_COMP+3]*fac;
+			palette_[i * PALETTE_ELEM_COMP + 3] = (unsigned char)255;
 		}
+		palette_[0] = 0; palette_[1] = 0; palette_[2] = 0; palette_[3] = 0;
 
 		for(auto ite = sel_segs_.begin(); ite != sel_segs_.end(); ++ite)
 			for (int j = 0; j < PALETTE_ELEM_COMP; j++)
@@ -847,10 +849,9 @@ namespace FLIVR
 		{
 			for (int j = 0; j < 3; j++)
 				palette_[i*PALETTE_ELEM_COMP+j] = (unsigned char)(128.0*fac);
-			//palette_[i*PALETTE_ELEM_COMP+3] = base_palette_[i*PALETTE_ELEM_COMP+3]*fac;
+			palette_[i*PALETTE_ELEM_COMP+3] = (unsigned char)255;
 		}
-
-		palette_[0] = 0; palette_[1] = 0; palette_[2] = 0;
+		palette_[0] = 0; palette_[1] = 0; palette_[2] = 0; palette_[3] = 0;
 
 		for(auto ite = sel_segs_.begin(); ite != sel_segs_.end(); ++ite)
 			for (int j = 0; j < PALETTE_ELEM_COMP; j++)
