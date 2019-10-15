@@ -320,53 +320,17 @@ namespace FLIVR
 	"				prev_pos = vec4((t - ray*step).xyz, 1.0);\n" \
 	"				prev_id = uint(texture(tex0, prev_pos.xyz).x * base.loc5.w + 0.5);\n" \
 	"			}\n" \
-	"			if ( (inside && id != prev_id) || (!inside && (vol_clip_func(prev_pos) || id != prev_id)) )" \
+	"			vec4 post_pos = vec4((t + ray*step).xyz, 1.0);\n" \
+	"			uint post_id = uint(texture(tex0, post_pos.xyz).x * base.loc5.w + 0.5);\n" \
+	"			if ( (inside && (id != prev_id || id != post_id || vol_clip_func(post_pos))) || (!inside && (vol_clip_func(prev_pos) || id != prev_id || id != post_id)) )" \
 	"			{\n" \
 	"				c = texture(tex7, vec2((float(id%uint(256))+0.5)/256.0, (float(id/256)+0.5)/256.0));\n" \
-	"				vec4 p; \n" \
-	"				uint r; \n" \
-	"				v = vec4(0.0); \n" \
-	"				n = vec4(0.0); \n" \
-	"				w = vec4(0.0);\n" \
-	"				w.x = dir.x; \n" \
-	"				p = clamp(TexCoord + w, 0.0, 1.0); \n" \
-	"				r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
-	"				v.x = (id==r?0.5:0.0) ; \n" \
-	"				n.x = v.x + n.x; \n" \
-	"				p = clamp(TexCoord - w, 0.0, 1.0); \n" \
-	"				r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
-	"				v.x = (id==r?0.5:0.0) ; \n" \
-	"				n.x = v.x - n.x; \n" \
-	"				w = vec4(0.0); \n" \
-	"				w.y = dir.y; \n" \
-	"				p = clamp(TexCoord + w, 0.0, 1.0); \n" \
-	"				r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
-	"				v.x = (id==r?0.5:0.0) ; \n" \
-	"				n.y = v.x + n.y; \n" \
-	"				p = clamp(TexCoord - w, 0.0, 1.0); \n" \
-	"				r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
-	"				v.x = (id==r?0.5:0.0) ; \n" \
-	"				n.y = v.x - n.y; \n" \
-	"				w = vec4(0.0); \n" \
-	"				w.z = dir.z; \n" \
-	"				p = clamp(TexCoord + w, 0.0, 1.0); \n" \
-	"				r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
-	"				v.x = (id==r?0.5:0.0) ; \n" \
-	"				n.z = v.x + n.z; \n" \
-	"				p = clamp(TexCoord - w, 0.0, 1.0); \n" \
-	"				r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
-	"				v.x = (id==r?0.5:0.0) ; \n" \
-	"				n.z = v.x - n.z; \n" \
-	"				p.y = length(n.xyz); \n" \
-	"				p.y = 0.5 * (base.loc2.x<0.0?(1.0+p.y*base.loc2.x):p.y*base.loc2.x); \n" \
-	"\n" \
-	"				//VOL_COMPUTED_GM_LOOKUP\n" \
-	"				v.y = p.y;\n" \
 	"\n" \
 	"				//VOL_COLOR_OUTPUT\n" \
-	"				c.xyz = c.xyz*clamp(1.0-base.loc1.x, 0.0, 1.0) + base.loc1.x*c.xyz*(base.loc1.y > 0.0?(n.w + n.z):1.0);\n" \
+	"				c.xyz = c.xyz*clamp(1.0-base.loc1.x, 0.0, 1.0) + base.loc1.x*c.xyz;\n" \
 	"				c.xyz *= pow(1.0 - base.loc1.x/2.0, 2.0) + 1.0;\n" \
 	"				c.rgb = c.rgb*base.loc6.z;\n" \
+	"				c = c * l.w;\n" \
 	"			}\n" \
 	"			prev_id = id;\n" \
 	"			inside = true;\n" \
@@ -382,7 +346,9 @@ namespace FLIVR
 	"				prev_pos = vec4((t - ray*step).xyz, 1.0);\n" \
 	"				prev_id = uint(texture(tex0, prev_pos.xyz).x * base.loc5.w + 0.5);\n" \
 	"			}\n" \
-	"			if ( (inside && id != prev_id) || (!inside && (vol_clip_func(prev_pos) || id != prev_id)) )" \
+	"			vec4 post_pos = vec4((t + ray*step).xyz, 1.0);\n" \
+	"			uint post_id = uint(texture(tex0, post_pos.xyz).x * base.loc5.w + 0.5);\n" \
+	"			if ( (inside && (id != prev_id || id != post_id || vol_clip_func(post_pos))) || (!inside && (vol_clip_func(prev_pos) || id != prev_id || id != post_id)) )" \
 	"			{\n" \
 	"				c = texture(tex7, vec2((float(id%uint(256))+0.5)/256.0, (float(id/256)+0.5)/256.0));\n" \
 	"				vec4 p; \n" \
@@ -392,31 +358,31 @@ namespace FLIVR
 	"				w = vec4(0.0);\n" \
 	"				w.x = dir.x; \n" \
 	"				p = clamp(TexCoord + w, 0.0, 1.0); \n" \
-	"				r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
+	"				r = !vol_clip_func(p) ? uint(texture(tex0, p.stp).x*base.loc5.w+0.5) : 0; \n" \
 	"				v.x = (id==r?0.5:0.0) ; \n" \
 	"				n.x = v.x + n.x; \n" \
 	"				p = clamp(TexCoord - w, 0.0, 1.0); \n" \
-	"				r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
+	"				r = !vol_clip_func(p) ? uint(texture(tex0, p.stp).x*base.loc5.w+0.5) : 0; \n" \
 	"				v.x = (id==r?0.5:0.0) ; \n" \
 	"				n.x = v.x - n.x; \n" \
 	"				w = vec4(0.0); \n" \
 	"				w.y = dir.y; \n" \
 	"				p = clamp(TexCoord + w, 0.0, 1.0); \n" \
-	"				r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
+	"				r = !vol_clip_func(p) ? uint(texture(tex0, p.stp).x*base.loc5.w+0.5) : 0; \n" \
 	"				v.x = (id==r?0.5:0.0) ; \n" \
 	"				n.y = v.x + n.y; \n" \
 	"				p = clamp(TexCoord - w, 0.0, 1.0); \n" \
-	"				r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
+	"				r = !vol_clip_func(p) ? uint(texture(tex0, p.stp).x*base.loc5.w+0.5) : 0; \n" \
 	"				v.x = (id==r?0.5:0.0) ; \n" \
 	"				n.y = v.x - n.y; \n" \
 	"				w = vec4(0.0); \n" \
 	"				w.z = dir.z; \n" \
 	"				p = clamp(TexCoord + w, 0.0, 1.0); \n" \
-	"				r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
+	"				r = !vol_clip_func(p) ? uint(texture(tex0, p.stp).x*base.loc5.w+0.5) : 0; \n" \
 	"				v.x = (id==r?0.5:0.0) ; \n" \
 	"				n.z = v.x + n.z; \n" \
 	"				p = clamp(TexCoord - w, 0.0, 1.0); \n" \
-	"				r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
+	"				r = !vol_clip_func(p) ? uint(texture(tex0, p.stp).x*base.loc5.w+0.5) : 0; \n" \
 	"				v.x = (id==r?0.5:0.0) ; \n" \
 	"				n.z = v.x - n.z; \n" \
 	"				p.y = length(n.xyz); \n" \
@@ -440,6 +406,7 @@ namespace FLIVR
 	"				c.xyz = c.xyz*clamp(1.0-base.loc1.x, 0.0, 1.0) + base.loc1.x*c.xyz*(base.loc1.y > 0.0?(n.w + n.z):1.0);\n" \
 	"				c.xyz *= pow(1.0 - base.loc1.x/2.0, 2.0) + 1.0;\n" \
 	"				c.rgb = c.rgb*base.loc6.z;\n" \
+	"				c = c * l.w;\n" \
 	"			}\n" \
 	"			prev_id = id;\n" \
 	"			inside = true;\n" \
