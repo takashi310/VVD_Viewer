@@ -867,9 +867,9 @@ namespace vks
 		bool flush, vks::VulkanSemaphoreSettings* semaphore, bool sync 
 	)
 	{
-		uint64_t st_time, ed_time;
+		/*uint64_t st_time, ed_time;
 		char dbgstr[50];
-		st_time = milliseconds_now();
+		st_time = milliseconds_now();*/
 
 		VkDeviceSize texMemSize = (VkDeviceSize)tex->w * (VkDeviceSize)tex->h * (VkDeviceSize)tex->d * (VkDeviceSize)tex->bytes;
 
@@ -878,7 +878,7 @@ namespace vks
 
 		checkStagingBuffer(texMemSize);
 
-		st_time = milliseconds_now();
+		//st_time = milliseconds_now();
 		
 		// Copy texture data into staging buffer
 		uint64_t poffset = (VkDeviceSize)offset.z * zpitch + (VkDeviceSize)offset.y * ypitch + offset.x * (VkDeviceSize)tex->bytes;
@@ -924,9 +924,9 @@ namespace vks
 			i.join();
 		}
 
-		ed_time = milliseconds_now();
+		/*ed_time = milliseconds_now();
 		sprintf(dbgstr, "memcpy time: %lld  size: %lld\n", ed_time - st_time, texMemSize);
-		OutputDebugStringA(dbgstr);
+		OutputDebugStringA(dbgstr);*/
 
 		VkDeviceSize atom = properties.limits.nonCoherentAtomSize;
 		if (atom > 0)
@@ -936,13 +936,14 @@ namespace vks
 		else
 			staging_buf.flush(texMemSize);
 
-		st_time = milliseconds_now();
+		//st_time = milliseconds_now();
 
 		CopyDataStagingBuf2Tex(tex, flush, semaphore);
 
-		ed_time = milliseconds_now();
-		sprintf(dbgstr, "tex upload time: %lld  size: %lld\n", ed_time - st_time, texMemSize);
-		OutputDebugStringA(dbgstr);
+		//VK_CHECK_RESULT(vkQueueWaitIdle(transfer_queue));
+		//ed_time = milliseconds_now();
+		//sprintf(dbgstr, "tex upload time: %lld  size: %lld\n", ed_time - st_time, texMemSize);
+		//OutputDebugStringA(dbgstr);
 
 		return true;
 	}

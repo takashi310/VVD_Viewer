@@ -1567,6 +1567,8 @@ namespace FLIVR
 		} 
 		else //idx == -1
 		{
+			//VK_CHECK_RESULT(vkQueueWaitIdle(m_vulkan->vulkanDevice->queue));
+			//VK_CHECK_RESULT(vkQueueWaitIdle(m_vulkan->vulkanDevice->transfer_queue));
 			//uint64_t st_time, ed_time;
 			//char dbgstr[50];
 			//st_time = milliseconds_now();
@@ -1609,7 +1611,8 @@ namespace FLIVR
 
 				void *texdata = brick->get_nrrd(c)->data;
 				device->UploadTexture3D(result, texdata, offset, ypitch, zpitch, !mem_swap_, semaphore, !swapped);
-				*updated = true;
+				if (updated)
+					*updated = true;
 			}
 			else if(tex_->isBrxml())
 			{
@@ -1700,6 +1703,8 @@ namespace FLIVR
 #endif
 			}
 
+			//VK_CHECK_RESULT(vkQueueWaitIdle(m_vulkan->vulkanDevice->queue));
+			//VK_CHECK_RESULT(vkQueueWaitIdle(m_vulkan->vulkanDevice->transfer_queue));
 			//ed_time = milliseconds_now();
 			//sprintf(dbgstr, "%lld\n", ed_time - st_time);
 			//OutputDebugStringA(dbgstr);

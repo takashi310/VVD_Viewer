@@ -300,10 +300,10 @@ namespace FLIVR
 #define VRAY_LOOP_CONDITION_DP_3 \
 	"i > dp_near && i < dp_far && "
 
-#define VRAY_LOOP_CONDITION_HIDE_OUTSIDE_MASK \
+#define VRAY_LOOP_CONDITION_HIDE_INSIDE_MASK \
 	"maskval <= 0.5 && "
 
-#define VRAY_LOOP_CONDITION_HIDE_INSIDE_MASK \
+#define VRAY_LOOP_CONDITION_HIDE_OUTSIDE_MASK \
 	"maskval > 0.5 && "
 
 #define VRAY_LOOP_CONDITION_END \
@@ -936,7 +936,15 @@ namespace FLIVR
 	"		vec4 TexCoord = st + ray*step*float(i);\n" \
 	"		vec4 t = vec4(TexCoord.xyz, 1.0);\n" \
 	"\n" \
-	"		if (!vol_clip_func(t) && t.x >= brk.tbmin.x && t.x <= brk.tbmax.x && t.y >= brk.tbmin.y && t.y <= brk.tbmax.y && t.z >= brk.tbmin.z && t.z <= brk.tbmax.z && outcol.w <= 0.99995)\n" \
+	"		uint cond = vol_clip_func(t) ? 1 : 0;\n" \
+	"		cond += t.x < brk.tbmin.x ? 1 : 0;\n" \
+	"		cond += t.x > brk.tbmax.x ? 1 : 0;\n" \
+	"		cond += t.y < brk.tbmin.y ? 1 : 0;\n" \
+	"		cond += t.y > brk.tbmax.y ? 1 : 0;\n" \
+	"		cond += t.z < brk.tbmin.z ? 1 : 0;\n" \
+	"		cond += t.z > brk.tbmax.z ? 1 : 0;\n" \
+	"		cond += outcol.w > 0.99995 ? 1 : 0;\n" \
+	"		if (cond == 0)\n" \
 	"		{\n" \
 	"			//VOL_DATA_VOLUME_LOOKUP\n" \
 	"			vec4 v = texture(tex0, t.stp);\n" \
@@ -1430,6 +1438,10 @@ VRayShader::VRayShader(
 	bool VRayShader::emit_f(string& s)
 	{
 		ostringstream z;
+
+		/*z << VRAY_FRG_SHADER_CODE_TEST_PERSP;
+		s = z.str();
+		return false;*/
 
 		//version info
 		z << ShaderProgram::glsl_version_;

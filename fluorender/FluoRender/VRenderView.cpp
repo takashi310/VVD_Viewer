@@ -2649,6 +2649,11 @@ void VRenderVulkanView::PaintStroke()
 
 	vks::VulkanDevice* prim_dev = m_vulkan->devices[0];
 
+	if (m_fbo_paint && (m_fbo_paint->w != nx || m_fbo_paint->h != ny))
+	{
+		m_fbo_paint.reset();
+		m_tex_paint.reset();
+	}
 	if (!m_fbo_paint)
 	{
 		m_fbo_paint = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
@@ -2699,12 +2704,12 @@ void VRenderVulkanView::PaintStroke()
 		params.pipeline =
 			m_v2drender->preparePipeline(
 				IMG_SHDR_PAINT,
-				V2DRENDER_BLEND_DISABLE,
+				V2DRENDER_BLEND_MAX,
 				m_fbo_paint->attachments[0]->format,
 				m_fbo_paint->attachments.size(),
 				0,
 				m_fbo_paint->attachments[0]->is_swapchain_images);
-		params.tex[0] = m_tex_paint.get();
+		//params.tex[0] = m_tex_paint.get();
 		params.loc[0] = glm::vec4(float(x), float(y), float(radius1 * pressure), float(radius2 * pressure));
 		params.loc[1] = glm::vec4((float)nx, (float)ny, 0.0f, 0.0f);
 		params.clear = m_clear_paint;
@@ -4524,7 +4529,7 @@ void VRenderVulkanView::DrawMIP(VolumeData* vd, std::unique_ptr<vks::VFrameBuffe
 
 	if (do_mip)
 	{
-		if (m_fbo_ol1 && m_fbo_ol1->w != nx || m_fbo_ol1->h != ny)
+		if (m_fbo_ol1 && (m_fbo_ol1->w != nx || m_fbo_ol1->h != ny))
 		{
 			m_fbo_ol1.reset();
 			m_tex_ol1.reset();
@@ -5015,7 +5020,7 @@ void VRenderVulkanView::DrawOLShadows(vector<VolumeData*> &vlist, std::unique_pt
 	vks::VulkanDevice* prim_dev = m_vulkan->vulkanDevice;
 	
 	//gradient pass
-	if (m_fbo_ol1 && m_fbo_ol1->w != nx || m_fbo_ol1->h != ny)
+	if (m_fbo_ol1 && (m_fbo_ol1->w != nx || m_fbo_ol1->h != ny))
 	{
 		m_fbo_ol1.reset();
 		m_tex_ol1.reset();
@@ -5141,7 +5146,7 @@ void VRenderVulkanView::DrawOLShadows(vector<VolumeData*> &vlist, std::unique_pt
 		(TextureRenderer::get_mem_swap() &&
 		TextureRenderer::get_clear_chan_buffer()))
 	{
-		if (m_fbo_ol2 && m_fbo_ol2->w != nx || m_fbo_ol2->h != ny)
+		if (m_fbo_ol2 && (m_fbo_ol2->w != nx || m_fbo_ol2->h != ny))
 		{
 			m_fbo_ol2.reset();
 			m_tex_ol2.reset();
@@ -14555,6 +14560,7 @@ void VRenderVulkanView::OnMouse(wxMouseEvent& event)
 			Segment();
 			m_int_mode = 4;
 			m_force_clear = true;
+			m_clear_paint = true;
 		}
 		else if (m_int_mode == 5 &&
 			!event.AltDown())
@@ -14578,6 +14584,7 @@ void VRenderVulkanView::OnMouse(wxMouseEvent& event)
 				AddPaintRulerPoint();
 			m_int_mode = 8;
 			m_force_clear = true;
+			m_clear_paint = true;
 		}
 
 		RefreshGL();

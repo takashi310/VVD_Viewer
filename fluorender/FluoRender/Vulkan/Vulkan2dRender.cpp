@@ -356,9 +356,15 @@ Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(
 		src_blend = VK_BLEND_FACTOR_ZERO;
 		dst_blend = VK_BLEND_FACTOR_SRC_COLOR;
 		break;
+	case V2DRENDER_BLEND_MAX:
+		enable_blend = VK_TRUE;
+		blend_op = VK_BLEND_OP_MAX;
+		src_blend = VK_BLEND_FACTOR_ONE;
+		dst_blend = VK_BLEND_FACTOR_ONE;
+		break;
 	default:
 		enable_blend = VK_FALSE;
-		blend_op = VK_BLEND_OP_ADD;
+		blend_op = VK_BLEND_OP_MAX;
 		src_blend = VK_BLEND_FACTOR_ONE;
 		dst_blend = VK_BLEND_FACTOR_ZERO;
 	}
