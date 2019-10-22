@@ -58,7 +58,6 @@ namespace FLIVR {
 	"	vec4 loc0; //(mouse_x, mouse_y, radius1, radius2)\n" \
 	"	vec4 loc1; //(width, height, 0, 0)\n" \
 	"} ct;\n" \
-	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \

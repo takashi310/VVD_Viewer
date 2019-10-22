@@ -748,17 +748,15 @@ namespace FLIVR
 	"	vec4 loc0; //(mouse_x, mouse_y, radius1, radius2)\n" \
 	"	vec4 loc1; //(width, height, 0, 0)\n" \
 	"} ct;\n" \
-	"layout (binding = 0) uniform sampler2D tex0;\n" \
 	"\n" \
 	"void main()\n" \
 	"{\n" \
 	"	vec4 t = vec4(OutTexCoord, 1.0);\n" \
-	"	vec4 c = texture(tex0, t.xy);\n" \
 	"	vec2 center = vec2(ct.loc0.x, ct.loc0.y);\n" \
 	"	vec2 pos = vec2(t.x*ct.loc1.x, t.y*ct.loc1.y);\n" \
 	"	float d = length(pos - center);\n" \
 	"	vec4 ctemp = d<ct.loc0.z?vec4(1.0, 1.0, 1.0, 1.0):(d<ct.loc0.w?vec4(0.5, 0.5, 0.5, 1.0):vec4(0.0, 0.0, 0.0, 1.0));\n" \
-	"	FragColor = ctemp.r>c.r?ctemp:c;\n" \
+	"	FragColor = ctemp;\n" \
 	"	FragColor.a = FragColor.r>0.1?0.5:0.0;\n" \
 	"}\n"
 

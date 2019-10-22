@@ -1916,7 +1916,7 @@ namespace FLIVR
 			if (vert_ubuf_offset == 0)
 				vert_ubuf.flush();
 			else
-				vert_ubuf.flush(sizeof(VolShaderFactory::VolVertShaderUBO), vert_ubuf_offset);
+				vert_ubuf.flush(VK_WHOLE_SIZE, vert_ubuf_offset);
 			frag_ubuf.flush();
 		}
 		
@@ -2749,7 +2749,7 @@ namespace FLIVR
 			if (vert_ubuf_offset == 0)
 				vert_ubuf.flush();
 			else
-				vert_ubuf.flush(sizeof(VRayShaderFactory::VRayVertShaderUBO), vert_ubuf_offset);
+				vert_ubuf.flush(VK_WHOLE_SIZE, vert_ubuf_offset);
 			frag_ubuf.flush();
 		}
 

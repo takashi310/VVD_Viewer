@@ -823,7 +823,7 @@ namespace FLIVR
 				if (vert_ubuf_offset == 0)
 					vert_ubuf.flush();
 				else
-					vert_ubuf.flush(sizeof(MshShaderFactory::MshVertShaderUBO), vert_ubuf_offset);
+					vert_ubuf.flush(VK_WHOLE_SIZE, vert_ubuf_offset);
 				frag_ubuf.flush();
 			}
 
@@ -1028,7 +1028,7 @@ namespace FLIVR
 			if (vert_ubuf_offset == 0)
 				vert_ubuf.flush();
 			else
-				vert_ubuf.flush(sizeof(MshShaderFactory::MshVertShaderUBO), vert_ubuf_offset);
+				vert_ubuf.flush(sizeof(VK_WHOLE_SIZE, vert_ubuf_offset));
 			frag_ubuf.flush();
 		}
 		if (depth_peel_)
@@ -1224,7 +1224,7 @@ namespace FLIVR
 			if (vert_ubuf_offset == 0)
 				vert_ubuf.flush();
 			else
-				vert_ubuf.flush(sizeof(MshShaderFactory::MshVertShaderUBO), vert_ubuf_offset);
+				vert_ubuf.flush(VK_WHOLE_SIZE, vert_ubuf_offset);
 			frag_ubuf.flush();
 		}
 		

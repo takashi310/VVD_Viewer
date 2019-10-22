@@ -55,20 +55,20 @@ DEALINGS IN THE SOFTWARE.
 int VRenderView::m_id = 1;
 ImgShaderFactory VRenderVulkanView::m_img_shader_factory;
 
-uint64_t st_time, ed_time;
-char dbgstr[50];
-long long milliseconds_now() {
-	static LARGE_INTEGER s_frequency;
-	static BOOL s_use_qpc = QueryPerformanceFrequency(&s_frequency);
-	if (s_use_qpc) {
-		LARGE_INTEGER now;
-		QueryPerformanceCounter(&now);
-		return (1000LL * now.QuadPart) / s_frequency.QuadPart;
-	}
-	else {
-		return GetTickCount64();
-	}
-}
+//uint64_t st_time, ed_time;
+//char dbgstr[50];
+//long long milliseconds_now() {
+//    static LARGE_INTEGER s_frequency;
+//    static BOOL s_use_qpc = QueryPerformanceFrequency(&s_frequency);
+//    if (s_use_qpc) {
+//        LARGE_INTEGER now;
+//        QueryPerformanceCounter(&now);
+//        return (1000LL * now.QuadPart) / s_frequency.QuadPart;
+//    }
+//    else {
+//        return GetTickCount64();
+//    }
+//}
 
 ////////////////////////////////////////////////////////////////////////
 
@@ -1619,9 +1619,9 @@ void VRenderVulkanView::DrawVolumes(int peel)
 		{
 			TextureRenderer::reset_update_loop();
 			vkQueueWaitIdle(m_vulkan->vulkanDevice->queue);
-			ed_time = milliseconds_now();
-			sprintf(dbgstr, "Frame Draw: %lld \n", ed_time - st_time);
-			OutputDebugStringA(dbgstr);
+//            ed_time = milliseconds_now();
+//            sprintf(dbgstr, "Frame Draw: %lld \n", ed_time - st_time);
+//            OutputDebugStringA(dbgstr);
 		}
 	}
 
@@ -12150,7 +12150,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 	//  !TextureRenderer::get_done_update_loop())
 	//  return;
 
-	st_time = milliseconds_now();
+	//st_time = milliseconds_now();
 
 	if (reset_peeling_layer)
 		m_finished_peeling_layer = 0;
