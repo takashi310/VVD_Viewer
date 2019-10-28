@@ -2355,10 +2355,22 @@ void ClippingView::OnYZClipBtn(wxCommandEvent& event)
 	{
 		int x1 = resx/2-dist/2;
 		int x2 = x1 + dist;
-		m_x1_clip_text->SetValue(
-			wxString::Format("%d", x1));
-		m_x2_clip_text->SetValue(
-			wxString::Format("%d", x2));
+		int cur_x1 = m_x1_clip_sldr->GetValue();
+		int cur_x2 = m_x2_clip_sldr->GetValue();
+		if (x1 <= cur_x2)
+		{
+			m_x1_clip_text->SetValue(
+				wxString::Format("%d", x1));
+			m_x2_clip_text->SetValue(
+				wxString::Format("%d", x2));
+		}
+		else
+		{
+			m_x2_clip_text->SetValue(
+				wxString::Format("%d", x2));
+			m_x1_clip_text->SetValue(
+				wxString::Format("%d", x1));
+		}
 		SetXLink(true);
 		int distx, disty, distz;
 		if (m_sel_type == 2)
@@ -2420,10 +2432,22 @@ void ClippingView::OnXZClipBtn(wxCommandEvent& event)
 	{
 		int y1 = resy/2-dist/2;
 		int y2 = y1 + dist;
-		m_y1_clip_text->SetValue(
-			wxString::Format("%d", y1));
-		m_y2_clip_text->SetValue(
-			wxString::Format("%d", y2));
+		int cur_y1 = m_y1_clip_sldr->GetValue();
+		int cur_y2 = m_y2_clip_sldr->GetValue();
+		if (y1 <= cur_y2)
+		{
+			m_y1_clip_text->SetValue(
+				wxString::Format("%d", y1));
+			m_y2_clip_text->SetValue(
+				wxString::Format("%d", y2));
+		}
+		else
+		{
+			m_y2_clip_text->SetValue(
+				wxString::Format("%d", y2));
+			m_y1_clip_text->SetValue(
+				wxString::Format("%d", y1));
+		}
 		SetYLink(true);
 		int distx, disty, distz;
 		if (m_sel_type == 2)
@@ -2485,10 +2509,22 @@ void ClippingView::OnXYClipBtn(wxCommandEvent& event)
 	{
 		int z1 = resz/2-dist/2;
 		int z2 = z1 + dist;
-		m_z1_clip_text->SetValue(
-			wxString::Format("%d", z1));
-		m_z2_clip_text->SetValue(
-			wxString::Format("%d", z2));
+		int cur_z1 = m_z1_clip_sldr->GetValue();
+		int cur_z2 = m_z2_clip_sldr->GetValue();
+		if (z1 <= cur_z2)
+		{
+			m_z1_clip_text->SetValue(
+				wxString::Format("%d", z1));
+			m_z2_clip_text->SetValue(
+				wxString::Format("%d", z2));
+		}
+		else
+		{
+			m_z2_clip_text->SetValue(
+				wxString::Format("%d", z2));
+			m_z1_clip_text->SetValue(
+				wxString::Format("%d", z1));
+		}
 		SetZLink(true);
 		int distx, disty, distz;
 		if (m_sel_type == 2)
