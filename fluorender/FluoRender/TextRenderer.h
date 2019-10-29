@@ -29,7 +29,7 @@ DEALINGS IN THE SOFTWARE.
 #ifndef _TEXTRENDERER_H_
 #define _TEXTRENDERER_H_
 
-#include <glew.h>
+//#include <glew.h>
 #include <string>
 #include <ft2build.h>
 #include FT_FREETYPE_H

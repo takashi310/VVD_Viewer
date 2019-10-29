@@ -1246,7 +1246,7 @@ namespace FLIVR
 			depth_peel_, true,
 			hiqual_, ml_mode_,
 			colormap_mode_, colormap_, colormap_proj_,
-			solid_, 1, tex_->nmask() != -1 ? m_mask_hide_mode : VOL_MASK_HIDE_NONE, persp);
+			solid_, 1, tex_->nmask() != -1 ? m_mask_hide_mode : VOL_MASK_HIDE_NONE, persp, mode_);
 
 		if (m_prev_vray_pipeline >= 0) {
 			if (m_vray_pipelines[m_prev_vray_pipeline].device == device &&
@@ -3211,11 +3211,11 @@ namespace FLIVR
 				filter_params.pipeline =
 					m_v2drender->preparePipeline(
 						IMG_SHDR_FILTER_BLUR,
-						V2DRENDER_BLEND_OVER,
+						V2DRENDER_BLEND_DISABLE,
 						VK_FORMAT_R32G32B32A32_SFLOAT,
 						1,
 						0,
-						filter_buffer_->attachments[0]->is_swapchain_images);
+						false);
 
 				if (filter_buffer_ &&
 					(filter_buffer_resize_ || filter_buffer_->renderPass != filter_params.pipeline.pass))
@@ -3235,13 +3235,13 @@ namespace FLIVR
 					if (!filter_tex_id_)
 						filter_tex_id_ = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, w2, h2);
 
-					filter_buffer_->addAttachment(blend_tex_id_);
+					filter_buffer_->addAttachment(filter_tex_id_);
 
 					filter_buffer_->setup(filter_params.pipeline.pass);
 				}
 
 				filter_params.clear = true;
-				filter_params.loc[0] = { filter_size_min_ / w2, filter_size_min_ / h2, 1.0 / w2, 1.0 / h2 };
+				filter_params.loc[0] = { (float)(filter_size_min_ / w2), (float)(filter_size_min_ / h2), 1.0f / w2, 1.0f / h2 };
 				filter_params.tex[0] = blend_tex_id_.get();
 
 				vks::VulkanSemaphoreSettings sem = prim_dev->GetNextRenderSemaphoreSettings();
@@ -3266,7 +3266,7 @@ namespace FLIVR
 						framebuf->attachments[0]->is_swapchain_images);
 				params.tex[0] = filter_tex_id_.get();
 				filter_size_shp_ = CalcFilterSize(3, w, h, tex_->nx(), tex_->ny(), zoom, sfactor_);
-				params.loc[0] = { filter_size_shp_ / w, filter_size_shp_ / h, 0.0, 0.0 };
+				params.loc[0] = { (float)(filter_size_shp_ / w), (float)(filter_size_shp_ / h), 0.0f, 0.0f };
 			}
 			else
 			{

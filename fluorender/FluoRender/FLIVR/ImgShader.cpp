@@ -444,6 +444,7 @@ namespace FLIVR
 	"	vec4 c8 = texture(tex0, vec2(t.x+0.70711*ct.loc0.x, t.y+0.70711*ct.loc0.y));\n" \
 	"	c = c*9.0 - (c1+c2+c3+c4+c5+c6+c7+c8);\n" \
 	"	FragColor = c;\n" \
+	"	//FragColor = vec4(1.0, 0.0, 0.0, 1.0);\n" \
 	"}\n"
 
 #define IMG_SHADER_CODE_DEPTH_TO_OUTLINES \

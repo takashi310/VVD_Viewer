@@ -827,6 +827,11 @@ namespace FLIVR
 	"			outcol = outcol + (1.0 - outcol.w) * c;\n" \
 	"\n"
 
+#define VRAY_BLEND_MIP \
+	"			//VRAY_BLEND_MIP\n" \
+	"			outcol = max(outcol, c);\n" \
+	"\n"
+
 #define VRAY_BLEND_DMAP \
 	"			//VRAY_BLEND_DMAP\n" \
 	"			outcol = c;\n" \
@@ -1354,7 +1359,7 @@ VRayShader::VRayShader(
 	int peel, bool clip,
 	bool hiqual, int mask,
 	int color_mode, int colormap, int colormap_proj,
-	bool solid, int vertex_shader, int mask_hide_mode, bool persp)
+	bool solid, int vertex_shader, int mask_hide_mode, bool persp, int blend_mode)
 	: device_(device),
 	poly_(poly),
 	channels_(channels),
@@ -1371,6 +1376,7 @@ VRayShader::VRayShader(
 	vertex_type_(vertex_shader),
 	mask_hide_mode_(mask_hide_mode),
 	persp_(persp),
+	blend_mode_(blend_mode),
 	program_(0)
 	{
 	}
@@ -1721,6 +1727,8 @@ VRayShader::VRayShader(
 
 		if (color_mode_ == 2)
 			z << VRAY_BLEND_DMAP;
+		else if (blend_mode_ == 2)
+			z << VRAY_BLEND_MIP;
 		else
 			z << VRAY_BLEND_OVER;
 
@@ -1777,7 +1785,7 @@ VRayShader::VRayShader(
 		int peel, bool clip,
 		bool hiqual, int mask,
 		int color_mode, int colormap, int colormap_proj,
-		bool solid, int vertex_shader, int mask_hide_mode, bool persp)
+		bool solid, int vertex_shader, int mask_hide_mode, bool persp, int blend_mode)
 	{
 		VRayShader*ret = nullptr;
 		if(prev_shader_ >= 0)
@@ -1788,7 +1796,7 @@ VRayShader::VRayShader(
 				peel, clip,
 				hiqual, mask,
 				color_mode, colormap, colormap_proj,
-				solid, vertex_shader, mask_hide_mode, persp))
+				solid, vertex_shader, mask_hide_mode, persp, blend_mode))
 			{
 				ret = shader_[prev_shader_];
 			}
@@ -1803,7 +1811,7 @@ VRayShader::VRayShader(
 					peel, clip,
 					hiqual, mask,
 					color_mode, colormap, colormap_proj,
-					solid, vertex_shader, mask_hide_mode, persp))
+					solid, vertex_shader, mask_hide_mode, persp, blend_mode))
 				{
 					prev_shader_ = i;
 					ret = shader_[i];
@@ -1819,7 +1827,7 @@ VRayShader::VRayShader(
 				peel, clip,
 				hiqual, mask,
 				color_mode, colormap, colormap_proj,
-				solid, vertex_shader, mask_hide_mode, persp);
+				solid, vertex_shader, mask_hide_mode, persp, blend_mode);
 			if(s->create())
 				delete s;
 			else

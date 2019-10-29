@@ -25,9 +25,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 */
-#include <GL/glew.h>
+//#include <GL/glew.h>
 #include "compatibility.h"
-#include "bitmap_fonts.h"
 #include <vector>
 #include <unordered_map>
 #include <string.h>
@@ -944,7 +943,6 @@ public:
 	vector<AnnotationDB> GetAnnotationDB(){return m_annotationdb;}
 
 	void SetAnnotationsFromDatabase(vector<AnnotationDB> ann, Point new_p, double spcx = 1.0, double spcy = 1.0, double spcz = 1.0);
-	void DrawBalloon(int nx, int ny, Point orig);
 
 private:
 
@@ -1004,8 +1002,7 @@ public:
 	void SetTransform(Transform *tform);
 
 	void Clear();
-	void Draw(bool persp, int nx, int ny, glm::mat4 mv_mat, glm::mat4 proj_mat, vector<AnnotationDB> annotationdb = vector<AnnotationDB>(), double spcx = 1.0, double spcy = 1.0, double spcz = 1.0);
-
+	
 	//display functions
 	void SetDisp(bool disp)
 	{

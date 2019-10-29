@@ -28,7 +28,6 @@ DEALINGS IN THE SOFTWARE.
 
 #include "VRenderView.h"
 #include "VRenderFrame.h"
-#include "bitmap_fonts.h"
 #include <tiffio.h>
 #include <wx/utils.h>
 #include <wx/valnum.h>
@@ -803,8 +802,6 @@ VRenderVulkanView::~VRenderVulkanView()
 	FLIVR::TextureRenderer::finalize_vulkan();
 	m_v2drender.reset();
 	//m_vulkan.reset();
-
-	KernelProgram::clear();
 }
 
 void VRenderVulkanView::OnErase(wxEraseEvent& event)
@@ -4629,7 +4626,7 @@ void VRenderVulkanView::DrawMIP(VolumeData* vd, std::unique_ptr<vks::VFrameBuffe
 	{
 		vector<VolumeData*> list;
 		list.push_back(vd);
-		DrawOLShadows(list, fb);
+		//DrawOLShadows(list, fb);
 	}
 
 	//bind fbo for final composition

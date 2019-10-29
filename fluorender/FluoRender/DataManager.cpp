@@ -4893,69 +4893,6 @@ wxArrayString RulerBalloon::GetAnnotations()
     return annotations;
 }
 
-void RulerBalloon::DrawBalloon(int nx, int ny, Point orig)
-{
-	m_annotations.Clear();
-
-	int stline = 0;
-	for(int a = 0; a < m_bufs.size(); a++)
-	{
-		stringstream ss(m_bufs[a]);
-		string temp, elem;
-		int i = 0;
-		while (getline(ss, temp))
-		{
-			std::stringstream ls(temp);
-			int j = stline;
-			while (getline(ls, elem, '\t'))
-			{
-				if(i == 0) m_annotations.Add(wxString(elem) + wxT(": "));
-				else if (j < m_annotations.size()) m_annotations.Item(j) += wxT(" ") + elem;
-				j++;
-			}
-			i++;
-		}
-		stline = m_annotations.size();
-	}
-
-	double xpx = 2.0/nx;
-	double ypx = 2.0/ny;
-	double asp = (double)nx / (double)ny;;
-	double margin_x = 5;
-	double margin_top = 3;
-	double margin_bottom = 3;
-	double line_spc = 2;
-	int lnum = m_annotations.size();
-	const BitmapFontType ftype = BITMAP_FONT_TYPE_HELVETICA_12;
-
-	if(lnum <= 0) return;
-
-	double maxlw, lw, lh;
-
-	lh = fontHeight(ftype);
-	margin_bottom += lh/2;//�e�L�X�g��Y���W��baseline�Ɉ��v���邽��
-	maxlw = 0.0;
-
-	for(int i = 0; i < lnum; i++)
-	{
-		lw = renderTextLen(ftype, m_annotations.Item(i).To8BitData().data());
-		if(lw > maxlw) maxlw = lw;
-		renderText(orig.x()+1.0+margin_x*xpx, 1.05+(lh*(i+1)+line_spc*i+margin_top)*ypx-orig.y(),
-				ftype, m_annotations.Item(i).To8BitData().data());
-	}
-
-	double bw = (margin_x*2 + maxlw)*xpx;
-	double bh = (margin_top + margin_bottom + lh*lnum + line_spc*(lnum-1))*ypx;
-
-	glBegin(GL_LINE_LOOP);
-	glVertex2d(orig.x()+1.0, 1.0-orig.y());
-	glVertex2d(orig.x()+1.0+0.03/asp, 1.05-orig.y());
-	glVertex2d(orig.x()+1.0+bw, 1.05-orig.y());
-	glVertex2d(orig.x()+1.0+bw, 1.05+bh-orig.y());
-	glVertex2d(orig.x()+1.0, 1.05+bh-orig.y());
-	glEnd();
-}
-
 int Ruler::m_num = 0;
 Ruler::Ruler()
 {
@@ -5133,66 +5070,6 @@ wxArrayString Ruler::GetAnnotations(int index, vector<AnnotationDB> annotationdb
     
     m_balloons[index].SetAnnotationsFromDatabase(annotationdb, m_ruler[index], spcx, spcy, spcz);
     return m_balloons[index].GetAnnotations();
-}
-
-void Ruler::Draw(bool persp, int nx, int ny, glm::mat4 mv_mat, glm::mat4 proj_mat, vector<AnnotationDB> annotationdb, double spcx, double spcy, double spcz)
-{
-	double asp = (double)nx / (double)ny;
-	Transform mv;
-	Transform p;
-	mv.set(glm::value_ptr(mv_mat));
-	p.set(glm::value_ptr(proj_mat));
-
-	beginRenderText(2, 2, true);//glOrtho�ō��オ(0,0)�E����(2,2)�ɂȂ�
-	for (int i=0; i<(int)m_ruler.size(); i++)
-	{
-		Point p1, p2;
-		p2 = m_ruler[i];
-		//if (m_tform)
-		//	p2 = m_tform->transform(p2);
-		p2 = mv.transform(p2);
-		p2 = p.transform(p2);
-		if ((persp && (p2.z()<=0.0 || p2.z()>=1.0)) ||
-			(!persp && (p2.z()>=0.0 || p2.z()<=-1.0)))
-			continue;
-		glBegin(GL_LINE_LOOP);
-			glVertex2d(p2.x()+1.0-0.01/asp, 0.99-p2.y());
-			glVertex2d(p2.x()+1.0+0.01/asp, 0.99-p2.y());
-			glVertex2d(p2.x()+1.0+0.01/asp, 1.01-p2.y());
-			glVertex2d(p2.x()+1.0-0.01/asp, 1.01-p2.y());
-		glEnd();
-		if(m_balloons[i].GetVisibility())
-		{
-			m_balloons[i].SetAnnotationsFromDatabase(annotationdb, Point(m_ruler[i]), spcx, spcy, spcz);
-			m_balloons[i].DrawBalloon(nx, ny, p2);
-		}
-		if (i+1 == m_ruler.size())
-			renderText(p2.x()+1.02, 1.01-p2.y(),
-			BITMAP_FONT_TYPE_HELVETICA_12,
-			m_name_disp.To8BitData().data());
-		if (m_ruler_type==2 && i==0)
-		{
-			glBegin(GL_POINTS);
-				glVertex2d(p2.x()+1.0, 1.0-p2.y());
-			glEnd();
-		}
-		if (i > 0)
-		{
-			p1 = m_ruler[i-1];
-			if (m_tform)
-				p1 = m_tform->transform(p1);
-			p1 = mv.transform(p1);
-			p1 = p.transform(p1);
-			if ((persp && (p1.z()<=0.0 || p1.z()>=1.0)) ||
-				(!persp && (p1.z()>=0.0 || p1.z()<=-1.0)))
-				continue;
-			glBegin(GL_LINES);
-				glVertex2d(p1.x()+1.0, 1.0-p1.y());
-				glVertex2d(p2.x()+1.0, 1.0-p2.y());
-			glEnd();
-		}
-	}
-	endRenderText();
 }
 
 wxString Ruler::GetDelInfoValues(wxString del)

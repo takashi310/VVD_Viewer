@@ -51,7 +51,7 @@ namespace FLIVR
 				int peel, bool clip,
 				bool hiqual, int mask,
 				int color_mode, int colormap, int colormap_proj,
-				bool solid, int vertex_shader, int mask_hide_mode, bool persp);
+				bool solid, int vertex_shader, int mask_hide_mode, bool persp, int blend_mode);
 		~VRayShader();
 
 		bool create();
@@ -71,13 +71,14 @@ namespace FLIVR
 		inline bool solid() {return solid_;}
 		inline bool mask_hide_mode() {return mask_hide_mode_;}
 		inline bool persp() { return persp_; }
+		inline int blend_mode() { return blend_mode_; }
 
 		inline bool match(VkDevice device, bool poly, int channels,
 						bool shading, bool fog,
 						int peel, bool clip,
 						bool hiqual, int mask,
 						int color_mode, int colormap, int colormap_proj,
-						bool solid, int vertex_shader, int mask_hide_mode, bool persp)
+						bool solid, int vertex_shader, int mask_hide_mode, bool persp, int blend_mode)
 		{ 
 			return (device_ == device &&
 				poly_ == poly &&
@@ -94,7 +95,8 @@ namespace FLIVR
 				solid_ == solid &&
 				vertex_type_ == vertex_shader &&
 				mask_hide_mode_ == mask_hide_mode &&
-				persp_ == persp); 
+				persp_ == persp &&
+				blend_mode_ == blend_mode); 
 		}
 
 		inline ShaderProgram* program() { return program_; }
@@ -121,6 +123,7 @@ namespace FLIVR
 		int vertex_type_;
 		int mask_hide_mode_;
 		bool persp_;
+		int blend_mode_;
 
 		VkDevice device_;
 
@@ -141,7 +144,7 @@ namespace FLIVR
 								int peel, bool clip,
 								bool hiqual, int mask,
 								int color_mode, int colormap, int colormap_proj,
-								bool solid, int vertex_type, int mask_hide_mode, bool persp);
+								bool solid, int vertex_type, int mask_hide_mode, bool persp, int blend_mode);
 		//mask: 0-no mask, 1-segmentation mask, 2-labeling mask
 		//color_mode: 0-normal; 1-rainbow; 2-depth; 3-index; 255-index(depth mode)
 

@@ -17,14 +17,14 @@ public:
 	void SetFile(string &file);
 	void SetFile(wstring &file);
 	void Preprocess();
-	GLMmodel* Convert();
+	//GLMmodel* Convert();
 	
 	wstring GetPathName() {return m_path_name;}
 	wstring GetDataName() {return m_data_name;}
-	void SetInfo();
+	//void SetInfo();
 
 	GLMmodel *GenerateSolidModel(double def_r, double r_scale, unsigned int subdiv);
-	GLMmodel *GenerateWireModel();
+	//GLMmodel *GenerateWireModel();
 
 	static bool DeepCopy(SWCReader *in, SWCReader *out);
 
