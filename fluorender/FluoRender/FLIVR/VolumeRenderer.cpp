@@ -3289,8 +3289,9 @@ namespace FLIVR
 
 			params.clear = clear_framebuf;
 			params.clearColor = clearColor;
-
-			framebuf->replaceRenderPass(params.pipeline.pass);
+			
+			if (!framebuf->renderPass)
+				framebuf->replaceRenderPass(params.pipeline.pass);
 
 			m_v2drender->render(framebuf, params);
 

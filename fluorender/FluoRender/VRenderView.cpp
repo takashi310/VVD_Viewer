@@ -4625,11 +4625,11 @@ void VRenderVulkanView::DrawMIP(VolumeData* vd, std::unique_ptr<vks::VFrameBuffe
 
 	}
 
-	if (shadow && vd->GetVR()->get_done_loop(2))
+	if (shadow && vd->GetVR()->get_done_loop(1))
 	{
 		vector<VolumeData*> list;
 		list.push_back(vd);
-		//DrawOLShadows(list, fb);
+		DrawOLShadows(list, fb);
 	}
 
 	//bind fbo for final composition
