@@ -188,7 +188,7 @@ namespace FLIVR
 	"\n"
 
 #define VRAY_HEAD_PERSP_DMAP \
-	"//VRAY_HEAD_PERSP\n" \
+	"//VRAY_HEAD_PERSP_DMAP\n" \
 	"void main()\n" \
 	"{\n" \
 	"	const vec3 vray = normalize(base.matrix0 * OutVertex).xyz;\n" \
@@ -197,11 +197,14 @@ namespace FLIVR
 	"	const float step = -brk.loc4.z / vray.z;\n" \
 	"	vec4 outcol = vec4(0.0);\n" \
 	"	vec4 dir = vec4(brk.brkscale.w, brk.brktrans.w, brk.mskbrkscale.w, 0.0);\n" \
+	"	const vec4 dmap_ray = inverse(base.matrix0) * vec4(vray, 0.0);\n" \
+	"	const vec4 dmap_st = inverse(base.matrix0) * vec4((brk.loc4.y / vray.z) * vray, 1.0);\n" \
+	"	float prevz = 1.0;\n" \
 	"\n"
 
 
 #define VRAY_HEAD_ORTHO_DMAP \
-	"//VRAY_HEAD_ORTHO\n" \
+	"//VRAY_HEAD_ORTHO_DMAP\n" \
 	"void main()\n" \
 	"{\n" \
 	"	vec4 view = vec4(0.0, 0.0, brk.loc4.x, 0.0);\n" \
@@ -210,6 +213,9 @@ namespace FLIVR
 	"	const float step = -brk.loc4.z;\n" \
 	"	vec4 outcol = vec4(0.0);\n" \
 	"	vec4 dir = vec4(brk.brkscale.w, brk.brktrans.w, brk.mskbrkscale.w, 0.0);\n" \
+	"	const vec4 dmap_ray = inverse(base.matrix0) * vec4(0.0, 0.0, 1.0, 0.0);\n" \
+	"	const vec4 dmap_st = inverse(base.matrix0) * vec4((base.matrix0 * OutVertex).xy, brk.loc4.y, 1.0);\n" \
+	"	float prevz = 1.0;\n" \
 	"\n"
 
 #define VRAY_MASK_RAY_PERSP \
@@ -222,18 +228,6 @@ namespace FLIVR
 	"//VRAY_MASK_RAY_ORTHO\n" \
 	"	const vec4 msk_ray = base.matrix1 * vec4(0.0, 0.0, 1.0, 0.0) / vec4(brk.brkscale.xyz, 1.);\n" \
 	"	const vec4 msk_st = base.matrix1 * vec4((base.matrix0 * OutVertex).xy, brk.loc4.x, 1.0) / vec4(brk.mskbrkscale.xyz, 1.) - vec4(brk.mskbrktrans.xyz / brk.mskbrkscale.xyz, 0.0);\n" \
-	"\n"
-
-#define VRAY_HEAD_DMAP_PERSP \
-	"	const vec4 dmap_ray = inverse(base.matrix0) * vec4(vray, 0.0);\n" \
-	"	const vec4 dmap_st = inverse(base.matrix0) * vec4((brk.loc4.y / vray.z) * vray, 1.0);\n" \
-	"	float prevz = 1.0;\n" \
-	"\n"
-
-#define VRAY_HEAD_DMAP_ORTHO \
-	"	const vec4 dmap_ray = inverse(base.matrix0) * vec4(0.0, 0.0, 1.0, 0.0);\n" \
-	"	const vec4 dmap_st = inverse(base.matrix0) * vec4((base.matrix0 * OutVertex).xy, brk.loc4.y, 1.0);\n" \
-	"	float prevz = 1.0;\n" \
 	"\n"
 
 #define VRAY_HEAD_LIT \
@@ -314,6 +308,9 @@ namespace FLIVR
 
 #define VRAY_LOOP_CONDITION_END \
 	"!vol_clip_func(t) && t.x >= brk.tbmin.x && t.x <= brk.tbmax.x && t.y >= brk.tbmin.y && t.y <= brk.tbmax.y && t.z >= brk.tbmin.z && t.z <= brk.tbmax.z && outcol.w <= 0.99995)\n" \
+	"		{\n" 
+#define VRAY_LOOP_CONDITION_END_DMAP \
+	"!vol_clip_func(t) && t.x >= brk.tbmin.x && t.x <= brk.tbmax.x && t.y >= brk.tbmin.y && t.y <= brk.tbmax.y && t.z >= brk.tbmin.z && t.z <= brk.tbmax.z)\n" \
 	"		{\n" 
 
 #define VRAY_INDEX_COLOR_BODY \
@@ -1570,7 +1567,10 @@ VRayShader::VRayShader(
 		else if (mask_hide_mode_ == 2)
 			z << VRAY_LOOP_CONDITION_HIDE_INSIDE_MASK;
 
-		z << VRAY_LOOP_CONDITION_END;
+		if (color_mode_ != 2)
+			z << VRAY_LOOP_CONDITION_END;
+		else
+			z << VRAY_LOOP_CONDITION_END_DMAP;
 
 		//bodies
 		if (color_mode_ == 3)

@@ -352,7 +352,7 @@ Vulkan2dRender::V2dPipeline Vulkan2dRender::preparePipeline(
 		break;
 	case V2DRENDER_BLEND_SHADE_SHADOW:
 		enable_blend = VK_TRUE;
-		blend_op = VK_BLEND_OP_MIN;
+		blend_op = VK_BLEND_OP_ADD;
 		src_blend = VK_BLEND_FACTOR_ZERO;
 		dst_blend = VK_BLEND_FACTOR_SRC_COLOR;
 		break;

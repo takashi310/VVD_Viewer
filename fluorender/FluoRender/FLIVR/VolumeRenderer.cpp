@@ -1337,12 +1337,12 @@ namespace FLIVR
 		case MODE_OVER:
 		default:
 			blendop = VK_BLEND_OP_ADD;
-			if (update_order_ == 0)
+			if (colormap_mode_ == 2)
 			{
 				src_blend = VK_BLEND_FACTOR_ONE;
 				dst_blend = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
 			}
-			else if (update_order_ == 1)
+			else
 			{
 				src_blend = VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
 				dst_blend = VK_BLEND_FACTOR_ONE;
@@ -3273,7 +3273,7 @@ namespace FLIVR
 				params.pipeline =
 					m_v2drender->preparePipeline(
 						IMG_SHADER_TEXTURE_LOOKUP,
-						V2DRENDER_BLEND_OVER_INV,
+						colormap_mode_ != 2 ? V2DRENDER_BLEND_OVER_INV : V2DRENDER_BLEND_OVER,
 						framebuf->attachments[0]->format,
 						framebuf->attachments.size(),
 						0,
