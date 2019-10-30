@@ -260,7 +260,7 @@ namespace FLIVR
 	"\n"
 
 #define VRAY_HEAD_FOG \
-	"	//VOL_HEAD_FOG\n" \
+	"	//VRAY_HEAD_FOG\n" \
 	"	vec4 fp;\n" \
 	"	fp.x = base.loc8.x;\n" \
 	"	fp.y = base.loc8.y;\n" \
@@ -275,6 +275,12 @@ namespace FLIVR
 	"	prev_id = !vol_clip_func(prev_pos) ? prev_id : 0;\n" \
 	"	bool inside = false;\n" \
 	"\n"
+
+#define VRAY_HEAD_MIP \
+	"	//VRAY_HEAD_MIP\n" \
+	"	float maxval = 0.0;\n" \
+	"\n"
+
 
 #define VRAY_LOOP_HEAD \
 	"	//VRAY_LOOP_HEAD\n" \
@@ -829,7 +835,11 @@ namespace FLIVR
 
 #define VRAY_BLEND_MIP \
 	"			//VRAY_BLEND_MIP\n" \
-	"			outcol = max(outcol, c);\n" \
+	"			if (v.x > maxval)\n" \
+	"			{\n" \
+	"				maxval = v.x;\n" \
+	"				outcol = c;\n" \
+	"			}\n" \
 	"\n"
 
 #define VRAY_BLEND_DMAP \
@@ -1537,6 +1547,9 @@ VRayShader::VRayShader(
 
 		if (color_mode_ == 3 || color_mode_ == 255)
 			z << VRAY_HEAD_ID_INITIALIZE;
+
+		if (blend_mode_ == 2)
+			z << VRAY_HEAD_MIP;
 
 		z << VRAY_LOOP_HEAD;
 

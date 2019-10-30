@@ -4554,7 +4554,7 @@ void VRenderVulkanView::DrawMIP(VolumeData* vd, std::unique_ptr<vks::VFrameBuffe
 
 		if (vd->GetVR())
 			vd->GetVR()->set_depth_peel(peel);
-		vd->GetVR()->set_shading(false);
+		//vd->GetVR()->set_shading(false);
 		if (color_mode == 1)
 		{
 			vd->SetMode(3);
@@ -4619,7 +4619,7 @@ void VRenderVulkanView::DrawMIP(VolumeData* vd, std::unique_ptr<vks::VFrameBuffe
 
 	if (shading && vd->GetVR()->get_done_loop(1))
 	{
-		DrawOLShading(vd, fb);
+		//DrawOLShading(vd, fb);
 	}
 
 	if (shadow && vd->GetVR()->get_done_loop(2))
@@ -4674,7 +4674,7 @@ void VRenderVulkanView::DrawMIP(VolumeData* vd, std::unique_ptr<vks::VFrameBuffe
 		m_fbo_final->replaceRenderPass(params_final.pipeline.pass);
 	m_v2drender->render(m_fbo_final, params_final);
 
-	vd->GetVR()->set_shading(shading);
+	//vd->GetVR()->set_shading(shading);
 	vd->SetColormapMode(color_mode);
 }
 
@@ -12330,11 +12330,6 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 							(*bricks)[j]->set_disp(true);
 						total_num++;
 						num_chan++;
-						if (vd->GetMode()==1 && vd->GetShading())
-						{
-							total_num++;
-							num_chan++;
-						}
 						if (vd->GetShadow())
 						{
 							total_num++;
@@ -12376,7 +12371,6 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 				list.push_back(vd);
 			}
 
-			vector<VolumeLoaderData> tmp_shade;
 			vector<VolumeLoaderData> tmp_shadow;
 			for (i = 0; i < list.size(); i++)
 			{
@@ -12385,7 +12379,6 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 				Ray view_ray = vd->GetVR()->compute_view();
 				vector<TextureBrick*> *bricks = tex->get_sorted_bricks(view_ray, !m_persp);
 				int mode = vd->GetMode() == 1 ? 1 : 0;
-				bool shade = (mode == 1 && vd->GetShading());
 				bool shadow = vd->GetShadow();
 				for (j = 0; j < bricks->size(); j++)
 				{
@@ -12401,11 +12394,6 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 							d.mode = mode;
 							queues.push_back(d);
 						}
-						if (shade && !b->drawn(2))
-						{
-							d.mode = 2;
-							tmp_shade.push_back(d);
-						}
 						if (shadow && !b->drawn(3))
 						{
 							d.mode = 3;
@@ -12419,14 +12407,6 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 			else if (TextureRenderer::get_update_order() == 0)
 				std::sort(queues.begin(), queues.end(), VolumeLoader::sort_data_asc);
 
-			if (!tmp_shade.empty())
-			{
-				if (TextureRenderer::get_update_order() == 1)
-					std::sort(tmp_shade.begin(), tmp_shade.end(), VolumeLoader::sort_data_dsc);
-				else if (TextureRenderer::get_update_order() == 0)
-					std::sort(tmp_shade.begin(), tmp_shade.end(), VolumeLoader::sort_data_asc);
-				queues.insert(queues.end(), tmp_shade.begin(), tmp_shade.end());
-			}
 			if (!tmp_shadow.empty())
 			{
 				if (TextureRenderer::get_update_order() == 1)
@@ -12515,7 +12495,6 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 							continue;
 
 						vector<VolumeLoaderData> tmp_q;
-						vector<VolumeLoaderData> tmp_shade;
 						vector<VolumeLoaderData> tmp_shadow;
 						if (group->GetBlendMode() == VOL_METHOD_MULTI)
 						{
@@ -12526,7 +12505,6 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 								Ray view_ray = vd->GetVR()->compute_view();
 								vector<TextureBrick*> *bricks = tex->get_sorted_bricks(view_ray, !m_persp);
 								int mode = vd->GetMode() == 1 ? 1 : 0;
-								bool shade = (mode == 1 && vd->GetShading());
 								bool shadow = vd->GetShadow();
 								for (j = 0; j < bricks->size(); j++)
 								{
@@ -12541,11 +12519,6 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 										{
 											d.mode = mode;
 											tmp_q.push_back(d);
-										}
-										if (shade && !b->drawn(2))
-										{
-											d.mode = 2;
-											tmp_shade.push_back(d);
 										}
 										if (shadow && !b->drawn(3))
 										{
@@ -12562,14 +12535,6 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 								else if (TextureRenderer::get_update_order() == 0)
 									std::sort(tmp_q.begin(), tmp_q.end(), VolumeLoader::sort_data_asc);
 								queues.insert(queues.end(), tmp_q.begin(), tmp_q.end());
-							}
-							if (!tmp_shade.empty())
-							{
-								if (TextureRenderer::get_update_order() == 1)
-									std::sort(tmp_shade.begin(), tmp_shade.end(), VolumeLoader::sort_data_dsc);
-								else if (TextureRenderer::get_update_order() == 0)
-									std::sort(tmp_shade.begin(), tmp_shade.end(), VolumeLoader::sort_data_asc);
-								queues.insert(queues.end(), tmp_shade.begin(), tmp_shade.end());
 							}
 							if (!tmp_shadow.empty())
 							{
@@ -12603,7 +12568,6 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 								Ray view_ray = vd->GetVR()->compute_view();
 								vector<TextureBrick*> *bricks = tex->get_sorted_bricks(view_ray, !m_persp);
 								int mode = vd->GetMode() == 1 ? 1 : 0;
-								bool shade = (mode == 1 && vd->GetShading());
 								bool shadow = vd->GetShadow();
 								for (k=0; k<bricks->size(); k++)
 								{
@@ -12619,11 +12583,6 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 											d.mode = mode;
 											queues.push_back(d);
 										}
-										if (shade && !b->drawn(2))
-										{
-											d.mode = 2;
-											tmp_shade.push_back(d);
-										}
 										if (shadow && !b->drawn(3))
 										{
 											d.mode = 3;
@@ -12631,7 +12590,6 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 										}
 									}
 								}
-								if (!tmp_shade.empty()) queues.insert(queues.end(), tmp_shade.begin(), tmp_shade.end());
 								if (!tmp_shadow.empty())
 								{
 									if (TextureRenderer::get_update_order() == 1)
