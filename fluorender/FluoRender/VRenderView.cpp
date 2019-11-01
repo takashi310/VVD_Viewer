@@ -5208,7 +5208,6 @@ void VRenderVulkanView::DrawOLShadows(vector<VolumeData*> &vlist, std::unique_pt
 		if (!fb->renderPass)
 			fb->replaceRenderPass(params_final.pipeline.pass);
 		m_v2drender->render(fb, params_final);
-
 	}
 }
 

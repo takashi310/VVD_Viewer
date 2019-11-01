@@ -197,11 +197,11 @@ namespace FLIVR
 	"	const float step = -brk.loc4.z / vray.z;\n" \
 	"	vec4 outcol = vec4(0.0);\n" \
 	"	vec4 dir = vec4(brk.brkscale.w, brk.brktrans.w, brk.mskbrkscale.w, 0.0);\n" \
-	"	const vec4 dmap_ray = inverse(base.matrix0) * vec4(vray, 0.0);\n" \
-	"	const vec4 dmap_st = inverse(base.matrix0) * vec4((brk.loc4.y / vray.z) * vray, 1.0);\n" \
+	"	const vec4 dmap_ray = vec4(vray, 0.0);\n" \
+	"	const vec4 dmap_st = vec4((brk.loc4.y / vray.z) * vray, 1.0);\n" \
+	"	const mat4 proj_mat = inverse(base.matrix0);\n" \
 	"	float prevz = 1.0;\n" \
 	"\n"
-
 
 #define VRAY_HEAD_ORTHO_DMAP \
 	"//VRAY_HEAD_ORTHO_DMAP\n" \
@@ -213,8 +213,9 @@ namespace FLIVR
 	"	const float step = -brk.loc4.z;\n" \
 	"	vec4 outcol = vec4(0.0);\n" \
 	"	vec4 dir = vec4(brk.brkscale.w, brk.brktrans.w, brk.mskbrkscale.w, 0.0);\n" \
-	"	const vec4 dmap_ray = inverse(base.matrix0) * vec4(0.0, 0.0, 1.0, 0.0);\n" \
-	"	const vec4 dmap_st = inverse(base.matrix0) * vec4((base.matrix0 * OutVertex).xy, brk.loc4.y, 1.0);\n" \
+	"	const vec4 dmap_ray = vec4(0.0, 0.0, 1.0, 0.0);\n" \
+	"	const vec4 dmap_st = vec4((base.matrix0 * OutVertex).xy, brk.loc4.y, 1.0);\n" \
+	"	const mat4 proj_mat = inverse(base.matrix0);\n" \
 	"	float prevz = 1.0;\n" \
 	"\n"
 
@@ -697,7 +698,8 @@ namespace FLIVR
 
 #define VRAY_RASTER_BLEND_DMAP \
 	"			//VRAY_RASTER_BLEND_DMAP\n" \
-	"			float currz = (dmap_st + dmap_ray*step*float(i)).z;\n" \
+	"			vec4 cspv = proj_mat * (dmap_st + dmap_ray*step*float(i));\n" \
+	"			float currz = cspv.z / cspv.w;\n" \
 	"			float intpo = (c*l.w).r;\n" \
 	"			c = vec4(vec3(intpo>0.05?currz:prevz), 1.0);\n" \
 	"			prevz = intpo > 0.05 ? currz : prevz;\n" \
@@ -723,7 +725,8 @@ namespace FLIVR
 
 #define VRAY_RASTER_BLEND_NOMASK_DMAP \
 	"			//VRAY_RASTER_BLEND_NOMASK_DMAP\n" \
-	"			float currz = (dmap_st + dmap_ray*step*float(i)).z;\n" \
+	"			vec4 cspv = proj_mat * (dmap_st + dmap_ray*step*float(i));\n" \
+	"			float currz = cspv.z / cspv.w;\n" \
 	"			vec4 cmask = texture(tex2, t.stp); //get mask value\n" \
 	"			float intpo = (vec4(1.0-cmask.x)*c*l.w).r;\n" \
 	"			c = vec4(vec3(intpo>0.05?currz:prevz), 1.0);\n" \
@@ -750,7 +753,8 @@ namespace FLIVR
 
 #define VRAY_RASTER_BLEND_MASK_DMAP \
 	"			//VRAY_RASTER_BLEND_MASK_DMAP\n" \
-	"			float currz = (dmap_st + dmap_ray*step*float(i)).z;\n" \
+	"			vec4 cspv = proj_mat * (dmap_st + dmap_ray*step*float(i));\n" \
+	"			float currz = cspv.z / cspv.w;\n" \
 	"			vec4 cmask = texture(tex2, t.stp); //get mask value\n" \
 	"			float intpo = (vec4(cmask.x)*c*l.w).r;\n" \
 	"			c = vec4(vec3(intpo>0.05?currz:prevz), 1.0);\n" \
