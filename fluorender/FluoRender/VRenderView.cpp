@@ -5124,7 +5124,7 @@ void VRenderVulkanView::DrawOLShadows(vector<VolumeData*> &vlist, std::unique_pt
 			}
 			m_mvr->set_colormap_mode(2);
 			//draw
-			m_mvr->draw(m_test_wiref, m_interactive, !m_persp, m_scale_factor, m_intp, sampling_frq_fac);
+			m_mvr->draw(m_fbo_ol1, clear, m_interactive, !m_persp, m_scale_factor, m_intp, sampling_frq_fac, clear_color);
 			//restore
 			m_mvr->set_colormap_mode(0);
 			for (i=0; i<(int)list.size(); i++)
@@ -5375,7 +5375,7 @@ void VRenderVulkanView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 
 		//draw multiple volumes at the same time
 		double sampling_frq_fac = 2 / min(m_ortho_right-m_ortho_left, m_ortho_top-m_ortho_bottom);
-		//m_mvr->draw(m_fbo, clear, m_test_wiref, m_interactive, !m_persp, m_scale_factor, m_intp, sampling_frq_fac);
+		m_mvr->draw(m_fbo, clear, m_interactive, !m_persp, m_scale_factor, m_intp, sampling_frq_fac);
 	}
 
 	if (shadow && doShadow && vrfirst && vrfirst->get_done_loop(0))

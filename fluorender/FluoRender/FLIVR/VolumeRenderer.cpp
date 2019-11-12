@@ -1234,7 +1234,7 @@ namespace FLIVR
 		return ret_pipeline;
 	}
 
-	VolumeRenderer::VRayPipeline VolumeRenderer::prepareVRayPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode, bool persp)
+	VolumeRenderer::VRayPipeline VolumeRenderer::prepareVRayPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode, bool persp, int multi_mode)
 	{
 		VRayPipeline ret_pipeline;
 
@@ -1246,7 +1246,7 @@ namespace FLIVR
 			depth_peel_, true,
 			hiqual_, ml_mode_,
 			colormap_mode_, colormap_, colormap_proj_,
-			solid_, 1, tex_->nmask() != -1 ? m_mask_hide_mode : VOL_MASK_HIDE_NONE, persp, mode_);
+			solid_, 1, tex_->nmask() != -1 ? m_mask_hide_mode : VOL_MASK_HIDE_NONE, persp, mode_, multi_mode);
 
 		if (m_prev_vray_pipeline >= 0) {
 			if (m_vray_pipelines[m_prev_vray_pipeline].device == device &&
@@ -1331,6 +1331,11 @@ namespace FLIVR
 		{
 		case MODE_MIP:
 			blendop = VK_BLEND_OP_MAX;
+			src_blend = VK_BLEND_FACTOR_ONE;
+			dst_blend = VK_BLEND_FACTOR_ONE;
+			break;
+		case MODE_SLICE:
+			blendop = VK_BLEND_OP_ADD;
 			src_blend = VK_BLEND_FACTOR_ONE;
 			dst_blend = VK_BLEND_FACTOR_ONE;
 			break;

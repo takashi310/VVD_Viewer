@@ -107,7 +107,7 @@ namespace FLIVR
 	"	vec4 brktrans;//tex transform for bricking and 1/ny\n" \
 	"	vec4 mskbrkscale;//tex transform for mask bricks and 1/nz\n" \
 	"	vec4 mskbrktrans;//tex transform for mask bricks\n" \
-	"	vec4 tbmin;//tex bbox min\n" \
+	"	vec4 tbmin;//tex bbox min and mode\n" \
 	"	vec4 tbmax;//tex bbox max\n" \
 	"	vec3 loc4;//(zmin, zmax, dz)\n" \
 	"	uint stnum;\n" \
@@ -276,6 +276,10 @@ namespace FLIVR
 	"	float maxval = 0.0;\n" \
 	"\n"
 
+#define VRAY_HEAD_MULTI \
+	"	//VRAY_HEAD_MULTI\n" \
+	"	int mode = uint(tbmin.w);\n" \
+	"\n"
 
 #define VRAY_LOOP_HEAD \
 	"	//VRAY_LOOP_HEAD\n" \
@@ -314,8 +318,219 @@ namespace FLIVR
 	"!vol_clip_func(t) && t.x >= brk.tbmin.x && t.x <= brk.tbmax.x && t.y >= brk.tbmin.y && t.y <= brk.tbmax.y && t.z >= brk.tbmin.z && t.z <= brk.tbmax.z)\n" \
 	"		{\n" 
 
+#define VRAY_MULTI_DEFAULT_COLORMAP_INDEX_BODY \
+	"			//VRAY_MULTI_DEFAULT_COLORMAP_INDEX_BODY\n" \
+	"			if (mode & 8 != 0) \n" \
+	"			{\n" \
+	"				//VRAY_INDEX_COLOR_BODY_SHADE\n" \
+	"				vec4 v;\n" \
+	"				uint id = uint(texture(tex0, t.stp).x*base.loc5.w+0.5);\n" \
+	"				vec4 c = vec4(0.0);\n" \
+	"				if (!inside) \n" \
+	"				{\n" \
+	"					prev_pos = vec4((t - ray*step).xyz, 1.0);\n" \
+	"					prev_id = uint(texture(tex0, prev_pos.xyz).x * base.loc5.w + 0.5);\n" \
+	"				}\n" \
+	"				vec4 post_pos = vec4((t + ray*step).xyz, 1.0);\n" \
+	"				uint post_id = uint(texture(tex0, post_pos.xyz).x * base.loc5.w + 0.5);\n" \
+	"				if ( (inside && (id != prev_id || id != post_id || vol_clip_func(post_pos))) || (!inside && (vol_clip_func(prev_pos) || id != prev_id || id != post_id)) )" \
+	"				{\n" \
+	"					c = texture(tex7, vec2((float(id%uint(256))+0.5)/256.0, (float(id/256)+0.5)/256.0));\n" \
+	"\n" \
+	"					if (mode & 1 != 0) \n" \
+	"					{\n" \
+	"						vec4 p; \n" \
+	"						uint r; \n" \
+	"						v = vec4(0.0); \n" \
+	"						n = vec4(0.0); \n" \
+	"						w = vec4(0.0);\n" \
+	"						w.x = dir.x; \n" \
+	"						p = clamp(TexCoord + w, 0.0, 1.0); \n" \
+	"						r = !vol_clip_func(p) ? uint(texture(tex0, p.stp).x*base.loc5.w+0.5) : 0; \n" \
+	"						v.x = (id==r?0.5:0.0) ; \n" \
+	"						n.x = v.x + n.x; \n" \
+	"						p = clamp(TexCoord - w, 0.0, 1.0); \n" \
+	"						r = !vol_clip_func(p) ? uint(texture(tex0, p.stp).x*base.loc5.w+0.5) : 0; \n" \
+	"						v.x = (id==r?0.5:0.0) ; \n" \
+	"						n.x = v.x - n.x; \n" \
+	"						w = vec4(0.0); \n" \
+	"						w.y = dir.y; \n" \
+	"						p = clamp(TexCoord + w, 0.0, 1.0); \n" \
+	"						r = !vol_clip_func(p) ? uint(texture(tex0, p.stp).x*base.loc5.w+0.5) : 0; \n" \
+	"						v.x = (id==r?0.5:0.0) ; \n" \
+	"						n.y = v.x + n.y; \n" \
+	"						p = clamp(TexCoord - w, 0.0, 1.0); \n" \
+	"						r = !vol_clip_func(p) ? uint(texture(tex0, p.stp).x*base.loc5.w+0.5) : 0; \n" \
+	"						v.x = (id==r?0.5:0.0) ; \n" \
+	"						n.y = v.x - n.y; \n" \
+	"						w = vec4(0.0); \n" \
+	"						w.z = dir.z; \n" \
+	"						p = clamp(TexCoord + w, 0.0, 1.0); \n" \
+	"						r = !vol_clip_func(p) ? uint(texture(tex0, p.stp).x*base.loc5.w+0.5) : 0; \n" \
+	"						v.x = (id==r?0.5:0.0) ; \n" \
+	"						n.z = v.x + n.z; \n" \
+	"						p = clamp(TexCoord - w, 0.0, 1.0); \n" \
+	"						r = !vol_clip_func(p) ? uint(texture(tex0, p.stp).x*base.loc5.w+0.5) : 0; \n" \
+	"						v.x = (id==r?0.5:0.0) ; \n" \
+	"						n.z = v.x - n.z; \n" \
+	"						p.y = length(n.xyz); \n" \
+	"						p.y = 0.5 * (base.loc2.x<0.0?(1.0+p.y*base.loc2.x):p.y*base.loc2.x); \n" \
+	"\n" \
+	"						//VOL_BODY_SHADING\n" \
+	"						n.xyz = normalize(n.xyz);\n" \
+	"						n.w = dot(l.xyz, n.xyz); // calculate angle between light and normal. \n" \
+	"						n.w = clamp(abs(n.w), 0.0, 1.0); // two-sided lighting, n.w = abs(cos(angle))  \n" \
+	"						w = k; // w.x = weight*ka, w.y = weight*kd, w.z = weight*ks \n" \
+	"						w.x = k.x - w.y; // w.x = ka - kd*weight \n" \
+	"						w.x = w.x + k.y; // w.x = ka + kd - kd*weight \n" \
+	"						n.z = pow(n.w, k.w); // n.z = abs(cos(angle))^ns \n" \
+	"						n.w = (n.w * w.y) + w.x; // n.w = abs(cos(angle))*kd+ka\n" \
+	"						n.z = w.z * n.z; // n.z = weight*ks*abs(cos(angle))^ns \n" \
+	"\n" \
+	"						//VOL_COMPUTED_GM_LOOKUP\n" \
+	"						v.y = p.y;\n" \
+	"\n" \
+	"						//VOL_COLOR_OUTPUT\n" \
+	"						c.xyz = c.xyz*clamp(1.0-base.loc1.x, 0.0, 1.0) + base.loc1.x*c.xyz*(base.loc1.y > 0.0?(n.w + n.z):1.0);\n" \
+	"						c.xyz *= pow(1.0 - base.loc1.x/2.0, 2.0) + 1.0;\n" \
+	"\n" \
+	"					}\n" \
+	"\n" \
+	"					c.rgb = c.rgb*base.loc6.z;\n" \
+	"					c = c * l.w;\n" \
+	"				}\n" \
+	"				prev_id = id;\n" \
+	"				inside = true;\n" \
+	"\n" \
+	"				c = (mode & 2 == 0) ? c*l.w : c;\n" \
+	"\n" \
+	"				//VRAY_BLEND_OVER\n" \
+	"				outcol = outcol + (1.0 - outcol.w) * c;\n" \
+	"\n" \
+	"			}\n" \
+	"			else \n" \
+	"			{\n" \
+	"				//VRAY_DATA_VOLUME_LOOKUP\n" \
+	"				vec4 v = texture(tex0, t.stp);\n" \
+	"\n"\
+	"				// VOL_GRAD_COMPUTE_HI\n" \
+	"				vec4 r, p;\n" \
+	"				v = vec4(v.x);\n" \
+	"				n = vec4(0.0);\n" \
+	"				w = vec4(0.0);\n" \
+	"				w.x = dir.x;\n" \
+	"				p = clamp(TexCoord + w, 0.0, 1.0);\n" \
+	"				r = texture(tex0, p.stp);\n" \
+	"				n.x = r.x + n.x;\n" \
+	"				p = clamp(TexCoord - w, 0.0, 1.0);\n" \
+	"				r = texture(tex0, p.stp);\n" \
+	"				n.x = r.x - n.x;\n" \
+	"				w = vec4(0.0);\n" \
+	"				w.y = dir.y;\n" \
+	"				p = clamp(TexCoord + w, 0.0, 1.0);\n" \
+	"				r = texture(tex0, p.stp);\n" \
+	"				n.y = r.x + n.y;\n" \
+	"				p = clamp(TexCoord - w, 0.0, 1.0);\n" \
+	"				r = texture(tex0, p.stp);\n" \
+	"				n.y = r.x - n.y;\n" \
+	"				w = vec4(0.0);\n" \
+	"				w.z = dir.z;\n" \
+	"				p = clamp(TexCoord + w, 0.0, 1.0);\n" \
+	"				r = texture(tex0, p.stp);\n" \
+	"				n.z = r.x + n.z;\n" \
+	"				p = clamp(TexCoord - w, 0.0, 1.0);\n" \
+	"				r = texture(tex0, p.stp);\n" \
+	"				n.z = r.x - n.z;\n" \
+	"				p.y = length(n.xyz);\n" \
+	"				p.y = 0.5 * (base.loc2.x < 0.0 ? (1.0 + p.y * base.loc2.x) : p.y * base.loc2.x);\n" \
+	"\n" \
+	"				if (mode & 1 != 0) \n" \
+	"				{\n" \
+	"					//VRAY_BODY_SHADING\n" \
+	"					n.xyz = normalize(n.xyz);\n" \
+	"					n.w = dot(l.xyz, n.xyz); // calculate angle between light and normal. \n" \
+	"					n.w = clamp(abs(n.w), 0.0, 1.0); // two-sided lighting, n.w = abs(cos(angle))  \n" \
+	"					w = k; // w.x = weight*ka, w.y = weight*kd, w.z = weight*ks \n" \
+	"					w.x = k.x - w.y; // w.x = ka - kd*weight \n" \
+	"					w.x = w.x + k.y; // w.x = ka + kd - kd*weight \n" \
+	"					n.z = pow(n.w, k.w); // n.z = abs(cos(angle))^ns \n" \
+	"					n.w = (n.w * w.y) + w.x; // n.w = abs(cos(angle))*kd+ka\n" \
+	"					n.z = w.z * n.z; // n.z = weight*ks*abs(cos(angle))^ns \n" \
+	"				}\n" \
+	"\n" \
+	"				//VRAY_COMPUTED_GM_LOOKUP\n" \
+	"				v.y = p.y;\n" \
+	"\n" \
+	"				if (mode & 4 != 0) \n" \
+	"				{\n" \
+	"					//VRAY_TRANSFER_FUNCTION_COLORMAP\n" \
+	"					vec4 c;\n" \
+	"					float tf_alp = 0.0;\n" \
+	"					float alpha = 0.0;\n" \
+	"					v.x = base.loc2.x<0.0?(1.0+v.x*base.loc2.x):v.x*base.loc2.x;\n" \
+	"					if (v.x<base.loc2.z-base.loc3.w || v.x>base.loc2.w+base.loc3.w || v.y<base.loc3.y)\n" \
+	"						c = vec4(0.0);\n" \
+	"					else\n" \
+	"					{\n" \
+	"						v.x = (v.x<base.loc2.z?(base.loc3.w-base.loc2.z+v.x)/base.loc3.w:(v.x>base.loc2.w?(base.loc3.w-v.x+base.loc2.w)/base.loc3.w:1.0))*v.x;\n" \
+	"						vec4 rb = vec4(0.0);\n" \
+	"						//VRAY_TRANSFER_FUNCTION_COLORMAP_VALU \n" \
+	"						float valu = (v.x - base.loc6.x) / base.loc6.z;\n" \
+	"						//VRAY_COLORMAP_CALC0 \n" \
+	"						rb.r = clamp(4.0 * valu - 2.0, 0.0, 1.0);\n" \
+	"						rb.g = clamp(valu < 0.5 ? 4.0 * valu : -4.0 * valu + 4.0, 0.0, 1.0);\n" \
+	"						rb.b = clamp(-4.0 * valu + 2.0, 0.0, 1.0);\n" \
+	"						//VRAY_COMMON_TRANSFER_FUNCTION_CALC \n" \
+	"						tf_alp = pow(clamp(v.x / base.loc3.z, \n" \
+	"							base.loc3.x < 1.0 ? -(base.loc3.x - 1.0) * 0.00001 : 0.0, \n" \
+	"							base.loc3.x>1.0 ? 0.9999 : 1.0), base.loc3.x); \n" \
+	"						//VRAY_TRANSFER_FUNCTION_COLORMAP_RESULT \n" \
+	"						float alpha = (1.0 - pow(clamp(1.0 - tf_alp * l.w, 0.0, 1.0), base.loc7.z)) / l.w; \n" \
+	"						c = vec4(rb.rgb * tf_alp, 1.0); \n" \
+	"						c = (mode & 2 != 0) ? c : c*alpha;\n" \
+	"					}\n" \
+	"					c.w = (mode & 2 != 0) ? 1.0 : c.w;\n" \
+	"				}\n" \
+	"				else \n" \
+	"				{\n" \
+	"					//VRAY_TRANSFER_FUNCTION_SIN_COLOR\n" \
+	"					vec4 c;\n" \
+	"					float tf_alp = 0.0;\n" \
+	"					float alpha = 0.0;\n" \
+	"					v.x = base.loc2.x < 0.0 ? (1.0 + v.x * base.loc2.x) : v.x * base.loc2.x;\n" \
+	"					if (v.x < base.loc2.z - base.loc3.w || v.x > base.loc2.w + base.loc3.w || v.y < base.loc3.y - base.loc3.w)\n" \
+	"						c = vec4(0.0);\n" \
+	"					else\n" \
+	"					{\n" \
+	"						v.x = (v.x < base.loc2.z ? (base.loc3.w - base.loc2.z + v.x) / base.loc3.w : (v.x > base.loc2.w ? (base.loc3.w - v.x + base.loc2.w) / base.loc3.w : 1.0)) * v.x;\n" \
+	"						v.x = (v.y < base.loc3.y ? (base.loc3.w - base.loc3.y + v.y) / base.loc3.w : 1.0) * v.x;\n" \
+	"						tf_alp = pow(clamp(v.x / base.loc3.z,\n" \
+	"							base.loc3.x < 1.0 ? -(base.loc3.x - 1.0) * 0.00001 : 0.0,\n" \
+	"							base.loc3.x > 1.0 ? 0.9999 : 1.0), base.loc3.x);\n" \
+	"						alpha = (1.0 - pow(clamp(1.0 - tf_alp * l.w, 0.0, 1.0), base.loc7.z)) / l.w;\n" \
+	"						c = vec4(base.loc6.rgb * tf_alp, 1.0);\n" \
+	"						c = (mode & 2 != 0) ? c : c*alpha;\n" \
+	"					}\n" \
+	"					c.w = (mode & 2 != 0) ? 1.0 : c.w;\n" \
+	"				}\n" \
+	"\n" \
+	"				if (mode & 1 != 0) \n" \
+	"				{\n" \
+	"					//VRAY_COLOR_OUTPUT\n" \
+	"					c.xyz = c.xyz * clamp(1.0 - base.loc1.x, 0.0, 1.0) + base.loc1.x * c.xyz * (base.loc1.y > 0.0 ? (n.w + n.z) : 1.0);\n" \
+	"					c.xyz *= pow(1.0 - base.loc1.x / 2.0, 2.0) + 1.0;\n" \
+	"				}\n" \
+	"\n" \
+	"				c = (mode & 2 == 0) ? c*l.w : c;\n" \
+	"\n" \
+	"				//VRAY_BLEND_OVER\n" \
+	"				outcol = outcol + (1.0 - outcol.w) * c;\n" \
+	"\n" \
+	"			}\n" \
+	"\n"
+
 #define VRAY_INDEX_COLOR_BODY \
-	"			//VRAY_INDEX_COLOR_BODY_SHADE\n" \
+	"			//VRAY_INDEX_COLOR_BODY\n" \
 	"			vec4 v;\n" \
 	"			uint id = uint(texture(tex0, t.stp).x*base.loc5.w+0.5);\n" \
 	"			vec4 c = vec4(0.0);\n" \
@@ -331,8 +546,6 @@ namespace FLIVR
 	"				c = texture(tex7, vec2((float(id%uint(256))+0.5)/256.0, (float(id/256)+0.5)/256.0));\n" \
 	"\n" \
 	"				//VOL_COLOR_OUTPUT\n" \
-	"				c.xyz = c.xyz*clamp(1.0-base.loc1.x, 0.0, 1.0) + base.loc1.x*c.xyz;\n" \
-	"				c.xyz *= pow(1.0 - base.loc1.x/2.0, 2.0) + 1.0;\n" \
 	"				c.rgb = c.rgb*base.loc6.z;\n" \
 	"				c = c * l.w;\n" \
 	"			}\n" \
@@ -1370,7 +1583,7 @@ VRayShader::VRayShader(
 	int peel, bool clip,
 	bool hiqual, int mask,
 	int color_mode, int colormap, int colormap_proj,
-	bool solid, int vertex_shader, int mask_hide_mode, bool persp, int blend_mode)
+	bool solid, int vertex_shader, int mask_hide_mode, bool persp, int blend_mode, int multi_mode)
 	: device_(device),
 	poly_(poly),
 	channels_(channels),
@@ -1388,7 +1601,8 @@ VRayShader::VRayShader(
 	mask_hide_mode_(mask_hide_mode),
 	persp_(persp),
 	blend_mode_(blend_mode),
-	program_(0)
+	program_(0),
+	multi_mode_(0)
 	{
 	}
 
@@ -1749,10 +1963,7 @@ VRayShader::VRayShader(
 		else
 			z << VRAY_BLEND_OVER;
 
-		if (color_mode_ == 3)
-			z << VRAY_LOOP_TAIL_INDEX_COLOR;
-		else
-			z << VRAY_LOOP_TAIL;
+		z << VRAY_LOOP_TAIL;
 
 		//the common tail
 		z << VRAY_TAIL;
@@ -1802,7 +2013,7 @@ VRayShader::VRayShader(
 		int peel, bool clip,
 		bool hiqual, int mask,
 		int color_mode, int colormap, int colormap_proj,
-		bool solid, int vertex_shader, int mask_hide_mode, bool persp, int blend_mode)
+		bool solid, int vertex_shader, int mask_hide_mode, bool persp, int blend_mode, int multi_mode)
 	{
 		VRayShader*ret = nullptr;
 		if(prev_shader_ >= 0)
@@ -1813,7 +2024,7 @@ VRayShader::VRayShader(
 				peel, clip,
 				hiqual, mask,
 				color_mode, colormap, colormap_proj,
-				solid, vertex_shader, mask_hide_mode, persp, blend_mode))
+				solid, vertex_shader, mask_hide_mode, persp, blend_mode, multi_mode))
 			{
 				ret = shader_[prev_shader_];
 			}
@@ -1828,7 +2039,7 @@ VRayShader::VRayShader(
 					peel, clip,
 					hiqual, mask,
 					color_mode, colormap, colormap_proj,
-					solid, vertex_shader, mask_hide_mode, persp, blend_mode))
+					solid, vertex_shader, mask_hide_mode, persp, blend_mode, multi_mode))
 				{
 					prev_shader_ = i;
 					ret = shader_[i];
@@ -1844,7 +2055,7 @@ VRayShader::VRayShader(
 				peel, clip,
 				hiqual, mask,
 				color_mode, colormap, colormap_proj,
-				solid, vertex_shader, mask_hide_mode, persp, blend_mode);
+				solid, vertex_shader, mask_hide_mode, persp, blend_mode, multi_mode);
 			if(s->create())
 				delete s;
 			else
