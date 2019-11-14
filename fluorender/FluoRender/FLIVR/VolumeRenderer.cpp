@@ -1400,7 +1400,7 @@ namespace FLIVR
 		return ret_pipeline;
 	}
 
-	void VolumeRenderer::saveScreenshot(const char* filename)
+	void VolumeRenderer::saveScreenshot(const char* filename, const std::shared_ptr<vks::VTexture> tex)
 	{
 		VkPhysicalDevice physicalDevice = m_vulkan->vulkanDevice->physicalDevice;
 		VkDevice device = m_vulkan->vulkanDevice->logicalDevice;
@@ -1411,7 +1411,7 @@ namespace FLIVR
 		VkFormatProperties formatProps;
 
 		// Check if the device supports blitting from optimal images (the swapchain images are in optimal format)
-		vkGetPhysicalDeviceFormatProperties(physicalDevice, blend_tex_id_->format, &formatProps);
+		vkGetPhysicalDeviceFormatProperties(physicalDevice, tex->format, &formatProps);
 		if (!(formatProps.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_SRC_BIT)) {
 			std::cerr << "Device does not support blitting from optimal tiled images, using copy instead of blit!" << std::endl;
 			supportsBlit = false;
@@ -1425,15 +1425,15 @@ namespace FLIVR
 		}
 
 		// Source for the copy is the last rendered swapchain image
-		VkImage srcImage = blend_tex_id_->image;
+		VkImage srcImage = tex->image;
 
 		// Create the linear tiled destination image to copy to and to read the memory from
 		VkImageCreateInfo imageCreateCI(vks::initializers::imageCreateInfo());
 		imageCreateCI.imageType = VK_IMAGE_TYPE_2D;
 		// Note that vkCmdBlitImage (if supported) will also do format conversions if the swapchain color format would differ
 		imageCreateCI.format = VK_FORMAT_R8G8B8A8_UNORM;
-		imageCreateCI.extent.width = blend_tex_id_->w;
-		imageCreateCI.extent.height = blend_tex_id_->h;
+		imageCreateCI.extent.width = tex->w;
+		imageCreateCI.extent.height = tex->h;
 		imageCreateCI.extent.depth = 1;
 		imageCreateCI.arrayLayers = 1;
 		imageCreateCI.mipLevels = 1;
@@ -1487,8 +1487,8 @@ namespace FLIVR
 		{
 			// Define the region to blit (we will blit the whole swapchain image)
 			VkOffset3D blitSize;
-			blitSize.x = blend_tex_id_->w;
-			blitSize.y = blend_tex_id_->h;
+			blitSize.x = tex->w;
+			blitSize.y = tex->h;
 			blitSize.z = 1;
 			VkImageBlit imageBlitRegion{};
 			imageBlitRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -1515,8 +1515,8 @@ namespace FLIVR
 			imageCopyRegion.srcSubresource.layerCount = 1;
 			imageCopyRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			imageCopyRegion.dstSubresource.layerCount = 1;
-			imageCopyRegion.extent.width = blend_tex_id_->w;
-			imageCopyRegion.extent.height = blend_tex_id_->h;
+			imageCopyRegion.extent.width = tex->w;
+			imageCopyRegion.extent.height = tex->h;
 			imageCopyRegion.extent.depth = 1;
 
 			// Issue the copy command
@@ -1567,7 +1567,7 @@ namespace FLIVR
 		std::ofstream file(filename, std::ios::out | std::ios::binary);
 
 		// ppm header
-		file << "P6\n" << blend_tex_id_->w << "\n" << blend_tex_id_->h << "\n" << 255 << "\n";
+		file << "P6\n" << tex->w << "\n" << tex->h << "\n" << 255 << "\n";
 
 		// If source is BGR (destination is always RGB) and we can't use blit (which does automatic conversion), we'll have to manually swizzle color components
 		bool colorSwizzle = false;
@@ -1576,14 +1576,14 @@ namespace FLIVR
 		if (!supportsBlit)
 		{
 			std::vector<VkFormat> formatsBGR = { VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_B8G8R8A8_SNORM };
-			colorSwizzle = (std::find(formatsBGR.begin(), formatsBGR.end(), blend_tex_id_->format) != formatsBGR.end());
+			colorSwizzle = (std::find(formatsBGR.begin(), formatsBGR.end(), tex->format) != formatsBGR.end());
 		}
 
 		// ppm binary pixel data
-		for (uint32_t y = 0; y < blend_tex_id_->h; y++)
+		for (uint32_t y = 0; y < tex->h; y++)
 		{
 			unsigned int* row = (unsigned int*)data;
-			for (uint32_t x = 0; x < blend_tex_id_->w; x++)
+			for (uint32_t x = 0; x < tex->w; x++)
 			{
 				if (colorSwizzle)
 				{

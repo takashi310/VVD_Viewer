@@ -156,6 +156,8 @@ namespace FLIVR
 			Point& center, Ray& view, bool is_orthographic = false);
 
 		struct MultiVolRenederSettings {
+			VolumeRenderer::VRayPipeline pipeline;
+			VkPipelineLayout pipelineLayout;
 			vks::Buffer vert_ubuf, frag_ubuf;
 			VkDeviceSize vert_ubuf_offset, frag_ubuf_offset;
 			vector<VkWriteDescriptorSet> descriptorWritesBase;
@@ -170,6 +172,17 @@ namespace FLIVR
 			VRayShaderFactory::VRayFragShaderBrickConst frag_const;
 			vector<VkWriteDescriptorSet> descriptorWrites;
 		};
+
+		inline void SubmitAndRestartCommandBuf(
+			vks::VulkanDevice *device,
+			VkCommandBuffer cmdbuf,
+			const VkRenderPassBeginInfo &renderPassBeginInfo);
+
+		inline bool TestTexMemSwap(
+			vks::VulkanDevice* device,
+			TextureBrick *b,
+			int c,
+			vector<TextureBrick*> *locked_bricks);
 	};
 
 } // End namespace FLIVR

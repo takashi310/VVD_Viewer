@@ -5287,6 +5287,7 @@ void VRenderVulkanView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 	{
 		m_fbo_temp.reset();
 		m_tex_temp.reset();
+		m_fbo_temp_restore.reset();
 	}
 	if (TextureRenderer::get_mem_swap() && !m_fbo_temp)
 	{
@@ -5297,6 +5298,12 @@ void VRenderVulkanView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 
 		m_tex_temp = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
 		m_fbo_temp->addAttachment(m_tex_temp);
+
+		m_fbo_temp_restore = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+		m_fbo_temp_restore->w = m_nx;
+		m_fbo_temp_restore->h = m_ny;
+		m_fbo_temp_restore->device = prim_dev;
+		m_fbo_temp_restore->addAttachment(m_fbo_final->attachments[0]);
 	}
 
 	if (TextureRenderer::get_mem_swap() &&
@@ -5375,7 +5382,7 @@ void VRenderVulkanView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 
 		//draw multiple volumes at the same time
 		double sampling_frq_fac = 2 / min(m_ortho_right-m_ortho_left, m_ortho_top-m_ortho_bottom);
-		m_mvr->draw(m_fbo, clear, m_interactive, !m_persp, m_scale_factor, m_intp, sampling_frq_fac);
+		m_mvr->draw(use_tex_wt2 ? m_fbo_wt2 : m_fbo, clear, m_interactive, !m_persp, m_scale_factor, m_intp, sampling_frq_fac);
 	}
 
 	if (shadow && doShadow && vrfirst && vrfirst->get_done_loop(0))
@@ -5395,15 +5402,15 @@ void VRenderVulkanView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 			m_v2drender->preparePipeline(
 				IMG_SHADER_TEXTURE_LOOKUP,
 				V2DRENDER_BLEND_DISABLE,
-				m_fbo_final->attachments[0]->format,
-				m_fbo_final->attachments.size(),
+				m_fbo_temp_restore->attachments[0]->format,
+				m_fbo_temp_restore->attachments.size(),
 				0,
-				m_fbo_final->attachments[0]->is_swapchain_images);
+				m_fbo_temp_restore->attachments[0]->is_swapchain_images);
 		params.tex[0] = m_tex_temp.get();
-		
-		if (!m_fbo_final->renderPass)
-			m_fbo_final->replaceRenderPass(params.pipeline.pass);
-		m_v2drender->render(m_fbo_final, params);
+
+		if (!m_fbo_temp_restore->renderPass)
+			m_fbo_temp_restore->replaceRenderPass(params.pipeline.pass);
+		m_v2drender->render(m_fbo_temp_restore, params);
 	}
 
 	Vulkan2dRender::V2DRenderParams params_final = m_v2drender->GetNextV2dRenderSemaphoreSettings();
@@ -5411,13 +5418,12 @@ void VRenderVulkanView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 	params_final.pipeline =
 		m_v2drender->preparePipeline(
 			IMG_SHDR_BRIGHTNESS_CONTRAST_HDR,
-			TextureRenderer::get_update_order() == 0 ? V2DRENDER_BLEND_OVER : V2DRENDER_BLEND_OVER_INV,
+			m_vol_method == V2DRENDER_BLEND_ADD,
 			m_fbo_final->attachments[0]->format,
 			m_fbo_final->attachments.size(),
 			0,
 			m_fbo_final->attachments[0]->is_swapchain_images);
 	params_final.tex[0] = use_tex_wt2 ? m_fbo_wt2->attachments[0].get() : m_fbo->attachments[0].get();
-	
 	Color gamma, brightness, hdr;
 	if (m_vol_method == VOL_METHOD_MULTI)
 	{
@@ -5435,7 +5441,9 @@ void VRenderVulkanView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 	params_final.loc[0] = glm::vec4((float)gamma.r(), (float)gamma.g(), (float)gamma.b(), 1.0f);
 	params_final.loc[1] = glm::vec4((float)brightness.r(), (float)brightness.g(), (float)brightness.b(), 1.0f);
 	params_final.loc[2] = glm::vec4((float)hdr.r(), (float)hdr.g(), (float)hdr.b(), 0.0f);
-	
+	params_final.clear = m_clear_final_buffer;
+	m_clear_final_buffer = false;
+
 	if (!m_fbo_final->renderPass)
 		m_fbo_final->replaceRenderPass(params_final.pipeline.pass);
 	m_v2drender->render(m_fbo_final, params_final);

@@ -497,7 +497,7 @@ public:
 		VCalPipeline prepareCalPipeline(vks::VulkanDevice* device, int type, int out_bytes);
 
 
-		void saveScreenshot(const char* filename);
+		static void saveScreenshot(const char* filename, const std::shared_ptr<vks::VTexture> tex);
 	};
 
 } // End namespace FLIVR

@@ -175,6 +175,65 @@ namespace FLIVR
 #define FLV_CTYPE_DEPTH 16
 #define FLV_VR_INVALID 32
 
+   inline void MultiVolumeRenderer::SubmitAndRestartCommandBuf(
+	   vks::VulkanDevice* device, 
+	   VkCommandBuffer cmdbuf, 
+	   const VkRenderPassBeginInfo& renderPassBeginInfo)
+   {
+	   vkCmdEndRenderPass(cmdbuf);
+	   VK_CHECK_RESULT(vkEndCommandBuffer(cmdbuf));
+	   VkSubmitInfo submitInfo = vks::initializers::submitInfo();
+	   submitInfo.commandBufferCount = 1;
+	   submitInfo.pCommandBuffers = &cmdbuf;
+	   VK_CHECK_RESULT(vkQueueSubmit(device->queue, 1, &submitInfo, VK_NULL_HANDLE));
+
+	   vkQueueWaitIdle(device->queue);
+
+	   VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
+	   cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	   VK_CHECK_RESULT(vkBeginCommandBuffer(cmdbuf, &cmdBufInfo));
+	   vkCmdBeginRenderPass(cmdbuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+	   int w = renderPassBeginInfo.renderArea.extent.width;
+	   int h = renderPassBeginInfo.renderArea.extent.height;
+	   VkViewport viewport = vks::initializers::viewport((float)w, (float)h, 0.0f, 1.0f);
+	   vkCmdSetViewport(cmdbuf, 0, 1, &viewport);
+
+	   VkRect2D scissor = vks::initializers::rect2D(w, h, 0, 0);
+	   vkCmdSetScissor(cmdbuf, 0, 1, &scissor);
+
+   }
+
+   inline bool MultiVolumeRenderer::TestTexMemSwap(
+	   vks::VulkanDevice* device,
+	   TextureBrick* b,
+	   int c,
+	   vector<TextureBrick*>* locked_bricks)
+   {
+	   bool result = true;
+	   if (VolumeRenderer::mem_swap_)
+	   {
+		   int c = 0;
+		   int idx = device->findTexInPool(b, 0, b->nx(), b->ny(), b->nz(), b->nb(c), b->tex_format(c));
+		   if (idx == -1) {
+			   double new_mem = (VkDeviceSize)b->nx() * b->ny() * b->nz() * b->nb(c) / 1.04e6;
+			   int sw_idx = device->check_swap_memory(b, c);
+			   if (sw_idx == -1 && device->available_mem < new_mem)
+			   {
+				   if (locked_bricks)
+				   {
+					   for (auto bb : *locked_bricks)
+						   bb->prevent_tex_deletion(false);
+					   locked_bricks->clear();
+				   }
+				   result = false;
+			   }
+		   }
+	   }
+
+	   return result;
+   }
+
    void MultiVolumeRenderer::draw_volume(
 	   const std::unique_ptr<vks::VFrameBuffer>& framebuf,
 	   bool clear_framebuf,
@@ -320,134 +379,21 @@ namespace FLIVR
 	   if (TextureRenderer::get_mem_swap() && remain_brk == 0) return;
 
 
-	   vector<uint32_t> shadertypes;
-	   for (auto vr : valid_vrs)
-	   {
-		   uint32_t type = 0;
-
-		   if (colormap_mode_ == 2)
-			   type |= FLV_CTYPE_DEPTH;
-		   else if (vr->colormap_mode_ == 1)
-			   type |= FLV_CTYPE_RAINBOW;
-		   else if (vr->colormap_mode_ == 3)
-			   type |= FLV_CTYPE_INDEX;
-
-		   if (!vr->alpha_)
-			   type |= FLV_VR_SOLID;
-
-		   if (!vr->shading_)
-			   type |= FLV_SMODE_NO_SHADING;
-
-		   shadertypes.push_back(type);
-	   }
-
-	   bool multi_shader = false;
-	   uint32_t prev_type = FLV_VR_INVALID;
-	   for (auto type : shadertypes)
-	   {
-		   if (type != FLV_VR_INVALID)
-		   {
-			   if (prev_type == FLV_VR_INVALID)
-				   prev_type = type;
-			   else if (type != prev_type)
-			   {
-				   multi_shader = true;
-				   break;
-			   }
-		   }
-	   }
-
 	   vks::VulkanDevice* prim_dev = VolumeRenderer::m_vulkan->devices[0];
 
-	   VolumeRenderer::VRayPipeline pipeline;
 	   int blendmode = blend_slices_ ? TextureRenderer::MODE_SLICE : TextureRenderer::MODE_OVER;
-	   if (!multi_shader)
-		   pipeline = valid_vrs[0]->prepareVRayPipeline(prim_dev, 1, valid_vrs[0]->update_order_, valid_vrs[0]->colormap_mode_, !orthographic_p, 0);
-	   else
-		   pipeline = valid_vrs[0]->prepareVRayPipeline(prim_dev, 1, valid_vrs[0]->update_order_, colormap_mode_, !orthographic_p, 1);
 
-	   VkPipelineLayout pipelineLayout = VolumeRenderer::m_vulkan->vray_shader_factory_->pipeline_[prim_dev].pipelineLayout;
-
-	   if (slice_fbo_ && (slice_fbo_->w != w2 || slice_fbo_->h != h2 || slice_fbo_->renderPass != pipeline.renderpass))
-	   {
-		   slice_fbo_.reset();
-		   slice_tex_.reset();
-	   }
-	   if (!slice_fbo_)
-	   {
-		   slice_fbo_ = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
-		   slice_fbo_->w = w2;
-		   slice_fbo_->h = h2;
-		   slice_fbo_->device = prim_dev;
-
-		   if (!slice_tex_)
-			   slice_tex_ = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, w2, h2);
-
-		   slice_fbo_->addAttachment(slice_tex_);
-
-		   if (!slice_fbo_->renderPass)
-			   slice_fbo_->setup(pipeline.renderpass);
-	   }
-
-	   Vulkan2dRender::V2DRenderParams blend_params;
-	   if (blend_slices_)
-	   {
-		   blend_params.pipeline =
-			   VolumeRenderer::m_v2drender->preparePipeline(
-				   IMG_SHADER_TEXTURE_LOOKUP,
-				   V2DRENDER_BLEND_OVER_INV,
-				   framebuf->attachments[0]->format,
-				   framebuf->attachments.size(),
-				   0,
-				   framebuf->attachments[0]->is_swapchain_images);
-		   blend_params.tex[0] = slice_tex_.get();
-		   blend_params.clear = true;
-
-		   if (blend_framebuffer_ &&
-			   (blend_framebuffer_->w != w || blend_framebuffer_->h != h || blend_framebuffer_->renderPass != blend_params.pipeline.pass))
-		   {
-			   blend_framebuffer_.reset();
-			   blend_tex_id_.reset();
-		   }
-		   if (!blend_framebuffer_)
-		   {
-			   blend_framebuffer_ = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
-			   blend_framebuffer_->w = w2;
-			   blend_framebuffer_->h = h2;
-			   blend_framebuffer_->device = prim_dev;
-
-			   if (!blend_tex_id_)
-				   blend_tex_id_ = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, w2, h2);
-
-			   blend_framebuffer_->addAttachment(blend_tex_id_);
-
-			   if (!blend_framebuffer_->renderPass)
-				   blend_framebuffer_->setup(blend_params.pipeline.pass);
-		   }
-	   }
-	   
 	   map<VolumeRenderer*, MultiVolRenederSettings> rsettings;
 	   for (auto vr : valid_vrs)
 	   {
 		   MultiVolRenederSettings setting;
-		  
-		   prim_dev->GetNextUniformBuffer(sizeof(VRayShaderFactory::VRayVertShaderUBO), setting.vert_ubuf, setting.vert_ubuf_offset);
-		   prim_dev->GetNextUniformBuffer(sizeof(VRayShaderFactory::VRayFragShaderBaseUBO), setting.frag_ubuf, setting.frag_ubuf_offset);
-		   VolumeRenderer::m_vulkan->vray_shader_factory_->getDescriptorSetWriteUniforms(
-			   prim_dev,
-			   setting.vert_ubuf,
-			   setting.frag_ubuf,
-			   setting.descriptorWritesBase);
-		   if (vr->colormap_mode_ == 3)
-		   {
-			   auto palette = vr->get_palette();
-			   if (palette.count(prim_dev) > 0)
-				   setting.descriptorWritesBase.push_back(VRayShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 7, &palette[prim_dev]->descriptor));
-		   }
 		   
 		   VRayShaderFactory::VRayVertShaderUBO vert_ubo;
 		   VRayShaderFactory::VRayFragShaderBaseUBO frag_ubo;
 		   VRayShaderFactory::VRayFragShaderBrickConst frag_const;
+
+		   setting.pipeline = vr->prepareVRayPipeline(prim_dev, blendmode, vr->update_order_, vr->colormap_mode_, !orthographic_p);
+		   setting.pipelineLayout = VolumeRenderer::m_vulkan->vray_shader_factory_->pipeline_[prim_dev].pipelineLayout;
 
 		   Ray view_ray = valid_vrs[0]->compute_view();
 		   vector<TextureBrick*>* brs = vr->tex_->get_bricks();
@@ -464,7 +410,7 @@ namespace FLIVR
 		   //spacings
 		   double spcx, spcy, spcz;
 		   vr->tex_->get_spacings(spcx, spcy, spcz);
-		   if (colormap_mode_ == 3)
+		   if (vr->colormap_mode_ == 3)
 		   {
 			   int max_id = (*brs)[0]->nb(0) == 2 ? USHRT_MAX : UCHAR_MAX;
 			   frag_ubo.loc5_spc_id = { spcx, spcy, spcz, max_id };
@@ -475,7 +421,7 @@ namespace FLIVR
 		   //transfer function
 		   frag_ubo.loc2_scscale_th = { vr->inv_ ? -(vr->scalar_scale_) : vr->scalar_scale_, vr->gm_scale_, vr->lo_thresh_, vr->hi_thresh_ };
 		   frag_ubo.loc3_gamma_offset = { 1.0 / vr->gamma3d_, vr->gm_thresh_, vr->offset_, vr->sw_ };
-		   switch (colormap_mode_)
+		   switch (vr->colormap_mode_)
 		   {
 		   case 0://normal
 			   frag_ubo.loc6_colparam = { vr->color_.r(), vr->color_.g(), vr->color_.b(), 0.0 };
@@ -530,19 +476,6 @@ namespace FLIVR
 		   frag_ubo.proj_mat_inv = glm::inverse(vr->m_proj_mat);
 		   frag_ubo.mv_mat_inv = glm::inverse(vr->m_mv_mat2);
 
-		   setting.vert_ubuf.copyTo(&vert_ubo, sizeof(VRayShaderFactory::VRayVertShaderUBO), setting.vert_ubuf_offset);
-		   setting.frag_ubuf.copyTo(&frag_ubo, sizeof(VRayShaderFactory::VRayFragShaderBaseUBO), setting.frag_ubuf_offset);
-		   if (setting.vert_ubuf.buffer == setting.frag_ubuf.buffer)
-			   setting.vert_ubuf.flush(prim_dev->GetCurrentUniformBufferOffset() - setting.vert_ubuf_offset, setting.vert_ubuf_offset);
-		   else
-		   {
-			   if (setting.vert_ubuf_offset == 0)
-				   setting.vert_ubuf.flush();
-			   else
-				   setting.vert_ubuf.flush(VK_WHOLE_SIZE, setting.vert_ubuf_offset);
-			   setting.frag_ubuf.flush();
-		   }
-
 		   setting.view_ray = view_ray;
 		   if (intp && vr->colormap_mode_ != 3)
 			   setting.filter = VK_FILTER_LINEAR;
@@ -550,24 +483,130 @@ namespace FLIVR
 			   setting.filter = VK_FILTER_NEAREST;
 
 		   rsettings[vr] = setting;
+
+
+		   prim_dev->GetNextUniformBuffer(sizeof(VRayShaderFactory::VRayVertShaderUBO), rsettings[vr].vert_ubuf, rsettings[vr].vert_ubuf_offset);
+		   prim_dev->GetNextUniformBuffer(sizeof(VRayShaderFactory::VRayFragShaderBaseUBO), rsettings[vr].frag_ubuf, rsettings[vr].frag_ubuf_offset);
+		   VolumeRenderer::m_vulkan->vray_shader_factory_->getDescriptorSetWriteUniforms(
+			   prim_dev,
+			   rsettings[vr].vert_ubuf,
+			   rsettings[vr].frag_ubuf,
+			   rsettings[vr].descriptorWritesBase);
+		   if (vr->colormap_mode_ == 3)
+		   {
+			   auto palette = vr->get_palette();
+			   if (palette.count(prim_dev) > 0)
+				   rsettings[vr].descriptorWritesBase.push_back(VRayShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 7, &palette[prim_dev]->descriptor));
+		   }
+
+		   rsettings[vr].vert_ubuf.copyTo(&vert_ubo, sizeof(VRayShaderFactory::VRayVertShaderUBO), rsettings[vr].vert_ubuf_offset);
+		   rsettings[vr].frag_ubuf.copyTo(&frag_ubo, sizeof(VRayShaderFactory::VRayFragShaderBaseUBO), rsettings[vr].frag_ubuf_offset);
+		   if (rsettings[vr].vert_ubuf.buffer == rsettings[vr].frag_ubuf.buffer)
+			   rsettings[vr].vert_ubuf.flush(prim_dev->GetCurrentUniformBufferOffset() - rsettings[vr].vert_ubuf_offset, rsettings[vr].vert_ubuf_offset);
+		   else
+		   {
+			   if (rsettings[vr].vert_ubuf_offset == 0)
+				   rsettings[vr].vert_ubuf.flush();
+			   else
+				   rsettings[vr].vert_ubuf.flush(VK_WHOLE_SIZE, rsettings[vr].vert_ubuf_offset);
+			   rsettings[vr].frag_ubuf.flush();
+		   }
+
+
+		   vr->prepareVRayVertexBuffers(prim_dev);
+	   }
+
+	   if (slice_fbo_ && (slice_fbo_->w != w2 || slice_fbo_->h != h2 || slice_fbo_->renderPass != rsettings[valid_vrs[0]].pipeline.renderpass))
+	   {
+		   slice_fbo_.reset();
+		   slice_tex_.reset();
+	   }
+	   if (!slice_fbo_)
+	   {
+		   slice_fbo_ = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+		   slice_fbo_->w = w2;
+		   slice_fbo_->h = h2;
+		   slice_fbo_->device = prim_dev;
+
+		   if (!slice_tex_)
+			   slice_tex_ = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, w2, h2);
+
+		   slice_fbo_->addAttachment(slice_tex_);
+
+		   if (!slice_fbo_->renderPass)
+			   slice_fbo_->setup(rsettings[valid_vrs[0]].pipeline.renderpass);
+	   }
+
+	   Vulkan2dRender::V2DRenderParams blend_params;
+	   if (blend_slices_)
+	   {
+		   blend_params.pipeline =
+			   VolumeRenderer::m_v2drender->preparePipeline(
+				   IMG_SHADER_TEXTURE_LOOKUP,
+				   V2DRENDER_BLEND_OVER_INV,
+				   framebuf->attachments[0]->format,
+				   framebuf->attachments.size(),
+				   0,
+				   framebuf->attachments[0]->is_swapchain_images);
+		   blend_params.tex[0] = slice_tex_.get();
+		   blend_params.clear = true;
+
+		   if (blend_framebuffer_ &&
+			   (blend_framebuffer_->w != w || blend_framebuffer_->h != h || blend_framebuffer_->renderPass != blend_params.pipeline.pass))
+		   {
+			   blend_framebuffer_.reset();
+			   blend_tex_id_.reset();
+		   }
+		   if (!blend_framebuffer_)
+		   {
+			   blend_framebuffer_ = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+			   blend_framebuffer_->w = w2;
+			   blend_framebuffer_->h = h2;
+			   blend_framebuffer_->device = prim_dev;
+
+			   if (!blend_tex_id_)
+				   blend_tex_id_ = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, w2, h2);
+
+			   blend_framebuffer_->addAttachment(blend_tex_id_);
+
+			   if (!blend_framebuffer_->renderPass)
+				   blend_framebuffer_->setup(blend_params.pipeline.pass);
+		   }
 	   }
 
 	   bool clear = true;
 	   bool blend_clear = true;
 	   VkCommandBuffer cmdbuf = VK_NULL_HANDLE;
 	   VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
-	   renderPassBeginInfo.renderPass = pipeline.renderpass;
+	   renderPassBeginInfo.renderPass = rsettings[valid_vrs[0]].pipeline.renderpass;
 	   renderPassBeginInfo.renderArea.offset.x = 0;
 	   renderPassBeginInfo.renderArea.offset.y = 0;
 	   renderPassBeginInfo.renderArea.extent.width = slice_fbo_->w;
 	   renderPassBeginInfo.renderArea.extent.height = slice_fbo_->h;
 	   renderPassBeginInfo.framebuffer = slice_fbo_->framebuffer;
-	   
+
+
+	   cmdbuf = prim_dev->GetNextCommandBuffer();
+	   VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
+	   cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+	   VK_CHECK_RESULT(vkBeginCommandBuffer(cmdbuf, &cmdBufInfo));
+
+	   vkCmdBeginRenderPass(cmdbuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+	   VkViewport viewport = vks::initializers::viewport((float)w2, (float)h2, 0.0f, 1.0f);
+	   vkCmdSetViewport(cmdbuf, 0, 1, &viewport);
+
+	   VkRect2D scissor = vks::initializers::rect2D(w2, h2, 0, 0);
+	   vkCmdSetScissor(cmdbuf, 0, 1, &scissor);
+
 
 	  vector<MultiVolBrick> cur_brs;
 	  int cur_bid;
 	  bool order = TextureRenderer::get_update_order();
 	  int start_i = order ? all_timin : all_timax;
+
+	  vector<TextureBrick*> locked_bricks;
 
 	  if (updating)
 	  {
@@ -642,30 +681,125 @@ namespace FLIVR
 		  if (cur_brs.size() == 0)
 			  continue;
 
+		  bool blend_clear = true;
 		  for (int j = 0; j < cur_brs.size(); j++)
 		  {
 			  TextureBrick *b = cur_brs[j].b;
 			  VolumeRenderer *vr = b->get_vr();
 			  Ray view_ray = rsettings[vr].view_ray;
+
+			  bool restart = !TestTexMemSwap(prim_dev, b, 0, nullptr);
 			  
-			  bool tex_updated = false;
-			  bool mask_updated = false;
-			  bool label_updated = false;
 			  shared_ptr<vks::VTexture> brktex, msktex, lbltex;
-
-			  cur_brs[j].b->prevent_tex_deletion(true);
-
 			  vector<TextureBrick*> tempbv(1, b);
 			  brktex = vr->load_brick(prim_dev, 0, 0, &tempbv, 0, rsettings[vr].filter, vr->compression_, stmode, false);
+			  if (!brktex)
+				  continue;
+
+			  b->prevent_tex_deletion(true);
+			  locked_bricks.push_back(b);
+			  if (restart)
+			  {
+				  for (auto bb : locked_bricks)
+					  bb->prevent_tex_deletion(false);
+				  locked_bricks.clear();
+				  SubmitAndRestartCommandBuf(prim_dev, cmdbuf, renderPassBeginInfo);
+			  }
+
+			  if (vr->tex_->nmask() != -1 && vr->m_mask_hide_mode != VOL_MASK_HIDE_NONE)
+			  {
+				  if (vr->tex_->isBrxml() && vr->tex_->GetMaskLv() != vr->tex_->GetCurLevel())
+				  {
+					  vr->m_pThreadCS.Enter();
+
+					  int cnx = b->nx(), cny = b->ny(), cnz = b->nz();
+					  int cox = b->ox(), coy = b->oy(), coz = b->oz();
+					  int cmx = b->mx(), cmy = b->my(), cmz = b->mz();
+					  int csx = b->sx(), csy = b->sy(), csz = b->sz();
+					  Nrrd* cdata = b->get_nrrd(0);
+					  Nrrd* cmdata = b->get_nrrd(vr->tex_->nmask());
+
+					  b->set_nrrd(vr->tex_->get_nrrd_lv(vr->tex_->GetMaskLv(), 0), 0);
+					  b->set_nrrd(vr->tex_->get_nrrd(vr->tex_->nmask()), vr->tex_->nmask());
+					  int sx = b->sx(), sy = b->sy(), sz = b->sz();
+					  double xscale = (double)sx / csx;
+					  double yscale = (double)sy / csy;
+					  double zscale = (double)sz / csz;
+
+					  double ox_d = (double)cox * xscale;
+					  double oy_d = (double)coy * yscale;
+					  double oz_d = (double)coz * zscale;
+					  int ox = (int)floor(ox_d);
+					  int oy = (int)floor(oy_d);
+					  int oz = (int)floor(oz_d);
+
+					  b->ox(ox); b->oy(oy); b->oz(oz);
+
+					  double endx_d = (double)(cox + cnx) * xscale;
+					  double endy_d = (double)(coy + cny) * yscale;
+					  double endz_d = (double)(coz + cnz) * zscale;
+					  int nx = (int)ceil(endx_d) - ox;
+					  int ny = (int)ceil(endy_d) - oy;
+					  int nz = (int)ceil(endz_d) - oz;
+
+					  b->nx(nx); b->ny(ny); b->nz(nz);
+					  b->mx(nx); b->my(ny); b->mz(nz);
+
+					  if (!restart)
+					  {
+						  restart = !TestTexMemSwap(prim_dev, b, vr->tex_->nmask(), &locked_bricks);
+						  if (restart)
+							  SubmitAndRestartCommandBuf(prim_dev, cmdbuf, renderPassBeginInfo);
+					  }
+					  msktex = vr->load_brick_mask(prim_dev, &tempbv, 0, rsettings[vr].filter, false, 0, true, false);
+
+					  double trans_x = (ox_d - ox) / nx;
+					  double trans_y = (oy_d - oy) / ny;
+					  double trans_z = (oz_d - oz) / nz;
+					  double scale_x = (endx_d - ox_d) / nx;
+					  double scale_y = (endy_d - oy_d) / ny;
+					  double scale_z = (endz_d - oz_d) / nz;
+
+					  cur_brs[j].frag_const.mask_b_scale_invnz = { (float)scale_x, (float)scale_y, (float)scale_z , 1.0f };
+					  cur_brs[j].frag_const.mask_b_trans = { (float)trans_x, (float)trans_y, (float)trans_z, 0.0f };
+
+					  b->nx(cnx); b->ny(cny); b->nz(cnz);
+					  b->ox(cox); b->oy(coy); b->oz(coz);
+					  b->mx(cmx); b->my(cmy); b->mz(cmz);
+					  b->set_nrrd(cdata, 0);
+					  b->set_nrrd(cmdata, vr->tex_->nmask());
+
+					  vr->m_pThreadCS.Leave();
+				  }
+				  else
+				  {
+					  if (!restart)
+					  {
+						  restart = !TestTexMemSwap(prim_dev, b, vr->tex_->nmask(), &locked_bricks);
+						  if (restart)
+							  SubmitAndRestartCommandBuf(prim_dev, cmdbuf, renderPassBeginInfo);
+					  }
+					  msktex = vr->load_brick_mask(prim_dev, &tempbv, 0, rsettings[vr].filter, false, 0, true, false);
+
+					  cur_brs[j].frag_const.mask_b_scale_invnz = { 1.0f, 1.0f, 1.0f, 1.0f };
+					  cur_brs[j].frag_const.mask_b_trans = { 0.0f, 0.0f, 0.0f, 0.0f };
+				  }
+			  }
 
 			  cur_brs[j].descriptorWrites = rsettings[vr].descriptorWritesBase;
 			  brktex->descriptor.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			  cur_brs[j].descriptorWrites.push_back(VRayShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 0, &brktex->descriptor));
 
+			  if (msktex)
+			  {
+				  msktex->descriptor.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				  cur_brs[j].descriptorWrites.push_back(VRayShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 2, &msktex->descriptor));
+			  }
+
 			  Transform mv;
 			  mv.set_trans(glm::value_ptr(vr->m_mv_mat));
 			  Transform* tform = vr->tex_->transform();
-			  unsigned int slicenum = 1;
+			  unsigned int slicenum = 0;
 			  int timax = i, timin = i;
 			  double vr_dt = b->dt();
 			  Point p = view_ray.parameter(timin * vr_dt);
@@ -677,33 +811,21 @@ namespace FLIVR
 			  cur_brs[j].frag_const.loc_zmin_zmax_dz = { p.z(), p2.z(), dv.z() };
 			  cur_brs[j].frag_const.stepnum = slicenum;
 
-			  cmdbuf = prim_dev->GetNextCommandBuffer();
-			  VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
-			  cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-			  VK_CHECK_RESULT(vkBeginCommandBuffer(cmdbuf, &cmdBufInfo));
-
-			  vkCmdBeginRenderPass(cmdbuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-			  VkViewport viewport = vks::initializers::viewport((float)w2, (float)h2, 0.0f, 1.0f);
-			  vkCmdSetViewport(cmdbuf, 0, 1, &viewport);
-
-			  VkRect2D scissor = vks::initializers::rect2D(w2, h2, 0, 0);
-			  vkCmdSetScissor(cmdbuf, 0, 1, &scissor);
+			  vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, rsettings[vr].pipeline.vkpipeline);
 
 			  if (!cur_brs[j].descriptorWrites.empty())
 			  {
 				  prim_dev->vkCmdPushDescriptorSetKHR(
 					  cmdbuf,
 					  VK_PIPELINE_BIND_POINT_GRAPHICS,
-					  pipelineLayout,
+					  rsettings[vr].pipelineLayout,
 					  0,
 					  cur_brs[j].descriptorWrites.size(),
 					  cur_brs[j].descriptorWrites.data()
 				  );
 			  }
 
-			  if (blend_slices_ || clear)
+			  if ((blend_slices_ && blend_clear) || clear)
 			  {
 				  VkClearValue clearValues[1];
 				  clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
@@ -726,13 +848,12 @@ namespace FLIVR
 					  clearRect);
 
 				  clear = false;
+				  blend_clear = false;
 			  }
-
-			  vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.vkpipeline);
 
 			  vkCmdPushConstants(
 				  cmdbuf,
-				  pipelineLayout,
+				  rsettings[vr].pipelineLayout,
 				  VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT,
 				  0,
 				  sizeof(VRayShaderFactory::VRayFragShaderBrickConst),
@@ -742,24 +863,15 @@ namespace FLIVR
 			  vkCmdBindVertexBuffers(cmdbuf, 0, 1, &valid_vrs[0]->m_vray_vbufs[prim_dev].vertexBuffer.buffer, offsets);
 			  vkCmdBindIndexBuffer(cmdbuf, valid_vrs[0]->m_vray_vbufs[prim_dev].indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 			  vkCmdDrawIndexed(cmdbuf, valid_vrs[0]->m_vray_vbufs[prim_dev].indexCount, 1, 0, 0, 0);
-			  vkCmdEndRenderPass(cmdbuf);
-
-			  VK_CHECK_RESULT(vkEndCommandBuffer(cmdbuf));
-
-			  VkSubmitInfo submitInfo = vks::initializers::submitInfo();
-			  submitInfo.commandBufferCount = 1;
-			  submitInfo.pCommandBuffers = &cmdbuf;
-
-			  VK_CHECK_RESULT(vkQueueSubmit(prim_dev->queue, 1, &submitInfo, VK_NULL_HANDLE));
-
-			  cur_brs[j].b->prevent_tex_deletion(false);
 
 		  }//for (int j = 0; j < cur_brs.size(); j++)
 
 		  if (blend_slices_ && colormap_mode_ != 2)
 		  {
-			  vkQueueWaitIdle(prim_dev->queue);
+			  SubmitAndRestartCommandBuf(prim_dev, cmdbuf, renderPassBeginInfo);
+
 			  VolumeRenderer::m_v2drender->render(blend_framebuffer_, blend_params);
+			  blend_params.clear = false;
 		  } 
 
 		  vector<MultiVolBrick>::iterator ite = cur_brs.begin();
@@ -781,6 +893,20 @@ namespace FLIVR
 		  }
 
 	  }//for (i = start_i; order?(i <= all_timax):(i >= all_timin); i += order?1:-1)
+
+	  vkCmdEndRenderPass(cmdbuf);
+	  VK_CHECK_RESULT(vkEndCommandBuffer(cmdbuf));
+
+	  VkSubmitInfo submitInfo = vks::initializers::submitInfo();
+	  submitInfo.commandBufferCount = 1;
+	  submitInfo.pCommandBuffers = &cmdbuf;
+
+	  VK_CHECK_RESULT(vkQueueSubmit(prim_dev->queue, 1, &submitInfo, VK_NULL_HANDLE));
+	  vkQueueWaitIdle(prim_dev->queue);
+	  
+	  for (auto bb : locked_bricks)
+		  bb->prevent_tex_deletion(false);
+
 
 	  TextureRenderer::cur_tid_offset_multi_ = i - (order?all_timin:all_timax);
 	  
@@ -804,7 +930,6 @@ namespace FLIVR
          TextureRenderer::set_done_update_loop(true);
       }
 
-	  vkQueueWaitIdle(prim_dev->queue);
 
 	  //output
 	  if (blend_num_bits_ > 8)
@@ -898,11 +1023,14 @@ namespace FLIVR
 		  params.clear = clear_framebuf;
 		  params.clearColor = clearColor;
 
-		  framebuf->replaceRenderPass(params.pipeline.pass);
+		  if (!framebuf->renderPass)
+			framebuf->replaceRenderPass(params.pipeline.pass);
 
 		  VolumeRenderer::m_v2drender->render(framebuf, params);
 
-		  //VK_CHECK_RESULT(vkQueueWaitIdle(prim_dev->queue));
+		  VK_CHECK_RESULT(vkQueueWaitIdle(prim_dev->queue));
+
+		  //VolumeRenderer::saveScreenshot("E:\\vulkan_screenshot.ppm", framebuf->attachments[0]);
 	  }
 
    }
