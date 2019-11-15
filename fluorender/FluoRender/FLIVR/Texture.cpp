@@ -306,6 +306,46 @@ namespace FLIVR
 		return bricks_;
 	}
 
+	vector<TextureBrick*>* Texture::get_sorted_bricks_dir(Ray& view)
+	{
+		if (sort_bricks_)
+		{
+			for (unsigned int i = 0; i < (*bricks_).size(); i++)
+			{
+				TextureBrick* b = (*bricks_)[i];
+				BBox bbox = b->bbox();
+
+				Point corner[8];
+				corner[0] = bbox.min();
+				corner[1] = Point(bbox.min().x(), bbox.min().y(), bbox.max().z());
+				corner[2] = Point(bbox.min().x(), bbox.max().y(), bbox.min().z());
+				corner[3] = Point(bbox.min().x(), bbox.max().y(), bbox.max().z());
+				corner[4] = Point(bbox.max().x(), bbox.min().y(), bbox.min().z());
+				corner[5] = Point(bbox.max().x(), bbox.min().y(), bbox.max().z());
+				corner[6] = Point(bbox.max().x(), bbox.max().y(), bbox.min().z());
+				corner[7] = bbox.max();
+
+				double tmin = Dot(corner[0] - view.origin(), view.direction());
+				double tmax = tmin;
+				int maxi = 0;
+				int mini = 0;
+				for (int i = 1; i < 8; i++)
+				{
+					double t = Dot(corner[i] - view.origin(), view.direction());
+					if (t < tmin) { mini = i; tmin = t; }
+					if (t > tmax) { maxi = i; tmax = t; }
+				}
+
+				double d = TextureRenderer::get_update_order() ? tmin : tmax;
+				(*bricks_)[i]->set_d(d);
+			}
+			std::sort((*bricks_).begin(), (*bricks_).end(), TextureRenderer::get_update_order() ? TextureBrick::sort_dsc : TextureBrick::sort_asc);
+
+			sort_bricks_ = false;
+		}
+		return bricks_;
+	}
+
 	vector<TextureBrick*>* Texture::get_closest_bricks(
 		Point& center, int quota, bool skip,
 		Ray& view, bool is_orthographic)

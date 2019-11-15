@@ -119,6 +119,7 @@ namespace FLIVR
 		// get sorted bricks
 		vector<TextureBrick*>* get_sorted_bricks(
 			Ray& view, bool is_orthographic = false);
+		vector<TextureBrick*>* get_sorted_bricks_dir(Ray& view);
 		//get closest bricks
 		vector<TextureBrick*>* get_closest_bricks(
 			Point& center, int quota, bool skip,

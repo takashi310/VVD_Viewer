@@ -5104,6 +5104,7 @@ void VRenderVulkanView::DrawOLShadows(vector<VolumeData*> &vlist, std::unique_pt
 		if (!list.empty())
 		{
 			m_mvr->clear_vr();
+			m_mvr->set_main_membuf_size((long long)TextureRenderer::mainmem_buf_size_ * 1024LL * 1024LL);
 			for (i=0; i<(int)list.size(); i++)
 			{
 				VolumeData* vd = list[i];
@@ -5382,6 +5383,7 @@ void VRenderVulkanView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 
 		//draw multiple volumes at the same time
 		double sampling_frq_fac = 2 / min(m_ortho_right-m_ortho_left, m_ortho_top-m_ortho_bottom);
+		m_mvr->set_main_membuf_size((long long)TextureRenderer::mainmem_buf_size_ * 1024LL * 1024LL);
 		m_mvr->draw(use_tex_wt2 ? m_fbo_wt2 : m_fbo, clear, m_interactive, !m_persp, m_scale_factor, m_intp, sampling_frq_fac);
 	}
 
@@ -12392,7 +12394,8 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 				VolumeData* vd = list[i];
 				Texture* tex = vd->GetTexture();
 				Ray view_ray = vd->GetVR()->compute_view();
-				vector<TextureBrick*> *bricks = tex->get_sorted_bricks(view_ray, !m_persp);
+				tex->set_sort_bricks();
+				vector<TextureBrick*> *bricks = tex->get_sorted_bricks_dir(view_ray); // distance from view plane
 				int mode = vd->GetMode() == 1 ? 1 : 0;
 				bool shadow = vd->GetShadow();
 				for (j = 0; j < bricks->size(); j++)
@@ -12432,7 +12435,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 					{
 						Ray view_ray = list[i]->GetVR()->compute_view();
 						list[i]->GetTexture()->set_sort_bricks();
-						list[i]->GetTexture()->get_sorted_bricks(view_ray, !m_persp); //recalculate brick.d_
+						list[i]->GetTexture()->get_sorted_bricks_dir(view_ray); // distance from view plane
 						list[i]->GetTexture()->set_sort_bricks();
 					}
 					TextureRenderer::set_update_order(order);
@@ -12518,7 +12521,8 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 								VolumeData* vd = list[k];
 								Texture* tex = vd->GetTexture();
 								Ray view_ray = vd->GetVR()->compute_view();
-								vector<TextureBrick*> *bricks = tex->get_sorted_bricks(view_ray, !m_persp);
+								tex->set_sort_bricks();
+								vector<TextureBrick*> *bricks = tex->get_sorted_bricks_dir(view_ray); // distance from view plane
 								int mode = vd->GetMode() == 1 ? 1 : 0;
 								bool shadow = vd->GetShadow();
 								for (j = 0; j < bricks->size(); j++)
@@ -12561,7 +12565,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 									{
 										Ray view_ray = list[k]->GetVR()->compute_view();
 										list[i]->GetTexture()->set_sort_bricks();
-										list[i]->GetTexture()->get_sorted_bricks(view_ray, !m_persp); //recalculate brick.d_
+										list[i]->GetTexture()->get_sorted_bricks_dir(view_ray); // distance from view plane
 										list[i]->GetTexture()->set_sort_bricks();
 									}
 									TextureRenderer::set_update_order(order);

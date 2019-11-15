@@ -100,6 +100,8 @@ namespace FLIVR
 		//soft threshold
 		static void set_soft_threshold(double val) {sw_ = val;}
 
+		void set_main_membuf_size(long long size) { main_membuf_size_ = size; }
+
 	private:
 		//volume renderer list
 		vector<VolumeRenderer*> vr_list_;
@@ -150,6 +152,8 @@ namespace FLIVR
 
 		//soft threshold
 		static double sw_;
+
+		long long main_membuf_size_;
 
 		//find out combined bricks in interactive mode
 		vector<TextureBrick*> *get_combined_bricks(
