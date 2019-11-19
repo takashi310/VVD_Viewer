@@ -1632,531 +1632,480 @@ void VRenderVulkanView::DrawVolumes(int peel)
 
 void VRenderVulkanView::DrawVolumesDP()
 {
-//	int finished_bricks = 0;
-//	if (TextureRenderer::get_mem_swap())
-//	{
-//		finished_bricks = TextureRenderer::get_finished_bricks();
-//		TextureRenderer::reset_finished_bricks();
-//	}
-//
-//	bool dp = (m_md_pop_list.size() > 0);
-//	
-//	int peeling_layers;
-//	if (!m_mdtrans || m_peeling_layers <= 0) peeling_layers = 0;
-//	else peeling_layers = m_peeling_layers;
-//
-//	int nx = m_nx;
-//	int ny = m_ny;
-//
-//	vks::VulkanDevice* prim_dev = m_vulkan->devices[0];
-//
-//	PrepFinalBuffer();
-//	glClearColor(0.0, 0.0, 0.0, 0.0);
-//
-//	if (TextureRenderer::get_mem_swap())
-//	{
-//		//set start time for the texture renderer
-//		TextureRenderer::set_st_time(GET_TICK_COUNT());
-//
-//		TextureRenderer::set_interactive(m_interactive);
-//	}
-//
-//	bool first = (m_finished_peeling_layer == 0 && (!TextureRenderer::get_mem_swap() || TextureRenderer::get_cur_brick_num() == 0)) ? true : false;
-//
-//	//draw
-//	if ((!m_drawing_coord &&
-//		m_int_mode!=7 &&
-//		m_updating) ||
-//		(!m_drawing_coord &&
-//		(m_int_mode == 1 ||
-//		m_int_mode == 3 ||
-//		m_int_mode == 4 ||
-//		m_int_mode == 5 ||
-//		(m_int_mode == 6 &&
-//		!m_editing_ruler_point) ||
-//		m_int_mode == 8 ||
-//		m_force_clear)))
-//	{
-//
-//		m_updating = false;
-//		m_force_clear = false;
-//
-//		for (int s = m_finished_peeling_layer; s <= peeling_layers; s++)
-//		{
-//			if ( s == 0 || (TextureRenderer::get_mem_swap() && TextureRenderer::get_total_brick_num() > 0) ) ClearFinalBuffer();
-//
-//			if (m_finished_peeling_layer == 0 && TextureRenderer::get_cur_brick_num() == 0 && m_md_pop_list.size() > 0)
-//			{
-//				int dptexnum = peeling_layers > 0 ? peeling_layers : 1;
-//
-//				if (m_resize)
-//				{
-//					m_dp_fbo_list.clear();
-//					m_dp_ctex_list.clear();
-//					m_dp_tex_list.clear();
-//				}
-//
-//				if (m_dp_fbo_list.size() < dptexnum)
-//				{
-//					m_dp_fbo_list.resize(dptexnum+1);
-//					m_dp_ctex_list.resize(dptexnum+1);
-//					m_dp_tex_list.resize(dptexnum+1);
-//				}
-//
-//				for (int i = 0; i <= dptexnum; i++)
-//				{
-//					if (!m_dp_fbo_list[i])
-//					{
-//						m_dp_fbo_list[i] = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
-//						m_dp_fbo_list[i]->w = m_nx;
-//						m_dp_fbo_list[i]->h = m_ny;
-//						m_dp_fbo_list[i]->device = prim_dev;
-//
-//						m_dp_ctex_list[i] = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
-//						m_dp_fbo_list[i]->addAttachment(m_dp_ctex_list[i]);
-//
-//						m_dp_tex_list[i] = prim_dev->GenTexture2D(
-//							m_vulkan->depthFormat,
-//							VK_FILTER_LINEAR,
-//							m_nx, m_ny,
-//							VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-//							VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-//							VK_IMAGE_USAGE_SAMPLED_BIT |
-//							VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-//							VK_IMAGE_USAGE_STORAGE_BIT
-//						);
-//						m_dp_fbo_list[i]->addAttachment(m_dp_tex_list[i]);
-//					}
-//
-//					//TODO: clear in MeshRenderer
-//					//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-//
-//					if (i==0)
-//					{
-//						DrawMeshes(0);
-//					}
-//					else
-//					{
-//						m_msh_dp_fr_tex = m_dp_tex_list[i - 1];
-//						DrawMeshes(1);
-//					}
-//
-//				}
-//			}
-//
-//			int peel = 0;
-//			if (m_dp_tex_list.size() >= peeling_layers && !m_dp_tex_list.empty() && m_md_pop_list.size() > 0)
-//			{
-//				if (TextureRenderer::get_update_order() == 0)
-//				{
-//					if (s == 0)
-//					{
-//						peel = 2;
-//						m_vol_dp_fr_tex = m_dp_tex_list[(peeling_layers-1)-s];
-//					}
-//					else if (s == peeling_layers)
-//					{
-//						peel = 1;
-//						m_vol_dp_bk_tex = m_dp_tex_list[(peeling_layers-1)-(s-1)];
-//					}
-//					else
-//					{
-//						peel = 3;
-//						m_vol_dp_fr_tex = m_dp_tex_list[(peeling_layers-1)-s];
-//						m_vol_dp_bk_tex = m_dp_tex_list[(peeling_layers-1)-(s-1)];
-//					}
-//				}
-//				else
-//				{
-//					if (s == 0)
-//					{
-//						peel = 1;
-//						m_vol_dp_bk_tex = m_dp_tex_list[s];
-//					}
-//					else if (s == peeling_layers)
-//					{
-//						peel = 2;
-//						m_vol_dp_fr_tex = m_dp_tex_list[s-1];
-//					}
-//					else
-//					{
-//						peel = 3;
-//						m_vol_dp_fr_tex = m_dp_tex_list[s-1];
-//						m_vol_dp_bk_tex = m_dp_tex_list[s];
-//					}
-//				}
-//			}
-//
-//			//setup
-//			PopVolumeList();
-//
-//			vector<VolumeData*> quota_vd_list;
-//
-//			//handle intermixing modes
-//			if (m_vol_method == VOL_METHOD_MULTI)
-//			{
-//				DrawVolumesMulti(m_vd_pop_list, peel);
-//				//draw masks
-//				if (m_draw_mask)
-//					DrawVolumesComp(m_vd_pop_list, true, peel);
-//			}
-//			else
-//			{
-//				int i, j;
-//				vector<VolumeData*> list;
-//				for (i=(int)m_layer_list.size()-1; i>=0; i--)
-//				{
-//					if (!m_layer_list[i])
-//						continue;
-//					switch (m_layer_list[i]->IsA())
-//					{
-//					case 2://volume data (this won't happen now)
-//						{
-//							if (m_finished_peeling_layer != 0)
+	int finished_bricks = 0;
+	if (TextureRenderer::get_mem_swap())
+	{
+		finished_bricks = TextureRenderer::get_finished_bricks();
+		TextureRenderer::reset_finished_bricks();
+	}
+
+	bool dp = (m_md_pop_list.size() > 0);
+
+	int peeling_layers;
+	if (!m_mdtrans || m_peeling_layers <= 0) peeling_layers = 0;
+	else peeling_layers = m_peeling_layers;
+
+	int nx = m_nx;
+	int ny = m_ny;
+
+	PrepFinalBuffer();
+
+	vks::VulkanDevice* prim_dev = m_vulkan->devices[0];
+
+	if (TextureRenderer::get_mem_swap())
+	{
+		//set start time for the texture renderer
+		TextureRenderer::set_st_time(GET_TICK_COUNT());
+
+		TextureRenderer::set_interactive(m_interactive);
+	}
+
+	bool first = (m_finished_peeling_layer == 0 && (!TextureRenderer::get_mem_swap() || TextureRenderer::get_cur_brick_num() == 0)) ? true : false;
+
+	//draw
+	if ((!m_drawing_coord &&
+		m_int_mode != 7 &&
+		m_updating) ||
+		(!m_drawing_coord &&
+		(m_int_mode == 1 ||
+			m_int_mode == 3 ||
+			m_int_mode == 4 ||
+			m_int_mode == 5 ||
+			(m_int_mode == 6 &&
+				!m_editing_ruler_point) ||
+			m_int_mode == 8 ||
+			m_force_clear)))
+	{
+
+		m_updating = false;
+		m_force_clear = false;
+
+		for (int s = m_finished_peeling_layer; s <= peeling_layers; s++)
+		{
+			if (s == 0 || (TextureRenderer::get_mem_swap() && TextureRenderer::get_total_brick_num() > 0)) ClearFinalBuffer();
+
+			if (m_finished_peeling_layer == 0 && TextureRenderer::get_cur_brick_num() == 0 && m_md_pop_list.size() > 0)
+			{
+				int dptexnum = peeling_layers > 0 ? peeling_layers : 1;
+				if (m_resize)
+				{
+					m_dp_fbo_list.clear();
+					m_dp_ctex_list.clear();
+					m_dp_tex_list.clear();
+				}
+
+				if (m_dp_fbo_list.size() < dptexnum)
+				{
+					m_dp_fbo_list.resize(dptexnum);
+					m_dp_ctex_list.resize(dptexnum);
+					m_dp_tex_list.resize(dptexnum);
+				}
+
+				for (int i = 0; i < dptexnum; i++)
+				{
+					if (!m_dp_fbo_list[i])
+					{
+						m_dp_fbo_list[i] = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+						m_dp_fbo_list[i]->w = m_nx;
+						m_dp_fbo_list[i]->h = m_ny;
+						m_dp_fbo_list[i]->device = prim_dev;
+
+						m_dp_ctex_list[i] = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+						m_dp_fbo_list[i]->addAttachment(m_dp_ctex_list[i]);
+
+						m_dp_tex_list[i] = prim_dev->GenTexture2D(
+							m_vulkan->depthFormat,
+							VK_FILTER_LINEAR,
+							m_nx, m_ny,
+							VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+							VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+							VK_IMAGE_USAGE_SAMPLED_BIT |
+							VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+						);
+						m_dp_fbo_list[i]->addAttachment(m_dp_tex_list[i]);
+					}
+
+					if (i == 0)
+					{
+						DrawMeshes(m_dp_fbo_list[i], true, 0);
+					}
+					else
+					{
+						m_msh_dp_fr_tex = m_dp_tex_list[i - 1];
+						DrawMeshes(m_dp_fbo_list[i], true, 1, m_dp_tex_list[i - 1]);
+					}
+				}
+			}
+
+			int peel = 0;
+			if (m_dp_tex_list.size() >= peeling_layers && !m_dp_tex_list.empty() && m_md_pop_list.size() > 0)
+			{
+				if (TextureRenderer::get_update_order() == 0)
+				{
+					if (s == 0)
+					{
+						peel = 2;
+						m_vol_dp_fr_tex = m_dp_tex_list[(peeling_layers-1)-s];
+					}
+					else if (s == peeling_layers)
+					{
+						peel = 1;
+						m_vol_dp_bk_tex = m_dp_tex_list[(peeling_layers-1)-(s-1)];
+					}
+					else
+					{
+						peel = 3;
+						m_vol_dp_fr_tex = m_dp_tex_list[(peeling_layers-1)-s];
+						m_vol_dp_bk_tex = m_dp_tex_list[(peeling_layers-1)-(s-1)];
+					}
+				}
+				else
+				{
+					if (s == 0)
+					{
+						peel = 1;
+						m_vol_dp_bk_tex = m_dp_tex_list[s];
+					}
+					else if (s == peeling_layers)
+					{
+						peel = 2;
+						m_vol_dp_fr_tex = m_dp_tex_list[s-1];
+					}
+					else
+					{
+						peel = 3;
+						m_vol_dp_fr_tex = m_dp_tex_list[s-1];
+						m_vol_dp_bk_tex = m_dp_tex_list[s];
+					}
+				}
+			}
+
+			//setup
+			PopVolumeList();
+
+			vector<VolumeData*> quota_vd_list;
+
+			//handle intermixing modes
+			if (m_vol_method == VOL_METHOD_MULTI)
+			{
+				DrawVolumesMulti(m_vd_pop_list, peel);
+				//draw masks
+				if (m_draw_mask)
+					DrawVolumesComp(m_vd_pop_list, true, peel);
+			}
+			else
+			{
+				int i, j;
+				vector<VolumeData*> list;
+				for (i=(int)m_layer_list.size()-1; i>=0; i--)
+				{
+					if (!m_layer_list[i])
+						continue;
+					switch (m_layer_list[i]->IsA())
+					{
+					case 2://volume data (this won't happen now)
+						{
+							if (m_finished_peeling_layer != 0)
+								continue;
+							VolumeData* vd = (VolumeData*)m_layer_list[i];
+							if (vd && vd->GetDisp())
+							{
+								if (TextureRenderer::get_mem_swap() &&
+									TextureRenderer::get_interactive() &&
+									quota_vd_list.size()>0)
+								{
+									if (find(quota_vd_list.begin(),
+										quota_vd_list.end(), vd)!=
+										quota_vd_list.end())
+										list.push_back(vd);
+								}
+								else
+									list.push_back(vd);
+							}
+						}
+						break;
+					case 5://group
+						{
+							if (!list.empty())
+							{
+								DrawVolumesComp(list, false, peel);
+								//draw masks
+								if (m_draw_mask)
+									DrawVolumesComp(list, true, peel);
+								list.clear();
+							}
+							DataGroup* group = (DataGroup*)m_layer_list[i];
+							if (!group->GetDisp())
+								continue;
+//							if (m_finished_peeling_layer != 0 && group->GetBlendMode() != VOL_METHOD_MULTI)
 //								continue;
-//							VolumeData* vd = (VolumeData*)m_layer_list[i];
-//							if (vd && vd->GetDisp())
-//							{
-//								if (TextureRenderer::get_mem_swap() &&
-//									TextureRenderer::get_interactive() &&
-//									quota_vd_list.size()>0)
-//								{
-//									if (find(quota_vd_list.begin(),
-//										quota_vd_list.end(), vd)!=
-//										quota_vd_list.end())
-//										list.push_back(vd);
-//								}
-//								else
-//									list.push_back(vd);
-//							}
-//						}
-//						break;
-//					case 5://group
-//						{
-//							if (!list.empty())
-//							{
-//								DrawVolumesComp(list, false, peel);
-//								//draw masks
-//								if (m_draw_mask)
-//									DrawVolumesComp(list, true, peel);
-//								list.clear();
-//							}
-//							DataGroup* group = (DataGroup*)m_layer_list[i];
-//							if (!group->GetDisp())
-//								continue;
-////							if (m_finished_peeling_layer != 0 && group->GetBlendMode() != VOL_METHOD_MULTI)
-////								continue;
-//							for (j=group->GetVolumeNum()-1; j>=0; j--)
-//							{
-//								VolumeData* vd = group->GetVolumeData(j);
-//								if (vd && vd->GetDisp())
-//								{
-//									if (TextureRenderer::get_mem_swap() &&
-//										TextureRenderer::get_interactive() &&
-//										quota_vd_list.size()>0)
-//									{
-//										if (find(quota_vd_list.begin(),
-//											quota_vd_list.end(), vd)!=
-//											quota_vd_list.end())
-//											list.push_back(vd);
-//									}
-//									else
-//										list.push_back(vd);
-//								}
-//							}
-//							if (!list.empty())
-//							{
-//								if (group->GetBlendMode() == VOL_METHOD_MULTI)
-//									DrawVolumesMulti(list, peel);
-//								else
-//									DrawVolumesComp(list, false, peel);
-//								//draw masks
-//								if (m_draw_mask)
-//									DrawVolumesComp(list, true, peel);
-//								list.clear();
-//							}
-//						}
-//						break;
-//					}
-//				}
-//			}
-//			
-//			int texid = TextureRenderer::get_update_order() == 0 ? (peeling_layers-1)-s : s;
-//			if (m_dp_ctex_list.size() > texid && m_md_pop_list.size() > 0 &&
-//				((TextureRenderer::get_start_update_loop() && TextureRenderer::get_done_update_loop()) || !TextureRenderer::get_mem_swap() || TextureRenderer::get_total_brick_num() == 0) )
-//			{
-//				glBindFramebuffer(GL_FRAMEBUFFER, 0);
-//				glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_final);
-//				glFramebufferTexture2D(GL_FRAMEBUFFER,
-//					GL_COLOR_ATTACHMENT0,
-//					GL_TEXTURE_2D, m_tex_final, 0);
-//
-//				glActiveTexture(GL_TEXTURE0);
-//				glEnable(GL_TEXTURE_2D);
-//				glEnable(GL_BLEND);
-//				if (TextureRenderer::get_update_order() == 0)
-//					glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-//				else if (TextureRenderer::get_update_order() == 1)
-//					glBlendFunc(GL_ONE_MINUS_DST_ALPHA, GL_ONE);
-//				glDisable(GL_DEPTH_TEST);
-//
-//				ShaderProgram* img_shader = m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP_BLEND);
-//				if (img_shader)
-//				{
-//					if (!img_shader->valid())
-//						img_shader->create();
-//					img_shader->bind();
-//				}
-//
-//				glActiveTexture(GL_TEXTURE0);
-//				glBindTexture(GL_TEXTURE_2D, m_dp_ctex_list[texid]);
-//				DrawViewQuad();
-//				glBindTexture(GL_TEXTURE_2D, 0);
-//
-//				if (img_shader && img_shader->valid())
-//					img_shader->release();
-//
-//				glBindTexture(GL_TEXTURE_2D, 0);
-//			}
-//
-//			if (bCull) glEnable(GL_CULL_FACE);
-//
-//			if (TextureRenderer::get_mem_swap() && TextureRenderer::get_total_brick_num() > 0)
-//			{
-//				unsigned int rn_time = GET_TICK_COUNT();
-//				TextureRenderer::set_consumed_time(rn_time - TextureRenderer::get_st_time());
-//
-//				if (TextureRenderer::get_start_update_loop() && !TextureRenderer::get_done_update_loop())
-//					break;
-//
-//				if (TextureRenderer::get_start_update_loop() && TextureRenderer::get_done_update_loop())
-//				{
-//					m_finished_peeling_layer++;
-//					if (m_finished_peeling_layer <= peeling_layers)
-//					{
-//						StartLoopUpdate(false);
-//						finished_bricks = TextureRenderer::get_finished_bricks();
-//						TextureRenderer::reset_finished_bricks();
-//						
-//						if (TextureRenderer::get_mem_swap() &&
-//							TextureRenderer::get_start_update_loop() &&
-//							TextureRenderer::get_save_final_buffer())
-//						{
-//							TextureRenderer::reset_save_final_buffer();
-//
-//							if (glIsFramebuffer(m_fbo_temp)!=GL_TRUE)
-//							{
-//								glGenFramebuffers(1, &m_fbo_temp);
-//								if (glIsTexture(m_tex_temp)!=GL_TRUE)
-//									glGenTextures(1, &m_tex_temp);
-//								glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_temp);
-//								//color buffer for each volume
-//								glBindTexture(GL_TEXTURE_2D, m_tex_temp);
-//								glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-//								glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-//								glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-//								glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-//								glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-//									GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-//								glFramebufferTexture2D(GL_FRAMEBUFFER,
-//									GL_COLOR_ATTACHMENT0,
-//									GL_TEXTURE_2D, m_tex_temp, 0);
-//							}
-//							else
-//								glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_temp);
-//
-//							glClearColor(0.0, 0.0, 0.0, 0.0);
-//							glClear(GL_COLOR_BUFFER_BIT);
-//							glActiveTexture(GL_TEXTURE0);
-//							glEnable(GL_TEXTURE_2D);
-//							glBindTexture(GL_TEXTURE_2D, m_tex_final);
-//							glDisable(GL_BLEND);
-//							glDisable(GL_DEPTH_TEST);
-//
-//							ShaderProgram* img_shader =
-//								m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
-//							if (img_shader)
-//							{
-//								if (!img_shader->valid())
-//									img_shader->create();
-//								img_shader->bind();
-//							}
-//							DrawViewQuad();
-//							if (img_shader && img_shader->valid())
-//								img_shader->release();
-//
-//							glBindTexture(GL_TEXTURE_2D, 0);
-//							glBindFramebuffer(GL_FRAMEBUFFER, 0);
-//						}
-//
-//					}
-//					else
-//						TextureRenderer::reset_update_loop();
-//				}
-//
-//				if (rn_time - TextureRenderer::get_st_time() > TextureRenderer::get_up_time())
-//					break;
-//			}
-//			else
-//				m_finished_peeling_layer++;
-//		}
-//	}
-//
-//	//final composition
-//	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-//		
-//	if (m_tile_rendering) {
-//		//generate textures & buffer objects
-//		//frame buffer for final
-//		if (!glIsFramebuffer(m_fbo_tiled_tmp))
-//		{
-//			glGenFramebuffers(1, &m_fbo_tiled_tmp);
-//			//color buffer/texture for final
-//			if (!glIsTexture(m_tex_tiled_tmp))
-//				glGenTextures(1, &m_tex_tiled_tmp);
-//			//fbo_final
-//			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_tiled_tmp);
-//			//color buffer for final
-//			glBindTexture(GL_TEXTURE_2D, m_tex_tiled_tmp);
-//			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-//			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-//			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-//			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-//			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, GetSize().x, GetSize().y, 0,
-//				GL_RGBA, GL_FLOAT, NULL);
-//			glFramebufferTexture2D(GL_FRAMEBUFFER,
-//				GL_COLOR_ATTACHMENT0,
-//				GL_TEXTURE_2D, m_tex_tiled_tmp, 0);
-//		}
-//		else
-//		{
-//			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_tiled_tmp);
-//			glBindTexture(GL_TEXTURE_2D, m_tex_tiled_tmp);
-//			if (m_current_tileid == 0)
-//				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, GetSize().x, GetSize().y, 0, GL_RGBA, GL_FLOAT, NULL);
-//		}
-//
-//		glActiveTexture(GL_TEXTURE0);
-//		glEnable(GL_TEXTURE_2D);
-//		
-//		glViewport(0, 0, (GLint)GetSize().x, (GLint)GetSize().y);
-//		if (m_current_tileid == 0) {
-//			glClearColor(0.0, 0.0, 0.0, 0.0);
-//			glClear(GL_COLOR_BUFFER_BIT);
-//		}
-//		
-//		glBindTexture(GL_TEXTURE_2D, m_tex_final);
-//		glDisable(GL_BLEND);
-//		glDisable(GL_DEPTH_TEST);
-//
-//		//2d adjustment
-//		ShaderProgram* img_shader = m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
-//		if (img_shader)
-//		{
-//			if (!img_shader->valid())
-//				img_shader->create();
-//			img_shader->bind();
-//		}
-//
-//		DrawViewQuadTile(m_current_tileid);
-//
-//		if (img_shader && img_shader->valid())
-//			img_shader->release();
-//
-//		glBindTexture(GL_TEXTURE_2D, 0);
-//		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-//
-//		//draw the final buffer to the windows buffer
-//		glActiveTexture(GL_TEXTURE0);
-//		glEnable(GL_TEXTURE_2D);
-//		glEnable(GL_BLEND);
-//		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-//		glBindTexture(GL_TEXTURE_2D, m_tex_tiled_tmp);
-//		glDisable(GL_DEPTH_TEST);
-//
-//		//2d adjustment
-//		img_shader = m_img_shader_factory.shader(IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR);
-//		if (img_shader)
-//		{
-//			if (!img_shader->valid())
-//				img_shader->create();
-//			img_shader->bind();
-//		}
-//
-//		img_shader->setLocalParam(0, 1.0, 1.0, 1.0, 1.0);
-//		img_shader->setLocalParam(1, 1.0, 1.0, 1.0, 1.0);
-//		img_shader->setLocalParam(2, 0.0, 0.0, 0.0, 0.0);
-//
-//		DrawViewQuad();
-//		if (img_shader && img_shader->valid())
-//			img_shader->release();
-//		glBindTexture(GL_TEXTURE_2D, 0);
-//	}
-//	else {
-//		//draw the final buffer to the windows buffer
-//		glActiveTexture(GL_TEXTURE0);
-//		glEnable(GL_TEXTURE_2D);
-//		glBindTexture(GL_TEXTURE_2D, m_tex_final);
-//		glEnable(GL_BLEND);
-//		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-//		glDisable(GL_DEPTH_TEST);
-//
-//		//2d adjustment
-//		ShaderProgram* img_shader =
-//			m_img_shader_factory.shader(IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR);
-//		if (img_shader)
-//		{
-//			if (!img_shader->valid())
-//				img_shader->create();
-//			img_shader->bind();
-//		}
-//
-//		img_shader->setLocalParam(0, 1.0, 1.0, 1.0, 1.0);
-//		img_shader->setLocalParam(1, 1.0, 1.0, 1.0, 1.0);
-//		img_shader->setLocalParam(2, 0.0, 0.0, 0.0, 0.0);
-//
-//		//2d adjustment
-//
-//		DrawViewQuad();
-//		if (img_shader && img_shader->valid())
-//			img_shader->release();
-//
-//		glBindTexture(GL_TEXTURE_2D, 0);
-//	}
-//
-//	bool refresh = false;
-//
-//	if (m_interactive)
-//	{
-//		m_interactive = false;
-//		m_clear_buffer = true;
-//		refresh = true;
-//	}
-//
-//	if (m_int_res)
-//	{
-//		m_int_res = false;
-//		refresh = true;
-//	}
-//
-//	if (m_manip)
-//	{
-//		m_pre_draw = true;
-//		refresh = true;
-//	}
-//
-//	if (m_tile_rendering && m_current_tileid < m_tile_xnum*m_tile_ynum) {
-//		if (m_finished_peeling_layer > peeling_layers) {
-//			glViewport(0, 0, (GLint)m_nx, (GLint)m_ny);
-//			DrawTile();
-//			m_current_tileid++;
-//			if (m_capture) m_postdraw = true;
-//			refresh = true;
-//		}
-//	}
-//
-//	if (refresh)
-//		RefreshGL();
+							for (j=group->GetVolumeNum()-1; j>=0; j--)
+							{
+								VolumeData* vd = group->GetVolumeData(j);
+								if (vd && vd->GetDisp())
+								{
+									if (TextureRenderer::get_mem_swap() &&
+										TextureRenderer::get_interactive() &&
+										quota_vd_list.size()>0)
+									{
+										if (find(quota_vd_list.begin(),
+											quota_vd_list.end(), vd)!=
+											quota_vd_list.end())
+											list.push_back(vd);
+									}
+									else
+										list.push_back(vd);
+								}
+							}
+							if (!list.empty())
+							{
+								if (group->GetBlendMode() == VOL_METHOD_MULTI)
+									DrawVolumesMulti(list, peel);
+								else
+									DrawVolumesComp(list, false, peel);
+								//draw masks
+								if (m_draw_mask)
+									DrawVolumesComp(list, true, peel);
+								list.clear();
+							}
+						}
+						break;
+					}
+				}
+			}
+
+			if (m_fbo_temp && (m_fbo_temp->w != m_nx || m_fbo_temp->h != m_ny))
+			{
+				m_fbo_temp.reset();
+				m_tex_temp.reset();
+				m_fbo_temp_restore.reset();
+			}
+			if (!m_fbo_temp)
+			{
+				m_fbo_temp = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+				m_fbo_temp->w = m_nx;
+				m_fbo_temp->h = m_ny;
+				m_fbo_temp->device = prim_dev;
+
+				m_tex_temp = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+				m_fbo_temp->addAttachment(m_tex_temp);
+
+				m_fbo_temp_restore = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+				m_fbo_temp_restore->w = m_nx;
+				m_fbo_temp_restore->h = m_ny;
+				m_fbo_temp_restore->device = prim_dev;
+				m_fbo_temp_restore->addAttachment(m_fbo_final->attachments[0]);
+			}
+			
+			int texid = TextureRenderer::get_update_order() == 0 ? (peeling_layers-1)-s : s;
+			if (m_dp_ctex_list.size() > texid && m_md_pop_list.size() > 0 &&
+				((TextureRenderer::get_start_update_loop() && TextureRenderer::get_done_update_loop()) || !TextureRenderer::get_mem_swap() || TextureRenderer::get_total_brick_num() == 0) )
+			{
+				Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+
+				params.clear = m_clear_final_buffer;
+				m_clear_final_buffer = false;
+				params.pipeline =
+					m_v2drender->preparePipeline(
+						IMG_SHADER_TEXTURE_LOOKUP_BLEND,
+						V2DRENDER_BLEND_OVER_INV,
+						m_fbo_temp_restore->attachments[0]->format,
+						m_fbo_temp_restore->attachments.size(),
+						0,
+						m_fbo_temp_restore->attachments[0]->is_swapchain_images);
+				params.tex[0] = m_dp_ctex_list[texid].get();
+
+				if (!m_fbo_temp_restore->renderPass)
+					m_fbo_temp_restore->replaceRenderPass(params.pipeline.pass);
+				m_v2drender->render(m_fbo_temp_restore, params);
+			}
+
+			if (TextureRenderer::get_mem_swap() && TextureRenderer::get_total_brick_num() > 0)
+			{
+				unsigned int rn_time = GET_TICK_COUNT();
+				TextureRenderer::set_consumed_time(rn_time - TextureRenderer::get_st_time());
+
+				if (TextureRenderer::get_start_update_loop() && !TextureRenderer::get_done_update_loop())
+					break;
+
+				if (TextureRenderer::get_start_update_loop() && TextureRenderer::get_done_update_loop())
+				{
+					m_finished_peeling_layer++;
+					if (m_finished_peeling_layer <= peeling_layers)
+					{
+						StartLoopUpdate(false);
+						finished_bricks = TextureRenderer::get_finished_bricks();
+						TextureRenderer::reset_finished_bricks();
+						
+						if (TextureRenderer::get_mem_swap() &&
+							TextureRenderer::get_start_update_loop())
+						{
+							TextureRenderer::validate_temp_final_buffer();
+
+							Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+
+							params.clear = true;
+							params.pipeline =
+								m_v2drender->preparePipeline(
+									IMG_SHADER_TEXTURE_LOOKUP,
+									V2DRENDER_BLEND_DISABLE,
+									m_fbo_temp->attachments[0]->format,
+									m_fbo_temp->attachments.size(),
+									0,
+									m_fbo_temp->attachments[0]->is_swapchain_images);
+							params.tex[0] = m_tex_final.get();
+
+							if (!m_fbo_temp->renderPass)
+								m_fbo_temp->replaceRenderPass(params.pipeline.pass);
+							m_v2drender->render(m_fbo_temp, params);
+						}
+					}
+					else
+						TextureRenderer::reset_update_loop();
+				}
+
+				if (rn_time - TextureRenderer::get_st_time() > TextureRenderer::get_up_time())
+					break;
+			}
+			else
+				m_finished_peeling_layer++;
+		}
+	}
+
+	//final composition
+	if (m_tile_rendering) {
+		//generate textures & buffer objects
+		//frame buffer for final
+		if (!m_fbo_tiled_tmp)
+		{
+			m_fbo_tiled_tmp = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+			m_fbo_tiled_tmp->w = m_nx;
+			m_fbo_tiled_tmp->h = m_ny;
+			m_fbo_tiled_tmp->device = prim_dev;
+
+			m_tex_tiled_tmp = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+			m_fbo_tiled_tmp->addAttachment(m_tex_tiled_tmp);
+		}
+
+		Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+		params.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHADER_TEXTURE_LOOKUP,
+				V2DRENDER_BLEND_OVER,
+				m_fbo_tiled_tmp->attachments[0]->format,
+				m_fbo_tiled_tmp->attachments.size(),
+				0,
+				m_fbo_tiled_tmp->attachments[0]->is_swapchain_images);
+		params.tex[0] = m_tex_final.get();
+		if (m_current_tileid == 0)
+			params.clear = true;
+
+		std::vector<Vulkan2dRender::Vertex> tile_verts;
+		m_tile_vobj.vertOffset = sizeof(Vulkan2dRender::Vertex) * 4 * m_current_tileid;
+		params.obj = &m_tile_vobj;
+
+		if (!m_fbo_tiled_tmp->renderPass)
+			m_fbo_tiled_tmp->replaceRenderPass(params.pipeline.pass);
+
+		m_v2drender->render(m_fbo_tiled_tmp, params);
+
+
+		Vulkan2dRender::V2DRenderParams params2 = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+		vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+		params2.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR,
+				V2DRENDER_BLEND_OVER,
+				current_fbo->attachments[0]->format,
+				current_fbo->attachments.size(),
+				0,
+				current_fbo->attachments[0]->is_swapchain_images);
+		params2.tex[0] = m_tex_tiled_tmp.get();
+		params2.loc[0] = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+		params2.loc[1] = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+		params2.loc[2] = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
+		params2.clear = m_frame_clear;
+		params2.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
+		m_frame_clear = false;
+
+		if (!current_fbo->renderPass)
+			current_fbo->replaceRenderPass(params2.pipeline.pass);
+
+		m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params2);
+	}
+	else {
+		//draw the final buffer to the windows buffer
+		Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+		vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+		params.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR,
+				V2DRENDER_BLEND_OVER,
+				current_fbo->attachments[0]->format,
+				current_fbo->attachments.size(),
+				0,
+				current_fbo->attachments[0]->is_swapchain_images);
+		params.tex[0] = m_tex_final.get();
+		params.loc[0] = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+		params.loc[1] = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+		params.loc[2] = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
+		params.clear = m_frame_clear;
+		params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
+		m_frame_clear = false;
+
+		if (!current_fbo->renderPass)
+			current_fbo->replaceRenderPass(params.pipeline.pass);
+
+		m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
+	}
+
+	if (m_interactive)
+	{
+		m_interactive = false;
+		m_clear_buffer = true;
+		m_refresh_start_loop = true;
+	}
+
+	if (m_int_res)
+	{
+		m_int_res = false;
+		m_refresh_start_loop = true;
+	}
+
+	if (m_manip)
+	{
+		m_pre_draw = true;
+		m_refresh_start_loop = true;
+	}
+
+	if (m_tile_rendering && m_current_tileid < m_tile_xnum * m_tile_ynum) {
+		if ((TextureRenderer::get_start_update_loop() && TextureRenderer::get_done_update_loop()) ||
+			!TextureRenderer::get_mem_swap() ||
+			TextureRenderer::get_total_brick_num() == 0) {
+			glViewport(0, 0, (GLint)m_nx, (GLint)m_ny);
+			DrawTile();
+			m_current_tileid++;
+			if (m_capture) m_postdraw = true;
+			if (m_current_tileid < m_tile_xnum * m_tile_ynum) m_refresh = true;
+		}
+	}
+
+	/*if (TextureRenderer::get_mem_swap())
+	{
+		TextureRenderer::set_consumed_time(GET_TICK_COUNT() - TextureRenderer::get_st_time());
+		if (TextureRenderer::get_start_update_loop() &&
+			TextureRenderer::get_done_update_loop())
+		{
+			TextureRenderer::reset_update_loop();
+			vkQueueWaitIdle(m_vulkan->vulkanDevice->queue);
+			ed_time = milliseconds_now();
+			sprintf(dbgstr, "Frame Draw: %lld \n", ed_time - st_time);
+			OutputDebugStringA(dbgstr);
+		}
+	}*/
+
+	//if (refresh)
+	//	RefreshGL();
 }
 
 void VRenderVulkanView::DrawAnnotations()
@@ -4358,6 +4307,7 @@ void VRenderVulkanView::DrawOVER(VolumeData* vd, std::unique_ptr<vks::VFrameBuff
 				TextureRenderer::get_save_final_buffer())
 			{
 				TextureRenderer::reset_save_final_buffer();
+				TextureRenderer::validate_temp_final_buffer();
 
 				Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 
@@ -4411,12 +4361,14 @@ void VRenderVulkanView::DrawOVER(VolumeData* vd, std::unique_ptr<vks::VFrameBuff
 	}
 
 	//bind fbo for final composition
-	if (TextureRenderer::get_mem_swap() && m_fbo_temp && m_tex_temp)
+	if (TextureRenderer::get_mem_swap() && m_fbo_temp && m_tex_temp && TextureRenderer::isvalid_temp_final_buffer())
 	{
 		//restore m_fbo_temp to m_fbo_final
 		Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 
-		params.clear = true;
+		params.clear = m_clear_final_buffer;
+		m_clear_final_buffer = false;
+
 		params.pipeline =
 			m_v2drender->preparePipeline(
 				IMG_SHADER_TEXTURE_LOOKUP,
@@ -4499,6 +4451,7 @@ void VRenderVulkanView::DrawMIP(VolumeData* vd, std::unique_ptr<vks::VFrameBuffe
 				TextureRenderer::get_save_final_buffer())
 			{
 				TextureRenderer::reset_save_final_buffer();
+				TextureRenderer::validate_temp_final_buffer();
 
 				Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 
@@ -4633,12 +4586,14 @@ void VRenderVulkanView::DrawMIP(VolumeData* vd, std::unique_ptr<vks::VFrameBuffe
 	}
 
 	//bind fbo for final composition
-	if (TextureRenderer::get_mem_swap() && m_fbo_temp && m_tex_temp)
+	if (TextureRenderer::get_mem_swap() && m_fbo_temp && m_tex_temp && TextureRenderer::isvalid_temp_final_buffer())
 	{
 		//restore m_fbo_temp to m_fbo_final
 		Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 
-		params.clear = true;
+		params.clear = m_clear_final_buffer;
+		m_clear_final_buffer = false;
+
 		params.pipeline =
 			m_v2drender->preparePipeline(
 				IMG_SHADER_TEXTURE_LOOKUP,
@@ -5312,6 +5267,7 @@ void VRenderVulkanView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 		TextureRenderer::get_save_final_buffer())
 	{
 		TextureRenderer::reset_save_final_buffer();
+		TextureRenderer::validate_temp_final_buffer();
 
 		Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 
@@ -5335,6 +5291,11 @@ void VRenderVulkanView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 		return;
 
 	m_mvr->set_depth_peel(peel);
+	if (peel > 0)
+	{
+		m_mvr->set_front_depth_tex(m_vol_dp_fr_tex);
+		m_mvr->set_back_depth_tex(m_vol_dp_bk_tex);
+	}
 
 	//generate textures & buffer objects
 	//frame buffer for each volume
@@ -5394,12 +5355,14 @@ void VRenderVulkanView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 	}
 
 	//bind fbo for final composition
-	if (TextureRenderer::get_mem_swap() && m_fbo_temp && m_tex_temp)
+	if (TextureRenderer::get_mem_swap() && m_fbo_temp && m_tex_temp && TextureRenderer::isvalid_temp_final_buffer())
 	{
 		//restore m_fbo_temp to m_fbo_final
 		Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 
-		params.clear = true;
+		params.clear = m_clear_final_buffer;
+		m_clear_final_buffer = false;
+
 		params.pipeline =
 			m_v2drender->preparePipeline(
 				IMG_SHADER_TEXTURE_LOOKUP,
@@ -5420,7 +5383,7 @@ void VRenderVulkanView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 	params_final.pipeline =
 		m_v2drender->preparePipeline(
 			IMG_SHDR_BRIGHTNESS_CONTRAST_HDR,
-			m_vol_method == V2DRENDER_BLEND_ADD,
+			V2DRENDER_BLEND_OVER_INV,
 			m_fbo_final->attachments[0]->format,
 			m_fbo_final->attachments.size(),
 			0,
@@ -12695,6 +12658,9 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 		}
 		else
 			TextureRenderer::set_total_brick_num(0);
+
+		TextureRenderer::reset_save_final_buffer();
+		TextureRenderer::invalidate_temp_final_buffer();
 	}
 }
 

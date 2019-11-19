@@ -75,6 +75,7 @@ namespace FLIVR
 	int TextureRenderer::cur_tid_offset_multi_ = 0;
 	bool TextureRenderer::clear_chan_buffer_ = true;
 	bool TextureRenderer::save_final_buffer_ = true;
+	bool TextureRenderer::valid_temp_final_buffer_ = true;
 	unsigned long TextureRenderer::st_time_ = 0;
 	unsigned long TextureRenderer::up_time_ = 100;
 	unsigned long TextureRenderer::cor_up_time_ = 100;

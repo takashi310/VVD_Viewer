@@ -287,6 +287,9 @@ namespace FLIVR
                static void reset_save_final_buffer() {save_final_buffer_ = false;}
                static bool get_save_final_buffer() {return save_final_buffer_;}
 			   static void set_save_final_buffer() {save_final_buffer_ = true;}
+			   static void invalidate_temp_final_buffer() { valid_temp_final_buffer_ = false; }
+			   static void validate_temp_final_buffer() { valid_temp_final_buffer_ = true; }
+			   static bool isvalid_temp_final_buffer() { return valid_temp_final_buffer_; }
                //set start time
                static void set_st_time(unsigned long time) {st_time_ = time;}
                static unsigned long get_st_time() {return st_time_;}
@@ -413,6 +416,7 @@ namespace FLIVR
                static int cur_chan_brick_num_;
                static bool clear_chan_buffer_;
                static bool save_final_buffer_;
+			   static bool valid_temp_final_buffer_;
 			   static int cur_tid_offset_multi_;
                //timer for rendering
                static unsigned long st_time_;

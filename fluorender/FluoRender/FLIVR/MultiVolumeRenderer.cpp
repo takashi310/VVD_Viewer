@@ -394,6 +394,7 @@ namespace FLIVR
 			VRayShaderFactory::VRayFragShaderBaseUBO frag_ubo;
 			VRayShaderFactory::VRayFragShaderBrickConst frag_const;
 
+			vr->set_depth_peel(depth_peel_);
 			setting.pipeline = vr->prepareVRayPipeline(prim_dev, blendmode, vr->update_order_, vr->colormap_mode_, !orthographic_p);
 			setting.pipelineLayout = VolumeRenderer::m_vulkan->vray_shader_factory_->pipeline_[prim_dev].pipelineLayout;
 
@@ -501,6 +502,11 @@ namespace FLIVR
 					rsettings[vr].descriptorWritesBase.push_back(VRayShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 7, &palette[prim_dev]->descriptor));
 			}
 
+			if (depth_peel_ == 1 || depth_peel_ == 3 || depth_peel_ == 4)//draw volume before 15
+				rsettings[vr].descriptorWritesBase.push_back(VRayShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 15, &dtex_back_->descriptor));
+			if (depth_peel_ == 2 || depth_peel_ == 3 || depth_peel_ == 4 || depth_peel_ == 5)//draw volume after 14
+				rsettings[vr].descriptorWritesBase.push_back(VRayShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 14, &dtex_front_->descriptor));
+
 			rsettings[vr].vert_ubuf.copyTo(&vert_ubo, sizeof(VRayShaderFactory::VRayVertShaderUBO), rsettings[vr].vert_ubuf_offset);
 			rsettings[vr].frag_ubuf.copyTo(&frag_ubo, sizeof(VRayShaderFactory::VRayFragShaderBaseUBO), rsettings[vr].frag_ubuf_offset);
 			if (rsettings[vr].vert_ubuf.buffer == rsettings[vr].frag_ubuf.buffer)
@@ -577,7 +583,6 @@ namespace FLIVR
 		}
 
 		bool clear = true;
-		bool blend_clear = true;
 		VkCommandBuffer cmdbuf = VK_NULL_HANDLE;
 		VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
 		renderPassBeginInfo.renderPass = rsettings[valid_vrs[0]].pipeline.renderpass;
@@ -593,6 +598,27 @@ namespace FLIVR
 		cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
 		VK_CHECK_RESULT(vkBeginCommandBuffer(cmdbuf, &cmdBufInfo));
+
+		if (depth_peel_ == 1 || depth_peel_ == 3 || depth_peel_ == 4)//draw volume before 15
+		{
+			vks::tools::setImageLayout(
+				cmdbuf,
+				dtex_back_->image,
+				VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+				VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+				dtex_back_->subresourceRange);
+			dtex_back_->descriptor.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+		}
+		if (depth_peel_ == 2 || depth_peel_ == 3 || depth_peel_ == 4 || depth_peel_ == 5)//draw volume after 14
+		{
+			vks::tools::setImageLayout(
+				cmdbuf,
+				dtex_front_->image,
+				VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+				VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+				dtex_front_->subresourceRange);
+			dtex_front_->descriptor.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+		}
 
 		vkCmdBeginRenderPass(cmdbuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -943,6 +969,28 @@ namespace FLIVR
 		}//for (i = start_i; order?(i <= all_timax):(i >= all_timin); i += order?1:-1)
 
 		vkCmdEndRenderPass(cmdbuf);
+
+		if (depth_peel_ == 1 || depth_peel_ == 3 || depth_peel_ == 4)//draw volume before 15
+		{
+			dtex_back_->descriptor.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+			vks::tools::setImageLayout(
+				cmdbuf,
+				dtex_back_->image,
+				VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+				VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+				dtex_back_->subresourceRange);
+		}
+		if (depth_peel_ == 2 || depth_peel_ == 3 || depth_peel_ == 4 || depth_peel_ == 5)//draw volume after 14
+		{
+			dtex_front_->descriptor.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+			vks::tools::setImageLayout(
+				cmdbuf,
+				dtex_front_->image,
+				VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+				VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+				dtex_front_->subresourceRange);
+		}
+
 		VK_CHECK_RESULT(vkEndCommandBuffer(cmdbuf));
 
 		VkSubmitInfo submitInfo = vks::initializers::submitInfo();

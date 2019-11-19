@@ -102,6 +102,9 @@ namespace FLIVR
 
 		void set_main_membuf_size(long long size) { main_membuf_size_ = size; }
 
+		void set_front_depth_tex(std::shared_ptr<vks::VTexture> dtex) { dtex_front_ = dtex; }
+		void set_back_depth_tex(std::shared_ptr<vks::VTexture> dtex) { dtex_back_ = dtex; }
+
 	private:
 		//volume renderer list
 		vector<VolumeRenderer*> vr_list_;
@@ -124,6 +127,9 @@ namespace FLIVR
 		//2nd buffer for multiple filtering
 		std::unique_ptr<vks::VFrameBuffer> filter_buffer_;
 		std::shared_ptr<vks::VTexture> filter_tex_id_;
+
+		std::shared_ptr<vks::VTexture> dtex_front_;
+		std::shared_ptr<vks::VTexture> dtex_back_;
 
 		//scale factor
 		bool noise_red_;

@@ -179,7 +179,6 @@ namespace FLIVR
 	"//VRAY_HEAD_ORTHO\n" \
 	"void main()\n" \
 	"{\n" \
-	"	vec4 view = vec4(0.0, 0.0, brk.loc4.x, 0.0);\n" \
 	"	const vec4 ray = base.matrix1 * vec4(0.0, 0.0, 1.0, 0.0) / vec4(brk.brkscale.xyz, 1.);\n" \
 	"	const vec4 st = base.matrix1 * vec4((base.matrix0 * OutVertex).xy, brk.loc4.x, 1.0) / vec4(brk.brkscale.xyz, 1.) - vec4(brk.brktrans.xyz / brk.brkscale.xyz, 0.0);\n" \
 	"	const float step = brk.loc4.z;\n" \
@@ -207,7 +206,6 @@ namespace FLIVR
 	"//VRAY_HEAD_ORTHO_DMAP\n" \
 	"void main()\n" \
 	"{\n" \
-	"	vec4 view = vec4(0.0, 0.0, brk.loc4.x, 0.0);\n" \
 	"	const vec4 ray = base.matrix1 * vec4(0.0, 0.0, 1.0, 0.0) / vec4(brk.brkscale.xyz, 1.);\n" \
 	"	const vec4 st = base.matrix1 * vec4((base.matrix0 * OutVertex).xy, brk.loc4.y, 1.0) / vec4(brk.brkscale.xyz, 1.) - vec4(brk.brktrans.xyz / brk.brkscale.xyz, 0.0);\n" \
 	"	const float step = -brk.loc4.z;\n" \
@@ -217,6 +215,19 @@ namespace FLIVR
 	"	const vec4 dmap_st = vec4((base.matrix0 * OutVertex).xy, brk.loc4.y, 1.0);\n" \
 	"	const mat4 proj_mat = inverse(base.matrix0);\n" \
 	"	float prevz = 1.0;\n" \
+	"\n"
+
+#define VRAY_HEAD_CLIP_COORD_PERSP \
+	"	//VRAY_CLIP_COORD_PERSP\n" \
+	"	const vec4 dmap_ray = vec4(vray, 0.0);\n" \
+	"	const vec4 dmap_st = vec4((brk.loc4.x / vray.z) * vray, 1.0);\n" \
+	"	const mat4 proj_mat = inverse(base.matrix0);\n" \
+	"\n"
+#define VRAY_HEAD_CLIP_COORD_ORTHO \
+	"	//VRAY_CLIP_COORD_PERSP\n" \
+	"	const vec4 dmap_ray = vec4(0.0, 0.0, 1.0, 0.0);\n" \
+	"	const vec4 dmap_st = vec4((base.matrix0 * OutVertex).xy, brk.loc4.x, 1.0);\n" \
+	"	const mat4 proj_mat = inverse(base.matrix0);\n" \
 	"\n"
 
 #define VRAY_MASK_RAY_PERSP \
@@ -240,27 +251,13 @@ namespace FLIVR
 	"	if (l.w == 0.0) { discard; return; }\n" \
 	"\n" 
 
-#define VRAY_HEAD_2DMAP_LOC \
-	"	//VRAY_HEAD_2DMAP_LOC\n" \
-	"	vec2 fcf = vec2(gl_FragCoord.x*base.loc7.x, gl_FragCoord.y*base.loc7.y);\n" \
-	"\n"
-
-#define VRAY_HEAD_DP_1_STEP \
-	"	//VRAY_HEAD_DP_1_STEP\n" \
-	"	float dp_far = ((base.matrix0 * vec4(fcf, texture(tex15, fcf).r, 1.0)).z - brk.loc4.x) / brk.loc4.z;\n" \
-	"\n"
-#define VRAY_HEAD_DP_2_STEP \
-	"	//VRAY_HEAD_DP_2_STEP\n" \
-	"	float dp_near = ((base.matrix0 * vec4(fcf, texture(tex14, fcf).r, 1.0)).z - brk.loc4.x) / brk.loc4.z;\n" \
-	"\n"
-
 #define VRAY_HEAD_FOG \
 	"	//VRAY_HEAD_FOG\n" \
 	"	vec4 fp;\n" \
 	"	fp.x = base.loc8.x;\n" \
 	"	fp.y = base.loc8.y;\n" \
 	"	fp.z = base.loc8.z;\n" \
-	"	mat4 mvmat = inverse(base.matrix1) * ;\n" \
+	"	const mat4 mv_mat = inverse(base.matrix1);\n" \
 	"\n"
 
 #define VRAY_HEAD_ID_INITIALIZE \
@@ -289,6 +286,21 @@ namespace FLIVR
 	"		vec4 t = vec4(TexCoord.xyz, 1.0);\n" \
 	"\n"
 
+#define VRAY_LOOP_CLIP_COORD \
+	"		//VRAY_LOOP_CLIP_COORD\n" \
+	"		vec4 cspv = proj_mat * (dmap_st + dmap_ray*step*float(i));\n" \
+	"		cspv = cspv / cspv.w;\n" \
+	"\n"
+
+#define VRAY_DP_Z1_FAR \
+	"		//VRAY_DP_Z_FAR\n" \
+	"		float dp_far = texture(tex15, vec2((cspv.x + 1.0)/2.0, (cspv.y + 1.0)/2.0)).r;\n" \
+	"\n"
+#define VRAY_DP_Z2_NEAR \
+	"		//VRAY_DP_Z_NEAR\n" \
+	"		float dp_near = texture(tex14, vec2((cspv.x + 1.0)/2.0, (cspv.y + 1.0)/2.0)).r;\n" \
+	"\n"
+
 #define VRAY_MASK_VAL\
 	"		//VRAY_MASK_VAL\n" \
 	"		float maskval = texture(tex2, (msk_st + msk_ray*step*float(i)).stp).r; //get mask value\n" \
@@ -297,13 +309,13 @@ namespace FLIVR
 	"		if ("
 
 #define VRAY_LOOP_CONDITION_DP_1 \
-	"i < dp_far && " 
+	"cspv.z < dp_far && " 
 
 #define VRAY_LOOP_CONDITION_DP_2 \
-	"i > dp_near && " 
+	"cspv.z > dp_near && " 
 
 #define VRAY_LOOP_CONDITION_DP_3 \
-	"i > dp_near && i < dp_far && "
+	"cspv.z > dp_near && cspv.z < dp_far && "
 
 #define VRAY_LOOP_CONDITION_HIDE_INSIDE_MASK \
 	"maskval <= 0.5 && "
@@ -886,7 +898,7 @@ namespace FLIVR
 
 #define VRAY_FOG_BODY \
 	"			//VRAY_FOG_BODY\n" \
-	"			vec4 fogcoord = mvmat * vec4(t.xyz * brk.brkscale.xyz + brk.brktrans.xyz, 1.0);\n" \
+	"			vec4 fogcoord = mv_mat * vec4(t.xyz * brk.brkscale.xyz + brk.brktrans.xyz, 1.0);\n" \
 	"			fp.w = abs(fogcoord.z/fogcoord.w);\n" \
 	"			v.x = (fp.z-fp.w)/(fp.z-fp.y);\n" \
 	"			v.x = 1.0-clamp(v.x, 0.0, 1.0);\n" \
@@ -911,11 +923,9 @@ namespace FLIVR
 
 #define VRAY_RASTER_BLEND_DMAP \
 	"			//VRAY_RASTER_BLEND_DMAP\n" \
-	"			vec4 cspv = proj_mat * (dmap_st + dmap_ray*step*float(i));\n" \
-	"			float currz = cspv.z / cspv.w;\n" \
 	"			float intpo = (c*l.w).r;\n" \
-	"			c = vec4(vec3(intpo>0.05?currz:prevz), 1.0);\n" \
-	"			prevz = intpo > 0.05 ? currz : prevz;\n" \
+	"			c = vec4(vec3(intpo>0.05?cspv.z:prevz), 1.0);\n" \
+	"			prevz = intpo > 0.05 ? cspv.z : prevz;\n" \
 	"\n"
 
 #define VRAY_RASTER_BLEND_NOMASK \
@@ -938,12 +948,10 @@ namespace FLIVR
 
 #define VRAY_RASTER_BLEND_NOMASK_DMAP \
 	"			//VRAY_RASTER_BLEND_NOMASK_DMAP\n" \
-	"			vec4 cspv = proj_mat * (dmap_st + dmap_ray*step*float(i));\n" \
-	"			float currz = cspv.z / cspv.w;\n" \
 	"			vec4 cmask = texture(tex2, t.stp); //get mask value\n" \
 	"			float intpo = (vec4(1.0-cmask.x)*c*l.w).r;\n" \
-	"			c = vec4(vec3(intpo>0.05?currz:prevz), 1.0);\n" \
-	"			prevz = intpo > 0.05 ? currz : prevz;\n" \
+	"			c = vec4(vec3(intpo>0.05?cspv.z:prevz), 1.0);\n" \
+	"			prevz = intpo > 0.05 ? cspv.z : prevz;\n" \
 	"\n"
 
 #define VRAY_RASTER_BLEND_MASK \
@@ -966,12 +974,10 @@ namespace FLIVR
 
 #define VRAY_RASTER_BLEND_MASK_DMAP \
 	"			//VRAY_RASTER_BLEND_MASK_DMAP\n" \
-	"			vec4 cspv = proj_mat * (dmap_st + dmap_ray*step*float(i));\n" \
-	"			float currz = cspv.z / cspv.w;\n" \
 	"			vec4 cmask = texture(tex2, t.stp); //get mask value\n" \
 	"			float intpo = (vec4(cmask.x)*c*l.w).r;\n" \
-	"			c = vec4(vec3(intpo>0.05?currz:prevz), 1.0);\n" \
-	"			prevz = intpo > 0.05 ? currz : prevz;\n" \
+	"			c = vec4(vec3(intpo>0.05?cspv.z:prevz), 1.0);\n" \
+	"			prevz = intpo > 0.05 ? cspv.z : prevz;\n" \
 	"\n"
 
 #define VRAY_RASTER_BLEND_LABEL \
@@ -1741,20 +1747,16 @@ VRayShader::VRayShader(
 			if (mask_hide_mode_ > 0)
 				z << VRAY_MASK_RAY_ORTHO;
 		}
+		if (peel_ != 0)
+		{
+			if (persp_)
+				z << VRAY_HEAD_CLIP_COORD_PERSP;
+			else
+				z << VRAY_HEAD_CLIP_COORD_ORTHO;
+		}
 			
 		// Set up light variables and input parameters.
 		z << VRAY_HEAD_LIT;
-
-		if (peel_ != 0 || color_mode_ == 2)
-			z << VRAY_HEAD_2DMAP_LOC;
-
-		//head for depth peeling
-		if (peel_ == 1)//draw volume before 15
-			z << VRAY_HEAD_DP_1_STEP;
-		else if (peel_ == 2 || peel_ == 5)//draw volume after 14
-			z << VRAY_HEAD_DP_2_STEP;
-		else if (peel_ == 3 || peel_ == 4)//draw volume after 14 and before 15
-			z << VRAY_HEAD_DP_1_STEP << VRAY_HEAD_DP_2_STEP;
 
 		// Set up fog variables and input parameters.
 		if (fog_)
@@ -1767,6 +1769,14 @@ VRayShader::VRayShader(
 			z << VRAY_HEAD_MIP;
 
 		z << VRAY_LOOP_HEAD;
+		if (peel_ != 0)
+			z << VRAY_LOOP_CLIP_COORD;
+		if (peel_ == 1)//draw volume before 15
+			z << VRAY_DP_Z1_FAR;
+		else if (peel_ == 2 || peel_ == 5)//draw volume after 14
+			z << VRAY_DP_Z2_NEAR;
+		else if (peel_ == 3 || peel_ == 4)//draw volume after 14 and before 15
+			z << VRAY_DP_Z1_FAR << VRAY_DP_Z2_NEAR;
 
 		if (mask_hide_mode_ > 0)
 			z << VRAY_MASK_VAL;
