@@ -5380,10 +5380,23 @@ void VRenderVulkanView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 
 	Vulkan2dRender::V2DRenderParams params_final = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 
+	int blend_method = V2DRENDER_BLEND_ADD;
+
+	if (m_dpeel)
+		blend_method = V2DRENDER_BLEND_OVER_INV;
+	else
+	{
+		if (m_vol_method == VOL_METHOD_COMP)
+			blend_method = V2DRENDER_BLEND_ADD;
+		else if (m_vol_method == VOL_METHOD_SEQ)
+			blend_method = V2DRENDER_BLEND_OVER;
+
+	}
+
 	params_final.pipeline =
 		m_v2drender->preparePipeline(
 			IMG_SHDR_BRIGHTNESS_CONTRAST_HDR,
-			V2DRENDER_BLEND_OVER_INV,
+			blend_method,
 			m_fbo_final->attachments[0]->format,
 			m_fbo_final->attachments.size(),
 			0,
