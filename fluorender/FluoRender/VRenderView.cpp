@@ -969,7 +969,7 @@ void VRenderVulkanView::HandleProjection(int nx, int ny)
 			double tx = -1.0 * (-1.0 + tilew/2.0 + tilew*tilex);
 			double ty = -1.0 * (-1.0 + tileh/2.0 + tileh*tiley);
 			auto scale = glm::scale(glm::vec3((float)scalex, (float)scaley, 1.f));
-			auto translate = glm::translate(glm::vec3((float)tx, (float)(-ty), 0.f));
+			auto translate = glm::translate(glm::vec3((float)tx, (float)ty, 0.f));
 			m_proj_mat = scale * translate * m_proj_mat;
 		}
 	}
@@ -983,7 +983,7 @@ void VRenderVulkanView::HandleProjection(int nx, int ny)
 			float shiftX = (double)m_tile_w * (m_ortho_right - m_ortho_left)/m_capture_resx;
 			float shiftY = (double)m_tile_h * (m_ortho_top - m_ortho_bottom)/m_capture_resy;
 			m_proj_mat = glm::ortho(m_ortho_left + shiftX*tilex, m_ortho_left + shiftX*(tilex+1),
-				m_ortho_top - shiftY*(tiley+1), m_ortho_top - shiftY*tiley, -m_far_clip/100.0, m_far_clip);
+				m_ortho_bottom + shiftY*tiley, m_ortho_bottom + shiftY*(tiley+1), -m_far_clip/100.0, m_far_clip);
 		}
 	}
 }
@@ -1604,7 +1604,6 @@ void VRenderVulkanView::DrawVolumes(int peel)
 		if ((TextureRenderer::get_start_update_loop() && TextureRenderer::get_done_update_loop()) ||
 				!TextureRenderer::get_mem_swap() ||
 				TextureRenderer::get_total_brick_num() == 0 ) {
-			glViewport(0, 0, (GLint)m_nx, (GLint)m_ny);
 			DrawTile();
 			m_current_tileid++;
 			if (m_capture) m_postdraw = true;
@@ -2082,7 +2081,6 @@ void VRenderVulkanView::DrawVolumesDP()
 		if ((TextureRenderer::get_start_update_loop() && TextureRenderer::get_done_update_loop()) ||
 			!TextureRenderer::get_mem_swap() ||
 			TextureRenderer::get_total_brick_num() == 0) {
-			glViewport(0, 0, (GLint)m_nx, (GLint)m_ny);
 			DrawTile();
 			m_current_tileid++;
 			if (m_capture) m_postdraw = true;
@@ -3573,7 +3571,6 @@ void VRenderVulkanView::StartTileRendering(int w_, int h_, int tilew_, int tileh
 	m_tile_xnum = w_/tilew_ + (w_%tilew_ > 0);
 	m_tile_ynum = h_/tileh_ + (h_%tileh_ > 0);
 	m_current_tileid = 0;
-	Resize();
 
 	m_tmp_res_mode = m_res_mode;
 	m_res_mode = 0;
@@ -3622,12 +3619,12 @@ void VRenderVulkanView::StartTileRendering(int w_, int h_, int tilew_, int tileh
 			tilew = 2.0 * m_tile_w * h / m_capture_resy / w;
 			tileh = 2.0 * m_tile_h * h / m_capture_resy / h;
 			stpos_x = -1.0 + 2.0 * (w - h * ren_aspect) / 2.0 / w;
-			stpos_y = 1.0;
+			stpos_y = -1.0;
 			xbound = stpos_x + 2.0 * h * ren_aspect / w;
-			ybound = -1.0;
+			ybound = 1.0;
 
 			stpos_x = stpos_x + tilew * (tileid % m_tile_xnum);
-			stpos_y = stpos_y - tileh * (tileid / m_tile_xnum + 1);
+			stpos_y = stpos_y + tileh * (tileid / m_tile_xnum);
 			edpos_x = stpos_x + tilew;
 			edpos_y = stpos_y + tileh;
 		}
@@ -3635,31 +3632,31 @@ void VRenderVulkanView::StartTileRendering(int w_, int h_, int tilew_, int tileh
 			tilew = 2.0 * m_tile_w * w / m_capture_resx / w;
 			tileh = 2.0 * m_tile_h * w / m_capture_resx / h;
 			stpos_x = -1.0;
-			stpos_y = 1.0 - 2.0 * (h - w / ren_aspect) / 2.0 / h;
+			stpos_y = -1.0 + 2.0 * (h - w / ren_aspect) / 2.0 / h;
 			xbound = 1.0;
-			ybound = stpos_y - 2.0 * w / ren_aspect / h;
+			ybound = stpos_y + 2.0 * w / ren_aspect / h;
 
 			stpos_x = stpos_x + tilew * (tileid % m_tile_xnum);
-			stpos_y = stpos_y - tileh * (tileid / m_tile_xnum + 1);
+			stpos_y = stpos_y + tileh * (tileid / m_tile_xnum);
 			edpos_x = stpos_x + tilew;
 			edpos_y = stpos_y + tileh;
 		}
 
 		double tex_x = 1.0;
-		double tex_y = 0.0;
+		double tex_y = 1.0;
 		if (edpos_x > xbound) {
 			tex_x = (xbound - stpos_x) / tilew;
 			edpos_x = xbound;
 		}
-		if (stpos_y < ybound) {
-			tex_y = 1.0 - (edpos_y - ybound) / tileh;
-			stpos_y = ybound;
+		if (edpos_y > ybound) {
+			tex_y = (ybound - stpos_y) / tileh;
+			edpos_y = ybound;
 		}
 
-		verts.push_back(Vulkan2dRender::Vertex{ {(float)edpos_x, (float)edpos_y, 0.0f}, {(float)tex_x, 1.0f,         0.0f} });
-		verts.push_back(Vulkan2dRender::Vertex{ {(float)stpos_x, (float)edpos_y, 0.0f}, {0.0f,         1.0f,         0.0f} });
-		verts.push_back(Vulkan2dRender::Vertex{ {(float)stpos_x, (float)stpos_y, 0.0f}, {0.0f,         (float)tex_y, 0.0f} });
-		verts.push_back(Vulkan2dRender::Vertex{ {(float)edpos_x, (float)stpos_y, 0.0f}, {(float)tex_x, (float)tex_y, 0.0f} });
+		verts.push_back(Vulkan2dRender::Vertex{ {(float)edpos_x, (float)edpos_y, 0.0f}, {(float)tex_x, (float)tex_y, 0.0f} });
+		verts.push_back(Vulkan2dRender::Vertex{ {(float)stpos_x, (float)edpos_y, 0.0f}, {0.0f,         (float)tex_y, 0.0f} });
+		verts.push_back(Vulkan2dRender::Vertex{ {(float)stpos_x, (float)stpos_y, 0.0f}, {0.0f,         0.0f,         0.0f} });
+		verts.push_back(Vulkan2dRender::Vertex{ {(float)edpos_x, (float)stpos_y, 0.0f}, {(float)tex_x, 0.0f,         0.0f} });
 
 	}
 
@@ -3682,7 +3679,7 @@ void VRenderVulkanView::StartTileRendering(int w_, int h_, int tilew_, int tileh
 	m_tile_vobj.vertCount = verts.size();
 	m_tile_vobj.vertOffset = 0;
 
-	RefreshGL();
+	Resize();
 }
 
 void VRenderVulkanView::EndTileRendering()
@@ -3760,7 +3757,7 @@ void VRenderVulkanView::DrawTile()
 		m_fbo_tile->h = m_ny;
 		m_fbo_tile->device = prim_dev;
 
-		m_tex_tile = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+		m_tex_tile = prim_dev->GenTexture2D(VK_FORMAT_R8G8B8A8_UNORM, VK_FILTER_LINEAR, m_nx, m_ny);
 		m_fbo_tile->addAttachment(m_tex_tile);
 	}
 
@@ -6841,19 +6838,38 @@ void VRenderVulkanView::PostDraw()
 			for (size_t y = sty; y < edy; y++) {
 				for (size_t x = stx; x < edx; x++) {
 					for (int c = 0; c < dst_chann; c++) {
-						m_tiled_image[(y * m_capture_resx + x) * dst_chann + c] = image[((m_tile_h - (y - sty) - 1) * m_tile_w + (x - stx)) * chann + c];
+						m_tiled_image[(y * m_capture_resx + x) * dst_chann + c] = image[((y - sty) * m_tile_w + (x - stx)) * chann + c];
 					}
 				}
 			}
 		}
 		else {
-			prim_dev->DownloadTexture(m_tex_tile, image);
+			vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+			prim_dev->DownloadTexture(current_fbo->attachments[0], image);
+
+			bool colorSwizzleBGR = false;
+			std::vector<VkFormat> formatsBGR = { VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_B8G8R8A8_SNORM };
+			colorSwizzleBGR = (std::find(formatsBGR.begin(), formatsBGR.end(), current_fbo->attachments[0]->format) != formatsBGR.end());
 
 			unsigned char* rgb_image = new unsigned char[w * h * dst_chann];
-			for (size_t y = 0; y < h; y++) {
-				for (size_t x = 0; x < w; x++) {
-					for (int c = 0; c < dst_chann; c++) {
-						rgb_image[(y * w + x) * dst_chann + c] = image[(y * w + x) * chann + c];
+
+			if (colorSwizzleBGR)
+			{
+				for (size_t y = 0; y < h; y++) {
+					for (size_t x = 0; x < w; x++) {
+						rgb_image[(y * w + x) * dst_chann + 2] = image[(y * w + x) * chann + 0];
+						rgb_image[(y * w + x) * dst_chann + 1] = image[(y * w + x) * chann + 1];
+						rgb_image[(y * w + x) * dst_chann + 0] = image[(y * w + x) * chann + 2];
+					}
+				}
+			}
+			else
+			{
+				for (size_t y = 0; y < h; y++) {
+					for (size_t x = 0; x < w; x++) {
+						for (int c = 0; c < dst_chann; c++) {
+							rgb_image[(y * w + x) * dst_chann + c] = image[(y * w + x) * chann + c];
+						}
 					}
 				}
 			}
@@ -6878,7 +6894,7 @@ void VRenderVulkanView::PostDraw()
 			TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(out, 0));
 			for (uint32 row = 0; row < (uint32)h; row++)
 			{
-				memcpy(buf, &rgb_image[(h - row - 1) * linebytes], linebytes);// check the index here, and figure out why not using h*linebytes
+				memcpy(buf, &rgb_image[row*linebytes], linebytes);
 				if (TIFFWriteScanline(out, buf, row, 0) < 0)
 					break;
 			}
@@ -6926,7 +6942,7 @@ void VRenderVulkanView::PostDraw()
 				TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(out, 0));
 				for (uint32 row = 0; row < (uint32)cap_h; row++)
 				{
-					memcpy(buf, &m_tiled_image[(row+cap_oy)*pitchX + cap_ox*dst_chann], linebytes);// check the index here, and figure out why not using h*linebytes
+					memcpy(buf, &m_tiled_image[(row+cap_oy)*pitchX + cap_ox*dst_chann], linebytes);
 					if (TIFFWriteScanline(out, buf, row, 0) < 0)
 						break;
 				}
@@ -16955,10 +16971,14 @@ void VRenderView::OnCapture(wxCommandEvent& event)
 		m_glview->m_cap_file = file_dlg.GetDirectory() + "/" + file_dlg.GetFilename();
 		m_glview->m_capture = true;
 		
-		if (m_cap_resx > 2000 && m_cap_resy > 2000)
-			m_glview->StartTileRendering(m_cap_resx, m_cap_resy, 2000, 2000);
+		if (m_cap_resx > 4000 && m_cap_resy > 4000 && m_cap_resx != m_cap_dispresx && m_cap_resy != m_cap_dispresy)
+		{
+			int tilew = m_cap_resx / (m_cap_resx / 2000 + 1) + (m_cap_resx / 2000 + 1);
+			int tileh = m_cap_resy / (m_cap_resy / 2000 + 1) + (m_cap_resy / 2000 + 1);
+			m_glview->StartTileRendering(m_cap_resx, m_cap_resy, tilew, tileh);
+		}
 		else
-			m_glview->StartTileRendering(m_cap_resx, m_cap_resy, m_cap_resx, m_cap_resy);
+			RefreshGL();
 
 		if (vr_frame && vr_frame->GetSettingDlg() &&
 			vr_frame->GetSettingDlg()->GetProjSave())

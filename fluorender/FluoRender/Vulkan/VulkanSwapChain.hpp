@@ -461,6 +461,7 @@ public:
 			buffers[i]->subresourceRange = colorAttachmentView.subresourceRange;
 			buffers[i]->mipLevels = 1;
 			buffers[i]->is_swapchain_images = true;
+			buffers[i]->descriptor.imageLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
 			VK_CHECK_RESULT(vkCreateImageView(device, &colorAttachmentView, nullptr, &buffers[i]->view));
 		}

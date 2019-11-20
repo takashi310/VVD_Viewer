@@ -494,6 +494,7 @@ void VulkanExampleBase::setupDepthStencil()
 	depthStencil->usage = imageCI.usage;
 	depthStencil->subresourceRange = imageViewCI.subresourceRange;
 	depthStencil->device = vulkanDevice;
+	depthStencil->descriptor.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 }
 
 void VulkanExampleBase::setupFrameBuffer()
