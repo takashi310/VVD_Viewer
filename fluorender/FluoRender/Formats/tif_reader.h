@@ -184,6 +184,8 @@ public:
 	void SetTimeSeq(bool ts);
 	bool GetTimeSeq();
 
+	void GetDisplayRange(int ch, double &minxal, double &maxval);
+
 private:
 	wstring m_data_name;
 	bool isBig_;
@@ -293,8 +295,19 @@ private:
 		//next page offset
 		bool b_next_page_offset;
 		unsigned long long ull_next_page_offset;
+		//metadata byte count
+		bool b_metadata_byte_counts;
+		vector<unsigned long long> ull_metadata_byte_counts;
+		//metadata
+		bool b_metadata;
+		vector<double> displayRanges;
 	};
 	PageInfo m_page_info;
+
+	union Double_ULL_Converter {
+		double d;
+		unsigned long long ull;
+	};
 
 	//time sequence id
 	wstring m_time_id;
@@ -346,6 +359,22 @@ private:
 	static const uint64_t kTileBytesCountsTag = 325;
 	/** The tiff tag number of entries on current page */
 	static const uint64_t kNextPageOffsetTag = 500;
+	static const int METAMORPH1 = 33628;
+	static const int METAMORPH2 = 33629;
+	static const int IPLAB = 34122;
+	static const int NIH_IMAGE_HDR = 43314;
+	static const int META_DATA_BYTE_COUNTS = 50838; // private tag registered with Adobe
+	static const int META_DATA = 50839; // private tag registered with Adobe
+
+	// metadata types
+	static const int MAGIC_NUMBER = 0x494a494a;  // "IJIJ"
+	static const int INFO = 0x696e666f;  // "info" (Info image property)
+	static const int LABELS = 0x6c61626c;  // "labl" (slice labels)
+	static const int RANGES = 0x72616e67;  // "rang" (display ranges)
+	static const int LUTS = 0x6c757473;  // "luts" (channel LUTs)
+	static const int ROI = 0x726f6920;  // "roi " (ROI)
+	static const int OVERLAY = 0x6f766572;  // "over" (overlay)
+
 	/** The BYTE type */
 	static const uint8_t kByte = 1;
 	/** The ASCII type */
@@ -393,6 +422,16 @@ private:
 	void SetPageInfoVector(uint16_t tag, uint16_t type, uint64_t cnt, void* data);
 	void ReadTiffFields();
 	inline void InvalidatePageInfo();
+
+	bool getMetaData(uint64_t loc);
+	//void getInfoProperty(int first);
+	//void getSliceLabels(int first, int last);
+	void getDisplayRanges(int first);
+	//void getLuts(int first, int last);
+	//void getRoi(int first);
+	//void getOverlay(int first, int last);
+	//void error(const char* message);
+	void skipUnknownType(int first, int last);
 
 	void DeleteTempFiles();
 };

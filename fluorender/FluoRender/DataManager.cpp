@@ -6233,13 +6233,13 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 			if (m_vd_list[j] && m_vd_list[j]->GetReader() == reader && !m_vd_list[j]->GetDup() &&
 				m_vd_list[j]->GetCurChannel() == i)
 				found_vd = m_vd_list[j];
-		if (found_vd)
+		/*if (found_vd)
 		{
 			vd = VolumeData::DeepCopy(*found_vd, true, this);
 			AddVolumeData(vd);
 			result++;
 		}
-		else
+		else*/
 		{
 			VolumeData *vd = new VolumeData();
 			vd->SetSkipBrick(m_skip_brick);
@@ -6312,6 +6312,16 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 			AddVolumeData(vd);
 
 			SetVolumeDefault(vd);
+			if (type == LOAD_TYPE_TIFF)
+			{
+				double minval, maxval, vxmax;
+				((TIFReader*)reader)->GetDisplayRange(i, minval, maxval);
+				vxmax = vd->GetMaxValue();
+				if (minval >= 0)
+					vd->SetLeftThresh(minval/vxmax);
+				if (maxval >= 0)
+					vd->SetOffset(maxval/vxmax);
+			}
 
 			//get excitation wavelength
 			double wavelength = reader->GetExcitationWavelength(i);

@@ -143,8 +143,9 @@ void TIFReader::Preprocess()
 	bool imagej_raw = str_pos != -1;
 	if (imagej && hyperstack)
 	{
-		//it is an ImageJ hyperstack, get information from the description
 		int num;
+
+		//it is an ImageJ hyperstack, get information from the description
 		//channels
 		search_str = "channels=";
 		str_pos = img_desc.find(search_str);
@@ -178,21 +179,6 @@ void TIFReader::Preprocess()
 			m_time_num = num;
 		else
 			m_time_num = 1;
-		//max
-		if (bits == 16)
-		{
-			search_str = "max=";
-			str_pos = img_desc.find(search_str);
-			if (str_pos != -1)
-				num = get_number(img_desc, str_pos + search_str.length());
-			else
-				num = 0;
-			if (num)
-			{
-				m_max_value = num;
-				m_scalar_scale = 65535.0 / m_max_value;
-			}
-		}
 
 		std::vector<std::wstring> list;
 		if (m_time_num == 1)
@@ -273,6 +259,30 @@ void TIFReader::Preprocess()
 		}
 		else
 			m_slice_num = 1;
+
+		m_page_info.displayRanges.resize(2);
+		m_page_info.displayRanges[0] = -1.0;
+		m_page_info.displayRanges[1] = -1.0;
+
+		bool max_exist = false;
+		search_str = "max=";
+		str_pos = img_desc.find(search_str);
+		if (str_pos != -1)
+			num = get_number(img_desc, str_pos + search_str.length());
+		else
+			num = 0;
+		if (num)
+			m_page_info.displayRanges[1] = num;
+
+		bool min_exist = false;
+		search_str = "min=";
+		str_pos = img_desc.find(search_str);
+		if (str_pos != -1)
+			num = get_number(img_desc, str_pos + search_str.length());
+		else
+			num = 0;
+		if (num)
+			m_page_info.displayRanges[0] = num;
 	}
 	CloseTiff();
 	
@@ -537,7 +547,9 @@ bool TIFReader::TagInInfo(uint16_t tag)
 		tag == kTileWidthTag ||
 		tag == kTileLengthTag ||
 		tag == kTileOffsetsTag ||
-		tag == kTileBytesCountsTag)
+		tag == kTileBytesCountsTag ||
+		tag == META_DATA_BYTE_COUNTS ||
+		tag == META_DATA)
 		return true;
 	else
 		return false;
@@ -627,6 +639,15 @@ void TIFReader::SetPageInfo(uint16_t tag, uint64_t answer)
 		m_page_info.ull_tile_byte_counts.resize(1);
 		m_page_info.ull_tile_byte_counts[0] = static_cast<unsigned long long>(answer);
 		break;
+	case META_DATA_BYTE_COUNTS:
+		m_page_info.b_metadata_byte_counts = true;
+		m_page_info.ull_metadata_byte_counts.resize(1);
+		m_page_info.ull_metadata_byte_counts[0] = static_cast<unsigned long long>(answer);
+		break;
+	case META_DATA:
+		m_page_info.b_metadata = true;
+		getMetaData(answer);
+		break;
 	}
 }
 
@@ -663,6 +684,11 @@ void TIFReader::SetPageInfoVector(uint16_t tag, uint16_t type, uint64_t cnt, voi
 				swap_ ? SwapShort(data2[0]) : data2[0];
 		}
 		return;
+	}
+	else if (tag == META_DATA_BYTE_COUNTS)
+	{
+		m_page_info.b_metadata_byte_counts = true;
+		v = &(m_page_info.ull_metadata_byte_counts);
 	}
 
 	v->clear();
@@ -784,132 +810,178 @@ void TIFReader::ReadTiffFields()
 
 			uint64_t answer = 0;
 			char* buf = 0;
-			if (type == kByte)
+			
+			if (tag == META_DATA_BYTE_COUNTS)
 			{
-				uint8_t value = 0;
-				tiff_stream.read((char*)&value, sizeof(uint8_t));
-				answer = static_cast<uint64_t>(value);
-			}
-			else if (type == kASCII)
-			{
-				if (cnt > 1)
+				if (isBig_)
 				{
-					if (isBig_)
-					{
-						tiff_stream.read((char*)&addr64, sizeof(uint64_t));
-						addr64 = swap_ ? SwapLong(addr64) : addr64;
-					}
-					else
-					{
-						tiff_stream.read((char*)&addr32, sizeof(uint32_t));
-						addr64 = static_cast<uint64_t>(swap_ ? SwapWord(addr32) : addr32);
-					}
-					tiff_stream.seekg(addr64, tiff_stream.beg);
-				}
-				//read the the string
-				buf = new char[cnt];
-				tiff_stream.read(buf, cnt);
-			}
-			else if (type == kShort)
-			{
-				uint16_t value = 0;
-				if (cnt > (isBig_ ? 4 : 2))
-				{
-					if (isBig_)
-					{
-						tiff_stream.read((char*)&addr64, sizeof(uint64_t));
-						addr64 = swap_ ? SwapLong(addr64) : addr64;
-					}
-					else
-					{
-						tiff_stream.read((char*)&addr32, sizeof(uint32_t));
-						addr64 = static_cast<uint64_t>(swap_ ? SwapWord(addr32) : addr32);
-					}
-					tiff_stream.seekg(addr64, tiff_stream.beg);
-					buf = (char*)(new uint16_t[cnt]);
-					tiff_stream.read((char*)buf, sizeof(uint16_t)*cnt);
-				}
-				else
-				{
-					tiff_stream.read((char*)&value, sizeof(uint16_t));
-					if (swap_) value = SwapShort(value);
-					answer = static_cast<uint64_t>(value);
-				}
-			}
-			else if (type == kLong)
-			{
-				uint32_t value = 0;
-				if (cnt > (isBig_ ? 2 : 1))
-				{
-					if (isBig_)
-					{
-						tiff_stream.read((char*)&addr64, sizeof(uint64_t));
-						addr64 = swap_ ? SwapLong(addr64) : addr64;
-					}
-					else
-					{
-						tiff_stream.read((char*)&addr32, sizeof(uint32_t));
-						addr64 = static_cast<uint64_t>(swap_ ? SwapWord(addr32) : addr32);
-					}
-					tiff_stream.seekg(addr64, tiff_stream.beg);
-					buf = (char*)(new uint32_t[cnt]);
-					tiff_stream.read((char*)buf, sizeof(uint32_t)*cnt);
-				}
-				else
-				{
-					tiff_stream.read((char*)&value, sizeof(uint32_t));
-					if (swap_) value = SwapWord(value);
-					answer = static_cast<uint64_t>(value);
-				}
-			}
-			else if (type == kLong8)
-			{
-				if (cnt > 1)
-				{
-					tiff_stream.read((char*)&addr64, sizeof(uint64_t));
+					tiff_stream.read((char*)& addr64, sizeof(uint64_t));
 					addr64 = swap_ ? SwapLong(addr64) : addr64;
-					tiff_stream.seekg(addr64, tiff_stream.beg);
-					buf = (char*)(new uint64_t[cnt]);
-					tiff_stream.read((char*)buf, sizeof(uint64_t)*cnt);
 				}
 				else
 				{
-					tiff_stream.read((char*)&answer, sizeof(uint64_t));
-					if (swap_) answer = SwapLong(answer);
+					tiff_stream.read((char*)& addr32, sizeof(uint32_t));
+					addr64 = static_cast<uint64_t>(swap_ ? SwapWord(addr32) : addr32);
 				}
-			}
-			else if (type == kRational)
-			{
-				//get the two values in the data to make a float.
-				uint32_t value = 0;
-				tiff_stream.read((char*)&value, sizeof(uint32_t));
-				if (swap_) value = SwapWord(value);
-				tiff_stream.seekg(value, tiff_stream.beg);
-				uint32_t num = 0, den = 0;
-				tiff_stream.read((char*)&num, sizeof(uint32_t));
-				if (swap_) num = SwapWord(num);
-				tiff_stream.seekg(value + sizeof(uint32_t), tiff_stream.beg);
-				tiff_stream.read((char*)&den, sizeof(uint32_t));
-				if (swap_) den = SwapWord(den);
-				double rat = static_cast<double>(num) /
-					static_cast<double>(den);
-				memcpy(&answer, &rat, sizeof(double));
-			}
-			else
-			{
-				std::cerr << "Unhandled TIFF Tag type" << std::endl;
-			}
+				
+				uint64_t saveLoc = tiff_stream.tellg();
+				tiff_stream.seekg(addr64, tiff_stream.beg);
 
-			if (tag == kImageDescriptionTag && buf)
-			{
-				m_page_info.b_image_desc = true;
-				m_page_info.s_image_desc = buf;
+				m_page_info.b_metadata_byte_counts = true;
+				vector<unsigned long long>* v = &(m_page_info.ull_metadata_byte_counts);
+				uint32_t value = 0;
+				for (uint64_t i = 0; i < cnt; ++i)
+				{
+					tiff_stream.read((char*)& value, sizeof(uint32_t));
+					if (swap_) value = SwapWord(value);
+					v->push_back(value);
+				}
+				tiff_stream.seekg(saveLoc, tiff_stream.beg);
 			}
-			else if (!answer && buf)
-				SetPageInfoVector(tag, type, cnt, (void*)buf);
+			else if (tag == META_DATA)
+			{
+				if (isBig_)
+				{
+					tiff_stream.read((char*)& addr64, sizeof(uint64_t));
+					addr64 = swap_ ? SwapLong(addr64) : addr64;
+				}
+				else
+				{
+					tiff_stream.read((char*)& addr32, sizeof(uint32_t));
+					addr64 = static_cast<uint64_t>(swap_ ? SwapWord(addr32) : addr32);
+				}
+				m_page_info.b_metadata = true;
+				getMetaData(addr64);
+			}
 			else
-				SetPageInfo(tag, answer);
-			if (buf) delete[] buf;
+			{
+				if (type == kByte)
+				{
+					uint8_t value = 0;
+					tiff_stream.read((char*)& value, sizeof(uint8_t));
+					answer = static_cast<uint64_t>(value);
+				}
+				else if (type == kASCII)
+				{
+					if (cnt > 1)
+					{
+						if (isBig_)
+						{
+							tiff_stream.read((char*)& addr64, sizeof(uint64_t));
+							addr64 = swap_ ? SwapLong(addr64) : addr64;
+						}
+						else
+						{
+							tiff_stream.read((char*)& addr32, sizeof(uint32_t));
+							addr64 = static_cast<uint64_t>(swap_ ? SwapWord(addr32) : addr32);
+						}
+						tiff_stream.seekg(addr64, tiff_stream.beg);
+					}
+					//read the the string
+					buf = new char[cnt];
+					tiff_stream.read(buf, cnt);
+				}
+				else if (type == kShort)
+				{
+					uint16_t value = 0;
+					if (cnt > (isBig_ ? 4 : 2))
+					{
+						if (isBig_)
+						{
+							tiff_stream.read((char*)& addr64, sizeof(uint64_t));
+							addr64 = swap_ ? SwapLong(addr64) : addr64;
+						}
+						else
+						{
+							tiff_stream.read((char*)& addr32, sizeof(uint32_t));
+							addr64 = static_cast<uint64_t>(swap_ ? SwapWord(addr32) : addr32);
+						}
+						tiff_stream.seekg(addr64, tiff_stream.beg);
+						buf = (char*)(new uint16_t[cnt]);
+						tiff_stream.read((char*)buf, sizeof(uint16_t) * cnt);
+					}
+					else
+					{
+						tiff_stream.read((char*)& value, sizeof(uint16_t));
+						if (swap_) value = SwapShort(value);
+						answer = static_cast<uint64_t>(value);
+					}
+				}
+				else if (type == kLong)
+				{
+					uint32_t value = 0;
+					if (cnt > (isBig_ ? 2 : 1))
+					{
+						if (isBig_)
+						{
+							tiff_stream.read((char*)& addr64, sizeof(uint64_t));
+							addr64 = swap_ ? SwapLong(addr64) : addr64;
+						}
+						else
+						{
+							tiff_stream.read((char*)& addr32, sizeof(uint32_t));
+							addr64 = static_cast<uint64_t>(swap_ ? SwapWord(addr32) : addr32);
+						}
+						tiff_stream.seekg(addr64, tiff_stream.beg);
+						buf = (char*)(new uint32_t[cnt]);
+						tiff_stream.read((char*)buf, sizeof(uint32_t) * cnt);
+					}
+					else
+					{
+						tiff_stream.read((char*)& value, sizeof(uint32_t));
+						if (swap_) value = SwapWord(value);
+						answer = static_cast<uint64_t>(value);
+					}
+				}
+				else if (type == kLong8)
+				{
+					if (cnt > 1)
+					{
+						tiff_stream.read((char*)& addr64, sizeof(uint64_t));
+						addr64 = swap_ ? SwapLong(addr64) : addr64;
+						tiff_stream.seekg(addr64, tiff_stream.beg);
+						buf = (char*)(new uint64_t[cnt]);
+						tiff_stream.read((char*)buf, sizeof(uint64_t) * cnt);
+					}
+					else
+					{
+						tiff_stream.read((char*)& answer, sizeof(uint64_t));
+						if (swap_) answer = SwapLong(answer);
+					}
+				}
+				else if (type == kRational)
+				{
+					//get the two values in the data to make a float.
+					uint32_t value = 0;
+					tiff_stream.read((char*)& value, sizeof(uint32_t));
+					if (swap_) value = SwapWord(value);
+					tiff_stream.seekg(value, tiff_stream.beg);
+					uint32_t num = 0, den = 0;
+					tiff_stream.read((char*)& num, sizeof(uint32_t));
+					if (swap_) num = SwapWord(num);
+					tiff_stream.seekg(value + sizeof(uint32_t), tiff_stream.beg);
+					tiff_stream.read((char*)& den, sizeof(uint32_t));
+					if (swap_) den = SwapWord(den);
+					double rat = static_cast<double>(num) /
+						static_cast<double>(den);
+					memcpy(&answer, &rat, sizeof(double));
+				}
+				else
+				{
+					std::cerr << "Unhandled TIFF Tag type" << std::endl;
+				}
+
+				if (tag == kImageDescriptionTag && buf)
+				{
+					m_page_info.b_image_desc = true;
+					m_page_info.s_image_desc = buf;
+				}
+				else if (!answer && buf)
+					SetPageInfoVector(tag, type, cnt, (void*)buf);
+				else
+					SetPageInfo(tag, answer);
+				if (buf) delete[] buf;
+			}
 		}
 	}
 	
@@ -938,6 +1010,230 @@ void TIFReader::ReadTiffFields()
 
 	m_page_info.b_valid = true;
 }
+
+bool TIFReader::getMetaData(uint64_t loc)
+{
+	if (!m_page_info.b_metadata_byte_counts || m_page_info.ull_metadata_byte_counts.size() == 0)
+		return false;
+	int maxTypes = 10;
+
+	long long saveLoc = tiff_stream.tellg();
+	tiff_stream.seekg(loc, tiff_stream.beg);
+
+	int n = m_page_info.ull_metadata_byte_counts.size();
+
+	int hdrSize = m_page_info.ull_metadata_byte_counts[0];
+	if (hdrSize < 12 || hdrSize>804)
+	{ 
+		tiff_stream.seekg(saveLoc, tiff_stream.beg);
+		return false;
+	}
+
+	int magicNumber = 0;
+	tiff_stream.read((char*)& magicNumber, sizeof(uint32_t));
+	if (swap_) magicNumber = SwapWord(magicNumber);
+	if (magicNumber != MAGIC_NUMBER)
+	{ 
+		tiff_stream.seekg(saveLoc, tiff_stream.beg);
+		return false;
+	}
+
+	int nTypes = (hdrSize - 4) / 8;
+	int* types = new int[nTypes];
+	int* counts = new int[nTypes];
+
+	string s;
+	bool debugMode = false;
+	if (debugMode) {
+		//s = dInfo;
+		s += "Metadata:\n";
+	}
+
+	int extraMetaDataEntries = 0;
+	for (int i = 0; i < nTypes; i++) {
+		tiff_stream.read((char*)& types[i], sizeof(uint32_t));
+		if (swap_) types[i] = SwapWord(types[i]);
+		tiff_stream.read((char*)& counts[i], sizeof(uint32_t));
+		if (swap_) counts[i] = SwapWord(counts[i]);
+		if (types[i] < 0xffffff)
+			extraMetaDataEntries += counts[i];
+		if (debugMode) {
+			string id("");
+			if (types[i] == INFO) id = " (Info property)";
+			if (types[i] == LABELS) id = " (slice labels)";
+			if (types[i] == RANGES) id = " (display ranges)";
+			if (types[i] == LUTS) id = " (luts)";
+			if (types[i] == ROI) id = " (roi)";
+			if (types[i] == OVERLAY) id = " (overlay)";
+			stringstream ss;
+			ss << "   " << i << " " << std::hex << types[i] << std::dec << " " << counts[i] << id << "\n";
+			s += ss.str();
+		}
+	}
+	
+	int start = 1;
+	int eMDindex = 0;
+	for (int i = 0; i < nTypes; i++) {
+		if (types[i] == INFO)
+			skipUnknownType(start, start + counts[i] - 1);
+		else if (types[i] == LABELS)
+			skipUnknownType(start, start + counts[i] - 1);
+		else if (types[i] == RANGES)
+			getDisplayRanges(start);
+		else if (types[i] == LUTS)
+			skipUnknownType(start, start + counts[i] - 1);
+		else if (types[i] == ROI)
+			skipUnknownType(start, start + counts[i] - 1);
+		else if (types[i] == OVERLAY)
+			skipUnknownType(start, start + counts[i] - 1);
+		else if (types[i] < 0xffffff)
+			skipUnknownType(start, start + counts[i] - 1);
+		else
+			skipUnknownType(start, start + counts[i] - 1);
+		start += counts[i];
+	}
+	tiff_stream.seekg(saveLoc, tiff_stream.beg);
+
+	delete[] types;
+	delete[] counts;
+
+	return true;
+}
+//
+//void TIFReader::getInfoProperty(int first, FileInfo& fi) throw(ios_base::failure) {
+//	int len = metaDataCounts[first];
+//	byte* buffer = new byte[len];
+//	in->read((char*)buffer, len);
+//	len /= 2;
+//	char* chars = new char[len + 1];
+//	if (littleEndian) {
+//		for (int j = 0, k = 0; j < len; j++)
+//			chars[j] = (char)(buffer[k++] & 255 + ((buffer[k++] & 255) << 8));
+//	}
+//	else {
+//		for (int j = 0, k = 0; j < len; j++)
+//			chars[j] = (char)(((buffer[k++] & 255) << 8) + buffer[k++] & 255);
+//	}
+//	chars[len] = '\0';
+//	SAFE_DELETE_ARRAY(fi.info);
+//	_stringNewAndCopy(fi.info, chars);
+//
+//	delete[] buffer;
+//	delete[] chars;
+//}
+//
+//void TIFReader::getSliceLabels(int first, int last, FileInfo& fi) throw(ios_base::failure) {
+//	if (last - first + 1 <= 0)return;
+//	SAFE_DELETE_2D_ARRAY(fi.sliceLabels, fi.nSliceLabels);
+//	fi.sliceLabels = new char* [last - first + 1];
+//	for (int i = 0; i < last - first + 1; i++)fi.sliceLabels[i] = NULL;
+//	fi.nSliceLabels = last - first + 1;
+//	int index = 0;
+//	byte* buffer = new byte[metaDataCounts[first]];
+//	for (int i = first; i <= last; i++) {
+//		int len = metaDataCounts[i];
+//		if (len > 0) {
+//			if (len > metaDataCounts[first]) {
+//				delete[] buffer;
+//				buffer = new byte[len];
+//			}
+//			in->read((char*)buffer, len);
+//			len /= 2;
+//			char* chars = new char[len + 1];
+//			if (littleEndian) {
+//				for (int j = 0, k = 0; j < len; j++)
+//					chars[j] = buffer[2 * k++];//(char)(buffer[k++]&255 + ((buffer[k++]&255)<<8));
+//			}
+//			else {
+//				for (int j = 0, k = 0; j < len; j++)
+//					chars[j] = buffer[2 * (k++) + 1];//(char)(((buffer[k++]&255)<<8) + buffer[k++]&255);
+//			}
+//			chars[len] = '\0';
+//			_stringNewAndCopy(fi.sliceLabels[index], chars);
+//			//if(fi.sliceLabels[index] && index < 10)cout << index << ": " << fi.sliceLabels[index] << endl;
+//			index++;
+//			delete[] chars;
+//		}
+//		else fi.sliceLabels[index++] = NULL;
+//	}
+//	delete[] buffer;
+//}
+
+void TIFReader::getDisplayRanges(int first) throw(ios_base::failure) {
+	int n = m_page_info.ull_metadata_byte_counts[first] / 8;
+	m_page_info.displayRanges.resize(n);
+	for (int i = 0; i < n; i++)
+	{
+		uint64_t val = 0;
+		tiff_stream.read((char*)& val, sizeof(uint64_t));
+		if (swap_) val = SwapLong(val);
+		Double_ULL_Converter conv;
+		conv.ull = val;
+		m_page_info.displayRanges[i] = conv.d;
+	}
+}
+//
+//void TIFReader::getLuts(int first, int last) throw(ios_base::failure) {
+//	if (last - first + 1 <= 0)return;
+//	SAFE_DELETE_2D_ARRAY(fi.channelLuts, fi.nChannelLuts);
+//	SAFE_DELETE_ARRAY(fi.nLuts);
+//	fi.channelLuts = new byte * [last - first + 1];
+//	fi.nLuts = new int[last - first + 1];
+//	fi.nChannelLuts = last - first + 1;
+//	int index = 0;
+//	for (int i = first; i <= last; i++) {
+//		int len = metaDataCounts[i];
+//		fi.channelLuts[index] = new byte[len];
+//		fi.nLuts[index] = len;
+//		in->read((char*)fi.channelLuts[index], len);
+//		index++;
+//	}
+//
+//}
+//
+//void TIFReader::getRoi(int first) throw(ios_base::failure) {
+//	SAFE_DELETE_ARRAY(fi.roi);
+//	int len = metaDataCounts[first];
+//	fi.roi = new byte[len];
+//	in->read((char*)fi.roi, len);
+//}
+//
+//void TIFReader::getOverlay(int first, int last) throw(ios_base::failure) {
+//	SAFE_DELETE_2D_ARRAY(fi.overlay, fi.nOverlay);
+//	SAFE_DELETE_ARRAY(fi.overlaySize);
+//	fi.overlay = new byte * [last - first + 1];
+//	fi.nOverlay = last - first + 1;
+//	fi.overlaySize = new int[last - first + 1];
+//	int index = 0;
+//	for (int i = first; i <= last; i++) {
+//		int len = metaDataCounts[i];
+//		fi.overlaySize[index] = len;
+//		fi.overlay[index] = new byte[len];
+//		in->read((char*)fi.overlay[index], len);
+//		index++;
+//	}
+//}
+//
+//
+//void TIFReader::error(const char* message) throw(ios_base::failure) {
+//	if (in != NULL) in->close();
+//	throw  ios_base::failure("TiffDecoder::error");
+//}
+
+void TIFReader::skipUnknownType(int first, int last) throw(ios_base::failure) {
+	byte* buffer = new byte[m_page_info.ull_metadata_byte_counts[first]];
+	for (int i = first; i <= last; i++) {
+		int len = m_page_info.ull_metadata_byte_counts[i];
+		if (len > m_page_info.ull_metadata_byte_counts[first]) {
+			delete[] buffer;
+			buffer = new byte[len];
+		}
+		tiff_stream.read((char*)buffer, len);
+	}
+
+	delete[] buffer;
+}
+
 
 uint64_t TIFReader::GetTiffNextPageOffset()
 {
@@ -1801,7 +2097,7 @@ Nrrd* TIFReader::ReadTiff(std::vector<SliceInfo> &filelist,
 		(size_t)m_y_size, (size_t)numPages);
 
 	if (!eight_bit) {
-		if (get_max) {
+		//if (get_max) {
 			if (samples > 1)
 				m_max_value = max_value;
 			else {
@@ -1814,9 +2110,13 @@ Nrrd* TIFReader::ReadTiff(std::vector<SliceInfo> &filelist,
 					m_max_value = value > m_max_value ? value : m_max_value;
 				}
 			}
-		}
+		//}
 		if (m_max_value > 0.0) m_scalar_scale = 65535.0 / m_max_value;
-		else m_scalar_scale = 1.0;
+		else
+		{
+			m_max_value = 65535.0;
+			m_scalar_scale = 1.0;
+		}
 	}
 	else m_max_value = 255.0;
 
@@ -1868,5 +2168,18 @@ void TIFReader::DeleteTempFiles()
 	for (auto t : m_4d_seq) {
 		if (!t.slices.empty() && !t.slices[0].decomp_slice.empty() && wxFileExists(t.slices[0].decomp_slice))
 			wxRemoveFile(t.slices[0].decomp_slice);
+	}
+}
+
+void TIFReader::GetDisplayRange(int ch, double& minval, double& maxval)
+{
+	int n = m_page_info.displayRanges.size();
+
+	minval = -1.0;
+	maxval = -1.0;
+	if (ch >= 0 && 2*ch+1 < n)
+	{
+		minval = m_page_info.displayRanges[2 * ch];
+		maxval = m_page_info.displayRanges[2 * ch + 1];
 	}
 }
