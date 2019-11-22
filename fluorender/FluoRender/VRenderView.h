@@ -773,10 +773,10 @@ public:
 	//linked rotation
 	bool m_linked_rot;
 
-private:
 	shared_ptr<VVulkan> m_vulkan;
 	std::shared_ptr<Vulkan2dRender> m_v2drender;
 
+private:
 	wxWindow* m_frame;
 	VRenderView* m_vrv;
 	//populated lists of data

@@ -1213,51 +1213,77 @@ void VMovieView::WriteFrameToFile(int total_frames) {
         w = vrv->GetGLSize().x;
         h = vrv->GetGLSize().y;
     }
-	int chann = 3; //RGB or RGBA
-    glPixelStorei(GL_PACK_ROW_LENGTH, w);
-    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+	int chann = 4; //RGB or RGBA
+	int dst_chann = 3;
     unsigned char *image = new unsigned char[w*h*chann];
-    glReadBuffer(GL_FRONT);
-    glReadPixels(x, y, w, h, chann==3?GL_RGB:GL_RGBA, GL_UNSIGNED_BYTE, image);
-    glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+	vks::VFrameBuffer* current_fbo = vrv->m_glview->m_vulkan->frameBuffers[vrv->m_glview->m_vulkan->currentBuffer].get();
+	vrv->m_glview->m_vulkan->vulkanDevice->DownloadTexture(current_fbo->attachments[0], image);
+
+	bool colorSwizzleBGR = false;
+	std::vector<VkFormat> formatsBGR = { VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_B8G8R8A8_SNORM };
+	colorSwizzleBGR = (std::find(formatsBGR.begin(), formatsBGR.end(), current_fbo->attachments[0]->format) != formatsBGR.end());
+
+	unsigned char* rgb_image = new unsigned char[w * h * dst_chann];
+
+	if (colorSwizzleBGR)
+	{
+		for (size_t y = 0; y < h; y++) {
+			for (size_t x = 0; x < w; x++) {
+				rgb_image[(y * w + x) * dst_chann + 2] = image[(y * w + x) * chann + 0];
+				rgb_image[(y * w + x) * dst_chann + 1] = image[(y * w + x) * chann + 1];
+				rgb_image[(y * w + x) * dst_chann + 0] = image[(y * w + x) * chann + 2];
+			}
+		}
+	}
+	else
+	{
+		for (size_t y = 0; y < h; y++) {
+			for (size_t x = 0; x < w; x++) {
+				for (int c = 0; c < dst_chann; c++) {
+					rgb_image[(y * w + x) * dst_chann + c] = image[(y * w + x) * chann + c];
+				}
+			}
+		}
+	}
+
     string str_fn = outputfilename.ToStdString();
 	if (filetype_.IsSameAs(".mov")) {
-		//flip vertically 
-		unsigned char *flip = new unsigned char[w*h*chann];
-		for(size_t yy = 0; yy < (size_t)h; yy++)
-			memcpy(flip + yy * 3 * w, image + 3 * w * (h - yy - 1),w * 3);
-		bool worked = encoder_.set_frame_rgb_data(flip);
+		bool worked = encoder_.set_frame_rgb_data(rgb_image);
 		worked = encoder_.write_video_frame(m_last_frame);
-		delete flip;
-		return;
 	}
-    TIFF *out = TIFFOpen(str_fn.c_str(), "wb");
-    if (!out) return;
-    TIFFSetField(out, TIFFTAG_IMAGEWIDTH, w);
-    TIFFSetField(out, TIFFTAG_IMAGELENGTH, h);
-    TIFFSetField(out, TIFFTAG_SAMPLESPERPIXEL, chann);
-    TIFFSetField(out, TIFFTAG_BITSPERSAMPLE, 8);
-    TIFFSetField(out, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
-    TIFFSetField(out, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
-    TIFFSetField(out, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
-    if (VRenderFrame::GetCompression())
-        TIFFSetField(out, TIFFTAG_COMPRESSION, COMPRESSION_LZW);
+	else
+	{
+		TIFF* out = TIFFOpen(str_fn.c_str(), "wb");
+		if (!out) return;
+		TIFFSetField(out, TIFFTAG_IMAGEWIDTH, w);
+		TIFFSetField(out, TIFFTAG_IMAGELENGTH, h);
+		TIFFSetField(out, TIFFTAG_SAMPLESPERPIXEL, dst_chann);
+		TIFFSetField(out, TIFFTAG_BITSPERSAMPLE, 8);
+		TIFFSetField(out, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
+		TIFFSetField(out, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
+		TIFFSetField(out, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
+		if (VRenderFrame::GetCompression())
+			TIFFSetField(out, TIFFTAG_COMPRESSION, COMPRESSION_LZW);
 
-    tsize_t linebytes = chann * w;
-    unsigned char *buf = NULL;
-    buf = (unsigned char *)_TIFFmalloc(linebytes);
-    TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(out, 0));
-    for (uint32 row = 0; row < (uint32)h; row++)
-    {
-        memcpy(buf, &image[(h-row-1)*linebytes], linebytes);// check the index here, and figure out why not using h*linebytes
-        if (TIFFWriteScanline(out, buf, row, 0) < 0)
-        break;
-    }
-    TIFFClose(out);
-    if (buf)
-        _TIFFfree(buf);
+		tsize_t linebytes = dst_chann * w;
+		unsigned char* buf = NULL;
+		buf = (unsigned char*)_TIFFmalloc(linebytes);
+		TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(out, 0));
+		for (uint32 row = 0; row < (uint32)h; row++)
+		{
+			memcpy(buf, &rgb_image[row * linebytes], linebytes);
+			if (TIFFWriteScanline(out, buf, row, 0) < 0)
+				break;
+		}
+		TIFFClose(out);
+		if (buf)
+			_TIFFfree(buf);
+	}
+    
     if (image)
-        delete []image;
+		delete[] image;
+	if (rgb_image)
+		delete[] rgb_image;
 }
 
 void VMovieView::OnUpFrame(wxCommandEvent& event) {
