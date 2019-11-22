@@ -1103,7 +1103,7 @@ namespace FLIVR
 				params.pipeline =
 					VolumeRenderer::m_v2drender->preparePipeline(
 						IMG_SHADER_TEXTURE_LOOKUP,
-						V2DRENDER_BLEND_OVER_INV,
+						colormap_mode_ != 2 ? V2DRENDER_BLEND_OVER_INV : V2DRENDER_BLEND_OVER,
 						framebuf->attachments[0]->format,
 						framebuf->attachments.size(),
 						0,

@@ -5161,6 +5161,22 @@ void VRenderVulkanView::DrawOLShadows(vector<VolumeData*> &vlist, std::unique_pt
 		if (!fb->renderPass)
 			fb->replaceRenderPass(params_final.pipeline.pass);
 		m_v2drender->render(fb, params_final);
+
+/*
+		Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+		params.clear = true;
+		params.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHADER_TEXTURE_LOOKUP,
+				V2DRENDER_BLEND_DISABLE,
+				fb->attachments[0]->format,
+				fb->attachments.size(),
+				0,
+				fb->attachments[0]->is_swapchain_images);
+		params.tex[0] = m_tex_ol2.get();
+		if (!fb->renderPass)
+			fb->replaceRenderPass(params.pipeline.pass);
+		m_v2drender->render(fb, params);*/
 	}
 }
 

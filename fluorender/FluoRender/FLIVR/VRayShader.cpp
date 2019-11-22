@@ -924,7 +924,7 @@ namespace FLIVR
 #define VRAY_RASTER_BLEND_DMAP \
 	"			//VRAY_RASTER_BLEND_DMAP\n" \
 	"			float intpo = (c*l.w).r;\n" \
-	"			c = vec4(vec3(intpo>0.05?cspv.z:prevz), 1.0);\n" \
+	"			c = intpo > 0.05 ? vec4(vec3(cspv.z), 1.0) : vec4(0.0);\n" \
 	"			prevz = intpo > 0.05 ? cspv.z : prevz;\n" \
 	"\n"
 
@@ -1064,7 +1064,7 @@ namespace FLIVR
 
 #define VRAY_BLEND_DMAP \
 	"			//VRAY_BLEND_DMAP\n" \
-	"			outcol = c;\n" \
+	"			outcol = (1.0 - c.w) * outcol + c;\n" \
 	"\n"
 
 #define VRAY_LOOP_TAIL \
@@ -1769,7 +1769,7 @@ VRayShader::VRayShader(
 			z << VRAY_HEAD_MIP;
 
 		z << VRAY_LOOP_HEAD;
-		if (peel_ != 0)
+		if (peel_ != 0 || color_mode_ == 2)
 			z << VRAY_LOOP_CLIP_COORD;
 		if (peel_ == 1)//draw volume before 15
 			z << VRAY_DP_Z1_FAR;
