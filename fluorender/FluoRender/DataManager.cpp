@@ -2452,7 +2452,7 @@ void VolumeData::DrawMask(int type, int paint_mode, int hr_mode,
 
 void VolumeData::DrawMaskThreshold(float th, bool ortho)
 {
-	/*if (m_vr)
+	if (m_vr)
 	{
 		int curlv = -1;
 		if (isBrxml())
@@ -2465,7 +2465,7 @@ void VolumeData::DrawMaskThreshold(float th, bool ortho)
 
 		if (isBrxml())
 			SetLevel(curlv);
-	}*/
+	}
 }
 
 void VolumeData::DrawMaskDSLT(int type, int paint_mode, int hr_mode,

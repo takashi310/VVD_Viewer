@@ -3691,6 +3691,18 @@ namespace FLIVR
 				if (!write_to_vol)
 					descriptorWrites.push_back(SegShaderFactory::writeDescriptorSetMask(VK_NULL_HANDLE, &msktex->descriptor));
 			}
+
+			if (stroketex)
+			{
+				vks::tools::setImageLayout(
+					cmdbuf,
+					stroketex->image,
+					VK_IMAGE_LAYOUT_UNDEFINED,
+					VK_IMAGE_LAYOUT_GENERAL,
+					stroketex->subresourceRange);
+				stroketex->descriptor.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+				descriptorWrites.push_back(SegShaderFactory::writeDescriptorSetStroke(VK_NULL_HANDLE, &stroketex->descriptor));
+			}
 			
 			//size and sample rate
 			seg_const.loc_dim_inv = { 1.0 / b->nx(), 1.0 / b->ny(), 1.0 / b->nz(),
@@ -4503,101 +4515,123 @@ namespace FLIVR
 //		return code;
 //	}
 //
-//	void VolumeRenderer::draw_mask_th(float thresh, bool orthographic_p)
-//	{
-//		if (!tex_ || tex_->nstroke() < 0) return;
-//
-//		Ray view_ray = compute_view();
-//
-//		vector<TextureBrick*> *bricks = tex_->get_sorted_bricks(view_ray, orthographic_p);
-//		if (!bricks || bricks->size() == 0)
-//			return;
-//
-//		if (!m_dslt_kernel)
-//		{
-//            std::wstring exePath = wxStandardPaths::Get().GetExecutablePath().ToStdWstring();
-//            exePath = exePath.substr(0,exePath.find_last_of(std::wstring()+GETSLASH()));
-//            std::wstring pref = exePath + GETSLASH() + L"CL_code" + GETSLASH();
-//
-//			wxString code = "";
-//			wxString filepath;
-//			
-//			filepath = pref + wxString("dslt2.cl");
-//			code = readCLcode(filepath);
-//			m_dslt_kernel = vol_kernel_factory_.kernel(code.ToStdString());
-//			if (!m_dslt_kernel)
-//				return;
-//		}
-//
-//		string kn_th  = "threshold_mask";
-//		if (!m_dslt_kernel->valid())
-//		{
-//			string kn_max = "dslt_max";
-//			string kn_l2  = "dslt_l2";
-//			string kn_b   = "dslt_binarize";
-//			string kn_em  = "dslt_elem_min";
-//			string kn_ap  = "dslt_ap_mask";
-//			if (!m_dslt_kernel->create(kn_max))
-//				return;
-//			if (!m_dslt_kernel->create(kn_l2))
-//				return;
-//			if (!m_dslt_kernel->create(kn_b))
-//				return;
-//			if (!m_dslt_kernel->create(kn_em))
-//				return;
-//			if (!m_dslt_kernel->create(kn_ap))
-//				return;
-//			if (!m_dslt_kernel->create(kn_th))
-//				return;
-//		}
-//
-//		for (unsigned int i=0; i < bricks->size(); i++)
-//		{
-//			TextureBrick* b = (*bricks)[i];
-//			int c = b->nmask();
-//			int nb = b->nb(c);
-//			float bmax = (b->nb(0) == 2) ? 65535.0 : 255.0;
-//			float thval = thresh / bmax;
-//			int brick_x = b->nx();
-//			int brick_y = b->ny();
-//			int brick_z = b->nz();
-//
-//			int ypitch = brick_x;
-//			int zpitch = brick_x*brick_y;
-//			size_t global_size[3] = { (size_t)brick_x, (size_t)brick_y, (size_t)brick_z };
-//			size_t *local_size = NULL;
-//			
-//			GLint vd_id = load_brick(0, 0, bricks, i, GL_NEAREST, compression_);
-//			GLint mask_id = load_brick_mask(bricks, i, GL_NEAREST);
-//			GLint stroke_tex_id = load_brick_stroke(bricks, i, GL_NEAREST);
-//
-//			if (!glIsTexture(stroke_tex_id) || !glIsTexture(mask_id) || !glIsTexture(vd_id))
-//				continue;
-//			
-//			m_dslt_kernel->setKernelArgTex3D(0, CL_MEM_READ_ONLY, vd_id, kn_th);
-//			m_dslt_kernel->setKernelArgTex3D(1, CL_MEM_READ_ONLY, stroke_tex_id, kn_th);
-//			m_dslt_kernel->setKernelArgTex3D(2, CL_MEM_WRITE_ONLY, mask_id, kn_th);
-//			m_dslt_kernel->setKernelArgConst(3, sizeof(float), (void*)(&thval), kn_th);
-//			m_dslt_kernel->setKernelArgConst(4, sizeof(int), (void*)(&ypitch), kn_th);
-//			m_dslt_kernel->setKernelArgConst(5, sizeof(int), (void*)(&zpitch), kn_th);
-//			m_dslt_kernel->execute(3, global_size, local_size, kn_th);
-//
-//			m_dslt_kernel->delTex(vd_id);
-//			m_dslt_kernel->delTex(stroke_tex_id);
-//			m_dslt_kernel->delTex(mask_id);
-//
-//			b->set_dirty(b->nmask(), true);
-//		}
-//
-//		// Reset the blend functions after MIP
-//		glBlendEquation(GL_FUNC_ADD);
-//		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-//		glDisable(GL_BLEND);
-//
-//		//enable depth test
-//		glEnable(GL_DEPTH_TEST);
-//	}
-//	
+	void VolumeRenderer::draw_mask_th(float thresh, bool orthographic_p)
+	{
+		if (!tex_ || tex_->nstroke() < 0 || tex_->nmask() < 0) return;
+
+		//sync sorting
+		Ray view_ray(Point(0.802, 0.267, 0.534), Vector(0.802, 0.267, 0.534));
+		tex_->set_sort_bricks();
+		vector<TextureBrick*>* bricks = tex_->get_sorted_bricks(view_ray);
+		if (!bricks || bricks->size() == 0)
+			return;
+
+		int out_bytes = tex_->nb(tex_->nmask());
+
+		vks::VulkanDevice* prim_dev = m_vulkan->devices[0];
+
+		VCalPipeline pipeline = prepareCalPipeline(prim_dev, CAL_MASK_THRESHOLD, out_bytes);
+		VkPipelineLayout pipelineLayout = m_vulkan->cal_shader_factory_->pipeline_[prim_dev].pipelineLayout;
+
+		VolCalShaderFactory::CalCompShaderBrickConst cal_const;
+
+		float normalized_th = tex_->nb(0) == 2 ? thresh / 65535.0f : thresh / 255.0f;
+		cal_const.loc0_scale_usemask = { 1.0f, 1.0f, normalized_th, 0.0f };
+
+		vkQueueWaitIdle(prim_dev->compute_queue);
+
+		VkCommandBuffer cmdbuf = prim_dev->createComputeCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+
+		for (unsigned int i = 0; i < bricks->size(); i++)
+		{
+			TextureBrick* b = (*bricks)[i];
+			
+			//size and sample rate
+			cal_const.loc1_dim_inv = { 1.0 / b->nx(), 1.0 / b->ny(), 1.0 / b->nz(), 1.0 / sampling_rate_ };
+
+			shared_ptr<vks::VTexture> masktex, reftex, stroketex;
+			std::vector<VkWriteDescriptorSet> descriptorWrites;
+
+			//load the texture
+			b->prevent_tex_deletion(true);
+
+			reftex = load_brick(prim_dev, 0, 0, bricks, i, VK_FILTER_NEAREST, false, 0, false);
+			if (!reftex) continue;
+			descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 0, &reftex->descriptor));
+
+			stroketex = load_brick_stroke(prim_dev, bricks, i, VK_FILTER_NEAREST, false, 0, true);
+			if (!stroketex) continue;
+			descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 1, &stroketex->descriptor));
+			
+			masktex = load_brick_mask(prim_dev, bricks, i, VK_FILTER_NEAREST, false, 0, true);
+			if (!masktex) continue;
+			descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetOutput(VK_NULL_HANDLE, &masktex->descriptor));
+
+			b->prevent_tex_deletion(false);
+
+			VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
+			VK_CHECK_RESULT(vkBeginCommandBuffer(cmdbuf, &cmdBufInfo));
+
+			vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.vkpipeline);
+
+			//layout transition to VK_IMAGE_LAYOUT_GENERAL
+			vks::tools::setImageLayout(
+				cmdbuf,
+				masktex->image,
+				VK_IMAGE_LAYOUT_UNDEFINED,
+				VK_IMAGE_LAYOUT_GENERAL,
+				masktex->subresourceRange);
+			masktex->descriptor.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+			if (!descriptorWrites.empty())
+			{
+				prim_dev->vkCmdPushDescriptorSetKHR(
+					cmdbuf,
+					VK_PIPELINE_BIND_POINT_COMPUTE,
+					pipelineLayout,
+					0,
+					descriptorWrites.size(),
+					descriptorWrites.data()
+				);
+			}
+
+			vkCmdPushConstants(
+				cmdbuf,
+				pipelineLayout,
+				VK_SHADER_STAGE_COMPUTE_BIT,
+				0,
+				sizeof(VolCalShaderFactory::CalCompShaderBrickConst),
+				&cal_const
+			);
+
+			uint32_t group_count_x = b->nx() / 4 + ((b->nx() % 4) > 0 ? 1 : 0);
+			uint32_t group_count_y = b->ny() / 4 + ((b->ny() % 4) > 0 ? 1 : 0);
+			uint32_t group_count_z = b->nz() / 4 + ((b->nz() % 4) > 0 ? 1 : 0);
+
+			vkCmdDispatch(cmdbuf, group_count_x, group_count_y, group_count_z);
+
+			vkEndCommandBuffer(cmdbuf);
+
+			VkSubmitInfo submitInfo = vks::initializers::submitInfo();
+			submitInfo.commandBufferCount = 1;
+			submitInfo.pCommandBuffers = &cmdbuf;
+
+			VkFenceCreateInfo fenceInfo = vks::initializers::fenceCreateInfo(VK_FLAGS_NONE);
+			VkFence fence;
+			VK_CHECK_RESULT(vkCreateFence(prim_dev->logicalDevice, &fenceInfo, nullptr, &fence));
+
+			// Submit to the queue
+			VK_CHECK_RESULT(vkQueueSubmit(prim_dev->compute_queue, 1, &submitInfo, fence));
+			// Wait for the fence to signal that command buffer has finished executing
+			VK_CHECK_RESULT(vkWaitForFences(prim_dev->logicalDevice, 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
+
+			vkDestroyFence(prim_dev->logicalDevice, fence, nullptr);
+		}
+
+		vkFreeCommandBuffers(prim_dev->logicalDevice, prim_dev->compute_commandPool, 1, &cmdbuf);
+
+	}
+	
 //	//type: 0-initial; 1-diffusion-based growing; 2-masked filtering
 //	//paint_mode: 1-select; 2-append; 3-erase; 4-diffuse; 5-flood; 6-clear; 7-all;
 //	//			  11-posterize

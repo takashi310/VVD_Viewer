@@ -46,6 +46,7 @@ namespace FLIVR
 	#define CAL_APPLYMASKINV	6	//apply the inverted mask
 	#define CAL_APPLYMASKINV2	7	//apply the inverted mask
 	#define CAL_INTERSECTION_WITH_MASK	8	//minimum of two with mask
+	#define CAL_MASK_THRESHOLD	9	//minimum of two with mask
 
 	#define CAL_SAMPLER_NUM 4
 

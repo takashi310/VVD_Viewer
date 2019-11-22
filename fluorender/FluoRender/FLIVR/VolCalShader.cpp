@@ -45,7 +45,7 @@ namespace FLIVR
 	"#pragma optionNV(ifcvt none)\n" \
 	"#pragma optionNV(strict on)\n" \
 	"#pragma optionNV(unroll all)\n" \
-	"layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;\n" \
+	"layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;\n" 
 
 #define CAL_OUTPUTS \
 	"//CAL_INOUT\n" \
@@ -137,6 +137,14 @@ namespace FLIVR
 	"	vec4 c = vec4(c1.x*(1.0-c2.x));\n" \
 	"\n"
 
+#define CAL_BODY_MASK_THRESHOLD \
+	"	//CAL_BODY_MASK_THRESHOLD\n" \
+	"	if (c2.r > 0.0)\n" \
+	"	{\n" \
+	"		//CAL_RESULT\n" \
+	"		imageStore(outimg, ivec3(gl_GlobalInvocationID.xyz), vec4(c1.r >= ct.loc0.z ? 1.0 : 0.0));\n" \
+	"	}\n" \
+
 #define CAL_RESULT \
 	"	//CAL_RESULT\n" \
 	"	imageStore(outimg, ivec3(gl_GlobalInvocationID.xyz), c);\n" \
@@ -186,6 +194,7 @@ namespace FLIVR
 		case CAL_APPLYMASK:
 		case CAL_APPLYMASKINV:
 		case CAL_APPLYMASKINV2:
+		case CAL_MASK_THRESHOLD:
 			z << CAL_UNIFORMS_COMMON;
 			break;
 		case CAL_INTERSECTION_WITH_MASK:
@@ -223,10 +232,16 @@ namespace FLIVR
 			break;
 		case CAL_INTERSECTION_WITH_MASK:
 			z << CAL_BODY_INTERSECTION_WITH_MASK;
+		case CAL_MASK_THRESHOLD:
+			z << CAL_BODY_MASK_THRESHOLD;
 			break;
 		}
 
-		z << CAL_RESULT;
+		if (type_ != CAL_MASK_THRESHOLD)
+		{
+			z << CAL_RESULT;
+		}
+
 		z << CAL_TAIL;
 
 		s = z.str();
