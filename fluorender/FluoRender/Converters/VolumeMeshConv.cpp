@@ -236,13 +236,13 @@ void VolumeMeshConv::Convert()
 	int numtriangles = int(tri_list.size());
 	m_mesh->numvertices = numtriangles*3;
 	m_mesh->numtriangles = numtriangles;
-	m_mesh->vertices = (GLfloat*)malloc(sizeof(GLfloat) *
+	m_mesh->vertices = (float*)malloc(sizeof(float) *
 		3 * (m_mesh->numvertices + 1));
 	m_mesh->triangles = (GLMtriangle*)malloc(sizeof(GLMtriangle) *
 		m_mesh->numtriangles);
-	group->triangles = (GLuint*)malloc(sizeof(GLuint) * numtriangles);
+	group->triangles = (unsigned int*)malloc(sizeof(unsigned int) * numtriangles);
 
-	GLfloat* vertices = m_mesh->vertices;
+	float* vertices = m_mesh->vertices;
 	int numvertices = 1;
 	numtriangles = 0;
 	for (int n=0; n<(int)tri_list.size(); n++)
@@ -251,29 +251,29 @@ void VolumeMeshConv::Convert()
 
 		//copy data
 		//vertex 1
-		vertices[3*numvertices + 0] = GLfloat(tri.p[0].x());
-		vertices[3*numvertices + 1] = GLfloat(tri.p[0].y());
-		vertices[3*numvertices + 2] = GLfloat(tri.p[0].z());
+		vertices[3*numvertices + 0] = float(tri.p[0].x());
+		vertices[3*numvertices + 1] = float(tri.p[0].y());
+		vertices[3*numvertices + 2] = float(tri.p[0].z());
 		//triangle
 		m_mesh->triangles[numtriangles].vindices[0] = numvertices;
 		numvertices++;
 		//vertex 2
-		vertices[3*numvertices + 0] = GLfloat(tri.p[1].x());
-		vertices[3*numvertices + 1] = GLfloat(tri.p[1].y());
-		vertices[3*numvertices + 2] = GLfloat(tri.p[1].z());
+		vertices[3*numvertices + 0] = float(tri.p[1].x());
+		vertices[3*numvertices + 1] = float(tri.p[1].y());
+		vertices[3*numvertices + 2] = float(tri.p[1].z());
 		//triangle
 		m_mesh->triangles[numtriangles].vindices[1] = numvertices;
 		numvertices++;
 		//vertex 3
-		vertices[3*numvertices + 0] = GLfloat(tri.p[2].x());
-		vertices[3*numvertices + 1] = GLfloat(tri.p[2].y());
-		vertices[3*numvertices + 2] = GLfloat(tri.p[2].z());
+		vertices[3*numvertices + 0] = float(tri.p[2].x());
+		vertices[3*numvertices + 1] = float(tri.p[2].y());
+		vertices[3*numvertices + 2] = float(tri.p[2].z());
 		//triangle
 		m_mesh->triangles[numtriangles].vindices[2] = numvertices;
 		numvertices++;
 
 		//group
-		group->triangles[group->numtriangles++] = (GLint)numtriangles;
+		group->triangles[group->numtriangles++] = (unsigned int)numtriangles;
 		numtriangles++;
 	}
 	

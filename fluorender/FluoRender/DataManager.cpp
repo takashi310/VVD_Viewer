@@ -3299,10 +3299,10 @@ MeshData *VolumeData::ExportMeshMask()
 //	vtkIdType fnum = faces->GetNumberOfCells();
 //
 //	GLMmodel *model = (GLMmodel*)malloc(sizeof(GLMmodel));
-//	GLfloat *verts = (GLfloat*)malloc(sizeof(GLfloat)*vnum*3);
-//	GLfloat *norms = (GLfloat*)malloc(sizeof(GLfloat)*vnum*3);
+//	float *verts = (float*)malloc(sizeof(float)*vnum*3);
+//	float *norms = (float*)malloc(sizeof(float)*vnum*3);
 //	GLMtriangle *tris = (GLMtriangle*)malloc(sizeof(GLMtriangle)*fnum);
-//	GLuint *gtris = (GLuint*)malloc(sizeof(GLuint)*fnum);
+//	unsigned int *gtris = (unsigned int*)malloc(sizeof(unsigned int)*fnum);
 //
 //	#pragma omp parallel
 //	{
@@ -3311,9 +3311,9 @@ MeshData *VolumeData::ExportMeshMask()
 //		{
 //			double v[3];
 //			points->GetPoint(i, v);
-//			verts[3*i  ] = (GLfloat)v[0];
-//			verts[3*i+1] = (GLfloat)v[1];
-//			verts[3*i+2] = (GLfloat)v[2];
+//			verts[3*i  ] = (float)v[0];
+//			verts[3*i+1] = (float)v[1];
+//			verts[3*i+2] = (float)v[2];
 //			norms[3*i  ] = raw_normals[3*i  ];
 //			norms[3*i+1] = raw_normals[3*i+1];
 //			norms[3*i+2] = raw_normals[3*i+2];
@@ -3361,7 +3361,7 @@ MeshData *VolumeData::ExportMeshMask()
 //	model->position[0]   = 0.0;
 //	model->position[1]   = 0.0;
 //	model->position[2]   = 0.0;
-//	model->hastexture = GL_FALSE;
+//	model->hastexture = false;
 //	
 //	GLMgroup* group;
 //	group = (GLMgroup*)malloc(sizeof(GLMgroup));
@@ -3488,11 +3488,11 @@ int MeshData::Load(GLMmodel* mesh)
 	m_data->materials[0].emmissive[1] = 0.0;
 	m_data->materials[0].emmissive[2] = 0.0;
 	m_data->materials[0].emmissive[3] = 0.0;
-	m_data->materials[0].havetexture = GL_FALSE;
+	m_data->materials[0].havetexture = false;
 	m_data->materials[0].textureID = 0;
 
 	//bounds
-	GLfloat fbounds[6];
+	float fbounds[6];
 	glmBoundingBox(m_data, fbounds);
 	BBox bounds;
 	Point pmin(fbounds[0], fbounds[2], fbounds[4]);
@@ -3582,11 +3582,11 @@ int MeshData::Load(wxString &filename)
 	m_data->materials[0].emmissive[1] = 0.0;
 	m_data->materials[0].emmissive[2] = 0.0;
 	m_data->materials[0].emmissive[3] = 0.0;
-	m_data->materials[0].havetexture = GL_FALSE;
+	m_data->materials[0].havetexture = false;
 	m_data->materials[0].textureID = 0;
 
 	//bounds
-	GLfloat fbounds[6];
+	float fbounds[6];
 	glmBoundingBox(m_data, fbounds);
 	BBox bounds;
 	Point pmin(fbounds[0], fbounds[2], fbounds[4]);
@@ -3622,29 +3622,29 @@ MeshData* MeshData::DeepCopy(MeshData &copy, bool use_default_settings, DataMana
 	model->vertices =  NULL;
 	if (model->numvertices)
 	{
-		model->vertices = (GLfloat*)malloc(sizeof(GLfloat) * 3 * (model->numvertices + 1));
-		memcpy(model->vertices, mi->vertices, sizeof(GLfloat) * 3 * (model->numvertices + 1));
+		model->vertices = (float*)malloc(sizeof(float) * 3 * (model->numvertices + 1));
+		memcpy(model->vertices, mi->vertices, sizeof(float) * 3 * (model->numvertices + 1));
 	}
 	model->numnormals = mi->numnormals;
 	model->normals = NULL;
 	if (model->numnormals)
 	{
-		model->normals = (GLfloat*)malloc(sizeof(GLfloat) * 3 * (model->numnormals + 1));
-		memcpy(model->normals, mi->normals, sizeof(GLfloat) * 3 * (model->numnormals + 1));
+		model->normals = (float*)malloc(sizeof(float) * 3 * (model->numnormals + 1));
+		memcpy(model->normals, mi->normals, sizeof(float) * 3 * (model->numnormals + 1));
 	}
 	model->numtexcoords = mi->numtexcoords;
 	model->texcoords = NULL;
 	if (model->numtexcoords)
 	{
-		model->texcoords = (GLfloat*)malloc(sizeof(GLfloat) * 2 * (model->numtexcoords + 1));
-		memcpy(model->texcoords, mi->texcoords, sizeof(GLfloat) * 2 * (model->numtexcoords + 1));
+		model->texcoords = (float*)malloc(sizeof(float) * 2 * (model->numtexcoords + 1));
+		memcpy(model->texcoords, mi->texcoords, sizeof(float) * 2 * (model->numtexcoords + 1));
 	}
 	model->numfacetnorms = mi->numfacetnorms;
 	model->facetnorms = NULL;
 	if (model->numfacetnorms)
 	{
-		model->facetnorms = (GLfloat*)malloc(sizeof(GLfloat) * 3 * (model->numfacetnorms + 1));
-		memcpy(model->facetnorms, mi->facetnorms, sizeof(GLfloat) * 3 * (model->numfacetnorms + 1));
+		model->facetnorms = (float*)malloc(sizeof(float) * 3 * (model->numfacetnorms + 1));
+		memcpy(model->facetnorms, mi->facetnorms, sizeof(float) * 3 * (model->numfacetnorms + 1));
 	}
 	model->numtriangles = mi->numtriangles;
 	model->triangles = NULL;
@@ -3703,8 +3703,8 @@ MeshData* MeshData::DeepCopy(MeshData &copy, bool use_default_settings, DataMana
 		og->next = NULL;
 		if (group->numtriangles)
 		{
-			og->triangles = (GLuint*)malloc(sizeof(GLuint) * group->numtriangles);
-			memcpy(og->triangles, group->triangles, sizeof(GLuint) * group->numtriangles);
+			og->triangles = (unsigned int*)malloc(sizeof(unsigned int) * group->numtriangles);
+			memcpy(og->triangles, group->triangles, sizeof(unsigned int) * group->numtriangles);
 		}
 		if (!model->groups) 
 		{
@@ -3752,11 +3752,11 @@ MeshData* MeshData::DeepCopy(MeshData &copy, bool use_default_settings, DataMana
 		md->m_data->materials[0].emmissive[1] = 0.0;
 		md->m_data->materials[0].emmissive[2] = 0.0;
 		md->m_data->materials[0].emmissive[3] = 0.0;
-		md->m_data->materials[0].havetexture = GL_FALSE;
+		md->m_data->materials[0].havetexture = false;
 		md->m_data->materials[0].textureID = 0;
 
 		//bounds
-		GLfloat fbounds[6];
+		float fbounds[6];
 		glmBoundingBox(md->m_data, fbounds);
 		BBox bounds;
 		Point pmin(fbounds[0], fbounds[2], fbounds[4]);
@@ -3895,11 +3895,11 @@ bool MeshData::UpdateModelSWC()
 	m_data->materials[0].emmissive[1] = 0.0;
 	m_data->materials[0].emmissive[2] = 0.0;
 	m_data->materials[0].emmissive[3] = 0.0;
-	m_data->materials[0].havetexture = GL_FALSE;
+	m_data->materials[0].havetexture = false;
 	m_data->materials[0].textureID = 0;
 
 	//bounds
-	GLfloat fbounds[6];
+	float fbounds[6];
 	glmBoundingBox(m_data, fbounds);
 	BBox bounds;
 	Point pmin(fbounds[0], fbounds[2], fbounds[4]);
@@ -4330,7 +4330,7 @@ int MeshData::GetLimitNumber()
 
 void MeshData::RecalcBounds()
 {
-	GLfloat fbounds[6];
+	float fbounds[6];
 	glmBoundingBox(m_data, fbounds);
 	BBox bounds;
 	Point pmin(fbounds[0], fbounds[2], fbounds[4]);
@@ -6214,13 +6214,6 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 				((BRKXMLReader *)reader)->loadMetadata(metadatapath.ToStdWstring());
 			}
 		}
-	}
-
-	//align data for compression if vtc is not supported
-	if (!GLEW_NV_texture_compression_vtc && m_compression)
-	{
-		reader->SetResize(1);
-		reader->SetAlignment(4);
 	}
 
 	int chan = reader->GetChanNum();

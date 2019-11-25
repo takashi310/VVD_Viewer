@@ -136,8 +136,8 @@ void SWCReader::AddSolidSphere(glm::vec3 center, double radius, unsigned int sub
 	int v_offset = m_model_verts.size();
 	m_model_verts.resize(v_offset + vertices.size()*3);
 	m_model_norms.resize(v_offset + vertices.size()*3);
-	vector<GLfloat>::iterator v_ite = m_model_verts.begin() + v_offset;
-	vector<GLfloat>::iterator n_ite = m_model_norms.begin() + v_offset;
+	vector<float>::iterator v_ite = m_model_verts.begin() + v_offset;
+	vector<float>::iterator n_ite = m_model_norms.begin() + v_offset;
 	for (int i = 0; i < vertices.size(); i++)
 	{
 		*v_ite++ = vertices[i].x + center.x;
@@ -150,7 +150,7 @@ void SWCReader::AddSolidSphere(glm::vec3 center, double radius, unsigned int sub
 
 	int t_offset = m_model_tris.size();
 	m_model_tris.resize(t_offset + triangles.size()*3);
-	vector<GLuint>::iterator t_ite = m_model_tris.begin() + t_offset;
+	vector<unsigned int>::iterator t_ite = m_model_tris.begin() + t_offset;
 	for (int i = 0; i < triangles.size(); i++)
 	{
 		*t_ite++ = triangles[i][0] + v_offset/3;
@@ -170,9 +170,9 @@ void SWCReader::AddSolidCylinder(glm::vec3 p1, glm::vec3 p2, double radius1, dou
 
 	float const S = 1./(float)sectors;
 
-	vector<GLfloat> vertices;
-	vector<GLfloat> normals;
-	vector<GLuint> triangles;
+	vector<float> vertices;
+	vector<float> normals;
+	vector<unsigned int> triangles;
 
 	if (m_before_cy_subdiv == -1 || subdiv != m_before_cy_subdiv)
 	{
@@ -180,8 +180,8 @@ void SWCReader::AddSolidCylinder(glm::vec3 p1, glm::vec3 p2, double radius1, dou
 		normals.resize(2*sectors*3);
 		triangles.resize(2*sectors*3);
 
-		vector<GLfloat>::iterator v = vertices.begin();
-		vector<GLfloat>::iterator n = normals.begin();
+		vector<float>::iterator v = vertices.begin();
+		vector<float>::iterator n = normals.begin();
 		for(int s = 0; s < sectors; s++) {
 			float const x = cos(2*M_PI * s * S);
 			float const y = sin(2*M_PI * s * S);
@@ -207,7 +207,7 @@ void SWCReader::AddSolidCylinder(glm::vec3 p1, glm::vec3 p2, double radius1, dou
 			*n++ = 0.0;
 		}
 
-		std::vector<GLuint>::iterator i = triangles.begin();
+		std::vector<unsigned int>::iterator i = triangles.begin();
 		int s;
 		for(s = 0; s < sectors-1; s++) {
 			*i++ = s;
@@ -239,8 +239,8 @@ void SWCReader::AddSolidCylinder(glm::vec3 p1, glm::vec3 p2, double radius1, dou
 		triangles = m_cylinder_tris_cache;
 	}
 
-	vector<GLfloat>::iterator v = vertices.begin();
-	vector<GLfloat>::iterator n = normals.begin();
+	vector<float>::iterator v = vertices.begin();
+	vector<float>::iterator n = normals.begin();
 	double nz = (radius1 - radius2) / (half_length*2.0);
 	double nd = sqrt(1.0 + nz*nz);
 	nz /= nd;
@@ -276,10 +276,10 @@ void SWCReader::AddSolidCylinder(glm::vec3 p1, glm::vec3 p2, double radius1, dou
 	int v_offset = m_model_verts.size();
 	m_model_verts.resize(v_offset + vertices.size());
 	m_model_norms.resize(v_offset + vertices.size());
-	vector<GLfloat>::iterator mv_ite = m_model_verts.begin() + v_offset;
-	vector<GLfloat>::iterator mn_ite = m_model_norms.begin() + v_offset;
-	vector<GLfloat>::iterator v_ite = vertices.begin();
-	vector<GLfloat>::iterator n_ite = normals.begin();
+	vector<float>::iterator mv_ite = m_model_verts.begin() + v_offset;
+	vector<float>::iterator mn_ite = m_model_norms.begin() + v_offset;
+	vector<float>::iterator v_ite = vertices.begin();
+	vector<float>::iterator n_ite = normals.begin();
 	for (int i = 0; i < vertices.size()/3; i++)
 	{
 		*mv_ite++ = *v_ite++ + center.x;
@@ -292,8 +292,8 @@ void SWCReader::AddSolidCylinder(glm::vec3 p1, glm::vec3 p2, double radius1, dou
 
 	int t_offset = m_model_tris.size();
 	m_model_tris.resize(t_offset + triangles.size());
-	vector<GLuint>::iterator mt_ite = m_model_tris.begin() + t_offset;
-	vector<GLuint>::iterator t_ite = triangles.begin();
+	vector<unsigned int>::iterator mt_ite = m_model_tris.begin() + t_offset;
+	vector<unsigned int>::iterator t_ite = triangles.begin();
 	for (int i = 0; i < triangles.size()/3; i++)
 	{
 		*mt_ite++ = *t_ite++ + v_offset/3;
@@ -304,7 +304,7 @@ void SWCReader::AddSolidCylinder(glm::vec3 p1, glm::vec3 p2, double radius1, dou
 	return;
 }
 
-void SWCReader::RotateVertices(vector<GLfloat> &vertices, glm::vec3 center, GLfloat angle, glm::vec3 axis)
+void SWCReader::RotateVertices(vector<float> &vertices, glm::vec3 center, float angle, glm::vec3 axis)
 {
 	double c = cos(angle);
 	double s = sin(angle);
@@ -314,7 +314,7 @@ void SWCReader::RotateVertices(vector<GLfloat> &vertices, glm::vec3 center, GLfl
 	double dz = axis.z / d;
 	double tx, ty, tz;
 
-	GLuint i;
+	unsigned int i;
 	int numvertices = vertices.size()/3;
 	double mat[9] =
 	{dx*dx*(1-c)+c,    dx*dy*(1-c)-dz*s, dx*dz*(1-c)+dy*s,
@@ -325,15 +325,15 @@ void SWCReader::RotateVertices(vector<GLfloat> &vertices, glm::vec3 center, GLfl
 		tx = vertices[3 * i + 0] - center.x;
 		ty = vertices[3 * i + 1] - center.y;
 		tz = vertices[3 * i + 2] - center.z;
-		vertices[3 * i + 0] = GLfloat(
+		vertices[3 * i + 0] = float(
 			mat[0]*tx +
 			mat[1]*ty +
 			mat[2]*tz);
-		vertices[3 * i + 1] = GLfloat(
+		vertices[3 * i + 1] = float(
 			mat[3]*tx +
 			mat[4]*ty +
 			mat[5]*tz);
-		vertices[3 * i + 2] = GLfloat(
+		vertices[3 * i + 2] = float(
 			mat[6]*tx +
 			mat[7]*ty +
 			mat[8]*tz);
@@ -383,16 +383,16 @@ GLMmodel *SWCReader::GenerateSolidModel(double def_r, double r_scale, unsigned i
 	}
 
 	GLMmodel *model = (GLMmodel*)malloc(sizeof(GLMmodel));
-	GLfloat *verts = (GLfloat*)malloc(sizeof(GLfloat)*m_model_verts.size());
-	GLfloat *norms = (GLfloat*)malloc(sizeof(GLfloat)*m_model_norms.size());
+	float *verts = (float*)malloc(sizeof(float)*m_model_verts.size());
+	float *norms = (float*)malloc(sizeof(float)*m_model_norms.size());
 	GLMtriangle *tris = (GLMtriangle*)malloc(sizeof(GLMtriangle)*m_model_tris.size()/3);
-	GLuint *gtris = (GLuint*)malloc(sizeof(GLuint)*m_model_tris.size()/3);
+	unsigned int *gtris = (unsigned int*)malloc(sizeof(unsigned int)*m_model_tris.size()/3);
 
-	memcpy(verts, m_model_verts.data(), sizeof(GLfloat)*m_model_verts.size());
-	memcpy(norms, m_model_norms.data(), sizeof(GLfloat)*m_model_norms.size());
+	memcpy(verts, m_model_verts.data(), sizeof(float)*m_model_verts.size());
+	memcpy(norms, m_model_norms.data(), sizeof(float)*m_model_norms.size());
 	
 	int numtris = m_model_tris.size()/3;
-	vector<GLuint>::iterator t_ite = m_model_tris.begin();
+	vector<unsigned int>::iterator t_ite = m_model_tris.begin();
 	for (int i = 0; i < numtris; i++)
 	{
 		tris[i].vindices[0] = *t_ite;
@@ -425,7 +425,7 @@ GLMmodel *SWCReader::GenerateSolidModel(double def_r, double r_scale, unsigned i
 	model->position[0]   = 0.0;
 	model->position[1]   = 0.0;
 	model->position[2]   = 0.0;
-	model->hastexture = GL_FALSE;
+	model->hastexture = false;
 	
 	GLMgroup* group;
 	group = (GLMgroup*)malloc(sizeof(GLMgroup));

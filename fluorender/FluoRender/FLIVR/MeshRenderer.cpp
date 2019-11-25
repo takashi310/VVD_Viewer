@@ -654,7 +654,7 @@ namespace FLIVR
 			update_ = false;
 		}
 
-		bool tex = data_->hastexture == GL_TRUE;
+		bool tex = data_->hastexture;
 
 		MeshPipeline pipeline = prepareMeshPipeline(device_, 0, MSHRENDER_BLEND_DISABLE, tex);
 		VkPipelineLayout pipelineLayout = m_vulkan->msh_shader_factory_->pipeline_[device_].pipelineLayout;
@@ -899,7 +899,7 @@ namespace FLIVR
 			update_ = false;
 		}
 
-		bool tex = data_->hastexture == GL_TRUE;
+		bool tex = data_->hastexture;
 
 		MeshPipeline pipeline = prepareMeshPipeline(device_, 0, MSHRENDER_BLEND_DISABLE, tex, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_LINE);
 		VkPipelineLayout pipelineLayout = m_vulkan->msh_shader_factory_->pipeline_[device_].pipelineLayout;
@@ -1117,7 +1117,7 @@ namespace FLIVR
 			update_ = false;
 		}
 
-		bool tex = data_->hastexture == GL_TRUE;
+		bool tex = data_->hastexture;
 
 		MeshPipeline pipeline = prepareMeshPipeline(device_, 1, MSHRENDER_BLEND_DISABLE, false);
 		VkPipelineLayout pipelineLayout = m_vulkan->msh_shader_factory_->pipeline_[device_].pipelineLayout;

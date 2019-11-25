@@ -29,7 +29,7 @@
 #ifndef SLIVR_MultiVolumeRenderer_h
 #define SLIVR_MultiVolumeRenderer_h
 
-#include "GL/glew.h"
+//#include "GL/glew.h"
 #include "BBox.h"
 #include "Plane.h"
 #include "Texture.h"

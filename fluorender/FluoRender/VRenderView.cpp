@@ -38,7 +38,6 @@ DEALINGS IN THE SOFTWARE.
 #include <algorithm>
 #include <limits>
 #include <unordered_set>
-#include "GL/mywgl.h"
 #include "png_resource.h"
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -10519,7 +10518,7 @@ void VRenderVulkanView::DrawFrame()
 	ny = GetSize().y;
 	glm::mat4 proj_mat = glm::ortho(float(0), float(nx), float(0), float(ny));
 
-	GLfloat line_width = 1.0f;
+	float line_width = 1.0f;
 
 	vector<Vulkan2dRender::Vertex> vertex;
 	vector<uint32_t> index = { 0,1,2,3,0 };
@@ -14266,7 +14265,7 @@ void VRenderVulkanView::DrawTraces()
 		{
 			double width = m_text_renderer->GetSize()/3.0;
 			glEnable(GL_LINE_SMOOTH);
-			glLineWidth(GLfloat(width));
+			glLineWidth(float(width));
 			glEnable(GL_DEPTH_TEST);
 			glEnable(GL_BLEND);
 			glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
@@ -15667,73 +15666,10 @@ wxPanel(parent, id, pos, size, style),
 
 	wxString name = wxString::Format("Render View:%d", m_id++);
 	this->SetName(name);
-	// this list takes care of both pixel and context attributes (no custom edits of wx is preferred)
-	//render view/////////////////////////////////////////////////
-	int red_bit = 8;
-	int green_bit = 8;
-	int blue_bit = 8;
-	int alpha_bit = 8;
-	int depth_bit = 24;
-	int samples = 0;
-	int gl_major_ver = 4;
-	int gl_minor_ver = 4;
-	int gl_profile_mask = WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
-	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-	if (vr_frame && vr_frame->GetSettingDlg())
-	{
-		red_bit = vr_frame->GetSettingDlg()->GetRedBit();
-		green_bit = vr_frame->GetSettingDlg()->GetGreenBit();
-		blue_bit = vr_frame->GetSettingDlg()->GetBlueBit();
-		alpha_bit = vr_frame->GetSettingDlg()->GetAlphaBit();
-		depth_bit = vr_frame->GetSettingDlg()->GetDepthBit();
-		samples = vr_frame->GetSettingDlg()->GetSamples();
-		gl_major_ver = vr_frame->GetSettingDlg()->GetGLMajorVer();
-		gl_minor_ver = vr_frame->GetSettingDlg()->GetGLMinorVer();
-		gl_profile_mask = vr_frame->GetSettingDlg()->GetGLProfileMask();
-	}
-	int attriblist[] =
-	{
-		//pixel properties
-		WX_GL_MIN_RED, red_bit,
-		WX_GL_MIN_GREEN, green_bit,
-		WX_GL_MIN_BLUE, blue_bit,
-		WX_GL_MIN_ALPHA, alpha_bit,
-		WX_GL_DEPTH_SIZE, depth_bit,
-		WX_GL_DOUBLEBUFFER,
-		WX_GL_SAMPLE_BUFFERS, 1,
-		WX_GL_SAMPLES, samples,
-		// context properties.
-		WX_GL_CORE_PROFILE,
-		WX_GL_MAJOR_VERSION, gl_major_ver,
-		WX_GL_MINOR_VERSION, gl_minor_ver,
-		0, 0
-	};
+
 	m_glview = new VRenderVulkanView(frame, this, wxID_ANY);
 	m_glview->SetCanFocus(false);
-	//m_view_sizer->Add(m_glview, 1, wxEXPAND);
-#ifdef _WIN32
-	//example Pixel format descriptor detailing each part
-	//PIXELFORMATDESCRIPTOR pfd = { 
-	// sizeof(PIXELFORMATDESCRIPTOR),  //  size of this pfd  
-	// 1,                     // version number  
-	// PFD_DRAW_TO_WINDOW |   // support window  
-	// PFD_SUPPORT_OPENGL |   // support OpenGL  
-	// PFD_DOUBLEBUFFER,      // double buffered  
-	// PFD_TYPE_RGBA,         // RGBA type  
-	// 24,                    // 24-bit color depth  
-	// 0, 0, 0, 0, 0, 0,      // color bits ignored  
-	// 0,                     // no alpha buffer  
-	// 0,                     // shift bit ignored  
-	// 0,                     // no accumulation buffer  
-	// 0, 0, 0, 0,            // accum bits ignored  
-	// 32,                    // 32-bit z-buffer      
-	// 0,                     // no stencil buffer  
-	// 0,                     // no auxiliary buffer  
-	// PFD_MAIN_PLANE,        // main layer  
-	// 0,                     // reserved  
-	// 0, 0, 0                // layer masks ignored  
-	// }; 
-#endif
+
 	CreateBar();
 	if (m_glview) {
 		m_glview->SetSBText("µm");

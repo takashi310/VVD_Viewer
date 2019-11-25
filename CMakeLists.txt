@@ -94,9 +94,9 @@ elseif(${CMAKE_BUILD_TYPE} MATCHES "Debug")
 endif()
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 set(wxWidgets_EXCLUDE_COMMON_LIBRARIES TRUE)
-find_package(wxWidgets COMPONENTS core base aui html xml net adv gl stc scintilla png tiff regex expat zlib REQUIRED)
+find_package(wxWidgets COMPONENTS core base aui html xml net adv stc scintilla png tiff regex expat zlib REQUIRED)
 else()
-find_package(wxWidgets COMPONENTS core base aui html xml net adv gl stc REQUIRED)
+find_package(wxWidgets COMPONENTS core base aui html xml net adv stc REQUIRED)
 endif()
 
 include(${wxWidgets_USE_FILE})
@@ -157,15 +157,6 @@ file(GLOB nrrdhdr fluorender/teem/Nrrd/*.h)
 add_library(TEEM_OBJ OBJECT
       ${airsrc} ${hestsrc} ${nrrdsrc} ${biffsrc}
       ${airhdr} ${hesthdr} ${nrrdhdr} ${biffhdr})
-
-#glew
-include_directories(${VVDViewer_SOURCE_DIR}/fluorender/glew)
-include_directories(${VVDViewer_SOURCE_DIR}/fluorender/glew/GL)
-file(GLOB gl_srcs fluorender/glew/*.c)
-file(GLOB gl_hdrs1 fluorender/glew/*.h)
-file(GLOB gl_hdrs2 fluorender/glew/GL/*.h)
-add_library(GLEW_OBJ OBJECT
-      ${gl_srcs} ${gl_hdrs1} ${gl_hdrs2})
 
 #pole
 include_directories(${VVDViewer_SOURCE_DIR}/fluorender/pole)
@@ -291,19 +282,6 @@ else()
   file(GLOB hdf5_LIBRARIES ${VVDViewer_SOURCE_DIR}/fluorender/hdf5/mac/lib/*.a)
 endif()
 
-#OpenCL
-if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-  include_directories(${VVDViewer_SOURCE_DIR}/fluorender/OpenCL/include)
-  if(${ARCHITECTURE} MATCHES 64)
-    file(GLOB OPENCL_LIBRARIES ${VVDViewer_SOURCE_DIR}/fluorender/OpenCL/lib/x86_64/*.lib)
-  elseif(${ARCHITECTURE} MATCHES 32)
-    file(GLOB OPENCL_LIBRARIES ${VVDViewer_SOURCE_DIR}/fluorender/OpenCL/lib/x86/*.lib)
-  endif()
-elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-#  include(${CMAKE_SOURCE_DIR}/FindOpenCL.cmake)
-#  include_directories( ${OPENCL_INCLUDE_DIRS})  
-endif()
-
 #freetype
 include_directories(${VVDViewer_SOURCE_DIR}/fluorender/freetype/include)
 if (WIN32)
@@ -383,7 +361,6 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 	    $<TARGET_OBJECTS:NV_OBJ>
 	    $<TARGET_OBJECTS:FORMATS_OBJ>
 	    $<TARGET_OBJECTS:TRACKING_OBJ>
-	    $<TARGET_OBJECTS:GLEW_OBJ>
 	    $<TARGET_OBJECTS:POLE_OBJ>
 	    $<TARGET_OBJECTS:TEEM_OBJ>
 		$<TARGET_OBJECTS:PLUGINS_OBJ>)
@@ -403,7 +380,6 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 		$<TARGET_OBJECTS:NV_OBJ>
 		$<TARGET_OBJECTS:FORMATS_OBJ>
 		$<TARGET_OBJECTS:TRACKING_OBJ>
-		$<TARGET_OBJECTS:GLEW_OBJ>
 		$<TARGET_OBJECTS:POLE_OBJ>
 		$<TARGET_OBJECTS:TEEM_OBJ>
 		$<TARGET_OBJECTS:PLUGINS_OBJ>
@@ -452,7 +428,6 @@ elseif(NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 					  NV_OBJ
 					  FORMATS_OBJ
 					  TRACKING_OBJ
-					  GLEW_OBJ
 					  POLE_OBJ
 					  TEEM_OBJ
 					  PLUGINS_OBJ
@@ -538,9 +513,7 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	   ${TIFF_LIBRARIES}
 	   ${OPENSSL_LIBRARIES} ws2_32.lib Wldap32.lib
 	   ${ffmpeg_LIBRARIES} Secur32.lib  Normaliz.lib crypt32.lib Bcrypt.lib
-	   ${OPENGL_LIBRARIES}
 	   ${Boost_LIBRARIES}
-	   ${OPENCL_LIBRARIES}
 	   ${FREETYPE_LIBRARIES}
 	   ${wxWidgets_LIBRARIES}
 	   ${hdf5_LIBRARIES}
@@ -559,9 +532,7 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 	   ${OPENSSL_LIBRARIES}
 	   ${SSL_DEP_LIBRARIES}
 	   ${ffmpeg_LIBRARIES}
-	   ${OPENGL_LIBRARIES}
 	   ${Boost_LIBRARIES}
-	   ${OPENCL_LIBRARIES}
 	   ${FREETYPE_LIBRARIES}
 	   ${wxWidgets_LIBRARIES}
 	   ${hdf5_LIBRARIES}
