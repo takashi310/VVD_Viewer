@@ -1159,7 +1159,7 @@ bool TIFReader::getMetaData(uint64_t loc)
 //	delete[] buffer;
 //}
 
-void TIFReader::getDisplayRanges(int first) throw(ios_base::failure) {
+void TIFReader::getDisplayRanges(int first) {
 	int n = m_page_info.ull_metadata_byte_counts[first] / 8;
 	m_page_info.displayRanges.resize(n);
 	for (int i = 0; i < n; i++)
@@ -1220,13 +1220,13 @@ void TIFReader::getDisplayRanges(int first) throw(ios_base::failure) {
 //	throw  ios_base::failure("TiffDecoder::error");
 //}
 
-void TIFReader::skipUnknownType(int first, int last) throw(ios_base::failure) {
-	byte* buffer = new byte[m_page_info.ull_metadata_byte_counts[first]];
+void TIFReader::skipUnknownType(int first, int last) {
+	char* buffer = new char[m_page_info.ull_metadata_byte_counts[first]];
 	for (int i = first; i <= last; i++) {
 		int len = m_page_info.ull_metadata_byte_counts[i];
 		if (len > m_page_info.ull_metadata_byte_counts[first]) {
 			delete[] buffer;
-			buffer = new byte[len];
+			buffer = new char[len];
 		}
 		tiff_stream.read((char*)buffer, len);
 	}
