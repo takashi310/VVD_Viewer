@@ -950,7 +950,7 @@ namespace FLIVR
 	"			//VRAY_RASTER_BLEND_NOMASK_DMAP\n" \
 	"			vec4 cmask = texture(tex2, t.stp); //get mask value\n" \
 	"			float intpo = (vec4(1.0-cmask.x)*c*l.w).r;\n" \
-	"			c = vec4(vec3(intpo>0.05?cspv.z:prevz), 1.0);\n" \
+	"			c = intpo > 0.05 ? vec4(vec3(cspv.z), 1.0) : vec4(0.0);\n" \
 	"			prevz = intpo > 0.05 ? cspv.z : prevz;\n" \
 	"\n"
 
@@ -976,7 +976,7 @@ namespace FLIVR
 	"			//VRAY_RASTER_BLEND_MASK_DMAP\n" \
 	"			vec4 cmask = texture(tex2, t.stp); //get mask value\n" \
 	"			float intpo = (vec4(cmask.x)*c*l.w).r;\n" \
-	"			c = vec4(vec3(intpo>0.05?cspv.z:prevz), 1.0);\n" \
+	"			c = intpo > 0.05 ? vec4(vec3(cspv.z), 1.0) : vec4(0.0);\n" \
 	"			prevz = intpo > 0.05 ? cspv.z : prevz;\n" \
 	"\n"
 
