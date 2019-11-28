@@ -822,6 +822,9 @@ namespace vks
 		bool free_sampler;
 		bool is_swapchain_images;
 
+		VkDeviceSize memsize;
+		unsigned char* mapped;
+
 		VTexture()
 		{
 			sampler = VK_NULL_HANDLE;

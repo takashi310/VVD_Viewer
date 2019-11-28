@@ -91,7 +91,7 @@ namespace vks
 				//save before deletion
 				return_brick(tex_pool[j]);
 				if (tex_pool[j].comp >= 0 && tex_pool[j].comp < TEXTURE_MAX_COMPONENTS && tex_pool[j].tex->bytes > 0)
-					available_mem += (VkDeviceSize)tex_pool[j].tex->w*tex_pool[j].tex->h*tex_pool[j].tex->d*tex_pool[j].tex->bytes/1.04e6;
+					available_mem += tex_pool[j].tex->memsize / 1.04e6;
 				tex_pool.erase(tex_pool.begin()+j);
 			}
 		}
@@ -205,7 +205,7 @@ namespace vks
 				texp.delayed_del = true;
 				comp = texp.comp;
 				deleted.push_back(bd_undisp[i].index);
-				double released_mem = (VkDeviceSize)texp.tex->w*texp.tex->h*texp.tex->d*texp.tex->bytes/1.04e6;
+				double released_mem = texp.tex->memsize / 1.04e6;
 				est_avlb_mem += released_mem;
 				if (est_avlb_mem >= new_mem)
 					break;
@@ -246,7 +246,7 @@ namespace vks
 						texp.delayed_del = true;
 						comp = texp.comp;
 						deleted.push_back(bd_others[i].index);
-						double released_mem = (VkDeviceSize)texp.tex->w*texp.tex->h*texp.tex->d*texp.tex->bytes/1.04e6;
+						double released_mem = texp.tex->memsize / 1.04e6;
 						est_avlb_mem += released_mem;
 						if (est_avlb_mem >= new_mem)
 							break;
@@ -297,10 +297,12 @@ namespace vks
 			vks::TexParam p = vks::TexParam(comp, ret);
 			p.brick = b;
 			tex_pool.push_back(p);
-			available_mem -= (VkDeviceSize)ret->w*ret->h*ret->d*ret->bytes/1.04e6;
-		}
+			available_mem -= ret->memsize / 1.04e6;
 
-		return int(tex_pool.size()) - 1;
+			return int(tex_pool.size()) - 1;
+		}
+		else
+			return -1;
 	}
 
 	void VulkanDevice::createPipelineCache()
@@ -722,13 +724,18 @@ namespace vks
 		ret->bytes = FormatTexelSize(format);
 		ret->mipLevels = 1;
 		ret->format = format;
-		ret->usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+		ret->usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 		ret->image = VK_NULL_HANDLE;
 		ret->deviceMemory = VK_NULL_HANDLE;
 		ret->sampler = VK_NULL_HANDLE;
 		ret->view = VK_NULL_HANDLE;
 		ret->device = this;
 
+		if (format != VK_FORMAT_BC4_SNORM_BLOCK && format != VK_FORMAT_BC4_UNORM_BLOCK)
+			ret->usage |= VK_IMAGE_USAGE_STORAGE_BIT;
+		else
+			ret->bytes = 1;
+		
 		// Format support check
 		VkFormatProperties formatProperties;
 		vkGetPhysicalDeviceFormatProperties(ret->device->physicalDevice, ret->format, &formatProperties);
@@ -775,6 +782,7 @@ namespace vks
 		VkMemoryRequirements memReqs = {};
 		vkGetImageMemoryRequirements(ret->device->logicalDevice, ret->image, &memReqs);
 		memAllocInfo.allocationSize = memReqs.size;
+		ret->memsize = memReqs.size;
 		memAllocInfo.memoryTypeIndex = ret->device->getMemoryType(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		VK_CHECK_RESULT(vkAllocateMemory(ret->device->logicalDevice, &memAllocInfo, nullptr, &ret->deviceMemory));
 		VK_CHECK_RESULT(vkBindImageMemory(ret->device->logicalDevice, ret->image, ret->deviceMemory, 0));
@@ -871,7 +879,7 @@ namespace vks
 		char dbgstr[50];
 		st_time = milliseconds_now();*/
 
-		VkDeviceSize texMemSize = (VkDeviceSize)tex->w * (VkDeviceSize)tex->h * (VkDeviceSize)tex->d * (VkDeviceSize)tex->bytes;
+		VkDeviceSize texMemSize = tex->memsize;
 
 		if (sync)
 			VK_CHECK_RESULT(vkQueueWaitIdle(transfer_queue));
@@ -881,47 +889,147 @@ namespace vks
 		//st_time = milliseconds_now();
 		
 		// Copy texture data into staging buffer
-		uint64_t poffset = (VkDeviceSize)offset.z * zpitch + (VkDeviceSize)offset.y * ypitch + offset.x * (VkDeviceSize)tex->bytes;
-		uint64_t dst_ypitch = (VkDeviceSize)tex->w * (VkDeviceSize)tex->bytes;
-		uint64_t dst_zpitch = (VkDeviceSize)tex->w * (VkDeviceSize)tex->h * (VkDeviceSize)tex->bytes;
-		unsigned char* dst = (unsigned char*)staging_buf.mapped;
-		unsigned char* src = (unsigned char*)data + poffset;
-
-		size_t nthreads = std::thread::hardware_concurrency();
-		if (nthreads > 8) nthreads = 8;
-		std::vector<std::thread> threads(nthreads);
-		int grain_size = tex->d / nthreads;
-		auto worker = [&zpitch, &dst_zpitch, &ypitch, &dst_ypitch](unsigned char* dst, unsigned char* src, int d, int texh) {
-			int xite = dst_ypitch / 4096;
-			unsigned char *src_p, *dst_p, *tmp_xsrc_p, *tmp_xdst_p;
-			for (uint32_t z = 0; z < d; z++)
-			{
-				src_p = src + (VkDeviceSize)z * zpitch;
-				dst_p = dst + (VkDeviceSize)z * dst_zpitch;
-				
-				for (uint32_t y = 0; y < texh; y++)
-				{
-					tmp_xsrc_p = src_p + (VkDeviceSize)y * ypitch;
-					tmp_xdst_p = dst_p + (VkDeviceSize)y * dst_ypitch;
-					for (int x = 0; x < xite - 1; x++)
-					{
-						memcpy(tmp_xdst_p, tmp_xsrc_p, 4096);
-						tmp_xdst_p += 4096;
-						tmp_xsrc_p += 4096;
-					}
-					memcpy(tmp_xdst_p, tmp_xsrc_p, dst_ypitch - 4096LL * (xite >= 1 ? xite - 1 : 0));
-				}
-			}
-		};
-		for (uint32_t i = 0; i < nthreads - 1; i++)
+		if (tex->format != VK_FORMAT_BC4_UNORM_BLOCK)
 		{
-			threads[i] = std::thread(worker, dst, src, grain_size, tex->h);
-			dst += grain_size * dst_zpitch;
-			src += grain_size * zpitch;
+			uint64_t poffset = (VkDeviceSize)offset.z * zpitch + (VkDeviceSize)offset.y * ypitch + offset.x * (VkDeviceSize)tex->bytes;
+			uint64_t dst_ypitch = (VkDeviceSize)tex->w * (VkDeviceSize)tex->bytes;
+			uint64_t dst_zpitch = (VkDeviceSize)tex->w * (VkDeviceSize)tex->h * (VkDeviceSize)tex->bytes;
+			unsigned char* dst = (unsigned char*)staging_buf.mapped;
+			unsigned char* src = (unsigned char*)data + poffset;
+
+			size_t nthreads = std::thread::hardware_concurrency();
+			if (nthreads > 8) nthreads = 8;
+			std::vector<std::thread> threads(nthreads);
+			int grain_size = tex->d / nthreads;
+			auto worker = [&zpitch, &dst_zpitch, &ypitch, &dst_ypitch](unsigned char* dst, unsigned char* src, int d, int texh) {
+				int xite = dst_ypitch / 4096;
+				unsigned char* src_p, * dst_p, * tmp_xsrc_p, * tmp_xdst_p;
+				for (uint32_t z = 0; z < d; z++)
+				{
+					src_p = src + (VkDeviceSize)z * zpitch;
+					dst_p = dst + (VkDeviceSize)z * dst_zpitch;
+
+					for (uint32_t y = 0; y < texh; y++)
+					{
+						tmp_xsrc_p = src_p + (VkDeviceSize)y * ypitch;
+						tmp_xdst_p = dst_p + (VkDeviceSize)y * dst_ypitch;
+						for (int x = 0; x < xite - 1; x++)
+						{
+							memcpy(tmp_xdst_p, tmp_xsrc_p, 4096);
+							tmp_xdst_p += 4096;
+							tmp_xsrc_p += 4096;
+						}
+						memcpy(tmp_xdst_p, tmp_xsrc_p, dst_ypitch - 4096LL * (xite >= 1 ? xite - 1 : 0));
+					}
+				}
+			};
+			for (uint32_t i = 0; i < nthreads - 1; i++)
+			{
+				threads[i] = std::thread(worker, dst, src, grain_size, tex->h);
+				dst += grain_size * dst_zpitch;
+				src += grain_size * zpitch;
+			}
+			threads.back() = std::thread(worker, dst, src, tex->d - grain_size * (nthreads - 1), tex->h);
+			for (auto&& i : threads) {
+				i.join();
+			}
 		}
-		threads.back() = std::thread(worker, dst, src, tex->d - grain_size * (nthreads - 1), tex->h);
-		for (auto&& i : threads) {
-			i.join();
+		else
+		{
+			uint64_t bnum_x = ((VkDeviceSize)tex->w % 4 > 0 ? (VkDeviceSize)tex->w / 4 + 1 : (VkDeviceSize)tex->w / 4);
+			uint64_t bnum_y = ((VkDeviceSize)tex->h % 4 > 0 ? (VkDeviceSize)tex->h / 4 + 1 : (VkDeviceSize)tex->h / 4);
+			uint64_t poffset = (VkDeviceSize)offset.z * zpitch + (VkDeviceSize)offset.y * ypitch + offset.x * (VkDeviceSize)tex->bytes;
+			uint64_t dst_ypitch = bnum_x * 8;
+			uint64_t dst_zpitch = bnum_y * dst_ypitch;
+			uint64_t w = tex->w;
+			uint64_t h = tex->h;
+			unsigned char* dst = (unsigned char*)staging_buf.mapped;
+			unsigned char* src = (unsigned char*)data + poffset;
+
+			size_t nthreads = std::thread::hardware_concurrency();
+			if (nthreads > 8) nthreads = 8;
+			std::vector<std::thread> threads(nthreads);
+			int grain_size = tex->d / nthreads;
+			
+			auto worker = [&zpitch, &dst_zpitch, &ypitch, &dst_ypitch, &w, &h](unsigned char* dst, unsigned char* src, int d, int bnum_y, int bnum_x) {
+				unsigned char buf[4096];
+				unsigned char block[16];
+				uint64_t count = 0;
+				unsigned char* src_p, * dst_p, * tmp_xsrc_p, * tmp_xdst_p;
+				for (uint32_t z = 0; z < d; z++)
+				{
+					src_p = src + (VkDeviceSize)z * zpitch;
+					dst_p = dst + (VkDeviceSize)z * dst_zpitch;
+
+					for (uint32_t y = 0; y < bnum_y; y++)
+					{
+						tmp_xsrc_p = src_p + (VkDeviceSize)y * ypitch * 4;
+						tmp_xdst_p = dst_p + (VkDeviceSize)y * dst_ypitch;
+						for (int x = 0; x < bnum_x; x++)
+						{
+							int bcount = 0;
+							uint8_t maxval = 0;
+							uint8_t minval = 255;
+							for (uint32_t by = 0; by < 4; by++)
+							{
+								for (uint32_t bx = 0; bx < 4; bx++)
+								{
+									if (x * 4 + bx < w && y * 4 + by < h)
+										block[bcount] = tmp_xsrc_p[by * ypitch + bx];
+									else
+										block[bcount] = block[bcount - 1];
+									if (maxval < block[bcount])
+										maxval = block[bcount];
+									if (minval > block[bcount])
+										minval = block[bcount];
+									bcount++;
+								}
+							}
+
+							uint64_t b = 0;
+							if (maxval > minval)
+							{
+								for (int i = 15; i >= 0; i--)
+								{
+									uint8_t id = (uint8_t)((double)(block[i] - minval) / (double)(maxval - minval) * 7.0 + 0.5);
+									if (id == 7)
+										id = 0;
+									else if (id == 0)
+										id = 1;
+									else
+										id = 7 - id + 1;
+									
+									if (i < 15)
+										b = b << 3;
+									b |= id;
+								}
+							}
+							else
+								b = b << 48;
+
+							b = b << 8;
+							b |= minval;
+							b = b << 8;
+							b |= maxval;
+
+							*((uint64_t*)tmp_xdst_p) = b;
+
+							tmp_xdst_p += 8;
+							tmp_xsrc_p += 4;
+						}
+					}
+				}
+			};
+			for (uint32_t i = 0; i < nthreads - 1; i++)
+			{
+				threads[i] = std::thread(worker, dst, src, grain_size, bnum_y, bnum_x);
+				dst += grain_size * dst_zpitch;
+				src += grain_size * zpitch;
+			}
+			threads.back() = std::thread(worker, dst, src, tex->d - grain_size * (nthreads - 1), bnum_y, bnum_x);
+			for (auto&& i : threads) {
+				i.join();
+			}
 		}
 
 		/*ed_time = milliseconds_now();
