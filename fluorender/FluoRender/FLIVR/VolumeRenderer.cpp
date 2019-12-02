@@ -4010,16 +4010,39 @@ namespace FLIVR
 		vector<TextureBrick*> *bricks_a = 0;
 		vector<TextureBrick*> *bricks_b = 0;
 
+		bool compression_this = false;
+		bool compression_a = false;
+		bool compression_b = false;
+
+		compression_this = compression_;
+		if (compression_)
+		{
+			m_vulkan->eraseBricksFromTexpools(bricks, 0);
+			compression_ = false;
+		}
+
 		bricks_a = vr_a->tex_->get_bricks();
 		if (vr_a)
 		{
 			vr_a->tex_->set_sort_bricks();
 			bricks_a = vr_a->tex_->get_sorted_bricks(view_ray);
+			compression_a = vr_a->compression_;
+			if (vr_a->compression_)
+			{
+				m_vulkan->eraseBricksFromTexpools(bricks_a, 0);
+				vr_a->compression_ = false;
+			}
 		}
 		if (vr_b)
 		{
 			vr_b->tex_->set_sort_bricks();
 			bricks_b = vr_b->tex_->get_sorted_bricks(view_ray);
+			compression_b = vr_b->compression_;
+			if (vr_b->compression_)
+			{
+				m_vulkan->eraseBricksFromTexpools(bricks_b, 0);
+				vr_b->compression_ = false;
+			}
 		}
 
 		int out_bytes = tex_->nb(0);
@@ -4185,6 +4208,21 @@ namespace FLIVR
 
 		vkFreeCommandBuffers(prim_dev->logicalDevice, prim_dev->compute_commandPool, 1, &cmdbuf);
 
+		if (compression_this)
+		{
+			m_vulkan->eraseBricksFromTexpools(bricks, 0);
+			compression_ = compression_this;
+		}
+		if (compression_a)
+		{
+			m_vulkan->eraseBricksFromTexpools(bricks_a, 0);
+			vr_a->compression_ = compression_a;
+		}
+		if (compression_b)
+		{
+			m_vulkan->eraseBricksFromTexpools(bricks_b, 0);
+			vr_b->compression_ = compression_b;
+		}
 	}
 
 	void VolumeRenderer::return_component(int c)

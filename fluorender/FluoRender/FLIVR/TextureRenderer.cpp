@@ -1611,7 +1611,7 @@ namespace FLIVR
 					result->descriptor.sampler = device->nearest_sampler;
 
 				void *texdata = brick->get_nrrd(c)->data;
-				device->UploadTexture3D(result, texdata, offset, ypitch, zpitch, !mem_swap_, semaphore, !swapped);
+				device->UploadTexture3D(result, texdata, offset, ypitch, zpitch, !mem_swap_ || semaphore == nullptr, semaphore, !swapped);
 				if (updated)
 					*updated = true;
 			}
@@ -1645,7 +1645,7 @@ namespace FLIVR
 					bool brkerror = false;
 					void *texdata = brick->tex_data_brk(c, NULL);
 					if (texdata)
-						device->UploadTexture(result, texdata, !mem_swap_, semaphore, !swapped);
+						device->UploadTexture(result, texdata, !mem_swap_ || semaphore == nullptr, semaphore, !swapped);
 					else
 						result.reset();
 					
@@ -1692,7 +1692,7 @@ namespace FLIVR
 						bool brkerror = false;
 						void *texdata = brick->tex_data_brk(c, NULL);
 						if (texdata)
-							device->UploadTexture(result, texdata, !mem_swap_, semaphore, !swapped);
+							device->UploadTexture(result, texdata, !mem_swap_ || semaphore == nullptr, semaphore, !swapped);
 						else
 							result.reset();
 						
@@ -1789,7 +1789,7 @@ namespace FLIVR
 				result->descriptor.sampler = device->nearest_sampler;
 
 			void* texdata = brick->get_nrrd(c)->data;
-			device->UploadTexture3D(result, texdata, offset, ypitch, zpitch, !mem_swap_, semaphore, !swapped);
+			device->UploadTexture3D(result, texdata, offset, ypitch, zpitch, !mem_swap_ || semaphore == nullptr, semaphore, !swapped);
 			
 			if (updated)
 				*updated = true;
