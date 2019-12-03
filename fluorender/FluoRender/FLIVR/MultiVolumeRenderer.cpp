@@ -745,7 +745,7 @@ namespace FLIVR
 
 					shared_ptr<vks::VTexture> brktex, msktex, lbltex;
 					vector<TextureBrick*> tempbv(1, b);
-					brktex = vr->load_brick(prim_dev, 0, 0, &tempbv, 0, rsettings[vr].filter, vr->compression_, stmode, false);
+					brktex = vr->load_brick(prim_dev, 0, 0, &tempbv, 0, rsettings[vr].filter, vr->compression_, stmode, false, nullptr, nullptr, false);
 
 					if (!brktex && vr->tex_->isBrxml() && !b->isLoaded() && main_membuf_size_ > 0LL)
 					{
@@ -756,7 +756,7 @@ namespace FLIVR
 							if (b->isLoaded())
 							{
 								//retry
-								brktex = vr->load_brick(prim_dev, 0, 0, &tempbv, 0, rsettings[vr].filter, vr->compression_, stmode, false);
+								brktex = vr->load_brick(prim_dev, 0, 0, &tempbv, 0, rsettings[vr].filter, vr->compression_, stmode, false, nullptr, nullptr, false);
 								b->freeBrkData();
 							}
 						}
@@ -816,7 +816,7 @@ namespace FLIVR
 								if (restart)
 									SubmitAndRestartCommandBuf(prim_dev, cmdbuf, renderPassBeginInfo);
 							}
-							msktex = vr->load_brick_mask(prim_dev, &tempbv, 0, rsettings[vr].filter, false, 0, true, false);
+							msktex = vr->load_brick_mask(prim_dev, &tempbv, 0, rsettings[vr].filter, false, 0, true, false, nullptr, nullptr, false);
 
 							double trans_x = (ox_d - ox) / nx;
 							double trans_y = (oy_d - oy) / ny;
@@ -844,7 +844,7 @@ namespace FLIVR
 								if (restart)
 									SubmitAndRestartCommandBuf(prim_dev, cmdbuf, renderPassBeginInfo);
 							}
-							msktex = vr->load_brick_mask(prim_dev, &tempbv, 0, rsettings[vr].filter, false, 0, true, false);
+							msktex = vr->load_brick_mask(prim_dev, &tempbv, 0, rsettings[vr].filter, false, 0, true, false, nullptr, nullptr, false);
 
 							cur_brs[j].frag_const.mask_b_scale_invnz = { 1.0f, 1.0f, 1.0f, 1.0f };
 							cur_brs[j].frag_const.mask_b_trans = { 0.0f, 0.0f, 0.0f, 0.0f };

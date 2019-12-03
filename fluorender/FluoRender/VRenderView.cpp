@@ -6586,7 +6586,7 @@ void VRenderVulkanView::Set4DSeqFrame(int frame, bool run_script)
 					wxString data_path = wxString(reader->GetCurName(frame, vd->GetCurChannel()));
 					wxString data_name = data_path.AfterLast(wxFileName::GetPathSeparator());
 					if (reader->GetChanNum() > 1)
-						data_name += wxString::Format("_%d", vd->GetCurChannel()+1);
+						data_name += wxString::Format("_Ch%d", vd->GetCurChannel()+1);
 					vd->SetName(data_name);
 					vd->SetPath(data_path);
 

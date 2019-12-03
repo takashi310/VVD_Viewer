@@ -231,6 +231,8 @@ void TIFReader::Preprocess()
 				sliceinfo.slicenumber = 0;
 				if (isHsTimeSeq_)
 					sliceinfo.slice = str;
+				else
+					sliceinfo.slice = m_data_name + wxString::Format("_Fr%d", i+1);
 				sliceinfo.pagenumber = page_cnt;
 				page_cnt += m_chan_num;
 				info.slices.push_back(sliceinfo);

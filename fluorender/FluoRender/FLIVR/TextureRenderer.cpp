@@ -1530,7 +1530,7 @@ namespace FLIVR
 	
 	std::shared_ptr<vks::VTexture> TextureRenderer::load_brick(vks::VulkanDevice *device, int unit, int c,
 		vector<TextureBrick*> *bricks, int bindex,
-		VkFilter filter, bool compression, int mode, bool set_drawn, bool* updated, vks::VulkanSemaphoreSettings* semaphore)
+		VkFilter filter, bool compression, int mode, bool set_drawn, bool* updated, vks::VulkanSemaphoreSettings* semaphore, bool flush)
 	{
 		std::shared_ptr<vks::VTexture> result;
 
@@ -1611,7 +1611,7 @@ namespace FLIVR
 					result->descriptor.sampler = device->nearest_sampler;
 
 				void *texdata = brick->get_nrrd(c)->data;
-				device->UploadTexture3D(result, texdata, offset, ypitch, zpitch, !mem_swap_ || semaphore == nullptr, semaphore, !swapped);
+				device->UploadTexture3D(result, texdata, offset, ypitch, zpitch, !mem_swap_ || (flush && semaphore == nullptr), semaphore, !swapped);
 				if (updated)
 					*updated = true;
 			}
@@ -1645,7 +1645,7 @@ namespace FLIVR
 					bool brkerror = false;
 					void *texdata = brick->tex_data_brk(c, NULL);
 					if (texdata)
-						device->UploadTexture(result, texdata, !mem_swap_ || semaphore == nullptr, semaphore, !swapped);
+						device->UploadTexture(result, texdata, !mem_swap_ || (flush && semaphore == nullptr), semaphore, !swapped);
 					else
 						result.reset();
 					
@@ -1692,7 +1692,7 @@ namespace FLIVR
 						bool brkerror = false;
 						void *texdata = brick->tex_data_brk(c, NULL);
 						if (texdata)
-							device->UploadTexture(result, texdata, !mem_swap_ || semaphore == nullptr, semaphore, !swapped);
+							device->UploadTexture(result, texdata, !mem_swap_ || (flush && semaphore == nullptr), semaphore, !swapped);
 						else
 							result.reset();
 						
@@ -1729,7 +1729,7 @@ namespace FLIVR
 
 	std::shared_ptr<vks::VTexture> TextureRenderer::base_fanc_load_brick_comp(
 		vks::VulkanDevice *device, int c, TextureBrick* brick, VkFilter filter, bool compression, bool swap_mem,
-		bool* updated, vks::VulkanSemaphoreSettings* semaphore)
+		bool* updated, vks::VulkanSemaphoreSettings* semaphore, bool flush)
 	{
 		std::shared_ptr<vks::VTexture> result;
 
@@ -1789,7 +1789,7 @@ namespace FLIVR
 				result->descriptor.sampler = device->nearest_sampler;
 
 			void* texdata = brick->get_nrrd(c)->data;
-			device->UploadTexture3D(result, texdata, offset, ypitch, zpitch, !mem_swap_ || semaphore == nullptr, semaphore, !swapped);
+			device->UploadTexture3D(result, texdata, offset, ypitch, zpitch, !mem_swap_ || (flush && semaphore == nullptr), semaphore, !swapped);
 			
 			if (updated)
 				*updated = true;
@@ -1801,14 +1801,14 @@ namespace FLIVR
 	//search for or create the mask texture in the texture pool
 	std::shared_ptr<vks::VTexture> TextureRenderer::load_brick_mask(
 		vks::VulkanDevice *device, vector<TextureBrick*> *bricks, int bindex, VkFilter filter, bool compression, int unit,
-		bool swap_mem, bool set_drawn, bool* updated, vks::VulkanSemaphoreSettings* semaphore)
+		bool swap_mem, bool set_drawn, bool* updated, vks::VulkanSemaphoreSettings* semaphore, bool flush)
 	{
 		std::shared_ptr<vks::VTexture> result;
 
 		TextureBrick* brick = (*bricks)[bindex];
 		int c = brick->nmask();
 
-		result = base_fanc_load_brick_comp(device, c, brick, filter, compression, swap_mem, updated, semaphore);
+		result = base_fanc_load_brick_comp(device, c, brick, filter, compression, swap_mem, updated, semaphore, flush);
 
 		if (mem_swap_ &&
 			start_update_loop_ &&
@@ -1828,14 +1828,14 @@ namespace FLIVR
 	//search for or create the label texture in the texture pool
 	std::shared_ptr<vks::VTexture> TextureRenderer::load_brick_label(
 		vks::VulkanDevice *device, vector<TextureBrick*> *bricks, int bindex, bool swap_mem, bool set_drawn,
-		bool* updated, vks::VulkanSemaphoreSettings* semaphore)
+		bool* updated, vks::VulkanSemaphoreSettings* semaphore, bool flush)
 	{
 		std::shared_ptr<vks::VTexture> result;
 
 		TextureBrick* brick = (*bricks)[bindex];
 		int c = brick->nlabel();
 
-		result = base_fanc_load_brick_comp(device, c, brick, VK_FILTER_NEAREST, false, swap_mem, updated, semaphore);
+		result = base_fanc_load_brick_comp(device, c, brick, VK_FILTER_NEAREST, false, swap_mem, updated, semaphore, flush);
 		
 		if (mem_swap_ &&
 			start_update_loop_ &&
@@ -1855,14 +1855,14 @@ namespace FLIVR
 	//search for or create the mask texture in the texture pool
 	std::shared_ptr<vks::VTexture> TextureRenderer::load_brick_stroke(
 		vks::VulkanDevice *device, vector<TextureBrick*> *bricks, int bindex, VkFilter filter, bool compression, int unit,
-		bool swap_mem, bool* updated, vks::VulkanSemaphoreSettings* semaphore)
+		bool swap_mem, bool* updated, vks::VulkanSemaphoreSettings* semaphore, bool flush)
 	{
 		std::shared_ptr<vks::VTexture> result;
 
 		TextureBrick* brick = (*bricks)[bindex];
 		int c = brick->nstroke();
 
-		result = base_fanc_load_brick_comp(device, c, brick, filter, compression, swap_mem, updated, semaphore);
+		result = base_fanc_load_brick_comp(device, c, brick, filter, compression, swap_mem, updated, semaphore, flush);
 		
 		return std::move(result);
 	}

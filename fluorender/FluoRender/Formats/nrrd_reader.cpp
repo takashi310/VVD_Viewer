@@ -121,16 +121,25 @@ void NRRDReader::Preprocess()
 	{
 		//search time sequence files
 		std::vector<std::wstring> list;
-		int tmp = 0;
-		FIND_FILES(path,L".nrrd",list,tmp,name.substr(0,begin+id_len+1));
-		for(size_t i = 0; i < list.size(); i++) {
-			size_t start_idx = list.at(i).find(m_time_id) + id_len;
-			size_t end_idx   = list.at(i).find(L".nrrd");
-			size_t size = end_idx - start_idx;
-			std::wstring fileno = list.at(i).substr(start_idx, size);
+		int64_t begin = m_path_name.find(m_time_id);
+		size_t id_len = m_time_id.length();
+		FIND_FILES_4D(m_path_name, m_time_id, list, m_cur_time);
+		for (size_t i = 0; i < list.size(); i++) {
 			TimeDataInfo info;
-			info.filenumber = WSTOI(fileno);
-			info.filename = list.at(i);
+			std::wstring str = list.at(i);
+			std::wstring t_num;
+			for (size_t j = begin + id_len; j < str.size(); j++)
+			{
+				wchar_t c = str[j];
+				if (iswdigit(c))
+					t_num.push_back(c);
+				else break;
+			}
+			if (t_num.size() > 0)
+				info.filenumber = WSTOI(t_num);
+			else
+				info.filenumber = 0;
+			info.filename = str;
 			m_4d_seq.push_back(info);
 		}
 	}

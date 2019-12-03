@@ -480,7 +480,8 @@ namespace FLIVR
 				   int mode=0,
 				   bool set_drawn=true,
 				   bool *updated=nullptr,
-				   vks::VulkanSemaphoreSettings* semaphore=nullptr);
+				   vks::VulkanSemaphoreSettings* semaphore=nullptr,
+				   bool flush=true);
                //load the texture for volume mask into texture pool
                std::shared_ptr<vks::VTexture> load_brick_mask(
 				   vks::VulkanDevice *device,
@@ -492,7 +493,8 @@ namespace FLIVR
 				   bool swap_mem=false,
 				   bool set_drawn=true,
 				   bool* updated = nullptr,
-				   vks::VulkanSemaphoreSettings* semaphore = nullptr);
+				   vks::VulkanSemaphoreSettings* semaphore = nullptr,
+				   bool flush=true);
 			   //load the texture for volume labeling into texture pool
                std::shared_ptr<vks::VTexture> load_brick_label(
 				   vks::VulkanDevice *device,
@@ -501,7 +503,8 @@ namespace FLIVR
 				   bool swap_mem=false,
 				   bool set_drawn=true,
 				   bool* updated = nullptr,
-				   vks::VulkanSemaphoreSettings* semaphore = nullptr);
+				   vks::VulkanSemaphoreSettings* semaphore = nullptr,
+				   bool flush=true);
 			   //load the texture for volume stroke into texture pool
                std::shared_ptr<vks::VTexture> load_brick_stroke(
 				   vks::VulkanDevice *device,
@@ -512,7 +515,8 @@ namespace FLIVR
 				   int unit=0,
 				   bool swap_mem=false,
 				   bool* updated = nullptr,
-				   vks::VulkanSemaphoreSettings* semaphore = nullptr);
+				   vks::VulkanSemaphoreSettings* semaphore = nullptr,
+				   bool flush=true);
                
 			   std::shared_ptr<vks::VTexture> base_fanc_load_brick_comp(
 				   vks::VulkanDevice *device,
@@ -522,7 +526,8 @@ namespace FLIVR
 				   bool compression,
 				   bool swap_mem,
 				   bool* updated = nullptr,
-				   vks::VulkanSemaphoreSettings* semaphore = nullptr);
+				   vks::VulkanSemaphoreSettings* semaphore = nullptr,
+				   bool flush=true);
       //         
 			   //void release_texture(int unit, GLenum target);
 
