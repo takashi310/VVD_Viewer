@@ -34,7 +34,7 @@
 
 #include "vulkan/vulkan.h"
 
-#include "SPIRV/GlslangToSpv.h"
+#include "glslang/SPIRV/GlslangToSpv.h"
 
 #include "DLLExport.h"
 
