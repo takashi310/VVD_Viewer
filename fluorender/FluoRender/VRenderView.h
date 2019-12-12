@@ -1002,6 +1002,8 @@ private:
 	//clipping plane rotations
 	Quaternion m_q_cl;
 	Quaternion m_q_cl_zero;
+	Quaternion m_q_cl_fix;
+	Quaternion m_q_fix;
 	double m_rotx_cl, m_roty_cl, m_rotz_cl;
 
 	bool m_dpeel;

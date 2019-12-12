@@ -35,6 +35,7 @@ BEGIN_EVENT_TABLE(ClippingView, wxPanel)
 	EVT_CHECKBOX(ID_LinkChannelsChk, ClippingView::OnLinkChannelsCheck)
 	EVT_COMBOBOX(ID_PlaneModesCombo, ClippingView::OnPlaneModesCombo)
 	EVT_BUTTON(ID_SetZeroBtn, ClippingView::OnSetZeroBtn)
+	EVT_CHECKBOX(ID_FixRotsChk, ClippingView::OnFixRotsCheck)
 	EVT_BUTTON(ID_RotResetBtn, ClippingView::OnRotResetBtn)
 	EVT_BUTTON(ID_ClipResetBtn, ClippingView::OnClipResetBtn)
 
@@ -96,7 +97,9 @@ m_hold_planes(false),
 m_plane_mode(PM_NORMAL),
 m_link_x(false),
 m_link_y(false),
-m_link_z(false)
+m_link_z(false),
+m_fix_rots(false),
+m_update_only_ui(false)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -141,6 +144,13 @@ m_link_z(false)
 	sizer_pm->Add(m_plane_mode_combo, 0, wxALIGN_CENTER, 0);
 	
 	//rotations
+	wxBoxSizer* sizer_f = new wxBoxSizer(wxHORIZONTAL);
+	m_fix_rots_chk = new wxCheckBox(this, ID_FixRotsChk, "Fix in View");
+	m_fix_rots_chk->SetValue(false);
+	sizer_f->Add(5, 5, 0);
+	sizer_f->Add(m_fix_rots_chk, 0, wxALIGN_CENTER);
+	sizer_f->Add(5, 5, 0);
+
 	//set sero rotation for clipping planes
 	wxBoxSizer* sizer_2 = new wxBoxSizer(wxHORIZONTAL);
 	m_set_zero_btn = new wxButton(this, ID_SetZeroBtn, "Align to View",
@@ -437,6 +447,8 @@ m_link_z(false)
 	sizer_v->Add(10, 10, 0);
 	sizer_v->Add(st, 0, wxALIGN_CENTER);
 	sizer_v->Add(10, 10, 0);
+	sizer_v->Add(sizer_f, 0, wxALIGN_CENTER);
+	sizer_v->Add(5, 5, 0);
 	sizer_v->Add(sizer_2, 0, wxALIGN_CENTER);
 	sizer_v->Add(sizer_3, 0, wxALIGN_CENTER);
 	sizer_v->Add(10, 10, 0);
@@ -2000,6 +2012,9 @@ void ClippingView::OnXRotEdit(wxCommandEvent &event)
 	str.ToDouble(&val);
 	m_x_rot_sldr->SetValue(int(val));
 
+	if (m_update_only_ui)
+		return;
+
 	VRenderFrame* vrender_frame = (VRenderFrame*)m_frame;
 	if (vrender_frame)
 	{
@@ -2031,6 +2046,9 @@ void ClippingView::OnYRotEdit(wxCommandEvent &event)
 	str.ToDouble(&val);
 	m_y_rot_sldr->SetValue(int(val));
 
+	if (m_update_only_ui)
+		return;
+
 	VRenderFrame* vrender_frame = (VRenderFrame*)m_frame;
 	if (vrender_frame)
 	{
@@ -2061,6 +2079,9 @@ void ClippingView::OnZRotEdit(wxCommandEvent &event)
 	double val = 0.0;
 	str.ToDouble(&val);
 	m_z_rot_sldr->SetValue(int(val));
+
+	if (m_update_only_ui)
+		return;
 
 	VRenderFrame* vrender_frame = (VRenderFrame*)m_frame;
 	if (vrender_frame)
@@ -2787,6 +2808,54 @@ void ClippingView::OnSliderKeyDown(wxKeyEvent& event)
 	event.Skip();
 }
 
+void ClippingView::OnFixRotsCheck(wxCommandEvent& event)
+{
+	VRenderFrame* vrender_frame = (VRenderFrame*)m_frame;
+
+	if (vrender_frame)
+	{
+		if (m_fix_rots_chk->GetValue())
+		{
+			for (int i = 0; i < (int)vrender_frame->GetViewList()->size(); i++)
+			{
+				VRenderView* vrv = (*vrender_frame->GetViewList())[i];
+				if (vrv)
+				{
+					vrv->SetClipMode(3);
+					vrv->RefreshGL();
+					double rotx, roty, rotz;
+					vrv->GetClippingPlaneRotations(rotx, roty, rotz);
+					m_x_rot_sldr->SetValue(int(rotx));
+					m_y_rot_sldr->SetValue(int(roty));
+					m_z_rot_sldr->SetValue(int(rotz));
+					m_x_rot_text->ChangeValue(wxString::Format("%.1f", rotx));
+					m_y_rot_text->ChangeValue(wxString::Format("%.1f", roty));
+					m_z_rot_text->ChangeValue(wxString::Format("%.1f", rotz));
+				}
+			}
+			m_fix_rots = true;
+			DisableRotations();
+		}
+		else
+		{
+			VRenderFrame* vrender_frame = (VRenderFrame*)m_frame;
+			if (vrender_frame)
+			{
+				for (int i = 0; i < (int)vrender_frame->GetViewList()->size(); i++)
+				{
+					VRenderView* vrv = (*vrender_frame->GetViewList())[i];
+					if (vrv)
+					{
+						vrv->SetClipMode(4);
+					}
+				}
+			}
+			m_fix_rots = false;
+			EnableRotations();
+		}
+	}
+}
+
 void ClippingView::LoadDefault()
 {
 	wxString expath = wxStandardPaths::Get().GetExecutablePath();
@@ -2885,6 +2954,7 @@ void ClippingView::EnableAll()
 	m_yz_dist_text->Enable();
 	m_xz_dist_text->Enable();
 	m_xy_dist_text->Enable();
+	m_fix_rots_chk->Enable();
 }
 
 void ClippingView::DisableAll()
@@ -2923,4 +2993,35 @@ void ClippingView::DisableAll()
 	m_yz_dist_text->Disable();
 	m_xz_dist_text->Disable();
 	m_xy_dist_text->Disable();
+	m_fix_rots_chk->Disable();
+}
+
+void ClippingView::EnableRotations()
+{
+	m_set_zero_btn->Enable();
+	m_rot_reset_btn->Enable();
+	m_x_rot_sldr->Enable();
+	m_y_rot_sldr->Enable();
+	m_z_rot_sldr->Enable();
+	m_x_rot_text->Enable();
+	m_y_rot_text->Enable();
+	m_z_rot_text->Enable();
+	m_x_rot_spin->Enable();
+	m_y_rot_spin->Enable();
+	m_z_rot_spin->Enable();
+}
+
+void ClippingView::DisableRotations()
+{
+	m_set_zero_btn->Disable();
+	m_rot_reset_btn->Disable();
+	m_x_rot_sldr->Disable();
+	m_y_rot_sldr->Disable();
+	m_z_rot_sldr->Disable();
+	m_x_rot_text->Disable();
+	m_y_rot_text->Disable();
+	m_z_rot_text->Disable();
+	m_x_rot_spin->Disable();
+	m_y_rot_spin->Disable();
+	m_z_rot_spin->Disable();
 }

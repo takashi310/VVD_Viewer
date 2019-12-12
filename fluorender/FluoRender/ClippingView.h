@@ -85,7 +85,8 @@ class EXPORT_API ClippingView: public wxPanel
 		ID_YZDistText,
 		ID_XZDistText,
 		ID_XYDistText,
-		ID_CLTimer
+		ID_CLTimer,
+		ID_FixRotsChk
 	};
 
 public:
@@ -154,14 +155,18 @@ public:
 		OnLinkZCheck(ev);
 	}
 
-	void SetClippingPlaneRotations(double rotx, double roty, double rotz)
+	void SetClippingPlaneRotations(double rotx, double roty, double rotz, bool update_only_ui=false)
 	{
+		m_update_only_ui = update_only_ui;
+
 		m_x_rot_sldr->SetValue(int(rotx));
 		m_y_rot_sldr->SetValue(int(roty));
 		m_z_rot_sldr->SetValue(int(rotz));
 		m_x_rot_text->SetValue(wxString::Format("%.1f", rotx));
 		m_y_rot_text->SetValue(wxString::Format("%.1f", roty));
 		m_z_rot_text->SetValue(wxString::Format("%.1f", rotz));
+
+		m_update_only_ui = false;
 	}
 
 	void SetPlaneMode(int mode)
@@ -179,6 +184,12 @@ public:
 
 	void SaveDefault();
 	void LoadDefault();
+
+	void SetUpdateOnlyUIs(bool val) { m_update_only_ui; }
+	bool GetUpdateOnlyUIs() { return m_update_only_ui; }
+
+	void SetFixRotations(bool val) { m_fix_rots; }
+	bool GetFixRotations() { return m_fix_rots; }
 
 private:
 	wxWindow* m_frame;
@@ -198,11 +209,16 @@ private:
 	bool m_link_y;
 	bool m_link_z;
 
+	bool m_fix_rots;
+
+	bool m_update_only_ui;
+
 	//1st line
 	wxCheckBox *m_link_channels;
 	wxComboBox *m_plane_mode_combo;
 	wxButton *m_clip_reset_btn;
 	//fix plane rotations
+	wxCheckBox* m_fix_rots_chk;
 	wxButton *m_set_zero_btn;
 	wxButton *m_rot_reset_btn;
 
@@ -269,6 +285,9 @@ private:
 	void EnableAll();
 	void DisableAll();
 
+	void EnableRotations();
+	void DisableRotations();
+
 	void OnX1ClipChange(wxScrollEvent &event);
 	void OnX2ClipChange(wxScrollEvent &event);
 	void OnY1ClipChange(wxScrollEvent &event);
@@ -289,6 +308,7 @@ private:
 	void OnSetZeroBtn(wxCommandEvent &event);
 	void OnRotResetBtn(wxCommandEvent &event);
 
+	void OnFixRotsCheck(wxCommandEvent& event);
 	void OnXRotChange(wxScrollEvent &event);
 	void OnYRotChange(wxScrollEvent &event);
 	void OnZRotChange(wxScrollEvent &event);

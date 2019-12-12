@@ -5498,6 +5498,7 @@ void VRenderVulkanView::UpdateBrushState()
 				tree_panel->SelectBrush(TreePanel::ID_BrushAppend);
 			if (brush_dlg)
 				brush_dlg->SelectBrush(BrushToolDlg::ID_BrushAppend);
+			m_clear_paint = true;
 			RefreshGLOverlays();
 		}
 		else if (wxGetKeyState(wxKeyCode('Z')))
@@ -5507,6 +5508,7 @@ void VRenderVulkanView::UpdateBrushState()
 				tree_panel->SelectBrush(TreePanel::ID_BrushDiffuse);
 			if (brush_dlg)
 				brush_dlg->SelectBrush(BrushToolDlg::ID_BrushDiffuse);
+			m_clear_paint = true;
 			RefreshGLOverlays();
 		}
 		else if (wxGetKeyState(wxKeyCode('X')))
@@ -5516,6 +5518,7 @@ void VRenderVulkanView::UpdateBrushState()
 				tree_panel->SelectBrush(TreePanel::ID_BrushDesel);
 			if (brush_dlg)
 				brush_dlg->SelectBrush(BrushToolDlg::ID_BrushDesel);
+			m_clear_paint = true;
 			RefreshGLOverlays();
 		}
 	}
@@ -5531,6 +5534,7 @@ void VRenderVulkanView::UpdateBrushState()
 					tree_panel->SelectBrush(TreePanel::ID_BrushAppend);
 				if (brush_dlg)
 					brush_dlg->SelectBrush(BrushToolDlg::ID_BrushAppend);
+				m_clear_paint = true;
 				RefreshGLOverlays();
 			}
 			else if (wxGetKeyState(wxKeyCode('Z')))
@@ -5541,6 +5545,7 @@ void VRenderVulkanView::UpdateBrushState()
 					tree_panel->SelectBrush(TreePanel::ID_BrushDiffuse);
 				if (brush_dlg)
 					brush_dlg->SelectBrush(BrushToolDlg::ID_BrushDiffuse);
+				m_clear_paint = true;
 				RefreshGLOverlays();
 			}
 			else if (wxGetKeyState(wxKeyCode('X')))
@@ -5551,11 +5556,13 @@ void VRenderVulkanView::UpdateBrushState()
 					tree_panel->SelectBrush(TreePanel::ID_BrushDesel);
 				if (brush_dlg)
 					brush_dlg->SelectBrush(BrushToolDlg::ID_BrushDesel);
+				m_clear_paint = true;
 				RefreshGLOverlays();
 			}
 			else
 			{
 				SetBrush(m_brush_state);
+				m_clear_paint = true;
 				RefreshGLOverlays();
 			}
 		}
@@ -11806,7 +11813,27 @@ void VRenderVulkanView::Q2A()
 	if (m_clip_mode)
 	{
 		if (m_clip_mode == 1)
-			m_q_cl.FromEuler(m_rotx, -m_roty, -m_rotz);
+			m_q_cl.FromEuler(-m_rotx, -m_roty, m_rotz);
+		else if (m_clip_mode == 3)
+		{
+			m_q_cl_zero.FromEuler(-m_rotx, -m_roty, m_rotz);
+			m_q_cl = m_q_cl_fix * (m_q_fix * m_q_cl_zero);
+			m_q_cl.ToEuler(m_rotx_cl, m_roty_cl, m_rotz_cl);
+			if (m_rotx_cl > 180.0) m_rotx_cl -= 360.0;
+			if (m_roty_cl > 180.0) m_roty_cl -= 360.0;
+			if (m_rotz_cl > 180.0) m_rotz_cl -= 360.0;
+			VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+			if (vr_frame)
+			{
+				ClippingView* clip_view = vr_frame->GetClippingView();
+				if (clip_view)
+					clip_view->SetClippingPlaneRotations(
+						m_rotx_cl <= 180.0 ? m_rotx_cl : 360.0 - m_rotx_cl,
+						m_roty_cl <= 180.0 ? m_roty_cl : 360.0 - m_roty_cl,
+						m_rotz_cl <= 180.0 ? m_rotz_cl : 360.0 - m_rotz_cl,
+						true);
+			}
+		}
 
 		vector<Plane*> *planes = 0;
 		for (int i=0; i<(int)m_vd_pop_list.size(); i++)
@@ -11900,7 +11927,27 @@ void VRenderVulkanView::A2Q()
 	if (m_clip_mode)
 	{
 		if (m_clip_mode == 1)
-			m_q_cl.FromEuler(m_rotx, -m_roty, -m_rotz);
+			m_q_cl.FromEuler(-m_rotx, -m_roty, m_rotz);
+		else if (m_clip_mode == 3)
+		{
+			m_q_cl_zero.FromEuler(-m_rotx, -m_roty, m_rotz);
+			m_q_cl = m_q_cl_fix * (m_q_fix * m_q_cl_zero);
+			m_q_cl.ToEuler(m_rotx_cl, m_roty_cl, m_rotz_cl);
+			if (m_rotx_cl > 180.0) m_rotx_cl -= 360.0;
+			if (m_roty_cl > 180.0) m_roty_cl -= 360.0;
+			if (m_rotz_cl > 180.0) m_rotz_cl -= 360.0;
+			VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+			if (vr_frame)
+			{
+				ClippingView* clip_view = vr_frame->GetClippingView();
+				if (clip_view)
+					clip_view->SetClippingPlaneRotations(
+						m_rotx_cl <= 180.0 ? m_rotx_cl : 360.0 - m_rotx_cl,
+						m_roty_cl <= 180.0 ? m_roty_cl : 360.0 - m_roty_cl,
+						m_rotz_cl <= 180.0 ? m_rotz_cl : 360.0 - m_rotz_cl,
+						true);
+			}
+		}
 
 		for (int i=0; i<(int)m_vd_pop_list.size(); i++)
 		{
@@ -12088,8 +12135,23 @@ void VRenderVulkanView::SetClipMode(int mode)
 		break;
 	case 2:
 		m_clip_mode = 2;
-		m_q_cl_zero.FromEuler(m_rotx, -m_roty, -m_rotz);
+		m_q_cl_zero.FromEuler(-m_rotx, -m_roty, m_rotz);
 		m_q_cl = m_q_cl_zero;
+		m_q_cl.ToEuler(m_rotx_cl, m_roty_cl, m_rotz_cl);
+		if (m_rotx_cl > 180.0) m_rotx_cl -= 360.0;
+		if (m_roty_cl > 180.0) m_roty_cl -= 360.0;
+		if (m_rotz_cl > 180.0) m_rotz_cl -= 360.0;
+		SetRotations(m_rotx, m_roty, m_rotz);
+		break;
+	case 3:
+		m_clip_mode = 3;
+		m_q_cl_fix.FromEuler(m_rotx_cl, m_roty_cl, m_rotz_cl);
+		m_q_fix.FromEuler(m_rotx, m_roty, m_rotz);
+		m_q_fix.z *= -1;
+		m_q_cl_zero.FromEuler(-m_rotx, -m_roty, m_rotz);
+		break;
+	case 4:
+		m_clip_mode = 2;
 		m_q_cl.ToEuler(m_rotx_cl, m_roty_cl, m_rotz_cl);
 		if (m_rotx_cl > 180.0) m_rotx_cl -= 360.0;
 		if (m_roty_cl > 180.0) m_roty_cl -= 360.0;
@@ -12124,9 +12186,9 @@ void VRenderVulkanView::RestorePlanes()
 
 void VRenderVulkanView::SetClippingPlaneRotations(double rotx, double roty, double rotz)
 {
-	m_rotx_cl = -rotx;
+	m_rotx_cl = rotx;
 	m_roty_cl = roty;
-	m_rotz_cl = rotz;
+	m_rotz_cl = -rotz;
 
 	m_q_cl.FromEuler(m_rotx_cl, m_roty_cl, m_rotz_cl);
 	m_q_cl.Normalize();
@@ -12136,9 +12198,9 @@ void VRenderVulkanView::SetClippingPlaneRotations(double rotx, double roty, doub
 
 void VRenderVulkanView::GetClippingPlaneRotations(double &rotx, double &roty, double &rotz)
 {
-	rotx = -m_rotx_cl;
+	rotx = m_rotx_cl;
 	roty = m_roty_cl;
-	rotz = m_rotz_cl;
+	rotz = -m_rotz_cl;
 }
 
 //interpolation
@@ -14490,22 +14552,21 @@ void VRenderVulkanView::OnMouse(wxMouseEvent& event)
 		if (m_int_mode == 6)
 			m_editing_ruler_point = GetEditingRulerPoint(event.GetX(), event.GetY());
 
+		old_mouse_X = event.GetX();
+		old_mouse_Y = event.GetY();
+		prv_mouse_X = old_mouse_X;
+		prv_mouse_Y = old_mouse_Y;
+
 		if (m_int_mode == 1 ||
 			(m_int_mode==5 &&
 			event.AltDown()) ||
 			(m_int_mode==6 &&
 			m_editing_ruler_point==0))
 		{
-			old_mouse_X = event.GetX();
-			old_mouse_Y = event.GetY();
 			m_pick = true;
 		}
 		else if (m_int_mode == 2 || m_int_mode == 7)
 		{
-			old_mouse_X = event.GetX();
-			old_mouse_Y = event.GetY();
-			prv_mouse_X = old_mouse_X;
-			prv_mouse_Y = old_mouse_Y;
 			m_paint_enable = true;
 			m_clear_paint = true;
 			RefreshGLOverlays();
