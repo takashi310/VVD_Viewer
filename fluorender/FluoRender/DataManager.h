@@ -54,6 +54,7 @@ DEALINGS IN THE SOFTWARE.
 #include "Formats/brkxml_reader.h"
 #include "Formats/h5j_reader.h"
 #include "Formats/swc_reader.h"
+#include "Formats/v3dpbd_reader.h"
 
 #include "Tracking/TrackMap.h"
 #include "DatabaseDlg.h"
@@ -81,6 +82,7 @@ using namespace FLIVR;
 #define LOAD_TYPE_PVXML		6
 #define LOAD_TYPE_BRKXML	7
 #define LOAD_TYPE_H5J		8
+#define LOAD_TYPE_V3DPBD	9
 
 class EXPORT_API TreeLayer
 {

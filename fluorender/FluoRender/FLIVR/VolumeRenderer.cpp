@@ -3091,6 +3091,8 @@ namespace FLIVR
 					submitInfo.signalSemaphoreCount = brksem.signalSemaphoreCount;
 					submitInfo.pSignalSemaphores = brksem.signalSemaphores;
 					std::vector<VkSemaphore> waitSems;
+					
+					/*
 					for (int i = 0 ; i < semaphores.size()-1; i++)
 						waitSems.push_back(semaphores[i].signalSemaphores[0]);
 					std::vector<VkPipelineStageFlags> waitStages;
@@ -3102,6 +3104,17 @@ namespace FLIVR
 						submitInfo.pWaitSemaphores = waitSems.data();
 						submitInfo.pWaitDstStageMask = waitStages.data();
 					}
+					*/
+					std::vector<VkPipelineStageFlags> waitStages;
+					if (brksem.waitSemaphoreCount > 0)
+					{
+						for (uint32_t i = 0; i < brksem.waitSemaphoreCount; i++)
+							waitStages.push_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+						submitInfo.waitSemaphoreCount = brksem.waitSemaphoreCount;
+						submitInfo.pWaitSemaphores = brksem.waitSemaphores;
+						submitInfo.pWaitDstStageMask = waitStages.data();
+					}
+
 					VK_CHECK_RESULT(vkQueueSubmit(prim_dev->queue, 1, &submitInfo, VK_NULL_HANDLE));
 
 					//VkFenceCreateInfo fenceInfo = vks::initializers::fenceCreateInfo(VK_FLAGS_NONE);

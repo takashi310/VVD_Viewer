@@ -6181,6 +6181,8 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 			reader = new BRKXMLReader();
 		else if (type == LOAD_TYPE_H5J)
 			reader = new H5JReader();
+		else if (type == LOAD_TYPE_V3DPBD)
+			reader = new V3DPBDReader();
 
 		m_reader_list.push_back(reader);
 		wstring str_w = pathname.ToStdWstring();

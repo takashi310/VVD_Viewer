@@ -1012,7 +1012,7 @@ void VRenderFrame::OnOpenVolume(wxCommandEvent& WXUNUSED(event))
 
 	wxFileDialog *fopendlg = new wxFileDialog(
 		this, "Choose the volume data file", "", "",
-		"All Supported|*.tif;*.tiff;*.zip;*.oib;*.oif;*.lsm;*.xml;*.nrrd;*.h5j;*.vvd|"\
+		"All Supported|*.tif;*.tiff;*.zip;*.oib;*.oif;*.lsm;*.xml;*.nrrd;*.h5j;*.vvd;*.v3dpbd|"\
 		"Tiff Files (*.tif, *.tiff, *.zip)|*.tif;*.tiff;*.zip|"\
 		"Olympus Image Binary Files (*.oib)|*.oib|"\
 		"Olympus Original Imaging Format (*.oif)|*.oif|"\
@@ -1020,6 +1020,7 @@ void VRenderFrame::OnOpenVolume(wxCommandEvent& WXUNUSED(event))
 		"Prairie View XML (*.xml)|*.xml|"\
 		"Nrrd files (*.nrrd)|*.nrrd|"\
 		"H5J files (*.h5j)|*.h5j|"\
+		"V3DPBD files (*.v3dpbd)|*.v3dpbd|"\
 		"VVD files (*.vvd)|*.vvd", wxFD_OPEN|wxFD_MULTIPLE);
 	fopendlg->SetExtraControlCreator(CreateExtraControlVolume);
 
@@ -1106,6 +1107,8 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_BRKXML);
 			else if (suffix == ".h5j")
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_H5J);
+			else if (suffix == ".v3dpbd")
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_V3DPBD);
 
 			if (ch_num > 1)
 			{
@@ -1265,6 +1268,7 @@ void VRenderFrame::StartupLoad(wxArrayString files)
 			suffix == ".xml" ||
 			suffix == ".vvd" ||
 			suffix == ".h5j" ||
+			suffix == ".v3dpbd" ||
 			suffix == ".zip")
 		{
 			LoadVolumes(files);
@@ -3344,6 +3348,8 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_BRKXML, cur_chan, cur_time);
 					else if (suffix == ".h5j")
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_H5J, cur_chan, cur_time);
+					else if (suffix == ".v3dpbd")
+						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_V3DPBD, cur_chan, cur_time);
 				}
 				if (loaded_num)
 					vd = m_data_mgr.GetLastVolumeData();

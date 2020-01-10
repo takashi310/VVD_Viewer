@@ -25,8 +25,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 */
-#ifndef _NRRD_READER_H_
-#define _NRRD_READER_H_
+#ifndef _V3DPBD_READER_H_
+#define _V3DPBD_READER_H_
 
 #include <base_reader.h>
 #include <stdio.h>
@@ -135,11 +135,12 @@ private:
     unsigned char pbd3_current_min;
     unsigned char pbd3_current_max;
     
-    int pbd3_current_channel;
     size_t pbd_sz[4];
+
+	string m_cur_file;
 
 private:
 	static bool nrrd_sort(const TimeDataInfo& info1, const TimeDataInfo& info2);
 };
 
-#endif//_NRRD_READER_H_
+#endif//_V3DPBD_READER_H_

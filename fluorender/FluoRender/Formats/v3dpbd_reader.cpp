@@ -186,8 +186,13 @@ void V3DPBDReader::Preprocess()
 	else
 		m_cur_time = 0;
 
-	//3D nrrd file
-	m_chan_num = 1;
+    compressionPosition = 0;
+    decompressionPosition = 0;
+
+    wstring str_name = m_4d_seq[0].filename;
+    m_data_name = str_name.substr(str_name.find_last_of(GETSLASH()) + 1);
+    loadRaw2StackPBD(ws2s(str_name).c_str());
+
 	//get time number
 	m_time_num = (int)m_4d_seq.size();
 }
@@ -260,159 +265,104 @@ Nrrd* V3DPBDReader::Convert(int t, int c, bool get_max)
 	size_t i;
 
 	wstring str_name = m_4d_seq[t].filename;
-	m_data_name = str_name.substr(str_name.find_last_of(GETSLASH())+1);
-	FILE* nrrd_file = 0;
-	if (!WFOPEN(&nrrd_file, str_name.c_str(), L"rb"))
-		return 0;
+    if (m_cur_file != ws2s(str_name))
+    {
+        m_data_name = str_name.substr(str_name.find_last_of(GETSLASH()) + 1);
+        if (loadRaw2StackPBD(ws2s(str_name).c_str()) < 0)
+            return 0;
+    }
 
-	Nrrd *output = nrrdNew();
-	NrrdIoState *nio = nrrdIoStateNew();
-	nrrdIoStateSet(nio, nrrdIoStateSkipData, AIR_TRUE);
-	if (nrrdRead(output, nrrd_file, nio))
-	{
-		fclose(nrrd_file);
-		return 0;
-	}
-	nio = nrrdIoStateNix(nio);
-	rewind(nrrd_file);
-	if (!(output->dim == 3 || output->dim == 2))
-	{
-		delete []output->data;
-		nrrdNix(output);
-		fclose(nrrd_file);
-		return 0;
-	}
+    Nrrd* data = 0;
+    unsigned long long mem_size = (unsigned long long)m_x_size * (unsigned long long)m_y_size * (unsigned long long)m_slice_num;
 
-	if (output->dim == 2)
-	{
-		output->axis[2].size = 1;
-		output->axis[2].spacing = 1.0;
-		output->axis[0].spaceDirection[2] = 0.0;
-		output->axis[1].spaceDirection[2] = 0.0;
-		output->axis[2].spaceDirection[0] = 0.0;
-		output->axis[2].spaceDirection[1] = 0.0;
-		output->axis[2].spaceDirection[2] = 1.0;
-	}
-
-	m_slice_num = int(output->axis[2].size);
-	m_x_size = int(output->axis[0].size);
-	m_y_size = int(output->axis[1].size);
-	m_xspc = output->axis[0].spacing;
-	m_yspc = output->axis[1].spacing;
-	m_zspc = output->axis[2].spacing;
+    if (m_xspc > 0.0 && m_xspc < 100.0 &&
+        m_yspc > 0.0 && m_yspc < 100.0 &&
+        m_zspc > 0.0 && m_zspc < 100.0)
+        m_valid_spc = true;
+    else
+    {
+        m_valid_spc = false;
+        m_xspc = 1.0;
+        m_yspc = 1.0;
+        m_zspc = 1.0;
+    }
+    
+    if (m_bd == 8)
+    {
+        //create nrrd
+        unsigned char* val = new (std::nothrow) unsigned char[mem_size];
+        memcpy(val, decompressionBuffer + mem_size * c, mem_size);
+        data = nrrdNew();
+        nrrdWrap(data, val, nrrdTypeUChar, 3, (size_t)m_x_size, (size_t)m_y_size, (size_t)m_slice_num);
+        nrrdAxisInfoSet(data, nrrdAxisInfoSpacing, m_xspc, m_yspc, m_zspc);
+        nrrdAxisInfoSet(data, nrrdAxisInfoMax, m_xspc * m_x_size, m_yspc * m_y_size, m_zspc * m_slice_num);
+        nrrdAxisInfoSet(data, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
+        nrrdAxisInfoSet(data, nrrdAxisInfoSize, (size_t)m_x_size, (size_t)m_y_size, (size_t)m_slice_num);
+    }
+    else if (m_bd == 16)
+    {
+        unsigned short* val = new (std::nothrow) unsigned short[mem_size];
+        memcpy(val, (unsigned short*)decompressionBuffer + mem_size * c, mem_size * sizeof(unsigned short));
+        data = nrrdNew();
+        nrrdWrap(data, val, nrrdTypeUShort, 3, (size_t)m_x_size, (size_t)m_y_size, (size_t)m_slice_num);
+        nrrdAxisInfoSet(data, nrrdAxisInfoSpacing, m_xspc, m_yspc, m_zspc);
+        nrrdAxisInfoSet(data, nrrdAxisInfoMax, m_xspc * m_x_size, m_yspc * m_y_size, m_zspc * m_slice_num);
+        nrrdAxisInfoSet(data, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
+        nrrdAxisInfoSet(data, nrrdAxisInfoSize, (size_t)m_x_size, (size_t)m_y_size, (size_t)m_slice_num);
+    }
 	
-	if (!(m_xspc>0.0 && m_xspc<100.0))
+	if (data->dim == 2)
 	{
-		double n = output->axis[0].spaceDirection[0]*output->axis[0].spaceDirection[0] +
-				   output->axis[0].spaceDirection[1]*output->axis[0].spaceDirection[1] + 
-				   output->axis[0].spaceDirection[2]*output->axis[0].spaceDirection[2];
-		m_xspc = sqrt(n);
-	}
-	if (!(m_yspc>0.0 && m_yspc<100.0))
-	{
-		double n = output->axis[1].spaceDirection[0]*output->axis[1].spaceDirection[0] +
-				   output->axis[1].spaceDirection[1]*output->axis[1].spaceDirection[1] + 
-				   output->axis[1].spaceDirection[2]*output->axis[1].spaceDirection[2];
-		m_yspc = sqrt(n);
-	}
-	if (!(m_zspc>0.0 && m_zspc<100.0))
-	{
-		double n = output->axis[2].spaceDirection[0]*output->axis[2].spaceDirection[0] +
-				   output->axis[2].spaceDirection[1]*output->axis[2].spaceDirection[1] + 
-				   output->axis[2].spaceDirection[2]*output->axis[2].spaceDirection[2];
-		m_zspc = sqrt(n);
-	}
-	nrrdAxisInfoSet(output, nrrdAxisInfoSpacing, m_xspc, m_yspc, m_zspc);
-	nrrdAxisInfoSet(output, nrrdAxisInfoMax, m_xspc*output->axis[0].size, m_yspc*output->axis[1].size, m_zspc*output->axis[2].size);
-
-	if (m_xspc>0.0 && m_xspc<100.0 &&
-		m_yspc>0.0 && m_yspc<100.0 &&
-		m_zspc>0.0 && m_zspc<100.0)
-		m_valid_spc = true;
-	else
-	{
-		m_valid_spc = false;
-		m_xspc = 1.0;
-		m_yspc = 1.0;
-		m_zspc = 1.0;
-	}
-	size_t voxelnum = (size_t)m_slice_num * (size_t)m_x_size * (size_t)m_y_size;
-    size_t data_size = voxelnum;
-	if (output->type == nrrdTypeUShort || output->type == nrrdTypeShort)
-		data_size *= 2;
-	output->data = new unsigned char[data_size];
-
-	//if (data_size >= 1073741824UL)
-	//	get_max = false;
-
-	if (nrrdRead(output, nrrd_file, NULL))
-	{
-		delete [] output->data;
-		nrrdNix(output);
-		fclose(nrrd_file);
-		return 0;
-	}
-	
-	if (output->dim == 2)
-	{
-		output->dim = 3;
-		output->axis[2].size = 1;
-		output->axis[2].spacing = 1.0;
-		output->axis[0].spaceDirection[2] = 0.0;
-		output->axis[1].spaceDirection[2] = 0.0;
-		output->axis[2].spaceDirection[0] = 0.0;
-		output->axis[2].spaceDirection[1] = 0.0;
-		output->axis[2].spaceDirection[2] = 1.0;
+        data->dim = 3;
+        data->axis[2].size = 1;
+        data->axis[2].spacing = 1.0;
+        data->axis[0].spaceDirection[2] = 0.0;
+        data->axis[1].spaceDirection[2] = 0.0;
+        data->axis[2].spaceDirection[0] = 0.0;
+        data->axis[2].spaceDirection[1] = 0.0;
+        data->axis[2].spaceDirection[2] = 1.0;
 	}
 
-	// turn signed into unsigned
-	if (output->type == nrrdTypeChar) {
-		for (i=0; i<voxelnum; i++) {
-			char val = ((char*)output->data)[i];
-			unsigned char n = val + 128;
-			((unsigned char*)output->data)[i] = n;
-		}
-		output->type = nrrdTypeUChar;
-	}
+    unsigned long long voxelnum = (unsigned long long)m_slice_num * (unsigned long long)m_x_size * (unsigned long long)m_y_size;
 	m_max_value = 0.0;
 	// turn signed into unsigned
 	unsigned short min_value = 32768, n;
-	if (output->type == nrrdTypeShort || (output->type == nrrdTypeUShort && get_max)) {
+	if (data->type == nrrdTypeShort || (data->type == nrrdTypeUShort && get_max)) {
 		for (i=0; i<voxelnum; i++) {
-			if (output->type == nrrdTypeShort) {
-				short val = ((short*)output->data)[i];
+			if (data->type == nrrdTypeShort) {
+				short val = ((short*)data->data)[i];
 				n = val + 32768;
-				((unsigned short*)output->data)[i] = n;
+				((unsigned short*)data->data)[i] = n;
 				min_value = (n < min_value)?n:min_value;
 			} else {
-				n =  ((unsigned short*)output->data)[i];
+				n =  ((unsigned short*)data->data)[i];
 			}
 			if (get_max)
 				m_max_value = (n > m_max_value)?n:m_max_value;
 		}
 	}
 	//find max value
-	if (output->type == nrrdTypeUChar)
+	if (data->type == nrrdTypeUChar)
 	{
 		//8 bit
 		m_max_value = 255.0;
 		m_scalar_scale = 1.0;
 	}
-	else if (output->type == nrrdTypeShort)
+	else if (data->type == nrrdTypeShort)
 	{
 		m_max_value -= min_value;
 		//16 bit
 		for (i=0; i<voxelnum; i++) {
-			((unsigned short*)output->data)[i] =
-				((unsigned short*)output->data)[i] - min_value;
+			((unsigned short*)data->data)[i] =
+				((unsigned short*)data->data)[i] - min_value;
 		}
 		if (m_max_value > 0.0)
 			m_scalar_scale = 65535.0 / m_max_value;
 		else
 			m_scalar_scale = 1.0;
-		output->type = nrrdTypeUShort;
+        data->type = nrrdTypeUShort;
 	}
-	else if (output->type == nrrdTypeUShort)
+	else if (data->type == nrrdTypeUShort)
 	{
 		if (m_max_value > 0.0)
 			m_scalar_scale = 65535.0 / m_max_value;
@@ -424,18 +374,16 @@ Nrrd* V3DPBDReader::Convert(int t, int c, bool get_max)
 	}
 	else
 	{
-		delete []output->data;
-		nrrdNix(output);
-		fclose(nrrd_file);
+		delete []data->data;
+		nrrdNix(data);
 		return 0;
 	}
 
 	m_cur_time = t;
-	fclose(nrrd_file);
 
 	SetInfo();
 
-	return output;
+	return data;
 }
 
 bool V3DPBDReader::nrrd_sort(const TimeDataInfo& info1, const TimeDataInfo& info2)
@@ -454,12 +402,13 @@ void V3DPBDReader::SetInfo()
 
 	wss << L"------------------------\n";
 	wss << m_path_name << '\n';
-	wss << L"File type: NRRD\n";
+	wss << L"File type: V3DPBD\n";
 	wss << L"Width: " << m_x_size << L'\n';
 	wss << L"Height: " << m_y_size << L'\n';
 	wss << L"Depth: " << m_slice_num << L'\n';
 	wss << L"Channels: " << m_chan_num << L'\n';
 	wss << L"Frames: " << m_time_num << L'\n';
+    wss << L"Bit Depth: " << m_bd << L'\n';
 
 	m_info = wss.str();
 }
@@ -1504,14 +1453,7 @@ int V3DPBDReader::loadRaw2StackPBD(const char* filename)
     mysz[0]=mysz[1]=mysz[2]=mysz[3]=0;
     int tmpn=fread(mysz, 4, 4, fid); // because I have already checked the file size to be bigger than the header, no need to check the number of actual bytes read.
     //int tmpn=fileStream.read((char*)mysz, 16); // because I have already checked the file size to be bigger than the header, no need to check the number of actual bytes read.
-    if (tmpn!=16)
-    {
-        stringstream msg;
-        msg << "This program only reads [" << tmpn << "] units.";
-        //return exitWithError(msg.str());
-        return -1;
-    }
-    
+        
     if (b_swap && (unitSize==2 || unitSize==4)) {
         stringstream msg;
         msg << "b_swap true and unitSize > 1 - this is not implemented in current code";
@@ -1611,7 +1553,8 @@ int V3DPBDReader::loadRaw2StackPBD(const char* filename)
     // qDebug() << "Total time elapsed after all reads is " << stopwatch.elapsed() / 1000.0 << " seconds";
     
     // clean and return
-    // fclose(fid); //bug fix on 060412
+    fclose(fid); //bug fix on 060412
+    m_cur_file = filename;
     
     return berror;
 }
