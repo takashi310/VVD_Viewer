@@ -5582,7 +5582,14 @@ void VRenderVulkanView::UpdateBrushState()
 				tree_panel->SelectBrush(0);
 			if (brush_dlg)
 				brush_dlg->SelectBrush(0);
-			RefreshGLOverlays();
+
+			if (m_paint_enable)
+			{
+				Segment();
+				RefreshGL();
+			}
+			else
+				RefreshGLOverlays();
 
 			if (m_prev_focus)
 			{
@@ -14514,13 +14521,14 @@ void VRenderVulkanView::OnMouse(wxMouseEvent& event)
 	//		SetFocus();
 	//mouse interactive flag
 	//m_interactive = false; //deleted by takashi
-	m_paint_enable = false;
-	m_drawing_coord = false;
-
+	
 	wxPoint mouse_pos = wxGetMousePosition();
 	wxRect view_reg = GetScreenRect();
 	if (view_reg.Contains(mouse_pos))
 		UpdateBrushState();
+
+	m_paint_enable = false;
+	m_drawing_coord = false;
 
 	extern CURLM * _g_curlm;
 	int handle_count;
