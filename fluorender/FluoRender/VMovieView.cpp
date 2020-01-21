@@ -736,6 +736,7 @@ void VMovieView::OnRun(wxCommandEvent& event) {
 		}
 		m_filename = m_filename.SubString(0,m_filename.Len()-5);
 		m_record = true;
+        vrv->SetRecording(true);
 
 		if (vr_frame && vr_frame->GetSettingDlg() &&
 			vr_frame->GetSettingDlg()->GetProjSave())
@@ -762,6 +763,13 @@ void VMovieView::OnStop(wxCommandEvent& event) {
 	m_running = false;
 	m_record = false;
 	encoder_.close();
+    
+    wxString str = m_views_cmb->GetValue();
+    VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+    if (!vr_frame) return;
+    VRenderView* vrv = vr_frame->GetView(str);
+    if (!vrv) return;
+    vrv->SetRecording(false);
 }
 
 void VMovieView::OnRewind(wxCommandEvent& event){
@@ -1216,12 +1224,12 @@ void VMovieView::WriteFrameToFile(int total_frames) {
 	int chann = 4; //RGB or RGBA
 	int dst_chann = 3;
     unsigned char *image = new unsigned char[w*h*chann];
-	vks::VFrameBuffer* current_fbo = vrv->m_glview->m_vulkan->frameBuffers[vrv->m_glview->m_vulkan->currentBuffer].get();
-	vrv->m_glview->m_vulkan->vulkanDevice->DownloadTexture(current_fbo->attachments[0], image);
+    VkFormat texformat;
+    vrv->DownloadRecordedFrame(image, texformat);
 
 	bool colorSwizzleBGR = false;
 	std::vector<VkFormat> formatsBGR = { VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_B8G8R8A8_SNORM };
-	colorSwizzleBGR = (std::find(formatsBGR.begin(), formatsBGR.end(), current_fbo->attachments[0]->format) != formatsBGR.end());
+	colorSwizzleBGR = (std::find(formatsBGR.begin(), formatsBGR.end(), texformat) != formatsBGR.end());
 
 	unsigned char* rgb_image = new unsigned char[w * h * dst_chann];
 

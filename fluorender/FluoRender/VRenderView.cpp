@@ -7454,10 +7454,59 @@ void VRenderVulkanView::OnDraw(wxPaintEvent& event)
 	if (m_tile_rendering && m_current_tileid >= m_tile_xnum*m_tile_ynum) {
 		EndTileRendering();
 	}
+    
+    if (m_recording)
+    {
+        vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+        vks::VulkanDevice* prim_dev = m_vulkan->devices[0];
+        
+        if (m_fbo_record && (m_fbo_record->w != nx || m_fbo_record->h != ny))
+        {
+            m_fbo_record.reset();
+            m_tex_record.reset();
+        }
+        if (!m_fbo_record)
+        {
+            m_fbo_record = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+            m_fbo_record->w = m_nx;
+            m_fbo_record->h = m_ny;
+            m_fbo_record->device = prim_dev;
+            
+            m_tex_record = prim_dev->GenTexture2D(current_fbo->attachments[0]->format, VK_FILTER_LINEAR, m_nx, m_ny);
+            m_fbo_record->addAttachment(m_tex_record);
+        }
+        
+        Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+        params.pipeline =
+        m_v2drender->preparePipeline(
+                                     IMG_SHADER_TEXTURE_LOOKUP,
+                                     V2DRENDER_BLEND_DISABLE,
+                                     m_fbo_record->attachments[0]->format,
+                                     m_fbo_record->attachments.size(),
+                                     0,
+                                     m_fbo_record->attachments[0]->is_swapchain_images);
+        params.tex[0] = current_fbo->attachments[0].get();
+        params.clear = true;
+        
+        if (!m_fbo_record->renderPass)
+            m_fbo_record->replaceRenderPass(params.pipeline.pass);
+        
+        m_v2drender->render(m_fbo_record, params);
+    }
 
 	m_vulkan->submitFrame();
 
 	SetEvtHandlerEnabled(true);
+}
+
+void VRenderVulkanView::DownloadRecordedFrame(void *image, VkFormat &format)
+{
+    if (!m_recording)
+        return;
+    
+    vkQueueWaitIdle(m_vulkan->vulkanDevice->queue);
+    m_vulkan->vulkanDevice->DownloadTexture(m_tex_record, image);
+    format = m_tex_record->format;
 }
 
 void VRenderVulkanView::SetRadius(double r)

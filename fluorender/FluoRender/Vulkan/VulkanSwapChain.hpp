@@ -462,8 +462,28 @@ public:
 			buffers[i]->mipLevels = 1;
 			buffers[i]->is_swapchain_images = true;
 			buffers[i]->descriptor.imageLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+            
+            // Create sampler
+            VkSamplerCreateInfo sampler = vks::initializers::samplerCreateInfo();
+            sampler.magFilter = VK_FILTER_LINEAR;
+            sampler.minFilter = VK_FILTER_LINEAR;
+            sampler.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+            sampler.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            sampler.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            sampler.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            sampler.mipLodBias = 0.0f;
+            sampler.compareOp = VK_COMPARE_OP_NEVER;
+            sampler.minLod = 0.0f;
+            sampler.maxLod = 0.0f;
+            sampler.maxAnisotropy = 1.0;
+            sampler.anisotropyEnable = VK_FALSE;
+            sampler.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+            VK_CHECK_RESULT(vkCreateSampler(device, &sampler, nullptr, &buffers[i]->descriptor.sampler));
+            buffers[i]->free_sampler = true;
 
 			VK_CHECK_RESULT(vkCreateImageView(device, &colorAttachmentView, nullptr, &buffers[i]->view));
+            
+            buffers[i]->descriptor.imageView = buffers[i]->view;
 		}
 	}
 

@@ -687,6 +687,10 @@ public:
 	double CalcCameraDistance();
 
 	void OnErase(wxEraseEvent& event);
+    
+    void SetRecording(bool val) { m_recording = val; }
+    bool GetRecording() { return m_recording; }
+    void DownloadRecordedFrame(void *image, VkFormat &format);
 
 public:
 	//script run
@@ -890,6 +894,10 @@ private:
 	std::shared_ptr<vks::VTexture> m_tex_tile;
 	std::unique_ptr<vks::VFrameBuffer> m_fbo_tiled_tmp;
 	std::shared_ptr<vks::VTexture> m_tex_tiled_tmp;
+    
+    std::unique_ptr<vks::VFrameBuffer> m_fbo_record;
+    std::shared_ptr<vks::VTexture> m_tex_record;
+    bool m_recording;
 
 	//camera controls
 	bool m_persp;
@@ -1858,6 +1866,19 @@ public:
 	{
 		if (m_glview) return m_glview->GetAdaptiveRes(); else return 0;
 	}
+    
+    void SetRecording(bool recording)
+    {
+        if (m_glview) m_glview->SetRecording(recording);
+    }
+    bool GetRecording()
+    {
+        if (m_glview) return m_glview->GetRecording(); else return 0;
+    }
+    void DownloadRecordedFrame(void *image, VkFormat &format)
+    {
+        if (m_glview) m_glview->DownloadRecordedFrame(image, format);
+    }
 
 	void SetMinPPI(double ppi);
 	double GetMinPPI();
