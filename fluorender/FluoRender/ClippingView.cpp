@@ -36,6 +36,7 @@ BEGIN_EVENT_TABLE(ClippingView, wxPanel)
 	EVT_COMBOBOX(ID_PlaneModesCombo, ClippingView::OnPlaneModesCombo)
 	EVT_BUTTON(ID_SetZeroBtn, ClippingView::OnSetZeroBtn)
 	EVT_CHECKBOX(ID_FixRotsChk, ClippingView::OnFixRotsCheck)
+    EVT_CHECKBOX(ID_HoldPlanesChk, ClippingView::OnHoldPlanesCheck)
 	EVT_BUTTON(ID_RotResetBtn, ClippingView::OnRotResetBtn)
 	EVT_BUTTON(ID_ClipResetBtn, ClippingView::OnClipResetBtn)
 
@@ -99,6 +100,7 @@ m_link_x(false),
 m_link_y(false),
 m_link_z(false),
 m_fix_rots(false),
+m_mouse_in(false),
 m_update_only_ui(false)
 {
 	SetEvtHandlerEnabled(false);
@@ -147,9 +149,10 @@ m_update_only_ui(false)
 	wxBoxSizer* sizer_f = new wxBoxSizer(wxHORIZONTAL);
 	m_fix_rots_chk = new wxCheckBox(this, ID_FixRotsChk, "Fix in View");
 	m_fix_rots_chk->SetValue(false);
+    m_hold_planes_chk = new wxCheckBox(this, ID_HoldPlanesChk, "Display Planes");
+    m_hold_planes_chk->SetValue(false);
 	sizer_f->Add(5, 5, 0);
 	sizer_f->Add(m_fix_rots_chk, 0, wxALIGN_CENTER);
-	sizer_f->Add(5, 5, 0);
 
 	//set sero rotation for clipping planes
 	wxBoxSizer* sizer_2 = new wxBoxSizer(wxHORIZONTAL);
@@ -448,7 +451,8 @@ m_update_only_ui(false)
 	sizer_v->Add(st, 0, wxALIGN_CENTER);
 	sizer_v->Add(10, 10, 0);
 	sizer_v->Add(sizer_f, 0, wxALIGN_CENTER);
-	sizer_v->Add(5, 5, 0);
+    sizer_v->Add(m_hold_planes_chk, 0, wxALIGN_CENTER);
+    sizer_v->Add(5, 5, 0);
 	sizer_v->Add(sizer_2, 0, wxALIGN_CENTER);
 	sizer_v->Add(sizer_3, 0, wxALIGN_CENTER);
 	sizer_v->Add(10, 10, 0);
@@ -1854,12 +1858,6 @@ void ClippingView::OnIdle(wxTimerEvent& event)
 		m_zBar->SetSize(wxSize(3,barsize*clipSz));
 	}
 
-	if (m_hold_planes)
-	{
-		m_draw_clip = true;
-		return;
-	}
-
 	int i;
 	VRenderFrame* vrender_frame = (VRenderFrame*)m_frame;
 	if (!vrender_frame)
@@ -1878,6 +1876,34 @@ void ClippingView::OnIdle(wxTimerEvent& event)
 	wxPoint pos = wxGetMousePosition();
 	wxRect reg = GetScreenRect();
 	wxWindow *window = wxWindow::FindFocus();
+    
+    if (m_hold_planes)
+    {
+        m_draw_clip = true;
+        
+        if (window && reg.Contains(pos))
+        {
+            if (!m_mouse_in)
+            {
+                vector <VRenderView*>* vrv_list = vrender_frame->GetViewList();
+                for (i=0; i<(int)vrv_list->size(); i++)
+                {
+                    if ((*vrv_list)[i])
+                        (*vrv_list)[i]->m_glview->m_clip_mask = -1;
+                }
+                if (m_plane_mode == PM_LOWTRANSBACK || m_plane_mode == PM_NORMALBACK)
+                    RefreshVRenderViews();
+                else
+                    RefreshVRenderViewsOverlay();
+            }
+            m_mouse_in = true;
+        }
+        else
+            m_mouse_in = false;
+        
+        return;
+    }
+    
 	if (window && reg.Contains(pos))
 	{
 		if (!m_draw_clip)
@@ -1897,10 +1923,11 @@ void ClippingView::OnIdle(wxTimerEvent& event)
 				RefreshVRenderViewsOverlay();
 			m_draw_clip = true;
 		}
+        m_mouse_in = true;
 	}
 	else
 	{
-		if (m_draw_clip)
+		if (m_draw_clip && !m_hold_planes)
 		{
 			vector <VRenderView*>* vrv_list = vrender_frame->GetViewList();
 			for (i=0; i<(int)vrv_list->size(); i++)
@@ -1913,6 +1940,7 @@ void ClippingView::OnIdle(wxTimerEvent& event)
 			else 
 				RefreshVRenderViewsOverlay();
 			m_draw_clip = false;
+            m_mouse_in = false;
 		}
 	}
 
@@ -2856,6 +2884,14 @@ void ClippingView::OnFixRotsCheck(wxCommandEvent& event)
 	}
 }
 
+void ClippingView::OnHoldPlanesCheck(wxCommandEvent& event)
+{
+    if (m_hold_planes_chk->GetValue())
+        m_hold_planes = true;
+    else
+        m_hold_planes = false;
+}
+
 void ClippingView::LoadDefault()
 {
 	wxString expath = wxStandardPaths::Get().GetExecutablePath();
@@ -2955,6 +2991,7 @@ void ClippingView::EnableAll()
 	m_xz_dist_text->Enable();
 	m_xy_dist_text->Enable();
 	m_fix_rots_chk->Enable();
+    m_hold_planes_chk->Enable();
 }
 
 void ClippingView::DisableAll()
@@ -2994,6 +3031,7 @@ void ClippingView::DisableAll()
 	m_xz_dist_text->Disable();
 	m_xy_dist_text->Disable();
 	m_fix_rots_chk->Disable();
+    m_hold_planes_chk->Disable();
 }
 
 void ClippingView::EnableRotations()

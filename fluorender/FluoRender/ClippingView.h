@@ -86,7 +86,8 @@ class EXPORT_API ClippingView: public wxPanel
 		ID_XZDistText,
 		ID_XYDistText,
 		ID_CLTimer,
-		ID_FixRotsChk
+		ID_FixRotsChk,
+        ID_HoldPlanesChk
 	};
 
 public:
@@ -185,10 +186,10 @@ public:
 	void SaveDefault();
 	void LoadDefault();
 
-	void SetUpdateOnlyUIs(bool val) { m_update_only_ui; }
+	void SetUpdateOnlyUIs(bool val) { m_update_only_ui = val; }
 	bool GetUpdateOnlyUIs() { return m_update_only_ui; }
 
-	void SetFixRotations(bool val) { m_fix_rots; }
+	void SetFixRotations(bool val) { m_fix_rots = val; }
 	bool GetFixRotations() { return m_fix_rots; }
 
 private:
@@ -210,8 +211,8 @@ private:
 	bool m_link_z;
 
 	bool m_fix_rots;
-
 	bool m_update_only_ui;
+    bool m_mouse_in;
 
 	//1st line
 	wxCheckBox *m_link_channels;
@@ -219,6 +220,7 @@ private:
 	wxButton *m_clip_reset_btn;
 	//fix plane rotations
 	wxCheckBox* m_fix_rots_chk;
+    wxCheckBox* m_hold_planes_chk;
 	wxButton *m_set_zero_btn;
 	wxButton *m_rot_reset_btn;
 
@@ -309,6 +311,7 @@ private:
 	void OnRotResetBtn(wxCommandEvent &event);
 
 	void OnFixRotsCheck(wxCommandEvent& event);
+    void OnHoldPlanesCheck(wxCommandEvent& event);
 	void OnXRotChange(wxScrollEvent &event);
 	void OnYRotChange(wxScrollEvent &event);
 	void OnZRotChange(wxScrollEvent &event);

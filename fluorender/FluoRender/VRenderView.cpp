@@ -11901,14 +11901,22 @@ void VRenderVulkanView::Q2A()
 			int resx, resy, resz;
 			m_vd_pop_list[i]->GetSpacings(spcx, spcy, spcz);
 			m_vd_pop_list[i]->GetResolution(resx, resy, resz);
-			Vector scale;
-			if (spcx>0.0 && spcy>0.0 && spcz>0.0)
-			{
-				scale = Vector(1.0/resx/spcx, 1.0/resy/spcy, 1.0/resz/spcz);
-				scale.safe_normalize();
-			}
-			else
-				scale = Vector(1.0, 1.0, 1.0);
+			Vector scale, scale2, scale2inv;
+            if (spcx>0.0 && spcy>0.0 && spcz>0.0)
+            {
+                scale = Vector(1.0/resx/spcx, 1.0/resy/spcy, 1.0/resz/spcz);
+                scale.safe_normalize();
+                scale2 = Vector(resx*spcx, resy*spcy, resz*spcz);
+                //scale2.safe_normalize();
+                scale2inv = Vector(1.0/(resx*spcx), 1.0/(resy*spcy), 1.0/(resz*spcz));
+                //scale2inv.safe_normalize();
+            }
+            else
+            {
+                scale = Vector(1.0, 1.0, 1.0);
+                scale2 = Vector(1.0, 1.0, 1.0);
+                scale2inv = Vector(1.0, 1.0, 1.0);
+            }
 
 			if (m_vd_pop_list[i]->GetVR())
 				planes = m_vd_pop_list[i]->GetVR()->get_planes();
@@ -11933,41 +11941,47 @@ void VRenderVulkanView::Q2A()
 				Vector trans1(-0.5, -0.5, -0.5);
 				Vector trans2(0.5, 0.5, 0.5);
 
-				(*planes)[0]->Restore();
-				(*planes)[0]->Translate(trans1);
-				(*planes)[0]->Rotate(m_q_cl);
-				(*planes)[0]->Scale(scale);
-				(*planes)[0]->Translate(trans2);
-
-				(*planes)[1]->Restore();
-				(*planes)[1]->Translate(trans1);
-				(*planes)[1]->Rotate(m_q_cl);
-				(*planes)[1]->Scale(scale);
-				(*planes)[1]->Translate(trans2);
-
-				(*planes)[2]->Restore();
-				(*planes)[2]->Translate(trans1);
-				(*planes)[2]->Rotate(m_q_cl);
-				(*planes)[2]->Scale(scale);
-				(*planes)[2]->Translate(trans2);
-
-				(*planes)[3]->Restore();
-				(*planes)[3]->Translate(trans1);
-				(*planes)[3]->Rotate(m_q_cl);
-				(*planes)[3]->Scale(scale);
-				(*planes)[3]->Translate(trans2);
-
-				(*planes)[4]->Restore();
-				(*planes)[4]->Translate(trans1);
-				(*planes)[4]->Rotate(m_q_cl);
-				(*planes)[4]->Scale(scale);
-				(*planes)[4]->Translate(trans2);
-
-				(*planes)[5]->Restore();
-				(*planes)[5]->Translate(trans1);
-				(*planes)[5]->Rotate(m_q_cl);
-				(*planes)[5]->Scale(scale);
-				(*planes)[5]->Translate(trans2);
+                (*planes)[0]->Restore();
+                (*planes)[0]->Translate(trans1);
+                (*planes)[0]->Scale2(scale2);
+                (*planes)[0]->Rotate(m_q_cl);
+                (*planes)[0]->Scale2(scale2inv);
+                (*planes)[0]->Translate(trans2);
+                
+                (*planes)[1]->Restore();
+                (*planes)[1]->Translate(trans1);
+                (*planes)[1]->Scale2(scale2);
+                (*planes)[1]->Rotate(m_q_cl);
+                (*planes)[1]->Scale2(scale2inv);
+                (*planes)[1]->Translate(trans2);
+                
+                (*planes)[2]->Restore();
+                (*planes)[2]->Translate(trans1);
+                (*planes)[2]->Scale2(scale2);
+                (*planes)[2]->Rotate(m_q_cl);
+                (*planes)[2]->Scale2(scale2inv);
+                (*planes)[2]->Translate(trans2);
+                
+                (*planes)[3]->Restore();
+                (*planes)[3]->Translate(trans1);
+                (*planes)[3]->Scale2(scale2);
+                (*planes)[3]->Rotate(m_q_cl);
+                (*planes)[3]->Scale2(scale2inv);
+                (*planes)[3]->Translate(trans2);
+                
+                (*planes)[4]->Restore();
+                (*planes)[4]->Translate(trans1);
+                (*planes)[4]->Scale2(scale2);
+                (*planes)[4]->Rotate(m_q_cl);
+                (*planes)[4]->Scale2(scale2inv);
+                (*planes)[4]->Translate(trans2);
+                
+                (*planes)[5]->Restore();
+                (*planes)[5]->Translate(trans1);
+                (*planes)[5]->Scale2(scale2);
+                (*planes)[5]->Rotate(m_q_cl);
+                (*planes)[5]->Scale2(scale2inv);
+                (*planes)[5]->Translate(trans2);
 			}
 		}
 	}
@@ -12015,14 +12029,22 @@ void VRenderVulkanView::A2Q()
 			int resx, resy, resz;
 			m_vd_pop_list[i]->GetSpacings(spcx, spcy, spcz);
 			m_vd_pop_list[i]->GetResolution(resx, resy, resz);
-			Vector scale;
+			Vector scale, scale2, scale2inv;
 			if (spcx>0.0 && spcy>0.0 && spcz>0.0)
 			{
 				scale = Vector(1.0/resx/spcx, 1.0/resy/spcy, 1.0/resz/spcz);
 				scale.safe_normalize();
+                scale2 = Vector(resx*spcx, resy*spcy, resz*spcz);
+                //scale2.safe_normalize();
+                scale2inv = Vector(1.0/(resx*spcx), 1.0/(resy*spcy), 1.0/(resz*spcz));
+                //scale2inv.safe_normalize();
 			}
 			else
+            {
 				scale = Vector(1.0, 1.0, 1.0);
+                scale2 = Vector(1.0, 1.0, 1.0);
+                scale2inv = Vector(1.0, 1.0, 1.0);
+            }
 
 			if (m_vd_pop_list[i]->GetVR())
 				planes = m_vd_pop_list[i]->GetVR()->get_planes();
@@ -12050,38 +12072,44 @@ void VRenderVulkanView::A2Q()
 
 				(*planes)[0]->Restore();
 				(*planes)[0]->Translate(trans1);
+                (*planes)[0]->Scale2(scale2);
 				(*planes)[0]->Rotate(m_q_cl);
-				(*planes)[0]->Scale(scale);
+                (*planes)[0]->Scale2(scale2inv);
 				(*planes)[0]->Translate(trans2);
 
 				(*planes)[1]->Restore();
 				(*planes)[1]->Translate(trans1);
+                (*planes)[1]->Scale2(scale2);
 				(*planes)[1]->Rotate(m_q_cl);
-				(*planes)[1]->Scale(scale);
+                (*planes)[1]->Scale2(scale2inv);
 				(*planes)[1]->Translate(trans2);
 
 				(*planes)[2]->Restore();
 				(*planes)[2]->Translate(trans1);
+                (*planes)[2]->Scale2(scale2);
 				(*planes)[2]->Rotate(m_q_cl);
-				(*planes)[2]->Scale(scale);
+                (*planes)[2]->Scale2(scale2inv);
 				(*planes)[2]->Translate(trans2);
 
 				(*planes)[3]->Restore();
 				(*planes)[3]->Translate(trans1);
+                (*planes)[3]->Scale2(scale2);
 				(*planes)[3]->Rotate(m_q_cl);
-				(*planes)[3]->Scale(scale);
+                (*planes)[3]->Scale2(scale2inv);
 				(*planes)[3]->Translate(trans2);
 
 				(*planes)[4]->Restore();
 				(*planes)[4]->Translate(trans1);
+                (*planes)[4]->Scale2(scale2);
 				(*planes)[4]->Rotate(m_q_cl);
-				(*planes)[4]->Scale(scale);
+                (*planes)[4]->Scale2(scale2inv);
 				(*planes)[4]->Translate(trans2);
 
 				(*planes)[5]->Restore();
 				(*planes)[5]->Translate(trans1);
+                (*planes)[5]->Scale2(scale2);
 				(*planes)[5]->Rotate(m_q_cl);
-				(*planes)[5]->Scale(scale);
+                (*planes)[5]->Scale2(scale2inv);
 				(*planes)[5]->Translate(trans2);
 			}
 		}
@@ -12094,9 +12122,13 @@ void VRenderVulkanView::A2Q()
 			vector<Plane*> *planes = 0;
 
 			Vector sz = m_md_pop_list[i]->GetBounds().diagonal();
-			Vector scale;
+			Vector scale, scale2, scale2inv;
 			scale = Vector(1.0/sz.x(), 1.0/sz.y(), 1.0/sz.z());
 			scale.safe_normalize();
+            scale2 = Vector(sz.x(), sz.y(), sz.z());
+            //scale2.safe_normalize();
+            scale2inv = Vector(1.0/sz.x(), 1.0/sz.y(), 1.0/sz.z());
+            //scale2inv.safe_normalize();
 			
 			if (m_md_pop_list[i]->GetMR())
 				planes = m_md_pop_list[i]->GetMR()->get_planes();
@@ -12121,41 +12153,47 @@ void VRenderVulkanView::A2Q()
 				Vector trans1(-0.5, -0.5, -0.5);
 				Vector trans2(0.5, 0.5, 0.5);
 
-				(*planes)[0]->Restore();
-				(*planes)[0]->Translate(trans1);
-				(*planes)[0]->Rotate(m_q_cl);
-				(*planes)[0]->Scale(scale);
-				(*planes)[0]->Translate(trans2);
-
-				(*planes)[1]->Restore();
-				(*planes)[1]->Translate(trans1);
-				(*planes)[1]->Rotate(m_q_cl);
-				(*planes)[1]->Scale(scale);
-				(*planes)[1]->Translate(trans2);
-
-				(*planes)[2]->Restore();
-				(*planes)[2]->Translate(trans1);
-				(*planes)[2]->Rotate(m_q_cl);
-				(*planes)[2]->Scale(scale);
-				(*planes)[2]->Translate(trans2);
-
-				(*planes)[3]->Restore();
-				(*planes)[3]->Translate(trans1);
-				(*planes)[3]->Rotate(m_q_cl);
-				(*planes)[3]->Scale(scale);
-				(*planes)[3]->Translate(trans2);
-
-				(*planes)[4]->Restore();
-				(*planes)[4]->Translate(trans1);
-				(*planes)[4]->Rotate(m_q_cl);
-				(*planes)[4]->Scale(scale);
-				(*planes)[4]->Translate(trans2);
-
-				(*planes)[5]->Restore();
-				(*planes)[5]->Translate(trans1);
-				(*planes)[5]->Rotate(m_q_cl);
-				(*planes)[5]->Scale(scale);
-				(*planes)[5]->Translate(trans2);
+                (*planes)[0]->Restore();
+                (*planes)[0]->Translate(trans1);
+                (*planes)[0]->Scale2(scale2);
+                (*planes)[0]->Rotate(m_q_cl);
+                (*planes)[0]->Scale2(scale2inv);
+                (*planes)[0]->Translate(trans2);
+                
+                (*planes)[1]->Restore();
+                (*planes)[1]->Translate(trans1);
+                (*planes)[1]->Scale2(scale2);
+                (*planes)[1]->Rotate(m_q_cl);
+                (*planes)[1]->Scale2(scale2inv);
+                (*planes)[1]->Translate(trans2);
+                
+                (*planes)[2]->Restore();
+                (*planes)[2]->Translate(trans1);
+                (*planes)[2]->Scale2(scale2);
+                (*planes)[2]->Rotate(m_q_cl);
+                (*planes)[2]->Scale2(scale2inv);
+                (*planes)[2]->Translate(trans2);
+                
+                (*planes)[3]->Restore();
+                (*planes)[3]->Translate(trans1);
+                (*planes)[3]->Scale2(scale2);
+                (*planes)[3]->Rotate(m_q_cl);
+                (*planes)[3]->Scale2(scale2inv);
+                (*planes)[3]->Translate(trans2);
+                
+                (*planes)[4]->Restore();
+                (*planes)[4]->Translate(trans1);
+                (*planes)[4]->Scale2(scale2);
+                (*planes)[4]->Rotate(m_q_cl);
+                (*planes)[4]->Scale2(scale2inv);
+                (*planes)[4]->Translate(trans2);
+                
+                (*planes)[5]->Restore();
+                (*planes)[5]->Translate(trans1);
+                (*planes)[5]->Scale2(scale2);
+                (*planes)[5]->Rotate(m_q_cl);
+                (*planes)[5]->Scale2(scale2inv);
+                (*planes)[5]->Translate(trans2);
 			}
 		}
 	}

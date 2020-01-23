@@ -85,6 +85,7 @@ namespace FLIVR
 		void Rotate(Quaternion &q);
 		//scale the plane from the origin by a vector
 		void Scale(Vector &v);
+        void Scale2(Vector &v);
 
 		//remember and restore
 		void Remember() {n_copy = n; d_copy = d;};
