@@ -442,8 +442,8 @@ VRenderFrame::VRenderFrame(
 		FloatingSize(wxSize(110, 700)).Layer(1));
 	m_aui_mgr.AddPane(m_clip_view, wxAuiPaneInfo().
 		Name("m_clip_view").Caption(UITEXT_CLIPPING).
-		Right().CloseButton(true).MinSize(wxSize(130, 700)).
-		FloatingSize(wxSize(130, 700)).Layer(1));
+		Right().CloseButton(true).MinSize(wxSize(160, 700)).
+		FloatingSize(wxSize(160, 700)).Layer(1));
 	m_aui_mgr.AddPane(vrv, wxAuiPaneInfo().
 		Name(vrv->GetName()).Caption(vrv->GetName()).
 		Dockable(true).CloseButton(false).

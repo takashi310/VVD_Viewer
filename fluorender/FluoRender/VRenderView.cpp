@@ -11873,8 +11873,9 @@ void VRenderVulkanView::Q2A()
 		else if (m_clip_mode == 3)
 		{
 			m_q_cl_zero.FromEuler(-m_rotx, -m_roty, m_rotz);
-			m_q_cl = m_q_cl_fix * (m_q_fix * m_q_cl_zero);
-			m_q_cl.ToEuler(m_rotx_cl, m_roty_cl, m_rotz_cl);
+			m_q_cl = m_q_fix * m_q_cl_zero;
+			/*
+            m_q_cl.ToEuler(m_rotx_cl, m_roty_cl, m_rotz_cl);
 			if (m_rotx_cl > 180.0) m_rotx_cl -= 360.0;
 			if (m_roty_cl > 180.0) m_roty_cl -= 360.0;
 			if (m_rotz_cl > 180.0) m_rotz_cl -= 360.0;
@@ -11889,6 +11890,7 @@ void VRenderVulkanView::Q2A()
 						m_rotz_cl <= 180.0 ? m_rotz_cl : 360.0 - m_rotz_cl,
 						true);
 			}
+             */
 		}
 
 		vector<Plane*> *planes = 0;
@@ -11937,51 +11939,74 @@ void VRenderVulkanView::Q2A()
 				z1 = fabs(abcd[3]);
 				(*planes)[5]->get_copy(abcd);
 				z2 = fabs(abcd[3]);
-
-				Vector trans1(-0.5, -0.5, -0.5);
-				Vector trans2(0.5, 0.5, 0.5);
-
-                (*planes)[0]->Restore();
-                (*planes)[0]->Translate(trans1);
-                (*planes)[0]->Scale2(scale2);
-                (*planes)[0]->Rotate(m_q_cl);
-                (*planes)[0]->Scale2(scale2inv);
-                (*planes)[0]->Translate(trans2);
                 
-                (*planes)[1]->Restore();
-                (*planes)[1]->Translate(trans1);
-                (*planes)[1]->Scale2(scale2);
-                (*planes)[1]->Rotate(m_q_cl);
-                (*planes)[1]->Scale2(scale2inv);
-                (*planes)[1]->Translate(trans2);
+                Vector trans1(-0.5, -0.5, -0.5);
+                Vector trans2(0.5, 0.5, 0.5);
                 
-                (*planes)[2]->Restore();
-                (*planes)[2]->Translate(trans1);
-                (*planes)[2]->Scale2(scale2);
-                (*planes)[2]->Rotate(m_q_cl);
-                (*planes)[2]->Scale2(scale2inv);
-                (*planes)[2]->Translate(trans2);
-                
-                (*planes)[3]->Restore();
-                (*planes)[3]->Translate(trans1);
-                (*planes)[3]->Scale2(scale2);
-                (*planes)[3]->Rotate(m_q_cl);
-                (*planes)[3]->Scale2(scale2inv);
-                (*planes)[3]->Translate(trans2);
-                
-                (*planes)[4]->Restore();
-                (*planes)[4]->Translate(trans1);
-                (*planes)[4]->Scale2(scale2);
-                (*planes)[4]->Rotate(m_q_cl);
-                (*planes)[4]->Scale2(scale2inv);
-                (*planes)[4]->Translate(trans2);
-                
-                (*planes)[5]->Restore();
-                (*planes)[5]->Translate(trans1);
-                (*planes)[5]->Scale2(scale2);
-                (*planes)[5]->Rotate(m_q_cl);
-                (*planes)[5]->Scale2(scale2inv);
-                (*planes)[5]->Translate(trans2);
+                if (m_clip_mode == 3)
+                {
+                    Vector obj_trans1 = m_trans_fix;
+                    Vector obj_trans2 = -obj_trans1;
+                    Vector obj_trans3 = obj_trans1 - Vector(m_obj_transx, m_obj_transy, -m_obj_transz);
+                    
+                    for (int i = 0; i < 6; i++)
+                    {
+                        (*planes)[i]->Restore();
+                        (*planes)[i]->Translate(trans1);
+                        (*planes)[i]->Scale2(scale2);
+                        (*planes)[i]->Rotate(m_q_cl_fix);
+                        (*planes)[i]->Translate(obj_trans1);
+                        (*planes)[i]->Rotate(m_q_cl);
+                        (*planes)[i]->Translate(obj_trans2);
+                        (*planes)[i]->Translate(obj_trans3);
+                        (*planes)[i]->Scale2(scale2inv);
+                        (*planes)[i]->Translate(trans2);
+                    }
+                }
+                else
+                {
+                    (*planes)[0]->Restore();
+                    (*planes)[0]->Translate(trans1);
+                    (*planes)[0]->Scale2(scale2);
+                    (*planes)[0]->Rotate(m_q_cl);
+                    (*planes)[0]->Scale2(scale2inv);
+                    (*planes)[0]->Translate(trans2);
+                    
+                    (*planes)[1]->Restore();
+                    (*planes)[1]->Translate(trans1);
+                    (*planes)[1]->Scale2(scale2);
+                    (*planes)[1]->Rotate(m_q_cl);
+                    (*planes)[1]->Scale2(scale2inv);
+                    (*planes)[1]->Translate(trans2);
+                    
+                    (*planes)[2]->Restore();
+                    (*planes)[2]->Translate(trans1);
+                    (*planes)[2]->Scale2(scale2);
+                    (*planes)[2]->Rotate(m_q_cl);
+                    (*planes)[2]->Scale2(scale2inv);
+                    (*planes)[2]->Translate(trans2);
+                    
+                    (*planes)[3]->Restore();
+                    (*planes)[3]->Translate(trans1);
+                    (*planes)[3]->Scale2(scale2);
+                    (*planes)[3]->Rotate(m_q_cl);
+                    (*planes)[3]->Scale2(scale2inv);
+                    (*planes)[3]->Translate(trans2);
+                    
+                    (*planes)[4]->Restore();
+                    (*planes)[4]->Translate(trans1);
+                    (*planes)[4]->Scale2(scale2);
+                    (*planes)[4]->Rotate(m_q_cl);
+                    (*planes)[4]->Scale2(scale2inv);
+                    (*planes)[4]->Translate(trans2);
+                    
+                    (*planes)[5]->Restore();
+                    (*planes)[5]->Translate(trans1);
+                    (*planes)[5]->Scale2(scale2);
+                    (*planes)[5]->Rotate(m_q_cl);
+                    (*planes)[5]->Scale2(scale2inv);
+                    (*planes)[5]->Translate(trans2);
+                }
 			}
 		}
 	}
@@ -12000,8 +12025,9 @@ void VRenderVulkanView::A2Q()
 			m_q_cl.FromEuler(-m_rotx, -m_roty, m_rotz);
 		else if (m_clip_mode == 3)
 		{
-			m_q_cl_zero.FromEuler(-m_rotx, -m_roty, m_rotz);
-			m_q_cl = m_q_cl_fix * (m_q_fix * m_q_cl_zero);
+            m_q_cl_zero.FromEuler(-m_rotx, -m_roty, m_rotz);
+            m_q_cl = m_q_fix * m_q_cl_zero;
+            /*
 			m_q_cl.ToEuler(m_rotx_cl, m_roty_cl, m_rotz_cl);
 			if (m_rotx_cl > 180.0) m_rotx_cl -= 360.0;
 			if (m_roty_cl > 180.0) m_roty_cl -= 360.0;
@@ -12017,6 +12043,7 @@ void VRenderVulkanView::A2Q()
 						m_rotz_cl <= 180.0 ? m_rotz_cl : 360.0 - m_rotz_cl,
 						true);
 			}
+             */
 		}
 
 		for (int i=0; i<(int)m_vd_pop_list.size(); i++)
@@ -12067,50 +12094,73 @@ void VRenderVulkanView::A2Q()
 				(*planes)[5]->get_copy(abcd);
 				z2 = fabs(abcd[3]);
 
-				Vector trans1(-0.5, -0.5, -0.5);
-				Vector trans2(0.5, 0.5, 0.5);
-
-				(*planes)[0]->Restore();
-				(*planes)[0]->Translate(trans1);
-                (*planes)[0]->Scale2(scale2);
-				(*planes)[0]->Rotate(m_q_cl);
-                (*planes)[0]->Scale2(scale2inv);
-				(*planes)[0]->Translate(trans2);
-
-				(*planes)[1]->Restore();
-				(*planes)[1]->Translate(trans1);
-                (*planes)[1]->Scale2(scale2);
-				(*planes)[1]->Rotate(m_q_cl);
-                (*planes)[1]->Scale2(scale2inv);
-				(*planes)[1]->Translate(trans2);
-
-				(*planes)[2]->Restore();
-				(*planes)[2]->Translate(trans1);
-                (*planes)[2]->Scale2(scale2);
-				(*planes)[2]->Rotate(m_q_cl);
-                (*planes)[2]->Scale2(scale2inv);
-				(*planes)[2]->Translate(trans2);
-
-				(*planes)[3]->Restore();
-				(*planes)[3]->Translate(trans1);
-                (*planes)[3]->Scale2(scale2);
-				(*planes)[3]->Rotate(m_q_cl);
-                (*planes)[3]->Scale2(scale2inv);
-				(*planes)[3]->Translate(trans2);
-
-				(*planes)[4]->Restore();
-				(*planes)[4]->Translate(trans1);
-                (*planes)[4]->Scale2(scale2);
-				(*planes)[4]->Rotate(m_q_cl);
-                (*planes)[4]->Scale2(scale2inv);
-				(*planes)[4]->Translate(trans2);
-
-				(*planes)[5]->Restore();
-				(*planes)[5]->Translate(trans1);
-                (*planes)[5]->Scale2(scale2);
-				(*planes)[5]->Rotate(m_q_cl);
-                (*planes)[5]->Scale2(scale2inv);
-				(*planes)[5]->Translate(trans2);
+                Vector trans1(-0.5, -0.5, -0.5);
+                Vector trans2(0.5, 0.5, 0.5);
+                
+                if (m_clip_mode == 3)
+                {
+                    Vector obj_trans1 = m_trans_fix;
+                    Vector obj_trans2 = -obj_trans1;
+                    Vector obj_trans3 = obj_trans1 - Vector(m_obj_transx, m_obj_transy, -m_obj_transz);
+                    
+                    for (int i = 0; i < 6; i++)
+                    {
+                        (*planes)[i]->Restore();
+                        (*planes)[i]->Translate(trans1);
+                        (*planes)[i]->Scale2(scale2);
+                        (*planes)[i]->Rotate(m_q_cl_fix);
+                        (*planes)[i]->Translate(obj_trans1);
+                        (*planes)[i]->Rotate(m_q_cl);
+                        (*planes)[i]->Translate(obj_trans2);
+                        (*planes)[i]->Translate(obj_trans3);
+                        (*planes)[i]->Scale2(scale2inv);
+                        (*planes)[i]->Translate(trans2);
+                    }
+                }
+                else
+                {
+                    (*planes)[0]->Restore();
+                    (*planes)[0]->Translate(trans1);
+                    (*planes)[0]->Scale2(scale2);
+                    (*planes)[0]->Rotate(m_q_cl);
+                    (*planes)[0]->Scale2(scale2inv);
+                    (*planes)[0]->Translate(trans2);
+                    
+                    (*planes)[1]->Restore();
+                    (*planes)[1]->Translate(trans1);
+                    (*planes)[1]->Scale2(scale2);
+                    (*planes)[1]->Rotate(m_q_cl);
+                    (*planes)[1]->Scale2(scale2inv);
+                    (*planes)[1]->Translate(trans2);
+                    
+                    (*planes)[2]->Restore();
+                    (*planes)[2]->Translate(trans1);
+                    (*planes)[2]->Scale2(scale2);
+                    (*planes)[2]->Rotate(m_q_cl);
+                    (*planes)[2]->Scale2(scale2inv);
+                    (*planes)[2]->Translate(trans2);
+                    
+                    (*planes)[3]->Restore();
+                    (*planes)[3]->Translate(trans1);
+                    (*planes)[3]->Scale2(scale2);
+                    (*planes)[3]->Rotate(m_q_cl);
+                    (*planes)[3]->Scale2(scale2inv);
+                    (*planes)[3]->Translate(trans2);
+                    
+                    (*planes)[4]->Restore();
+                    (*planes)[4]->Translate(trans1);
+                    (*planes)[4]->Scale2(scale2);
+                    (*planes)[4]->Rotate(m_q_cl);
+                    (*planes)[4]->Scale2(scale2inv);
+                    (*planes)[4]->Translate(trans2);
+                    
+                    (*planes)[5]->Restore();
+                    (*planes)[5]->Translate(trans1);
+                    (*planes)[5]->Scale2(scale2);
+                    (*planes)[5]->Rotate(m_q_cl);
+                    (*planes)[5]->Scale2(scale2inv);
+                    (*planes)[5]->Translate(trans2);
+                }
 			}
 		}
 
@@ -12150,50 +12200,73 @@ void VRenderVulkanView::A2Q()
 				(*planes)[5]->get_copy(abcd);
 				z2 = fabs(abcd[3]);
 
-				Vector trans1(-0.5, -0.5, -0.5);
-				Vector trans2(0.5, 0.5, 0.5);
-
-                (*planes)[0]->Restore();
-                (*planes)[0]->Translate(trans1);
-                (*planes)[0]->Scale2(scale2);
-                (*planes)[0]->Rotate(m_q_cl);
-                (*planes)[0]->Scale2(scale2inv);
-                (*planes)[0]->Translate(trans2);
+                Vector trans1(-0.5, -0.5, -0.5);
+                Vector trans2(0.5, 0.5, 0.5);
                 
-                (*planes)[1]->Restore();
-                (*planes)[1]->Translate(trans1);
-                (*planes)[1]->Scale2(scale2);
-                (*planes)[1]->Rotate(m_q_cl);
-                (*planes)[1]->Scale2(scale2inv);
-                (*planes)[1]->Translate(trans2);
-                
-                (*planes)[2]->Restore();
-                (*planes)[2]->Translate(trans1);
-                (*planes)[2]->Scale2(scale2);
-                (*planes)[2]->Rotate(m_q_cl);
-                (*planes)[2]->Scale2(scale2inv);
-                (*planes)[2]->Translate(trans2);
-                
-                (*planes)[3]->Restore();
-                (*planes)[3]->Translate(trans1);
-                (*planes)[3]->Scale2(scale2);
-                (*planes)[3]->Rotate(m_q_cl);
-                (*planes)[3]->Scale2(scale2inv);
-                (*planes)[3]->Translate(trans2);
-                
-                (*planes)[4]->Restore();
-                (*planes)[4]->Translate(trans1);
-                (*planes)[4]->Scale2(scale2);
-                (*planes)[4]->Rotate(m_q_cl);
-                (*planes)[4]->Scale2(scale2inv);
-                (*planes)[4]->Translate(trans2);
-                
-                (*planes)[5]->Restore();
-                (*planes)[5]->Translate(trans1);
-                (*planes)[5]->Scale2(scale2);
-                (*planes)[5]->Rotate(m_q_cl);
-                (*planes)[5]->Scale2(scale2inv);
-                (*planes)[5]->Translate(trans2);
+                if (m_clip_mode == 3)
+                {
+                    Vector obj_trans1 = m_trans_fix;
+                    Vector obj_trans2 = -obj_trans1;
+                    Vector obj_trans3 = obj_trans1 - Vector(m_obj_transx, m_obj_transy, -m_obj_transz);
+                    
+                    for (int i = 0; i < 6; i++)
+                    {
+                        (*planes)[i]->Restore();
+                        (*planes)[i]->Translate(trans1);
+                        (*planes)[i]->Scale2(scale2);
+                        (*planes)[i]->Rotate(m_q_cl_fix);
+                        (*planes)[i]->Translate(obj_trans1);
+                        (*planes)[i]->Rotate(m_q_cl);
+                        (*planes)[i]->Translate(obj_trans2);
+                        (*planes)[i]->Translate(obj_trans3);
+                        (*planes)[i]->Scale2(scale2inv);
+                        (*planes)[i]->Translate(trans2);
+                    }
+                }
+                else
+                {
+                    (*planes)[0]->Restore();
+                    (*planes)[0]->Translate(trans1);
+                    (*planes)[0]->Scale2(scale2);
+                    (*planes)[0]->Rotate(m_q_cl);
+                    (*planes)[0]->Scale2(scale2inv);
+                    (*planes)[0]->Translate(trans2);
+                    
+                    (*planes)[1]->Restore();
+                    (*planes)[1]->Translate(trans1);
+                    (*planes)[1]->Scale2(scale2);
+                    (*planes)[1]->Rotate(m_q_cl);
+                    (*planes)[1]->Scale2(scale2inv);
+                    (*planes)[1]->Translate(trans2);
+                    
+                    (*planes)[2]->Restore();
+                    (*planes)[2]->Translate(trans1);
+                    (*planes)[2]->Scale2(scale2);
+                    (*planes)[2]->Rotate(m_q_cl);
+                    (*planes)[2]->Scale2(scale2inv);
+                    (*planes)[2]->Translate(trans2);
+                    
+                    (*planes)[3]->Restore();
+                    (*planes)[3]->Translate(trans1);
+                    (*planes)[3]->Scale2(scale2);
+                    (*planes)[3]->Rotate(m_q_cl);
+                    (*planes)[3]->Scale2(scale2inv);
+                    (*planes)[3]->Translate(trans2);
+                    
+                    (*planes)[4]->Restore();
+                    (*planes)[4]->Translate(trans1);
+                    (*planes)[4]->Scale2(scale2);
+                    (*planes)[4]->Rotate(m_q_cl);
+                    (*planes)[4]->Scale2(scale2inv);
+                    (*planes)[4]->Translate(trans2);
+                    
+                    (*planes)[5]->Restore();
+                    (*planes)[5]->Translate(trans1);
+                    (*planes)[5]->Scale2(scale2);
+                    (*planes)[5]->Rotate(m_q_cl);
+                    (*planes)[5]->Scale2(scale2inv);
+                    (*planes)[5]->Translate(trans2);
+                }
 			}
 		}
 	}
@@ -12239,17 +12312,25 @@ void VRenderVulkanView::SetClipMode(int mode)
 		break;
 	case 3:
 		m_clip_mode = 3;
+        m_rotx_fix = m_rotx;
+        m_roty_fix = m_roty;
+        m_rotz_fix = m_rotz;
 		m_q_cl_fix.FromEuler(m_rotx_cl, m_roty_cl, m_rotz_cl);
 		m_q_fix.FromEuler(m_rotx, m_roty, m_rotz);
 		m_q_fix.z *= -1;
 		m_q_cl_zero.FromEuler(-m_rotx, -m_roty, m_rotz);
+        m_trans_fix = Vector(m_obj_transx, m_obj_transy, -m_obj_transz);
 		break;
 	case 4:
 		m_clip_mode = 2;
-		m_q_cl.ToEuler(m_rotx_cl, m_roty_cl, m_rotz_cl);
-		if (m_rotx_cl > 180.0) m_rotx_cl -= 360.0;
-		if (m_roty_cl > 180.0) m_roty_cl -= 360.0;
-		if (m_rotz_cl > 180.0) m_rotz_cl -= 360.0;
+        m_rotx_cl = m_rotx_cl_fix;
+        m_roty_cl = m_roty_cl_fix;
+        m_rotz_cl = m_rotz_cl_fix;
+        m_rotx = m_rotx_fix;
+        m_roty = m_roty_fix;
+        m_rotz = m_rotz_fix;
+        m_q_cl.FromEuler(m_rotx_cl, m_roty_cl, m_rotz_cl);
+        m_q_cl.Normalize();
 		SetRotations(m_rotx, m_roty, m_rotz);
 		break;
 	}
@@ -14866,6 +14947,8 @@ void VRenderVulkanView::OnMouse(wxMouseEvent& event)
 
 					m_interactive = m_adaptive;
 					m_int_res = m_adaptive_res;
+                    
+                    Q2A();
 
 					//SetSortBricks();
 					RefreshGL();

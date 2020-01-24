@@ -1013,6 +1013,9 @@ private:
 	Quaternion m_q_cl_fix;
 	Quaternion m_q_fix;
 	double m_rotx_cl, m_roty_cl, m_rotz_cl;
+    double m_rotx_cl_fix, m_roty_cl_fix, m_rotz_cl_fix;
+    double m_rotx_fix, m_roty_fix, m_rotz_fix;
+    Vector m_trans_fix;
 
 	bool m_dpeel;
 	bool m_mdtrans;

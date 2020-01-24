@@ -147,7 +147,7 @@ m_update_only_ui(false)
 	
 	//rotations
 	wxBoxSizer* sizer_f = new wxBoxSizer(wxHORIZONTAL);
-	m_fix_rots_chk = new wxCheckBox(this, ID_FixRotsChk, "Fix in View");
+	m_fix_rots_chk = new wxCheckBox(this, ID_FixRotsChk, "Fix");
 	m_fix_rots_chk->SetValue(false);
     m_hold_planes_chk = new wxCheckBox(this, ID_HoldPlanesChk, "Display Planes");
     m_hold_planes_chk->SetValue(false);
@@ -446,7 +446,7 @@ m_update_only_ui(false)
 	sizer_v->Add(10, 10, 0);
 	sizer_v->Add(st, 0, wxEXPAND);
 
-	st = new wxStaticText(this, 0, "Rotations:");
+	st = new wxStaticText(this, 0, "Clipping Plane Rotations:");
 	sizer_v->Add(10, 10, 0);
 	sizer_v->Add(st, 0, wxALIGN_CENTER);
 	sizer_v->Add(10, 10, 0);
@@ -2859,6 +2859,7 @@ void ClippingView::OnFixRotsCheck(wxCommandEvent& event)
 					m_x_rot_text->ChangeValue(wxString::Format("%.1f", rotx));
 					m_y_rot_text->ChangeValue(wxString::Format("%.1f", roty));
 					m_z_rot_text->ChangeValue(wxString::Format("%.1f", rotz));
+                    vrv->RefreshGL();
 				}
 			}
 			m_fix_rots = true;
@@ -2875,6 +2876,7 @@ void ClippingView::OnFixRotsCheck(wxCommandEvent& event)
 					if (vrv)
 					{
 						vrv->SetClipMode(4);
+                        vrv->RefreshGL();
 					}
 				}
 			}
