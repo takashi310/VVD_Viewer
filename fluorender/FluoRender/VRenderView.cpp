@@ -5562,7 +5562,6 @@ void VRenderVulkanView::UpdateBrushState()
 			else
 			{
 				SetBrush(m_brush_state);
-				m_clear_paint = true;
 				RefreshGLOverlays();
 			}
 		}
