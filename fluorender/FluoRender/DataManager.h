@@ -83,6 +83,8 @@ using namespace FLIVR;
 #define LOAD_TYPE_BRKXML	7
 #define LOAD_TYPE_H5J		8
 #define LOAD_TYPE_V3DPBD	9
+#define LOAD_TYPE_IDI       10
+
 
 class EXPORT_API TreeLayer
 {

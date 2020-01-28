@@ -10146,8 +10146,8 @@ void VRenderVulkanView::DrawClippingPlanes(bool border, int face_winding)
 			BBox dbox = md->GetBounds();
 			glm::mat4 mvmat = glm::mat4(float(dbox.max().x()-dbox.min().x()), 0.0f, 0.0f, 0.0f,
 										0.0f, float(dbox.max().y()-dbox.min().y()), 0.0f, 0.0f,
-										0.0f, 0.0f, float(dbox.max().z()-dbox.min().z()), 0.0f,
-										float(dbox.min().x()), float(dbox.min().y()), float(dbox.min().z()), 1.0f);
+										0.0f, 0.0f, -float(dbox.max().z()-dbox.min().z()), 0.0f,
+										float(dbox.min().x()), float(dbox.min().y()), float(dbox.max().z()), 1.0f);
 			glm::mat4 matrix = m_proj_mat * m_mv_mat * mvmat;
 
 			vector<Vulkan2dRender::Vertex> vertex;
@@ -12008,6 +12008,112 @@ void VRenderVulkanView::Q2A()
                 }
 			}
 		}
+        
+        for (int i=0; i<(int)m_md_pop_list.size(); i++)
+        {
+            if (!m_md_pop_list[i])
+                continue;
+            
+            vector<Plane*> *planes = 0;
+            
+            Vector sz = m_md_pop_list[i]->GetBounds().diagonal();
+            Vector scale, scale2, scale2inv;
+            scale = Vector(1.0/sz.x(), 1.0/sz.y(), 1.0/sz.z());
+            scale.safe_normalize();
+            scale2 = Vector(sz.x(), sz.y(), sz.z());
+            //scale2.safe_normalize();
+            scale2inv = Vector(1.0/sz.x(), 1.0/sz.y(), 1.0/sz.z());
+            //scale2inv.safe_normalize();
+            
+            if (m_md_pop_list[i]->GetMR())
+                planes = m_md_pop_list[i]->GetMR()->get_planes();
+            if (planes && planes->size()==6)
+            {
+                double x1, x2, y1, y2, z1, z2;
+                double abcd[4];
+                
+                (*planes)[0]->get_copy(abcd);
+                x1 = fabs(abcd[3]);
+                (*planes)[1]->get_copy(abcd);
+                x2 = fabs(abcd[3]);
+                (*planes)[2]->get_copy(abcd);
+                y1 = fabs(abcd[3]);
+                (*planes)[3]->get_copy(abcd);
+                y2 = fabs(abcd[3]);
+                (*planes)[4]->get_copy(abcd);
+                z1 = fabs(abcd[3]);
+                (*planes)[5]->get_copy(abcd);
+                z2 = fabs(abcd[3]);
+                
+                Vector trans1(-0.5, -0.5, -0.5);
+                Vector trans2(0.5, 0.5, 0.5);
+                
+                if (m_clip_mode == 3)
+                {
+                    Vector obj_trans1 = m_trans_fix;
+                    Vector obj_trans2 = -obj_trans1;
+                    Vector obj_trans3 = obj_trans1 - Vector(m_obj_transx, m_obj_transy, -m_obj_transz);
+                    
+                    for (int i = 0; i < 6; i++)
+                    {
+                        (*planes)[i]->Restore();
+                        (*planes)[i]->Translate(trans1);
+                        (*planes)[i]->Scale2(scale2);
+                        (*planes)[i]->Rotate(m_q_cl_fix);
+                        (*planes)[i]->Translate(obj_trans1);
+                        (*planes)[i]->Rotate(m_q_cl);
+                        (*planes)[i]->Translate(obj_trans2);
+                        (*planes)[i]->Translate(obj_trans3);
+                        (*planes)[i]->Scale2(scale2inv);
+                        (*planes)[i]->Translate(trans2);
+                    }
+                }
+                else
+                {
+                    (*planes)[0]->Restore();
+                    (*planes)[0]->Translate(trans1);
+                    (*planes)[0]->Scale2(scale2);
+                    (*planes)[0]->Rotate(m_q_cl);
+                    (*planes)[0]->Scale2(scale2inv);
+                    (*planes)[0]->Translate(trans2);
+                    
+                    (*planes)[1]->Restore();
+                    (*planes)[1]->Translate(trans1);
+                    (*planes)[1]->Scale2(scale2);
+                    (*planes)[1]->Rotate(m_q_cl);
+                    (*planes)[1]->Scale2(scale2inv);
+                    (*planes)[1]->Translate(trans2);
+                    
+                    (*planes)[2]->Restore();
+                    (*planes)[2]->Translate(trans1);
+                    (*planes)[2]->Scale2(scale2);
+                    (*planes)[2]->Rotate(m_q_cl);
+                    (*planes)[2]->Scale2(scale2inv);
+                    (*planes)[2]->Translate(trans2);
+                    
+                    (*planes)[3]->Restore();
+                    (*planes)[3]->Translate(trans1);
+                    (*planes)[3]->Scale2(scale2);
+                    (*planes)[3]->Rotate(m_q_cl);
+                    (*planes)[3]->Scale2(scale2inv);
+                    (*planes)[3]->Translate(trans2);
+                    
+                    (*planes)[4]->Restore();
+                    (*planes)[4]->Translate(trans1);
+                    (*planes)[4]->Scale2(scale2);
+                    (*planes)[4]->Rotate(m_q_cl);
+                    (*planes)[4]->Scale2(scale2inv);
+                    (*planes)[4]->Translate(trans2);
+                    
+                    (*planes)[5]->Restore();
+                    (*planes)[5]->Translate(trans1);
+                    (*planes)[5]->Scale2(scale2);
+                    (*planes)[5]->Rotate(m_q_cl);
+                    (*planes)[5]->Scale2(scale2inv);
+                    (*planes)[5]->Translate(trans2);
+                }
+            }
+        }
 	}
 }
 
@@ -12311,6 +12417,9 @@ void VRenderVulkanView::SetClipMode(int mode)
 		break;
 	case 3:
 		m_clip_mode = 3;
+        m_rotx_cl_fix = m_rotx_cl;
+        m_roty_cl_fix = m_roty_cl;
+        m_rotz_cl_fix = m_rotz_cl;
         m_rotx_fix = m_rotx;
         m_roty_fix = m_roty;
         m_rotz_fix = m_rotz;

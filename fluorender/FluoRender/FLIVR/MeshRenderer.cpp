@@ -743,7 +743,7 @@ namespace FLIVR
 		BBox dbox = bounds_;
 		glm::mat4 gmat = glm::mat4(float(dbox.max().x() - dbox.min().x()), 0.0f, 0.0f, float(dbox.min().x()),
 			0.0f, float(dbox.max().y() - dbox.min().y()), 0.0f, float(dbox.min().y()),
-			0.0f, 0.0f, float(dbox.max().z() - dbox.min().z()), float(dbox.min().z()),
+			0.0f, 0.0f, -float(dbox.max().z() - dbox.min().z()), float(dbox.max().z()),
 			0.0f, 0.0f, 0.0f, 1.0f);
 		glm::mat4 invmat = glm::inverseTranspose(gmat);
 		fubo.matrix3 = invmat;
@@ -989,10 +989,10 @@ namespace FLIVR
 			fubo.loc7 = { 1.0f / float(framebuf->w), 1.0f / float(framebuf->h), 0.0f, 0.0f };
 
 		BBox dbox = bounds_;
-		glm::mat4 gmat = glm::mat4(float(dbox.max().x() - dbox.min().x()), 0.0f, 0.0f, float(dbox.min().x()),
-			0.0f, float(dbox.max().y() - dbox.min().y()), 0.0f, float(dbox.min().y()),
-			0.0f, 0.0f, float(dbox.max().z() - dbox.min().z()), float(dbox.min().z()),
-			0.0f, 0.0f, 0.0f, 1.0f);
+        glm::mat4 gmat = glm::mat4(float(dbox.max().x() - dbox.min().x()), 0.0f, 0.0f, float(dbox.min().x()),
+                                   0.0f, float(dbox.max().y() - dbox.min().y()), 0.0f, float(dbox.min().y()),
+                                   0.0f, 0.0f, -float(dbox.max().z() - dbox.min().z()), float(dbox.max().z()),
+                                   0.0f, 0.0f, 0.0f, 1.0f);
 		glm::mat4 invmat = glm::inverseTranspose(gmat);
 		fubo.matrix3 = invmat;
 
@@ -1200,10 +1200,10 @@ namespace FLIVR
 		fubo.plane5 = { abcd[0], abcd[1], abcd[2], abcd[3] };
 
 		BBox dbox = bounds_;
-		glm::mat4 gmat = glm::mat4(float(dbox.max().x() - dbox.min().x()), 0.0f, 0.0f, float(dbox.min().x()),
-			0.0f, float(dbox.max().y() - dbox.min().y()), 0.0f, float(dbox.min().y()),
-			0.0f, 0.0f, float(dbox.max().z() - dbox.min().z()), float(dbox.min().z()),
-			0.0f, 0.0f, 0.0f, 1.0f);
+        glm::mat4 gmat = glm::mat4(float(dbox.max().x() - dbox.min().x()), 0.0f, 0.0f, float(dbox.min().x()),
+                                   0.0f, float(dbox.max().y() - dbox.min().y()), 0.0f, float(dbox.min().y()),
+                                   0.0f, 0.0f, -float(dbox.max().z() - dbox.min().z()), float(dbox.max().z()),
+                                   0.0f, 0.0f, 0.0f, 1.0f);
 		glm::mat4 invmat = glm::inverseTranspose(gmat);
 		fubo.matrix3 = invmat;
 
