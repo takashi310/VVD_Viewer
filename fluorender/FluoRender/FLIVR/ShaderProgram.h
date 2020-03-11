@@ -34,7 +34,11 @@
 
 #include "vulkan/vulkan.h"
 
+#ifdef _DARWIN
+#include "SPIRV/GlslangToSpv.h"
+#else
 #include "glslang/SPIRV/GlslangToSpv.h"
+#endif
 
 #include "DLLExport.h"
 

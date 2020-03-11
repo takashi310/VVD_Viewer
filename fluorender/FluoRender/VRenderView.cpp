@@ -9066,6 +9066,8 @@ void VRenderVulkanView::MoveMeshinGroup(wxString &group_name, wxString &src_name
 			break;
 		}
 	}
+    
+    InitView(INIT_BOUNDS|INIT_CENTER);
 
 	m_vd_pop_dirty = true;
 	m_md_pop_dirty = true;
@@ -9143,6 +9145,7 @@ void VRenderVulkanView::MoveMeshtoGroup(wxString &group_name, wxString &src_name
 			}
 		}
 	}
+    InitView(INIT_BOUNDS|INIT_CENTER);
 	m_vd_pop_dirty = true;
 	m_md_pop_dirty = true;
 }
@@ -9183,6 +9186,7 @@ void VRenderVulkanView::MoveMeshfromtoGroup(wxString &src_group_name, wxString &
 			}
 		}
 	}
+    InitView(INIT_BOUNDS|INIT_CENTER);
 	m_vd_pop_dirty = true;
 	m_md_pop_dirty = true;
 }

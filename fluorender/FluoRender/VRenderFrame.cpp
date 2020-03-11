@@ -1317,6 +1317,7 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv)
 			{
 				group->InsertMeshData(group->GetMeshNum()-1, md);
 				vrv->SetMeshPopDirty();
+                vrv->InitView(INIT_BOUNDS | INIT_CENTER);
 			}
 			else
 				vrv->AddMeshData(md);
@@ -1558,6 +1559,10 @@ void VRenderFrame::UpdateTreeIcons()
 							mesh_item = treectrl->GetNextChild(layer_item, ck_mesh);
 						if (!mesh_item.IsOk())
 							continue;
+                        item_data = (LayerInfo*)treectrl->GetItemData(mesh_item);
+                        if (!item_data)
+                            continue;
+                        int iconid = item_data->icon / 2;
 						m_tree_panel->SetMeshItemImage(mesh_item, md->GetDisp()?2*iconid+1:2*iconid);
 					}
 				}
@@ -1655,20 +1660,23 @@ void VRenderFrame::UpdateTreeColors()
 					DataGroup* group = (DataGroup*)layer;
 					if (!group)
 						break;
+                    wxTreeItemIdValue ck_volume;
 					for (k=0; k<group->GetVolumeNum(); k++)
 					{
 						VolumeData* vd = group->GetVolumeData(k);
 						if (!vd)
 							break;
-						
-						wxString v_name = vd->GetName();
-						wxTreeItemId v_item = m_tree_panel->FindTreeItem(v_name);
-						if (!v_item.IsOk())
-							continue;
-						LayerInfo* vitem_data = (LayerInfo*)treectrl->GetItemData(v_item);
-						if (!vitem_data)
-							continue;
-						iconid = vitem_data->icon / 2;
+                        wxTreeItemId volume_item;
+                        if (k==0)
+                            volume_item = treectrl->GetFirstChild(layer_item, ck_volume);
+                        else
+                            volume_item = treectrl->GetNextChild(layer_item, ck_volume);
+                        if (!volume_item.IsOk())
+                            continue;
+                        item_data = (LayerInfo*)treectrl->GetItemData(volume_item);
+                        if (!item_data)
+                            continue;
+                        int iconid = item_data->icon / 2;
 
 						Color c = vd->GetColor();
 						wxColor wxc(
@@ -1686,11 +1694,23 @@ void VRenderFrame::UpdateTreeColors()
 					MeshGroup* group = (MeshGroup*)layer;
 					if (!group)
 						break;
+                    wxTreeItemIdValue ck_mesh;
 					for (k=0; k<group->GetMeshNum(); k++)
 					{
 						MeshData* md = group->GetMeshData(k);
 						if (!md)
 							break;
+                        wxTreeItemId mesh_item;
+                        if (k==0)
+                            mesh_item = treectrl->GetFirstChild(layer_item, ck_mesh);
+                        else
+                            mesh_item = treectrl->GetNextChild(layer_item, ck_mesh);
+                        if (!mesh_item.IsOk())
+                            continue;
+                        item_data = (LayerInfo*)treectrl->GetItemData(mesh_item);
+                        if (!item_data)
+                            continue;
+                        int iconid = item_data->icon / 2;
 						Color amb, diff, spec;
 						double shine, alpha;
 						md->GetMaterial(amb, diff, spec, shine, alpha);
@@ -4244,7 +4264,10 @@ void VRenderFrame::OpenProject(wxString& filename)
 													{
 														MeshData* md = m_data_mgr.GetMeshData(str);
 														if (md)
+                                                        {
 															group->InsertMeshData(k-1, md);
+                                                            vrv->InitView(INIT_BOUNDS|INIT_CENTER);
+                                                        }
 													}
 												}
 											}
