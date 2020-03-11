@@ -384,7 +384,7 @@ public:
 		swapchainCI.imageFormat = colorFormat;
 		swapchainCI.imageColorSpace = colorSpace;
 		swapchainCI.imageExtent = { swapchainExtent.width, swapchainExtent.height };
-		swapchainCI.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+		swapchainCI.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		swapchainCI.preTransform = (VkSurfaceTransformFlagBitsKHR)preTransform;
 		swapchainCI.imageArrayLayers = 1;
 		swapchainCI.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -457,7 +457,7 @@ public:
 			buffers[i]->d = 1;
 			buffers[i]->bytes = FormatTexelSize(colorFormat);
 			buffers[i]->format = colorFormat;
-			buffers[i]->usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+			buffers[i]->usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 			buffers[i]->subresourceRange = colorAttachmentView.subresourceRange;
 			buffers[i]->mipLevels = 1;
 			buffers[i]->is_swapchain_images = true;

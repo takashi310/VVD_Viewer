@@ -258,8 +258,8 @@ add_library(IMAGES_OBJ OBJECT  ${pngs_hdr} ${pngs_src})
 include_directories(${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/PluginController)
 set(PLUGIN_DIR ${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/PluginController)
 add_library(PLUGINS_OBJ OBJECT ${PLUGIN_DIR}/stdwx.h 
-							   ${PLUGIN_DIR}/wxGuiPluginBase.h 
-							   ${PLUGIN_DIR}/wxGuiPluginWindowBase.h 
+							   ${PLUGIN_DIR}/PluginControllerBase.h 
+							   ${PLUGIN_DIR}/PluginControllerBaseSettings.h 
 							   ${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/DLLExport.h
 							   ${PLUGIN_DIR}/stdwx.cpp
 							   ${PLUGIN_DIR}/PluginControllerBase.cpp
@@ -542,6 +542,33 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 	   VVDMainFrame
 	   ${wxWidgets_LIBRARIES})
 endif()
+
+
+set(PLUGINBASE ${PLUGIN_DIR}/stdwx.h 
+			   ${PLUGIN_DIR}/Declarations.h 
+			   ${PLUGIN_DIR}/wxGuiPluginBase.h 
+			   ${PLUGIN_DIR}/wxGuiPluginWindowBase.h 
+			   ${VVDViewer_SOURCE_DIR}/fluorender/FluoRender/DLLExport.h
+			   ${PLUGIN_DIR}/stdwx.cpp
+			   ${PLUGIN_DIR}/wxGuiPluginBase.cpp
+			   ${PLUGIN_DIR}/wxGuiPluginWindowBase.cpp)
+add_library(wxGuiPluginBase SHARED ${PLUGINBASE})
+target_link_libraries(wxGuiPluginBase ${wxWidgets_LIBRARIES})
+if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
+	set_target_properties(wxGuiPluginBase PROPERTIES COMPILE_DEFINITIONS DEMO_PLUGIN_EXPORTS)
+endif()
+
+file(GLOB fi_src ${VVDViewer_SOURCE_DIR}/plugin_fiji/vvd/*.cpp)
+file(GLOB fi_hdr ${VVDViewer_SOURCE_DIR}/plugin_fiji/vvd/*.h)
+set(fi_ext ${PLUGIN_DIR}/stdwx.h ${PLUGIN_DIR}/stdwx.cpp)
+add_library(FijiInterfacePlugin SHARED ${fi_src} ${fi_hdr} ${fi_ext})
+target_link_libraries(FijiInterfacePlugin VVDMainFrame wxGuiPluginBase ${wxWidgets_LIBRARIES})
+
+file(GLOB nb_src ${VVDViewer_SOURCE_DIR}/plugin_nblast/vvd/*.cpp)
+file(GLOB nb_hdr ${VVDViewer_SOURCE_DIR}/plugin_nblast/vvd/*.h)
+set(nb_ext ${PLUGIN_DIR}/stdwx.h ${PLUGIN_DIR}/stdwx.cpp)
+add_library(NBLASTGuiPlugin SHARED ${nb_src} ${nb_hdr} ${nb_ext})
+target_link_libraries(NBLASTGuiPlugin VVDMainFrame wxGuiPluginBase ${wxWidgets_LIBRARIES})
 
 #build OpenCL examples copies.
 

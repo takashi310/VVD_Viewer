@@ -684,7 +684,8 @@ VRenderVulkanView::VRenderVulkanView(wxWindow* frame,
 	m_sclbar_digit(3),
 	m_clear_final_buffer(false),
     m_refresh(false),
-	m_refresh_start_loop(false)
+	m_refresh_start_loop(false),
+	m_recording(false)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
