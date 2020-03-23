@@ -570,6 +570,12 @@ set(nb_ext ${PLUGIN_DIR}/stdwx.h ${PLUGIN_DIR}/stdwx.cpp)
 add_library(NBLASTGuiPlugin SHARED ${nb_src} ${nb_hdr} ${nb_ext})
 target_link_libraries(NBLASTGuiPlugin VVDMainFrame wxGuiPluginBase ${wxWidgets_LIBRARIES})
 
+file(GLOB na_src ${VVDViewer_SOURCE_DIR}/plugin_NA/vvd/*.cpp)
+file(GLOB na_hdr ${VVDViewer_SOURCE_DIR}/plugin_NA/vvd/*.h)
+set(na_ext ${PLUGIN_DIR}/stdwx.h ${PLUGIN_DIR}/stdwx.cpp)
+add_library(NeuronAnnotatorPlugin SHARED ${na_src} ${na_hdr} ${na_ext})
+target_link_libraries(NeuronAnnotatorPlugin VVDMainFrame wxGuiPluginBase ${wxWidgets_LIBRARIES})
+
 #build OpenCL examples copies.
 
 #copy openCL examples to the binary directory
