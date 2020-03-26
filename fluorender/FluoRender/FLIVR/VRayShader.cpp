@@ -653,6 +653,16 @@ namespace FLIVR
 	"			//VRAY_DATA_VOLUME_LOOKUP\n" \
 	"			vec4 v = texture(tex0, t.stp);\n" \
 	"\n"
+    
+#define VRAY_DATA_LABEL_SEG_IF \
+    "           //VRAY_DATA_LABEL_SEG_LOOKUP\n" \
+    "           uint lbl = texture(tex3, t.stp).x; //get label value\n" \
+    "           vec4 b = texture(tex7, vec2((float(lbl%uint(256))+0.5)/256.0, (float(lbl/256)+0.5)/256.0));\n" \
+    "           if (b.x > 0.5) {" \
+    "\n"
+    
+#define VRAY_DATA_LABEL_SEG_ENDIF \
+    "           }\n"
 
 #define VRAY_GRAD_COMPUTE_LO \
 	"			//VRAY_GRAD_COMPUTE_LO\n" \
@@ -1589,7 +1599,7 @@ VRayShader::VRayShader(
 	int peel, bool clip,
 	bool hiqual, int mask,
 	int color_mode, int colormap, int colormap_proj,
-	bool solid, int vertex_shader, int mask_hide_mode, bool persp, int blend_mode, int multi_mode)
+	bool solid, int vertex_shader, int mask_hide_mode, bool persp, int blend_mode, int multi_mode, bool na_mode)
 	: device_(device),
 	poly_(poly),
 	channels_(channels),
@@ -1608,7 +1618,8 @@ VRayShader::VRayShader(
 	persp_(persp),
 	blend_mode_(blend_mode),
 	program_(0),
-	multi_mode_(0)
+	multi_mode_(0),
+    na_mode_(false)
 	{
 	}
 
@@ -1816,6 +1827,9 @@ VRayShader::VRayShader(
 		{
 			//no gradient volume, need to calculate in real-time
 			z << VRAY_DATA_VOLUME_LOOKUP;
+            
+            if (na_mode_)
+                z << VRAY_DATA_LABEL_SEG_IF;
 
 			if (hiqual_)
 				z << VRAY_GRAD_COMPUTE_HI;
@@ -1862,6 +1876,9 @@ VRayShader::VRayShader(
 		else // No shading
 		{
 			z << VRAY_DATA_VOLUME_LOOKUP;
+            
+            if (na_mode_)
+                z << VRAY_DATA_LABEL_SEG_IF;
 
 			if (channels_ == 1)
 			{
@@ -1972,6 +1989,9 @@ VRayShader::VRayShader(
 			z << VRAY_BLEND_MIP;
 		else
 			z << VRAY_BLEND_OVER;
+        
+        if (na_mode_)
+            z << VRAY_DATA_LABEL_SEG_ENDIF;
 
 		z << VRAY_LOOP_TAIL;
 
@@ -2023,7 +2043,7 @@ VRayShader::VRayShader(
 		int peel, bool clip,
 		bool hiqual, int mask,
 		int color_mode, int colormap, int colormap_proj,
-		bool solid, int vertex_shader, int mask_hide_mode, bool persp, int blend_mode, int multi_mode)
+		bool solid, int vertex_shader, int mask_hide_mode, bool persp, int blend_mode, int multi_mode, bool na_mode)
 	{
 		VRayShader*ret = nullptr;
 		if(prev_shader_ >= 0)
@@ -2034,7 +2054,7 @@ VRayShader::VRayShader(
 				peel, clip,
 				hiqual, mask,
 				color_mode, colormap, colormap_proj,
-				solid, vertex_shader, mask_hide_mode, persp, blend_mode, multi_mode))
+				solid, vertex_shader, mask_hide_mode, persp, blend_mode, multi_mode, na_mode))
 			{
 				ret = shader_[prev_shader_];
 			}
@@ -2049,7 +2069,7 @@ VRayShader::VRayShader(
 					peel, clip,
 					hiqual, mask,
 					color_mode, colormap, colormap_proj,
-					solid, vertex_shader, mask_hide_mode, persp, blend_mode, multi_mode))
+					solid, vertex_shader, mask_hide_mode, persp, blend_mode, multi_mode, na_mode))
 				{
 					prev_shader_ = i;
 					ret = shader_[i];
@@ -2065,7 +2085,7 @@ VRayShader::VRayShader(
 				peel, clip,
 				hiqual, mask,
 				color_mode, colormap, colormap_proj,
-				solid, vertex_shader, mask_hide_mode, persp, blend_mode, multi_mode);
+				solid, vertex_shader, mask_hide_mode, persp, blend_mode, multi_mode, na_mode);
 			if(s->create())
 				delete s;
 			else

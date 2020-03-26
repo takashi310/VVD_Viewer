@@ -338,6 +338,9 @@ namespace FLIVR
 				   if (m_vulkan) m_vulkan.reset();
 				   if (m_v2drender) m_v2drender.reset();
 			   }
+       
+               void set_seg_mask(int id, bool val);
+               std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> get_seg_mask_tex();
 
 			   //static VolKernelFactory vol_kernel_factory_;
 
@@ -365,7 +368,11 @@ namespace FLIVR
                bool filter_buffer_resize_;
                std::unique_ptr<vks::VFrameBuffer> filter_buffer_;
                std::shared_ptr<vks::VTexture> filter_tex_id_;
-
+       
+               std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> na_tex_;
+               unsigned char na_lbl_[PALETTE_SIZE];
+               bool na_tex_dirty_;
+       
 			   std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> palette_tex_id_;
 			   std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> base_palette_tex_id_;
 			   unsigned char palette_[PALETTE_SIZE*PALETTE_ELEM_COMP];

@@ -107,7 +107,8 @@ namespace FLIVR
 		desel_col_fac_(0.1),
 		edit_sel_id_(-1),
 		filter_buffer_resize_(false),
-		blend_num_bits_(32)
+		blend_num_bits_(32),
+        na_tex_dirty_(false)
 	{
 		init_palette();
 /*
@@ -140,6 +141,14 @@ namespace FLIVR
 			}
 		}
 */
+        
+        memset(na_lbl_, 0, sizeof(na_lbl_));
+        na_lbl_[1] = 255;
+        na_lbl_[3] = 255;
+        if (na_tex_.empty())
+            m_vulkan->GenTextures2DAllDevice(na_tex_, VK_FORMAT_R8_UNORM, VK_FILTER_NEAREST, PALETTE_W, PALETTE_H);
+        m_vulkan->UploadTextures(na_tex_, na_lbl_);
+        
 #ifndef _UNIT_TEST_VOLUME_RENDERER_WITHOUT_IDVOL
 		select_all_roi_tree();
 #endif
@@ -160,7 +169,8 @@ namespace FLIVR
 		edit_sel_id_(copy.edit_sel_id_),
 		roi_tree_(copy.roi_tree_),
 		filter_buffer_resize_(false),
-		blend_num_bits_(copy.blend_num_bits_)
+		blend_num_bits_(copy.blend_num_bits_),
+        na_tex_dirty_(copy.na_tex_dirty_)
 	{
 		memcpy(palette_, copy.palette_, sizeof(unsigned char)*PALETTE_SIZE*PALETTE_ELEM_COMP); 
 		memcpy(base_palette_, copy.base_palette_, sizeof(unsigned char)*PALETTE_SIZE*PALETTE_ELEM_COMP); 
@@ -174,6 +184,11 @@ namespace FLIVR
 		m_vulkan->UploadTextures(base_palette_tex_id_, base_palette_);
 
 		update_palette_tex();
+        
+        memcpy(na_lbl_, copy.na_lbl_, sizeof(unsigned char)*PALETTE_SIZE);
+        if (na_tex_.empty())
+            m_vulkan->GenTextures2DAllDevice(na_tex_, VK_FORMAT_R8_UNORM, VK_FILTER_NEAREST, PALETTE_W, PALETTE_H);
+        m_vulkan->UploadTextures(na_tex_, na_lbl_);
 	}
 
 	TextureRenderer::~TextureRenderer()
@@ -185,6 +200,22 @@ namespace FLIVR
 		m_slices_ibo.destroy();
 		m_slices_vao.destroy();
 	}
+    
+    void TextureRenderer::set_seg_mask(int id, bool val)
+    {
+        na_lbl_[id] = val ? 255 : 0;
+        na_tex_dirty_ = true;
+    }
+    
+    std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> TextureRenderer::get_seg_mask_tex()
+    {
+        if (na_tex_dirty_)
+        {
+            m_vulkan->UploadTextures(na_tex_, na_lbl_);
+            na_tex_dirty_ = false;
+        }
+        return na_tex_;
+    }
 
 	void TextureRenderer::init_palette()
 	{

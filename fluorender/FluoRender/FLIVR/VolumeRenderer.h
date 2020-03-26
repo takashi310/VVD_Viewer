@@ -201,6 +201,9 @@ namespace FLIVR
 		
 		void set_clear_color(VkClearColorValue col) { m_clear_color = col; }
 		VkClearColorValue get_clear_color() { return m_clear_color; }
+        
+        void set_na_mode(bool val) { m_na_mode = val; }
+        bool get_na_mode() { return m_na_mode; }
 
 		friend class MultiVolumeRenderer;
 
@@ -274,6 +277,8 @@ namespace FLIVR
 		double m_fog_intensity;
 		double m_fog_start;
 		double m_fog_end;
+        
+        bool m_na_mode;
 
 		/*
 		static KernelProgram* m_dslt_kernel = NULL;
@@ -439,7 +444,7 @@ public:
 		static std::vector<VRayPipeline> m_vray_pipelines;
 		static std::map<vks::VulkanDevice*, VkRenderPass> m_vray_draw_pass;
 		int m_prev_vray_pipeline;
-		VRayPipeline prepareVRayPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode, bool persp, int multi_mode = 0);
+		VRayPipeline prepareVRayPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode, bool persp, int multi_mode = 0, bool na_mode = false);
 		
 		struct VRayVertexBuffers {
 			vks::Buffer vertexBuffer;

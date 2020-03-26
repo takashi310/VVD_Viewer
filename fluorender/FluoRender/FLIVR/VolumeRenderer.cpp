@@ -131,7 +131,8 @@ namespace FLIVR
 		inv_(false),
 		compression_(false),
 		m_mask_hide_mode(VOL_MASK_HIDE_NONE),
-		m_use_fog(false)
+		m_use_fog(false),
+        m_na_mode(false)
 	{
 		//mode
 		mode_ = MODE_OVER;
@@ -1234,7 +1235,7 @@ namespace FLIVR
 		return ret_pipeline;
 	}
 
-	VolumeRenderer::VRayPipeline VolumeRenderer::prepareVRayPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode, bool persp, int multi_mode)
+	VolumeRenderer::VRayPipeline VolumeRenderer::prepareVRayPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode, bool persp, int multi_mode, bool na_mode)
 	{
 		VRayPipeline ret_pipeline;
 
@@ -1246,7 +1247,7 @@ namespace FLIVR
 			depth_peel_, true,
 			hiqual_, ml_mode_,
 			colormap_mode_, colormap_, colormap_proj_,
-			solid_, 1, tex_->nmask() != -1 ? m_mask_hide_mode : VOL_MASK_HIDE_NONE, persp, mode_, multi_mode);
+			solid_, 1, tex_->nmask() != -1 ? m_mask_hide_mode : VOL_MASK_HIDE_NONE, persp, mode_, multi_mode, na_mode);
 
 		if (m_prev_vray_pipeline >= 0) {
 			if (m_vray_pipelines[m_prev_vray_pipeline].device == device &&
@@ -2618,8 +2619,8 @@ namespace FLIVR
 		m_vulkan->vray_shader_factory_->getDescriptorSetWriteUniforms(prim_dev, vert_ubuf, frag_ubuf, descriptorWritesBase);
 
 		eval_ml_mode();
-
-		VRayPipeline pipeline = prepareVRayPipeline(prim_dev, mode_, update_order_, colormap_mode_, !orthographic_p);
+        
+		VRayPipeline pipeline = prepareVRayPipeline(prim_dev, mode_, update_order_, colormap_mode_, !orthographic_p, 0, !label_ && m_na_mode && tex_->nlabel() != -1);
 		VkPipelineLayout pipelineLayout = m_vulkan->vray_shader_factory_->pipeline_[prim_dev].pipelineLayout;
 
 		prepareVRayVertexBuffers(prim_dev);
@@ -2650,8 +2651,13 @@ namespace FLIVR
 				blend_framebuffer_->setup(pipeline.renderpass);
 			}
 		}
-
-		if (colormap_mode_ == 3)
+        
+        if (!label_ && m_na_mode && tex_->nlabel() != -1)
+        {
+            auto sm_tex = get_seg_mask_tex();
+            descriptorWritesBase.push_back(VRayShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 7, &sm_tex[prim_dev]->descriptor));
+        }
+		else if (colormap_mode_ == 3)
 		{
 			auto palette = get_palette();
 			if (palette.count(prim_dev) > 0)
@@ -2944,7 +2950,7 @@ namespace FLIVR
 			if (mask_updated)
 				semaphores.push_back(prim_dev->GetNextRenderSemaphoreSettings());
 
-			if (label_)
+			if (label_ || (m_na_mode && tex_->nlabel() != -1))
 				lbltex = load_brick_label(prim_dev, bricks, i, false, true, &label_updated, &(semaphores.back()));
 			if (label_updated)
 				semaphores.push_back(prim_dev->GetNextRenderSemaphoreSettings());

@@ -684,6 +684,10 @@ public:
 
 	void SetMaskHideMode(int mode) { if (m_vr) m_vr->set_mask_hide_mode(mode); }
 	int GetMaskHideMode() { return m_vr ? m_vr->get_mask_hide_mode() : VOL_MASK_HIDE_NONE; }
+    
+    void SetSegmentMask(int id, bool val) { if (m_vr) m_vr->set_seg_mask(id, val); }
+    void SetNAMode(bool val) { if (m_vr) m_vr->set_na_mode(val); }
+    bool GetNAMode() { return m_vr ? m_vr->get_na_mode() : false; }
 
 private:
 	//duplication indicator and counter

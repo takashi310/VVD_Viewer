@@ -108,7 +108,8 @@ class EXPORT_API DataTreeCtrl: public wxTreeCtrl, Notifier
 		ID_ExportAllSegments,
 		ID_FlipH,
 		ID_FlipV,
-		ID_ExportMeshMask
+		ID_ExportMeshMask,
+        ID_ToggleNAMode
 	};
 
 public:
@@ -267,6 +268,7 @@ private:
 	void OnFlipH(wxCommandEvent& event);
 	void OnFlipV(wxCommandEvent& event);
 	void OnExportMeshMask(wxCommandEvent& event);
+    void OnToggleNAMode(wxCommandEvent& event);
 
 	void OnSelChanged(wxTreeEvent& event);
 	void OnSelChanging(wxTreeEvent& event);
