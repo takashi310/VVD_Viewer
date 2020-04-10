@@ -64,15 +64,17 @@ bool DnDFile::OnDropFiles(wxCoord x, wxCoord y, const wxArrayString &filenames)
 				vr_frame->OpenProject(filename);
 			}
 			else if (suffix == ".nrrd" ||
-					 suffix == ".tif" ||
-					 suffix == ".tiff" ||
-					 suffix == ".oib" ||
-					 suffix == ".oif" ||
-					 suffix == ".lsm" ||
-					 suffix == ".xml" ||
-					 suffix == ".vvd" ||
-					 suffix == ".h5j" ||
-					 suffix == ".zip")
+				suffix == ".tif" ||
+				suffix == ".tiff" ||
+				suffix == ".oib" ||
+				suffix == ".oif" ||
+				suffix == ".lsm" ||
+				suffix == ".xml" ||
+				suffix == ".vvd" ||
+				suffix == ".h5j" ||
+				suffix == ".v3dpbd" ||
+				suffix == ".zip" ||
+				suffix == ".idi")
 			{
 				vr_frame->LoadVolumes(filenames, (VRenderView*)m_view);
 			}

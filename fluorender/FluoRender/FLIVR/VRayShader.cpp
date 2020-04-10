@@ -1619,7 +1619,7 @@ VRayShader::VRayShader(
 	blend_mode_(blend_mode),
 	program_(0),
 	multi_mode_(0),
-    na_mode_(false)
+    na_mode_(na_mode)
 	{
 	}
 
@@ -1695,6 +1695,12 @@ VRayShader::VRayShader(
 		z << ShaderProgram::glsl_version_;
 		z << VRAY_FRG_HEADER;
 
+		if (na_mode_)
+		{
+			z << VRAY_UNIFORMS_INDEX_COLOR;
+			z << VRAY_UNIFORMS_LABEL;
+		}
+
 		//color modes
 		switch (color_mode_)
 		{
@@ -1702,7 +1708,8 @@ VRayShader::VRayShader(
 			z << VRAY_UNIFORMS_DEPTHMAP;
 			break;
 		case 3://index color
-			z << VRAY_UNIFORMS_INDEX_COLOR;
+			if (!na_mode_)
+				z << VRAY_UNIFORMS_INDEX_COLOR;
 			break;
         case 255://index color (depth mode)
             z << VRAY_UNIFORMS_INDEX_COLOR_D;
@@ -1722,7 +1729,8 @@ VRayShader::VRayShader(
 			z << VRAY_UNIFORMS_MASK;
 			break;
 		case 3:
-			z << VRAY_UNIFORMS_LABEL;
+			if (!na_mode_)
+				z << VRAY_UNIFORMS_LABEL;
 			break;
 		case 4:
 			z << VRAY_UNIFORMS_MASK;

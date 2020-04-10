@@ -1520,6 +1520,7 @@ public:
 	void SetTimeId(wxString str) {m_timeId = str;}
 	void SetLoadMask(bool load_mask) {m_load_mask = load_mask;}
 	void AddVolumeData(VolumeData* vd);
+	void AddEmptyVolumeData(wxString name, int bits, int nx, int ny, int nz, double spcx, double spcy, double spcz);
 	void AddMeshData(MeshData* md);
 	VolumeData* DuplicateVolumeData(VolumeData* vd, bool use_default_settings=false);
 	MeshData* DuplicateMeshData(MeshData* vd, bool use_default_settings=false);
@@ -1539,6 +1540,17 @@ public:
 		else
 			return 0;
 	};
+	int GetLatestVolumeChannelNum() { return m_latest_vols.size(); }
+	VolumeData* GetLatestVolumeDataset(int ch)
+	{
+		for (int i = 0; i < m_latest_vols.size(); i++)
+		{
+			if (m_latest_vols[i]->GetCurChannel() == ch)
+				return m_latest_vols[i];
+		}
+
+		return NULL;
+	}
 
 	//load mesh
 	int LoadMeshData(wxString &filename);
@@ -1595,6 +1607,7 @@ public:
 	bool GetPvxmlFlipX() {return m_pvxml_flip_x;}
 	void SetPvxmlFlipY(bool flip) {m_pvxml_flip_y = flip;}
 	bool GetPvxmlFlipY() {return m_pvxml_flip_y;}
+
 public:
 	//default values
 	//volume
@@ -1628,6 +1641,8 @@ public:
 
 	//wavelength to color table
 	Color m_vol_wav[4];
+
+	vector<VolumeData*> m_latest_vols;
 
 private:
 	vector <VolumeData*> m_vd_list;

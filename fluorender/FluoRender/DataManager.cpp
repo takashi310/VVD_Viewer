@@ -6218,6 +6218,9 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 		}
 	}
 
+	if (!m_latest_vols.empty())
+		m_latest_vols.clear();
+
 	int chan = reader->GetChanNum();
 	for (i=(ch_num>=0?ch_num:0);
 		i<(ch_num>=0?ch_num+1:chan); i++)
@@ -6349,6 +6352,8 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 						vd->SetColor(white);
 				}
 			}
+			
+			m_latest_vols.push_back(vd);
 		}
 
 	}
@@ -6477,6 +6482,10 @@ void DataManager::ReplaceVolumeData(int index, VolumeData *vd)
 	VolumeData* data = m_vd_list[index];
 	if (data)
 	{
+		auto p = find(m_latest_vols.begin(), m_latest_vols.end(), data);
+		if (p != m_latest_vols.end())
+			m_latest_vols.erase(p);
+
 		delete data;
 		data = 0;
 	}
@@ -6491,6 +6500,10 @@ void DataManager::RemoveVolumeData(int index)
 	VolumeData* data = m_vd_list[index];
 	if (data)
 	{
+		auto p = find(m_latest_vols.begin(), m_latest_vols.end(), data);
+		if (p != m_latest_vols.end())
+			m_latest_vols.erase(p);
+
 		m_vd_list.erase(m_vd_list.begin()+index);
 		delete data;
 		data = 0;
@@ -6581,6 +6594,33 @@ void DataManager::AddVolumeData(VolumeData* vd)
 		}
 	}
 	
+	m_vd_list.push_back(vd);
+}
+
+void DataManager::AddEmptyVolumeData(wxString name, int bits, int nx, int ny, int nz, double spcx, double spcy, double spcz)
+{
+	wxString new_name = name;
+
+	int i;
+	for (i = 1; CheckNames(new_name, DATA_VOLUME); i++)
+		new_name = name + wxString::Format("_%d", i);
+
+	VolumeData* vd = new VolumeData();
+	vd->AddEmptyData(bits, nx, ny, nz, spcx, spcy, spcz);
+
+	vd->SetName(new_name);
+
+	if (m_override_vox)
+	{
+		if (m_vd_list.size() > 0)
+		{
+			double spcx, spcy, spcz;
+			m_vd_list[0]->GetSpacings(spcx, spcy, spcz, 0);
+			vd->SetSpacings(spcx, spcy, spcz);
+			vd->SetSpcFromFile(true);
+		}
+	}
+
 	m_vd_list.push_back(vd);
 }
 

@@ -291,7 +291,15 @@ Nrrd* V3DPBDReader::Convert(int t, int c, bool get_max)
     {
         //create nrrd
         unsigned char* val = new (std::nothrow) unsigned char[mem_size];
-        memcpy(val, decompressionBuffer + mem_size * c, mem_size);
+        unsigned char* src = decompressionBuffer + mem_size * c;
+        for (int z = 0; z < m_slice_num; z++)
+        {
+            size_t offset = z * m_y_size * m_x_size;
+            for (int y = 0; y < m_y_size; y++)
+            {
+                memcpy(val + offset + y*m_x_size, src + offset + (m_y_size-y-1)*m_x_size, m_x_size);
+            }
+        }
         data = nrrdNew();
         nrrdWrap(data, val, nrrdTypeUChar, 3, (size_t)m_x_size, (size_t)m_y_size, (size_t)m_slice_num);
         nrrdAxisInfoSet(data, nrrdAxisInfoSpacing, m_xspc, m_yspc, m_zspc);
@@ -302,7 +310,15 @@ Nrrd* V3DPBDReader::Convert(int t, int c, bool get_max)
     else if (m_bd == 16)
     {
         unsigned short* val = new (std::nothrow) unsigned short[mem_size];
-        memcpy(val, (unsigned short*)decompressionBuffer + mem_size * c, mem_size * sizeof(unsigned short));
+        unsigned short* src = (unsigned short*)decompressionBuffer + mem_size * c;
+        for (int z = 0; z < m_slice_num; z++)
+        {
+            size_t offset = z * m_y_size * m_x_size;
+            for (int y = 0; y < m_y_size; y++)
+            {
+                memcpy(val + offset + y*m_x_size, src + offset + (m_y_size-y-1)*m_x_size, m_x_size*sizeof(unsigned short));
+            }
+        }
         data = nrrdNew();
         nrrdWrap(data, val, nrrdTypeUShort, 3, (size_t)m_x_size, (size_t)m_y_size, (size_t)m_slice_num);
         nrrdAxisInfoSet(data, nrrdAxisInfoSpacing, m_xspc, m_yspc, m_zspc);

@@ -45,10 +45,14 @@ struct NAListItemData
 	int mipid;
 	wxString score;
 	int itemid;
+	int imgid;
 };
 
 class NAListCtrl : public wxListCtrl, public Notifier
 {
+	static constexpr int IMG_ID_REF = -2;
+	static constexpr int IMG_ID_ALLSIG = -1;
+
 	enum
 	{
 		Menu_AddTo = wxID_HIGHEST+12201,
@@ -63,12 +67,11 @@ public:
 		long style=wxLC_REPORT|wxLC_SINGLE_SEL);
 	~NAListCtrl();
 
-	void Append(wxString name, wxString dbname, wxString score, int mipid=-1, int swcid=-1, int dbid=-1, int index=-1);
+	void Append(int imgid, wxString name, int mipid, int index=-1);
 	wxString GetText(long item, int col);
 	int GetImageId(long item, int col);
 	
-	void LoadResults(wxString csvfilepath);
-	void SaveResults(wxString txtpath, bool export_swc=false, bool export_swcprev=false, bool export_mip=false, bool export_vol=false, bool pfx_score=false, bool pfx_db=false, bool zip=false);
+	void LoadResults(wxString idpath, wxString volpath, NAGuiPlugin* plugin, wxString chspec, wxString prefix=wxT(""));
 	wxString GetListFilePath() {return m_rfpath;}
 
 	void DeleteSelection();
@@ -76,6 +79,7 @@ public:
 	void AddHistory(const NAListItemData &data);
 	void Undo();
 	void Redo();
+
 
 private:
 	void OnSelect(wxListEvent &event);
@@ -104,6 +108,7 @@ private:
 	std::vector<NAListItemData> m_history;
 	int m_history_pos;
 	wxString m_rfpath;
+	NAGuiPlugin* m_plugin;
 };
 
 class wxNASettingDialog : public wxDialog
@@ -139,7 +144,7 @@ public:
 class wxImagePanel : public wxPanel
 {
     wxImage  m_image;
-    wxImage  *m_orgimage;
+    wxImage  m_orgimage;
     wxImage  m_olimage;
     wxImage  m_bgimage;
     wxBitmap *m_resized;
@@ -148,7 +153,7 @@ class wxImagePanel : public wxPanel
 public:
     wxImagePanel(wxWindow* parent, int w, int h);
     ~wxImagePanel();
-    void SetImage(wxString file, wxBitmapType format);
+    void SetImage(const wxImage *img);
     void SetOverlayImage(wxString file, wxBitmapType format, bool show=true);
     void SetBackgroundImage(wxString file, wxBitmapType format);
     void ResetImage();

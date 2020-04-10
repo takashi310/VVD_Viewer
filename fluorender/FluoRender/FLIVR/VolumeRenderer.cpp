@@ -2951,7 +2951,7 @@ namespace FLIVR
 				semaphores.push_back(prim_dev->GetNextRenderSemaphoreSettings());
 
 			if (label_ || (m_na_mode && tex_->nlabel() != -1))
-				lbltex = load_brick_label(prim_dev, bricks, i, false, true, &label_updated, &(semaphores.back()));
+				lbltex = load_brick_label(prim_dev, bricks, i, true, (m_na_mode && tex_->nlabel() != -1) ? false : true, &label_updated, &(semaphores.back()));
 			if (label_updated)
 				semaphores.push_back(prim_dev->GetNextRenderSemaphoreSettings());
 

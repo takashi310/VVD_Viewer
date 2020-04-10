@@ -50,7 +50,7 @@ extern "C" {
 
 using namespace std;
 
-class H5JReader : public BaseReader
+class EXPORT_API H5JReader : public BaseReader
 {
 public:
 	H5JReader();

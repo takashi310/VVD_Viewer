@@ -929,7 +929,7 @@ z
       else if (c == nmask_)
 		 return VK_FORMAT_R8_UNORM;
       else if (c == nlabel_)
-         return VK_FORMAT_R16_UINT;
+         return VK_FORMAT_R32_UINT;
 	  else if (c == nstroke_)
          return VK_FORMAT_R8_UNORM;
       else

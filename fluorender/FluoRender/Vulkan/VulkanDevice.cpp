@@ -26,10 +26,19 @@ namespace vks
 		{
 			if (mem_prop2.memoryProperties.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
 			{
-				VkDeviceSize heap_budget = mem_bprop.heapBudget[i];
-				VkDeviceSize heap_usage = mem_bprop.heapUsage[i];
-				if (cur_mem_lim < heap_budget - heap_usage)
-					cur_mem_lim = heap_budget - heap_usage;
+				if (extensionSupported("VK_EXT_memory_budget"))
+				{
+					VkDeviceSize heap_budget = mem_bprop.heapBudget[i];
+					VkDeviceSize heap_usage = mem_bprop.heapUsage[i];
+					if (cur_mem_lim < heap_budget - heap_usage)
+						cur_mem_lim = heap_budget - heap_usage;
+				}
+				else
+				{
+					VkDeviceSize heap_size = mem_prop2.memoryProperties.memoryHeaps[i].size;
+					if (cur_mem_lim < heap_size)
+						cur_mem_lim = heap_size;
+				}
 			}
 		}
 

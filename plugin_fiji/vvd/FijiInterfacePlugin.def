@@ -1,0 +1,5 @@
+LIBRARY	"FijiInterfacePlugin"
+
+EXPORTS
+	CreatePlugin=CreatePlugin
+	DeletePlugin=DeletePlugin

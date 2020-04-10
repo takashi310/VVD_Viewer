@@ -143,8 +143,6 @@ namespace FLIVR
 */
         
         memset(na_lbl_, 0, sizeof(na_lbl_));
-        na_lbl_[1] = 255;
-        na_lbl_[3] = 255;
         if (na_tex_.empty())
             m_vulkan->GenTextures2DAllDevice(na_tex_, VK_FORMAT_R8_UNORM, VK_FILTER_NEAREST, PALETTE_W, PALETTE_H);
         m_vulkan->UploadTextures(na_tex_, na_lbl_);
