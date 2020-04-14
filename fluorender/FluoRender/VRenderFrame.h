@@ -339,7 +339,7 @@ public:
 	void CreatePluginWindow(wxString name, bool show=true);
 	bool IsCreatedPluginWindow(wxString name);
 	bool IsShownPluginWindow(wxString name);
-	bool RunPlugin(wxString name, wxString options);
+	bool RunPlugin(wxString name, wxString options, bool show=false);
 	bool PluginExists(wxString name);
 	int UploadFileRemote(wxString url, wxString upfname, wxString loc_fpath, wxString usr, wxString pwd=wxString());
 	int DownloadFileRemote(wxString url, wxString dir, wxString usr=wxString(), wxString pwd=wxString());

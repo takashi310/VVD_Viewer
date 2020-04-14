@@ -332,6 +332,7 @@ NAListCtrl::NAListCtrl(
 	long style) :
 	wxListCtrl(parent, id, pos, size, style)
 {
+	m_plugin = NULL;
 	m_images = NULL;
 	m_history_pos = 0;
 
@@ -355,11 +356,18 @@ NAListCtrl::~NAListCtrl()
 	wxDELETE(m_images);
 }
 
-void NAListCtrl::LoadResults(wxString idpath, wxString volpath, NAGuiPlugin* plugin, wxString chspec, wxString prefix)
+void NAListCtrl::LoadResults(wxString idpath, wxString volpath, wxString chspec, wxString prefix)
 {
-	m_plugin = plugin;
+	if (!m_plugin) return;
 
-	if (!plugin) return;
+	m_plugin->runNALoader(idpath, volpath, chspec, prefix);
+
+	UpdateResults();
+}
+
+void NAListCtrl::UpdateResults()
+{
+	if (!m_plugin) return;
 
 	SetEvtHandlerEnabled(false);
 
@@ -367,10 +375,8 @@ void NAListCtrl::LoadResults(wxString idpath, wxString volpath, NAGuiPlugin* plu
 
 	if (!m_listdata.empty()) m_listdata.clear();
 
-	plugin->runNALoader(idpath, volpath, chspec, prefix);
-
-	int w = plugin->getRefMIPThumbnail()->GetWidth();
-	int h = plugin->getRefMIPThumbnail()->GetHeight();
+	int w = m_plugin->getRefMIPThumbnail()->GetWidth();
+	int h = m_plugin->getRefMIPThumbnail()->GetHeight();
 
 	if (m_images) wxDELETE(m_images);
 	int img_count = 0;
@@ -381,7 +387,7 @@ void NAListCtrl::LoadResults(wxString idpath, wxString volpath, NAGuiPlugin* plu
 	ref_data.name = "Reference";
 	ref_data.mipid = img_count++;
 	ref_data.imgid = IMG_ID_REF;
-	wxBitmap refbmp = wxBitmap(*plugin->getRefMIPThumbnail());
+	wxBitmap refbmp = wxBitmap(*m_plugin->getRefMIPThumbnail());
 	m_images->Add(refbmp, wxBITMAP_TYPE_ANY);
 	m_listdata.push_back(ref_data);
 
@@ -389,17 +395,17 @@ void NAListCtrl::LoadResults(wxString idpath, wxString volpath, NAGuiPlugin* plu
 	sig_data.name = "Signals";
 	sig_data.mipid = img_count++;
 	sig_data.imgid = IMG_ID_ALLSIG;
-	wxBitmap sigbmp = wxBitmap(*plugin->getSegMIPThumbnail());
+	wxBitmap sigbmp = wxBitmap(*m_plugin->getSegMIPThumbnail());
 	m_images->Add(sigbmp, wxBITMAP_TYPE_ANY);
 	m_listdata.push_back(sig_data);
 
-	for (int i = 0; i < plugin->getSegCount(); i++)
+	for (int i = 0; i < m_plugin->getSegCount(); i++)
 	{
 		NAListItemData data;
 		data.name = wxString::Format("Fragment %d", i);
 		data.mipid = img_count++;
 		data.imgid = i;
-		wxBitmap bmp = wxBitmap(*plugin->getSegMIPThumbnail(i));
+		wxBitmap bmp = wxBitmap(*m_plugin->getSegMIPThumbnail(i));
 		m_images->Add(bmp, wxBITMAP_TYPE_ANY);
 		m_listdata.push_back(data);
 	}
@@ -410,7 +416,7 @@ void NAListCtrl::LoadResults(wxString idpath, wxString volpath, NAGuiPlugin* plu
 	SetColumnWidth(3, w + 2);
 #endif
 
-	Append(IMG_ID_REF ,m_listdata[0].name, m_listdata[0].mipid);
+	Append(IMG_ID_REF, m_listdata[0].name, m_listdata[0].mipid);
 	Append(IMG_ID_ALLSIG, m_listdata[1].name, m_listdata[1].mipid);
 	for (int i = 2; i < m_listdata.size(); i++)
 	{
@@ -418,11 +424,13 @@ void NAListCtrl::LoadResults(wxString idpath, wxString volpath, NAGuiPlugin* plu
 	}
 
 	SetEvtHandlerEnabled(true);
-    Update();
+	Update();
 
 	long item = GetNextItem(-1);
 	if (item != -1)
 		SetItemState(item, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
+
+	m_plugin->setDirty(false);
 }
 
 void NAListCtrl::DeleteSelection()
@@ -842,9 +850,6 @@ void NAGuiPluginWindow::CreateControls()
 {    
 	wxString rpath, nlibpath, outdir, rnum, scmtd;
 	NAGuiPlugin* plugin = (NAGuiPlugin *)GetPlugin();
-	if (plugin)
-	{
-	}
 
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -885,6 +890,7 @@ void NAGuiPluginWindow::CreateControls()
 	wxBoxSizer *sizerl = new wxBoxSizer(wxHORIZONTAL);
 	m_results = new NAListCtrl(nbpanel, wxID_ANY, wxDefaultPosition, wxSize(300, 500));
 	m_results->addObserver(this);
+	m_results->SetPlugin(plugin);
     sizerl->Add(5,10);
     sizerl->Add(m_results, 1, wxEXPAND);
     sizerl->Add(5,10);
@@ -897,7 +903,7 @@ void NAGuiPluginWindow::CreateControls()
 	//sizerchk->Add(20, 10);
 	//sizerchk->Add(m_overlayChk, 0, wxALIGN_CENTER_VERTICAL);
 	//m_swcImagePanel = new wxImagePanel( imgpanel, 500, 250);
-	m_mipImagePanel = new wxImagePanel( imgpanel, 500, 250);
+	m_mipImagePanel = new wxImagePanel( imgpanel, 800, 250);
 	//itemBoxSizer2_1->Add(5, 5);
 	//itemBoxSizer2_1->Add(sizerchk, 0, wxLEFT);
 	//itemBoxSizer2_1->Add(5, 5);
@@ -909,7 +915,7 @@ void NAGuiPluginWindow::CreateControls()
 	imgpanel->SetSizer(itemBoxSizer2_1);
 
 	nbpanel->SetMinSize(wxSize(640,750));
-	imgpanel->SetMinSize(wxSize(510,750));
+	imgpanel->SetMinSize(wxSize(800,750));
 	
 	m_splitterWindow->SplitVertically(nbpanel, imgpanel);
 
@@ -926,7 +932,7 @@ void NAGuiPluginWindow::CreateControls()
 
 	Thaw();
 	SetEvtHandlerEnabled(true);
-	//m_idleTimer->Start(50);
+	m_idleTimer->Start(100);
 	//m_wtimer->Start(50);
 }
 
@@ -1075,7 +1081,7 @@ void NAGuiPluginWindow::OnImportResultsButtonClick( wxCommandEvent& event )
 		return;
 	wxString volpath = file_dlg2.GetPath();
 
-	m_results->LoadResults(idpath, volpath, plugin, "sssr", "");
+	m_results->LoadResults(idpath, volpath, "sssr", "");
 }
 
 void NAGuiPluginWindow::OnSettingButtonClick( wxCommandEvent& event )
@@ -1121,7 +1127,7 @@ void NAGuiPluginWindow::OnInteropMessageReceived(wxCommandEvent & event)
 
 void NAGuiPluginWindow::OnIdle(wxTimerEvent& event)
 {
-	if (m_results)
+/*	if (m_results)
 	{
 		if (wxGetKeyState(wxKeyCode('z')) && wxGetKeyState(WXK_CONTROL) && !wxGetKeyState(WXK_SHIFT) && !wxGetKeyState(WXK_ALT))
 			m_results->Undo();
@@ -1131,6 +1137,16 @@ void NAGuiPluginWindow::OnIdle(wxTimerEvent& event)
 
 		if (wxGetKeyState(wxKeyCode('z')) && wxGetKeyState(WXK_CONTROL) && wxGetKeyState(WXK_SHIFT) && !wxGetKeyState(WXK_ALT))
 			m_results->Redo();
+	}
+*/
+	NAGuiPlugin* plugin = (NAGuiPlugin*)GetPlugin();
+
+	if (!m_results || !plugin)
+		return;
+
+	if (plugin->isDirty())
+	{
+		m_results->UpdateResults();
 	}
 }
 

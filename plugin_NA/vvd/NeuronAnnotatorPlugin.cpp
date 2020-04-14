@@ -5,6 +5,8 @@
 #include <wx/mstream.h>
 #include <wx/filename.h>
 #include <wx/zipstrm.h>
+#include <wx/tokenzr.h>
+#include <wx/cmdline.h>
 #include "compatibility.h"
 
 MIPGeneratorThread::MIPGeneratorThread(NAGuiPlugin* plugin, const vector<int> &queue) : wxThread(wxTHREAD_DETACHED)
@@ -105,7 +107,7 @@ bool NAGuiPlugin::runNALoader()
 	return runNALoader(m_id_path, m_vol_path, wxT("sssr"));
 }
 
-bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chspec, wxString prefix)
+bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chspec, wxString prefix, bool set_dirty)
 {
 	if (!wxFileExists(id_path) || !wxFileExists(vol_path))
 		return false;
@@ -119,6 +121,11 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 		"Neuron Annotator Plugin",
 		"Loading labels...",
 		4, 0, wxPD_SMOOTH | wxPD_AUTO_HIDE);
+
+	if (m_lbl_reader)
+		delete m_lbl_reader;
+	if (m_vol_reader)
+		delete m_vol_reader;
 
 	if (m_lbl_nrrd)
 	{
@@ -156,8 +163,13 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 	void* lbl_data = m_lbl_nrrd->data;
 
 	prg_diag->Update(1, "Loading volumes...");
+	
+	m_vol_suffix = vol_path.Mid(vol_path.Find('.', true)).MakeLower();
+	if (m_vol_suffix == ".h5j")
+		m_vol_reader = new H5JReader();
+	else if (m_vol_suffix == ".v3dpbd")
+		m_vol_reader = new V3DPBDReader();
 
-	m_vol_reader = new H5JReader();
 	str_w = vol_path.ToStdWstring();
 	m_vol_reader->SetFile(str_w);
 	m_vol_reader->Preprocess();
@@ -368,288 +380,10 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 
 	delete prg_diag;
 
-	return true;
-}
-
-/*
-bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chspec)
-{
-	if (!wxFileExists(id_path) || !wxFileExists(vol_path))
-		return false;
-
-	VRenderFrame* vframe = (VRenderFrame*)m_vvd;
-	if (!vframe) return false;
-	DataManager* dm = vframe->GetDataManager();
-	if (!dm) return false;
-
-	m_lbl_reader = new V3DPBDReader();
-
-	chspec = wxT("sssr");
-
-	wstring str_w = id_path.ToStdWstring();
-	m_lbl_reader->SetFile(str_w);
-	m_lbl_reader->Preprocess();
-	int lbl_chan = m_lbl_reader->GetChanNum();
-	Nrrd* v3d_nrrd = m_lbl_reader->Convert(0, 0, true);
-	void* v3d_data = v3d_nrrd->data;
-
-	LoadFiles(vol_path);
-	int vol_chan = dm->GetLatestVolumeChannelNum();
-	VolumeData* vols[3] = {};
-	Nrrd* nrrd_s[3] = {};
-	void* data_s[3] = {};
-	Nrrd* nrrd_r;
-	void* data_r;
-	int scount = 0;
-	for (int c = 0; c < vol_chan; c++)
-	{
-		if (c < chspec.Length())
-		{
-			VolumeData* vd = dm->GetLatestVolumeDataset(c);
-			if (vd && vd->GetTexture() && vd->GetTexture()->get_nrrd(0))
-			{
-				if (chspec[c].GetValue() == 's' && scount < 3)
-				{
-					nrrd_s[scount] = vd->GetTexture()->get_nrrd(0);
-					data_s[scount] = nrrd_s[scount]->data;
-					vols[scount] = vd;
-					scount++;
-				}
-				if (chspec[c].GetValue() == 'r')
-				{
-					nrrd_r = vd->GetTexture()->get_nrrd(0);
-					data_r = nrrd_r->data;
-				}
-			}
-		}
-	}
-
-	int dim_offset = 0;
-	if (nrrd_r->dim > 3) dim_offset = 1;
-	int nx = nrrd_r->axis[dim_offset + 0].size;
-	int ny = nrrd_r->axis[dim_offset + 1].size;
-	int nz = nrrd_r->axis[dim_offset + 2].size;
-
-	double xspc = nrrd_r->axis[dim_offset + 0].spacing;
-	double yspc = nrrd_r->axis[dim_offset + 1].spacing;
-	double zspc = nrrd_r->axis[dim_offset + 2].spacing;
-
-	Nrrd* lbl_nrrd = nrrdNew();
-	size_t vxnum = nx * ny * nz;
-	uint32_t* newdata = new uint32_t[vxnum];
-	if (v3d_nrrd->type == nrrdTypeUChar)
-	{
-		for (size_t i = 0; i < vxnum; i++)
-			newdata[i] = ((unsigned char*)v3d_data)[i];
-	}
-	else if (v3d_nrrd->type == nrrdTypeUShort)
-	{
-		for (size_t i = 0; i < vxnum; i++)
-			newdata[i] = ((uint16_t*)v3d_data)[i];
-	}
-
-	nrrdWrap(lbl_nrrd, (uint32_t*)newdata, nrrdTypeUInt, 3, (size_t)nx, (size_t)ny, (size_t)nz);
-	nrrdAxisInfoSet(lbl_nrrd, nrrdAxisInfoSpacing, xspc, yspc, zspc);
-	nrrdAxisInfoSet(lbl_nrrd, nrrdAxisInfoMax, xspc * nx, yspc * ny, zspc * nz);
-	nrrdAxisInfoSet(lbl_nrrd, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
-	nrrdAxisInfoSet(lbl_nrrd, nrrdAxisInfoSize, (size_t)nx, (size_t)ny, (size_t)nz);
-	void* lbl_data = lbl_nrrd->data;
-
-	delete [] v3d_data;
-	nrrdNix(v3d_nrrd);
-
-	for (int c = 0; c < scount; c++)
-	{
-		if (c == 0)
-			vols[c]->LoadLabel(lbl_nrrd);
-		else
-		{
-			Nrrd* newnrrd;
-			newnrrd = nrrdNew();
-			nrrdCopy(newnrrd, lbl_nrrd);
-			vols[c]->LoadLabel(newnrrd);
-		}
-	}
-    
-    int i, j, k;
-    map<int, BBox> seg_bbox;
-    map<int, size_t> seg_size;
-	double gmaxval_r = 0.0;
-	double gmaxvals[3] = {};
-    //first pass: finding max value and calculating BBox
-    for (i=0; i<nx; i++)
-    {
-        for (j=0; j<ny; j++)
-        {
-            for (k=0; k<nz; k++)
-            {
-                int index = nx*ny*k + nx*j + i;
-                int label = 0;
-                label = ((uint32_t*)lbl_data)[index];
-                if (label > 0)
-                {
-                    if ( seg_bbox.find(label) == seg_bbox.end() )
-                    {
-                        BBox bbox;
-                        bbox.extend(Point(i, j, k));
-                        seg_bbox[label] = bbox;
-                        seg_size[label] = 1;
-                    }
-                    else
-                    {
-                        seg_bbox[label].extend(Point(i, j, k));
-                        seg_size[label]++;
-                    }
-                }
-				for (int c = 0; c < scount; c++)
-				{
-					double val = 0.0;
-					if (nrrd_s[c]->type == nrrdTypeUChar)
-						val = ((unsigned char*)data_s[c])[index];
-					else if (nrrd_s[c]->type == nrrdTypeUShort)
-						val = ((unsigned short*)data_s[c])[index];
-					if (val > gmaxvals[c])
-						gmaxvals[c] = val;
-				}
-				{
-					double val = 0.0;
-					if (nrrd_r->type == nrrdTypeUChar)
-						val = ((unsigned char*)data_r)[index];
-					else if (nrrd_r->type == nrrdTypeUShort)
-						val = ((unsigned short*)data_r)[index];
-					if (val > gmaxval_r)
-						gmaxval_r = val;
-				}
-            }
-        }
-    }
-    
-    map<int, BBox>::iterator it = seg_bbox.begin();
-    m_segs.clear();
-    
-    while (it != seg_bbox.end())
-    {
-        NASegment seg;
-        seg.id = it->first;
-        seg.size = seg_size[seg.id];
-        seg.bbox = it->second;
-        
-        m_segs.push_back(seg);
-		it++;
-    }
-    
-    std::sort(m_segs.begin(), m_segs.end(), NAGuiPlugin::sort_data_asc);
-    
-    //second pass: generate MIPs
-    for (int s = 0; s < m_segs.size(); s++)
-    {
-		unsigned char* temp = (unsigned char*)malloc(nx * ny * 3 * sizeof(unsigned char));
-		memset(temp, 0, nx * ny * 3 * sizeof(unsigned char));
-        BBox bbox = m_segs[s].bbox;
-        for (i=int(bbox.min().x()); i<=int(bbox.max().x()); i++)
-        {
-            for (j=int(bbox.min().y()); j<=int(bbox.max().y()); j++)
-            {
-				double maxvals[3] = {};
-				for (int c = 0; c < scount; c++)
-				{
-					for (k = int(bbox.min().z()); k <= int(bbox.max().z()); k++)
-					{
-						int index = nx * ny * k + nx * j + i;
-						int label = 0;
-						label = ((uint32_t*)lbl_data)[index];
-						if (m_segs[s].id == label)
-						{
-							double val = 0.0;
-							if (nrrd_s[c]->type == nrrdTypeUChar)
-								val = ((unsigned char*)data_s[c])[index];
-							else if (nrrd_s[c]->type == nrrdTypeUShort)
-								val = ((unsigned short*)data_s[c])[index];
-							if (val > maxvals[c])
-								maxvals[c] = val;
-						}
-					}
-					if (nrrd_s[c]->type == nrrdTypeUChar)
-						temp[nx * 3 * j + 3 * i + c] = (unsigned char)maxvals[c];
-					else if (nrrd_s[c]->type == nrrdTypeUShort)
-						temp[nx * 3 * j + 3 * i + c] = (unsigned char)(maxvals[c] / gmaxvals[c] * 255.0);
-				}
-            }
-        }
-		m_segs[s].image.Create(nx, ny, temp);
-		m_segs[s].thumbnail = m_segs[s].image.Scale(500, (int)((double)m_segs[s].image.GetHeight() / (double)m_segs[s].image.GetWidth() * 500.0), wxIMAGE_QUALITY_HIGH);
-    }
-
-	unsigned char* temp_r = (unsigned char*)malloc(nx * ny * 3 * sizeof(unsigned char));
-	unsigned char* temp_s = (unsigned char*)malloc(nx * ny * 3 * sizeof(unsigned char));
-	for (i = 0; i < nx; i++)
-	{
-		for (j = 0; j < ny; j++)
-		{
-			double maxval_r = 0.0;
-			for (k = 0; k < nz; k++)
-			{
-				int index = nx * ny * k + nx * j + i;
-				double val = 0.0;
-				if (nrrd_r->type == nrrdTypeUChar)
-					val = ((unsigned char*)data_r)[index];
-				else if (nrrd_r->type == nrrdTypeUShort)
-					val = ((unsigned short*)data_r)[index];
-				if (val > maxval_r)
-					maxval_r = val;
-			}
-			unsigned char v = 0;
-			if (nrrd_r->type == nrrdTypeUChar)
-				v = (unsigned char)maxval_r;
-			else if (nrrd_r->type == nrrdTypeUShort)
-				v = (unsigned char)(maxval_r / gmaxval_r * 255.0);
-			temp_r[nx * 3 * j + 3 * i + 0] = v;
-			temp_r[nx * 3 * j + 3 * i + 1] = v;
-			temp_r[nx * 3 * j + 3 * i + 2] = v;
-
-			double maxvals[3] = {};
-			for (int c = 0; c < scount; c++)
-			{
-				for (k = 0; k < nz; k++)
-				{
-					int index = nx * ny * k + nx * j + i;
-					double val = 0.0;
-					if (nrrd_s[c]->type == nrrdTypeUChar)
-						val = ((unsigned char*)data_s[c])[index];
-					else if (nrrd_s[c]->type == nrrdTypeUShort)
-						val = ((unsigned short*)data_s[c])[index];
-					if (val > maxvals[c])
-						maxvals[c] = val;
-				}
-				if (nrrd_s[c]->type == nrrdTypeUChar)
-					temp_s[nx * 3 * j + 3 * i + c] = (unsigned char)maxvals[c];
-				else if (nrrd_s[c]->type == nrrdTypeUShort)
-					temp_s[nx * 3 * j + 3 * i + c] = (unsigned char)(maxvals[c] / gmaxvals[c] * 255.0);
-			}
-		}
-	}
-	m_ref_image.Create(nx, ny, temp_r);
-	m_sig_image.Create(nx, ny, temp_s);
-
-	m_ref_image_thumb = m_ref_image.Scale(500, (int)((double)m_ref_image.GetHeight() / (double)m_ref_image.GetWidth() * 500.0), wxIMAGE_QUALITY_HIGH);
-	m_sig_image_thumb = m_sig_image.Scale(500, (int)((double)m_sig_image.GetHeight() / (double)m_sig_image.GetWidth() * 500.0), wxIMAGE_QUALITY_HIGH);
-
-	m_id_path = id_path;
-	m_vol_path = vol_path;
-
-	for (int s = 0; s < m_segs.size() && s < 3; s++)
-	{
-		int id = m_segs[s].id;
-		for (int c = 0; c < scount; c++)
-		{
-			vols[c]->SetNAMode(true);
-			vols[c]->SetSegmentMask(id, true);
-		}
-	}
+	m_dirty = set_dirty;
 
 	return true;
 }
-*/
 
 wxImage* NAGuiPlugin::getSegMIPThumbnail(int id)
 {
@@ -729,6 +463,27 @@ bool NAGuiPlugin::runNALoaderRemote(wxString url, wxString usr, wxString pwd, wx
 
 bool NAGuiPlugin::OnRun(wxString options)
 {
+	static const wxCmdLineEntryDesc cmdLineDesc[] =
+	{
+	   { wxCMD_LINE_PARAM, NULL, NULL, NULL,
+		  wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL | wxCMD_LINE_PARAM_MULTIPLE },
+	   { wxCMD_LINE_NONE }
+	};
+
+	wxCmdLineParser parser(cmdLineDesc, options);
+	wxArrayString params;
+	parser.Parse();
+	for (int i = 0; i < (int)parser.GetParamCount(); i++)
+	{
+		params.Add(parser.GetParam(i));
+	}
+
+	if (params.Count() == 2)
+		runNALoader(params.Item(0), params.Item(1), wxT("sssr"), wxT(""), true);
+	else if (params.Count() == 3)
+		runNALoader(params.Item(0), params.Item(1), params.Item(2), wxT(""), true);
+	else if (params.Count() >= 4)
+		runNALoader(params.Item(0), params.Item(1), params.Item(2), params.Item(3), true);
 
 	return true;
 }
@@ -952,7 +707,7 @@ bool NAGuiPlugin::LoadNrrd(int id)
 
 wxString NAGuiPlugin::GetName() const
 {
-	return _("Neuron Annotator Plugin");
+	return _("NAPlugin");
 }
 
 wxString NAGuiPlugin::GetId() const
@@ -973,6 +728,7 @@ void NAGuiPlugin::OnInit()
 	m_nrrd_r = NULL;
 	m_nrrd_s[0] = m_nrrd_s[1] = m_nrrd_s[2] = NULL;
 	m_scount = 0;
+	m_dirty = false;
 	LoadConfigFile();
 }
 

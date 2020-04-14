@@ -15,7 +15,7 @@
 #define SYMBOL_NAPluginWindow_STYLE wxTAB_TRAVERSAL
 #define SYMBOL_NAPluginWindow_TITLE _("_NeuronAnnotatorPluginWindow_H_")
 #define SYMBOL_NAPluginWindow_IDNAME ID_NAGuiPluginWindow
-#define SYMBOL_NAPluginWindow_SIZE wxSize(400, 300)
+#define SYMBOL_NAPluginWindow_SIZE wxSize(800, 600)
 #define SYMBOL_NAPluginWindow_POSITION wxDefaultPosition
 
 class wxUsrPwdDialog : public wxDialog
@@ -70,8 +70,11 @@ public:
 	void Append(int imgid, wxString name, int mipid, int index=-1);
 	wxString GetText(long item, int col);
 	int GetImageId(long item, int col);
+
+	void SetPlugin(NAGuiPlugin* plugin) { m_plugin = plugin; }
 	
-	void LoadResults(wxString idpath, wxString volpath, NAGuiPlugin* plugin, wxString chspec, wxString prefix=wxT(""));
+	void LoadResults(wxString idpath, wxString volpath, wxString chspec, wxString prefix=wxT(""));
+	void UpdateResults();
 	wxString GetListFilePath() {return m_rfpath;}
 
 	void DeleteSelection();

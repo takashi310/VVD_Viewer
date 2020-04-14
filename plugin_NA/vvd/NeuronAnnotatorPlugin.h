@@ -44,7 +44,7 @@ public:
 	void SaveConfigFile();
 
 	bool runNALoader();
-	bool runNALoader(wxString id_path, wxString vol_path, wxString chflags, wxString prefix=wxT(""));
+	bool runNALoader(wxString id_path, wxString vol_path, wxString chflags=wxT("sssr"), wxString prefix=wxT(""), bool set_dirty=false);
 	bool runNALoaderRemote(wxString url, wxString usr, wxString pwd, wxString outdir, wxString ofname);
 	bool LoadFragment(wxString name, int id);
     bool LoadSWC(wxString name, wxString swc_zip_path);
@@ -59,15 +59,19 @@ public:
 	wxImage* getRefMIP();
 	int getSegCount() { return m_segs.size(); }
     
-    V3DPBDReader *m_lbl_reader;
-    H5JReader *m_vol_reader;
-    vector<NASegment> m_segs;
+    static bool sort_data_asc(const NASegment s1, const NASegment s2)
+    { return s2.size < s1.size; }
+
+	bool isDirty() { return m_dirty; }
+	void setDirty(bool val) { m_dirty = val; }
+
+	V3DPBDReader* m_lbl_reader;
+	BaseReader* m_vol_reader;
+	vector<NASegment> m_segs;
 	wxImage m_ref_image;
 	wxImage m_sig_image;
 	wxImage m_ref_image_thumb;
 	wxImage m_sig_image_thumb;
-    static bool sort_data_asc(const NASegment s1, const NASegment s2)
-    { return s2.size < s1.size; }
 
 	Nrrd* m_lbl_nrrd;
 	Nrrd* m_nrrd_r;
@@ -80,6 +84,10 @@ public:
 
 	int m_scount;
 
+	wxString m_vol_suffix;
+
+	bool m_dirty;
+	
 private:
 	wxString m_id_path;
 	wxString m_vol_path;

@@ -5477,14 +5477,18 @@ bool VRenderFrame::PluginExists(wxString name)
 	return false;
 }
 
-bool VRenderFrame::RunPlugin(wxString name, wxString options)
+bool VRenderFrame::RunPlugin(wxString name, wxString options, bool show)
 {
 	wxGuiPluginBaseList gplist = m_plugin_manager->GetGuiPlugins();
 	for(wxGuiPluginBaseList::Node * node = gplist.GetFirst(); node; node = node->GetNext())
 	{
 		wxGuiPluginBase *plugin = node->GetData();
 		if (plugin && plugin->GetName() == name)
+		{
+			if (show)
+				ToggleVisibilityPluginWindow(plugin->GetName(), true);
 			return plugin->OnRun(options);
+		}
 	}
 
 	wxNonGuiPluginBaseList ngplist = m_plugin_manager->GetNonGuiPlugins();

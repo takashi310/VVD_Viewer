@@ -45,7 +45,9 @@ IMPLEMENT_APP(VRenderApp)
 
 static const wxCmdLineEntryDesc g_cmdLineDesc [] =
 {
-   { wxCMD_LINE_PARAM, NULL, NULL, NULL,
+   { wxCMD_LINE_OPTION, "p", NULL, NULL,
+	  wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL },
+   { wxCMD_LINE_PARAM, NULL, NULL, "input file",
       wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL|wxCMD_LINE_PARAM_MULTIPLE },
    { wxCMD_LINE_NONE }
 };
@@ -144,6 +146,9 @@ bool VRenderApp::OnInit()
    if (m_files.Count()>0)
       ((VRenderFrame*)m_frame)->StartupLoad(m_files);
 
+   if (!m_plugin_name.IsEmpty())
+	   ((VRenderFrame*)m_frame)->RunPlugin(m_plugin_name, m_plugin_params, true);
+
    if (setting_dlg)
    {
 	   setting_dlg->SetRealtimeCompress(((VRenderFrame *)m_frame)->GetRealtimeCompression());
@@ -161,35 +166,47 @@ int VRenderApp::OnExit()
 
 void VRenderApp::OnInitCmdLine(wxCmdLineParser& parser)
 {
-   parser.SetDesc (g_cmdLineDesc);
+   parser.SetDesc(g_cmdLineDesc);
+   parser.SetSwitchChars(wxT("-"));
 }
 
 bool VRenderApp::OnCmdLineParsed(wxCmdLineParser& parser)
 {
    int i=0;
    wxString params;
-   for (i = 0; i < (int)parser.GetParamCount(); i++)
+
+   wxString val;
+   int count = 1;
+   if (parser.Found(wxT("p"), &val))
    {
-      wxString file = parser.GetParam(i);
+	   m_plugin_name = val.BeforeFirst(' ');
+	   m_plugin_params = val.AfterFirst(' ');
+	   count++;
+   }
 
-	  if (file.StartsWith(wxT("vvd:")))
-	  {
-		  m_open_by_web_browser = true;
-		  if(file.Length() >= 5)
-		  {
-			  params = file.SubString(4, file.Length()-1);
-			  wxStringTokenizer tkz(params, wxT(","));
-			  while(tkz.HasMoreTokens())
-			  {
-				  wxString path = tkz.GetNextToken();
-				  m_files.Add(path);
-			  }
-		  }
-		  break;
-	  }
-	  
-	  m_files.Add(file);
+   for (i = count; i < (int)parser.GetParamCount(); i++)
+   {
+	   wxString file = parser.GetParam(i);
 
+	   if (file.StartsWith(wxT("vvd:")))
+	   {
+		   m_open_by_web_browser = true;
+		   if (file.Length() >= 5)
+		   {
+			   params = file.SubString(4, file.Length() - 1);
+			   wxStringTokenizer tkz(params, wxT(","));
+			   while (tkz.HasMoreTokens())
+			   {
+				   wxString path = tkz.GetNextToken();
+				   m_files.Add(path);
+			   }
+		   }
+		   break;
+	   }
+	   else
+	   {
+		   m_files.Add(file);
+	   }
    }
     
 #ifdef _WIN32
