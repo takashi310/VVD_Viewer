@@ -210,7 +210,11 @@ class EXPORT_API VRenderVulkanView: public wxWindow
 	enum
 	{
 		ID_Searcher = wxID_HIGHEST+6001,
-		ID_Timer
+		ID_Timer,
+		ID_CTXMENU_HIDE_OTHER_VOLS,
+		ID_CTXMENU_HIDE_THIS_VOL,
+		ID_CTXMENU_UNDO_VISIBILITY_SETTING_CHANGES,
+		ID_CTXMENU_REDO_VISIBILITY_SETTING_CHANGES,
 	};
 
 public:
@@ -1260,6 +1264,13 @@ private:
 	void Resize(bool refresh=true);
 	void OnIdle(wxTimerEvent& event);
 	void OnKeyDown(wxKeyEvent& event);
+	void OnContextMenu(wxContextMenuEvent& event);
+	
+	void OnHideOtherVolumes(wxCommandEvent& event);
+	void OnHideSelectedVolume(wxCommandEvent& event);
+	void OnUndoVisibilitySettings(wxCommandEvent& event);
+	void OnRedoVisibilitySettings(wxCommandEvent& event);
+
 	//WXLRESULT MSWWindowProc(WXUINT message, WXWPARAM wParam, WXLPARAM lParam);
 
 	void switchLevel(VolumeData *vd);
@@ -2060,7 +2071,6 @@ private:
 	void OnSaveDefault(wxCommandEvent &event);
 
 	void OnKeyDown(wxKeyEvent& event);
-
 
 	DECLARE_EVENT_TABLE();
 

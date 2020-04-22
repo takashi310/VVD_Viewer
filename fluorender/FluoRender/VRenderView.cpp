@@ -417,6 +417,10 @@ void LMSeacher::OnMouse(wxMouseEvent& event)
 
 
 BEGIN_EVENT_TABLE(VRenderVulkanView, wxWindow)
+	EVT_MENU(ID_CTXMENU_HIDE_OTHER_VOLS, VRenderVulkanView::OnHideOtherVolumes)
+	EVT_MENU(ID_CTXMENU_HIDE_THIS_VOL, VRenderVulkanView::OnHideSelectedVolume)
+	EVT_MENU(ID_CTXMENU_UNDO_VISIBILITY_SETTING_CHANGES, VRenderVulkanView::OnUndoVisibilitySettings)
+	EVT_MENU(ID_CTXMENU_REDO_VISIBILITY_SETTING_CHANGES, VRenderVulkanView::OnRedoVisibilitySettings)
 	EVT_PAINT(VRenderVulkanView::OnDraw)
 	EVT_SIZE(VRenderVulkanView::OnResize)
 	EVT_ERASE_BACKGROUND(VRenderVulkanView::OnErase)
@@ -6204,6 +6208,77 @@ void VRenderVulkanView::OnKeyDown(wxKeyEvent& event)
 {
 	event.Skip();
 }
+
+void VRenderVulkanView::OnContextMenu(wxContextMenuEvent& event)
+{
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+
+	wxMenu menu;
+	menu.Append(ID_CTXMENU_HIDE_OTHER_VOLS, "Hide other volumes");
+	menu.Append(ID_CTXMENU_HIDE_THIS_VOL, "Hide selected volume data");
+	menu.Append(ID_CTXMENU_UNDO_VISIBILITY_SETTING_CHANGES, "Undo visibility settings");
+	menu.Append(ID_CTXMENU_REDO_VISIBILITY_SETTING_CHANGES, "Redo visibility settings");
+
+	wxPoint point = event.GetPosition();
+	// If from keyboard
+	if (point.x == -1 && point.y == -1) {
+		wxSize size = GetSize();
+		point.x = size.x / 2;
+		point.y = size.y / 2;
+	}
+	else {
+		point = ScreenToClient(point);
+	}
+
+	PopupMenu(&menu, point.x, point.y);
+
+}
+
+void VRenderVulkanView::OnHideOtherVolumes(wxCommandEvent& event)
+{
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+
+	VolumeData *vd = vr_frame->GetCurSelVol();
+	if (!vd) return;
+
+	TreePanel* tree_panel = vr_frame->GetTree();
+	if (!tree_panel) return;
+
+	tree_panel->HideOtherVolumes(vd->GetName());
+}
+void VRenderVulkanView::OnHideSelectedVolume(wxCommandEvent& event)
+{
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+
+	TreePanel* tree_panel = vr_frame->GetTree();
+	if (!tree_panel) return;
+
+	tree_panel->HideSelectedItem();
+}
+void VRenderVulkanView::OnUndoVisibilitySettings(wxCommandEvent& event)
+{
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+
+	TreePanel* tree_panel = vr_frame->GetTree();
+	if (!tree_panel) return;
+
+	tree_panel->UndoVisibility();
+}
+void VRenderVulkanView::OnRedoVisibilitySettings(wxCommandEvent& event)
+{
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+
+	TreePanel* tree_panel = vr_frame->GetTree();
+	if (!tree_panel) return;
+
+	tree_panel->RedoVisibility();
+}
+
 
 void VRenderVulkanView::Set3DRotCapture(double start_angle,
 									double end_angle,
@@ -14947,13 +15022,19 @@ void VRenderVulkanView::OnMouse(wxMouseEvent& event)
 				AddRulerPoint(event.GetX(), event.GetY());
 				FinishRuler();
 			}
+
+			RefreshGL();
+		}
+		else
+		{
+			wxContextMenuEvent e;
+			e.SetPosition(mouse_pos);
+			OnContextMenu(e);
 		}
 
 		//added by takashi
-		SwitchRulerBalloonVisibility_Point(event.GetX(), event.GetY());
-
-		//SetSortBricks();
-		RefreshGL();
+		//SwitchRulerBalloonVisibility_Point(event.GetX(), event.GetY());
+		
 		return;
 	}
 

@@ -44,7 +44,7 @@ public:
 	void SaveConfigFile();
 
 	bool runNALoader();
-	bool runNALoader(wxString id_path, wxString vol_path, wxString chflags=wxT("sssr"), wxString prefix=wxT(""), bool set_dirty=false);
+	bool runNALoader(wxString id_path, wxString vol_path, wxString chflags=wxT("sssr"), wxString spacings=wxT(""), wxString prefix=wxT(""), bool set_dirty=false);
 	bool runNALoaderRemote(wxString url, wxString usr, wxString pwd, wxString outdir, wxString ofname);
 	bool LoadFragment(wxString name, int id);
     bool LoadSWC(wxString name, wxString swc_zip_path);
@@ -83,6 +83,10 @@ public:
 	int m_running_mip_th;
 
 	int m_scount;
+
+	double m_xspc;
+	double m_yspc;
+	double m_zspc;
 
 	wxString m_vol_suffix;
 

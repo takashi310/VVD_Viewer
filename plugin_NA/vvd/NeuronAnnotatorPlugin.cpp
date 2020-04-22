@@ -99,6 +99,27 @@ NAGuiPlugin::NAGuiPlugin(wxEvtHandler * handler, wxWindow * vvd)
 
 NAGuiPlugin::~NAGuiPlugin()
 {
+	if (m_lbl_nrrd)
+	{
+		delete[] m_lbl_nrrd->data;
+		nrrdNix(m_lbl_nrrd);
+		m_lbl_nrrd = NULL;
+	}
+	if (m_nrrd_r)
+	{
+		delete[] m_nrrd_r->data;
+		nrrdNix(m_nrrd_r);
+		m_nrrd_r = NULL;
+	}
+	for (int i = 0; i < 3; i++)
+	{
+		if (m_nrrd_s[i])
+		{
+			delete[] m_nrrd_s[i]->data;
+			nrrdNix(m_nrrd_s[i]);
+		}
+		m_nrrd_s[i] = NULL;
+	}
 }
 
 bool NAGuiPlugin::runNALoader()
@@ -107,7 +128,7 @@ bool NAGuiPlugin::runNALoader()
 	return runNALoader(m_id_path, m_vol_path, wxT("sssr"));
 }
 
-bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chspec, wxString prefix, bool set_dirty)
+bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chspec, wxString spacings, wxString prefix, bool set_dirty)
 {
 	if (!wxFileExists(id_path) || !wxFileExists(vol_path))
 		return false;
@@ -149,7 +170,29 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 		m_nrrd_s[i] = NULL;
 	}
 
-	chspec = wxT("sssr");
+	m_xspc = -1.0;
+	m_yspc = -1.0;
+	m_zspc = -1.0;
+	if (!spacings.IsEmpty())
+	{
+		wxStringTokenizer tkz(spacings, wxT("x"));
+		wxArrayString strspc;
+		while (tkz.HasMoreTokens())
+			strspc.Add(tkz.GetNextToken());
+		
+		if (strspc.Count() == 3)
+		{
+			double val;
+			if (strspc.Item(0).ToDouble(&val))
+				m_xspc = val;
+			if (strspc.Item(1).ToDouble(&val))
+				m_yspc = val;
+			if (strspc.Item(2).ToDouble(&val))
+				m_zspc = val;
+		}
+	}
+
+
 	m_prefix = prefix;
 	if (!m_prefix.IsEmpty())
 		m_prefix += wxT(" ");
@@ -204,6 +247,13 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 	int nx = m_nrrd_s[0]->axis[dim_offset + 0].size;
 	int ny = m_nrrd_s[0]->axis[dim_offset + 1].size;
 	int nz = m_nrrd_s[0]->axis[dim_offset + 2].size;
+
+	if (m_xspc <= 0.0)
+		m_xspc = m_nrrd_s[0]->axis[dim_offset + 0].spacing;
+	if (m_yspc <= 0.0)
+		m_yspc = m_nrrd_s[0]->axis[dim_offset + 1].spacing;
+	if (m_zspc <= 0.0)
+		m_zspc = m_nrrd_s[0]->axis[dim_offset + 2].spacing;
 
 	int i, j, k;
 	map<int, BBox> seg_bbox;
@@ -465,25 +515,37 @@ bool NAGuiPlugin::OnRun(wxString options)
 {
 	static const wxCmdLineEntryDesc cmdLineDesc[] =
 	{
-	   { wxCMD_LINE_PARAM, NULL, NULL, NULL,
-		  wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL | wxCMD_LINE_PARAM_MULTIPLE },
+	   { wxCMD_LINE_OPTION, "l", NULL, NULL, wxCMD_LINE_VAL_STRING, wxCMD_LINE_OPTION_MANDATORY },
+	   { wxCMD_LINE_OPTION, "v", NULL, NULL, wxCMD_LINE_VAL_STRING, wxCMD_LINE_OPTION_MANDATORY },
+	   { wxCMD_LINE_OPTION, "c", NULL, NULL, wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL },
+	   { wxCMD_LINE_OPTION, "s", NULL, NULL, wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL },
+	   { wxCMD_LINE_OPTION, "p", NULL, NULL, wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL },
 	   { wxCMD_LINE_NONE }
 	};
 
 	wxCmdLineParser parser(cmdLineDesc, options);
-	wxArrayString params;
 	parser.Parse();
-	for (int i = 0; i < (int)parser.GetParamCount(); i++)
-	{
-		params.Add(parser.GetParam(i));
-	}
 
-	if (params.Count() == 2)
-		runNALoader(params.Item(0), params.Item(1), wxT("sssr"), wxT(""), true);
-	else if (params.Count() == 3)
-		runNALoader(params.Item(0), params.Item(1), params.Item(2), wxT(""), true);
-	else if (params.Count() >= 4)
-		runNALoader(params.Item(0), params.Item(1), params.Item(2), params.Item(3), true);
+	wxString label;
+	wxString volume;
+	wxString ch = "sssr";
+	wxString spacings;
+	wxString prefix;
+
+	wxString val;
+
+	if (parser.Found(wxT("l"), &val))
+		label = val;
+	if (parser.Found(wxT("v"), &val))
+		volume = val;
+	if (parser.Found(wxT("c"), &val))
+		ch = val;
+	if (parser.Found(wxT("s"), &val))
+		spacings = val;
+	if (parser.Found(wxT("p"), &val))
+		prefix = val;
+
+	runNALoader(label, volume, ch, spacings, prefix, true);
 
 	return true;
 }
@@ -573,10 +635,6 @@ bool NAGuiPlugin::LoadNrrd(int id)
 	int ny = m_nrrd_s[0]->axis[dim_offset + 1].size;
 	int nz = m_nrrd_s[0]->axis[dim_offset + 2].size;
 
-	double xspc = m_nrrd_s[0]->axis[dim_offset + 0].spacing;
-	double yspc = m_nrrd_s[0]->axis[dim_offset + 1].spacing;
-	double zspc = m_nrrd_s[0]->axis[dim_offset + 2].spacing;
-
 	int bits = 8;
 	if (m_nrrd_s[0]->type == nrrdTypeUChar || m_nrrd_s[0]->type == nrrdTypeChar)
 		bits = 8;
@@ -587,7 +645,7 @@ bool NAGuiPlugin::LoadNrrd(int id)
 
 	if (id == -2 && m_nrrd_r)
 	{
-		dm->AddEmptyVolumeData(m_prefix+"Reference", bits, nx, ny, nz, xspc, yspc, zspc);
+		dm->AddEmptyVolumeData(m_prefix+"Reference", bits, nx, ny, nz, m_xspc, m_yspc, m_zspc);
 		VolumeData* vd = dm->GetVolumeData(dm->GetVolumeNum() - 1);
 
 		if (bits == 16)
@@ -609,7 +667,7 @@ bool NAGuiPlugin::LoadNrrd(int id)
 			if (m_nrrd_s[i])
 			{
 				wxString name = wxString::Format(m_prefix+"Channel %d", i);
-				dm->AddEmptyVolumeData(name, bits, nx, ny, nz, xspc, yspc, zspc);
+				dm->AddEmptyVolumeData(name, bits, nx, ny, nz, m_xspc, m_yspc, m_zspc);
 				VolumeData* vd = dm->GetVolumeData(dm->GetVolumeNum() - 1);
 
 				if (bits == 16)
@@ -641,7 +699,7 @@ bool NAGuiPlugin::LoadNrrd(int id)
 	else if (id >= 0 && id < m_segs.size())
 	{
 		wxString name = wxString::Format(m_prefix+"Fragment %d", id);
-		dm->AddEmptyVolumeData(name, bits, nx, ny, nz, xspc, yspc, zspc);
+		dm->AddEmptyVolumeData(name, bits, nx, ny, nz, m_xspc, m_yspc, m_zspc);
 		VolumeData* vd = dm->GetVolumeData(dm->GetVolumeNum() - 1);
 		
 		if (bits == 16)
@@ -729,6 +787,9 @@ void NAGuiPlugin::OnInit()
 	m_nrrd_s[0] = m_nrrd_s[1] = m_nrrd_s[2] = NULL;
 	m_scount = 0;
 	m_dirty = false;
+	m_xspc = -1.0;
+	m_yspc = -1.0;
+	m_zspc = -1.0;
 	LoadConfigFile();
 }
 

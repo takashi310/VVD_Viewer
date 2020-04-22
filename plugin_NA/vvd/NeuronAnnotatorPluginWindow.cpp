@@ -816,6 +816,7 @@ bool NAGuiPluginWindow::Create(wxGuiPluginBase * plugin,
 
 NAGuiPluginWindow::~NAGuiPluginWindow()
 {
+	m_idleTimer->Stop();
 	NAGuiPlugin* plugin = (NAGuiPlugin *)GetPlugin();
 	if (plugin)
 		plugin->SaveConfigFile();

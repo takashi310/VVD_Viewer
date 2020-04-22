@@ -199,10 +199,25 @@ public:
 
 	wxString GetItemBaseText(wxTreeItemId itemid);
 
+	void UndoVisibility();
+	void RedoVisibility();
+	void PushVisHistory();
+
+	void HideOtherDatasets(wxString name);
+	void HideOtherDatasets(wxTreeItemId item);
+	void HideOtherDatasetsTraversal(wxTreeItemId item, wxTreeItemId self);
+	void HideOtherVolumes(wxString name);
+	void HideOtherVolumes(wxTreeItemId item);
+	void HideOtherVolumesTraversal(wxTreeItemId item, wxTreeItemId self);
+	void HideSelectedItem();
+
 	friend class TreePanel;
 
 private:
 	wxWindow* m_frame;
+
+	std::unordered_map<wxString, bool> m_vtmp;
+	std::vector<std::unordered_map<wxString, bool>> m_v_undo, m_v_redo;
 
 	//drag
 	wxTreeItemId m_drag_item;
@@ -219,6 +234,9 @@ private:
 	std::unordered_map<wxString, bool> m_exp_state;
 
 private:
+
+	void GetVisHistoryTraversal(wxTreeItemId item);
+	void SetVisHistoryTraversal(wxTreeItemId item);
 
 	static wxWindow* CreateExtraControl(wxWindow* parent);
 	void OnCh1Check(wxCommandEvent &event);
@@ -384,6 +402,12 @@ public:
 	void CollapseDataTreeItem(wxString name, bool collapse_children=false);
 
 	void doAction(ActionInfo *info);
+
+	void UndoVisibility();
+	void RedoVisibility();
+	void HideOtherDatasets(wxString name);
+	void HideOtherVolumes(wxString name);
+	void HideSelectedItem();
 
 private:
 	wxWindow* m_frame;

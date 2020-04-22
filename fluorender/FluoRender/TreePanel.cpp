@@ -2531,6 +2531,7 @@ void DataTreeCtrl::OnAct(wxTreeEvent &event)
 		return;
 
 	wxTreeItemId sel_item = GetSelection();
+
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	wxString name = "";
 	bool rc = wxGetKeyState(WXK_CONTROL);
@@ -2541,6 +2542,7 @@ void DataTreeCtrl::OnAct(wxTreeEvent &event)
 		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
 		if (item_data)
 		{
+			PushVisHistory();
 			switch (item_data->type)
 			{
 			case 1://view
@@ -3979,6 +3981,468 @@ void DataTreeCtrl::CollapseDataTreeItem(wxString name, bool collapse_children)
 		Collapse(item);
 }
 
+void DataTreeCtrl::RedoVisibility()
+{
+	if (m_v_redo.empty())
+		return;
+
+	m_vtmp.clear();
+	GetVisHistoryTraversal(GetRootItem());
+	m_v_undo.push_back(m_vtmp);
+
+	m_vtmp = m_v_redo[m_v_redo.size() - 1];
+
+	SetVisHistoryTraversal(GetRootItem());
+
+	m_v_redo.pop_back();
+
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+	vr_frame->UpdateTreeIcons();
+	vr_frame->RefreshVRenderViews(false, true);
+}
+
+void DataTreeCtrl::PushVisHistory()
+{
+	m_vtmp.clear();
+	GetVisHistoryTraversal(GetRootItem());
+
+	m_v_undo.push_back(m_vtmp);
+	m_v_redo.clear();
+}
+
+void DataTreeCtrl::GetVisHistoryTraversal(wxTreeItemId item)
+{
+	wxTreeItemIdValue cookie;
+	wxTreeItemId child_item = GetFirstChild(item, cookie);
+	if (child_item.IsOk())
+		GetVisHistoryTraversal(child_item);
+	child_item = GetNextChild(item, cookie);
+	while (child_item.IsOk())
+	{
+		GetVisHistoryTraversal(child_item);
+		child_item = GetNextChild(item, cookie);
+	}
+
+	LayerInfo* item_data = (LayerInfo*)GetItemData(item);
+	if (item_data->type != 7 && item_data->type != 8)
+	{
+		wxString name = GetItemBaseText(item);
+		m_vtmp[name] = (item_data->icon % 2 == 0) ? false : true;
+	}
+}
+
+void DataTreeCtrl::UndoVisibility()
+{
+	if (m_v_undo.empty())
+		return;
+	
+	m_vtmp.clear();
+	GetVisHistoryTraversal(GetRootItem());
+	m_v_redo.push_back(m_vtmp);
+	
+	m_vtmp = m_v_undo[m_v_undo.size() - 1];
+	SetVisHistoryTraversal(GetRootItem());
+
+	m_v_undo.pop_back();
+	
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+	vr_frame->UpdateTreeIcons();
+	vr_frame->RefreshVRenderViews(false, true);
+}
+
+void DataTreeCtrl::SetVisHistoryTraversal(wxTreeItemId item)
+{
+	wxTreeItemIdValue cookie;
+	wxTreeItemId child_item = GetFirstChild(item, cookie);
+	if (child_item.IsOk())
+		SetVisHistoryTraversal(child_item);
+	child_item = GetNextChild(item, cookie);
+	while (child_item.IsOk())
+	{
+		SetVisHistoryTraversal(child_item);
+		child_item = GetNextChild(item, cookie);
+	}
+
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	wxString name = "";
+
+	if (item.IsOk() && vr_frame)
+	{
+		name = GetItemBaseText(item);
+		LayerInfo* item_data = (LayerInfo*)GetItemData(item);
+		if (item_data && m_vtmp.find(name) != m_vtmp.end())
+		{
+			switch (item_data->type)
+			{
+			case 1://view
+			{
+				VRenderView* vrv = vr_frame->GetView(name);
+				if (vrv)
+				{
+					vrv->SetDraw(m_vtmp[name]);
+				}
+			}
+			break;
+			case 2://volume data
+			{
+				VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
+				if (vd)
+				{
+					vd->SetDisp(m_vtmp[name]);
+					for (int i = 0; i < vr_frame->GetViewNum(); i++)
+					{
+						VRenderView* vrv = vr_frame->GetView(i);
+						if (vrv)
+							vrv->SetVolPopDirty();
+					}
+				}
+			}
+			break;
+			case 3://mesh data
+			{
+				MeshData* md = vr_frame->GetDataManager()->GetMeshData(name);
+				if (md)
+				{
+					md->SetDisp(m_vtmp[name]);
+					for (int i = 0; i < vr_frame->GetViewNum(); i++)
+					{
+						VRenderView* vrv = vr_frame->GetView(i);
+						if (vrv)
+							vrv->SetMeshPopDirty();
+					}
+				}
+			}
+			break;
+			case 4://annotations
+			{
+				Annotations* ann = vr_frame->GetDataManager()->GetAnnotations(name);
+				if (ann)
+				{
+					ann->SetDisp(m_vtmp[name]);
+					vr_frame->GetMeasureDlg()->UpdateList();
+				}
+			}
+			break;
+			case 5://group
+			{
+				wxString par_name = GetItemBaseText(GetItemParent(item));
+				VRenderView* vrv = vr_frame->GetView(par_name);
+				if (vrv)
+				{
+					DataGroup* group = vrv->GetGroup(name);
+					if (group)
+					{
+						group->SetDisp(m_vtmp[name]);
+						vrv->SetVolPopDirty();
+					}
+				}
+			}
+			break;
+			case 6://mesh group
+			{
+				wxString par_name = GetItemBaseText(GetItemParent(item));
+				VRenderView* vrv = vr_frame->GetView(par_name);
+				if (vrv)
+				{
+					MeshGroup* group = vrv->GetMGroup(name);
+					if (group)
+					{
+						group->SetDisp(m_vtmp[name]);
+						vrv->SetMeshPopDirty();
+					}
+				}
+			}
+			break;
+			/*case 7://volume segment
+			case 8://segment group
+			{
+				wxTreeItemId vol_item = GetParentVolItem(sel_item);
+				if (vol_item.IsOk())
+				{
+					wxString vname = GetItemBaseText(vol_item);
+					VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(vname);
+					if (vd)
+					{
+						int id = vd->GetROIid(GetItemBaseText(sel_item).ToStdWstring());
+						if (id != -1)
+							vd->SetROISel(GetItemBaseText(sel_item).ToStdWstring(), !(vd->isSelID(id)));
+					}
+				}
+			}
+			break;*/
+			}
+		}
+	}
+}
+
+void DataTreeCtrl::HideOtherDatasets(wxString name)
+{
+	wxTreeItemId item = FindTreeItem(name);
+	HideOtherDatasets(item);
+}
+
+void DataTreeCtrl::HideOtherDatasets(wxTreeItemId item)
+{
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+
+	wxTreeItemId sel_item = GetSelection();
+	if (!sel_item.IsOk()) return;
+
+	LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+	if (!item_data || (item_data->type != 2 && item_data->type != 3 && item_data->type != 4))
+		return;
+
+	PushVisHistory();
+
+	HideOtherDatasetsTraversal(GetRootItem(), sel_item);
+
+	//m_scroll_pos = GetScrollPos(wxVERTICAL);
+	vr_frame->UpdateTreeIcons();
+	//SetScrollPos(wxVERTICAL, m_scroll_pos);
+	//UpdateSelection();
+	vr_frame->RefreshVRenderViews(false, true);
+}
+
+void DataTreeCtrl::HideOtherDatasetsTraversal(wxTreeItemId item, wxTreeItemId self)
+{
+	wxTreeItemIdValue cookie;
+	wxTreeItemId child_item = GetFirstChild(item, cookie);
+	if (child_item.IsOk())
+		HideOtherDatasetsTraversal(child_item, self);
+	child_item = GetNextChild(item, cookie);
+	while (child_item.IsOk())
+	{
+		HideOtherDatasetsTraversal(child_item, self);
+		child_item = GetNextChild(item, cookie);
+	}
+
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	wxString name = "";
+
+	if (item.IsOk() && vr_frame && item != self)
+	{
+		name = GetItemBaseText(item);
+		LayerInfo* item_data = (LayerInfo*)GetItemData(item);
+		if (item_data)
+		{
+			switch (item_data->type)
+			{
+			case 2://volume data
+			{
+				VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
+				if (vd)
+				{
+					vd->SetDisp(false);
+					for (int i = 0; i < vr_frame->GetViewNum(); i++)
+					{
+						VRenderView* vrv = vr_frame->GetView(i);
+						if (vrv)
+							vrv->SetVolPopDirty();
+					}
+				}
+			}
+			break;
+			case 3://mesh data
+			{
+				MeshData* md = vr_frame->GetDataManager()->GetMeshData(name);
+				if (md)
+				{
+					md->SetDisp(false);
+					for (int i = 0; i < vr_frame->GetViewNum(); i++)
+					{
+						VRenderView* vrv = vr_frame->GetView(i);
+						if (vrv)
+							vrv->SetMeshPopDirty();
+					}
+				}
+			}
+			break;
+			case 4://annotations
+			{
+				Annotations* ann = vr_frame->GetDataManager()->GetAnnotations(name);
+				if (ann)
+				{
+					ann->SetDisp(false);
+					vr_frame->GetMeasureDlg()->UpdateList();
+				}
+			}
+			break;
+			/*case 7://volume segment
+			case 8://segment group
+			{
+				wxTreeItemId vol_item = GetParentVolItem(sel_item);
+				if (vol_item.IsOk())
+				{
+					wxString vname = GetItemBaseText(vol_item);
+					VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(vname);
+					if (vd)
+					{
+						int id = vd->GetROIid(GetItemBaseText(sel_item).ToStdWstring());
+						if (id != -1)
+							vd->SetROISel(GetItemBaseText(sel_item).ToStdWstring(), !(vd->isSelID(id)));
+					}
+				}
+			}
+			break;*/
+			}
+		}
+	}
+}
+
+void DataTreeCtrl::HideOtherVolumes(wxString name)
+{
+	wxTreeItemId item = FindTreeItem(name);
+	HideOtherVolumes(item);
+}
+
+void DataTreeCtrl::HideOtherVolumes(wxTreeItemId item)
+{
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+
+	wxTreeItemId sel_item = GetSelection();
+	if (!sel_item.IsOk()) return;
+
+	LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+	if (!item_data || (item_data->type != 2 && item_data->type != 3 && item_data->type != 4))
+		return;
+
+	PushVisHistory();
+
+	HideOtherVolumesTraversal(GetRootItem(), sel_item);
+
+	//m_scroll_pos = GetScrollPos(wxVERTICAL);
+	vr_frame->UpdateTreeIcons();
+	//SetScrollPos(wxVERTICAL, m_scroll_pos);
+	//UpdateSelection();
+	vr_frame->RefreshVRenderViews(false, true);
+}
+
+void DataTreeCtrl::HideOtherVolumesTraversal(wxTreeItemId item, wxTreeItemId self)
+{
+	wxTreeItemIdValue cookie;
+	wxTreeItemId child_item = GetFirstChild(item, cookie);
+	if (child_item.IsOk())
+		HideOtherVolumesTraversal(child_item, self);
+	child_item = GetNextChild(item, cookie);
+	while (child_item.IsOk())
+	{
+		HideOtherVolumesTraversal(child_item, self);
+		child_item = GetNextChild(item, cookie);
+	}
+
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	wxString name = "";
+
+	if (item.IsOk() && vr_frame && item != self)
+	{
+		name = GetItemBaseText(item);
+		LayerInfo* item_data = (LayerInfo*)GetItemData(item);
+		if (item_data)
+		{
+			switch (item_data->type)
+			{
+			case 2://volume data
+			{
+				VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
+				if (vd)
+				{
+					vd->SetDisp(false);
+					for (int i = 0; i < vr_frame->GetViewNum(); i++)
+					{
+						VRenderView* vrv = vr_frame->GetView(i);
+						if (vrv)
+							vrv->SetVolPopDirty();
+					}
+				}
+			}
+			break;
+			/*case 7://volume segment
+			case 8://segment group
+			{
+				wxTreeItemId vol_item = GetParentVolItem(sel_item);
+				if (vol_item.IsOk())
+				{
+					wxString vname = GetItemBaseText(vol_item);
+					VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(vname);
+					if (vd)
+					{
+						int id = vd->GetROIid(GetItemBaseText(sel_item).ToStdWstring());
+						if (id != -1)
+							vd->SetROISel(GetItemBaseText(sel_item).ToStdWstring(), !(vd->isSelID(id)));
+					}
+				}
+			}
+			break;*/
+			}
+		}
+	}
+}
+
+void DataTreeCtrl::HideSelectedItem()
+{
+	if (m_fixed)
+		return;
+
+	wxTreeItemId sel_item = GetSelection();
+
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	wxString name = "";
+	
+	if (sel_item.IsOk() && vr_frame)
+	{
+		PushVisHistory();
+
+		name = GetItemBaseText(sel_item);
+		LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+		if (item_data)
+		{
+			switch (item_data->type)
+			{
+			case 2://volume data
+			{
+				VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
+				if (vd)
+				{
+					vd->SetDisp(false);
+					for (int i = 0; i < vr_frame->GetViewNum(); i++)
+					{
+						VRenderView* vrv = vr_frame->GetView(i);
+						if (vrv)
+							vrv->SetVolPopDirty();
+					}
+				}
+			}
+			break;
+			case 3://mesh data
+			{
+				MeshData* md = vr_frame->GetDataManager()->GetMeshData(name);
+				if (md)
+				{
+					md->SetDisp(false);
+					for (int i = 0; i < vr_frame->GetViewNum(); i++)
+					{
+						VRenderView* vrv = vr_frame->GetView(i);
+						if (vrv)
+							vrv->SetMeshPopDirty();
+					}
+				}
+			}
+			break;
+			}
+		}
+
+		//m_scroll_pos = GetScrollPos(wxVERTICAL);
+		vr_frame->UpdateTreeIcons();
+		//SetScrollPos(wxVERTICAL, m_scroll_pos);
+		//UpdateSelection();
+		vr_frame->RefreshVRenderViews(false, true);
+	}
+}
+
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 BEGIN_EVENT_TABLE(TreePanel, wxPanel)
@@ -4728,4 +5192,30 @@ void TreePanel::CollapseDataTreeItem(wxString name, bool collapse_children)
 {
 	if (m_datatree) 
 		m_datatree->CollapseDataTreeItem(name, collapse_children);
+}
+
+void TreePanel::UndoVisibility()
+{
+	if (m_datatree)
+		m_datatree->UndoVisibility();
+}
+void TreePanel::RedoVisibility()
+{
+	if (m_datatree)
+		m_datatree->RedoVisibility();
+}
+void TreePanel::HideOtherDatasets(wxString name)
+{
+	if (m_datatree)
+		m_datatree->HideOtherDatasets(name);
+}
+void TreePanel::HideOtherVolumes(wxString name)
+{
+	if (m_datatree)
+		m_datatree->HideOtherVolumes(name);
+}
+void TreePanel::HideSelectedItem()
+{
+	if (m_datatree)
+		m_datatree->HideSelectedItem();
 }
