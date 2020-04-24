@@ -401,7 +401,7 @@ bool VulkanExampleBase::initVulkan()
 	// Create synchronization objects
 	VkSemaphoreCreateInfo semaphoreCreateInfo = vks::initializers::semaphoreCreateInfo();
 	// Create a semaphore used to synchronize image presentation
-	// Ensures that the image is displayed before we start submitting new commands to the queu
+	// Ensures that the image is displayed before we start submitting new commands to the queue
 	VK_CHECK_RESULT(vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &semaphores.presentComplete));
 	// Create a semaphore used to synchronize command submission
 	// Ensures that the image is not presented until all commands have been sumbitted and executed

@@ -59,6 +59,9 @@ public:
 	wxImage* getRefMIP();
 	int getSegCount() { return m_segs.size(); }
     
+    bool isRefExists() { return m_nrrd_r ? true : false; }
+    bool isSegExists() { return m_nrrd_s[0] ? true : false; }
+    
     static bool sort_data_asc(const NASegment s1, const NASegment s2)
     { return s2.size < s1.size; }
 

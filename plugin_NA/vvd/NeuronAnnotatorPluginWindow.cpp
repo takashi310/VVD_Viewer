@@ -339,16 +339,21 @@ NAListCtrl::NAListCtrl(
 	wxListItem itemCol;
 	itemCol.SetText("");
 	this->InsertColumn(0, itemCol);
+    
+    itemCol;
+    itemCol.SetText("");
+    this->InsertColumn(1, itemCol);
 
 	itemCol.SetText("Name");
-	this->InsertColumn(1, itemCol);
-
-	itemCol.SetText("Thumbnail");
 	this->InsertColumn(2, itemCol);
 
+	itemCol.SetText("Thumbnail");
+	this->InsertColumn(3, itemCol);
+
 	SetColumnWidth(0, 0);
-	SetColumnWidth(1, 110);
-	SetColumnWidth(2, 500);
+    SetColumnWidth(1, 0);
+	SetColumnWidth(2, 110);
+	SetColumnWidth(3, 500);
 }
 
 NAListCtrl::~NAListCtrl()
@@ -375,53 +380,58 @@ void NAListCtrl::UpdateResults()
 
 	if (!m_listdata.empty()) m_listdata.clear();
 
-	int w = m_plugin->getRefMIPThumbnail()->GetWidth();
-	int h = m_plugin->getRefMIPThumbnail()->GetHeight();
+	int w = m_plugin->getSegMIPThumbnail()->GetWidth();
+	int h = m_plugin->getSegMIPThumbnail()->GetHeight();
 
 	if (m_images) wxDELETE(m_images);
 	int img_count = 0;
 	m_images = new wxImageList(w, h, false);
 	SetImageList(m_images, wxIMAGE_LIST_SMALL);
-
-	NAListItemData ref_data;
-	ref_data.name = "Reference";
-	ref_data.mipid = img_count++;
-	ref_data.imgid = IMG_ID_REF;
-	wxBitmap refbmp = wxBitmap(*m_plugin->getRefMIPThumbnail());
-	m_images->Add(refbmp, wxBITMAP_TYPE_ANY);
-	m_listdata.push_back(ref_data);
-
-	NAListItemData sig_data;
-	sig_data.name = "Signals";
-	sig_data.mipid = img_count++;
-	sig_data.imgid = IMG_ID_ALLSIG;
-	wxBitmap sigbmp = wxBitmap(*m_plugin->getSegMIPThumbnail());
-	m_images->Add(sigbmp, wxBITMAP_TYPE_ANY);
-	m_listdata.push_back(sig_data);
+    
+    if (m_plugin->isRefExists())
+    {
+        NAListItemData ref_data;
+        ref_data.name = "Reference";
+        ref_data.mipid = img_count;
+        ref_data.imgid = IMG_ID_REF;
+        wxBitmap refbmp = wxBitmap(*m_plugin->getRefMIPThumbnail());
+        m_images->Add(refbmp, wxBITMAP_TYPE_ANY);
+        m_listdata.push_back(ref_data);
+        Append(IMG_ID_REF, m_listdata[img_count].name, m_listdata[img_count].mipid, 0);
+        img_count++;
+    }
+    
+    if (m_plugin->isSegExists())
+    {
+        NAListItemData sig_data;
+        sig_data.name = "Signals";
+        sig_data.mipid = img_count;
+        sig_data.imgid = IMG_ID_ALLSIG;
+        wxBitmap sigbmp = wxBitmap(*m_plugin->getSegMIPThumbnail());
+        m_images->Add(sigbmp, wxBITMAP_TYPE_ANY);
+        m_listdata.push_back(sig_data);
+        Append(IMG_ID_ALLSIG, m_listdata[img_count].name, m_listdata[img_count].mipid, 1);
+        img_count++;
+    }
 
 	for (int i = 0; i < m_plugin->getSegCount(); i++)
 	{
 		NAListItemData data;
 		data.name = wxString::Format("Fragment %d", i);
-		data.mipid = img_count++;
+		data.mipid = img_count;
 		data.imgid = i;
 		wxBitmap bmp = wxBitmap(*m_plugin->getSegMIPThumbnail(i));
 		m_images->Add(bmp, wxBITMAP_TYPE_ANY);
 		m_listdata.push_back(data);
+        Append(m_listdata[img_count].imgid, m_listdata[img_count].name, m_listdata[img_count].mipid, img_count);
+        img_count++;
 	}
-
+    
 #ifdef _DARWIN
-	SetColumnWidth(3, w + 8);
+    SetColumnWidth(3, w + 8);
 #else
-	SetColumnWidth(3, w + 2);
+    SetColumnWidth(3, w + 2);
 #endif
-
-	Append(IMG_ID_REF, m_listdata[0].name, m_listdata[0].mipid);
-	Append(IMG_ID_ALLSIG, m_listdata[1].name, m_listdata[1].mipid);
-	for (int i = 2; i < m_listdata.size(); i++)
-	{
-		Append(m_listdata[i].imgid, m_listdata[i].name, m_listdata[i].mipid);
-	}
 
 	SetEvtHandlerEnabled(true);
 	Update();
@@ -537,7 +547,7 @@ void NAListCtrl::Redo()
 
 void NAListCtrl::OnColBeginDrag(wxListEvent& event)
 {
-	if ( event.GetColumn() == 0 )
+	if ( event.GetColumn() == 0 || event.GetColumn() == 1)
     {
         event.Veto();
     }
@@ -546,10 +556,11 @@ void NAListCtrl::OnColBeginDrag(wxListEvent& event)
 void NAListCtrl::Append(int imgid, wxString name, int mipid, int index)
 {
 	wxString dbidstr = wxT("0");
-	int itemid = index >= 0 ? index : GetItemCount();
+	int itemid = GetItemCount();
 	long tmp = InsertItem(itemid, wxString::Format("%d", imgid));
-	SetItem(tmp, 1, name);
-	SetItem(tmp, 2, _(""), mipid);
+    SetItem(tmp, 1, wxString::Format("%d", index));
+	SetItem(tmp, 2, name);
+	SetItem(tmp, 3, _(""), mipid);
 }
 
 wxString NAListCtrl::GetText(long item, int col)

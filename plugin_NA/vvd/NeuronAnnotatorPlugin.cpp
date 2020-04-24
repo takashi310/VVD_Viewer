@@ -26,16 +26,16 @@ MIPGeneratorThread::~MIPGeneratorThread()
 
 wxThread::ExitCode MIPGeneratorThread::Entry()
 {
-	if (!m_plugin)
+	if (!m_plugin || !m_plugin->m_nrrd_s[0])
 		return (wxThread::ExitCode)0;
 
 	m_plugin->m_running_mip_th++;
 
 	int dim_offset = 0;
-	if (m_plugin->m_nrrd_r->dim > 3) dim_offset = 1;
-	int nx = m_plugin->m_nrrd_r->axis[dim_offset + 0].size;
-	int ny = m_plugin->m_nrrd_r->axis[dim_offset + 1].size;
-	int nz = m_plugin->m_nrrd_r->axis[dim_offset + 2].size;
+	if (m_plugin->m_nrrd_s[0]->dim > 3) dim_offset = 1;
+	int nx = m_plugin->m_nrrd_s[0]->axis[dim_offset + 0].size;
+	int ny = m_plugin->m_nrrd_s[0]->axis[dim_offset + 1].size;
+	int nz = m_plugin->m_nrrd_s[0]->axis[dim_offset + 2].size;
 
 	for (auto s : m_queue)
 	{ 
