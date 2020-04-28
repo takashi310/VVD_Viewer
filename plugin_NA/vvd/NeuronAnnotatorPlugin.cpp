@@ -647,6 +647,8 @@ bool NAGuiPlugin::LoadNrrd(int id)
 	{
 		dm->AddEmptyVolumeData(m_prefix+"Reference", bits, nx, ny, nz, m_xspc, m_yspc, m_zspc);
 		VolumeData* vd = dm->GetVolumeData(dm->GetVolumeNum() - 1);
+        vd->SetSpcFromFile(true);
+        dm->SetVolumeDefault(vd);
 
 		if (bits == 16)
 			vd->SetMaxValue(4096.0);
@@ -669,6 +671,8 @@ bool NAGuiPlugin::LoadNrrd(int id)
 				wxString name = wxString::Format(m_prefix+"Channel %d", i);
 				dm->AddEmptyVolumeData(name, bits, nx, ny, nz, m_xspc, m_yspc, m_zspc);
 				VolumeData* vd = dm->GetVolumeData(dm->GetVolumeNum() - 1);
+                vd->SetSpcFromFile(true);
+                dm->SetVolumeDefault(vd);
 
 				if (bits == 16)
 					vd->SetMaxValue(4096.0);
@@ -701,6 +705,8 @@ bool NAGuiPlugin::LoadNrrd(int id)
 		wxString name = wxString::Format(m_prefix+"Fragment %d", id);
 		dm->AddEmptyVolumeData(name, bits, nx, ny, nz, m_xspc, m_yspc, m_zspc);
 		VolumeData* vd = dm->GetVolumeData(dm->GetVolumeNum() - 1);
+        vd->SetSpcFromFile(true);
+        dm->SetVolumeDefault(vd);
 		
 		if (bits == 16)
 			vd->SetMaxValue(4096.0);

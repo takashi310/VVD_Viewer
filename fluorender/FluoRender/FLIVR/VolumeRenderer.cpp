@@ -2551,20 +2551,10 @@ namespace FLIVR
 				return;
 		}
 
-		/*uint64_t st_time, ed_time;
-		char dbgstr[50];
-		st_time = milliseconds_now();*/
-
 		Ray view_ray = compute_view();
-		Ray snapview = compute_snapview(0.4);
 
 		vector<TextureBrick*>* bricks = 0;
-		/*		if (mem_swap_ && interactive_)
-					bricks = tex_->get_closest_bricks(
-					quota_center_, quota_bricks_chan_, true,
-					view_ray, orthographic_p);
-				else
-		*/			bricks = tex_->get_sorted_bricks(view_ray, orthographic_p);
+		bricks = tex_->get_sorted_bricks(view_ray, orthographic_p);
 		if (!bricks || bricks->size() == 0)
 			return;
 
@@ -2572,14 +2562,6 @@ namespace FLIVR
 
 		// Set sampling rate based on interaction
 		double rate = imode_ ? irate_ * 2.0 : sampling_rate_ * 2.0;
-		double rate_fac = 1.0;
-		Vector diag = tex_->bbox()->diagonal();
-		/*		Vector cell_diag(
-					diag.x() / tex_->nx(),
-					diag.y() / tex_->ny(),
-					diag.z() / tex_->nz());
-				double dt = cell_diag.length()/compute_rate_scale()/rate;
-		*/		//double dt = 0.0020/rate * compute_dt_fac(sampling_frq_fac, &rate_fac);
 		uint32_t w = m_vulkan->width;
 		uint32_t h = m_vulkan->height;
 		uint32_t minwh = min(w, h);
@@ -2590,8 +2572,6 @@ namespace FLIVR
 		num_slices_ = (int)(tex_->GetBrickIdSpaceMaxExtent().length() / dt);
 
 		//--------------------------------------------------------------------------
-		bool use_fog = m_use_fog && colormap_mode_ != 2;
-
 		double sf = CalcScaleFactor(w, h, tex_->nx(), tex_->ny(), zoom);
 		if (fabs(sf - sfactor_) > 0.05)
 		{
@@ -3224,8 +3204,6 @@ namespace FLIVR
 		//output result
 		if (blend_num_bits_ > 8 && (!mem_swap_ || finished_bricks_- cur_finished_bricks > 0))
 		{
-			ShaderProgram* img_shader = 0;
-
 			if (noise_red_ && colormap_mode_ != 2)
 			{
 				//FILTERING/////////////////////////////////////////////////////////////////
