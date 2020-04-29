@@ -851,6 +851,9 @@ void NAGuiPluginWindow::Init()
 	m_waitingforFiji = false;
 	m_wtimer = new wxTimer(this, ID_WaitTimer);
 	m_idleTimer = new wxTimer(this, ID_IdleTimer);
+
+	m_nbpanel = NULL;
+	m_imgpanel = NULL;
 }
 
 
@@ -862,32 +865,112 @@ void NAGuiPluginWindow::CreateControls()
 {    
 	wxString rpath, nlibpath, outdir, rnum, scmtd;
 	NAGuiPlugin* plugin = (NAGuiPlugin *)GetPlugin();
+//
+//	SetEvtHandlerEnabled(false);
+//	Freeze();
+//
+//	m_splitterWindow = new wxSplitterWindow(this, wxID_ANY, wxDefaultPosition, wxSize(-1, -1));
+//	wxPanel* nbpanel = new wxPanel(m_splitterWindow, wxID_ANY);
+//	nbpanel->SetWindowStyle(wxBORDER_SIMPLE);
+//	wxPanel* imgpanel = new wxPanel(m_splitterWindow, wxID_ANY);
+//	imgpanel->SetWindowStyle(wxBORDER_SIMPLE);
+//
+//	////@begin NAGuiPluginWindow content construction
+//	wxBoxSizer* itemBoxSizer = new wxBoxSizer(wxHORIZONTAL);
+//	wxBoxSizer* itemBoxSizer2 = new wxBoxSizer(wxVERTICAL);
+//	wxBoxSizer* itemBoxSizer2_1 = new wxBoxSizer(wxVERTICAL);
+//
+//	wxIntegerValidator<unsigned int> vald_int;
+//	vald_int.SetMin(1);
+//
+//#ifdef _WIN32
+//    int stsize = 120;
+//#else
+//    int stsize = 130;
+//#endif
+//
+//	wxBoxSizer *sizert = new wxBoxSizer(wxHORIZONTAL);
+//	m_tb = new wxToolBar(nbpanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTB_FLAT|wxTB_TOP|wxTB_NODIVIDER|wxTB_TEXT|wxTB_NOICONS|wxTB_HORZ_LAYOUT);
+//	//m_tb->AddTool(ID_SAVE_BUTTON, "Save", wxNullBitmap, "Save search results");
+//	m_tb->AddTool(ID_IMPORT_RESULTS_BUTTON, "Import", wxNullBitmap, "Import search results");
+//	//m_tb->AddTool(ID_EDIT_DB_BUTTON, "Database", wxNullBitmap, "Edit NBLAST databases");
+//	//m_tb->AddTool(ID_SETTING, "Setting", wxNullBitmap, "Setting");
+//	m_tb->SetToolSeparation(20);
+//	m_tb->Realize();
+//	sizert->Add(m_tb, 1, wxEXPAND);
+//	itemBoxSizer2->Add(sizert, 0, wxEXPAND);
+//	wxStaticLine *stl = new wxStaticLine(nbpanel);
+//	itemBoxSizer2->Add(stl, 0, wxEXPAND);
+//
+//	wxBoxSizer *sizerl = new wxBoxSizer(wxHORIZONTAL);
+//	m_results = new NAListCtrl(nbpanel, wxID_ANY, wxDefaultPosition, wxSize(300, 500));
+//	m_results->addObserver(this);
+//	m_results->SetPlugin(plugin);
+//    sizerl->Add(5,10);
+//    sizerl->Add(m_results, 1, wxEXPAND);
+//    sizerl->Add(5,10);
+//	itemBoxSizer2->Add(5, 3);
+//	itemBoxSizer2->Add(sizerl, 1, wxEXPAND);
+//
+//	//wxBoxSizer *sizerchk = new wxBoxSizer(wxHORIZONTAL);
+//	//m_overlayChk = new wxCheckBox(imgpanel, ID_NA_OverlayCheckBox, "Overlay search query");
+//	//m_overlayChk->SetValue(true);
+//	//sizerchk->Add(20, 10);
+//	//sizerchk->Add(m_overlayChk, 0, wxALIGN_CENTER_VERTICAL);
+//	//m_swcImagePanel = new wxImagePanel( imgpanel, 500, 250);
+//	m_mipImagePanel = new wxImagePanel( imgpanel, 800, 250);
+//	//itemBoxSizer2_1->Add(5, 5);
+//	//itemBoxSizer2_1->Add(sizerchk, 0, wxLEFT);
+//	//itemBoxSizer2_1->Add(5, 5);
+//	//itemBoxSizer2_1->Add(m_swcImagePanel, 1, wxEXPAND);
+//	itemBoxSizer2_1->Add(5, 5);
+//	itemBoxSizer2_1->Add(m_mipImagePanel, 1, wxEXPAND);
+//
+//	nbpanel->SetSizer(itemBoxSizer2);
+//	imgpanel->SetSizer(itemBoxSizer2_1);
+//
+//	nbpanel->SetMinSize(wxSize(400, 700));
+//	imgpanel->SetMinSize(wxSize(1, 700));
+//	
+//	m_splitterWindow->SplitVertically(nbpanel, imgpanel);
+//
+//	itemBoxSizer->Add(m_splitterWindow, 1, wxEXPAND);
+//	this->SetSizer(itemBoxSizer);
+//	this->Layout();
+//
+//	////@end NAGuiPluginWindow content construction
+//
+//	plugin->GetEventHandler()->Bind(wxEVT_GUI_PLUGIN_INTEROP, 
+//		wxCommandEventHandler(NAGuiPluginWindow::OnInteropMessageReceived), this);
+//
+//	m_nbpanel = nbpanel;
+//	m_imgpanel = imgpanel;
+//
+//	Thaw();
+//	SetEvtHandlerEnabled(true);
+
 
 	SetEvtHandlerEnabled(false);
 	Freeze();
 
-	m_splitterWindow = new wxSplitterWindow(this, wxID_ANY, wxDefaultPosition, wxSize(-1, -1));
-	wxPanel* nbpanel = new wxPanel(m_splitterWindow, wxID_ANY);
+	wxPanel* nbpanel = new wxPanel(this, wxID_ANY);
 	nbpanel->SetWindowStyle(wxBORDER_SIMPLE);
-	wxPanel* imgpanel = new wxPanel(m_splitterWindow, wxID_ANY);
-	imgpanel->SetWindowStyle(wxBORDER_SIMPLE);
-
+	
 	////@begin NAGuiPluginWindow content construction
 	wxBoxSizer* itemBoxSizer = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* itemBoxSizer2 = new wxBoxSizer(wxVERTICAL);
-	wxBoxSizer* itemBoxSizer2_1 = new wxBoxSizer(wxVERTICAL);
 
 	wxIntegerValidator<unsigned int> vald_int;
 	vald_int.SetMin(1);
 
 #ifdef _WIN32
-    int stsize = 120;
+	int stsize = 120;
 #else
-    int stsize = 130;
+	int stsize = 130;
 #endif
 
-	wxBoxSizer *sizert = new wxBoxSizer(wxHORIZONTAL);
-	m_tb = new wxToolBar(nbpanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTB_FLAT|wxTB_TOP|wxTB_NODIVIDER|wxTB_TEXT|wxTB_NOICONS|wxTB_HORZ_LAYOUT);
+	wxBoxSizer* sizert = new wxBoxSizer(wxHORIZONTAL);
+	m_tb = new wxToolBar(nbpanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTB_FLAT | wxTB_TOP | wxTB_NODIVIDER | wxTB_TEXT | wxTB_NOICONS | wxTB_HORZ_LAYOUT);
 	//m_tb->AddTool(ID_SAVE_BUTTON, "Save", wxNullBitmap, "Save search results");
 	m_tb->AddTool(ID_IMPORT_RESULTS_BUTTON, "Import", wxNullBitmap, "Import search results");
 	//m_tb->AddTool(ID_EDIT_DB_BUTTON, "Database", wxNullBitmap, "Edit NBLAST databases");
@@ -896,54 +979,39 @@ void NAGuiPluginWindow::CreateControls()
 	m_tb->Realize();
 	sizert->Add(m_tb, 1, wxEXPAND);
 	itemBoxSizer2->Add(sizert, 0, wxEXPAND);
-	wxStaticLine *stl = new wxStaticLine(nbpanel);
+	wxStaticLine* stl = new wxStaticLine(nbpanel);
 	itemBoxSizer2->Add(stl, 0, wxEXPAND);
 
-	wxBoxSizer *sizerl = new wxBoxSizer(wxHORIZONTAL);
+	wxBoxSizer* sizerl = new wxBoxSizer(wxHORIZONTAL);
 	m_results = new NAListCtrl(nbpanel, wxID_ANY, wxDefaultPosition, wxSize(300, 500));
 	m_results->addObserver(this);
 	m_results->SetPlugin(plugin);
-    sizerl->Add(5,10);
-    sizerl->Add(m_results, 1, wxEXPAND);
-    sizerl->Add(5,10);
+	sizerl->Add(5, 10);
+	sizerl->Add(m_results, 1, wxEXPAND);
+	sizerl->Add(5, 10);
 	itemBoxSizer2->Add(5, 3);
 	itemBoxSizer2->Add(sizerl, 1, wxEXPAND);
 
-	//wxBoxSizer *sizerchk = new wxBoxSizer(wxHORIZONTAL);
-	//m_overlayChk = new wxCheckBox(imgpanel, ID_NA_OverlayCheckBox, "Overlay search query");
-	//m_overlayChk->SetValue(true);
-	//sizerchk->Add(20, 10);
-	//sizerchk->Add(m_overlayChk, 0, wxALIGN_CENTER_VERTICAL);
-	//m_swcImagePanel = new wxImagePanel( imgpanel, 500, 250);
-	m_mipImagePanel = new wxImagePanel( imgpanel, 800, 250);
-	//itemBoxSizer2_1->Add(5, 5);
-	//itemBoxSizer2_1->Add(sizerchk, 0, wxLEFT);
-	//itemBoxSizer2_1->Add(5, 5);
-	//itemBoxSizer2_1->Add(m_swcImagePanel, 1, wxEXPAND);
-	itemBoxSizer2_1->Add(5, 5);
-	itemBoxSizer2_1->Add(m_mipImagePanel, 1, wxEXPAND);
-
 	nbpanel->SetSizer(itemBoxSizer2);
-	imgpanel->SetSizer(itemBoxSizer2_1);
-
-	nbpanel->SetMinSize(wxSize(640,750));
-	imgpanel->SetMinSize(wxSize(800,750));
 	
-	m_splitterWindow->SplitVertically(nbpanel, imgpanel);
-
-	itemBoxSizer->Add(m_splitterWindow, 1, wxEXPAND); 
+	nbpanel->SetMinSize(wxSize(400, 700));
+	
+	itemBoxSizer->Add(nbpanel, 1, wxEXPAND);
 	this->SetSizer(itemBoxSizer);
 	this->Layout();
 
 	////@end NAGuiPluginWindow content construction
 
-	plugin->GetEventHandler()->Bind(wxEVT_GUI_PLUGIN_INTEROP, 
+	plugin->GetEventHandler()->Bind(wxEVT_GUI_PLUGIN_INTEROP,
 		wxCommandEventHandler(NAGuiPluginWindow::OnInteropMessageReceived), this);
 
 	m_nbpanel = nbpanel;
-
+	
 	Thaw();
 	SetEvtHandlerEnabled(true);
+
+
+
 	m_idleTimer->Start(100);
 	//m_wtimer->Start(50);
 }
@@ -1008,16 +1076,16 @@ void NAGuiPluginWindow::doAction(ActionInfo *info)
 			plugin->LoadNrrd(id);
 		}
 		break;
-	case NA_SET_IMAGE:
-		if (plugin && m_mipImagePanel)
-		{
-			int id = *(int*)(info->data);
-			if (id == -2)
-				m_mipImagePanel->SetImage(plugin->getRefMIP());
-			else
-				m_mipImagePanel->SetImage(plugin->getSegMIP(id));
-			m_mipImagePanel->Refresh();
-		}
+	//case NA_SET_IMAGE:
+	//	if (plugin && m_mipImagePanel)
+	//	{
+	//		int id = *(int*)(info->data);
+	//		if (id == -2)
+	//			m_mipImagePanel->SetImage(plugin->getRefMIP());
+	//		else
+	//			m_mipImagePanel->SetImage(plugin->getSegMIP(id));
+	//		m_mipImagePanel->Refresh();
+	//	}
 	default:
 		break;
 	}
@@ -1094,6 +1162,15 @@ void NAGuiPluginWindow::OnImportResultsButtonClick( wxCommandEvent& event )
 	wxString volpath = file_dlg2.GetPath();
 
 	m_results->LoadResults(idpath, volpath, "sssr", "");
+
+	if (m_results->GetItemCount() > 0)
+	{
+		m_nbpanel->SetMinSize(wxSize(1, 1));
+	}
+	else
+	{
+		m_nbpanel->SetMinSize(wxSize(400, 700));
+	}
 }
 
 void NAGuiPluginWindow::OnSettingButtonClick( wxCommandEvent& event )

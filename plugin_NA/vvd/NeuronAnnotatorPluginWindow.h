@@ -273,6 +273,7 @@ private:
 	std::vector<wxCheckBox*> m_nlib_chks;
 	wxStaticBoxSizer *m_nlib_box;
 	wxPanel *m_nbpanel;
+	wxPanel* m_imgpanel;
 	wxToolBar *m_tb;
 	wxTimer *m_idleTimer;
 	wxRadioButton *m_sc_forward;

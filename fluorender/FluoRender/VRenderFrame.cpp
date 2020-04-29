@@ -5398,7 +5398,7 @@ void VRenderFrame::ToggleVisibilityPluginWindow(wxString name, bool show)
 				wxSize wsize = pp->GetVirtualSize();
 				m_aui_mgr.AddPane(pp, wxAuiPaneInfo().
 					Name(gp->GetName()).Caption(gp->GetName()).
-					Dockable(false).CloseButton(true));
+					Dockable(true).CloseButton(true));
 				m_aui_mgr.GetPane(pp).Float();
 				m_aui_mgr.Update();
 				SetEvtHandlerEnabled(true);
@@ -5418,7 +5418,7 @@ void VRenderFrame::ToggleVisibilityPluginWindow(wxString name, bool show)
 				wxSize wsize = pp->GetVirtualSize();
 				m_aui_mgr.AddPane(pp, wxAuiPaneInfo().
 					Name(gp->GetName()).Caption(gp->GetName()).
-					Dockable(false).CloseButton(true).Hide());
+					Dockable(true).CloseButton(true).Hide());
 				m_aui_mgr.GetPane(pp).Float();
 				m_aui_mgr.Update();
 				SetEvtHandlerEnabled(true);
