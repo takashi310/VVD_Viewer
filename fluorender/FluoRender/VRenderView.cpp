@@ -4329,10 +4329,13 @@ void VRenderVulkanView::DrawOVER(VolumeData* vd, std::unique_ptr<vks::VFrameBuff
 			}
 		}
 
-		unsigned int rn_time = GET_TICK_COUNT();
-		if (rn_time - TextureRenderer::get_st_time() >
-			TextureRenderer::get_up_time()/* && vd->GetMaskMode() != 1*/)
-			return;
+		if (TextureRenderer::get_streaming())
+		{
+			unsigned int rn_time = GET_TICK_COUNT();
+			if (rn_time - TextureRenderer::get_st_time() >
+				TextureRenderer::get_up_time()/* && vd->GetMaskMode() != 1*/)
+				return;
+		}
 	}
 
 	if (do_over)
@@ -4472,10 +4475,13 @@ void VRenderVulkanView::DrawMIP(VolumeData* vd, std::unique_ptr<vks::VFrameBuffe
 			}
 		}
 
-		unsigned int rn_time = GET_TICK_COUNT();
-		if (rn_time - TextureRenderer::get_st_time() >
-			TextureRenderer::get_up_time())
-			return;
+		if (TextureRenderer::get_streaming())
+		{
+			unsigned int rn_time = GET_TICK_COUNT();
+			if (rn_time - TextureRenderer::get_st_time() >
+				TextureRenderer::get_up_time())
+				return;
+		}
 	}
 
 	int nx, ny;
@@ -11732,7 +11738,7 @@ void VRenderVulkanView::DrawInfo(int nx, int ny)
 	double fps_ = 1.0/goTimer->average();
 	wxString str;
 	Color text_color = GetTextColor();
-	if (TextureRenderer::get_mem_swap())
+	if (TextureRenderer::get_streaming())
 	{
 		str = wxString::Format(
 			"FPS: %.2f, Bricks: %d, Quota: %d, Int: %s, Time: %lu, Dist: %f",

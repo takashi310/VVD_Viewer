@@ -1713,7 +1713,7 @@ namespace FLIVR
 			return;
 
 		//comment off when debug_ds
-		if (mem_swap_)
+		if (streaming_)
 		{
 			uint32_t rn_time = GET_TICK_COUNT();
 			if (rn_time - st_time_ > get_up_time())
@@ -2325,7 +2325,7 @@ namespace FLIVR
 			}
 
 			//comment off when debug_ds
-			if (mem_swap_/* && !mask_ && !label_*/ && count == 0)
+			if (streaming_/* && !mask_ && !label_*/ && count == 0)
 			{
 				uint32_t rn_time = GET_TICK_COUNT();
 				if (rn_time - st_time_ > get_up_time())
@@ -2544,7 +2544,7 @@ namespace FLIVR
 			return;
 
 		//comment off when debug_ds
-		if (mem_swap_)
+		if (streaming_)
 		{
 			uint32_t rn_time = GET_TICK_COUNT();
 			if (rn_time - st_time_ > get_up_time())
@@ -2781,7 +2781,7 @@ namespace FLIVR
 		for (unsigned int i = 0; i < bricks->size(); i++)
 		{
 			//comment off when debug_ds
-			if (mem_swap_/* && !mask_ && !label_*/ && count == 0)
+			if (streaming_/* && !mask_ && !label_*/ && count == 0)
 			{
 				uint32_t rn_time = GET_TICK_COUNT();
 				if (rn_time - st_time_ > get_up_time())
@@ -2838,7 +2838,8 @@ namespace FLIVR
 				filter = VK_FILTER_NEAREST;
 
 			vector<vks::VulkanSemaphoreSettings> semaphores;
-			semaphores.push_back(prim_dev->GetNextRenderSemaphoreSettings());
+			if (mem_swap_)
+				semaphores.push_back(prim_dev->GetNextRenderSemaphoreSettings());
 
 			bool tex_updated = false;
 			bool mask_updated = false;
@@ -2846,18 +2847,18 @@ namespace FLIVR
 			shared_ptr<vks::VTexture> brktex, msktex, lbltex;
 
 			brktex = load_brick(prim_dev, 0, 0, bricks, i, filter, compression_, mode,
-				(mask_ || label_) ? false : true, &tex_updated, &(semaphores.back()));
+				(mask_ || label_) ? false : true, &tex_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
 			if (!brktex)
 			{
 				prim_dev->m_cur_semaphore_id--;
 				continue;
 			}
 			b->prevent_tex_deletion(true);
-			if (tex_updated)
+			if (tex_updated && mem_swap_)
 				semaphores.push_back(prim_dev->GetNextRenderSemaphoreSettings());
 
 			if (mask_)
-				msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, true, &mask_updated, &(semaphores.back()));
+				msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, true, &mask_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
 			else if (tex_->nmask() != -1 && m_mask_hide_mode != VOL_MASK_HIDE_NONE)
 			{
 #ifndef _UNIT_TEST_VOLUME_RENDERER_
@@ -2898,7 +2899,7 @@ namespace FLIVR
 					b->nx(nx); b->ny(ny); b->nz(nz);
 					b->mx(nx); b->my(ny); b->mz(nz);
 
-					msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, false, &mask_updated, &(semaphores.back()));
+					msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, false, &mask_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
 
 					double trans_x = (ox_d - ox) / nx;
 					double trans_y = (oy_d - oy) / ny;
@@ -2920,19 +2921,19 @@ namespace FLIVR
 				}
 				else
 				{
-					msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, false, &mask_updated, &(semaphores.back()));
+					msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, false, &mask_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
 
 					frag_const.mask_b_scale_invnz = { 1.0f, 1.0f, 1.0f, 1.0f };
 					frag_const.mask_b_trans = { 0.0f, 0.0f, 0.0f, 0.0f };
 				}
 #endif
 			}
-			if (mask_updated)
+			if (mask_updated && mem_swap_)
 				semaphores.push_back(prim_dev->GetNextRenderSemaphoreSettings());
 
 			if (label_ || (m_na_mode && tex_->nlabel() != -1))
-				lbltex = load_brick_label(prim_dev, bricks, i, true, (m_na_mode && tex_->nlabel() != -1) ? false : true, &label_updated, &(semaphores.back()));
-			if (label_updated)
+				lbltex = load_brick_label(prim_dev, bricks, i, true, (m_na_mode && tex_->nlabel() != -1) ? false : true, &label_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
+			if (label_updated && mem_swap_)
 				semaphores.push_back(prim_dev->GetNextRenderSemaphoreSettings());
 
 			b->prevent_tex_deletion(false);
@@ -3136,7 +3137,7 @@ namespace FLIVR
 			}
 
 			//comment off when debug_ds
-			if (mem_swap_/* && !mask_ && !label_*/ && count == 0)
+			if (streaming_/* && !mask_ && !label_*/ && count == 0)
 			{
 				uint32_t rn_time = GET_TICK_COUNT();
 				if (rn_time - st_time_ > get_up_time())

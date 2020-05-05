@@ -5202,7 +5202,7 @@ void VRenderFrame::SetTextureRendererSettings()
 	if (!m_setting_dlg)
 		return;
 
-	TextureRenderer::set_mem_swap(m_setting_dlg->GetMemSwap());
+	TextureRenderer::set_streaming(m_setting_dlg->GetMemSwap());
 	bool use_mem_limit = true;
 
 	//check amount of graphic memory

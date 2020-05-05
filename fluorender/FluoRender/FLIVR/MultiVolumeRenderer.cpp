@@ -247,7 +247,7 @@ namespace FLIVR
 		if (get_vr_num() <= 0)
 			return;
 
-		if (TextureRenderer::get_mem_swap())
+		if (TextureRenderer::get_streaming())
 		{
 			uint32_t rn_time = GET_TICK_COUNT();
 			if (rn_time - TextureRenderer::get_st_time() > TextureRenderer::get_up_time())
@@ -645,7 +645,7 @@ namespace FLIVR
 		cur_bid = 0;
 		for (i = start_i; order ? (i <= all_timax) : (i >= all_timin); i += order ? 1 : -1)
 		{
-			if (TextureRenderer::get_mem_swap())
+			if (TextureRenderer::get_streaming())
 			{
 				uint32_t rn_time = GET_TICK_COUNT();
 				if (rn_time - TextureRenderer::get_st_time() > TextureRenderer::get_up_time())
@@ -959,7 +959,7 @@ namespace FLIVR
 				else ite++;
 			}
 
-			if (TextureRenderer::get_mem_swap() && fail)
+			if (TextureRenderer::get_streaming() && fail)
 			{
 				uint32_t rn_time = GET_TICK_COUNT();
 				if (rn_time - TextureRenderer::get_st_time() > TextureRenderer::get_up_time())
