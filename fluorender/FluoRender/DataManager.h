@@ -435,7 +435,9 @@ public:
 		bool intactive = false,
 		double zoom = 1.0,
 		double sampling_frq_fac = -1.0,
-		VkClearColorValue clearColor = {0.0f, 0.0f, 0.0f, 0.0f}
+		VkClearColorValue clearColor = {0.0f, 0.0f, 0.0f, 0.0f},
+		Texture* ext_msk = NULL,
+		Texture* ext_lbl = NULL
 	);
 	void DrawBounds();
 	//draw mask (create the mask)
@@ -686,8 +688,13 @@ public:
 	int GetMaskHideMode() { return m_vr ? m_vr->get_mask_hide_mode() : VOL_MASK_HIDE_NONE; }
     
     void SetSegmentMask(int id, bool val) { if (m_vr) m_vr->set_seg_mask(id, val); }
+	bool GetSegmentMask(int id) { return m_vr ? m_vr->get_seg_mask(id) : false; }
+	std::set<int>* GetActiveSegIDs() { return m_vr ? m_vr->get_active_seg_ids() : nullptr; }
     void SetNAMode(bool val) { if (m_vr) m_vr->set_na_mode(val); }
     bool GetNAMode() { return m_vr ? m_vr->get_na_mode() : false; }
+
+	wxString GetSharedLabelName() { return m_shared_lbl_name; }
+	void SetSharedLabelName(wxString name) { m_shared_lbl_name = name; }
 
 private:
 	//duplication indicator and counter
@@ -803,6 +810,8 @@ private:
 
 	VolumeData *m_brkxml_mask;
 	int m_mask_lv;
+
+	wxString m_shared_lbl_name;
 
 private:
 	//label functions

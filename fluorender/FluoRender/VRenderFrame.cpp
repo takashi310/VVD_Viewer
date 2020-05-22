@@ -5385,7 +5385,7 @@ void VRenderFrame::OnPluginMenuSelect(wxCommandEvent& event)
 	}
 }
 
-void VRenderFrame::ToggleVisibilityPluginWindow(wxString name, bool show)
+void VRenderFrame::ToggleVisibilityPluginWindow(wxString name, bool show, int docking)
 {
 	if (auto gp = m_plugin_manager->GetGuiPlugin(name))
 	{
@@ -5394,12 +5394,14 @@ void VRenderFrame::ToggleVisibilityPluginWindow(wxString name, bool show)
 			if (!m_aui_mgr.GetPane(gp->GetName()).IsOk())
 			{
 				SetEvtHandlerEnabled(false);
-				wxWindow* pp = gp->CreatePanel(m_help_dlg);//dummy parent window
+				//wxWindow* pp = gp->CreatePanel(m_help_dlg);//dummy parent window
+				wxWindow * pp = gp->CreatePanel(this);
 				wxSize wsize = pp->GetVirtualSize();
 				m_aui_mgr.AddPane(pp, wxAuiPaneInfo().
 					Name(gp->GetName()).Caption(gp->GetName()).
 					Dockable(true).CloseButton(true));
-				m_aui_mgr.GetPane(pp).Float();
+				//m_aui_mgr.GetPane(pp).Float();
+				m_aui_mgr.GetPane(pp).Left().Layer(3);
 				m_aui_mgr.Update();
 				SetEvtHandlerEnabled(true);
 			}
@@ -5414,12 +5416,14 @@ void VRenderFrame::ToggleVisibilityPluginWindow(wxString name, bool show)
 			if (!m_aui_mgr.GetPane(gp->GetName()).IsOk())
 			{
 				SetEvtHandlerEnabled(false);
-				wxWindow* pp = gp->CreatePanel(m_help_dlg);//dummy parent window
+				//wxWindow* pp = gp->CreatePanel(m_help_dlg);//dummy parent window
+				wxWindow* pp = gp->CreatePanel(this);
 				wxSize wsize = pp->GetVirtualSize();
 				m_aui_mgr.AddPane(pp, wxAuiPaneInfo().
 					Name(gp->GetName()).Caption(gp->GetName()).
 					Dockable(true).CloseButton(true).Hide());
-				m_aui_mgr.GetPane(pp).Float();
+				//m_aui_mgr.GetPane(pp).Float();
+				m_aui_mgr.GetPane(pp).Left().Layer(3);
 				m_aui_mgr.Update();
 				SetEvtHandlerEnabled(true);
 			}

@@ -4002,6 +4002,12 @@ void DataTreeCtrl::RedoVisibility()
 	vr_frame->RefreshVRenderViews(false, true);
 }
 
+void DataTreeCtrl::ClearVisHistory()
+{
+	m_v_undo.clear();
+	m_v_redo.clear();
+}
+
 void DataTreeCtrl::PushVisHistory()
 {
 	m_vtmp.clear();
@@ -4028,7 +4034,31 @@ void DataTreeCtrl::GetVisHistoryTraversal(wxTreeItemId item)
 	if (item_data->type != 7 && item_data->type != 8)
 	{
 		wxString name = GetItemBaseText(item);
-		m_vtmp[name] = (item_data->icon % 2 == 0) ? false : true;
+		VolVisState state;
+		state.disp = (item_data->icon % 2 == 0) ? false : true;
+
+		if (item_data->type == 2)
+		{
+			VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+			VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
+			if (vd)
+			{
+				state.na_mode = vd->GetNAMode();
+				auto ids = vd->GetActiveSegIDs();
+				if (ids)
+				{
+					auto it = ids->begin();
+					while (it != ids->end())
+					{
+						bool bval = vd->GetSegmentMask(*it);
+						state.label[*it] = bval;
+						it++;
+					}
+				}
+			}
+		}
+
+		m_vtmp[name] = state;
 	}
 }
 
@@ -4081,7 +4111,7 @@ void DataTreeCtrl::SetVisHistoryTraversal(wxTreeItemId item)
 				VRenderView* vrv = vr_frame->GetView(name);
 				if (vrv)
 				{
-					vrv->SetDraw(m_vtmp[name]);
+					vrv->SetDraw(m_vtmp[name].disp);
 				}
 			}
 			break;
@@ -4090,7 +4120,14 @@ void DataTreeCtrl::SetVisHistoryTraversal(wxTreeItemId item)
 				VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
 				if (vd)
 				{
-					vd->SetDisp(m_vtmp[name]);
+					vd->SetDisp(m_vtmp[name].disp);
+					//vd->SetNAMode(m_vtmp[name].na_mode);
+					auto it = m_vtmp[name].label.begin();
+					while (it != m_vtmp[name].label.end())
+					{
+						vd->SetSegmentMask(it->first, it->second);
+						it++;
+					}
 					for (int i = 0; i < vr_frame->GetViewNum(); i++)
 					{
 						VRenderView* vrv = vr_frame->GetView(i);
@@ -4105,7 +4142,7 @@ void DataTreeCtrl::SetVisHistoryTraversal(wxTreeItemId item)
 				MeshData* md = vr_frame->GetDataManager()->GetMeshData(name);
 				if (md)
 				{
-					md->SetDisp(m_vtmp[name]);
+					md->SetDisp(m_vtmp[name].disp);
 					for (int i = 0; i < vr_frame->GetViewNum(); i++)
 					{
 						VRenderView* vrv = vr_frame->GetView(i);
@@ -4120,7 +4157,7 @@ void DataTreeCtrl::SetVisHistoryTraversal(wxTreeItemId item)
 				Annotations* ann = vr_frame->GetDataManager()->GetAnnotations(name);
 				if (ann)
 				{
-					ann->SetDisp(m_vtmp[name]);
+					ann->SetDisp(m_vtmp[name].disp);
 					vr_frame->GetMeasureDlg()->UpdateList();
 				}
 			}
@@ -4134,7 +4171,7 @@ void DataTreeCtrl::SetVisHistoryTraversal(wxTreeItemId item)
 					DataGroup* group = vrv->GetGroup(name);
 					if (group)
 					{
-						group->SetDisp(m_vtmp[name]);
+						group->SetDisp(m_vtmp[name].disp);
 						vrv->SetVolPopDirty();
 					}
 				}
@@ -4149,7 +4186,7 @@ void DataTreeCtrl::SetVisHistoryTraversal(wxTreeItemId item)
 					MeshGroup* group = vrv->GetMGroup(name);
 					if (group)
 					{
-						group->SetDisp(m_vtmp[name]);
+						group->SetDisp(m_vtmp[name].disp);
 						vrv->SetMeshPopDirty();
 					}
 				}
@@ -5203,6 +5240,16 @@ void TreePanel::RedoVisibility()
 {
 	if (m_datatree)
 		m_datatree->RedoVisibility();
+}
+void TreePanel::ClearVisHistory()
+{
+	if (m_datatree)
+		m_datatree->ClearVisHistory();
+}
+void TreePanel::PushVisHistory()
+{
+	if (m_datatree)
+		m_datatree->PushVisHistory();
 }
 void TreePanel::HideOtherDatasets(wxString name)
 {

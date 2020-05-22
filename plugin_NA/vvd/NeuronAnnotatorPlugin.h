@@ -16,6 +16,7 @@ struct NASegment
     BBox bbox;
     wxImage image;
 	wxImage thumbnail;
+	bool visible;
 };
 
 class NAGuiPlugin : public wxGuiPluginBase, public Notifier
@@ -50,10 +51,15 @@ public:
     bool LoadSWC(wxString name, wxString swc_zip_path);
     bool LoadFiles(wxString path);
 	bool LoadNrrd(int id);
+	void SetSegmentVisibility(int id, bool vis);
+	void ToggleSegmentVisibility(int id);
+	void PushVisHistory();
+
+	void ResizeThumbnails(int w);
     
 	void OnTimer(wxTimerEvent& event);
 
-	wxImage* getSegMIPThumbnail(int id=-1);
+	wxImage* getSegMIPThumbnail(int id=0);
 	wxImage* getSegMIP(int id=-1);
 	wxImage* getRefMIPThumbnail();
 	wxImage* getRefMIP();
@@ -78,7 +84,9 @@ public:
 
 	Nrrd* m_lbl_nrrd;
 	Nrrd* m_nrrd_r;
+	wxString m_vol_r;
 	Nrrd* m_nrrd_s[3];
+	wxString m_vol_s[3];
 
 	double m_gmaxvals[3];
 
@@ -94,6 +102,8 @@ public:
 	wxString m_vol_suffix;
 
 	bool m_dirty;
+
+	bool m_allsig_visible;
 	
 private:
 	wxString m_id_path;

@@ -913,9 +913,9 @@ z
    size_t TextureBrick::tex_format_size(VkFormat t)
    {
       if (t == VK_FORMAT_R8_SNORM || VK_FORMAT_BC4_SNORM_BLOCK)  { return sizeof(int8_t); }
-      if (t == VK_FORMAT_R8_UNORM || VK_FORMAT_BC4_UNORM_BLOCK)  { return sizeof(uint8_t); }
+      if (t == VK_FORMAT_R8_UNORM || VK_FORMAT_BC4_UNORM_BLOCK || VK_FORMAT_R8_UINT)  { return sizeof(uint8_t); }
       if (t == VK_FORMAT_R16_SNORM) { return sizeof(int16_t); }
-      if (t == VK_FORMAT_R16_UNORM) { return sizeof(uint16_t); }
+      if (t == VK_FORMAT_R16_UNORM || VK_FORMAT_R16_UINT) { return sizeof(uint16_t); }
       if (t == VK_FORMAT_R32_SINT)  { return sizeof(int32_t); }
       if (t == VK_FORMAT_R32_UINT)  { return sizeof(uint32_t); }
       if (t == VK_FORMAT_R32_SFLOAT){ return sizeof(float); }
@@ -928,8 +928,15 @@ z
          return tex_format_aux(data_[c]);
       else if (c == nmask_)
 		 return VK_FORMAT_R8_UNORM;
-      else if (c == nlabel_)
-         return VK_FORMAT_R32_UINT;
+	  else if (c == nlabel_)
+	  {
+		  if (data_[c]->type == nrrdTypeUChar)
+			  return VK_FORMAT_R8_UINT;
+		  else if (data_[c]->type == nrrdTypeUShort)
+			  return VK_FORMAT_R16_UINT;
+		  else if (data_[c]->type == nrrdTypeUInt)
+			  return VK_FORMAT_R32_UINT;
+	  }
 	  else if (c == nstroke_)
          return VK_FORMAT_R8_UNORM;
       else

@@ -177,7 +177,7 @@ namespace FLIVR
 		//add one more texture component as the volume mask
 		bool add_empty_mask();
 		//add one more texture component as the labeling volume
-		bool add_empty_label();
+		bool add_empty_label(int nb = 4);
 		//add one more texture component as the labeling volume
 		bool add_empty_stroke();
 

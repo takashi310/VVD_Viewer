@@ -1239,7 +1239,15 @@ void VolumeData::LoadLabel(Nrrd* label)
 	if (!m_tex || !m_vr)
 		return;
 
-	m_tex->add_empty_label();
+	int nb = 4;
+	if (label->type == nrrdTypeChar)   nb = 1;
+	if (label->type == nrrdTypeUChar)  nb = 1;
+	if (label->type == nrrdTypeShort)  nb = 2;
+	if (label->type == nrrdTypeUShort) nb = 2;
+	if (label->type == nrrdTypeInt)    nb = 4;
+	if (label->type == nrrdTypeUInt)   nb = 4;
+	if (label->type == nrrdTypeFloat)  nb = 4;
+	m_tex->add_empty_label(nb);
 	m_tex->set_nrrd(label, m_tex->nlabel());
 }
 
@@ -2399,7 +2407,7 @@ void VolumeData::SetMatrices(glm::mat4 &mv_mat,
 //draw volume
 void VolumeData::Draw(
 	std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf,
-	bool ortho, bool interactive, double zoom, double sampling_frq_fac, VkClearColorValue clearColor)
+	bool ortho, bool interactive, double zoom, double sampling_frq_fac, VkClearColorValue clearColor, Texture* ext_msk, Texture* ext_lbl)
 {
 	if (m_vr)
 	{
@@ -2410,7 +2418,7 @@ void VolumeData::Draw(
 			SetLevel(GetMaskLv());
 		}
 		
-		m_vr->draw(framebuf, clear_framebuf, m_test_wiref, interactive, ortho, zoom, m_stream_mode, sampling_frq_fac, clearColor);
+		m_vr->draw(framebuf, clear_framebuf, m_test_wiref, interactive, ortho, zoom, m_stream_mode, sampling_frq_fac, clearColor, ext_msk, ext_lbl);
 		
 		if ( isBrxml() && (m_vr->is_mask_active() || m_vr->is_label_active()) )
 			SetLevel(curlv);

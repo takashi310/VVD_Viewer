@@ -141,7 +141,7 @@ namespace FLIVR
 		double compute_dt_fac_1px(uint32_t w, uint32_t h, double sclfac);
 
 		//draw
-		void eval_ml_mode();
+		void eval_ml_mode(Texture* ext_msk = NULL, Texture* ext_lbl = NULL);
 
 		//mask and label
 		int get_ml_mode() {return ml_mode_;}
@@ -337,7 +337,9 @@ public:
 			double zoom = 1.0,
 			int mode = 0,
 			double sampling_frq_fac = -1.0,
-			VkClearColorValue clearColor = { 0.0f, 0.0f, 0.0f, 0.0f }
+			VkClearColorValue clearColor = { 0.0f, 0.0f, 0.0f, 0.0f },
+			Texture* ext_msk = NULL,
+			Texture* ext_lbl = NULL
 		);
 		void draw_volume(
 			const std::unique_ptr<vks::VFrameBuffer>& framebuf,
@@ -357,7 +359,9 @@ public:
 			double zoom = 1.0,
 			int mode = 0,
 			double sampling_frq_fac = -1.0,
-			VkClearColorValue clearColor = { 0.0f, 0.0f, 0.0f, 0.0f }
+			VkClearColorValue clearColor = { 0.0f, 0.0f, 0.0f, 0.0f },
+			Texture* ext_msk = NULL,
+			Texture* ext_lbl = NULL
 		);
 		//type: 0-initial; 1-diffusion-based growing; 2-masked filtering
 		//paint_mode: 1-select; 2-append; 3-erase; 4-diffuse; 5-flood; 6-clear; 7-all;

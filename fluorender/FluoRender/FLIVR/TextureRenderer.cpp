@@ -202,9 +202,18 @@ namespace FLIVR
     
     void TextureRenderer::set_seg_mask(int id, bool val)
     {
-        na_lbl_[id] = val ? 255 : 0;
-        na_tex_dirty_ = true;
+		if (id >= 0 && id < 65535)
+		{
+			na_lbl_[id] = val ? 255 : 0;
+			na_active_lbl_.insert(id);
+			na_tex_dirty_ = true;
+		}
     }
+
+	bool TextureRenderer::get_seg_mask(int id)
+	{
+		return (id >= 0 && id < 65535) ? na_lbl_[id] : false;
+	}
     
     std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> TextureRenderer::get_seg_mask_tex()
     {
@@ -1685,15 +1694,27 @@ namespace FLIVR
 				else if (!interactive_)
 				{
 					m_pThreadCS.Leave();
-					uint32_t rn_time;
-					unsigned long elapsed;
-					long t;
-					do {
-						rn_time = GET_TICK_COUNT();
-						elapsed = rn_time - st_time_;
-						t = up_time_ - elapsed;
-						if (t > 0) wxMilliSleep(t);
-					} while (elapsed <= up_time_);
+					if (streaming_)
+					{
+						uint32_t rn_time;
+						unsigned long elapsed;
+						long t;
+						do {
+							rn_time = GET_TICK_COUNT();
+							elapsed = rn_time - st_time_;
+							t = up_time_ - elapsed;
+							if (t > 0) wxMilliSleep(t);
+						} while (elapsed <= up_time_);
+					}
+					else
+					{
+						unsigned long elapsed = 0;
+						while (!brick->isLoaded() && elapsed <= 10000) 
+						{
+							wxMilliSleep(10);
+							elapsed += 10;
+						}
+					}
 					m_pThreadCS.Enter();
 
 					if (brick->isLoaded())

@@ -335,7 +335,7 @@ public:
 
 	PluginManager* GetPluginManager() const { return m_plugin_manager ; }
 
-	void ToggleVisibilityPluginWindow(wxString name, bool show);
+	void ToggleVisibilityPluginWindow(wxString name, bool show, int docking = 0);
 	void CreatePluginWindow(wxString name, bool show=true);
 	bool IsCreatedPluginWindow(wxString name);
 	bool IsShownPluginWindow(wxString name);

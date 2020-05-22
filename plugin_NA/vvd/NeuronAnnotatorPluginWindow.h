@@ -46,6 +46,7 @@ struct NAListItemData
 	wxString score;
 	int itemid;
 	int imgid;
+	bool visibility;
 };
 
 class NAListCtrl : public wxListCtrl, public Notifier
@@ -67,7 +68,7 @@ public:
 		long style=wxLC_REPORT|wxLC_SINGLE_SEL);
 	~NAListCtrl();
 
-	void Append(int imgid, wxString name, int mipid, int index=-1);
+	void Append(int imgid, wxString name, int mipid, bool visibility);
 	wxString GetText(long item, int col);
 	int GetImageId(long item, int col);
 
@@ -94,6 +95,7 @@ private:
 	void OnScroll(wxMouseEvent& event);
 	void OnColBeginDrag(wxListEvent& event);
 	void OnLeftDClick(wxMouseEvent& event);
+	void OnSize(wxSizeEvent& event);
 	
 	DECLARE_EVENT_TABLE()
 protected: //Possible TODO
@@ -103,6 +105,7 @@ protected: //Possible TODO
 
 private:
 	wxImageList *m_images;
+	wxImageList* m_vis_images;
 	wxStopWatch m_watch;
 	wxArrayString m_dbdirs;
 	wxArrayString m_dbpaths;

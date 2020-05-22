@@ -840,7 +840,7 @@ namespace FLIVR
 	}
 
 	//add one more texture component as the labeling volume
-	bool Texture::add_empty_label()
+	bool Texture::add_empty_label(int nb)
 	{
 		if (nc_>0 && nc_<=2 && nlabel_==-1)
 		{
@@ -848,13 +848,13 @@ namespace FLIVR
 				nlabel_ = 3;
 			else			//label is after mask
 				nlabel_ = nmask_+1;
-			nb_[nlabel_] = 4;
+			nb_[nlabel_] = nb;
 
 			int i;
 			for (i=0; i<(int)(*bricks_).size(); i++)
 			{
 				(*bricks_)[i]->nlabel(nlabel_);
-				(*bricks_)[i]->nb(4, nlabel_);
+				(*bricks_)[i]->nb(nb, nlabel_);
 				(*bricks_)[i]->ntype(TextureBrick::TYPE_LABEL, nlabel_);
 			}
 			return true;

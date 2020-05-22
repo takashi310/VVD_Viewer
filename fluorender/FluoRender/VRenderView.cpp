@@ -417,6 +417,7 @@ void LMSeacher::OnMouse(wxMouseEvent& event)
 
 
 BEGIN_EVENT_TABLE(VRenderVulkanView, wxWindow)
+	EVT_MENU(ID_CTXMENU_SHOW_ALL, VRenderVulkanView::OnShowAllVolumes)
 	EVT_MENU(ID_CTXMENU_HIDE_OTHER_VOLS, VRenderVulkanView::OnHideOtherVolumes)
 	EVT_MENU(ID_CTXMENU_HIDE_THIS_VOL, VRenderVulkanView::OnHideSelectedVolume)
 	EVT_MENU(ID_CTXMENU_UNDO_VISIBILITY_SETTING_CHANGES, VRenderVulkanView::OnUndoVisibilitySettings)
@@ -4349,12 +4350,22 @@ void VRenderVulkanView::DrawOVER(VolumeData* vd, std::unique_ptr<vks::VFrameBuff
 			clear = true;
 		}
 
+		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+		Texture* ext_lbl = NULL;
+		if (!vd->GetSharedLabelName().IsEmpty() && vr_frame && vr_frame->GetDataManager())
+		{
+			VolumeData* lbl = vr_frame->GetDataManager()->GetVolumeData(vd->GetSharedLabelName());
+			if (lbl)
+				ext_lbl = lbl->GetTexture();
+		}
+
 		if (vd->GetVR())
 			vd->GetVR()->set_depth_peel(peel);
 		vd->SetStreamMode(0);
 		vd->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
 		vd->SetFog(m_use_fog, m_fog_intensity, m_fog_start, m_fog_end);
-		vd->Draw(fb, clear, !m_persp, m_interactive, m_scale_factor, sampling_frq_fac);
+		VkClearColorValue clear_color = { 0.0, 0.0, 0.0, 0.0 };
+		vd->Draw(fb, clear, !m_persp, m_interactive, m_scale_factor, sampling_frq_fac, clear_color, NULL, ext_lbl);
 	}
 
 	if (vd->GetShadow() && vd->GetVR()->get_done_loop(0))
@@ -4536,10 +4547,21 @@ void VRenderVulkanView::DrawMIP(VolumeData* vd, std::unique_ptr<vks::VFrameBuffe
 		//turn off alpha
 		if (color_mode == 1)
 			vd->SetEnableAlpha(false);
+
+		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+		Texture* ext_lbl = NULL;
+		if (!vd->GetSharedLabelName().IsEmpty() && vr_frame && vr_frame->GetDataManager())
+		{
+			VolumeData* lbl = vr_frame->GetDataManager()->GetVolumeData(vd->GetSharedLabelName());
+			if (lbl)
+				ext_lbl = lbl->GetTexture();
+		}
+		VkClearColorValue clear_color = { 0.0, 0.0, 0.0, 0.0 };
+
 		//draw
 		vd->SetStreamMode(1);
 		vd->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
-		vd->Draw(m_fbo_ol1, clear, !m_persp, m_interactive, m_scale_factor, sampling_frq_fac);
+		vd->Draw(m_fbo_ol1, clear, !m_persp, m_interactive, m_scale_factor, sampling_frq_fac, clear_color, NULL, ext_lbl);
 		//
 		if (color_mode == 1)
 		{
@@ -6221,6 +6243,7 @@ void VRenderVulkanView::OnContextMenu(wxContextMenuEvent& event)
 	if (!vr_frame) return;
 
 	wxMenu menu;
+	menu.Append(ID_CTXMENU_SHOW_ALL, "Show all volumes");
 	menu.Append(ID_CTXMENU_HIDE_OTHER_VOLS, "Hide other volumes");
 	menu.Append(ID_CTXMENU_HIDE_THIS_VOL, "Hide selected volume data");
 	menu.Append(ID_CTXMENU_UNDO_VISIBILITY_SETTING_CHANGES, "Undo visibility settings");
@@ -6238,6 +6261,11 @@ void VRenderVulkanView::OnContextMenu(wxContextMenuEvent& event)
 	}
 
 	PopupMenu(&menu, point.x, point.y);
+
+}
+
+void VRenderVulkanView::OnShowAllVolumes(wxCommandEvent& event)
+{
 
 }
 
@@ -7987,6 +8015,35 @@ DataGroup* VRenderVulkanView::GetGroup(wxString &name)
 			}
 		}
 	}
+	return 0;
+}
+
+DataGroup* VRenderVulkanView::GetParentGroup(wxString& name)
+{
+	int i, j;
+
+	for (i = 0; i < (int)m_layer_list.size(); i++)
+	{
+		if (!m_layer_list[i])
+			continue;
+		switch (m_layer_list[i]->IsA())
+		{
+		case 5://group
+		{
+			DataGroup* group = (DataGroup*)m_layer_list[i];
+			if (!group)
+				break;
+			for (j = 0; j < group->GetVolumeNum(); j++)
+			{
+				VolumeData* vd = group->GetVolumeData(j);
+				if (vd && vd->GetName() == name)
+					return group;
+			}
+		}
+		break;
+		}
+	}
+
 	return 0;
 }
 
@@ -16504,6 +16561,14 @@ DataGroup* VRenderView::GetGroup(wxString &name)
 {
 	if (m_glview)
 		return m_glview->GetGroup(name);
+	else
+		return 0;
+}
+
+DataGroup* VRenderView::GetParentGroup(wxString& name)
+{
+	if (m_glview)
+		return m_glview->GetParentGroup(name);
 	else
 		return 0;
 }

@@ -911,7 +911,7 @@ namespace FLIVR
 		return true;
 	}
 
-	void VolumeRenderer::eval_ml_mode()
+	void VolumeRenderer::eval_ml_mode(Texture* ext_msk, Texture* ext_lbl)
 	{
 		//reassess the mask/label mode
 		//0-normal, 1-render with mask, 2-render with mask excluded
@@ -923,7 +923,7 @@ namespace FLIVR
 			label_ = false;
 			break;
 		case 1:
-			if (tex_->nmask() == -1)
+			if (tex_->nmask() == -1 || (ext_msk && ext_msk->nmask() == -1))
 			{
 				mask_ = false;
 				ml_mode_ = 0;
@@ -933,7 +933,7 @@ namespace FLIVR
 			label_ = false;
 			break;
 		case 2:
-			if (tex_->nmask() == -1)
+			if (tex_->nmask() == -1 || (ext_msk && ext_msk->nmask() == -1))
 			{
 				mask_ = false;
 				ml_mode_ = 0;
@@ -943,7 +943,7 @@ namespace FLIVR
 			label_ = false;
 			break;
 		case 3:
-			if (tex_->nlabel() == -1)
+			if (tex_->nlabel() == -1 || (ext_lbl && ext_lbl->nlabel() == -1))
 			{
 				label_ = false;
 				ml_mode_ = 0;
@@ -953,9 +953,9 @@ namespace FLIVR
 			mask_ = false;
 			break;
 		case 4:
-			if (tex_->nlabel() == -1)
+			if (tex_->nlabel() == -1 || (ext_lbl && ext_lbl->nlabel() == -1))
 			{
-				if (tex_->nmask()>-1)
+				if (tex_->nmask() > -1 || (ext_msk && ext_msk->nmask() > -1))
 				{
 					mask_ = true;
 					label_ = false;
@@ -1696,10 +1696,10 @@ namespace FLIVR
 		const std::unique_ptr<vks::VFrameBuffer>& framebuf,
 		bool clear_framebuf,
 		bool draw_wireframe_p, bool interactive_mode_p,
-		bool orthographic_p, double zoom, int mode, double sampling_frq_fac, VkClearColorValue clearColor)
+		bool orthographic_p, double zoom, int mode, double sampling_frq_fac, VkClearColorValue clearColor, Texture* ext_msk, Texture* ext_lbl)
 	{
 		//draw_volume(framebuf, clear_framebuf, interactive_mode_p, orthographic_p, zoom, mode, sampling_frq_fac, clearColor);
-		draw_volume_ray(framebuf, clear_framebuf, interactive_mode_p, orthographic_p, zoom, mode, sampling_frq_fac, clearColor);
+		draw_volume_ray(framebuf, clear_framebuf, interactive_mode_p, orthographic_p, zoom, mode, sampling_frq_fac, clearColor, ext_msk, ext_lbl);
 		//if(draw_wireframe_p)
 		//	draw_wireframe(orthographic_p);
 	}
@@ -2537,8 +2537,8 @@ namespace FLIVR
 
 	void VolumeRenderer::draw_volume_ray(
 		const std::unique_ptr<vks::VFrameBuffer>& framebuf,
-		bool clear_framebuf,
-		bool interactive_mode_p, bool orthographic_p, double zoom, int mode, double sampling_frq_fac, VkClearColorValue clearColor)
+		bool clear_framebuf, bool interactive_mode_p, bool orthographic_p, double zoom, int mode,
+		double sampling_frq_fac, VkClearColorValue clearColor, Texture* ext_msk, Texture* ext_lbl)
 	{
 		if (!tex_ || !m_vulkan)
 			return;
@@ -2557,6 +2557,14 @@ namespace FLIVR
 		bricks = tex_->get_sorted_bricks(view_ray, orthographic_p);
 		if (!bricks || bricks->size() == 0)
 			return;
+		
+		vector<TextureBrick*>* lbl_bricks = 0;
+		if (ext_lbl)
+		{
+			lbl_bricks = ext_lbl->get_sorted_bricks(view_ray, orthographic_p);
+			if (!lbl_bricks || lbl_bricks->size() == 0)
+				return;
+		}
 
 		set_interactive_mode(adaptive_ && interactive_mode_p);
 
@@ -2599,8 +2607,8 @@ namespace FLIVR
 		m_vulkan->vray_shader_factory_->getDescriptorSetWriteUniforms(prim_dev, vert_ubuf, frag_ubuf, descriptorWritesBase);
 
 		eval_ml_mode();
-        
-		VRayPipeline pipeline = prepareVRayPipeline(prim_dev, mode_, update_order_, colormap_mode_, !orthographic_p, 0, !label_ && m_na_mode && tex_->nlabel() != -1);
+		bool lbl_exists = tex_->nlabel() != -1 || (ext_lbl && ext_lbl->nlabel() != -1);
+		VRayPipeline pipeline = prepareVRayPipeline(prim_dev, mode_, update_order_, colormap_mode_, !orthographic_p, 0, !label_ && m_na_mode && lbl_exists);
 		VkPipelineLayout pipelineLayout = m_vulkan->vray_shader_factory_->pipeline_[prim_dev].pipelineLayout;
 
 		prepareVRayVertexBuffers(prim_dev);
@@ -2632,7 +2640,7 @@ namespace FLIVR
 			}
 		}
         
-        if (!label_ && m_na_mode && tex_->nlabel() != -1)
+        if (!label_ && m_na_mode && lbl_exists)
         {
             auto sm_tex = get_seg_mask_tex();
             descriptorWritesBase.push_back(VRayShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 7, &sm_tex[prim_dev]->descriptor));
@@ -2931,8 +2939,19 @@ namespace FLIVR
 			if (mask_updated && mem_swap_)
 				semaphores.push_back(prim_dev->GetNextRenderSemaphoreSettings());
 
-			if (label_ || (m_na_mode && tex_->nlabel() != -1))
-				lbltex = load_brick_label(prim_dev, bricks, i, true, (m_na_mode && tex_->nlabel() != -1) ? false : true, &label_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
+			if (label_)
+				lbltex = load_brick_label(prim_dev, bricks, i, true,true, &label_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
+			else if (m_na_mode)
+			{
+				if (ext_lbl && ext_lbl->nlabel() != -1)
+				{
+					lbltex = load_brick_label(prim_dev, lbl_bricks, i, true, false, &label_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
+				}
+				else if (tex_->nlabel() != -1)
+				{
+					lbltex = load_brick_label(prim_dev, bricks, i, true, false, &label_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
+				}
+			}
 			if (label_updated && mem_swap_)
 				semaphores.push_back(prim_dev->GetNextRenderSemaphoreSettings());
 

@@ -29,6 +29,7 @@ DEALINGS IN THE SOFTWARE.
 #include <wx/treectrl.h>
 #include "compatibility.h"
 #include "utility.h"
+#include <map>
 #include <unordered_map>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/optional.hpp>
@@ -68,6 +69,42 @@ public:
 
 	int icon;
 };
+
+class VolVisState
+{
+public:
+	bool disp;
+	bool na_mode;
+	std::map<int, bool> label;
+
+	VolVisState()
+	{
+		disp = true;
+		na_mode = false;
+	}
+
+	~VolVisState()
+	{
+
+	}
+
+	VolVisState(const VolVisState& copy)
+	{
+		disp = copy.disp;
+		na_mode = copy.na_mode;
+		label = copy.label;
+	}
+
+	VolVisState& operator=(const VolVisState& copy)
+	{
+		disp = copy.disp;
+		na_mode = copy.na_mode;
+		label = copy.label;
+
+		return (*this);
+	}
+};
+
 
 class EXPORT_API DataTreeCtrl: public wxTreeCtrl, Notifier
 {
@@ -201,6 +238,7 @@ public:
 
 	void UndoVisibility();
 	void RedoVisibility();
+	void ClearVisHistory();
 	void PushVisHistory();
 
 	void HideOtherDatasets(wxString name);
@@ -216,8 +254,8 @@ public:
 private:
 	wxWindow* m_frame;
 
-	std::unordered_map<wxString, bool> m_vtmp;
-	std::vector<std::unordered_map<wxString, bool>> m_v_undo, m_v_redo;
+	std::unordered_map<wxString, VolVisState> m_vtmp;
+	std::vector<std::unordered_map<wxString, VolVisState>> m_v_undo, m_v_redo;
 
 	//drag
 	wxTreeItemId m_drag_item;
@@ -405,6 +443,8 @@ public:
 
 	void UndoVisibility();
 	void RedoVisibility();
+	void ClearVisHistory();
+	void PushVisHistory();
 	void HideOtherDatasets(wxString name);
 	void HideOtherVolumes(wxString name);
 	void HideSelectedItem();

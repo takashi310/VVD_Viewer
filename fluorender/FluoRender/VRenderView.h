@@ -211,6 +211,7 @@ class EXPORT_API VRenderVulkanView: public wxWindow
 	{
 		ID_Searcher = wxID_HIGHEST+6001,
 		ID_Timer,
+		ID_CTXMENU_SHOW_ALL,
 		ID_CTXMENU_HIDE_OTHER_VOLS,
 		ID_CTXMENU_HIDE_THIS_VOL,
 		ID_CTXMENU_UNDO_VISIBILITY_SETTING_CHANGES,
@@ -252,6 +253,7 @@ public:
 	MeshData* GetMeshData(wxString &name);
 	Annotations* GetAnnotations(wxString &name);
 	DataGroup* GetGroup(wxString &name);
+	DataGroup* GetParentGroup(wxString& name);
 	MeshGroup* GetMGroup(wxString str);
 	//add
 	DataGroup* AddVolumeData(VolumeData* vd, wxString group_name="");
@@ -1266,6 +1268,7 @@ private:
 	void OnKeyDown(wxKeyEvent& event);
 	void OnContextMenu(wxContextMenuEvent& event);
 	
+	void OnShowAllVolumes(wxCommandEvent& event);
 	void OnHideOtherVolumes(wxCommandEvent& event);
 	void OnHideSelectedVolume(wxCommandEvent& event);
 	void OnUndoVisibilitySettings(wxCommandEvent& event);
@@ -1364,6 +1367,7 @@ public:
 	MeshData* GetMeshData(wxString &name);
 	Annotations* GetAnnotations(wxString &name);
 	DataGroup* GetGroup(wxString &name);
+	DataGroup* GetParentGroup(wxString& name);
 	DataGroup* AddVolumeData(VolumeData* vd, wxString group_name="");
 	void AddMeshData(MeshData* md);
 	void AddAnnotations(Annotations* ann);

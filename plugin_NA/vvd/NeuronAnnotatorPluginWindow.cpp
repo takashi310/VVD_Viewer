@@ -22,6 +22,8 @@
 #include <wx/statline.h>
 #include "Formats/png_resource.h"
 #include "img/icons.h"
+#include "tick.xpm"
+#include "cross.xpm"
 
 
 wxUsrPwdDialog::wxUsrPwdDialog(wxWindow* parent, wxWindowID id, const wxString &title,
@@ -322,6 +324,7 @@ BEGIN_EVENT_TABLE(NAListCtrl, wxListCtrl)
 	EVT_KEY_UP(NAListCtrl::OnKeyUp)
 	EVT_MOUSE_EVENTS(NAListCtrl::OnMouse)
 	EVT_LEFT_DCLICK(NAListCtrl::OnLeftDClick)
+	EVT_SIZE(NAListCtrl::OnSize)
 END_EVENT_TABLE()
 
 NAListCtrl::NAListCtrl(
@@ -334,6 +337,7 @@ NAListCtrl::NAListCtrl(
 {
 	m_plugin = NULL;
 	m_images = NULL;
+	m_vis_images = NULL;
 	m_history_pos = 0;
 
 	wxListItem itemCol;
@@ -351,14 +355,22 @@ NAListCtrl::NAListCtrl(
 	this->InsertColumn(3, itemCol);
 
 	SetColumnWidth(0, 0);
-    SetColumnWidth(1, 0);
+    SetColumnWidth(1, 30);
 	SetColumnWidth(2, 110);
-	SetColumnWidth(3, 500);
+	SetColumnWidth(3, 300);
+
+	m_vis_images = new wxImageList(20, 20, false);
+	wxIcon icon0 = wxIcon(cross_xpm);
+	wxIcon icon1 = wxIcon(tick_xpm);
+	m_vis_images->Add(icon0);
+	m_vis_images->Add(icon1);
+	//SetImageList(m_vis_images, wxIMAGE_LIST_SMALL);
 }
 
 NAListCtrl::~NAListCtrl()
 {
 	wxDELETE(m_images);
+	wxDELETE(m_vis_images);
 }
 
 void NAListCtrl::LoadResults(wxString idpath, wxString volpath, wxString chspec, wxString prefix)
@@ -380,50 +392,47 @@ void NAListCtrl::UpdateResults()
 
 	if (!m_listdata.empty()) m_listdata.clear();
 
-	int w = m_plugin->getSegMIPThumbnail()->GetWidth();
-	int h = m_plugin->getSegMIPThumbnail()->GetHeight();
+	wxSize s = GetSize();
+	int namew = GetColumnWidth(2) + GetColumnWidth(1);
+	if (s.x - namew > 0)
+		m_plugin->ResizeThumbnails(s.x - namew);
+
+	int w = m_plugin->getSegMIPThumbnail(0)->GetWidth();
+	int h = m_plugin->getSegMIPThumbnail(0)->GetHeight();
 
 	if (m_images) wxDELETE(m_images);
 	int img_count = 0;
 	m_images = new wxImageList(w, h, false);
 	SetImageList(m_images, wxIMAGE_LIST_SMALL);
-    
+
     if (m_plugin->isRefExists())
     {
         NAListItemData ref_data;
         ref_data.name = "Reference";
         ref_data.mipid = img_count;
         ref_data.imgid = IMG_ID_REF;
+		ref_data.visibility = false;
         wxBitmap refbmp = wxBitmap(*m_plugin->getRefMIPThumbnail());
         m_images->Add(refbmp, wxBITMAP_TYPE_ANY);
         m_listdata.push_back(ref_data);
-        Append(IMG_ID_REF, m_listdata[img_count].name, m_listdata[img_count].mipid, 0);
+        Append(IMG_ID_REF, m_listdata[img_count].name, m_listdata[img_count].mipid, m_listdata[img_count].visibility);
         img_count++;
     }
     
-    if (m_plugin->isSegExists())
-    {
-        NAListItemData sig_data;
-        sig_data.name = "Signals";
-        sig_data.mipid = img_count;
-        sig_data.imgid = IMG_ID_ALLSIG;
-        wxBitmap sigbmp = wxBitmap(*m_plugin->getSegMIPThumbnail());
-        m_images->Add(sigbmp, wxBITMAP_TYPE_ANY);
-        m_listdata.push_back(sig_data);
-        Append(IMG_ID_ALLSIG, m_listdata[img_count].name, m_listdata[img_count].mipid, 1);
-        img_count++;
-    }
-
 	for (int i = 0; i < m_plugin->getSegCount(); i++)
 	{
 		NAListItemData data;
-		data.name = wxString::Format("Fragment %d", i);
+		if (i == 0)
+			data.name = "Background";
+		else
+			data.name = wxString::Format("Fragment %d", i);
 		data.mipid = img_count;
 		data.imgid = i;
+		data.visibility = true;
 		wxBitmap bmp = wxBitmap(*m_plugin->getSegMIPThumbnail(i));
 		m_images->Add(bmp, wxBITMAP_TYPE_ANY);
 		m_listdata.push_back(data);
-        Append(m_listdata[img_count].imgid, m_listdata[img_count].name, m_listdata[img_count].mipid, img_count);
+        Append(m_listdata[img_count].imgid, m_listdata[img_count].name, m_listdata[img_count].mipid, m_listdata[img_count].visibility);
         img_count++;
 	}
     
@@ -553,12 +562,12 @@ void NAListCtrl::OnColBeginDrag(wxListEvent& event)
     }
 }
 
-void NAListCtrl::Append(int imgid, wxString name, int mipid, int index)
+void NAListCtrl::Append(int imgid, wxString name, int mipid, bool visibility)
 {
 	wxString dbidstr = wxT("0");
 	int itemid = GetItemCount();
 	long tmp = InsertItem(itemid, wxString::Format("%d", imgid));
-    SetItem(tmp, 1, wxString::Format("%d", index));
+    SetItem(tmp, 1, visibility ? _("\u2713") : _("-"));
 	SetItem(tmp, 2, name);
 	SetItem(tmp, 3, _(""), mipid);
 }
@@ -646,6 +655,18 @@ void NAListCtrl::OnLeftDClick(wxMouseEvent& event)
 		int id = wxAtoi(GetText(item, 0));
 		notifyAll(NA_OPEN_FILE, &id, sizeof(int));
 	}
+}
+
+void NAListCtrl::OnSize(wxSizeEvent& event)
+{
+	if (!m_plugin) return;
+
+	wxSize s = GetSize();
+	int namew = GetColumnWidth(2) + GetColumnWidth(1);
+	if (s.x - namew > 0)
+		m_plugin->ResizeThumbnails(s.x - namew);
+	if (m_plugin->isRefExists() || m_plugin->isSegExists())
+		UpdateResults();
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -865,90 +886,6 @@ void NAGuiPluginWindow::CreateControls()
 {    
 	wxString rpath, nlibpath, outdir, rnum, scmtd;
 	NAGuiPlugin* plugin = (NAGuiPlugin *)GetPlugin();
-//
-//	SetEvtHandlerEnabled(false);
-//	Freeze();
-//
-//	m_splitterWindow = new wxSplitterWindow(this, wxID_ANY, wxDefaultPosition, wxSize(-1, -1));
-//	wxPanel* nbpanel = new wxPanel(m_splitterWindow, wxID_ANY);
-//	nbpanel->SetWindowStyle(wxBORDER_SIMPLE);
-//	wxPanel* imgpanel = new wxPanel(m_splitterWindow, wxID_ANY);
-//	imgpanel->SetWindowStyle(wxBORDER_SIMPLE);
-//
-//	////@begin NAGuiPluginWindow content construction
-//	wxBoxSizer* itemBoxSizer = new wxBoxSizer(wxHORIZONTAL);
-//	wxBoxSizer* itemBoxSizer2 = new wxBoxSizer(wxVERTICAL);
-//	wxBoxSizer* itemBoxSizer2_1 = new wxBoxSizer(wxVERTICAL);
-//
-//	wxIntegerValidator<unsigned int> vald_int;
-//	vald_int.SetMin(1);
-//
-//#ifdef _WIN32
-//    int stsize = 120;
-//#else
-//    int stsize = 130;
-//#endif
-//
-//	wxBoxSizer *sizert = new wxBoxSizer(wxHORIZONTAL);
-//	m_tb = new wxToolBar(nbpanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTB_FLAT|wxTB_TOP|wxTB_NODIVIDER|wxTB_TEXT|wxTB_NOICONS|wxTB_HORZ_LAYOUT);
-//	//m_tb->AddTool(ID_SAVE_BUTTON, "Save", wxNullBitmap, "Save search results");
-//	m_tb->AddTool(ID_IMPORT_RESULTS_BUTTON, "Import", wxNullBitmap, "Import search results");
-//	//m_tb->AddTool(ID_EDIT_DB_BUTTON, "Database", wxNullBitmap, "Edit NBLAST databases");
-//	//m_tb->AddTool(ID_SETTING, "Setting", wxNullBitmap, "Setting");
-//	m_tb->SetToolSeparation(20);
-//	m_tb->Realize();
-//	sizert->Add(m_tb, 1, wxEXPAND);
-//	itemBoxSizer2->Add(sizert, 0, wxEXPAND);
-//	wxStaticLine *stl = new wxStaticLine(nbpanel);
-//	itemBoxSizer2->Add(stl, 0, wxEXPAND);
-//
-//	wxBoxSizer *sizerl = new wxBoxSizer(wxHORIZONTAL);
-//	m_results = new NAListCtrl(nbpanel, wxID_ANY, wxDefaultPosition, wxSize(300, 500));
-//	m_results->addObserver(this);
-//	m_results->SetPlugin(plugin);
-//    sizerl->Add(5,10);
-//    sizerl->Add(m_results, 1, wxEXPAND);
-//    sizerl->Add(5,10);
-//	itemBoxSizer2->Add(5, 3);
-//	itemBoxSizer2->Add(sizerl, 1, wxEXPAND);
-//
-//	//wxBoxSizer *sizerchk = new wxBoxSizer(wxHORIZONTAL);
-//	//m_overlayChk = new wxCheckBox(imgpanel, ID_NA_OverlayCheckBox, "Overlay search query");
-//	//m_overlayChk->SetValue(true);
-//	//sizerchk->Add(20, 10);
-//	//sizerchk->Add(m_overlayChk, 0, wxALIGN_CENTER_VERTICAL);
-//	//m_swcImagePanel = new wxImagePanel( imgpanel, 500, 250);
-//	m_mipImagePanel = new wxImagePanel( imgpanel, 800, 250);
-//	//itemBoxSizer2_1->Add(5, 5);
-//	//itemBoxSizer2_1->Add(sizerchk, 0, wxLEFT);
-//	//itemBoxSizer2_1->Add(5, 5);
-//	//itemBoxSizer2_1->Add(m_swcImagePanel, 1, wxEXPAND);
-//	itemBoxSizer2_1->Add(5, 5);
-//	itemBoxSizer2_1->Add(m_mipImagePanel, 1, wxEXPAND);
-//
-//	nbpanel->SetSizer(itemBoxSizer2);
-//	imgpanel->SetSizer(itemBoxSizer2_1);
-//
-//	nbpanel->SetMinSize(wxSize(400, 700));
-//	imgpanel->SetMinSize(wxSize(1, 700));
-//	
-//	m_splitterWindow->SplitVertically(nbpanel, imgpanel);
-//
-//	itemBoxSizer->Add(m_splitterWindow, 1, wxEXPAND);
-//	this->SetSizer(itemBoxSizer);
-//	this->Layout();
-//
-//	////@end NAGuiPluginWindow content construction
-//
-//	plugin->GetEventHandler()->Bind(wxEVT_GUI_PLUGIN_INTEROP, 
-//		wxCommandEventHandler(NAGuiPluginWindow::OnInteropMessageReceived), this);
-//
-//	m_nbpanel = nbpanel;
-//	m_imgpanel = imgpanel;
-//
-//	Thaw();
-//	SetEvtHandlerEnabled(true);
-
 
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -1010,7 +947,7 @@ void NAGuiPluginWindow::CreateControls()
 	Thaw();
 	SetEvtHandlerEnabled(true);
 
-
+	nbpanel->SetMinSize(wxSize(300, 400));
 
 	m_idleTimer->Start(100);
 	//m_wtimer->Start(50);
@@ -1070,10 +1007,16 @@ void NAGuiPluginWindow::doAction(ActionInfo *info)
 	switch (evid)
 	{
 	case NA_OPEN_FILE:
-		if (plugin)
+		/*if (plugin)
 		{
 			int id = *(int*)(info->data);
 			plugin->LoadNrrd(id);
+		}*/
+		if (plugin)
+		{
+			plugin->PushVisHistory();
+			int id = *(int*)(info->data);
+			plugin->ToggleSegmentVisibility(id);
 		}
 		break;
 	//case NA_SET_IMAGE:
