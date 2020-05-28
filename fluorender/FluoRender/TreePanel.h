@@ -75,7 +75,7 @@ class VolVisState
 public:
 	bool disp;
 	bool na_mode;
-	std::map<int, bool> label;
+	std::map<int, int> label;
 
 	VolVisState()
 	{

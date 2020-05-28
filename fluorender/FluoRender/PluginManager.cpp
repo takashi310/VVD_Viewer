@@ -100,6 +100,17 @@ void PluginManager::InitPlugins()
 	}
 }
 
+void PluginManager::OnTreeUpdate()
+{
+	for (wxGuiPluginBaseList::Node* node = m_GuiPlugins.GetFirst();
+		node; node = node->GetNext())
+	{
+		wxGuiPluginBase* plugin = node->GetData();
+		if (plugin)
+			plugin->OnTreeUpdate();
+	}
+}
+
 void PluginManager::FinalizePligins()
 {
 	for(wxGuiPluginBaseList::Node * node = m_GuiPlugins.GetFirst(); 

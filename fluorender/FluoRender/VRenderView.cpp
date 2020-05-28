@@ -420,6 +420,9 @@ BEGIN_EVENT_TABLE(VRenderVulkanView, wxWindow)
 	EVT_MENU(ID_CTXMENU_SHOW_ALL, VRenderVulkanView::OnShowAllVolumes)
 	EVT_MENU(ID_CTXMENU_HIDE_OTHER_VOLS, VRenderVulkanView::OnHideOtherVolumes)
 	EVT_MENU(ID_CTXMENU_HIDE_THIS_VOL, VRenderVulkanView::OnHideSelectedVolume)
+	EVT_MENU(ID_CTXMENU_SHOW_ALL_FRAGMENTS, VRenderVulkanView::OnShowAllFragments)
+	EVT_MENU(ID_CTXMENU_HIDE_OTHER_FRAGMENTS, VRenderVulkanView::OnHideOtherFragments)
+	EVT_MENU(ID_CTXMENU_HIDE_SELECTED_FLAGMENTS, VRenderVulkanView::OnHideSelectedFragments)
 	EVT_MENU(ID_CTXMENU_UNDO_VISIBILITY_SETTING_CHANGES, VRenderVulkanView::OnUndoVisibilitySettings)
 	EVT_MENU(ID_CTXMENU_REDO_VISIBILITY_SETTING_CHANGES, VRenderVulkanView::OnRedoVisibilitySettings)
 	EVT_PAINT(VRenderVulkanView::OnDraw)
@@ -5769,9 +5772,9 @@ void VRenderVulkanView::PickVolume()
 		int cmode = vd->GetColormapMode();
 		double sel_id;
 		if (cmode == 3)
-			dist = GetPointAndIntVolume(p, sel_id, false, old_mouse_X, old_mouse_Y, vd);
+			dist = GetPointAndIntVolume(p, sel_id, false, old_mouse_X, old_mouse_Y, vd, 0.3);
 		else 
-			dist = GetPointVolume(p, old_mouse_X, old_mouse_Y, vd, 2, true, 0.5);
+			dist = GetPointVolume(p, old_mouse_X, old_mouse_Y, vd, 2, true, 0.3);
 
 		if (dist > 0.0)
 		{
@@ -5909,6 +5912,111 @@ bool VRenderVulkanView::SelSegVolume(int mode)
 			}
 		}
 		rval = true;
+	}
+
+	return rval;
+}
+
+
+bool VRenderVulkanView::SelLabelSegVolume(int mode)
+{
+	double dist = 0.0;
+	double min_dist = -1.0;
+	Point p;
+	VolumeData* vd = 0;
+	VolumeData* picked_vd = 0;
+	vector<VolumeData*> navds;
+	int picked_sel_id = 0;
+	bool rval = false;
+	for (int i = 0; i < (int)m_vd_pop_list.size(); i++)
+	{
+		vd = m_vd_pop_list[i];
+		if (!vd || !vd->GetDisp() || !vd->GetNAMode()) continue;
+		navds.push_back(vd);
+		if (!vd->GetLabel(false)) continue;
+
+		if (picked_vd)
+			continue;
+
+		int sel_id;
+		dist = GetPointAndLabel(p, sel_id, old_mouse_X, old_mouse_Y, vd);
+
+		if (dist > 0.0)
+		{
+			if (min_dist < 0.0)
+			{
+				min_dist = dist;
+				picked_vd = vd;
+				picked_sel_id = sel_id;
+			}
+			else
+			{
+				if (m_persp)
+				{
+					if (dist < min_dist)
+					{
+						min_dist = dist;
+						picked_vd = vd;
+						picked_sel_id = sel_id;
+					}
+				}
+				else
+				{
+					if (dist > min_dist)
+					{
+						min_dist = dist;
+						picked_vd = vd;
+						picked_sel_id = sel_id;
+					}
+				}
+			}
+		}
+	}
+
+	if (picked_vd && picked_sel_id > 0)
+	{
+		for (int i = 0; i < (int)navds.size(); i++)
+		{
+			switch (mode)
+			{
+			case 0:
+				if (navds[i]->GetSegmentMask(picked_sel_id) == 2)
+					navds[i]->SetSegmentMask(picked_sel_id, 1);
+				else if (navds[i]->GetSegmentMask(picked_sel_id) == 1)
+					navds[i]->SetSegmentMask(picked_sel_id, 2);
+				break;
+			case 1:
+				if (navds[i]->GetSegmentMask(picked_sel_id) == 2)
+					navds[i]->SetSegmentMask(picked_sel_id, false);
+				else if (navds[i]->GetSegmentMask(picked_sel_id) == 1)
+				{
+					auto ids = navds[i]->GetActiveSegIDs();
+					if (ids)
+					{
+						auto it = ids->begin();
+						while (it != ids->end())
+							navds[i]->SetSegmentMask(*it, 1);
+					}
+					navds[i]->SetSegmentMask(picked_sel_id, 2);
+				}
+				break;
+			}
+
+			VRenderFrame* frame = (VRenderFrame*)m_frame;
+			if (frame)
+			{
+				//VPropView* vprop_view = frame->GetPropView();
+				//if (vprop_view)
+				//	vprop_view->UpdateUIsROI();
+
+				if (frame->GetTree())
+				{
+					if (mode != 3) frame->UpdateTreeIcons();
+					//frame->GetTree()->SetFocus();
+				}
+			}
+			rval = true;
+		}
 	}
 
 	return rval;
@@ -6242,10 +6350,29 @@ void VRenderVulkanView::OnContextMenu(wxContextMenuEvent& event)
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (!vr_frame) return;
 
+	bool na_mode = false;
+	for (int i = 0; i < m_vd_pop_list.size(); i++)
+	{
+		if (m_vd_pop_list[i]->GetDisp() && m_vd_pop_list[i]->GetNAMode())
+		{
+			na_mode = true;
+			break;
+		}
+	}
+
 	wxMenu menu;
-	menu.Append(ID_CTXMENU_SHOW_ALL, "Show all volumes");
-	menu.Append(ID_CTXMENU_HIDE_OTHER_VOLS, "Hide other volumes");
-	menu.Append(ID_CTXMENU_HIDE_THIS_VOL, "Hide selected volume data");
+	if (na_mode)
+	{
+		menu.Append(ID_CTXMENU_SHOW_ALL_FRAGMENTS, "Show all fragments");
+		menu.Append(ID_CTXMENU_HIDE_OTHER_FRAGMENTS, "Hide unselected fragments");
+		menu.Append(ID_CTXMENU_HIDE_SELECTED_FLAGMENTS, "Hide selected fragments");
+	}
+	else
+	{
+		menu.Append(ID_CTXMENU_SHOW_ALL, "Show all volumes");
+		menu.Append(ID_CTXMENU_HIDE_OTHER_VOLS, "Hide unselected volumes");
+		menu.Append(ID_CTXMENU_HIDE_THIS_VOL, "Hide selected volume data");
+	}
 	menu.Append(ID_CTXMENU_UNDO_VISIBILITY_SETTING_CHANGES, "Undo visibility settings");
 	menu.Append(ID_CTXMENU_REDO_VISIBILITY_SETTING_CHANGES, "Redo visibility settings");
 
@@ -6266,9 +6393,59 @@ void VRenderVulkanView::OnContextMenu(wxContextMenuEvent& event)
 
 void VRenderVulkanView::OnShowAllVolumes(wxCommandEvent& event)
 {
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+	TreePanel* tree_panel = vr_frame->GetTree();
+	if (!tree_panel) return;
 
+	bool changed = false;
+	for (int i = 0; i < (int)m_layer_list.size(); i++)
+	{
+		if (!m_layer_list[i])
+			continue;
+		switch (m_layer_list[i]->IsA())
+		{
+		case 2://volume data
+		{
+			VolumeData* vd = (VolumeData*)m_layer_list[i];
+			if (!vd->GetDisp())
+			{
+				if (!changed)
+				{
+					tree_panel->PushVisHistory();
+					changed = true;
+				}
+				vd->SetDisp(true);
+			}
+		}
+		break;
+		case 5://group
+		{
+			DataGroup* group = (DataGroup*)m_layer_list[i];
+			for (int j = 0; j < group->GetVolumeNum(); j++)
+			{
+				VolumeData* vd = group->GetVolumeData(j);
+				if (!vd->GetDisp())
+				{
+					if (!changed)
+					{
+						tree_panel->PushVisHistory();
+						changed = true;
+					}
+					vd->SetDisp(true);
+				}
+			}
+		}
+		break;
+		}
+	}
+
+	if (changed)
+	{
+		RefreshGL();
+		vr_frame->UpdateTreeIcons();
+	}
 }
-
 void VRenderVulkanView::OnHideOtherVolumes(wxCommandEvent& event)
 {
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
@@ -6291,6 +6468,205 @@ void VRenderVulkanView::OnHideSelectedVolume(wxCommandEvent& event)
 	if (!tree_panel) return;
 
 	tree_panel->HideSelectedItem();
+}
+
+void VRenderVulkanView::OnShowAllFragments(wxCommandEvent& event)
+{
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+	TreePanel* tree_panel = vr_frame->GetTree();
+	if (!tree_panel) return;
+
+	vector<VolumeData*> na_vols;
+
+	for (int i = 0; i < (int)m_layer_list.size(); i++)
+	{
+		if (!m_layer_list[i])
+			continue;
+		switch (m_layer_list[i]->IsA())
+		{
+		case 2://volume data
+		{
+			VolumeData* vd = (VolumeData*)m_layer_list[i];
+			if (vd && vd->GetNAMode())
+				na_vols.push_back(vd);
+		}
+		break;
+		case 5://group
+		{
+			DataGroup* group = (DataGroup*)m_layer_list[i];
+			if (!group->GetDisp())
+				continue;
+			for (int j = 0; j < group->GetVolumeNum(); j++)
+			{
+				VolumeData* vd = group->GetVolumeData(j);
+				if (vd && vd->GetNAMode())
+					na_vols.push_back(vd);
+			}
+		}
+		break;
+		}
+	}
+
+	bool changed = false;
+	for (auto vd : na_vols)
+	{
+		auto ids = vd->GetActiveSegIDs();
+		if (ids)
+		{
+			auto it = ids->begin();
+			while (it != ids->end())
+			{
+				if (vd->GetSegmentMask(*it) == 0 && *it != 0)
+				{
+					if (!changed)
+					{
+						tree_panel->PushVisHistory();
+						changed = true;
+					}
+					vd->SetSegmentMask(*it, 1);
+				}
+				it++;
+			}
+		}
+	}
+
+	if (changed)
+	{
+		RefreshGL();
+		vr_frame->UpdateTreeIcons();
+	}
+}
+
+void VRenderVulkanView::OnHideOtherFragments(wxCommandEvent& event)
+{
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+	TreePanel* tree_panel = vr_frame->GetTree();
+	if (!tree_panel) return;
+
+	vector<VolumeData*> na_vols;
+
+	for (int i = 0; i < (int)m_layer_list.size(); i++)
+	{
+		if (!m_layer_list[i])
+			continue;
+		switch (m_layer_list[i]->IsA())
+		{
+		case 2://volume data
+		{
+			VolumeData* vd = (VolumeData*)m_layer_list[i];
+			if (vd && vd->GetNAMode())
+				na_vols.push_back(vd);
+		}
+		break;
+		case 5://group
+		{
+			DataGroup* group = (DataGroup*)m_layer_list[i];
+			for (int j = 0; j < group->GetVolumeNum(); j++)
+			{
+				VolumeData* vd = group->GetVolumeData(j);
+				if (vd && vd->GetNAMode())
+					na_vols.push_back(vd);
+			}
+		}
+		break;
+		}
+	}
+
+	bool changed = false;
+	for (auto vd : na_vols)
+	{
+		auto ids = vd->GetActiveSegIDs();
+		if (ids)
+		{
+			auto it = ids->begin();
+			while (it != ids->end())
+			{
+				if (vd->GetSegmentMask(*it) == 1)
+				{
+					if (!changed)
+					{
+						tree_panel->PushVisHistory();
+						changed = true;
+					}
+					vd->SetSegmentMask(*it, 0);
+				}
+				it++;
+			}
+		}
+	}
+
+	if (changed)
+	{
+		RefreshGL();
+		vr_frame->UpdateTreeIcons();
+	}
+}
+void VRenderVulkanView::OnHideSelectedFragments(wxCommandEvent& event)
+{
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+	TreePanel* tree_panel = vr_frame->GetTree();
+	if (!tree_panel) return;
+
+	vector<VolumeData*> na_vols;
+
+	for (int i = 0; i < (int)m_layer_list.size(); i++)
+	{
+		if (!m_layer_list[i])
+			continue;
+		switch (m_layer_list[i]->IsA())
+		{
+		case 2://volume data
+		{
+			VolumeData* vd = (VolumeData*)m_layer_list[i];
+			if (vd && vd->GetNAMode())
+				na_vols.push_back(vd);
+		}
+		break;
+		case 5://group
+		{
+			DataGroup* group = (DataGroup*)m_layer_list[i];
+			for (int j = 0; j < group->GetVolumeNum(); j++)
+			{
+				VolumeData* vd = group->GetVolumeData(j);
+				if (vd && vd->GetNAMode())
+					na_vols.push_back(vd);
+			}
+		}
+		break;
+		}
+	}
+
+	bool changed = false;
+	for (auto vd : na_vols)
+	{
+		auto ids = vd->GetActiveSegIDs();
+		if (ids)
+		{
+			auto it = ids->begin();
+			while (it != ids->end())
+			{
+				if (vd->GetSegmentMask(*it) == 2)
+				{
+					if (!changed)
+					{
+						tree_panel->PushVisHistory();
+						changed = true;
+					}
+					vd->SetSegmentMask(*it, 0);
+				}
+				it++;
+			}
+		}
+	}
+
+	if (changed)
+	{
+		RefreshGL();
+		vr_frame->UpdateTreeIcons();
+	}
 }
 void VRenderVulkanView::OnUndoVisibilitySettings(wxCommandEvent& event)
 {
@@ -13410,6 +13786,154 @@ double VRenderVulkanView::GetPointVolume(Point& mp, int mx, int my,
 	return return_val;
 }
 
+double VRenderVulkanView::GetPointAndLabel(Point& mp, int& lblval, int mx, int my, VolumeData* vd)
+{
+	if (!vd)
+		return -1.0;
+	Texture* tex = vd->GetTexture();
+	if (!tex) return -1.0;
+	Nrrd* nrrd = tex->get_nrrd(tex->nlabel());
+	if (!nrrd) return -1.0;
+	void* data = nrrd->data;
+	if (!data && !tex->isBrxml()) return -1.0;
+
+	int nx = GetSize().x;
+	int ny = GetSize().y;
+
+	if (nx <= 0 || ny <= 0)
+		return -1.0;
+
+	glm::mat4 cur_mv_mat = m_mv_mat;
+	glm::mat4 cur_proj_mat = m_proj_mat;
+
+	//projection
+	HandleProjection(nx, ny);
+	//Transformation
+	HandleCamera();
+	glm::mat4 mv_temp;
+	//translate object
+	mv_temp = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
+	//rotate object
+	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
+	//center object
+	mv_temp = glm::translate(mv_temp, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
+
+	Transform mv;
+	Transform p;
+	mv.set(glm::value_ptr(mv_temp));
+	p.set(glm::value_ptr(m_proj_mat));
+
+	double x, y;
+	x = double(mx) * 2.0 / double(nx) - 1.0;
+	y = double(my) * 2.0 / double(ny) - 1.0;
+	p.invert();
+	mv.invert();
+	//transform mp1 and mp2 to object space
+	Point mp1(x, y, 0.0);
+	mp1 = p.transform(mp1);
+	mp1 = mv.transform(mp1);
+	Point mp2(x, y, 1.0);
+	mp2 = p.transform(mp2);
+	mp2 = mv.transform(mp2);
+
+	//volume res
+	int xx = -1;
+	int yy = -1;
+	int zz = -1;
+	int tmp_xx, tmp_yy, tmp_zz;
+	double spcx, spcy, spcz;
+	vd->GetSpacings(spcx, spcy, spcz);
+	int resx, resy, resz;
+	vd->GetResolution(resx, resy, resz);
+	//volume bounding box
+	BBox bbox = vd->GetBounds();
+	Vector vv = mp2 - mp1;
+	vv.normalize();
+	Point hit;
+	int p_int = 0;
+	double alpha = 0.0;
+	int value = 0;
+	vector<Plane*>* planes = 0;
+	double mspc = 1.0;
+	double return_val = -1.0;
+	if (vd->GetSampleRate() > 0.0)
+		mspc = sqrt(1.0 / (resx * resx) + 1.0 / (resy * resy) + 1.0 / (resz * resz)) / vd->GetSampleRate();
+	if (vd->GetVR())
+		planes = vd->GetVR()->get_planes();
+	if (bbox.intersect(mp1, vv, hit))
+	{
+		Transform* textrans = tex->transform();
+		Vector vv2 = textrans->unproject(vv);
+		vv2.normalize();
+		Point hp1 = textrans->unproject(hit);
+		while (true)
+		{
+			tmp_xx = int(hp1.x() * resx);
+			tmp_yy = int(hp1.y() * resy);
+			tmp_zz = int(hp1.z() * resz);
+			if (tmp_xx == xx && tmp_yy == yy && tmp_zz == zz)
+			{
+				//same, skip
+				hp1 += vv2 * mspc;
+				continue;
+			}
+			else
+			{
+				xx = tmp_xx;
+				yy = tmp_yy;
+				zz = tmp_zz;
+			}
+			//out of bound, stop
+			if (xx<0 || xx>resx ||
+				yy<0 || yy>resy ||
+				zz<0 || zz>resz)
+				break;
+
+			bool inside = true;
+			if (planes)
+			{
+				for (int i = 0; i < 6; i++)
+				{
+					if ((*planes)[i] &&
+						(*planes)[i]->eval_point(hp1) < 0.0)
+					{
+						inside = false;
+						break;
+					}
+				}
+			}
+			if (inside)
+			{
+				xx = xx == resx ? resx - 1 : xx;
+				yy = yy == resy ? resy - 1 : yy;
+				zz = zz == resz ? resz - 1 : zz;
+
+				value = vd->GetLabellValue(xx, yy, zz);
+
+				if (value > 0 && vd->GetSegmentMask(value) > 0)
+				{
+					mp = Point((xx + 0.5) / resx, (yy + 0.5) / resy, (zz + 0.5) / resz);
+					mp = textrans->project(mp);
+					p_int = value;
+					break;
+				}
+			}
+			hp1 += vv2 * mspc;
+		}
+	}
+
+	if (p_int > 0)
+		return_val = (mp - mp1).length();
+
+	lblval = p_int;
+
+	m_mv_mat = cur_mv_mat;
+	m_proj_mat = cur_proj_mat;
+	return return_val;
+}
+
 double VRenderVulkanView::GetPointAndIntVolume(Point& mp, double &intensity, bool normalize, int mx, int my, VolumeData* vd, double thresh)
 {
 	if (!vd)
@@ -14953,7 +15477,6 @@ void VRenderVulkanView::OnMouse(wxMouseEvent& event)
 	int handle_count;
 	curl_multi_perform(_g_curlm, &handle_count);
 
-	//added by takashi
 	if(event.LeftDClick())
 	{
 		Point *p = GetEditingRulerPoint(event.GetX(), event.GetY());
@@ -14965,7 +15488,21 @@ void VRenderVulkanView::OnMouse(wxMouseEvent& event)
 			StartManipulation(NULL, NULL, NULL, &trans, NULL);
 		}
 		else
-			SelSegVolume();
+		{
+			bool na_mode = false;
+			for (int i = 0; i < m_vd_pop_list.size(); i++)
+			{
+				if (m_vd_pop_list[i]->GetDisp() && m_vd_pop_list[i]->GetNAMode())
+				{
+					na_mode = true;
+					break;
+				}
+			}
+			if (na_mode)
+				SelLabelSegVolume();
+			else
+				SelSegVolume();
+		}
 
 		RefreshGL();
 		return;

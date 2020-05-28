@@ -96,7 +96,18 @@ IMPLEMENT_DYNAMIC_CLASS(NAGuiPlugin, wxObject)
 NAGuiPlugin::NAGuiPlugin()
 	: wxGuiPluginBase(NULL, NULL)
 {
-
+	m_lbl_reader = NULL;
+	m_vol_reader = NULL;
+	m_lbl_nrrd = NULL;
+	m_nrrd_r = NULL;
+	m_nrrd_s[0] = m_nrrd_s[1] = m_nrrd_s[2] = NULL;
+	m_scount = 0;
+	m_dirty = false;
+	m_xspc = -1.0;
+	m_yspc = -1.0;
+	m_zspc = -1.0;
+	m_allsig_visible = true;
+	m_lock = true;
 }
 
 NAGuiPlugin::NAGuiPlugin(wxEvtHandler * handler, wxWindow * vvd)
@@ -149,6 +160,8 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 	if (!vrv) return false;
 	TreePanel* tree = vframe->GetTree();
 	if (!tree) return false;
+
+	Lock();
 
 	for (int c = 0; c < 3; c++)
 	{
@@ -438,6 +451,8 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 		}
 		m_allsig_visible = true;
 	}
+
+	Unlock();
 
 	return true;
 }
@@ -1149,23 +1164,18 @@ wxWindow * NAGuiPlugin::CreatePanel(wxWindow * parent)
 
 void NAGuiPlugin::OnInit()
 {
-	m_lbl_reader = NULL;
-	m_vol_reader = NULL;
-	m_lbl_nrrd = NULL;
-	m_nrrd_r = NULL;
-	m_nrrd_s[0] = m_nrrd_s[1] = m_nrrd_s[2] = NULL;
-	m_scount = 0;
-	m_dirty = false;
-	m_xspc = -1.0;
-	m_yspc = -1.0;
-	m_zspc = -1.0;
-	m_allsig_visible = true;
 	LoadConfigFile();
 }
 
 void NAGuiPlugin::OnDestroy()
 {
 
+}
+
+void NAGuiPlugin::OnTreeUpdate()
+{
+	if (!m_lock)
+		m_dirty = true;
 }
 
 void NAGuiPlugin::OnTimer(wxTimerEvent& event)

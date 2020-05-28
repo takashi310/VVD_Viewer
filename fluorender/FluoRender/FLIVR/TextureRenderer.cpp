@@ -200,19 +200,19 @@ namespace FLIVR
 		m_slices_vao.destroy();
 	}
     
-    void TextureRenderer::set_seg_mask(int id, bool val)
+    void TextureRenderer::set_seg_mask(int id, int val)
     {
 		if (id >= 0 && id < 65535)
 		{
-			na_lbl_[id] = val ? 255 : 0;
+			na_lbl_[id] = (val == 2) ? 255 : ((val == 1) ? 120 : 0);
 			na_active_lbl_.insert(id);
 			na_tex_dirty_ = true;
 		}
     }
 
-	bool TextureRenderer::get_seg_mask(int id)
+	int TextureRenderer::get_seg_mask(int id)
 	{
-		return (id >= 0 && id < 65535) ? na_lbl_[id] : false;
+		return (id >= 0 && id < 65535) ? na_lbl_[id]/120 : false;
 	}
     
     std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> TextureRenderer::get_seg_mask_tex()

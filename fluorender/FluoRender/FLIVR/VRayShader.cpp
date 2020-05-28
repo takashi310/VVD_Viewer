@@ -278,6 +278,11 @@ namespace FLIVR
 	"	int mode = uint(tbmin.w);\n" \
 	"\n"
 
+#define VRAY_HEAD_LABEL_SEG \
+	"	//VRAY_HEAD_LABEL_SEG\n" \
+	"	float highlight = 0.0;\n" \
+	"\n"
+
 #define VRAY_LOOP_HEAD \
 	"	//VRAY_LOOP_HEAD\n" \
 	"	for (uint i = 0; i <= brk.stnum; i++)\n" \
@@ -658,7 +663,8 @@ namespace FLIVR
     "           //VRAY_DATA_LABEL_SEG_LOOKUP\n" \
     "           uint lbl = texture(tex3, t.stp).x; //get label value\n" \
     "           vec4 b = texture(tex7, vec2((float(lbl%uint(256))+0.5)/256.0, (float(lbl/256)+0.5)/256.0));\n" \
-    "           if (b.x > 0.5) {" \
+	"           highlight = (b.x >= 0.5) ? 1.0 : highlight;\n" \
+    "           if (b.x > 0.1) {\n" \
     "\n"
     
 #define VRAY_DATA_LABEL_SEG_ENDIF \
@@ -1076,6 +1082,13 @@ namespace FLIVR
 	"			//VRAY_BLEND_DMAP\n" \
 	"			outcol = (1.0 - c.w) * outcol + c;\n" \
 	"\n"
+
+#define VRAY_LABEL_SEG_LOOP_TAIL \
+    "		}\n" \
+	"	}\n" \
+	"\n" \
+	"	FragColor = outcol + highlight * 0.1 * clamp(outcol, 0.01, 1.0);\n" \
+	"\n" 
 
 #define VRAY_LOOP_TAIL \
 	"		}\n" \
@@ -1787,6 +1800,9 @@ VRayShader::VRayShader(
 		if (blend_mode_ == 2)
 			z << VRAY_HEAD_MIP;
 
+		if (na_mode_)
+			z << VRAY_HEAD_LABEL_SEG;
+
 		z << VRAY_LOOP_HEAD;
 		if (peel_ != 0 || color_mode_ == 2)
 			z << VRAY_LOOP_CLIP_COORD;
@@ -2001,7 +2017,10 @@ VRayShader::VRayShader(
         if (na_mode_)
             z << VRAY_DATA_LABEL_SEG_ENDIF;
 
-		z << VRAY_LOOP_TAIL;
+		if (na_mode_)
+			z << VRAY_LABEL_SEG_LOOP_TAIL;
+		else
+			z << VRAY_LOOP_TAIL;
 
 		//the common tail
 		z << VRAY_TAIL;

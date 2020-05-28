@@ -403,6 +403,7 @@ public:
 	//save
 	double GetOriginalValue(int i, int j, int k, bool normalize=true);
 	double GetTransferedValue(int i, int j, int k);
+	int GetLabellValue(int i, int j, int k);
 	void Save(wxString &filename, int mode=0, bool bake=false, bool compress=false, bool save_msk=true, bool save_label=true, VolumeLoader *vl=NULL);
 	void ExportMask(wxString &filename);
 	void ImportMask(wxString &filename);
@@ -687,8 +688,8 @@ public:
 	void SetMaskHideMode(int mode) { if (m_vr) m_vr->set_mask_hide_mode(mode); }
 	int GetMaskHideMode() { return m_vr ? m_vr->get_mask_hide_mode() : VOL_MASK_HIDE_NONE; }
     
-    void SetSegmentMask(int id, bool val) { if (m_vr) m_vr->set_seg_mask(id, val); }
-	bool GetSegmentMask(int id) { return m_vr ? m_vr->get_seg_mask(id) : false; }
+    void SetSegmentMask(int id, int val) { if (m_vr) m_vr->set_seg_mask(id, val); }
+	int GetSegmentMask(int id) { return m_vr ? m_vr->get_seg_mask(id) : false; }
 	std::set<int>* GetActiveSegIDs() { return m_vr ? m_vr->get_active_seg_ids() : nullptr; }
     void SetNAMode(bool val) { if (m_vr) m_vr->set_na_mode(val); }
     bool GetNAMode() { return m_vr ? m_vr->get_na_mode() : false; }

@@ -4050,8 +4050,8 @@ void DataTreeCtrl::GetVisHistoryTraversal(wxTreeItemId item)
 					auto it = ids->begin();
 					while (it != ids->end())
 					{
-						bool bval = vd->GetSegmentMask(*it);
-						state.label[*it] = bval;
+						int ival = vd->GetSegmentMask(*it);
+						state.label[*it] = ival;
 						it++;
 					}
 				}

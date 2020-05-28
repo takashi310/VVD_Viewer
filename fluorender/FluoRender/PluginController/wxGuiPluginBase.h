@@ -19,6 +19,8 @@ public:
 	virtual void OnInit() = 0;
 	//This method is called when the application is closing.
 	virtual void OnDestroy() = 0;
+
+	virtual void OnTreeUpdate() {}
 	
 	//For command line.
 	virtual bool OnRun(wxString options);

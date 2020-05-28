@@ -1659,6 +1659,44 @@ double VolumeData::GetTransferedValue(int i, int j, int k)
 	return 0.0;
 }
 
+int VolumeData::GetLabellValue(int i, int j, int k)
+{
+	Nrrd* data = m_tex->get_nrrd(m_tex->nlabel());
+	if (!data) return 0.0;
+
+	int bits = data->type;
+	int64_t nx = (int64_t)(data->axis[0].size);
+	int64_t ny = (int64_t)(data->axis[1].size);
+	int64_t nz = (int64_t)(data->axis[2].size);
+
+	if (i < 0 || i >= nx || j < 0 || j >= ny || k < 0 || k >= nz)
+		return 0.0;
+	uint64_t ii = i, jj = j, kk = k;
+
+	if (!data->data) return 0.0;
+	if (bits == nrrdTypeUChar)
+	{
+		uint64_t index = (nx) * (ny) * (kk)+(nx) * (jj)+(ii);
+		uint8 old_value = ((uint8*)(data->data))[index];
+		return int(old_value);
+	}
+	else if (bits == nrrdTypeUShort)
+	{
+		uint64_t index = (nx) * (ny) * (kk)+(nx) * (jj)+(ii);
+		uint16 old_value = ((uint16*)(data->data))[index];
+		return int(old_value);
+	}
+	else if (bits == nrrdTypeUInt)
+	{
+		uint64_t index = (nx) * (ny) * (kk)+(nx) * (jj)+(ii);
+		uint16 old_value = ((uint32*)(data->data))[index];
+		return int(old_value);
+	}
+
+	return 0.0;
+}
+
+
 //save
 void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bool save_msk, bool save_label, VolumeLoader *vl)
 {

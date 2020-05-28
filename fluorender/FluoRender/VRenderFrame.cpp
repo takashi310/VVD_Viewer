@@ -1575,6 +1575,9 @@ void VRenderFrame::UpdateTreeIcons()
 	m_tree_panel->SetEvtHandlerEnabled(true);
 
 	m_tree_panel->Refresh(false);
+
+	if (m_plugin_manager)
+		m_plugin_manager->OnTreeUpdate();
 }
 
 void VRenderFrame::UpdateTreeColors()
@@ -1730,6 +1733,9 @@ void VRenderFrame::UpdateTreeColors()
 	m_tree_panel->SetEvtHandlerEnabled(true);
 
 	m_tree_panel->Refresh(false);
+
+	if (m_plugin_manager)
+		m_plugin_manager->OnTreeUpdate();
 }
 
 void VRenderFrame::UpdateTree(wxString name, int type, bool set_calc)
@@ -1958,6 +1964,9 @@ void VRenderFrame::UpdateTree(wxString name, int type, bool set_calc)
 
 	m_tree_panel->Thaw();
 	m_tree_panel->SetEvtHandlerEnabled(true);
+
+	if (m_plugin_manager)
+		m_plugin_manager->OnTreeUpdate();
 }
 
 void VRenderFrame::UpdateROITree(VolumeData *vd, bool set_calc)

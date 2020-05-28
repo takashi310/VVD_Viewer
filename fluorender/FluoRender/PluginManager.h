@@ -24,6 +24,7 @@ public:
 	virtual bool LoadAllPlugins(bool forceProgramPath);
 	virtual bool UnloadAllPlugins();
 	void InitPlugins();
+	void OnTreeUpdate();
 	void FinalizePligins();
 
 	const wxNonGuiPluginBaseList& GetNonGuiPlugins() const;

@@ -32,7 +32,11 @@ public:
 	virtual wxWindow * CreatePanel(wxWindow * parent);
 	virtual void OnInit();
 	virtual void OnDestroy();
+	virtual void OnTreeUpdate();
 	virtual bool OnRun(wxString options);
+
+	void Lock() { m_lock = true; }
+	void Unlock() { m_lock = false; }
 
 	void SetIDXImagePath(wxString path) { m_id_path = path; }
 	wxString GetIDXImagePath() { return m_id_path; }
@@ -104,6 +108,8 @@ public:
 	bool m_dirty;
 
 	bool m_allsig_visible;
+
+	bool m_lock;
 	
 private:
 	wxString m_id_path;

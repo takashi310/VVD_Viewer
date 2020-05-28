@@ -214,6 +214,9 @@ class EXPORT_API VRenderVulkanView: public wxWindow
 		ID_CTXMENU_SHOW_ALL,
 		ID_CTXMENU_HIDE_OTHER_VOLS,
 		ID_CTXMENU_HIDE_THIS_VOL,
+		ID_CTXMENU_SHOW_ALL_FRAGMENTS,
+		ID_CTXMENU_HIDE_OTHER_FRAGMENTS,
+		ID_CTXMENU_HIDE_SELECTED_FLAGMENTS,
 		ID_CTXMENU_UNDO_VISIBILITY_SETTING_CHANGES,
 		ID_CTXMENU_REDO_VISIBILITY_SETTING_CHANGES,
 	};
@@ -1248,10 +1251,13 @@ private:
 	void PickVolume();
 	//mode: 0-add selection; 1-single selection; 2-subtract selection, 3-switch an editing segment
 	bool SelSegVolume(int mode=0);
+	//mode: 0-add selection; 1-single selection; 2-subtract selection, 3-switch an editing segment
+	bool SelLabelSegVolume(int mode = 0);
 
 	//get mouse point in 3D
 	//mode: 0-maximum with original value; 1-maximum with transfered value; 2-accumulated with original value; 3-accumulated with transfered value
 	double GetPointVolume(Point &mp, int mx, int my, VolumeData* vd, int mode, bool use_transf, double thresh = 0.5);
+	double GetPointAndLabel(Point& mp, int& lblval, int mx, int my, VolumeData* vd);
 	double GetPointAndIntVolume(Point& mp, double &intensity, bool normalize, int mx, int my, VolumeData* vd, double thresh = 0.5);
 	double GetPointVolumeBox(Point &mp, int mx, int my, VolumeData* vd, bool calc_mats=true);
 	double GetPointVolumeBox2(Point &p1, Point &p2, int mx, int my, VolumeData* vd);
@@ -1271,6 +1277,9 @@ private:
 	void OnShowAllVolumes(wxCommandEvent& event);
 	void OnHideOtherVolumes(wxCommandEvent& event);
 	void OnHideSelectedVolume(wxCommandEvent& event);
+	void OnShowAllFragments(wxCommandEvent& event);
+	void OnHideOtherFragments(wxCommandEvent& event);
+	void OnHideSelectedFragments(wxCommandEvent& event);
 	void OnUndoVisibilitySettings(wxCommandEvent& event);
 	void OnRedoVisibilitySettings(wxCommandEvent& event);
 

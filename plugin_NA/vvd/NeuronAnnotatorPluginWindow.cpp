@@ -386,6 +386,8 @@ void NAListCtrl::UpdateResults()
 {
 	if (!m_plugin) return;
 
+	if (m_plugin->getSegCount() <= 0) return;
+
 	SetEvtHandlerEnabled(false);
 
 	DeleteAllItems();

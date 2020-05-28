@@ -342,8 +342,8 @@ namespace FLIVR
 				   if (m_v2drender) m_v2drender.reset();
 			   }
        
-               void set_seg_mask(int id, bool val);
-               bool get_seg_mask(int id);
+               void set_seg_mask(int id, int val);
+               int get_seg_mask(int id);
                std::set<int>* get_active_seg_ids() { return &na_active_lbl_; }
                std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> get_seg_mask_tex();
 
