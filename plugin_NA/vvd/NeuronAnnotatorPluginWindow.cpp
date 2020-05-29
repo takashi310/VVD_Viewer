@@ -359,11 +359,11 @@ NAListCtrl::NAListCtrl(
 	SetColumnWidth(2, 110);
 	SetColumnWidth(3, 300);
 
-	m_vis_images = new wxImageList(20, 20, false);
-	wxIcon icon0 = wxIcon(cross_xpm);
-	wxIcon icon1 = wxIcon(tick_xpm);
-	m_vis_images->Add(icon0);
-	m_vis_images->Add(icon1);
+	//m_vis_images = new wxImageList(20, 20, false);
+	//wxIcon icon0 = wxIcon(cross_xpm);
+	//wxIcon icon1 = wxIcon(tick_xpm);
+	//m_vis_images->Add(icon0);
+	//m_vis_images->Add(icon1);
 	//SetImageList(m_vis_images, wxIMAGE_LIST_SMALL);
 }
 
@@ -669,6 +669,8 @@ void NAListCtrl::OnSize(wxSizeEvent& event)
 		m_plugin->ResizeThumbnails(s.x - namew);
 	if (m_plugin->isRefExists() || m_plugin->isSegExists())
 		UpdateResults();
+    
+    event.Skip();
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -922,7 +924,7 @@ void NAGuiPluginWindow::CreateControls()
 	itemBoxSizer2->Add(stl, 0, wxEXPAND);
 
 	wxBoxSizer* sizerl = new wxBoxSizer(wxHORIZONTAL);
-	m_results = new NAListCtrl(nbpanel, wxID_ANY, wxDefaultPosition, wxSize(300, 500));
+	m_results = new NAListCtrl(nbpanel, wxID_ANY, wxDefaultPosition, wxSize(500, 500));
 	m_results->addObserver(this);
 	m_results->SetPlugin(plugin);
 	sizerl->Add(5, 10);
