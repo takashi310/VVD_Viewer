@@ -5,6 +5,7 @@
 #include <wx/dialog.h>
 #include <wx/filepicker.h>
 #include <wx/progdlg.h>
+#include <wx/dataview.h>
 #include <wx/listctrl.h>
 #include <wx/stopwatch.h>
 #include <wx/splitter.h>
@@ -49,7 +50,7 @@ struct NAListItemData
 	bool visibility;
 };
 
-class NAListCtrl : public wxListCtrl, public Notifier
+class NAListCtrl : public wxDataViewListCtrl, public Notifier
 {
 	static constexpr int IMG_ID_REF = -2;
 	static constexpr int IMG_ID_ALLSIG = -1;
@@ -65,7 +66,7 @@ public:
 		wxWindowID id,
 		const wxPoint& pos=wxDefaultPosition,
 		const wxSize& size=wxDefaultSize,
-		long style=wxLC_REPORT|wxLC_SINGLE_SEL);
+		long style= wxDV_ROW_LINES | wxDV_VERT_RULES);
 	~NAListCtrl();
 
 	void Append(int imgid, wxString name, int mipid, bool visibility);
@@ -104,8 +105,9 @@ protected: //Possible TODO
 	}
 
 private:
-	wxImageList *m_images;
-	wxImageList* m_vis_images;
+	wxIcon m_icon_visible;
+	wxIcon m_icon_invisible;
+	vector<wxIcon> m_images;
 	wxStopWatch m_watch;
 	wxArrayString m_dbdirs;
 	wxArrayString m_dbpaths;

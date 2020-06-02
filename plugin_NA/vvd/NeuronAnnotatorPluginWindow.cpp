@@ -317,7 +317,7 @@ void wxImagePanel::OnSize(wxSizeEvent& event)
 }
 
 
-BEGIN_EVENT_TABLE(NAListCtrl, wxListCtrl)
+BEGIN_EVENT_TABLE(NAListCtrl, wxDataViewListCtrl)
 	EVT_LIST_ITEM_SELECTED(wxID_ANY, NAListCtrl::OnSelect)
 	EVT_LIST_COL_BEGIN_DRAG(wxID_ANY, NAListCtrl::OnColBeginDrag)
 	EVT_KEY_DOWN(NAListCtrl::OnKeyDown)
@@ -333,44 +333,23 @@ NAListCtrl::NAListCtrl(
 	const wxPoint& pos,
 	const wxSize& size,
 	long style) :
-	wxListCtrl(parent, id, pos, size, style)
+	wxDataViewListCtrl(parent, id, pos, size, style)
 {
 	m_plugin = NULL;
-	m_images = NULL;
-	m_vis_images = NULL;
 	m_history_pos = 0;
 
-	wxListItem itemCol;
-	itemCol.SetText("");
-	this->InsertColumn(0, itemCol);
-    
-    itemCol;
-    itemCol.SetText("");
-    this->InsertColumn(1, itemCol);
+	AppendTextColumn(wxT(""), wxDATAVIEW_CELL_INERT, 0, wxALIGN_LEFT, wxDATAVIEW_COL_HIDDEN);
+	AppendToggleColumn(wxT(""), wxDATAVIEW_CELL_INERT, 30, wxALIGN_LEFT, 0);
+	AppendTextColumn(wxT("Name"), wxDATAVIEW_CELL_INERT, 110, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE);
+	AppendIconTextColumn(wxT("Thumbnail"), wxDATAVIEW_CELL_INERT, 300, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE);
 
-	itemCol.SetText("Name");
-	this->InsertColumn(2, itemCol);
-
-	itemCol.SetText("Thumbnail");
-	this->InsertColumn(3, itemCol);
-
-	SetColumnWidth(0, 0);
-    SetColumnWidth(1, 30);
-	SetColumnWidth(2, 110);
-	SetColumnWidth(3, 300);
-
-	//m_vis_images = new wxImageList(20, 20, false);
-	//wxIcon icon0 = wxIcon(cross_xpm);
-	//wxIcon icon1 = wxIcon(tick_xpm);
-	//m_vis_images->Add(icon0);
-	//m_vis_images->Add(icon1);
-	//SetImageList(m_vis_images, wxIMAGE_LIST_SMALL);
+	m_icon_visible = wxIcon(cross_xpm);
+	m_icon_invisible = wxIcon(tick_xpm);
 }
 
 NAListCtrl::~NAListCtrl()
 {
-	wxDELETE(m_images);
-	wxDELETE(m_vis_images);
+
 }
 
 void NAListCtrl::LoadResults(wxString idpath, wxString volpath, wxString chspec, wxString prefix)
@@ -395,18 +374,16 @@ void NAListCtrl::UpdateResults()
 	if (!m_listdata.empty()) m_listdata.clear();
 
 	wxSize s = GetSize();
-	int namew = GetColumnWidth(2) + GetColumnWidth(1);
+	int namew = GetColumn(2)->GetWidth() + GetColumn(1)->GetWidth();
 	if (s.x - namew > 0)
 		m_plugin->ResizeThumbnails(s.x - namew);
 
 	int w = m_plugin->getSegMIPThumbnail(0)->GetWidth();
 	int h = m_plugin->getSegMIPThumbnail(0)->GetHeight();
 
-	if (m_images) wxDELETE(m_images);
+	if (!m_images.empty()) m_images.clear();
 	int img_count = 0;
-	m_images = new wxImageList(w, h, false);
-	SetImageList(m_images, wxIMAGE_LIST_SMALL);
-
+	
     if (m_plugin->isRefExists())
     {
         NAListItemData ref_data;
@@ -415,7 +392,9 @@ void NAListCtrl::UpdateResults()
         ref_data.imgid = IMG_ID_REF;
 		ref_data.visibility = false;
         wxBitmap refbmp = wxBitmap(*m_plugin->getRefMIPThumbnail());
-        m_images->Add(refbmp, wxBITMAP_TYPE_ANY);
+		wxIcon tmp_icon;
+		tmp_icon.CopyFromBitmap(refbmp);
+        m_images.push_back(tmp_icon);
         m_listdata.push_back(ref_data);
         Append(IMG_ID_REF, m_listdata[img_count].name, m_listdata[img_count].mipid, m_listdata[img_count].visibility);
         img_count++;
@@ -432,55 +411,32 @@ void NAListCtrl::UpdateResults()
 		data.imgid = i;
 		data.visibility = true;
 		wxBitmap bmp = wxBitmap(*m_plugin->getSegMIPThumbnail(i));
-		m_images->Add(bmp, wxBITMAP_TYPE_ANY);
+		wxIcon tmp_icon;
+		tmp_icon.CopyFromBitmap(bmp);
+		m_images.push_back(tmp_icon);
 		m_listdata.push_back(data);
         Append(m_listdata[img_count].imgid, m_listdata[img_count].name, m_listdata[img_count].mipid, m_listdata[img_count].visibility);
         img_count++;
 	}
     
 #ifdef _DARWIN
-    SetColumnWidth(3, w + 8);
+	GetColumn(3)->SetWidth(w + 8);
 #else
-    SetColumnWidth(3, w + 2);
+	GetColumn(3)->SetWidth(w + 2);
 #endif
+
+	if (!m_images.empty())
+		SetRowHeight(m_images[0].GetHeight());
 
 	SetEvtHandlerEnabled(true);
 	Update();
-
-	long item = GetNextItem(-1);
-	if (item != -1)
-		SetItemState(item, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
 
 	m_plugin->setDirty(false);
 }
 
 void NAListCtrl::DeleteSelection()
 {
-	long item = GetNextItem(-1,
-		wxLIST_NEXT_ALL,
-		wxLIST_STATE_SELECTED);
-	if (item != -1)
-	{
-		long sel = item;
-		if (GetNextItem(item, wxLIST_NEXT_BELOW) == -1)
-			sel = GetNextItem(item, wxLIST_NEXT_ABOVE);
-		
-		NAListItemData hdata;
-		wxString dbidstr = GetText(item, 1);
-		hdata.dbid = wxAtoi(dbidstr);
-		hdata.name = GetText(item, 2);
-		hdata.dbname = GetText(item, 3);
-		hdata.swcid = GetImageId(item, 4);
-		hdata.mipid = GetImageId(item, 5);
-		hdata.score = GetText(item, 6);
-		hdata.itemid = item;
-		AddHistory(hdata);
-
-		DeleteItem(item);
-
-		if (sel != -1)
-			SetItemState(sel, wxLIST_STATE_SELECTED|wxLIST_STATE_FOCUSED, wxLIST_STATE_SELECTED|wxLIST_STATE_FOCUSED);
-	}
+	
 }
 
 void NAListCtrl::DeleteAll()
@@ -523,16 +479,6 @@ void NAListCtrl::Undo()
 	m_history_pos--;
 	NAListItemData comdata = m_history[m_history_pos];
 
-	long item = GetNextItem(-1,
-		wxLIST_NEXT_ALL,
-		wxLIST_STATE_SELECTED);
-	long sel = -1;
-	if (item != -1)
-	{
-		if (item >= comdata.itemid)
-			sel = item + 1;
-	}
-
 	Append(comdata.imgid, comdata.name, comdata.mipid, comdata.itemid);
 }
 
@@ -541,16 +487,6 @@ void NAListCtrl::Redo()
 	if (m_history_pos >= m_history.size())
 		return;
 	NAListItemData comdata = m_history[m_history_pos];
-
-	long item = GetNextItem(-1,
-		wxLIST_NEXT_ALL,
-		wxLIST_STATE_SELECTED);
-	long sel = -1;
-	if (item != -1)
-	{
-		if (item >= comdata.itemid)
-			sel = item - 1;
-	}
 
 	DeleteItem(comdata.itemid);
 	m_history_pos++;
@@ -566,43 +502,31 @@ void NAListCtrl::OnColBeginDrag(wxListEvent& event)
 
 void NAListCtrl::Append(int imgid, wxString name, int mipid, bool visibility)
 {
-	wxString dbidstr = wxT("0");
-	int itemid = GetItemCount();
-	long tmp = InsertItem(itemid, wxString::Format("%d", imgid));
-    SetItem(tmp, 1, visibility ? _("\u2713") : _("-"));
-	SetItem(tmp, 2, name);
-	SetItem(tmp, 3, _(""), mipid);
+	wxVector<wxVariant> data;
+	data.push_back(wxVariant(wxString::Format("%d", imgid)));
+	data.push_back(wxVariant(visibility));
+	data.push_back(wxVariant(name));
+	data.push_back(wxVariant(wxDataViewIconText(wxEmptyString, m_images[mipid])));
+	AppendItem(data);
 }
 
 wxString NAListCtrl::GetText(long item, int col)
 {
-	wxListItem info;
-	info.SetId(item);
-	info.SetColumn(col);
-	info.SetMask(wxLIST_MASK_TEXT);
-	GetItem(info);
-	return info.GetText();
+	return wxT("");
 }
 
 int NAListCtrl::GetImageId(long item, int col)
 {
-	wxListItem info;
-	info.SetId(item);
-	info.SetColumn(col);
-	info.SetMask(wxLIST_MASK_IMAGE);
-	GetItem(info);
-	return info.GetImage();
+	return 0;
 }
 
 void NAListCtrl::OnSelect(wxListEvent &event)
 {
-	long item = GetNextItem(-1,
-		wxLIST_NEXT_ALL,
-		wxLIST_STATE_SELECTED);
+	int item = GetSelectedRow();
 
-	if (item != -1)
+	if (item != wxNOT_FOUND)
 	{
-		int id = wxAtoi(GetText(item, 0));
+		int id = wxAtoi(GetTextValue(item, 0));
 		notifyAll(NA_SET_IMAGE, &id, sizeof(int));
 	}
 }
@@ -649,10 +573,9 @@ void NAListCtrl::OnKeyUp(wxKeyEvent& event)
 
 void NAListCtrl::OnLeftDClick(wxMouseEvent& event)
 {
-	long item = GetNextItem(-1,
-		wxLIST_NEXT_ALL,
-		wxLIST_STATE_SELECTED);
-	if (item != -1)
+	int item = GetSelectedRow();
+
+	if (item != wxNOT_FOUND)
 	{
 		int id = wxAtoi(GetText(item, 0));
 		notifyAll(NA_OPEN_FILE, &id, sizeof(int));
@@ -664,7 +587,7 @@ void NAListCtrl::OnSize(wxSizeEvent& event)
 	if (!m_plugin) return;
 
 	wxSize s = GetSize();
-	int namew = GetColumnWidth(2) + GetColumnWidth(1);
+	int namew = GetColumn(2)->GetWidth() + GetColumn(1)->GetWidth();
 	if (s.x - namew > 0)
 		m_plugin->ResizeThumbnails(s.x - namew);
 	if (m_plugin->isRefExists() || m_plugin->isSegExists())
