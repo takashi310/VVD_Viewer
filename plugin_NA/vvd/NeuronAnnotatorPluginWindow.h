@@ -66,7 +66,7 @@ public:
 		wxWindowID id,
 		const wxPoint& pos=wxDefaultPosition,
 		const wxSize& size=wxDefaultSize,
-		long style= wxDV_ROW_LINES | wxDV_VERT_RULES);
+		long style= wxDV_HORIZ_RULES | wxDV_VERT_RULES);
 	~NAListCtrl();
 
 	void Append(int imgid, wxString name, int mipid, bool visibility);
@@ -107,7 +107,7 @@ protected: //Possible TODO
 private:
 	wxIcon m_icon_visible;
 	wxIcon m_icon_invisible;
-	vector<wxIcon> m_images;
+	vector<wxBitmap> m_images;
 	wxStopWatch m_watch;
 	wxArrayString m_dbdirs;
 	wxArrayString m_dbpaths;
@@ -117,6 +117,7 @@ private:
 	int m_history_pos;
 	wxString m_rfpath;
 	NAGuiPlugin* m_plugin;
+	wxWindow* m_parent;
 };
 
 class wxNASettingDialog : public wxDialog

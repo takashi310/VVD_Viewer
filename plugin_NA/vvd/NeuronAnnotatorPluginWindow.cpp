@@ -337,11 +337,13 @@ NAListCtrl::NAListCtrl(
 {
 	m_plugin = NULL;
 	m_history_pos = 0;
+	m_parent = parent;
 
 	AppendTextColumn(wxT(""), wxDATAVIEW_CELL_INERT, 0, wxALIGN_LEFT, wxDATAVIEW_COL_HIDDEN);
 	AppendToggleColumn(wxT(""), wxDATAVIEW_CELL_INERT, 30, wxALIGN_LEFT, 0);
 	AppendTextColumn(wxT("Name"), wxDATAVIEW_CELL_INERT, 110, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE);
-	AppendIconTextColumn(wxT("Thumbnail"), wxDATAVIEW_CELL_INERT, 300, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE);
+	wxDataViewColumn* col = new wxDataViewColumn(wxT("Thumbnail"), new wxDataViewBitmapRenderer(), GetStore()->GetColumnCount(), 300);
+	AppendColumn(col);
 
 	m_icon_visible = wxIcon(cross_xpm);
 	m_icon_invisible = wxIcon(tick_xpm);
@@ -392,9 +394,7 @@ void NAListCtrl::UpdateResults()
         ref_data.imgid = IMG_ID_REF;
 		ref_data.visibility = false;
         wxBitmap refbmp = wxBitmap(*m_plugin->getRefMIPThumbnail());
-		wxIcon tmp_icon;
-		tmp_icon.CopyFromBitmap(refbmp);
-        m_images.push_back(tmp_icon);
+        m_images.push_back(refbmp);
         m_listdata.push_back(ref_data);
         Append(IMG_ID_REF, m_listdata[img_count].name, m_listdata[img_count].mipid, m_listdata[img_count].visibility);
         img_count++;
@@ -411,9 +411,7 @@ void NAListCtrl::UpdateResults()
 		data.imgid = i;
 		data.visibility = true;
 		wxBitmap bmp = wxBitmap(*m_plugin->getSegMIPThumbnail(i));
-		wxIcon tmp_icon;
-		tmp_icon.CopyFromBitmap(bmp);
-		m_images.push_back(tmp_icon);
+		m_images.push_back(bmp);
 		m_listdata.push_back(data);
         Append(m_listdata[img_count].imgid, m_listdata[img_count].name, m_listdata[img_count].mipid, m_listdata[img_count].visibility);
         img_count++;
@@ -426,7 +424,7 @@ void NAListCtrl::UpdateResults()
 #endif
 
 	if (!m_images.empty())
-		SetRowHeight(m_images[0].GetHeight());
+		SetRowHeight(m_images[0].GetHeight()+6);
 
 	SetEvtHandlerEnabled(true);
 	Update();
@@ -506,7 +504,7 @@ void NAListCtrl::Append(int imgid, wxString name, int mipid, bool visibility)
 	data.push_back(wxVariant(wxString::Format("%d", imgid)));
 	data.push_back(wxVariant(visibility));
 	data.push_back(wxVariant(name));
-	data.push_back(wxVariant(wxDataViewIconText(wxEmptyString, m_images[mipid])));
+	data.push_back(wxVariant(m_images[mipid]));
 	AppendItem(data);
 }
 
@@ -586,8 +584,8 @@ void NAListCtrl::OnSize(wxSizeEvent& event)
 {
 	if (!m_plugin) return;
 
-	wxSize s = GetSize();
-	int namew = GetColumn(2)->GetWidth() + GetColumn(1)->GetWidth();
+	wxSize s = event.GetSize();
+	int namew = GetColumn(2)->GetWidth() + GetColumn(1)->GetWidth() + GetColumn(0)->GetWidth();
 	if (s.x - namew > 0)
 		m_plugin->ResizeThumbnails(s.x - namew);
 	if (m_plugin->isRefExists() || m_plugin->isSegExists())
