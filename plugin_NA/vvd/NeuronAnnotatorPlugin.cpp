@@ -1067,7 +1067,7 @@ bool NAGuiPlugin::LoadNrrd(int id)
 	return true;
 }
 
-void NAGuiPlugin::SetSegmentVisibility(int id, bool vis)
+void NAGuiPlugin::SetSegmentVisibility(int id, int vis)
 {
 	VRenderFrame* vframe = (VRenderFrame*)m_vvd;
 	if (!vframe) return;
@@ -1082,7 +1082,7 @@ void NAGuiPlugin::SetSegmentVisibility(int id, bool vis)
 	{
 		VolumeData* v = dm->GetVolumeData(m_vol_r);
 		if (v)
-			v->SetDisp(vis);
+			v->SetDisp(vis > 0 ? true : false);
 		vframe->UpdateTreeIcons();
 	}
 	if (id >= 0 && id < m_segs.size())
@@ -1100,6 +1100,38 @@ void NAGuiPlugin::SetSegmentVisibility(int id, bool vis)
 		}
 	}
 	vframe->RefreshVRenderViews(true);
+}
+
+int NAGuiPlugin::GetSegmentVisibility(int id)
+{
+	int ret_val = 0;
+
+	VRenderFrame* vframe = (VRenderFrame*)m_vvd;
+	if (!vframe) return ret_val;
+	DataManager* dm = vframe->GetDataManager();
+	if (!dm) return ret_val;
+
+	if (id == -2 && m_nrrd_r)
+	{
+		VolumeData* v = dm->GetVolumeData(m_vol_r);
+		if (v)
+			ret_val = v->GetDisp() ? 1 : 0;
+	}
+	if (id >= 0 && id < m_segs.size())
+	{
+		for (int i = 0; i < m_scount; i++)
+		{
+			VolumeData* v = dm->GetVolumeData(m_vol_s[i]);
+			if (v)
+			{
+				int lblid = m_segs[id].id;
+				if (v->GetNAMode())
+					ret_val = v->GetSegmentMask(lblid);
+			}
+		}
+	}
+	
+	return ret_val;
 }
 
 void NAGuiPlugin::ToggleSegmentVisibility(int id)

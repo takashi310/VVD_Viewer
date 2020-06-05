@@ -6,8 +6,10 @@
 
 #define NA_PLUGIN_VERSION "1.00"
 
-#define NA_OPEN_FILE 1
-#define NA_SET_IMAGE 2
+#define NA_TOGGLE_VISIBILITY 1
+#define NA_SET_VISIBILE 2
+#define NA_SET_INVISIBILE 3
+#define NA_SET_ACTIVE 4
 
 struct NASegment
 {
@@ -16,7 +18,7 @@ struct NASegment
     BBox bbox;
     wxImage image;
 	wxImage thumbnail;
-	bool visible;
+	int visible;
 };
 
 class NAGuiPlugin : public wxGuiPluginBase, public Notifier
@@ -55,7 +57,8 @@ public:
     bool LoadSWC(wxString name, wxString swc_zip_path);
     bool LoadFiles(wxString path);
 	bool LoadNrrd(int id);
-	void SetSegmentVisibility(int id, bool vis);
+	void SetSegmentVisibility(int id, int vis);
+	int GetSegmentVisibility(int id);
 	void ToggleSegmentVisibility(int id);
 	void PushVisHistory();
 

@@ -13686,7 +13686,7 @@ double VRenderVulkanView::GetPointVolume(Point& mp, int mx, int my,
 	double mspc = 1.0;
 	double return_val = -1.0;
 	if (vd->GetSampleRate() > 0.0)
-		mspc = sqrt(1.0/(resx*resx) + 1.0/(resy*resy) + 1.0/(resz*resz))/vd->GetSampleRate();
+		mspc = sqrt(1.0 / (resx * resx) + 1.0 / (resy * resy) + 1.0 / (resz * resz)) / 2.0;
 	if (vd->GetVR())
 		planes = vd->GetVR()->get_planes();
 	if (bbox.intersect(mp1, vv, hit))
@@ -13859,7 +13859,7 @@ double VRenderVulkanView::GetPointAndLabel(Point& mp, int& lblval, int mx, int m
 	double mspc = 1.0;
 	double return_val = -1.0;
 	if (vd->GetSampleRate() > 0.0)
-		mspc = sqrt(1.0 / (resx * resx) + 1.0 / (resy * resy) + 1.0 / (resz * resz)) / vd->GetSampleRate();
+		mspc = sqrt(1.0 / (resx * resx) + 1.0 / (resy * resy) + 1.0 / (resz * resz)) / 2.0;
 	if (vd->GetVR())
 		planes = vd->GetVR()->get_planes();
 	if (bbox.intersect(mp1, vv, hit))
@@ -14007,7 +14007,7 @@ double VRenderVulkanView::GetPointAndIntVolume(Point& mp, double &intensity, boo
 	double mspc = 1.0;
 	double return_val = -1.0;
 	if (vd->GetSampleRate() > 0.0)
-		mspc = sqrt(1.0/(resx*resx) + 1.0/(resy*resy) + 1.0/(resz*resz))/vd->GetSampleRate();
+		mspc = sqrt(1.0 / (resx * resx) + 1.0 / (resy * resy) + 1.0 / (resz * resz)) / 2.0;
 	if (vd->GetVR())
 		planes = vd->GetVR()->get_planes();
 	if (bbox.intersect(mp1, vv, hit))

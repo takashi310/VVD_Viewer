@@ -317,14 +317,17 @@ void wxImagePanel::OnSize(wxSizeEvent& event)
 }
 
 
-BEGIN_EVENT_TABLE(NAListCtrl, wxDataViewListCtrl)
-	EVT_LIST_ITEM_SELECTED(wxID_ANY, NAListCtrl::OnSelect)
-	EVT_LIST_COL_BEGIN_DRAG(wxID_ANY, NAListCtrl::OnColBeginDrag)
-	EVT_KEY_DOWN(NAListCtrl::OnKeyDown)
-	EVT_KEY_UP(NAListCtrl::OnKeyUp)
-	EVT_MOUSE_EVENTS(NAListCtrl::OnMouse)
-	EVT_LEFT_DCLICK(NAListCtrl::OnLeftDClick)
-	EVT_SIZE(NAListCtrl::OnSize)
+BEGIN_EVENT_TABLE(NAListCtrl, wxListCtrl)
+EVT_LIST_ITEM_SELECTED(wxID_ANY, NAListCtrl::OnSelect)
+EVT_LIST_ITEM_DESELECTED(wxID_ANY, NAListCtrl::OnDeselect)
+EVT_LIST_COL_BEGIN_DRAG(wxID_ANY, NAListCtrl::OnColBeginDrag)
+EVT_LIST_ITEM_CHECKED(wxID_ANY, NAListCtrl::OnItemChecked)
+EVT_LIST_ITEM_UNCHECKED(wxID_ANY, NAListCtrl::OnItemUnchecked)
+EVT_KEY_DOWN(NAListCtrl::OnKeyDown)
+EVT_KEY_UP(NAListCtrl::OnKeyUp)
+EVT_MOUSE_EVENTS(NAListCtrl::OnMouse)
+EVT_LEFT_DCLICK(NAListCtrl::OnLeftDClick)
+EVT_SIZE(NAListCtrl::OnSize)
 END_EVENT_TABLE()
 
 NAListCtrl::NAListCtrl(
@@ -333,25 +336,46 @@ NAListCtrl::NAListCtrl(
 	const wxPoint& pos,
 	const wxSize& size,
 	long style) :
-	wxDataViewListCtrl(parent, id, pos, size, style)
+	wxListCtrl(parent, id, pos, size, style)
 {
 	m_plugin = NULL;
+	m_images = NULL;
+	m_vis_images = NULL;
 	m_history_pos = 0;
-	m_parent = parent;
 
-	AppendTextColumn(wxT(""), wxDATAVIEW_CELL_INERT, 0, wxALIGN_LEFT, wxDATAVIEW_COL_HIDDEN);
-	AppendToggleColumn(wxT(""), wxDATAVIEW_CELL_INERT, 30, wxALIGN_LEFT, 0);
-	AppendTextColumn(wxT("Name"), wxDATAVIEW_CELL_INERT, 110, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE);
-	wxDataViewColumn* col = new wxDataViewColumn(wxT("Thumbnail"), new wxDataViewBitmapRenderer(), GetStore()->GetColumnCount(), 300);
-	AppendColumn(col);
+	wxListItem itemCol;
+	itemCol.SetText("");
+	this->InsertColumn(0, itemCol);
 
-	m_icon_visible = wxIcon(cross_xpm);
-	m_icon_invisible = wxIcon(tick_xpm);
+	itemCol;
+	itemCol.SetText("");
+	this->InsertColumn(1, itemCol);
+
+	itemCol.SetText("Name");
+	this->InsertColumn(2, itemCol);
+
+	itemCol.SetText("Thumbnail");
+	this->InsertColumn(3, itemCol);
+
+	SetColumnWidth(0, 20);
+	SetColumnWidth(1, 0);
+	SetColumnWidth(2, 110);
+	SetColumnWidth(3, 300);
+
+	bool chk = EnableCheckBoxes();
+
+	//m_vis_images = new wxImageList(20, 20, false);
+	//wxIcon icon0 = wxIcon(cross_xpm);
+	//wxIcon icon1 = wxIcon(tick_xpm);
+	//m_vis_images->Add(icon0);
+	//m_vis_images->Add(icon1);
+	//SetImageList(m_vis_images, wxIMAGE_LIST_SMALL);
 }
 
 NAListCtrl::~NAListCtrl()
 {
-
+	wxDELETE(m_images);
+	wxDELETE(m_vis_images);
 }
 
 void NAListCtrl::LoadResults(wxString idpath, wxString volpath, wxString chspec, wxString prefix)
@@ -359,6 +383,11 @@ void NAListCtrl::LoadResults(wxString idpath, wxString volpath, wxString chspec,
 	if (!m_plugin) return;
 
 	m_plugin->runNALoader(idpath, volpath, chspec, prefix);
+
+	m_plugin->SetSegmentVisibility(IMG_ID_REF, false);
+
+	for (int i = 0; i < m_plugin->getSegCount(); i++)
+		m_plugin->SetSegmentVisibility(i, true);
 
 	UpdateResults();
 }
@@ -371,35 +400,39 @@ void NAListCtrl::UpdateResults()
 
 	SetEvtHandlerEnabled(false);
 
+	long sel_item = GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+
 	DeleteAllItems();
 
 	if (!m_listdata.empty()) m_listdata.clear();
 
 	wxSize s = GetSize();
-	int namew = GetColumn(2)->GetWidth() + GetColumn(1)->GetWidth();
+	int namew = GetColumnWidth(2) + GetColumnWidth(1) + GetColumnWidth(0) + 20;
 	if (s.x - namew > 0)
 		m_plugin->ResizeThumbnails(s.x - namew);
 
 	int w = m_plugin->getSegMIPThumbnail(0)->GetWidth();
 	int h = m_plugin->getSegMIPThumbnail(0)->GetHeight();
 
-	if (!m_images.empty()) m_images.clear();
+	if (m_images) wxDELETE(m_images);
 	int img_count = 0;
-	
-    if (m_plugin->isRefExists())
-    {
-        NAListItemData ref_data;
-        ref_data.name = "Reference";
-        ref_data.mipid = img_count;
-        ref_data.imgid = IMG_ID_REF;
-		ref_data.visibility = false;
-        wxBitmap refbmp = wxBitmap(*m_plugin->getRefMIPThumbnail());
-        m_images.push_back(refbmp);
-        m_listdata.push_back(ref_data);
-        Append(IMG_ID_REF, m_listdata[img_count].name, m_listdata[img_count].mipid, m_listdata[img_count].visibility);
-        img_count++;
-    }
-    
+	m_images = new wxImageList(w, h, false);
+	SetImageList(m_images, wxIMAGE_LIST_SMALL);
+
+	if (m_plugin->isRefExists())
+	{
+		NAListItemData ref_data;
+		ref_data.name = "Reference";
+		ref_data.mipid = img_count;
+		ref_data.imgid = IMG_ID_REF;
+		ref_data.visibility = m_plugin->GetSegmentVisibility(IMG_ID_REF);
+		wxBitmap refbmp = wxBitmap(*m_plugin->getRefMIPThumbnail());
+		m_images->Add(refbmp, wxBITMAP_TYPE_ANY);
+		m_listdata.push_back(ref_data);
+		Append(IMG_ID_REF, m_listdata[img_count].name, m_listdata[img_count].mipid, m_listdata[img_count].visibility > 0 ? true : false);
+		img_count++;
+	}
+
 	for (int i = 0; i < m_plugin->getSegCount(); i++)
 	{
 		NAListItemData data;
@@ -409,22 +442,26 @@ void NAListCtrl::UpdateResults()
 			data.name = wxString::Format("Fragment %d", i);
 		data.mipid = img_count;
 		data.imgid = i;
-		data.visibility = true;
+		data.visibility = m_plugin->GetSegmentVisibility(i);
 		wxBitmap bmp = wxBitmap(*m_plugin->getSegMIPThumbnail(i));
-		m_images.push_back(bmp);
+		m_images->Add(bmp, wxBITMAP_TYPE_ANY);
 		m_listdata.push_back(data);
-        Append(m_listdata[img_count].imgid, m_listdata[img_count].name, m_listdata[img_count].mipid, m_listdata[img_count].visibility);
-        img_count++;
+		Append(m_listdata[img_count].imgid, m_listdata[img_count].name, m_listdata[img_count].mipid, m_listdata[img_count].visibility > 0 ? true : false);
+		img_count++;
 	}
-    
+
 #ifdef _DARWIN
-	GetColumn(3)->SetWidth(w + 8);
+	SetColumnWidth(3, w + 8);
 #else
-	GetColumn(3)->SetWidth(w + 2);
+	SetColumnWidth(3, w + 2);
 #endif
 
-	if (!m_images.empty())
-		SetRowHeight(m_images[0].GetHeight()+6);
+	for (long i = 0; i < GetItemCount() && i < m_listdata.size(); i++)
+	{
+		if (m_listdata[i].visibility == 2)
+			SetItemState(i, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
+		CheckItem(i, m_listdata[i].visibility > 0 ? true : false);
+	}
 
 	SetEvtHandlerEnabled(true);
 	Update();
@@ -434,7 +471,31 @@ void NAListCtrl::UpdateResults()
 
 void NAListCtrl::DeleteSelection()
 {
-	
+	long item = GetNextItem(-1,
+		wxLIST_NEXT_ALL,
+		wxLIST_STATE_SELECTED);
+	if (item != -1)
+	{
+		long sel = item;
+		if (GetNextItem(item, wxLIST_NEXT_BELOW) == -1)
+			sel = GetNextItem(item, wxLIST_NEXT_ABOVE);
+
+		NAListItemData hdata;
+		wxString dbidstr = GetText(item, 1);
+		hdata.dbid = wxAtoi(dbidstr);
+		hdata.name = GetText(item, 2);
+		hdata.dbname = GetText(item, 3);
+		hdata.swcid = GetImageId(item, 4);
+		hdata.mipid = GetImageId(item, 5);
+		hdata.score = GetText(item, 6);
+		hdata.itemid = item;
+		AddHistory(hdata);
+
+		DeleteItem(item);
+
+		if (sel != -1)
+			SetItemState(sel, wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED, wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED);
+	}
 }
 
 void NAListCtrl::DeleteAll()
@@ -444,12 +505,12 @@ void NAListCtrl::DeleteAll()
 	m_history_pos = 0;
 }
 
-void NAListCtrl::AddHistory(const NAListItemData &data)
+void NAListCtrl::AddHistory(const NAListItemData& data)
 {
 	if (m_history_pos < m_history.size())
 	{
 		if (m_history_pos > 0)
-			m_history = vector<NAListItemData>(m_history.begin(), m_history.begin()+m_history_pos);
+			m_history = vector<NAListItemData>(m_history.begin(), m_history.begin() + m_history_pos);
 		else
 		{
 			if (!m_history.empty()) m_history.clear();
@@ -477,6 +538,16 @@ void NAListCtrl::Undo()
 	m_history_pos--;
 	NAListItemData comdata = m_history[m_history_pos];
 
+	long item = GetNextItem(-1,
+		wxLIST_NEXT_ALL,
+		wxLIST_STATE_SELECTED);
+	long sel = -1;
+	if (item != -1)
+	{
+		if (item >= comdata.itemid)
+			sel = item + 1;
+	}
+
 	Append(comdata.imgid, comdata.name, comdata.mipid, comdata.itemid);
 }
 
@@ -486,50 +557,97 @@ void NAListCtrl::Redo()
 		return;
 	NAListItemData comdata = m_history[m_history_pos];
 
+	long item = GetNextItem(-1,
+		wxLIST_NEXT_ALL,
+		wxLIST_STATE_SELECTED);
+	long sel = -1;
+	if (item != -1)
+	{
+		if (item >= comdata.itemid)
+			sel = item - 1;
+	}
+
 	DeleteItem(comdata.itemid);
 	m_history_pos++;
 }
 
 void NAListCtrl::OnColBeginDrag(wxListEvent& event)
 {
-	if ( event.GetColumn() == 0 || event.GetColumn() == 1)
-    {
-        event.Veto();
-    }
+	if (event.GetColumn() == 0 || event.GetColumn() == 1)
+	{
+		event.Veto();
+	}
 }
 
 void NAListCtrl::Append(int imgid, wxString name, int mipid, bool visibility)
 {
-	wxVector<wxVariant> data;
-	data.push_back(wxVariant(wxString::Format("%d", imgid)));
-	data.push_back(wxVariant(visibility));
-	data.push_back(wxVariant(name));
-	data.push_back(wxVariant(m_images[mipid]));
-	AppendItem(data);
+	wxString dbidstr = wxT("0");
+	int itemid = GetItemCount();
+	long tmp = InsertItem(itemid, wxString::Format("%d", imgid), -1);
+	SetItem(tmp, 1, visibility ? _("+") : _(""));
+	SetItem(tmp, 2, name);
+	SetItem(tmp, 3, _(""), mipid);
 }
 
 wxString NAListCtrl::GetText(long item, int col)
 {
-	return wxT("");
+	wxListItem info;
+	info.SetId(item);
+	info.SetColumn(col);
+	info.SetMask(wxLIST_MASK_TEXT);
+	GetItem(info);
+	return info.GetText();
 }
 
 int NAListCtrl::GetImageId(long item, int col)
 {
-	return 0;
+	wxListItem info;
+	info.SetId(item);
+	info.SetColumn(col);
+	info.SetMask(wxLIST_MASK_IMAGE);
+	GetItem(info);
+	return info.GetImage();
 }
 
-void NAListCtrl::OnSelect(wxListEvent &event)
+void NAListCtrl::OnSelect(wxListEvent& event)
 {
-	int item = GetSelectedRow();
-
-	if (item != wxNOT_FOUND)
+	if (event.GetIndex() != -1)
 	{
-		int id = wxAtoi(GetTextValue(item, 0));
-		notifyAll(NA_SET_IMAGE, &id, sizeof(int));
+		int id = wxAtoi(GetText(event.GetIndex(), 0));
+		if (IsItemChecked(event.GetIndex()))
+			notifyAll(NA_SET_ACTIVE, &id, sizeof(int));
 	}
 }
 
-void NAListCtrl::OnMouse(wxMouseEvent &event)
+void NAListCtrl::OnDeselect(wxListEvent& event)
+{
+	if (event.GetIndex() != -1)
+	{
+		int id = wxAtoi(GetText(event.GetIndex(), 0));
+		if (IsItemChecked(event.GetIndex()))
+			notifyAll(NA_SET_VISIBILE, &id, sizeof(int));
+	}
+}
+
+void NAListCtrl::OnItemChecked(wxListEvent& event)
+{
+	if (event.GetIndex() != -1)
+	{
+		int id = wxAtoi(GetText(event.GetIndex(), 0));
+		notifyAll(NA_SET_ACTIVE, &id, sizeof(int));
+	}
+}
+
+void NAListCtrl::OnItemUnchecked(wxListEvent& event)
+{
+	if (event.GetIndex() != -1)
+	{
+		int id = wxAtoi(GetText(event.GetIndex(), 0));
+		notifyAll(NA_SET_INVISIBILE, &id, sizeof(int));
+	}
+}
+
+void NAListCtrl::OnMouse(wxMouseEvent& event)
 {
 	event.Skip();
 }
@@ -554,7 +672,7 @@ void NAListCtrl::OnKeyDown(wxKeyEvent& event)
 
 	if (event.GetKeyCode() == wxKeyCode('Z') && wxGetKeyState(WXK_CONTROL) && !wxGetKeyState(WXK_SHIFT) && !wxGetKeyState(WXK_ALT))
 		Undo();
-	
+
 	if (event.GetKeyCode() == wxKeyCode('Y') && wxGetKeyState(WXK_CONTROL) && !wxGetKeyState(WXK_SHIFT) && !wxGetKeyState(WXK_ALT))
 		Redo();
 
@@ -571,12 +689,17 @@ void NAListCtrl::OnKeyUp(wxKeyEvent& event)
 
 void NAListCtrl::OnLeftDClick(wxMouseEvent& event)
 {
-	int item = GetSelectedRow();
-
-	if (item != wxNOT_FOUND)
+	long item = GetNextItem(-1,
+		wxLIST_NEXT_ALL,
+		wxLIST_STATE_SELECTED);
+	if (item != -1)
 	{
 		int id = wxAtoi(GetText(item, 0));
-		notifyAll(NA_OPEN_FILE, &id, sizeof(int));
+		if (IsItemChecked(item))
+			CheckItem(item, false);
+		else
+			CheckItem(item, true);
+		//notifyAll(NA_TOGGLE_VISIBILITY, &id, sizeof(int));
 	}
 }
 
@@ -584,14 +707,10 @@ void NAListCtrl::OnSize(wxSizeEvent& event)
 {
 	if (!m_plugin) return;
 
-	wxSize s = event.GetSize();
-	int namew = GetColumn(2)->GetWidth() + GetColumn(1)->GetWidth() + GetColumn(0)->GetWidth();
-	if (s.x - namew > 0)
-		m_plugin->ResizeThumbnails(s.x - namew);
 	if (m_plugin->isRefExists() || m_plugin->isSegExists())
 		UpdateResults();
-    
-    event.Skip();
+
+	event.Skip();
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -931,12 +1050,7 @@ void NAGuiPluginWindow::doAction(ActionInfo *info)
 
 	switch (evid)
 	{
-	case NA_OPEN_FILE:
-		/*if (plugin)
-		{
-			int id = *(int*)(info->data);
-			plugin->LoadNrrd(id);
-		}*/
+	case NA_TOGGLE_VISIBILITY:
 		if (plugin)
 		{
 			plugin->PushVisHistory();
@@ -944,16 +1058,30 @@ void NAGuiPluginWindow::doAction(ActionInfo *info)
 			plugin->ToggleSegmentVisibility(id);
 		}
 		break;
-	//case NA_SET_IMAGE:
-	//	if (plugin && m_mipImagePanel)
-	//	{
-	//		int id = *(int*)(info->data);
-	//		if (id == -2)
-	//			m_mipImagePanel->SetImage(plugin->getRefMIP());
-	//		else
-	//			m_mipImagePanel->SetImage(plugin->getSegMIP(id));
-	//		m_mipImagePanel->Refresh();
-	//	}
+	case NA_SET_VISIBILE:
+		if (plugin)
+		{
+			plugin->PushVisHistory();
+			int id = *(int*)(info->data);
+			plugin->SetSegmentVisibility(id, 1);
+		}
+		break;
+	case NA_SET_INVISIBILE:
+		if (plugin)
+		{
+			plugin->PushVisHistory();
+			int id = *(int*)(info->data);
+			plugin->SetSegmentVisibility(id, 0);
+		}
+		break;
+	case NA_SET_ACTIVE:
+		if (plugin)
+		{
+			plugin->PushVisHistory();
+			int id = *(int*)(info->data);
+			plugin->SetSegmentVisibility(id, 2);
+		}
+		break;
 	default:
 		break;
 	}

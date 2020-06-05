@@ -47,26 +47,26 @@ struct NAListItemData
 	wxString score;
 	int itemid;
 	int imgid;
-	bool visibility;
+	int visibility;
 };
 
-class NAListCtrl : public wxDataViewListCtrl, public Notifier
+class NAListCtrl : public wxListCtrl, public Notifier
 {
 	static constexpr int IMG_ID_REF = -2;
 	static constexpr int IMG_ID_ALLSIG = -1;
 
 	enum
 	{
-		Menu_AddTo = wxID_HIGHEST+12201,
+		Menu_AddTo = wxID_HIGHEST + 12201,
 		Menu_Save
 	};
 
 public:
 	NAListCtrl(wxWindow* parent,
 		wxWindowID id,
-		const wxPoint& pos=wxDefaultPosition,
-		const wxSize& size=wxDefaultSize,
-		long style= wxDV_HORIZ_RULES | wxDV_VERT_RULES);
+		const wxPoint& pos = wxDefaultPosition,
+		const wxSize& size = wxDefaultSize,
+		long style = wxLC_REPORT);
 	~NAListCtrl();
 
 	void Append(int imgid, wxString name, int mipid, bool visibility);
@@ -74,21 +74,24 @@ public:
 	int GetImageId(long item, int col);
 
 	void SetPlugin(NAGuiPlugin* plugin) { m_plugin = plugin; }
-	
-	void LoadResults(wxString idpath, wxString volpath, wxString chspec, wxString prefix=wxT(""));
+
+	void LoadResults(wxString idpath, wxString volpath, wxString chspec, wxString prefix = wxT(""));
 	void UpdateResults();
-	wxString GetListFilePath() {return m_rfpath;}
+	wxString GetListFilePath() { return m_rfpath; }
 
 	void DeleteSelection();
 	void DeleteAll();
-	void AddHistory(const NAListItemData &data);
+	void AddHistory(const NAListItemData& data);
 	void Undo();
 	void Redo();
 
 
 private:
-	void OnSelect(wxListEvent &event);
+	void OnSelect(wxListEvent& event);
+	void OnDeselect(wxListEvent& event);
 	//void OnAct(wxListEvent &event);
+	void OnItemChecked(wxListEvent& event);
+	void OnItemUnchecked(wxListEvent& event);
 	void OnKeyDown(wxKeyEvent& event);
 	void OnKeyUp(wxKeyEvent& event);
 	void OnMouse(wxMouseEvent& event);
@@ -97,7 +100,7 @@ private:
 	void OnColBeginDrag(wxListEvent& event);
 	void OnLeftDClick(wxMouseEvent& event);
 	void OnSize(wxSizeEvent& event);
-	
+
 	DECLARE_EVENT_TABLE()
 protected: //Possible TODO
 	wxSize GetSizeAvailableForScrollTarget(const wxSize& size) {
@@ -105,9 +108,8 @@ protected: //Possible TODO
 	}
 
 private:
-	wxIcon m_icon_visible;
-	wxIcon m_icon_invisible;
-	vector<wxBitmap> m_images;
+	wxImageList* m_images;
+	wxImageList* m_vis_images;
 	wxStopWatch m_watch;
 	wxArrayString m_dbdirs;
 	wxArrayString m_dbpaths;
@@ -117,7 +119,6 @@ private:
 	int m_history_pos;
 	wxString m_rfpath;
 	NAGuiPlugin* m_plugin;
-	wxWindow* m_parent;
 };
 
 class wxNASettingDialog : public wxDialog
