@@ -389,10 +389,10 @@ void NAListCtrl::LoadResults(wxString idpath, wxString volpath, wxString chspec,
 	for (int i = 0; i < m_plugin->getSegCount(); i++)
 		m_plugin->SetSegmentVisibility(i, true);
 
-	UpdateResults();
+	UpdateResults(true);
 }
 
-void NAListCtrl::UpdateResults()
+void NAListCtrl::UpdateResults(bool refresh_items)
 {
 	if (!m_plugin) return;
 
@@ -400,66 +400,94 @@ void NAListCtrl::UpdateResults()
 
 	SetEvtHandlerEnabled(false);
 
-	long sel_item = GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+	bool ref_selected = false;
+	bool bg_selected = false;
+	if (GetItemCount() > 0)
+		ref_selected = (GetItemState(0, wxLIST_STATE_SELECTED) != 0);
+	if (GetItemCount() > 1)
+		bg_selected = (GetItemState(1, wxLIST_STATE_SELECTED) != 0);
 
-	DeleteAllItems();
-
-	if (!m_listdata.empty()) m_listdata.clear();
-
-	wxSize s = GetSize();
-	int namew = GetColumnWidth(2) + GetColumnWidth(1) + GetColumnWidth(0) + 20;
-	if (s.x - namew > 0)
-		m_plugin->ResizeThumbnails(s.x - namew);
-
-	int w = m_plugin->getSegMIPThumbnail(0)->GetWidth();
-	int h = m_plugin->getSegMIPThumbnail(0)->GetHeight();
-
-	if (m_images) wxDELETE(m_images);
-	int img_count = 0;
-	m_images = new wxImageList(w, h, false);
-	SetImageList(m_images, wxIMAGE_LIST_SMALL);
-
-	if (m_plugin->isRefExists())
+	if (refresh_items)
 	{
-		NAListItemData ref_data;
-		ref_data.name = "Reference";
-		ref_data.mipid = img_count;
-		ref_data.imgid = IMG_ID_REF;
-		ref_data.visibility = m_plugin->GetSegmentVisibility(IMG_ID_REF);
-		wxBitmap refbmp = wxBitmap(*m_plugin->getRefMIPThumbnail());
-		m_images->Add(refbmp, wxBITMAP_TYPE_ANY);
-		m_listdata.push_back(ref_data);
-		Append(IMG_ID_REF, m_listdata[img_count].name, m_listdata[img_count].mipid, m_listdata[img_count].visibility > 0 ? true : false);
-		img_count++;
-	}
+		DeleteAllItems();
 
-	for (int i = 0; i < m_plugin->getSegCount(); i++)
-	{
-		NAListItemData data;
-		if (i == 0)
-			data.name = "Background";
-		else
-			data.name = wxString::Format("Fragment %d", i);
-		data.mipid = img_count;
-		data.imgid = i;
-		data.visibility = m_plugin->GetSegmentVisibility(i);
-		wxBitmap bmp = wxBitmap(*m_plugin->getSegMIPThumbnail(i));
-		m_images->Add(bmp, wxBITMAP_TYPE_ANY);
-		m_listdata.push_back(data);
-		Append(m_listdata[img_count].imgid, m_listdata[img_count].name, m_listdata[img_count].mipid, m_listdata[img_count].visibility > 0 ? true : false);
-		img_count++;
-	}
+		if (!m_listdata.empty()) m_listdata.clear();
+
+		wxSize s = GetSize();
+		int namew = GetColumnWidth(2) + GetColumnWidth(1) + GetColumnWidth(0) + 20;
+		if (s.x - namew > 0)
+			m_plugin->ResizeThumbnails(s.x - namew);
+
+		int w = m_plugin->getSegMIPThumbnail(0)->GetWidth();
+		int h = m_plugin->getSegMIPThumbnail(0)->GetHeight();
+
+		if (m_images) wxDELETE(m_images);
+		int img_count = 0;
+		m_images = new wxImageList(w, h, false);
+		SetImageList(m_images, wxIMAGE_LIST_SMALL);
+
+		if (m_plugin->isRefExists())
+		{
+			NAListItemData ref_data;
+			ref_data.name = "Reference";
+			ref_data.mipid = img_count;
+			ref_data.imgid = IMG_ID_REF;
+			ref_data.visibility = m_plugin->GetSegmentVisibility(IMG_ID_REF);
+			wxBitmap refbmp = wxBitmap(*m_plugin->getRefMIPThumbnail());
+			m_images->Add(refbmp, wxBITMAP_TYPE_ANY);
+			m_listdata.push_back(ref_data);
+			Append(IMG_ID_REF, m_listdata[img_count].name, m_listdata[img_count].mipid, m_listdata[img_count].visibility > 0 ? true : false);
+			img_count++;
+		}
+
+		for (int i = 0; i < m_plugin->getSegCount(); i++)
+		{
+			NAListItemData data;
+			if (i == 0)
+				data.name = "Background";
+			else
+				data.name = wxString::Format("Fragment %d", i);
+			data.mipid = img_count;
+			data.imgid = i;
+			data.visibility = m_plugin->GetSegmentVisibility(i);
+			wxBitmap bmp = wxBitmap(*m_plugin->getSegMIPThumbnail(i));
+			m_images->Add(bmp, wxBITMAP_TYPE_ANY);
+			m_listdata.push_back(data);
+			Append(m_listdata[img_count].imgid, m_listdata[img_count].name, m_listdata[img_count].mipid, m_listdata[img_count].visibility > 0 ? true : false);
+			img_count++;
+		}
 
 #ifdef _DARWIN
-	SetColumnWidth(3, w + 8);
+		SetColumnWidth(3, w + 8);
 #else
-	SetColumnWidth(3, w + 2);
+		SetColumnWidth(3, w + 2);
 #endif
+	}
+	else
+	{
+		if (m_plugin->isRefExists())
+			m_listdata[0].visibility = m_plugin->GetSegmentVisibility(IMG_ID_REF);
 
-	for (long i = 0; i < GetItemCount() && i < m_listdata.size(); i++)
+		int offset = m_plugin->isRefExists() ? 1 : 0;
+		for (int i = 0; i < m_plugin->getSegCount(); i++)
+			m_listdata[offset + i].visibility = m_plugin->GetSegmentVisibility(i);
+	}
+
+	if (ref_selected)
+		SetItemState(0, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
+	if (GetItemCount() > 0)
+		CheckItem(0, m_listdata[0].visibility > 0 ? true : false);
+	if (bg_selected)
+		SetItemState(1, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
+	if (GetItemCount() > 1)
+		CheckItem(1, m_listdata[1].visibility > 0 ? true : false);
+
+	for (long i = 2; i < GetItemCount() && i < m_listdata.size(); i++)
 	{
 		if (m_listdata[i].visibility == 2)
 			SetItemState(i, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
+		else
+			SetItemState(i, 0, wxLIST_STATE_SELECTED);
 		CheckItem(i, m_listdata[i].visibility > 0 ? true : false);
 	}
 
@@ -614,7 +642,7 @@ void NAListCtrl::OnSelect(wxListEvent& event)
 	if (event.GetIndex() != -1)
 	{
 		int id = wxAtoi(GetText(event.GetIndex(), 0));
-		if (IsItemChecked(event.GetIndex()))
+		if (id > 0 && IsItemChecked(event.GetIndex()) && IsItemChecked(event.GetIndex()))
 			notifyAll(NA_SET_ACTIVE, &id, sizeof(int));
 	}
 }
@@ -624,8 +652,8 @@ void NAListCtrl::OnDeselect(wxListEvent& event)
 	if (event.GetIndex() != -1)
 	{
 		int id = wxAtoi(GetText(event.GetIndex(), 0));
-		if (IsItemChecked(event.GetIndex()))
-			notifyAll(NA_SET_VISIBILE, &id, sizeof(int));
+		if (id > 0 && IsItemChecked(event.GetIndex()) && IsItemChecked(event.GetIndex()))
+			notifyAll(NA_SET_VISIBLE, &id, sizeof(int));
 	}
 }
 
@@ -634,7 +662,10 @@ void NAListCtrl::OnItemChecked(wxListEvent& event)
 	if (event.GetIndex() != -1)
 	{
 		int id = wxAtoi(GetText(event.GetIndex(), 0));
-		notifyAll(NA_SET_ACTIVE, &id, sizeof(int));
+		if (id > 0)
+			notifyAll(NA_SET_ACTIVE, &id, sizeof(int));
+		else
+			notifyAll(NA_SET_VISIBLE, &id, sizeof(int));
 	}
 }
 
@@ -643,7 +674,7 @@ void NAListCtrl::OnItemUnchecked(wxListEvent& event)
 	if (event.GetIndex() != -1)
 	{
 		int id = wxAtoi(GetText(event.GetIndex(), 0));
-		notifyAll(NA_SET_INVISIBILE, &id, sizeof(int));
+		notifyAll(NA_SET_INVISIBLE, &id, sizeof(int));
 	}
 }
 
@@ -689,9 +720,9 @@ void NAListCtrl::OnKeyUp(wxKeyEvent& event)
 
 void NAListCtrl::OnLeftDClick(wxMouseEvent& event)
 {
-	long item = GetNextItem(-1,
-		wxLIST_NEXT_ALL,
-		wxLIST_STATE_SELECTED);
+	wxPoint pos = event.GetPosition();
+	int flags = wxLIST_HITTEST_ONITEM;
+	long item = HitTest(pos, flags, NULL);
 	if (item != -1)
 	{
 		int id = wxAtoi(GetText(item, 0));
@@ -708,7 +739,7 @@ void NAListCtrl::OnSize(wxSizeEvent& event)
 	if (!m_plugin) return;
 
 	if (m_plugin->isRefExists() || m_plugin->isSegExists())
-		UpdateResults();
+		UpdateResults(true);
 
 	event.Skip();
 }
@@ -1058,7 +1089,7 @@ void NAGuiPluginWindow::doAction(ActionInfo *info)
 			plugin->ToggleSegmentVisibility(id);
 		}
 		break;
-	case NA_SET_VISIBILE:
+	case NA_SET_VISIBLE:
 		if (plugin)
 		{
 			plugin->PushVisHistory();
@@ -1066,7 +1097,7 @@ void NAGuiPluginWindow::doAction(ActionInfo *info)
 			plugin->SetSegmentVisibility(id, 1);
 		}
 		break;
-	case NA_SET_INVISIBILE:
+	case NA_SET_INVISIBLE:
 		if (plugin)
 		{
 			plugin->PushVisHistory();

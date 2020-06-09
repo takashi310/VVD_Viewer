@@ -7,8 +7,8 @@
 #define NA_PLUGIN_VERSION "1.00"
 
 #define NA_TOGGLE_VISIBILITY 1
-#define NA_SET_VISIBILE 2
-#define NA_SET_INVISIBILE 3
+#define NA_SET_VISIBLE 2
+#define NA_SET_INVISIBLE 3
 #define NA_SET_ACTIVE 4
 
 struct NASegment

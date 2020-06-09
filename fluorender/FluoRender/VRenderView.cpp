@@ -6442,6 +6442,12 @@ void VRenderVulkanView::OnShowAllVolumes(wxCommandEvent& event)
 
 	if (changed)
 	{
+		for (int i = 0; i < vr_frame->GetViewNum(); i++)
+		{
+			VRenderView* vrv = vr_frame->GetView(i);
+			if (vrv)
+				vrv->SetVolPopDirty();
+		}
 		RefreshGL();
 		vr_frame->UpdateTreeIcons();
 	}
@@ -15559,8 +15565,17 @@ void VRenderVulkanView::OnMouse(wxMouseEvent& event)
 	{
 		if (m_int_mode == 1)
 		{
+			bool na_mode = false;
+			for (int i = 0; i < m_vd_pop_list.size(); i++)
+			{
+				if (m_vd_pop_list[i]->GetDisp() && m_vd_pop_list[i]->GetNAMode())
+				{
+					na_mode = true;
+					break;
+				}
+			}
 			//pick polygon models
-			if (m_pick)
+			if (m_pick && !na_mode)
 				Pick();
 		}
 		else if (m_int_mode == 2)

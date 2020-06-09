@@ -452,6 +452,22 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 		m_allsig_visible = true;
 	}
 
+	DataGroup* group = vrv->GetParentGroup(m_vol_s[0]);
+	if (group)
+	{
+		group->SetVolumeSyncProp(true);
+		group->SetVolumeSyncSpc(true);
+		VPropView* prop = vframe->GetPropView();
+		if (prop)
+		{
+			VolumeData* vdr = dm->GetVolumeData(m_vol_r);
+			if (vdr)
+				prop->SetVolumeData(vdr);
+			else if (vols[0])
+				prop->SetVolumeData(vols[0]);
+		}
+	}
+
 	Unlock();
 
 	return true;
@@ -1082,7 +1098,15 @@ void NAGuiPlugin::SetSegmentVisibility(int id, int vis)
 	{
 		VolumeData* v = dm->GetVolumeData(m_vol_r);
 		if (v)
+		{
 			v->SetDisp(vis > 0 ? true : false);
+			for (int i = 0; i < vframe->GetViewNum(); i++)
+			{
+				VRenderView* vv = vframe->GetView(i);
+				if (vv)
+					vv->SetVolPopDirty();
+			}
+		}
 		vframe->UpdateTreeIcons();
 	}
 	if (id >= 0 && id < m_segs.size())
@@ -1149,7 +1173,15 @@ void NAGuiPlugin::ToggleSegmentVisibility(int id)
 	{
 		VolumeData* v = dm->GetVolumeData(m_vol_r);
 		if (v)
+		{
 			v->SetDisp(!v->GetDisp());
+			for (int i = 0; i < vframe->GetViewNum(); i++)
+			{
+				VRenderView* vv = vframe->GetView(i);
+				if (vv)
+					vv->SetVolPopDirty();
+			}
+		}
 		vframe->UpdateTreeIcons();
 	}
 	if (id >= 0 && id < m_segs.size())

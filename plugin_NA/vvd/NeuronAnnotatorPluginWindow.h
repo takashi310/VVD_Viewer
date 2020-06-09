@@ -76,7 +76,7 @@ public:
 	void SetPlugin(NAGuiPlugin* plugin) { m_plugin = plugin; }
 
 	void LoadResults(wxString idpath, wxString volpath, wxString chspec, wxString prefix = wxT(""));
-	void UpdateResults();
+	void UpdateResults(bool refresh_items = false);
 	wxString GetListFilePath() { return m_rfpath; }
 
 	void DeleteSelection();
