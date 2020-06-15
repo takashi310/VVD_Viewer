@@ -175,8 +175,15 @@ bool VRenderApp::OnCmdLineParsed(wxCmdLineParser& parser)
    int i=0;
    wxString params;
 
+   wxString line;
+   for (i = 0; i < (int)parser.GetParamCount(); i++)
+   {
+	   line += parser.GetParam(i);
+	   line += " ";
+   }
+
    wxString val;
-   int count = 1;
+   int count = 0;
    if (parser.Found(wxT("p"), &val))
    {
 	   m_plugin_name = val.BeforeFirst(' ');
