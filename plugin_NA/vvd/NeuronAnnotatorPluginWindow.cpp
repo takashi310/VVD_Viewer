@@ -357,7 +357,7 @@ NAListCtrl::NAListCtrl(
 	itemCol.SetText("Thumbnail");
 	this->InsertColumn(3, itemCol);
 
-	SetColumnWidth(0, 20);
+	SetColumnWidth(0, 25);
 	SetColumnWidth(1, 0);
 	SetColumnWidth(2, 110);
 	SetColumnWidth(3, 300);

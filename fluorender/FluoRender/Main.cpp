@@ -174,6 +174,19 @@ bool VRenderApp::OnCmdLineParsed(wxCmdLineParser& parser)
 {
    int i=0;
    wxString params;
+    
+    /*
+    wxString list;
+    for (i = 0; i < (int)parser.GetParamCount(); i++)
+    {
+        list += parser.GetParam(i);
+    }
+    wxTextFile txt(wxT("/Users/kawase/Documents/params.txt"));
+    txt.Open();
+    txt.AddLine(list);
+    txt.Write();
+    txt.Close();
+    */
 
    wxString line;
    for (i = 0; i < (int)parser.GetParamCount(); i++)

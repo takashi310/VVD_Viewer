@@ -12,6 +12,19 @@ namespace vks
 	{
 		VkPhysicalDeviceMemoryBudgetPropertiesEXT mem_bprop;
 		VkPhysicalDeviceMemoryProperties2KHR mem_prop2;
+        
+        uint32_t extensionCount = 0;
+        vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+        std::vector<VkExtensionProperties> extensions(extensionCount);
+        vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
+        std::vector<std::string> supportedInstanceExtensions;
+        for (auto ext : extensions)
+            supportedExtensions.push_back(ext.extensionName);
+        
+        VkDeviceSize cur_mem_lim = 0;
+        
+        if (std::find(supportedExtensions.begin(), supportedExtensions.end(), "VK_KHR_get_physical_device_properties2") == supportedExtensions.end())
+        {
 
 		mem_prop2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2;
 		mem_prop2.pNext = &mem_bprop;
@@ -21,7 +34,6 @@ namespace vks
 
 		vkGetPhysicalDeviceMemoryProperties2(physicalDevice, &mem_prop2);
 
-		VkDeviceSize cur_mem_lim = 0;
 		for (int i = 0; i < mem_prop2.memoryProperties.memoryHeapCount; i++)
 		{
 			if (mem_prop2.memoryProperties.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
@@ -41,6 +53,7 @@ namespace vks
 				}
 			}
 		}
+        }
 
 		double dev_max_mem = (double)cur_mem_lim / 1024.0 / 1024.0;
 		if (dev_max_mem >= 4096.0) dev_max_mem -= 1024.0 + 512.0;
