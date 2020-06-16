@@ -10,59 +10,72 @@ namespace vks
 {
 	void VulkanDevice::setMemoryLimit(double limit)
 	{
-		VkPhysicalDeviceMemoryBudgetPropertiesEXT mem_bprop;
-		VkPhysicalDeviceMemoryProperties2KHR mem_prop2;
-        
-        uint32_t extensionCount = 0;
+		uint32_t extensionCount = 0;
         vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
         std::vector<VkExtensionProperties> extensions(extensionCount);
         vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
         std::vector<std::string> supportedInstanceExtensions;
         for (auto ext : extensions)
-            supportedExtensions.push_back(ext.extensionName);
+			supportedInstanceExtensions.push_back(ext.extensionName);
         
         VkDeviceSize cur_mem_lim = 0;
-        
-        if (std::find(supportedExtensions.begin(), supportedExtensions.end(), "VK_KHR_get_physical_device_properties2") == supportedExtensions.end())
-        {
 
-		mem_prop2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2;
-		mem_prop2.pNext = &mem_bprop;
-
-		mem_bprop.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT;
-		mem_bprop.pNext = nullptr;
-
-		vkGetPhysicalDeviceMemoryProperties2(physicalDevice, &mem_prop2);
-
-		for (int i = 0; i < mem_prop2.memoryProperties.memoryHeapCount; i++)
+		if (std::find(supportedInstanceExtensions.begin(), supportedInstanceExtensions.end(), "VK_KHR_get_physical_device_properties2") != supportedInstanceExtensions.end())
 		{
-			if (mem_prop2.memoryProperties.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
+			VkPhysicalDeviceMemoryBudgetPropertiesEXT mem_bprop;
+			VkPhysicalDeviceMemoryProperties2 mem_prop2;
+
+			mem_prop2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2;
+			mem_prop2.pNext = &mem_bprop;
+
+			mem_bprop.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT;
+			mem_bprop.pNext = nullptr;
+
+			vkGetPhysicalDeviceMemoryProperties2(physicalDevice, &mem_prop2);
+
+			for (int i = 0; i < mem_prop2.memoryProperties.memoryHeapCount; i++)
 			{
-				if (extensionSupported("VK_EXT_memory_budget"))
+				if (mem_prop2.memoryProperties.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
 				{
-					VkDeviceSize heap_budget = mem_bprop.heapBudget[i];
-					VkDeviceSize heap_usage = mem_bprop.heapUsage[i];
-					if (cur_mem_lim < heap_budget - heap_usage)
-						cur_mem_lim = heap_budget - heap_usage;
+					if (extensionSupported("VK_EXT_memory_budget"))
+					{
+						VkDeviceSize heap_budget = mem_bprop.heapBudget[i];
+						VkDeviceSize heap_usage = mem_bprop.heapUsage[i];
+						if (cur_mem_lim < heap_budget - heap_usage)
+							cur_mem_lim = heap_budget - heap_usage;
+					}
+					else
+					{
+						VkDeviceSize heap_size = mem_prop2.memoryProperties.memoryHeaps[i].size;
+						if (cur_mem_lim < heap_size)
+							cur_mem_lim = heap_size;
+					}
 				}
-				else
+			}
+		}
+		else
+		{
+			VkPhysicalDeviceMemoryProperties mem_prop;
+			vkGetPhysicalDeviceMemoryProperties(physicalDevice, &mem_prop);
+			for (int i = 0; i < mem_prop.memoryHeapCount; i++)
+			{
+				if (mem_prop.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
 				{
-					VkDeviceSize heap_size = mem_prop2.memoryProperties.memoryHeaps[i].size;
+					VkDeviceSize heap_size = mem_prop.memoryHeaps[i].size;
 					if (cur_mem_lim < heap_size)
 						cur_mem_lim = heap_size;
 				}
 			}
 		}
-        }
 
 		double dev_max_mem = (double)cur_mem_lim / 1024.0 / 1024.0;
-		if (dev_max_mem >= 4096.0) dev_max_mem -= 1024.0 + 512.0;
-		else if (dev_max_mem >= 1024.0) dev_max_mem -= 512.0;
-		else dev_max_mem *= 0.7;
+		if (dev_max_mem >= 4096.0) dev_max_mem -= 512.0;
+		else if (dev_max_mem >= 1024.0) dev_max_mem -= 256.0;
+		else dev_max_mem *= 0.8;
 
 		double new_mem_limit = 0.0;
 
-		if (limit > 0 && limit < dev_max_mem)
+		if (dev_max_mem <= 0.0 || (limit > 0 && limit < dev_max_mem))
 			new_mem_limit = limit;
 		else
 			new_mem_limit = dev_max_mem;
