@@ -231,6 +231,8 @@ public:
         const wxString& name = "VulkanCanvasName");
 	~VRenderVulkanView();
 
+	double GetAvailableGraphicsMemory(int device_id);
+
 	//initialization
 	void Init();
 
@@ -1353,6 +1355,11 @@ public:
 		const wxSize& size = wxDefaultSize,
 		long style = 0);
 	~VRenderView();
+
+	double GetAvailableGraphicsMemory(int device_id)
+	{
+		return m_glview ? m_glview->GetAvailableGraphicsMemory(device_id) : 0.0;
+	}
 
 	//recalculate view according to object bounds
 	void InitView(unsigned int type=INIT_BOUNDS);

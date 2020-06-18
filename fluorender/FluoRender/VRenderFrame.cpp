@@ -1052,7 +1052,7 @@ void VRenderFrame::OnDownloadVolume(wxCommandEvent& WXUNUSED(event))
 	m_aui_mgr.Update();
 }
 
-void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<vector<AnnotationDB>> annotations)
+void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<vector<AnnotationDB>> annotations, size_t datasize)
 {
 	int j;
 
@@ -1093,25 +1093,25 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
 			wxString suffix = filename.Mid(filename.Find('.', true)).MakeLower();
 
 			if (suffix == ".nrrd")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_NRRD);
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_NRRD, -1, -1, datasize);
 			else if (suffix==".tif" || suffix==".tiff" || suffix==".zip")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_TIFF);
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_TIFF, -1, -1, datasize);
 			else if (suffix == ".oib")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_OIB);
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_OIB, -1, -1, datasize);
 			else if (suffix == ".oif")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_OIF);
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_OIF, -1, -1, datasize);
 			else if (suffix==".lsm")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_LSM);
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_LSM, -1, -1, datasize);
 			else if (suffix==".xml")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_PVXML);
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_PVXML, -1, -1, datasize);
 			else if (suffix==".vvd")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_BRKXML);
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_BRKXML, -1, -1, datasize);
 			else if (suffix == ".h5j")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_H5J);
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_H5J, -1, -1, datasize);
 			else if (suffix == ".v3dpbd")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_V3DPBD);
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_V3DPBD, -1, -1, datasize);
             else if (suffix == ".idi")
-                ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_IDI);
+                ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_IDI, -1, -1, datasize);
 
 			if (ch_num > 1)
 			{
@@ -1248,7 +1248,7 @@ void VRenderFrame::AddVolume(VolumeData *vd, VRenderView* view)
 	vrv->RefreshGL();
 }
 
-void VRenderFrame::StartupLoad(wxArrayString files)
+void VRenderFrame::StartupLoad(wxArrayString files, size_t datasize)
 {
 	if (m_vrv_list[0])
 		m_vrv_list[0]->m_glview->Init();
@@ -1275,7 +1275,7 @@ void VRenderFrame::StartupLoad(wxArrayString files)
 			suffix == ".zip" ||
             suffix == ".idi")
 		{
-			LoadVolumes(files);
+			LoadVolumes(files, NULL, vector<vector<AnnotationDB>>(), datasize);
 		}
 		else if (suffix == ".obj" || suffix == ".swc")
 		{

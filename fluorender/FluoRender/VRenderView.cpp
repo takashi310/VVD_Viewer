@@ -812,6 +812,18 @@ VRenderVulkanView::~VRenderVulkanView()
 	//m_vulkan.reset();
 }
 
+double VRenderVulkanView::GetAvailableGraphicsMemory(int device_id)
+{
+	double ret = 0.0;
+	if (m_vulkan)
+	{
+		if (device_id >= 0 && device_id < m_vulkan->devices.size())
+			ret = m_vulkan->devices[device_id]->available_mem;
+	}
+
+	return ret;
+}
+
 void VRenderVulkanView::OnErase(wxEraseEvent& event)
 {
 

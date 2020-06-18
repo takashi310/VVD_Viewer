@@ -55,7 +55,7 @@ public:
 	bool runNALoaderRemote(wxString url, wxString usr, wxString pwd, wxString outdir, wxString ofname);
 	bool LoadFragment(wxString name, int id);
     bool LoadSWC(wxString name, wxString swc_zip_path);
-    bool LoadFiles(wxString path);
+    bool LoadFiles(wxString path, size_t datasize = 0ULL);
 	bool LoadNrrd(int id);
 	void SetSegmentVisibility(int id, int vis);
 	int GetSegmentVisibility(int id);

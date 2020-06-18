@@ -3432,6 +3432,598 @@ MeshData *VolumeData::ExportMeshMask()
     return result;
 }
 
+Nrrd* VolumeData::NrrdScale(Nrrd* src, size_t dst_datasize, bool interpolation)
+{
+	if (!src) return nullptr;
+
+	int bits = 0;
+	int nx, ny, nz;
+	double spcx, spcy, spcz;
+
+	if (src->type == nrrdTypeChar || src->type == nrrdTypeUChar)
+		bits = 1;
+	else if(src->type == nrrdTypeShort || src->type == nrrdTypeUShort)
+		bits = 2;
+
+	size_t dim = src->dim;
+
+	if (dim <= 2)
+		return nullptr;
+
+	std::vector<size_t> ssize(dim);
+	std::vector<double> sspc(dim);
+
+	int offset = 0;
+	if (dim > 3) offset = 1;
+
+	double maxspc = sspc[0];
+	int maxspc_id = 0;
+	for (size_t p = 0; p < dim; p++)
+	{
+		ssize[p] = (int)src->axis[p + offset].size;
+		sspc[p] = src->axis[p + offset].spacing;
+		if (sspc[p] > maxspc)
+		{
+			maxspc = sspc[p];
+			maxspc_id = p;
+		}
+	}
+
+	std::vector<double> sc1(3);
+	for (size_t p = 0; p < 3; p++)
+		sc1[p] = sspc[p] / maxspc;
+	
+	size_t src_datasize = ssize[0] * ssize[1] * ssize[2] * bits;
+
+	if (src_datasize < dst_datasize)
+		return nullptr;
+
+	if (src_datasize * sc1[0] * sc1[1] * sc1[2] > dst_datasize)
+	{
+		double dnx = ssize[0] * sc1[0];
+		double dny = ssize[1] * sc1[1];
+		double dnz = ssize[2] * sc1[2];
+
+		double sc2 = cbrt(dst_datasize / (dnx * dny * dnz * bits));
+
+		nx = (size_t)(dnx * sc2);
+		ny = (size_t)(dny * sc2);
+		nz = (size_t)(dnz * sc2);
+		spcx = spcy = spcz = maxspc / sc2;
+	}
+	else
+	{
+		std::vector<size_t> dsize(3);
+		std::vector<double> dspc(3);
+
+		double sc2 = sqrt(dst_datasize / src_datasize);
+		for (size_t p = 0; p < 3; p++)
+		{
+			if (p != maxspc_id)
+			{
+				dsize[p] = (size_t)(ssize[p] * sc2);
+				dspc[p] = sspc[p] / sc2;
+			}
+		}
+		nx = dsize[0];
+		ny = dsize[1];
+		nz = dsize[2];
+		spcx = dspc[0];
+		spcy = dspc[1];
+		spcz = dspc[2];
+	}
+
+	return NrrdScale(src, nx, ny, nz, interpolation);
+}
+
+Nrrd* VolumeData::NrrdScale(Nrrd* src, size_t nx, size_t ny, size_t nz, bool interpolation)
+{
+	if (!src) return nullptr;
+
+	int bits = 0;
+
+	if (src->type == nrrdTypeChar || src->type == nrrdTypeUChar)
+		bits = 1;
+	else if (src->type == nrrdTypeShort || src->type == nrrdTypeUShort)
+		bits = 2;
+
+	size_t dim = src->dim;
+
+	if (dim <= 2)
+		return nullptr;
+
+	std::vector<size_t> ssize(dim);
+	std::vector<double> sspc(dim);
+
+	int offset = 0;
+	if (dim > 3) offset = 1;
+
+	double maxspc = sspc[0];
+	int maxspc_id = 0;
+	for (size_t p = 0; p < dim; p++)
+	{
+		ssize[p] = (int)src->axis[p + offset].size;
+		sspc[p] = src->axis[p + offset].spacing;
+	}
+
+	double spcx = sspc[0] * ssize[0] / nx;
+	double spcy = sspc[1] * ssize[1] / ny;
+	double spcz = sspc[2] * ssize[2] / nz;
+
+	Nrrd* nv = nrrdNew();
+	if (bits == 1)
+	{
+		unsigned long long mem_size = (unsigned long long)nx *
+			(unsigned long long)ny * (unsigned long long)nz;
+		uint8* val8 = new (std::nothrow) uint8[mem_size];
+		if (!val8)
+		{
+			wxMessageBox("Not enough memory. Please save project and restart.");
+			return nullptr;
+		}
+		memset((void*)val8, 0, sizeof(uint8) * nx * ny * nz);
+		nrrdWrap(nv, val8, nrrdTypeUChar, 3, (size_t)nx, (size_t)ny, (size_t)nz);
+	}
+	else if (bits == 2)
+	{
+		unsigned long long mem_size = (unsigned long long)nx *
+			(unsigned long long)ny * (unsigned long long)nz;
+		uint16* val16 = new (std::nothrow) uint16[mem_size];
+		if (!val16)
+		{
+			wxMessageBox("Not enough memory. Please save project and restart.");
+			return nullptr;
+		}
+		memset((void*)val16, 0, sizeof(uint16) * nx * ny * nz);
+		nrrdWrap(nv, val16, nrrdTypeUShort, 3, (size_t)nx, (size_t)ny, (size_t)nz);
+	}
+	nrrdAxisInfoSet(nv, nrrdAxisInfoSpacing, spcx, spcy, spcz);
+	nrrdAxisInfoSet(nv, nrrdAxisInfoMax, spcx * nx, spcy * ny, spcz * nz);
+	nrrdAxisInfoSet(nv, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
+	nrrdAxisInfoSet(nv, nrrdAxisInfoSize, (size_t)nx, (size_t)ny, (size_t)nz);
+
+	NrrdScaler scaler(src, nv, interpolation);
+
+	scaler.Run();
+
+	/*
+	double scx = (double)ssize[0] / nx;
+	double scy = (double)ssize[1] / ny;
+	double scz = (double)ssize[2] / nz;
+	if (interpolation)
+	{
+		if (bits == 1)
+		{
+			uint8* data = (uint8*)src->data;
+			uint8* dst_data = (uint8*)nv->data;
+			for (int z = 0; z < nz; z++)
+			{
+				for (int y = 0; y < ny; y++)
+				{
+					for (int x = 0; x < nx; x++)
+					{
+						double dx = x * scx;
+						double dy = y * scy;
+						double dz = z * scz;
+
+						size_t ix = (size_t)dx;
+						size_t iy = (size_t)dy;
+						size_t iz = (size_t)dz;
+
+						dx = dx - ix;
+						dy = dy - iy;
+						dz = dz - iz;
+
+						size_t id = iz * ssize[1] * ssize[0] + iy * ssize[0] + ix;
+
+						float c000 = data[id];
+						float c100 = data[id + 1];
+						float c010 = data[id + ssize[0]];
+						float c110 = data[id + ssize[0] + 1];
+						float c001 = data[id + ssize[1] * ssize[0]];
+						float c101 = data[id + ssize[1] * ssize[0] + 1];
+						float c011 = data[id + ssize[1] * ssize[0] + ssize[0]];
+						float c111 = data[id + ssize[1] * ssize[0] + ssize[0] + 1];
+
+						float c00 = c000 * (1 - dx) + c100 * dx;
+						float c01 = c001 * (1 - dx) + c101 * dx;
+						float c10 = c010 * (1 - dx) + c110 * dx;
+						float c11 = c011 * (1 - dx) + c111 * dx;
+
+						float c0 = c00 * (1 - dy) + c10 * dy;
+						float c1 = c01 * (1 - dy) + c11 * dy;
+
+						float c = c0 * (1 - dz) + c1 * dz;
+
+						dst_data[z * ny * nx + y * nx + x] = (uint8)c;
+					}
+				}
+			}
+		}
+		else if (bits == 2)
+		{
+			uint16* data = (uint16*)src->data;
+			uint16* dst_data = (uint16*)nv->data;
+			for (int z = 0; z < nz; z++)
+			{
+				for (int y = 0; y < ny; y++)
+				{
+					for (int x = 0; x < nx; x++)
+					{
+						double dx = x * scx;
+						double dy = y * scy;
+						double dz = z * scz;
+
+						size_t ix = (size_t)dx;
+						size_t iy = (size_t)dy;
+						size_t iz = (size_t)dz;
+
+						dx = dx - ix;
+						dy = dy - iy;
+						dz = dz - iz;
+
+						size_t id = iz * ssize[1] * ssize[0] + iy * ssize[0] + ix;
+
+						float c000 = data[id];
+						float c100 = data[id + 1];
+						float c010 = data[id + ssize[0]];
+						float c110 = data[id + ssize[0] + 1];
+						float c001 = data[id + ssize[1] * ssize[0]];
+						float c101 = data[id + ssize[1] * ssize[0] + 1];
+						float c011 = data[id + ssize[1] * ssize[0] + ssize[0]];
+						float c111 = data[id + ssize[1] * ssize[0] + ssize[0] + 1];
+
+						float c00 = c000 * (1 - dx) + c100 * dx;
+						float c01 = c001 * (1 - dx) + c101 * dx;
+						float c10 = c010 * (1 - dx) + c110 * dx;
+						float c11 = c011 * (1 - dx) + c111 * dx;
+
+						float c0 = c00 * (1 - dy) + c10 * dy;
+						float c1 = c01 * (1 - dy) + c11 * dy;
+
+						float c = c0 * (1 - dz) + c1 * dz;
+
+						dst_data[z * ny * nx + y * nx + x] = (uint16)c;
+					}
+				}
+			}
+		}
+	}
+	else {
+		if (bits == 1)
+		{
+			uint8* data = (uint8*)src->data;
+			uint8* dst_data = (uint8*)nv->data;
+			for (int z = 0; z < nz; z++)
+			{
+				for (int y = 0; y < ny; y++)
+				{
+					for (int x = 0; x < nx; x++)
+					{
+						double dx = x * scx;
+						double dy = y * scy;
+						double dz = z * scz;
+
+						size_t ix = (size_t)round(dx);
+						size_t iy = (size_t)round(dy);
+						size_t iz = (size_t)round(dz);
+
+						size_t id = iz * ssize[1] * ssize[0] + iy * ssize[0] + ix;
+
+						dst_data[z * ny * nx + y * nx + x] = (uint8)data[id];
+					}
+				}
+			}
+		}
+		else if (bits == 2)
+		{
+			uint16* data = (uint16*)src->data;
+			uint16* dst_data = (uint16*)nv->data;
+			for (int z = 0; z < nz; z++)
+			{
+				for (int y = 0; y < ny; y++)
+				{
+					for (int x = 0; x < nx; x++)
+					{
+						double dx = x * scx;
+						double dy = y * scy;
+						double dz = z * scz;
+
+						size_t ix = (size_t)round(dx);
+						size_t iy = (size_t)round(dy);
+						size_t iz = (size_t)round(dz);
+
+						size_t id = iz * ssize[1] * ssize[0] + iy * ssize[0] + ix;
+
+						dst_data[z * ny * nx + y * nx + x] = (uint16)data[id];
+					}
+				}
+			}
+		}
+	}
+
+	*/
+
+	return nv;
+}
+
+NrrdScaler::NrrdScaler(Nrrd* src, Nrrd* dst, bool interpolation)
+{
+	m_src = src;
+	m_dst = dst;
+	m_interpolation = interpolation;
+}
+
+NrrdScaler::~NrrdScaler()
+{
+
+}
+
+void NrrdScaler::Run()
+{
+	m_running_nrrd_scale_th = 0;
+
+	size_t dim = m_dst->dim;
+
+	std::vector<size_t> dsize(dim);
+	std::vector<double> dspc(dim);
+
+	int doffset = 0;
+	if (dim > 3) doffset = 1;
+
+	for (size_t p = 0; p < dim; p++)
+		dsize[p] = (int)m_dst->axis[p + doffset].size;
+
+	int nz = dsize[2];
+
+	int thread_num = wxThread::GetCPUCount() - 1;
+	if (thread_num <= 0)
+		thread_num = 1;
+	if (nz / thread_num == 0)
+		thread_num = nz;
+	int interval = nz / thread_num;
+
+	for (int z = 0; z < nz; z += interval)
+	{
+		int zed = (z + interval > nz) ? nz : z + interval;
+		NrrdScaleThread* th = new NrrdScaleThread(this, m_src, m_dst, z, zed, m_interpolation);
+		th->Run();
+	}
+
+	while (1)
+	{
+		{
+			wxCriticalSectionLocker enter(m_pThreadCS);
+			if (m_running_nrrd_scale_th <= 0)
+				break;
+		}
+		wxThread::This()->Sleep(10);
+	}
+	m_running_nrrd_scale_th = 0;
+
+}
+
+NrrdScaleThread::NrrdScaleThread(NrrdScaler* scaler, Nrrd* src, Nrrd* dst, int zst, int zed, bool interpolation)
+{
+	m_scaler = scaler;
+	m_src = src;
+	m_dst = dst;
+	m_zst = zst;
+	m_zed = zed;
+	m_interpolation = interpolation;
+}
+
+NrrdScaleThread::~NrrdScaleThread()
+{
+	if (m_scaler)
+	{
+		wxCriticalSectionLocker enter(m_scaler->m_pThreadCS);
+		m_scaler->m_running_nrrd_scale_th--;
+	}
+}
+
+wxThread::ExitCode NrrdScaleThread::Entry()
+{
+	m_scaler->m_pThreadCS.Enter();
+	m_scaler->m_running_nrrd_scale_th++;
+	m_scaler->m_pThreadCS.Leave();
+
+	int bits = 0;
+
+	if (m_src->type == nrrdTypeChar || m_src->type == nrrdTypeUChar)
+		bits = 1;
+	else if (m_src->type == nrrdTypeShort || m_src->type == nrrdTypeUShort)
+		bits = 2;
+
+	size_t dim = m_src->dim;
+
+	if (dim <= 2)
+		return nullptr;
+
+	std::vector<size_t> ssize(dim);
+	std::vector<double> sspc(dim);
+
+	int offset = 0;
+	if (dim > 3) offset = 1;
+
+	for (size_t p = 0; p < dim; p++)
+	{
+		ssize[p] = (int)m_src->axis[p + offset].size;
+		sspc[p] = m_src->axis[p + offset].spacing;
+	}
+
+	std::vector<size_t> dsize(dim);
+	std::vector<double> dspc(dim);
+
+	int doffset = 0;
+	if (dim > 3) doffset = 1;
+
+	for (size_t p = 0; p < dim; p++)
+	{
+		dsize[p] = (int)m_dst->axis[p + doffset].size;
+		dspc[p] = m_dst->axis[p + doffset].spacing;
+	}
+
+	double scx = (double)ssize[0] / dsize[0];
+	double scy = (double)ssize[1] / dsize[1];
+	double scz = (double)ssize[2] / dsize[2];
+	int nx = dsize[0];
+	int ny = dsize[1];
+	int nz = dsize[2];
+	if (m_interpolation)
+	{
+		if (bits == 1)
+		{
+			uint8* data = (uint8*)m_src->data;
+			uint8* dst_data = (uint8*)m_dst->data;
+			for (int z = m_zst; z < m_zed; z++)
+			{
+				for (int y = 0; y < ny; y++)
+				{
+					for (int x = 0; x < nx; x++)
+					{
+						double dx = x * scx;
+						double dy = y * scy;
+						double dz = z * scz;
+
+						size_t ix = (size_t)dx;
+						size_t iy = (size_t)dy;
+						size_t iz = (size_t)dz;
+
+						dx = dx - ix;
+						dy = dy - iy;
+						dz = dz - iz;
+
+						size_t id = iz * ssize[1] * ssize[0] + iy * ssize[0] + ix;
+
+						float c000 = data[id];
+						float c100 = data[id + 1];
+						float c010 = data[id + ssize[0]];
+						float c110 = data[id + ssize[0] + 1];
+						float c001 = data[id + ssize[1] * ssize[0]];
+						float c101 = data[id + ssize[1] * ssize[0] + 1];
+						float c011 = data[id + ssize[1] * ssize[0] + ssize[0]];
+						float c111 = data[id + ssize[1] * ssize[0] + ssize[0] + 1];
+
+						float c00 = c000 * (1 - dx) + c100 * dx;
+						float c01 = c001 * (1 - dx) + c101 * dx;
+						float c10 = c010 * (1 - dx) + c110 * dx;
+						float c11 = c011 * (1 - dx) + c111 * dx;
+
+						float c0 = c00 * (1 - dy) + c10 * dy;
+						float c1 = c01 * (1 - dy) + c11 * dy;
+
+						float c = c0 * (1 - dz) + c1 * dz;
+
+						dst_data[z * ny * nx + y * nx + x] = (uint8)c;
+					}
+				}
+			}
+		}
+		else if (bits == 2)
+		{
+			uint16* data = (uint16*)m_src->data;
+			uint16* dst_data = (uint16*)m_dst->data;
+			for (int z = m_zst; z < m_zed; z++)
+			{
+				for (int y = 0; y < ny; y++)
+				{
+					for (int x = 0; x < nx; x++)
+					{
+						double dx = x * scx;
+						double dy = y * scy;
+						double dz = z * scz;
+
+						size_t ix = (size_t)dx;
+						size_t iy = (size_t)dy;
+						size_t iz = (size_t)dz;
+
+						dx = dx - ix;
+						dy = dy - iy;
+						dz = dz - iz;
+
+						size_t id = iz * ssize[1] * ssize[0] + iy * ssize[0] + ix;
+
+						float c000 = data[id];
+						float c100 = data[id + 1];
+						float c010 = data[id + ssize[0]];
+						float c110 = data[id + ssize[0] + 1];
+						float c001 = data[id + ssize[1] * ssize[0]];
+						float c101 = data[id + ssize[1] * ssize[0] + 1];
+						float c011 = data[id + ssize[1] * ssize[0] + ssize[0]];
+						float c111 = data[id + ssize[1] * ssize[0] + ssize[0] + 1];
+
+						float c00 = c000 * (1 - dx) + c100 * dx;
+						float c01 = c001 * (1 - dx) + c101 * dx;
+						float c10 = c010 * (1 - dx) + c110 * dx;
+						float c11 = c011 * (1 - dx) + c111 * dx;
+
+						float c0 = c00 * (1 - dy) + c10 * dy;
+						float c1 = c01 * (1 - dy) + c11 * dy;
+
+						float c = c0 * (1 - dz) + c1 * dz;
+
+						dst_data[z * ny * nx + y * nx + x] = (uint16)c;
+					}
+				}
+			}
+		}
+	}
+	else {
+		if (bits == 1)
+		{
+			uint8* data = (uint8*)m_src->data;
+			uint8* dst_data = (uint8*)m_dst->data;
+			for (int z = m_zst; z < m_zed; z++)
+			{
+				for (int y = 0; y < ny; y++)
+				{
+					for (int x = 0; x < nx; x++)
+					{
+						double dx = x * scx;
+						double dy = y * scy;
+						double dz = z * scz;
+
+						size_t ix = (size_t)round(dx);
+						size_t iy = (size_t)round(dy);
+						size_t iz = (size_t)round(dz);
+
+						size_t id = iz * ssize[1] * ssize[0] + iy * ssize[0] + ix;
+
+						dst_data[z * ny * nx + y * nx + x] = (uint8)data[id];
+					}
+				}
+			}
+		}
+		else if (bits == 2)
+		{
+			uint16* data = (uint16*)m_src->data;
+			uint16* dst_data = (uint16*)m_dst->data;
+			for (int z = m_zst; z < m_zed; z++)
+			{
+				for (int y = 0; y < ny; y++)
+				{
+					for (int x = 0; x < nx; x++)
+					{
+						double dx = x * scx;
+						double dy = y * scy;
+						double dz = z * scz;
+
+						size_t ix = (size_t)round(dx);
+						size_t iy = (size_t)round(dy);
+						size_t iz = (size_t)round(dz);
+
+						size_t id = iz * ssize[1] * ssize[0] + iy * ssize[0] + ix;
+
+						dst_data[z * ny * nx + y * nx + x] = (uint16)data[id];
+					}
+				}
+			}
+		}
+	}
+}
+
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 MeshData::MeshData() :
 m_data(0),
@@ -6135,7 +6727,7 @@ bool DataManager::DownloadToCurrentDir(wxString &filename)
 	return true;
 }
 
-int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_num)
+int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_num, size_t datasize)
 {
 	wxString pathname = filename;
 	bool isURL = false;
@@ -6268,6 +6860,10 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 		m_latest_vols.clear();
 
 	int chan = reader->GetChanNum();
+	size_t voxnum = reader->GetXSize() * reader->GetYSize() * reader->GetSliceNum();
+	size_t ch_datasize = 0;
+	size_t bytes = 0;
+
 	for (i=(ch_num>=0?ch_num:0);
 		i<(ch_num>=0?ch_num+1:chan); i++)
 	{
@@ -6288,6 +6884,42 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 			VolumeData *vd = new VolumeData();
 			vd->SetSkipBrick(m_skip_brick);
 			Nrrd* data = reader->Convert(t_num>=0?t_num:reader->GetCurTime(), i, true);
+
+			if (datasize > 0)
+			{
+				if (ch_datasize == 0)
+				{
+					switch (data->type)
+					{
+					case nrrdTypeUChar:
+					case nrrdTypeChar:
+						bytes = 1;
+						break;
+					case nrrdTypeUShort:
+					case nrrdTypeShort:
+						bytes = 2;
+						break;
+					default:
+						bytes = 0;
+					}
+					if (ch_num >= 0)
+						ch_datasize = (datasize * bytes) / (3ULL + bytes);
+					else
+						ch_datasize = (datasize * bytes) / (3ULL + bytes * chan);
+				}
+				if (ch_datasize > 0 && bytes > 0 && ch_datasize < voxnum * bytes)
+				{
+					Nrrd* tmp;
+					tmp = VolumeData::NrrdScale(data, ch_datasize);
+					if (tmp)
+					{
+						delete[] data->data;
+						nrrdNix(data);
+						data = tmp;
+					}
+				}
+			}
+
 			if (!data)
 				continue;
 

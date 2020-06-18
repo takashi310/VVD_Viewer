@@ -697,6 +697,9 @@ public:
 	wxString GetSharedLabelName() { return m_shared_lbl_name; }
 	void SetSharedLabelName(wxString name) { m_shared_lbl_name = name; }
 
+	static Nrrd* NrrdScale(Nrrd* src, size_t dst_datasize, bool interpolation = true);
+	static Nrrd* NrrdScale(Nrrd* src, size_t nx, size_t ny, size_t nz, bool interpolation = true);
+
 private:
 	//duplication indicator and counter
 	bool m_dup;
@@ -842,6 +845,39 @@ private:
 	Point m_pos;
 	string m_info;
 };
+
+class NrrdScaler
+{
+public:
+	NrrdScaler(Nrrd* src, Nrrd* dst, bool interpolation);
+	~NrrdScaler();
+
+	void Run();
+
+	wxCriticalSection m_pThreadCS;
+	int m_running_nrrd_scale_th;
+
+private:
+	Nrrd* m_src;
+	Nrrd* m_dst;
+	bool m_interpolation;
+};
+
+class NrrdScaleThread : public wxThread
+{
+public:
+	NrrdScaleThread(NrrdScaler* scaler, Nrrd* src, Nrrd* dst, int zst, int zend, bool interpolation);
+	~NrrdScaleThread();
+protected:
+	virtual ExitCode Entry();
+	Nrrd* m_src;
+	Nrrd* m_dst;
+	int m_zst;
+	int m_zed;
+	bool m_interpolation;
+	NrrdScaler* m_scaler;
+};
+
 
 class DataManager;
 class EXPORT_API Annotations : public TreeLayer
@@ -1518,7 +1554,7 @@ public:
 
 	bool DownloadToCurrentDir(wxString &filename);
 	//load volume
-	int LoadVolumeData(wxString &filename, int type, int ch_num=-1, int t_num=-1);
+	int LoadVolumeData(wxString &filename, int type, int ch_num=-1, int t_num=-1, size_t datasize = 0);
 	//set default
 	void SetVolumeDefault(VolumeData* vd);
 	//load volume options
