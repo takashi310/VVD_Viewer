@@ -220,8 +220,8 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 	Nrrd* v3d_nrrd = m_lbl_reader->Convert(0, 0, true);
 	void* v3d_data = v3d_nrrd->data;
 
-	//size_t avmem = (size_t)(vrv->GetAvailableGraphicsMemory(0) * 1024.0 * 1024.0);
-	size_t avmem = (size_t)(2048.0 * 1024.0 * 1024.0);
+	size_t avmem = (size_t)(vrv->GetAvailableGraphicsMemory(0) * 1024.0 * 1024.0);
+	//size_t avmem = (size_t)(1048.0 * 1024.0 * 1024.0);
 
 	LoadFiles(vol_path, avmem);
 	int vol_chan = dm->GetLatestVolumeChannelNum();
@@ -270,30 +270,9 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 		m_yspc = m_nrrd_s[0]->axis[dim_offset + 1].spacing;
 	if (m_zspc <= 0.0)
 		m_zspc = m_nrrd_s[0]->axis[dim_offset + 2].spacing;
-	/*
-	m_lbl_nrrd = nrrdNew();
-	size_t vxnum = (size_t)nx * ny * nz;
-	uint8_t* newdata = new uint8_t[vxnum];
-	if (v3d_nrrd->type == nrrdTypeUChar)
-	{
-		for (size_t i = 0; i < vxnum; i++)
-			newdata[i] = ((unsigned char*)v3d_data)[i];
-	}
-	else if (v3d_nrrd->type == nrrdTypeUShort)
-	{
-		for (size_t i = 0; i < vxnum; i++)
-			newdata[i] = ((uint16_t*)v3d_data)[i];
-	}
-	nrrdWrap(m_lbl_nrrd, (uint8_t*)newdata, nrrdTypeUChar, 3, (size_t)nx, (size_t)ny, (size_t)nz);
-	nrrdAxisInfoSet(m_lbl_nrrd, nrrdAxisInfoSpacing, m_xspc, m_yspc, m_zspc);
-	nrrdAxisInfoSet(m_lbl_nrrd, nrrdAxisInfoMax, m_xspc * nx, m_yspc * ny, m_zspc * nz);
-	nrrdAxisInfoSet(m_lbl_nrrd, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
-	nrrdAxisInfoSet(m_lbl_nrrd, nrrdAxisInfoSize, (size_t)nx, (size_t)ny, (size_t)nz);
-	void* lbl_data = m_lbl_nrrd->data;
-	delete[] v3d_data;
-	nrrdNix(v3d_nrrd);
-	*/
+	
 	m_lbl_nrrd = VolumeData::NrrdScale(v3d_nrrd, nx, ny, nz, false);
+
 	if (!m_lbl_nrrd) return false;
 	void* lbl_data = m_lbl_nrrd->data;
 	nrrdAxisInfoSet(m_lbl_nrrd, nrrdAxisInfoSpacing, m_xspc, m_yspc, m_zspc);
