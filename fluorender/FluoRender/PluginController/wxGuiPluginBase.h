@@ -10,6 +10,7 @@ public:
 	virtual ~wxGuiPluginBase();
 	
 	virtual wxString GetName() const = 0;
+    virtual wxString GetDisplayName() const = 0;
 	virtual wxString GetId() const = 0;
 
 	//This method is called when the plugin is starting.

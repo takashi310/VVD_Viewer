@@ -295,6 +295,11 @@ wxString NBLASTGuiPlugin::GetName() const
 	return _("NBLAST Search");
 }
 
+wxString NBLASTGuiPlugin::GetDisplayName() const
+{
+    return _("NBLAST Search");
+}
+
 wxString NBLASTGuiPlugin::GetId() const
 {
 	return wxT("{EEFDF66-5FBB-4719-AF17-76C1C82D3FE1}");

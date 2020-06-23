@@ -448,6 +448,12 @@ wxString SampleGuiPlugin1::GetName() const
 	return _("Fiji Interface");
 }
 
+
+wxString SampleGuiPlugin1::GetDisplayName() const
+{
+    return _("Fiji Interface");
+}
+
 wxString SampleGuiPlugin1::GetId() const
 {
 	return wxT("{4E97DF66-5FBB-4719-AF17-76C1C82D3FE1}");

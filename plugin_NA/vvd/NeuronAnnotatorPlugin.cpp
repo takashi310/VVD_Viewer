@@ -106,6 +106,7 @@ NAGuiPlugin::NAGuiPlugin()
 	m_nrrd_s[0] = m_nrrd_s[1] = m_nrrd_s[2] = NULL;
 	m_scount = 0;
 	m_dirty = false;
+    m_reload_list = false;
 	m_xspc = -1.0;
 	m_yspc = -1.0;
 	m_zspc = -1.0;
@@ -220,8 +221,8 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 	Nrrd* v3d_nrrd = m_lbl_reader->Convert(0, 0, true);
 	void* v3d_data = v3d_nrrd->data;
 
-	size_t avmem = (size_t)(vrv->GetAvailableGraphicsMemory(0) * 1024.0 * 1024.0);
-	//size_t avmem = (size_t)(1048.0 * 1024.0 * 1024.0);
+	//size_t avmem = (size_t)(vrv->GetAvailableGraphicsMemory(0) * 1024.0 * 1024.0);
+	size_t avmem = (size_t)(1024.0 * 1024.0 * 1024.0);
 
 	LoadFiles(vol_path, avmem);
 	int vol_chan = dm->GetLatestVolumeChannelNum();
@@ -247,13 +248,15 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 					data_s[scount] = m_nrrd_s[scount]->data;
 					m_vol_s[scount] = vd->GetName();
 					vols[scount] = vd;
+                    vd->SetSpacings(m_xspc, m_yspc, m_zspc);
 					scount++;
 				}
 				if (chspec[c].GetValue() == 'r')
 				{
 					m_nrrd_r = vd->GetTexture()->get_nrrd(0);
 					data_r = m_nrrd_r->data;
-					m_vol_r = vd->GetName();;
+					m_vol_r = vd->GetName();
+                    vd->SetSpacings(m_xspc, m_yspc, m_zspc);
 				}
 			}
 		}
@@ -439,6 +442,7 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 	delete prg_diag;
 
 	m_dirty = set_dirty;
+    m_reload_list = set_dirty;
 
 	for (int s = 0; s < m_segs.size(); s++)
 	{
@@ -466,6 +470,9 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 				prop->SetVolumeData(vols[0]);
 		}
 	}
+    
+    vrv->InitView(INIT_BOUNDS|INIT_CENTER|INIT_TRANSL|INIT_ROTATE);
+    vrv->RefreshGL();
 
 	Unlock();
 
@@ -1212,7 +1219,12 @@ void NAGuiPlugin::PushVisHistory()
 
 wxString NAGuiPlugin::GetName() const
 {
-	return _("Neuron Annotator Plugin");
+	return _("NAPlugin");
+}
+
+wxString NAGuiPlugin::GetDisplayName() const
+{
+    return _("Neuron Annotator Plugin");
 }
 
 wxString NAGuiPlugin::GetId() const

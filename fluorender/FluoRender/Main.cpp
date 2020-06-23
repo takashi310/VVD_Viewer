@@ -175,7 +175,7 @@ bool VRenderApp::OnCmdLineParsed(wxCmdLineParser& parser)
    int i=0;
    wxString params;
     
-    /*
+    
     wxString list;
     for (i = 0; i < (int)parser.GetParamCount(); i++)
     {
@@ -186,7 +186,7 @@ bool VRenderApp::OnCmdLineParsed(wxCmdLineParser& parser)
     txt.AddLine(list);
     txt.Write();
     txt.Close();
-    */
+    
 
    wxString line;
    for (i = 0; i < (int)parser.GetParamCount(); i++)
@@ -202,6 +202,12 @@ bool VRenderApp::OnCmdLineParsed(wxCmdLineParser& parser)
 	   m_plugin_name = val.BeforeFirst(' ');
 	   m_plugin_params = val.AfterFirst(' ');
 	   count++;
+       
+       wxTextFile txt(wxT("/Users/kawase/Documents/params.txt"));
+       txt.Open();
+       txt.AddLine(val);
+       txt.Write();
+       txt.Close();
    }
 
    for (i = count; i < (int)parser.GetParamCount(); i++)

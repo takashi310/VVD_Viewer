@@ -456,6 +456,8 @@ void NAListCtrl::UpdateResults(bool refresh_items)
 			Append(m_listdata[img_count].imgid, m_listdata[img_count].name, m_listdata[img_count].mipid, m_listdata[img_count].visibility > 0 ? true : false);
 			img_count++;
 		}
+        
+        m_plugin->setReloaded(false);
 
 #ifdef _DARWIN
 		SetColumnWidth(3, w + 8);
@@ -465,11 +467,11 @@ void NAListCtrl::UpdateResults(bool refresh_items)
 	}
 	else
 	{
-		if (m_plugin->isRefExists())
+		if (m_plugin->isRefExists() && m_listdata.size() > 0)
 			m_listdata[0].visibility = m_plugin->GetSegmentVisibility(IMG_ID_REF);
 
 		int offset = m_plugin->isRefExists() ? 1 : 0;
-		for (int i = 0; i < m_plugin->getSegCount(); i++)
+		for (int i = 0; i < m_plugin->getSegCount() && i+offset < m_listdata.size(); i++)
 			m_listdata[offset + i].visibility = m_plugin->GetSegmentVisibility(i);
 	}
 
@@ -1262,7 +1264,7 @@ void NAGuiPluginWindow::OnIdle(wxTimerEvent& event)
 
 	if (plugin->isDirty())
 	{
-		m_results->UpdateResults();
+		m_results->UpdateResults(plugin->isReloaded());
 	}
 }
 

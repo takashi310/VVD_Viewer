@@ -244,6 +244,7 @@ VRenderFrame::VRenderFrame(
 	if(m_plugin_manager)
 		m_plugin_manager->LoadAllPlugins(true);
 	m_tb_menu_plugin = new wxMenu;
+    wxArrayString plugin_disp_names;
 	if (!m_plugin_list.IsEmpty()) m_plugin_list.Clear();
 	wxGuiPluginBaseList gplist = m_plugin_manager->GetGuiPlugins();
 	for(wxGuiPluginBaseList::Node * node = gplist.GetFirst(); node; node = node->GetNext())
@@ -251,17 +252,25 @@ VRenderFrame::VRenderFrame(
 		wxString gpname = node->GetData()->GetName();
 		if (!gpname.IsEmpty())
 			m_plugin_list.Add(gpname);
+        wxString gpdispname = node->GetData()->GetDisplayName();
+        if (!gpdispname.IsEmpty())
+            plugin_disp_names.Add(gpdispname);
+        else
+            plugin_disp_names.Add(gpname);
 	}
 	wxNonGuiPluginBaseList ngplist = m_plugin_manager->GetNonGuiPlugins();
 	for(wxNonGuiPluginBaseList::Node * node = ngplist.GetFirst(); node; node = node->GetNext())
 	{
 		wxString ngpname = node->GetData()->GetName();
 		if (!ngpname.IsEmpty())
-			m_plugin_list.Add(ngpname);
+        {
+            m_plugin_list.Add(ngpname);
+            plugin_disp_names.Add(ngpname);
+        }
 	}
-	m_plugin_list.Sort();
+	//m_plugin_list.Sort();
 	for (int i = 0; i < m_plugin_list.size(); i++)
-		m_tb_menu_plugin->Append(ID_Plugin+i, m_plugin_list[i]);
+		m_tb_menu_plugin->Append(ID_Plugin+i, plugin_disp_names[i]);
 	if (!m_plugin_list.IsEmpty())
 		m_tb_menu_plugin->Bind(wxEVT_COMMAND_MENU_SELECTED, &VRenderFrame::OnPluginMenuSelect, this, ID_Plugin, ID_Plugin+m_plugin_list.size()-1);
 
@@ -5400,14 +5409,14 @@ void VRenderFrame::ToggleVisibilityPluginWindow(wxString name, bool show, int do
 	{
 		if (show)
 		{
-			if (!m_aui_mgr.GetPane(gp->GetName()).IsOk())
+			if (!m_aui_mgr.GetPane(gp->GetDisplayName()).IsOk())
 			{
 				SetEvtHandlerEnabled(false);
 				//wxWindow* pp = gp->CreatePanel(m_help_dlg);//dummy parent window
 				wxWindow * pp = gp->CreatePanel(this);
 				wxSize wsize = pp->GetVirtualSize();
 				m_aui_mgr.AddPane(pp, wxAuiPaneInfo().
-					Name(gp->GetName()).Caption(gp->GetName()).
+					Name(gp->GetDisplayName()).Caption(gp->GetDisplayName()).
 					Dockable(true).CloseButton(true));
 				//m_aui_mgr.GetPane(pp).Float();
 				m_aui_mgr.GetPane(pp).Left().Layer(3);
@@ -5416,20 +5425,20 @@ void VRenderFrame::ToggleVisibilityPluginWindow(wxString name, bool show, int do
 			}
 			else
 			{
-				m_aui_mgr.GetPane(gp->GetName()).Show();
+				m_aui_mgr.GetPane(gp->GetDisplayName()).Show();
 				m_aui_mgr.Update();
 			}
 		}
-		else if (m_aui_mgr.GetPane(gp->GetName()).IsOk())
+		else if (m_aui_mgr.GetPane(gp->GetDisplayName()).IsOk())
 		{
-			if (!m_aui_mgr.GetPane(gp->GetName()).IsOk())
+			if (!m_aui_mgr.GetPane(gp->GetDisplayName()).IsOk())
 			{
 				SetEvtHandlerEnabled(false);
 				//wxWindow* pp = gp->CreatePanel(m_help_dlg);//dummy parent window
 				wxWindow* pp = gp->CreatePanel(this);
 				wxSize wsize = pp->GetVirtualSize();
 				m_aui_mgr.AddPane(pp, wxAuiPaneInfo().
-					Name(gp->GetName()).Caption(gp->GetName()).
+					Name(gp->GetDisplayName()).Caption(gp->GetDisplayName()).
 					Dockable(true).CloseButton(true).Hide());
 				//m_aui_mgr.GetPane(pp).Float();
 				m_aui_mgr.GetPane(pp).Left().Layer(3);
@@ -5438,7 +5447,7 @@ void VRenderFrame::ToggleVisibilityPluginWindow(wxString name, bool show, int do
 			}
 			else
 			{
-				m_aui_mgr.GetPane(gp->GetName()).Hide();
+				m_aui_mgr.GetPane(gp->GetDisplayName()).Hide();
 				m_aui_mgr.Update();
 			}
 		}
@@ -5453,7 +5462,7 @@ void VRenderFrame::CreatePluginWindow(wxString name, bool show)
 bool VRenderFrame::IsCreatedPluginWindow(wxString name)
 {
 	if (auto gp = m_plugin_manager->GetGuiPlugin(name))
-		return m_aui_mgr.GetPane(gp->GetName()).IsOk();
+		return m_aui_mgr.GetPane(gp->GetDisplayName()).IsOk();
 
 	return false;
 }
@@ -5462,8 +5471,8 @@ bool VRenderFrame::IsShownPluginWindow(wxString name)
 {
 	if (auto gp = m_plugin_manager->GetGuiPlugin(name))
 	{
-		if (m_aui_mgr.GetPane(gp->GetName()).IsOk())
-			return m_aui_mgr.GetPane(gp->GetName()).IsShown();
+		if (m_aui_mgr.GetPane(gp->GetDisplayName()).IsOk())
+			return m_aui_mgr.GetPane(gp->GetDisplayName()).IsShown();
 	}
 
 	return false;

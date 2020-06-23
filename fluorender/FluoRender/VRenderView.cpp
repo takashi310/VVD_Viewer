@@ -18220,6 +18220,7 @@ void VRenderView::OnRotReset(wxCommandEvent &event)
 	m_y_rot_text->ChangeValue("0.0");
 	m_z_rot_text->ChangeValue("0.0");
 	SetRotations(0.0, 0.0, 0.0);
+    m_glview->InitView(INIT_BOUNDS|INIT_CENTER|INIT_OBJ_TRANSL|INIT_ROTATE);
 	RefreshGL();
 	if (m_glview->m_mouse_focus)
 		m_glview->SetFocus();

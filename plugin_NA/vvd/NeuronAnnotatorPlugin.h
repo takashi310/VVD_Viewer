@@ -30,6 +30,7 @@ public:
 	virtual ~NAGuiPlugin();
 
 	virtual wxString GetName() const;
+    virtual wxString GetDisplayName() const;
 	virtual wxString GetId() const;
 	virtual wxWindow * CreatePanel(wxWindow * parent);
 	virtual void OnInit();
@@ -80,6 +81,8 @@ public:
 
 	bool isDirty() { return m_dirty; }
 	void setDirty(bool val) { m_dirty = val; }
+    bool isReloaded() { return m_reload_list; }
+    void setReloaded(bool val) { m_reload_list = val; }
 
 	V3DPBDReader* m_lbl_reader;
 	BaseReader* m_vol_reader;
@@ -109,6 +112,8 @@ public:
 	wxString m_vol_suffix;
 
 	bool m_dirty;
+    
+    bool m_reload_list;
 
 	bool m_allsig_visible;
 
