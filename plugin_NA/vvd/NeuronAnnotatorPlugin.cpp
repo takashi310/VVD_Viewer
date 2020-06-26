@@ -221,8 +221,8 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 	Nrrd* v3d_nrrd = m_lbl_reader->Convert(0, 0, true);
 	void* v3d_data = v3d_nrrd->data;
 
-	//size_t avmem = (size_t)(vrv->GetAvailableGraphicsMemory(0) * 1024.0 * 1024.0);
-	size_t avmem = (size_t)(1024.0 * 1024.0 * 1024.0);
+	size_t avmem = (size_t)(vrv->GetAvailableGraphicsMemory(0) * 1024.0 * 1024.0);
+	//size_t avmem = (size_t)(1024.0 * 1024.0 * 1024.0);
 
 	LoadFiles(vol_path, avmem);
 	int vol_chan = dm->GetLatestVolumeChannelNum();
@@ -932,6 +932,157 @@ bool NAGuiPlugin::LoadFiles(wxString path, size_t datasize)
 	vframe->StartupLoad(arr, datasize);
 
 	return true;
+}
+
+void NAGuiPlugin::SaveCombinedFragment(wxString path)
+{
+    VRenderFrame* vframe = (VRenderFrame*)m_vvd;
+    if (!vframe) return;
+    DataManager* dm = vframe->GetDataManager();
+    if (!dm) return;
+    VRenderView *vrv = vframe->GetView(0);
+    if (!vrv) return;
+    
+    int dim_offset = 0;
+    if (m_nrrd_s[0]->dim > 3) dim_offset = 1;
+    
+    int nx = m_nrrd_s[0]->axis[dim_offset + 0].size;
+    int ny = m_nrrd_s[0]->axis[dim_offset + 1].size;
+    int nz = m_nrrd_s[0]->axis[dim_offset + 2].size;
+    
+    double spcx = m_nrrd_s[0]->axis[dim_offset + 0].spacing;
+    double spcy = m_nrrd_s[0]->axis[dim_offset + 1].spacing;
+    double spcz = m_nrrd_s[0]->axis[dim_offset + 2].spacing;
+    
+    int bits = 8;
+    if (m_nrrd_s[0]->type == nrrdTypeUChar || m_nrrd_s[0]->type == nrrdTypeChar)
+        bits = 8;
+    else if (m_nrrd_s[0]->type == nrrdTypeUShort || m_nrrd_s[0]->type == nrrdTypeShort)
+        bits = 16;
+    
+    unsigned long long mem_size = (unsigned long long)nx*(unsigned long long)ny*(unsigned long long)nz;
+    
+    Nrrd *nv = nrrdNew();
+    if (bits == 8)
+    {
+        uint8 *val8 = new (std::nothrow) uint8[mem_size];
+        if (!val8)
+        {
+            wxMessageBox("Not enough memory. Please save project and restart.");
+            return;
+        }
+        memset((void*)val8, 0, sizeof(uint8)*nx*ny*nz);
+        nrrdWrap(nv, val8, nrrdTypeUChar, 3, (size_t)nx, (size_t)ny, (size_t)nz);
+    }
+    else if (bits == 16)
+    {
+        uint16 *val16 = new (std::nothrow) uint16[mem_size];
+        if (!val16)
+        {
+            wxMessageBox("Not enough memory. Please save project and restart.");
+            return;
+        }
+        memset((void*)val16, 0, sizeof(uint16)*nx*ny*nz);
+        nrrdWrap(nv, val16, nrrdTypeUShort, 3, (size_t)nx, (size_t)ny, (size_t)nz);
+    }
+    nrrdAxisInfoSet(nv, nrrdAxisInfoSpacing, spcx, spcy, spcz);
+    nrrdAxisInfoSet(nv, nrrdAxisInfoMax, spcx*nx, spcy*ny, spcz*nz);
+    nrrdAxisInfoSet(nv, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
+    nrrdAxisInfoSet(nv, nrrdAxisInfoSize, (size_t)nx, (size_t)ny, (size_t)nz);
+
+    unsigned char* ndata8 = (unsigned char*)nv->data;
+    unsigned short* ndata16 = (unsigned short*)nv->data;
+    if (bits == 8)
+    {
+        for (int s = 0; s < m_segs.size(); s++)
+        {
+            if (GetSegmentVisibility(s) == 0) continue;
+            BBox bbox = m_segs[s].bbox;
+            int sx = (int)bbox.min().x();
+            int sy = (int)bbox.min().y();
+            int sz = (int)bbox.min().z();
+            int ex = (int)bbox.max().x();
+            int ey = (int)bbox.max().y();
+            int ez = (int)bbox.max().z();
+            for (int i = sx; i <= ex; i++)
+            {
+                for (int j = sy; j <= ey; j++)
+                {
+                    for (int k = sz; k <= ez; k++)
+                    {
+                        size_t index = (size_t)nx * ny * k + nx * j + i;
+                        int label = 0;
+                        if (m_lbl_nrrd->type == nrrdTypeUChar)
+                            label = ((unsigned char*)m_lbl_nrrd->data)[index];
+                        else if (m_lbl_nrrd->type == nrrdTypeUShort)
+                            label = ((unsigned short*)m_lbl_nrrd->data)[index];
+                        if (m_segs[s].id == label)
+                        {
+                            unsigned char maxval = 0;
+                            for (int c = 0; c < m_scount; c++)
+                            {
+                                unsigned char val = ((unsigned char*)m_nrrd_s[c]->data)[index];
+                                if (val > maxval) maxval = val;
+                            }
+                            ndata8[index] = maxval;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    else if (bits == 16)
+    {
+        for (int s = 0; s < m_segs.size(); s++)
+        {
+            if (GetSegmentVisibility(s) == 0) continue;
+            BBox bbox = m_segs[s].bbox;
+            int sx = (int)bbox.min().x();
+            int sy = (int)bbox.min().y();
+            int sz = (int)bbox.min().z();
+            int ex = (int)bbox.max().x();
+            int ey = (int)bbox.max().y();
+            int ez = (int)bbox.max().z();
+            for (int i = sx; i <= ex; i++)
+            {
+                for (int j = sy; j <= ey; j++)
+                {
+                    for (int k = sz; k <= ez; k++)
+                    {
+                        size_t index = (size_t)nx * ny * k + nx * j + i;
+                        int label = 0;
+                        if (m_lbl_nrrd->type == nrrdTypeUChar)
+                            label = ((unsigned char*)m_lbl_nrrd->data)[index];
+                        else if (m_lbl_nrrd->type == nrrdTypeUShort)
+                            label = ((unsigned short*)m_lbl_nrrd->data)[index];
+                        if (m_segs[s].id == label)
+                        {
+                            unsigned short maxval = 0;
+                            for (int c = 0; c < m_scount; c++)
+                            {
+                                unsigned short val = ((unsigned short*)m_nrrd_s[c]->data)[index];
+                                if (val > maxval) maxval = val;
+                            }
+                            ndata16[index] = maxval;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    NRRDWriter writer;
+    writer.SetData(nv);
+    writer.SetCompression(true);
+    writer.SetSpacings(spcx, spcy, spcz);
+    writer.Save(path.ToStdWstring(), 0);
+    
+    if (bits == 8)
+        delete [] ndata8;
+    if (bits == 16)
+        delete [] ndata16;
+    
+    nrrdNix(nv);
 }
 
 bool NAGuiPlugin::LoadNrrd(int id)

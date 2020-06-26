@@ -204,6 +204,7 @@ class NAGuiPluginWindow: public wxGuiPluginWindowBase, public Observer
 		ID_SETTING,
 		ID_WaitTimer,
 		ID_IdleTimer,
+        ID_NA_Export
 	};
 
 public:
@@ -244,6 +245,7 @@ public:
 	void OnKeyDown(wxKeyEvent& event);
 	void OnKeyUp(wxKeyEvent& event);
 	void OnIdle(wxTimerEvent& event);
+    void OnExport(wxCommandEvent& event);
 
 ////@end NAGuiPluginWindow event handler declarations
 

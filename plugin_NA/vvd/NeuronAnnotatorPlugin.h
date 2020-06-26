@@ -62,6 +62,8 @@ public:
 	int GetSegmentVisibility(int id);
 	void ToggleSegmentVisibility(int id);
 	void PushVisHistory();
+    
+    void SaveCombinedFragment(wxString path);
 
 	void ResizeThumbnails(int w);
     

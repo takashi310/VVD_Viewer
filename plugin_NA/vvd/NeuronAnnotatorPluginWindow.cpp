@@ -863,6 +863,7 @@ BEGIN_EVENT_TABLE( NAGuiPluginWindow, wxGuiPluginWindowBase )
 	EVT_MENU( ID_EDIT_DB_BUTTON, NAGuiPluginWindow::OnEditDBButtonClick )
 	EVT_MENU( ID_IMPORT_RESULTS_BUTTON, NAGuiPluginWindow::OnImportResultsButtonClick )
 	EVT_MENU( ID_SETTING, NAGuiPluginWindow::OnSettingButtonClick )
+    EVT_MENU( ID_NA_Export, NAGuiPluginWindow::OnExport )
 	EVT_RADIOBUTTON(ID_SC_FWD, NAGuiPluginWindow::OnScoringMethodCheck)
 	EVT_RADIOBUTTON(ID_SC_MEAN, NAGuiPluginWindow::OnScoringMethodCheck)
 	EVT_CHECKBOX(ID_NA_OverlayCheckBox, NAGuiPluginWindow::OnOverlayCheck)
@@ -987,6 +988,7 @@ void NAGuiPluginWindow::CreateControls()
 	m_tb = new wxToolBar(nbpanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTB_FLAT | wxTB_TOP | wxTB_NODIVIDER | wxTB_TEXT | wxTB_NOICONS | wxTB_HORZ_LAYOUT);
 	//m_tb->AddTool(ID_SAVE_BUTTON, "Save", wxNullBitmap, "Save search results");
 	m_tb->AddTool(ID_IMPORT_RESULTS_BUTTON, "Import", wxNullBitmap, "Import search results");
+    m_tb->AddTool(ID_NA_Export, "export", wxNullBitmap, "Export combined fragments");
 	//m_tb->AddTool(ID_EDIT_DB_BUTTON, "Database", wxNullBitmap, "Edit NBLAST databases");
 	//m_tb->AddTool(ID_SETTING, "Setting", wxNullBitmap, "Setting");
 	m_tb->SetToolSeparation(20);
@@ -1200,6 +1202,23 @@ void NAGuiPluginWindow::OnImportResultsButtonClick( wxCommandEvent& event )
 	{
 		m_nbpanel->SetMinSize(wxSize(400, 700));
 	}
+}
+
+void NAGuiPluginWindow::OnExport( wxCommandEvent& event )
+{
+    NAGuiPlugin* plugin = (NAGuiPlugin*)GetPlugin();
+    
+    if (!m_results || !plugin)
+        return;
+    
+    wxFileDialog saveFileDialog(this, _("Save Combined Fragments"), "", "", "Nrrd files (*.nrrd)|*.nrrd", wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
+    
+    if (saveFileDialog.ShowModal() == wxID_CANCEL)
+        return;
+    
+    wxString path = saveFileDialog.GetPath();
+    
+    plugin->SaveCombinedFragment(path);
 }
 
 void NAGuiPluginWindow::OnSettingButtonClick( wxCommandEvent& event )
