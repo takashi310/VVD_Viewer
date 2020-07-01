@@ -6260,6 +6260,17 @@ void DataGroup::RandomizeColor()
 	}
 }
 
+void DataGroup::SetMaskHideMode(int mode)
+{
+    for (int i=0; i<GetVolumeNum(); i++)
+    {
+        VolumeData* vd = GetVolumeData(i);
+        if (vd)
+            vd->SetMaskHideMode(mode);
+    }
+}
+
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 int MeshGroup::m_num = 0;
 MeshGroup::MeshGroup()

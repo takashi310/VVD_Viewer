@@ -2467,11 +2467,21 @@ void VPropView::OnMaskHideOutsideCheck(wxCommandEvent& event)
 	bool inside = m_mask_inside_chk->GetValue();
 	if (outside)
 		m_mask_inside_chk->SetValue(false);
-
-	if (outside)
-		m_vd->SetMaskHideMode(VOL_MASK_HIDE_OUTSIDE);
-	else
-		m_vd->SetMaskHideMode(VOL_MASK_HIDE_NONE);
+    
+    if (m_sync_group && m_group)
+    {
+        if (outside)
+            m_group->SetMaskHideMode(VOL_MASK_HIDE_OUTSIDE);
+        else
+            m_group->SetMaskHideMode(VOL_MASK_HIDE_NONE);
+    }
+    else
+    {
+        if (outside)
+            m_vd->SetMaskHideMode(VOL_MASK_HIDE_OUTSIDE);
+        else
+            m_vd->SetMaskHideMode(VOL_MASK_HIDE_NONE);
+    }
 
 	RefreshVRenderViews();
 }
@@ -2484,10 +2494,20 @@ void VPropView::OnMaskHideInsideCheck(wxCommandEvent& event)
 	if (inside)
 		m_mask_outside_chk->SetValue(false);
 
-	if (inside)
-		m_vd->SetMaskHideMode(VOL_MASK_HIDE_INSIDE);
-	else
-		m_vd->SetMaskHideMode(VOL_MASK_HIDE_NONE);
+    if (m_sync_group && m_group)
+    {
+        if (inside)
+            m_group->SetMaskHideMode(VOL_MASK_HIDE_INSIDE);
+        else
+            m_group->SetMaskHideMode(VOL_MASK_HIDE_NONE);
+    }
+    else
+    {
+        if (inside)
+            m_vd->SetMaskHideMode(VOL_MASK_HIDE_INSIDE);
+        else
+            m_vd->SetMaskHideMode(VOL_MASK_HIDE_NONE);
+    }
 
 	RefreshVRenderViews();
 }

@@ -164,16 +164,28 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 	if (!vrv) return false;
 	TreePanel* tree = vframe->GetTree();
 	if (!tree) return false;
+    BrushToolDlg* brushdlg = vframe->GetBrushToolDlg();
+    if (!brushdlg) return false;
 
 	Lock();
-
+    
+    DataGroup* group = vrv->GetParentGroup(m_vol_s[0]);
+    if (group)
+    {
+        wxString gname = group->GetName();
+        vrv->RemoveGroup(gname);
+    }
+    group = vrv->GetParentGroup(m_vol_r);
+    if (group)
+    {
+        wxString gname = group->GetName();
+        vrv->RemoveGroup(gname);
+    }
+    
 	for (int c = 0; c < 3; c++)
-	{
-		vrv->RemoveVolumeData(m_vol_s[c]);
 		m_vol_s[c].Clear();
-	}
-	vrv->RemoveVolumeData(m_vol_r);
 	m_vol_r.Clear();
+    
 	vframe->UpdateTree();
 	tree->ClearVisHistory();
 
@@ -248,7 +260,8 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 					data_s[scount] = m_nrrd_s[scount]->data;
 					m_vol_s[scount] = vd->GetName();
 					vols[scount] = vd;
-                    vd->SetSpacings(m_xspc, m_yspc, m_zspc);
+                    if (m_xspc > 0.0 && m_yspc > 0.0 && m_zspc > 0.0)
+                        vd->SetSpacings(m_xspc, m_yspc, m_zspc);
 					scount++;
 				}
 				if (chspec[c].GetValue() == 'r')
@@ -256,7 +269,8 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 					m_nrrd_r = vd->GetTexture()->get_nrrd(0);
 					data_r = m_nrrd_r->data;
 					m_vol_r = vd->GetName();
-                    vd->SetSpacings(m_xspc, m_yspc, m_zspc);
+                    if (m_xspc > 0.0 && m_yspc > 0.0 && m_zspc > 0.0)
+                        vd->SetSpacings(m_xspc, m_yspc, m_zspc);
 				}
 			}
 		}
@@ -279,7 +293,7 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 	if (!m_lbl_nrrd) return false;
 	void* lbl_data = m_lbl_nrrd->data;
 	nrrdAxisInfoSet(m_lbl_nrrd, nrrdAxisInfoSpacing, m_xspc, m_yspc, m_zspc);
-	nrrdAxisInfoSet(m_lbl_nrrd, nrrdAxisInfoMax, m_xspc* nx, m_yspc* ny, m_zspc* nz);
+	nrrdAxisInfoSet(m_lbl_nrrd, nrrdAxisInfoMax, m_xspc * nx, m_yspc * ny, m_zspc * nz);
 	nrrdAxisInfoSet(m_lbl_nrrd, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
 	nrrdAxisInfoSet(m_lbl_nrrd, nrrdAxisInfoSize, (size_t)nx, (size_t)ny, (size_t)nz);
 	delete[] v3d_data;
@@ -435,7 +449,7 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 
 	m_ref_image.Create(mx, my, temp_r);
 	m_ref_image_thumb = m_ref_image.Scale(300, (int)((double)m_ref_image.GetHeight() / (double)m_ref_image.GetWidth() * 300.0), wxIMAGE_QUALITY_HIGH);
-	
+
 	m_id_path = id_path;
 	m_vol_path = vol_path;
 
@@ -455,7 +469,7 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 		m_allsig_visible = true;
 	}
 
-	DataGroup* group = vrv->GetParentGroup(m_vol_s[0]);
+	group = vrv->GetParentGroup(m_vol_s[0]);
 	if (group)
 	{
 		group->SetVolumeSyncProp(true);
@@ -468,15 +482,64 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 				prop->SetVolumeData(vdr);
 			else if (vols[0])
 				prop->SetVolumeData(vols[0]);
+            
+            if (vdr)
+            {
+                wxString gname = group->GetName();
+                wxString rvname = vdr->GetName();
+                wxString str;
+                vrv->MoveLayertoView(gname, rvname, str);
+                vframe->UpdateTree(rvname, 2);
+            }
 		}
 	}
     
-    vrv->InitView(INIT_BOUNDS|INIT_CENTER|INIT_TRANSL|INIT_ROTATE);
+    vrv->SetSelectGroup(true);
+    brushdlg->GetSettings(vrv);
+    
+    vrv->InitView(INIT_BOUNDS|INIT_CENTER|INIT_OBJ_TRANSL|INIT_ROTATE);
     vrv->RefreshGL();
 
 	Unlock();
 
 	return true;
+}
+
+void NAGuiPlugin::SwitchPropPanel(bool ref)
+{
+    VRenderFrame* vframe = (VRenderFrame*)m_vvd;
+    if (!vframe) return;
+    DataManager* dm = vframe->GetDataManager();
+    if (!dm) return;
+    VRenderView* vrv = vframe->GetView(0);
+    if (!vrv) return;
+    VPropView* prop = vframe->GetPropView();
+    if (!prop) return;
+    
+    if (ref && !m_vol_r.IsEmpty())
+    {
+        VolumeData* vd = dm->GetVolumeData(m_vol_r);
+        if (vd != prop->GetVolumeData())
+        {
+            wxString vname = vd->GetName();
+            DataGroup* group = vrv->GetParentGroup(vname);
+            vframe->GetAdjustView()->SetGroupLink(group);
+            vframe->OnSelection(2, vrv, group, vd, 0);
+            vrv->SetVolumeA(vd);
+        }
+    }
+    else if (!ref && !m_vol_s[0].IsEmpty())
+    {
+        VolumeData* vd = dm->GetVolumeData(m_vol_s[0]);
+        if (vd != prop->GetVolumeData())
+        {
+            wxString vname = vd->GetName();
+            DataGroup* group = vrv->GetParentGroup(vname);
+            vframe->GetAdjustView()->SetGroupLink(group);
+            vframe->OnSelection(2, vrv, group, vd, 0);
+            vrv->SetVolumeA(vd);
+        }
+    }
 }
 
 void NAGuiPlugin::ResizeThumbnails(int w)
@@ -1240,7 +1303,7 @@ bool NAGuiPlugin::LoadNrrd(int id)
 	return true;
 }
 
-void NAGuiPlugin::SetSegmentVisibility(int id, int vis)
+void NAGuiPlugin::SetSegmentVisibility(int id, int vis, bool refresh)
 {
 	VRenderFrame* vframe = (VRenderFrame*)m_vvd;
 	if (!vframe) return;
@@ -1251,22 +1314,22 @@ void NAGuiPlugin::SetSegmentVisibility(int id, int vis)
 	TreePanel* tree = vframe->GetTree();
 	if (!tree) return;
 
-	if (id == -2 && m_nrrd_r)
-	{
-		VolumeData* v = dm->GetVolumeData(m_vol_r);
-		if (v)
-		{
-			v->SetDisp(vis > 0 ? true : false);
-			for (int i = 0; i < vframe->GetViewNum(); i++)
-			{
-				VRenderView* vv = vframe->GetView(i);
-				if (vv)
-					vv->SetVolPopDirty();
-			}
-		}
-		vframe->UpdateTreeIcons();
-	}
-	if (id >= 0 && id < m_segs.size())
+    if (id == -2 && m_nrrd_r)
+    {
+        VolumeData* v = dm->GetVolumeData(m_vol_r);
+        if (v)
+        {
+            v->SetDisp(vis > 0 ? true : false);
+            for (int i = 0; i < vframe->GetViewNum(); i++)
+            {
+                VRenderView* vv = vframe->GetView(i);
+                if (vv)
+                    vv->SetVolPopDirty();
+            }
+        }
+        vframe->UpdateTreeIcons();
+    }
+	else if (id >= 0 && id < m_segs.size())
 	{
 		m_segs[id].visible = vis;
 		for (int i = 0; i < m_scount; i++)
@@ -1280,7 +1343,8 @@ void NAGuiPlugin::SetSegmentVisibility(int id, int vis)
 			}
 		}
 	}
-	vframe->RefreshVRenderViews(true);
+    if (refresh)
+        vframe->RefreshVRenderViews(true);
 }
 
 int NAGuiPlugin::GetSegmentVisibility(int id)
@@ -1366,6 +1430,14 @@ void NAGuiPlugin::PushVisHistory()
 	if (!tree) return;
 
 	tree->PushVisHistory();
+}
+
+void NAGuiPlugin::RefreshRenderViews()
+{
+    VRenderFrame* vframe = (VRenderFrame*)m_vvd;
+    if (!vframe) return;
+    
+    vframe->RefreshVRenderViews(true);
 }
 
 wxString NAGuiPlugin::GetName() const

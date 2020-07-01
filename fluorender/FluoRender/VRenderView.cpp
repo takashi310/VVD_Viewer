@@ -421,6 +421,7 @@ BEGIN_EVENT_TABLE(VRenderVulkanView, wxWindow)
 	EVT_MENU(ID_CTXMENU_HIDE_OTHER_VOLS, VRenderVulkanView::OnHideOtherVolumes)
 	EVT_MENU(ID_CTXMENU_HIDE_THIS_VOL, VRenderVulkanView::OnHideSelectedVolume)
 	EVT_MENU(ID_CTXMENU_SHOW_ALL_FRAGMENTS, VRenderVulkanView::OnShowAllFragments)
+    EVT_MENU(ID_CTXMENU_DESELECT_ALL_FRAGMENTS, VRenderVulkanView::OnDeselectAllFragments)
 	EVT_MENU(ID_CTXMENU_HIDE_OTHER_FRAGMENTS, VRenderVulkanView::OnHideOtherFragments)
 	EVT_MENU(ID_CTXMENU_HIDE_SELECTED_FLAGMENTS, VRenderVulkanView::OnHideSelectedFragments)
 	EVT_MENU(ID_CTXMENU_UNDO_VISIBILITY_SETTING_CHANGES, VRenderVulkanView::OnUndoVisibilitySettings)
@@ -6376,13 +6377,14 @@ void VRenderVulkanView::OnContextMenu(wxContextMenuEvent& event)
 	if (na_mode)
 	{
 		menu.Append(ID_CTXMENU_SHOW_ALL_FRAGMENTS, "Show all fragments");
-		menu.Append(ID_CTXMENU_HIDE_OTHER_FRAGMENTS, "Hide unselected fragments");
+        menu.Append(ID_CTXMENU_DESELECT_ALL_FRAGMENTS, "Deselect all fragments");
+		menu.Append(ID_CTXMENU_HIDE_OTHER_FRAGMENTS, "Show only selected fragments");
 		menu.Append(ID_CTXMENU_HIDE_SELECTED_FLAGMENTS, "Hide selected fragments");
 	}
 	else
 	{
 		menu.Append(ID_CTXMENU_SHOW_ALL, "Show all volumes");
-		menu.Append(ID_CTXMENU_HIDE_OTHER_VOLS, "Hide unselected volumes");
+		menu.Append(ID_CTXMENU_HIDE_OTHER_VOLS, "Sohw only selected volumes");
 		menu.Append(ID_CTXMENU_HIDE_THIS_VOL, "Hide selected volume data");
 	}
 	menu.Append(ID_CTXMENU_UNDO_VISIBILITY_SETTING_CHANGES, "Undo visibility settings");
@@ -6554,6 +6556,74 @@ void VRenderVulkanView::OnShowAllFragments(wxCommandEvent& event)
 		RefreshGL();
 		vr_frame->UpdateTreeIcons();
 	}
+}
+
+void VRenderVulkanView::OnDeselectAllFragments(wxCommandEvent& event)
+{
+    VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+    if (!vr_frame) return;
+    TreePanel* tree_panel = vr_frame->GetTree();
+    if (!tree_panel) return;
+    
+    vector<VolumeData*> na_vols;
+    
+    for (int i = 0; i < (int)m_layer_list.size(); i++)
+    {
+        if (!m_layer_list[i])
+            continue;
+        switch (m_layer_list[i]->IsA())
+        {
+            case 2://volume data
+            {
+                VolumeData* vd = (VolumeData*)m_layer_list[i];
+                if (vd && vd->GetNAMode())
+                    na_vols.push_back(vd);
+            }
+                break;
+            case 5://group
+            {
+                DataGroup* group = (DataGroup*)m_layer_list[i];
+                if (!group->GetDisp())
+                    continue;
+                for (int j = 0; j < group->GetVolumeNum(); j++)
+                {
+                    VolumeData* vd = group->GetVolumeData(j);
+                    if (vd && vd->GetNAMode())
+                        na_vols.push_back(vd);
+                }
+            }
+                break;
+        }
+    }
+    
+    bool changed = false;
+    for (auto vd : na_vols)
+    {
+        auto ids = vd->GetActiveSegIDs();
+        if (ids)
+        {
+            auto it = ids->begin();
+            while (it != ids->end())
+            {
+                if (vd->GetSegmentMask(*it) == 2 && *it != 0)
+                {
+                    if (!changed)
+                    {
+                        tree_panel->PushVisHistory();
+                        changed = true;
+                    }
+                    vd->SetSegmentMask(*it, 1);
+                }
+                it++;
+            }
+        }
+    }
+    
+    if (changed)
+    {
+        RefreshGL();
+        vr_frame->UpdateTreeIcons();
+    }
 }
 
 void VRenderVulkanView::OnHideOtherFragments(wxCommandEvent& event)

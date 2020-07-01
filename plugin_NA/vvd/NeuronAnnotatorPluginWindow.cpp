@@ -328,6 +328,7 @@ EVT_KEY_UP(NAListCtrl::OnKeyUp)
 EVT_MOUSE_EVENTS(NAListCtrl::OnMouse)
 EVT_LEFT_DCLICK(NAListCtrl::OnLeftDClick)
 EVT_SIZE(NAListCtrl::OnSize)
+EVT_TIMER(NAL_SelTimer ,NAListCtrl::OnTimer)
 END_EVENT_TABLE()
 
 NAListCtrl::NAListCtrl(
@@ -370,10 +371,14 @@ NAListCtrl::NAListCtrl(
 	//m_vis_images->Add(icon0);
 	//m_vis_images->Add(icon1);
 	//SetImageList(m_vis_images, wxIMAGE_LIST_SMALL);
+    
+    m_selTimer = new wxTimer(this, NAL_SelTimer);
 }
 
 NAListCtrl::~NAListCtrl()
 {
+    m_selTimer->Stop();
+    wxDELETE(m_selTimer);
 	wxDELETE(m_images);
 	wxDELETE(m_vis_images);
 }
@@ -528,6 +533,51 @@ void NAListCtrl::DeleteSelection()
 	}
 }
 
+void NAListCtrl::UpdateSelections()
+{
+    if (!m_plugin) return;
+    
+    if (m_plugin->getSegCount() <= 0) return;
+    
+    SetEvtHandlerEnabled(false);
+    
+    bool ref_selected = false;
+    bool bg_selected = false;
+    if (GetItemCount() > 0)
+        ref_selected = (GetItemState(0, wxLIST_STATE_SELECTED) != 0);
+    if (GetItemCount() > 1)
+        bg_selected = (GetItemState(1, wxLIST_STATE_SELECTED) != 0);
+
+    if (m_plugin->isRefExists() && m_listdata.size() > 0)
+        m_listdata[0].visibility = m_plugin->GetSegmentVisibility(IMG_ID_REF);
+    int offset = m_plugin->isRefExists() ? 1 : 0;
+    for (int i = 0; i < m_plugin->getSegCount() && i+offset < m_listdata.size(); i++)
+        m_listdata[offset + i].visibility = m_plugin->GetSegmentVisibility(i);
+    
+    if (ref_selected)
+        SetItemState(0, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
+    if (GetItemCount() > 0)
+        CheckItem(0, m_listdata[0].visibility > 0 ? true : false);
+    if (bg_selected)
+        SetItemState(1, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
+    if (GetItemCount() > 1)
+        CheckItem(1, m_listdata[1].visibility > 0 ? true : false);
+    
+    for (long i = 2; i < GetItemCount() && i < m_listdata.size(); i++)
+    {
+        if (m_listdata[i].visibility == 2)
+            SetItemState(i, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
+        else
+            SetItemState(i, 0, wxLIST_STATE_SELECTED);
+        CheckItem(i, m_listdata[i].visibility > 0 ? true : false);
+    }
+    
+    SetEvtHandlerEnabled(true);
+    Update();
+    
+    m_plugin->setDirty(false);
+}
+
 void NAListCtrl::DeleteAll()
 {
 	DeleteAllItems();
@@ -644,8 +694,21 @@ void NAListCtrl::OnSelect(wxListEvent& event)
 	if (event.GetIndex() != -1)
 	{
 		int id = wxAtoi(GetText(event.GetIndex(), 0));
-		if (id > 0 && IsItemChecked(event.GetIndex()) && IsItemChecked(event.GetIndex()))
-			notifyAll(NA_SET_ACTIVE, &id, sizeof(int));
+        if (id <= 0 && IsItemChecked(event.GetIndex()))
+        {
+            notifyAll(NA_SWITCH_PROPPANEL, &id, sizeof(int));
+        }
+		else if (id > 0 && IsItemChecked(event.GetIndex()))
+        {
+            if (m_selTimer->IsRunning())
+                m_selTimer->Stop();
+            m_selTimer->StartOnce(30);
+            NAListItemSel sel;
+            sel.itemid = id;
+            sel.visibility = 2;
+            m_selbuf.push_back(sel);
+			notifyAll(NA_SWITCH_PROPPANEL, &id, sizeof(int));
+        }
 	}
 }
 
@@ -655,7 +718,16 @@ void NAListCtrl::OnDeselect(wxListEvent& event)
 	{
 		int id = wxAtoi(GetText(event.GetIndex(), 0));
 		if (id > 0 && IsItemChecked(event.GetIndex()) && IsItemChecked(event.GetIndex()))
-			notifyAll(NA_SET_VISIBLE, &id, sizeof(int));
+        {
+            if (m_selTimer->IsRunning())
+                m_selTimer->Stop();
+            m_selTimer->StartOnce(30);
+            NAListItemSel sel;
+            sel.itemid = id;
+            sel.visibility = 1;
+            m_selbuf.push_back(sel);
+			//notifyAll(NA_SET_VISIBLE, &id, sizeof(int));
+        }
 	}
 }
 
@@ -744,6 +816,24 @@ void NAListCtrl::OnSize(wxSizeEvent& event)
 		UpdateResults(true);
 
 	event.Skip();
+}
+
+void NAListCtrl::OnTimer(wxTimerEvent& event)
+{
+    if (m_selbuf.size() > 0)
+    {
+        notifyAll(NA_PUSH_HISTORY, NULL, 0);
+        for (auto d : m_selbuf)
+        {
+            if (d.visibility == 1)
+                notifyAll(NA_SET_VISIBLE_WITHOUT_REFRESH, &(d.itemid), sizeof(int));
+            else if (d.visibility == 2)
+                notifyAll(NA_SET_ACTIVE_WITHOUT_REFRESH, &(d.itemid), sizeof(int));
+        }
+        notifyAll(NA_REFRESH_RENDERVIEWS, NULL, 0);
+    }
+    
+    m_selbuf.clear();
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1117,6 +1207,40 @@ void NAGuiPluginWindow::doAction(ActionInfo *info)
 			plugin->SetSegmentVisibility(id, 2);
 		}
 		break;
+    case NA_SET_VISIBLE_WITHOUT_REFRESH:
+        if (plugin)
+        {
+            int id = *(int*)(info->data);
+            plugin->SetSegmentVisibility(id, 1, false);
+        }
+        break;
+    case NA_SET_ACTIVE_WITHOUT_REFRESH:
+        if (plugin)
+        {
+            int id = *(int*)(info->data);
+            plugin->SetSegmentVisibility(id, 2, false);
+        }
+        break;
+    case NA_PUSH_HISTORY:
+        if (plugin)
+        {
+            plugin->PushVisHistory();
+        }
+        break;
+    case NA_REFRESH_RENDERVIEWS:
+        if (plugin)
+        {
+            plugin->RefreshRenderViews();
+        }
+        break;
+    case NA_SWITCH_PROPPANEL:
+        if (plugin)
+        {
+            int id = *(int*)(info->data);
+            bool isref = id == -2 ? true : false;
+            plugin->SwitchPropPanel(isref);
+        }
+        break;
 	default:
 		break;
 	}

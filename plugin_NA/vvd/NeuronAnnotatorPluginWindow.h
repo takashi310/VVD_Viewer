@@ -50,6 +50,12 @@ struct NAListItemData
 	int visibility;
 };
 
+struct NAListItemSel
+{
+    int itemid;
+    int visibility;
+};
+
 class NAListCtrl : public wxListCtrl, public Notifier
 {
 	static constexpr int IMG_ID_REF = -2;
@@ -58,7 +64,8 @@ class NAListCtrl : public wxListCtrl, public Notifier
 	enum
 	{
 		Menu_AddTo = wxID_HIGHEST + 12201,
-		Menu_Save
+		Menu_Save,
+        NAL_SelTimer
 	};
 
 public:
@@ -77,6 +84,7 @@ public:
 
 	void LoadResults(wxString idpath, wxString volpath, wxString chspec, wxString prefix = wxT(""));
 	void UpdateResults(bool refresh_items = false);
+    void UpdateSelections();
 	wxString GetListFilePath() { return m_rfpath; }
 
 	void DeleteSelection();
@@ -100,6 +108,7 @@ private:
 	void OnColBeginDrag(wxListEvent& event);
 	void OnLeftDClick(wxMouseEvent& event);
 	void OnSize(wxSizeEvent& event);
+    void OnTimer(wxTimerEvent& event);
 
 	DECLARE_EVENT_TABLE()
 protected: //Possible TODO
@@ -116,6 +125,8 @@ private:
 	wxArrayString m_dbnames;
 	std::vector<NAListItemData> m_listdata;
 	std::vector<NAListItemData> m_history;
+    std::vector<NAListItemSel> m_selbuf;
+    wxTimer *m_selTimer;
 	int m_history_pos;
 	wxString m_rfpath;
 	NAGuiPlugin* m_plugin;

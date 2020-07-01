@@ -1414,6 +1414,7 @@ public:
 	void SetNR(bool val);
     void SetInterpolate(bool mode);
 	void SetInvert(bool mode);
+    void SetMaskHideMode(int mode);
 
 	//blend mode
 	void SetBlendMode(int mode);

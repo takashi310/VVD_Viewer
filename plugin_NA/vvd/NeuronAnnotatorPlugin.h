@@ -10,6 +10,12 @@
 #define NA_SET_VISIBLE 2
 #define NA_SET_INVISIBLE 3
 #define NA_SET_ACTIVE 4
+#define NA_SET_VISIBLE_WITHOUT_REFRESH 5
+#define NA_SET_ACTIVE_WITHOUT_REFRESH 6
+#define NA_PUSH_HISTORY 7
+#define NA_REFRESH_RENDERVIEWS 8
+#define NA_SWITCH_PROPPANEL 9
+
 
 struct NASegment
 {
@@ -58,10 +64,13 @@ public:
     bool LoadSWC(wxString name, wxString swc_zip_path);
     bool LoadFiles(wxString path, size_t datasize = 0ULL);
 	bool LoadNrrd(int id);
-	void SetSegmentVisibility(int id, int vis);
+	void SetSegmentVisibility(int id, int vis, bool refresh = true);
 	int GetSegmentVisibility(int id);
 	void ToggleSegmentVisibility(int id);
 	void PushVisHistory();
+    void RefreshRenderViews();
+    
+    void SwitchPropPanel(bool ref);
     
     void SaveCombinedFragment(wxString path);
 
