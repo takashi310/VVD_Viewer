@@ -370,7 +370,7 @@ public:
 		void draw_mask(
 			int type, int paint_mode, int hr_mode,
 			double ini_thresh, double gm_falloff, double scl_falloff,
-			double scl_translate, double w2d, double bins, bool ortho, bool estimate);
+			double scl_translate, double w2d, double bins, bool ortho, bool estimate, Texture* ext_msk = NULL);
 
 		//generate the labeling assuming the mask is already generated
 		//type: 0-initialization; 1-maximum intensity filtering

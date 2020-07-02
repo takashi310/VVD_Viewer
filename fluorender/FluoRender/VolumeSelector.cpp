@@ -161,10 +161,19 @@ void VolumeSelector::Select(double radius)
 			ini_thresh /= 2.0;
 		m_scl_translate = ini_thresh;
 	}*/
+    
+    Texture* ext_msk = NULL;
+    if (!m_vd->GetSharedMaskName().IsEmpty() && m_dm)
+    {
+        VolumeData* msk = m_dm->GetVolumeData(m_vd->GetSharedMaskName());
+        if (msk)
+            ext_msk = msk->GetTexture();
+    }
+    
 	if (m_use_dslt && (m_mode == 1 || m_mode == 2))
 		m_vd->DrawMaskDSLT(0, m_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0, m_dslt_r, m_dslt_q, m_dslt_c);
 	else
-		m_vd->DrawMask(0, m_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0);
+		m_vd->DrawMask(0, m_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0, false, ext_msk);
 
 	//grow the selection when paint mode is select, append, erase, or invert
 	if (/*m_mode==1 ||
@@ -175,7 +184,7 @@ void VolumeSelector::Select(double radius)
 		//loop for growing
 		int iter = m_iter_num*(radius/20.0>1.0?radius/20.0:1.0);
 		for (int i=0; i<iter; i++)
-			m_vd->DrawMask(1, m_mode, 0, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0);
+			m_vd->DrawMask(1, m_mode, 0, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0, ext_msk);
 		/*if (m_vd->GetVR() && m_vd->GetBrickNum() > 1) {
 			m_vd->GetVR()->return_mask();
 			m_vd->GetVR()->clear_tex_current_mask();

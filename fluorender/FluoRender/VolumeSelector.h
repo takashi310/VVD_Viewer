@@ -130,6 +130,11 @@ public:
 
 	//Test functions
 	void Test();
+    
+    void SetDataManager(DataManager* dm)
+    {
+        m_dm = dm;
+    }
 
 private:
 	VolumeData *m_vd;	//volume data for segmentation
@@ -205,6 +210,8 @@ private:
 	double m_ps_size;
 
 	bool m_estimate_threshold;
+    
+    DataManager* m_dm;
 
 private:
 	bool SearchComponentList(unsigned int cval, Vector &pos, double intensity);

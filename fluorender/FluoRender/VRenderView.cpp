@@ -736,6 +736,8 @@ VRenderVulkanView::VRenderVulkanView(wxWindow* frame,
 		m_text_renderer = new TextRenderer(font_file.ToStdString(), m_v2drender);
 		if (setting_dlg)
 			m_text_renderer->SetSize(setting_dlg->GetTextSize());
+        
+        m_selector.SetDataManager(vr_frame->GetDataManager());
 	}
 
 	goTimer = new nv::Timer(10);
@@ -3910,7 +3912,7 @@ void VRenderVulkanView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, in
 			}
 			if (maxlen > sampling_frq_fac) sampling_frq_fac = maxlen;
 			*/
-			if (tex->nmask()!=-1 && vd->GetMaskHideMode() == VOL_MASK_HIDE_NONE)
+			if ( (tex->nmask()!=-1 || !vd->GetSharedMaskName().IsEmpty()) && vd->GetMaskHideMode() == VOL_MASK_HIDE_NONE)
 			{
 				cnt_mask++;
 				if (vr_frame &&
@@ -3981,7 +3983,7 @@ void VRenderVulkanView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, in
 				vd->GetLabel(false))
 				continue;
 
-			if (vd->GetTexture() && vd->GetTexture()->nmask()!=-1)
+			if ( vd->GetTexture() && (vd->GetTexture()->nmask()!=-1 || !vd->GetSharedMaskName().IsEmpty()) )
 			{
 				Color tmp_hdr;
 				if (m_enhance_sel)
@@ -4374,6 +4376,13 @@ void VRenderVulkanView::DrawOVER(VolumeData* vd, std::unique_ptr<vks::VFrameBuff
 			if (lbl)
 				ext_lbl = lbl->GetTexture();
 		}
+        Texture* ext_msk = NULL;
+        if (!vd->GetSharedMaskName().IsEmpty() && vr_frame && vr_frame->GetDataManager())
+        {
+            VolumeData* msk = vr_frame->GetDataManager()->GetVolumeData(vd->GetSharedMaskName());
+            if (msk)
+                ext_msk = msk->GetTexture();
+        }
 
 		if (vd->GetVR())
 			vd->GetVR()->set_depth_peel(peel);
@@ -4381,7 +4390,7 @@ void VRenderVulkanView::DrawOVER(VolumeData* vd, std::unique_ptr<vks::VFrameBuff
 		vd->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
 		vd->SetFog(m_use_fog, m_fog_intensity, m_fog_start, m_fog_end);
 		VkClearColorValue clear_color = { 0.0, 0.0, 0.0, 0.0 };
-		vd->Draw(fb, clear, !m_persp, m_interactive, m_scale_factor, sampling_frq_fac, clear_color, NULL, ext_lbl);
+		vd->Draw(fb, clear, !m_persp, m_interactive, m_scale_factor, sampling_frq_fac, clear_color, ext_msk, ext_lbl);
 	}
 
 	if (vd->GetShadow() && vd->GetVR()->get_done_loop(0))
@@ -4572,12 +4581,20 @@ void VRenderVulkanView::DrawMIP(VolumeData* vd, std::unique_ptr<vks::VFrameBuffe
 			if (lbl)
 				ext_lbl = lbl->GetTexture();
 		}
+        Texture* ext_msk = NULL;
+        if (!vd->GetSharedMaskName().IsEmpty() && vr_frame && vr_frame->GetDataManager())
+        {
+            VolumeData* msk = vr_frame->GetDataManager()->GetVolumeData(vd->GetSharedMaskName());
+            if (msk)
+                ext_msk = msk->GetTexture();
+        }
+        
 		VkClearColorValue clear_color = { 0.0, 0.0, 0.0, 0.0 };
-
+        
 		//draw
 		vd->SetStreamMode(1);
 		vd->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
-		vd->Draw(m_fbo_ol1, clear, !m_persp, m_interactive, m_scale_factor, sampling_frq_fac, clear_color, NULL, ext_lbl);
+		vd->Draw(m_fbo_ol1, clear, !m_persp, m_interactive, m_scale_factor, sampling_frq_fac, clear_color, ext_msk, ext_lbl);
 		//
 		if (color_mode == 1)
 		{

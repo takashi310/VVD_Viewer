@@ -2565,6 +2565,14 @@ namespace FLIVR
 			if (!lbl_bricks || lbl_bricks->size() == 0)
 				return;
 		}
+        
+        vector<TextureBrick*>* msk_bricks = 0;
+        if (ext_msk)
+        {
+            msk_bricks = ext_msk->get_sorted_bricks(view_ray, orthographic_p);
+            if (!msk_bricks || msk_bricks->size() == 0)
+                return;
+        }
 
 		set_interactive_mode(adaptive_ && interactive_mode_p);
 
@@ -2606,8 +2614,9 @@ namespace FLIVR
 		std::vector<VkWriteDescriptorSet> descriptorWritesBase;
 		m_vulkan->vray_shader_factory_->getDescriptorSetWriteUniforms(prim_dev, vert_ubuf, frag_ubuf, descriptorWritesBase);
 
-		eval_ml_mode();
+		eval_ml_mode(ext_msk);
 		bool lbl_exists = tex_->nlabel() != -1 || (ext_lbl && ext_lbl->nlabel() != -1);
+        bool msk_exists = tex_->nmask() != -1 || (ext_msk && ext_msk->nmask() != -1);
 		VRayPipeline pipeline = prepareVRayPipeline(prim_dev, mode_, update_order_, colormap_mode_, !orthographic_p, 0, !label_ && m_na_mode && lbl_exists);
 		VkPipelineLayout pipelineLayout = m_vulkan->vray_shader_factory_->pipeline_[prim_dev].pipelineLayout;
 
@@ -2866,7 +2875,23 @@ namespace FLIVR
 				semaphores.push_back(prim_dev->GetNextRenderSemaphoreSettings());
 
 			if (mask_)
-				msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, true, &mask_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
+            {
+                if (m_na_mode)
+                {
+                    if (ext_msk && ext_msk->nmask() != -1)
+                    {
+                        msktex = load_brick_mask(prim_dev, msk_bricks, i, filter, false, 0, true, false, &mask_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
+                    }
+                    else if (tex_->nmask() != -1)
+                    {
+                        msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, true, &mask_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
+                    }
+                }
+                else
+                {
+                    msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, true, &mask_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
+                }
+            }
 			else if (tex_->nmask() != -1 && m_mask_hide_mode != VOL_MASK_HIDE_NONE)
 			{
 #ifndef _UNIT_TEST_VOLUME_RENDERER_
@@ -3506,7 +3531,7 @@ namespace FLIVR
 		int type, int paint_mode, int hr_mode,
 		double ini_thresh, double gm_falloff, double scl_falloff,
 		double scl_translate, double w2d, double bins, bool orthographic_p,
-		bool estimate)
+		bool estimate, Texture* ext_msk)
 	{
 /*		if (paint_mode == 1 || paint_mode == 2)
 		{
@@ -3542,6 +3567,14 @@ namespace FLIVR
 		vector<TextureBrick*> *bricks = tex_->get_sorted_bricks(view_ray, orthographic_p);
 		if (!bricks || bricks->size() == 0)
 			return;
+        
+        vector<TextureBrick*>* msk_bricks = 0;
+        if (ext_msk)
+        {
+            msk_bricks = ext_msk->get_sorted_bricks(view_ray, orthographic_p);
+            if (!msk_bricks || msk_bricks->size() == 0)
+                return;
+        }
 
 		vks::VulkanDevice* prim_dev = m_vulkan->devices[0];
 
@@ -3660,8 +3693,15 @@ namespace FLIVR
 			b->prevent_tex_deletion(true);
 			brktex = load_brick(prim_dev, 0, 0, bricks, i, VK_FILTER_NEAREST, compression_);
 			if (!brktex) continue;
-			msktex = load_brick_mask(prim_dev, bricks, i, VK_FILTER_NEAREST, false, 0, true);
+			
+            if (ext_msk && ext_msk->nmask() != -1)
+                msktex = load_brick_mask(prim_dev, msk_bricks, i, VK_FILTER_NEAREST, false, 0, true);
+            else
+                msktex = load_brick_mask(prim_dev, bricks, i, VK_FILTER_NEAREST, false, 0, true);
+            
+            
 			if (!msktex) continue;
+            
 			if (use_stroke)
 			{
 				stroketex = load_brick_stroke(prim_dev, bricks, i, VK_FILTER_NEAREST, false, 0, true);

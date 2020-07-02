@@ -122,6 +122,7 @@ NAGuiPlugin::NAGuiPlugin(wxEvtHandler * handler, wxWindow * vvd)
 
 NAGuiPlugin::~NAGuiPlugin()
 {
+/*
 	if (m_lbl_nrrd)
 	{
 		delete[] m_lbl_nrrd->data;
@@ -143,6 +144,7 @@ NAGuiPlugin::~NAGuiPlugin()
 		}
 		m_nrrd_s[i] = NULL;
 	}
+ */
 }
 
 bool NAGuiPlugin::runNALoader()
@@ -244,6 +246,7 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 	m_vol_suffix = vol_path.Mid(vol_path.Find('.', true)).MakeLower();
 
 	VolumeData* vols[3] = {};
+    VolumeData* volr = NULL;
 	void* data_s[3] = {};
 	void* data_r;
 	int scount = 0;
@@ -269,6 +272,7 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 					m_nrrd_r = vd->GetTexture()->get_nrrd(0);
 					data_r = m_nrrd_r->data;
 					m_vol_r = vd->GetName();
+                    volr = vd;
                     if (m_xspc > 0.0 && m_yspc > 0.0 && m_zspc > 0.0)
                         vd->SetSpacings(m_xspc, m_yspc, m_zspc);
 				}
@@ -304,10 +308,18 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 		if (c == 0)
 			vols[c]->LoadLabel(m_lbl_nrrd);
 		else
-		{
 			vols[c]->SetSharedLabelName(vols[0]->GetName());
-		}
 	}
+    
+    for (int c = 0; c < scount; c++)
+    {
+        if (c == 0)
+            vols[c]->AddEmptyMask();
+        else
+            vols[c]->SetSharedMaskName(vols[0]->GetName());
+    }
+    if (volr)
+        volr->SetSharedMaskName(vols[0]->GetName());
 
 	m_scount = scount;
 
