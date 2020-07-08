@@ -5650,6 +5650,7 @@ void VRenderVulkanView::UpdateBrushState()
 
 			if (m_paint_enable)
 			{
+                SetForceHideMask(false);
 				Segment();
 				RefreshGL();
 			}
@@ -6247,18 +6248,26 @@ void VRenderVulkanView::OnIdle(wxTimerEvent& event)
 			m_clip_down = false;
 
 		//draw_mask
-		if (wxGetKeyState(wxKeyCode('V')) &&
-			m_draw_mask)
-		{
-			m_draw_mask = false;
-			refresh = true;
-		}
-		if (!wxGetKeyState(wxKeyCode('V')) &&
-			!m_draw_mask)
-		{
-			m_draw_mask = true;
-			refresh = true;
-		}
+        if (!m_force_hide_mask)
+        {
+            if (wxGetKeyState(wxKeyCode('V')) &&
+                m_draw_mask)
+            {
+                m_draw_mask = false;
+                refresh = true;
+            }
+            if (!wxGetKeyState(wxKeyCode('V')) &&
+                !m_draw_mask)
+            {
+                m_draw_mask = true;
+                refresh = true;
+            }
+        }
+        else if (m_draw_mask)
+        {
+            m_draw_mask = false;
+            refresh = true;
+        }
 	}
 
 	if (window && !editting && view_reg.Contains(mouse_pos) && !m_key_lock)
@@ -13328,7 +13337,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 							total_num++;
 							num_chan++;
 						}
-						if (m_draw_mask && tex->nmask() != -1 && !tex->isBrxml() && vd->GetMaskHideMode() == VOL_MASK_HIDE_NONE)
+						if (m_draw_mask && (tex->nmask() != -1 || !vd->GetSharedMaskName().IsEmpty()) && !tex->isBrxml() && vd->GetMaskHideMode() == VOL_MASK_HIDE_NONE)
 						{
 							total_num++;
 							num_chan++;
@@ -13428,7 +13437,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 				for (i = 0; i < list.size(); i++)
 				{
 					VolumeData* vd = list[i];
-					if (vd->GetTexture()->nmask() < 0) continue;
+					if (vd->GetTexture()->nmask() < 0 && vd->GetSharedMaskName().IsEmpty()) continue;
 					int curlevel = vd->GetLevel();
 					vd->SetLevel(vd->GetMaskLv());
 					Texture* tex = vd->GetTexture();
@@ -13609,7 +13618,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 							for (j = 0; j < list.size(); j++)
 							{
 								VolumeData* vd = list[j];
-								if (vd->GetTexture()->nmask() < 0) continue;
+								if (vd->GetTexture()->nmask() < 0 && vd->GetSharedMaskName().IsEmpty()) continue;
 								int curlevel = vd->GetLevel();
 								vd->SetLevel(vd->GetMaskLv());
 								Texture* tex = vd->GetTexture();
@@ -15680,6 +15689,7 @@ void VRenderVulkanView::OnMouse(wxMouseEvent& event)
 		else if (m_int_mode == 2)
 		{
 			//segment volumes
+            SetForceHideMask(false);
 			Segment();
 			m_int_mode = 4;
 			m_force_clear = true;
@@ -15700,6 +15710,7 @@ void VRenderVulkanView::OnMouse(wxMouseEvent& event)
 		else if (m_int_mode == 7)
 		{
 			//segment volume, calculate center, add ruler point
+            SetForceHideMask(false);
 			Segment();
 			if (m_ruler_type == 3)
 				AddRulerPoint(event.GetX(), event.GetY());

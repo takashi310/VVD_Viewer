@@ -235,8 +235,8 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 	Nrrd* v3d_nrrd = m_lbl_reader->Convert(0, 0, true);
 	void* v3d_data = v3d_nrrd->data;
 
-	size_t avmem = (size_t)(vrv->GetAvailableGraphicsMemory(0) * 1024.0 * 1024.0);
-	//size_t avmem = (size_t)(1024.0 * 1024.0 * 1024.0);
+	//size_t avmem = (size_t)(vrv->GetAvailableGraphicsMemory(0) * 1024.0 * 1024.0);
+	size_t avmem = (size_t)(1024.0 * 1024.0 * 1024.0);
 
 	LoadFiles(vol_path, avmem);
 	int vol_chan = dm->GetLatestVolumeChannelNum();
@@ -490,10 +490,6 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 		if (prop)
 		{
 			VolumeData* vdr = dm->GetVolumeData(m_vol_r);
-			if (vdr)
-				prop->SetVolumeData(vdr);
-			else if (vols[0])
-				prop->SetVolumeData(vols[0]);
             
             if (vdr)
             {
@@ -501,13 +497,25 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
                 wxString rvname = vdr->GetName();
                 wxString str;
                 vrv->MoveLayertoView(gname, rvname, str);
-                vframe->UpdateTree(rvname, 2);
+            }
+            if (vols[0])
+            {
+                wxString vname = vols[0]->GetName();
+                vframe->UpdateTree(vname, 2);
+            }
+            else if (vdr)
+            {
+                wxString vname = vdr->GetName();
+                vframe->UpdateTree(vname, 2);
             }
 		}
 	}
     
     vrv->SetSelectGroup(true);
+    brushdlg->SetBrushSclTranslate(0.0);
     brushdlg->GetSettings(vrv);
+    
+    vrv->SetForceHideMask(true);
     
     vrv->InitView(INIT_BOUNDS|INIT_CENTER|INIT_OBJ_TRANSL|INIT_ROTATE);
     vrv->RefreshGL();

@@ -2350,7 +2350,7 @@ int VolumeData::GetMaskMode()
 
 bool VolumeData::isActiveMask()
 {
-	if (m_tex->nmask()==-1) return false;
+	if (m_tex->nmask()==-1 && m_shared_msk_name.IsEmpty()) return false;
 
 	bool mask;
 	switch (m_mask_mode)
@@ -2377,7 +2377,7 @@ bool VolumeData::isActiveMask()
 
 bool VolumeData::isActiveLabel()
 {
-	if (m_tex->nlabel()==-1) return false;
+	if (m_tex->nlabel()==-1 && m_shared_lbl_name.IsEmpty()) return false;
 
 	bool label;
 	switch (m_mask_mode)

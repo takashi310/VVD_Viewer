@@ -508,7 +508,8 @@ namespace FLIVR
 				   bool set_drawn=true,
 				   bool* updated = nullptr,
 				   vks::VulkanSemaphoreSettings* semaphore = nullptr,
-				   bool flush=true);
+				   bool flush=true,
+                   TextureBrick* bdraw = NULL);
 			   //load the texture for volume labeling into texture pool
                std::shared_ptr<vks::VTexture> load_brick_label(
 				   vks::VulkanDevice *device,

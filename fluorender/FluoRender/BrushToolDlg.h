@@ -125,6 +125,15 @@ public:
 	void SetDftNRThresh(double thresh) {m_dft_nr_thresh = thresh;}
 	double GetDftNRSize() {return m_dft_nr_size;}
 	void SetDftNRSize(double size) {m_dft_nr_size = size;}
+    
+    void SetBrushSclTranslate(double val)
+    {
+        wxString str;
+        m_dft_scl_translate = val;
+        str = wxString::Format("%.1f", m_dft_scl_translate*m_max_value);
+        m_brush_scl_translate_sldr->SetRange(0, int(m_max_value*10.0));
+        m_brush_scl_translate_text->SetValue(str);
+    }
 
 	//save default
 	void SaveDefault();

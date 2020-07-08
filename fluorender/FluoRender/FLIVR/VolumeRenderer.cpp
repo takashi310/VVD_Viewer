@@ -923,7 +923,7 @@ namespace FLIVR
 			label_ = false;
 			break;
 		case 1:
-			if (tex_->nmask() == -1 || (ext_msk && ext_msk->nmask() == -1))
+			if (tex_->nmask() == -1 && (ext_msk && ext_msk->nmask() == -1))
 			{
 				mask_ = false;
 				ml_mode_ = 0;
@@ -933,7 +933,7 @@ namespace FLIVR
 			label_ = false;
 			break;
 		case 2:
-			if (tex_->nmask() == -1 || (ext_msk && ext_msk->nmask() == -1))
+			if (tex_->nmask() == -1 && (ext_msk && ext_msk->nmask() == -1))
 			{
 				mask_ = false;
 				ml_mode_ = 0;
@@ -943,7 +943,7 @@ namespace FLIVR
 			label_ = false;
 			break;
 		case 3:
-			if (tex_->nlabel() == -1 || (ext_lbl && ext_lbl->nlabel() == -1))
+			if (tex_->nlabel() == -1 && (ext_lbl && ext_lbl->nlabel() == -1))
 			{
 				label_ = false;
 				ml_mode_ = 0;
@@ -953,7 +953,7 @@ namespace FLIVR
 			mask_ = false;
 			break;
 		case 4:
-			if (tex_->nlabel() == -1 || (ext_lbl && ext_lbl->nlabel() == -1))
+			if (tex_->nlabel() == -1 && (ext_lbl && ext_lbl->nlabel() == -1))
 			{
 				if (tex_->nmask() > -1 || (ext_msk && ext_msk->nmask() > -1))
 				{
@@ -1235,7 +1235,7 @@ namespace FLIVR
 		return ret_pipeline;
 	}
 
-	VolumeRenderer::VRayPipeline VolumeRenderer::prepareVRayPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode, bool persp, int multi_mode, bool na_mode)
+	VolumeRenderer::VRayPipeline VolumeRenderer::prepareVRayPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode, bool persp, int multi_mode, bool na_mode, Texture* ext_msk)
 	{
 		VRayPipeline ret_pipeline;
 
@@ -1247,7 +1247,7 @@ namespace FLIVR
 			depth_peel_, true,
 			hiqual_, ml_mode_,
 			colormap_mode_, colormap_, colormap_proj_,
-			solid_, 1, tex_->nmask() != -1 ? m_mask_hide_mode : VOL_MASK_HIDE_NONE, persp, mode_, multi_mode, na_mode);
+			solid_, 1, (tex_->nmask() != -1 || (ext_msk && ext_msk->nmask() != -1)) ? m_mask_hide_mode : VOL_MASK_HIDE_NONE, persp, mode_, multi_mode, na_mode);
 
 		if (m_prev_vray_pipeline >= 0) {
 			if (m_vray_pipelines[m_prev_vray_pipeline].device == device &&
@@ -2617,7 +2617,7 @@ namespace FLIVR
 		eval_ml_mode(ext_msk);
 		bool lbl_exists = tex_->nlabel() != -1 || (ext_lbl && ext_lbl->nlabel() != -1);
         bool msk_exists = tex_->nmask() != -1 || (ext_msk && ext_msk->nmask() != -1);
-		VRayPipeline pipeline = prepareVRayPipeline(prim_dev, mode_, update_order_, colormap_mode_, !orthographic_p, 0, !label_ && m_na_mode && lbl_exists);
+		VRayPipeline pipeline = prepareVRayPipeline(prim_dev, mode_, update_order_, colormap_mode_, !orthographic_p, 0, !label_ && m_na_mode && lbl_exists, ext_msk);
 		VkPipelineLayout pipelineLayout = m_vulkan->vray_shader_factory_->pipeline_[prim_dev].pipelineLayout;
 
 		prepareVRayVertexBuffers(prim_dev);
@@ -2692,7 +2692,12 @@ namespace FLIVR
 		{
 		case 0://normal
 			if (mask_ && !label_)
-				frag_ubo.loc6_colparam = { mask_color_.r(), mask_color_.g(), mask_color_.b(), mask_thresh_ };
+            {
+                if (m_na_mode)
+                    frag_ubo.loc6_colparam = { mask_color_.r(), mask_color_.g(), mask_color_.b(), mask_thresh_ };
+                else
+                    frag_ubo.loc6_colparam = { mask_color_.r(), mask_color_.g(), mask_color_.b(), mask_thresh_ };
+            }
 			else
 				frag_ubo.loc6_colparam = { color_.r(), color_.g(), color_.b(), 0.0 };
 			break;
@@ -2876,23 +2881,12 @@ namespace FLIVR
 
 			if (mask_)
             {
-                if (m_na_mode)
-                {
-                    if (ext_msk && ext_msk->nmask() != -1)
-                    {
-                        msktex = load_brick_mask(prim_dev, msk_bricks, i, filter, false, 0, true, false, &mask_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
-                    }
-                    else if (tex_->nmask() != -1)
-                    {
-                        msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, true, &mask_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
-                    }
-                }
-                else
-                {
+                if (ext_msk && ext_msk->nmask() != -1)
+                    msktex = load_brick_mask(prim_dev, msk_bricks, i, filter, false, 0, true, true, &mask_updated, !mem_swap_ ? nullptr : &(semaphores.back()), true, (*bricks)[i]);
+                else if (tex_->nmask() != -1)
                     msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, true, &mask_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
-                }
             }
-			else if (tex_->nmask() != -1 && m_mask_hide_mode != VOL_MASK_HIDE_NONE)
+			else if (msk_exists && m_mask_hide_mode != VOL_MASK_HIDE_NONE)
 			{
 #ifndef _UNIT_TEST_VOLUME_RENDERER_
 				if (tex_->isBrxml() && tex_->GetMaskLv() != tex_->GetCurLevel())
@@ -2932,7 +2926,10 @@ namespace FLIVR
 					b->nx(nx); b->ny(ny); b->nz(nz);
 					b->mx(nx); b->my(ny); b->mz(nz);
 
-					msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, false, &mask_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
+                    if (ext_msk && ext_msk->nmask() != -1)
+                        msktex = load_brick_mask(prim_dev, msk_bricks, i, filter, false, 0, true, false, &mask_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
+                    else if (tex_->nmask() != -1)
+                        msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, false, &mask_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
 
 					double trans_x = (ox_d - ox) / nx;
 					double trans_y = (oy_d - oy) / ny;
@@ -2954,7 +2951,10 @@ namespace FLIVR
 				}
 				else
 				{
-					msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, false, &mask_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
+                    if (ext_msk && ext_msk->nmask() != -1)
+                        msktex = load_brick_mask(prim_dev, msk_bricks, i, filter, false, 0, true, false, &mask_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
+                    else if (tex_->nmask() != -1)
+                        msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, false, &mask_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
 
 					frag_const.mask_b_scale_invnz = { 1.0f, 1.0f, 1.0f, 1.0f };
 					frag_const.mask_b_trans = { 0.0f, 0.0f, 0.0f, 0.0f };

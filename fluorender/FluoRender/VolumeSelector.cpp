@@ -109,7 +109,18 @@ void VolumeSelector::Select(double radius)
 		return;
 
 	//insert the mask volume into m_vd
-	m_vd->AddEmptyMask();
+    Texture* ext_msk = NULL;
+    if (!m_vd->GetSharedMaskName().IsEmpty() && m_dm)
+    {
+        VolumeData* msk = m_dm->GetVolumeData(m_vd->GetSharedMaskName());
+        if (msk)
+            ext_msk = msk->GetTexture();
+        else
+            m_vd->AddEmptyMask();
+    }
+    else
+        m_vd->AddEmptyMask();
+    
 	m_vd->Set2dMask(m_2d_mask);
 	if (m_use2d && m_2d_weight1 && m_2d_weight2)
 		m_vd->Set2DWeight(m_2d_weight1, m_2d_weight2);
@@ -161,14 +172,6 @@ void VolumeSelector::Select(double radius)
 			ini_thresh /= 2.0;
 		m_scl_translate = ini_thresh;
 	}*/
-    
-    Texture* ext_msk = NULL;
-    if (!m_vd->GetSharedMaskName().IsEmpty() && m_dm)
-    {
-        VolumeData* msk = m_dm->GetVolumeData(m_vd->GetSharedMaskName());
-        if (msk)
-            ext_msk = msk->GetTexture();
-    }
     
 	if (m_use_dslt && (m_mode == 1 || m_mode == 2))
 		m_vd->DrawMaskDSLT(0, m_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0, m_dslt_r, m_dslt_q, m_dslt_c);

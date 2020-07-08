@@ -1088,8 +1088,15 @@ namespace FLIVR
 	"	}\n" \
 	"\n" \
 	"	FragColor = outcol + highlight * 0.1 * clamp(outcol, 0.01, 1.0);\n" \
-	"\n" 
+	"\n"
 
+#define VRAY_LOOP_NA_MASK_TAIL \
+"        }\n" \
+"    }\n" \
+"\n" \
+"    FragColor = outcol * 0.001;\n" \
+"\n"
+    
 #define VRAY_LOOP_TAIL \
 	"		}\n" \
 	"	}\n" \
@@ -2017,8 +2024,10 @@ VRayShader::VRayShader(
         if (na_mode_)
             z << VRAY_DATA_LABEL_SEG_ENDIF;
 
-		if (na_mode_)
+		if (na_mode_ && mask_ != 1)
 			z << VRAY_LABEL_SEG_LOOP_TAIL;
+        else if (na_mode_ && mask_ == 1)
+            z << VRAY_LOOP_NA_MASK_TAIL;
 		else
 			z << VRAY_LOOP_TAIL;
 

@@ -1852,7 +1852,7 @@ namespace FLIVR
 	//search for or create the mask texture in the texture pool
 	std::shared_ptr<vks::VTexture> TextureRenderer::load_brick_mask(
 		vks::VulkanDevice *device, vector<TextureBrick*> *bricks, int bindex, VkFilter filter, bool compression, int unit,
-		bool swap_mem, bool set_drawn, bool* updated, vks::VulkanSemaphoreSettings* semaphore, bool flush)
+		bool swap_mem, bool set_drawn, bool* updated, vks::VulkanSemaphoreSettings* semaphore, bool flush, TextureBrick* bdraw)
 	{
 		std::shared_ptr<vks::VTexture> result;
 
@@ -1865,6 +1865,8 @@ namespace FLIVR
 			start_update_loop_ &&
 			!done_update_loop_ && set_drawn)
 		{
+            if (bdraw)
+                brick = bdraw;
 			if (!brick->drawn(TEXTURE_RENDER_MODE_MASK))
 			{
 				brick->set_drawn(TEXTURE_RENDER_MODE_MASK, true);

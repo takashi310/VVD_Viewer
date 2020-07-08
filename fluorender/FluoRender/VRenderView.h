@@ -703,6 +703,9 @@ public:
     void SetRecording(bool val) { m_recording = val; }
     bool GetRecording() { return m_recording; }
     void DownloadRecordedFrame(void *image, VkFormat &format);
+    
+    void SetForceHideMask(bool val) { m_force_hide_mask = val; m_draw_mask = !val; }
+    bool GetForceHideMask() { return m_force_hide_mask; }
 
 public:
 	//script run
@@ -1058,6 +1061,8 @@ private:
 	bool m_draw_mask;
 	bool m_clear_mask;
 	bool m_draw_label;
+    
+    bool m_force_hide_mask;
 
 	//move view
 	bool m_move_left;
@@ -1942,6 +1947,9 @@ public:
 	VolumeLoader* GetVolumeLoader() { if (m_glview) return m_glview->GetVolumeLoader(); else return NULL; }
 	 
 	TextRenderer* GetTextRenderer() { if (m_glview) return m_glview->GetTextRenderer(); else return nullptr; }
+    
+    void SetForceHideMask(bool val) { if (m_glview) m_glview->SetForceHideMask(val); }
+    bool GetForceHideMask() { if (m_glview) return m_glview->GetForceHideMask(); }
 
 public:
 	wxWindow* m_frame;

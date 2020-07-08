@@ -448,7 +448,7 @@ public:
 		static std::vector<VRayPipeline> m_vray_pipelines;
 		static std::map<vks::VulkanDevice*, VkRenderPass> m_vray_draw_pass;
 		int m_prev_vray_pipeline;
-		VRayPipeline prepareVRayPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode, bool persp, int multi_mode = 0, bool na_mode = false);
+        VRayPipeline prepareVRayPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode, bool persp, int multi_mode = 0, bool na_mode = false, Texture* ext_msk = NULL);
 		
 		struct VRayVertexBuffers {
 			vks::Buffer vertexBuffer;
