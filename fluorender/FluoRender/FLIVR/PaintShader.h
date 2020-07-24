@@ -32,21 +32,29 @@
 #include <string>
 #include <vector>
 
+#include "DLLExport.h"
+
+#include "VulkanDevice.hpp"
+
 namespace FLIVR
 {
+	#define PAINT_SAMPLER_NUM 1
+
 	class ShaderProgram;
 
-	class PaintShader
+	class EXPORT_API PaintShader
 	{
 	public:
-		PaintShader();
+		PaintShader(VkDevice device);
 		~PaintShader();
 
 		bool create();
 
-		inline bool match()
+		inline VkDevice device() { return device_; }
+
+		inline bool match(VkDevice device)
 		{ 
-			return true; 
+			return (device_ == device);
 		}
 
 		inline ShaderProgram* program() { return program_; }
@@ -54,16 +62,33 @@ namespace FLIVR
 	protected:
 		bool emit(std::string& s);
 
+		VkDevice device_;
+
 		ShaderProgram* program_;
 	};
 
-	class PaintShaderFactory
+	class EXPORT_API PaintShaderFactory
 	{
 	public:
 		PaintShaderFactory();
+		PaintShaderFactory(std::vector<vks::VulkanDevice*> &devices);
 		~PaintShaderFactory();
 
-		ShaderProgram* shader();
+		ShaderProgram* shader(VkDevice device);
+
+		void init(std::vector<vks::VulkanDevice*> &devices);
+
+		struct PaintPipeline {
+			VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
+			VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+			VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+		};
+
+		void setupDescriptorSetLayout();
+			
+		std::map<vks::VulkanDevice*, PaintPipeline> pipeline_;
+
+		std::vector<vks::VulkanDevice*> vdevices_;
 
 	protected:
 		std::vector<PaintShader*> shader_;

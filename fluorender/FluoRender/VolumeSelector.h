@@ -27,14 +27,15 @@ DEALINGS IN THE SOFTWARE.
 */
 #include "DataManager.h"
 #include <wx/progdlg.h>
-#include <boost/unordered_map.hpp>
+//#include <boost/unordered_map.hpp>
+#include "DLLExport.h"
 
 #ifndef _VOLUMESELECTOR_H_
 #define _VOLUMESELECTOR_H_
 
 //using namespace stdext;
 
-class VolumeSelector
+class EXPORT_API VolumeSelector
 {
 public:
 	VolumeSelector();
@@ -42,8 +43,8 @@ public:
 
 	void SetVolume(VolumeData *vd);
 	VolumeData* GetVolume();
-	void Set2DMask(GLuint mask);
-	void Set2DWeight(GLuint weight1, GLuint weight2);
+	void Set2DMask(const std::shared_ptr<vks::VTexture> &mask);
+	void Set2DWeight(const std::shared_ptr<vks::VTexture> &weight1, const std::shared_ptr<vks::VTexture> &weight2);
 	void SetProjection(double* mvmat, double *prjmat);
 	void SetBrushIteration(int num) {m_iter_num = num;}
 	int GetBrushIteration() {return m_iter_num;}
@@ -129,12 +130,17 @@ public:
 
 	//Test functions
 	void Test();
+    
+    void SetDataManager(DataManager* dm)
+    {
+        m_dm = dm;
+    }
 
 private:
 	VolumeData *m_vd;	//volume data for segmentation
-	GLuint m_2d_mask;	//2d mask from painting
-	GLuint m_2d_weight1;//2d weight map (after tone mapping)
-	GLuint m_2d_weight2;//2d weight map	(before tone mapping)
+	std::shared_ptr<vks::VTexture> m_2d_mask;	//2d mask from painting
+	std::shared_ptr<vks::VTexture> m_2d_weight1;//2d weight map (after tone mapping)
+	std::shared_ptr<vks::VTexture> m_2d_weight2;//2d weight map	(before tone mapping)
 	double m_mvmat[16];	//modelview matrix
 	double m_prjmat[16];//projection matrix
 	int m_iter_num;		//iteration number for growing
@@ -171,11 +177,14 @@ private:
 	struct Component
 	{
 		unsigned int id;
-		unsigned int counter;
+		unsigned long long counter;
 		Vector acc_pos;
 		double acc_int;
+		std::unordered_set<unsigned int > links;
+		bool marker;
 	};
-	boost::unordered_map <unsigned int, Component> m_comps;
+
+	std::unordered_map <unsigned int, Component> m_comps;
 	double m_min_voxels, m_max_voxels;
 
 	//exported volumes
@@ -201,10 +210,18 @@ private:
 	double m_ps_size;
 
 	bool m_estimate_threshold;
+    
+    DataManager* m_dm;
 
 private:
 	bool SearchComponentList(unsigned int cval, Vector &pos, double intensity);
 	double HueCalculation(int mode, unsigned int label);
+	unsigned int getMinIndexOfLinkedComponents(unsigned int lval);
+	unsigned int getMinIndexOfLinkedComponents_r(unsigned int lval);
+	void SetIdLinkedComponents(unsigned int lval, unsigned int new_lval);
+	void SetIdLinkedComponents_r(unsigned int lval, unsigned int new_lval);
+	Component GetCombinedComponent(unsigned int root);
+	void GetCombinedComponent_r(unsigned int lval, Component &output);
 };
 
 #endif//_VOLUMESELECTOR_H_

@@ -495,7 +495,9 @@ wxWindow* TraceDlg::CreateLinkPage(wxWindow *parent)
 		wxGetBitmapFromMemory(auto_link_off), wxNullBitmap,
 		"Automatically link selected IDs after each paint brush stroke",
 		"Automatically link selected IDs after each paint brush stroke");
-	m_manual_assist_check->SetBackgroundColour(m_notebook->GetThemeBackgroundColour());
+    wxColour col =  m_notebook->GetThemeBackgroundColour();
+    if (col.Ok())
+        m_manual_assist_check->SetBackgroundColour(col);
 	m_manual_assist_check->Realize();
 	sizer_1->Add(5, 5);
 	sizer_1->Add(st, 0, wxALIGN_CENTER);
@@ -561,7 +563,9 @@ wxWindow* TraceDlg::CreateModifyPage(wxWindow *parent)
 		wxGetBitmapFromMemory(auto_assign_off), wxNullBitmap,
 		"Automatically assign an ID to selection after each paint brush stroke",
 		"Automatically assign an ID to selection after each paint brush stroke");
-	m_auto_id_chk->SetBackgroundColour(m_notebook->GetThemeBackgroundColour());
+    wxColour col =  m_notebook->GetThemeBackgroundColour();
+    if (col.Ok())
+        m_auto_id_chk->SetBackgroundColour(col);
 	m_auto_id_chk->Realize();
 	sizer_1->Add(5, 5);
 	sizer_1->Add(st, 0, wxALIGN_CENTER);
@@ -672,6 +676,10 @@ TraceDlg::TraceDlg(wxWindow* frame, wxWindow* parent)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
+
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (vr_frame && vr_frame->GetApp())
+		m_app = vr_frame->GetApp();
 
 	//validator: integer
 	wxIntegerValidator<unsigned int> vald_int;
@@ -1110,7 +1118,7 @@ void TraceDlg::OnConvertConsistent(wxCommandEvent &event)
 	}
 
 	m_stat_text->SetValue("Generating consistent IDs in");
-	wxGetApp().Yield();
+	if (m_app) m_app->Yield();
 	FL::TrackMap &track_map = trace_group->GetTrackMap();
 	FL::TrackMapProcessor tm_processor;
 	int chan = vd->GetCurChannel();
@@ -1139,7 +1147,7 @@ void TraceDlg::OnConvertConsistent(wxCommandEvent &event)
 	lbl_reader.SetFile(lblname);
 	nrrd_label_in1 = lbl_reader.Convert(0, chan, true);
 	(*m_stat_text) << wxString::Format("Label in 1 of frame %d read.\n", 0);
-	wxGetApp().Yield();
+	if (m_app) m_app->Yield();
 	//duplicate
 	nrrd_label_in2 = nrrdNew();
 	nrrdCopy(nrrd_label_in2, nrrd_label_in1);
@@ -1166,7 +1174,7 @@ void TraceDlg::OnConvertConsistent(wxCommandEvent &event)
 	lbl_writer.SetData(nrrd_label_in2);
 	lbl_writer.Save(label_name.ToStdWstring(), 1);
 	(*m_stat_text) << wxString::Format("Label in 2 of frame %d written.\n", 0);
-	wxGetApp().Yield();
+	if (m_app) m_app->Yield();
 
 	unsigned int label_out1, label_out2;
 	//remaining frames
@@ -1181,7 +1189,7 @@ void TraceDlg::OnConvertConsistent(wxCommandEvent &event)
 		lbl_reader.SetFile(lblname);
 		nrrd_label_out1 = lbl_reader.Convert(fi, chan, true);
 		(*m_stat_text) << wxString::Format("Label out 1 of frame %d read.\n", int(fi));
-		wxGetApp().Yield();
+		if (m_app) m_app->Yield();
 
 		//copy
 		nrrd_label_out2 = nrrdNew();
@@ -1219,7 +1227,7 @@ void TraceDlg::OnConvertConsistent(wxCommandEvent &event)
 		lbl_writer.SetData(nrrd_label_out2);
 		lbl_writer.Save(label_name.ToStdWstring(), 1);
 		(*m_stat_text) << wxString::Format("Label out 2 of frame %d written.\n", int(fi));
-		wxGetApp().Yield();
+		if (m_app) m_app->Yield();
 
 		//swap
 		nrrdNuke(nrrd_label_in1);
@@ -1382,7 +1390,7 @@ void TraceDlg::CompDelete()
 			data_mask[index] = 0;
 	}
 	//invalidate label mask in gpu
-	vd->GetVR()->clear_tex_pool();
+	vd->GetVR()->clear_tex_current();
 	//update view
 	CellUpdate();
 }
@@ -1506,7 +1514,7 @@ void TraceDlg::OnCompAppend(wxCommandEvent &event)
 			}
 		}
 		//invalidate label mask in gpu
-		vd->GetVR()->clear_tex_pool();
+		vd->GetVR()->clear_tex_current();
 	}
 
 	//update view
@@ -1559,7 +1567,7 @@ void TraceDlg::OnCompExclusive(wxCommandEvent &event)
 				data_mask[index] = 0;
 		}
 		//invalidate label mask in gpu
-		vd->GetVR()->clear_tex_pool();
+		vd->GetVR()->clear_tex_current();
 	}
 
 	//update view
@@ -1663,7 +1671,7 @@ void TraceDlg::CellFull()
 				}
 			}
 	//invalidate label mask in gpu
-	vd->GetVR()->clear_tex_pool();
+	vd->GetVR()->clear_tex_current();
 	//update view
 	CellUpdate();
 }
@@ -1861,7 +1869,7 @@ void TraceDlg::CellNewID(bool append)
 		trace_group->AddCell(cell, m_cur_time);
 
 	//invalidate label mask in gpu
-	vd->GetVR()->clear_tex_pool();
+	vd->GetVR()->clear_tex_current();
 	//save label mask to disk
 	BaseReader* reader = vd->GetReader();
 	if (reader)
@@ -1942,7 +1950,7 @@ void TraceDlg::CellEraseID()
 		}
 
 		//invalidate label mask in gpu
-		vd->GetVR()->clear_tex_pool();
+		vd->GetVR()->clear_tex_current();
 		//save label mask to disk
 		BaseReader* reader = vd->GetReader();
 		if (reader)
@@ -2333,7 +2341,7 @@ void TraceDlg::OnCellReplaceID(wxCommandEvent &event)
 		}
 	}
 	//invalidate label mask in gpu
-	vd->GetVR()->clear_tex_pool();
+	vd->GetVR()->clear_tex_current();
 	//save label mask to disk
 	BaseReader* reader = vd->GetReader();
 	if (reader)
@@ -2442,7 +2450,7 @@ void TraceDlg::OnCellCombineID(wxCommandEvent &event)
 			data_label[index] = cell->Id();
 	}
 	//invalidate label mask in gpu
-	vd->GetVR()->clear_tex_pool();
+	vd->GetVR()->clear_tex_current();
 	//save label mask to disk
 	BaseReader* reader = vd->GetReader();
 	if (reader)
@@ -2653,7 +2661,7 @@ void TraceDlg::OutputMeasureResult(wxString &str)
 {
 	str = "Statistics on the selection:\n";
 	str += "A total of " +
-		wxString::Format("%u", m_info_list.size()) +
+		wxString::Format("%llu", m_info_list.size()) +
 		" component(s) selected\n";
 	str += "ID\tTotalN\tSurfaceN\tMean\tSigma\tMinimum\tMaximum\n";
 	for (size_t i = 0; i < m_info_list.size(); ++i)
@@ -3126,7 +3134,7 @@ void TraceDlg::GenMap()
 		return;
 
 	m_stat_text->SetValue("Generating track map.\n");
-	wxGetApp().Yield();
+	if (m_app) m_app->Yield();
 	FL::TrackMap &track_map = trace_group->GetTrackMap();
 	FL::TrackMapProcessor tm_processor;
 	int chan = vd->GetCurChannel();
@@ -3208,7 +3216,7 @@ void TraceDlg::GenMap()
 		prog += prog_bit;
 		m_gen_map_prg->SetValue(int(prog));
 		(*m_stat_text) << wxString::Format("Time point %d initialized.\n", i);
-		wxGetApp().Yield();
+		if (m_app) m_app->Yield();
 	}
 
 	if (file_err)
@@ -3225,7 +3233,7 @@ void TraceDlg::GenMap()
 		prog += prog_bit;
 		m_gen_map_prg->SetValue(int(prog));
 		(*m_stat_text) << wxString::Format("Time point %d resolved.\n", int(fi));
-		wxGetApp().Yield();
+		if (m_app) m_app->Yield();
 	}
 
 	high_resolution_clock::time_point t1 = high_resolution_clock::now();
@@ -3239,7 +3247,7 @@ void TraceDlg::GenMap()
 			prog += prog_bit;
 			m_gen_map_prg->SetValue(int(prog));
 			(*m_stat_text) << wxString::Format("Time point %d linked.\n", int(fi));
-			wxGetApp().Yield();
+			if (m_app) m_app->Yield();
 		}
 
 		if (++iteri >= iter_num)
@@ -3255,7 +3263,7 @@ void TraceDlg::GenMap()
 			prog += prog_bit;
 			m_gen_map_prg->SetValue(int(prog));
 			(*m_stat_text) << wxString::Format("Time point %d unlinked.\n", int(fi));
-			wxGetApp().Yield();
+			if (m_app) m_app->Yield();
 		}
 	}
 	high_resolution_clock::time_point t2 = high_resolution_clock::now();
@@ -3275,7 +3283,7 @@ void TraceDlg::GenMap()
 		prog += prog_bit; \
 		m_gen_map_prg->SetValue(int(prog)); \
 		(*m_stat_text) << wxString::Format("Time point %d linked.\n", int(fi)); \
-		wxGetApp().Yield(); \
+		if (m_app) m_app->Yield(); \
 	}
 
 #define UNLINK_FRAMES \
@@ -3288,7 +3296,7 @@ void TraceDlg::GenMap()
 		prog += prog_bit; \
 		m_gen_map_prg->SetValue(int(prog)); \
 		(*m_stat_text) << wxString::Format("Time point %d unlinked.\n", int(fi)); \
-		wxGetApp().Yield(); \
+		if (m_app) m_app->Yield(); \
 	}
 
 void TraceDlg::RefineMap(int t)
@@ -3307,7 +3315,7 @@ void TraceDlg::RefineMap(int t)
 	else
 		m_stat_text->SetValue(wxString::Format(
 			"Refining track map at time point %d.\n", t));
-	wxGetApp().Yield();
+	if (m_app) m_app->Yield();
 	FL::TrackMap &track_map = trace_group->GetTrackMap();
 	FL::TrackMapProcessor tm_processor;
 	int start_frame, end_frame;

@@ -66,32 +66,59 @@ void MSKWriter::Save(wstring filename, int mode)
 	if (!m_data)
 		return;
 
-	int64_t pos = filename.find_last_of('.');
-	if (pos == -1)
+	wstring str_name;
+	if (mode >= 0)
+	{
+		int64_t pos = filename.find_last_of('.');
+		if (pos == -1)
+			return;
+		str_name = filename.substr(0, pos);
+		wostringstream strs;
+		if (mode == 0)
+			strs << str_name /*<< "_t" << m_time << "_c" << m_channel*/ << ".msk";
+		else if (mode == 1)
+			strs << str_name /*<< "_t" << m_time << "_c" << m_channel*/ << ".lbl";
+		str_name = strs.str();
+	}
+	else
+		str_name = filename;
+
+	NrrdIoState *nio = nrrdIoStateNew();
+	if (!nio)
 		return;
-	wstring str_name = filename.substr(0, pos);
-	wostringstream strs;
-	if (mode == 0)
-		strs << str_name /*<< "_t" << m_time << "_c" << m_channel*/ << ".msk";
-	else if (mode == 1)
-		strs << str_name /*<< "_t" << m_time << "_c" << m_channel*/ << ".lbl";
-	str_name = strs.str();
+	nrrdIoStateEncodingSet(nio, nrrdEncodingGzip);
+	nio->format = nrrdFormatNRRD;
 
 	if (m_use_spacings &&
 		m_data->dim == 3)
 	{
-		nrrdAxisInfoSet(m_data, nrrdAxisInfoSpacing, m_spcx, m_spcy, m_spcz);
-		nrrdAxisInfoSet(m_data, nrrdAxisInfoMax,
-			m_spcx*m_data->axis[0].size,
-			m_spcy*m_data->axis[1].size,
-			m_spcz*m_data->axis[2].size);
+		double spc_org[NRRD_SPACE_DIM_MAX] = {0.0, 0.0, 0.0};
+		double spc_vec[3][NRRD_SPACE_DIM_MAX]= {
+			{m_spcx, 0.0, 0.0},
+			{0.0, m_spcy, 0.0},
+			{0.0, 0.0, m_spcz} };
+
+		nrrdSpaceSet(m_data, nrrdSpaceRightAnteriorSuperior);
+		nrrdSpaceOriginSet(m_data, spc_org);
+		
+		nrrdAxisInfoSet(m_data, nrrdAxisInfoSpaceDirection, spc_vec[0], spc_vec[1], spc_vec[2]);
+		nrrdAxisInfoSet(m_data, nrrdAxisInfoSize, m_data->axis[0].size, m_data->axis[1].size, m_data->axis[2].size);
+		nrrdAxisInfoSet(m_data, nrrdAxisInfoSpacing, AIR_NAN, AIR_NAN, AIR_NAN);
+		nrrdAxisInfoSet(m_data, nrrdAxisInfoMax, AIR_NAN, AIR_NAN, AIR_NAN);
+		nrrdAxisInfoSet(m_data, nrrdAxisInfoMin, AIR_NAN, AIR_NAN, AIR_NAN);
 	}
 
 	string str;
 	str.assign(str_name.length(), 0);
 	for (int i=0; i<(int)str_name.length(); i++)
 		str[i] = (char)str_name[i];
-	nrrdSave(str.c_str(), m_data, NULL);
+	nrrdSave(str.c_str(), m_data, nio);
+
+	nrrdIoStateNix(nio);
+
+	nrrdAxisInfoSet(m_data, nrrdAxisInfoSpacing, m_spcx, m_spcy, m_spcz);
+	nrrdAxisInfoSet(m_data, nrrdAxisInfoMax, m_spcx*m_data->axis[0].size, m_spcy*m_data->axis[1].size, m_spcz*m_data->axis[2].size);
+	nrrdAxisInfoSet(m_data, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
 }
 
 void MSKWriter::SetTC(int t, int c)

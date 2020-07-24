@@ -5,6 +5,7 @@
 #include <wx/clrpicker.h>
 #include <wx/slider.h>
 
+#include "DLLExport.h"
 #include "FLIVR/Color.h"
 #include "FLIVR/VolumeRenderer.h"
 #include "FLIVR/BBox.h"
@@ -19,7 +20,7 @@ using namespace std;
 
 class VRenderView;
 
-class VPropView: public wxPanel
+class EXPORT_API VPropView: public wxPanel
 {
 	enum
 	{
@@ -62,6 +63,8 @@ class VPropView: public wxPanel
 		ID_ScaleText,
 		ID_ScaleCmb,
 		ID_ScaleTextChk,
+		ID_ScaleLenFixChk,
+		ID_ScaleDigitCombo,
 		ID_LegendChk,
 		ID_SyncGroupChk,
 		ID_SyncGroupSpcChk,
@@ -79,7 +82,9 @@ class VPropView: public wxPanel
 		ID_IDCLChk,
 		ID_MipChk,
 		ID_NRChk,
-		ID_DepthChk
+		ID_DepthChk,
+		ID_MaskHideOutside,
+		ID_MaskHideInside
 };
 
 public:
@@ -210,6 +215,8 @@ private:
 	wxTextCtrl *m_scale_text;
 	wxComboBox *m_scale_cmb;
 	wxCheckBox *m_scale_te_chk;
+	wxCheckBox *m_scale_lenfix_chk;
+	wxComboBox *m_scale_digit_cmb;
 	//legend
 	wxCheckBox *m_legend_chk;
 	//sync
@@ -218,6 +225,9 @@ private:
 	//default
 	wxButton *m_save_default;
 	wxButton *m_reset_default;
+
+	wxCheckBox *m_mask_outside_chk;
+	wxCheckBox *m_mask_inside_chk;
 
 private:
 	void GetSettings();
@@ -276,6 +286,8 @@ private:
 	void OnScaleTextCheck(wxCommandEvent& event);
 	void OnScaleTextEditing(wxCommandEvent& event);
 	void OnScaleUnitSelected(wxCommandEvent& event);
+	void OnScaleLenFixCheck(wxCommandEvent& event);
+	void OnScaleDigitSelected(wxCommandEvent& event);
 	//legend
 	void OnLegendCheck(wxCommandEvent& event);
 	//sync within group
@@ -294,6 +306,9 @@ private:
 	void OnNRCheck(wxCommandEvent &event);
 	//depth omde
 	void OnDepthCheck(wxCommandEvent &event);
+
+	void OnMaskHideOutsideCheck(wxCommandEvent &event);
+	void OnMaskHideInsideCheck(wxCommandEvent &event);
 
 	DECLARE_EVENT_TABLE();
 };

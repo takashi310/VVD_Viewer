@@ -30,6 +30,7 @@ DEALINGS IN THE SOFTWARE.
 
 #include "Cell.h"
 #include <vector>
+#include "DLLExport.h"
 
 namespace FL
 {
@@ -52,7 +53,7 @@ namespace FL
 		pwVertex vertex;
 	};
 
-	class InterGraph :
+	class EXPORT_API InterGraph :
 		public boost::adjacency_list<boost::listS,
 		boost::listS, boost::undirectedS,
 		InterVertexData, InterEdgeData>
@@ -68,7 +69,7 @@ namespace FL
 	typedef std::vector<pwCell> CellBin;
 	typedef CellBin::iterator CellBinIter;
 
-	class Vertex
+	class EXPORT_API Vertex
 	{
 	public:
 		Vertex(unsigned int id) :

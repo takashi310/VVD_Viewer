@@ -34,6 +34,7 @@
 #include "Transform.h"
 #include "TextureBrick.h"
 #include "Utils.h"
+#include "DLLExport.h"
 
 namespace FLIVR
 {
@@ -41,7 +42,7 @@ namespace FLIVR
 
 	class Transform;
 
-	class Texture 
+	class EXPORT_API Texture 
 	{
 	public:
 		static size_t mask_undo_num_;
@@ -66,6 +67,7 @@ namespace FLIVR
 		}
 		inline int nmask() { return nmask_; }
 		inline int nlabel() { return nlabel_; }
+		inline int nstroke() { return nstroke_; }
 
 		inline void set_size(int nx, int ny, int nz, int nc, int* nb) 
 		{
@@ -117,6 +119,7 @@ namespace FLIVR
 		// get sorted bricks
 		vector<TextureBrick*>* get_sorted_bricks(
 			Ray& view, bool is_orthographic = false);
+		vector<TextureBrick*>* get_sorted_bricks_dir(Ray& view);
 		//get closest bricks
 		vector<TextureBrick*>* get_closest_bricks(
 			Point& center, int quota, bool skip,
@@ -126,7 +129,7 @@ namespace FLIVR
 		void reset_sort_bricks() {sort_bricks_ = false;}
 		bool get_sort_bricks() {return sort_bricks_;}
 		// load the bricks independent of the view
-		vector<TextureBrick*>* get_bricks();
+		vector<TextureBrick*>* get_bricks(int lv=-1);
 		int get_brick_num() {return int((*bricks_).size());}
 		//quota bricks
 		vector<TextureBrick*>* get_quota_bricks();
@@ -152,6 +155,8 @@ namespace FLIVR
 		void get_base_spacings(double &x, double &y, double &z);
 		void set_spacing_scales(double x, double y, double z);
 		void get_spacing_scales(double &x, double &y, double &z);
+
+		void get_dimensions(size_t &w, size_t &h, size_t &d, int lv = -1);
 		
 			// Creator of the brick owns the nrrd memory.
 		void set_nrrd(Nrrd* data, int index);
@@ -172,10 +177,13 @@ namespace FLIVR
 		//add one more texture component as the volume mask
 		bool add_empty_mask();
 		//add one more texture component as the labeling volume
-		bool add_empty_label();
+		bool add_empty_label(int nb = 4);
+		//add one more texture component as the labeling volume
+		bool add_empty_stroke();
 
 		void delete_mask();
 		void delete_label();
+		void delete_stroke();
 
 		//get priority brick number
 		inline void set_use_priority(bool value) {use_priority_ = value;}
@@ -192,13 +200,30 @@ namespace FLIVR
 		bool buildPyramid(vector<Pyramid_Level> &pyramid, vector<vector<vector<vector<FileLocInfo *>>>> &filenames, bool useURL = false);
 		void set_FrameAndChannel(int fr, int ch);
 		void setLevel(int lv);
-		Nrrd * loadData(int &lv);
+		Nrrd* loadData(int &lv);
+		Nrrd* getSubData(int lv, int mask_mode, vector<TextureBrick*> *tar_bricks=NULL, size_t stx=0, size_t sty=0, size_t stz=0, size_t w=0, size_t h=0, size_t d=0);
 		int GetCurLevel() {return pyramid_cur_lv_;}
 		int GetLevelNum() {return pyramid_.size();}
 		void SetCopyableLevel(int lv) {pyramid_copy_lv_ = lv;}
 		int GetCopyableLevel() {return pyramid_copy_lv_;}
+		int GetMaskLv()
+		{
+			if (!isBrxml()) return -1;
+			else if (masklv_ < 0 || masklv_ >= GetLevelNum()) return GetLevelNum()-1;
+			return masklv_;
+		}
+		void SetMaskLv(int lv)
+		{
+			if (!isBrxml()) return;
+			else if (lv < 0 || lv >= GetLevelNum()) return;
+			masklv_ = lv;
+		}
+		void GetDimensionLv(int lv, int &x, int &y, int &z);
+		Nrrd* get_nrrd_lv(int lv, int index);
 
 		void DeleteCacheFiles();
+
+		Vector GetBrickIdSpaceMaxExtent() { return brick_idspace_max_extent_; }
 
 	protected:
 		void build_bricks(vector<TextureBrick*> &bricks,
@@ -207,6 +232,7 @@ namespace FLIVR
 
 		//! data carved up to texture memory sized chunks.
 		vector<TextureBrick*>						*bricks_;
+		Vector										brick_idspace_max_extent_;
 		//for limited number of bricks during interactions
 		vector<TextureBrick*>						quota_bricks_;
 		//sort texture brick
@@ -227,6 +253,8 @@ namespace FLIVR
 		int											nmask_;
 		//the index of current label
 		int											nlabel_;
+		//the index of current stroke
+		int											nstroke_;
 		//! bytes per texel for each component.
 		int											nb_[TEXTURE_MAX_COMPONENTS];
 		//! data tform
@@ -268,6 +296,8 @@ namespace FLIVR
 		vector<vector<vector<vector<FileLocInfo *>>>> filenames_;
 
 		int pyramid_copy_lv_;
+
+		int masklv_;
 
 		//used when brkxml_ is not equal to false.
 		vector<TextureBrick*> default_vec_;

@@ -23,6 +23,7 @@ DEALINGS IN THE SOFTWARE.
 #define _FLKEY_H_
 
 #include <string>
+#include "DLLExport.h"
 
 using namespace std;
 
@@ -31,7 +32,7 @@ using namespace std;
 #define FLKEY_TYPE_BOOLEAN	3
 #define FLKEY_TYPE_INT		4
 
-class KeyCode
+class EXPORT_API KeyCode
 {
 public:
 	int l0;//view: 1
@@ -74,7 +75,7 @@ public:
 };
 
 //virtual
-class FlKey
+class EXPORT_API FlKey
 {
 public:
 	//FlKey();

@@ -36,15 +36,29 @@
 #include <glm/glm.hpp>
 #include <unordered_set>
 #include <unordered_map>
+
+#ifndef _UNIT_TEST_VOLUME_RENDERER_
+#include <wx/thread.h>
+#endif
+
+#ifndef _UNIT_TEST_VOLUME_RENDERER_WITHOUT_IDVOL
 #include <boost/property_tree/ptree.hpp>
 #include <boost/optional.hpp>
+#endif
+
 #include <string>
 #include <tinyxml2.h>
+
+#include "VVulkan.h"
+#include "Vulkan2dRender.h"
+#include <memory>
+
+#include "DLLExport.h"
 
 namespace FLIVR
 {
    //a simple fixed-length fifo sequence
-   class BrickQueue
+   class EXPORT_API BrickQueue
    {
       public:
          BrickQueue(int limit):
@@ -106,26 +120,16 @@ namespace FLIVR
 
    struct TexParam
    {
-      int nx, ny, nz, nb;
-      unsigned int id;
+      std::shared_ptr<vks::VTexture> tex;
       TextureBrick *brick;
       int comp;
-      GLenum textype;
       bool delayed_del;
       TexParam() :
-         nx(0), ny(0), nz(0), nb(0),
-         id(0), brick(0), comp(0),
-         textype(GL_UNSIGNED_BYTE),
+         tex(0), brick(0), comp(0),
          delayed_del(false)
       {}
-      TexParam(int c, int x,
-            int y, int z,
-            int b, GLenum f,
-            unsigned int i) :
-          nx(x), ny(y),
-         nz(z), nb(b), id(i),
-         brick(0), comp(c), textype(f),
-         delayed_del(false)
+      TexParam(int c, const std::shared_ptr<vks::VTexture> &t) :
+         tex(t), brick(0), comp(c), delayed_del(false)
       {}
    };
 
@@ -134,7 +138,7 @@ namespace FLIVR
 #define PALETTE_SIZE (PALETTE_W*PALETTE_H)
 #define PALETTE_ELEM_COMP 4
 
-   class TextureRenderer
+   class EXPORT_API TextureRenderer
    {
       public:
          enum RenderMode
@@ -157,29 +161,31 @@ namespace FLIVR
          void set_blend_num_bits(int b);
 
          //clear the opengl textures from the texture pool
-         static void clear_tex_pool();
 		void clear_tex_current();
+		void clear_tex_current_mask();
 
          //resize the fbo texture
          void resize();
 
          //set the 2d texture mask for segmentation
-         void set_2d_mask(GLuint id);
+         void set_2d_mask(const shared_ptr<vks::VTexture> tex);
          //set 2d weight map for segmentation
-         void set_2d_weight(GLuint weight1, GLuint weight2);
+         void set_2d_weight(const shared_ptr<vks::VTexture> weight1, const shared_ptr<vks::VTexture> weight2);
 
          //set the 2d texture depth map for rendering shadows
-         void set_2d_dmap(GLuint id);
+         void set_2d_dmap(const shared_ptr<vks::VTexture> tex);
 
          // Tests the bounding box against the current MODELVIEW and
          // PROJECTION matrices to determine if it is within the viewport.
          // Returns true if it is visible.
 		bool test_against_view(const BBox &bbox, bool persp=false);
 
-		 void clear_brick_buf();
 
-		 void init_palette();
-		 void update_palette_tex();
+		void init_palette();
+		void update_palette_tex();
+		std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> get_palette();
+
+#ifndef _UNIT_TEST_VOLUME_RENDERER_WITHOUT_IDVOL
 		 void set_roi_name(wstring name, int id=-1, wstring parent_name=wstring());
 		 void set_roi_name(wstring name, int id, int parent_id);
 		 wstring check_new_roi_name(wstring name);
@@ -210,12 +216,11 @@ namespace FLIVR
 		 void get_id_color(unsigned char &r, unsigned char &g, unsigned char &b, int id=-1);
 		 void get_rendered_id_color(unsigned char &r, unsigned char &g, unsigned char &b, int id=-1);
 		 //0-dark; 1-gray; 2-invisible;
-		 void update_palette(int mode, float fac=0.1);
+		 void update_palette(int mode, float fac=-1.0f);
 		 int get_roi_disp_mode(){ return desel_palette_mode_; }
 		 void set_desel_palette_mode_dark(float fac=0.1);
 		 void set_desel_palette_mode_gray(float fac=0.1);
 		 void set_desel_palette_mode_invisible();
-		 GLuint get_palette();
 		 bool is_sel_id(int id);
 		 void add_sel_id(int id);
 		 void del_sel_id(int id);
@@ -231,10 +236,18 @@ namespace FLIVR
 		 string exprot_selected_roi_ids();
 		 void import_roi_tree(const wstring &tree);
 		 void import_selected_ids(const string &sel_ids_str);
+
+		 boost::property_tree::wptree roi_tree_;
+#else
+		void *roi_tree_; //dummy
+#endif
 		 
          //memory swap
          static void set_mem_swap(bool val) {mem_swap_ = val;}
          static bool get_mem_swap() {return mem_swap_;}
+         //streamoing
+         static void set_streaming(bool val) { streaming_ = val; }
+         static bool get_streaming() { return streaming_; }
          //use memory limit (otherwise get available memory from graphics card)
          static void set_use_mem_limit(bool val) {use_mem_limit_ = val;}
          static bool get_use_mem_limit() {return use_mem_limit_;}
@@ -277,6 +290,9 @@ namespace FLIVR
                static void reset_save_final_buffer() {save_final_buffer_ = false;}
                static bool get_save_final_buffer() {return save_final_buffer_;}
 			   static void set_save_final_buffer() {save_final_buffer_ = true;}
+			   static void invalidate_temp_final_buffer() { valid_temp_final_buffer_ = false; }
+			   static void validate_temp_final_buffer() { valid_temp_final_buffer_ = true; }
+			   static bool isvalid_temp_final_buffer() { return valid_temp_final_buffer_; }
                //set start time
                static void set_st_time(unsigned long time) {st_time_ = time;}
                static unsigned long get_st_time() {return st_time_;}
@@ -313,7 +329,25 @@ namespace FLIVR
 			   static void set_load_on_main_thread(bool val) {load_on_main_thread_ = val;}
 			   static bool get_load_on_main_thread() {return load_on_main_thread_;}
 
-			   static VolKernelFactory vol_kernel_factory_;
+			   static void set_vulkan(std::shared_ptr<VVulkan> vulkan, std::shared_ptr<Vulkan2dRender> v2drender) 
+			   { 
+					m_vulkan = vulkan;
+					m_v2drender = v2drender;
+			   }
+			   static std::shared_ptr<VVulkan> get_vulkan() { return m_vulkan; }
+			   static std::shared_ptr<Vulkan2dRender> get_vulkan2drender() { return m_v2drender; }
+			   static void finalize_vulkan() 
+			   {
+				   if (m_vulkan) m_vulkan.reset();
+				   if (m_v2drender) m_v2drender.reset();
+			   }
+       
+               void set_seg_mask(int id, int val);
+               int get_seg_mask(int id);
+               std::set<int>* get_active_seg_ids() { return &na_active_lbl_; }
+               std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> get_seg_mask_tex();
+
+			   //static VolKernelFactory vol_kernel_factory_;
 
       public:
                struct BrickDist
@@ -331,46 +365,44 @@ namespace FLIVR
 
                //blend frame buffer for output
                bool blend_framebuffer_resize_;
-               GLuint blend_framebuffer_;
-               GLuint blend_tex_id_;
-			   GLuint label_tex_id_;
+               std::unique_ptr<vks::VFrameBuffer> blend_framebuffer_;
+			   std::unique_ptr<vks::VFrameBuffer> blend_framebuffer_label_;
+			   std::shared_ptr<vks::VTexture> blend_tex_id_;
+			   std::shared_ptr<vks::VTexture> label_tex_id_;
                //2nd buffer for multiple filtering
                bool filter_buffer_resize_;
-               GLuint filter_buffer_;
-               GLuint filter_tex_id_;
-
-			   GLuint palette_tex_id_;
-			   GLuint base_palette_tex_id_;
+               std::unique_ptr<vks::VFrameBuffer> filter_buffer_;
+               std::shared_ptr<vks::VTexture> filter_tex_id_;
+       
+               std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> na_tex_;
+               unsigned char na_lbl_[PALETTE_SIZE];
+               std::set<int> na_active_lbl_;
+               bool na_tex_dirty_;
+       
+			   std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> palette_tex_id_;
+			   std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> base_palette_tex_id_;
 			   unsigned char palette_[PALETTE_SIZE*PALETTE_ELEM_COMP];
 			   unsigned char base_palette_[PALETTE_SIZE*PALETTE_ELEM_COMP];
 			   unordered_set<int> sel_ids_;
 			   unordered_set<int> sel_segs_;
-			   boost::property_tree::wptree roi_tree_;
+
 			   int desel_palette_mode_;
 			   float desel_col_fac_;
 			   int edit_sel_id_;
 
-               //sahder for volume rendering
-               static VolShaderFactory vol_shader_factory_;
-               //shader for segmentation
-               static SegShaderFactory seg_shader_factory_;
-               //shader for calculation
-               static VolCalShaderFactory cal_shader_factory_;
-
                //3d frame buffer object for mask
-               GLuint fbo_mask_;
+               std::unique_ptr<vks::VFrameBuffer> fbo_mask_;
                //3d frame buffer object for label
-               GLuint fbo_label_;
+               std::unique_ptr<vks::VFrameBuffer> fbo_label_;
                //2d mask texture
-               GLuint tex_2d_mask_;
+               std::shared_ptr<vks::VTexture> tex_2d_mask_;
                //2d weight map
-               GLuint tex_2d_weight1_;  //after tone mapping
-               GLuint tex_2d_weight2_;  //before tone mapping
+               std::shared_ptr<vks::VTexture> tex_2d_weight1_;  //after tone mapping
+               std::shared_ptr<vks::VTexture> tex_2d_weight2_;  //before tone mapping
                //2d depth map texture
-               GLuint tex_2d_dmap_;
+               std::shared_ptr<vks::VTexture> tex_2d_dmap_;
 
                int blend_num_bits_;
-               static bool clear_pool_;
 
 			   struct LoadedBrick {
 				   bool swapped;
@@ -382,6 +414,7 @@ namespace FLIVR
 			   
                //memory management
                static bool mem_swap_;
+               static bool streaming_;
                static bool use_mem_limit_;
                static double mem_limit_;
                static double available_mem_;
@@ -389,7 +422,6 @@ namespace FLIVR
 			   static double available_mainmem_buf_size_;
                static double large_data_size_;
                static int force_brick_size_;
-               static vector<TexParam> tex_pool_;
                static bool start_update_loop_;
                static bool done_update_loop_;
                static bool done_current_chan_;
@@ -398,6 +430,7 @@ namespace FLIVR
                static int cur_chan_brick_num_;
                static bool clear_chan_buffer_;
                static bool save_final_buffer_;
+			   static bool valid_temp_final_buffer_;
 			   static int cur_tid_offset_multi_;
                //timer for rendering
                static unsigned long st_time_;
@@ -419,6 +452,9 @@ namespace FLIVR
 
 			   static bool load_on_main_thread_;
 
+			   static std::shared_ptr<VVulkan> m_vulkan;
+			   static std::shared_ptr<Vulkan2dRender> m_v2drender;
+
                //for view testing
                float mvmat_[16];
                float prmat_[16];
@@ -430,57 +466,111 @@ namespace FLIVR
 			   glm::mat4 m_tex_mat;
 
 			   //vertex and index buffer bind points
-			   GLuint m_slices_vbo, m_slices_ibo, m_slices_vao;
-			   GLuint m_quad_vbo, m_quad_vao;
+			   vks::Buffer m_slices_vbo, m_slices_ibo, m_slices_vao;
+
+#ifndef _UNIT_TEST_VOLUME_RENDERER_
+			   wxCriticalSection m_pThreadCS;
+#endif
 
                //compute view
                Ray compute_view();
 			   Ray compute_snapview(double snap);
-		double compute_rate_scale(Vector v);
+			   double compute_rate_scale(Vector v);
 
                //brick distance sort
                static bool brick_sort(const BrickDist& bd1, const BrickDist& bd2);
-               //check and swap memory
-               void check_swap_memory(TextureBrick* brick, int c);
+
+
                //load texture bricks for drawing
                //unit:assigned unit, c:channel
-               GLint load_brick(int unit, int c, vector<TextureBrick*> *b, int i, GLint filter=GL_LINEAR, bool compression=false, int mode=0, bool set_drawn=true);
+			   std::shared_ptr<vks::VTexture> load_brick(
+				   vks::VulkanDevice *device,
+				   int unit,
+				   int c,
+				   vector<TextureBrick*> *b,
+				   int i,
+				   VkFilter filter=VK_FILTER_LINEAR,
+				   bool compression=false,
+				   int mode=0,
+				   bool set_drawn=true,
+				   bool *updated=nullptr,
+				   vks::VulkanSemaphoreSettings* semaphore=nullptr,
+				   bool flush=true);
                //load the texture for volume mask into texture pool
-               GLint load_brick_mask(vector<TextureBrick*> *b, int i, GLint filter=GL_NEAREST, bool compression=false, int unit=0);
-               //load the texture for volume labeling into texture pool
-               GLint load_brick_label(vector<TextureBrick*> *b, int i);
-               void release_texture(int unit, GLenum target);
+               std::shared_ptr<vks::VTexture> load_brick_mask(
+				   vks::VulkanDevice *device,
+				   vector<TextureBrick*> *b, 
+				   int i,
+				   VkFilter filter=VK_FILTER_NEAREST,
+				   bool compression=false,
+				   int unit=0,
+				   bool swap_mem=false,
+				   bool set_drawn=true,
+				   bool* updated = nullptr,
+				   vks::VulkanSemaphoreSettings* semaphore = nullptr,
+				   bool flush=true,
+                   TextureBrick* bdraw = NULL);
+			   //load the texture for volume labeling into texture pool
+               std::shared_ptr<vks::VTexture> load_brick_label(
+				   vks::VulkanDevice *device,
+				   vector<TextureBrick*> *b,
+				   int i,
+				   bool swap_mem=false,
+				   bool set_drawn=true,
+				   bool* updated = nullptr,
+				   vks::VulkanSemaphoreSettings* semaphore = nullptr,
+				   bool flush=true);
+			   //load the texture for volume stroke into texture pool
+               std::shared_ptr<vks::VTexture> load_brick_stroke(
+				   vks::VulkanDevice *device,
+				   vector<TextureBrick*> *b,
+				   int i,
+				   VkFilter filter=VK_FILTER_NEAREST,
+				   bool compression=false,
+				   int unit=0,
+				   bool swap_mem=false,
+				   bool* updated = nullptr,
+				   vks::VulkanSemaphoreSettings* semaphore = nullptr,
+				   bool flush=true);
+               
+			   std::shared_ptr<vks::VTexture> base_fanc_load_brick_comp(
+				   vks::VulkanDevice *device,
+				   int c,
+				   TextureBrick* brick,
+				   VkFilter filter,
+				   bool compression,
+				   bool swap_mem,
+				   bool* updated = nullptr,
+				   vks::VulkanSemaphoreSettings* semaphore = nullptr,
+				   bool flush=true);
+      //         
+			   //void release_texture(int unit, GLenum target);
 
-               //draw slices of the volume
-               void draw_slices(double d);
+      //         //slices
+      //         void draw_polygons(vector<double>& vertex, vector<double>& texcoord,
+      //               vector<int>& poly,
+      //               bool fog,
+      //               ShaderProgram *shader = 0);
+      //         void draw_polygons_wireframe(vector<double>& vertex, vector<double>& texcoord,
+      //               vector<int>& poly,
+      //               bool fog);
 
-			   void draw_view_quad(double d=0.0);
+			   //void draw_polygons(vector<float>& vertex,
+				  // vector<uint32_t>& triangle_verts);
+			   //void draw_polygons(vector<float>& vertex,
+				  // vector<uint32_t>& triangle_verts, vector<uint32_t>& size);
+			   //void draw_polygons_wireframe(vector<float>& vertex,
+				  // vector<uint32_t>& index, vector<uint32_t>& size);
 
-               //slices
-               void draw_polygons(vector<double>& vertex, vector<double>& texcoord,
-                     vector<int>& poly,
-                     bool fog,
-                     ShaderProgram *shader = 0);
-               void draw_polygons_wireframe(vector<double>& vertex, vector<double>& texcoord,
-                     vector<int>& poly,
-                     bool fog);
+      //         //bind 2d mask for segmentation
+      //         void bind_2d_mask();
+      //         //bind 2d weight map for segmentation
+      //         void bind_2d_weight();
+      //         //bind 2d depth map for rendering shadows
+      //         void bind_2d_dmap();
 
-			   void draw_polygons(vector<float>& vertex,
-				   vector<uint32_t>& triangle_verts);
-			   void draw_polygons(vector<float>& vertex,
-				   vector<uint32_t>& triangle_verts, vector<uint32_t>& size);
-			   void draw_polygons_wireframe(vector<float>& vertex,
-				   vector<uint32_t>& index, vector<uint32_t>& size);
-
-               //bind 2d mask for segmentation
-               void bind_2d_mask();
-               //bind 2d weight map for segmentation
-               void bind_2d_weight();
-               //bind 2d depth map for rendering shadows
-               void bind_2d_dmap();
-
-			   void rearrangeLoadedBrkVec();
    };
+
 } // end namespace FLIVR
 
 #endif // TextureRenderer_h

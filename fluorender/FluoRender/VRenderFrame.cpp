@@ -78,6 +78,7 @@ BEGIN_EVENT_TABLE(VRenderFrame, wxFrame)
 	EVT_MENU(ID_Facebook, VRenderFrame::OnFacebook)
 	EVT_MENU(ID_ShowHideUI, VRenderFrame::OnShowHideUI)
 	EVT_MENU(ID_ShowHideToolbar, VRenderFrame::OnShowHideToolbar)
+	EVT_MENU(ID_Plugins, VRenderFrame::OnPlugins)
 	//ui menu events
 	EVT_MENU(ID_UITreeView, VRenderFrame::OnShowHideView)
 	EVT_MENU(ID_UIMeasureView, VRenderFrame::OnShowHideView)
@@ -93,6 +94,7 @@ BEGIN_EVENT_TABLE(VRenderFrame, wxFrame)
 	EVT_KEY_DOWN(VRenderFrame::OnKeyDown)
 	//close
 	EVT_CLOSE(VRenderFrame::OnClose)
+	EVT_TIMER(ID_Timer, VRenderFrame::OnTimer)
 END_EVENT_TABLE()
 
 bool VRenderFrame::m_sliceSequence = false;
@@ -109,7 +111,7 @@ CURLM *_g_curlm;//add by takashi
 CURL *_g_curl;//add by takashi
 
 VRenderFrame::VRenderFrame(
-	wxFrame* frame,
+	wxApp* app, wxFrame* frame,
 	const wxString& title,
 	int x, int y,
 	int w, int h)
@@ -124,7 +126,8 @@ VRenderFrame::VRenderFrame(
 	m_cur_sel_type(-1),
 	m_cur_sel_vol(-1),
 	m_cur_sel_mesh(-1),
-	m_gpu_max_mem(-1.0)
+	m_gpu_max_mem(-1.0),
+	m_app(app)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -144,12 +147,13 @@ VRenderFrame::VRenderFrame(
 
 	// set frame icon
 	wxIcon icon;
-	icon.CopyFromBitmap(wxGetBitmapFromMemory(icon_32));
+	icon.CopyFromBitmap(wxGetBitmapFromMemory(icon_64));
 	SetIcon(icon);
 
 	// create the main toolbar
 	m_main_tb = new wxToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTB_FLAT|wxTB_TOP|wxTB_NODIVIDER);
+    m_main_tb->SetToolBitmapSize(wxSize(95,42));
 	//create the menu for UI management
 	m_tb_menu_ui = new wxMenu;
 	m_tb_menu_ui->Append(ID_UITreeView, UITEXT_TREEVIEW,
@@ -235,6 +239,48 @@ VRenderFrame::VRenderFrame(
 		"Recorder: Record actions by key frames and play back",
 		"Recorder: Record actions by key frames and play back");
 	m_main_tb->AddSeparator();
+
+	m_plugin_manager = new PluginManager(this);
+	if(m_plugin_manager)
+		m_plugin_manager->LoadAllPlugins(true);
+	m_tb_menu_plugin = new wxMenu;
+    wxArrayString plugin_disp_names;
+	if (!m_plugin_list.IsEmpty()) m_plugin_list.Clear();
+	wxGuiPluginBaseList gplist = m_plugin_manager->GetGuiPlugins();
+	for(wxGuiPluginBaseList::Node * node = gplist.GetFirst(); node; node = node->GetNext())
+	{
+		wxString gpname = node->GetData()->GetName();
+		if (!gpname.IsEmpty())
+			m_plugin_list.Add(gpname);
+        wxString gpdispname = node->GetData()->GetDisplayName();
+        if (!gpdispname.IsEmpty())
+            plugin_disp_names.Add(gpdispname);
+        else
+            plugin_disp_names.Add(gpname);
+	}
+	wxNonGuiPluginBaseList ngplist = m_plugin_manager->GetNonGuiPlugins();
+	for(wxNonGuiPluginBaseList::Node * node = ngplist.GetFirst(); node; node = node->GetNext())
+	{
+		wxString ngpname = node->GetData()->GetName();
+		if (!ngpname.IsEmpty())
+        {
+            m_plugin_list.Add(ngpname);
+            plugin_disp_names.Add(ngpname);
+        }
+	}
+	//m_plugin_list.Sort();
+	for (int i = 0; i < m_plugin_list.size(); i++)
+		m_tb_menu_plugin->Append(ID_Plugin+i, plugin_disp_names[i]);
+	if (!m_plugin_list.IsEmpty())
+		m_tb_menu_plugin->Bind(wxEVT_COMMAND_MENU_SELECTED, &VRenderFrame::OnPluginMenuSelect, this, ID_Plugin, ID_Plugin+m_plugin_list.size()-1);
+
+
+	m_main_tb->AddTool(ID_Plugins, "Plugins",
+		wxGetBitmapFromMemory(plugins), wxNullBitmap, wxITEM_NORMAL,
+		"Plugins",
+		"Plugins");
+    
+	m_main_tb->AddSeparator();
 	m_main_tb->AddTool(ID_Settings, "Settings",
 		wxGetBitmapFromMemory(icon_settings), wxNullBitmap, wxITEM_NORMAL,
 		"Settings of FluoRender",
@@ -260,10 +306,16 @@ VRenderFrame::VRenderFrame(
 	m_main_tb->Realize();
 
 	//create render view
+    Thaw();
+    SetEvtHandlerEnabled(true);
+    
 	VRenderView *vrv = new VRenderView(this, this, wxID_ANY);
 	vrv->SetDropTarget(new DnDFile(this, vrv));
 	vrv->InitView();
 	m_vrv_list.push_back(vrv);
+    
+    SetEvtHandlerEnabled(false);
+    Freeze();
 
 	//create tree view
 	m_tree_panel = new TreePanel(this, this, wxID_ANY,
@@ -304,18 +356,6 @@ VRenderFrame::VRenderFrame(
 	m_adjust_view = new AdjustView(this, this, wxID_ANY,
 		wxDefaultPosition, wxSize(130, 700));
 
-	wxString font_file = m_setting_dlg->GetFontFile();
-	std::string exePath = wxStandardPaths::Get().GetExecutablePath().ToStdString();
-	exePath = exePath.substr(0,exePath.find_last_of(std::string()+GETSLASH()));
-	if (font_file != "")
-		font_file = wxString(exePath) + GETSLASH() + wxString("Fonts") +
-			GETSLASH() + font_file;
-	else
-		font_file = wxString(exePath) + GETSLASH() + wxString("Fonts") +
-			GETSLASH() + wxString("FreeSans.ttf");
-	m_text_renderer = new TextRenderer(font_file.ToStdString());
-	m_text_renderer->SetSize(m_setting_dlg->GetTextSize());
-
 	//settings dialog
 	if (m_setting_dlg->GetTestMode(1))
 		m_vrv_list[0]->m_glview->m_test_speed = true;
@@ -339,7 +379,6 @@ VRenderFrame::VRenderFrame(
 	m_vrv_list[0]->SetPointVolumeMode(m_setting_dlg->GetPointVolumeMode());
 	m_vrv_list[0]->SetRulerUseTransf(m_setting_dlg->GetRulerUseTransf());
 	m_vrv_list[0]->SetRulerTimeDep(m_setting_dlg->GetRulerTimeDep());
-	m_vrv_list[0]->SetTextRenderer(m_text_renderer);
 	m_time_id = m_setting_dlg->GetTimeId();
 	m_data_mgr.SetOverrideVox(m_setting_dlg->GetOverrideVox());
 	m_data_mgr.SetPvxmlFlipX(m_setting_dlg->GetPvxmlFlipX());
@@ -389,18 +428,19 @@ VRenderFrame::VRenderFrame(
 		Name("m_main_tb").Caption("Toolbar").CaptionVisible(false).
 		MinSize(wxSize(-1, 49)).MaxSize(wxSize(-1, 50)).
 		Top().CloseButton(false).Layer(4));
+
 	m_aui_mgr.AddPane(m_tree_panel, wxAuiPaneInfo().
 		Name("m_tree_panel").Caption(UITEXT_TREEVIEW).
 		Left().CloseButton(true).BestSize(wxSize(320, 300)).
-		FloatingSize(wxSize(320, 300)).Layer(3));
-	m_aui_mgr.AddPane(m_measure_dlg, wxAuiPaneInfo().
-		Name("m_measure_dlg").Caption(UITEXT_MEASUREMENT).
-		Left().CloseButton(true).BestSize(wxSize(320, 400)).
 		FloatingSize(wxSize(320, 300)).Layer(3));
 	m_aui_mgr.AddPane(m_movie_view, wxAuiPaneInfo().
 		Name("m_movie_view").Caption(UITEXT_MAKEMOVIE).
 		Left().CloseButton(true).MinSize(wxSize(320, 300)).
 		FloatingSize(wxSize(320, 300)).Layer(3));
+    m_aui_mgr.AddPane(m_measure_dlg, wxAuiPaneInfo().
+        Name("m_measure_dlg").Caption(UITEXT_MEASUREMENT).
+        Left().CloseButton(true).BestSize(wxSize(320, 400)).
+        FloatingSize(wxSize(550, 500)).Layer(3).Dockable(false));
 	m_aui_mgr.AddPane(m_prop_panel, wxAuiPaneInfo().
 		Name("m_prop_panel").Caption(UITEXT_PROPERTIES).
 		Bottom().CloseButton(true).MinSize(wxSize(300, 150)).
@@ -411,8 +451,8 @@ VRenderFrame::VRenderFrame(
 		FloatingSize(wxSize(110, 700)).Layer(1));
 	m_aui_mgr.AddPane(m_clip_view, wxAuiPaneInfo().
 		Name("m_clip_view").Caption(UITEXT_CLIPPING).
-		Right().CloseButton(true).MinSize(wxSize(130, 700)).
-		FloatingSize(wxSize(130, 700)).Layer(1));
+		Right().CloseButton(true).MinSize(wxSize(160, 700)).
+		FloatingSize(wxSize(160, 700)).Layer(1));
 	m_aui_mgr.AddPane(vrv, wxAuiPaneInfo().
 		Name(vrv->GetName()).Caption(vrv->GetName()).
 		Dockable(true).CloseButton(false).
@@ -641,17 +681,27 @@ VRenderFrame::VRenderFrame(
 
 	Thaw();
 	SetEvtHandlerEnabled(true);
+
+	//Initialize plugins
+	m_plugin_manager->InitPlugins();
+
+	//m_timer = new wxTimer(this, ID_Timer);
+	//m_timer->Start(100);
 }
 
 VRenderFrame::~VRenderFrame()
 {
+	//m_timer->Stop();
+	//wxDELETE(m_timer);
+	//Finalize plugins
+	//VolumeRenderer::vol_kernel_factory_.clean();
+	m_plugin_manager->FinalizePligins();
+
 	for (int i=0; i<(int)m_vrv_list.size(); i++)
 	{
 		VRenderView* vrv = m_vrv_list[i];
 		if (vrv) vrv->Clear();
 	}
-	if (m_text_renderer)
-		delete m_text_renderer;
 	m_aui_mgr.UnInit();
 
 	curl_easy_cleanup(_g_curl);//add by takashi
@@ -659,6 +709,11 @@ VRenderFrame::~VRenderFrame()
 	curl_global_cleanup();//add by takashi
 
 	TextureBrick::delete_all_cache_files();
+}
+
+void VRenderFrame::OnTimer(wxTimerEvent& event)
+{
+	event.Skip();
 }
 
 void VRenderFrame::OnExit(wxCommandEvent& WXUNUSED(event))
@@ -688,8 +743,7 @@ wxString VRenderFrame::CreateView(int row)
 	VRenderView* vrv = 0;
 	if (m_vrv_list.size()>0)
 	{
-		wxGLContext* sharedContext = m_vrv_list[0]->GetContext();
-		vrv = new VRenderView(this, this, wxID_ANY, sharedContext);
+		vrv = new VRenderView(this, this, wxID_ANY, m_vrv_list[0]->GetContext());
 		m_aui_mgr.AddPane(vrv, wxAuiPaneInfo().
 			Name(vrv->GetName()).Caption(vrv->GetName()).
 			Dockable(true).CloseButton(false).
@@ -725,7 +779,6 @@ wxString VRenderFrame::CreateView(int row)
 		vrv->SetPointVolumeMode(m_setting_dlg->GetPointVolumeMode());
 		vrv->SetRulerUseTransf(m_setting_dlg->GetRulerUseTransf());
 		vrv->SetRulerTimeDep(m_setting_dlg->GetRulerTimeDep());
-		vrv->SetTextRenderer(m_text_renderer);
 	}
 
 	//m_aui_mgr.Update();
@@ -968,13 +1021,16 @@ void VRenderFrame::OnOpenVolume(wxCommandEvent& WXUNUSED(event))
 
 	wxFileDialog *fopendlg = new wxFileDialog(
 		this, "Choose the volume data file", "", "",
-		"All Supported|*.tif;*.tiff;*.oib;*.oif;*.lsm;*.xml;*.nrrd;*.vvd|"\
-		"Tiff Files (*.tif, *.tiff)|*.tif;*.tiff|"\
+		"All Supported|*.tif;*.tiff;*.zip;*.oib;*.oif;*.lsm;*.xml;*.nrrd;*.h5j;*.vvd;*.v3dpbd|"\
+		"Tiff Files (*.tif, *.tiff, *.zip)|*.tif;*.tiff;*.zip|"\
 		"Olympus Image Binary Files (*.oib)|*.oib|"\
 		"Olympus Original Imaging Format (*.oif)|*.oif|"\
 		"Zeiss Laser Scanning Microscope (*.lsm)|*.lsm|"\
 		"Prairie View XML (*.xml)|*.xml|"\
 		"Nrrd files (*.nrrd)|*.nrrd|"\
+		"H5J files (*.h5j)|*.h5j|"\
+		"V3DPBD files (*.v3dpbd)|*.v3dpbd|"\
+        "Indexed images (*.idi)|*.idi|"\
 		"VVD files (*.vvd)|*.vvd", wxFD_OPEN|wxFD_MULTIPLE);
 	fopendlg->SetExtraControlCreator(CreateExtraControlVolume);
 
@@ -1005,7 +1061,7 @@ void VRenderFrame::OnDownloadVolume(wxCommandEvent& WXUNUSED(event))
 	m_aui_mgr.Update();
 }
 
-void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<vector<AnnotationDB>> annotations)
+void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<vector<AnnotationDB>> annotations, size_t datasize)
 {
 	int j;
 
@@ -1046,19 +1102,25 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
 			wxString suffix = filename.Mid(filename.Find('.', true)).MakeLower();
 
 			if (suffix == ".nrrd")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_NRRD);
-			else if (suffix==".tif" || suffix==".tiff")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_TIFF);
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_NRRD, -1, -1, datasize);
+			else if (suffix==".tif" || suffix==".tiff" || suffix==".zip")
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_TIFF, -1, -1, datasize);
 			else if (suffix == ".oib")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_OIB);
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_OIB, -1, -1, datasize);
 			else if (suffix == ".oif")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_OIF);
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_OIF, -1, -1, datasize);
 			else if (suffix==".lsm")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_LSM);
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_LSM, -1, -1, datasize);
 			else if (suffix==".xml")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_PVXML);
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_PVXML, -1, -1, datasize);
 			else if (suffix==".vvd")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_BRKXML);
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_BRKXML, -1, -1, datasize);
+			else if (suffix == ".h5j")
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_H5J, -1, -1, datasize);
+			else if (suffix == ".v3dpbd")
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_V3DPBD, -1, -1, datasize);
+            else if (suffix == ".idi")
+                ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_IDI, -1, -1, datasize);
 
 			if (ch_num > 1)
 			{
@@ -1141,10 +1203,61 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
 		delete prg_diag;
 	}
 
-	vrv->RefreshGL();//added by Takashi
+	vrv->RefreshGL();
 }
 
-void VRenderFrame::StartupLoad(wxArrayString files)
+void VRenderFrame::AddVolume(VolumeData *vd, VRenderView* view)
+{
+	if (!vd) return;
+
+	int j;
+
+	VolumeData* vd_sel = 0;
+	DataGroup* group_sel = 0;
+	VRenderView* vrv = 0;
+
+	if (view)
+		vrv = view;
+	else
+		vrv = GetView(0);
+
+	if (vrv)
+	{
+		m_data_mgr.SetSliceSequence(m_sliceSequence);
+		m_data_mgr.SetTimeSequence(m_timeSequence);
+		m_data_mgr.SetCompression(m_compression);
+		m_data_mgr.SetSkipBrick(m_skip_brick);
+		m_data_mgr.SetTimeId(m_time_id);
+		m_data_mgr.SetLoadMask(m_load_mask);
+		m_setting_dlg->SetTimeId(m_time_id);
+
+		bool enable_4d = false;
+		m_data_mgr.AddVolumeData(vd);
+
+		vrv->AddVolumeData(vd);
+		vd_sel = vd;
+
+		if (vd->GetReader() && vd->GetReader()->GetTimeNum()>1){
+			vrv->m_glview->m_tseq_cur_num = vd->GetReader()->GetCurTime();
+			enable_4d = true;
+		}
+
+		UpdateTree(vd_sel->GetName(), 2);
+		
+		if (vrv)
+			vrv->InitView(INIT_BOUNDS|INIT_CENTER);
+		if (enable_4d) {
+			m_movie_view->EnableTime();
+			m_movie_view->DisableRot();
+			m_movie_view->SetCurrentTime(vrv->m_glview->m_tseq_cur_num);
+		}
+
+	}
+
+	vrv->RefreshGL();
+}
+
+void VRenderFrame::StartupLoad(wxArrayString files, size_t datasize)
 {
 	if (m_vrv_list[0])
 		m_vrv_list[0]->m_glview->Init();
@@ -1165,9 +1278,13 @@ void VRenderFrame::StartupLoad(wxArrayString files)
 			suffix == ".oif" ||
 			suffix == ".lsm" ||
 			suffix == ".xml" ||
-			suffix == ".vvd" )
+			suffix == ".vvd" ||
+			suffix == ".h5j" ||
+			suffix == ".v3dpbd" ||
+			suffix == ".zip" ||
+            suffix == ".idi")
 		{
-			LoadVolumes(files);
+			LoadVolumes(files, NULL, vector<vector<AnnotationDB>>(), datasize);
 		}
 		else if (suffix == ".obj" || suffix == ".swc")
 		{
@@ -1209,6 +1326,7 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv)
 			{
 				group->InsertMeshData(group->GetMeshNum()-1, md);
 				vrv->SetMeshPopDirty();
+                vrv->InitView(INIT_BOUNDS | INIT_CENTER);
 			}
 			else
 				vrv->AddMeshData(md);
@@ -1218,13 +1336,16 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv)
 		}
 	}
 
+	//if (vrv)
+	//	vrv->InitView(INIT_BOUNDS | INIT_CENTER);
+
 	if (md_sel)
 		UpdateTree(md_sel->GetName(), 3);
 	else
 		UpdateTree();
 
-	if (vrv)
-		vrv->InitView(INIT_BOUNDS|INIT_CENTER);
+	//if (vrv)
+	//	vrv->InitView(INIT_BOUNDS|INIT_CENTER);
 
 	delete prg_diag;
 }
@@ -1447,6 +1568,10 @@ void VRenderFrame::UpdateTreeIcons()
 							mesh_item = treectrl->GetNextChild(layer_item, ck_mesh);
 						if (!mesh_item.IsOk())
 							continue;
+                        item_data = (LayerInfo*)treectrl->GetItemData(mesh_item);
+                        if (!item_data)
+                            continue;
+                        int iconid = item_data->icon / 2;
 						m_tree_panel->SetMeshItemImage(mesh_item, md->GetDisp()?2*iconid+1:2*iconid);
 					}
 				}
@@ -1459,6 +1584,9 @@ void VRenderFrame::UpdateTreeIcons()
 	m_tree_panel->SetEvtHandlerEnabled(true);
 
 	m_tree_panel->Refresh(false);
+
+	if (m_plugin_manager)
+		m_plugin_manager->OnTreeUpdate();
 }
 
 void VRenderFrame::UpdateTreeColors()
@@ -1544,20 +1672,23 @@ void VRenderFrame::UpdateTreeColors()
 					DataGroup* group = (DataGroup*)layer;
 					if (!group)
 						break;
+                    wxTreeItemIdValue ck_volume;
 					for (k=0; k<group->GetVolumeNum(); k++)
 					{
 						VolumeData* vd = group->GetVolumeData(k);
 						if (!vd)
 							break;
-						
-						wxString v_name = vd->GetName();
-						wxTreeItemId v_item = m_tree_panel->FindTreeItem(v_name);
-						if (!v_item.IsOk())
-							continue;
-						LayerInfo* vitem_data = (LayerInfo*)treectrl->GetItemData(v_item);
-						if (!vitem_data)
-							continue;
-						iconid = vitem_data->icon / 2;
+                        wxTreeItemId volume_item;
+                        if (k==0)
+                            volume_item = treectrl->GetFirstChild(layer_item, ck_volume);
+                        else
+                            volume_item = treectrl->GetNextChild(layer_item, ck_volume);
+                        if (!volume_item.IsOk())
+                            continue;
+                        item_data = (LayerInfo*)treectrl->GetItemData(volume_item);
+                        if (!item_data)
+                            continue;
+                        int iconid = item_data->icon / 2;
 
 						Color c = vd->GetColor();
 						wxColor wxc(
@@ -1575,11 +1706,23 @@ void VRenderFrame::UpdateTreeColors()
 					MeshGroup* group = (MeshGroup*)layer;
 					if (!group)
 						break;
+                    wxTreeItemIdValue ck_mesh;
 					for (k=0; k<group->GetMeshNum(); k++)
 					{
 						MeshData* md = group->GetMeshData(k);
 						if (!md)
 							break;
+                        wxTreeItemId mesh_item;
+                        if (k==0)
+                            mesh_item = treectrl->GetFirstChild(layer_item, ck_mesh);
+                        else
+                            mesh_item = treectrl->GetNextChild(layer_item, ck_mesh);
+                        if (!mesh_item.IsOk())
+                            continue;
+                        item_data = (LayerInfo*)treectrl->GetItemData(mesh_item);
+                        if (!item_data)
+                            continue;
+                        int iconid = item_data->icon / 2;
 						Color amb, diff, spec;
 						double shine, alpha;
 						md->GetMaterial(amb, diff, spec, shine, alpha);
@@ -1599,6 +1742,9 @@ void VRenderFrame::UpdateTreeColors()
 	m_tree_panel->SetEvtHandlerEnabled(true);
 
 	m_tree_panel->Refresh(false);
+
+	if (m_plugin_manager)
+		m_plugin_manager->OnTreeUpdate();
 }
 
 void VRenderFrame::UpdateTree(wxString name, int type, bool set_calc)
@@ -1652,6 +1798,8 @@ void VRenderFrame::UpdateTree(wxString name, int type, bool set_calc)
 			case 0://root
 				break;
 			case 1://view
+				if (name == layer->GetName() && (type == 1 || type < 0))
+					GetMeasureDlg()->GetSettings(vrv);
 				break;
 			case 2://volume data
 				{
@@ -1700,8 +1848,10 @@ void VRenderFrame::UpdateTree(wxString name, int type, bool set_calc)
 					m_tree_panel->ChangeIconColor(ii, wxc);
 					wxTreeItemId item = m_tree_panel->AddMeshItem(vrv_item, md->GetName());
 					m_tree_panel->SetMeshItemImage(item, md->GetDisp()?2*ii+1:2*ii);
-					if (name == md->GetName() && (type == 3 || type < 0))
+					if (name == md->GetName() && (type == 3 || type < 0)) {
+						GetMeasureDlg()->GetSettings(vrv);
 						sel_item = item;//m_tree_panel->SelectItem(item);
+					}
 				}
 				break;
 			case 4://annotations
@@ -1716,8 +1866,10 @@ void VRenderFrame::UpdateTree(wxString name, int type, bool set_calc)
 					m_tree_panel->ChangeIconColor(ii, wxc);
 					wxTreeItemId item = m_tree_panel->AddAnnotationItem(vrv_item, ann->GetName());
 					m_tree_panel->SetAnnotationItemImage(item, ann->GetDisp()?2*ii+1:2*ii);
-					if (name == ann->GetName() && (type == 4 || type < 0))
+					if (name == ann->GetName() && (type == 4 || type < 0)) {
+						GetMeasureDlg()->GetSettings(vrv);
 						sel_item = item;
+					}
 				}
 				break;
 			case 5://group
@@ -1757,8 +1909,10 @@ void VRenderFrame::UpdateTree(wxString name, int type, bool set_calc)
 							GetTraceDlg()->GetSettings(vrv);
 						}
 					}
-					if (name == group->GetName() && (type == 5 || type < 0))
+					if (name == group->GetName() && (type == 5 || type < 0)) {
+						GetMeasureDlg()->GetSettings(vrv);
 						sel_item = group_item;
+					}
 				}
 				break;
 			case 6://mesh group
@@ -1791,8 +1945,10 @@ void VRenderFrame::UpdateTree(wxString name, int type, bool set_calc)
 						if (name == md->GetName() && (type == 3 || type < 0))
 							sel_item = item;
 					}
-					if (name == group->GetName() && (type == 6 || type < 0))
+					if (name == group->GetName() && (type == 6 || type < 0)) {
 						sel_item = group_item;
+						GetMeasureDlg()->GetSettings(vrv);
+					}
 				}
 				break;
 			}
@@ -1817,6 +1973,9 @@ void VRenderFrame::UpdateTree(wxString name, int type, bool set_calc)
 
 	m_tree_panel->Thaw();
 	m_tree_panel->SetEvtHandlerEnabled(true);
+
+	if (m_plugin_manager)
+		m_plugin_manager->OnTreeUpdate();
 }
 
 void VRenderFrame::UpdateROITree(VolumeData *vd, bool set_calc)
@@ -1896,13 +2055,14 @@ void VRenderFrame::OnSelection(int type,
 			m_annotation_prop->Show(false);
 		m_aui_mgr.GetPane(m_prop_panel).Caption(UITEXT_PROPERTIES);
 		m_aui_mgr.Update();
+		if (vrv) m_measure_dlg->GetSettings(vrv);
 		break;
 	case 2:  //volume
 		if (vd && vd->GetDisp())
 		{
-			m_volume_prop->SetVolumeData(vd);
-			m_volume_prop->SetGroup(group);
 			m_volume_prop->SetView(vrv);
+			m_volume_prop->SetGroup(group);
+			m_volume_prop->SetVolumeData(vd);
 			if (!m_volume_prop->IsShown())
 			{
 				m_volume_prop->Show(true);
@@ -1922,7 +2082,7 @@ void VRenderFrame::OnSelection(int type,
 				VRenderView* vrv = m_vrv_list[i];
 				if (!vrv)
 					continue;
-				vrv->m_glview->m_cur_vol = vd;
+				vrv->SetCurrentVolume(vd);
 			}
 
 			if (m_volume_prop)
@@ -2447,7 +2607,10 @@ void VRenderFrame::SaveProject(wxString& filename)
 				wxString new_folder;
 				new_folder = filename + "_files";
 				CREATE_DIR(new_folder.fn_str());
-				str = new_folder + GETSLASH() + vd->GetName() + ".nrrd";
+				wxString ext = ".nrrd";
+				if (vd->GetName().AfterLast(L'.') == wxT("nrrd"))
+					ext = "";
+				str = new_folder + GETSLASH() + vd->GetName() + ext;
 				vd->Save(str, 2, false, VRenderFrame::GetCompression());
 				fconfig.Write("path", str);
 			}
@@ -2457,6 +2620,7 @@ void VRenderFrame::SaveProject(wxString& filename)
 			if (vd->GetReader())
 			{
 				fconfig.Write("slice_seq", vd->GetReader()->GetSliceSeq());
+				fconfig.Write("time_seq", vd->GetReader()->GetTimeSeq());
 				str = vd->GetReader()->GetTimeId();
 				fconfig.Write("time_id", str);
 			}
@@ -2622,6 +2786,29 @@ void VRenderFrame::SaveProject(wxString& filename)
 				msk_writer.Save(str.ToStdWstring(), 0);
 			}
 			fconfig.Write("mask", str);
+            
+            //label
+            Nrrd* label = vd->GetLabel(true);
+            str = "";
+            if (label)
+            {
+                wxString new_folder;
+                new_folder = filename + "_files";
+                CREATE_DIR(new_folder.fn_str());
+                str = new_folder + GETSLASH() + vd->GetName() + ".lbl";
+                MSKWriter lbl_writer;
+                lbl_writer.SetData(label);
+                lbl_writer.SetSpacings(resx, resy, resz);
+                lbl_writer.Save(str.ToStdWstring(), 1);
+            }
+            fconfig.Write("label", str);
+			
+			fconfig.Write("mask_disp_mode", vd->GetMaskHideMode());
+			fconfig.Write("mask_lv", vd->GetMaskLv());
+            
+            fconfig.Write("na_mode", vd->GetNAMode());
+            fconfig.Write("shared_mask", vd->GetSharedMaskName());
+            fconfig.Write("shared_label", vd->GetSharedLabelName());
 		}
 	}
 	//mesh
@@ -2639,11 +2826,29 @@ void VRenderFrame::SaveProject(wxString& filename)
 		{
 			if (md->GetPath() == "" || m_vrp_embed)
 			{
-				wxString new_folder;
-				new_folder = filename + "_files";
-				CREATE_DIR(new_folder.fn_str());
-				str = new_folder + GETSLASH() + md->GetName() + ".obj";
-				md->Save(str);
+				if (!md->isSWC())
+				{
+					wxString new_folder;
+					new_folder = filename + "_files";
+					CREATE_DIR(new_folder.fn_str());
+					wxString ext = ".obj";
+					if (md->GetName().AfterLast(L'.') == wxT("obj"))
+						ext = "";
+					str = new_folder + GETSLASH() + md->GetName() + ext;
+					md->Save(str);
+				}
+				else
+				{
+					wxString new_folder;
+					wxString srcpath = md->GetPath();
+					new_folder = filename + "_files";
+					CREATE_DIR(new_folder.fn_str());
+					wxString ext = ".swc";
+					if (md->GetName().AfterLast(L'.') == wxT("swc"))
+						ext = "";
+					wxString dstpath = new_folder + GETSLASH() + md->GetName() + ext;
+					wxCopyFile(srcpath, dstpath);
+				}
 			}
 			str = wxString::Format("/data/mesh/%d", i);
 			fconfig.SetPath(str);
@@ -2683,6 +2888,50 @@ void VRenderFrame::SaveProject(wxString& filename)
 			double darkness;
 			md->GetShadowParams(darkness);
 			fconfig.Write("shadow_darkness", darkness);
+
+			fconfig.Write("radius_scale", md->GetRadScale());
+
+			//resolution scale
+			BBox b = md->GetBounds();
+			str = wxString::Format("%lf %lf %lf", b.min().x(), b.min().y(), b.min().z());
+			fconfig.Write("bound_min", str);
+			str = wxString::Format("%lf %lf %lf", b.max().x(), b.max().y(), b.max().z());
+			fconfig.Write("bound_max", str);
+			
+			//planes
+			vector<Plane*> *planes = 0;
+			if (md->GetMR())
+				planes = md->GetMR()->get_planes();
+			if (planes && planes->size() == 6)
+			{
+				Plane* plane = 0;
+				double abcd[4];
+
+				//x1
+				plane = (*planes)[0];
+				plane->get_copy(abcd);
+				fconfig.Write("x1_val", abcd[3]);
+				//x2
+				plane = (*planes)[1];
+				plane->get_copy(abcd);
+				fconfig.Write("x2_val", abcd[3]);
+				//y1
+				plane = (*planes)[2];
+				plane->get_copy(abcd);
+				fconfig.Write("y1_val", abcd[3]);
+				//y2
+				plane = (*planes)[3];
+				plane->get_copy(abcd);
+				fconfig.Write("y2_val", abcd[3]);
+				//z1
+				plane = (*planes)[4];
+				plane->get_copy(abcd);
+				fconfig.Write("z1_val", abcd[3]);
+				//z2
+				plane = (*planes)[5];
+				plane->get_copy(abcd);
+				fconfig.Write("z2_val", abcd[3]);
+			}
 
 			//mesh transform
 			fconfig.SetPath("../transform");
@@ -2871,6 +3120,10 @@ void VRenderFrame::SaveProject(wxString& filename)
 			str = vrv->m_glview->m_sb_num;
 			fconfig.Write("sb_num", str);
 			fconfig.Write("sb_unit", vrv->m_glview->m_sb_unit);
+			fconfig.Write("sb_digit", vrv->m_glview->GetScaleBarDigit());
+			bool fixed; int uid; double len;
+			vrv->GetScaleBarFixed(fixed, len, uid);
+			fconfig.Write("sb_fixed", fixed);
 
 			//2d adjustment
 			str = wxString::Format("%f %f %f", vrv->m_glview->GetGamma().r(),
@@ -2902,6 +3155,12 @@ void VRenderFrame::SaveProject(wxString& filename)
 			fconfig.Write("brush_iteration", vrv->GetBrushIteration());
 			fconfig.Write("brush_translate", vrv->GetBrushSclTranslate());
 			fconfig.Write("w2d", vrv->GetW2d());
+
+			int cur=0, st=0, ed=0;
+			vrv->Get4DSeqFrames(st, ed, cur);
+			fconfig.Write("st_time", st);
+			fconfig.Write("ed_time", ed);
+			fconfig.Write("cur_time", cur);
 
 			//rulers
 			fconfig.SetPath(wxString::Format("/views/%d/rulers", i));
@@ -2967,7 +3226,9 @@ void VRenderFrame::SaveProject(wxString& filename)
 	fconfig.Write("width_text", m_movie_view->m_width_text->GetValue());
 	fconfig.Write("height_text", m_movie_view->m_height_text->GetValue());
 	fconfig.Write("time_start_text", m_movie_view->m_time_start_text->GetValue());
+	fconfig.Write("time_cur_text", m_movie_view->m_time_current_text->GetValue());
 	fconfig.Write("time_end_text", m_movie_view->m_time_end_text->GetValue());
+	fconfig.Write("progress_text", m_movie_view->m_progress_text->GetValue());
 	//brushtool diag
 	fconfig.SetPath("/brush_diag");
 	fconfig.Write("ca_min", m_brush_tool_dlg->GetDftCAMin());
@@ -2983,7 +3244,7 @@ void VRenderFrame::SaveProject(wxString& filename)
 	fconfig.SetPath("/ui_layout");
 	fconfig.Write("ui_main_tb", m_main_tb->IsShown());
 	fconfig.Write("ui_tree_view", m_tree_panel->IsShown());
-	fconfig.Write("ui_measure_view", m_measure_dlg->IsShown());
+	fconfig.Write("ui_measure_view", false);
 	fconfig.Write("ui_adjust_view", m_adjust_view->IsShown());
 	fconfig.Write("ui_clip_view", m_clip_view->IsShown());
 	fconfig.Write("ui_prop_view", m_prop_panel->IsShown());
@@ -2999,6 +3260,24 @@ void VRenderFrame::SaveProject(wxString& filename)
 		m_aui_mgr.GetPane(m_clip_view).IsFloating():false);
 	fconfig.Write("ui_prop_view_float", m_aui_mgr.GetPane(m_prop_panel).IsOk()?
 		m_aui_mgr.GetPane(m_prop_panel).IsFloating():false);
+    
+    wxGuiPluginBaseList gplist = m_plugin_manager->GetGuiPlugins();
+    for(wxGuiPluginBaseList::Node * node = gplist.GetFirst(); node; node = node->GetNext())
+    {
+        wxGuiPluginBase *plugin = node->GetData();
+        fconfig.Write(plugin->GetDisplayName(), m_aui_mgr.GetPane(plugin->GetDisplayName()).IsOk() ? m_aui_mgr.GetPane(plugin->GetDisplayName()).IsShown() : false);
+        fconfig.Write(plugin->GetDisplayName()+"_float", m_aui_mgr.GetPane(plugin->GetDisplayName()).IsOk() ? m_aui_mgr.GetPane(plugin->GetDisplayName()).IsFloating() : false);
+        
+        wxString new_folder;
+        new_folder = filename + "_files";
+        CREATE_DIR(new_folder.fn_str());
+        wxString ext = ".set";
+        str = new_folder + GETSLASH() + plugin->GetDisplayName() + ext;
+        plugin->SaveProjectSettingFile(str);
+        if (wxFileExists(str))
+            fconfig.Write(plugin->GetDisplayName()+"_setting", str);
+    }
+    
 	//interpolator
 	fconfig.SetPath("/interpolator");
 	fconfig.Write("max_id", Interpolator::m_id);
@@ -3122,17 +3401,20 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 						if (fconfig.Read("tiff_chan", &cur_chan))
 							cur_chan--;
 					int cur_time = 0;
-					fconfig.Read("cur_time", &cur_time);
+					//fconfig.Read("cur_time", &cur_time);
 					bool slice_seq = 0;
 					fconfig.Read("slice_seq", &slice_seq);
 					m_data_mgr.SetSliceSequence(slice_seq);
+					bool time_seq = 0;
+					fconfig.Read("time_seq", &time_seq);
+					m_data_mgr.SetTimeSequence(time_seq);
 					wxString time_id;
 					fconfig.Read("time_id", &time_id);
 					m_data_mgr.SetTimeId(time_id);
 					wxString suffix = str.Mid(str.Find('.', true)).MakeLower();
 					if (suffix == ".nrrd")
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_NRRD, cur_chan, cur_time);
-					else if (suffix == ".tif"||suffix == ".tiff")
+					else if (suffix == ".tif"||suffix == ".tiff"||suffix == ".zip")
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_TIFF, cur_chan, cur_time);
 					else if (suffix == ".oib")
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_OIB, cur_chan, cur_time);
@@ -3144,6 +3426,12 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_PVXML, cur_chan, cur_time);
 					else if (suffix == ".vvd")
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_BRKXML, cur_chan, cur_time);
+					else if (suffix == ".h5j")
+						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_H5J, cur_chan, cur_time);
+					else if (suffix == ".v3dpbd")
+						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_V3DPBD, cur_chan, cur_time);
+                    else if (suffix == ".idi")
+                        loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_IDI, cur_chan, cur_time);
 				}
 				if (loaded_num)
 					vd = m_data_mgr.GetLastVolumeData();
@@ -3423,6 +3711,9 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 						if (fconfig.Read("roi_disp_mode", &iVal))
 							vd->SetIDColDispMode(iVal);
 
+						if (fconfig.Read("mask_lv", &iVal))
+							vd->SetMaskLv(iVal);
+
 						//mask
 						if (fconfig.Read("mask", &str))
 						{
@@ -3431,9 +3722,37 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 							msk_reader.SetFile(maskname);
 							BaseReader *br = &msk_reader;
 							Nrrd* mask = br->Convert(true);
+							Nrrd* oldmask = vd->GetMask(false);
+							if (oldmask)
+								vd->DeleteMask();
 							if (mask)
 								vd->LoadMask(mask);
 						}
+                        
+                        //label
+                        if (fconfig.Read("label", &str))
+                        {
+                            LBLReader lbl_reader;
+                            wstring lblname = str.ToStdWstring();
+                            lbl_reader.SetFile(lblname);
+                            BaseReader *br = &lbl_reader;
+                            Nrrd* label = br->Convert(true);
+                            Nrrd* oldlabel = vd->GetLabel(false);
+                            if (oldlabel)
+                                vd->DeleteLabel();
+                            if (label)
+                                vd->LoadLabel(label);
+                        }
+
+						if (fconfig.Read("mask_disp_mode", &iVal))
+							vd->SetMaskHideMode(iVal);
+                        
+                        if (fconfig.Read("na_mode", &bVal))
+                            vd->SetNAMode(bVal);
+                        if (fconfig.Read("shared_mask", &str))
+                            vd->SetSharedMaskName(str);
+                        if (fconfig.Read("shared_label", &str))
+                            vd->SetSharedLabelName(str);
 					}
 				}
 			}
@@ -3470,7 +3789,7 @@ MeshData* VRenderFrame::OpenMeshFromProject(wxString name, wxFileConfig &fconfig
 				{
 					m_data_mgr.LoadMeshData(str);
 				}
-				MeshData* md = m_data_mgr.GetLastMeshData();
+				md = m_data_mgr.GetLastMeshData();
 				if (md)
 				{
 					if (fconfig.Read("name", &str))
@@ -3538,6 +3857,99 @@ MeshData* VRenderFrame::OpenMeshFromProject(wxString name, wxFileConfig &fconfig
 						double darkness;
 						if (fconfig.Read("shadow_darkness", &darkness))
 							md->SetShadowParams(darkness);
+						
+						double radsc;
+						if (fconfig.Read("radius_scale", &radsc))
+							md->SetRadScale(radsc);
+
+						Point bmin, bmax;
+						bool valid_bound = true;
+						if (fconfig.Read("bound_min", &str))
+						{
+							double b_x, b_y, b_z;
+							if (SSCANF(str.c_str(), "%lf%lf%lf", &b_x, &b_y, &b_z))
+								bmin = Point(b_x, b_y, b_z);
+						}
+						else
+							valid_bound = false;
+
+						if (fconfig.Read("bound_max", &str))
+						{
+							double b_x, b_y, b_z;
+							if (SSCANF(str.c_str(), "%lf%lf%lf", &b_x, &b_y, &b_z))
+								bmax = Point(b_x, b_y, b_z);
+						}
+						else
+							valid_bound = false;
+
+						if (valid_bound)
+						{
+							BBox bound(bmin, bmax);
+							md->SetBounds(bound);
+						}
+
+						vector<Plane*> *planes = 0;
+						if (md->GetMR())
+							planes = md->GetMR()->get_planes();
+						int iresx, iresy, iresz;
+						Vector d = md->GetBounds().diagonal();
+						iresx = (int)d.x();
+						iresy = (int)d.y();
+						iresz = (int)d.z();
+
+						if (planes && planes->size()==6)
+						{
+							double val;
+							wxString splane;
+
+							//x1
+							if (fconfig.Read("x1_vali", &val))
+								(*planes)[0]->ChangePlane(Point(abs(val/iresx), 0.0, 0.0),
+								Vector(1.0, 0.0, 0.0));
+							else if (fconfig.Read("x1_val", &val))
+								(*planes)[0]->ChangePlane(Point(abs(val), 0.0, 0.0),
+								Vector(1.0, 0.0, 0.0));
+
+							//x2
+							if (fconfig.Read("x2_vali", &val))
+								(*planes)[1]->ChangePlane(Point(abs(val/iresx), 0.0, 0.0),
+								Vector(-1.0, 0.0, 0.0));
+							else if (fconfig.Read("x2_val", &val))
+								(*planes)[1]->ChangePlane(Point(abs(val), 0.0, 0.0),
+								Vector(-1.0, 0.0, 0.0));
+
+							//y1
+							if (fconfig.Read("y1_vali", &val))
+								(*planes)[2]->ChangePlane(Point(0.0, abs(val/iresy), 0.0),
+								Vector(0.0, 1.0, 0.0));
+							else if (fconfig.Read("y1_val", &val))
+								(*planes)[2]->ChangePlane(Point(0.0, abs(val), 0.0),
+								Vector(0.0, 1.0, 0.0));
+
+							//y2
+							if (fconfig.Read("y2_vali", &val))
+								(*planes)[3]->ChangePlane(Point(0.0, abs(val/iresy), 0.0),
+								Vector(0.0, -1.0, 0.0));
+							else if (fconfig.Read("y2_val", &val))
+								(*planes)[3]->ChangePlane(Point(0.0, abs(val), 0.0),
+								Vector(0.0, -1.0, 0.0));
+
+							//z1
+							if (fconfig.Read("z1_vali", &val))
+								(*planes)[4]->ChangePlane(Point(0.0, 0.0, abs(val/iresz)),
+								Vector(0.0, 0.0, 1.0));
+							else if (fconfig.Read("z1_val", &val))
+								(*planes)[4]->ChangePlane(Point(0.0, 0.0, abs(val)),
+								Vector(0.0, 0.0, 1.0));
+
+							//z2
+							if (fconfig.Read("z2_vali", &val))
+								(*planes)[5]->ChangePlane(Point(0.0, 0.0, abs(val/iresz)),
+								Vector(0.0, 0.0, -1.0));
+							else if (fconfig.Read("z2_val", &val))
+								(*planes)[5]->ChangePlane(Point(0.0, 0.0, abs(val)),
+								Vector(0.0, 0.0, -1.0));
+						}
 
 						//mesh transform
 						if (fconfig.Exists("../transform"))
@@ -3580,7 +3992,6 @@ void VRenderFrame::OpenProject(wxString& filename)
 	int iVal;
 	int i, j, k;
 	//clear
-	m_data_mgr.ClearAll();
 	DataGroup::ResetID();
 	MeshGroup::ResetID();
 	m_adjust_view->SetVolumeData(0);
@@ -3589,6 +4000,7 @@ void VRenderFrame::OpenProject(wxString& filename)
 	m_vrv_list[0]->Clear();
 	for (i=m_vrv_list.size()-1; i>0; i--)
 		DeleteVRenderView(i);
+	m_data_mgr.ClearAll();
 	
 	wxFileInputStream is(filename);
 	if (!is.IsOk())
@@ -3621,6 +4033,7 @@ void VRenderFrame::OpenProject(wxString& filename)
 		100, 0, wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);
 
 	//read streaming mode
+	/*
 	if (fconfig.Exists("/memory settings"))
 	{
 		fconfig.SetPath("/memory settings");
@@ -3647,6 +4060,52 @@ void VRenderFrame::OpenProject(wxString& filename)
 
 		SetTextureRendererSettings();
 	}
+	*/
+	if (ticks && prg_diag)
+		prg_diag->Update(90*tick_cnt/ticks,
+		"Reading project file. Please wait.");
+
+	//volumes
+	if (fconfig.Exists("/data/volume"))
+	{
+		fconfig.SetPath("/data/volume");
+		int num = fconfig.Read("num", 0l);
+		for (i = 0; i < num; i++)
+		{
+			wxString str;
+			str = wxString::Format("/data/volume/%d", i);
+			if (fconfig.Exists(str))
+			{
+				fconfig.SetPath(str);
+				if (fconfig.Read("name", &str))
+				{
+					OpenVolumeFromProject(str, fconfig);
+				}
+			}
+			tick_cnt++;
+		}
+	}
+
+	//meshes
+	if (fconfig.Exists("/data/mesh"))
+	{
+		fconfig.SetPath("/data/mesh");
+		int num = fconfig.Read("num", 0l);
+		for (i = 0; i < num; i++)
+		{
+			wxString str;
+			str = wxString::Format("/data/mesh/%d", i);
+			if (fconfig.Exists(str))
+			{
+				fconfig.SetPath(str);
+				if (fconfig.Read("name", &str))
+				{
+					OpenMeshFromProject(str, fconfig);
+				}
+			}
+			tick_cnt++;
+		}
+	}
 
 	//annotations
 	if (fconfig.Exists("/data/annotations"))
@@ -3665,6 +4124,7 @@ void VRenderFrame::OpenProject(wxString& filename)
 					m_data_mgr.LoadAnnotations(str);
 				}
 			}
+			tick_cnt++;
 		}
 	}
 
@@ -3695,10 +4155,6 @@ void VRenderFrame::OpenProject(wxString& filename)
 			if (i==0 && m_setting_dlg && m_setting_dlg->GetTestMode(1))
 				vrv->m_glview->m_test_speed = true;
 
-			if (ticks && prg_diag)
-				prg_diag->Update(90*tick_cnt/ticks,
-				"Reading project file. Please wait.");
-
 			wxString str;
 			//old
 			//volumes
@@ -3712,10 +4168,9 @@ void VRenderFrame::OpenProject(wxString& filename)
 					if (fconfig.Read(wxString::Format("name%d", j), &str))
 					{
 						
-						VolumeData* vd = OpenVolumeFromProject(str, fconfig);
+						VolumeData* vd = m_data_mgr.GetVolumeData(str);
 						if (vd)
 							vrv->AddVolumeData(vd);
-						tick_cnt++;
 					}
 				}
 				vrv->SetVolPopDirty();
@@ -3730,10 +4185,9 @@ void VRenderFrame::OpenProject(wxString& filename)
 				{
 					if (fconfig.Read(wxString::Format("name%d", j), &str))
 					{
-						MeshData* md = OpenMeshFromProject(str, fconfig);
+						MeshData* md = m_data_mgr.GetMeshData(str);
 						if (md)
 							vrv->AddMeshData(md);
-						tick_cnt++;
 					}
 				}
 			}
@@ -3760,10 +4214,9 @@ void VRenderFrame::OpenProject(wxString& filename)
 								{
 									if (fconfig.Read("name", &str))
 									{
-										VolumeData* vd = OpenVolumeFromProject(str, fconfig);
+										VolumeData* vd = m_data_mgr.GetVolumeData(str);
 										if (vd)
 											vrv->AddVolumeData(vd);
-										tick_cnt++;
 									}
 								}
 								break;
@@ -3771,10 +4224,9 @@ void VRenderFrame::OpenProject(wxString& filename)
 								{
 									if (fconfig.Read("name", &str))
 									{
-										MeshData* md = OpenMeshFromProject(str, fconfig);
+										MeshData* md = m_data_mgr.GetMeshData(str);
 										if (md)
 											vrv->AddMeshData(md);
-										tick_cnt++;
 									}
 								}
 								break;
@@ -3850,10 +4302,10 @@ void VRenderFrame::OpenProject(wxString& filename)
 												{
 													if (fconfig.Read(wxString::Format("vol_%d", k), &str))
 													{
-														VolumeData* vd = OpenVolumeFromProject(str, fconfig);
+														VolumeData* vd = m_data_mgr.GetVolumeData(str);
 														if (vd)
-															group->InsertVolumeData(k-1, vd);
-														tick_cnt++;
+															vrv->AddVolumeData(vd, group->GetName());
+															//group->InsertVolumeData(k-1, vd);
 													}
 												}
 											}
@@ -3888,10 +4340,12 @@ void VRenderFrame::OpenProject(wxString& filename)
 												{
 													if (fconfig.Read(wxString::Format("mesh_%d", k), &str))
 													{
-														MeshData* md = OpenMeshFromProject(str, fconfig);
+														MeshData* md = m_data_mgr.GetMeshData(str);
 														if (md)
+                                                        {
 															group->InsertMeshData(k-1, md);
-														tick_cnt++;
+                                                            vrv->InitView(INIT_BOUNDS|INIT_CENTER);
+                                                        }
 													}
 												}
 											}
@@ -4040,6 +4494,12 @@ void VRenderFrame::OpenProject(wxString& filename)
 				int unit;
 				if (fconfig.Read("sb_unit", &unit))
 					vrv->m_glview->m_sb_unit = unit;
+				int digit;
+				if (fconfig.Read("sb_digit", &digit))
+					vrv->SetScaleBarDigit(digit);
+				bool fixed;
+				if (fconfig.Read("sb_fixed", &fixed))
+					vrv->FixScaleBarLen(fixed);
 
 				//2d sdjustment settings
 				if (fconfig.Read("gamma", &str))
@@ -4172,6 +4632,7 @@ void VRenderFrame::OpenProject(wxString& filename)
 					}
 				}
 			}
+			vrv->InitView(INIT_BOUNDS|INIT_CENTER);
 		}
 	}
 
@@ -4221,6 +4682,7 @@ void VRenderFrame::OpenProject(wxString& filename)
 	}
 
 	//movie panel
+	wxString mov_prog, mov_time; 
 	if (fconfig.Exists("/movie_panel"))
 	{
 		fconfig.SetPath("/movie_panel");
@@ -4325,6 +4787,9 @@ void VRenderFrame::OpenProject(wxString& filename)
 			m_movie_view->m_time_start_text->SetValue(sVal);
 		if (fconfig.Read("time_end_text", &sVal))
 			m_movie_view->m_time_end_text->SetValue(sVal);
+		if (fconfig.Read("time_cur_text", &sVal))
+			m_movie_view->m_time_current_text->SetValue(sVal);
+		fconfig.Read("progress_text", &mov_prog);
 	}
 
 	//brushtool diag
@@ -4408,7 +4873,7 @@ void VRenderFrame::OpenProject(wxString& filename)
 		}
 		if (fconfig.Read("ui_measure_view", &bVal))
 		{
-/*			if (bVal)
+			if (bVal)
 			{
 				m_aui_mgr.GetPane(m_measure_dlg).Show();
 				m_tb_menu_ui->Check(ID_UIMeasureView, true);
@@ -4422,7 +4887,7 @@ void VRenderFrame::OpenProject(wxString& filename)
 				}
 			}
 			else
-*/			{
+			{
 				if (m_aui_mgr.GetPane(m_measure_dlg).IsOk())
 					m_aui_mgr.GetPane(m_measure_dlg).Hide();
 				m_tb_menu_ui->Check(ID_UIMeasureView, false);
@@ -4516,6 +4981,31 @@ void VRenderFrame::OpenProject(wxString& filename)
 				m_tb_menu_ui->Check(ID_UIPropView, false);
 			}
 		}
+        
+        wxGuiPluginBaseList gplist = m_plugin_manager->GetGuiPlugins();
+        for(wxGuiPluginBaseList::Node * node = gplist.GetFirst(); node; node = node->GetNext())
+        {
+            wxGuiPluginBase *plugin = node->GetData();
+            if (fconfig.Read(plugin->GetDisplayName(), &bVal))
+            {
+                ToggleVisibilityPluginWindow(plugin->GetName(), bVal);
+                bool fl;
+                if (fconfig.Read(plugin->GetDisplayName()+"_float", &fl))
+                {
+                    if (m_aui_mgr.GetPane(plugin->GetDisplayName()).IsOk())
+                    {
+                        if (fl)
+                            m_aui_mgr.GetPane(plugin->GetDisplayName()).Float();
+                        else
+                            m_aui_mgr.GetPane(plugin->GetDisplayName()).Dock();
+                    }
+                }
+                
+                wxString str;
+                if (fconfig.Read(plugin->GetDisplayName()+"_setting", &str))
+                    plugin->LoadProjectSettingFile(str);
+            }
+        }
 
 		m_aui_mgr.Update();
 	}
@@ -4638,6 +5128,7 @@ void VRenderFrame::OpenProject(wxString& filename)
 				UpdateTree();
 			break;
 		default:
+			m_measure_dlg->GetSettings(m_vrv_list[0]);
 			UpdateTree();
 		}
 	}
@@ -4646,10 +5137,16 @@ void VRenderFrame::OpenProject(wxString& filename)
 		if (m_data_mgr.GetVolumeData(m_cur_sel_vol))
 			UpdateTree(m_data_mgr.GetVolumeData(m_cur_sel_vol)->GetName(), 2);
 		else
+		{
+			m_measure_dlg->GetSettings(m_vrv_list[0]);
 			UpdateTree();
+		}
 	}
 	else
+	{
+		m_measure_dlg->GetSettings(m_vrv_list[0]);
 		UpdateTree();
+	}
 
 	if (!expstate.IsEmpty())
 		m_tree_panel->ImportExpState(expstate.ToStdString());
@@ -4657,10 +5154,28 @@ void VRenderFrame::OpenProject(wxString& filename)
 
 	if (m_movie_view)
 		m_movie_view->SetView(0);
+
 	delete prg_diag;
     
     //Thaw();
     SetEvtHandlerEnabled(true);
+
+	if (!m_mov_step.IsEmpty() && !mov_prog.IsEmpty())
+	{
+		double movcur = 0.0, movlen = 1.0;
+		mov_prog.ToDouble(&movcur);
+		m_mov_step.ToDouble(&movlen);
+		m_movie_view->SetProgress(movcur/movlen);
+		m_movie_view->SetRendering(movcur/movlen);
+	}
+	else
+	{
+		m_movie_view->SetProgress(0.0);
+		m_movie_view->SetRendering(0.0);
+	}
+
+	if (m_setting_dlg)
+		m_setting_dlg->UpdateUI();
 }
 
 void VRenderFrame::OnSettings(wxCommandEvent& WXUNUSED(event))
@@ -4790,12 +5305,13 @@ void VRenderFrame::SetTextureRendererSettings()
 	if (!m_setting_dlg)
 		return;
 
-	TextureRenderer::set_mem_swap(m_setting_dlg->GetMemSwap());
+	TextureRenderer::set_streaming(m_setting_dlg->GetMemSwap());
 	bool use_mem_limit = true;
 
 	//check amount of graphic memory
 	if (m_gpu_max_mem <= 0.0)
 	{
+/*
 		GLenum error = glGetError();
 		GLint mem_info[4] = {0, 0, 0, 0};
 		glGetIntegerv(GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX, mem_info);
@@ -4807,13 +5323,20 @@ void VRenderFrame::SetTextureRendererSettings()
 		}
 		if (error != GL_INVALID_ENUM)
 			m_gpu_max_mem = mem_info[0]/1024.0;
+		
+		if (m_gpu_max_mem >= 4096.0) m_gpu_max_mem -= 1024.0 + 512.0;
+		else if (m_gpu_max_mem >= 1024.0) m_gpu_max_mem -= 512.0;
+		else m_gpu_max_mem *= 0.7;
+ */
 	}
-	double mem_size = m_gpu_max_mem > m_setting_dlg->GetGraphicsMem() ? m_setting_dlg->GetGraphicsMem() : m_gpu_max_mem;
+
+    double user_mem_limit = m_setting_dlg->GetGraphicsMem();
+	double mem_size = user_mem_limit;
+
+    if (m_gpu_max_mem > 0.0 && m_gpu_max_mem < user_mem_limit) mem_size = m_gpu_max_mem;
 
 	//reserve a memory area for 2D textures
 	//(TextureRenderer takes no account of 2D textures in calculating allocated memory size)
-	if (mem_size > 1024.0) mem_size -= 300.0;
-	else mem_size *= 0.7;
 
 	double mem_delta = mem_size - TextureRenderer::get_mem_limit();
 	double prev_available_mem = TextureRenderer::get_available_mem();
@@ -4941,6 +5464,215 @@ void VRenderFrame::OnShowHideView(wxCommandEvent &event)
 	}
 
 	m_aui_mgr.Update();
+}
+
+void VRenderFrame::OnPlugins(wxCommandEvent& WXUNUSED(event))
+{
+	PopupMenu(m_tb_menu_plugin);
+}
+
+void VRenderFrame::OnPluginMenuSelect(wxCommandEvent& event)
+{
+	int pid = event.GetId() - ID_Plugin;
+	if (pid < m_plugin_list.size())
+	{
+		if (auto gp = m_plugin_manager->GetGuiPlugin(m_plugin_list[pid]))
+		{
+			ToggleVisibilityPluginWindow(gp->GetName(), true);
+		}
+		else if (auto ngp = m_plugin_manager->GetNonGuiPlugin(m_plugin_list[pid]))
+		{
+			ngp->Work();
+			return;
+		}
+	}
+}
+
+void VRenderFrame::ToggleVisibilityPluginWindow(wxString name, bool show, int docking)
+{
+	if (auto gp = m_plugin_manager->GetGuiPlugin(name))
+	{
+		if (show)
+		{
+			if (!m_aui_mgr.GetPane(gp->GetDisplayName()).IsOk())
+			{
+				SetEvtHandlerEnabled(false);
+				//wxWindow* pp = gp->CreatePanel(m_help_dlg);//dummy parent window
+				wxWindow * pp = gp->CreatePanel(this);
+				wxSize wsize = pp->GetVirtualSize();
+				m_aui_mgr.AddPane(pp, wxAuiPaneInfo().
+					Name(gp->GetDisplayName()).Caption(gp->GetDisplayName()).
+					Dockable(true).CloseButton(true));
+				//m_aui_mgr.GetPane(pp).Float();
+				m_aui_mgr.GetPane(pp).Left().Layer(3);
+				m_aui_mgr.Update();
+				SetEvtHandlerEnabled(true);
+			}
+			else
+			{
+				m_aui_mgr.GetPane(gp->GetDisplayName()).Show();
+				m_aui_mgr.Update();
+			}
+		}
+		else if (m_aui_mgr.GetPane(gp->GetDisplayName()).IsOk())
+		{
+			if (!m_aui_mgr.GetPane(gp->GetDisplayName()).IsOk())
+			{
+				SetEvtHandlerEnabled(false);
+				//wxWindow* pp = gp->CreatePanel(m_help_dlg);//dummy parent window
+				wxWindow* pp = gp->CreatePanel(this);
+				wxSize wsize = pp->GetVirtualSize();
+				m_aui_mgr.AddPane(pp, wxAuiPaneInfo().
+					Name(gp->GetDisplayName()).Caption(gp->GetDisplayName()).
+					Dockable(true).CloseButton(true).Hide());
+				//m_aui_mgr.GetPane(pp).Float();
+				m_aui_mgr.GetPane(pp).Left().Layer(3);
+				m_aui_mgr.Update();
+				SetEvtHandlerEnabled(true);
+			}
+			else
+			{
+				m_aui_mgr.GetPane(gp->GetDisplayName()).Hide();
+				m_aui_mgr.Update();
+			}
+		}
+	}
+}
+
+void VRenderFrame::CreatePluginWindow(wxString name, bool show)
+{
+	ToggleVisibilityPluginWindow(name, show);
+}
+
+bool VRenderFrame::IsCreatedPluginWindow(wxString name)
+{
+	if (auto gp = m_plugin_manager->GetGuiPlugin(name))
+		return m_aui_mgr.GetPane(gp->GetDisplayName()).IsOk();
+
+	return false;
+}
+
+bool VRenderFrame::IsShownPluginWindow(wxString name)
+{
+	if (auto gp = m_plugin_manager->GetGuiPlugin(name))
+	{
+		if (m_aui_mgr.GetPane(gp->GetDisplayName()).IsOk())
+			return m_aui_mgr.GetPane(gp->GetDisplayName()).IsShown();
+	}
+
+	return false;
+}
+
+bool VRenderFrame::PluginExists(wxString name)
+{
+	wxGuiPluginBaseList gplist = m_plugin_manager->GetGuiPlugins();
+	for(wxGuiPluginBaseList::Node * node = gplist.GetFirst(); node; node = node->GetNext())
+	{
+		wxGuiPluginBase *plugin = node->GetData();
+		if (plugin && plugin->GetName() == name)
+			return true;
+	}
+
+	wxNonGuiPluginBaseList ngplist = m_plugin_manager->GetNonGuiPlugins();
+	for(wxNonGuiPluginBaseList::Node * node = ngplist.GetFirst(); node; node = node->GetNext())
+	{
+		wxNonGuiPluginBase *plugin = node->GetData();
+		if (plugin && plugin->GetName() == name)
+			return true;
+	}
+
+	return false;
+}
+
+bool VRenderFrame::RunPlugin(wxString name, wxString options, bool show)
+{
+	wxGuiPluginBaseList gplist = m_plugin_manager->GetGuiPlugins();
+	for(wxGuiPluginBaseList::Node * node = gplist.GetFirst(); node; node = node->GetNext())
+	{
+		wxGuiPluginBase *plugin = node->GetData();
+		if (plugin && plugin->GetName() == name)
+		{
+			if (show)
+				ToggleVisibilityPluginWindow(plugin->GetName(), true);
+			return plugin->OnRun(options);
+		}
+	}
+
+	wxNonGuiPluginBaseList ngplist = m_plugin_manager->GetNonGuiPlugins();
+	for(wxNonGuiPluginBaseList::Node * node = ngplist.GetFirst(); node; node = node->GetNext())
+	{
+		wxNonGuiPluginBase *plugin = node->GetData();
+		if (plugin && plugin->GetName() == name)
+		{
+			plugin->Work();
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static size_t my_read_callback(void *ptr, size_t size, size_t nmemb, void *stream)
+{
+	curl_off_t nread;
+	/* in real-world cases, this would probably get this data differently
+	as this fread() stuff is exactly what the library already would do
+	by default internally */ 
+	size_t retcode = fread(ptr, size, nmemb, (FILE *)stream);
+
+	nread = (curl_off_t)retcode;
+
+	fprintf(stderr, "*** We read %" CURL_FORMAT_CURL_OFF_T " bytes from file\n", nread);
+	return retcode;
+}
+
+int VRenderFrame::UploadFileRemote(wxString url, wxString upfname, wxString loc_fpath, wxString usr, wxString pwd)
+{
+	CURLcode res;
+	FILE *fl;
+	struct stat file_info;
+	curl_off_t fsize;
+	struct curl_slist *headerlist = NULL;
+	wxString buf1 = wxString("RNFR ")+upfname+wxT(".uploading");
+	wxString buf2 = wxString("RNTO ")+upfname;
+	wxString usrpwd = usr + wxT(":") + pwd;
+	wxString fullurl = url + upfname + wxT(".uploading");
+
+	if (stat(loc_fpath.ToStdString().c_str(), &file_info)) {
+		printf("Couldnt open '%s': %sn", loc_fpath.ToStdString().c_str(), strerror(errno));
+		return 1;
+	}
+	fsize = (curl_off_t) file_info.st_size;
+	printf("Local file size: %" CURL_FORMAT_CURL_OFF_T " bytes.n", fsize);
+	fl = fopen(loc_fpath.ToStdString().c_str(), "rb");
+	
+	_g_curl = curl_easy_init();
+	if (_g_curl) {
+		headerlist = curl_slist_append(headerlist, buf1.ToStdString().c_str());
+		headerlist = curl_slist_append(headerlist, buf2.ToStdString().c_str());
+		curl_easy_setopt(_g_curl, CURLOPT_READFUNCTION, my_read_callback);
+		curl_easy_setopt(_g_curl, CURLOPT_UPLOAD, 1L);
+		curl_easy_setopt(_g_curl, CURLOPT_URL, fullurl.ToStdString().c_str());
+		curl_easy_setopt(_g_curl, CURLOPT_POSTQUOTE, headerlist);
+		curl_easy_setopt(_g_curl, CURLOPT_READDATA, fl);
+		curl_easy_setopt(_g_curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t) fsize);
+		curl_easy_setopt(_g_curl, CURLOPT_USERPWD, usrpwd.ToStdString().c_str());
+		curl_easy_setopt(_g_curl, CURLOPT_SSL_VERIFYPEER, false);
+
+		res = curl_easy_perform(_g_curl);
+
+		curl_slist_free_all(headerlist);
+
+		curl_easy_cleanup(_g_curl);
+	}
+	fclose(fl);
+
+	return 0;
+}
+
+int VRenderFrame::DownloadFileRemote(wxString url, wxString dir, wxString usr, wxString pwd)
+{
+	return 0;
 }
 
 //panes

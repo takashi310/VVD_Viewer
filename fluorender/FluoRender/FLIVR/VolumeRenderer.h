@@ -29,20 +29,26 @@
 #ifndef SLIVR_VolumeRenderer_h
 #define SLIVR_VolumeRenderer_h
 
+#include "DLLExport.h"
+
+#include "VVulkan.h"
+
 #include "Color.h"
 #include "Plane.h"
 #include "Texture.h"
 #include "TextureRenderer.h"
-#include "ImgShader.h"
-#include <FLIVR/KernelProgram.h>
-#include <FLIVR/VolKernel.h>
 #include "FLIVR/Quaternion.h"
 
 namespace FLIVR
 {
+	
+#define VOL_MASK_HIDE_NONE		0
+#define VOL_MASK_HIDE_OUTSIDE	1
+#define VOL_MASK_HIDE_INSIDE	2
+
 	class MultiVolumeRenderer;
 
-	class VolumeRenderer : public TextureRenderer
+	class EXPORT_API VolumeRenderer : public TextureRenderer
 	{
 	public:
 		VolumeRenderer(Texture* tex,
@@ -132,43 +138,10 @@ namespace FLIVR
 		int get_depth_peel() {return depth_peel_;}
 
 		double compute_dt_fac(double sampling_frq_fac=-1.0, double *rate_fac=nullptr);
-		double compute_dt_fac_1px(double sclfac);
+		double compute_dt_fac_1px(uint32_t w, uint32_t h, double sclfac);
 
 		//draw
-		void eval_ml_mode();
-		virtual void draw(bool draw_wireframe_p, 
-			bool interactive_mode_p, 
-			bool orthographic_p = false,
-			double zoom = 1.0, int mode = 0, double sampling_frq_fac = -1.0);
-		void draw_wireframe(bool orthographic_p = false, double sampling_frq_fac = -1.0);
-		void draw_volume(bool interactive_mode_p,
-			bool orthographic_p = false,
-			double zoom = 1.0, int mode = 0, double sampling_frq_fac = -1.0);
-		//type: 0-initial; 1-diffusion-based growing; 2-masked filtering
-		//paint_mode: 1-select; 2-append; 3-erase; 4-diffuse; 5-flood; 6-clear; 7-all;
-		//			  11-posterize
-		//hr_mode (hidden removal): 0-none; 1-ortho; 2-persp
-		void draw_mask(int type, int paint_mode, int hr_mode,
-			double ini_thresh, double gm_falloff, double scl_falloff,
-			double scl_translate, double w2d, double bins, bool ortho, bool estimate);
-		void draw_mask_dslt(int type, int paint_mode, int hr_mode,
-			double ini_thresh, double gm_falloff, double scl_falloff,
-			double scl_translate, double w2d, double bins, bool ortho, bool estimate, int dslt_r, int dslt_q, double dslt_c);
-		void dslt_mask(int rmax, int quality, double c);
-		//generate the labeling assuming the mask is already generated
-		//type: 0-initialization; 1-maximum intensity filtering
-		//mode: 0-normal; 1-posterized
-		void draw_label(int type, int mode, double thresh, double gm_falloff);
-
-		double calc_hist_3d(GLuint, GLuint, size_t, size_t, size_t);
-
-		//calculation
-		void calculate(int type, VolumeRenderer* vr_a, VolumeRenderer* vr_b);
-
-		//return
-		void return_volume();//return the data volume
-		void return_mask();//return the mask volume
-		void return_label(); //return the label volume
+		void eval_ml_mode(Texture* ext_msk = NULL, Texture* ext_lbl = NULL);
 
 		//mask and label
 		int get_ml_mode() {return ml_mode_;}
@@ -213,9 +186,29 @@ namespace FLIVR
 		bool test_against_view_clip(const BBox &bbox, const BBox &tbox, const BBox &dbox, bool persp);
 		void set_clip_quaternion(Quaternion q){ m_q_cl = q; }
 
+		void set_buffer_scale(double val)
+		{
+			if (val > 0.0 && val <= 1.0 && val != buffer_scale_)
+			{
+				buffer_scale_ = val;
+				resize();
+			}
+		}
+		double get_buffer_scale() { return buffer_scale_; }
+
+		bool is_mask_active() { eval_ml_mode(); return mask_; }
+		bool is_label_active() { eval_ml_mode(); return label_; }
+		
+		void set_clear_color(VkClearColorValue col) { m_clear_color = col; }
+		VkClearColorValue get_clear_color() { return m_clear_color; }
+        
+        void set_na_mode(bool val) { m_na_mode = val; }
+        bool get_na_mode() { return m_na_mode; }
+
 		friend class MultiVolumeRenderer;
 
 	protected:
+		double buffer_scale_;
 		double scalar_scale_;
 		double gm_scale_;
 		//transfer function properties
@@ -255,8 +248,6 @@ namespace FLIVR
 						//3-random color with label, 4-random color with label+mask
 		bool mask_;
 		bool label_;
-		//smooth filter
-		static ImgShaderFactory m_img_shader_factory;
 
 		//noise reduction
 		bool noise_red_;
@@ -286,13 +277,20 @@ namespace FLIVR
 		double m_fog_intensity;
 		double m_fog_start;
 		double m_fog_end;
+        
+        bool m_na_mode;
 
-		KernelProgram* m_dslt_kernel;
-		KernelProgram* m_dslt_l2_kernel;
-		KernelProgram* m_dslt_b_kernel;
-		KernelProgram* m_dslt_em_kernel;
+		/*
+		static KernelProgram* m_dslt_kernel = NULL;
+		KernelProgram* m_dslt_l2_kernel = NULL;
+		KernelProgram* m_dslt_b_kernel = NULL;
+		KernelProgram* m_dslt_em_kernel = NULL;
+		*/
 
 		Quaternion m_q_cl;
+
+		// 0:none, 1:outside, 2:inside 
+		int m_mask_hide_mode;
 
 		//calculating scaling factor, etc
 		double CalcScaleFactor(double w, double h, double tex_w, double tex_h, double zoom);
@@ -303,6 +301,212 @@ namespace FLIVR
 										//		 2:max filter
 										//		 3:sharpening
 
+public:
+		VkClearColorValue m_clear_color;
+		std::map<vks::VulkanDevice*, VolShaderFactory::VolUniformBufs> m_volUniformBuffers;
+		std::map<vks::VulkanDevice*, VRayShaderFactory::VRayUniformBufs> m_vrayUniformBuffers;
+		std::map<vks::VulkanDevice*, SegShaderFactory::SegUniformBufs> m_segUniformBuffers;
+		std::map<vks::VulkanDevice*, VkCommandBuffer> m_commandBuffers;
+		std::map<vks::VulkanDevice*, VkCommandBuffer> m_seg_commandBuffers;
+		
+		struct Vertex {
+			float pos[4];
+			float uv[4];
+		};
+		struct {
+			VkPipelineVertexInputStateCreateInfo inputState;
+			std::vector<VkVertexInputBindingDescription> inputBinding;
+			std::vector<VkVertexInputAttributeDescription> inputAttributes;
+		} m_vertices;
+		void setupVertexDescriptions();
+
+		struct VSemaphoreSettings {
+			uint32_t waitSemaphoreCount = 0;
+			uint32_t signalSemaphoreCount = 0;
+			VkSemaphore* waitSemaphores = nullptr;
+			VkSemaphore* signalSemaphores = nullptr;
+			bool wait_before_brk_rendering = false;
+		};
+
+		virtual void draw(
+			const std::unique_ptr<vks::VFrameBuffer>& framebuf,
+			bool clear_framebuf,
+			bool draw_wireframe_p,
+			bool interactive_mode_p,
+			bool orthographic_p = false,
+			double zoom = 1.0,
+			int mode = 0,
+			double sampling_frq_fac = -1.0,
+			VkClearColorValue clearColor = { 0.0f, 0.0f, 0.0f, 0.0f },
+			Texture* ext_msk = NULL,
+			Texture* ext_lbl = NULL
+		);
+		void draw_volume(
+			const std::unique_ptr<vks::VFrameBuffer>& framebuf,
+			bool clear_framebuf,
+			bool interactive_mode_p,
+			bool orthographic_p = false,
+			double zoom = 1.0,
+			int mode = 0,
+			double sampling_frq_fac = -1.0,
+			VkClearColorValue clearColor = { 0.0f, 0.0f, 0.0f, 0.0f }
+		);
+		void draw_volume_ray(
+			const std::unique_ptr<vks::VFrameBuffer>& framebuf,
+			bool clear_framebuf,
+			bool interactive_mode_p,
+			bool orthographic_p = false,
+			double zoom = 1.0,
+			int mode = 0,
+			double sampling_frq_fac = -1.0,
+			VkClearColorValue clearColor = { 0.0f, 0.0f, 0.0f, 0.0f },
+			Texture* ext_msk = NULL,
+			Texture* ext_lbl = NULL
+		);
+		//type: 0-initial; 1-diffusion-based growing; 2-masked filtering
+		//paint_mode: 1-select; 2-append; 3-erase; 4-diffuse; 5-flood; 6-clear; 7-all;
+		//			  11-posterize
+		//hr_mode (hidden removal): 0-none; 1-ortho; 2-persp
+		void draw_mask(
+			int type, int paint_mode, int hr_mode,
+			double ini_thresh, double gm_falloff, double scl_falloff,
+			double scl_translate, double w2d, double bins, bool ortho, bool estimate, Texture* ext_msk = NULL);
+
+		//generate the labeling assuming the mask is already generated
+		//type: 0-initialization; 1-maximum intensity filtering
+		//mode: 0-normal; 1-posterized
+		void draw_label(int type, int mode, double thresh, double gm_falloff);
+
+		//calculation
+		void calculate(int type, VolumeRenderer* vr_a, VolumeRenderer* vr_b);
+
+		//double calc_hist_3d(GLuint, GLuint, size_t, size_t, size_t);
+		////return
+		void return_component(int c);//base function
+		void return_volume();//return the data volume
+		void return_mask();//return the mask volume
+		void return_label(); //return the label volume
+		void return_stroke(); //return the stroke volume
+
+		//void draw_wireframe(bool orthographic_p = false, double sampling_frq_fac = -1.0);
+		
+		//void draw_mask_cpu(int type, int paint_mode, int hr_mode,
+		//	double ini_thresh, double gm_falloff, double scl_falloff,
+		//	double scl_translate, double w2d, double bins, bool ortho, bool estimate);
+		void draw_mask_th(float thresh, bool orthographic_p);
+		//void draw_mask_dslt(int type, int paint_mode, int hr_mode,
+		//	double ini_thresh, double gm_falloff, double scl_falloff,
+		//	double scl_translate, double w2d, double bins, bool ortho, bool estimate, int dslt_r, int dslt_q, double dslt_c);
+		//void dslt_mask(int rmax, int quality, double c);
+
+
+		void set_mask_hide_mode(int mode)
+		{
+			if (tex_ && tex_->isBrxml() && m_mask_hide_mode == VOL_MASK_HIDE_NONE && mode != VOL_MASK_HIDE_NONE)
+			{
+				int curlv = tex_->GetCurLevel();
+				tex_->setLevel(tex_->GetMaskLv());
+				return_mask();
+				for (int lv = 0; lv < tex_->GetLevelNum(); lv++)
+				{
+					if (lv != tex_->GetMaskLv())
+					{
+						tex_->setLevel(lv);
+						clear_tex_current_mask();
+					}
+				}
+				tex_->setLevel(curlv);
+			}
+			m_mask_hide_mode = mode;
+		}
+		int get_mask_hide_mode() { return m_mask_hide_mode; }
+
+
+		static VkRenderPass prepareRenderPass(vks::VulkanDevice* device, int attatchment_num);
+
+		struct VVolVertexBuffers {
+			vks::Buffer vertexBuffer;
+			vks::Buffer indexBuffer;
+			uint32_t indexCount;
+		};
+		std::map<vks::VulkanDevice*, VVolVertexBuffers> m_vertbufs;
+		void prepareVertexBuffers(vks::VulkanDevice* device, unsigned int total_slicenum);
+
+		static void init();
+		static void finalize();
+
+		struct VRayPipeline {
+			VkPipeline vkpipeline;
+			VkRenderPass renderpass;
+			ShaderProgram* shader;
+			vks::VulkanDevice* device;
+			int mode;
+			int update_order;
+			int colormap_mode;
+			VkBool32 samplers[IMG_SHDR_SAMPLER_NUM] = { VK_FALSE };
+		};
+		static std::vector<VRayPipeline> m_vray_pipelines;
+		static std::map<vks::VulkanDevice*, VkRenderPass> m_vray_draw_pass;
+		int m_prev_vray_pipeline;
+        VRayPipeline prepareVRayPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode, bool persp, int multi_mode = 0, bool na_mode = false, Texture* ext_msk = NULL);
+		
+		struct VRayVertexBuffers {
+			vks::Buffer vertexBuffer;
+			vks::Buffer indexBuffer;
+			uint32_t indexCount;
+		};
+		std::map<vks::VulkanDevice*, VRayVertexBuffers> m_vray_vbufs;
+		void prepareVRayVertexBuffers(vks::VulkanDevice* device);
+
+
+		struct VVolPipeline {
+			VkPipeline vkpipeline;
+			VkRenderPass renderpass;
+			ShaderProgram* shader;
+			vks::VulkanDevice* device;
+			int mode;
+			int update_order;
+			int colormap_mode;
+			VkBool32 samplers[IMG_SHDR_SAMPLER_NUM] = { VK_FALSE };
+		};
+		static std::vector<VVolPipeline> m_vol_pipelines;
+		static std::map<vks::VulkanDevice*, VkRenderPass> m_vol_draw_pass;
+		int m_prev_vol_pipeline;
+		VVolPipeline prepareVolPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode);
+		
+		struct VSlicePipeline {
+			VkPipeline vkpipeline;
+			ShaderProgram* shader;
+			vks::VulkanDevice* device;
+		};
+		static std::vector<VSlicePipeline> m_vslice_pipelines;
+		int m_prev_vslice_pipeline;
+		VSlicePipeline prepareVSlicePipeline(vks::VulkanDevice* device, int update_order);
+
+		struct VSegPipeline {
+			VkPipeline vkpipeline;
+			ShaderProgram* shader;
+			vks::VulkanDevice* device;
+			VkBool32 uniforms[V2DRENDER_UNIFORM_NUM] = { VK_FALSE };
+			VkBool32 samplers[IMG_SHDR_SAMPLER_NUM] = { VK_FALSE };
+		};
+		static std::vector<VSegPipeline> m_seg_pipelines;
+		int m_prev_seg_pipeline;
+		VSegPipeline prepareSegPipeline(vks::VulkanDevice* device, int type, int paint_mode, int hr_mode, bool use_stroke, bool stroke_clear, int out_bytes);
+
+		struct VCalPipeline {
+			VkPipeline vkpipeline;
+			ShaderProgram* shader;
+			vks::VulkanDevice* device;
+			VkBool32 uniforms[V2DRENDER_UNIFORM_NUM] = { VK_FALSE };
+			VkBool32 samplers[IMG_SHDR_SAMPLER_NUM] = { VK_FALSE };
+		};
+		static std::vector<VCalPipeline> m_cal_pipelines;
+		int m_prev_cal_pipeline;
+		VCalPipeline prepareCalPipeline(vks::VulkanDevice* device, int type, int out_bytes);
+
+
+		static void saveScreenshot(const char* filename, const std::shared_ptr<vks::VTexture> tex);
 	};
 
 } // End namespace FLIVR

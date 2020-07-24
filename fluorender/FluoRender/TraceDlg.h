@@ -25,7 +25,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 */
-#include "Main.h"
 #include "DataManager.h"
 #include <wx/wx.h>
 #include <wx/listctrl.h>
@@ -33,6 +32,7 @@ DEALINGS IN THE SOFTWARE.
 #include <wx/notebook.h>
 #include "teem/Nrrd/nrrd.h"
 #include <vector>
+#include "DLLExport.h"
 
 #ifndef _TRACEDLG_H_
 #define _TRACEDLG_H_
@@ -41,7 +41,7 @@ using namespace std;
 
 class VRenderView;
 
-class TraceListCtrl : public wxListCtrl
+class EXPORT_API TraceListCtrl : public wxListCtrl
 {
 	enum
 	{
@@ -91,8 +91,7 @@ private:
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
-DECLARE_APP(VRenderApp)
-class TraceDlg : public wxPanel
+class EXPORT_API TraceDlg : public wxPanel
 {
 public:
 	enum
@@ -222,6 +221,8 @@ private:
 
 	typedef boost::unordered_map<unsigned int, unsigned int> CellMap;
 	typedef boost::unordered_map<unsigned int, unsigned int>::iterator CellMapIter;
+
+	wxApp* m_app;
 
 	wxWindow* m_frame;
 	//current view

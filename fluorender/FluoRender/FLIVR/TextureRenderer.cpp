@@ -26,8 +26,7 @@
 //  DEALINGS IN THE SOFTWARE.
 //  
 
-#include <GL/glew.h>
-#include <FLIVR/texturebrick.h>
+#include <FLIVR/TextureBrick.h>
 #include <FLIVR/TextureRenderer.h>
 #include <FLIVR/Color.h>
 #include <FLIVR/Utils.h>
@@ -38,20 +37,29 @@
 #include <algorithm>
 #include <glm/gtc/type_ptr.hpp>
 #include <FLIVR/palettes.h>
-#include <boost/foreach.hpp>
-#include <boost/lexical_cast.hpp>
+
 #include <sstream>
-#include "compatibility.h"
 #include <time.h>
-#include <wx/utils.h>
+
 //#include <iomanip>
 
+#ifndef _UNIT_TEST_VOLUME_RENDERER_
+#include "compatibility.h"
+#include <wx/utils.h>
+#endif
+
+#ifndef _UNIT_TEST_VOLUME_RENDERER_WITHOUT_IDVOL
+#include <boost/foreach.hpp>
+#include <boost/lexical_cast.hpp>
 using boost::property_tree::wptree;
+#endif
+
 using namespace std;
 
 namespace FLIVR
 {
 	bool TextureRenderer::mem_swap_ = true;
+	bool TextureRenderer::streaming_ = false;
 	bool TextureRenderer::use_mem_limit_ = false;
 	double TextureRenderer::mem_limit_ = 0.0;
 	double TextureRenderer::available_mem_ = 0.0;
@@ -59,7 +67,6 @@ namespace FLIVR
 	double TextureRenderer::available_mainmem_buf_size_ = 0.0;
 	double TextureRenderer::large_data_size_ = 0.0;
 	int TextureRenderer::force_brick_size_ = 0;
-	vector<TexParam> TextureRenderer::tex_pool_;
 	bool TextureRenderer::start_update_loop_ = false;
 	bool TextureRenderer::done_update_loop_ = true;
 	bool TextureRenderer::done_current_chan_ = true;
@@ -69,6 +76,7 @@ namespace FLIVR
 	int TextureRenderer::cur_tid_offset_multi_ = 0;
 	bool TextureRenderer::clear_chan_buffer_ = true;
 	bool TextureRenderer::save_final_buffer_ = true;
+	bool TextureRenderer::valid_temp_final_buffer_ = true;
 	unsigned long TextureRenderer::st_time_ = 0;
 	unsigned long TextureRenderer::up_time_ = 100;
 	unsigned long TextureRenderer::cor_up_time_ = 100;
@@ -80,10 +88,12 @@ namespace FLIVR
 	Point TextureRenderer::quota_center_;
 	int TextureRenderer::update_order_ = 0;
 	bool TextureRenderer::load_on_main_thread_ = false;
-	bool TextureRenderer::clear_pool_ = false;
 
 	vector<TextureRenderer::LoadedBrick> TextureRenderer::loadedbrks;
 	int TextureRenderer::del_id = 0;
+
+	std::shared_ptr<VVulkan> TextureRenderer::m_vulkan;
+	std::shared_ptr<Vulkan2dRender> TextureRenderer::m_v2drender;
 
 	TextureRenderer::TextureRenderer(Texture* tex)
 		:
@@ -94,24 +104,12 @@ namespace FLIVR
 		irate_(0.5),
 		imode_(false),
 		blend_framebuffer_resize_(false),
-		blend_framebuffer_(0),
-		blend_tex_id_(0),
-		label_tex_id_(0),
-		palette_tex_id_(0),
-		base_palette_tex_id_(0),
 		desel_palette_mode_(0),
 		desel_col_fac_(0.1),
 		edit_sel_id_(-1),
 		filter_buffer_resize_(false),
-		filter_buffer_(0),
-		filter_tex_id_(0),
-		fbo_mask_(0),
-		fbo_label_(0),
-		tex_2d_mask_(0),
-		tex_2d_weight1_(0),
-		tex_2d_weight2_(0),
-		tex_2d_dmap_(0),
-		blend_num_bits_(32)
+		blend_num_bits_(32),
+        na_tex_dirty_(false)
 	{
 		init_palette();
 /*
@@ -144,7 +142,15 @@ namespace FLIVR
 			}
 		}
 */
+        
+        memset(na_lbl_, 0, sizeof(na_lbl_));
+        if (na_tex_.empty())
+            m_vulkan->GenTextures2DAllDevice(na_tex_, VK_FORMAT_R8_UNORM, VK_FILTER_NEAREST, PALETTE_W, PALETTE_H);
+        m_vulkan->UploadTextures(na_tex_, na_lbl_);
+        
+#ifndef _UNIT_TEST_VOLUME_RENDERER_WITHOUT_IDVOL
 		select_all_roi_tree();
+#endif
 	}
 
 	TextureRenderer::TextureRenderer(const TextureRenderer& copy)
@@ -156,89 +162,68 @@ namespace FLIVR
 		irate_(copy.irate_),
 		imode_(copy.imode_),
 		blend_framebuffer_resize_(false),
-		blend_framebuffer_(0),
-		blend_tex_id_(0),
-		label_tex_id_(0),
-		palette_tex_id_(0),
-		base_palette_tex_id_(0),
 		desel_palette_mode_(copy.desel_palette_mode_),
 		desel_col_fac_(copy.desel_col_fac_),
 		sel_ids_(copy.sel_ids_),
 		edit_sel_id_(copy.edit_sel_id_),
 		roi_tree_(copy.roi_tree_),
 		filter_buffer_resize_(false),
-		filter_buffer_(0),
-		filter_tex_id_(0),
-		fbo_mask_(0),
-		fbo_label_(0),
-		tex_2d_mask_(0),
-		tex_2d_weight1_(0),
-		tex_2d_weight2_(0),
-		tex_2d_dmap_(0),
-		blend_num_bits_(copy.blend_num_bits_)
+		blend_num_bits_(copy.blend_num_bits_),
+        na_tex_dirty_(copy.na_tex_dirty_)
 	{
 		memcpy(palette_, copy.palette_, sizeof(unsigned char)*PALETTE_SIZE*PALETTE_ELEM_COMP); 
 		memcpy(base_palette_, copy.base_palette_, sizeof(unsigned char)*PALETTE_SIZE*PALETTE_ELEM_COMP); 
-		if (!glIsTexture(palette_tex_id_))
-			glGenTextures(1, &palette_tex_id_);
-		glBindTexture(GL_TEXTURE_2D, palette_tex_id_);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, PALETTE_W, PALETTE_H, 0,
-			GL_RGBA, GL_UNSIGNED_BYTE, (void *)palette_);//GL_RGBA16F
-		glBindTexture(GL_TEXTURE_2D, 0);
+		
+		if (palette_tex_id_.empty())
+			m_vulkan->GenTextures2DAllDevice(palette_tex_id_, VK_FORMAT_R8G8B8A8_UNORM, VK_FILTER_NEAREST, PALETTE_W, PALETTE_H);
+		m_vulkan->UploadTextures(palette_tex_id_, palette_);
 
-		if (!glIsTexture(base_palette_tex_id_))
-			glGenTextures(1, &base_palette_tex_id_);
-		glBindTexture(GL_TEXTURE_2D, base_palette_tex_id_);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, PALETTE_W, PALETTE_H, 0,
-			GL_RGBA, GL_UNSIGNED_BYTE, (void *)base_palette_);//GL_RGBA16F
-		glBindTexture(GL_TEXTURE_2D, 0);
+		if (base_palette_tex_id_.empty())
+			m_vulkan->GenTextures2DAllDevice(base_palette_tex_id_, VK_FORMAT_R8G8B8A8_UNORM, VK_FILTER_NEAREST, PALETTE_W, PALETTE_H);
+		m_vulkan->UploadTextures(base_palette_tex_id_, base_palette_);
 
 		update_palette_tex();
+        
+        memcpy(na_lbl_, copy.na_lbl_, sizeof(unsigned char)*PALETTE_SIZE);
+        if (na_tex_.empty())
+            m_vulkan->GenTextures2DAllDevice(na_tex_, VK_FORMAT_R8_UNORM, VK_FILTER_NEAREST, PALETTE_W, PALETTE_H);
+        m_vulkan->UploadTextures(na_tex_, na_lbl_);
 	}
 
 	TextureRenderer::~TextureRenderer()
 	{
-		clear_brick_buf();
 		//clear_tex_pool();
 		clear_tex_current();
-		if (glIsFramebuffer(blend_framebuffer_))
-			glDeleteFramebuffers(1, &blend_framebuffer_);
-		if (glIsFramebuffer(fbo_label_))
-			glDeleteFramebuffers(1, &fbo_label_);
-		if (glIsFramebuffer(fbo_mask_))
-			glDeleteFramebuffers(1, &fbo_mask_);
-		if (glIsTexture(blend_tex_id_))
-			glDeleteTextures(1, &blend_tex_id_);
-		if (glIsTexture(label_tex_id_))
-			glDeleteTextures(1, &label_tex_id_);
-		if (glIsTexture(palette_tex_id_))
-			glDeleteTextures(1, &palette_tex_id_);
-		if (glIsTexture(base_palette_tex_id_))
-			glDeleteTextures(1, &base_palette_tex_id_);
-		if (glIsFramebuffer(filter_buffer_))
-			glDeleteFramebuffers(1, &filter_buffer_);
-		if (glIsTexture(filter_tex_id_))
-			glDeleteTextures(1, &filter_tex_id_);
 
-		if (glIsBuffer(m_slices_vbo))
-			glDeleteBuffers(1, &m_slices_vbo);
-		if (glIsBuffer(m_slices_ibo))
-			glDeleteBuffers(1, &m_slices_ibo);
-		if (glIsVertexArray(m_slices_vao))
-			glDeleteVertexArrays(1, &m_slices_vao);
-		if (glIsBuffer(m_quad_vbo))
-			glDeleteBuffers(1, &m_quad_vbo);
-		if (glIsVertexArray(m_quad_vao))
-			glDeleteVertexArrays(1, &m_quad_vao);
+		m_slices_vbo.destroy();
+		m_slices_ibo.destroy();
+		m_slices_vao.destroy();
 	}
+    
+    void TextureRenderer::set_seg_mask(int id, int val)
+    {
+		if (id >= 0 && id < 65535)
+		{
+			na_lbl_[id] = (val == 2) ? 255 : ((val == 1) ? 120 : 0);
+			na_active_lbl_.insert(id);
+			na_tex_dirty_ = true;
+		}
+    }
+
+	int TextureRenderer::get_seg_mask(int id)
+	{
+		return (id >= 0 && id < 65535) ? na_lbl_[id]/120 : false;
+	}
+    
+    std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> TextureRenderer::get_seg_mask_tex()
+    {
+        if (na_tex_dirty_)
+        {
+            m_vulkan->UploadTextures(na_tex_, na_lbl_);
+            na_tex_dirty_ = false;
+        }
+        return na_tex_;
+    }
 
 	void TextureRenderer::init_palette()
 	{
@@ -275,27 +260,13 @@ namespace FLIVR
 		memcpy(palette_, (const void *)palettes::palette_random_256_256_4, sizeof(unsigned char)*PALETTE_SIZE*PALETTE_ELEM_COMP);
 		memcpy(base_palette_, (const void *)palettes::palette_random_256_256_4, sizeof(unsigned char)*PALETTE_SIZE*PALETTE_ELEM_COMP); 
 
-		if (!glIsTexture(palette_tex_id_))
-			glGenTextures(1, &palette_tex_id_);
-		glBindTexture(GL_TEXTURE_2D, palette_tex_id_);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, PALETTE_W, PALETTE_H, 0,
-			GL_RGBA, GL_UNSIGNED_BYTE, (void *)palette_);//GL_RGBA16F
-		glBindTexture(GL_TEXTURE_2D, 0);
+		if (palette_tex_id_.empty())
+			m_vulkan->GenTextures2DAllDevice(palette_tex_id_, VK_FORMAT_R8G8B8A8_UNORM, VK_FILTER_NEAREST, PALETTE_W, PALETTE_H);
+		m_vulkan->UploadTextures(palette_tex_id_, palette_);
 
-		if (!glIsTexture(base_palette_tex_id_))
-			glGenTextures(1, &base_palette_tex_id_);
-		glBindTexture(GL_TEXTURE_2D, base_palette_tex_id_);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, PALETTE_W, PALETTE_H, 0,
-			GL_RGBA, GL_UNSIGNED_BYTE, (void *)base_palette_);//GL_RGBA16F
-		glBindTexture(GL_TEXTURE_2D, 0);
+		if (base_palette_tex_id_.empty())
+			m_vulkan->GenTextures2DAllDevice(base_palette_tex_id_, VK_FORMAT_R8G8B8A8_UNORM, VK_FILTER_NEAREST, PALETTE_W, PALETTE_H);
+		m_vulkan->UploadTextures(base_palette_tex_id_, base_palette_);
 /*
 		ofstream ofs("random_palette.txt");
 		ofs << "const unsigned char palette_random[] = {\n";
@@ -312,14 +283,23 @@ namespace FLIVR
 
 	void TextureRenderer::update_palette_tex()
 	{
-		if (glIsTexture(palette_tex_id_))
-		{
-			glBindTexture(GL_TEXTURE_2D, palette_tex_id_);
-			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, PALETTE_W, PALETTE_H, GL_RGBA, GL_UNSIGNED_BYTE, (void *)palette_);
-			glBindTexture(GL_TEXTURE_2D, 0);
-		}
+		m_vulkan->UploadTextures(palette_tex_id_, palette_);
+		m_vulkan->UploadTextures(base_palette_tex_id_, base_palette_);
 	}
 
+	std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> TextureRenderer::get_palette()
+	{
+#ifndef _UNIT_TEST_VOLUME_RENDERER_WITHOUT_IDVOL
+		update_sel_segs();
+
+		if (sel_ids_.empty() && roi_tree_.empty()) return base_palette_tex_id_;
+		else return palette_tex_id_;
+#else
+		return palette_tex_id_;
+#endif
+	}
+
+#ifndef _UNIT_TEST_VOLUME_RENDERER_WITHOUT_IDVOL
 	boost::optional<wstring> TextureRenderer::get_roi_path(int id)
 	{
 		return get_roi_path(id, roi_tree_, L"");
@@ -884,12 +864,13 @@ namespace FLIVR
 
 	void TextureRenderer::set_desel_palette_mode_dark(float fac)
 	{
-		for (int i = 0; i < PALETTE_SIZE; i++)
+		for (int i = 1; i < PALETTE_SIZE; i++)
 		{
 			for (int j = 0; j < 3; j++)
 				palette_[i*PALETTE_ELEM_COMP+j] = (unsigned char)(base_palette_[i*PALETTE_ELEM_COMP+j]*fac);
-			//palette_[i*PALETTE_ELEM_COMP+3] = base_palette_[i*PALETTE_ELEM_COMP+3]*fac;
+			palette_[i * PALETTE_ELEM_COMP + 3] = (unsigned char)255;
 		}
+		palette_[0] = 0; palette_[1] = 0; palette_[2] = 0; palette_[3] = 0;
 
 		for(auto ite = sel_segs_.begin(); ite != sel_segs_.end(); ++ite)
 			for (int j = 0; j < PALETTE_ELEM_COMP; j++)
@@ -908,10 +889,9 @@ namespace FLIVR
 		{
 			for (int j = 0; j < 3; j++)
 				palette_[i*PALETTE_ELEM_COMP+j] = (unsigned char)(128.0*fac);
-			//palette_[i*PALETTE_ELEM_COMP+3] = base_palette_[i*PALETTE_ELEM_COMP+3]*fac;
+			palette_[i*PALETTE_ELEM_COMP+3] = (unsigned char)255;
 		}
-
-		palette_[0] = 0; palette_[1] = 0; palette_[2] = 0;
+		palette_[0] = 0; palette_[1] = 0; palette_[2] = 0; palette_[3] = 0;
 
 		for(auto ite = sel_segs_.begin(); ite != sel_segs_.end(); ++ite)
 			for (int j = 0; j < PALETTE_ELEM_COMP; j++)
@@ -940,9 +920,11 @@ namespace FLIVR
 		switch(mode)
 		{
 		case 0:
+			if (fac < 0.0f) fac = 0.3f;
 			set_desel_palette_mode_dark(fac);
 			break;
 		case 1:
+			if (fac < 0.0f) fac = 0.1f;
 			set_desel_palette_mode_gray(fac);
 			break;
 		case 2:
@@ -952,14 +934,6 @@ namespace FLIVR
 
 		desel_palette_mode_ = mode;
 		desel_col_fac_ = fac;
-	}
-
-	GLuint TextureRenderer::get_palette()
-	{
-		update_sel_segs();
-
-		if (sel_ids_.empty() && roi_tree_.empty()) return base_palette_tex_id_;
-		else return palette_tex_id_;
 	}
 
 	bool TextureRenderer::is_sel_id(int id)
@@ -1211,15 +1185,13 @@ namespace FLIVR
 
 		update_palette(desel_palette_mode_, desel_col_fac_);
 	}
-
+#endif
 
 	//set the texture for rendering
 	void TextureRenderer::set_texture(Texture* tex)
 	{
 		if (tex_ != tex) 
 		{
-			// new texture, flag existing tex id's for deletion.
-			//clear_pool_ = true;
 			clear_tex_current();
 			tex->clear_undos();
 			tex_ = tex;
@@ -1237,48 +1209,21 @@ namespace FLIVR
 		blend_num_bits_ = b;
 	}
 
-	// Pool is static, however it is cleared each time
-	// when a texture is deleted
-	void TextureRenderer::clear_tex_pool() 
-	{
-		for(unsigned int i = 0; i < tex_pool_.size(); i++)
-		{
-			// delete tex object.
-			if(glIsTexture(tex_pool_[i].id))
-			{
-				glDeleteTextures(1, (GLuint*)&tex_pool_[i].id);
-				tex_pool_[i].id = 0;
-			}
-		}
-		tex_pool_.clear();
-		clear_pool_ = false;
-		available_mem_ = mem_limit_;
-	}
-
 	void TextureRenderer::clear_tex_current()
 	{
 		if (!tex_)
 			return;
 		vector<TextureBrick*>* bricks = tex_->get_bricks();
-		TextureBrick* brick = 0;
-		double est_avlb_mem = available_mem_;
-		for (int i = tex_pool_.size() - 1; i >= 0; --i)
-		{
-			for (size_t j = 0; j < bricks->size(); ++j)
-			{
-				brick = (*bricks)[j];
-				if (tex_pool_[i].brick == brick)
-				{
-					if (tex_pool_[i].comp >= 0 && tex_pool_[i].comp < TEXTURE_MAX_COMPONENTS && brick->nb(tex_pool_[i].comp) > 0)
-						est_avlb_mem += brick->nx()*brick->ny()*brick->nz()*brick->nb(tex_pool_[i].comp)/1.04e6;
-					glDeleteTextures(1, (GLuint*)&tex_pool_[i].id);
-					tex_pool_.erase(tex_pool_.begin() + i);
-					break;
-				}
-			}
-		}
-		if (use_mem_limit_)
-			available_mem_ = est_avlb_mem;
+		m_vulkan->eraseBricksFromTexpools(bricks);
+	}
+
+	void TextureRenderer::clear_tex_current_mask()
+	{
+		if (!tex_)
+			return;
+
+		vector<TextureBrick*>* bricks = tex_->get_bricks();
+		m_vulkan->eraseBricksFromTexpools(bricks, tex_->nmask());
 	}
 
 	//resize the fbo texture
@@ -1289,22 +1234,22 @@ namespace FLIVR
 	}
 
 	//set the 2d texture mask for segmentation
-	void TextureRenderer::set_2d_mask(GLuint id)
+	void TextureRenderer::set_2d_mask(const shared_ptr<vks::VTexture> tex)
 	{
-		tex_2d_mask_ = id;
+		tex_2d_mask_ = tex;
 	}
 
 	//set 2d weight map for segmentation
-	void TextureRenderer::set_2d_weight(GLuint weight1, GLuint weight2)
+	void TextureRenderer::set_2d_weight(const shared_ptr<vks::VTexture> weight1, const shared_ptr<vks::VTexture> weight2)
 	{
 		tex_2d_weight1_ = weight1;
 		tex_2d_weight2_ = weight2;
 	}
 
 	//set the 2d texture depth map for rendering shadows
-	void TextureRenderer::set_2d_dmap(GLuint id)
+	void TextureRenderer::set_2d_dmap(const shared_ptr<vks::VTexture> tex)
 	{
-		tex_2d_dmap_ = id;
+		tex_2d_dmap_ = tex;
 	}
 
 	//timer
@@ -1609,332 +1554,218 @@ namespace FLIVR
 		return !(overx || overy || overz || underx || undery || underz);
 	}
 
+	//long long milliseconds_now() {
+	//	static LARGE_INTEGER s_frequency;
+	//	static BOOL s_use_qpc = QueryPerformanceFrequency(&s_frequency);
+	//	if (s_use_qpc) {
+	//		LARGE_INTEGER now;
+	//		QueryPerformanceCounter(&now);
+	//		return (1000LL * now.QuadPart) / s_frequency.QuadPart;
+	//	}
+	//	else {
+	//		return GetTickCount64();
+	//	}
+	//}
 	
-	GLint TextureRenderer::load_brick(int unit, int c,
+	std::shared_ptr<vks::VTexture> TextureRenderer::load_brick(vks::VulkanDevice *device, int unit, int c,
 		vector<TextureBrick*> *bricks, int bindex,
-		GLint filter, bool compression, int mode, bool set_drawn)
+		VkFilter filter, bool compression, int mode, bool set_drawn, bool* updated, vks::VulkanSemaphoreSettings* semaphore, bool flush)
 	{
-		GLint result = -1;
+		std::shared_ptr<vks::VTexture> result;
 
-		if (clear_pool_) clear_tex_pool();
 		TextureBrick* brick = (*bricks)[bindex];
 		int idx;
 
 		if (c < 0 || c >= TEXTURE_MAX_COMPONENTS)
-			return 0;
+			return std::move(result);
 		if (brick->ntype(c) != TextureBrick::TYPE_INT)
-			return 0;
-
-		glActiveTexture(GL_TEXTURE0+unit);
+			return std::move(result);
 
 		int nb = brick->nb(c);
 		int nx = brick->nx();
 		int ny = brick->ny();
 		int nz = brick->nz();
-		GLenum textype = brick->tex_type(c);
+		if (compression) {
+			VkFormatProperties fprops;
+			vkGetPhysicalDeviceFormatProperties(device->physicalDevice, VK_FORMAT_BC4_UNORM_BLOCK, &fprops);
+			if (!fprops.optimalTilingFeatures)
+				compression = false;
+		}
+		brick->set_compression(compression);
+		VkFormat texformat = brick->tex_format(c);
 
 		//! Try to find the existing texture in tex_pool_, for this brick.
-		idx = -1;
-		for(unsigned int i = 0; i < tex_pool_.size() && idx < 0; i++)
-		{
-			if(tex_pool_[i].id != 0
-				&& tex_pool_[i].brick == brick
-				&& tex_pool_[i].comp == c
-				&& nx == tex_pool_[i].nx
-				&& ny == tex_pool_[i].ny
-				&& nz == tex_pool_[i].nz
-				&& nb == tex_pool_[i].nb
-				&& textype == tex_pool_[i].textype
-				&& glIsTexture(tex_pool_[i].id))
-			{
-				//found!
-				idx = i;
-			}
-		}
-
+		idx = device->findTexInPool(brick, c, nx, ny, nz, nb, texformat);
+				
 		if(idx != -1) 
 		{
-			//! The texture object was located, bind it.
-			// bind texture object
-			glBindTexture(GL_TEXTURE_3D, tex_pool_[idx].id);
-			result = tex_pool_[idx].id;
-			// set interpolation method
-			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, filter);
-			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, filter);
+			result = device->tex_pool[idx].tex;
+			if (filter == VK_FILTER_LINEAR)
+				result->descriptor.sampler = device->linear_sampler;
+			else if (filter == VK_FILTER_NEAREST)
+				result->descriptor.sampler = device->nearest_sampler;
 		} 
 		else //idx == -1
 		{
-			//see if it needs to free some memory
-			if (mem_swap_)
-				check_swap_memory(brick, c);
+			//VK_CHECK_RESULT(vkQueueWaitIdle(m_vulkan->vulkanDevice->queue));
+			//VK_CHECK_RESULT(vkQueueWaitIdle(m_vulkan->vulkanDevice->transfer_queue));
+			//uint64_t st_time, ed_time;
+			//char dbgstr[50];
+			//st_time = milliseconds_now();
 
-			// allocate new object
-			unsigned int tex_id;
-			glGenTextures(1, (GLuint*)&tex_id);
+			bool overwrite = false;
+			bool swapped = false;
+			VkOffset3D offset;
+			uint64_t ypitch;
+			uint64_t zpitch;
 
-			// create new entry
-			tex_pool_.push_back(TexParam(c, nx, ny, nz, nb, textype, tex_id));
-			idx = int(tex_pool_.size())-1;
-
-			tex_pool_[idx].brick = brick;
-			tex_pool_[idx].comp = c;
-			// bind texture object
-			glBindTexture(GL_TEXTURE_3D, tex_pool_[idx].id);
-			result = tex_pool_[idx].id;
-			// set border behavior
-			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-			// set interpolation method
-			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, filter);
-			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, filter);
-
-			// download texture data
-#ifdef _WIN32
-			if(tex_->isBrxml())
+			if (!tex_->isBrxml())
 			{
-				glPixelStorei(GL_UNPACK_ROW_LENGTH, nx);
-				glPixelStorei(GL_UNPACK_IMAGE_HEIGHT, ny);
-			}
-			else
-			{
-				glPixelStorei(GL_UNPACK_ROW_LENGTH, brick->sx());
-				glPixelStorei(GL_UNPACK_IMAGE_HEIGHT, brick->sy());
-			}
-#else
-			glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-			glPixelStorei(GL_UNPACK_IMAGE_HEIGHT, 0);
-#endif
-			glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+				//see if it needs to free some memory
+				if (mem_swap_)
+					idx = device->check_swap_memory(brick, c, &swapped);
 
-			if (ShaderProgram::shaders_supported())
-			{
-				GLenum format;
-				GLint internal_format;
-				if (nb < 3)
+				if (idx == -1)
 				{
-					if (compression && GLEW_ARB_texture_compression_rgtc &&
-						brick->ntype(c)==TextureBrick::TYPE_INT && (brick->tex_type(c)==GL_BYTE||brick->tex_type(c)==GL_UNSIGNED_BYTE))
-						internal_format = GL_COMPRESSED_RED;
-					else
-						internal_format = (brick->tex_type(c)==GL_SHORT||
-							brick->tex_type(c)==GL_UNSIGNED_SHORT)?
-							GL_R16:GL_R8;
-					format = GL_RED;
+					// allocate new object
+					idx = device->GenTexture3D_pool(texformat, filter, brick, c);
 				}
 				else
 				{
-					if (compression && GLEW_ARB_texture_compression_rgtc &&
-						brick->ntype(c)==TextureBrick::TYPE_INT && (brick->tex_type(c)==GL_BYTE||brick->tex_type(c)==GL_UNSIGNED_BYTE))
-						internal_format = GL_COMPRESSED_RED;
-					else
-						internal_format = (brick->tex_type(c)==GL_SHORT||
-							brick->tex_type(c)==GL_UNSIGNED_SHORT)?
-							GL_RGBA16UI:GL_RGBA8UI;
-					format = GL_RGBA;
+					device->tex_pool[idx].brick = brick;
+					overwrite = true;
 				}
+				result = device->tex_pool[idx].tex;
 
-				if (glTexImage3D)
+				offset.x = brick->ox();
+				offset.y = brick->oy();
+				offset.z = brick->oz();
+				ypitch = (uint64_t)brick->sx() * brick->nb(c);
+				zpitch = (uint64_t)brick->sy() * brick->sx() * brick->nb(c);
+
+				// set interpolation method
+				if (filter == VK_FILTER_LINEAR)
+					result->descriptor.sampler = device->linear_sampler;
+				else if (filter == VK_FILTER_NEAREST)
+					result->descriptor.sampler = device->nearest_sampler;
+
+				void *texdata = brick->get_nrrd(c)->data;
+				device->UploadTexture3D(result, texdata, offset, ypitch, zpitch, !mem_swap_ || (flush && semaphore == nullptr), semaphore, !swapped);
+				if (updated)
+					*updated = true;
+			}
+			else if(tex_->isBrxml())
+			{
+#ifndef _UNIT_TEST_VOLUME_RENDERER_
+				m_pThreadCS.Enter();
+				if (brick->isLoaded())
 				{
-					if(tex_->isBrxml())
+					//see if it needs to free some memory
+					if (mem_swap_)
+						idx = device->check_swap_memory(brick, c, &swapped);
+
+					if (idx == -1)
 					{
-						if (load_on_main_thread_)
-						{
-							bool brkerror = false;
-							bool lb_swapped = false;
-							if (brick->isLoaded())
-							{
-								if (brick->get_id_in_loadedbrks() >= 0 && brick->get_id_in_loadedbrks() < loadedbrks.size())
-								{
-									loadedbrks[brick->get_id_in_loadedbrks()].swapped = true;
-									lb_swapped = true;
-								}
-								else
-									brkerror = true;
-							}
-							else if(mainmem_buf_size_ >= 1.0)
-							{
-								double bsize = brick->nx()*brick->ny()*brick->nz()*brick->nb(c)/1.04e6;
-								if(available_mainmem_buf_size_ - bsize < 0.0)
-								{
-									double free_mem_size = 0.0;
-									while (free_mem_size < bsize && del_id < loadedbrks.size() )
-									{
-										TextureBrick* b = loadedbrks[del_id].brk;
-										if(!loadedbrks[del_id].swapped && b->isLoaded()){
-											b->freeBrkData();
-											free_mem_size += b->nx() * b->ny() * b->nz() * b->nb(0) / 1.04e6;
-										}
-										del_id++;
-									}
-									available_mainmem_buf_size_ += free_mem_size;
-								}
-							}
-
-							FileLocInfo *finfo = tex_->GetFileName(brick->getID());
-							void *texdata = brick->tex_data_brk(c, finfo);
-							if (texdata)
-							{
-								glTexImage3D(GL_TEXTURE_3D, 0, internal_format, nx, ny, nz, 0, format, brick->tex_type(c), 0);
-								glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format, brick->tex_type(c), texdata);
-							}
-							else 
-							{
-								glDeleteTextures(1, (GLuint*)&tex_pool_[idx].id);
-								tex_pool_.erase(tex_pool_.begin()+idx);
-								brkerror = true;
-								result = -1;
-							}
-
-							if (mainmem_buf_size_ == 0.0) brick->freeBrkData();
-							else 
-							{
-								if (brkerror)
-								{
-									brick->freeBrkData();
-
-									double new_mem = brick->nx()*brick->ny()*brick->nz()*brick->nb(c)/1.04e6;
-									available_mainmem_buf_size_ += new_mem;
-								}
-								else
-								{
-									if(!lb_swapped)
-									{
-										double new_mem = brick->nx()*brick->ny()*brick->nz()*brick->nb(c)/1.04e6;
-										available_mainmem_buf_size_ -= new_mem;
-									}
-
-									LoadedBrick lb;
-									lb.swapped = false;
-									lb.size = brick->nx()*brick->ny()*brick->nz()*brick->nb(c)/1.04e6;
-									lb.brk = brick;
-									lb.brk->set_id_in_loadedbrks(loadedbrks.size());
-									loadedbrks.push_back(lb);
-
-								}
-
-							}
-						}
-						else 
-						{
-							if (brick->isLoaded())
-							{
-								bool brkerror = false;
-								void *texdata = brick->tex_data_brk(c, NULL);
-								if (texdata)
-								{
-									glTexImage3D(GL_TEXTURE_3D, 0, internal_format, nx, ny, nz, 0, format, brick->tex_type(c), 0);
-									glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format, brick->tex_type(c), texdata);
-								}
-								else 
-								{
-									glDeleteTextures(1, (GLuint*)&tex_pool_[idx].id);
-									tex_pool_.erase(tex_pool_.begin()+idx);
-									brkerror = true;
-									result = -1;
-								}
-							}
-							else if (!interactive_)
-							{
-								uint32_t rn_time;
-								unsigned long elapsed;
-								long t;
-								do {
-									rn_time = GET_TICK_COUNT();
-									elapsed = rn_time - st_time_;
-									t = up_time_ - elapsed;
-									if (t > 0) wxMilliSleep(t);
-								} while (elapsed <= up_time_);
-								
-								if (brick->isLoaded())
-								{
-									bool brkerror = false;
-									void *texdata = brick->tex_data_brk(c, NULL);
-									if (texdata)
-									{
-										glTexImage3D(GL_TEXTURE_3D, 0, internal_format, nx, ny, nz, 0, format, brick->tex_type(c), 0);
-										glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format, brick->tex_type(c), texdata);
-									}
-									else 
-									{
-										glDeleteTextures(1, (GLuint*)&tex_pool_[idx].id);
-										tex_pool_.erase(tex_pool_.begin()+idx);
-										brkerror = true;
-										result = -1;
-									}
-								}
-								else
-								{
-									glDeleteTextures(1, (GLuint*)&tex_pool_[idx].id);
-									tex_pool_.erase(tex_pool_.begin()+idx);
-									result = -1;
-								}
-							}
-							else
-							{
-								glDeleteTextures(1, (GLuint*)&tex_pool_[idx].id);
-								tex_pool_.erase(tex_pool_.begin()+idx);
-								result = -1;
-							}
-						}
+						// allocate new object
+						idx = device->GenTexture3D_pool(texformat, filter, brick, c);
 					}
 					else
 					{
-						glTexImage3D(GL_TEXTURE_3D, 0, internal_format, nx, ny, nz, 0, format,
-							brick->tex_type(c), 0);
-#ifdef _WIN32
-						glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format,
-							brick->tex_type(c), brick->tex_data(c));
-#else
-//						if (bricks->size() > 1)
-						{
-							unsigned long long mem_size = (unsigned long long)nx*
-								(unsigned long long)ny*(unsigned long long)nz*nb;
-							unsigned char* temp = new unsigned char[mem_size];
-							unsigned char* tempp = temp;
-							unsigned char* tp = (unsigned char*)(brick->tex_data(c));
-							unsigned char* tp2;
-							for (unsigned int k = 0; k < nz; ++k)
-							{
-								tp2 = tp;
-								for (unsigned int j = 0; j < ny; ++j)
-								{
-									memcpy(tempp, tp2, nx*nb);
-									tempp += nx*nb;
-									tp2 += brick->sx()*nb;
-								}
-								tp += brick->sx()*brick->sy()*nb;
-							}
-							glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format,
-								brick->tex_type(c), (GLvoid*)temp);
-							delete[]temp;
-						}
-//						else
-//							glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format,
-//							brick->tex_type(c), brick->tex_data(c));
-#endif
+						device->tex_pool[idx].brick = brick;
+						overwrite = true;
 					}
+					result = device->tex_pool[idx].tex;
 
-					if (mem_swap_ && result >= 0)
-					{
-						double new_mem = brick->nx()*brick->ny()*brick->nz()*brick->nb(c)/1.04e6;
-						available_mem_ -= new_mem;
-					}
+					if (filter == VK_FILTER_LINEAR)
+						result->descriptor.sampler = device->linear_sampler;
+					else if (filter == VK_FILTER_NEAREST)
+						result->descriptor.sampler = device->nearest_sampler;
 
+					bool brkerror = false;
+					void *texdata = brick->tex_data_brk(c, NULL);
+					if (texdata)
+						device->UploadTexture(result, texdata, !mem_swap_ || (flush && semaphore == nullptr), semaphore, !swapped);
+					else
+						result.reset();
+					
+					if (updated)
+						*updated = true;
 				}
+				else if (!interactive_)
+				{
+					m_pThreadCS.Leave();
+					if (streaming_)
+					{
+						uint32_t rn_time;
+						unsigned long elapsed;
+						long t;
+						do {
+							rn_time = GET_TICK_COUNT();
+							elapsed = rn_time - st_time_;
+							t = up_time_ - elapsed;
+							if (t > 0) wxMilliSleep(t);
+						} while (elapsed <= up_time_);
+					}
+					else
+					{
+						unsigned long elapsed = 0;
+						while (!brick->isLoaded() && elapsed <= 10000) 
+						{
+							wxMilliSleep(10);
+							elapsed += 10;
+						}
+					}
+					m_pThreadCS.Enter();
+
+					if (brick->isLoaded())
+					{
+						//see if it needs to free some memory
+						if (mem_swap_)
+							idx = device->check_swap_memory(brick, c, &swapped);
+
+						if (idx == -1)
+						{
+							// allocate new object
+							idx = device->GenTexture3D_pool(texformat, filter, brick, c);
+						}
+						else
+						{
+							device->tex_pool[idx].brick = brick;
+							overwrite = true;
+						}
+						result = device->tex_pool[idx].tex;
+
+						if (filter == VK_FILTER_LINEAR)
+							result->descriptor.sampler = device->linear_sampler;
+						else if (filter == VK_FILTER_NEAREST)
+							result->descriptor.sampler = device->nearest_sampler;
+
+						bool brkerror = false;
+						void *texdata = brick->tex_data_brk(c, NULL);
+						if (texdata)
+							device->UploadTexture(result, texdata, !mem_swap_ || (flush && semaphore == nullptr), semaphore, !swapped);
+						else
+							result.reset();
+						
+						if (updated)
+							*updated = true;
+					} 
+				}
+				m_pThreadCS.Leave();
+#endif
 			}
 
-#ifdef _WIN32
-			glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-			glPixelStorei(GL_UNPACK_IMAGE_HEIGHT, 0);
-#endif
-			glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+			//VK_CHECK_RESULT(vkQueueWaitIdle(m_vulkan->vulkanDevice->queue));
+			//VK_CHECK_RESULT(vkQueueWaitIdle(m_vulkan->vulkanDevice->transfer_queue));
+			//ed_time = milliseconds_now();
+			//sprintf(dbgstr, "%lld\n", ed_time - st_time);
+			//OutputDebugStringA(dbgstr);
 		}
 
 		if (mem_swap_ &&
 			start_update_loop_ &&
 			!done_update_loop_ &&
-			set_drawn && result >= 0)
+			set_drawn && (result || interactive_))
 		{
 			if (!brick->drawn(mode))
 			{
@@ -1944,142 +1775,98 @@ namespace FLIVR
 			}
 		}
 
-		glActiveTexture(GL_TEXTURE0);
-
-		return result;
+		return std::move(result);
 	}
 
-	//search for or create the mask texture in the texture pool
-	GLint TextureRenderer::load_brick_mask(vector<TextureBrick*> *bricks, int bindex, GLint filter, bool compression, int unit)
+	std::shared_ptr<vks::VTexture> TextureRenderer::base_fanc_load_brick_comp(
+		vks::VulkanDevice *device, int c, TextureBrick* brick, VkFilter filter, bool compression, bool swap_mem,
+		bool* updated, vks::VulkanSemaphoreSettings* semaphore, bool flush)
 	{
-		GLint result = -1;
+		std::shared_ptr<vks::VTexture> result;
 
-		TextureBrick* brick = (*bricks)[bindex];
-		int c = brick->nmask();
-
-		glActiveTexture(GL_TEXTURE0+(unit>0?unit:c));
+		if (c < 0)
+			return std::move(result);
 
 		int nb = brick->nb(c);
 		int nx = brick->nx();
 		int ny = brick->ny();
 		int nz = brick->nz();
-		GLenum textype = brick->tex_type(c);
+		VkFormat texformat = brick->tex_format(c);
 
 		//! Try to find the existing texture in tex_pool_, for this brick.
-		int idx = -1;
-		for(unsigned int i = 0; i < tex_pool_.size() && idx < 0; i++)
-		{
-			if(tex_pool_[i].id != 0
-				&& tex_pool_[i].brick == brick
-				&& tex_pool_[i].comp == c
-				&& nx == tex_pool_[i].nx
-				&& ny == tex_pool_[i].ny
-				&& nz == tex_pool_[i].nz
-				&& nb == tex_pool_[i].nb
-				&& textype == tex_pool_[i].textype
-				&& glIsTexture(tex_pool_[i].id))
-			{
-				//found!
-				idx = i;
-			}
-		}
+		int idx = device->findTexInPool(brick, c, nx, ny, nz, nb, texformat);
 
 		if(idx != -1) 
 		{
-			//! The texture object was located, bind it.
-			// bind texture object
-			glBindTexture(GL_TEXTURE_3D, tex_pool_[idx].id);
-			result = tex_pool_[idx].id;
-			// set interpolation method
-			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, filter);
-			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, filter);
-		} 
+			result = device->tex_pool[idx].tex;
+			if (filter == VK_FILTER_LINEAR)
+				result->descriptor.sampler = device->linear_sampler;
+			else if (filter == VK_FILTER_NEAREST)
+				result->descriptor.sampler = device->nearest_sampler;
+		}
 		else //idx == -1
 		{
-			////! try again to find the matching texture object
-			unsigned int tex_id;
-			glGenTextures(1, (GLuint*)&tex_id);
+			bool overwrite = false;
+			bool swapped = false;
+			VkOffset3D offset;
+			uint64_t ypitch;
+			uint64_t zpitch;
 
-			tex_pool_.push_back(TexParam(c, nx, ny, nz, nb, textype, tex_id));
-			idx = int(tex_pool_.size())-1;
+			if (mem_swap_ && swap_mem)
+				idx = device->check_swap_memory(brick, c, &swapped);
 
-			tex_pool_[idx].brick = brick;
-			tex_pool_[idx].comp = c;
-			// bind texture object
-			glBindTexture(GL_TEXTURE_3D, tex_pool_[idx].id);
-			result = tex_pool_[idx].id;
-
-			// set border behavior
-			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-			// set interpolation method
-			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, filter);
-			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, filter);
-
-			// download texture data
-#ifdef _WIN32
-			glPixelStorei(GL_UNPACK_ROW_LENGTH, brick->sx());
-			glPixelStorei(GL_UNPACK_IMAGE_HEIGHT, brick->sy());
-#else
-			glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-			glPixelStorei(GL_UNPACK_IMAGE_HEIGHT, 0);
-#endif
-			glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-
-			if (ShaderProgram::shaders_supported())
+			if (idx == -1)
 			{
-				GLint internal_format = GL_R8;
-				GLenum format = (nb == 1 ? GL_RED : GL_RGBA);
-				if (glTexImage3D)
-				{
-					glTexImage3D(GL_TEXTURE_3D, 0, internal_format, nx, ny, nz, 0, format,
-					brick->tex_type(c), 0);
-#ifdef _WIN32
-					glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format,
-					brick->tex_type(c), brick->tex_data(c));
-#else
-//					if (bricks->size() > 1)
-					{
-						unsigned long long mem_size = (unsigned long long)nx*
-							(unsigned long long)ny*(unsigned long long)nz*nb;
-						unsigned char* temp = new unsigned char[mem_size];
-						unsigned char* tempp = temp;
-						unsigned char* tp = (unsigned char*)(brick->tex_data(c));
-						unsigned char* tp2;
-						for (unsigned int k = 0; k < nz; ++k)
-						{
-							tp2 = tp;
-							for (unsigned int j = 0; j < ny; ++j)
-							{
-								memcpy(tempp, tp2, nx*nb);
-								tempp += nx*nb;
-								tp2 += brick->sx()*nb;
-				}
-							tp += brick->sx()*brick->sy()*nb;
-						}
-						glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format,
-							brick->tex_type(c), (GLvoid*)temp);
-						delete[]temp;
-					}
-//					else
-//						glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format,
-//							brick->tex_type(c), brick->tex_data(c));
-#endif
+				// allocate new object
+				idx = device->GenTexture3D_pool(texformat, filter, brick, c);
 			}
+			else
+			{
+				device->tex_pool[idx].brick = brick;
+				overwrite = true;
 			}
+			result = device->tex_pool[idx].tex;
 
-#ifdef _WIN32
-			glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-			glPixelStorei(GL_UNPACK_IMAGE_HEIGHT, 0);
-#endif
-			glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+			offset.x = brick->ox();
+			offset.y = brick->oy();
+			offset.z = brick->oz();
+			ypitch = (uint64_t)brick->sx() * brick->nb(c);
+			zpitch = (uint64_t)brick->sy() * brick->sx() * brick->nb(c);
+
+			// set interpolation method
+			if (filter == VK_FILTER_LINEAR)
+				result->descriptor.sampler = device->linear_sampler;
+			else if (filter == VK_FILTER_NEAREST)
+				result->descriptor.sampler = device->nearest_sampler;
+
+			void* texdata = brick->get_nrrd(c)->data;
+			device->UploadTexture3D(result, texdata, offset, ypitch, zpitch, !mem_swap_ || (flush && semaphore == nullptr), semaphore, !swapped);
+			
+			if (updated)
+				*updated = true;
 		}
+
+		return std::move(result);
+	}
+
+	//search for or create the mask texture in the texture pool
+	std::shared_ptr<vks::VTexture> TextureRenderer::load_brick_mask(
+		vks::VulkanDevice *device, vector<TextureBrick*> *bricks, int bindex, VkFilter filter, bool compression, int unit,
+		bool swap_mem, bool set_drawn, bool* updated, vks::VulkanSemaphoreSettings* semaphore, bool flush, TextureBrick* bdraw)
+	{
+		std::shared_ptr<vks::VTexture> result;
+
+		TextureBrick* brick = (*bricks)[bindex];
+		int c = brick->nmask();
+
+		result = base_fanc_load_brick_comp(device, c, brick, filter, compression, swap_mem, updated, semaphore, flush);
 
 		if (mem_swap_ &&
 			start_update_loop_ &&
-			!done_update_loop_)
+			!done_update_loop_ && set_drawn)
 		{
+            if (bdraw)
+                brick = bdraw;
 			if (!brick->drawn(TEXTURE_RENDER_MODE_MASK))
 			{
 				brick->set_drawn(TEXTURE_RENDER_MODE_MASK, true);
@@ -2088,139 +1875,24 @@ namespace FLIVR
 			}
 		}
 		
-		glActiveTexture(GL_TEXTURE0);
-		
-		return result;
+		return std::move(result);
 	}
 
 	//search for or create the label texture in the texture pool
-	GLint TextureRenderer::load_brick_label(vector<TextureBrick*> *bricks, int bindex)
+	std::shared_ptr<vks::VTexture> TextureRenderer::load_brick_label(
+		vks::VulkanDevice *device, vector<TextureBrick*> *bricks, int bindex, bool swap_mem, bool set_drawn,
+		bool* updated, vks::VulkanSemaphoreSettings* semaphore, bool flush)
 	{
-		GLint result = -1;
+		std::shared_ptr<vks::VTexture> result;
 
 		TextureBrick* brick = (*bricks)[bindex];
 		int c = brick->nlabel();
 
-		glActiveTexture(GL_TEXTURE0+c);
-
-		int nb = brick->nb(c);
-		int nx = brick->nx();
-		int ny = brick->ny();
-		int nz = brick->nz();
-		GLenum textype = brick->tex_type(c);
+		result = base_fanc_load_brick_comp(device, c, brick, VK_FILTER_NEAREST, false, swap_mem, updated, semaphore, flush);
 		
-		//! Try to find the existing texture in tex_pool_, for this brick.
-		int idx = -1;
-		for(unsigned int i = 0; i < tex_pool_.size() && idx < 0; i++)
-		{
-			if(tex_pool_[i].id != 0
-				&& tex_pool_[i].brick == brick
-				&& tex_pool_[i].comp == c
-				&& nx == tex_pool_[i].nx
-				&& ny == tex_pool_[i].ny
-				&& nz == tex_pool_[i].nz
-				&& nb == tex_pool_[i].nb
-				&& textype == tex_pool_[i].textype
-				&& glIsTexture(tex_pool_[i].id))
-			{
-				//found!
-				idx = i;
-			}
-		}
-
-		if(idx != -1) 
-		{
-			//! The texture object was located, bind it.
-			// bind texture object
-			glBindTexture(GL_TEXTURE_3D, tex_pool_[idx].id);
-			result = tex_pool_[idx].id;
-			// set interpolation method
-			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		} 
-		else //idx == -1
-		{
-			unsigned int tex_id;
-			glGenTextures(1, (GLuint*)&tex_id);
-			tex_pool_.push_back(TexParam(c, nx, ny, nz, nb, textype, tex_id));
-			idx = int(tex_pool_.size())-1;
-
-			tex_pool_[idx].brick = brick;
-			tex_pool_[idx].comp = c;
-			// bind texture object
-			glBindTexture(GL_TEXTURE_3D, tex_pool_[idx].id);
-			result = tex_pool_[idx].id;
-
-			// set border behavior
-			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-			// set interpolation method
-			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-			// download texture data
-#ifdef _WIN32
-			glPixelStorei(GL_UNPACK_ROW_LENGTH, brick->sx());
-			glPixelStorei(GL_UNPACK_IMAGE_HEIGHT, brick->sy());
-#else
-			glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-			glPixelStorei(GL_UNPACK_IMAGE_HEIGHT, 0);
-#endif
-			glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-
-			if (ShaderProgram::shaders_supported())
-			{
-				GLenum format = GL_RED_INTEGER;
-				GLint internal_format = GL_R32UI;
-				if (glTexImage3D)
-				{
-					glTexImage3D(GL_TEXTURE_3D, 0, internal_format, nx, ny, nz, 0, format,
-						brick->tex_type(c), NULL);
-#ifdef _WIN32
-					glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format,
-					brick->tex_type(c), brick->tex_data(c));
-#else
-//					if (bricks->size() > 1)
-					{
-						unsigned long long mem_size = (unsigned long long)nx*
-							(unsigned long long)ny*(unsigned long long)nz*nb;
-						unsigned char* temp = new unsigned char[mem_size];
-						unsigned char* tempp = temp;
-						unsigned char* tp = (unsigned char*)(brick->tex_data(c));
-						unsigned char* tp2;
-						for (unsigned int k = 0; k < nz; ++k)
-						{
-							tp2 = tp;
-							for (unsigned int j = 0; j < ny; ++j)
-							{
-								memcpy(tempp, tp2, nx*nb);
-								tempp += nx*nb;
-								tp2 += brick->sx()*nb;
-							}
-							tp += brick->sx()*brick->sy()*nb;
-						}
-						glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format,
-							brick->tex_type(c), (GLvoid*)temp);
-						delete[]temp;
-					}
-//					else
-//						glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, format,
-//					brick->tex_type(c), brick->tex_data(c));
-#endif
-				}
-			}
-
-#ifdef _WIN32
-			glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-			glPixelStorei(GL_UNPACK_IMAGE_HEIGHT, 0);
-#endif
-			glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-		}
-
 		if (mem_swap_ &&
 			start_update_loop_ &&
-			!done_update_loop_)
+			!done_update_loop_ && set_drawn)
 		{
 			if (!brick->drawn(TEXTURE_RENDER_MODE_LABEL))
 			{
@@ -2230,9 +1902,22 @@ namespace FLIVR
 			}
 		}
 
-		glActiveTexture(GL_TEXTURE0);
+		return std::move(result);
+	}
 
-		return result;
+	//search for or create the mask texture in the texture pool
+	std::shared_ptr<vks::VTexture> TextureRenderer::load_brick_stroke(
+		vks::VulkanDevice *device, vector<TextureBrick*> *bricks, int bindex, VkFilter filter, bool compression, int unit,
+		bool swap_mem, bool* updated, vks::VulkanSemaphoreSettings* semaphore, bool flush)
+	{
+		std::shared_ptr<vks::VTexture> result;
+
+		TextureBrick* brick = (*bricks)[bindex];
+		int c = brick->nstroke();
+
+		result = base_fanc_load_brick_comp(device, c, brick, filter, compression, swap_mem, updated, semaphore, flush);
+		
+		return std::move(result);
 	}
 
 	bool TextureRenderer::brick_sort(const BrickDist& bd1, const BrickDist& bd2)
@@ -2240,443 +1925,244 @@ namespace FLIVR
 		return bd1.dist > bd2.dist;
 	}
 
-	void TextureRenderer::check_swap_memory(TextureBrick* brick, int c)
-	{
-		unsigned int i;
-		double new_mem = brick->nx()*brick->ny()*brick->nz()*brick->nb(c)/1.04e6;
+	//void TextureRenderer::draw_polygons(vector<double>& vertex, 
+	//	vector<double>& texcoord,
+	//	vector<int>& poly, 
+	//	bool fog,
+	//	ShaderProgram* shader)
+	//{
+	//	double mvmat[16];
+	//	if(fog)
+	//	{
+	//		glGetDoublev(GL_MODELVIEW_MATRIX, mvmat);
+	//	}
 
-		if (use_mem_limit_)
-		{
-			if (available_mem_ >= new_mem)
-				return;
-		}
-		else
-		{
-			GLenum error = glGetError();
-			GLint mem_info[4] = {0, 0, 0, 0};
-			glGetIntegerv(GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX, mem_info);
-			error = glGetError();
-			if (error == GL_INVALID_ENUM)
-			{
-				glGetIntegerv(GL_TEXTURE_FREE_MEMORY_ATI, mem_info);
-				error = glGetError();
-				if (error == GL_INVALID_ENUM)
-					return;
-			}
+	//	for(unsigned int i=0, k=0; i<poly.size(); i++)
+	//	{
+	//		glBegin(GL_POLYGON);
+	//		{
+	//			for(int j=0; j<poly[i]; j++) 
+	//			{
+	//				double* t = &texcoord[(k+j)*3];
+	//				double* v = &vertex[(k+j)*3];
+	//				if (glMultiTexCoord3d) 
+	//				{
+	//					glMultiTexCoord3d(GL_TEXTURE0, t[0], t[1], t[2]);
+	//					if(fog) 
+	//					{
+	//						double vz = mvmat[2]*v[0] + mvmat[6]*v[1] + mvmat[10]*v[2] + mvmat[14];
+	//						glMultiTexCoord3d(GL_TEXTURE1, -vz, 0.0, 0.0);
+	//					}
+	//				}
+	//				glVertex3d(v[0], v[1], v[2]);
+	//			}
+	//		}
+	//		glEnd();
 
-			//available memory size in MB
-			available_mem_ = mem_info[0]/1024.0;
-			if (available_mem_ >= new_mem)
-				return;
-		}
+	//		glFlush();
 
-		vector<BrickDist> bd_list;
-		BrickDist bd;
-		//generate a list of bricks and their distances to the new brick
-		for (i=0; i<tex_pool_.size(); i++)
-		{
-			bd.index = i;
-			bd.brick = tex_pool_[i].brick;
-			//calculate the distance
-			bd.dist = brick->bbox().distance(bd.brick->bbox());
-			bd_list.push_back(bd);
-		}
+	//		k += poly[i];
+	//	}
+	//}
 
-		//release bricks far away
-		double est_avlb_mem = available_mem_;
-		if (bd_list.size() > 0)
-		{
-			//sort from farthest to closest
-			std::sort(bd_list.begin(), bd_list.end(), TextureRenderer::brick_sort);
+	//void TextureRenderer::draw_polygons_wireframe(vector<double>& vertex,
+	//	vector<double>& texcoord,
+	//	vector<int>& poly,
+	//	bool fog)
+	//{
+	//	for(unsigned int i=0, k=0; i<poly.size(); i++)
+	//	{
+	//		glBegin(GL_LINE_LOOP);
+	//		{
+	//			for(int j=0; j<poly[i]; j++)
+	//			{
+	//				double* v = &vertex[(k+j)*3];
+	//				glVertex3d(v[0], v[1], v[2]);
+	//			}
+	//		}
+	//		glEnd();
+	//		k += poly[i];
+	//	}
+	//}
 
-			vector<BrickDist> bd_undisp;
-			vector<BrickDist> bd_saved;
-			vector<BrickDist> bd_others;
-			for (i=0; i<bd_list.size(); i++)
-			{
-				TextureBrick* b = bd_list[i].brick;
-				if (!b->get_disp())
-					bd_undisp.push_back(bd_list[i]);
-				else if (b->is_tex_deletion_prevented())
-					bd_saved.push_back(bd_list[i]);
-				else
-					bd_others.push_back(bd_list[i]);
-			}
+	//void TextureRenderer::draw_polygons(vector<float>& vertex,
+	//	vector<uint32_t>& triangle_verts)
+	//{
+	//	if (vertex.empty() || triangle_verts.empty())
+	//		return;
 
+	//	if (!glIsBuffer(m_slices_vbo))
+	//		glGenBuffers(1, &m_slices_vbo);
+	//	if (!glIsBuffer(m_slices_ibo))
+	//		glGenBuffers(1, &m_slices_ibo);
+	//	if (!glIsVertexArray(m_slices_vao))
+	//		glGenVertexArrays(1, &m_slices_vao);
 
-			//remove
-			for (i=0; i<bd_undisp.size(); i++)
-			{
-				TextureBrick* btemp = bd_undisp[i].brick;
-				tex_pool_[bd_undisp[i].index].delayed_del = true;
-				double released_mem = btemp->nx()*btemp->ny()*btemp->nz()*btemp->nb(c)/1.04e6;
-				est_avlb_mem += released_mem;
-				if (est_avlb_mem >= new_mem)
-					break;
-			}
-			if (est_avlb_mem < new_mem)
-			{
-				for (i=0; i<bd_others.size(); i++)
-				{
-					TextureBrick* btemp = bd_others[i].brick;
-					tex_pool_[bd_others[i].index].delayed_del = true;
-					double released_mem = btemp->nx()*btemp->ny()*btemp->nz()*btemp->nb(c)/1.04e6;
-					est_avlb_mem += released_mem;
-					if (est_avlb_mem >= new_mem)
-						break;
-				}
-			}
-			if (est_avlb_mem < new_mem)
-			{
-				for (i=0; i<bd_saved.size(); i++)
-				{
-					TextureBrick* btemp = bd_saved[i].brick;
-					tex_pool_[bd_saved[i].index].delayed_del = true;
-					double released_mem = btemp->nx()*btemp->ny()*btemp->nz()*btemp->nb(c)/1.04e6;
-					est_avlb_mem += released_mem;
-					if (est_avlb_mem >= new_mem)
-						break;
-				}
-			}
+	//	//link to the new data
+	//	glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
+	//	glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_STREAM_DRAW);
+	//	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_slices_ibo);
+	//	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*triangle_verts.size(), 
+	//		&triangle_verts[0], GL_STREAM_DRAW);
+	//	
+	//	glBindVertexArray(m_slices_vao);
+	//	//now draw it
+	//	glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
+	//	glEnableVertexAttribArray(0);
+	//	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)0);
+	//	glEnableVertexAttribArray(1);
+	//	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)12);
 
-			//delete from pool
-			for (int j=int(tex_pool_.size()-1); j>=0; j--)
-			{
-				if (tex_pool_[j].delayed_del &&
-					glIsTexture(tex_pool_[j].id))
-				{
-					glDeleteTextures(1, (GLuint*)&tex_pool_[j].id);
-					tex_pool_.erase(tex_pool_.begin()+j);
-				}
-			}
+	//	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_slices_ibo);
+	//	glDrawElements(GL_TRIANGLES, triangle_verts.size(), GL_UNSIGNED_INT, 0);
+	//	glDisableVertexAttribArray(0);
+	//	glDisableVertexAttribArray(1);
+	//	//unbind
+	//	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	//	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	//	glBindVertexArray(0);
+	//}
 
-			if (use_mem_limit_)
-				available_mem_ = est_avlb_mem;
-		}
-	}
+	//void TextureRenderer::draw_polygons(vector<float>& vertex,
+	//	vector<uint32_t>& triangle_verts, vector<uint32_t>& size)
+	//{
+ //       if (vertex.empty() || triangle_verts.empty())
+ //           return;
 
-	void TextureRenderer::draw_slices(double d)
-	{
-		glBegin(GL_QUADS);
-			glMultiTexCoord3d(GL_TEXTURE0, 0.0, 0.0, d); glVertex2d(-1.0, -1.0);
-			glMultiTexCoord3d(GL_TEXTURE0, 1.0, 0.0, d); glVertex2d(1.0, -1.0);
-			glMultiTexCoord3d(GL_TEXTURE0, 1.0, 1.0, d); glVertex2d(1.0, 1.0);
-			glMultiTexCoord3d(GL_TEXTURE0, 0.0, 1.0, d); glVertex2d(-1.0, 1.0);
-		glEnd();
-	}
+	//	if (!glIsBuffer(m_slices_vbo))
+	//		glGenBuffers(1, &m_slices_vbo);
+	//	if (!glIsBuffer(m_slices_ibo))
+	//		glGenBuffers(1, &m_slices_ibo);
+	//	if (!glIsVertexArray(m_slices_vao))
+	//		glGenVertexArrays(1, &m_slices_vao);
+ //       
+ //       //link to the new data
+ //       glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
+ //       glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
+ //       glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_slices_ibo);
+ //       glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*triangle_verts.size(),
+ //                    &triangle_verts[0], GL_DYNAMIC_DRAW);
+ //       
+ //       glBindVertexArray(m_slices_vao);
+ //       //now draw it
+ //       glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
+ //       glEnableVertexAttribArray(0);
+ //       glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)0);
+ //       glEnableVertexAttribArray(1);
+ //       glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)12);
+ //       
+ //       glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_slices_ibo);
+ //       int slicen = size.size();
+ //       uint32_t *t = &triangle_verts[0];
+ //       for (int s = 0; s < slicen; s++)
+ //       {
+ //           unsigned int tsize = (size[s]-2)*3;
+ //           glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*tsize,
+ //                        t, GL_DYNAMIC_DRAW);
+ //           glDrawElements(GL_TRIANGLES, tsize, GL_UNSIGNED_INT, 0);
+ //           glFlush();
+ //           t += tsize;
+ //       }
+ //       glDisableVertexAttribArray(0);
+ //       glDisableVertexAttribArray(1);
+ //       //unbind
+ //       glBindBuffer(GL_ARRAY_BUFFER, 0);
+ //       glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+ //       glBindVertexArray(0);
+	//}
 
-	void TextureRenderer::draw_view_quad(double d)
-	{
-		glEnable(GL_TEXTURE_2D);
-		float points[] = {
-			-1.0f, -1.0f, 0.0f, 0.0f, 0.0f, float(d),
-			1.0f, -1.0f, 0.0f, 1.0f, 0.0f, float(d),
-			-1.0f, 1.0f, 0.0f, 0.0f, 1.0f, float(d),
-			1.0f, 1.0f, 0.0f, 1.0f, 1.0f, float(d)};
+	//void TextureRenderer::draw_polygons_wireframe(vector<float>& vertex,
+	//	vector<uint32_t>& index, vector<uint32_t>& size)
+	//{
+	//	if (vertex.empty() || index.empty())
+	//		return;
 
-		if (!glIsBuffer(m_quad_vbo))
-			glGenBuffers(1, &m_quad_vbo);
-		if (!glIsVertexArray(m_quad_vao))
-			glGenVertexArrays(1, &m_quad_vao);
+	//	if (!glIsBuffer(m_slices_vbo))
+	//		glGenBuffers(1, &m_slices_vbo);
+	//	if (!glIsBuffer(m_slices_ibo))
+	//		glGenBuffers(1, &m_slices_ibo);
+	//	if (!glIsVertexArray(m_slices_vao))
+	//		glGenVertexArrays(1, &m_slices_vao);
 
-		glBindBuffer(GL_ARRAY_BUFFER, m_quad_vbo);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(float)*24, points, GL_STREAM_DRAW);
+	//	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-		glBindVertexArray(m_quad_vao);
-		glBindBuffer(GL_ARRAY_BUFFER, m_quad_vbo);
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)0);
-		glEnableVertexAttribArray(1);
-		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)12);
+	//	glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
+	//	glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_STREAM_DRAW);
+	//	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_slices_ibo);
+	//	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*index.size(), 
+	//		&index[0], GL_STREAM_DRAW);
 
-		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-		glDisableVertexAttribArray(0);
-		glDisableVertexAttribArray(1);
-		glBindVertexArray(0);
-		glDisable(GL_TEXTURE_2D);
-	}
+	//	glBindVertexArray(m_slices_vao);
+	//	glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
+	//	glEnableVertexAttribArray(0);
+	//	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)0);
+	//	glEnableVertexAttribArray(1);
+	//	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)12);
 
-	void TextureRenderer::draw_polygons(vector<double>& vertex, 
-		vector<double>& texcoord,
-		vector<int>& poly, 
-		bool fog,
-		ShaderProgram* shader)
-	{
-		double mvmat[16];
-		if(fog)
-		{
-			glGetDoublev(GL_MODELVIEW_MATRIX, mvmat);
-		}
+	//	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_slices_ibo);
+	//	unsigned int idx_num;
+	//	for (unsigned int i=0, k=0; i<size.size(); ++i)
+	//	{
+	//		idx_num = (size[i]-2)*3;
+	//		glDrawElements(GL_TRIANGLES, idx_num, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*> (k));
+	//		k += idx_num*4;
+	//	}
+	//	glDisableVertexAttribArray(0);
+	//	glDisableVertexAttribArray(1);
+	//	//unbind
+	//	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	//	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	//	glBindVertexArray(0);
 
-		for(unsigned int i=0, k=0; i<poly.size(); i++)
-		{
-			glBegin(GL_POLYGON);
-			{
-				for(int j=0; j<poly[i]; j++) 
-				{
-					double* t = &texcoord[(k+j)*3];
-					double* v = &vertex[(k+j)*3];
-					if (glMultiTexCoord3d) 
-					{
-						glMultiTexCoord3d(GL_TEXTURE0, t[0], t[1], t[2]);
-						if(fog) 
-						{
-							double vz = mvmat[2]*v[0] + mvmat[6]*v[1] + mvmat[10]*v[2] + mvmat[14];
-							glMultiTexCoord3d(GL_TEXTURE1, -vz, 0.0, 0.0);
-						}
-					}
-					glVertex3d(v[0], v[1], v[2]);
-				}
-			}
-			glEnd();
+	//	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	//}
 
-			glFlush();
+	////bind 2d mask for segmentation
+	//void TextureRenderer::bind_2d_mask()
+	//{
+	//	if (ShaderProgram::shaders_supported() && glActiveTexture)
+	//	{
+	//		glActiveTexture(GL_TEXTURE6);
+	//		glBindTexture(GL_TEXTURE_2D, tex_2d_mask_);
+	//		glActiveTexture(GL_TEXTURE0);
+	//	}
+	//}
 
-			k += poly[i];
-		}
-	}
+	////bind 2d weight map for segmentation
+	//void TextureRenderer::bind_2d_weight()
+	//{
+	//	if (ShaderProgram::shaders_supported() && glActiveTexture)
+	//	{
+	//		glActiveTexture(GL_TEXTURE4);
+	//		glBindTexture(GL_TEXTURE_2D, tex_2d_weight1_);
+	//		glActiveTexture(GL_TEXTURE5);
+	//		glBindTexture(GL_TEXTURE_2D, tex_2d_weight2_);
+	//		glActiveTexture(GL_TEXTURE0);
+	//	}
+	//}
 
-	void TextureRenderer::draw_polygons_wireframe(vector<double>& vertex,
-		vector<double>& texcoord,
-		vector<int>& poly,
-		bool fog)
-	{
-		for(unsigned int i=0, k=0; i<poly.size(); i++)
-		{
-			glBegin(GL_LINE_LOOP);
-			{
-				for(int j=0; j<poly[i]; j++)
-				{
-					double* v = &vertex[(k+j)*3];
-					glVertex3d(v[0], v[1], v[2]);
-				}
-			}
-			glEnd();
-			k += poly[i];
-		}
-	}
+	////bind 2d depth map for rendering shadows
+	//void TextureRenderer::bind_2d_dmap()
+	//{
+	//	if (ShaderProgram::shaders_supported() && glActiveTexture)
+	//	{
+	//		glActiveTexture(GL_TEXTURE4);
+	//		glBindTexture(GL_TEXTURE_2D, tex_2d_dmap_);
+	//		glActiveTexture(GL_TEXTURE0);
+	//	}
+	//}
 
-	void TextureRenderer::draw_polygons(vector<float>& vertex,
-		vector<uint32_t>& triangle_verts)
-	{
-		if (vertex.empty() || triangle_verts.empty())
-			return;
-
-		if (!glIsBuffer(m_slices_vbo))
-			glGenBuffers(1, &m_slices_vbo);
-		if (!glIsBuffer(m_slices_ibo))
-			glGenBuffers(1, &m_slices_ibo);
-		if (!glIsVertexArray(m_slices_vao))
-			glGenVertexArrays(1, &m_slices_vao);
-
-		//link to the new data
-		glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_STREAM_DRAW);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_slices_ibo);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*triangle_verts.size(), 
-			&triangle_verts[0], GL_STREAM_DRAW);
-		
-		glBindVertexArray(m_slices_vao);
-		//now draw it
-		glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)0);
-		glEnableVertexAttribArray(1);
-		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)12);
-
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_slices_ibo);
-		glDrawElements(GL_TRIANGLES, triangle_verts.size(), GL_UNSIGNED_INT, 0);
-		glDisableVertexAttribArray(0);
-		glDisableVertexAttribArray(1);
-		//unbind
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-		glBindVertexArray(0);
-	}
-
-	void TextureRenderer::draw_polygons(vector<float>& vertex,
-		vector<uint32_t>& triangle_verts, vector<uint32_t>& size)
-	{
-        if (vertex.empty() || triangle_verts.empty())
-            return;
-
-		if (!glIsBuffer(m_slices_vbo))
-			glGenBuffers(1, &m_slices_vbo);
-		if (!glIsBuffer(m_slices_ibo))
-			glGenBuffers(1, &m_slices_ibo);
-		if (!glIsVertexArray(m_slices_vao))
-			glGenVertexArrays(1, &m_slices_vao);
-        
-        //link to the new data
-        glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_slices_ibo);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*triangle_verts.size(),
-                     &triangle_verts[0], GL_DYNAMIC_DRAW);
-        
-        glBindVertexArray(m_slices_vao);
-        //now draw it
-        glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)0);
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)12);
-        
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_slices_ibo);
-        int slicen = size.size();
-        uint32_t *t = &triangle_verts[0];
-        for (int s = 0; s < slicen; s++)
-        {
-            unsigned int tsize = (size[s]-2)*3;
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*tsize,
-                         t, GL_DYNAMIC_DRAW);
-            glDrawElements(GL_TRIANGLES, tsize, GL_UNSIGNED_INT, 0);
-            glFlush();
-            t += tsize;
-        }
-        glDisableVertexAttribArray(0);
-        glDisableVertexAttribArray(1);
-        //unbind
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
-	}
-
-	void TextureRenderer::draw_polygons_wireframe(vector<float>& vertex,
-		vector<uint32_t>& index, vector<uint32_t>& size)
-	{
-		if (vertex.empty() || index.empty())
-			return;
-
-		if (!glIsBuffer(m_slices_vbo))
-			glGenBuffers(1, &m_slices_vbo);
-		if (!glIsBuffer(m_slices_ibo))
-			glGenBuffers(1, &m_slices_ibo);
-		if (!glIsVertexArray(m_slices_vao))
-			glGenVertexArrays(1, &m_slices_vao);
-
-		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-
-		glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_STREAM_DRAW);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_slices_ibo);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*index.size(), 
-			&index[0], GL_STREAM_DRAW);
-
-		glBindVertexArray(m_slices_vao);
-		glBindBuffer(GL_ARRAY_BUFFER, m_slices_vbo);
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)0);
-		glEnableVertexAttribArray(1);
-		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)12);
-
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_slices_ibo);
-		unsigned int idx_num;
-		for (unsigned int i=0, k=0; i<size.size(); ++i)
-		{
-			idx_num = (size[i]-2)*3;
-			glDrawElements(GL_TRIANGLES, idx_num, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*> (k));
-			k += idx_num*4;
-		}
-		glDisableVertexAttribArray(0);
-		glDisableVertexAttribArray(1);
-		//unbind
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-		glBindVertexArray(0);
-
-		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-	}
-
-	//bind 2d mask for segmentation
-	void TextureRenderer::bind_2d_mask()
-	{
-		if (ShaderProgram::shaders_supported() && glActiveTexture)
-		{
-			glActiveTexture(GL_TEXTURE6);
-			glBindTexture(GL_TEXTURE_2D, tex_2d_mask_);
-			glActiveTexture(GL_TEXTURE0);
-		}
-	}
-
-	//bind 2d weight map for segmentation
-	void TextureRenderer::bind_2d_weight()
-	{
-		if (ShaderProgram::shaders_supported() && glActiveTexture)
-		{
-			glActiveTexture(GL_TEXTURE4);
-			glBindTexture(GL_TEXTURE_2D, tex_2d_weight1_);
-			glActiveTexture(GL_TEXTURE5);
-			glBindTexture(GL_TEXTURE_2D, tex_2d_weight2_);
-			glActiveTexture(GL_TEXTURE0);
-		}
-	}
-
-	//bind 2d depth map for rendering shadows
-	void TextureRenderer::bind_2d_dmap()
-	{
-		if (ShaderProgram::shaders_supported() && glActiveTexture)
-		{
-			glActiveTexture(GL_TEXTURE4);
-			glBindTexture(GL_TEXTURE_2D, tex_2d_dmap_);
-			glActiveTexture(GL_TEXTURE0);
-		}
-	}
-
-	//release texture
-	void TextureRenderer::release_texture(int unit, GLenum taget)
-	{
-		if (ShaderProgram::shaders_supported() && glActiveTexture)
-		{
-			glActiveTexture(GL_TEXTURE0 + unit);
-			glBindTexture(taget, 0);
-			glActiveTexture(GL_TEXTURE0);
-		}
-	}
-
-	//Texture‚ÖˆÚ“®—\’è
-	void TextureRenderer::rearrangeLoadedBrkVec()
-	{
-		if (loadedbrks.empty()) return;
-		vector<LoadedBrick>::iterator ite = loadedbrks.begin();
-		while (ite != loadedbrks.end())
-		{
-			if (!ite->brk->isLoaded())
-			{
-				ite->brk->set_id_in_loadedbrks(-1);
-				ite = loadedbrks.erase(ite);
-			}
-			else if(ite->swapped)
-			{
-				ite = loadedbrks.erase(ite);
-			}
-			else ite++;
-		}
-		for (int i = 0; i < loadedbrks.size(); i++) loadedbrks[i].brk->set_id_in_loadedbrks(i);
-		del_id = 0;
-	}
-
-	//Texture‚ÖˆÚ“®—\’è
-	void TextureRenderer::clear_brick_buf()
-	{
-		int cur_lv = tex_->GetCurLevel();
-		for (unsigned int lv = 0; lv < tex_->GetLevelNum(); lv++)
-		{
-			tex_->setLevel(lv);
-			vector<TextureBrick *> *bs = tex_->get_bricks();
-			for (unsigned int i = 0; i < bs->size(); i++)
-			{
-				if((*bs)[i]->isLoaded()){
-					available_mainmem_buf_size_ += (*bs)[i]->nx() * (*bs)[i]->ny() * (*bs)[i]->nz() * (*bs)[i]->nb(0) / 1.04e6;
-					(*bs)[i]->freeBrkData();
-				}
-			}
-			rearrangeLoadedBrkVec();//tex_‚Åload‚µ‚½‚à‚Ì‚¾‚¯‚ðÁ‚·
-		}
-		tex_->setLevel(cur_lv);
-	}
-
-
+	////release texture
+	//void TextureRenderer::release_texture(int unit, GLenum taget)
+	//{
+	//	if (ShaderProgram::shaders_supported() && glActiveTexture)
+	//	{
+	//		glActiveTexture(GL_TEXTURE0 + unit);
+	//		glBindTexture(taget, 0);
+	//		glActiveTexture(GL_TEXTURE0);
+	//	}
+	//}
+	
 } // namespace FLIVR
 
 

@@ -26,11 +26,12 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 */
 #include "DataManager.h"
+#include "DLLExport.h"
 
 #ifndef _VOLUMECALCULATOR_H_
 #define _VOLUMECALCULATOR_H_
 
-class VolumeCalculator
+class EXPORT_API VolumeCalculator
 {
 public:
 	VolumeCalculator();

@@ -5,10 +5,11 @@
 #include <base_reader.h>
 #include <FLIVR/TextureBrick.h>
 #include <tinyxml2.h>
+#include <memory>
 
 using namespace std;
 
-class BRKXMLReader : public BaseReader
+class EXPORT_API BRKXMLReader : public BaseReader
 {
 public:
 	BRKXMLReader();

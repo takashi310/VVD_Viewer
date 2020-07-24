@@ -22,6 +22,8 @@ DEALINGS IN THE SOFTWARE.
 #ifndef _VOLUME_MESH_CONV_H_
 #define _VOLUME_MESH_CONV_H_
 
+#include "DLLExport.h"
+
 #include <vector>
 #include "../FLIVR/glm.h"
 #include "../FLIVR/Vector.h"
@@ -31,7 +33,7 @@ using namespace std;
 using namespace FLIVR;
 
 //convert volume data to mesh
-class VolumeMeshConv
+class EXPORT_API VolumeMeshConv
 {
 public:
 	VolumeMeshConv();

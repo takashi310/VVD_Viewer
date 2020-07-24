@@ -30,7 +30,7 @@ DEALINGS IN THE SOFTWARE.
 
 #include <base_writer.h>
 
-class MSKWriter : public BaseWriter
+class EXPORT_API MSKWriter : public BaseWriter
 {
 public:
 	MSKWriter();

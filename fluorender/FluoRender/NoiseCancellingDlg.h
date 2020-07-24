@@ -1,5 +1,6 @@
 #include <wx/wx.h>
 #include "FLIVR/Color.h"
+#include "DLLExport.h"
 
 #ifndef _NOISECANCELLINGDLG_H_
 #define _NOISECANCELLINGDLG_H_
@@ -10,7 +11,7 @@ class DataGroup;
 
 using namespace FLIVR;
 
-class NoiseCancellingDlg : public wxPanel
+class EXPORT_API NoiseCancellingDlg : public wxPanel
 {
 public:
 	enum

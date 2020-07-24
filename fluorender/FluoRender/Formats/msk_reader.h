@@ -32,7 +32,7 @@ DEALINGS IN THE SOFTWARE.
 
 using namespace std;
 
-class MSKReader : public BaseReader
+class EXPORT_API MSKReader : public BaseReader
 {
 public:
 	MSKReader();
@@ -71,6 +71,12 @@ public:
 	int GetBatchNum() {return 0;}
 	int GetCurBatch() {return 0;}
 	void SetInfo(){}
+
+	void SetAddExt(bool add_ext) { m_add_extension = add_ext; }
+	bool GetAddExt() { return m_add_extension; }
+
+private:
+	bool m_add_extension;
 };
 
 #endif//_MSK_READER_H_

@@ -29,9 +29,11 @@ DEALINGS IN THE SOFTWARE.
 #include <wx/treectrl.h>
 #include "compatibility.h"
 #include "utility.h"
+#include <map>
 #include <unordered_map>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/optional.hpp>
+#include "DLLExport.h"
 
 #ifndef _TREEPANEL_H_
 #define _TREEPANEL_H_
@@ -48,7 +50,7 @@ class VolumeData;
 //-------------------------------------
 
 //tree item data
-class LayerInfo : public wxTreeItemData
+class EXPORT_API LayerInfo : public wxTreeItemData
 {
 public:
 	LayerInfo()
@@ -68,7 +70,43 @@ public:
 	int icon;
 };
 
-class DataTreeCtrl: public wxTreeCtrl, Notifier
+class VolVisState
+{
+public:
+	bool disp;
+	bool na_mode;
+	std::map<int, int> label;
+
+	VolVisState()
+	{
+		disp = true;
+		na_mode = false;
+	}
+
+	~VolVisState()
+	{
+
+	}
+
+	VolVisState(const VolVisState& copy)
+	{
+		disp = copy.disp;
+		na_mode = copy.na_mode;
+		label = copy.label;
+	}
+
+	VolVisState& operator=(const VolVisState& copy)
+	{
+		disp = copy.disp;
+		na_mode = copy.na_mode;
+		label = copy.label;
+
+		return (*this);
+	}
+};
+
+
+class EXPORT_API DataTreeCtrl: public wxTreeCtrl, Notifier
 {
 	enum
 	{
@@ -77,6 +115,8 @@ class DataTreeCtrl: public wxTreeCtrl, Notifier
 		ID_Rename,
 		ID_Duplicate,
 		ID_Save,
+		ID_ExportMask,
+		ID_ImportMask,
 		ID_BakeVolume,
 		ID_Isolate,
 		ID_ShowAll,
@@ -101,7 +141,12 @@ class DataTreeCtrl: public wxTreeCtrl, Notifier
 		ID_Counting,
 		ID_Colocalization,
 		ID_Convert,
-		ID_RandomizeColor
+		ID_RandomizeColor,
+		ID_ExportAllSegments,
+		ID_FlipH,
+		ID_FlipV,
+		ID_ExportMeshMask,
+        ID_ToggleNAMode
 	};
 
 public:
@@ -189,10 +234,28 @@ public:
 	void ExpandDataTreeItem(wxString name, bool expand_children=false);
 	void CollapseDataTreeItem(wxString name, bool collapse_children=false);
 
+	wxString GetItemBaseText(wxTreeItemId itemid);
+
+	void UndoVisibility();
+	void RedoVisibility();
+	void ClearVisHistory();
+	void PushVisHistory();
+
+	void HideOtherDatasets(wxString name);
+	void HideOtherDatasets(wxTreeItemId item);
+	void HideOtherDatasetsTraversal(wxTreeItemId item, wxTreeItemId self);
+	void HideOtherVolumes(wxString name);
+	void HideOtherVolumes(wxTreeItemId item);
+	void HideOtherVolumesTraversal(wxTreeItemId item, wxTreeItemId self);
+	void HideSelectedItem();
+
 	friend class TreePanel;
 
 private:
 	wxWindow* m_frame;
+
+	std::unordered_map<wxString, VolVisState> m_vtmp;
+	std::vector<std::unordered_map<wxString, VolVisState>> m_v_undo, m_v_redo;
 
 	//drag
 	wxTreeItemId m_drag_item;
@@ -210,6 +273,9 @@ private:
 
 private:
 
+	void GetVisHistoryTraversal(wxTreeItemId item);
+	void SetVisHistoryTraversal(wxTreeItemId item);
+
 	static wxWindow* CreateExtraControl(wxWindow* parent);
 	void OnCh1Check(wxCommandEvent &event);
 
@@ -226,6 +292,8 @@ private:
 	void OnToggleDisp(wxCommandEvent& event);
 	void OnDuplicate(wxCommandEvent& event);
 	void OnSave(wxCommandEvent& event);
+	void OnExportMask(wxCommandEvent& event);
+	void OnImportMask(wxCommandEvent& event);
 	void OnBakeVolume(wxCommandEvent& event);
 	void OnRenameMenu(wxCommandEvent& event);
 	void OnIsolate(wxCommandEvent& event);
@@ -252,6 +320,11 @@ private:
 	void OnColocalization(wxCommandEvent& event);
 	void OnConvert(wxCommandEvent& event);
 	void OnRandomizeColor(wxCommandEvent& event);
+	void OnExportAllSegments(wxCommandEvent& event);
+	void OnFlipH(wxCommandEvent& event);
+	void OnFlipV(wxCommandEvent& event);
+	void OnExportMeshMask(wxCommandEvent& event);
+    void OnToggleNAMode(wxCommandEvent& event);
 
 	void OnSelChanged(wxTreeEvent& event);
 	void OnSelChanging(wxTreeEvent& event);
@@ -272,7 +345,7 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-class TreePanel : public wxPanel, Observer
+class EXPORT_API TreePanel : public wxPanel, Observer
 {
 public:
 	enum
@@ -367,6 +440,14 @@ public:
 	void CollapseDataTreeItem(wxString name, bool collapse_children=false);
 
 	void doAction(ActionInfo *info);
+
+	void UndoVisibility();
+	void RedoVisibility();
+	void ClearVisHistory();
+	void PushVisHistory();
+	void HideOtherDatasets(wxString name);
+	void HideOtherVolumes(wxString name);
+	void HideSelectedItem();
 
 private:
 	wxWindow* m_frame;

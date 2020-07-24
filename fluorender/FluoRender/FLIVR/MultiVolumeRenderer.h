@@ -29,18 +29,20 @@
 #ifndef SLIVR_MultiVolumeRenderer_h
 #define SLIVR_MultiVolumeRenderer_h
 
-#include "GL/glew.h"
+//#include "GL/glew.h"
 #include "BBox.h"
 #include "Plane.h"
 #include "Texture.h"
 #include "VolumeRenderer.h"
 #include <vector>
 
+#include "DLLExport.h"
+
 using namespace std;
 
 namespace FLIVR
 {
-	class MultiVolumeRenderer
+	class EXPORT_API MultiVolumeRenderer
 	{
 	public:
 		MultiVolumeRenderer();
@@ -60,13 +62,20 @@ namespace FLIVR
 		void clear_vr();
 		int get_vr_num();
 
-		void draw(bool draw_wireframe_p, 
-			bool interactive_mode_p, 
-			bool orthographic_p,
-			double zoom, bool intp, double sampling_frq_fac);
+		void draw(
+			const std::unique_ptr<vks::VFrameBuffer>& framebuf,
+			bool clear_framebuf,
+			bool interactive_mode_p,
+			bool orthographic_p, double zoom, bool intp, double sampling_frq_fac,
+			VkClearColorValue clearColor = { 0.0f, 0.0f, 0.0f, 0.0f });
 
 		void draw_wireframe(bool orthographic_p);
-		void draw_volume(bool interactive_mode_p, bool orthographic_p, double zoom, bool intp, double sampling_frq_fac);
+		void draw_volume(
+			const std::unique_ptr<vks::VFrameBuffer>& framebuf,
+			bool clear_framebuf,
+			bool interactive_mode_p,
+			bool orthographic_p, double zoom, bool intp, double sampling_frq_fac,
+			VkClearColorValue clearColor = { 0.0f, 0.0f, 0.0f, 0.0f });
 
 		double num_slices_to_rate(int slices);
 
@@ -91,6 +100,11 @@ namespace FLIVR
 		//soft threshold
 		static void set_soft_threshold(double val) {sw_ = val;}
 
+		void set_main_membuf_size(long long size) { main_membuf_size_ = size; }
+
+		void set_front_depth_tex(std::shared_ptr<vks::VTexture> dtex) { dtex_front_ = dtex; }
+		void set_back_depth_tex(std::shared_ptr<vks::VTexture> dtex) { dtex_back_ = dtex; }
+
 	private:
 		//volume renderer list
 		vector<VolumeRenderer*> vr_list_;
@@ -101,20 +115,21 @@ namespace FLIVR
 		bool hiqual_;
 		int blend_num_bits_;
 		bool blend_slices_;
+		double buffer_scale_;
 
 		//blend frame buffers
-		bool blend_framebuffer_resize_;
-		GLuint blend_framebuffer_;
-		GLuint blend_tex_id_;
-		GLuint label_tex_id_;
-		bool blend_fbo_resize_;
-		GLuint blend_fbo_;
-		GLuint blend_tex_;
-		GLuint blend_id_tex_;
+		std::unique_ptr<vks::VFrameBuffer> blend_framebuffer_;
+		std::shared_ptr<vks::VTexture> blend_tex_id_;
+		std::shared_ptr<vks::VTexture> label_tex_id_;
+		std::unique_ptr<vks::VFrameBuffer> slice_fbo_;
+		std::shared_ptr<vks::VTexture> slice_tex_;
+		std::shared_ptr<vks::VTexture> blend_id_tex_;
 		//2nd buffer for multiple filtering
-		bool filter_buffer_resize_;
-		GLuint filter_buffer_;
-		GLuint filter_tex_id_;
+		std::unique_ptr<vks::VFrameBuffer> filter_buffer_;
+		std::shared_ptr<vks::VTexture> filter_tex_id_;
+
+		std::shared_ptr<vks::VTexture> dtex_front_;
+		std::shared_ptr<vks::VTexture> dtex_back_;
 
 		//scale factor
 		bool noise_red_;
@@ -144,9 +159,40 @@ namespace FLIVR
 		//soft threshold
 		static double sw_;
 
+		long long main_membuf_size_;
+
 		//find out combined bricks in interactive mode
 		vector<TextureBrick*> *get_combined_bricks(
 			Point& center, Ray& view, bool is_orthographic = false);
+
+		struct MultiVolRenederSettings {
+			VolumeRenderer::VRayPipeline pipeline;
+			VkPipelineLayout pipelineLayout;
+			vks::Buffer vert_ubuf, frag_ubuf;
+			VkDeviceSize vert_ubuf_offset, frag_ubuf_offset;
+			vector<VkWriteDescriptorSet> descriptorWritesBase;
+			VRayShaderFactory::VRayVertShaderUBO vert_ubo;
+			VRayShaderFactory::VRayFragShaderBaseUBO frag_ubo;
+			Ray view_ray;
+			VkFilter filter;
+		};
+
+		struct MultiVolBrick {
+			TextureBrick* b;
+			VRayShaderFactory::VRayFragShaderBrickConst frag_const;
+			vector<VkWriteDescriptorSet> descriptorWrites;
+		};
+
+		inline void SubmitAndRestartCommandBuf(
+			vks::VulkanDevice *device,
+			VkCommandBuffer cmdbuf,
+			const VkRenderPassBeginInfo &renderPassBeginInfo);
+
+		inline bool TestTexMemSwap(
+			vks::VulkanDevice* device,
+			TextureBrick *b,
+			int c,
+			vector<TextureBrick*> *locked_bricks);
 	};
 
 } // End namespace FLIVR

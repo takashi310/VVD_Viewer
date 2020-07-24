@@ -1,5 +1,10 @@
-class icons {
+#include "DLLExport.h"
+
+class EXPORT_API icons {
 public:
+/* plugins.png - 3810 bytes */
+const static unsigned char plugins_png[4299];
+
 /* align.png - 1470 bytes */
 const static unsigned char align_png[1470];
 
@@ -36,11 +41,14 @@ const static unsigned char freefly_png[1143];
 /* gear_45.png - 17863 bytes */
 const static unsigned char gear_45_png[17863];
 
-/* icon_16.png - 18975 bytes */
-const static unsigned char icon_16_png[18975];
+/* icon_16.png - 633 bytes */
+const static unsigned char icon_16_png[633];
 
-/* icon_32.png - 20515 bytes */
-const static unsigned char icon_32_png[20515];
+/* icon_32.png - 1279 bytes */
+const static unsigned char icon_32_png[1279];
+
+/* icon_64.png - 2676 bytes */
+const static unsigned char icon_64_png[2676];
 
 /* icon_about.png - 2655 bytes */
 const static unsigned char icon_about_png[2655];

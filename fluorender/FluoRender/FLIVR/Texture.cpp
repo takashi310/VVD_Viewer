@@ -32,8 +32,13 @@
 #include <FLIVR/Utils.h>
 #include <algorithm>
 #include <inttypes.h>
+#include <base_reader.h>
 
 #include <wx/progdlg.h>
+
+#ifdef _WIN32
+#include <omp.h>
+#endif
 
 using namespace std;
 
@@ -48,6 +53,7 @@ namespace FLIVR
         nc_(0),
         nmask_(-1),
         nlabel_(-1),
+		nstroke_(-1),
 		vmin_(0.0),
 		vmax_(0.0),
 		gmin_(0.0),
@@ -69,7 +75,8 @@ namespace FLIVR
 		s_spcy_(1.0),
 		s_spcz_(1.0),
         mask_undo_pointer_(-1),
-		filename_(NULL)
+		filename_(NULL),
+		masklv_(-1)
 	{
 		for (size_t i = 0; i < TEXTURE_MAX_COMPONENTS; i++)
 		{
@@ -94,7 +101,9 @@ namespace FLIVR
 			vector<TextureBrick *>().swap(*bricks_);
 		}
 
-		clear_undos();
+		bool mask_undo = !mask_undos_.empty();
+		if (mask_undo)
+			clear_undos();
 
 		//release other data
 		for (int i=0; i<TEXTURE_MAX_COMPONENTS; i++)
@@ -108,7 +117,8 @@ namespace FLIVR
 				//delete [] data_[i]->data;
 				if (!existInPyramid)
 				{
-					if (ntype_[i]!=TYPE_MASK) delete [] data_[i]->data;
+					if (!mask_undo || ntype_[i] != TYPE_MASK)
+						delete [] data_[i]->data;
 					nrrdNix(data_[i]);
 				}
 			}
@@ -296,6 +306,46 @@ namespace FLIVR
 		return bricks_;
 	}
 
+	vector<TextureBrick*>* Texture::get_sorted_bricks_dir(Ray& view)
+	{
+		if (sort_bricks_)
+		{
+			for (unsigned int i = 0; i < (*bricks_).size(); i++)
+			{
+				TextureBrick* b = (*bricks_)[i];
+				BBox bbox = b->bbox();
+
+				Point corner[8];
+				corner[0] = bbox.min();
+				corner[1] = Point(bbox.min().x(), bbox.min().y(), bbox.max().z());
+				corner[2] = Point(bbox.min().x(), bbox.max().y(), bbox.min().z());
+				corner[3] = Point(bbox.min().x(), bbox.max().y(), bbox.max().z());
+				corner[4] = Point(bbox.max().x(), bbox.min().y(), bbox.min().z());
+				corner[5] = Point(bbox.max().x(), bbox.min().y(), bbox.max().z());
+				corner[6] = Point(bbox.max().x(), bbox.max().y(), bbox.min().z());
+				corner[7] = bbox.max();
+
+				double tmin = Dot(corner[0] - view.origin(), view.direction());
+				double tmax = tmin;
+				int maxi = 0;
+				int mini = 0;
+				for (int i = 1; i < 8; i++)
+				{
+					double t = Dot(corner[i] - view.origin(), view.direction());
+					if (t < tmin) { mini = i; tmin = t; }
+					if (t > tmax) { maxi = i; tmax = t; }
+				}
+
+				double d = TextureRenderer::get_update_order() ? tmin : tmax;
+				(*bricks_)[i]->set_d(d);
+			}
+			std::sort((*bricks_).begin(), (*bricks_).end(), TextureRenderer::get_update_order() ? TextureBrick::sort_dsc : TextureBrick::sort_asc);
+
+			sort_bricks_ = false;
+		}
+		return bricks_;
+	}
+
 	vector<TextureBrick*>* Texture::get_closest_bricks(
 		Point& center, int quota, bool skip,
 		Ray& view, bool is_orthographic)
@@ -375,9 +425,17 @@ namespace FLIVR
 		return &quota_bricks_;
 	}
 
-	vector<TextureBrick*>* Texture::get_bricks()
+	vector<TextureBrick*>* Texture::get_bricks(int lv)
 	{
-		return bricks_;
+		if (brkxml_)
+		{
+			if (lv < 0 || lv > pyramid_.size())
+				return bricks_;
+			else
+				return &pyramid_[lv].bricks;
+		}
+		else
+			return bricks_;
 	}
 
 	vector<TextureBrick*>* Texture::get_quota_bricks()
@@ -393,9 +451,12 @@ namespace FLIVR
 			spcx_ = x;
 			spcy_ = y;
 			spcz_ = z;
+			b_spcx_ = x;
+			b_spcy_ = y;
+			b_spcz_ = z;
 			Transform tform;
 			tform.load_identity();
-			Point nmax(nx_*x, ny_*y, nz_*z);
+			Point nmax(nx_*x, ny_*y, -nz_*z);
 			tform.pre_scale(Vector(nmax));
 			set_transform(tform);
 		}
@@ -406,7 +467,7 @@ namespace FLIVR
 			s_spcz_ = z / b_spcz_;
 			Transform tform;
 			tform.load_identity();
-			Point nmax(nx_*spcx_*s_spcx_, ny_*spcy_*s_spcy_, nz_*spcz_*s_spcz_);
+			Point nmax(nx_*spcx_*s_spcx_, ny_*spcy_*s_spcy_, -nz_*spcz_*s_spcz_);
 			tform.pre_scale(Vector(nmax));
 			set_transform(tform);
 		}
@@ -414,17 +475,21 @@ namespace FLIVR
 
 	void Texture::set_base_spacings(double x, double y, double z)
 	{
-		spcx_ = x;
-		spcy_ = y;
-		spcz_ = z;
 		b_spcx_ = x;
 		b_spcy_ = y;
 		b_spcz_ = z;
-		Transform tform;
-		tform.load_identity();
-		Point nmax(nx_*x, ny_*y, nz_*z);
-		tform.pre_scale(Vector(nmax));
-		set_transform(tform);
+
+		if (!brkxml_)
+		{
+			spcx_ = x;
+			spcy_ = y;
+			spcz_ = z;
+			Transform tform;
+			tform.load_identity();
+			Point nmax(nx_*x, ny_*y, -nz_*z);
+			tform.pre_scale(Vector(nmax));
+			set_transform(tform);
+		}
 	}
 
 	void Texture::get_base_spacings(double &x, double &y, double &z)
@@ -510,6 +575,7 @@ namespace FLIVR
 
 		Transform tform;
 		tform.load_identity();
+		tform.pre_scale(Vector(1.0, 1.0, -1.0));
 
 		for (size_t p = 0; p < dim; p++) 
 			size[p] = (int)nv_nrrd->axis[p + offset].size;
@@ -570,7 +636,35 @@ namespace FLIVR
 		set_nrrd(nv_nrrd, 0);
 		set_nrrd(gm_nrrd, 1);
 
+		brick_idspace_max_extent_ = Vector(0.0);
+		for (unsigned int i = 0; i < (*bricks_).size(); i++)
+		{
+			TextureBrick* tb = (*bricks_)[i];
+			Vector extent = tb->bbox().max() - tb->bbox().min();
+			if (extent.x() > brick_idspace_max_extent_[0]) brick_idspace_max_extent_[0] = extent.x();
+			if (extent.y() > brick_idspace_max_extent_[1]) brick_idspace_max_extent_[1] = extent.y();
+			if (extent.z() > brick_idspace_max_extent_[2]) brick_idspace_max_extent_[2] = extent.z();
+		}
+
 		return true;
+	}
+
+	void Texture::get_dimensions(size_t &w, size_t &h, size_t &d, int lv)
+	{
+		if (!brkxml_ || (lv < 0 || lv >= pyramid_lv_num_ || pyramid_.empty()))
+		{
+			w = nx_;
+			h = ny_;
+			d = nz_;
+		}
+		else if(pyramid_[lv].data)
+		{
+			int offset = 0;
+			if (pyramid_[lv].data->dim > 3) offset = 1; 
+			w = pyramid_[lv].data->axis[offset + 0].size;
+			h = pyramid_[lv].data->axis[offset + 1].size;
+			d = pyramid_[lv].data->axis[offset + 2].size;
+		}
 	}
 
 	void Texture::build_bricks(vector<TextureBrick*> &bricks, 
@@ -578,18 +672,13 @@ namespace FLIVR
 		int numc, int* numb)
 	{
 		bool force_pow2 = false;
-		if (ShaderProgram::init())
-			force_pow2 = !ShaderProgram::texture_non_power_of_two();
-
-		int max_texture_size = 2048;
-		if (ShaderProgram::init())
-			max_texture_size = ShaderProgram::max_texture_size();
-
+		int max_texture_size = 65535;
+		
 		//further determine the max texture size
 		if (TextureRenderer::get_mem_swap())
 		{
 			double data_size = double(sz_x)*double(sz_y)*double(sz_z)*double(numb[0])/1.04e6;
-			if (data_size > TextureRenderer::get_mem_limit() ||
+			if (data_size > TextureRenderer::m_vulkan->vulkanDevice->mem_limit ||
 				data_size > TextureRenderer::get_large_data_size())
 				max_texture_size = TextureRenderer::get_force_brick_size();
 		}
@@ -630,15 +719,18 @@ namespace FLIVR
 		double tx0, ty0, tz0, tx1, ty1, tz1;
 		double bx1, by1, bz1;
 		double dx0, dy0, dz0, dx1, dy1, dz1;
+		const int overlapx = 2 + sz_x / 512;
+		const int overlapy = 2 + sz_y / 512;
+		const int overlapz = 2 + sz_z / 512;
 		for (k = 0; k < sz_z; k += bsize[2])
 		{
-			if (k) k--;
+			if (k) k -= overlapz;
 			for (j = 0; j < sz_y; j += bsize[1])
 			{
-				if (j) j--;
+				if (j) j -= overlapy;
 				for (i = 0; i < sz_x; i += bsize[0])
 				{
-					if (i) i--;
+					if (i) i -= overlapx;
 					mx = Min(bsize[0], sz_x - i);
 					my = Min(bsize[1], sz_y - j);
 					mz = Min(bsize[2], sz_z - k);
@@ -654,37 +746,37 @@ namespace FLIVR
 					}
 
 					// Compute Texture Box.
-					tx0 = i?((mx2 - mx + 0.5) / mx2): 0.0;
-					ty0 = j?((my2 - my + 0.5) / my2): 0.0;
-					tz0 = k?((mz2 - mz + 0.5) / mz2): 0.0;
+					tx0 = i?((mx2 - mx + overlapx / 2.0) / mx2): 0.0;
+					ty0 = j?((my2 - my + overlapy / 2.0) / my2): 0.0;
+					tz0 = k?((mz2 - mz + overlapz / 2.0) / mz2): 0.0;
 
-					tx1 = 1.0 - 0.5 / mx2;
+					tx1 = 1.0 - overlapx / 2.0 / mx2;
 					if (mx < bsize[0]) tx1 = 1.0;
 					if (sz_x - i == bsize[0]) tx1 = 1.0;
 
-					ty1 = 1.0 - 0.5 / my2;
+					ty1 = 1.0 - overlapy / 2.0 / my2;
 					if (my < bsize[1]) ty1 = 1.0;
 					if (sz_y - j == bsize[1]) ty1 = 1.0;
 
-					tz1 = 1.0 - 0.5 / mz2;
+					tz1 = 1.0 - overlapz / 2.0 / mz2;
 					if (mz < bsize[2]) tz1 = 1.0;
 					if (sz_z - k == bsize[2]) tz1 = 1.0;
 
 					BBox tbox(Point(tx0, ty0, tz0), Point(tx1, ty1, tz1));
 
 					// Compute BBox.
-					bx1 = Min((i + bsize[0] - 0.5) / (double)sz_x, 1.0);
+					bx1 = Min((i + bsize[0] - overlapx / 2.0) / (double)sz_x, 1.0);
 					if (sz_x - i == bsize[0]) bx1 = 1.0;
 
-					by1 = Min((j + bsize[1] - 0.5) / (double)sz_y, 1.0);
+					by1 = Min((j + bsize[1] - overlapy / 2.0) / (double)sz_y, 1.0);
 					if (sz_y - j == bsize[1]) by1 = 1.0;
 
-					bz1 = Min((k + bsize[2] - 0.5) / (double)sz_z, 1.0);
+					bz1 = Min((k + bsize[2] - overlapz / 2.0) / (double)sz_z, 1.0);
 					if (sz_z - k == bsize[2]) bz1 = 1.0;
 
-					BBox bbox(Point(i==0?0:(i+0.5) / (double)sz_x,
-						j==0?0:(j+0.5) / (double)sz_y,
-						k==0?0:(k+0.5) / (double)sz_z),
+					BBox bbox(Point(i==0?0:(i+overlapx/2.0) / (double)sz_x,
+						j==0?0:(j+overlapy/2.0) / (double)sz_y,
+						k==0?0:(k+overlapz/2.0) / (double)sz_z),
 						Point(bx1, by1, bz1));
 
 					ox = i-(mx2-mx);
@@ -719,11 +811,51 @@ namespace FLIVR
 			ntype_[nmask_] = TYPE_MASK;
 
 			int i;
+			if (!isBrxml())
+			{
+				for (i=0; i<(int)(*bricks_).size(); i++)
+				{
+					(*bricks_)[i]->nmask(nmask_);
+					(*bricks_)[i]->nb(1, nmask_);
+					(*bricks_)[i]->ntype(TextureBrick::TYPE_MASK, nmask_);
+				}
+			}
+			else
+			{
+				for (i = 0; i < pyramid_.size(); i++)
+				{
+					for (int j = 0; j < pyramid_[i].bricks.size(); j++)
+					{
+						pyramid_[i].bricks[j]->nmask(nmask_);
+						pyramid_[i].bricks[j]->nb(1, nmask_);
+						pyramid_[i].bricks[j]->ntype(TextureBrick::TYPE_MASK, nmask_);
+					}
+				}
+			}
+
+			return true;
+		}
+		else
+			return false;
+	}
+
+	//add one more texture component as the labeling volume
+	bool Texture::add_empty_label(int nb)
+	{
+		if (nc_>0 && nc_<=2 && nlabel_==-1)
+		{
+			if (nmask_==-1)	//no mask
+				nlabel_ = 3;
+			else			//label is after mask
+				nlabel_ = nmask_+1;
+			nb_[nlabel_] = nb;
+
+			int i;
 			for (i=0; i<(int)(*bricks_).size(); i++)
 			{
-				(*bricks_)[i]->nmask(nmask_);
-				(*bricks_)[i]->nb(1, nmask_);
-				(*bricks_)[i]->ntype(TextureBrick::TYPE_MASK, nmask_);
+				(*bricks_)[i]->nlabel(nlabel_);
+				(*bricks_)[i]->nb(nb, nlabel_);
+				(*bricks_)[i]->ntype(TextureBrick::TYPE_LABEL, nlabel_);
 			}
 			return true;
 		}
@@ -732,22 +864,22 @@ namespace FLIVR
 	}
 
 	//add one more texture component as the labeling volume
-	bool Texture::add_empty_label()
+	bool Texture::add_empty_stroke()
 	{
-		if (nc_>0 && nc_<=2 && nlabel_==-1)
+		if (nc_>0 && nc_<=2 && nstroke_==-1)
 		{
-			if (nmask_==-1)	//no mask
-				nlabel_ = 3;
-			else			//label is after mask
-				nlabel_ = nmask_+1;
-			nb_[nlabel_] = 4;
+			if (nmask_ < 4 && nlabel_ < 4)	//no mask
+				nstroke_ = 4;
+			else
+				nstroke_ = nlabel_ > nmask_ ? nlabel_+1 : nmask_+1;
+			nb_[nstroke_] = 1;
 
 			int i;
 			for (i=0; i<(int)(*bricks_).size(); i++)
 			{
-				(*bricks_)[i]->nlabel(nlabel_);
-				(*bricks_)[i]->nb(4, nlabel_);
-				(*bricks_)[i]->ntype(TextureBrick::TYPE_LABEL, nlabel_);
+				(*bricks_)[i]->nstroke(nstroke_);
+				(*bricks_)[i]->nb(1, nstroke_);
+				(*bricks_)[i]->ntype(TextureBrick::TYPE_STROKE, nstroke_);
 			}
 			return true;
 		}
@@ -762,16 +894,32 @@ namespace FLIVR
 			nb_[nmask_] = 0;
 
 			int i;
-			for (i=0; i<(int)(*bricks_).size(); i++)
+			if (!isBrxml())
 			{
-				(*bricks_)[i]->nmask(-1);
-				(*bricks_)[i]->nb(0, nmask_);
-				(*bricks_)[i]->ntype(TextureBrick::TYPE_NONE, nmask_);
+				for (i=0; i<(int)(*bricks_).size(); i++)
+				{
+					(*bricks_)[i]->nmask(-1);
+					(*bricks_)[i]->nb(0, nmask_);
+					(*bricks_)[i]->ntype(TextureBrick::TYPE_NONE, nmask_);
+				}
+			}
+			else
+			{
+				for (i = 0; i < pyramid_.size(); i++)
+				{
+					for (int j = 0; j < pyramid_[i].bricks.size(); j++)
+					{
+						pyramid_[i].bricks[j]->nmask(-1);
+						pyramid_[i].bricks[j]->nb(0, nmask_);
+						pyramid_[i].bricks[j]->ntype(TextureBrick::TYPE_NONE, nmask_);
+					}
+				}
 			}
 
 			if (data_[nmask_])
 			{
 				delete [] data_[nmask_]->data;
+				nrrdNix(data_[nmask_]);
 				data_[nmask_] = NULL;
 			}
 
@@ -796,10 +944,36 @@ namespace FLIVR
 			if (data_[nlabel_])
 			{
 				delete [] data_[nlabel_]->data;
+				nrrdNix(data_[nlabel_]);
 				data_[nlabel_] = NULL;
 			}
 
 			nlabel_ = -1; 
+		}
+	}
+
+	void Texture::delete_stroke()
+	{
+		if (nstroke_ > 0)
+		{
+			nb_[nstroke_] = 0;
+
+			int i;
+			for (i=0; i<(int)(*bricks_).size(); i++)
+			{
+				(*bricks_)[i]->nstroke(-1);
+				(*bricks_)[i]->nb(0, nstroke_);
+				(*bricks_)[i]->ntype(TextureBrick::TYPE_NONE, nstroke_);
+			}
+
+			if (data_[nstroke_])
+			{
+				delete [] data_[nstroke_]->data;
+				nrrdNix(data_[nstroke_]);
+				data_[nstroke_] = NULL;
+			}
+
+			nstroke_ = -1; 
 		}
 	}
 
@@ -814,8 +988,7 @@ namespace FLIVR
 			
 			if (data_[index] && data && !existInPyramid)
 			{
-				if (index != nmask_)
-					delete [] data_[index]->data;
+				delete [] data_[index]->data;
 				nrrdNix(data_[index]);
 			}
 
@@ -867,6 +1040,7 @@ namespace FLIVR
 	void Texture::setLevel(int lv)
 	{
 		if (lv < 0 || lv >= pyramid_lv_num_ || !brkxml_ || pyramid_cur_lv_ == lv) return;
+
 		pyramid_cur_lv_ = lv;
 		build(pyramid_[pyramid_cur_lv_].data, 0, 0, 256, 0, 0, &pyramid_[pyramid_cur_lv_].bricks);
 		set_data_file(pyramid_[pyramid_cur_lv_].filenames, pyramid_[pyramid_cur_lv_].filetype);
@@ -878,9 +1052,10 @@ namespace FLIVR
 		spcz_ = pyramid_[lv].data->axis[offset + 2].spacing;
 		Transform tform;
 		tform.load_identity();
-		Point nmax(nx_*spcx_*s_spcx_, ny_*spcy_*s_spcy_, nz_*spcz_*s_spcz_);
+		Point nmax(nx_*spcx_*s_spcx_, ny_*spcy_*s_spcy_, -nz_*spcz_*s_spcz_);
 		tform.pre_scale(Vector(nmax));
 		set_transform(tform);
+		set_sort_bricks();
 	}
 
 	bool Texture::buildPyramid(vector<Pyramid_Level> &pyramid, vector<vector<vector<vector<FileLocInfo *>>>> &filenames, bool useURL)
@@ -912,6 +1087,7 @@ namespace FLIVR
 		}
 		setLevel(pyramid_lv_num_ - 1);
 		pyramid_cur_lv_ = -1;
+		SetMaskLv(pyramid_lv_num_ - 1);
 
 		return true;
 	}
@@ -981,8 +1157,18 @@ namespace FLIVR
 		int height = size[1];
 		int depth  = size[2];
 
-		data->data = malloc(width * height * depth * nbyte);
-		memset(data->data, 0, width * height * depth * nbyte);
+		if (nbyte == 1)
+		{
+			unsigned char *val8 = new unsigned char[(size_t)width * (size_t)height * (size_t)depth];
+			data->data = val8;
+		}
+		else
+		{
+			unsigned short *val16 = new unsigned short[(size_t)width * (size_t)height * (size_t)depth];
+			data->data = val16;
+		}
+
+		memset(data->data, 0, (size_t)width * (size_t)height * (size_t)depth * (size_t)nbyte);
 
 		wxProgressDialog *prog_diag = new wxProgressDialog(
 			"FluoRender: Load Volume Data...",
@@ -1022,7 +1208,7 @@ namespace FLIVR
 			{
 				for (int y = 0; y < ny; y++)
 				{
-					memcpy(ptr_dst, ptr_src, nx*nbyte);
+					memcpy(ptr_dst, ptr_src, (long long)nx*(long long)nbyte);
 					ptr_dst += (long long)(width) * (long long)nbyte;
 					ptr_src += (long long)(nx) * (long long)nbyte;
 				}
@@ -1041,6 +1227,162 @@ namespace FLIVR
 		delete prog_diag;
 
 		lv = level;
+
+		return data;
+	}
+
+	Nrrd *Texture::getSubData(int lv, int mask_mode, vector<TextureBrick*> *tar_bricks, size_t stx, size_t sty, size_t stz, size_t w, size_t h, size_t d)
+	{
+		if (!brkxml_) return NULL;
+
+		int level = lv;
+		if (level < 0 || level > pyramid_.size()) level = pyramid_copy_lv_;
+		if (level < 0 || level > pyramid_.size()) level = pyramid_cur_lv_;
+		if (pyramid_cur_fr_ < 0 || pyramid_cur_fr_ >= filenames_[level].size()) return NULL;
+		if (pyramid_cur_ch_ < 0 || pyramid_cur_ch_ >= filenames_[level][pyramid_cur_fr_].size()) return NULL;
+		
+		vector<TextureBrick*> *bricks = tar_bricks ? tar_bricks : &pyramid_[level].bricks;
+		
+		int bnum = bricks->size();
+		if (bnum <= 0) return NULL;
+
+		size_t imageW=0, imageH=0, imageD=0;
+		get_dimensions(imageW, imageH, imageD, lv);
+		double xspc = 1.0, yspc = 1.0, zspc = 1.0;
+		get_spacings(xspc, yspc, zspc, lv);
+		size_t nbyte = nb_[0];
+		if (w == 0) w = imageW;
+		if (h == 0) h = imageH;
+		if (d == 0) d = imageD;
+
+		if (stx+w > imageW || sty+h > imageH || stz+d > imageD) return NULL;
+
+		Nrrd *data;
+		data = nrrdNew();
+		if (nbyte == 1)
+		{
+			unsigned char *val8 = new unsigned char[w*h*d*nbyte];
+			nrrdWrap(data, val8, nrrdTypeUChar, 3, w, h, d);
+		}
+		else if (nbyte == 2)
+		{
+			unsigned short *val16 = new unsigned short[w*h*d*nbyte];
+			nrrdWrap(data, val16, nrrdTypeUShort, 3, w, h, d);
+		}
+		else if (nbyte == 4)
+		{
+			float *val32 = new float[w*h*d*nbyte];
+			nrrdWrap(data, val32, nrrdTypeFloat, 3, w, h, d);
+		}
+		nrrdAxisInfoSet(data, nrrdAxisInfoSpacing, xspc, yspc, zspc);
+		nrrdAxisInfoSet(data, nrrdAxisInfoMax, xspc*w, yspc*h, zspc*d);
+		nrrdAxisInfoSet(data, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
+		nrrdAxisInfoSet(data, nrrdAxisInfoSize, w, h, d);
+
+		memset(data->data, 0, w*h*d*nbyte);
+
+		size_t mask_w, mask_h, mask_d;
+		get_dimensions(mask_w, mask_h, mask_d, GetMaskLv());
+		double xscale = (double)mask_w / imageW;
+		double yscale = (double)mask_h / imageH;
+		double zscale = (double)mask_d / imageD;
+
+		bool mask = false;
+
+		unsigned char *ptr_mask = NULL;
+		if (mask_mode != 0 && get_nrrd(nmask_))
+		{
+			ptr_mask = (unsigned char *)data_[nmask_]->data;
+			if (ptr_mask) mask = true;
+		}
+
+		for(int i = 0; i < bnum; i++)
+		{
+			TextureBrick *b = (*bricks)[i];
+			//naive
+			int ox = b->ox();
+			int oy = b->oy();
+			int oz = b->oz();
+			int nx = b->nx();
+			int ny = b->ny();
+			int nz = b->nz();
+
+			if ( ox+nz <= stx || ox >= stx+w || oy+ny <= sty || oy >= sty+h || oz+nz <= stz || oz >= stz+d )
+				continue;
+
+			int ox2 = ox < stx ? stx : ox;
+			int oy2 = oy < sty ? sty : oy;
+			int oz2 = oz < stz ? stz : oz;
+			int ex2 = ox+nx > stx+w ? stx+w : ox+nx;
+			int ey2 = oy+ny > sty+h ? sty+h : oy+ny;
+			int ez2 = oz+nz > stz+d ? stz+d : oz+nz;
+			int nx2 = ex2-ox2;
+			int ny2 = ey2-oy2;
+			int nz2 = ez2-oz2;
+
+			int sox = ox2 - ox;
+			int soy = oy2 - oy;
+			int soz = oz2 - oz;
+			int dox = ox2 - stx;
+			int doy = oy2 - sty;
+			int doz = oz2 - stz;
+
+			bool tmp = false;
+			if(!b->isLoaded())
+			{
+				FileLocInfo *finfo = filenames_[level][pyramid_cur_fr_][pyramid_cur_ch_][b->getID()];
+				b->tex_data_brk(0, finfo);
+				tmp = true;
+			}
+			
+			if (nbyte == 1) {
+				unsigned char *ptr_dst = (unsigned char *)(data->data);
+				const unsigned char *ptr_src = (const unsigned char *)(*bricks)[i]->getBrickData();
+				#pragma omp parallel for
+				for (int z = 0; z < nz2; z++) {
+					for (int y = 0; y < ny2; y++) {
+						for (int x = 0; x < nx2; x++) {
+							size_t src_id = (size_t)(z+soz)*ny*nx + (size_t)(y+soy)*nx + (size_t)(x+sox);
+							size_t dst_id = (size_t)(z+doz)*h*w + (size_t)(y+doy)*w + (size_t)(x+dox);
+							if (!mask)
+								ptr_dst[dst_id] = ptr_src[src_id];
+							else {
+								size_t mx = (size_t)((x+ox2+0.5)*xscale);
+								size_t my = (size_t)((y+oy2+0.5)*yscale);
+								size_t mz = (size_t)((z+oz2+0.5)*zscale);
+								size_t mid = mz*mask_h*mask_w + my*mask_w + mx;
+								if		(mask_mode == 1) ptr_dst[dst_id] = ptr_mask[mid] > 0  ? ptr_src[src_id] : 0;
+								else if (mask_mode == 2) ptr_dst[dst_id] = ptr_mask[mid] == 0 ? ptr_src[src_id] : 0;
+							}
+						}
+					}
+				}
+			} else if (nbyte == 2) {
+				unsigned short *ptr_dst = (unsigned short *)(data->data);
+				const unsigned short *ptr_src = (const unsigned short *)(*bricks)[i]->getBrickData();
+				#pragma omp parallel for
+				for (int z = 0; z < nz2; z++) {
+					for (int y = 0; y < ny2; y++) {
+						for (int x = 0; x < nx2; x++) {
+							size_t src_id = (size_t)(z+soz)*ny*nx + (size_t)(y+soy)*nx + (size_t)(x+sox);
+							size_t dst_id = (size_t)(z+doz)*h*w + (size_t)(y+doy)*w + (size_t)(x+dox);
+							if (!mask)
+								ptr_dst[dst_id] = ptr_src[src_id];
+							else {
+								size_t mx = (size_t)((x+ox2+0.5)*xscale);
+								size_t my = (size_t)((y+oy2+0.5)*yscale);
+								size_t mz = (size_t)((z+oz2+0.5)*zscale);
+								size_t mid = mz*mask_h*mask_w + my*mask_w + mx;
+								if		(mask_mode == 1) ptr_dst[dst_id] = ptr_mask[mid] > 0  ? ptr_src[src_id] : 0;
+								else if (mask_mode == 2) ptr_dst[dst_id] = ptr_mask[mid] == 0 ? ptr_src[src_id] : 0;
+							}
+						}
+					}
+				}
+			}
+
+			if (tmp) (*bricks)[i]->freeBrkData();
+		}
 
 		return data;
 	}
@@ -1132,10 +1474,13 @@ namespace FLIVR
 			mask_undo_pointer_>mask_undos_.size()-1)
 			return;
 
+		int nx = nx_, ny = ny_, nz = nz_;
+		if (brkxml_) GetDimensionLv(masklv_, nx, ny, nz);
+		
 		//duplicate at pointer position
-		unsigned long long mem_size = (unsigned long long)nx_*
-			(unsigned long long)ny_*(unsigned long long)nz_;
-		void* new_data = (void*)new (std::nothrow) unsigned char[mem_size];
+		unsigned long long mem_size = (unsigned long long)nx*
+			(unsigned long long)ny*(unsigned long long)nz;
+		void* new_data = (void*)new unsigned char[mem_size];
 		memcpy(new_data, mask_undos_[mask_undo_pointer_], size_t(mem_size));
 		if (mask_undo_pointer_<mask_undos_.size()-1)
 		{
@@ -1156,8 +1501,8 @@ namespace FLIVR
 		//update mask data
 		nrrdWrap_va(data_[nmask_],
 			mask_undos_[mask_undo_pointer_],
-			nrrdTypeUChar, 3, (size_t)nx_,
-			(size_t)ny_, (size_t)nz_);
+			nrrdTypeUChar, 3, (size_t)nx,
+			(size_t)ny, (size_t)nz);
 	}
 
 	void Texture:: mask_undos_backward()
@@ -1171,11 +1516,14 @@ namespace FLIVR
 		//move pointer
 		mask_undo_pointer_--;
 
+		int nx = nx_, ny = ny_, nz = nz_;
+		if (brkxml_) GetDimensionLv(masklv_, nx, ny, nz);
+
 		//update mask data
 		nrrdWrap_va(data_[nmask_],
 			mask_undos_[mask_undo_pointer_],
-			nrrdTypeUChar, 3, (size_t)nx_,
-			(size_t)ny_, (size_t)nz_);
+			nrrdTypeUChar, 3, (size_t)nx,
+			(size_t)ny, (size_t)nz);
 	}
 
 	void Texture::mask_undos_forward()
@@ -1189,11 +1537,40 @@ namespace FLIVR
 		//move pointer
 		mask_undo_pointer_++;
 
+		int nx = nx_, ny = ny_, nz = nz_;
+		if (brkxml_) GetDimensionLv(masklv_, nx, ny, nz);
+
 		//update mask data
 		nrrdWrap_va(data_[nmask_],
 			mask_undos_[mask_undo_pointer_],
-			nrrdTypeUChar, 3, (size_t)nx_,
-			(size_t)ny_, (size_t)nz_);
+			nrrdTypeUChar, 3, (size_t)nx,
+			(size_t)ny, (size_t)nz);
+	}
+
+	void Texture::GetDimensionLv(int lv, int &x, int &y, int &z)
+	{
+		if (!brkxml_) return;
+
+		Nrrd *nv_nrrd = pyramid_[lv].data;
+		size_t dim = nv_nrrd->dim;
+		std::vector<int> size(dim);
+		int offset = 0;
+		if (dim > 3) offset = 1; 
+		for (size_t p = 0; p < dim; p++) 
+			size[p] = (int)nv_nrrd->axis[p + offset].size;
+		x = size[0];
+		y = size[1];
+		z = size[2];
+	}
+
+	Nrrd* Texture::get_nrrd_lv(int lv, int index)
+	{
+		if (!isBrxml()) get_nrrd(index);
+
+		if (index < 0 || index >= TEXTURE_MAX_COMPONENTS) return NULL;
+		if (lv < 0 || lv > pyramid_.size()) return NULL;
+
+		return pyramid_[lv].data;
 	}
 
 } // namespace FLIVR

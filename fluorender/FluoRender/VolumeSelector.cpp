@@ -30,6 +30,7 @@ DEALINGS IN THE SOFTWARE.
 #include "utility.h"
 #include <wx/wx.h>
 #include <algorithm>
+#include <queue>
 
 VolumeSelector::VolumeSelector() :
 	m_vd(0),
@@ -85,12 +86,12 @@ VolumeData* VolumeSelector::GetVolume()
 	return m_vd;
 }
 
-void VolumeSelector::Set2DMask(GLuint mask)
+void VolumeSelector::Set2DMask(const std::shared_ptr<vks::VTexture> &mask)
 {
 	m_2d_mask = mask;
 }
 
-void VolumeSelector::Set2DWeight(GLuint weight1, GLuint weight2)
+void VolumeSelector::Set2DWeight(const std::shared_ptr<vks::VTexture> &weight1, const std::shared_ptr<vks::VTexture> &weight2)
 {
 	m_2d_weight1 = weight1;
 	m_2d_weight2 = weight2;
@@ -104,16 +105,30 @@ void VolumeSelector::SetProjection(double *mvmat, double *prjmat)
 
 void VolumeSelector::Select(double radius)
 {
-	if (!m_vd || m_vd->isBrxml())
+	if (!m_vd)
 		return;
 
 	//insert the mask volume into m_vd
-	m_vd->AddEmptyMask();
+    Texture* ext_msk = NULL;
+    if (!m_vd->GetSharedMaskName().IsEmpty() && m_dm)
+    {
+        VolumeData* msk = m_dm->GetVolumeData(m_vd->GetSharedMaskName());
+        if (msk)
+            ext_msk = msk->GetTexture();
+        else
+            m_vd->AddEmptyMask();
+    }
+    else
+        m_vd->AddEmptyMask();
+    
 	m_vd->Set2dMask(m_2d_mask);
-	if (m_use2d && glIsTexture(m_2d_weight1) && glIsTexture(m_2d_weight2))
+	if (m_use2d && m_2d_weight1 && m_2d_weight2)
 		m_vd->Set2DWeight(m_2d_weight1, m_2d_weight2);
 	else
-		m_vd->Set2DWeight(0, 0);
+	{
+		auto blank = std::shared_ptr<vks::VTexture>();
+		m_vd->Set2DWeight(blank, blank);
+	}
 
 	//segment the volume with 2d mask
 	//result in 3d mask
@@ -133,6 +148,8 @@ void VolumeSelector::Select(double radius)
 	else
 	{
 		ini_thresh = m_scl_translate;
+		if (m_vd->GetLeftThresh() > ini_thresh)
+			ini_thresh = m_vd->GetLeftThresh();
 		scl_falloff = 0.0;
 	}
 	if (m_edge_detect)
@@ -155,10 +172,11 @@ void VolumeSelector::Select(double radius)
 			ini_thresh /= 2.0;
 		m_scl_translate = ini_thresh;
 	}*/
+    
 	if (m_use_dslt && (m_mode == 1 || m_mode == 2))
 		m_vd->DrawMaskDSLT(0, m_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0, m_dslt_r, m_dslt_q, m_dslt_c);
 	else
-		m_vd->DrawMask(0, m_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0);
+		m_vd->DrawMask(0, m_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0, false, ext_msk);
 
 	//grow the selection when paint mode is select, append, erase, or invert
 	if (/*m_mode==1 ||
@@ -167,9 +185,15 @@ void VolumeSelector::Select(double radius)
 		m_mode==4)
 	{
 		//loop for growing
-		int iter = m_iter_num*(radius/200.0>1.0?radius/200.0:1.0);
+		int iter = m_iter_num*(radius/20.0>1.0?radius/20.0:1.0);
 		for (int i=0; i<iter; i++)
-			m_vd->DrawMask(1, m_mode, 0, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0);
+			m_vd->DrawMask(1, m_mode, 0, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0, ext_msk);
+		/*if (m_vd->GetVR() && m_vd->GetBrickNum() > 1) {
+			m_vd->GetVR()->return_mask();
+			m_vd->GetVR()->clear_tex_current_mask();
+			for (int i = 0; i < iter; i++)
+				m_vd->DrawMask(1, m_mode, 0, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0);
+		}*/
 	}
 
 	if (m_mode == 6)
@@ -179,14 +203,14 @@ void VolumeSelector::Select(double radius)
 		m_vd->GetVR())
 	{
 		m_vd->GetVR()->return_mask();
-		TextureRenderer::clear_tex_pool();
+		m_vd->GetVR()->clear_tex_current_mask();
 	}
 }
 
 //mode: 0-normal; 1-posterized; 2-noraml,copy; 3-poster, copy
 void VolumeSelector::Label(int mode)
 {
-	if (!m_vd || m_vd->isBrxml())
+	if (!m_vd)
 		return;
 
 	int label_mode = 0;
@@ -247,18 +271,23 @@ int VolumeSelector::CompAnalysis(double min_voxels, double max_voxels, double th
 		m_total_pr = m_iter_label+nx*2;
 		//first, grow in the whole volume
 		m_vd->AddEmptyMask();
-		if (m_use2d && glIsTexture(m_2d_weight1) && glIsTexture(m_2d_weight2))
+		if (m_use2d && m_2d_weight1 && m_2d_weight2)
 			m_vd->Set2DWeight(m_2d_weight1, m_2d_weight2);
 		else
-			m_vd->Set2DWeight(0, 0);
+		{
+			auto blank = std::shared_ptr<vks::VTexture>();
+			m_vd->Set2DWeight(blank, blank);
+		}
 
 		m_vd->DrawMask(0, 5, 0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
 		//next do the same as when it's selected by brush
-	}
-	Label(0);
-	m_vd->GetVR()->return_label();
+	}/*
+	if (m_vd->GetBrickNum() == 1) {
+		Label(0);
+		m_vd->GetVR()->return_label();
+	} else*/
+		m_vd->GetVR()->return_mask();
 	return_val = CompIslandCount(min_voxels, max_voxels);
-
 
 	if (gen_ann)
 		GenerateAnnotations(use_sel);
@@ -297,7 +326,7 @@ int VolumeSelector::SetLabelBySize()
 	unsigned int min_size = 0;
 	unsigned int max_size = 0;
 	unsigned int counter;
-	boost::unordered_map<unsigned int, Component>::iterator comp_iter;
+	unordered_map<unsigned int, Component>::iterator comp_iter;
 	for (comp_iter=m_comps.begin();
 		comp_iter!=m_comps.end();
 		++comp_iter)
@@ -360,6 +389,7 @@ int VolumeSelector::SetLabelBySize()
 
 			return return_val;
 }
+
 int VolumeSelector::CompIslandCount(double min_voxels, double max_voxels)
 {
 	m_min_voxels = min_voxels;
@@ -378,96 +408,218 @@ int VolumeSelector::CompIslandCount(double min_voxels, double max_voxels)
 	void* orig_data = orig_nrrd->data;
 	if (!orig_data)
 		return 0;
-	Nrrd* label_nrrd = tex->get_nrrd(tex->nlabel());
-	if (!label_nrrd)
-		return 0;
-	unsigned int* label_data = (unsigned int*)(label_nrrd->data);
-	if (!label_data)
-		return 0;
-
+	
 	//resolution
 	int nx, ny, nz;
 	m_vd->GetResolution(nx, ny, nz);
 
 	m_comps.clear();
-	int i, j, k;
-	//first pass: generate the component list
-	for (i=0; i<nx; i++)
-	{
-		for (j=0; j<ny; j++)
-			for (k=0; k<nz; k++)
-			{
-				int index = nx*ny*k + nx*j + i;
-				unsigned int value = label_data[index];
-				if (value > 0)
-				{
-					Vector pos = Vector(i, j, k);
-					double intensity = 0.0;
-					if (orig_nrrd->type == nrrdTypeUChar)
-						intensity = double(((unsigned char*)orig_data)[index]) / 255.0;
-					else if (orig_nrrd->type == nrrdTypeUShort)
-						intensity = double(((unsigned short*)orig_data)[index]) / 65535.0;
-					bool found = SearchComponentList(value, pos, intensity);
-					if (!found)
-					{
-						Component comp;
-						comp.counter = 1;
-						comp.id = value;
-						comp.acc_pos = pos;
-						comp.acc_int = intensity;
-						m_comps.insert(pair<unsigned int, Component>(value, comp));
-					}
-				}
-			}
-			if (m_prog_diag)
-			{
-				m_progress++;
-				m_prog_diag->Update(95*(m_progress+1)/m_total_pr);
-			}
-	}
+	
+	std::unordered_map <unsigned int, Component> ::iterator comp_iter;
+	size_t i, j, k;
 
-	boost::unordered_map <unsigned int, Component> :: const_iterator comp_iter;
-	//second pass: combine components and remove islands
-	//update mask
-	Nrrd* mask_nrrd = m_vd->GetMask(true);
-	if (!mask_nrrd)
-		return 0;
-	unsigned char* mask_data = (unsigned char*)(mask_nrrd->data);
-	if (!mask_data)
-		return 0;
-	for (i=0; i<nx; i++)
-	{
-		for (j=0; j<ny; j++)
-			for (k=0; k<nz; k++)
-			{
-				int index = nx*ny*k + nx*j + i;
-				unsigned int label_value = label_data[index];
-				if (label_value>0)
-				{
-					comp_iter = m_comps.find(label_value);
-					if (comp_iter != m_comps.end())
-					{
-						if (comp_iter->second.counter<min_voxels ||
-							(max_voxels<0.0?false:(comp_iter->second.counter>max_voxels)))
-							mask_data[index] = 0;
+	/*if (m_vd->GetBrickNum() > 1) {*/
+		
+		m_vd->AddEmptyLabel(0);
+
+		Nrrd* label_nrrd = tex->get_nrrd(tex->nlabel());
+		if (!label_nrrd)
+			return 0;
+		unsigned int* label_data = (unsigned int*)(label_nrrd->data);
+		if (!label_data)
+			return 0;
+
+		Nrrd* mask_nrrd = tex->get_nrrd(tex->nmask());
+		if (!mask_nrrd)
+			return 0;
+		unsigned char* mask_data = (unsigned char*)mask_nrrd->data;
+		if (!mask_data)
+			return 0;
+
+		size_t voxelnum = (size_t)nx*(size_t)ny*(size_t)nz;
+		unsigned int *tmplabel = new (std::nothrow) unsigned int[voxelnum];
+		memset(tmplabel, 0, voxelnum * sizeof(unsigned int));
+
+		m_total_pr = nz;
+		m_progress = 0;
+
+		int label_th_i = orig_nrrd->type == nrrdTypeUChar ? (unsigned int)(m_label_thresh * 255.0) : (unsigned int)(m_label_thresh * 65535.0);
+
+		unsigned int segid = 1;
+		unsigned int finalid = 1;
+		unsigned int x, y, z;
+		vector<size_t> pts;
+		for (z = 0; z < nz; z++) {
+			for (y = 0; y < ny; y++) {
+				for (x = 0; x < nx; x++) {
+					size_t id = (size_t)nx*(size_t)ny*z + (size_t)nx*y + x;
+					unsigned int val = orig_nrrd->type == nrrdTypeUChar ? ((unsigned char*)orig_data)[id] : ((unsigned short*)orig_data)[id];
+					unsigned char mask_val = mask_data[id];
+					unsigned int segval = tmplabel[id];
+					if (mask_val == 0 || val <= label_th_i) {
+						tmplabel[id] = 0;
+						mask_data[id] = 0;
+					}
+					else if (segval == 0) {
+						std::queue<long long> que;
+						unsigned int cx, cy, cz;
+						long long tmp;
+
+						pts.clear();
+
+						Component comp;
+						comp.counter = 0;
+						comp.id = segid;
+						comp.acc_pos = Vector(0.0);
+						comp.acc_int = 0;
+
+						tmplabel[id] = segid;
+						que.push(((long long)x << 16 | (long long)y) << 16 | (long long)z);
+
+						while (que.size()) {
+							tmp = que.front();
+							que.pop();
+
+							cx = tmp >> 32;
+							cy = (tmp >> 16) & 0xFFFF;
+							cz = tmp & 0xFFFF;
+
+							int cid = (size_t)nx*(size_t)ny*cz + (size_t)nx*cy + cx;
+							pts.push_back(cid);
+							comp.counter++;
+							comp.acc_pos += Vector(cx, cy, cz);
+							comp.acc_int += orig_nrrd->type == nrrdTypeUChar ? double(((unsigned char*)orig_data)[cid]) / 255.0 : double(((unsigned short*)orig_data)[cid]) / 65535.0;
+
+							int stx = -1, sty = -1, stz = -1, edx = 1, edy = 1, edz = 1;
+							if (cx == 0) stx = 0;
+							else if (cx == nx - 1) edx = 0;
+							if (cy == 0) sty = 0;
+							else if (cy == ny - 1) edy = 0;
+							if (cz == 0) stz = 0;
+							else if (cz == nz - 1) edz = 0;
+
+							for (int dz = stz; dz <= edz; dz++)
+								for (int dy = sty; dy <= edy; dy++)
+									for (int dx = stx; dx <= edx; dx++) {
+										size_t did = (size_t)nx*(size_t)ny*(cz + dz) + (size_t)nx*(cy + dy) + cx + dx;
+										unsigned int next_val = orig_nrrd->type == nrrdTypeUChar ? ((unsigned char*)orig_data)[did] : ((unsigned short*)orig_data)[did];
+										if (mask_data[did] > 0 && tmplabel[did] == 0 && next_val > label_th_i) {
+											tmplabel[did] = segid;
+											que.push(((long long)(cx + dx) << 16 | (long long)(cy + dy)) << 16 | (long long)(cz + dz));
+										}
+									}
+						}
+						if (comp.counter < min_voxels || (max_voxels < 0.0 ? false : (comp.counter > max_voxels))) {
+							for (size_t e : pts)
+								mask_data[e] = 0;
+						}
+						else {
+							comp.id = finalid;
+							m_comps.insert(pair<unsigned int, Component>(finalid, comp));
+							for (size_t e : pts)
+								label_data[e] = finalid;
+							finalid++;
+						}
+						segid++;
 					}
 				}
-				else
-					mask_data[index] = 0;
 			}
 			if (m_prog_diag)
 			{
 				m_progress++;
-				m_prog_diag->Update(95*(m_progress+1)/m_total_pr);
+				m_prog_diag->Update(95 * (m_progress + 1) / m_total_pr);
 			}
-	}
-	TextureRenderer::clear_tex_pool();
+		}
+
+		delete[] tmplabel;
+	/*}
+	else {
+		Nrrd* label_nrrd = tex->get_nrrd(tex->nlabel());
+		if (!label_nrrd)
+			return 0;
+		unsigned int* label_data = (unsigned int*)(label_nrrd->data);
+		if (!label_data)
+			return 0;
+
+		//first pass: generate the component list
+		for (i = 0; i < nx; i++)
+		{
+			for (j = 0; j < ny; j++)
+				for (k = 0; k < nz; k++)
+				{
+					size_t index = (size_t)nx*(size_t)ny*k + (size_t)nx*j + i;
+					unsigned int value = label_data[index];
+					if (value > 0)
+					{
+						Vector pos = Vector(i, j, k);
+						double intensity = 0.0;
+						if (orig_nrrd->type == nrrdTypeUChar)
+							intensity = double(((unsigned char*)orig_data)[index]) / 255.0;
+						else if (orig_nrrd->type == nrrdTypeUShort)
+							intensity = double(((unsigned short*)orig_data)[index]) / 65535.0;
+						bool found = SearchComponentList(value, pos, intensity);
+						if (!found)
+						{
+							Component comp;
+							comp.counter = 1ULL;
+							comp.id = value;
+							comp.acc_pos = pos;
+							comp.acc_int = intensity;
+							m_comps.insert(pair<unsigned int, Component>(value, comp));
+						}
+					}
+				}
+			if (m_prog_diag)
+			{
+				m_progress++;
+				m_prog_diag->Update(95 * (m_progress + 1) / m_total_pr);
+			}
+		}
+
+		//second pass: combine components and remove islands
+		//update mask
+		Nrrd* mask_nrrd = m_vd->GetMask(true);
+		if (!mask_nrrd)
+			return 0;
+		unsigned char* mask_data = (unsigned char*)(mask_nrrd->data);
+		if (!mask_data)
+			return 0;
+		for (i = 0; i < nx; i++)
+		{
+			for (j = 0; j < ny; j++)
+				for (k = 0; k < nz; k++)
+				{
+					size_t index = (size_t)nx * (size_t)ny*k + (size_t)nx * j + i;
+					unsigned int label_value = label_data[index];
+					if (label_value > 0)
+					{
+						comp_iter = m_comps.find(label_value);
+						if (comp_iter != m_comps.end())
+						{
+							if (comp_iter->second.counter < min_voxels ||
+								(max_voxels < 0.0 ? false : (comp_iter->second.counter > max_voxels)))
+								mask_data[index] = 0;
+						}
+					}
+					else
+						mask_data[index] = 0;
+				}
+			if (m_prog_diag)
+			{
+				m_progress++;
+				m_prog_diag->Update(95 * (m_progress + 1) / m_total_pr);
+			}
+		}
+	}*/
+
+	if (m_vd->GetVR())
+		m_vd->GetVR()->clear_tex_current();
 
 	//count
-	for (comp_iter=m_comps.begin(); comp_iter!=m_comps.end(); comp_iter++)
+	for (comp_iter = m_comps.begin(); comp_iter != m_comps.end(); comp_iter++)
 	{
-		if (comp_iter->second.counter>=min_voxels &&
-			(max_voxels<0.0?true:(comp_iter->second.counter<=max_voxels)))
+		if (comp_iter->second.counter >= min_voxels &&
+			(max_voxels < 0.0 ? true : (comp_iter->second.counter <= max_voxels)))
 		{
 			m_ca_comps++;
 			m_ca_volume += comp_iter->second.counter;
@@ -477,12 +629,101 @@ int VolumeSelector::CompIslandCount(double min_voxels, double max_voxels)
 	return m_ca_comps;
 }
 
+unsigned int VolumeSelector::getMinIndexOfLinkedComponents(unsigned int lval)
+{
+	for (auto& elem : m_comps)
+		elem.second.marker = false;
+
+	return getMinIndexOfLinkedComponents_r(lval);
+}
+
+unsigned int VolumeSelector::getMinIndexOfLinkedComponents_r(unsigned int lval)
+{
+	unordered_map <unsigned int, Component> ::iterator comp_iter;
+	comp_iter = m_comps.find(lval);
+	unsigned int minval = UINT_MAX;
+	if (comp_iter != m_comps.end()) {
+		if (!comp_iter->second.marker) {
+			minval = lval;
+			comp_iter->second.marker = true;
+			for (const auto& elem : comp_iter->second.links) {
+				unsigned int val = getMinIndexOfLinkedComponents_r(elem);
+				if (minval > val) minval = val;
+			}
+		}
+	}
+
+	return minval;
+}
+
+void VolumeSelector::SetIdLinkedComponents(unsigned int lval, unsigned int new_lval)
+{
+	for (auto& elem : m_comps)
+		elem.second.marker = false;
+
+	SetIdLinkedComponents_r(lval, new_lval);
+}
+
+void VolumeSelector::SetIdLinkedComponents_r(unsigned int lval, unsigned int new_lval)
+{
+	unordered_map <unsigned int, Component> ::iterator comp_iter;
+	comp_iter = m_comps.find(lval);
+	if (comp_iter != m_comps.end()) {
+		if (!comp_iter->second.marker) {
+			comp_iter->second.id = new_lval;
+			comp_iter->second.marker = true;
+			for (const auto& elem : comp_iter->second.links)
+				SetIdLinkedComponents_r(elem, new_lval);
+		}
+	}
+
+	return;
+}
+
+VolumeSelector::Component VolumeSelector::GetCombinedComponent(unsigned int root)
+{
+	for (auto& elem : m_comps)
+		elem.second.marker = false;
+
+	Component output;
+	output.counter = 0;
+	output.id = 0;
+	output.acc_pos = 0;
+	output.acc_int = 0;
+
+	unordered_map <unsigned int, Component> ::iterator comp_iter;
+	comp_iter = m_comps.find(root);
+	if (comp_iter != m_comps.end()) {
+		output = comp_iter->second;
+		for (const auto& elem : comp_iter->second.links) {
+			GetCombinedComponent_r(elem, output);
+		}
+	}
+
+	return output;
+}
+void VolumeSelector::GetCombinedComponent_r(unsigned int lval, Component &output)
+{	
+	unordered_map <unsigned int, Component> ::iterator comp_iter;
+	comp_iter = m_comps.find(lval);
+	if (comp_iter != m_comps.end()) {
+		if (!comp_iter->second.marker) {
+			output.counter += comp_iter->second.counter;
+			output.acc_pos += comp_iter->second.acc_pos;
+			output.acc_int += comp_iter->second.acc_int;
+			comp_iter->second.marker = true;
+			for (const auto& elem : comp_iter->second.links) {
+				GetCombinedComponent_r(elem, output);
+			}
+		}
+	}
+}
+
 bool VolumeSelector::SearchComponentList(unsigned int cval, Vector &pos, double intensity)
 {
-	boost::unordered_map <unsigned int, Component> :: iterator comp_iter;
+	unordered_map <unsigned int, Component> :: iterator comp_iter;
 	comp_iter = m_comps.find(cval);
-	if (comp_iter != m_comps.end())
-	{
+	if (comp_iter != m_comps.end()) {
 		comp_iter->second.counter++;
 		comp_iter->second.acc_pos += pos;
 		comp_iter->second.acc_int += intensity;
@@ -503,10 +744,10 @@ double VolumeSelector::HueCalculation(int mode, unsigned int label)
 		hue = double(label % 360);
 		break;
 	case 1:
-		hue = double(label % m_randv) / double(m_randv) * 360.0;
+		hue = double((label*43) % 360);//double(label % m_randv) / double(m_randv) * 360.0;
 		break;
 	case 2:
-		hue = double(bit_reverse(label) % m_randv) / double(m_randv) * 360.0;
+		hue = double((bit_reverse(label)*43) % 360);//double(bit_reverse(label) % m_randv) / double(m_randv) * 360.0;
 		break;
 	}
 	return hue;
@@ -541,7 +782,7 @@ void VolumeSelector::CompExportMultiChann(bool select)
 	if (!data_mvd || (select&&!data_mvd_mask) || !data_mvd_label) return;
 
 	i = 1;
-	boost::unordered_map <unsigned int, Component> :: const_iterator comp_iter;
+	unordered_map <unsigned int, Component> :: const_iterator comp_iter;
 	for (comp_iter=m_comps.begin(); comp_iter!=m_comps.end(); comp_iter++)
 	{
 		if (comp_iter->second.counter<m_min_voxels ||
@@ -563,7 +804,7 @@ void VolumeSelector::CompExportMultiChann(bool select)
 			spc_x, spc_y, spc_z);
 		vd->SetSpcFromFile(true);
 		vd->SetName(m_vd->GetName() +
-			wxString::Format("_COMP%d_SIZE%d", i++, comp_iter->second.counter));
+			wxString::Format("_COMP%d_SIZE%llu", i++, comp_iter->second.counter));
 
 		//populate the volume
 		//the actual data
@@ -931,24 +1172,23 @@ void VolumeSelector::GenerateAnnotations(bool use_sel)
 		mul = 65535.0;
 	double total_int = 0.0;
 
-	int i = 1;
-	boost::unordered_map <unsigned int, Component> :: const_iterator comp_iter;
+	unordered_map <unsigned int, Component> :: const_iterator comp_iter;
+	vector<Component> comps;
 	for (comp_iter=m_comps.begin(); comp_iter!=m_comps.end(); comp_iter++)
+		comps.push_back(comp_iter->second);
+	sort(comps.begin(), comps.end(), [](const Component& a, const Component& b){return a.id < b.id;} );
+
+	for (Component c : comps)
 	{
-		if (comp_iter->second.counter<m_min_voxels ||
-			(m_max_voxels<0.0?false:(comp_iter->second.counter>m_max_voxels)))
-			continue;
-		wxString str_id = wxString::Format("%d", i++);
-		Vector pos = comp_iter->second.acc_pos/comp_iter->second.counter;
+		wxString str_id = wxString::Format("%d", c.id);
+		Vector pos = c.acc_pos/c.counter;
 		pos *= Vector(nx==0?0.0:1.0/nx,
 			ny==0?0.0:1.0/ny,
 			nz==0?0.0:1.0/nz);
-		double intensity = mul * comp_iter->second.acc_int / comp_iter->second.counter;
+		double intensity = mul * c.acc_int / c.counter;
 		total_int += intensity;
-		wxString str_info = wxString::Format("%d\t%f\t%d",
-			comp_iter->second.counter,
-			double(comp_iter->second.counter)*(spcx*spcy*spcz),
-			int(intensity+0.5));
+		wxString str_info = wxString::Format("%llu\t%f\t%d",
+			c.counter, double(c.counter)*(spcx*spcy*spcz), int(intensity+0.5));
 		m_annotations->AddText(str_id.ToStdString(), Point(pos), str_info.ToStdString());
 	}
 
@@ -984,6 +1224,35 @@ void VolumeSelector::GenerateAnnotations(bool use_sel)
 	std::string str1 = memo.ToStdString();
 	m_annotations->SetMemo(str1);
 	m_annotations->SetMemoRO(true);
+
+	//copy label
+	Texture* tex = m_vd->GetTexture();
+	if (!tex) return;
+
+	Nrrd* label_nrrd = tex->get_nrrd(tex->nlabel());
+	if (!label_nrrd) return;
+	unsigned int* label_data = (unsigned int*)(label_nrrd->data);
+	if (!label_data) return;
+
+	size_t voxelnum = (size_t)nx*(size_t)ny*(size_t)nz;
+
+	Nrrd *copy = nrrdNew();
+	unsigned int *val32 = new (std::nothrow) unsigned int[voxelnum];
+	if (!val32)
+	{
+		wxMessageBox("Not enough memory. Please save project and restart.");
+		return;
+	}
+
+	tex->get_spacings(spcx, spcy, spcz);
+	nrrdWrap(copy, val32, nrrdTypeUInt, 3, (size_t)nx, (size_t)ny, (size_t)nz);
+	nrrdAxisInfoSet(copy, nrrdAxisInfoSpacing, spcx, spcy, spcz);
+	nrrdAxisInfoSet(copy, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
+	nrrdAxisInfoSet(copy, nrrdAxisInfoMax, spcx*nx, spcy*ny, spcz*nz);
+	nrrdAxisInfoSet(copy, nrrdAxisInfoSize, (size_t)nx, (size_t)ny, (size_t)nz);
+
+	memcpy(val32, label_data, voxelnum*sizeof(unsigned int));
+	m_annotations->SetLabel(copy);
 }
 
 Annotations* VolumeSelector::GetAnnotations()
@@ -1016,10 +1285,13 @@ int VolumeSelector::NoiseAnalysis(double min_voxels, double max_voxels, double b
 
 	//first posterize the volume and put it into the mask
 	m_vd->AddEmptyMask();
-	if (m_use2d && glIsTexture(m_2d_weight1) && glIsTexture(m_2d_weight2))
+	if (m_use2d && m_2d_weight1 && m_2d_weight2)
 		m_vd->Set2DWeight(m_2d_weight1, m_2d_weight2);
 	else
-		m_vd->Set2DWeight(0, 0);
+	{
+		auto blank = std::shared_ptr<vks::VTexture>();
+		m_vd->Set2DWeight(blank, blank);
+	}
 	double ini_thresh, gm_falloff, scl_falloff;
 	if (m_ini_thresh > 0.0)
 		ini_thresh = m_ini_thresh;
@@ -1084,91 +1356,20 @@ void VolumeSelector::NoiseRemoval(int iter, double thresh, int mode)
 	{
 		m_result_vols.clear();
 		//get data and mask from the old volume
-		Texture* tex_mvd = m_vd->GetTexture();
-		if (!tex_mvd) return;
-		Nrrd* nrrd_mvd = tex_mvd->get_nrrd(0);
-		if (!nrrd_mvd) return;
-		Nrrd* nrrd_mvd_mask = tex_mvd->get_nrrd(tex_mvd->nmask());
-		if (!nrrd_mvd_mask) return;
-		//create new volume
+		VolumeData *vd_new = VolumeData::DeepCopy(*m_vd);
+		if (!vd_new) return;
+		//name etc
+		vd_new->SetName(m_vd->GetName() + "_NR");
+		
+		Texture *tex = vd_new->GetTexture();
+		if (!tex) return;
+		Nrrd *nrrd_new = tex->get_nrrd(0);
 		int res_x, res_y, res_z;
-		double spc_x, spc_y, spc_z;
-		m_vd->GetResolution(res_x, res_y, res_z);
-		m_vd->GetSpacings(spc_x, spc_y, spc_z);
-		VolumeData* vd_new = new VolumeData();
-		//add data and mask
-		Nrrd *nrrd_new = nrrdNew();
+		vd_new->GetResolution(res_x, res_y, res_z);
 		int bytes = 1;
-		if (nrrd_mvd->type == nrrdTypeUShort) bytes = 2;
+		if (nrrd_new->type == nrrdTypeUShort) bytes = 2;
 		unsigned long long mem_size = (unsigned long long)res_x*
 			(unsigned long long)res_y*(unsigned long long)res_z*(unsigned long long)bytes;
-		uint8 *val8 = new (std::nothrow) uint8[mem_size];
-
-		memcpy(val8, nrrd_mvd->data, mem_size);
-		if (nrrd_mvd->type == nrrdTypeUChar)
-			nrrdWrap(nrrd_new, val8, nrrdTypeUChar, 3, (size_t)res_x, (size_t)res_y, (size_t)res_z);
-		else if (nrrd_mvd->type == nrrdTypeUShort)
-			nrrdWrap(nrrd_new, val8, nrrdTypeUShort, 3, (size_t)res_x, (size_t)res_y, (size_t)res_z);
-
-		nrrdAxisInfoSet(nrrd_new, nrrdAxisInfoSpacing, spc_x, spc_y, spc_z);
-		nrrdAxisInfoSet(nrrd_new, nrrdAxisInfoMax, spc_x*res_x, spc_y*res_y, spc_z*res_z);
-		nrrdAxisInfoSet(nrrd_new, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
-		nrrdAxisInfoSet(nrrd_new, nrrdAxisInfoSize, (size_t)res_x, (size_t)res_y, (size_t)res_z);
-		wxString str = "";
-		vd_new->Load(nrrd_new, str, str);
-		//
-		Nrrd *nrrd_new_mask = nrrdNew();
-		val8 = new (std::nothrow) uint8[mem_size];
-		memcpy(val8, nrrd_mvd_mask->data, res_x*res_y*res_z);
-		nrrdWrap(nrrd_new_mask, val8, nrrdTypeUChar, 3, (size_t)res_x, (size_t)res_y, (size_t)res_z);
-		nrrdAxisInfoSet(nrrd_new_mask, nrrdAxisInfoSpacing, spc_x, spc_y, spc_z);
-		nrrdAxisInfoSet(nrrd_new_mask, nrrdAxisInfoMax, spc_x*res_x, spc_y*res_y, spc_z*res_z);
-		nrrdAxisInfoSet(nrrd_new_mask, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
-		nrrdAxisInfoSet(nrrd_new_mask, nrrdAxisInfoSize, (size_t)res_x, (size_t)res_y, (size_t)res_z);
-		vd_new->LoadMask(nrrd_new_mask);
-		//copy settings
-		//clipping planes
-		vector<Plane*> *planes = m_vd->GetVR()?m_vd->GetVR()->get_planes():0;
-		if (planes && vd_new->GetVR())
-			vd_new->GetVR()->set_planes(planes);
-		//transfer function
-		vd_new->Set3DGamma(m_vd->Get3DGamma());
-		vd_new->SetBoundary(m_vd->GetBoundary());
-		vd_new->SetOffset(m_vd->GetOffset());
-		vd_new->SetLeftThresh(m_vd->GetLeftThresh());
-		vd_new->SetRightThresh(m_vd->GetRightThresh());
-		FLIVR::Color col = m_vd->GetColor();
-		vd_new->SetColor(col);
-		vd_new->SetAlpha(m_vd->GetAlpha());
-		//shading
-		vd_new->SetShading(m_vd->GetShading());
-		vd_new->GetVR()->set_shading(m_vd->GetVR()->get_shading());
-		double amb, diff, spec, shine;
-		m_vd->GetMaterial(amb, diff, spec, shine);
-		vd_new->SetMaterial(amb, diff, spec, shine);
-		//shadow
-		vd_new->SetShadow(m_vd->GetShadow());
-		double shadow;
-		m_vd->GetShadowParams(shadow);
-		vd_new->SetShadowParams(shadow);
-		//sample rate
-		vd_new->SetSampleRate(m_vd->GetSampleRate());
-		//2d adjusts
-		col = m_vd->GetGamma();
-		vd_new->SetGamma(col);
-		col = m_vd->GetBrightness();
-		vd_new->SetBrightness(col);
-		col = m_vd->GetHdr();
-		vd_new->SetHdr(col);
-		vd_new->SetSyncR(m_vd->GetSyncR());
-		vd_new->SetSyncG(m_vd->GetSyncG());
-		vd_new->SetSyncB(m_vd->GetSyncB());
-		//spacings
-		vd_new->SetSpacings(spc_x, spc_y, spc_z);
-		vd_new->SetSpcFromFile(true);
-		//name etc
-		vd_new->SetName(m_vd->GetName() +
-			"_NR");
 
 		for (int i=0; i<iter; i++)
 		{

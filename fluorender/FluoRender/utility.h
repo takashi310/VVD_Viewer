@@ -30,6 +30,8 @@ DEALINGS IN THE SOFTWARE.
 
 #include <vector>
 
+#include "DLLExport.h"
+
 #define PI_2 1.5707963267948966192313216916398
 #define PI 3.1415926535897932384626433832795
 #define EPS 1e-6
@@ -67,20 +69,23 @@ unsigned int reverse_bit(unsigned int val, unsigned int len);
 float nCr(int n,int r);
 
 // Just a class to be passed in the action class
-class ActionInfo {
+class EXPORT_API ActionInfo {
 public:
 	int id;
-	ActionInfo() {id = -1;}
-	ActionInfo(int evid) {id = evid;}
+	const void* data;
+	size_t size;
+	ActionInfo() {id = -1; data = NULL; size = 0;}
+	ActionInfo(int evid) {id = evid; data = NULL; size = 0;}
+	ActionInfo(int evid, const void *evdata, int evsize) {id = evid; data = evdata; size = evsize;}
 };
 
 // The observer class
-class Observer {
+class EXPORT_API Observer {
 public:
 	virtual void doAction(ActionInfo *info) = 0;
 };
    
-class Notifier {
+class EXPORT_API Notifier {
 private:
    // an array containing all observer classes
    std::vector<Observer*> m_observers;
@@ -100,9 +105,19 @@ public:
    virtual void notifyAll(int evid) {
       for( size_t i=0; i<getObservers().size(); i++ ){
          Observer *obsvr = getObservers()[i];
-         
+          if (!obsvr) continue;
          // Create an information object and pass it to the callback function
          ActionInfo *ai = new ActionInfo(evid);
+         obsvr->doAction(ai);
+      }
+   }
+
+   virtual void notifyAll(int evid, const void *evdata, int evsize) {
+      for( size_t i=0; i<getObservers().size(); i++ ){
+         Observer *obsvr = getObservers()[i];
+         if (!obsvr) continue;
+         // Create an information object and pass it to the callback function
+         ActionInfo *ai = new ActionInfo(evid, evdata, evsize);
          obsvr->doAction(ai);
       }
    }

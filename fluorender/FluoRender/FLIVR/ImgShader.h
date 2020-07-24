@@ -31,6 +31,9 @@
 
 #include <string>
 #include <vector>
+#include "DLLExport.h"
+
+#include "VulkanDevice.hpp"
 
 namespace FLIVR
 {
@@ -53,23 +56,30 @@ namespace FLIVR
 #define	IMG_SHDR_DRAW_GEOMETRY_COLOR4		16
 #define IMG_SHDR_BLEND_FOR_DEPTH_MODE			17
 #define IMG_SHDR_BLEND_ID_COLOR_FOR_DEPTH_MODE	18
+#define IMG_SHADER_TEXTURE_LOOKUP_BLEND			19
+#define IMG_SHDR_BRIGHTNESS_CONTRAST_HDR_BLEND	20
+#define IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR_PREMULTI	21
+#define IMG_SHDR_TEXT						22
+
+#define IMG_SHDR_SAMPLER_NUM	3
 
 	class ShaderProgram;
 
-	class ImgShader
+	class EXPORT_API ImgShader
 	{
 	public:
-		ImgShader(int type, int colormap);
+		ImgShader(VkDevice device, int type, int colormap);
 		~ImgShader();
 
 		bool create();
 
+		inline VkDevice device() { return device_; }
 		inline int type() {return type_;}
 		inline int colormap() {return colormap_;}
 
-		inline bool match(int type, int colormap)
+		inline bool match(VkDevice device, int type, int colormap)
 		{
-			if (type_ == type)
+			if (device_ == device && type_ == type)
 			{
 				if (type_ == IMG_SHDR_GRADIENT_MAP)
 					return (colormap_==colormap);
@@ -87,19 +97,35 @@ namespace FLIVR
 		bool emit_f(std::string& s);
 		std::string get_colormap_code();
 
+		VkDevice device_;
 		int type_;
 		int colormap_;
 
 		ShaderProgram* program_;
 	};
 
-	class ImgShaderFactory
+	class EXPORT_API ImgShaderFactory
 	{
 	public:
 		ImgShaderFactory();
+		ImgShaderFactory(std::vector<vks::VulkanDevice*> &devices);
 		~ImgShaderFactory();
 
-		ShaderProgram* shader(int type, int colormap_=0);
+		void init(std::vector<vks::VulkanDevice*> &devices);
+
+		ShaderProgram* shader(VkDevice device, int type, int colormap_=0);
+
+		struct ImgPipelineSettings {
+			VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
+			VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+			VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+		};
+		
+		void setupDescriptorSetLayout();
+		
+		std::map<vks::VulkanDevice*, ImgPipelineSettings> pipeline_settings_;
+		
+		std::vector<vks::VulkanDevice*> vdevices_;
 
 	protected:
 		std::vector<ImgShader*> shader_;

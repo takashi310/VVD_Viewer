@@ -51,6 +51,11 @@ DEALINGS IN THE SOFTWARE.
 
 #include <assert.h>
 
+#ifdef _WIN32
+#else
+#include <mach/mach.h>
+#include <mach/mach_time.h>
+#endif
 
 //
 // Namespaces
@@ -81,6 +86,10 @@ Timer::Timer(unsigned int nBoxFilterSize) :
   _nStartCount(gcLargeIntZero)
 , _nStopCount(gcLargeIntZero)
 , _nFrequency(gcLargeIntZero) ,
+#elif _DARWIN
+  _nStartCount(0)
+, _nStopCount(0)
+, _nFrequency(0) ,
 #endif
   _nLastPeriod(0.0)
 , _nSum(0.0)
@@ -120,6 +129,8 @@ Timer::start()
 
 #ifdef _WIN32
 	QueryPerformanceCounter(&_nStartCount);
+#elif _DARWIN
+    _nStartCount = monotonicTimeNanos();
 #endif
 	_bClockRuns = true;
 }
@@ -135,6 +146,9 @@ Timer::stop()
 	QueryPerformanceCounter(&_nStopCount);
 	_nLastPeriod = static_cast<double>(_nStopCount.QuadPart - _nStartCount.QuadPart) 
 		/ static_cast<double>(_nFrequency.QuadPart);
+#elif _DARWIN
+    _nStopCount = monotonicTimeNanos();
+    _nLastPeriod = (double)(_nStopCount - _nStartCount) / 1.0e9;
 #endif
 	_nSum -= _aIntervals[_iFilterPosition];
 	_nSum += _nLastPeriod;
@@ -156,6 +170,10 @@ Timer::sample()
 	_nLastPeriod = static_cast<double>(nCurrentCount.QuadPart - _nStartCount.QuadPart) 
 		/ static_cast<double>(_nFrequency.QuadPart);
 	_nStartCount = nCurrentCount;
+#elif _DARWIN
+    uint64_t nCurrentCount = monotonicTimeNanos();
+    _nLastPeriod = (double)(nCurrentCount - _nStartCount) / 1.0e9;
+    _nStartCount = nCurrentCount;
 #endif
 	_nSum -= _aIntervals[_iFilterPosition];
 	_nSum += _nLastPeriod;
@@ -167,7 +185,7 @@ Timer::sample()
 // time
 //
 // Description:
-//      Time interval in ms
+//      Time interval in sec
 //
 double
 Timer::time()
@@ -179,7 +197,7 @@ const
 // average
 //
 // Description:
-//      Average time interval of the last events in ms.
+//      Average time interval of the last events in sec.
 //          Box filter size determines how many events get
 //      tracked. If not at least filter-size events were timed
 //      the result is undetermined.
@@ -192,4 +210,28 @@ const
 }
 
 
-
+#ifdef _DARWIN
+uint64_t Timer::monotonicTimeNanos() {
+    uint64_t now = mach_absolute_time();
+    static struct Data {
+        Data(uint64_t bias_) : bias(bias_) {
+            kern_return_t mtiStatus = mach_timebase_info(&tb);
+            assert(mtiStatus == KERN_SUCCESS);
+        }
+        uint64_t scale(uint64_t i) {
+            return scaleHighPrecision(i - bias, tb.numer, tb.denom);
+        }
+        static uint64_t scaleHighPrecision(uint64_t i, uint32_t numer,
+                                           uint32_t denom) {
+            uint64_t high = (i >> 32) * numer;
+            uint64_t low = (i & 0xffffffffull) * numer / denom;
+            uint64_t highRem = ((high % denom) << 32) / denom;
+            high /= denom;
+            return (high << 32) + highRem + low;
+        }
+        mach_timebase_info_data_t tb;
+        uint64_t bias;
+    } data(now);
+    return data.scale(now);
+}
+#endif

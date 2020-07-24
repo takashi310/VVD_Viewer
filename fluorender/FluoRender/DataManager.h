@@ -25,9 +25,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 */
-#include <GL/glew.h>
+//#include <GL/glew.h>
 #include "compatibility.h"
-#include "bitmap_fonts.h"
 #include <vector>
 #include <unordered_map>
 #include <string.h>
@@ -53,13 +52,17 @@ DEALINGS IN THE SOFTWARE.
 #include "Formats/lbl_reader.h"
 #include "Formats/pvxml_reader.h"
 #include "Formats/brkxml_reader.h"
+#include "Formats/h5j_reader.h"
 #include "Formats/swc_reader.h"
+#include "Formats/v3dpbd_reader.h"
 
 #include "Tracking/TrackMap.h"
 #include "DatabaseDlg.h"
 
 #include <curl/curl.h>
 #include <boost/property_tree/ptree.hpp>
+
+#include "DLLExport.h"
 
 #ifndef _DATAMANAGER_H_
 #define _DATAMANAGER_H_
@@ -78,8 +81,12 @@ using namespace FLIVR;
 #define LOAD_TYPE_LSM		5
 #define LOAD_TYPE_PVXML		6
 #define LOAD_TYPE_BRKXML	7
+#define LOAD_TYPE_H5J		8
+#define LOAD_TYPE_V3DPBD	9
+#define LOAD_TYPE_IDI       10
 
-class TreeLayer
+
+class EXPORT_API TreeLayer
 {
 public:
 	TreeLayer();
@@ -177,8 +184,170 @@ struct VD_Landmark
 };
 
 class DataManager;
+class VolumeLoader;
 
-class VolumeData : public TreeLayer
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#define MESH_COLOR_AMB	1
+#define MESH_COLOR_DIFF	2
+#define MESH_COLOR_SPEC	3
+#define MESH_FLOAT_SHN	4
+#define MESH_FLOAT_ALPHA	5
+
+class EXPORT_API MeshData : public TreeLayer
+{
+public:
+	MeshData();
+	virtual ~MeshData();
+
+	wxString GetPath();
+	BBox GetBounds();
+	void SetBounds(BBox b);
+	GLMmodel* GetMesh();
+	void SetDisp(bool disp);
+	void ToggleDisp();
+	bool GetDisp();
+	void SetDrawBounds(bool draw);
+	void ToggleDrawBounds();
+	bool GetDrawBounds();
+
+	//data management
+	int Load(wxString &filename);
+	int Load(GLMmodel* mesh);
+	void Save(wxString &filename);
+
+	static MeshData* DeepCopy(MeshData &copy, bool use_default_settings=false, DataManager *d_manager=NULL);
+
+	//MR
+	MeshRenderer* GetMR();
+
+	//draw
+	void SetMatrices(glm::mat4 &mv_mat, glm::mat4 &proj_mat);
+	void Draw(const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf, int peel);
+	void DrawBounds(const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf);
+	void DrawInt(unsigned int name, const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf, VkRect2D scissor = {0,0,0,0});
+
+	//lighting
+	void SetLighting(bool bVal);
+	bool GetLighting();
+	void SetFog(bool bVal, double fog_intensity, double fog_start, double fog_end);
+	bool GetFog();
+	void SetMaterial(Color& amb, Color& diff, Color& spec, 
+		double shine = 30.0, double alpha = 1.0);
+	void SetColor(Color &color, int type);
+	void SetFloat(double &value, int type);
+	void GetMaterial(Color& amb, Color& diff, Color& spec,
+		double& shine, double& alpha);
+	bool IsTransp();
+	//shadow
+	void SetShadow(bool bVal);
+	bool GetShadow();
+	void SetShadowParams(double val);
+	void GetShadowParams(double &val);
+
+	void SetTranslation(double x, double y, double z);
+	void GetTranslation(double &x, double &y, double &z);
+	void SetRotation(double x, double y, double z);
+	void GetRotation(double &x, double &y, double &z);
+	void SetScaling(double x, double y, double z);
+	void GetScaling(double &x, double &y, double &z);
+
+	//randomize color
+	void RandomizeColor();
+
+	//shown in legend
+	void SetLegend(bool val);
+	bool GetLegend();
+
+	//size limiter
+	void SetLimit(bool bVal);
+	bool GetLimit();
+	void SetLimitNumer(int val);
+	int GetLimitNumber();
+
+	wstring GetInfo(){ return m_info; };
+
+	bool isSWC(){ return m_swc; }
+	void SetRadScale(double rs)
+	{
+		if (m_r_scale != rs)
+		{
+			m_r_scale = rs;
+			UpdateModelSWC();
+		}
+	}
+	bool UpdateModelSWC();
+	double GetRadScale(){ return m_r_scale; }
+
+	void SetClipDistance(int distx, int disty, int distz);
+	void GetClipDistance(int &distx, int &disty, int &distz);
+
+	void SetDepthTex(const std::shared_ptr<vks::VTexture>& depth_tex)
+	{
+		if (m_mr) m_mr->set_depth_tex(depth_tex);
+	}
+	std::shared_ptr<vks::VTexture> GetDepthTex()
+	{
+		return m_mr ? m_mr->m_depth_tex : std::shared_ptr<vks::VTexture>();
+	}
+	void SetDevice(vks::VulkanDevice* device)
+	{
+		if (m_mr) m_mr->set_device(device);
+	}
+	vks::VulkanDevice* GetDevice()
+	{
+		return m_mr ? m_mr->get_device() : nullptr;
+	}
+
+	void RecalcBounds();
+
+private:
+	//wxString m_name;
+	wxString m_data_path;
+	GLMmodel* m_data;
+	MeshRenderer *m_mr;
+	BBox m_bounds;
+	Point m_center;
+
+	bool m_disp;
+	bool m_draw_bounds;
+
+	//lighting
+	bool m_light;
+	bool m_fog;
+	Color m_mat_amb;
+	Color m_mat_diff;
+	Color m_mat_spec;
+	double m_mat_shine;
+	double m_mat_alpha;
+	//shadow
+	bool m_shadow;
+	double m_shadow_darkness;
+	//size limiter
+	bool m_enable_limit;
+	int m_limit;
+
+	double m_trans[3];
+	double m_rot[3];
+	double m_scale[3];
+
+	//legend
+	bool m_legend;
+
+	bool m_swc;
+	double m_r_scale;
+	double m_def_r;
+	int m_subdiv;
+	SWCReader *m_swc_reader;
+
+	wstring m_info;
+
+	int m_clip_dist_x;
+	int m_clip_dist_y;
+	int m_clip_dist_z;
+};
+
+/////////////////////////////////////////////////////////////////////
+class EXPORT_API VolumeData : public TreeLayer
 {
 public:
 	VolumeData();
@@ -212,7 +381,7 @@ public:
 		int nx, int ny, int nz,
 		double spcx, double spcy, double spcz);
 	//load mask
-	void LoadMask(Nrrd* mask);
+	bool LoadMask(Nrrd* mask);
 	void DeleteMask();
 	Nrrd* GetMask(bool ret);
 	//empty mask
@@ -222,6 +391,11 @@ public:
 	void DeleteLabel();
 	Nrrd* GetLabel(bool ret);
 	//empty label
+	//load stroke
+	void LoadStroke(Nrrd* stroke);
+	void DeleteStroke();
+	Nrrd* GetStroke(bool ret);
+	void AddEmptyStroke();
 	//mode: 0-zeros;1-ordered; 2-shuffled
 	void AddEmptyLabel(int mode=0);
 	bool SearchLabel(unsigned int label);
@@ -229,7 +403,11 @@ public:
 	//save
 	double GetOriginalValue(int i, int j, int k, bool normalize=true);
 	double GetTransferedValue(int i, int j, int k);
-	void Save(wxString &filename, int mode=0, bool bake=false, bool compress=false, bool save_msk=true, bool save_label=true);
+	int GetLabellValue(int i, int j, int k);
+	void Save(wxString &filename, int mode=0, bool bake=false, bool compress=false, bool save_msk=true, bool save_label=true, VolumeLoader *vl=NULL);
+	void ExportMask(wxString &filename);
+	void ImportMask(wxString &filename);
+	void ExportEachSegment(wxString dir, Nrrd* label_nrrd=NULL, int mode=2, bool compress=true);
 
 	//volumerenderer
 	VolumeRenderer *GetVR();
@@ -251,7 +429,17 @@ public:
 
 	//draw volume
 	void SetMatrices(glm::mat4 &mv_mat, glm::mat4 &proj_mat, glm::mat4 &tex_mat);
-	void Draw(bool otho = false, bool intactive = false, double zoom = 1.0, double sampling_frq_fac = -1.0);
+	void Draw(
+		std::unique_ptr<vks::VFrameBuffer> &framebuf,
+		bool clear_framebuf,
+		bool otho = false,
+		bool intactive = false,
+		double zoom = 1.0,
+		double sampling_frq_fac = -1.0,
+		VkClearColorValue clearColor = {0.0f, 0.0f, 0.0f, 0.0f},
+		Texture* ext_msk = NULL,
+		Texture* ext_lbl = NULL
+	);
 	void DrawBounds();
 	//draw mask (create the mask)
 	//type: 0-initial; 1-diffusion-based growing
@@ -259,7 +447,8 @@ public:
 	//hr_mode (hidden removal): 0-none; 1-ortho; 2-persp
 	void DrawMask(int type, int paint_mode, int hr_mode,
 		double ini_thresh, double gm_falloff, double scl_falloff, double scl_translate,
-		double w2d, double bins, bool ortho = false);
+		double w2d, double bins, bool ortho = false, Texture* ext_msk = NULL);
+	void DrawMaskThreshold(float th, bool ortho = false);
 	void DrawMaskDSLT(int type, int paint_mode, int hr_mode,
 		double ini_thresh, double gm_falloff, double scl_falloff, double scl_translate,
 		double w2d, double bins, int dslt_r, int dslt_q, double dslt_c, bool ortho = false);
@@ -272,11 +461,11 @@ public:
 	void Calculate(int type, VolumeData* vd_a, VolumeData* vd_b);
 
 	//set 2d mask for segmentation
-	void Set2dMask(GLuint mask);
+	void Set2dMask(std::shared_ptr<vks::VTexture>& mask);
 	//set 2d weight map for segmentation
-	void Set2DWeight(GLuint weight1, GLuint weight2);
+	void Set2DWeight(std::shared_ptr<vks::VTexture>& weight1, std::shared_ptr<vks::VTexture>& weight2);
 	//set 2d depth map for rendering shadows
-	void Set2dDmap(GLuint dmap);
+	void Set2dDmap(std::shared_ptr<vks::VTexture>& dmap);
 
 	//properties
 	//transfer function
@@ -472,6 +661,48 @@ public:
 	void ImportROITreeXML(const wstring &filepath){ if (m_vr) m_vr->import_roi_tree_xml(filepath); }
 	void ImportSelIDs(const string &sel_ids_str){ if (m_vr) m_vr->import_selected_ids(sel_ids_str); }
 
+	void FlipHorizontally();
+	void FlipVertically();
+
+	VolumeData *GetBrkxmlMask() { return m_brkxml_mask; }
+	void SetBrkxmlMask(VolumeData *vd)
+	{
+		if (m_brkxml_mask) delete m_brkxml_mask;
+		m_brkxml_mask = vd;
+	}
+	int GetLevelBySize(size_t size);
+
+	MeshData *ExportMeshMask();
+
+	int GetMaskLv()
+	{
+		if (!m_tex) return -1;
+		return m_tex->GetMaskLv();
+	}
+	void SetMaskLv(int lv)
+	{
+		if (!m_tex) return;
+		m_tex->SetMaskLv(lv);
+	}
+
+	void SetMaskHideMode(int mode) { if (m_vr) m_vr->set_mask_hide_mode(mode); }
+	int GetMaskHideMode() { return m_vr ? m_vr->get_mask_hide_mode() : VOL_MASK_HIDE_NONE; }
+    
+    void SetSegmentMask(int id, int val) { if (m_vr) m_vr->set_seg_mask(id, val); }
+	int GetSegmentMask(int id) { return m_vr ? m_vr->get_seg_mask(id) : false; }
+	std::set<int>* GetActiveSegIDs() { return m_vr ? m_vr->get_active_seg_ids() : nullptr; }
+    void SetNAMode(bool val) { if (m_vr) m_vr->set_na_mode(val); }
+    bool GetNAMode() { return m_vr ? m_vr->get_na_mode() : false; }
+
+	wxString GetSharedLabelName() { return m_shared_lbl_name; }
+	void SetSharedLabelName(wxString name) { m_shared_lbl_name = name; }
+    
+    wxString GetSharedMaskName() { return m_shared_msk_name; }
+    void SetSharedMaskName(wxString name) { m_shared_msk_name = name; }
+
+	static Nrrd* NrrdScale(Nrrd* src, size_t dst_datasize, bool interpolation = true);
+	static Nrrd* NrrdScale(Nrrd* src, size_t nx, size_t ny, size_t nz, bool interpolation = true);
+
 private:
 	//duplication indicator and counter
 	bool m_dup;
@@ -548,13 +779,13 @@ private:
 	int m_blend_mode;	//0: ignore; 1: layered; 2: depth; 3: composite
 
 	//2d mask texture for segmentation
-	GLuint m_2d_mask;
+	std::shared_ptr<vks::VTexture> m_2d_mask;
 	//2d weight map for segmentation
-	GLuint m_2d_weight1;	//after tone mapping
-	GLuint m_2d_weight2;	//before tone mapping
+	std::shared_ptr<vks::VTexture> m_2d_weight1;	//after tone mapping
+	std::shared_ptr<vks::VTexture> m_2d_weight2;	//before tone mapping
 
 	//2d depth map texture for rendering shadows
-	GLuint m_2d_dmap;
+	std::shared_ptr<vks::VTexture> m_2d_dmap;
 
 	//reader
 	BaseReader *m_reader;
@@ -584,6 +815,12 @@ private:
 	vector<VD_Landmark> m_landmarks;
 	wstring m_metadata_id;
 
+	VolumeData *m_brkxml_mask;
+	int m_mask_lv;
+
+	wxString m_shared_lbl_name;
+    wxString m_shared_msk_name;
+
 private:
 	//label functions
 	void SetOrderedID(unsigned int* val);
@@ -592,140 +829,7 @@ private:
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#define MESH_COLOR_AMB	1
-#define MESH_COLOR_DIFF	2
-#define MESH_COLOR_SPEC	3
-#define MESH_FLOAT_SHN	4
-#define MESH_FLOAT_ALPHA	5
-
-class MeshData : public TreeLayer
-{
-public:
-	MeshData();
-	virtual ~MeshData();
-
-	wxString GetPath();
-	BBox GetBounds();
-	GLMmodel* GetMesh();
-	void SetDisp(bool disp);
-	void ToggleDisp();
-	bool GetDisp();
-	void SetDrawBounds(bool draw);
-	void ToggleDrawBounds();
-	bool GetDrawBounds();
-
-	//data management
-	int Load(wxString &filename);
-	int Load(GLMmodel* mesh);
-	void Save(wxString &filename);
-
-	static MeshData* DeepCopy(MeshData &copy, bool use_default_settings=false, DataManager *d_manager=NULL);
-
-	//MR
-	MeshRenderer* GetMR();
-
-	//draw
-	void SetMatrices(glm::mat4 &mv_mat, glm::mat4 &proj_mat);
-	void Draw(int peel);
-	void DrawBounds();
-	void DrawInt(unsigned int name);
-
-	//lighting
-	void SetLighting(bool bVal);
-	bool GetLighting();
-	void SetFog(bool bVal, double fog_intensity, double fog_start, double fog_end);
-	bool GetFog();
-	void SetMaterial(Color& amb, Color& diff, Color& spec, 
-		double shine = 30.0, double alpha = 1.0);
-	void SetColor(Color &color, int type);
-	void SetFloat(double &value, int type);
-	void GetMaterial(Color& amb, Color& diff, Color& spec,
-		double& shine, double& alpha);
-	bool IsTransp();
-	//shadow
-	void SetShadow(bool bVal);
-	bool GetShadow();
-	void SetShadowParams(double val);
-	void GetShadowParams(double &val);
-
-	void SetTranslation(double x, double y, double z);
-	void GetTranslation(double &x, double &y, double &z);
-	void SetRotation(double x, double y, double z);
-	void GetRotation(double &x, double &y, double &z);
-	void SetScaling(double x, double y, double z);
-	void GetScaling(double &x, double &y, double &z);
-
-	//randomize color
-	void RandomizeColor();
-
-	//shown in legend
-	void SetLegend(bool val);
-	bool GetLegend();
-
-	//size limiter
-	void SetLimit(bool bVal);
-	bool GetLimit();
-	void SetLimitNumer(int val);
-	int GetLimitNumber();
-
-	wstring GetInfo(){ return m_info; };
-
-	bool isSWC(){ return m_swc; }
-	void SetRadScale(double rs)
-	{
-		if (m_r_scale != rs)
-		{
-			m_r_scale = rs;
-			UpdateModelSWC();
-		}
-	}
-	bool UpdateModelSWC();
-	double GetRadScale(){ return m_r_scale; }
-
-private:
-	//wxString m_name;
-	wxString m_data_path;
-	GLMmodel* m_data;
-	MeshRenderer *m_mr;
-	BBox m_bounds;
-	Point m_center;
-
-	bool m_disp;
-	bool m_draw_bounds;
-
-	//lighting
-	bool m_light;
-	bool m_fog;
-	Color m_mat_amb;
-	Color m_mat_diff;
-	Color m_mat_spec;
-	double m_mat_shine;
-	double m_mat_alpha;
-	//shadow
-	bool m_shadow;
-	double m_shadow_darkness;
-	//size limiter
-	bool m_enable_limit;
-	int m_limit;
-
-	double m_trans[3];
-	double m_rot[3];
-	double m_scale[3];
-
-	//legend
-	bool m_legend;
-
-	bool m_swc;
-	double m_r_scale;
-	double m_def_r;
-	int m_subdiv;
-	SWCReader *m_swc_reader;
-
-	wstring m_info;
-};
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class AText
+class EXPORT_API AText
 {
 public:
 	AText();
@@ -746,8 +850,41 @@ private:
 	string m_info;
 };
 
+class NrrdScaler
+{
+public:
+	NrrdScaler(Nrrd* src, Nrrd* dst, bool interpolation);
+	~NrrdScaler();
+
+	void Run();
+
+	wxCriticalSection m_pThreadCS;
+	int m_running_nrrd_scale_th;
+
+private:
+	Nrrd* m_src;
+	Nrrd* m_dst;
+	bool m_interpolation;
+};
+
+class NrrdScaleThread : public wxThread
+{
+public:
+	NrrdScaleThread(NrrdScaler* scaler, Nrrd* src, Nrrd* dst, int zst, int zend, bool interpolation);
+	~NrrdScaleThread();
+protected:
+	virtual ExitCode Entry();
+	Nrrd* m_src;
+	Nrrd* m_dst;
+	int m_zst;
+	int m_zed;
+	bool m_interpolation;
+	NrrdScaler* m_scaler;
+};
+
+
 class DataManager;
-class Annotations : public TreeLayer
+class EXPORT_API Annotations : public TreeLayer
 {
 public:
 	Annotations();
@@ -810,11 +947,15 @@ public:
 
 	bool InsideClippingPlanes(Point &pos);
 
+	void SetLabel(Nrrd *label) {m_label = label;}
+	Nrrd *GetLabel() {return m_label;}
+
 private:
 	static int m_num;
 	vector<AText*> m_alist;
 	Transform *m_tform;
 	VolumeData* m_vd;
+	Nrrd* m_label;
 
 	bool m_disp;
 
@@ -833,7 +974,7 @@ private:
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class RulerBalloon
+class EXPORT_API RulerBalloon
 {
 public:
 	
@@ -860,7 +1001,6 @@ public:
 	vector<AnnotationDB> GetAnnotationDB(){return m_annotationdb;}
 
 	void SetAnnotationsFromDatabase(vector<AnnotationDB> ann, Point new_p, double spcx = 1.0, double spcy = 1.0, double spcz = 1.0);
-	void DrawBalloon(int nx, int ny, Point orig);
 
 private:
 
@@ -872,7 +1012,7 @@ private:
 	vector<string> m_bufs;
 };
 
-class ProfileBin
+class EXPORT_API ProfileBin
 {
 public:
 	ProfileBin():
@@ -882,7 +1022,7 @@ public:
 	double m_accum;
 };
 
-class Ruler : public TreeLayer
+class EXPORT_API Ruler : public TreeLayer
 {
 public:
 	Ruler();
@@ -920,8 +1060,7 @@ public:
 	void SetTransform(Transform *tform);
 
 	void Clear();
-	void Draw(bool persp, int nx, int ny, glm::mat4 mv_mat, glm::mat4 proj_mat, vector<AnnotationDB> annotationdb = vector<AnnotationDB>(), double spcx = 1.0, double spcy = 1.0, double spcz = 1.0);
-
+	
 	//display functions
 	void SetDisp(bool disp)
 	{
@@ -1063,7 +1202,7 @@ private:
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TraceGroup : public TreeLayer
+class EXPORT_API TraceGroup : public TreeLayer
 {
 public:
 	TraceGroup();
@@ -1164,7 +1303,7 @@ private:
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class DataGroup : public TreeLayer
+class EXPORT_API DataGroup : public TreeLayer
 {
 public:
 	DataGroup();
@@ -1202,6 +1341,8 @@ public:
 				m_vd_list.insert(m_vd_list.begin()+(index+1), vd);
 			else if (index == -1)
 				m_vd_list.insert(m_vd_list.begin()+0, vd);
+			else
+				m_vd_list.push_back(vd);
 		}
 		else
 		{
@@ -1277,6 +1418,7 @@ public:
 	void SetNR(bool val);
     void SetInterpolate(bool mode);
 	void SetInvert(bool mode);
+    void SetMaskHideMode(int mode);
 
 	//blend mode
 	void SetBlendMode(int mode);
@@ -1315,7 +1457,7 @@ private:
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class MeshGroup : public TreeLayer
+class EXPORT_API MeshGroup : public TreeLayer
 {
 public:
 	MeshGroup();
@@ -1401,7 +1543,7 @@ private:
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class DataManager
+class EXPORT_API DataManager
 {
 public:
 	DataManager();
@@ -1417,7 +1559,7 @@ public:
 
 	bool DownloadToCurrentDir(wxString &filename);
 	//load volume
-	int LoadVolumeData(wxString &filename, int type, int ch_num=-1, int t_num=-1);
+	int LoadVolumeData(wxString &filename, int type, int ch_num=-1, int t_num=-1, size_t datasize = 0);
 	//set default
 	void SetVolumeDefault(VolumeData* vd);
 	//load volume options
@@ -1429,6 +1571,7 @@ public:
 	void SetTimeId(wxString str) {m_timeId = str;}
 	void SetLoadMask(bool load_mask) {m_load_mask = load_mask;}
 	void AddVolumeData(VolumeData* vd);
+	void AddEmptyVolumeData(wxString name, int bits, int nx, int ny, int nz, double spcx, double spcy, double spcz);
 	void AddMeshData(MeshData* md);
 	VolumeData* DuplicateVolumeData(VolumeData* vd, bool use_default_settings=false);
 	MeshData* DuplicateMeshData(MeshData* vd, bool use_default_settings=false);
@@ -1448,6 +1591,17 @@ public:
 		else
 			return 0;
 	};
+	int GetLatestVolumeChannelNum() { return m_latest_vols.size(); }
+	VolumeData* GetLatestVolumeDataset(int ch)
+	{
+		for (int i = 0; i < m_latest_vols.size(); i++)
+		{
+			if (m_latest_vols[i]->GetCurChannel() == ch)
+				return m_latest_vols[i];
+		}
+
+		return NULL;
+	}
 
 	//load mesh
 	int LoadMeshData(wxString &filename);
@@ -1504,6 +1658,7 @@ public:
 	bool GetPvxmlFlipX() {return m_pvxml_flip_x;}
 	void SetPvxmlFlipY(bool flip) {m_pvxml_flip_y = flip;}
 	bool GetPvxmlFlipY() {return m_pvxml_flip_y;}
+
 public:
 	//default values
 	//volume
@@ -1538,6 +1693,8 @@ public:
 	//wavelength to color table
 	Color m_vol_wav[4];
 
+	vector<VolumeData*> m_latest_vols;
+
 private:
 	vector <VolumeData*> m_vd_list;
 	vector <MeshData*> m_md_list;
@@ -1565,5 +1722,108 @@ private:
 	bool m_pvxml_flip_x;
 	bool m_pvxml_flip_y;
 };
+
+
+
+struct VolumeLoaderData
+{
+	FileLocInfo *finfo;
+	TextureBrick *brick;
+	VolumeData *vd;
+	unsigned long long datasize;
+	int mode;
+};
+
+struct VolumeDecompressorData
+{
+	char *in_data;
+	size_t in_size;
+	TextureBrick *b;
+	FileLocInfo *finfo;
+	VolumeData *vd;
+	unsigned long long datasize;
+	int mode;
+};
+
+class VolumeLoader;
+
+class EXPORT_API VolumeDecompressorThread : public wxThread
+{
+    public:
+		VolumeDecompressorThread(VolumeLoader *vl);
+		~VolumeDecompressorThread();
+    protected:
+		virtual ExitCode Entry();
+        VolumeLoader* m_vl;
+};
+
+class EXPORT_API VolumeLoaderThread : public wxThread
+{
+    public:
+		VolumeLoaderThread(VolumeLoader *vl);
+		~VolumeLoaderThread();
+    protected:
+		virtual ExitCode Entry();
+        VolumeLoader* m_vl;
+};
+
+class EXPORT_API VolumeLoader
+{
+	public:
+		VolumeLoader();
+		~VolumeLoader();
+		void Queue(VolumeLoaderData brick);
+		void ClearQueues();
+		void Set(vector<VolumeLoaderData> vld);
+		void Abort();
+		void StopAll();
+		void Join();
+		bool Run();
+		void SetMaxThreadNum(int num) {m_max_decomp_th = num;}
+		void SetMemoryLimitByte(long long limit) {m_memory_limit = limit;}
+		void CleanupLoadedBrick();
+		void TryToFreeMemory(long long req=-1);
+		void CheckMemoryCache();
+		void RemoveAllLoadedBrick();
+		void RemoveBrickVD(VolumeData *vd);
+		void GetPalams(long long &used_mem, int &running_decomp_th, int &queue_num, int &decomp_queue_num);
+		void PreloadLevel(VolumeData *vd, int lv, bool lock=false);
+
+		long long GetAvailableMemory() { return m_memory_limit - m_used_memory; }
+		long long GetMemoryLimitByte() { return m_memory_limit; }
+		long long GetUsedMemory() { return m_used_memory; }
+
+		static bool sort_data_dsc(const VolumeLoaderData b1, const VolumeLoaderData b2)
+		{ return b2.brick->get_d() > b1.brick->get_d(); }
+		static bool sort_data_asc(const VolumeLoaderData b1, const VolumeLoaderData b2)
+		{ return b2.brick->get_d() < b1.brick->get_d(); }
+
+	protected:
+		VolumeLoaderThread *m_thread;
+		wxCriticalSection m_pThreadCS;
+		vector<VolumeLoaderData> m_queues;
+		vector<VolumeLoaderData> m_queued;
+		vector<VolumeDecompressorData> m_decomp_queues;
+		vector<VolumeDecompressorThread *> m_decomp_threads;
+		unordered_map<TextureBrick*, VolumeLoaderData> m_loaded;
+		unordered_map<wstring, std::shared_ptr<VL_Array>> m_memcached_data;
+		int m_running_decomp_th;
+		int m_max_decomp_th;
+		bool m_valid;
+
+		long long m_memory_limit;
+		long long m_used_memory;
+
+		inline void AddLoadedBrick(const VolumeLoaderData &lbd)
+		{
+			m_loaded[lbd.brick] = lbd;
+			m_memcached_data[lbd.finfo->id_string] = lbd.brick->getBrickDataSP();
+			m_used_memory += lbd.datasize;
+		}
+
+		friend class VolumeLoaderThread;
+		friend class VolumeDecompressorThread;
+};
+
 
 #endif//_DATAMANAGER_H_

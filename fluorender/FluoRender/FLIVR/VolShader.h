@@ -32,26 +32,31 @@
 #ifndef VolShader_h
 #define VolShader_h
 
+#include "VulkanDevice.hpp"
+#include <glm/glm.hpp>
 #include <string>
 #include <vector>
+#include <memory>
+#include "DLLExport.h"
 
 namespace FLIVR
 {
 	class ShaderProgram;
 
-	class VolShader
+	class EXPORT_API VolShader
 	{
 	public:
-		VolShader(bool poly, int channels,
+		VolShader(VkDevice device, bool poly, int channels,
 				bool shading, bool fog,
 				int peel, bool clip,
 				bool hiqual, int mask,
 				int color_mode, int colormap, int colormap_proj,
-				bool solid, int vertex_shader);
+				bool solid, int vertex_shader, int mask_hide_mode);
 		~VolShader();
 
 		bool create();
 
+		inline VkDevice device() { return device_; }
 		inline bool poly() {return poly_; }
 		inline int channels() { return channels_; }
 		inline bool shading() { return shading_; }
@@ -64,15 +69,17 @@ namespace FLIVR
 		inline int colormap() {return colormap_;}
 		inline int colormap_proj() {return colormap_proj_;}
 		inline bool solid() {return solid_;}
+		inline bool mask_hide_mode() {return mask_hide_mode_;}
 
-		inline bool match(bool poly, int channels,
+		inline bool match(VkDevice device, bool poly, int channels,
 						bool shading, bool fog,
 						int peel, bool clip,
 						bool hiqual, int mask,
 						int color_mode, int colormap, int colormap_proj,
-						bool solid, int vertex_shader)
+						bool solid, int vertex_shader, int mask_hide_mode)
 		{ 
-			return (poly_ == poly &&
+			return (device_ == device &&
+				poly_ == poly &&
 				channels_ == channels &&
 				shading_ == shading && 
 				fog_ == fog && 
@@ -84,7 +91,8 @@ namespace FLIVR
 				colormap_ == colormap &&
 				colormap_proj_ == colormap_proj &&
 				solid_ == solid &&
-				vertex_type_ == vertex_shader); 
+				vertex_type_ == vertex_shader &&
+				mask_hide_mode_ == mask_hide_mode); 
 		}
 
 		inline ShaderProgram* program() { return program_; }
@@ -109,24 +117,99 @@ namespace FLIVR
 		int colormap_proj_;//projection direction
 		bool solid_;//no transparency
 		int vertex_type_;
+		int mask_hide_mode_;
+
+		VkDevice device_;
 
 		ShaderProgram* program_;
 	};
 
-	class VolShaderFactory
+	class EXPORT_API VolShaderFactory
 	{
 	public:
 		VolShaderFactory();
+		VolShaderFactory(std::vector<vks::VulkanDevice*> &devices);
 		~VolShaderFactory();
 
-		ShaderProgram* shader(bool poly, int channels,
+		void init(std::vector<vks::VulkanDevice*> &devices);
+
+		ShaderProgram* shader(VkDevice device, bool poly, int channels,
 								bool shading, bool fog,
 								int peel, bool clip,
 								bool hiqual, int mask,
 								int color_mode, int colormap, int colormap_proj,
-								bool solid, int vertex_type);
+								bool solid, int vertex_type, int mask_hide_mode);
 		//mask: 0-no mask, 1-segmentation mask, 2-labeling mask
 		//color_mode: 0-normal; 1-rainbow; 2-depth; 3-index; 255-index(depth mode)
+
+		struct VolPipelineSettings {
+			VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
+			VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+			VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+		};
+		
+		struct VolVertShaderUBO {
+			glm::mat4 proj_mat;
+			glm::mat4 mv_mat;
+		};
+
+		struct VolFragShaderBaseUBO {
+			glm::vec4 loc0_light_alpha;	//loc0
+			glm::vec4 loc1_material;	//loc1
+			glm::vec4 loc2_scscale_th;	//loc2
+			glm::vec4 loc3_gamma_offset;//loc3
+//			glm::vec4 loc4_dim;			//loc4
+			glm::vec4 loc5_spc_id;		//loc5
+			glm::vec4 loc6_colparam;	//loc6
+			glm::vec4 loc7_view;		//loc7
+			glm::vec4 loc8_fog;			//loc8
+			glm::vec4 plane0;			//loc10
+			glm::vec4 plane1;			//loc11
+			glm::vec4 plane2;			//loc12
+			glm::vec4 plane3;			//loc13
+			glm::vec4 plane4;			//loc14
+			glm::vec4 plane5;			//loc15
+		};
+
+		struct VolFragShaderBrickConst {
+			glm::vec4 loc_dim_inv;	//loc4
+			glm::vec4 b_scale;
+			glm::vec4 b_trans;
+			glm::vec4 mask_b_scale;
+			glm::vec4 mask_b_trans;
+		};
+
+		struct VolUniformBufs {
+			vks::Buffer vert;
+			vks::Buffer frag_base;
+		};
+
+		void setupDescriptorSetLayout();
+		void getDescriptorSetWriteUniforms(vks::VulkanDevice* vdev, VolUniformBufs& uniformBuffers, std::vector<VkWriteDescriptorSet>& writeDescriptorSets);
+		void getDescriptorSetWriteUniforms(vks::VulkanDevice* vdev, vks::Buffer& vert, vks::Buffer& frag, std::vector<VkWriteDescriptorSet>& writeDescriptorSets);
+		void prepareUniformBuffers(std::map<vks::VulkanDevice*, VolUniformBufs> &uniformBuffers);
+		static void updateUniformBuffers(VolUniformBufs& uniformBuffers, VolVertShaderUBO vubo, VolFragShaderBaseUBO fubo);
+
+		
+		static inline VkWriteDescriptorSet writeDescriptorSetTex(
+			VkDescriptorSet dstSet,
+			uint32_t texid,
+			VkDescriptorImageInfo* imageInfo,
+			uint32_t descriptorCount = 1)
+		{
+			VkWriteDescriptorSet writeDescriptorSet{};
+			writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writeDescriptorSet.dstSet = dstSet;
+			writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			writeDescriptorSet.dstBinding = texid+2;
+			writeDescriptorSet.pImageInfo = imageInfo;
+			writeDescriptorSet.descriptorCount = descriptorCount;
+			return writeDescriptorSet;
+		}
+		
+		std::map<vks::VulkanDevice*, VolPipelineSettings> pipeline_;
+
+		std::vector<vks::VulkanDevice*> vdevices_;
 
 	protected:
 		std::vector<VolShader*> shader_;

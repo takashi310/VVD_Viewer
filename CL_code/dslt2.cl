@@ -161,6 +161,29 @@ __kernel void dslt_binarize(__read_only image3d_t in,
 	}
 }
 
+__kernel void threshold_mask(__read_only image3d_t in,
+							 __read_only image3d_t mask,
+							 __write_only image3d_t out,
+							 float th,
+							 int ypitch,
+							 int zpitch)
+{
+    const int x = get_global_id(0);
+    const int y = get_global_id(1);
+    const int z = get_global_id(2);
+	
+	float4 coord = (float4)(x+0.5, y+0.5, z+0.5, 0);
+	int4 coordi = (int4)(x, y, z, 0);
+
+	if (read_imagef(mask, MySampler2, coord).x > 0.0)
+	{
+		const int id = z*zpitch + y*ypitch + x;
+		float4 srcval = read_imagef(in, MySampler, coord);
+		write_imagef(out, coordi, (float4)(srcval.x>=th?1.0:0.0, 0.0, 0.0, 1.0));
+	}
+}
+
+
 __kernel void dslt_elem_min(__global float* in,
 							__global float* out,
 							__read_only image3d_t mask,

@@ -13,8 +13,6 @@ coordinate generation (spheremap and planar projections) + more.
 #if !defined(glm_h)
 #define glm_h
 
-#include "GL/glew.h"
-
 #ifndef M_PI
 #define M_PI 3.14159265f
 #endif
@@ -30,10 +28,10 @@ coordinate generation (spheremap and planar projections) + more.
 //for texturing
 typedef struct												// Create A Structure
 {
-	GLubyte	*imageData;										// Image Data (Up To 32 Bits)
-	GLuint	bpp;											// Image Color Depth In Bits Per Pixel.
-	GLuint	width;											// Image Width
-	GLuint	height;											// Image Height
+	unsigned char	*imageData;										// Image Data (Up To 32 Bits)
+	unsigned int	bpp;											// Image Color Depth In Bits Per Pixel.
+	unsigned int	width;											// Image Width
+	unsigned int	height;											// Image Height
 } TextureImage;												// Structure Name
 
 /* GLMmaterial: Structure that defines a material in a model. 
@@ -41,31 +39,31 @@ typedef struct												// Create A Structure
 typedef struct _GLMmaterial
 {
 	char*   name;                 /* name of material */
-	GLfloat diffuse[4];           /* diffuse component */
-	GLfloat ambient[4];           /* ambient component */
-	GLfloat specular[4];          /* specular component */
-	GLfloat emmissive[4];         /* emmissive component */
-	GLfloat shininess;            /* specular exponent */
-	GLboolean havetexture;		//contains a texture
-	GLuint  textureID;			//the texture id
+	float diffuse[4];           /* diffuse component */
+	float ambient[4];           /* ambient component */
+	float specular[4];          /* specular component */
+	float emmissive[4];         /* emmissive component */
+	float shininess;            /* specular exponent */
+	bool havetexture;		//contains a texture
+	unsigned int  textureID;			//the texture id
 } GLMmaterial;
 
 /* GLMline: Structure that defines a line in a model
 */
 typedef struct _GLMline
 {
-	GLuint numvertices;           /* number of vertices in line */
-	GLuint *vindices;             /* array of line vertex indices */
+	unsigned int numvertices;           /* number of vertices in line */
+	unsigned int *vindices;             /* array of line vertex indices */
 } GLMline;
 
 /* GLMtriangle: Structure that defines a triangle in a model.
 */
 typedef struct _GLMtriangle
 {
-	GLuint vindices[3];           /* array of triangle vertex indices */
-	GLuint nindices[3];           /* array of triangle normal indices */
-	GLuint tindices[3];           /* array of triangle texcoord indices*/
-	GLuint findex;                /* index of triangle facet normal */
+	unsigned int vindices[3];           /* array of triangle vertex indices */
+	unsigned int nindices[3];           /* array of triangle normal indices */
+	unsigned int tindices[3];           /* array of triangle texcoord indices*/
+	unsigned int findex;                /* index of triangle facet normal */
 } GLMtriangle;
 
 /* GLMgroup: Structure that defines a group in a model.
@@ -73,9 +71,9 @@ typedef struct _GLMtriangle
 typedef struct _GLMgroup
 {
 	char*             name;           /* name of this group */
-	GLuint            numtriangles;   /* number of triangles in this group */
-	GLuint*           triangles;      /* array of triangle indices */
-	GLuint            material;       /* index to material for group */
+	unsigned int            numtriangles;   /* number of triangles in this group */
+	unsigned int*           triangles;      /* array of triangle indices */
+	unsigned int            material;       /* index to material for group */
 	struct _GLMgroup* next;           /* pointer to next group in model */
 } GLMgroup;
 
@@ -86,33 +84,33 @@ typedef struct _GLMmodel
 	char*    pathname;            /* path to this model */
 	char*    mtllibname;          /* name of the material library */
 
-	GLuint   numvertices;         /* number of vertices in model */
-	GLfloat* vertices;            /* array of vertices  */
+	unsigned int   numvertices;         /* number of vertices in model */
+	float* vertices;            /* array of vertices  */
 
-	GLuint   numnormals;          /* number of normals in model */
-	GLfloat* normals;             /* array of normals */
+	unsigned int   numnormals;          /* number of normals in model */
+	float* normals;             /* array of normals */
 
-	GLuint   numtexcoords;        /* number of texcoords in model */
-	GLfloat* texcoords;           /* array of texture coordinates */
+	unsigned int   numtexcoords;        /* number of texcoords in model */
+	float* texcoords;           /* array of texture coordinates */
 
-	GLuint   numfacetnorms;       /* number of facetnorms in model */
-	GLfloat* facetnorms;          /* array of facetnorms */
+	unsigned int   numfacetnorms;       /* number of facetnorms in model */
+	float* facetnorms;          /* array of facetnorms */
 
-	GLuint       numtriangles;    /* number of triangles in model */
+	unsigned int       numtriangles;    /* number of triangles in model */
 	GLMtriangle* triangles;       /* array of triangles */
 
-	GLuint       numlines;        /* number of lines in model */
+	unsigned int       numlines;        /* number of lines in model */
 	GLMline*     lines;           /* array of lines */
 
-	GLuint       nummaterials;    /* number of materials in model */
+	unsigned int       nummaterials;    /* number of materials in model */
 	GLMmaterial* materials;       /* array of materials */
 
-	GLuint       numgroups;       /* number of groups in model */
+	unsigned int       numgroups;       /* number of groups in model */
 	GLMgroup*    groups;          /* linked list of groups */
 
-	GLfloat position[3];          /* position of the model */
+	float position[3];          /* position of the model */
 
-	GLboolean hastexture;
+	bool hastexture;
 
 } GLMmodel;
 
@@ -123,7 +121,7 @@ typedef struct _GLMmodel
 *
 * model - properly initialized GLMmodel structure 
 */
-GLfloat glmUnitize(GLMmodel* model);
+float glmUnitize(GLMmodel* model);
 
 /* glmBoundingBox: Calculates the bounding box, which is an array of six
 * floats (minx, maxx, miny, maxy, minz, maxz) of a model.
@@ -131,43 +129,43 @@ GLfloat glmUnitize(GLMmodel* model);
 * glmDimensions function, then re-wrote glmDimensions to use this.
 *
 * model   - initialized GLMmodel structure
-* boundingbox - array of 6 GLfloats (GLfloat boundingbox[6])
+* boundingbox - array of 6 floats (float boundingbox[6])
 */
-GLvoid glmBoundingBox(GLMmodel* model, GLfloat* boundingbox);
+void glmBoundingBox(GLMmodel* model, float* boundingbox);
 
 //get the center
-GLvoid glmCenter(GLMmodel* model, GLfloat* center);
+void glmCenter(GLMmodel* model, float* center);
 
 /* glmDimensions: Calculates the dimensions (width, height, depth) of
 * a model.
 *
 * model      - initialized GLMmodel structure
-* dimensions - array of 3 GLfloats (GLfloat dimensions[3])
+* dimensions - array of 3 floats (float dimensions[3])
 */
-GLvoid glmDimensions(GLMmodel* model, GLfloat* dimensions);
+void glmDimensions(GLMmodel* model, float* dimensions);
 
 /* glmArea: Calculates the sum of face areas of a model
 *
 * model      - initialized GLMmodel structure
-* area       - single GLfloat
+* area       - single float
 */
-GLvoid glmArea(GLMmodel* model, GLfloat* scale, GLfloat* area);
+void glmArea(GLMmodel* model, float* scale, float* area);
 
 /* Scale, translate and rotate the model
 * Similar to OpenGL calls
 */
-GLvoid glmScalef(GLMmodel* model, GLfloat x, GLfloat y, GLfloat z);
+void glmScalef(GLMmodel* model, float x, float y, float z);
 
-GLvoid glmTranslatef(GLMmodel* model, GLfloat x, GLfloat y, GLfloat z);
+void glmTranslatef(GLMmodel* model, float x, float y, float z);
 
-GLvoid glmRotatef(GLMmodel* model, GLfloat angle, GLfloat x, GLfloat y, GLfloat z);
+void glmRotatef(GLMmodel* model, float angle, float x, float y, float z);
 
 /* glmScale: Scales a model by a given amount.
 * 
 * model - properly initialized GLMmodel structure
 * scale - scalefactor (0.5 = half as large, 2.0 = twice as large)
 */
-GLvoid glmScale(GLMmodel* model, GLfloat scale);
+void glmScale(GLMmodel* model, float scale);
 
 /* glmReverseWinding: Reverse the polygon winding for all polygons in
 * this model.  Default winding is counter-clockwise.  Also changes
@@ -175,7 +173,7 @@ GLvoid glmScale(GLMmodel* model, GLfloat scale);
 * 
 * model - properly initialized GLMmodel structure 
 */
-GLvoid glmReverseWinding(GLMmodel* model);
+void glmReverseWinding(GLMmodel* model);
 
 /* glmFacetNormals: Generates facet normals for a model (by taking the
 * cross product of the two vectors derived from the sides of each
@@ -183,7 +181,7 @@ GLvoid glmReverseWinding(GLMmodel* model);
 *
 * model - initialized GLMmodel structure
 */
-GLvoid glmFacetNormals(GLMmodel* model);
+void glmFacetNormals(GLMmodel* model);
 
 /* glmVertexNormals: Generates smooth vertex normals for a model.
 * First builds a list of all the triangles each vertex is in.  Then
@@ -201,7 +199,7 @@ GLvoid glmFacetNormals(GLMmodel* model);
 * model - initialized GLMmodel structure
 * angle - maximum angle (in degrees) to smooth across
 */
-GLvoid glmVertexNormals(GLMmodel* model, GLfloat angle);
+void glmVertexNormals(GLMmodel* model, float angle);
 
 /* glmLinearTexture: Generates texture coordinates according to a
 * linear projection of the texture map.  It generates these by
@@ -209,7 +207,7 @@ GLvoid glmVertexNormals(GLMmodel* model, GLfloat angle);
 *
 * model - pointer to initialized GLMmodel structure
 */
-GLvoid glmLinearTexture(GLMmodel* model);
+void glmLinearTexture(GLMmodel* model);
 
 /* glmSpheremapTexture: Generates texture coordinates according to a
 * spherical projection of the texture map.  Sometimes referred to as
@@ -222,19 +220,19 @@ GLvoid glmLinearTexture(GLMmodel* model);
 *
 * model - pointer to initialized GLMmodel structure
 */
-GLvoid glmSpheremapTexture(GLMmodel* model);
+void glmSpheremapTexture(GLMmodel* model);
 
 /* glmDelete: Deletes a GLMmodel structure.
 *
 * model - initialized GLMmodel structure
 */
-GLvoid glmDelete(GLMmodel* model);
+void glmDelete(GLMmodel* model);
 
 /* glmClear: clear the content of the mode without freeing itself
 *
 * model - initialized GLMmodel structure
 */
-GLvoid glmClear(GLMmodel* model);
+void glmClear(GLMmodel* model);
 
 /* glmReadOBJ: Reads a model description from a Wavefront .OBJ file.
 * Returns a pointer to the created object which should be free'd with
@@ -256,7 +254,7 @@ GLMmodel* glmReadOBJ(const char* filename, bool* no_fail = 0);
 *            GLM_TEXTURE -  write texture coords
 *            GLM_FLAT and GLM_SMOOTH should not both be specified.
 */
-GLvoid glmWriteOBJ(GLMmodel* model, char* filename, GLuint mode);
+void glmWriteOBJ(GLMmodel* model, char* filename, unsigned int mode);
 
 /* glmDraw: Renders the model to the current OpenGL context using the
 * mode specified.
@@ -269,7 +267,7 @@ GLvoid glmWriteOBJ(GLMmodel* model, char* filename, GLuint mode);
 *            GLM_TEXTURE -  render with texture coords
 *            GLM_FLAT and GLM_SMOOTH should not both be specified.
 */
-GLvoid glmDraw(GLMmodel* model, GLuint mode, bool ext_color, int limit);
+void glmDraw(GLMmodel* model, unsigned int mode, bool ext_color, int limit);
 
 /* glmList: Generates and returns a display list for the model using
 * the mode specified.
@@ -282,7 +280,7 @@ GLvoid glmDraw(GLMmodel* model, GLuint mode, bool ext_color, int limit);
 *            GLM_TEXTURE -  render with texture coords
 *            GLM_FLAT and GLM_SMOOTH should not both be specified.  
 */
-GLuint glmList(GLMmodel* model, GLuint mode, int limit);
+unsigned int glmList(GLMmodel* model, unsigned int mode, int limit);
 
 /* glmWeld: eliminate (weld) vectors that are within an epsilon of
 * each other.
@@ -292,7 +290,7 @@ GLuint glmList(GLMmodel* model, GLuint mode, int limit);
 *              ( 0.00001 is a good start for a unitized model)
 *
 */
-GLvoid glmWeld(GLMmodel* model, GLfloat epsilon);
+void glmWeld(GLMmodel* model, float epsilon);
 
 /* glmReadPPM: read a PPM raw (type P6) file.  The PPM file has a header
 * that should look something like:
@@ -322,6 +320,6 @@ GLvoid glmWeld(GLMmodel* model, GLfloat epsilon);
 * height     - will contain the height of the image on return.
 *
 */
-GLubyte* glmReadPPM(char* filename, int* width, int* height);
+unsigned char* glmReadPPM(char* filename, int* width, int* height);
 
 #endif // #ifndef glm_h

@@ -36,7 +36,7 @@ DEALINGS IN THE SOFTWARE.
 
 using namespace std;
 
-class OIBReader : public BaseReader
+class EXPORT_API OIBReader : public BaseReader
 {
    public:
       OIBReader();

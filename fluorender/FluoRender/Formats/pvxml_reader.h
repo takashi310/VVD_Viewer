@@ -35,7 +35,7 @@ using namespace std;
 class wxXmlNode;
 class wxString;
 
-class PVXMLReader : public BaseReader
+class EXPORT_API PVXMLReader : public BaseReader
 {
 public:
 	PVXMLReader();

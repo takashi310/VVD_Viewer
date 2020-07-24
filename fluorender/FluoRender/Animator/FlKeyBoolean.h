@@ -23,8 +23,9 @@ DEALINGS IN THE SOFTWARE.
 #define _FLKEY_BOOLEAN_H_
 
 #include "FlKey.h"
+#include "DLLExport.h"
 
-class FlKeyBoolean : public FlKey
+class EXPORT_API FlKeyBoolean : public FlKey
 {
 public:
 	FlKeyBoolean()

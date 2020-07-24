@@ -338,6 +338,8 @@ void BRKXMLReader::ReadLevel(tinyxml2::XMLElement* lvNode, LevelInfo &lvinfo)
 		strValue = lvNode->Attribute("FileType");
 		if (strValue == "RAW") lvinfo.file_type = BRICK_FILE_TYPE_RAW;
 		else if (strValue == "JPEG") lvinfo.file_type = BRICK_FILE_TYPE_JPEG;
+		else if (strValue == "ZLIB") lvinfo.file_type = BRICK_FILE_TYPE_ZLIB;
+		else if (strValue == "H265") lvinfo.file_type = BRICK_FILE_TYPE_H265;
 	}
 	else lvinfo.file_type = BRICK_FILE_TYPE_NONE;
 
@@ -406,9 +408,9 @@ void BRKXMLReader::ReadBrick(tinyxml2::XMLElement* brickNode, BrickInfo &binfo)
 
 	binfo.z_start = STOI(brickNode->Attribute("st_z"));
 
-	binfo.offset = STOI(brickNode->Attribute("offset"));
+	binfo.offset = STOLL(brickNode->Attribute("offset"));
 
-	binfo.fsize = STOI(brickNode->Attribute("size"));
+	binfo.fsize = STOLL(brickNode->Attribute("size"));
 
 	tinyxml2::XMLElement *child = brickNode->FirstChildElement();
 	while (child)
@@ -512,10 +514,10 @@ void BRKXMLReader::ReadFilenames(tinyxml2::XMLElement* fileRootNode, vector<vect
 
 				filename[frame][channel][id]->offset = 0;
 				if (child->Attribute("offset"))
-					filename[frame][channel][id]->offset = STOI(child->Attribute("offset"));
+					filename[frame][channel][id]->offset = STOLL(child->Attribute("offset"));
 				filename[frame][channel][id]->datasize = 0;
 				if (child->Attribute("datasize"))
-					filename[frame][channel][id]->datasize = STOI(child->Attribute("datasize"));
+					filename[frame][channel][id]->datasize = STOLL(child->Attribute("datasize"));
 				
 				if (child->Attribute("filetype"))
 				{
@@ -523,6 +525,7 @@ void BRKXMLReader::ReadFilenames(tinyxml2::XMLElement* fileRootNode, vector<vect
 					if (str == "RAW") filename[frame][channel][id]->type = BRICK_FILE_TYPE_RAW;
 					else if (str == "JPEG") filename[frame][channel][id]->type = BRICK_FILE_TYPE_JPEG;
 					else if (str == "ZLIB") filename[frame][channel][id]->type = BRICK_FILE_TYPE_ZLIB;
+					else if (str == "H265") filename[frame][channel][id]->type = BRICK_FILE_TYPE_H265;
 				}
 				else
 				{
@@ -537,8 +540,14 @@ void BRKXMLReader::ReadFilenames(tinyxml2::XMLElement* fileRootNode, vector<vect
 							filename[frame][channel][id]->type = BRICK_FILE_TYPE_JPEG;
 						else if (ext == L"zlib")
 							filename[frame][channel][id]->type = BRICK_FILE_TYPE_ZLIB;
+						else if (ext == L"mp4")
+							filename[frame][channel][id]->type = BRICK_FILE_TYPE_H265;
 					}
 				}
+
+				std::wstringstream wss;
+				wss << filename[frame][channel][id]->filename << L" " << filename[frame][channel][id]->offset;
+				filename[frame][channel][id]->id_string = wss.str();
 			}
 		}
 		child = child->NextSiblingElement();
@@ -1040,13 +1049,8 @@ void BRKXMLReader::build_bricks(vector<FLIVR::TextureBrick*> &tbrks, int lv)
 	bsize[2] = m_pyramid[lev].brick_baseD;
 
 	bool force_pow2 = false;
-	if (FLIVR::ShaderProgram::init())
-		force_pow2 = !FLIVR::ShaderProgram::texture_non_power_of_two();
-
-	int max_texture_size = 2048;
-	if (FLIVR::ShaderProgram::init())
-		max_texture_size = FLIVR::ShaderProgram::max_texture_size();
-
+	int max_texture_size = 65535;
+	
 	int numb[1];
 	if (m_pyramid[lev].bit_depth == 8 || m_pyramid[lev].bit_depth == 16 || m_pyramid[lev].bit_depth == 32)
 		numb[0] = m_pyramid[lev].bit_depth / 8;

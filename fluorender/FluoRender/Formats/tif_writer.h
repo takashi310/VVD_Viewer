@@ -39,6 +39,8 @@ public:
 	void SetData(Nrrd* data);
 	void SetSpacings(double spcx, double spcy, double spcz);
 	void SetCompression(bool value);
+	void SetBaseSeqID(int startID);
+	void SetDigitNum(int ndigit);
 	void Save(wstring filename, int mode);	//mode: 0-single file
 											//1-file sequence
 
@@ -47,6 +49,8 @@ private:
 	double m_spcx, m_spcy, m_spcz;
 	bool m_use_spacings;
 	bool m_compression;
+	int m_base_seq_id;
+	int m_ndigit;
 
 private:
 	void SaveSingleFile(wstring filename);

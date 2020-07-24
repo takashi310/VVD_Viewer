@@ -26,6 +26,7 @@ EVT_TOOL(ID_HelpBtn, BrushToolDlg::OnHelpBtn)
 //translate
 EVT_COMMAND_SCROLL(ID_BrushSclTranslateSldr, BrushToolDlg::OnBrushSclTranslateChange)
 EVT_TEXT(ID_BrushSclTranslateText, BrushToolDlg::OnBrushSclTranslateText)
+EVT_TEXT_ENTER(ID_BrushSclTranslateText, BrushToolDlg::OnBrushSclTranslateTextEnter)
 //2d influence
 EVT_COMMAND_SCROLL(ID_Brush2dinflSldr, BrushToolDlg::OnBrush2dinflChange)
 EVT_TEXT(ID_Brush2dinflText, BrushToolDlg::OnBrush2dinflText)
@@ -99,6 +100,7 @@ wxWindow* BrushToolDlg::CreateBrushPage(wxWindow *parent)
 	//toolbar
 	m_toolbar = new wxToolBar(page, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTB_FLAT|wxTB_TOP|wxTB_NODIVIDER|wxTB_TEXT);
+    m_toolbar->SetToolBitmapSize(wxSize(20,20));
 	m_toolbar->AddTool(ID_BrushUndo, "Undo",
 		wxGetBitmapFromMemory(undo),
 		"Rollback previous brush operation");
@@ -128,7 +130,9 @@ wxWindow* BrushToolDlg::CreateBrushPage(wxWindow *parent)
 	m_toolbar->AddTool(ID_BrushCreate, "Extract",
 		wxGetBitmapFromMemory(listicon_brushcreate),
 		"Extract highlighted structures out and create a new volume");
-	m_toolbar->SetBackgroundColour(m_notebook->GetThemeBackgroundColour());
+    wxColour col =  m_notebook->GetThemeBackgroundColour();
+    if (col.Ok())
+        m_toolbar->SetBackgroundColour(col);
 	m_toolbar->Realize();
 
 	//Selection adjustment
@@ -155,7 +159,7 @@ wxWindow* BrushToolDlg::CreateBrushPage(wxWindow *parent)
 	m_brush_scl_translate_sldr = new wxSlider(page, ID_BrushSclTranslateSldr, 0, 0, 2550,
 		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
 	m_brush_scl_translate_text = new wxTextCtrl(page, ID_BrushSclTranslateText, "0.0",
-		wxDefaultPosition, wxSize(50, 20), 0, vald_fp1);
+		wxDefaultPosition, wxSize(50, 20), wxTE_PROCESS_ENTER, vald_fp1);
 	sizer1_2->Add(5, 5);
 	sizer1_2->Add(st, 0, wxALIGN_CENTER);
 	sizer1_2->Add(m_brush_scl_translate_sldr, 1, wxEXPAND);
@@ -247,9 +251,9 @@ wxWindow* BrushToolDlg::CreateBrushPage(wxWindow *parent)
 	m_brush_iters_rb->SetValue(true);
 	m_brush_iterss_rb->SetValue(false);
 
-	m_brush_iterw_rb->Hide();
-	m_brush_iters_rb->Hide();
-	m_brush_iterss_rb->Hide();
+	//m_brush_iterw_rb->Hide();
+	//m_brush_iters_rb->Hide();
+	//m_brush_iterss_rb->Hide();
 
 	sizer2_4->Add(5, 5);
 	sizer2_4->Add(st, 0, wxALIGN_CENTER);
@@ -590,6 +594,7 @@ BrushToolDlg::BrushToolDlg(wxWindow *frame, wxWindow *parent)
 
 	Thaw();
 	SetEvtHandlerEnabled(true);
+	//m_watch.Start();
 }
 
 BrushToolDlg::~BrushToolDlg()
@@ -830,7 +835,7 @@ void BrushToolDlg::OnBrushUndo(wxCommandEvent &event)
 	if (sel_vol && sel_vol->GetTexture())
 	{
 		sel_vol->GetTexture()->mask_undos_backward();
-		sel_vol->GetVR()->clear_tex_pool();
+		sel_vol->GetVR()->clear_tex_current_mask();
 	}
 	vr_frame->RefreshVRenderViews();
 	UpdateUndoRedo();
@@ -845,10 +850,51 @@ void BrushToolDlg::OnBrushRedo(wxCommandEvent &event)
 	if (sel_vol && sel_vol->GetTexture())
 	{
 		sel_vol->GetTexture()->mask_undos_forward();
-		sel_vol->GetVR()->clear_tex_pool();
+		sel_vol->GetVR()->clear_tex_current_mask();
 	}
 	vr_frame->RefreshVRenderViews();
 	UpdateUndoRedo();
+}
+
+void BrushToolDlg::DrawBrush(double val)
+{
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	VolumeData* sel_vol = 0;
+	if (m_cur_view)
+		sel_vol = m_cur_view->GetCurrentVolume();
+	if (vr_frame && sel_vol)
+	{
+		if (!m_select_group_chk->GetValue())
+		{
+			double thval = val / sel_vol->GetMaxValue();
+			if (thval < sel_vol->GetLeftThresh())
+				thval = sel_vol->GetLeftThresh();
+			thval *= sel_vol->GetMaxValue();
+			if (sel_vol->GetMask(false))
+				sel_vol->DrawMaskThreshold((float)thval, m_cur_view->GetPersp());
+		}
+		else
+		{
+			DataGroup *group = m_cur_view->GetCurrentVolGroup();
+			if (group)
+			{
+				for (int i = 0; i < group->GetVolumeNum(); i++)
+				{
+					VolumeData *vd = group->GetVolumeData(i);
+					if (vd && vd->GetDisp())
+					{
+						double thval = val / vd->GetMaxValue();
+						if (thval < vd->GetLeftThresh())
+							thval = vd->GetLeftThresh();
+						thval *= sel_vol->GetMaxValue();
+						if (vd->GetMask(false))
+							vd->DrawMaskThreshold((float)thval, m_cur_view->GetPersp());
+					}
+				}
+			}
+		}
+		vr_frame->RefreshVRenderViews();
+	}
 }
 
 //selection adjustment
@@ -859,6 +905,23 @@ void BrushToolDlg::OnBrushSclTranslateChange(wxScrollEvent &event)
    double val = double(ival)/10.0;
    wxString str = wxString::Format("%.1f", val);
    m_brush_scl_translate_text->SetValue(str);
+
+   DrawBrush(val);
+}
+
+void BrushToolDlg::OnBrushSclTranslateTextEnter(wxCommandEvent &event)
+{
+   wxString str = m_brush_scl_translate_text->GetValue();
+   double val;
+   str.ToDouble(&val);
+   m_dft_scl_translate = val/m_max_value;
+   m_brush_scl_translate_sldr->SetValue(int(val*10.0+0.5));
+
+   DrawBrush(val);
+   
+   //set translate
+   if (m_cur_view)
+      m_cur_view->SetBrushSclTranslate(m_dft_scl_translate);
 }
 
 void BrushToolDlg::OnBrushSclTranslateText(wxCommandEvent &event)
@@ -1137,8 +1200,8 @@ void BrushToolDlg::OnCAThreshText(wxCommandEvent &event)
    VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
    if (vr_frame)
       sel_vol = vr_frame->GetCurSelVol();
-   if (sel_vol)
-      sel_vol->SetMaskThreshold(m_dft_ca_thresh);
+   //if (sel_vol)
+   //   sel_vol->SetMaskThreshold(m_dft_ca_thresh);
    vr_frame->RefreshVRenderViews();
 }
 
@@ -1161,11 +1224,11 @@ void BrushToolDlg::OnCAAnalyzeBtn(wxCommandEvent &event)
       VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
       if (vr_frame)
          sel_vol = vr_frame->GetCurSelVol();
-      if (sel_vol)
+      /*if (sel_vol)
       {
          sel_vol->SetUseMaskThreshold(true);
          sel_vol->SetMaskThreshold(m_dft_ca_thresh);
-      }
+      }*/
       m_ca_comps_text->SetValue(wxString::Format("%d", comps));
       m_ca_volume_text->SetValue(wxString::Format("%d", volume));
       if (vr_frame)
@@ -1237,11 +1300,11 @@ void BrushToolDlg::OnNRAnalyzeBtn(wxCommandEvent &event)
       VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
       if (vr_frame)
          sel_vol = vr_frame->GetCurSelVol();
-      if (sel_vol)
-      {
-         sel_vol->SetUseMaskThreshold(true);
-         sel_vol->SetMaskThreshold(m_dft_ca_thresh);
-      }
+      //if (sel_vol)
+      //{
+      //   sel_vol->SetUseMaskThreshold(true);
+      //   sel_vol->SetMaskThreshold(m_dft_ca_thresh);
+      //}
       m_ca_comps_text->SetValue(wxString::Format("%d", comps));
       m_ca_volume_text->SetValue(wxString::Format("%d", volume));
       if (vr_frame)

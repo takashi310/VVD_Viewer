@@ -34,11 +34,16 @@ namespace FLIVR
 	"}\n" 
 
 #define VOL_INPUTS \
-	"in vec3 OutVertex;\n" \
-	"in vec3 OutTexture;\n"
+	"#pragma optionNV(inline all)\n" \
+	"#pragma optionNV(fastmath on)\n" \
+	"#pragma optionNV(ifcvt none)\n" \
+	"#pragma optionNV(strict on)\n" \
+	"#pragma optionNV(unroll all)\n" \
+	"layout(location = 0) in vec3 OutVertex;\n" \
+	"layout(location = 1) in vec3 OutTexture;\n"
 
 #define VOL_INPUTS_FOG \
-	"in vec4 OutFogCoord;\n"
+	"layout(location = 2) in vec4 OutFogCoord;\n"
 
 #define VOL_OUTPUTS \
 	"layout(location = 0) out vec4 FragColor;\n"
@@ -46,89 +51,71 @@ namespace FLIVR
 #define VOL_ID_COLOR_OUTPUTS \
 	"layout(location = 1) out vec4 IDColor;\n"
 
-#define VOL_UNIFORMS_COMMON \
-	"// VOL_UNIFORMS_COMMON\n" \
-	"uniform vec4 loc0;//(lx, ly, lz, alpha)\n" \
-	"uniform vec4 loc1;//(ka, kd, ks, ns)\n" \
-	"uniform vec4 loc2;//(scalar_scale, gm_scale, left_thresh, right_thresh)\n" \
-	"uniform vec4 loc3;//(gamma, gm_thresh, offset, sw)\n" \
-	"uniform vec4 loc4;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
-	"uniform vec4 loc5;//(spcx, spcy, spcz, max_id)\n" \
+#define VOL_UNIFORMS_BASE \
+	"// VOL_UNIFORMS_BASE\n" \
+	"layout (binding = 1) uniform VolFragShaderBaseUBO {\n" \
+	"	vec4 loc0;//(lx, ly, lz, alpha)\n" \
+	"	vec4 loc1;//(ka, kd, ks, ns)\n" \
+	"	vec4 loc2;//(scalar_scale, gm_scale, left_thresh, right_thresh)\n" \
+	"	vec4 loc3;//(gamma, gm_thresh, offset, sw)\n" \
+	"	vec4 loc5;//(spcx, spcy, spcz, max_id)\n" \
+	"	vec4 loc6;//(r, g, b, 0.0) or (1/vx, 1/vy, luminance, depth_mode)\n" \
+	"	vec4 loc7;//(1/vx, 1/vy, 0, 0)\n" \
+	"	vec4 loc8;//(int, start, end, 0.0)\n" \
+	"	vec4 loc10; //plane0\n" \
+	"	vec4 loc11; //plane1\n" \
+	"	vec4 loc12; //plane2\n" \
+	"	vec4 loc13; //plane3\n" \
+	"	vec4 loc14; //plane4\n" \
+	"	vec4 loc15; //plane5\n" \
+	"} base;\n" \
 	"\n" \
-	"uniform sampler3D tex0;//data volume\n" \
-	"uniform sampler3D tex1;//gm volume\n" \
+	"layout (binding = 2) uniform sampler3D tex0;//data volume\n" \
+	"layout (binding = 3) uniform sampler3D tex1;//gm volume\n" \
 	"\n" \
-	"uniform mat4 matrix5;//texture\n" \
-	"\n"
 
-#define VOL_UNIFORMS_MATRICES \
-	"// VOL_UNIFORMS_MATRICES\n" \
-	"uniform mat4 matrix2;//tex transform for bricking\n" \
-	"\n"
-
-#define VOL_UNIFORMS_SIN_COLOR \
-	"//VOL_UNIFORMS_SIN_COLOR\n" \
-	"uniform vec4 loc6;//(red, green, blue, mask_threshold)\n" \
-	"\n"
-
-#define VOL_UNIFORMS_COLORMAP \
-	"//VOL_UNIFORMS_COLORMAP\n" \
-	"uniform vec4 loc6;//(low, hi, hi-lo, 0)\n" \
+#define VOL_UNIFORMS_BRICK \
+	"// VOL_UNIFORMS_BRICK\n" \
+	"layout (push_constant) uniform VolFragShaderBrickConst {\n" \
+	"	vec4 loc4;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
+	"	vec4 brkscale;//tex transform for bricking\n" \
+	"	vec4 brktrans;//tex transform for bricking\n" \
+	"	vec4 mskbrkscale;//tex transform for mask bricks\n" \
+	"	vec4 mskbrktrans;//tex transform for mask bricks\n" \
+	"} brk;" \
 	"\n"
 
 #define VOL_UNIFORMS_INDEX_COLOR \
 	"//VOL_UNIFORMS_INDEX_COLOR\n" \
-	"uniform sampler2D tex5;\n" \
-	"uniform sampler2D tex7;\n" \
-	"uniform vec4 loc6;//(1/vx, 1/vy, luminance, depth_mode)\n" \
+	"layout (binding = 7) uniform sampler2D tex5;\n" \
+	"layout (binding = 8) uniform sampler2D tex7;\n" \
 	"\n"
 
 #define VOL_UNIFORMS_INDEX_COLOR_D \
     "//VOL_UNIFORMS_INDEX_COLOR_D\n" \
-    "uniform sampler2D tex5;\n" \
-	"uniform sampler2D tex7;\n" \
-    "uniform vec4 loc6;//(1/vx, 1/vy, luminance, depth_mode)\n" \
+    "layout (binding = 7) uniform sampler2D tex5;\n" \
+	"layout (binding = 8) uniform sampler2D tex7;\n" \
     "\n"
-
-#define VOL_UNIFORMS_2DMAP_LOC \
-	"//VOL_UNIFORMS_2DMAP_LOC\n" \
-	"uniform vec4 loc7;//(1/vx, 1/vy, 0, 0)\n" \
-	"\n"
-
-#define VOL_UNIFORMS_FOG_LOC \
-	"//VOL_UNIFORMS_FOG_LOC\n" \
-	"uniform vec4 loc8;//(int, start, end, 0.0)\n" \
-	"\n"
 
 #define VOL_UNIFORMS_DP \
 	"//VOL_UNIFORMS_DP\n" \
-	"uniform sampler2D tex14;//depth texture 1\n" \
-	"uniform sampler2D tex15;//depth texture 2\n" \
-	"\n"
-
-#define VOL_UNIFORMS_CLIP \
-	"//VOL_UNIFORMS_CLIP\n" \
-	"uniform vec4 loc10; //plane0\n" \
-	"uniform vec4 loc11; //plane1\n" \
-	"uniform vec4 loc12; //plane2\n" \
-	"uniform vec4 loc13; //plane3\n" \
-	"uniform vec4 loc14; //plane4\n" \
-	"uniform vec4 loc15; //plane5\n" \
+	"layout (binding = 16) uniform sampler2D tex14;//depth texture 1\n" \
+	"layout (binding = 17) uniform sampler2D tex15;//depth texture 2\n" \
 	"\n"
 
 #define VOL_UNIFORMS_MASK \
 	"//VOL_UNIFORMS_MASK\n" \
-	"uniform sampler3D tex2;//3d mask volume\n" \
+	"layout (binding = 4) uniform sampler3D tex2;//3d mask volume\n" \
 	"\n"
 
 #define VOL_UNIFORMS_LABEL \
 	"//VOL_UNIFORMS_LABEL\n" \
-	"uniform usampler3D tex3;//3d label volume\n" \
+	"layout (binding = 5) uniform usampler3D tex3;//3d label volume\n" \
 	"\n"
 
 #define VOL_UNIFORMS_DEPTHMAP \
 	"//VOL_UNIFORMS_DEPTHMAP\n" \
-	"uniform sampler2D tex4;//2d depth map\n" \
+	"layout (binding = 6) uniform sampler2D tex4;//2d depth map\n" \
 	"\n"
 
 #define VOL_HEAD \
@@ -141,7 +128,7 @@ namespace FLIVR
 
 #define VOL_HEAD_2DMAP_LOC \
 	"	//VOL_HEAD_2DMAP_LOC\n" \
-	"	vec2 fcf = vec2(gl_FragCoord.x*loc7.x, gl_FragCoord.y*loc7.y);\n" \
+	"	vec2 fcf = vec2(gl_FragCoord.x*base.loc7.x, gl_FragCoord.y*base.loc7.y);\n" \
 	"\n"
 
 #define VOL_HEAD_DP_1 \
@@ -151,7 +138,7 @@ namespace FLIVR
 
 #define VOL_HEAD_DP_2 \
 	"	//VOL_HEAD_DP_POS\n" \
-	"	if (texture(tex15, fcf).r > gl_FragCoord.z) discard;\n" \
+	"	if (texture(tex14, fcf).r > gl_FragCoord.z) discard;\n" \
 	"\n"
 
 #define VOL_HEAD_DP_3 \
@@ -163,21 +150,21 @@ namespace FLIVR
 #define VOL_HEAD_FOG \
 	"	//VOL_HEAD_FOG\n" \
 	"	vec4 fp;\n" \
-	"	fp.x = loc8.x;\n" \
-	"	fp.y = loc8.y;\n" \
-	"	fp.z = loc8.z;\n" \
+	"	fp.x = base.loc8.x;\n" \
+	"	fp.y = base.loc8.y;\n" \
+	"	fp.z = base.loc8.z;\n" \
 	"	fp.w = abs(OutFogCoord.z/OutFogCoord.w);\n" \
 	"\n"
 
 #define VOL_HEAD_CLIP \
 	"	//VOL_HEAD_CLIP\n" \
-	"	vec4 brickt = matrix2 * t;\n" \
-	"	if (dot(brickt.xyz, loc10.xyz)+loc10.w < 0.0 ||\n" \
-	"		dot(brickt.xyz, loc11.xyz)+loc11.w < 0.0 ||\n" \
-	"		dot(brickt.xyz, loc12.xyz)+loc12.w < 0.0 ||\n" \
-	"		dot(brickt.xyz, loc13.xyz)+loc13.w < 0.0 ||\n" \
-	"		dot(brickt.xyz, loc14.xyz)+loc14.w < 0.0 ||\n" \
-	"		dot(brickt.xyz, loc15.xyz)+loc15.w < 0.0)\n" \
+	"	vec4 brickt = (t*brk.brkscale + brk.brktrans);\n" \
+	"	if (dot(brickt.xyz, base.loc10.xyz)+base.loc10.w < 0.0 ||\n" \
+	"		dot(brickt.xyz, base.loc11.xyz)+base.loc11.w < 0.0 ||\n" \
+	"		dot(brickt.xyz, base.loc12.xyz)+base.loc12.w < 0.0 ||\n" \
+	"		dot(brickt.xyz, base.loc13.xyz)+base.loc13.w < 0.0 ||\n" \
+	"		dot(brickt.xyz, base.loc14.xyz)+base.loc14.w < 0.0 ||\n" \
+	"		dot(brickt.xyz, base.loc15.xyz)+base.loc15.w < 0.0)\n" \
 	"	{\n" \
 	"		discard;//FragColor = vec4(0.0);\n" \
 	"		return;\n" \
@@ -196,23 +183,45 @@ namespace FLIVR
 	"//VOL_CLIP_FUNC\n" \
 	"bool vol_clip_func(vec4 t)\n" \
 	"{\n" \
-	"	vec4 brickt = matrix2 * t;\n" \
-	"	if (dot(brickt.xyz, loc10.xyz)+loc10.w < 0.0 ||\n" \
-	"		dot(brickt.xyz, loc11.xyz)+loc11.w < 0.0 ||\n" \
-	"		dot(brickt.xyz, loc12.xyz)+loc12.w < 0.0 ||\n" \
-	"		dot(brickt.xyz, loc13.xyz)+loc13.w < 0.0 ||\n" \
-	"		dot(brickt.xyz, loc14.xyz)+loc14.w < 0.0 ||\n" \
-	"		dot(brickt.xyz, loc15.xyz)+loc15.w < 0.0)\n" \
+	"	vec4 brickt = (t*brk.brkscale + brk.brktrans);\n" \
+	"	if (dot(brickt.xyz, base.loc10.xyz)+base.loc10.w < 0.0 ||\n" \
+	"		dot(brickt.xyz, base.loc11.xyz)+base.loc11.w < 0.0 ||\n" \
+	"		dot(brickt.xyz, base.loc12.xyz)+base.loc12.w < 0.0 ||\n" \
+	"		dot(brickt.xyz, base.loc13.xyz)+base.loc13.w < 0.0 ||\n" \
+	"		dot(brickt.xyz, base.loc14.xyz)+base.loc14.w < 0.0 ||\n" \
+	"		dot(brickt.xyz, base.loc15.xyz)+base.loc15.w < 0.0)\n" \
 	"		return true;\n" \
 	"	else\n" \
 	"		return false;\n" \
 	"}\n" \
 	"\n"
 
+#define VOL_HEAD_HIDE_OUTSIDE_MASK \
+	"	//VOL_HEAD_HIDE_OUTSIDE_MASK\n" \
+	"	vec4 maskt = t*mskbrkscale + brk.mskbrktrans;\n" \
+	"	vec4 maskcheck = texture(tex2, maskt.stp); //get mask value\n" \
+	"	if (maskcheck.x <= 0.5)\n" \
+	"	{\n" \
+	"		discard;\n" \
+	"		return;\n" \
+	"	}\n" \
+	"\n"
+
+#define VOL_HEAD_HIDE_INSIDE_MASK \
+	"	//VOL_HEAD_HIDE_INSIDE_MASK\n" \
+	"	vec4 maskt = t*mskbrkscale + brk.mskbrktrans;\n" \
+	"	vec4 maskcheck = texture(tex2, maskt.stp); //get mask value\n" \
+	"	if (maskcheck.x > 0.5)\n" \
+	"	{\n" \
+	"		discard;\n" \
+	"		return;\n" \
+	"	}\n" \
+	"\n"
+
 #define VOL_HEAD_LIT \
 	"	//VOL_HEAD_LIT\n" \
-	"	vec4 l = loc0; // {lx, ly, lz, alpha}\n" \
-	"	vec4 k = loc1; // {ka, kd, ks, ns}\n" \
+	"	vec4 l = base.loc0; // {lx, ly, lz, alpha}\n" \
+	"	vec4 k = base.loc1; // {ka, kd, ks, ns}\n" \
 	"	k.x = k.x>1.0?log2(3.0-k.x):k.x;\n" \
 	"	vec4 n, w;\n" \
 	"	if (l.w == 0.0) { discard; return; }\n" \
@@ -235,7 +244,7 @@ namespace FLIVR
 
 #define VOL_GRAD_COMPUTE_LO \
 	"	//VOL_GRAD_COMPUTE_LO\n" \
-	"	vec4 dir = loc4; // \n" \
+	"	vec4 dir = brk.loc4; // \n" \
 	"	vec4 r, p; \n" \
 	"	v = vec4(v.x); \n" \
 	"	n = vec4(0.0); \n" \
@@ -255,12 +264,12 @@ namespace FLIVR
 	"	r = texture(tex0, p.stp); \n" \
 	"	n.z = v.z - r.x; \n" \
 	"	p.y = length(n.xyz); \n" \
-	"	p.y = 0.5 * (loc2.x<0.0?(1.0+p.y*loc2.x):p.y*loc2.x); \n" \
+	"	p.y = 0.5 * (base.loc2.x<0.0?(1.0+p.y*base.loc2.x):p.y*base.loc2.x); \n" \
 	"\n"
 
 #define VOL_GRAD_COMPUTE_HI \
 	"	// VOL_GRAD_COMPUTE_HI\n" \
-	"	vec4 dir = loc4;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
+	"	vec4 dir = brk.loc4;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
 	"	vec4 r, p; \n" \
 	"	v = vec4(v.x); \n" \
 	"	n = vec4(0.0); \n" \
@@ -289,12 +298,12 @@ namespace FLIVR
 	"	r = texture(tex0, p.stp); \n" \
 	"	n.z = r.x - n.z; \n" \
 	"	p.y = length(n.xyz); \n" \
-	"	p.y = 0.5 * (loc2.x<0.0?(1.0+p.y*loc2.x):p.y*loc2.x); \n" \
+	"	p.y = 0.5 * (base.loc2.x<0.0?(1.0+p.y*base.loc2.x):p.y*base.loc2.x); \n" \
 	"\n"
 
 #define VOL_ID_GRAD_COMPUTE_HI \
 	"	// VOL_GRAD_COMPUTE_HI\n" \
-	"	vec4 dir = loc4;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
+	"	vec4 dir = brk.loc4;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
 	"	vec4 r, p; \n" \
 	"	v = vec4(v.x); \n" \
 	"	n = vec4(0.0); \n" \
@@ -329,7 +338,7 @@ namespace FLIVR
 	"	r.x = (v.x==r.x?1.0:0.0) ; \n" \
 	"	n.z = r.x - n.z; \n" \
 	"	p.y = length(n.xyz); \n" \
-	"	p.y = 0.5 * (loc2.x<0.0?(1.0+p.y*loc2.x):p.y*loc2.x); \n" \
+	"	p.y = 0.5 * (base.loc2.x<0.0?(1.0+p.y*base.loc2.x):p.y*base.loc2.x); \n" \
 	"\n"
 
 #define VOL_GRAD_COMPUTE_FUNC \
@@ -385,7 +394,7 @@ namespace FLIVR
 
 #define VOL_COMPUTED_GM_INVALIDATE \
 	"	//VOL_COMPUTED_GM_INVALIDATE\n" \
-	"	v.y = loc3.y;\n" \
+	"	v.y = base.loc3.y;\n" \
 	"\n"
 
 #define VOL_TEXTURE_GM_LOOKUP \
@@ -398,18 +407,18 @@ namespace FLIVR
 	"	vec4 c;\n" \
 	"	float tf_alp = 0.0;\n" \
 	"	float alpha = 0.0;\n" \
-	"	v.x = loc2.x<0.0?(1.0+v.x*loc2.x):v.x*loc2.x;\n" \
-	"	if (v.x<loc2.z-loc3.w || v.x>loc2.w+loc3.w || v.y<loc3.y-loc3.w)\n" \
+	"	v.x = base.loc2.x<0.0?(1.0+v.x*base.loc2.x):v.x*base.loc2.x;\n" \
+	"	if (v.x<base.loc2.z-base.loc3.w || v.x>base.loc2.w+base.loc3.w || v.y<base.loc3.y-base.loc3.w)\n" \
 	"		c = vec4(0.0);\n" \
 	"	else\n" \
 	"	{\n" \
-	"		v.x = (v.x<loc2.z?(loc3.w-loc2.z+v.x)/loc3.w:(v.x>loc2.w?(loc3.w-v.x+loc2.w)/loc3.w:1.0))*v.x;\n" \
-	"		v.x = (v.y<loc3.y?(loc3.w-loc3.y+v.y)/loc3.w:1.0)*v.x;\n" \
-	"		tf_alp = pow(clamp(v.x/loc3.z,\n" \
-	"			loc3.x<1.0?-(loc3.x-1.0)*0.00001:0.0,\n" \
-	"			loc3.x>1.0?0.9999:1.0), loc3.x);\n" \
-	"		alpha = (1.0 - pow(clamp(1.0-tf_alp*l.w, 0.0, 1.0), loc4.w)) / l.w;\n" \
-	"		c = vec4(loc6.rgb*alpha*tf_alp, alpha);\n" \
+	"		v.x = (v.x<base.loc2.z?(base.loc3.w-base.loc2.z+v.x)/base.loc3.w:(v.x>base.loc2.w?(base.loc3.w-v.x+base.loc2.w)/base.loc3.w:1.0))*v.x;\n" \
+	"		v.x = (v.y<base.loc3.y?(base.loc3.w-base.loc3.y+v.y)/base.loc3.w:1.0)*v.x;\n" \
+	"		tf_alp = pow(clamp(v.x/base.loc3.z,\n" \
+	"			base.loc3.x<1.0?-(base.loc3.x-1.0)*0.00001:0.0,\n" \
+	"			base.loc3.x>1.0?0.9999:1.0), base.loc3.x);\n" \
+	"		alpha = (1.0 - pow(clamp(1.0-tf_alp*l.w, 0.0, 1.0), brk.loc4.w)) / l.w;\n" \
+	"		c = vec4(base.loc6.rgb*alpha*tf_alp, alpha);\n" \
 	"	}\n" \
 	"\n"
 
@@ -418,16 +427,16 @@ namespace FLIVR
 	"	vec4 c;\n" \
 	"	float tf_alp = 0.0;\n" \
 	"	float alpha = 0.0;\n" \
-	"	v.x = loc2.x<0.0?(1.0+v.x*loc2.x):v.x*loc2.x;\n" \
-	"	if (v.x<loc2.z-loc3.w || v.x>loc2.w+loc3.w || v.y<loc3.y)\n" \
+	"	v.x = base.loc2.x<0.0?(1.0+v.x*base.loc2.x):v.x*base.loc2.x;\n" \
+	"	if (v.x<base.loc2.z-base.loc3.w || v.x>base.loc2.w+base.loc3.w || v.y<base.loc3.y)\n" \
 	"		c = vec4(0.0, 0.0, 0.0, 1.0);\n" \
 	"	else\n" \
 	"	{\n" \
-	"		v.x = (v.x<loc2.z?(loc3.w-loc2.z+v.x)/loc3.w:(v.x>loc2.w?(loc3.w-v.x+loc2.w)/loc3.w:1.0))*v.x;\n" \
-	"		tf_alp = pow(clamp(v.x/loc3.z,\n" \
-	"			loc3.x<1.0?-(loc3.x-1.0)*0.00001:0.0,\n" \
-	"			loc3.x>1.0?0.9999:1.0), loc3.x);\n" \
-	"		c = vec4(loc6.rgb*tf_alp, 1.0);\n" \
+	"		v.x = (v.x<base.loc2.z?(base.loc3.w-base.loc2.z+v.x)/base.loc3.w:(v.x>base.loc2.w?(base.loc3.w-v.x+base.loc2.w)/base.loc3.w:1.0))*v.x;\n" \
+	"		tf_alp = pow(clamp(v.x/base.loc3.z,\n" \
+	"			base.loc3.x<1.0?-(base.loc3.x-1.0)*0.00001:0.0,\n" \
+	"			base.loc3.x>1.0?0.9999:1.0), base.loc3.x);\n" \
+	"		c = vec4(base.loc6.rgb*tf_alp, 1.0);\n" \
 	"	}\n" \
 	"\n"
 /*
@@ -436,15 +445,15 @@ namespace FLIVR
 	"	vec4 c;\n" \
 	"	float tf_alp = 0.0;\n" \
 	"	float alpha = 0.0;\n" \
-	"	v.x = loc2.x<0.0?(1.0+v.x*loc2.x):v.x*loc2.x;\n" \
-	"	if (v.x<loc2.z-loc3.w || v.x>loc2.w+loc3.w || v.y<loc3.y)\n" \
+	"	v.x = base.loc2.x<0.0?(1.0+v.x*base.loc2.x):v.x*base.loc2.x;\n" \
+	"	if (v.x<base.loc2.z-base.loc3.w || v.x>base.loc2.w+base.loc3.w || v.y<base.loc3.y)\n" \
 	"		c = vec4(0.0);\n" \
 	"	else\n" \
 	"	{\n" \
-	"		v.x = (v.x<loc2.z?(loc3.w-loc2.z+v.x)/loc3.w:(v.x>loc2.w?(loc3.w-v.x+loc2.w)/loc3.w:1.0))*v.x;\n" \
-	"		tf_alp = pow(clamp(v.x/loc3.z,\n" \
-	"			loc3.x<1.0?-(loc3.x-1.0)*0.00001:0.0,\n" \
-	"			loc3.x>1.0?0.9999:1.0), loc3.x);\n" \
+	"		v.x = (v.x<base.loc2.z?(base.loc3.w-base.loc2.z+v.x)/base.loc3.w:(v.x>base.loc2.w?(base.loc3.w-v.x+base.loc2.w)/base.loc3.w:1.0))*v.x;\n" \
+	"		tf_alp = pow(clamp(v.x/base.loc3.z,\n" \
+	"			base.loc3.x<1.0?-(base.loc3.x-1.0)*0.00001:0.0,\n" \
+	"			base.loc3.x>1.0?0.9999:1.0), base.loc3.x);\n" \
 	"		c = vec4(tf_alp);\n" \
 	"	}\n" \
 	"\n"
@@ -454,7 +463,7 @@ namespace FLIVR
 	"	vec4 c;\n" \
 	"	float tf_alp = 0.0;\n" \
 	"	float alpha = 0.0;\n" \
-	"	v.x = loc2.x<0.0?(1.0+v.x*loc2.x):v.x*loc2.x;\n" \
+	"	v.x = base.loc2.x<0.0?(1.0+v.x*base.loc2.x):v.x*base.loc2.x;\n" \
 	"	c = vec4(v.x);\n" \
 	"\n"
 
@@ -464,15 +473,15 @@ namespace FLIVR
 	"{\n" \
 	"	vec4 c;\n" \
 	"	float tf_alp;\n" \
-	"	v.x = loc2.x<0.0?(1.0+v.x*loc2.x):v.x*loc2.x;\n" \
-	"	if (v.x<loc2.z-loc3.w || v.x>loc2.w+loc3.w || v.y<loc3.y)\n" \
+	"	v.x = base.loc2.x<0.0?(1.0+v.x*base.loc2.x):v.x*base.loc2.x;\n" \
+	"	if (v.x<base.loc2.z-base.loc3.w || v.x>base.loc2.w+base.loc3.w || v.y<base.loc3.y)\n" \
 	"		c = vec4(0.0);\n" \
 	"	else\n" \
 	"	{\n" \
-	"		v.x = (v.x<loc2.z?(loc3.w-loc2.z+v.x)/loc3.w:(v.x>loc2.w?(loc3.w-v.x+loc2.w)/loc3.w:1.0))*v.x;\n" \
-	"		tf_alp = pow(clamp(v.x/loc3.z,\n" \
-	"			loc3.x<1.0?-(loc3.x-1.0)*0.00001:0.0,\n" \
-	"			loc3.x>1.0?0.9999:1.0), loc3.x);\n" \
+	"		v.x = (v.x<base.loc2.z?(base.loc3.w-base.loc2.z+v.x)/base.loc3.w:(v.x>base.loc2.w?(base.loc3.w-v.x+base.loc2.w)/base.loc3.w:1.0))*v.x;\n" \
+	"		tf_alp = pow(clamp(v.x/base.loc3.z,\n" \
+	"			base.loc3.x<1.0?-(base.loc3.x-1.0)*0.00001:0.0,\n" \
+	"			base.loc3.x>1.0?0.9999:1.0), base.loc3.x);\n" \
 	"		c = vec4(tf_alp);\n" \
 	"	}\n" \
 	"	return c;\n" \
@@ -481,9 +490,9 @@ namespace FLIVR
 
 #define VOL_COMMON_TRANSFER_FUNCTION_CALC \
 	"		//VOL_COMMON_TRANSFER_FUNCTION_CALC\n" \
-	"		tf_alp = pow(clamp(v.x/loc3.z,\n" \
-	"			loc3.x<1.0?-(loc3.x-1.0)*0.00001:0.0,\n" \
-	"			loc3.x>1.0?0.9999:1.0), loc3.x);\n"
+	"		tf_alp = pow(clamp(v.x/base.loc3.z,\n" \
+	"			base.loc3.x<1.0?-(base.loc3.x-1.0)*0.00001:0.0,\n" \
+	"			base.loc3.x>1.0?0.9999:1.0), base.loc3.x);\n"
 
 #define VOL_COLORMAP_CALC0 \
 	"		//VOL_COLORMAP_CALC0\n" \
@@ -520,36 +529,36 @@ namespace FLIVR
 	"	vec4 c;\n" \
 	"	float tf_alp = 0.0;\n" \
 	"	float alpha = 0.0;\n" \
-	"	v.x = loc2.x<0.0?(1.0+v.x*loc2.x):v.x*loc2.x;\n" \
-	"	if (v.x<loc2.z-loc3.w || v.x>loc2.w+loc3.w || v.y<loc3.y)\n" \
+	"	v.x = base.loc2.x<0.0?(1.0+v.x*base.loc2.x):v.x*base.loc2.x;\n" \
+	"	if (v.x<base.loc2.z-base.loc3.w || v.x>base.loc2.w+base.loc3.w || v.y<base.loc3.y)\n" \
 	"		c = vec4(0.0);\n" \
 	"	else\n" \
 	"	{\n" \
-	"		v.x = (v.x<loc2.z?(loc3.w-loc2.z+v.x)/loc3.w:(v.x>loc2.w?(loc3.w-v.x+loc2.w)/loc3.w:1.0))*v.x;\n" \
+	"		v.x = (v.x<base.loc2.z?(base.loc3.w-base.loc2.z+v.x)/base.loc3.w:(v.x>base.loc2.w?(base.loc3.w-v.x+base.loc2.w)/base.loc3.w:1.0))*v.x;\n" \
 	"		vec4 rb = vec4(0.0);\n"
 
 #define VOL_TRANSFER_FUNCTION_COLORMAP_VALU0 \
 	"		//VOL_TRANSFER_FUNCTION_COLORMAP_VALU\n" \
-	"		float valu = (v.x-loc6.x)/loc6.z;\n"
+	"		float valu = (v.x-base.loc6.x)/base.loc6.z;\n"
 
 #define VOL_TRANSFER_FUNCTION_COLORMAP_VALU1 \
 	"		//VOL_TRANSFER_FUNCTION_COLORMAP_VALU_Z\n" \
-	"		vec4 tt = matrix5 * t;\n" \
-	"		float valu = (1.0-tt.z-loc6.x)/loc6.z;\n"
+	"		vec4 tt = t*brk.brkscale + brk.brktrans;\n" \
+	"		float valu = (1.0-tt.z-base.loc6.x)/base.loc6.z;\n"
 
 #define VOL_TRANSFER_FUNCTION_COLORMAP_VALU2 \
 	"		//VOL_TRANSFER_FUNCTION_COLORMAP_VALU_Z\n" \
-	"		vec4 tt = matrix5 * t;\n" \
-	"		float valu = (1.0-tt.y-loc6.x)/loc6.z;\n"
+	"		vec4 tt = t*brk.brkscale + brk.brktrans;\n" \
+	"		float valu = (1.0-tt.y-base.loc6.x)/base.loc6.z;\n"
 
 #define VOL_TRANSFER_FUNCTION_COLORMAP_VALU3 \
 	"		//VOL_TRANSFER_FUNCTION_COLORMAP_VALU_Z\n" \
-	"		vec4 tt = matrix5 * t;\n" \
-	"		float valu = (1.0-tt.x-loc6.x)/loc6.z;\n"
+	"		vec4 tt = t*brk.brkscale + brk.brktrans;\n" \
+	"		float valu = (1.0-tt.x-base.loc6.x)/base.loc6.z;\n"
 
 #define VOL_TRANSFER_FUNCTION_COLORMAP_RESULT \
 	"		//VOL_TRANSFER_FUNCTION_COLORMAP_RESULT\n" \
-	"		float alpha = (1.0 - pow(clamp(1.0-tf_alp*l.w, 0.0, 1.0), loc4.w)) / l.w;\n" \
+	"		float alpha = (1.0 - pow(clamp(1.0-tf_alp*l.w, 0.0, 1.0), brk.loc4.w)) / l.w;\n" \
 	"		c = vec4(rb.rgb*alpha*tf_alp, alpha);\n" \
 	"	}\n" \
 	"\n"
@@ -559,12 +568,12 @@ namespace FLIVR
 	"	vec4 c;\n" \
 	"	float tf_alp = 0.0;\n" \
 	"	float alpha = 0.0;\n" \
-	"	v.x = loc2.x<0.0?(1.0+v.x*loc2.x):v.x*loc2.x;\n" \
-	"	if (v.x<loc2.z-loc3.w || v.x>loc2.w+loc3.w || v.y<loc3.y)\n" \
+	"	v.x = base.loc2.x<0.0?(1.0+v.x*base.loc2.x):v.x*base.loc2.x;\n" \
+	"	if (v.x<base.loc2.z-base.loc3.w || v.x>base.loc2.w+base.loc3.w || v.y<base.loc3.y)\n" \
 	"		c = vec4(0.0, 0.0, 0.0, 1.0);\n" \
 	"	else\n" \
 	"	{\n" \
-	"		v.x = (v.x<loc2.z?(loc3.w-loc2.z+v.x)/loc3.w:(v.x>loc2.w?(loc3.w-v.x+loc2.w)/loc3.w:1.0))*v.x;\n" \
+	"		v.x = (v.x<base.loc2.z?(base.loc3.w-base.loc2.z+v.x)/base.loc3.w:(v.x>base.loc2.w?(base.loc3.w-v.x+base.loc2.w)/base.loc3.w:1.0))*v.x;\n" \
 	"		vec4 rb = vec4(0.0);\n"
 
 #define VOL_TRANSFER_FUNCTION_COLORMAP_SOLID_RESULT \
@@ -578,15 +587,15 @@ namespace FLIVR
 	"	vec4 c;\n" \
 	"	float tf_alp = 0.0;\n" \
 	"	float alpha = 0.0;\n" \
-	"	v.x = loc2.x<0.0?(1.0+v.x*loc2.x):v.x*loc2.x;\n" \
-	"	if (v.x<loc2.z-loc3.w || v.x>loc2.w+loc3.w || v.y<loc3.y)\n" \
+	"	v.x = base.loc2.x<0.0?(1.0+v.x*base.loc2.x):v.x*base.loc2.x;\n" \
+	"	if (v.x<base.loc2.z-base.loc3.w || v.x>base.loc2.w+base.loc3.w || v.y<base.loc3.y)\n" \
 	"		c = vec4(0.0);\n" \
 	"	else\n" \
 	"	{\n" \
-	"		v.x = (v.x<loc2.z?(loc3.w-loc2.z+v.x)/loc3.w:(v.x>loc2.w?(loc3.w-v.x+loc2.w)/loc3.w:1.0))*v.x;\n" \
-	"		tf_alp = pow(clamp(v.x/loc3.z,\n" \
-	"			loc3.x<1.0?-(loc3.x-1.0)*0.00001:0.0,\n" \
-	"			loc3.x>1.0?0.9999:1.0), loc3.x);\n" \
+	"		v.x = (v.x<base.loc2.z?(base.loc3.w-base.loc2.z+v.x)/base.loc3.w:(v.x>base.loc2.w?(base.loc3.w-v.x+base.loc2.w)/base.loc3.w:1.0))*v.x;\n" \
+	"		tf_alp = pow(clamp(v.x/base.loc3.z,\n" \
+	"			base.loc3.x<1.0?-(base.loc3.x-1.0)*0.00001:0.0,\n" \
+	"			base.loc3.x>1.0?0.9999:1.0), base.loc3.x);\n" \
 	"		float alpha = tf_alp;\n" \
 	"		c = vec4(vec3(alpha*tf_alp), alpha);\n" \
 	"	}\n" \
@@ -595,24 +604,24 @@ namespace FLIVR
 #define VOL_INDEX_COLOR_BODY \
 	"	//VOL_INDEX_COLOR_BODY\n" \
 	"	vec4 v;\n" \
-	"	uint label = uint(texture(tex0, t.stp).x*loc5.w+0.5); //get mask value\n" \
+	"	uint label = uint(texture(tex0, t.stp).x*base.loc5.w+0.5); //get mask value\n" \
 	"	vec4 c = texture(tex7, vec2((float(label%uint(256))+0.5)/256.0, (float(label/256)+0.5)/256.0));\n" \
-	"	vec4 col = texture(tex5, gl_FragCoord.xy*loc6.xy);\n" \
+	"	vec4 col = texture(tex5, gl_FragCoord.xy*base.loc6.xy);\n" \
 	"	if (col.rgb == c.rgb)\n" \
 	"	{\n" \
 	"		discard;\n" \
 	"		return;\n" \
 	"	}\n" \
 	"	IDColor = c;\n" \
-	"	c.rgb = (c.rgb+col.rgb)*loc6.z;\n" \
+	"	c.rgb = (c.rgb+col.rgb)*base.loc6.z;\n" \
 	"\n"
 
 #define VOL_INDEX_COLOR_BODY_SHADE \
 	"	//VOL_INDEX_COLOR_BODY\n" \
 	"	vec4 v;\n" \
-	"	uint id = uint(texture(tex0, t.stp).x*loc5.w+0.5); //get mask value\n" \
+	"	uint id = uint(texture(tex0, t.stp).x*base.loc5.w+0.5); //get mask value\n" \
 	"	vec4 c = texture(tex7, vec2((float(id%uint(256))+0.5)/256.0, (float(id/256)+0.5)/256.0));\n" \
-	"	vec4 col = texture(tex5, gl_FragCoord.xy*loc6.xy);\n" \
+	"	vec4 col = texture(tex5, gl_FragCoord.xy*base.loc6.xy);\n" \
 	"	if (col.rgb == c.rgb)\n" \
 	"	{\n" \
 	"		discard;\n" \
@@ -620,7 +629,7 @@ namespace FLIVR
 	"	}\n" \
 	"	IDColor = c;\n" \
 	"	// VOL_GRAD_COMPUTE_HI\n" \
-	"	vec4 dir = loc4*2.0;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
+	"	vec4 dir = brk.loc4*2.0;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
 	"	vec4 p; \n" \
 	"	uint r; \n" \
 	"	v = vec4(0.0); \n" \
@@ -628,35 +637,35 @@ namespace FLIVR
 	"	w = vec4(0.0);\n" \
 	"	w.x = dir.x; \n" \
 	"	p = clamp(TexCoord + w, 0.0, 1.0); \n" \
-	"	r = uint(texture(tex0, p.stp).x*loc5.w+0.5); \n" \
+	"	r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
 	"	v.x = (id==r?0.5:0.0) ; \n" \
 	"	n.x = v.x + n.x; \n" \
 	"	p = clamp(TexCoord - w, 0.0, 1.0); \n" \
-	"	r = uint(texture(tex0, p.stp).x*loc5.w+0.5); \n" \
+	"	r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
 	"	v.x = (id==r?0.5:0.0) ; \n" \
 	"	n.x = v.x - n.x; \n" \
 	"	w = vec4(0.0); \n" \
 	"	w.y = dir.y; \n" \
 	"	p = clamp(TexCoord + w, 0.0, 1.0); \n" \
-	"	r = uint(texture(tex0, p.stp).x*loc5.w+0.5); \n" \
+	"	r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
 	"	v.x = (id==r?0.5:0.0) ; \n" \
 	"	n.y = v.x + n.y; \n" \
 	"	p = clamp(TexCoord - w, 0.0, 1.0); \n" \
-	"	r = uint(texture(tex0, p.stp).x*loc5.w+0.5); \n" \
+	"	r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
 	"	v.x = (id==r?0.5:0.0) ; \n" \
 	"	n.y = v.x - n.y; \n" \
 	"	w = vec4(0.0); \n" \
 	"	w.z = dir.z; \n" \
 	"	p = clamp(TexCoord + w, 0.0, 1.0); \n" \
-	"	r = uint(texture(tex0, p.stp).x*loc5.w+0.5); \n" \
+	"	r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
 	"	v.x = (id==r?0.5:0.0) ; \n" \
 	"	n.z = v.x + n.z; \n" \
 	"	p = clamp(TexCoord - w, 0.0, 1.0); \n" \
-	"	r = uint(texture(tex0, p.stp).x*loc5.w+0.5); \n" \
+	"	r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
 	"	v.x = (id==r?0.5:0.0) ; \n" \
 	"	n.z = v.x - n.z; \n" \
 	"	p.y = length(n.xyz); \n" \
-	"	p.y = 0.5 * (loc2.x<0.0?(1.0+p.y*loc2.x):p.y*loc2.x); \n" \
+	"	p.y = 0.5 * (base.loc2.x<0.0?(1.0+p.y*base.loc2.x):p.y*base.loc2.x); \n" \
 	"\n" \
 	"	//VOL_BODY_SHADING\n" \
 	"	n.xyz = normalize(n.xyz);\n" \
@@ -673,15 +682,15 @@ namespace FLIVR
 	"	v.y = p.y;\n" \
 	"\n" \
 	"	//VOL_COLOR_OUTPUT\n" \
-	"	c.xyz = (c.xyz+col.xyz)*clamp(1.0-loc1.x, 0.0, 1.0) + loc1.x*(c.xyz+col.xyz)*(loc1.y > 0.0?(n.w + n.z):1.0);\n" \
-	"	c.xyz *= pow(1.0 - loc1.x/2.0, 2.0) + 1.0;\n" \
-	"	c.rgb = c.rgb*loc6.z;\n" \
+	"	c.xyz = (c.xyz+col.xyz)*clamp(1.0-base.loc1.x, 0.0, 1.0) + base.loc1.x*(c.xyz+col.xyz)*(base.loc1.y > 0.0?(n.w + n.z):1.0);\n" \
+	"	c.xyz *= pow(1.0 - base.loc1.x/2.0, 2.0) + 1.0;\n" \
+	"	c.rgb = c.rgb*base.loc6.z;\n" \
 	"\n"
 /*
  #define VOL_INDEX_COLOR_BODY_SHADE \
 	"	//VOL_INDEX_COLOR_BODY\n" \
 	"	vec4 v;\n" \
-	"	uint id = uint(texture(tex0, t.stp).x*loc5.w+0.5); //get mask value\n" \
+	"	uint id = uint(texture(tex0, t.stp).x*base.loc5.w+0.5); //get mask value\n" \
 	"	vec4 c = texture(tex7, vec2((float(id%uint(256))+0.5)/256.0, (float(id/256)+0.5)/256.0));\n" \
 	"	IDColor = c;\n" \
 	"	if (id == 0 || c.rgb == vec3(0.0))\n" \
@@ -690,7 +699,7 @@ namespace FLIVR
 	"		return;\n" \
 	"	}\n" \
 	"	// VOL_GRAD_COMPUTE_HI\n" \
-	"	vec4 dir = loc4*1.5;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
+	"	vec4 dir = brk.loc4*1.5;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
 	"	vec4 p; \n" \
 	"	uint r; \n" \
 	"	uint df = 0; \n" \
@@ -699,41 +708,41 @@ namespace FLIVR
 	"	w = vec4(0.0);\n" \
 	"	w.x = dir.x; \n" \
 	"	p = clamp(TexCoord + w, 0.0, 1.0); \n" \
-	"	r = uint(texture(tex0, p.stp).x*loc5.w+0.5); \n" \
+	"	r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
 	"	v.x = (id==r?0.5:0.0) ; \n" \
 	"	df = df + (id!=r?1:0); \n" \
 	"	n.x = v.x + n.x; \n" \
 	"	p = clamp(TexCoord - w, 0.0, 1.0); \n" \
-	"	r = uint(texture(tex0, p.stp).x*loc5.w+0.5); \n" \
+	"	r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
 	"	v.x = (id==r?0.5:0.0) ; \n" \
 	"	df = df + (id!=r?1:0); \n" \
 	"	n.x = v.x - n.x; \n" \
 	"	w = vec4(0.0); \n" \
 	"	w.y = dir.y; \n" \
 	"	p = clamp(TexCoord + w, 0.0, 1.0); \n" \
-	"	r = uint(texture(tex0, p.stp).x*loc5.w+0.5); \n" \
+	"	r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
 	"	v.x = (id==r?0.5:0.0) ; \n" \
 	"	df = df + (id!=r?1:0); \n" \
 	"	n.y = v.x + n.y; \n" \
 	"	p = clamp(TexCoord - w, 0.0, 1.0); \n" \
-	"	r = uint(texture(tex0, p.stp).x*loc5.w+0.5); \n" \
+	"	r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
 	"	v.x = (id==r?0.5:0.0) ; \n" \
 	"	df = df + (id!=r?1:0); \n" \
 	"	n.y = v.x - n.y; \n" \
 	"	w = vec4(0.0); \n" \
 	"	w.z = dir.z; \n" \
 	"	p = clamp(TexCoord + w, 0.0, 1.0); \n" \
-	"	r = uint(texture(tex0, p.stp).x*loc5.w+0.5); \n" \
+	"	r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
 	"	v.x = (id==r?0.5:0.0) ; \n" \
 	"	df = df + (id!=r?1:0); \n" \
 	"	n.z = v.x + n.z; \n" \
 	"	p = clamp(TexCoord - w, 0.0, 1.0); \n" \
-	"	r = uint(texture(tex0, p.stp).x*loc5.w+0.5); \n" \
+	"	r = uint(texture(tex0, p.stp).x*base.loc5.w+0.5); \n" \
 	"	v.x = (id==r?0.5:0.0) ; \n" \
 	"	df = df + (id!=r?1:0); \n" \
 	"	n.z = v.x - n.z; \n" \
 	"	p.y = length(n.xyz); \n" \
-	"	p.y = 0.5 * (loc2.x<0.0?(1.0+p.y*loc2.x):p.y*loc2.x); \n" \
+	"	p.y = 0.5 * (base.loc2.x<0.0?(1.0+p.y*base.loc2.x):p.y*base.loc2.x); \n" \
 	"	if (df == 0)\n" \
 	"	{\n" \
 	"		discard;\n" \
@@ -756,28 +765,28 @@ namespace FLIVR
 	"\n" \
 	"	//VOL_ALPHA\n" \
 	"	float alpha = 0.0;\n" \
-	"	alpha = (1.0 - pow(clamp(1.0-l.w, 0.0, 1.0), loc4.w)) / l.w;\n" \
+	"	alpha = (1.0 - pow(clamp(1.0-l.w, 0.0, 1.0), brk.loc4.w)) / l.w;\n" \
 	"	alpha =alpha * c.w ;\n" \
 	"	c = vec4(c.rgb*alpha, alpha);\n" \
 	"\n" \
 	"	//VOL_COLOR_OUTPUT\n" \
-	"	c.xyz = c.xyz*clamp(1.0-loc1.x, 0.0, 1.0) + loc1.x*c.xyz*(loc1.y > 0.0?(n.w + n.z):1.0);\n" \
-	"	c.xyz *= pow(1.0 - loc1.x/2.0, 2.0) + 1.0;\n" \
-	"	c.rgb = c.rgb*loc6.z;\n" \
+	"	c.xyz = c.xyz*clamp(1.0-base.loc1.x, 0.0, 1.0) + base.loc1.x*c.xyz*(base.loc1.y > 0.0?(n.w + n.z):1.0);\n" \
+	"	c.xyz *= pow(1.0 - base.loc1.x/2.0, 2.0) + 1.0;\n" \
+	"	c.rgb = c.rgb*base.loc6.z;\n" \
 	"\n"
 */
 #define VOL_INDEX_COLOR_D_BODY \
 	"	//VOL_INDEX_COLOR_D_BODY\n" \
 	"	vec4 v;\n" \
-	"	uint label = uint(texture(tex0, t.stp).x*loc5.w+0.5); //get mask value\n" \
+	"	uint label = uint(texture(tex0, t.stp).x*base.loc5.w+0.5); //get mask value\n" \
 	"	vec4 c = texture(tex7, vec2((float(label%256)+0.5)/256.0, (float(label/256)+0.5)/256.0));\n" \
-	"	c.rgb = c.rgb*loc6.z;\n" \
+	"	c.rgb = c.rgb*base.loc6.z;\n" \
 	"\n"
 
 #define VOL_COLOR_OUTPUT \
 	"	//VOL_COLOR_OUTPUT\n" \
-	"	c.xyz = c.xyz*clamp(1.0-loc1.x, 0.0, 1.0) + loc1.x*c.xyz*(loc1.y > 0.0?(n.w + n.z):1.0);\n" \
-	"	c.xyz *= pow(1.0 - loc1.x/2.0, 2.0) + 1.0;\n" \
+	"	c.xyz = c.xyz*clamp(1.0-base.loc1.x, 0.0, 1.0) + base.loc1.x*c.xyz*(base.loc1.y > 0.0?(n.w + n.z):1.0);\n" \
+	"	c.xyz *= pow(1.0 - base.loc1.x/2.0, 2.0) + 1.0;\n" \
 	"\n"
 
 #define VOL_FOG_BODY \
@@ -843,14 +852,14 @@ namespace FLIVR
 #define VOL_RASTER_BLEND_MASK \
 	"	//VOL_RASTER_BLEND_MASK\n" \
 	"	vec4 cmask = texture(tex2, t.stp); //get mask value\n" \
-	"	FragColor = tf_alp*cmask.x<loc6.w?vec4(cmask.x*0.0002):vec4(cmask.x*0.0002)+vec4(cmask.x)*c*l.w;\n" \
+	"	FragColor = tf_alp*cmask.x<base.loc6.w?vec4(cmask.x*0.0002):vec4(cmask.x*0.0002)+vec4(cmask.x)*c*l.w;\n" \
 	"	//FragColor = cmask;\n" \
 	"\n"
 
 #define VOL_RASTER_BLEND_MASK_SOLID \
 	"	//VOL_RASTER_BLEND_MASK_SOLID\n" \
 	"	vec4 cmask = texture(tex2, t.stp); //get mask value\n" \
-	"	FragColor = tf_alp*cmask.x<loc6.w?vec4(0.0):vec4(cmask.x)*c;\n" \
+	"	FragColor = tf_alp*cmask.x<base.loc6.w?vec4(0.0):vec4(cmask.x)*c;\n" \
 	"\n"
 
 #define VOL_RASTER_BLEND_MASK_ID \
@@ -893,15 +902,15 @@ namespace FLIVR
 	"		else\n" \
 	"			sel = vec4(1.0, 1.0, p2, 1.0);\n" \
 	"	}\n" \
-	"	sel.xyz = sel.xyz*clamp(1.0-loc1.x, 0.0, 1.0) + loc1.x*sel.xyz*(loc1.y > 0.0?(n.w + n.z):1.0);\n" \
-	"	sel.xyz *= pow(1.0 - loc1.x / 2.0, 2.0) + 1.0;\n" \
+	"	sel.xyz = sel.xyz*clamp(1.0-base.loc1.x, 0.0, 1.0) + base.loc1.x*sel.xyz*(base.loc1.y > 0.0?(n.w + n.z):1.0);\n" \
+	"	sel.xyz *= pow(1.0 - base.loc1.x / 2.0, 2.0) + 1.0;\n" \
 	"	FragColor = sel*l.w;\n" \
 	"\n"
 
 #define VOL_RASTER_BLEND_LABEL_MASK \
 	"	//VOL_RASTER_BLEND_LABEL_MASK\n" \
 	"	vec4 cmask = texture(tex2, t.stp); //get mask value\n" \
-	"	if (cmask.x <= loc6.w)\n" \
+	"	if (cmask.x <= base.loc6.w)\n" \
 	"	{\n" \
 	"		FragColor = c*l.w;\n" \
 	"		return;\n" \
@@ -929,8 +938,8 @@ namespace FLIVR
 	"		else\n" \
 	"			sel = vec4(1.0, 0.0, p2, 1.0);\n" \
 	"	}\n" \
-	"	sel.xyz = sel.xyz*clamp(1.0-loc1.x, 0.0, 1.0) + loc1.x*sel.xyz*(loc1.y > 0.0?(n.w + n.z):1.0);\n" \
-	"	sel.xyz *= pow(1.0 - loc1.x / 2.0, 2.0) + 1.0;\n" \
+	"	sel.xyz = sel.xyz*clamp(1.0-base.loc1.x, 0.0, 1.0) + base.loc1.x*sel.xyz*(base.loc1.y > 0.0?(n.w + n.z):1.0);\n" \
+	"	sel.xyz *= pow(1.0 - base.loc1.x / 2.0, 2.0) + 1.0;\n" \
 	"	FragColor = sel*alpha*tf_alp*l.w;\n" \
 	"\n"
 

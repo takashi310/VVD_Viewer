@@ -45,7 +45,9 @@ IMPLEMENT_APP(VRenderApp)
 
 static const wxCmdLineEntryDesc g_cmdLineDesc [] =
 {
-   { wxCMD_LINE_PARAM, NULL, NULL, NULL,
+   { wxCMD_LINE_OPTION, "p", NULL, NULL,
+	  wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL },
+   { wxCMD_LINE_PARAM, NULL, NULL, "input file",
       wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL|wxCMD_LINE_PARAM_MULTIPLE },
    { wxCMD_LINE_NONE }
 };
@@ -67,9 +69,10 @@ bool VRenderApp::OnInit()
       std::string(VERSION_MAJOR_TAG) +  std::string(".") +
       std::string(VERSION_MINOR_TAG);
 */   
-   std::string title =  std::string(FLUORENDER_TITLE) + "1.00";
+   std::string title =  std::string(FLUORENDER_TITLE) + "1.10";
 
    m_frame = new VRenderFrame(
+	     this,
          (wxFrame*) NULL,
          wxString(title),
          50,50,1024,768);
@@ -143,6 +146,9 @@ bool VRenderApp::OnInit()
    if (m_files.Count()>0)
       ((VRenderFrame*)m_frame)->StartupLoad(m_files);
 
+   if (!m_plugin_name.IsEmpty())
+	   ((VRenderFrame*)m_frame)->RunPlugin(m_plugin_name, m_plugin_params, true);
+
    if (setting_dlg)
    {
 	   setting_dlg->SetRealtimeCompress(((VRenderFrame *)m_frame)->GetRealtimeCompression());
@@ -160,39 +166,65 @@ int VRenderApp::OnExit()
 
 void VRenderApp::OnInitCmdLine(wxCmdLineParser& parser)
 {
-   parser.SetDesc (g_cmdLineDesc);
+   parser.SetDesc(g_cmdLineDesc);
+   parser.SetSwitchChars(wxT("-"));
 }
 
 bool VRenderApp::OnCmdLineParsed(wxCmdLineParser& parser)
 {
    int i=0;
    wxString params;
+    
+    
+    wxString list;
+    for (i = 0; i < (int)parser.GetParamCount(); i++)
+    {
+        list += parser.GetParam(i);
+    }
+
+   wxString line;
    for (i = 0; i < (int)parser.GetParamCount(); i++)
    {
-      wxString file = parser.GetParam(i);
+	   line += parser.GetParam(i);
+	   line += " ";
+   }
 
-	  if (file.StartsWith(wxT("vvd:")))
-	  {
-		  m_open_by_web_browser = true;
-		  if(file.Length() >= 5)
-		  {
-			  params = file.SubString(4, file.Length()-1);
-			  wxStringTokenizer tkz(params, wxT(","));
-			  while(tkz.HasMoreTokens())
-			  {
-				  wxString path = tkz.GetNextToken();
-				  m_files.Add(path);
-			  }
-		  }
-		  break;
-	  }
-	  
-	  m_files.Add(file);
+   wxString val;
+   int count = 0;
+   if (parser.Found(wxT("p"), &val))
+   {
+	   m_plugin_name = val.BeforeFirst(' ');
+	   m_plugin_params = val.AfterFirst(' ');
+	   count++;
+   }
 
+   for (i = count; i < (int)parser.GetParamCount(); i++)
+   {
+	   wxString file = parser.GetParam(i);
+
+	   if (file.StartsWith(wxT("vvd:")))
+	   {
+		   m_open_by_web_browser = true;
+		   if (file.Length() >= 5)
+		   {
+			   params = file.SubString(4, file.Length() - 1);
+			   wxStringTokenizer tkz(params, wxT(","));
+			   while (tkz.HasMoreTokens())
+			   {
+				   wxString path = tkz.GetNextToken();
+				   m_files.Add(path);
+			   }
+		   }
+		   break;
+	   }
+	   else
+	   {
+		   m_files.Add(file);
+	   }
    }
     
 #ifdef _WIN32
-   {
+/*   {
 	   wxString message;
 
 	   int fnum = m_files.GetCount();
@@ -200,11 +232,13 @@ bool VRenderApp::OnCmdLineParsed(wxCmdLineParser& parser)
 
 	   wxLogNull lognull;
 
-	   wxString server = "50001";
+	   wxString server = "8001";
 	   wxString hostName = "localhost";
 
 	   MyClient *client = new MyClient;
 	   ClientConnection *connection = (ClientConnection *)client->MakeConnection(hostName, server, "IPC TEST");
+//	   ClientConnection *connection = (ClientConnection *)client->MakeConnection(hostName, "50001", "IPC TEST");
+//	   connection->StartAdvise(wxString("test"));
 
 	   if (!connection)
 	   {
@@ -220,7 +254,7 @@ bool VRenderApp::OnCmdLineParsed(wxCmdLineParser& parser)
 		   return true;
 	   }
 	   delete client;
-   }
+   }*/
 #endif
     
    return true;

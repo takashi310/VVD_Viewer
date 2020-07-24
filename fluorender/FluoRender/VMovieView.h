@@ -35,11 +35,12 @@ DEALINGS IN THE SOFTWARE.
 #include "RecorderDlg.h"
 #include "compatibility.h"
 #include "QVideoEncoder.h"
+#include "DLLExport.h"
 
 #ifndef _VMovieView_H_
 #define _VMovieView_H_
 
-class VMovieView : public wxPanel
+class EXPORT_API VMovieView : public wxPanel
 {
 	enum
 	{
@@ -93,7 +94,10 @@ class VMovieView : public wxPanel
 		ID_HeightText,
 		ID_WidthSpin,
 		ID_HeightSpin,
-		ID_Timer
+		ID_Timer,
+
+		//pages
+		ID_PageChanged
 	};
 
 public:
@@ -118,6 +122,13 @@ public:
 	void DownFrame();
 	void SetCurrentTime(size_t t);
 	bool IsRunningScript() {return m_batch_mode;}
+
+	//set the renderview and progress bars/text
+	void SetRendering(double pcnt);
+	void SetProgress(double pcnt);
+
+	void SetMovieTime(double t);
+	long GetFPS();
 
 public:
 	//controls
@@ -183,6 +194,7 @@ private:
 	RecorderDlg * m_advanced_movie;
 	wxNotebook * m_notebook;
 	int m_current_page;
+	double m_movie_time_basic;
 	QVideoEncoder encoder_;
 	wxString filetype_;
 	int m_rot_int_type;//0-linear; 1-smooth
@@ -194,10 +206,6 @@ private:
 
 private:
 	void GetSettings(int view=0);
-
-	//set the renderview and progress bars/text
-	void SetRendering(double pcnt);
-	void SetProgress(double pcnt);
 
 	//write frames to file
 	void WriteFrameToFile(int total_frames);
@@ -259,6 +267,9 @@ private:
 
 	//timer for playback.
 	void OnTimer(wxTimerEvent& event);
+
+	//pages
+	void OnPageChanged(wxBookCtrlEvent& event);
 
 	DECLARE_EVENT_TABLE();
 };

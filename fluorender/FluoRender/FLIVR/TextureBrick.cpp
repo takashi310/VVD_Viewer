@@ -31,23 +31,37 @@
 #include <FLIVR/TextureBrick.h>
 #include <FLIVR/TextureRenderer.h>
 #include <FLIVR/Utils.h>
+
+#include <utility>
+
+#ifndef _UNIT_TEST_VOLUME_RENDERER_
 #include <wx/wx.h>
 #include <wx/url.h>
-#include <utility>
 #include <iostream>
 #include <jpeglib.h>
 #include "../compatibility.h"
 #include <setjmp.h>
 #include <zlib.h>
 #include <wx/stdpaths.h>
+#include <h5j_reader.h>
+#endif
 
 using namespace std;
 
 namespace FLIVR
 {
-    CURL* TextureBrick::s_curl_ = NULL;
+
+#ifndef _UNIT_TEST_VOLUME_RENDERER_
+	CURL* TextureBrick::s_curl_ = NULL;
 	CURL* TextureBrick::s_curlm_ = NULL;
+#endif
+
 	map<wstring, wstring> TextureBrick::cache_table_ = map<wstring, wstring>();
+	map<wstring, MemCache*> TextureBrick::memcache_table_ = map<wstring, MemCache*>();
+	list<std::wstring> TextureBrick::memcache_order = list<std::wstring>();
+	size_t TextureBrick::memcache_size = 0;
+	size_t TextureBrick::memcache_limit = 1024*1024*1024;
+
     
    TextureBrick::TextureBrick (Nrrd* n0, Nrrd* n1,
          int nx, int ny, int nz, int nc, int* nb,
@@ -85,10 +99,15 @@ namespace FLIVR
       data_[1] = n1;
 
       nmask_ = -1;
+	  nlabel_ = -1;
+	  nstroke_ = -1;
 
       //if it's been drawn in a full update loop
       for (int i=0; i<TEXTURE_RENDER_MODES; i++)
          drawn_[i] = false;
+
+	   for (int i=0; i<TEXTURE_MAX_COMPONENTS; i++)
+         dirty_[i] = false;
 
       //priority
       priority_ = 0;
@@ -99,6 +118,9 @@ namespace FLIVR
 	  
 	  disp_ = true;
 	  prevent_tex_deletion_ = false;
+	  lock_brickdata_ = false;
+
+	  compression_ = false;
    }
 
    TextureBrick::~TextureBrick()
@@ -107,8 +129,6 @@ namespace FLIVR
       // This object never deletes that memory.
       data_[0] = 0;
       data_[1] = 0;
-
-	  if (brkdata_) delete [] brkdata_;
    }
 
    /* The cube is numbered in the following way
@@ -268,6 +288,41 @@ z
 	  vray_ = view;
 
 	  return (timax_ - timin_) >= 0 ? true : false;
+   }
+
+   void TextureBrick::compute_slicenum(Ray& view, double dt, double& r_tmax, double& r_tmin, unsigned int& r_slicenum)
+   {
+	   Point corner[8];
+	   corner[0] = bbox_.min();
+	   corner[1] = Point(bbox_.min().x(), bbox_.min().y(), bbox_.max().z());
+	   corner[2] = Point(bbox_.min().x(), bbox_.max().y(), bbox_.min().z());
+	   corner[3] = Point(bbox_.min().x(), bbox_.max().y(), bbox_.max().z());
+	   corner[4] = Point(bbox_.max().x(), bbox_.min().y(), bbox_.min().z());
+	   corner[5] = Point(bbox_.max().x(), bbox_.min().y(), bbox_.max().z());
+	   corner[6] = Point(bbox_.max().x(), bbox_.max().y(), bbox_.min().z());
+	   corner[7] = bbox_.max();
+
+	   double tmin = Dot(corner[0] - view.origin(), view.direction());
+	   double tmax = tmin;
+	   int maxi = 0;
+	   int mini = 0;
+	   for (int i = 1; i < 8; i++)
+	   {
+		   double t = Dot(corner[i] - view.origin(), view.direction());
+		   if (t < tmin) { mini = i; tmin = t; }
+		   if (t > tmax) { maxi = i; tmax = t; }
+	   }
+
+	   bool order = TextureRenderer::get_update_order();
+	   double tanchor = Dot(corner[order ? mini : maxi], view.direction());
+	   double tanchor0 = (floor(tanchor / dt) + 1) * dt;
+	   double tanchordiff = tanchor - tanchor0;
+	   if (order) tmin -= tanchordiff;
+	   else tmax -= tanchordiff;
+
+	   r_tmax = tmax;
+	   r_tmin = tmin;
+	   r_slicenum = (unsigned int)( (tmax-tmin) / dt );
    }
 
    void TextureBrick::compute_polygons(Ray& view, double dt,
@@ -843,41 +898,49 @@ z
          return (int)data_[0]->axis[3].size;
    }
 
-   GLenum TextureBrick::tex_type_aux(Nrrd* n)
+   VkFormat TextureBrick::tex_format_aux(Nrrd* n)
    {
-      // GL_BITMAP!?
-      if (n->type == nrrdTypeChar)   return GL_BYTE;
-      if (n->type == nrrdTypeUChar)  return GL_UNSIGNED_BYTE;
-      if (n->type == nrrdTypeShort)  return GL_SHORT;
-      if (n->type == nrrdTypeUShort) return GL_UNSIGNED_SHORT;
-      if (n->type == nrrdTypeInt)    return GL_INT;
-      if (n->type == nrrdTypeUInt)   return GL_UNSIGNED_INT;
-      if (n->type == nrrdTypeFloat)  return GL_FLOAT;
-      return GL_NONE;
+      if (n->type == nrrdTypeChar)   return compression_ ? VK_FORMAT_BC4_SNORM_BLOCK : VK_FORMAT_R8_SNORM;
+      if (n->type == nrrdTypeUChar)  return compression_ ? VK_FORMAT_BC4_UNORM_BLOCK : VK_FORMAT_R8_UNORM;
+      if (n->type == nrrdTypeShort)  return VK_FORMAT_R16_SNORM;
+      if (n->type == nrrdTypeUShort) return VK_FORMAT_R16_UNORM;
+	  if (n->type == nrrdTypeInt)    return VK_FORMAT_R32_SINT;
+      if (n->type == nrrdTypeUInt)   return VK_FORMAT_R32_UINT;
+	  if (n->type == nrrdTypeFloat)  return VK_FORMAT_R32_SFLOAT;
+      return VK_FORMAT_UNDEFINED;
    }
 
-   size_t TextureBrick::tex_type_size(GLenum t)
+   size_t TextureBrick::tex_format_size(VkFormat t)
    {
-      if (t == GL_BYTE)           { return sizeof(GLbyte); }
-      if (t == GL_UNSIGNED_BYTE)  { return sizeof(GLubyte); }
-      if (t == GL_SHORT)          { return sizeof(GLshort); }
-      if (t == GL_UNSIGNED_SHORT) { return sizeof(GLushort); }
-      if (t == GL_INT)            { return sizeof(GLint); }
-      if (t == GL_UNSIGNED_INT)   { return sizeof(GLuint); }
-      if (t == GL_FLOAT)          { return sizeof(GLfloat); }
+      if (t == VK_FORMAT_R8_SNORM || VK_FORMAT_BC4_SNORM_BLOCK)  { return sizeof(int8_t); }
+      if (t == VK_FORMAT_R8_UNORM || VK_FORMAT_BC4_UNORM_BLOCK || VK_FORMAT_R8_UINT)  { return sizeof(uint8_t); }
+      if (t == VK_FORMAT_R16_SNORM) { return sizeof(int16_t); }
+      if (t == VK_FORMAT_R16_UNORM || VK_FORMAT_R16_UINT) { return sizeof(uint16_t); }
+      if (t == VK_FORMAT_R32_SINT)  { return sizeof(int32_t); }
+      if (t == VK_FORMAT_R32_UINT)  { return sizeof(uint32_t); }
+      if (t == VK_FORMAT_R32_SFLOAT){ return sizeof(float); }
       return 0;
    }
 
-   GLenum TextureBrick::tex_type(int c)
+   VkFormat TextureBrick::tex_format(int c)
    {
       if (c < nc_)
-         return tex_type_aux(data_[c]);
+         return tex_format_aux(data_[c]);
       else if (c == nmask_)
-         return GL_UNSIGNED_BYTE;
-      else if (c == nlabel_)
-         return GL_UNSIGNED_INT;
+		 return VK_FORMAT_R8_UNORM;
+	  else if (c == nlabel_)
+	  {
+		  if (data_[c]->type == nrrdTypeUChar)
+			  return VK_FORMAT_R8_UINT;
+		  else if (data_[c]->type == nrrdTypeUShort)
+			  return VK_FORMAT_R16_UINT;
+		  else if (data_[c]->type == nrrdTypeUInt)
+			  return VK_FORMAT_R32_UINT;
+	  }
+	  else if (c == nstroke_)
+         return VK_FORMAT_R8_UNORM;
       else
-         return GL_NONE;
+         return VK_FORMAT_UNDEFINED;
    }
 
    void *TextureBrick::tex_data(int c)
@@ -886,11 +949,11 @@ z
 	   {
 		   if(data_[c]->data)
 		   {
-			   unsigned char *ptr = (unsigned char *)(data_[c]->data);
+			   char *ptr = (char *)(data_[c]->data);
 			   long long offset = (long long)(oz()) * (long long)(sx()) * (long long)(sy()) +
 								  (long long)(oy()) * (long long)(sx()) +
 								  (long long)(ox());
-			   return ptr + offset * tex_type_size(tex_type(c));
+			   return ptr + offset * tex_format_size(tex_format(c));
 		   }
 	   }
 
@@ -899,18 +962,19 @@ z
 
    void *TextureBrick::tex_data_brk(int c, const FileLocInfo* finfo)
    {
-	   unsigned char *ptr = NULL;
-	   if(brkdata_) ptr = (unsigned char *)(brkdata_);
+	   char *ptr = NULL;
+	   if(brkdata_) ptr = (char *)(brkdata_->getData());
 	   else
 	   {
-		   int bd = tex_type_size(tex_type(c));
-		   ptr = new unsigned char[(size_t)nx_*(size_t)ny_*(size_t)nz_*(size_t)bd];
-		   if (!read_brick((char *)ptr, (size_t)nx_*(size_t)ny_*(size_t)nz_*(size_t)bd, finfo))
+		   int bd = tex_format_size(tex_format(c));
+		   size_t bsize = (size_t)nx_*(size_t)ny_*(size_t)nz_*(size_t)bd;
+		   ptr = new char[bsize];
+		   if (!read_brick(ptr, bsize, finfo))
 		   {
 			   delete [] ptr;
 			   return NULL;
 		   }
-		   brkdata_ = (void *)ptr;
+		   brkdata_ = make_shared<VL_Array>(ptr, bsize);
 	   }
 	   return ptr;
    }
@@ -922,7 +986,7 @@ z
          priority_ = 0;
          return;
       }
-      size_t vs = tex_type_size(tex_type(0));
+      size_t vs = tex_format_size(tex_format(0));
       size_t sx = data_[0]->axis[0].size;
       size_t sy = data_[0]->axis[1].size;
       if (vs == 1)
@@ -1035,25 +1099,33 @@ z
       }
 */   }
 
+   void TextureBrick::freeBrkData()
+   {
+	   if (brkdata_) brkdata_.reset();
+   }
+
    bool TextureBrick::read_brick(char* data, size_t size, const FileLocInfo* finfo)
    {
-	   if (!finfo) return false;
-	   
-	   if (finfo->isurl)
-	   {
-		   if (finfo->type == BRICK_FILE_TYPE_RAW)  return raw_brick_reader_url(data, size, finfo);
-		   if (finfo->type == BRICK_FILE_TYPE_JPEG) return jpeg_brick_reader_url(data, size, finfo);
-		   if (finfo->type == BRICK_FILE_TYPE_ZLIB) return zlib_brick_reader_url(data, size, finfo);
-	   }
-	   else
-	   {
-		   if (finfo->type == BRICK_FILE_TYPE_RAW)  return raw_brick_reader(data, size, finfo);
-		   if (finfo->type == BRICK_FILE_TYPE_JPEG) return jpeg_brick_reader(data, size, finfo);
-		   if (finfo->type == BRICK_FILE_TYPE_ZLIB) return zlib_brick_reader(data, size, finfo);
-	   }
+	   bool result = false;
+#ifndef _UNIT_TEST_VOLUME_RENDERER_
+	   if (!finfo) return result;
 
-	   return false;
+	   FileLocInfo tmpinfo = *finfo;
+	   char *tmp = NULL;
+	   size_t tmpsize;
+	   read_brick_without_decomp(tmp, tmpsize, &tmpinfo);
+	   if	   (finfo->type == BRICK_FILE_TYPE_RAW) { data = tmp; size = tmpsize; return true; }
+	   else if (finfo->type == BRICK_FILE_TYPE_JPEG) result = jpeg_decompressor(data, tmp, size, tmpsize);
+	   else if (finfo->type == BRICK_FILE_TYPE_ZLIB) result = zlib_decompressor(data, tmp, size, tmpsize);
+	   else if (finfo->type == BRICK_FILE_TYPE_H265) result = h265_decompressor(data, tmp, size, tmpsize, nx_, ny_);
+
+	   if (tmp)
+		   delete[] tmp;
+#endif
+	   return result;
    }
+
+#ifndef _UNIT_TEST_VOLUME_RENDERER_
 
 #define DOWNLOAD_BUFSIZE 8192
    
@@ -1102,6 +1174,21 @@ z
 	   readsize = -1;
 
 	   if (!finfo) return false;
+
+	   if (finfo->type == BRICK_FILE_TYPE_H265) {
+		   auto itr = memcache_table_.find(finfo->filename);
+		   if (itr != memcache_table_.end())
+		   {
+			   char *ptr = itr->second->data;
+			   size_t fsize = itr->second->datasize;
+			   size_t h265size = finfo->datasize;
+			   if (h265size <= 0) h265size = fsize;
+			   data = new char[h265size];
+			   memcpy(data, ptr+finfo->offset, h265size);
+			   readsize = h265size;
+			   return true;
+		   }
+	   }
 	   
 	   if (finfo->isurl)
 	   {
@@ -1137,8 +1224,8 @@ z
 				   return false;
 			   }
 			   curl_easy_reset(s_curl_);
-			   curl_easy_setopt(s_curl_, CURLOPT_URL, wxString::wxString(finfo->filename).ToStdString().c_str());
-			   curl_easy_setopt(s_curl_, CURLOPT_TIMEOUT, 10L);
+			   curl_easy_setopt(s_curl_, CURLOPT_URL, wxString(finfo->filename).ToStdString().c_str());
+               curl_easy_setopt(s_curl_, CURLOPT_TIMEOUT, 10L);
 			   curl_easy_setopt(s_curl_, CURLOPT_USERAGENT, "libcurl-agent/1.0");
 			   curl_easy_setopt(s_curl_, CURLOPT_WRITEFUNCTION, WriteFileCallback);
 			   curl_easy_setopt(s_curl_, CURLOPT_SSL_VERIFYPEER, 0);
@@ -1213,22 +1300,56 @@ z
 	   wstring fn = finfo->cached ? finfo->cache_filename : finfo->filename;
 	   ifs.open(ws2s(fn), ios::binary);
 	   if (!ifs) return false;
-	   size_t zsize = finfo->datasize;
-	   if (zsize <= 0) zsize = (size_t)ifs.seekg(0, std::ios::end).tellg();
-	   char *zdata = new char[zsize];
-	   ifs.seekg(finfo->offset, ios_base::beg);
-	   ifs.read((char*)zdata, zsize);
-	   if (ifs) ifs.close();
-	   data = zdata;
-	   readsize = zsize;
+//	   if (finfo->type != BRICK_FILE_TYPE_H265) 
+//	   {
+		   size_t zsize = finfo->datasize;
+		   if (zsize <= 0) zsize = (size_t)ifs.seekg(0, std::ios::end).tellg();
+		   char *zdata = new char[zsize];
+		   ifs.seekg(finfo->offset, ios_base::beg);
+		   ifs.read((char*)zdata, zsize);
+		   if (ifs) ifs.close();
+		   data = zdata;
+		   readsize = zsize;
+//	   } 
+/*	   else
+	   {
+		   size_t h265size = finfo->datasize;
+		   size_t fsize = (size_t)ifs.seekg(0, std::ios::end).tellg();
+		   if (h265size <= 0) h265size = fsize;
+		   char *fdata = new char[fsize];
+		   char *h265data = new char[h265size];
+		   ifs.seekg(0, ios_base::beg);
+		   ifs.read((char*)fdata, fsize);
+		   if (ifs) ifs.close();
+		   memcpy(h265data, fdata+finfo->offset, h265size);
+		   data = h265data;
+		   readsize = h265size;
+		   memcache_table_[finfo->filename] = new MemCache(fdata, fsize);
+		   memcache_order.push_back(finfo->filename);
+		   memcache_size += fsize;
 
+		   while (memcache_size > memcache_limit)
+		   {
+			   wstring name = *memcache_order.begin();
+			   auto itr = memcache_table_.find(name);
+			   if (itr != memcache_table_.end())
+			   {
+				   memcache_size -= itr->second->datasize;
+				   delete itr->second;
+				   memcache_table_.erase(itr);
+			   }
+			   memcache_order.pop_front();
+		   }
+	   }
+*/
 	   return true;
    }
 
-   bool TextureBrick::decompress_brick(char *out, char* in, size_t out_size, size_t in_size, int type)
+   bool TextureBrick::decompress_brick(char *out, char* in, size_t out_size, size_t in_size, int type, int w, int h)
    {
 	   if (type == BRICK_FILE_TYPE_JPEG) return jpeg_decompressor(out, in, out_size, in_size);
 	   if (type == BRICK_FILE_TYPE_ZLIB) return zlib_decompressor(out, in, out_size, in_size);
+	   if (type == BRICK_FILE_TYPE_H265) return h265_decompressor(out, in, out_size, in_size, w, h);
 
 	   return false;
    }
@@ -1324,6 +1445,19 @@ z
 	   return true;
    }
 
+   bool TextureBrick::h265_decompressor(char *out, char* in, size_t out_size, size_t in_size, int w, int h)
+   {
+	   FFMpegMemDecoder decoder((void *)in, in_size, 0, 0);
+	   decoder.start();
+	   int vw = decoder.getImageWidth();
+	   int vh = decoder.getImageHeight();
+	   if (vw - w >= 0) decoder.setImagePaddingR(vw - w);
+	   if (vh - h >= 0) decoder.setImagePaddingB(vh - h);
+	   decoder.grab(out);
+	   decoder.close();
+	   return true;
+   }
+
    void TextureBrick::delete_all_cache_files()
    {
 	   for(auto itr = cache_table_.begin(); itr != cache_table_.end(); ++itr)
@@ -1386,8 +1520,8 @@ z
 		   return false;
 	   }
 	   curl_easy_reset(s_curl_);
-	   curl_easy_setopt(s_curl_, CURLOPT_URL, wxString::wxString(finfo->filename).ToStdString().c_str());
-	   curl_easy_setopt(s_curl_, CURLOPT_TIMEOUT, 10L);
+	   curl_easy_setopt(s_curl_, CURLOPT_URL, wxString(finfo->filename).ToStdString().c_str());
+       curl_easy_setopt(s_curl_, CURLOPT_TIMEOUT, 10L);
 	   curl_easy_setopt(s_curl_, CURLOPT_USERAGENT, "libcurl-agent/1.0");
 	   curl_easy_setopt(s_curl_, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
 	   curl_easy_setopt(s_curl_, CURLOPT_WRITEDATA, &chunk);
@@ -1467,8 +1601,8 @@ z
 		   return false;
 	   }
 	   curl_easy_reset(s_curl_);
-	   curl_easy_setopt(s_curl_, CURLOPT_URL, wxString::wxString(finfo->filename).ToStdString().c_str());
-	   curl_easy_setopt(s_curl_, CURLOPT_TIMEOUT, 10L);
+	   curl_easy_setopt(s_curl_, CURLOPT_URL, wxString(finfo->filename).ToStdString().c_str());
+       curl_easy_setopt(s_curl_, CURLOPT_TIMEOUT, 10L);
 	   curl_easy_setopt(s_curl_, CURLOPT_USERAGENT, "libcurl-agent/1.0");
 	   curl_easy_setopt(s_curl_, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
 	   curl_easy_setopt(s_curl_, CURLOPT_WRITEDATA, &chunk);
@@ -1564,10 +1698,6 @@ z
    {
 	   return true;
    }
+#endif
 
-   void TextureBrick::freeBrkData()
-   {
-	   if (brkdata_) delete [] brkdata_;
-	   brkdata_ = NULL;
-   }
 } // end namespace FLIVR

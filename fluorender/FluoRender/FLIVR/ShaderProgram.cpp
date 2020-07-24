@@ -26,8 +26,8 @@
 //  DEALINGS IN THE SOFTWARE.
 //  
 
-#include "GL/glew.h"
 #include "ShaderProgram.h"
+#include "Vulkan/vulkanexamplebase.h"
 #include "Utils.h"
 #include "../compatibility.h"
 #include <time.h>
@@ -40,43 +40,28 @@ using std::string;
 
 namespace FLIVR
 {
-	bool ShaderProgram::init_ = false;
-	bool ShaderProgram::supported_ = false;
-	bool ShaderProgram::non_2_textures_ = false;
-	int ShaderProgram::max_texture_size_ = 64;
-	int ShaderProgram::v_major_ = 4;
-	int ShaderProgram::v_minor_ = 0;
-	string ShaderProgram::glsl_version_;
+	string ShaderProgram::glsl_version_ = "#version 450\n";
 
-	ShaderProgram::ShaderProgram(const string& frag_shader) :
-	id_(0), vert_shader_(""), frag_shader_(frag_shader), valid_(false)
+	ShaderProgram::ShaderProgram(const string& compute_shader) :
+	vert_shader_(""), frag_shader_(""), compute_shader_(compute_shader), valid_(false)
 	{
-		for (int i=0; i<MAX_SHADER_UNIFORMS; ++i)
-		{
-			loc_ui[i] = -1;
-			loc_vec4[i] = -1;
-			loc_mat4[i] = -1;
-		}
+		device_ = VK_NULL_HANDLE;
+		vert_shader_stage_.module = VK_NULL_HANDLE;
+		frag_shader_stage_.module = VK_NULL_HANDLE;
+		compute_shader_stage_.module = VK_NULL_HANDLE;
 	}
 	ShaderProgram::ShaderProgram(const string& vert_shader, const string& frag_shader) :
-	id_(0), vert_shader_(vert_shader), frag_shader_(frag_shader), valid_(false)
+	vert_shader_(vert_shader), frag_shader_(frag_shader), compute_shader_(""), valid_(false)
 	{
-		for (int i=0; i<MAX_SHADER_UNIFORMS; ++i)
-		{
-			loc_ui[i] = -1;
-			loc_vec4[i] = -1;
-			loc_mat4[i] = -1;
-		}
+		device_ = VK_NULL_HANDLE;
+		vert_shader_stage_.module = VK_NULL_HANDLE;
+		frag_shader_stage_.module = VK_NULL_HANDLE;
+		compute_shader_stage_.module = VK_NULL_HANDLE;
 	}
 
-	ShaderProgram::~ShaderProgram ()
+	ShaderProgram::~ShaderProgram()
 	{
 		destroy();
-	}
-
-	unsigned int ShaderProgram::id()
-	{
-		return id_;
 	}
 
 	bool ShaderProgram::valid()
@@ -84,252 +69,273 @@ namespace FLIVR
 		return valid_;
 	}
 
-	bool ShaderProgram::init()
+	bool ShaderProgram::create(VkDevice device)
 	{
-		return init_;
+
+		init_glslang();
+		VkShaderModuleCreateInfo moduleCreateInfo;
+
+		if (!vert_shader_.empty()) {
+			std::vector<unsigned int> vtx_spv;
+			vert_shader_stage_.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+			vert_shader_stage_.pNext = NULL;
+			vert_shader_stage_.pSpecializationInfo = NULL;
+			vert_shader_stage_.flags = 0;
+			vert_shader_stage_.stage = VK_SHADER_STAGE_VERTEX_BIT;
+			vert_shader_stage_.pName = "main";
+
+			if ( !GLSLtoSPV(VK_SHADER_STAGE_VERTEX_BIT, vert_shader_.data(), vtx_spv) )
+				return true;
+
+			moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+			moduleCreateInfo.pNext = NULL;
+			moduleCreateInfo.flags = 0;
+			moduleCreateInfo.codeSize = vtx_spv.size() * sizeof(unsigned int);
+			moduleCreateInfo.pCode = vtx_spv.data();
+			VK_CHECK_RESULT( vkCreateShaderModule(device, &moduleCreateInfo, NULL, &vert_shader_stage_.module) );
+		}
+
+		if (!frag_shader_.empty()) {
+			std::vector<unsigned int> frag_spv;
+			frag_shader_stage_.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+			frag_shader_stage_.pNext = NULL;
+			frag_shader_stage_.pSpecializationInfo = NULL;
+			frag_shader_stage_.flags = 0;
+			frag_shader_stage_.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+			frag_shader_stage_.pName = "main";
+
+			if ( !GLSLtoSPV(VK_SHADER_STAGE_FRAGMENT_BIT, frag_shader_.data(), frag_spv) )
+				return true;
+
+			moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+			moduleCreateInfo.pNext = NULL;
+			moduleCreateInfo.flags = 0;
+			moduleCreateInfo.codeSize = frag_spv.size() * sizeof(unsigned int);
+			moduleCreateInfo.pCode = frag_spv.data();
+			VK_CHECK_RESULT( vkCreateShaderModule(device, &moduleCreateInfo, NULL, &frag_shader_stage_.module) );
+		}
+
+		if (!compute_shader_.empty()) {
+			std::vector<unsigned int> compute_spv;
+			compute_shader_stage_.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+			compute_shader_stage_.pNext = NULL;
+			compute_shader_stage_.pSpecializationInfo = NULL;
+			compute_shader_stage_.flags = 0;
+			compute_shader_stage_.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+			compute_shader_stage_.pName = "main";
+
+			if (!GLSLtoSPV(VK_SHADER_STAGE_COMPUTE_BIT, compute_shader_.data(), compute_spv))
+				return true;
+
+			moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+			moduleCreateInfo.pNext = NULL;
+			moduleCreateInfo.flags = 0;
+			moduleCreateInfo.codeSize = compute_spv.size() * sizeof(unsigned int);
+			moduleCreateInfo.pCode = compute_spv.data();
+			VK_CHECK_RESULT(vkCreateShaderModule(device, &moduleCreateInfo, NULL, &compute_shader_stage_.module));
+		}
+
+		device_ = device;
+
+		valid_ = true;
+
+		finalize_glslang();
+
+		return false;
+
 	}
 
-	void ShaderProgram::init_shaders_supported()
+	void ShaderProgram::destroy()
 	{
-		glewExperimental = GL_TRUE;
-		if (!init_ && glewInit()==GLEW_OK)
+		if (device_ != VK_NULL_HANDLE)
 		{
-			//get gl version
-			glGetIntegerv(GL_MAJOR_VERSION, &v_major_);
-			glGetIntegerv(GL_MINOR_VERSION, &v_minor_);
-			std::ostringstream oss;
-			oss << "#version " << v_major_ << v_minor_ << 0 << "\n";
-			glsl_version_ = oss.str();
-
-			supported_ = glTexImage3D;
-
-			//check max texture size
-			GLint texSize;
-			glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, &texSize);
-			max_texture_size_ = texSize;
-
-#ifdef _WIN32
-			const GLubyte* strRenderer=0;
-			if ((strRenderer=glGetString(GL_RENDERER)))
-			{
-				string str = (char*)strRenderer;
-				if (str.find("FirePro") != string::npos)
-					glPixelTransferf(GL_RED_BIAS, FLT_MIN);//for AMD FirePro cards
-			}
-#endif
-
-			// Check for non-power-of-two texture support.
-			non_2_textures_ = true;//GLEW_ARB_texture_non_power_of_two!=0;
-
-			//random numbers
-			srand((unsigned int)TIME(NULL));
-
-			init_ = true;
+			if (vert_shader_stage_.module != VK_NULL_HANDLE) 
+				vkDestroyShaderModule(device_, vert_shader_stage_.module, NULL);
+			if (frag_shader_stage_.module != VK_NULL_HANDLE) 
+				vkDestroyShaderModule(device_, frag_shader_stage_.module, NULL);
+			if (compute_shader_stage_.module != VK_NULL_HANDLE)
+				vkDestroyShaderModule(device_, compute_shader_stage_.module, NULL);
 		}
 	}
 
-	bool ShaderProgram::shaders_supported()
-	{
-		return supported_;
+	EShLanguage ShaderProgram::FindLanguage(const VkShaderStageFlagBits shader_type) {
+		switch (shader_type) {
+		case VK_SHADER_STAGE_VERTEX_BIT:
+			return EShLangVertex;
+
+		case VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT:
+			return EShLangTessControl;
+
+		case VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT:
+			return EShLangTessEvaluation;
+
+		case VK_SHADER_STAGE_GEOMETRY_BIT:
+			return EShLangGeometry;
+
+		case VK_SHADER_STAGE_FRAGMENT_BIT:
+			return EShLangFragment;
+
+		case VK_SHADER_STAGE_COMPUTE_BIT:
+			return EShLangCompute;
+
+		default:
+			return EShLangVertex;
+		}
 	}
 
-	int ShaderProgram::max_texture_size()
-	{
-		return max_texture_size_;
+	void ShaderProgram::init_glslang() {
+		glslang::InitializeProcess();
 	}
 
-	bool ShaderProgram::texture_non_power_of_two()
-	{
-		return non_2_textures_;
+	void ShaderProgram::finalize_glslang() {
+		glslang::FinalizeProcess();
 	}
 
-	bool
-		ShaderProgram::create()
-	{
-		if (shaders_supported())
-		{
-			// create the GLSL program and attach the shader
-			id_ = glCreateProgram();
-			if (id_ == 0) return true;
-			valid_ = true;
+	void ShaderProgram::init_resources(TBuiltInResource &Resources) {
+		Resources.maxLights = 32;
+		Resources.maxClipPlanes = 6;
+		Resources.maxTextureUnits = 32;
+		Resources.maxTextureCoords = 32;
+		Resources.maxVertexAttribs = 64;
+		Resources.maxVertexUniformComponents = 4096;
+		Resources.maxVaryingFloats = 64;
+		Resources.maxVertexTextureImageUnits = 32;
+		Resources.maxCombinedTextureImageUnits = 80;
+		Resources.maxTextureImageUnits = 32;
+		Resources.maxFragmentUniformComponents = 4096;
+		Resources.maxDrawBuffers = 32;
+		Resources.maxVertexUniformVectors = 128;
+		Resources.maxVaryingVectors = 8;
+		Resources.maxFragmentUniformVectors = 16;
+		Resources.maxVertexOutputVectors = 16;
+		Resources.maxFragmentInputVectors = 15;
+		Resources.minProgramTexelOffset = -8;
+		Resources.maxProgramTexelOffset = 7;
+		Resources.maxClipDistances = 8;
+		Resources.maxComputeWorkGroupCountX = 65535;
+		Resources.maxComputeWorkGroupCountY = 65535;
+		Resources.maxComputeWorkGroupCountZ = 65535;
+		Resources.maxComputeWorkGroupSizeX = 1024;
+		Resources.maxComputeWorkGroupSizeY = 1024;
+		Resources.maxComputeWorkGroupSizeZ = 64;
+		Resources.maxComputeUniformComponents = 1024;
+		Resources.maxComputeTextureImageUnits = 16;
+		Resources.maxComputeImageUniforms = 8;
+		Resources.maxComputeAtomicCounters = 8;
+		Resources.maxComputeAtomicCounterBuffers = 1;
+		Resources.maxVaryingComponents = 60;
+		Resources.maxVertexOutputComponents = 64;
+		Resources.maxGeometryInputComponents = 64;
+		Resources.maxGeometryOutputComponents = 128;
+		Resources.maxFragmentInputComponents = 128;
+		Resources.maxImageUnits = 8;
+		Resources.maxCombinedImageUnitsAndFragmentOutputs = 8;
+		Resources.maxCombinedShaderOutputResources = 8;
+		Resources.maxImageSamples = 0;
+		Resources.maxVertexImageUniforms = 0;
+		Resources.maxTessControlImageUniforms = 0;
+		Resources.maxTessEvaluationImageUniforms = 0;
+		Resources.maxGeometryImageUniforms = 0;
+		Resources.maxFragmentImageUniforms = 8;
+		Resources.maxCombinedImageUniforms = 8;
+		Resources.maxGeometryTextureImageUnits = 16;
+		Resources.maxGeometryOutputVertices = 256;
+		Resources.maxGeometryTotalOutputComponents = 1024;
+		Resources.maxGeometryUniformComponents = 1024;
+		Resources.maxGeometryVaryingComponents = 64;
+		Resources.maxTessControlInputComponents = 128;
+		Resources.maxTessControlOutputComponents = 128;
+		Resources.maxTessControlTextureImageUnits = 16;
+		Resources.maxTessControlUniformComponents = 1024;
+		Resources.maxTessControlTotalOutputComponents = 4096;
+		Resources.maxTessEvaluationInputComponents = 128;
+		Resources.maxTessEvaluationOutputComponents = 128;
+		Resources.maxTessEvaluationTextureImageUnits = 16;
+		Resources.maxTessEvaluationUniformComponents = 1024;
+		Resources.maxTessPatchComponents = 120;
+		Resources.maxPatchVertices = 32;
+		Resources.maxTessGenLevel = 64;
+		Resources.maxViewports = 16;
+		Resources.maxVertexAtomicCounters = 0;
+		Resources.maxTessControlAtomicCounters = 0;
+		Resources.maxTessEvaluationAtomicCounters = 0;
+		Resources.maxGeometryAtomicCounters = 0;
+		Resources.maxFragmentAtomicCounters = 8;
+		Resources.maxCombinedAtomicCounters = 8;
+		Resources.maxAtomicCounterBindings = 1;
+		Resources.maxVertexAtomicCounterBuffers = 0;
+		Resources.maxTessControlAtomicCounterBuffers = 0;
+		Resources.maxTessEvaluationAtomicCounterBuffers = 0;
+		Resources.maxGeometryAtomicCounterBuffers = 0;
+		Resources.maxFragmentAtomicCounterBuffers = 1;
+		Resources.maxCombinedAtomicCounterBuffers = 1;
+		Resources.maxAtomicCounterBufferSize = 16384;
+		Resources.maxTransformFeedbackBuffers = 4;
+		Resources.maxTransformFeedbackInterleavedComponents = 64;
+		Resources.maxCullDistances = 8;
+		Resources.maxCombinedClipAndCullDistances = 8;
+		Resources.maxSamples = 4;
+		Resources.maxMeshOutputVerticesNV = 256;
+		Resources.maxMeshOutputPrimitivesNV = 512;
+		Resources.maxMeshWorkGroupSizeX_NV = 32;
+		Resources.maxMeshWorkGroupSizeY_NV = 1;
+		Resources.maxMeshWorkGroupSizeZ_NV = 1;
+		Resources.maxTaskWorkGroupSizeX_NV = 32;
+		Resources.maxTaskWorkGroupSizeY_NV = 1;
+		Resources.maxTaskWorkGroupSizeZ_NV = 1;
+		Resources.maxMeshViewCountNV = 4;
+		Resources.limits.nonInductiveForLoops = 1;
+		Resources.limits.whileLoops = 1;
+		Resources.limits.doWhileLoops = 1;
+		Resources.limits.generalUniformIndexing = 1;
+		Resources.limits.generalAttributeMatrixVectorIndexing = 1;
+		Resources.limits.generalVaryingIndexing = 1;
+		Resources.limits.generalSamplerIndexing = 1;
+		Resources.limits.generalVariableIndexing = 1;
+		Resources.limits.generalConstantMatrixVectorIndexing = 1;
+	}
 
-			GLuint v_shader, f_shader;
-			v_shader = glCreateShader(GL_VERTEX_SHADER);
+	//
+	// Compile a given string containing GLSL into SPV for use by VK
+	// Return value of false means an error was encountered.
+	//
+	bool ShaderProgram::GLSLtoSPV(const VkShaderStageFlagBits shader_type, const char *pshader, std::vector<unsigned int> &spirv) {
+		EShLanguage stage = FindLanguage(shader_type);
+		glslang::TShader shader(stage);
+		glslang::TProgram program;
+		const char *shaderStrings[1];
+		TBuiltInResource Resources = {};
+		init_resources(Resources);
 
-			f_shader = glCreateShader(GL_FRAGMENT_SHADER);
+		// Enable SPIR-V and Vulkan rules when parsing GLSL
+		EShMessages messages = (EShMessages)(EShMsgSpvRules | EShMsgVulkanRules);
 
-			if (v_shader == 0 || f_shader == 0) return true;
+		shaderStrings[0] = pshader;
+		shader.setStrings(shaderStrings, 1);
 
-			// set the source code and compile the shader // vertex
-			const char *v_source[1], *f_source[1];
-			v_source[0] = vert_shader_.c_str();
-			GLint lengths[1];
-			lengths[0] = (int)std::strlen(v_source[0]);
-			glShaderSource(v_shader, 1, v_source, lengths);
-			glCompileShader(v_shader);
+		if (!shader.parse(&Resources, 100, false, messages)) {
+			puts(shader.getInfoLog());
+			puts(shader.getInfoDebugLog());
+			return false;  // something didn't work
+		}
 
-			// check the compilation of the shader
-			GLint shader_status[1];
-			char shader_log[1000];
-			GLint shader_length[1];
-			bool attach_vert = strcmp(*v_source,"") != 0;
-			glGetShaderiv(v_shader, GL_COMPILE_STATUS, shader_status);
-			if (shader_status[0] == GL_FALSE) {
-				glGetShaderInfoLog(v_shader, sizeof(shader_log), shader_length, shader_log);
-				std::cerr << "Error compiling vertex shader: " << shader_log << std::endl;
-				attach_vert = false;
-			}
+		program.addShader(&shader);
 
-			// set the source code and compile the shader // fragment
-			f_source[0] = frag_shader_.c_str();
-			lengths[0] = (int)std::strlen(f_source[0]);
-			glShaderSource(f_shader, 1, f_source, lengths);
-			glCompileShader(f_shader);
+		//
+		// Program-level processing...
+		//
 
-			// check the compilation of the shader
-			bool attach_frag = true;
-			glGetShaderiv(f_shader, GL_COMPILE_STATUS, shader_status);
-			if (shader_status[0] == GL_FALSE) {
-				glGetShaderInfoLog(f_shader, sizeof(shader_log), shader_length, shader_log);
-				std::cerr << "Error compiling fragment shader: " << shader_log << std::endl;
-				attach_frag = false;
-			}
-
-			if (attach_vert)
-				glAttachShader(id_, v_shader);
-			if (attach_frag)
-				glAttachShader(id_, f_shader);
-
-			//link time
-			glLinkProgram(id_);
-			glGetProgramiv(id_, GL_LINK_STATUS, shader_status);
-			if (shader_status[0] == GL_FALSE) {
-				glGetProgramInfoLog(id_, sizeof(shader_log), shader_length, shader_log);
-				std::cerr << "Error linking shaders: " << shader_log << std::endl;
-				return true;
-			}
-
-			glUseProgram(id_);
-
-			//glBindFragDataLocation(id_, 0, "FragColor");
-
-			const char *loc_strings[] = {
-				"tex0", "tex1", "tex2", "tex3",
-				"tex4", "tex5", "tex6", "tex7",
-				"tex8", "tex9", "tex10", "tex11",
-				"tex12", "tex13", "tex14", "tex15"};
-
-			int location;
-			for (size_t i=0; i<MAX_SHADER_UNIFORMS; ++i)
-			{
-				glActiveTexture(GL_TEXTURE0 + i);
-				location = glGetUniformLocation(id_, loc_strings[i]);
-				if (location != -1)
-					glUniform1i(location, i);
-			}
-
-			glValidateProgram(id_);
-			glGetProgramiv(id_, GL_VALIDATE_STATUS, shader_status);
-			if (shader_status[0] == GL_FALSE) {
-				glGetProgramInfoLog(id_, sizeof(shader_log), shader_length, shader_log);
-				std::cerr << "Invalid shader program: " << shader_log << std::endl;
-				return true;
-			}
-
+		if (!program.link(messages)) {
+			puts(shader.getInfoLog());
+			puts(shader.getInfoDebugLog());
+			fflush(stdout);
 			return false;
 		}
+
+		glslang::GlslangToSpv(*program.getIntermediate(stage), spirv);
 		return true;
 	}
 
-	void ShaderProgram::destroy ()
-	{
-		if (shaders_supported())
-		{
-			glDeleteProgram(id_);
-			id_ = 0;
-		}
-	}
 
-	void ShaderProgram::bind ()
-	{
-		if (shaders_supported())
-			glUseProgram(id_);
-	}
-
-	void ShaderProgram::bind_frag_data_location(int color_num, const char* name)
-	{
-		if (shaders_supported())
-		{
-			glBindFragDataLocation(id_, color_num, name);
-		}
-	}
-
-	void ShaderProgram::release ()
-	{
-		if (shaders_supported())
-		{
-			glUseProgram(0);
-		}
-	}
-
-	void ShaderProgram::setLocalParam(int i, double x, double y, double z, double w)
-	{
-		if (shaders_supported())
-		{
-			const char *loc_strings[] = {"loc0", "loc1", "loc2", "loc3",
-				"loc4", "loc5", "loc6", "loc7",
-				"loc8", "loc9", "loc10", "loc11",
-				"loc12", "loc13", "loc14", "loc15"};
-
-			if (loc_vec4[i] == -1)
-			{
-				loc_vec4[i] = glGetUniformLocation(id_, loc_strings[i]);
-				if (loc_vec4[i] == -1)
-					loc_vec4[i]--;
-			}
-			if (loc_vec4[i] >=0)
-				glUniform4f(loc_vec4[i], float(x), float(y), float(z), float(w));
-		}
-	}
-
-	void ShaderProgram::setLocalParamMatrix(int i, float* matrix4)
-	{
-		if (shaders_supported())
-		{
-			const char *loc_strings[] = {"matrix0", "matrix1", "matrix2", "matrix3",
-				"matrix4", "matrix5", "matrix6", "matrix7",
-				"matrix8", "matrix9", "matrix10", "matrix11",
-				"matrix12", "matrix13", "matrix14", "matrix15"};
-
-			if (loc_mat4[i] == -1)
-			{
-				loc_mat4[i] = glGetUniformLocation(id_, loc_strings[i]);
-				if (loc_mat4[i] == -1)
-					loc_mat4[i]--;
-			}
-			if (loc_mat4[i] >= 0)
-				glUniformMatrix4fv(loc_mat4[i], 1, false, matrix4);
-		}
-	}
-
-	void ShaderProgram::setLocalParamUInt(int i, unsigned int value)
-	{
-		if (shaders_supported())
-		{
-			const char *loc_strings[] = {"loci0", "loci1", "loci2", "loci3",
-				"loci4", "loci5", "loci6", "loci7",
-				"loci8", "loci9", "loci10", "loci11",
-				"loci12", "loci13", "loci14", "loci15"};
-
-			if (loc_ui[i] == -1)
-			{
-				loc_ui[i] = glGetUniformLocation(id_, loc_strings[i]);
-				if (loc_ui[i] == -1)
-					loc_ui[i]--;
-			}
-			if (loc_ui[i] >= 0)
-				glUniform1ui(loc_ui[i], value);
-		}
-	}
 
 } // end namespace FLIVR

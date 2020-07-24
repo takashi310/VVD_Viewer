@@ -25,6 +25,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 */
+#include "DLLExport.h"
 #include "DataManager.h"
 #include "utility.h"
 #include "VolumeSelector.h"
@@ -45,7 +46,6 @@ DEALINGS IN THE SOFTWARE.
 #include <wx/wx.h>
 #include <wx/clrpicker.h>
 #include <wx/spinbutt.h>
-#include <wx/glcanvas.h>
 #include <wx/event.h>
 #include <wx/srchctrl.h>
 #include <wx/thread.h>
@@ -53,9 +53,12 @@ DEALINGS IN THE SOFTWARE.
 #include <vector>
 #include <stdarg.h>
 #include <unordered_map>
+#include <memory>
 #include "nv/timer.h"
 
 #include <glm/glm.hpp>
+
+#include "VVulkan.h"
 
 #ifndef _VRENDERVIEW_H_
 #define _VRENDERVIEW_H_
@@ -88,11 +91,11 @@ DEALINGS IN THE SOFTWARE.
 using namespace std;
 
 class VRenderView;
-class VRenderGLView;
+class VRenderVulkanView;
 class LMSeacher;
 
 //tree item data
-class LMItemInfo : public wxTreeItemData
+class EXPORT_API LMItemInfo : public wxTreeItemData
 {
 public:
 	LMItemInfo()
@@ -108,7 +111,7 @@ public:
 	Point p;
 };
 
-class LMTreeCtrl : public wxTreeCtrl
+class EXPORT_API LMTreeCtrl : public wxTreeCtrl
 {
 	enum
 	{
@@ -116,7 +119,7 @@ class LMTreeCtrl : public wxTreeCtrl
 	};
 
 public:
-	LMTreeCtrl(VRenderGLView *glview,
+	LMTreeCtrl(VRenderVulkanView *glview,
 		wxWindow* parent,
 		wxWindowID id,
 		const wxPoint& pos = wxDefaultPosition,
@@ -141,7 +144,7 @@ public:
 	void StartManip(wxString str);
 
 private:
-	VRenderGLView* m_glview;
+	VRenderVulkanView* m_glview;
 
 	LMSeacher *m_schtxtctrl;
 
@@ -164,10 +167,10 @@ protected: //Possible TODO
 };
 
 
-class LMSeacher : public wxTextCtrl
+class EXPORT_API LMSeacher : public wxTextCtrl
 {
 public:
-	LMSeacher(VRenderGLView* glview,
+	LMSeacher(VRenderVulkanView* glview,
 		wxWindow* parent,
 		wxWindowID id,
 		const wxString& text = wxT(""),
@@ -179,7 +182,7 @@ public:
 	void KillFocus();
 
 private:
-	VRenderGLView *m_glview;
+	VRenderVulkanView *m_glview;
 	wxButton *m_dummy;
 
 	LMTreeCtrl *m_list;
@@ -202,119 +205,35 @@ private:
 	DECLARE_EVENT_TABLE()
 };
 
-struct VolumeLoaderData
-{
-	FileLocInfo *finfo;
-	TextureBrick *brick;
-	VolumeData *vd;
-	unsigned long long datasize;
-	int mode;
-};
-
-struct VolumeDecompressorData
-{
-	char *in_data;
-	size_t in_size;
-	TextureBrick *b;
-	FileLocInfo *finfo;
-	VolumeData *vd;
-	unsigned long long datasize;
-	int mode;
-};
-
-class VolumeLoader;
-
-class VolumeDecompressorThread : public wxThread
-{
-    public:
-		VolumeDecompressorThread(VolumeLoader *vl);
-		~VolumeDecompressorThread();
-    protected:
-		virtual ExitCode Entry();
-        VolumeLoader* m_vl;
-};
-
-class VolumeLoaderThread : public wxThread
-{
-    public:
-		VolumeLoaderThread(VolumeLoader *vl);
-		~VolumeLoaderThread();
-    protected:
-		virtual ExitCode Entry();
-        VolumeLoader* m_vl;
-};
-
-class VolumeLoader
-{
-	public:
-		VolumeLoader();
-		~VolumeLoader();
-		void Queue(VolumeLoaderData brick);
-		void ClearQueues();
-		void Set(vector<VolumeLoaderData> vld);
-		void Abort();
-		void StopAll();
-		bool Run();
-		void SetMaxThreadNum(int num) {m_max_decomp_th = num;}
-		void SetMemoryLimitByte(long long limit) {m_memory_limit = limit;}
-		void CleanupLoadedBrick();
-		void RemoveAllLoadedBrick();
-		void RemoveBrickVD(VolumeData *vd);
-		void GetPalams(long long &used_mem, int &running_decomp_th, int &queue_num, int &decomp_queue_num);
-
-		static bool sort_data_dsc(const VolumeLoaderData b1, const VolumeLoaderData b2)
-		{ return b2.brick->get_d() > b1.brick->get_d(); }
-		static bool sort_data_asc(const VolumeLoaderData b1, const VolumeLoaderData b2)
-		{ return b2.brick->get_d() < b1.brick->get_d(); }
-
-	protected:
-		VolumeLoaderThread *m_thread;
-		wxCriticalSection m_pThreadCS;
-		vector<VolumeLoaderData> m_queues;
-		vector<VolumeLoaderData> m_queued;
-		vector<VolumeDecompressorData> m_decomp_queues;
-		vector<VolumeDecompressorThread *> m_decomp_threads;
-		unordered_map<TextureBrick*, VolumeLoaderData> m_loaded;
-		int m_running_decomp_th;
-		int m_max_decomp_th;
-		bool m_valid;
-
-		long long m_memory_limit;
-		long long m_used_memory;
-
-		inline void AddLoadedBrick(VolumeLoaderData lbd)
-		{
-			m_loaded[lbd.brick] = lbd;
-			m_used_memory += lbd.datasize;
-		}
-
-		friend class VolumeLoaderThread;
-		friend class VolumeDecompressorThread;
-};
-
-class VRenderGLView: public wxGLCanvas
+class EXPORT_API VRenderVulkanView: public wxWindow
 {
 	enum
 	{
-		ID_Searcher = wxID_HIGHEST+6001
+		ID_Searcher = wxID_HIGHEST+6001,
+		ID_Timer,
+		ID_CTXMENU_SHOW_ALL,
+		ID_CTXMENU_HIDE_OTHER_VOLS,
+		ID_CTXMENU_HIDE_THIS_VOL,
+		ID_CTXMENU_SHOW_ALL_FRAGMENTS,
+        ID_CTXMENU_DESELECT_ALL_FRAGMENTS,
+		ID_CTXMENU_HIDE_OTHER_FRAGMENTS,
+		ID_CTXMENU_HIDE_SELECTED_FLAGMENTS,
+		ID_CTXMENU_UNDO_VISIBILITY_SETTING_CHANGES,
+		ID_CTXMENU_REDO_VISIBILITY_SETTING_CHANGES,
 	};
 
 public:
-	VRenderGLView(wxWindow* frame,
-		wxWindow* parent,
-		wxWindowID id,
-		const int* attriblist = NULL,
-		wxGLContext* sharedContext=0,
-		const wxPoint& pos=wxDefaultPosition,
-		const wxSize& size=wxDefaultSize,
-		long style=0);
-	~VRenderGLView();
+	VRenderVulkanView(wxWindow* frame,
+		wxWindow *parent,
+        wxWindowID id,
+        const wxPoint& pos = wxDefaultPosition,
+        const wxSize& size = wxDefaultSize,
+        long style = 0,
+        const wxString& name = "VulkanCanvasName");
+	~VRenderVulkanView();
 
-	//for degugging, this allows inspection of the pixel format actually given.
-#ifdef _WIN32
-	int GetPixelFormat(PIXELFORMATDESCRIPTOR *pfd);
-#endif
-	wxString GetOGLVersion();
+	double GetAvailableGraphicsMemory(int device_id);
+
 	//initialization
 	void Init();
 
@@ -340,6 +259,7 @@ public:
 	MeshData* GetMeshData(wxString &name);
 	Annotations* GetAnnotations(wxString &name);
 	DataGroup* GetGroup(wxString &name);
+	DataGroup* GetParentGroup(wxString& name);
 	MeshGroup* GetMGroup(wxString str);
 	//add
 	DataGroup* AddVolumeData(VolumeData* vd, wxString group_name="");
@@ -554,7 +474,9 @@ public:
 	void EnableSBText() {m_disp_scale_bar_text = true;}
 	void DisableSBText() {m_disp_scale_bar_text = false;}
 	void SetScaleBarLen(double len) {m_sb_length = len;}
+	double GetScaleBarLen() { return m_sb_length; }
 	void SetSBText(wxString text) {m_sb_text = text;}
+	wxString GetSBText() { return m_sb_text;}
 
 	//gamma settings
 	Color GetGamma() {return m_gamma;}
@@ -694,10 +616,14 @@ public:
 	void Run4DScript();
 
 	//start loop update
-	void StartLoopUpdate();
+	void StartLoopUpdate(bool reset_peeling_layer=true);
 	void HaltLoopUpdate();
 	void RefreshGL(bool erase=false, bool start_loop=true);
 	void RefreshGLOverlays(bool erase=false);
+//#ifdef __WXMAC__
+    virtual void Refresh( bool eraseBackground = true,
+                         const wxRect *rect = NULL ) wxOVERRIDE;
+//#endif
 
 	//rulers
 	int GetRulerType();
@@ -725,6 +651,8 @@ public:
 	//text renderer
 	void SetTextRenderer(TextRenderer* text_renderer)
 	{ m_text_renderer = text_renderer; }
+	TextRenderer* GetTextRenderer()
+	{ return m_text_renderer; }
 
 	void SetPreDraw(bool pre_draw) { m_pre_draw = pre_draw; }//added by takashi
 
@@ -757,6 +685,28 @@ public:
 
 	VolumeData *CopyLevel(VolumeData *src, int lv=-1);
 
+	void SetBufferScale(int mode);
+
+	void FixScaleBarLen(bool fix, double len=-1.0);
+	void GetScaleBarFixed(bool &fix, double &len, int &unitid);
+	void SetScaleBarDigit(int digit){ m_sclbar_digit = (digit >= 0 && digit <= 8) ? digit : 3; }
+	int GetScaleBarDigit(){ return m_sclbar_digit; }
+
+	VolumeData* GetCurrentVolume() {return m_cur_vol;}
+	void SetCurrentVolume(VolumeData *vd) {m_cur_vol = vd;}
+	DataGroup* GetCurrentVolGroup();
+
+	double CalcCameraDistance();
+
+	void OnErase(wxEraseEvent& event);
+    
+    void SetRecording(bool val) { m_recording = val; }
+    bool GetRecording() { return m_recording; }
+    void DownloadRecordedFrame(void *image, VkFormat &format);
+    
+    void SetForceHideMask(bool val) { m_force_hide_mask = val; m_draw_mask = !val; }
+    bool GetForceHideMask() { return m_force_hide_mask; }
+
 public:
 	//script run
 	bool m_run_script;
@@ -768,6 +718,21 @@ public:
 	bool m_capture_tsequ;
 	bool m_capture_bat;
 	bool m_capture_param;
+	bool m_capture_change_res;
+	int m_capture_resx;
+	int m_capture_resy;
+	bool m_tile_rendering;
+	int m_current_tileid;
+	int m_tile_xnum;
+	int m_tile_ynum;
+	int m_tile_w;
+	int m_tile_h;
+	unsigned char *m_tiled_image;
+	int m_nx;
+	int m_ny;
+	bool m_postdraw;
+	int m_tmp_res_mode;
+	std::map<VolumeData*,double> m_tmp_sample_rates;
 	//begin and end frame
 	int m_begin_frame;
 	int m_end_frame;
@@ -827,10 +792,10 @@ public:
 	//linked rotation
 	bool m_linked_rot;
 
+	shared_ptr<VVulkan> m_vulkan;
+	std::shared_ptr<Vulkan2dRender> m_v2drender;
+
 private:
-	wxString m_GLversion;
-	wxGLContext* m_glRC;
-	bool m_sharedRC;
 	wxWindow* m_frame;
 	VRenderView* m_vrv;
 	//populated lists of data
@@ -898,32 +863,56 @@ private:
 	bool m_paint_enable;
 	bool m_paint_display;
 	//2d frame buffers
-	GLuint m_fbo;
-	GLuint m_tex;
-	GLuint m_tex_wt2;  //use this texture instead of m_tex when the volume for segmentation is rendered
-	GLuint m_fbo_final;
-	GLuint m_tex_final;
+	std::unique_ptr<vks::VFrameBuffer> m_fbo;
+	std::shared_ptr<vks::VTexture> m_tex;
+	std::unique_ptr<vks::VFrameBuffer> m_fbo_wt2;
+	std::shared_ptr<vks::VTexture> m_tex_wt2;  //use this texture instead of m_tex when the volume for segmentation is rendered
+	std::unique_ptr<vks::VFrameBuffer> m_fbo_final;
+	std::shared_ptr<vks::VTexture> m_tex_final;
+	bool m_clear_final_buffer;
 	//temp buffer for large data compositing
-	GLuint m_fbo_temp;
-	GLuint m_tex_temp;
+	std::unique_ptr<vks::VFrameBuffer> m_fbo_temp;
+	std::shared_ptr<vks::VTexture> m_tex_temp;
+	std::unique_ptr<vks::VFrameBuffer> m_fbo_temp_restore;
 	//shading (shadow) overlay
-	GLuint m_fbo_ol1;
-	GLuint m_fbo_ol2;
-	GLuint m_tex_ol1;
-	GLuint m_tex_ol2;
+	std::unique_ptr<vks::VFrameBuffer> m_fbo_ol1;
+	std::unique_ptr<vks::VFrameBuffer> m_fbo_ol2;
+	std::shared_ptr<vks::VTexture> m_tex_ol1;
+	std::shared_ptr<vks::VTexture> m_tex_ol2;
 	//paint buffer
-	GLuint m_fbo_paint;
-	GLuint m_tex_paint;
+	std::unique_ptr<vks::VFrameBuffer> m_fbo_paint;
+	std::shared_ptr<vks::VTexture> m_tex_paint;
 	bool m_clear_paint;
 	//depth peeling buffers
-	vector<GLuint> m_dp_fbo_list;
-	vector<GLuint> m_dp_tex_list;
-	vector<GLuint> m_dp_ctex_list;
+	vector<std::unique_ptr<vks::VFrameBuffer>> m_dp_fbo_list;
+	vector<std::shared_ptr<vks::VTexture>> m_dp_tex_list;
+	vector<std::shared_ptr<vks::VTexture>> m_dp_ctex_list;
+	std::unique_ptr<vks::VFrameBuffer> m_dp_buf_fbo;
+	std::shared_ptr<vks::VTexture> m_dp_buf_tex;
+
+	//depth front tex for volume renderer (tex14)
+	std::shared_ptr<vks::VTexture> m_vol_dp_fr_tex;
+	//depth back tex for volume renderer (tex15)
+	std::shared_ptr<vks::VTexture> m_vol_dp_bk_tex;
+	//depth front tex for mesh renderer (tex15)
+	std::shared_ptr<vks::VTexture> m_msh_dp_fr_tex;
+
 	//vert buffer
-	GLuint m_quad_vbo, m_quad_vao;
-	GLuint m_misc_vbo, m_misc_ibo, m_misc_vao;
+	//GLuint m_quad_vbo, m_quad_vao;
+	//GLuint m_quad_tile_vbo, m_quad_tile_vao;
+	//GLuint m_misc_vbo, m_misc_ibo, m_misc_vao;
 	//mesh picking buffer
-	GLuint m_fbo_pick, m_tex_pick, m_tex_pick_depth;
+	std::unique_ptr<vks::VFrameBuffer> m_fbo_pick;
+	std::shared_ptr<vks::VTexture> m_tex_pick, m_tex_pick_depth;
+	//tile buffer
+	std::unique_ptr<vks::VFrameBuffer> m_fbo_tile;
+	std::shared_ptr<vks::VTexture> m_tex_tile;
+	std::unique_ptr<vks::VFrameBuffer> m_fbo_tiled_tmp;
+	std::shared_ptr<vks::VTexture> m_tex_tiled_tmp;
+    
+    std::unique_ptr<vks::VFrameBuffer> m_fbo_record;
+    std::shared_ptr<vks::VTexture> m_tex_record;
+    bool m_recording;
 
 	//camera controls
 	bool m_persp;
@@ -1010,15 +999,15 @@ private:
 	//volume color map
 	//double m_value_1;
 	Color m_color_1;
-	double m_value_2;
+	float m_value_2;
 	Color m_color_2;
-	double m_value_3;
+	float m_value_3;
 	Color m_color_3;
-	double m_value_4;
+	float m_value_4;
 	Color m_color_4;
-	double m_value_5;
+	float m_value_5;
 	Color m_color_5;
-	double m_value_6;
+	float m_value_6;
 	Color m_color_6;
 	//double m_value_7;
 	Color m_color_7;
@@ -1036,9 +1025,15 @@ private:
 	//clipping plane rotations
 	Quaternion m_q_cl;
 	Quaternion m_q_cl_zero;
+	Quaternion m_q_cl_fix;
+	Quaternion m_q_fix;
 	double m_rotx_cl, m_roty_cl, m_rotz_cl;
+    double m_rotx_cl_fix, m_roty_cl_fix, m_rotz_cl_fix;
+    double m_rotx_fix, m_roty_fix, m_rotz_fix;
+    Vector m_trans_fix;
 
 	bool m_dpeel;
+	bool m_mdtrans;
 
 	//volume selector for segmentation
 	VolumeSelector m_selector;
@@ -1048,6 +1043,9 @@ private:
 
 	//timer
 	nv::Timer *goTimer;
+    
+    bool m_refresh;
+	bool m_refresh_start_loop;
 
 	//wacom support
 #ifdef _WIN32
@@ -1063,6 +1061,8 @@ private:
 	bool m_draw_mask;
 	bool m_clear_mask;
 	bool m_draw_label;
+    
+    bool m_force_hide_mask;
 
 	//move view
 	bool m_move_left;
@@ -1098,6 +1098,7 @@ private:
 
 	int m_min_ppi;
 	int m_res_mode;
+	double m_res_scale;
 
 	LMSeacher *m_searcher;
 	vector<VolumeData *> m_lm_vdlist;
@@ -1121,6 +1122,29 @@ private:
 
 	VolumeLoader m_loader;
 	bool m_load_in_main_thread;
+
+	wxTimer *m_idleTimer;
+
+	int m_finished_peeling_layer;
+
+	bool m_fix_sclbar;
+	double m_fixed_sclbar_len;
+	double m_fixed_sclbar_fac;
+	int m_sclbar_digit;
+
+	Vulkan2dRender::V2dObject m_tile_vobj;
+	Vulkan2dRender::V2dObject m_brush_vobj;
+	Vulkan2dRender::V2dObject m_grid_vobj;
+	Vulkan2dRender::V2dObject m_scbar_vobj;
+	Vulkan2dRender::V2dObject m_frame_vobj;
+	Vulkan2dRender::V2dObject m_camctr_vobj;
+	Vulkan2dRender::V2dObject m_name_vobj;
+	Vulkan2dRender::V2dObject m_clip_vobj;
+	Vulkan2dRender::V2dObject m_grad_vobj;
+	Vulkan2dRender::V2dObject m_cmap_vobj;
+	Vulkan2dRender::V2dObject m_ruler_vobj;
+
+	bool m_frame_clear;
 
 private:
 #ifdef _WIN32
@@ -1151,7 +1175,13 @@ private:
 	void Draw();//draw volumes only
 	void DrawDP();//draw volumes and meshes with depth peeling
 	//mesh and volume
-	void DrawMeshes(int peel=0);//0: no dp
+	void DrawMeshes(const std::unique_ptr<
+		vks::VFrameBuffer>& framebuf,
+		bool clear_framebuf,
+		int peel=0,
+		const std::shared_ptr<vks::VTexture> depth_tex=std::shared_ptr<vks::VTexture>()
+	);
+	//0: no dp
 	//1: draw depth after 15 (15)
 	//2: draw mesh after 14 (14, 15)
 	//3: draw mesh after 13 and before 15 (13, 14, 15)
@@ -1163,21 +1193,28 @@ private:
 	//3: draw volume after 14 and before 15 (13, 14, 15)
 	//4: same as 3 (14, 15)
 	//5: same as 2 (15)
+	void DrawVolumesDP();
 	//annotation layer
 	void DrawAnnotations();
 	//draw out the framebuffer after composition
 	void PrepFinalBuffer();
 	void ClearFinalBuffer();
-	void DrawFinalBuffer();
+	void DrawFinalBuffer(bool clear);
 	//different volume drawing modes
 	void DrawVolumesMulti(vector<VolumeData*> &list, int peel=0);
 	void DrawVolumesComp(vector<VolumeData*> &list, bool mask=false, int peel=0);
-	void DrawMIP(VolumeData* vd, GLuint tex, int peel=0, double sampling_frq_fac = -1.0);
-	void DrawOVER(VolumeData* vd, GLuint tex, int peel=0, double sampling_frq_fac = -1.0);
+	void DrawMIP(VolumeData* vd, std::unique_ptr<vks::VFrameBuffer> &fb, int peel=0, double sampling_frq_fac = -1.0);
+	void DrawOVER(VolumeData* vd, std::unique_ptr<vks::VFrameBuffer>& fb, int peel=0, double sampling_frq_fac = -1.0);
 	//overlay passes
-	void DrawOLShading(VolumeData* vd);
-	void DrawOLShadows(vector<VolumeData*> &vlist, GLuint tex);
-	void DrawOLShadowsMesh(GLuint tex_depth, double darkenss);
+	void DrawOLShading(VolumeData* vd, std::unique_ptr<vks::VFrameBuffer>& fb);
+	void DrawOLShadows(vector<VolumeData*> &vlist, std::unique_ptr<vks::VFrameBuffer>& fb);
+	void DrawOLShadowsMesh(const std::shared_ptr<vks::VTexture>& tex_depth, double darkness);
+	
+	void StartTileRendering(int w, int h, int tilew, int tileh);
+	void EndTileRendering();
+	void DrawTile();
+	void GetTiledViewQuadVerts(int tileid, vector<Vulkan2dRender::Vertex> &verts);
+	void Get1x1DispSize(int &w, int &h);
 
 	//get mesh shadow
 	bool GetMeshShadow(double &val);
@@ -1222,10 +1259,13 @@ private:
 	void PickVolume();
 	//mode: 0-add selection; 1-single selection; 2-subtract selection, 3-switch an editing segment
 	bool SelSegVolume(int mode=0);
+	//mode: 0-add selection; 1-single selection; 2-subtract selection, 3-switch an editing segment
+	bool SelLabelSegVolume(int mode = 0);
 
 	//get mouse point in 3D
 	//mode: 0-maximum with original value; 1-maximum with transfered value; 2-accumulated with original value; 3-accumulated with transfered value
 	double GetPointVolume(Point &mp, int mx, int my, VolumeData* vd, int mode, bool use_transf, double thresh = 0.5);
+	double GetPointAndLabel(Point& mp, int& lblval, int mx, int my, VolumeData* vd);
 	double GetPointAndIntVolume(Point& mp, double &intensity, bool normalize, int mx, int my, VolumeData* vd, double thresh = 0.5);
 	double GetPointVolumeBox(Point &mp, int mx, int my, VolumeData* vd, bool calc_mats=true);
 	double GetPointVolumeBox2(Point &p1, Point &p2, int mx, int my, VolumeData* vd);
@@ -1237,11 +1277,26 @@ private:
 	//system call
 	void OnDraw(wxPaintEvent& event);
 	void OnResize(wxSizeEvent& event);
-	void OnIdle(wxIdleEvent& event);
+	void Resize(bool refresh=true);
+	void OnIdle(wxTimerEvent& event);
 	void OnKeyDown(wxKeyEvent& event);
+	void OnContextMenu(wxContextMenuEvent& event);
+	
+	void OnShowAllVolumes(wxCommandEvent& event);
+	void OnHideOtherVolumes(wxCommandEvent& event);
+	void OnHideSelectedVolume(wxCommandEvent& event);
+	void OnShowAllFragments(wxCommandEvent& event);
+    void OnDeselectAllFragments(wxCommandEvent& event);
+	void OnHideOtherFragments(wxCommandEvent& event);
+	void OnHideSelectedFragments(wxCommandEvent& event);
+	void OnUndoVisibilitySettings(wxCommandEvent& event);
+	void OnRedoVisibilitySettings(wxCommandEvent& event);
+
 	//WXLRESULT MSWWindowProc(WXUINT message, WXWPARAM wParam, WXLPARAM lParam);
 
 	void switchLevel(VolumeData *vd);
+
+	VolumeLoader* GetVolumeLoader() { return &m_loader; }
 
 	void DrawViewQuad();
 
@@ -1251,7 +1306,7 @@ private:
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class VRenderView: public wxPanel
+class EXPORT_API VRenderView: public wxPanel
 {
 public:
 	enum
@@ -1295,17 +1350,23 @@ public:
 		ID_PPISldr,
 		ID_PPIText,
 		ID_Searcher,
-		ID_SearchChk
+		ID_SearchChk,
+		ID_Timer
 	};
 
 	VRenderView(wxWindow* frame,
 		wxWindow* parent,
 		wxWindowID id,
-		wxGLContext* sharedContext=0,
+		const std::shared_ptr<VVulkan> &sharedContext = std::shared_ptr<VVulkan>(),
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize,
 		long style = 0);
 	~VRenderView();
+
+	double GetAvailableGraphicsMemory(int device_id)
+	{
+		return m_glview ? m_glview->GetAvailableGraphicsMemory(device_id) : 0.0;
+	}
 
 	//recalculate view according to object bounds
 	void InitView(unsigned int type=INIT_BOUNDS);
@@ -1329,6 +1390,7 @@ public:
 	MeshData* GetMeshData(wxString &name);
 	Annotations* GetAnnotations(wxString &name);
 	DataGroup* GetGroup(wxString &name);
+	DataGroup* GetParentGroup(wxString& name);
 	DataGroup* AddVolumeData(VolumeData* vd, wxString group_name="");
 	void AddMeshData(MeshData* md);
 	void AddAnnotations(Annotations* ann);
@@ -1454,7 +1516,7 @@ public:
 	static void ResetID();
 
 	//get rendering context
-	wxGLContext* GetContext();
+	std::shared_ptr<VVulkan> GetContext();
 
 	//refresh glview
 	void RefreshGL(bool intactive=false, bool start_loop=true);
@@ -1566,8 +1628,12 @@ public:
 	void DisableSBText() {if (m_glview) m_glview->DisableSBText();}
 	void SetScaleBarLen(double len)
 	{if (m_glview) m_glview->SetScaleBarLen(len);}
+	double GetScaleBarLen()
+	{if (m_glview) return m_glview->GetScaleBarLen(); else return 0.0; }
 	void SetSBText(wxString text)
 	{if (m_glview) m_glview->SetSBText(text);}
+	wxString GetSBText()
+	{if (m_glview) return m_glview->GetSBText(); else return wxString();}
 	void SetSbNumText(wxString text)
 	{if (m_glview) m_glview->m_sb_num = text;}
 	void SetSbUnitSel(int sel)
@@ -1841,6 +1907,19 @@ public:
 	{
 		if (m_glview) return m_glview->GetAdaptiveRes(); else return 0;
 	}
+    
+    void SetRecording(bool recording)
+    {
+        if (m_glview) m_glview->SetRecording(recording);
+    }
+    bool GetRecording()
+    {
+        if (m_glview) return m_glview->GetRecording(); else return 0;
+    }
+    void DownloadRecordedFrame(void *image, VkFormat &format)
+    {
+        if (m_glview) m_glview->DownloadRecordedFrame(image, format);
+    }
 
 	void SetMinPPI(double ppi);
 	double GetMinPPI();
@@ -1856,12 +1935,28 @@ public:
 	}
 	int GetResMode() {if (m_glview) return m_glview->m_res_mode; else return 0;}
 
+	void FixScaleBarLen(bool fix, double len=-1.0) {if (m_glview) m_glview->FixScaleBarLen(fix, len);}
+	void GetScaleBarFixed(bool &fix, double &len, int &unitid) {if (m_glview) m_glview->GetScaleBarFixed(fix, len, unitid);}
+	void SetScaleBarDigit(int digit) {if (m_glview) m_glview->SetScaleBarDigit(digit);}
+	int GetScaleBarDigit() { return m_glview ? m_glview->GetScaleBarDigit() : 3; }
+
+	VolumeData* GetCurrentVolume() { if (m_glview) return m_glview->GetCurrentVolume(); else return NULL; }
+	void SetCurrentVolume(VolumeData *vd) { if (m_glview) m_glview->SetCurrentVolume(vd); }
+	DataGroup* GetCurrentVolGroup() { if (m_glview) return m_glview->GetCurrentVolGroup(); else return NULL; }
+
+	VolumeLoader* GetVolumeLoader() { if (m_glview) return m_glview->GetVolumeLoader(); else return NULL; }
+	 
+	TextRenderer* GetTextRenderer() { if (m_glview) return m_glview->GetTextRenderer(); else return nullptr; }
+    
+    void SetForceHideMask(bool val) { if (m_glview) m_glview->SetForceHideMask(val); }
+    bool GetForceHideMask() { if (m_glview) return m_glview->GetForceHideMask(); }
+
 public:
 	wxWindow* m_frame;
 	static int m_id;
 
 	//render view///////////////////////////////////////////////
-	VRenderGLView *m_glview;
+	VRenderVulkanView *m_glview;
 	wxFrame* m_full_frame;
 	wxBoxSizer* m_view_sizer;
 
@@ -1918,6 +2013,16 @@ public:
 	wxButton *m_scale_reset_btn;
 	wxSpinButton* m_scale_factor_spin;
 
+	//capture////////////////////////////////////////////////////
+	static int m_cap_resx;
+	static int m_cap_resy;
+	static int m_cap_orgresx;
+	static int m_cap_orgresy;
+	static int m_cap_dispresx;
+	static int m_cap_dispresy;
+	static wxTextCtrl *m_cap_w_txt;
+	static wxTextCtrl *m_cap_h_txt;
+
 	//draw clip
 	bool m_draw_clip;
 
@@ -1927,6 +2032,8 @@ public:
 	double m_dft_z_rot;
 	double m_dft_depth_atten_factor;
 	double m_dft_scale_factor;
+
+	wxTimer *m_idleTimer;
 
 private:
 	//called when updated from bars
@@ -1949,7 +2056,7 @@ private:
 	void OnLegendCheck(wxCommandEvent& event);
 	void OnIntpCheck(wxCommandEvent& event);
 	void OnSearchCheck(wxCommandEvent& event);
-	void OnAovSldrIdle(wxIdleEvent& event);
+	void OnAovSldrIdle(wxTimerEvent& event);
 	void OnAovChange(wxScrollEvent& event);
 	void OnAovText(wxCommandEvent &event);
 	void OnFreeChk(wxCommandEvent& event);
@@ -1985,10 +2092,15 @@ private:
 	void OnZRotSpinUp(wxSpinEvent& event);
 	void OnZRotSpinDown(wxSpinEvent& event);
 
+	//capture
+	void OnCapWidthTextChange(wxCommandEvent &event);
+	void OnCapHeightTextChange(wxCommandEvent &event);
+	void OnSetOrgResButton(wxCommandEvent &event);
+	void OnSetDispResButton(wxCommandEvent &event);
+
 	void OnSaveDefault(wxCommandEvent &event);
 
 	void OnKeyDown(wxKeyEvent& event);
-
 
 	DECLARE_EVENT_TABLE();
 

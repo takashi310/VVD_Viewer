@@ -712,9 +712,9 @@ Nrrd* LSMReader::Convert(int t, int c, bool get_max)
             {
                if (m_l4gb?  
                      FSEEK64(pfile, ((uint64_t((*cinfo)[i].offset_high))<<32)+(*cinfo)[i].offset, SEEK_SET)==0:
-                     fseek(pfile, (*cinfo)[i].offset, SEEK_SET)==0)
+					 FSEEK64(pfile, (*cinfo)[i].offset, SEEK_SET)==0)
                {
-                  unsigned int val_pos = m_x_size*m_y_size*i;
+                  unsigned long long val_pos = (unsigned long long)m_x_size * (unsigned long long)m_y_size * (unsigned long long)i;
                   if (m_compression==1)
                      fread(val+val_pos, sizeof(unsigned char), (*cinfo)[i].size, pfile);
                   else if (m_compression==5)
@@ -748,9 +748,9 @@ Nrrd* LSMReader::Convert(int t, int c, bool get_max)
             {
                if (m_l4gb?
                      FSEEK64(pfile, ((uint64_t((*cinfo)[i].offset_high))<<32)+(*cinfo)[i].offset, SEEK_SET)==0:
-                     fseek(pfile, (*cinfo)[i].offset, SEEK_SET)==0)
+					 FSEEK64(pfile, (*cinfo)[i].offset, SEEK_SET)==0)
                {
-                  unsigned int val_pos = m_x_size*m_y_size*i;
+                  unsigned long long val_pos = (unsigned long long)m_x_size * (unsigned long long)m_y_size * (unsigned long long)i;
                   if (m_compression==1)
                      fread(val+val_pos, sizeof(unsigned char), (*cinfo)[i].size, pfile);
                   else if (m_compression==5)

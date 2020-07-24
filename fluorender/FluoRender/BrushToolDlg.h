@@ -1,5 +1,7 @@
 #include <wx/wx.h>
 #include <wx/notebook.h>
+#include <wx/stopwatch.h>
+#include "DLLExport.h"
 
 #ifndef _BRUSHTOOLDLG_H_
 #define _BRUSHTOOLDLG_H_
@@ -7,11 +9,11 @@
 class VRenderView;
 class VolumeData;
 
-#define BRUSH_TOOL_ITER_WEAK	10
-#define BRUSH_TOOL_ITER_NORMAL	30
-#define BRUSH_TOOL_ITER_STRONG	60
+#define BRUSH_TOOL_ITER_WEAK	20
+#define BRUSH_TOOL_ITER_NORMAL	50
+#define BRUSH_TOOL_ITER_STRONG	100
 
-class BrushToolDlg : public wxPanel
+class EXPORT_API BrushToolDlg : public wxPanel
 {
 public:
 	enum
@@ -123,6 +125,15 @@ public:
 	void SetDftNRThresh(double thresh) {m_dft_nr_thresh = thresh;}
 	double GetDftNRSize() {return m_dft_nr_size;}
 	void SetDftNRSize(double size) {m_dft_nr_size = size;}
+    
+    void SetBrushSclTranslate(double val)
+    {
+        wxString str;
+        m_dft_scl_translate = val;
+        str = wxString::Format("%.1f", m_dft_scl_translate*m_max_value);
+        m_brush_scl_translate_sldr->SetRange(0, int(m_max_value*10.0));
+        m_brush_scl_translate_text->SetValue(str);
+    }
 
 	//save default
 	void SaveDefault();
@@ -232,6 +243,8 @@ private:
 	//one-operators
 	wxButton *m_calc_fill_btn;
 
+	wxStopWatch m_watch;
+
 private:
 	void LoadDefault();
 	wxWindow* CreateBrushPage(wxWindow *parent);
@@ -239,6 +252,7 @@ private:
 	wxWindow* CreateAnalysisPage(wxWindow *parent);
 
 	void LoadVolumes();
+	void DrawBrush(double val);
 
 	//event handling
 	//paint tools
@@ -264,6 +278,7 @@ private:
 	//translate
 	void OnBrushSclTranslateChange(wxScrollEvent &event);
 	void OnBrushSclTranslateText(wxCommandEvent &event);
+	void OnBrushSclTranslateTextEnter(wxCommandEvent &event);
 	//brush properties
 	//brush size 1
 	void OnBrushSize1Change(wxScrollEvent &event);

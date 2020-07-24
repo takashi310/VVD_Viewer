@@ -33,6 +33,7 @@ DEALINGS IN THE SOFTWARE.
 #include <fstream>
 #include <boost/signals2.hpp>
 #include <deque>
+#include "DLLExport.h"
 
 class Ruler;
 namespace FL
@@ -51,7 +52,7 @@ namespace FL
 	typedef std::vector<Ruler*>::iterator RulerListIter;
 	class TrackMap;
 	//class ::Ruler;
-	class TrackMapProcessor
+	class EXPORT_API TrackMapProcessor
 	{
 	public:
 		TrackMapProcessor() :
@@ -335,7 +336,7 @@ namespace FL
 		return cell;
 	}
 
-	class TrackMap
+	class EXPORT_API TrackMap
 	{
 	public:
 		TrackMap();

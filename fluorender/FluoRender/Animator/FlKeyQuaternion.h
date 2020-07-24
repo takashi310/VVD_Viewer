@@ -22,12 +22,13 @@ DEALINGS IN THE SOFTWARE.
 #ifndef _FLKEY_QUATERNION_H_
 #define _FLKEY_QUATERNION_H_
 
+#include "DLLExport.h"
 #include "FlKey.h"
 #include "../FLIVR/Quaternion.h"
 
 using namespace FLIVR;
 
-class FlKeyQuaternion : public FlKey
+class EXPORT_API FlKeyQuaternion : public FlKey
 {
 public:
 	FlKeyQuaternion()

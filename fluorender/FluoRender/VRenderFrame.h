@@ -25,6 +25,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 */
+#include "DLLExport.h"
 #include "DataManager.h"
 #include "TreePanel.h"
 #include "ListPanel.h"
@@ -51,6 +52,7 @@ DEALINGS IN THE SOFTWARE.
 #include "Tester.h"
 #include "Animator/Interpolator.h"
 #include "TextRenderer.h"
+#include "PluginManager.h"
 #include "compatibility.h"
 
 #include <wx/wx.h>
@@ -64,7 +66,7 @@ DEALINGS IN THE SOFTWARE.
 
 using namespace std;
 
-#define WITH_DATABASE
+//#define WITH_DATABASE
 
 #define VERSION_CONTACT "http://www.sci.utah.edu/software/fluorender.html"
 #define VERSION_AUTHORS "    Yong Wan, Hideo Otsuna,\nChuck Hansen, Chi-Bin Chien,\nBrig Bagley\nTakashi Kawase\n      @The University of Utah"
@@ -102,8 +104,9 @@ using namespace std;
 #define UITEXT_ADJUST		"Output Adjustments"
 #define UITEXT_CLIPPING		"Clipping Planes"
 #define UITEXT_PROPERTIES	"Properties"
+#define UITEXT_PLUGINS		"Plugins"
 
-class VRenderFrame: public wxFrame
+class EXPORT_API VRenderFrame: public wxFrame
 {
 	enum
 	{
@@ -151,15 +154,20 @@ class VRenderFrame: public wxFrame
 		ID_Facebook,
 		ID_Twitter,
 		ID_Info,
-		ID_ShowHideToolbar
+		ID_ShowHideToolbar,
+		ID_Timer,
+		ID_Plugins,
+		ID_Plugin = wxID_HIGHEST+10001
 	};
 
 public:
-	VRenderFrame(wxFrame* frame,
+	VRenderFrame(wxApp *app, wxFrame* frame,
                  const wxString& title,
                  int x, int y,
                  int w, int h);
 	~VRenderFrame();
+
+	wxApp* GetApp() {return m_app;}
 
 	TreePanel *GetTree();
 	void UpdateTree(wxString name = "", int type=-1, bool set_calc=true);
@@ -262,13 +270,15 @@ public:
 	MeshData* GetCurSelMesh()
 	{ return m_data_mgr.GetMeshData(m_cur_sel_mesh); }
 
-	void StartupLoad(wxArrayString files);
+	void StartupLoad(wxArrayString files, size_t datasize = 0LL);
 	VolumeData* OpenVolumeFromProject(wxString name, wxFileConfig &fconfig);
 	MeshData* OpenMeshFromProject(wxString name, wxFileConfig &fconfig);
 	void OpenProject(wxString& filename);
 	void SaveProject(wxString& filename);
-	void LoadVolumes(wxArrayString files, VRenderView* view = 0, vector<vector<AnnotationDB>> annotations = vector<vector<AnnotationDB>>());
+	void LoadVolumes(wxArrayString files, VRenderView* view = 0, vector<vector<AnnotationDB>> annotations = vector<vector<AnnotationDB>>(), size_t datasize = 0LL);
 	void LoadMeshes(wxArrayString files, VRenderView* view = 0);
+
+	void AddVolume(VolumeData *vd, VRenderView* view);
 
 	//compression
 	static void SetCompression(bool value)
@@ -321,11 +331,19 @@ public:
 	//show info
 	void OnInfo(wxCommandEvent& WXUNUSED(event));
 
-	TextRenderer* GetTextRenderer()
-	{ return m_text_renderer; }
-
 	void SetKeyLock(bool lock);
 
+	PluginManager* GetPluginManager() const { return m_plugin_manager ; }
+
+	void ToggleVisibilityPluginWindow(wxString name, bool show, int docking = 0);
+	void CreatePluginWindow(wxString name, bool show=true);
+	bool IsCreatedPluginWindow(wxString name);
+	bool IsShownPluginWindow(wxString name);
+	bool RunPlugin(wxString name, wxString options, bool show=false);
+	bool PluginExists(wxString name);
+	int UploadFileRemote(wxString url, wxString upfname, wxString loc_fpath, wxString usr, wxString pwd=wxString());
+	int DownloadFileRemote(wxString url, wxString dir, wxString usr=wxString(), wxString pwd=wxString());
+	
 public: //public so export window can see it and set it. 
 	RecorderDlg* m_recorder_dlg;
 	VMovieView* m_movie_view;
@@ -334,6 +352,7 @@ private:
 	wxAuiManager m_aui_mgr;
 	wxMenu* m_tb_menu_ui;
 	wxMenu* m_tb_menu_edit;
+	wxMenu* m_tb_menu_plugin;
 	wxToolBar* m_main_tb;
 	//main top menu
 	wxMenuBar* m_top_menu;
@@ -404,12 +423,16 @@ private:
 	//mac address
 	wxString m_address;
 
-	//draw text
-	TextRenderer *m_text_renderer;
-
 	map<wxString, bool> m_ui_state_cache;
 
 	double m_gpu_max_mem;
+
+	wxTimer *m_timer;
+
+	PluginManager* m_plugin_manager;
+	wxArrayString m_plugin_list;
+
+	wxApp* m_app; 
 
 private:
 	//views
@@ -443,6 +466,8 @@ private:
 	void OnShowHideUI(wxCommandEvent& WXUNUSED(event));
 	void OnShowHideToolbar(wxCommandEvent& WXUNUSED(event));
 	void OnShowHideView(wxCommandEvent &event);
+	void OnPlugins(wxCommandEvent& WXUNUSED(event));
+	void OnPluginMenuSelect(wxCommandEvent& event);
 
 	//panes
 	void OnPaneClose(wxAuiManagerEvent& event);
@@ -468,6 +493,8 @@ private:
 
 	void OnDraw(wxPaintEvent& event);
 	void OnKeyDown(wxKeyEvent& event);
+
+	void OnTimer(wxTimerEvent& event);
 
 	DECLARE_EVENT_TABLE()
 };

@@ -1,3 +1,4 @@
+#include "DLLExport.h"
 #include "DataManager.h"
 #include "VRenderView.h"
 #include <wx/wx.h>
@@ -27,7 +28,7 @@
 #define Hdr2UIP(v) \
 	int(v*100.0+0.5)
 
-class AdjustView: public wxPanel
+class EXPORT_API AdjustView: public wxPanel
 {
 	enum
 	{
@@ -100,7 +101,7 @@ public:
 			DisableAll();
 		}
 	}
-	VRenderGLView* GetRenderView()
+	VRenderVulkanView* GetRenderView()
 	{
 		return m_glview;
 	}
@@ -187,7 +188,7 @@ public:
 private:
 	wxWindow* m_frame;
 	int m_type;
-	VRenderGLView *m_glview;
+	VRenderVulkanView *m_glview;
 	VolumeData* m_vd;
 	DataGroup* m_group;
 	bool m_link_group;

@@ -27,11 +27,12 @@ DEALINGS IN THE SOFTWARE.
 */
 #include <wx/wx.h>
 #include <wx/dialog.h>
+#include "DLLExport.h"
 
 #ifndef _TESTER_H_
 #define _TESTER_H_
 
-class TesterDlg : public wxDialog
+class EXPORT_API TesterDlg : public wxDialog
 {
 	enum
 	{

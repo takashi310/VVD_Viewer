@@ -45,11 +45,11 @@ file=FreeMonoBold.ttf
 color=0
 [memory\ settings]
 mem\ swap=1
-graphics\ mem=3500
-large\ data\ size=100
-force\ brick\ size=128
-up\ time=200
-main\ memory\ buffer\ size=4000
+graphics\ mem=4000
+large\ data\ size=1000
+force\ brick\ size=512
+up\ time=100
+main\ memory\ buffer\ size=10000
 [update\ order]
 value=1
 [point\ volume\ mode]

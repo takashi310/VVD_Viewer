@@ -71,6 +71,8 @@ BEGIN_EVENT_TABLE(VMovieView, wxPanel)
 	EVT_SPIN_DOWN(ID_HeightSpin, VMovieView::OnFrameSpinDown)
 //timer
     EVT_TIMER(ID_Timer, VMovieView::OnTimer)
+//tabs
+	EVT_NOTEBOOK_PAGE_CHANGED(ID_PageChanged, VMovieView::OnPageChanged)
 END_EVENT_TABLE()
 
 double VMovieView::m_Mbitrate = 10.0;
@@ -180,6 +182,7 @@ wxWindow* VMovieView::CreateSimplePage(wxWindow *parent) {
 		wxDefaultPosition,wxSize(60,-1));
 	m_movie_time = new wxTextCtrl(page, ID_MovieTimeText, "5",
 		wxDefaultPosition,wxSize(40,-1));
+	m_movie_time_basic = 5;
 	//sizer 7
 	sizer_7->AddStretchSpacer();
 	sizer_7->Add(st, 0, wxALIGN_CENTER);
@@ -367,8 +370,11 @@ m_rot_int_type(0),
 m_delayed_stop(false),
 m_batch_mode(false)
 {
+	SetEvtHandlerEnabled(false);
+	Freeze();
+
 	//notebook
-	m_notebook = new wxNotebook(this, wxID_ANY);
+	m_notebook = new wxNotebook(this, ID_PageChanged);
 	m_notebook->AddPage(CreateSimplePage(m_notebook), "Basic");
 	m_notebook->AddPage(CreateAdvancedPage(m_notebook), "Advanced");
 	m_notebook->AddPage(CreateAutoKeyPage(m_notebook), "Auto Key");
@@ -435,6 +441,9 @@ m_batch_mode(false)
 	SetSizer(sizerV);
 	Layout();
 	Init();
+	
+	Thaw();
+	SetEvtHandlerEnabled(true);
 }
 
 VMovieView::~VMovieView() {}
@@ -461,7 +470,10 @@ void VMovieView::GetSettings(int view) {
 	if (vr_frame->m_mov_angle_end != "")
 		m_degree_end->SetValue(vr_frame->m_mov_angle_end);
 	if (vr_frame->m_mov_step != "")
+	{
 		m_movie_time->SetValue(vr_frame->m_mov_step);
+		vr_frame->m_mov_step.ToDouble(&m_movie_time_basic);
+	}
 	if (vr_frame->m_mov_frames != "")
 		m_fps_text->ChangeValue(vr_frame->m_mov_frames);
 
@@ -724,6 +736,7 @@ void VMovieView::OnRun(wxCommandEvent& event) {
 		}
 		m_filename = m_filename.SubString(0,m_filename.Len()-5);
 		m_record = true;
+        vrv->SetRecording(true);
 
 		if (vr_frame && vr_frame->GetSettingDlg() &&
 			vr_frame->GetSettingDlg()->GetProjSave())
@@ -750,6 +763,13 @@ void VMovieView::OnStop(wxCommandEvent& event) {
 	m_running = false;
 	m_record = false;
 	encoder_.close();
+    
+    wxString str = m_views_cmb->GetValue();
+    VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+    if (!vr_frame) return;
+    VRenderView* vrv = vr_frame->GetView(str);
+    if (!vrv) return;
+    vrv->SetRecording(false);
 }
 
 void VMovieView::OnRewind(wxCommandEvent& event){
@@ -1058,11 +1078,10 @@ void VMovieView::SetRendering(double pcnt) {
 		vrv->Get4DSeqFrames(first, sec, tmp);
 		if (sec - first > 0) {
 			vrv->Set4DSeqFrame(time, false);
-		} else {
+		} else
 			vrv->Set3DBatFrame(time);
-		}
 	}
-	if (m_rot_chk->GetValue()) {
+	if (m_rot_chk->GetValue() && m_current_page == 0) {
 		double x,y,z,val;
 		vrv->GetRotations(x,y,z);
 		if (m_x_rd->GetValue())
@@ -1174,6 +1193,21 @@ void VMovieView::WriteFrameToFile(int total_frames) {
 	wxString s_length = wxString::Format("%d", total_frames);
 	int length = s_length.Length();
 	wxString format = wxString::Format("_%%0%dd", length);
+
+	if(m_seq_chk->GetValue()) {
+		int first, sec, tmp;
+		vrv->Get4DSeqFrames(first, sec, tmp);
+		if (sec - first <= 0) { // batch mode
+			vrv->Get3DBatFrames(first, sec, tmp);
+			if (sec - first > 0) {
+				int volnum = vrv->GetAllVolumeNum();
+				VolumeData *vd = vrv->GetCurrentVolume();
+				if (vd && vd->GetDisp()) 
+					format = format + "_" + vd->GetName();
+			}
+		}
+	}
+
 	wxString outputfilename = wxString::Format("%s"+format+"%s",m_filename,
 		m_last_frame,".tif");
     //capture
@@ -1187,51 +1221,77 @@ void VMovieView::WriteFrameToFile(int total_frames) {
         w = vrv->GetGLSize().x;
         h = vrv->GetGLSize().y;
     }
-	int chann = 3; //RGB or RGBA
-    glPixelStorei(GL_PACK_ROW_LENGTH, w);
-    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+	int chann = 4; //RGB or RGBA
+	int dst_chann = 3;
     unsigned char *image = new unsigned char[w*h*chann];
-    glReadBuffer(GL_FRONT);
-    glReadPixels(x, y, w, h, chann==3?GL_RGB:GL_RGBA, GL_UNSIGNED_BYTE, image);
-    glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+    VkFormat texformat;
+    vrv->DownloadRecordedFrame(image, texformat);
+
+	bool colorSwizzleBGR = false;
+	std::vector<VkFormat> formatsBGR = { VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_B8G8R8A8_SNORM };
+	colorSwizzleBGR = (std::find(formatsBGR.begin(), formatsBGR.end(), texformat) != formatsBGR.end());
+
+	unsigned char* rgb_image = new unsigned char[w * h * dst_chann];
+
+	if (colorSwizzleBGR)
+	{
+		for (size_t y = 0; y < h; y++) {
+			for (size_t x = 0; x < w; x++) {
+				rgb_image[(y * w + x) * dst_chann + 2] = image[(y * w + x) * chann + 0];
+				rgb_image[(y * w + x) * dst_chann + 1] = image[(y * w + x) * chann + 1];
+				rgb_image[(y * w + x) * dst_chann + 0] = image[(y * w + x) * chann + 2];
+			}
+		}
+	}
+	else
+	{
+		for (size_t y = 0; y < h; y++) {
+			for (size_t x = 0; x < w; x++) {
+				for (int c = 0; c < dst_chann; c++) {
+					rgb_image[(y * w + x) * dst_chann + c] = image[(y * w + x) * chann + c];
+				}
+			}
+		}
+	}
+
     string str_fn = outputfilename.ToStdString();
 	if (filetype_.IsSameAs(".mov")) {
-		//flip vertically 
-		unsigned char *flip = new unsigned char[w*h*chann];
-		for(size_t yy = 0; yy < (size_t)h; yy++)
-			memcpy(flip + yy * 3 * w, image + 3 * w * (h - yy - 1),w * 3);
-		bool worked = encoder_.set_frame_rgb_data(flip);
+		bool worked = encoder_.set_frame_rgb_data(rgb_image);
 		worked = encoder_.write_video_frame(m_last_frame);
-		delete flip;
-		return;
 	}
-    TIFF *out = TIFFOpen(str_fn.c_str(), "wb");
-    if (!out) return;
-    TIFFSetField(out, TIFFTAG_IMAGEWIDTH, w);
-    TIFFSetField(out, TIFFTAG_IMAGELENGTH, h);
-    TIFFSetField(out, TIFFTAG_SAMPLESPERPIXEL, chann);
-    TIFFSetField(out, TIFFTAG_BITSPERSAMPLE, 8);
-    TIFFSetField(out, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
-    TIFFSetField(out, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
-    TIFFSetField(out, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
-    if (VRenderFrame::GetCompression())
-        TIFFSetField(out, TIFFTAG_COMPRESSION, COMPRESSION_LZW);
+	else
+	{
+		TIFF* out = TIFFOpen(str_fn.c_str(), "wb");
+		if (!out) return;
+		TIFFSetField(out, TIFFTAG_IMAGEWIDTH, w);
+		TIFFSetField(out, TIFFTAG_IMAGELENGTH, h);
+		TIFFSetField(out, TIFFTAG_SAMPLESPERPIXEL, dst_chann);
+		TIFFSetField(out, TIFFTAG_BITSPERSAMPLE, 8);
+		TIFFSetField(out, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
+		TIFFSetField(out, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
+		TIFFSetField(out, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
+		if (VRenderFrame::GetCompression())
+			TIFFSetField(out, TIFFTAG_COMPRESSION, COMPRESSION_LZW);
 
-    tsize_t linebytes = chann * w;
-    unsigned char *buf = NULL;
-    buf = (unsigned char *)_TIFFmalloc(linebytes);
-    TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(out, 0));
-    for (uint32 row = 0; row < (uint32)h; row++)
-    {
-        memcpy(buf, &image[(h-row-1)*linebytes], linebytes);// check the index here, and figure out why not using h*linebytes
-        if (TIFFWriteScanline(out, buf, row, 0) < 0)
-        break;
-    }
-    TIFFClose(out);
-    if (buf)
-        _TIFFfree(buf);
+		tsize_t linebytes = dst_chann * w;
+		unsigned char* buf = NULL;
+		buf = (unsigned char*)_TIFFmalloc(linebytes);
+		TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(out, 0));
+		for (uint32 row = 0; row < (uint32)h; row++)
+		{
+			memcpy(buf, &rgb_image[row * linebytes], linebytes);
+			if (TIFFWriteScanline(out, buf, row, 0) < 0)
+				break;
+		}
+		TIFFClose(out);
+		if (buf)
+			_TIFFfree(buf);
+	}
+    
     if (image)
-        delete []image;
+		delete[] image;
+	if (rgb_image)
+		delete[] rgb_image;
 }
 
 void VMovieView::OnUpFrame(wxCommandEvent& event) {
@@ -1363,4 +1423,73 @@ wxWindow* VMovieView::CreateExtraCaptureControl(wxWindow* parent) {
 	panel->Layout();
 
 	return panel;
+}
+
+void VMovieView::OnPageChanged(wxBookCtrlEvent& event)
+{
+	int pageid = event.GetSelection();
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+	long fps;
+	m_fps_text->GetValue().ToLong(&fps);
+
+	double runtime = 0.0;
+	m_movie_time->GetValue().ToDouble(&runtime);
+	double pcnt = (m_cur_time / runtime);
+
+	switch (pageid)
+	{
+	case 0: 
+		if (m_current_page != 0) {
+			m_movie_time->ChangeValue(wxString::Format("%.2f", m_movie_time_basic));
+			m_current_page = 0;
+		}
+		break;
+	case 1:
+		if (m_current_page != 1) {
+			Interpolator *interpolator = vr_frame->GetInterpolator();
+			if (!interpolator)
+				break;
+			int frames = int(interpolator->GetLastT());
+			if (frames > 0)
+			{
+				runtime = (double)frames / (double)fps;
+				m_movie_time->GetValue().ToDouble(&m_movie_time_basic);
+				m_movie_time->ChangeValue(wxString::Format("%.2f", runtime));
+			}
+			m_current_page = 1;
+		}
+		break;
+	}
+
+	SetProgress(pcnt);
+	SetRendering(pcnt);
+
+}
+
+void VMovieView::SetMovieTime(double t)
+{
+	double runtime = 0.0;
+	m_movie_time->GetValue().ToDouble(&runtime);
+	double pcnt = (m_cur_time / runtime);
+
+	if (m_current_page == 0) {
+		m_movie_time->ChangeValue(wxString::Format("%.2f", t));
+		m_movie_time_basic = t;
+	}
+	else if (m_current_page == 1)
+	{
+		m_movie_time->ChangeValue(wxString::Format("%.2f", t));
+	}
+
+	SetProgress(pcnt);
+}
+
+long VMovieView::GetFPS()
+{
+	long fps = 0;
+
+	if (m_fps_text) m_fps_text->GetValue().ToLong(&fps);
+
+	return fps;
 }

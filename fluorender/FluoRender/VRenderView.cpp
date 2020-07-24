@@ -1,4 +1,4 @@
-﻿/*
+/*
 For more information, please see: http://software.sci.utah.edu
 
 The MIT License
@@ -28,7 +28,6 @@ DEALINGS IN THE SOFTWARE.
 
 #include "VRenderView.h"
 #include "VRenderFrame.h"
-#include "bitmap_fonts.h"
 #include <tiffio.h>
 #include <wx/utils.h>
 #include <wx/valnum.h>
@@ -39,7 +38,6 @@ DEALINGS IN THE SOFTWARE.
 #include <algorithm>
 #include <limits>
 #include <unordered_set>
-#include "GL/mywgl.h"
 #include "png_resource.h"
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -48,9 +46,28 @@ DEALINGS IN THE SOFTWARE.
 #ifdef _WIN32
 #include <Windows.h>
 #endif
+#ifdef __WXMAC__
+#include "MetalCompatibility.h"
+#endif
 
 int VRenderView::m_id = 1;
-ImgShaderFactory VRenderGLView::m_img_shader_factory;
+ImgShaderFactory VRenderVulkanView::m_img_shader_factory;
+
+//uint64_t st_time, ed_time;
+//char dbgstr[50];
+//long long milliseconds_now() {
+//    static LARGE_INTEGER s_frequency;
+//    static BOOL s_use_qpc = QueryPerformanceFrequency(&s_frequency);
+//    if (s_use_qpc) {
+//        LARGE_INTEGER now;
+//        QueryPerformanceCounter(&now);
+//        return (1000LL * now.QuadPart) / s_frequency.QuadPart;
+//    }
+//    else {
+//        return GetTickCount64();
+//    }
+//}
+
 ////////////////////////////////////////////////////////////////////////
 
 
@@ -64,7 +81,7 @@ BEGIN_EVENT_TABLE(LMTreeCtrl, wxTreeCtrl)
 	END_EVENT_TABLE()
 
 	LMTreeCtrl::LMTreeCtrl(
-	VRenderGLView *glview,
+	VRenderVulkanView *glview,
 	wxWindow* parent,
 	wxWindowID id,
 	const wxPoint& pos,
@@ -224,7 +241,7 @@ BEGIN_EVENT_TABLE(LMSeacher, wxTextCtrl)
 	END_EVENT_TABLE()
 
 	LMSeacher::LMSeacher(
-	VRenderGLView* glview,
+	VRenderVulkanView* glview,
 	wxWindow* parent,
 	wxWindowID id,
 	const wxString& text,
@@ -396,529 +413,35 @@ void LMSeacher::OnMouse(wxMouseEvent& event)
 	event.Skip();
 }
 
-/////////////////////////////////////////////////////////////////////////
-
-VolumeDecompressorThread::VolumeDecompressorThread(VolumeLoader *vl)
-	: wxThread(wxTHREAD_DETACHED), m_vl(vl)
-{
-
-}
-
-VolumeDecompressorThread::~VolumeDecompressorThread()
-{
-	wxCriticalSectionLocker enter(m_vl->m_pThreadCS);
-	// the thread is being destroyed; make sure not to leave dangling pointers around
-	m_vl->m_running_decomp_th--;
-}
-
-wxThread::ExitCode VolumeDecompressorThread::Entry()
-{
-	unsigned int st_time = GET_TICK_COUNT();
-
-	m_vl->m_pThreadCS.Enter();
-	m_vl->m_running_decomp_th++;
-	m_vl->m_pThreadCS.Leave();
-
-	while(1)
-	{
-		m_vl->m_pThreadCS.Enter();
-
-		if (m_vl->m_decomp_queues.size() == 0)
-		{
-			m_vl->m_pThreadCS.Leave();
-			break;
-		}
-		VolumeDecompressorData q = m_vl->m_decomp_queues[0];
-		m_vl->m_decomp_queues.erase(m_vl->m_decomp_queues.begin());
-
-		m_vl->m_pThreadCS.Leave();
-
-
-		size_t bsize = (size_t)(q.b->nx())*(size_t)(q.b->ny())*(size_t)(q.b->nz())*(size_t)(q.b->nb(0));
-		char *result = new char[bsize];
-		if (TextureBrick::decompress_brick(result, q.in_data, bsize, q.in_size, q.finfo->type))
-		{
-			m_vl->m_pThreadCS.Enter();
-
-			delete [] q.in_data;
-			q.b->set_brkdata(result);
-			q.b->set_loading_state(false);
-			m_vl->m_pThreadCS.Leave();
-		}
-		else
-		{
-			delete [] result;
-
-			m_vl->m_pThreadCS.Enter();
-			delete [] q.in_data;
-			m_vl->m_used_memory -= bsize;
-			q.b->set_drawn(q.mode, true);
-			q.b->set_loading_state(false);
-			m_vl->m_pThreadCS.Leave();
-		}
-	}
-
-	return (wxThread::ExitCode)0;
-}
-
-/*
-wxDEFINE_EVENT(wxEVT_VLTHREAD_COMPLETED, wxCommandEvent);
-wxDEFINE_EVENT(wxEVT_VLTHREAD_PAUSED, wxCommandEvent);
-*/
-VolumeLoaderThread::VolumeLoaderThread(VolumeLoader *vl)
-	: wxThread(wxTHREAD_JOINABLE), m_vl(vl)
-{
-
-}
-
-VolumeLoaderThread::~VolumeLoaderThread()
-{
-	wxCriticalSectionLocker enter(m_vl->m_pThreadCS);
-	if (!m_vl->m_decomp_queues.empty())
-	{
-		for (int i = 0; i < m_vl->m_decomp_queues.size(); i++)
-		{
-			if (m_vl->m_decomp_queues[i].in_data != NULL)
-				delete [] m_vl->m_decomp_queues[i].in_data;
-			m_vl->m_used_memory -= m_vl->m_decomp_queues[i].datasize;
-		}
-		m_vl->m_decomp_queues.clear();
-	}
-	// the thread is being destroyed; make sure not to leave dangling pointers around
-}
-
-wxThread::ExitCode VolumeLoaderThread::Entry()
-{
-	unsigned int st_time = GET_TICK_COUNT();
-
-	while(m_vl->m_running_decomp_th > 0)
-	{
-		if (TestDestroy())
-			return (wxThread::ExitCode)0;
-		Sleep(10);
-	}
-
-	m_vl->m_pThreadCS.Enter();
-	auto ite = m_vl->m_loaded.begin();
-	while(ite != m_vl->m_loaded.end())
-	{
-		if (!ite->second.brick->isLoaded() && ite->second.brick->isLoading())
-		{
-			ite->second.brick->set_loading_state(false);
-			ite = m_vl->m_loaded.erase(ite);
-		}
-		else
-			ite++;
-	}
-	m_vl->m_pThreadCS.Leave();
-
-	while(1)
-	{
-		if (TestDestroy())
-			break;
-
-		m_vl->m_pThreadCS.Enter();
-		if (m_vl->m_queues.size() == 0)
-		{
-			m_vl->m_pThreadCS.Leave();
-			break;
-		}
-		VolumeLoaderData b = m_vl->m_queues[0];
-		b.brick->set_loading_state(false);
-		m_vl->m_queues.erase(m_vl->m_queues.begin());
-		m_vl->m_queued.push_back(b);
-		m_vl->m_pThreadCS.Leave();
-
-		if (!b.brick->isLoaded() && !b.brick->isLoading())
-		{
-			if (m_vl->m_used_memory >= m_vl->m_memory_limit)
-			{
-				m_vl->m_pThreadCS.Enter();
-				while(1)
-				{
-					m_vl->CleanupLoadedBrick();
-					if (m_vl->m_used_memory < m_vl->m_memory_limit || TestDestroy())
-						break;
-					m_vl->m_pThreadCS.Leave();
-					Sleep(10);
-					m_vl->m_pThreadCS.Enter();
-				}
-				m_vl->m_pThreadCS.Leave();
-			}
-
-			char *ptr = NULL;
-			size_t readsize;
-			TextureBrick::read_brick_without_decomp(ptr, readsize, b.finfo, this);
-			if (!ptr) continue;
-
-			if (b.finfo->type == BRICK_FILE_TYPE_RAW)
-			{
-				m_vl->m_pThreadCS.Enter();
-				b.brick->set_brkdata(ptr);
-				b.datasize = readsize;
-				m_vl->AddLoadedBrick(b);
-				m_vl->m_pThreadCS.Leave();
-			}
-			else
-			{
-				bool decomp_in_this_thread = false;
-				VolumeDecompressorData dq;
-				dq.b = b.brick;
-				dq.finfo = b.finfo;
-				dq.vd = b.vd;
-				dq.mode = b.mode;
-				dq.in_data = ptr;
-				dq.in_size = readsize;
-
-				size_t bsize = (size_t)(b.brick->nx())*(size_t)(b.brick->ny())*(size_t)(b.brick->nz())*(size_t)(b.brick->nb(0));
-				b.datasize = bsize;
-				dq.datasize = bsize;
-
-				if (m_vl->m_max_decomp_th == 0)
-					decomp_in_this_thread = true;
-				else if (m_vl->m_max_decomp_th < 0 || 
-					m_vl->m_running_decomp_th < m_vl->m_max_decomp_th)
-				{
-					VolumeDecompressorThread *dthread = new VolumeDecompressorThread(m_vl);
-					if (dthread->Create() == wxTHREAD_NO_ERROR)
-					{
-						m_vl->m_pThreadCS.Enter();
-						m_vl->m_decomp_queues.push_back(dq);
-						m_vl->m_used_memory += bsize;
-						b.brick->set_loading_state(true);
-						m_vl->m_loaded[b.brick] = b;
-						m_vl->m_pThreadCS.Leave();
-
-						dthread->Run();
-					}
-					else
-					{
-						if (m_vl->m_running_decomp_th <= 0)
-							decomp_in_this_thread = true;
-						else
-						{
-							m_vl->m_pThreadCS.Enter();
-							m_vl->m_decomp_queues.push_back(dq);
-							m_vl->m_used_memory += bsize;
-							b.brick->set_loading_state(true);
-							m_vl->m_loaded[b.brick] = b;
-							m_vl->m_pThreadCS.Leave();
-						}
-					}
-				}
-				else
-				{
-					m_vl->m_pThreadCS.Enter();
-					m_vl->m_decomp_queues.push_back(dq);
-					m_vl->m_used_memory += bsize;
-					b.brick->set_loading_state(true);
-					m_vl->m_loaded[b.brick] = b;
-					m_vl->m_pThreadCS.Leave();
-				}
-
-				if (decomp_in_this_thread)
-				{
-					char *result = new char[bsize];
-					if (TextureBrick::decompress_brick(result, dq.in_data, bsize, dq.in_size, dq.finfo->type))
-					{
-						m_vl->m_pThreadCS.Enter();
-						delete [] dq.in_data;
-						b.brick->set_brkdata(result);
-						b.datasize = bsize;
-						m_vl->m_used_memory += bsize;
-						m_vl->m_loaded[b.brick] = b;
-						m_vl->m_pThreadCS.Leave();
-					}
-					else
-					{
-						delete [] result;
-
-						m_vl->m_pThreadCS.Enter();
-						delete [] dq.in_data;
-						m_vl->m_used_memory -= bsize;
-						dq.b->set_drawn(dq.mode, true);
-						m_vl->m_pThreadCS.Leave();
-					}
-				}
-			}
-
-		}
-		else
-		{
-			size_t bsize = (size_t)(b.brick->nx())*(size_t)(b.brick->ny())*(size_t)(b.brick->nz())*(size_t)(b.brick->nb(0));
-			b.datasize = bsize;
-
-			m_vl->m_pThreadCS.Enter();
-			if (m_vl->m_loaded.find(b.brick) != m_vl->m_loaded.end())
-				m_vl->m_loaded[b.brick] = b;
-			m_vl->m_pThreadCS.Leave();
-		}
-	}
-
-	/*
-	wxCommandEvent evt(wxEVT_VLTHREAD_COMPLETED, GetId());
-	VolumeLoaderData *data = new VolumeLoaderData;
-	data->m_cur_cat = 0;
-	data->m_cur_item = 0;
-	data->m_progress = 0;
-	evt.SetClientData(data);
-	wxPostEvent(m_pParent, evt);
-	*/
-	return (wxThread::ExitCode)0;
-}
-
-VolumeLoader::VolumeLoader()
-{
-	m_thread = NULL;
-	m_running_decomp_th = 0;
-	m_max_decomp_th = wxThread::GetCPUCount()-1;
-	if (m_max_decomp_th < 0)
-		m_max_decomp_th = -1;
-	m_memory_limit = 10000000LL;
-	m_used_memory = 0LL;
-}
-
-VolumeLoader::~VolumeLoader()
-{
-	if (m_thread)
-	{
-		if (m_thread->IsAlive())
-		{
-			m_thread->Delete();
-			if (m_thread->IsAlive()) m_thread->Wait();
-		}
-		delete m_thread;
-	}
-	RemoveAllLoadedBrick();
-}
-
-void VolumeLoader::Queue(VolumeLoaderData brick)
-{
-	wxCriticalSectionLocker enter(m_pThreadCS);
-	m_queues.push_back(brick);
-}
-
-void VolumeLoader::ClearQueues()
-{
-	if (!m_queues.empty())
-	{
-		Abort();
-		m_queues.clear();
-	}
-}
-
-void VolumeLoader::Set(vector<VolumeLoaderData> vld)
-{
-	Abort();
-	//StopAll();
-	m_queues = vld;
-}
-
-void VolumeLoader::Abort()
-{
-	if (m_thread)
-	{
-		if (m_thread->IsAlive())
-		{
-			m_thread->Delete();
-			if (m_thread->IsAlive()) m_thread->Wait();
-		}
-		delete m_thread;
-		m_thread = NULL;
-	}
-}
-
-void VolumeLoader::StopAll()
-{
-	Abort();
-
-	while(m_running_decomp_th > 0)
-	{
-		wxMilliSleep(10);
-	}
-}
-
-bool VolumeLoader::Run()
-{
-	Abort();
-	//StopAll();
-	if (!m_queued.empty())
-		m_queued.clear();
-
-	m_thread = new VolumeLoaderThread(this);
-	if (m_thread->Create() != wxTHREAD_NO_ERROR)
-	{
-		delete m_thread;
-		m_thread = NULL;
-		return false;
-	}
-	m_thread->Run();
-
-	return true;
-}
-
-void VolumeLoader::CleanupLoadedBrick()
-{
-	long long required = 0;
-
-	for(int i = 0; i < m_queues.size(); i++)
-	{
-		TextureBrick *b = m_queues[i].brick;
-		if (!m_queues[i].brick->isLoaded())
-			required += (size_t)b->nx()*(size_t)b->ny()*(size_t)b->nz()*(size_t)b->nb(0);
-	}
-
-	vector<VolumeLoaderData> vd_undisp;
-	vector<VolumeLoaderData> b_undisp;
-	vector<VolumeLoaderData> b_drawn;
-	for(auto elem : m_loaded)
-	{
-		if (!elem.second.vd->GetDisp())
-			vd_undisp.push_back(elem.second);
-		else if(!elem.second.brick->get_disp())
-			b_undisp.push_back(elem.second);
-		else if (elem.second.brick->drawn(elem.second.mode))
-			b_drawn.push_back(elem.second);
-	}
-	if (required > 0 || m_used_memory >= m_memory_limit)
-	{
-		for (int i = 0; i < vd_undisp.size(); i++)
-		{
-			if (!vd_undisp[i].brick->isLoaded())
-				continue;
-			vd_undisp[i].brick->freeBrkData();
-			required -= vd_undisp[i].datasize;
-			m_used_memory -= vd_undisp[i].datasize;
-			m_loaded.erase(vd_undisp[i].brick);
-			if (required <= 0 && m_used_memory < m_memory_limit)
-				break;
-		}
-	}
-	if (required > 0 || m_used_memory >= m_memory_limit)
-	{
-		for (int i = 0; i < b_undisp.size(); i++)
-		{
-			if (!b_undisp[i].brick->isLoaded())
-				continue;
-			b_undisp[i].brick->freeBrkData();
-			required -= b_undisp[i].datasize;
-			m_used_memory -= b_undisp[i].datasize;
-			m_loaded.erase(b_undisp[i].brick);
-			if (required <= 0 && m_used_memory < m_memory_limit)
-				break;
-		}
-	}
-	if (required > 0 || m_used_memory >= m_memory_limit)
-	{
-		for (int i = 0; i < b_drawn.size(); i++)
-		{
-			if (!b_drawn[i].brick->isLoaded())
-				continue;
-			b_drawn[i].brick->freeBrkData();
-			required -= b_drawn[i].datasize;
-			m_used_memory -= b_drawn[i].datasize;
-			m_loaded.erase(b_drawn[i].brick);
-			if (required <= 0 && m_used_memory < m_memory_limit)
-				break;
-		}
-	}
-	if (m_used_memory >= m_memory_limit)
-	{
-		for(int i = m_queues.size()-1; i >= 0; i--)
-		{
-			TextureBrick *b = m_queues[i].brick;
-			if (b->isLoaded() && m_loaded.find(b) != m_loaded.end())
-			{
-				bool skip = false;
-				for (int j = m_queued.size()-1; j >= 0; j--)
-				{
-					if (m_queued[j].brick == b && !b->drawn(m_queued[j].mode))
-						skip = true;
-				}
-				if (!skip)
-				{
-					b->freeBrkData();
-					long long datasize = (size_t)(b->nx())*(size_t)(b->ny())*(size_t)(b->nz())*(size_t)(b->nb(0));
-					required -= datasize;
-					m_used_memory -= datasize;
-					m_loaded.erase(b);
-					if (m_used_memory < m_memory_limit)
-						break;
-				}
-			}
-		}
-	}
-
-}
-
-void VolumeLoader::RemoveAllLoadedBrick()
-{
-	StopAll();
-	for(auto e : m_loaded)
-	{
-		if (e.second.brick->isLoaded())
-		{
-			e.second.brick->freeBrkData();
-			m_used_memory -= e.second.datasize;
-		}
-	}
-	m_loaded.clear();
-}
-
-void VolumeLoader::RemoveBrickVD(VolumeData *vd)
-{
-	StopAll();
-	auto ite = m_loaded.begin();
-	while(ite != m_loaded.end())
-	{
-		if (ite->second.vd == vd && ite->second.brick->isLoaded())
-		{
-			ite->second.brick->freeBrkData();
-			m_used_memory -= ite->second.datasize;
-			ite = m_loaded.erase(ite);
-		}
-		else
-			ite++;
-	}
-}
-
-void VolumeLoader::GetPalams(long long &used_mem, int &running_decomp_th, int &queue_num, int &decomp_queue_num)
-{
-	long long us = 0;
-	int ll = 0;
-/*	for(auto e : m_loaded)
-	{
-		if (e.second.brick->isLoaded())
-			us += e.second.datasize;
-		if (!e.second.brick->get_disp())
-			ll++;
-	}
-*/	used_mem = m_used_memory;
-	running_decomp_th = m_running_decomp_th;
-	queue_num = m_queues.size();
-	decomp_queue_num = m_decomp_queues.size();
-}
-
 //////////////////////////////////////////////////////////////////////////
 
 
-BEGIN_EVENT_TABLE(VRenderGLView, wxGLCanvas)
-	EVT_PAINT(VRenderGLView::OnDraw)
-	EVT_SIZE(VRenderGLView::OnResize)
-	EVT_MOUSE_EVENTS(VRenderGLView::OnMouse)
-	EVT_IDLE(VRenderGLView::OnIdle)
-	EVT_KEY_DOWN(VRenderGLView::OnKeyDown)
-	END_EVENT_TABLE()
+BEGIN_EVENT_TABLE(VRenderVulkanView, wxWindow)
+	EVT_MENU(ID_CTXMENU_SHOW_ALL, VRenderVulkanView::OnShowAllVolumes)
+	EVT_MENU(ID_CTXMENU_HIDE_OTHER_VOLS, VRenderVulkanView::OnHideOtherVolumes)
+	EVT_MENU(ID_CTXMENU_HIDE_THIS_VOL, VRenderVulkanView::OnHideSelectedVolume)
+	EVT_MENU(ID_CTXMENU_SHOW_ALL_FRAGMENTS, VRenderVulkanView::OnShowAllFragments)
+    EVT_MENU(ID_CTXMENU_DESELECT_ALL_FRAGMENTS, VRenderVulkanView::OnDeselectAllFragments)
+	EVT_MENU(ID_CTXMENU_HIDE_OTHER_FRAGMENTS, VRenderVulkanView::OnHideOtherFragments)
+	EVT_MENU(ID_CTXMENU_HIDE_SELECTED_FLAGMENTS, VRenderVulkanView::OnHideSelectedFragments)
+	EVT_MENU(ID_CTXMENU_UNDO_VISIBILITY_SETTING_CHANGES, VRenderVulkanView::OnUndoVisibilitySettings)
+	EVT_MENU(ID_CTXMENU_REDO_VISIBILITY_SETTING_CHANGES, VRenderVulkanView::OnRedoVisibilitySettings)
+	EVT_PAINT(VRenderVulkanView::OnDraw)
+	EVT_SIZE(VRenderVulkanView::OnResize)
+	EVT_ERASE_BACKGROUND(VRenderVulkanView::OnErase)
+	EVT_TIMER(ID_Timer ,VRenderVulkanView::OnIdle)
+	EVT_MOUSE_EVENTS(VRenderVulkanView::OnMouse)
+	EVT_KEY_DOWN(VRenderVulkanView::OnKeyDown)
+END_EVENT_TABLE()
 
-	VRenderGLView::VRenderGLView(wxWindow* frame,
-	wxWindow* parent,
+VRenderVulkanView::VRenderVulkanView(wxWindow* frame,
+	wxWindow *parent,
 	wxWindowID id,
-	const int* attriblist,
-	wxGLContext* sharedContext,
 	const wxPoint& pos,
 	const wxSize& size,
-	long style) :
-wxGLCanvas(parent, id, attriblist, pos, size, style),
+	long style,
+	const wxString& name)
+	: wxWindow(parent, id, pos, size, style, name),
 	//public
 	//capture modes
 	m_capture(false),
@@ -927,6 +450,10 @@ wxGLCanvas(parent, id, attriblist, pos, size, style),
 	m_capture_tsequ(false),
 	m_capture_bat(false),
 	m_capture_param(false),
+	m_capture_resx(-1),
+	m_capture_resy(-1),
+	m_tile_rendering(false),
+	m_postdraw(false),
 	//begin and end frame
 	m_begin_frame(0),
 	m_end_frame(0),
@@ -1021,28 +548,9 @@ wxGLCanvas(parent, id, attriblist, pos, size, style),
 	m_draw_brush(false),
 	m_paint_enable(false),
 	m_paint_display(false),
-	//2d frame buffers
-	m_fbo(0),
-	m_tex(0),
-	m_tex_wt2(0),
-	m_fbo_final(0),
-	m_tex_final(0),
-	//temp buffer for large data comp
-	m_fbo_temp(0),
-	m_tex_temp(0),
-	//shading (shadow) overlay
-	m_fbo_ol1(0),
-	m_fbo_ol2(0),
-	m_tex_ol1(0),
-	m_tex_ol2(0),
 	//paint buffer
-	m_fbo_paint(0),
-	m_tex_paint(0),
 	m_clear_paint(true),
-	//pick buffer
-	m_fbo_pick(0),
-	m_tex_pick(0),
-	m_tex_pick_depth(0),
+	m_tiled_image(NULL),
 	//camera controls
 	m_persp(false),
 	m_free(false),
@@ -1170,31 +678,71 @@ wxGLCanvas(parent, id, attriblist, pos, size, style),
 	m_manip_time(300),
 	m_min_ppi(20),
 	m_res_mode(0),
+	m_res_scale(1.0),
 	m_draw_landmarks(false),
 	m_draw_overlays_only(false),
-	m_enhance_sel(false),
+	m_enhance_sel(true),
 	m_adaptive_res(false),
 	m_int_res(false),
 	m_dpeel(false),
-	m_load_in_main_thread(true)
+	m_load_in_main_thread(true),
+	m_finished_peeling_layer(0),
+	m_fix_sclbar(false),
+	m_fixed_sclbar_len(0.0),
+	m_fixed_sclbar_fac(0.0),
+	m_sclbar_digit(3),
+	m_clear_final_buffer(false),
+    m_refresh(false),
+	m_refresh_start_loop(false),
+	m_recording(false)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
 
-	//create context
-	if (sharedContext)
+	m_vulkan = make_shared<VVulkan>();
+	m_vulkan->initVulkan();
+#if defined(_WIN32)
+	m_vulkan->setWindow((HWND)GetHWND(), GetModuleHandle(NULL));
+#elif (defined(__WXMAC__))
+    makeViewMetalCompatible(GetHandle());
+	m_vulkan->setWindow(GetHandle());
+#endif
+	m_vulkan->prepare();
+
+	m_v2drender = make_shared<Vulkan2dRender>(m_vulkan);
+	FLIVR::TextureRenderer::set_vulkan(m_vulkan, m_v2drender);
+
+	m_vulkan->ResetRenderSemaphores();
+
+	FLIVR::VolumeRenderer::init();
+	FLIVR::MeshRenderer::init(m_vulkan);
+    
+    wxSize wsize = GetSize();
+    m_vulkan->setSize(wsize.GetWidth(), wsize.GetHeight());
+
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (vr_frame)
 	{
-		m_glRC = sharedContext;
-		m_sharedRC = true;
-	}
-	else
-	{
-		m_glRC = new wxGLContext(this);
-		m_sharedRC = false;
+		auto setting_dlg = vr_frame->GetSettingDlg();
+		wxString font_file = setting_dlg ? setting_dlg->GetFontFile() : "";
+		std::string exePath = wxStandardPaths::Get().GetExecutablePath().ToStdString();
+		exePath = exePath.substr(0, exePath.find_last_of(std::string() + GETSLASH()));
+		if (font_file != "")
+			font_file = wxString(exePath) + GETSLASH() + wxString("Fonts") +
+			GETSLASH() + font_file;
+		else
+			font_file = wxString(exePath) + GETSLASH() + wxString("Fonts") +
+			GETSLASH() + wxString("FreeSans.ttf");
+		m_text_renderer = new TextRenderer(font_file.ToStdString(), m_v2drender);
+		if (setting_dlg)
+			m_text_renderer->SetSize(setting_dlg->GetTextSize());
+        
+        m_selector.SetDataManager(vr_frame->GetDataManager());
 	}
 
 	goTimer = new nv::Timer(10);
 	m_sb_num = "50";
+
 #ifdef _WIN32
 	//tablet initialization
 	if (m_use_pres && LoadWintab())
@@ -1203,6 +751,7 @@ wxGLCanvas(parent, id, attriblist, pos, size, style),
 		m_hTab = TabletInit((HWND)GetHWND());
 	}
 #endif
+
 	LoadDefaultBrushSettings();
 
 	m_searcher = new LMSeacher(this, (wxWindow *)this, ID_Searcher, wxT("Search"), wxPoint(20, 20), wxSize(200, -1), wxTE_PROCESS_ENTER);
@@ -1210,51 +759,17 @@ wxGLCanvas(parent, id, attriblist, pos, size, style),
 
 	Thaw();
 	SetEvtHandlerEnabled(true);
+	
+	m_idleTimer = new wxTimer(this, ID_Timer);
+	m_idleTimer->Start(50);
 }
 
-void VRenderGLView::SetSearcherVisibility(bool visibility)
-{
-	if(visibility)
-	{
-		m_draw_landmarks = true;
-		m_searcher->Show();
-	}
-	else
-	{
-		m_draw_landmarks = false;
-		m_searcher->Hide();
-	}
-}
-
-#ifdef _WIN32
-//tablet init
-HCTX VRenderGLView::TabletInit(HWND hWnd)
-{
-	/* get default region */
-	gpWTInfoA(WTI_DEFCONTEXT, 0, &m_lc);
-
-	/* modify the digitizing region */
-	m_lc.lcOptions |= CXO_MESSAGES;
-	m_lc.lcPktData = PACKETDATA;
-	m_lc.lcPktMode = PACKETMODE;
-	m_lc.lcMoveMask = PACKETDATA;
-	m_lc.lcBtnUpMask = m_lc.lcBtnDnMask;
-
-	/* output in 10000 x 10000 grid */
-	m_lc.lcOutOrgX = m_lc.lcOutOrgY = 0;
-	m_lc.lcOutExtX = 10000;
-	m_lc.lcOutExtY = 10000;
-
-	/* open the region */
-	return gpWTOpenA(hWnd, &m_lc, TRUE);
-
-}
-#endif
-
-VRenderGLView::~VRenderGLView()
+VRenderVulkanView::~VRenderVulkanView()
 {
 	goTimer->stop();
 	delete goTimer;
+	m_idleTimer->Stop();
+	wxDELETE(m_idleTimer);
 #ifdef _WIN32
 	//tablet
 	if (m_hTab)
@@ -1294,62 +809,83 @@ VRenderGLView::~VRenderGLView()
 			delete m_landmarks[i];
 	}
 
-	//delete buffers and textures
-	if (glIsFramebuffer(m_fbo))
-		glDeleteFramebuffers(1, &m_fbo);
-	if (glIsFramebuffer(m_fbo_final))
-		glDeleteFramebuffers(1, &m_fbo_final);
-	if (glIsFramebuffer(m_fbo_temp))
-		glDeleteFramebuffers(1, &m_fbo_temp);
-	if (glIsFramebuffer(m_fbo_paint))
-		glDeleteFramebuffers(1, &m_fbo_paint);
-	if (glIsFramebuffer(m_fbo_ol1))
-		glDeleteFramebuffers(1, &m_fbo_ol1);
-	if (glIsFramebuffer(m_fbo_ol2))
-		glDeleteFramebuffers(1, &m_fbo_ol2);
-	if (glIsTexture(m_tex))
-		glDeleteTextures(1, &m_tex);
-	if (glIsTexture(m_tex_final))
-		glDeleteTextures(1, &m_tex_final);
-	if (glIsTexture(m_tex_temp))
-		glDeleteTextures(1, &m_tex_temp);
-	if (glIsTexture(m_tex_paint))
-		glDeleteTextures(1, &m_tex_paint);
-	if (glIsTexture(m_tex_ol1))
-		glDeleteTextures(1, &m_tex_ol1);
-	if (glIsTexture(m_tex_ol2))
-		glDeleteTextures(1, &m_tex_ol2);
-
-	if (glIsBuffer(m_quad_vbo))
-		glDeleteBuffers(1, &m_quad_vbo);
-	if (glIsVertexArray(m_quad_vao))
-		glDeleteVertexArrays(1, &m_quad_vao);
-	if (glIsBuffer(m_misc_vbo))
-		glDeleteBuffers(1, &m_misc_vbo);
-	if (glIsBuffer(m_misc_ibo))
-		glDeleteBuffers(1, &m_misc_ibo);
-	if (glIsVertexArray(m_misc_vao))
-		glDeleteVertexArrays(1, &m_misc_vao);
-
-	//pick buffer
-	if (glIsFramebuffer(m_fbo_pick))
-		glDeleteFramebuffers(1, &m_fbo_pick);
-	if (glIsTexture(m_tex_pick))
-		glDeleteTextures(1, &m_tex_pick);
-	if (glIsTexture(m_tex_pick_depth))
-		glDeleteTextures(1, &m_tex_pick_depth);
-
-	if (!m_sharedRC)
-		delete m_glRC;
-
-	if (m_trace_group)
-		delete m_trace_group;
-
-	KernelProgram::clear();
+	FLIVR::VolumeRenderer::finalize();
+	FLIVR::TextureRenderer::finalize_vulkan();
+	m_v2drender.reset();
+	//m_vulkan.reset();
 }
 
-void VRenderGLView::OnResize(wxSizeEvent& event)
+double VRenderVulkanView::GetAvailableGraphicsMemory(int device_id)
 {
+	double ret = 0.0;
+	if (m_vulkan)
+	{
+		if (device_id >= 0 && device_id < m_vulkan->devices.size())
+			ret = m_vulkan->devices[device_id]->available_mem;
+	}
+
+	return ret;
+}
+
+void VRenderVulkanView::OnErase(wxEraseEvent& event)
+{
+
+}
+
+void VRenderVulkanView::SetSearcherVisibility(bool visibility)
+{
+	if(visibility)
+	{
+		m_draw_landmarks = true;
+		m_searcher->Show();
+	}
+	else
+	{
+		m_draw_landmarks = false;
+		m_searcher->Hide();
+	}
+}
+
+#ifdef _WIN32
+//tablet init
+HCTX VRenderVulkanView::TabletInit(HWND hWnd)
+{
+	/* get default region */
+	gpWTInfoA(WTI_DEFCONTEXT, 0, &m_lc);
+
+	/* modify the digitizing region */
+	m_lc.lcOptions |= CXO_MESSAGES;
+	m_lc.lcPktData = PACKETDATA;
+	m_lc.lcPktMode = PACKETMODE;
+	m_lc.lcMoveMask = PACKETDATA;
+	m_lc.lcBtnUpMask = m_lc.lcBtnDnMask;
+
+	/* output in 10000 x 10000 grid */
+	m_lc.lcOutOrgX = m_lc.lcOutOrgY = 0;
+	m_lc.lcOutExtX = 10000;
+	m_lc.lcOutExtY = 10000;
+
+	/* open the region */
+	return gpWTOpenA(hWnd, &m_lc, TRUE);
+
+}
+#endif
+
+void VRenderVulkanView::OnResize(wxSizeEvent& event)
+{
+	Resize();
+}
+
+void VRenderVulkanView::Resize(bool refresh)
+{
+	wxSize size = GetSize();
+	if (size.GetWidth() == 0 || size.GetHeight() == 0) {
+		return;
+	}
+
+	if (m_vd_pop_dirty)
+		PopVolumeList();
+
 	int i;
 	for (i=0; i<(int)m_vd_pop_list.size(); i++)
 	{
@@ -1370,46 +906,36 @@ void VRenderGLView::OnResize(wxSizeEvent& event)
 	m_resize_ol2 = true;
 	m_resize_paint = true;
 
-	RefreshGL();
+	m_vulkan->setSize(size.GetWidth(), size.GetHeight());
+	wxRect refreshRect(size);
+	RefreshRect(refreshRect, false);
+
+	if (refresh) RefreshGL();
 }
 
-void VRenderGLView::Init()
+void VRenderVulkanView::Init()
 {
 	if (!m_initialized)
 	{
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-		SetCurrent(*m_glRC);
-		ShaderProgram::init_shaders_supported();
 		if (vr_frame)
 		{
 			vr_frame->SetTextureRendererSettings();
 			vr_frame->SetTextureUndos();
 		}
-		glViewport(0, 0, (GLint)(GetSize().x), (GLint)(GetSize().y));
 		goTimer->start();
-		glGenBuffers(1, &m_quad_vbo);
-		m_quad_vao = 0;
-		glGenBuffers(1, &m_misc_vbo);
-		glGenBuffers(1, &m_misc_ibo);
-		glGenVertexArrays(1, &m_misc_vao);
-		glEnable( GL_MULTISAMPLE );
-
-		if (vr_frame && vr_frame->GetSettingDlg()) KernelProgram::set_device_id(vr_frame->GetSettingDlg()->GetCLDeviceID());
-		KernelProgram::init_kernels_supported();
+		
+		//if (vr_frame && vr_frame->GetSettingDlg()) KernelProgram::set_device_id(vr_frame->GetSettingDlg()->GetCLDeviceID());
+		//KernelProgram::init_kernels_supported();
 
 		m_initialized = true;
 	}
-
-	////query the OGL version to determine actual context info
-	//char version[16];
-	//memcpy(version,glGetString(GL_VERSION),16);
-	//m_GLversion = wxString("OpenGL Version: ") + wxString(version);
 }
 
-void VRenderGLView::Clear()
+void VRenderVulkanView::Clear()
 {
 	m_loader.RemoveAllLoadedBrick();
-	TextureRenderer::clear_tex_pool();
+	m_vulkan->clearTexPools();
 
 	//delete groups
 	for (int i=0; i<(int)m_layer_list.size(); i++)
@@ -1432,11 +958,13 @@ void VRenderGLView::Clear()
 	m_layer_list.clear();
 }
 
-void VRenderGLView::HandleProjection(int nx, int ny)
+void VRenderVulkanView::HandleProjection(int nx, int ny)
 {
 	double aspect = (double)nx / (double)ny;
 	if (!m_free)
 		m_distance = m_radius/tan(d2r(m_aov/2.0))/m_scale_factor;
+	else
+		m_scale_factor = m_radius/tan(d2r(m_aov/2.0)) / ( CalcCameraDistance() + (m_radius/tan(d2r(m_aov/2.0))/12.0) );
 	if (aspect>1.0)
 	{
 		m_ortho_left = -m_radius*aspect/m_scale_factor;
@@ -1453,21 +981,42 @@ void VRenderGLView::HandleProjection(int nx, int ny)
 	}
 	if (m_persp)
 	{
-		m_proj_mat = glm::perspective(m_aov, aspect, m_near_clip, m_far_clip);
+		m_proj_mat = glm::perspective(glm::radians(m_aov), aspect, m_near_clip, m_far_clip);
+		if (m_tile_rendering) {
+			int tilex = m_current_tileid % m_tile_xnum;
+			int tiley = m_current_tileid / m_tile_xnum;
+			double tilew = 2.0 * m_tile_w / nx;
+			double tileh = 2.0 * m_tile_h / ny;
+			double scalex = (double)nx/(double)(m_tile_w);
+			double scaley = (double)ny/(double)(m_tile_h);
+			double tx = -1.0 * (-1.0 + tilew/2.0 + tilew*tilex);
+			double ty = -1.0 * (-1.0 + tileh/2.0 + tileh*tiley);
+			auto scale = glm::scale(glm::vec3((float)scalex, (float)scaley, 1.f));
+			auto translate = glm::translate(glm::vec3((float)tx, (float)ty, 0.f));
+			m_proj_mat = scale * translate * m_proj_mat;
+		}
 	}
 	else
 	{
 		m_proj_mat = glm::ortho(m_ortho_left, m_ortho_right, m_ortho_bottom, m_ortho_top,
 			-m_far_clip/100.0, m_far_clip);
+		if (m_tile_rendering) {
+			int tilex = m_current_tileid % m_tile_xnum;
+			int tiley = m_current_tileid / m_tile_xnum;
+			float shiftX = (double)m_tile_w * (m_ortho_right - m_ortho_left)/m_capture_resx;
+			float shiftY = (double)m_tile_h * (m_ortho_top - m_ortho_bottom)/m_capture_resy;
+			m_proj_mat = glm::ortho(m_ortho_left + shiftX*tilex, m_ortho_left + shiftX*(tilex+1),
+				m_ortho_bottom + shiftY*tiley, m_ortho_bottom + shiftY*(tiley+1), -m_far_clip/100.0, m_far_clip);
+		}
 	}
 }
 
-void VRenderGLView::HandleCamera()
+void VRenderVulkanView::HandleCamera()
 {
 	Vector pos(m_transx, m_transy, m_transz);
 	pos.normalize();
 	if (m_free)
-		pos *= 0.1;
+		pos *= m_radius*0.01;
 	else
 		pos *= m_distance;
 	m_transx = pos.x();
@@ -1484,7 +1033,7 @@ void VRenderGLView::HandleCamera()
 }
 
 //depth buffer calculation
-double VRenderGLView::CalcZ(double z)
+double VRenderVulkanView::CalcZ(double z)
 {
 	double result = 0.0;
 	if (m_persp)
@@ -1500,12 +1049,8 @@ double VRenderGLView::CalcZ(double z)
 	return result;
 }
 
-void VRenderGLView::CalcFogRange()
+void VRenderVulkanView::CalcFogRange()
 {
-	int w, h;
-	w = GetSize().x;
-	h = GetSize().y;
-
 	BBox bbox;
 	bool use_box = false;
 	if (m_cur_vol)
@@ -1566,31 +1111,26 @@ void VRenderGLView::CalcFogRange()
 }
 
 //draw the volume data only
-void VRenderGLView::Draw()
+void VRenderVulkanView::Draw()
 {
-	int nx = GetSize().x;
-	int ny = GetSize().y;
 
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-	// clear color and depth buffers
-	glDrawBuffer(GL_BACK);
-	glClearDepth(1.0);
-	glClearColor(m_bg_color.r(), m_bg_color.g(), m_bg_color.b(), 0.0);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glViewport(0, 0, (GLint)nx, (GLint)ny);
+	int nx = m_nx;
+	int ny = m_ny;
 
 	//gradient background
 	if (m_grad_bg)
+	{
 		DrawGradBg();
+	}
 
 	if (VolumeRenderer::get_done_update_loop() && !m_draw_overlays_only) StartLoopUpdate();
 
 	if (m_draw_all)
 	{
 		//projection
-		HandleProjection(nx, ny);
+		if (m_tile_rendering) HandleProjection(m_capture_resx, m_capture_resy);
+		else HandleProjection(nx, ny);
 		//Transformation
 		HandleCamera();
 
@@ -1599,12 +1139,13 @@ void VRenderGLView::Draw()
 		m_mv_mat = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
 		//rotate object
 		m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
-		m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
-		m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
+		m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+		m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
 		//center object
 		m_mv_mat = glm::translate(m_mv_mat, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
 
-		if (VolumeRenderer::get_done_update_loop() && m_draw_overlays_only) DrawFinalBuffer();
+		if (VolumeRenderer::get_done_update_loop() && m_draw_overlays_only)
+			DrawFinalBuffer(m_frame_clear);
 		else
 		{
 			if (m_use_fog)
@@ -1616,13 +1157,36 @@ void VRenderGLView::Draw()
 			if (m_draw_clip)
 				DrawClippingPlanes(false, BACK_FACE);
 
-			//setup
-			glDisable(GL_DEPTH_TEST);
-			glEnable(GL_BLEND);
-			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
 			//draw the volumes
-			DrawVolumes();
+			if (m_md_pop_list.empty() && m_vd_pop_list.empty())
+			{
+				if (m_frame_clear) {
+					vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+					
+					if (current_fbo)
+					{
+						Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+						if (!current_fbo->renderPass)
+						{
+							params.pipeline =
+								m_v2drender->preparePipeline(
+									IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR,
+									V2DRENDER_BLEND_OVER,
+									current_fbo->attachments[0]->format,
+									current_fbo->attachments.size(),
+									0,
+									current_fbo->attachments[0]->is_swapchain_images);
+							current_fbo->replaceRenderPass(params.pipeline.pass);
+						}
+						params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b(), 1.0f };
+						m_v2drender->clear(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
+						m_frame_clear = false;
+					}
+
+				}
+			}
+			else if (!m_dpeel) DrawVolumes();
+			else DrawVolumesDP();
 		}
 
 
@@ -1648,296 +1212,9 @@ void VRenderGLView::Draw()
 	m_draw_overlays_only = false;
 }
 
-//draw with depth peeling
-void VRenderGLView::DrawDP()
-{
-	int i;
-	int nx = GetSize().x;
-	int ny = GetSize().y;
-
-	//clear
-	glDrawBuffer(GL_BACK);
-	glClearDepth(1.0);
-	glClearColor(m_bg_color.r(), m_bg_color.g(), m_bg_color.b(), 0.0);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glViewport(0, 0, (GLint)nx, (GLint)ny);
-
-	//gradient background
-	if (m_grad_bg)
-		DrawGradBg();
-
-	if (VolumeRenderer::get_done_update_loop() && !m_draw_overlays_only) StartLoopUpdate();
-
-	if (m_draw_all)
-	{
-		//projection
-		HandleProjection(nx, ny);
-		//Transformation
-		HandleCamera();
-
-		glm::mat4 mv_temp = m_mv_mat;
-		//translate object
-		m_mv_mat = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
-		//rotate object
-		m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
-		m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
-		m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
-		//center object
-		m_mv_mat = glm::translate(m_mv_mat, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
-
-		if (VolumeRenderer::get_done_update_loop() && m_draw_overlays_only) DrawFinalBuffer();
-		else
-		{
-			bool use_fog_save = m_use_fog;
-			if (m_use_fog)
-				CalcFogRange();
-
-			if (m_draw_grid)
-				DrawGrid();
-
-			if (m_draw_clip)
-				DrawClippingPlanes(true, BACK_FACE);
-
-			//generate depth peeling buffers
-			for (i=0; i<m_peeling_layers; i++)
-			{
-				if (i>=(int)m_dp_fbo_list.size())
-				{
-					GLuint fbo_id;
-					GLuint tex_id;
-					glGenFramebuffers(1, &fbo_id);
-					glGenTextures(1, &tex_id);
-					glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
-					glBindTexture(GL_TEXTURE_2D, tex_id);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
-						GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
-					glFramebufferTexture2D(GL_FRAMEBUFFER,
-						GL_DEPTH_ATTACHMENT,
-						GL_TEXTURE_2D, tex_id, 0);
-					m_dp_fbo_list.push_back(fbo_id);
-					m_dp_tex_list.push_back(tex_id);
-				}
-				else if (i>=0 && !glIsFramebuffer(m_dp_fbo_list[i]))
-				{
-					GLuint fbo_id;
-					GLuint tex_id;
-					glGenFramebuffers(1, &fbo_id);
-					glGenTextures(1, &tex_id);
-					glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
-					glBindTexture(GL_TEXTURE_2D, tex_id);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
-						GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
-					glFramebufferTexture2D(GL_FRAMEBUFFER,
-						GL_DEPTH_ATTACHMENT,
-						GL_TEXTURE_2D, tex_id, 0);
-					m_dp_fbo_list[i] = fbo_id;
-					m_dp_tex_list[i] = tex_id;
-				}
-				if (m_resize)
-				{
-					glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[i]);
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
-						GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
-					//m_resize = false;
-				}
-			}
-
-			//setup
-			glDisable(GL_BLEND);
-			glEnable(GL_DEPTH_TEST);
-			glDepthFunc(GL_LEQUAL);
-			m_use_fog = false;
-
-			//draw depth values of each layer into the buffers
-			for (i=0; i<m_peeling_layers; i++)
-			{
-				glBindFramebuffer(GL_FRAMEBUFFER, m_dp_fbo_list[i]);
-				glDrawBuffer(GL_NONE);
-				glReadBuffer(GL_NONE);
-
-				glClearDepth(1.0);
-				glClear(GL_DEPTH_BUFFER_BIT);
-
-				if (i==0)
-				{
-					DrawMeshes(0);
-				}
-				else
-				{
-					glActiveTexture(GL_TEXTURE15);
-					glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[i-1]);
-					glActiveTexture(GL_TEXTURE0);
-					DrawMeshes(1);
-					glActiveTexture(GL_TEXTURE15);
-					glBindTexture(GL_TEXTURE_2D, 0);
-					glActiveTexture(GL_TEXTURE0);
-				}
-			}
-
-			//bind back the framebuffer
-			glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-			//restore fog
-			m_use_fog = use_fog_save;
-
-			//draw depth peeling
-			for (i=m_peeling_layers; i>=0; i--)
-			{
-				if (i==0)
-				{
-					//draw volumes before the depth
-					glActiveTexture(GL_TEXTURE15);
-					glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[0]);
-					glActiveTexture(GL_TEXTURE0);
-					DrawVolumes(1);
-					glActiveTexture(GL_TEXTURE15);
-					glBindTexture(GL_TEXTURE_2D, 0);
-					glActiveTexture(GL_TEXTURE0);
-				}
-				else
-				{
-					if (m_peeling_layers == 1)
-					{
-						//i == m_peeling_layers == 1
-						glActiveTexture(GL_TEXTURE15);
-						glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[0]);
-						glActiveTexture(GL_TEXTURE0);
-					}
-					else if (m_peeling_layers == 2)
-					{
-						glActiveTexture(GL_TEXTURE14);
-						glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[0]);
-						glActiveTexture(GL_TEXTURE15);
-						glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[1]);
-						glActiveTexture(GL_TEXTURE0);
-					}
-					else if (m_peeling_layers > 2)
-					{
-						if (i == m_peeling_layers)
-						{
-							glActiveTexture(GL_TEXTURE14);
-							glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[i-2]);
-							glActiveTexture(GL_TEXTURE15);
-							glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[i-1]);
-							glActiveTexture(GL_TEXTURE0);
-						}
-						else if (i == 1)
-						{
-							glActiveTexture(GL_TEXTURE14);
-							glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[0]);
-							glActiveTexture(GL_TEXTURE15);
-							glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[1]);
-							glActiveTexture(GL_TEXTURE0);
-						}
-						else
-						{
-							glActiveTexture(GL_TEXTURE13);
-							glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[i-2]);
-							glActiveTexture(GL_TEXTURE14);
-							glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[i-1]);
-							glActiveTexture(GL_TEXTURE15);
-							glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[i]);
-							glActiveTexture(GL_TEXTURE0);
-						}
-					}
-
-					//draw volumes
-					if (m_peeling_layers == 1)
-						//i == m_peeling_layers == 1
-							DrawVolumes(5);//draw volume after 15
-					else if (m_peeling_layers == 2)
-					{
-						if (i == 2)
-							DrawVolumes(2);//draw volume after 15
-						else if (i == 1)
-							DrawVolumes(4);//draw volume after 14 and before 15
-					}
-					else if (m_peeling_layers > 2)
-					{
-						if (i == m_peeling_layers)
-							DrawVolumes(2);//draw volume after 15
-						else if (i == 1)
-							DrawVolumes(4);//draw volume after 14 and before 15
-						else
-							DrawVolumes(3);//draw volume after 14 and before 15
-					}
-
-					//draw meshes
-					glEnable(GL_DEPTH_TEST);
-					glDepthFunc(GL_LEQUAL);
-					glEnable(GL_BLEND);
-					glBlendEquation(GL_FUNC_ADD);
-					glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-					if (m_peeling_layers == 1)
-						//i == m_peeling_layers == 1
-							DrawMeshes(5);//draw mesh at 15
-					else if (m_peeling_layers == 2)
-					{
-						if (i == 2)
-							DrawMeshes(2);//draw mesh after 14
-						else if (i == 1)
-							DrawMeshes(4);//draw mesh before 15
-					}
-					else if (m_peeling_layers > 2)
-					{
-						if (i == m_peeling_layers)
-							DrawMeshes(2);//draw mesh after 14
-						else if (i == 1)
-							DrawMeshes(4);//draw mesh before 15
-						else
-							DrawMeshes(3);//draw mesh after 13 and before 15
-					}
-
-					glActiveTexture(GL_TEXTURE13);
-					glBindTexture(GL_TEXTURE_2D, 0);
-					glActiveTexture(GL_TEXTURE14);
-					glBindTexture(GL_TEXTURE_2D, 0);
-					glActiveTexture(GL_TEXTURE15);
-					glBindTexture(GL_TEXTURE_2D, 0);
-					glActiveTexture(GL_TEXTURE0);
-
-				}
-			}
-
-			if (m_dp_tex_list.size()>0)
-			{
-				double darkness;
-				if (GetMeshShadow(darkness))
-					DrawOLShadowsMesh(m_dp_tex_list[0], darkness);
-			}
-		}
-
-		if (m_draw_clip)
-			DrawClippingPlanes(false, FRONT_FACE);
-
-		if (m_draw_bounds)
-			DrawBounds();
-
-		if (m_draw_annotations)
-			DrawAnnotations();
-
-		if (m_draw_rulers)
-			DrawRulers();
-
-		//traces
-		DrawTraces();
-
-		m_mv_mat = mv_temp;
-	}
-}
-
 //draw meshes
 //peel==true -- depth peeling
-void VRenderGLView::DrawMeshes(int peel)
+void VRenderVulkanView::DrawMeshes(const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf, int peel, const std::shared_ptr<vks::VTexture> depth_tex)
 {
 	for (int i=0 ; i<(int)m_layer_list.size() ; i++)
 	{
@@ -1950,7 +1227,10 @@ void VRenderGLView::DrawMeshes(int peel)
 			{
 				md->SetMatrices(m_mv_mat, m_proj_mat);
 				md->SetFog(m_use_fog, m_fog_intensity, m_fog_start, m_fog_end);
-				md->Draw(peel);
+				md->SetDepthTex(depth_tex);
+				md->SetDevice(m_vulkan->devices[0]);
+				md->Draw(framebuf, clear_framebuf, peel);
+				clear_framebuf = false;
 			}
 		}
 		else if (m_layer_list[i]->IsA() == 6)
@@ -1965,7 +1245,10 @@ void VRenderGLView::DrawMeshes(int peel)
 					{
 						md->SetMatrices(m_mv_mat, m_proj_mat);
 						md->SetFog(m_use_fog, m_fog_intensity, m_fog_start, m_fog_end);
-						md->Draw(peel);
+						md->SetDepthTex(depth_tex);
+						md->SetDevice(m_vulkan->devices[0]);
+						md->Draw(framebuf, clear_framebuf, peel);
+						clear_framebuf = false;
 					}
 				}
 			}
@@ -1975,8 +1258,9 @@ void VRenderGLView::DrawMeshes(int peel)
 
 //draw volumes
 //peel==true -- depth peeling
-void VRenderGLView::DrawVolumes(int peel)
+void VRenderVulkanView::DrawVolumes(int peel)
 {
+
 	int finished_bricks = 0;
 	if (TextureRenderer::get_mem_swap())
 	{
@@ -1986,20 +1270,12 @@ void VRenderGLView::DrawVolumes(int peel)
 
 	PrepFinalBuffer();
 
+	bool dp = (m_md_pop_list.size() > 0);
+	vks::VulkanDevice* prim_dev = m_vulkan->devices[0];
+
 	//draw
-	if ((!m_drawing_coord &&
-		m_int_mode!=2 &&
-		m_int_mode!=7 &&
-		m_updating) ||
-		(!m_drawing_coord &&
-		(m_int_mode == 1 ||
-		m_int_mode == 3 ||
-		m_int_mode == 4 ||
-		m_int_mode == 5 ||
-		(m_int_mode == 6 &&
-		!m_editing_ruler_point) ||
-		m_int_mode == 8 ||
-		m_force_clear)))
+	if ( (!m_drawing_coord && m_int_mode!=7 && m_updating) ||
+		(!m_drawing_coord && (m_int_mode == 1 || m_int_mode == 3 || m_int_mode == 4 || m_int_mode == 5 || (m_int_mode == 6 && !m_editing_ruler_point) || m_int_mode == 8 || m_force_clear)) )
 	{
 		m_updating = false;
 		m_force_clear = false;
@@ -2009,7 +1285,6 @@ void VRenderGLView::DrawVolumes(int peel)
 			vr_frame->GetSettingDlg() &&
 			vr_frame->GetSettingDlg()->GetUpdateOrder() == 1)
 		{
-			//if (m_interactive) // deleted by takashi
 			ClearFinalBuffer();
 		}
 		else
@@ -2017,195 +1292,101 @@ void VRenderGLView::DrawVolumes(int peel)
 
 		if (TextureRenderer::get_cur_brick_num() == 0 && m_md_pop_list.size() > 0)
 		{
-			int nx = GetSize().x;
-			int ny = GetSize().y;
-
-			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			int nx = m_nx;
+			int ny = m_ny;
 
 			int peeling_layers;
 
-			if (!m_dpeel) peeling_layers = 1;
+			if (!m_mdtrans) peeling_layers = 1;
 			else peeling_layers = m_peeling_layers;
+
+			if (m_resize)
+			{
+				m_dp_fbo_list.clear();
+				m_dp_ctex_list.clear();
+				m_dp_tex_list.clear();
+			}
+
+			if (m_dp_fbo_list.size() < peeling_layers)
+			{
+				m_dp_fbo_list.resize(peeling_layers);
+				m_dp_ctex_list.resize(peeling_layers);
+				m_dp_tex_list.resize(peeling_layers);
+			}
 
 			for (int i = 0; i < peeling_layers; i++)
 			{
-				if (i >= (int)m_dp_fbo_list.size())
+				if (!m_dp_fbo_list[i])
 				{
-					GLuint fbo_id;
-					GLuint tex_id;
-					GLuint ctex_id;
-					glGenFramebuffers(1, &fbo_id);
-					glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
+					m_dp_fbo_list[i] = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+					m_dp_fbo_list[i]->w = m_nx;
+					m_dp_fbo_list[i]->h = m_ny;
+					m_dp_fbo_list[i]->device = prim_dev;
 
-					glGenTextures(1, &ctex_id);
-					glBindTexture(GL_TEXTURE_2D, ctex_id);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-						GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-					glFramebufferTexture2D(GL_FRAMEBUFFER,
-						GL_COLOR_ATTACHMENT0,
-						GL_TEXTURE_2D, ctex_id, 0);
-					m_dp_ctex_list.push_back(ctex_id);
+					m_dp_ctex_list[i] = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+					m_dp_fbo_list[i]->addAttachment(m_dp_ctex_list[i]);
 
-					glGenTextures(1, &tex_id);
-					glBindTexture(GL_TEXTURE_2D, tex_id);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
-						GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
-					glFramebufferTexture2D(GL_FRAMEBUFFER,
-						GL_DEPTH_ATTACHMENT,
-						GL_TEXTURE_2D, tex_id, 0);
-					m_dp_tex_list.push_back(tex_id);
-
-					m_dp_fbo_list.push_back(fbo_id);
+					m_dp_tex_list[i] = prim_dev->GenTexture2D(
+						m_vulkan->depthFormat,
+						VK_FILTER_LINEAR,
+						m_nx, m_ny,
+						VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+						VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+						VK_IMAGE_USAGE_SAMPLED_BIT |
+						VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+					);
+					m_dp_fbo_list[i]->addAttachment(m_dp_tex_list[i]);
 				}
-				else if (i >= 0 && !glIsFramebuffer(m_dp_fbo_list[i]))
-				{
-					GLuint fbo_id;
-					GLuint tex_id;
-					GLuint ctex_id;
-					glGenFramebuffers(1, &fbo_id);
-					glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
-
-					if (!glIsTexture(m_dp_ctex_list[i]))
-						glGenTextures(1, &ctex_id);
-					else
-						ctex_id = m_dp_ctex_list[i];
-					glBindTexture(GL_TEXTURE_2D, ctex_id);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-						GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-					glFramebufferTexture2D(GL_FRAMEBUFFER,
-						GL_COLOR_ATTACHMENT0,
-						GL_TEXTURE_2D, ctex_id, 0);
-					m_dp_ctex_list[i] = ctex_id;
-
-					if (!glIsTexture(m_dp_tex_list[i]))
-						glGenTextures(1, &tex_id);
-					else
-						tex_id = m_dp_tex_list[i];
-					glBindTexture(GL_TEXTURE_2D, tex_id);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
-						GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
-					glFramebufferTexture2D(GL_FRAMEBUFFER,
-						GL_DEPTH_ATTACHMENT,
-						GL_TEXTURE_2D, tex_id, 0);
-					m_dp_tex_list[i] = tex_id;
-
-					m_dp_fbo_list[i] = fbo_id;
-
-				}
-				else
-				{
-					glBindFramebuffer(GL_FRAMEBUFFER, m_dp_fbo_list[i]);
-					glFramebufferTexture2D(GL_FRAMEBUFFER,
-						GL_COLOR_ATTACHMENT0,
-						GL_TEXTURE_2D, m_dp_ctex_list[i], 0);
-					glFramebufferTexture2D(GL_FRAMEBUFFER,
-						GL_DEPTH_ATTACHMENT,
-						GL_TEXTURE_2D, m_dp_tex_list[i], 0);
-				}
-
-				if (m_resize)
-				{
-					glBindTexture(GL_TEXTURE_2D, m_dp_ctex_list[i]);
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-						GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-
-					glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[i]);
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
-						GL_DEPTH_COMPONENT, GL_FLOAT, NULL);//GL_RGBA16F
-					//m_resize = false;
-				}
-
-				glBindTexture(GL_TEXTURE_2D, 0);
-
-				glActiveTexture(GL_TEXTURE15);
-				glEnable(GL_TEXTURE_2D);
-				glActiveTexture(GL_TEXTURE0);
-				glEnable(GL_TEXTURE_2D);
-				glEnable(GL_BLEND);
-				glBlendFunc(GL_SRC_ALPHA, GL_ZERO);
-				glEnable(GL_DEPTH_TEST);
-				glDepthFunc(GL_LEQUAL);
-
-				glClearColor(0.0, 0.0, 0.0, 0.0);
-				glClearDepth(1.0);
-				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 				if (i==0)
 				{
-					DrawMeshes(0);
+					DrawMeshes(m_dp_fbo_list[i], true, 0);
 				}
 				else
 				{
-					glActiveTexture(GL_TEXTURE15);
-					glBindTexture(GL_TEXTURE_2D, m_dp_tex_list[i-1]);
-					glActiveTexture(GL_TEXTURE0);
-					DrawMeshes(1);
-					glActiveTexture(GL_TEXTURE15);
-					glBindTexture(GL_TEXTURE_2D, 0);
-					glActiveTexture(GL_TEXTURE0);
+					m_msh_dp_fr_tex = m_dp_tex_list[i - 1];
+					DrawMeshes(m_dp_fbo_list[i], true, 1, m_dp_tex_list[i-1]);
 				}
-
-				glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			}
 
-			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_final);
-			glFramebufferTexture2D(GL_FRAMEBUFFER,
-				GL_COLOR_ATTACHMENT0,
-				GL_TEXTURE_2D, m_tex_final, 0);
-
-			glActiveTexture(GL_TEXTURE0);
-			glEnable(GL_TEXTURE_2D);
-			glEnable(GL_BLEND);
-			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-			glDisable(GL_DEPTH_TEST);
-
-			ShaderProgram* img_shader = m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
-			if (img_shader)
-			{
-				if (!img_shader->valid())
-					img_shader->create();
-				img_shader->bind();
-			}
-
+			//combine result images of mesh renderer
+			std::vector<Vulkan2dRender::V2DRenderParams> v2drender_params;
+			Vulkan2dRender::V2dPipeline pl = 
+				m_v2drender->preparePipeline(
+					IMG_SHADER_TEXTURE_LOOKUP_BLEND,
+					V2DRENDER_BLEND_OVER,
+					VK_FORMAT_R32G32B32A32_SFLOAT,
+					1,
+					0,
+					m_fbo_final->attachments[0]->is_swapchain_images);
 			for (int i = peeling_layers-1; i >= 0; i--)
 			{
-				glActiveTexture(GL_TEXTURE0);
-				glBindTexture(GL_TEXTURE_2D, m_dp_ctex_list[i]);
-				DrawViewQuad();
-				glBindTexture(GL_TEXTURE_2D, 0);
+				Vulkan2dRender::V2DRenderParams param;
+				param.pipeline = pl;
+				param.clear = false;
+				param.tex[0] = m_dp_ctex_list[i].get();
+				v2drender_params.push_back(param);
 			}
+			v2drender_params[0].clear = m_clear_final_buffer;
+			m_clear_final_buffer = false;
+			vks::VulkanSemaphoreSettings sem = prim_dev->GetNextRenderSemaphoreSettings();
+			v2drender_params[0].waitSemaphores = sem.waitSemaphores;
+			v2drender_params[0].waitSemaphoreCount = sem.waitSemaphoreCount;
+			v2drender_params[0].signalSemaphores = sem.signalSemaphores;
+			v2drender_params[0].signalSemaphoreCount = sem.signalSemaphoreCount;
+			if (!m_fbo_final->renderPass)
+				m_fbo_final->replaceRenderPass(pl.pass);
+			m_v2drender->seq_render(m_fbo_final, v2drender_params.data(), v2drender_params.size());
 
-			if (img_shader && img_shader->valid())
-				img_shader->release();
-
-			glBindTexture(GL_TEXTURE_2D, 0);
-
+			if (m_md_pop_list[0]->GetShadow())
+			{
+				double darkness = 0.0;
+				m_md_pop_list[0]->GetShadowParams(darkness);
+				DrawOLShadowsMesh(m_dp_tex_list[0], (float)darkness);
+			}
 		}
 
 		//setup
-		glDisable(GL_DEPTH_TEST);
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-		GLboolean bCull = glIsEnabled(GL_CULL_FACE);
-		glDisable(GL_CULL_FACE);
-
 		PopVolumeList();
 
 		vector<VolumeData*> quota_vd_list;
@@ -2215,109 +1396,21 @@ void VRenderGLView::DrawVolumes(int peel)
 			TextureRenderer::set_st_time(GET_TICK_COUNT());
 
 			TextureRenderer::set_interactive(m_interactive);
-			//if in interactive mode, do interactive bricking also
-			/*			if (m_interactive && !(m_vol_method == VOL_METHOD_MULTI))
-			{
-			//calculate quota
-			int total_bricks = TextureRenderer::get_total_brick_num();
-			int quota_bricks = 0;
-			if (finished_bricks < total_bricks)
-			quota_bricks = TextureRenderer::get_est_bricks(3);
-			else
-			quota_bricks = total_bricks;
-			quota_bricks = Min(total_bricks, int(double(quota_bricks) *
-			double(TextureRenderer::get_cor_up_time()) /
-			double(TextureRenderer::get_up_time())));
-			TextureRenderer::set_quota_bricks(quota_bricks);
-			int quota_bricks_chan = 0;
-			if (m_vd_pop_list.size() > 1)
-			{
-			//priority: 1-selected channel; 2-group contains selected channel; 3-linear distance to above
-			//not considering mask for now
-			vector<VolumeData*>::iterator cur_iter;
-			cur_iter = find(m_vd_pop_list.begin(), m_vd_pop_list.end(), m_cur_vol);
-			size_t cur_index = distance(m_vd_pop_list.begin(), cur_iter);
-			int vd_index;
-			if (cur_iter != m_vd_pop_list.end())
-			{
-			VolumeData* vd;
-			vd = *cur_iter;
-			quota_vd_list.push_back(vd);
-			int count_bricks = vd->GetBrickNum();
-			quota_bricks_chan = Min(count_bricks, quota_bricks);
-			vd->GetVR()->set_quota_bricks_chan(quota_bricks_chan);
-			int count = 0;
-			while (count_bricks < quota_bricks &&
-			quota_vd_list.size() < m_vd_pop_list.size())
-			{
-			if (count % 2 == 0)
-			vd_index = cur_index + count/2 + 1;
-			else
-			vd_index = cur_index - count/2 - 1;
-			count++;
-			if (vd_index<0 ||
-			(size_t)vd_index>=m_vd_pop_list.size())
-			continue;
-			vd = m_vd_pop_list[vd_index];
-			int brick_num = vd->GetBrickNum();
-			quota_vd_list.push_back(vd);
-			if (count_bricks+brick_num > quota_bricks)
-			quota_bricks_chan = quota_bricks - count_bricks;
-			else
-			quota_bricks_chan = brick_num;
-			vd->GetVR()->set_quota_bricks_chan(quota_bricks_chan);
-			count_bricks += quota_bricks_chan;
-			}
-			}
-			}
-			else if (m_vd_pop_list.size() == 1)
-			{
-			quota_bricks_chan = quota_bricks;
-			VolumeData* vd = m_vd_pop_list[0];
-			if (vd)
-			vd->GetVR()->set_quota_bricks_chan(quota_bricks_chan);
-			}
-
-			//get and set center point
-			VolumeData* vd = m_cur_vol;
-			if (!vd)
-			if (m_vd_pop_list.size())
-			vd = m_vd_pop_list[0];
-			Point p;
-			if (vd && (GetPointVolumeBox(p,
-			GetSize().x/2, GetSize().y/2,
-			vd, false)>0.0 ||
-			GetPointPlane(p, GetSize().x/2,
-			GetSize().y/2, 0, false)>0.0))
-			{
-			int resx, resy, resz;
-			double sclx, scly, sclz;
-			double spcx, spcy, spcz;
-			vd->GetResolution(resx, resy, resz);
-			vd->GetScalings(sclx, scly, sclz);
-			vd->GetSpacings(spcx, spcy, spcz);
-			p = Point(p.x()/(resx*sclx*spcx),
-			p.y()/(resy*scly*spcy),
-			p.z()/(resz*sclz*spcz));
-			TextureRenderer::set_qutoa_center(p);
-			}
-			else
-			TextureRenderer::set_interactive(false);
-			}
-			*/		}
+		}
 
 		//handle intermixing modes
 		if (m_vol_method == VOL_METHOD_MULTI)
 		{
-			/*         if (TextureRenderer::get_mem_swap() &&
-			TextureRenderer::get_interactive() &&
-			quota_vd_list.size()>0)
-			DrawVolumesMulti(quota_vd_list, peel);
-			else
-			*/            DrawVolumesMulti(m_vd_pop_list, peel);
-		//draw masks
-		if (m_draw_mask)
-			DrawVolumesComp(m_vd_pop_list, true, peel);
+			if (dp)
+			{
+				m_vol_dp_bk_tex = m_dp_tex_list[0];
+				DrawVolumesMulti(m_vd_pop_list, 1);
+			}
+			else DrawVolumesMulti(m_vd_pop_list, peel);
+			
+			//draw masks
+			if (m_draw_mask)
+				DrawVolumesComp(m_vd_pop_list, true, peel);
 		}
 		else
 		{
@@ -2382,7 +1475,14 @@ void VRenderGLView::DrawVolumes(int peel)
 						if (!list.empty())
 						{
 							if (group->GetBlendMode() == VOL_METHOD_MULTI)
+							{
+								if (dp)
+								{
+									m_vol_dp_bk_tex = m_dp_tex_list[0];
+									DrawVolumesMulti(list, 1);
+								}
 								DrawVolumesMulti(list, peel);
+							}
 							else
 								DrawVolumesComp(list, false, peel);
 							//draw masks
@@ -2395,49 +1495,648 @@ void VRenderGLView::DrawVolumes(int peel)
 				}
 			}
 		}
+	}
 
-		if (bCull) glEnable(GL_CULL_FACE);
+	if (m_clear_final_buffer && m_fbo_final) {
+		Vulkan2dRender::V2DRenderParams params_final = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+
+		if (!m_fbo_final->renderPass)
+		{
+			params_final.pipeline =
+				m_v2drender->preparePipeline(
+					IMG_SHDR_BRIGHTNESS_CONTRAST_HDR,
+					V2DRENDER_BLEND_ADD,
+					m_fbo_final->attachments[0]->format,
+					m_fbo_final->attachments.size(),
+					0,
+					m_fbo_final->attachments[0]->is_swapchain_images);
+			m_fbo_final->replaceRenderPass(params_final.pipeline.pass);
+		}
+		params_final.clearColor = { 0.0f, 0.0f, 0.0f, 0.0f };
+		m_clear_final_buffer = false;
+		m_v2drender->clear(m_fbo_final, params_final);
 	}
 
 	//final composition
-	DrawFinalBuffer();
+	if (m_tile_rendering) {
+		//generate textures & buffer objects
+		//frame buffer for final
+		if (!m_fbo_tiled_tmp)
+		{
+			m_fbo_tiled_tmp = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+			m_fbo_tiled_tmp->w = m_nx;
+			m_fbo_tiled_tmp->h = m_ny;
+			m_fbo_tiled_tmp->device = prim_dev;
 
-	if (TextureRenderer::get_mem_swap())
-	{
-		TextureRenderer::set_consumed_time(GET_TICK_COUNT() - TextureRenderer::get_st_time());
-		if (TextureRenderer::get_start_update_loop() &&
-			TextureRenderer::get_done_update_loop())
-			TextureRenderer::reset_update_loop();
+			m_tex_tiled_tmp = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+			m_fbo_tiled_tmp->addAttachment(m_tex_tiled_tmp);
+		}
+
+		Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+		params.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHADER_TEXTURE_LOOKUP,
+				V2DRENDER_BLEND_OVER,
+				m_fbo_tiled_tmp->attachments[0]->format,
+				m_fbo_tiled_tmp->attachments.size(),
+				0,
+				m_fbo_tiled_tmp->attachments[0]->is_swapchain_images);
+		params.tex[0] = m_tex_final.get();
+		if (m_current_tileid == 0)
+			params.clear = true;
+
+		std::vector<Vulkan2dRender::Vertex> tile_verts;
+		m_tile_vobj.vertOffset = sizeof(Vulkan2dRender::Vertex) * 4 * m_current_tileid;
+		params.obj = &m_tile_vobj;
+
+		if (!m_fbo_tiled_tmp->renderPass)
+			m_fbo_tiled_tmp->replaceRenderPass(params.pipeline.pass);
+
+		m_v2drender->render(m_fbo_tiled_tmp, params);
+
+
+		Vulkan2dRender::V2DRenderParams params2 = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+		vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+		params2.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR,
+				V2DRENDER_BLEND_OVER,
+				current_fbo->attachments[0]->format,
+				current_fbo->attachments.size(),
+				0,
+				current_fbo->attachments[0]->is_swapchain_images);
+		params2.tex[0] = m_tex_tiled_tmp.get();
+		params2.loc[0] = glm::vec4( 1.0f, 1.0f, 1.0f, 1.0f );
+		params2.loc[1] = glm::vec4( 1.0f, 1.0f, 1.0f, 1.0f );
+		params2.loc[2] = glm::vec4( 0.0f, 0.0f, 0.0f, 0.0f );
+		params2.clear = m_frame_clear;
+		params2.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
+		m_frame_clear = false;
+		
+		if (!current_fbo->renderPass)
+			current_fbo->replaceRenderPass(params2.pipeline.pass);
+
+		m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params2);
+	}
+	else {
+		//draw the final buffer to the windows buffer
+		Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+		vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+		params.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR,
+				V2DRENDER_BLEND_OVER,
+				current_fbo->attachments[0]->format,
+				current_fbo->attachments.size(),
+				0,
+				current_fbo->attachments[0]->is_swapchain_images);
+		params.tex[0] = m_tex_final.get();
+		params.loc[0] = glm::vec4( 1.0f, 1.0f, 1.0f, 1.0f );
+		params.loc[1] = glm::vec4( 1.0f, 1.0f, 1.0f, 1.0f );
+		params.loc[2] = glm::vec4( 0.0f, 0.0f, 0.0f, 0.0f );
+		params.clear = m_frame_clear;
+		params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
+		m_frame_clear = false;
+		
+		if (!current_fbo->renderPass)
+			current_fbo->replaceRenderPass(params.pipeline.pass);
+
+		m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
 	}
 
 	if (m_interactive)
 	{
 		m_interactive = false;
 		m_clear_buffer = true;
-		RefreshGL();
+		m_refresh_start_loop = true;
 	}
 
 	if (m_int_res)
 	{
 		m_int_res = false;
-		RefreshGL();
+		m_refresh_start_loop = true;
 	}
 
 	if (m_manip)
 	{
 		m_pre_draw = true;
-		RefreshGL();
+		m_refresh_start_loop = true;
 	}
+
+	if (m_tile_rendering && m_current_tileid < m_tile_xnum*m_tile_ynum) {
+		if ((TextureRenderer::get_start_update_loop() && TextureRenderer::get_done_update_loop()) ||
+				!TextureRenderer::get_mem_swap() ||
+				TextureRenderer::get_total_brick_num() == 0 ) {
+			DrawTile();
+			m_current_tileid++;
+			if (m_capture) m_postdraw = true;
+			if (m_current_tileid < m_tile_xnum*m_tile_ynum) m_refresh = true;
+		}
+	}
+
+	if (TextureRenderer::get_mem_swap())
+	{
+		TextureRenderer::set_consumed_time(GET_TICK_COUNT() - TextureRenderer::get_st_time());
+		if (TextureRenderer::get_start_update_loop() &&
+			TextureRenderer::get_done_update_loop())
+		{
+			TextureRenderer::reset_update_loop();
+			vkQueueWaitIdle(m_vulkan->vulkanDevice->queue);
+//            ed_time = milliseconds_now();
+//            sprintf(dbgstr, "Frame Draw: %lld \n", ed_time - st_time);
+//            OutputDebugStringA(dbgstr);
+		}
+	}
+
+	//if (refresh)
+	//	RefreshGL();
 }
 
-void VRenderGLView::DrawAnnotations()
+void VRenderVulkanView::DrawVolumesDP()
+{
+	int finished_bricks = 0;
+	if (TextureRenderer::get_mem_swap())
+	{
+		finished_bricks = TextureRenderer::get_finished_bricks();
+		TextureRenderer::reset_finished_bricks();
+	}
+
+	bool dp = (m_md_pop_list.size() > 0);
+
+	int peeling_layers;
+	if (!m_mdtrans || m_peeling_layers <= 0) peeling_layers = 0;
+	else peeling_layers = m_peeling_layers;
+
+	int nx = m_nx;
+	int ny = m_ny;
+
+	PrepFinalBuffer();
+
+	vks::VulkanDevice* prim_dev = m_vulkan->devices[0];
+
+	if (TextureRenderer::get_mem_swap())
+	{
+		//set start time for the texture renderer
+		TextureRenderer::set_st_time(GET_TICK_COUNT());
+
+		TextureRenderer::set_interactive(m_interactive);
+	}
+
+	bool first = (m_finished_peeling_layer == 0 && (!TextureRenderer::get_mem_swap() || TextureRenderer::get_cur_brick_num() == 0)) ? true : false;
+
+	//draw
+	if ((!m_drawing_coord &&
+		m_int_mode != 7 &&
+		m_updating) ||
+		(!m_drawing_coord &&
+		(m_int_mode == 1 ||
+			m_int_mode == 3 ||
+			m_int_mode == 4 ||
+			m_int_mode == 5 ||
+			(m_int_mode == 6 &&
+				!m_editing_ruler_point) ||
+			m_int_mode == 8 ||
+			m_force_clear)))
+	{
+
+		m_updating = false;
+		m_force_clear = false;
+
+		for (int s = m_finished_peeling_layer; s <= peeling_layers; s++)
+		{
+			if (s == 0 || (TextureRenderer::get_mem_swap() && TextureRenderer::get_total_brick_num() > 0)) ClearFinalBuffer();
+
+			if (m_finished_peeling_layer == 0 && TextureRenderer::get_cur_brick_num() == 0 && m_md_pop_list.size() > 0)
+			{
+				int dptexnum = peeling_layers > 0 ? peeling_layers : 1;
+				if (m_resize)
+				{
+					m_dp_fbo_list.clear();
+					m_dp_ctex_list.clear();
+					m_dp_tex_list.clear();
+				}
+
+				if (m_dp_fbo_list.size() < dptexnum)
+				{
+					m_dp_fbo_list.resize(dptexnum);
+					m_dp_ctex_list.resize(dptexnum);
+					m_dp_tex_list.resize(dptexnum);
+				}
+
+				for (int i = 0; i < dptexnum; i++)
+				{
+					if (!m_dp_fbo_list[i])
+					{
+						m_dp_fbo_list[i] = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+						m_dp_fbo_list[i]->w = m_nx;
+						m_dp_fbo_list[i]->h = m_ny;
+						m_dp_fbo_list[i]->device = prim_dev;
+
+						m_dp_ctex_list[i] = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+						m_dp_fbo_list[i]->addAttachment(m_dp_ctex_list[i]);
+
+						m_dp_tex_list[i] = prim_dev->GenTexture2D(
+							m_vulkan->depthFormat,
+							VK_FILTER_LINEAR,
+							m_nx, m_ny,
+							VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+							VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+							VK_IMAGE_USAGE_SAMPLED_BIT |
+							VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+						);
+						m_dp_fbo_list[i]->addAttachment(m_dp_tex_list[i]);
+					}
+
+					if (i == 0)
+					{
+						DrawMeshes(m_dp_fbo_list[i], true, 0);
+					}
+					else
+					{
+						m_msh_dp_fr_tex = m_dp_tex_list[i - 1];
+						DrawMeshes(m_dp_fbo_list[i], true, 1, m_dp_tex_list[i - 1]);
+					}
+				}
+			}
+
+			int peel = 0;
+			if (m_dp_tex_list.size() >= peeling_layers && !m_dp_tex_list.empty() && m_md_pop_list.size() > 0)
+			{
+				if (TextureRenderer::get_update_order() == 0)
+				{
+					if (s == 0)
+					{
+						peel = 2;
+						m_vol_dp_fr_tex = m_dp_tex_list[(peeling_layers-1)-s];
+					}
+					else if (s == peeling_layers)
+					{
+						peel = 1;
+						m_vol_dp_bk_tex = m_dp_tex_list[(peeling_layers-1)-(s-1)];
+					}
+					else
+					{
+						peel = 3;
+						m_vol_dp_fr_tex = m_dp_tex_list[(peeling_layers-1)-s];
+						m_vol_dp_bk_tex = m_dp_tex_list[(peeling_layers-1)-(s-1)];
+					}
+				}
+				else
+				{
+					if (s == 0)
+					{
+						peel = 1;
+						m_vol_dp_bk_tex = m_dp_tex_list[s];
+					}
+					else if (s == peeling_layers)
+					{
+						peel = 2;
+						m_vol_dp_fr_tex = m_dp_tex_list[s-1];
+					}
+					else
+					{
+						peel = 3;
+						m_vol_dp_fr_tex = m_dp_tex_list[s-1];
+						m_vol_dp_bk_tex = m_dp_tex_list[s];
+					}
+				}
+			}
+
+			//setup
+			PopVolumeList();
+
+			vector<VolumeData*> quota_vd_list;
+
+			//handle intermixing modes
+			if (m_vol_method == VOL_METHOD_MULTI)
+			{
+				DrawVolumesMulti(m_vd_pop_list, peel);
+				//draw masks
+				if (m_draw_mask)
+					DrawVolumesComp(m_vd_pop_list, true, peel);
+			}
+			else
+			{
+				int i, j;
+				vector<VolumeData*> list;
+				for (i=(int)m_layer_list.size()-1; i>=0; i--)
+				{
+					if (!m_layer_list[i])
+						continue;
+					switch (m_layer_list[i]->IsA())
+					{
+					case 2://volume data (this won't happen now)
+						{
+							if (m_finished_peeling_layer != 0)
+								continue;
+							VolumeData* vd = (VolumeData*)m_layer_list[i];
+							if (vd && vd->GetDisp())
+							{
+								if (TextureRenderer::get_mem_swap() &&
+									TextureRenderer::get_interactive() &&
+									quota_vd_list.size()>0)
+								{
+									if (find(quota_vd_list.begin(),
+										quota_vd_list.end(), vd)!=
+										quota_vd_list.end())
+										list.push_back(vd);
+								}
+								else
+									list.push_back(vd);
+							}
+						}
+						break;
+					case 5://group
+						{
+							if (!list.empty())
+							{
+								DrawVolumesComp(list, false, peel);
+								//draw masks
+								if (m_draw_mask)
+									DrawVolumesComp(list, true, peel);
+								list.clear();
+							}
+							DataGroup* group = (DataGroup*)m_layer_list[i];
+							if (!group->GetDisp())
+								continue;
+//							if (m_finished_peeling_layer != 0 && group->GetBlendMode() != VOL_METHOD_MULTI)
+//								continue;
+							for (j=group->GetVolumeNum()-1; j>=0; j--)
+							{
+								VolumeData* vd = group->GetVolumeData(j);
+								if (vd && vd->GetDisp())
+								{
+									if (TextureRenderer::get_mem_swap() &&
+										TextureRenderer::get_interactive() &&
+										quota_vd_list.size()>0)
+									{
+										if (find(quota_vd_list.begin(),
+											quota_vd_list.end(), vd)!=
+											quota_vd_list.end())
+											list.push_back(vd);
+									}
+									else
+										list.push_back(vd);
+								}
+							}
+							if (!list.empty())
+							{
+								if (group->GetBlendMode() == VOL_METHOD_MULTI)
+									DrawVolumesMulti(list, peel);
+								else
+									DrawVolumesComp(list, false, peel);
+								//draw masks
+								if (m_draw_mask)
+									DrawVolumesComp(list, true, peel);
+								list.clear();
+							}
+						}
+						break;
+					}
+				}
+			}
+
+			if (m_fbo_temp && (m_fbo_temp->w != m_nx || m_fbo_temp->h != m_ny))
+			{
+				m_fbo_temp.reset();
+				m_tex_temp.reset();
+				m_fbo_temp_restore.reset();
+			}
+			if (!m_fbo_temp)
+			{
+				m_fbo_temp = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+				m_fbo_temp->w = m_nx;
+				m_fbo_temp->h = m_ny;
+				m_fbo_temp->device = prim_dev;
+
+				m_tex_temp = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+				m_fbo_temp->addAttachment(m_tex_temp);
+
+				m_fbo_temp_restore = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+				m_fbo_temp_restore->w = m_nx;
+				m_fbo_temp_restore->h = m_ny;
+				m_fbo_temp_restore->device = prim_dev;
+				m_fbo_temp_restore->addAttachment(m_fbo_final->attachments[0]);
+			}
+			
+			int texid = TextureRenderer::get_update_order() == 0 ? (peeling_layers-1)-s : s;
+			if (m_dp_ctex_list.size() > texid && m_md_pop_list.size() > 0 &&
+				((TextureRenderer::get_start_update_loop() && TextureRenderer::get_done_update_loop()) || !TextureRenderer::get_mem_swap() || TextureRenderer::get_total_brick_num() == 0) )
+			{
+				Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+
+				params.clear = m_clear_final_buffer;
+				m_clear_final_buffer = false;
+				params.pipeline =
+					m_v2drender->preparePipeline(
+						IMG_SHADER_TEXTURE_LOOKUP_BLEND,
+						V2DRENDER_BLEND_OVER_INV,
+						m_fbo_temp_restore->attachments[0]->format,
+						m_fbo_temp_restore->attachments.size(),
+						0,
+						m_fbo_temp_restore->attachments[0]->is_swapchain_images);
+				params.tex[0] = m_dp_ctex_list[texid].get();
+
+				if (!m_fbo_temp_restore->renderPass)
+					m_fbo_temp_restore->replaceRenderPass(params.pipeline.pass);
+				m_v2drender->render(m_fbo_temp_restore, params);
+			}
+
+			if (TextureRenderer::get_mem_swap() && TextureRenderer::get_total_brick_num() > 0)
+			{
+				unsigned int rn_time = GET_TICK_COUNT();
+				TextureRenderer::set_consumed_time(rn_time - TextureRenderer::get_st_time());
+
+				if (TextureRenderer::get_start_update_loop() && !TextureRenderer::get_done_update_loop())
+					break;
+
+				if (TextureRenderer::get_start_update_loop() && TextureRenderer::get_done_update_loop())
+				{
+					m_finished_peeling_layer++;
+					if (m_finished_peeling_layer <= peeling_layers)
+					{
+						StartLoopUpdate(false);
+						finished_bricks = TextureRenderer::get_finished_bricks();
+						TextureRenderer::reset_finished_bricks();
+						
+						if (TextureRenderer::get_mem_swap() &&
+							TextureRenderer::get_start_update_loop())
+						{
+							TextureRenderer::validate_temp_final_buffer();
+
+							Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+
+							params.clear = true;
+							params.pipeline =
+								m_v2drender->preparePipeline(
+									IMG_SHADER_TEXTURE_LOOKUP,
+									V2DRENDER_BLEND_DISABLE,
+									m_fbo_temp->attachments[0]->format,
+									m_fbo_temp->attachments.size(),
+									0,
+									m_fbo_temp->attachments[0]->is_swapchain_images);
+							params.tex[0] = m_tex_final.get();
+
+							if (!m_fbo_temp->renderPass)
+								m_fbo_temp->replaceRenderPass(params.pipeline.pass);
+							m_v2drender->render(m_fbo_temp, params);
+						}
+					}
+					else
+						TextureRenderer::reset_update_loop();
+				}
+
+				if (rn_time - TextureRenderer::get_st_time() > TextureRenderer::get_up_time())
+					break;
+			}
+			else
+				m_finished_peeling_layer++;
+		}
+	}
+
+	//final composition
+	if (m_tile_rendering) {
+		//generate textures & buffer objects
+		//frame buffer for final
+		if (!m_fbo_tiled_tmp)
+		{
+			m_fbo_tiled_tmp = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+			m_fbo_tiled_tmp->w = m_nx;
+			m_fbo_tiled_tmp->h = m_ny;
+			m_fbo_tiled_tmp->device = prim_dev;
+
+			m_tex_tiled_tmp = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+			m_fbo_tiled_tmp->addAttachment(m_tex_tiled_tmp);
+		}
+
+		Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+		params.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHADER_TEXTURE_LOOKUP,
+				V2DRENDER_BLEND_OVER,
+				m_fbo_tiled_tmp->attachments[0]->format,
+				m_fbo_tiled_tmp->attachments.size(),
+				0,
+				m_fbo_tiled_tmp->attachments[0]->is_swapchain_images);
+		params.tex[0] = m_tex_final.get();
+		if (m_current_tileid == 0)
+			params.clear = true;
+
+		std::vector<Vulkan2dRender::Vertex> tile_verts;
+		m_tile_vobj.vertOffset = sizeof(Vulkan2dRender::Vertex) * 4 * m_current_tileid;
+		params.obj = &m_tile_vobj;
+
+		if (!m_fbo_tiled_tmp->renderPass)
+			m_fbo_tiled_tmp->replaceRenderPass(params.pipeline.pass);
+
+		m_v2drender->render(m_fbo_tiled_tmp, params);
+
+
+		Vulkan2dRender::V2DRenderParams params2 = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+		vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+		params2.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR,
+				V2DRENDER_BLEND_OVER,
+				current_fbo->attachments[0]->format,
+				current_fbo->attachments.size(),
+				0,
+				current_fbo->attachments[0]->is_swapchain_images);
+		params2.tex[0] = m_tex_tiled_tmp.get();
+		params2.loc[0] = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+		params2.loc[1] = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+		params2.loc[2] = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
+		params2.clear = m_frame_clear;
+		params2.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
+		m_frame_clear = false;
+
+		if (!current_fbo->renderPass)
+			current_fbo->replaceRenderPass(params2.pipeline.pass);
+
+		m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params2);
+	}
+	else {
+		//draw the final buffer to the windows buffer
+		Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+		vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+		params.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR,
+				V2DRENDER_BLEND_OVER,
+				current_fbo->attachments[0]->format,
+				current_fbo->attachments.size(),
+				0,
+				current_fbo->attachments[0]->is_swapchain_images);
+		params.tex[0] = m_tex_final.get();
+		params.loc[0] = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+		params.loc[1] = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+		params.loc[2] = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
+		params.clear = m_frame_clear;
+		params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
+		m_frame_clear = false;
+
+		if (!current_fbo->renderPass)
+			current_fbo->replaceRenderPass(params.pipeline.pass);
+
+		m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
+	}
+
+	if (m_interactive)
+	{
+		m_interactive = false;
+		m_clear_buffer = true;
+		m_refresh_start_loop = true;
+	}
+
+	if (m_int_res)
+	{
+		m_int_res = false;
+		m_refresh_start_loop = true;
+	}
+
+	if (m_manip)
+	{
+		m_pre_draw = true;
+		m_refresh_start_loop = true;
+	}
+
+	if (m_tile_rendering && m_current_tileid < m_tile_xnum * m_tile_ynum) {
+		if ((TextureRenderer::get_start_update_loop() && TextureRenderer::get_done_update_loop()) ||
+			!TextureRenderer::get_mem_swap() ||
+			TextureRenderer::get_total_brick_num() == 0) {
+			DrawTile();
+			m_current_tileid++;
+			if (m_capture) m_postdraw = true;
+			if (m_current_tileid < m_tile_xnum * m_tile_ynum) m_refresh = true;
+		}
+	}
+
+	/*if (TextureRenderer::get_mem_swap())
+	{
+		TextureRenderer::set_consumed_time(GET_TICK_COUNT() - TextureRenderer::get_st_time());
+		if (TextureRenderer::get_start_update_loop() &&
+			TextureRenderer::get_done_update_loop())
+		{
+			TextureRenderer::reset_update_loop();
+			vkQueueWaitIdle(m_vulkan->vulkanDevice->queue);
+			ed_time = milliseconds_now();
+			sprintf(dbgstr, "Frame Draw: %lld \n", ed_time - st_time);
+			OutputDebugStringA(dbgstr);
+		}
+	}*/
+
+	//if (refresh)
+	//	RefreshGL();
+}
+
+void VRenderVulkanView::DrawAnnotations()
 {
 	if (!m_text_renderer)
 		return;
 
 	int nx, ny;
-	nx = GetSize().x;
-	ny = GetSize().y;
+	nx = m_nx;
+	ny = m_ny;
 	float sx, sy;
 	sx = 2.0/nx;
 	sy = 2.0/ny;
@@ -2476,15 +2175,14 @@ void VRenderGLView::DrawAnnotations()
 					if (pos.x() >= -1.0 && pos.x() <= 1.0 &&
 						pos.y() >= -1.0 && pos.y() <= 1.0)
 					{
-						if (m_persp && (pos.z()<=0.0 || pos.z()>=1.0))
-							continue;
-						if (!m_persp && (pos.z()>=0.0 || pos.z()<=-1.0))
+						if (pos.z()<=0.0 || pos.z()>=1.0)
 							continue;
 						px = pos.x()*nx/2.0;
 						py = pos.y()*ny/2.0;
 						m_text_renderer->RenderText(
+							m_vulkan->frameBuffers[m_vulkan->currentBuffer],
 							wstr, text_color,
-							px*sx, py*sy, sx, sy);
+							px*sx, py*sy);
 					}
 				}
 			}
@@ -2494,7 +2192,7 @@ void VRenderGLView::DrawAnnotations()
 
 //get populated mesh list
 //stored in m_md_pop_list
-void VRenderGLView::PopMeshList()
+void VRenderVulkanView::PopMeshList()
 {
 	if (!m_md_pop_dirty)
 		return;
@@ -2535,7 +2233,7 @@ void VRenderGLView::PopMeshList()
 
 //get populated volume list
 //stored in m_vd_pop_list
-void VRenderGLView::PopVolumeList()
+void VRenderVulkanView::PopVolumeList()
 {
 	if (!m_vd_pop_dirty)
 		return;
@@ -2576,7 +2274,7 @@ void VRenderGLView::PopVolumeList()
 //organize layers in view
 //put all volume data under view into last group of the view
 //if no group in view
-void VRenderGLView::OrganizeLayers()
+void VRenderVulkanView::OrganizeLayers()
 {
 	DataGroup* le_group = 0;
 	int i, j, k;
@@ -2705,7 +2403,7 @@ void VRenderGLView::OrganizeLayers()
 	}
 }
 
-void VRenderGLView::RandomizeColor()
+void VRenderVulkanView::RandomizeColor()
 {
 	for (int i=0; i<(int)m_layer_list.size(); i++)
 	{
@@ -2714,25 +2412,25 @@ void VRenderGLView::RandomizeColor()
 	}
 }
 
-void VRenderGLView::ClearVolList()
+void VRenderVulkanView::ClearVolList()
 {
 	m_loader.RemoveAllLoadedBrick();
-	TextureRenderer::clear_tex_pool();
+	m_vulkan->clearTexPools();
 	m_vd_pop_list.clear();
 }
 
-void VRenderGLView::ClearMeshList()
+void VRenderVulkanView::ClearMeshList()
 {
 	m_md_pop_list.clear();
 }
 
 //interactive modes
-int VRenderGLView::GetIntMode()
+int VRenderVulkanView::GetIntMode()
 {
 	return m_int_mode;
 }
 
-void VRenderGLView::SetIntMode(int mode)
+void VRenderVulkanView::SetIntMode(int mode)
 {
 	m_int_mode = mode;
 	if (m_int_mode == 1)
@@ -2743,74 +2441,107 @@ void VRenderGLView::SetIntMode(int mode)
 }
 
 //set use 2d rendering results
-void VRenderGLView::SetPaintUse2d(bool use2d)
+void VRenderVulkanView::SetPaintUse2d(bool use2d)
 {
 	m_selector.SetPaintUse2d(use2d);
 }
 
-bool VRenderGLView::GetPaintUse2d()
+bool VRenderVulkanView::GetPaintUse2d()
 {
 	return m_selector.GetPaintUse2d();
 }
 
 //segmentation mdoe selection
-void VRenderGLView::SetPaintMode(int mode)
+void VRenderVulkanView::SetPaintMode(int mode)
 {
 	m_selector.SetMode(mode);
 	m_brush_state = mode;
 }
 
-int VRenderGLView::GetPaintMode()
+int VRenderVulkanView::GetPaintMode()
 {
 	return m_selector.GetMode();
 }
 
-void VRenderGLView::DrawCircle(double cx, double cy,
+void VRenderVulkanView::DrawCircle(double cx, double cy,
 							   double radius, Color &color, glm::mat4 &matrix)
 {
+
 	int secs = 60;
 	double deg = 0.0;
 
-	vector<float> vertex;
-	vertex.reserve(secs*3);
-
-	for (size_t i=0; i<secs; ++i)
+	vector<Vulkan2dRender::Vertex> vertex;
+	vector<uint32_t> index;
+	vertex.reserve(secs * 6);
+	for (size_t i = 0; i < secs; ++i)
 	{
-		deg = i*2*PI/secs;
-		vertex.push_back(cx + radius*sin(deg));
-		vertex.push_back(cy + radius*cos(deg));
-		vertex.push_back(0.0f);
+		deg = i * 2 * PI / secs;
+		vertex.push_back(
+			Vulkan2dRender::Vertex{
+				{(float)(cx + radius * sin(deg)), (float)(cy + radius * cos(deg)), 0.0f},
+				{0.0f, 0.0f, 0.0f}
+			}
+		);
+		index.push_back(i);
 	}
+	index.push_back(0);
 
-	ShaderProgram* shader =
-		m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY);
-	if (shader)
+	if (m_brush_vobj.vertBuf.buffer == VK_NULL_HANDLE)
 	{
-		if (!shader->valid())
-			shader->create();
-		shader->bind();
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_brush_vobj.vertBuf,
+			vertex.size() * sizeof(Vulkan2dRender::Vertex),
+			vertex.data()));
+
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_brush_vobj.idxBuf,
+			index.size() * sizeof(uint32_t),
+			index.data()));
+
+		m_brush_vobj.idxCount = index.size();
+		m_brush_vobj.idxOffset = 0;
+		m_brush_vobj.vertCount = vertex.size();
+		m_brush_vobj.vertOffset = 0;
 	}
+	m_brush_vobj.vertBuf.map();
+	m_brush_vobj.idxBuf.map();
+	m_brush_vobj.vertBuf.copyTo(vertex.data(), vertex.size()*sizeof(Vulkan2dRender::Vertex));
+	m_brush_vobj.idxBuf.copyTo(index.data(), index.size() * sizeof(uint32_t));
+	m_brush_vobj.vertBuf.unmap();
+	m_brush_vobj.idxBuf.unmap();
 
-	shader->setLocalParam(0, color.r(), color.g(), color.b(), 1.0);
-	shader->setLocalParamMatrix(0, glm::value_ptr(matrix));
 
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-	glBindVertexArray(m_misc_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
-	glDrawArrays(GL_LINE_LOOP, 0, secs);
-	glDisableVertexAttribArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
+	Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+	vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+	params.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_DRAW_GEOMETRY,
+			V2DRENDER_BLEND_OVER_UI,
+			current_fbo->attachments[0]->format,
+			current_fbo->attachments.size(),
+			0,
+			current_fbo->attachments[0]->is_swapchain_images,
+			VK_PRIMITIVE_TOPOLOGY_LINE_STRIP);
+	params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), 1.0f);
+	params.matrix[0] = matrix;
+	params.clear = m_frame_clear;
+	params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
+	m_frame_clear = false;
 
-	if (shader && shader->valid())
-		shader->release();
+	params.obj = &m_brush_vobj;
+
+	if (!current_fbo->renderPass)
+		current_fbo->replaceRenderPass(params.pipeline.pass);
+
+	m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
 }
 
 //draw the brush shape
-void VRenderGLView::DrawBrush()
+void VRenderVulkanView::DrawBrush()
 {
 	double pressure = m_use_pres&&m_on_press?m_pressure:1.0;
 
@@ -2820,10 +2551,10 @@ void VRenderGLView::DrawBrush()
 	{
 		int i;
 		int nx, ny;
-		nx = GetSize().x;
-		ny = GetSize().y;
+		nx = m_nx;
+		ny = m_ny;
 		double cx = pos1.x;
-		double cy = ny - pos1.y;
+		double cy = pos1.y;
 		float sx, sy;
 		sx = 2.0/nx;
 		sy = 2.0/ny;
@@ -2833,18 +2564,13 @@ void VRenderGLView::DrawBrush()
 		glm::mat4 proj_mat = glm::ortho(float(0), float(nx), float(0), float(ny));
 
 		//attributes
-		glDisable(GL_DEPTH_TEST);
-		GLfloat line_width = 1.0f;
-
 		int mode = m_selector.GetMode();
-
 		Color text_color = GetTextColor();
 
 		if (mode == 1 ||
 			mode == 2 ||
 			mode == 8)
 		{
-			glLineWidth(0.5);
 			DrawCircle(cx, cy, m_brush_radius1*pressure,
 				text_color, proj_mat);
 		}
@@ -2854,14 +2580,13 @@ void VRenderGLView::DrawBrush()
 			mode == 3 ||
 			mode == 4)
 		{
-			glLineWidth(0.5);
 			DrawCircle(cx, cy, m_brush_radius2*pressure,
 				text_color, proj_mat);
 		}
 
 		float px, py;
 		px = cx-7-nx/2.0;
-		py = cy-3-ny/2.0;
+		py = cy+3-ny/2.0;
 		wstring wstr;
 		switch (mode)
 		{
@@ -2878,185 +2603,129 @@ void VRenderGLView::DrawBrush()
 			wstr = L"*";
 			break;
 		}
-		m_text_renderer->RenderText(wstr, text_color, px*sx, py*sy, sx, sy);
-
-		glLineWidth(line_width);
-		glEnable(GL_DEPTH_TEST);
+		m_text_renderer->RenderText(m_vulkan->frameBuffers[m_vulkan->currentBuffer], 
+			wstr, text_color, px*sx, py*sy);
 
 	}
 }
 
 //paint strokes on the paint fbo
-void VRenderGLView::PaintStroke()
+void VRenderVulkanView::PaintStroke()
 {
 	int nx, ny;
-	nx = GetSize().x;
-	ny = GetSize().y;
+	nx = m_nx;
+	ny = m_ny;
 
 	double pressure = m_use_pres?m_pressure:1.0;
 
-	//generate texture and buffer objects
-	glEnable(GL_TEXTURE_2D);
-	//painting fbo
-	if (!glIsFramebuffer(m_fbo_paint))
-	{
-		glGenFramebuffers(1, &m_fbo_paint);
-		//painting texture
-		if (!glIsTexture(m_tex_paint))
-			glGenTextures(1, &m_tex_paint);
+	vks::VulkanDevice* prim_dev = m_vulkan->devices[0];
 
-		//set up the painting fbo
-		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_paint);
-		//color buffer of painting
-		glBindTexture(GL_TEXTURE_2D, m_tex_paint);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-			GL_RGBA, GL_FLOAT, NULL);
-		glFramebufferTexture2D(GL_FRAMEBUFFER,
-			GL_COLOR_ATTACHMENT0,
-			GL_TEXTURE_2D, m_tex_paint, 0); 
+	if (m_fbo_paint && (m_fbo_paint->w != nx || m_fbo_paint->h != ny))
+	{
+		m_fbo_paint.reset();
+		m_tex_paint.reset();
 	}
-	else
+	if (!m_fbo_paint)
 	{
-		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_paint);
+		m_fbo_paint = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+		m_fbo_paint->w = m_nx;
+		m_fbo_paint->h = m_ny;
+		m_fbo_paint->device = prim_dev;
 
-		glFramebufferTexture2D(GL_FRAMEBUFFER,
-			GL_COLOR_ATTACHMENT0,
-			GL_TEXTURE_2D, m_tex_paint, 0);
+		m_tex_paint = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+		m_fbo_paint->addAttachment(m_tex_paint);
 	}
 
-	if (m_resize_paint)
+	double px = double(old_mouse_X - prv_mouse_X);
+	double py = double(old_mouse_Y - prv_mouse_Y);
+	double dist = sqrt(px * px + py * py);
+	double step = m_brush_radius1 * pressure * m_brush_spacing;
+	int repeat = int(dist / step + 0.5);
+	double spx = (double)prv_mouse_X;
+	double spy = (double)prv_mouse_Y;
+	if (repeat > 0)
 	{
-		glBindTexture(GL_TEXTURE_2D, m_tex_paint);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-			GL_RGBA, GL_FLOAT, NULL);
-		glBindTexture(GL_TEXTURE_2D, 0);
-		m_resize_paint = false;
+		px /= repeat;
+		py /= repeat;
 	}
 
-	//clear if asked so
-	if (m_clear_paint)
+	double x, y;
+	double radius1 = m_brush_radius1;
+	double radius2 = m_brush_radius2;
+	for (int i = 0; i <= repeat; i++)
 	{
-		glClearColor(0.0, 0.0, 0.0, 0.0);
-		glClear(GL_COLOR_BUFFER_BIT);
+		x = spx + i * px;
+		y = spy + i * py;
+		switch (m_selector.GetMode())
+		{
+		case 3:
+			radius1 = m_brush_radius2;
+			break;
+		case 4:
+			radius1 = 0.0;
+			break;
+		case 8:
+			radius2 = radius1;
+			break;
+		default:
+			break;
+		}
+		
+		Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+		params.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHDR_PAINT,
+				V2DRENDER_BLEND_MAX,
+				m_fbo_paint->attachments[0]->format,
+				m_fbo_paint->attachments.size(),
+				0,
+				m_fbo_paint->attachments[0]->is_swapchain_images);
+		//params.tex[0] = m_tex_paint.get();
+		params.loc[0] = glm::vec4(float(x), float(y), float(radius1 * pressure), float(radius2 * pressure));
+		params.loc[1] = glm::vec4((float)nx, (float)ny, 0.0f, 0.0f);
+		params.clear = m_clear_paint;
 		m_clear_paint = false;
+		
+		if (!m_fbo_paint->renderPass)
+			m_fbo_paint->replaceRenderPass(params.pipeline.pass);
+		m_v2drender->render(m_fbo_paint, params);
 	}
-	else
-	{
-		//paint shader
-		ShaderProgram* paint_shader =
-			m_img_shader_factory.shader(IMG_SHDR_PAINT);
-		if (paint_shader)
-		{
-			if (!paint_shader->valid())
-				paint_shader->create();
-			paint_shader->bind();
-		}
-
-		//paint to texture
-		//bind fbo for final composition
-		glActiveTexture(GL_TEXTURE0);
-		glEnable(GL_TEXTURE_2D);
-		glBindTexture(GL_TEXTURE_2D, m_tex_paint);
-		glDisable(GL_BLEND);
-		glDisable(GL_DEPTH_TEST);
-
-		double px = double(old_mouse_X-prv_mouse_X);
-		double py = double(old_mouse_Y-prv_mouse_Y);
-		double dist = sqrt(px*px+py*py);
-		double step = m_brush_radius1*pressure*m_brush_spacing;
-		int repeat = int(dist/step+0.5);
-		double spx = (double)prv_mouse_X;
-		double spy = (double)prv_mouse_Y;
-		if (repeat > 0)
-		{
-			px /= repeat;
-			py /= repeat;
-		}
-
-		//set the width and height
-		paint_shader->setLocalParam(1, nx, ny, 0.0f, 0.0f);
-
-		double x, y;
-		double radius1 = m_brush_radius1;
-		double radius2 = m_brush_radius2;
-		for (int i=0; i<=repeat; i++)
-		{
-			x = spx + i*px;
-			y = spy + i*py;
-			switch (m_selector.GetMode())
-			{
-			case 3:
-				radius1 = m_brush_radius2;
-				break;
-			case 4:
-				radius1 = 0.0;
-				break;
-			case 8:
-				radius2 = radius1;
-				break;
-			default:
-				break;
-			}
-			//send uniforms to paint shader
-			paint_shader->setLocalParam(0,
-				x, double(ny)-y,
-				radius1*pressure,
-				radius2*pressure);
-			//draw a square
-			DrawViewQuad();
-		}
-
-		//release paint shader
-		if (paint_shader && paint_shader->valid())
-			paint_shader->release();
-	}
-
-	//bind back the window frame buffer
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
 }
 
 //show the stroke buffer
-void VRenderGLView::DisplayStroke()
+void VRenderVulkanView::DisplayStroke()
 {
-	//painting texture
-	if (!glIsTexture(m_tex_paint))
+	if (!m_tex_paint)
 		return;
 
-	//draw the final buffer to the windows buffer
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, m_tex_paint);
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glDisable(GL_DEPTH_TEST);
+	Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+	vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+	params.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHADER_TEXTURE_LOOKUP,
+			V2DRENDER_BLEND_OVER_UI,
+			current_fbo->attachments[0]->format,
+			current_fbo->attachments.size(),
+			0,
+			current_fbo->attachments[0]->is_swapchain_images);
+	params.tex[0] = m_tex_paint.get();
+	params.clear = m_frame_clear;
+	params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
+	m_frame_clear = false;
 
-	ShaderProgram* img_shader =
-		m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
-	if (img_shader)
-	{
-		if (!img_shader->valid())
-			img_shader->create();
-		img_shader->bind();
-	}
-	DrawViewQuad();
-	if (img_shader && img_shader->valid())
-		img_shader->release();
+	if (!current_fbo->renderPass)
+		current_fbo->replaceRenderPass(params.pipeline.pass);
 
-	glEnable(GL_DEPTH_TEST);
+	m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
 }
 
 //set 2d weights
-void VRenderGLView::Set2dWeights()
+void VRenderVulkanView::Set2dWeights()
 {
-	m_selector.Set2DWeight(m_tex_final, glIsTexture(m_tex_wt2)?m_tex_wt2:m_tex);
+	m_selector.Set2DWeight(m_tex_final, m_tex_wt2?m_tex_wt2:m_tex);
 }
 
-VolumeData *VRenderGLView::CopyLevel(VolumeData *src, int lv)
+VolumeData *VRenderVulkanView::CopyLevel(VolumeData *src, int lv)
 {
 	if (!src->isBrxml()) return NULL;
 
@@ -3123,22 +2792,21 @@ VolumeData *VRenderGLView::CopyLevel(VolumeData *src, int lv)
 }
 
 //segment volumes in current view
-void VRenderGLView::Segment()
+void VRenderVulkanView::Segment()
 {
-	glViewport(0, 0, (GLint)GetSize().x, (GLint)GetSize().y);
-	HandleCamera();
+    HandleCamera();
 
 	//translate object
 	m_mv_mat = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
 	//rotate object
 	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
-	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
-	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
+	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
 	//center object
 	m_mv_mat = glm::translate(m_mv_mat, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
 
 	m_selector.Set2DMask(m_tex_paint);
-	m_selector.Set2DWeight(m_tex_final, glIsTexture(m_tex_wt2)?m_tex_wt2:m_tex);
+	m_selector.Set2DWeight(m_tex_final, m_tex_wt2?m_tex_wt2:m_tex);
 	//orthographic
 	m_selector.SetOrthographic(!m_persp);
 
@@ -3177,25 +2845,11 @@ void VRenderGLView::Segment()
 				for (int i=0; i<group->GetVolumeNum(); i++)
 				{
 					tmp_vd = group->GetVolumeData(i);
-					if (tmp_vd && tmp_vd->isBrxml() && tmp_vd->GetDisp())
-						cp_vd_list.push_back(tmp_vd);
-				}
-				for (auto v : cp_vd_list)
-				{
-					bool cur = (v == vd);
-					v = CopyLevel(v);
-					if (cur) vd = v;
-				}
-
-				for (int i=0; i<group->GetVolumeNum(); i++)
-				{
-					tmp_vd = group->GetVolumeData(i);
-					if (tmp_vd && tmp_vd->GetDisp())
-					{
-						tmp_vd->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
-						m_selector.SetVolume(tmp_vd);
-						m_selector.Select(m_brush_radius2-m_brush_radius1);
-					}
+					tmp_vd->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
+					m_selector.SetVolume(tmp_vd);
+					m_loader.SetMemoryLimitByte((long long)TextureRenderer::mainmem_buf_size_*1024LL*1024LL);
+					m_loader.PreloadLevel(tmp_vd, tmp_vd->GetMaskLv(), true);
+					m_selector.Select(m_brush_radius2-m_brush_radius1);
 				}
 				m_selector.SetVolume(vd);
 			}
@@ -3204,49 +2858,36 @@ void VRenderGLView::Segment()
 	else if (m_selector.GetSelectBoth())
 	{
 		VolumeData* vd = m_calculator.GetVolumeA();
-		if (vd && vd->isBrxml())
-		{
-			vd = CopyLevel(vd);
-			m_calculator.SetVolumeA(vd);
-			if (vd) copied = true;
-		}
 
 		if (vd)
 		{
 			vd->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
 			m_selector.SetVolume(vd);
+			m_loader.SetMemoryLimitByte((long long)TextureRenderer::mainmem_buf_size_*1024LL*1024LL);
+			m_loader.PreloadLevel(vd, vd->GetMaskLv(), true);
 			m_selector.Select(m_brush_radius2-m_brush_radius1);
 		}
 
-
 		vd = m_calculator.GetVolumeB();
-		if (vd && vd->isBrxml())
-		{
-			vd = CopyLevel(vd);
-			m_calculator.SetVolumeB(vd);
-			if (vd) copied = true;
-		}
 
 		if (vd)
 		{
 			vd->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
 			m_selector.SetVolume(vd);
+			m_loader.SetMemoryLimitByte((long long)TextureRenderer::mainmem_buf_size_*1024LL*1024LL);
+			m_loader.PreloadLevel(vd, vd->GetMaskLv(), true);
 			m_selector.Select(m_brush_radius2-m_brush_radius1);
 		}
 	}
 	else
 	{
 		VolumeData* vd = m_selector.GetVolume();
-		if (vd && vd->isBrxml())
-		{
-			vd = CopyLevel(vd);
-			m_selector.SetVolume(vd);
-			if (vd) copied = true;
-		}
+		m_loader.SetMemoryLimitByte((long long)TextureRenderer::mainmem_buf_size_*1024LL*1024LL);
+		m_loader.PreloadLevel(vd, vd->GetMaskLv(), true);
 		m_selector.Select(m_brush_radius2-m_brush_radius1);
 	}
 
-	if (copied = true) RefreshGL(false, true);
+	if (copied == true) RefreshGL(false, true);
 
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (vr_frame && vr_frame->GetTraceDlg())
@@ -3274,15 +2915,15 @@ void VRenderGLView::Segment()
 }
 
 //label volumes in current view
-void VRenderGLView::Label()
+void VRenderVulkanView::Label()
 {
 	m_selector.Label(0);
 }
 
 //remove noise
-int VRenderGLView::CompAnalysis(double min_voxels, double max_voxels, double thresh, bool select, bool gen_ann, int iter_limit)
+int VRenderVulkanView::CompAnalysis(double min_voxels, double max_voxels, double thresh, bool select, bool gen_ann, int iter_limit)
 {
-	int return_val = 0;
+    int return_val = 0;
 
 	bool copied = false;
 	VolumeData *vd = m_selector.GetVolume();
@@ -3296,7 +2937,7 @@ int VRenderGLView::CompAnalysis(double min_voxels, double max_voxels, double thr
 	if (!select)
 	{
 		m_selector.Set2DMask(m_tex_paint);
-		m_selector.Set2DWeight(m_tex_final, glIsTexture(m_tex_wt2)?m_tex_wt2:m_tex);
+		m_selector.Set2DWeight(m_tex_final, m_tex_wt2?m_tex_wt2:m_tex);
 		m_selector.SetSizeMap(false);
 		return_val = m_selector.CompAnalysis(min_voxels, max_voxels, thresh, 1.0, select, gen_ann, iter_limit);
 	}
@@ -3323,7 +2964,7 @@ int VRenderGLView::CompAnalysis(double min_voxels, double max_voxels, double thr
 	return return_val;
 }
 
-void VRenderGLView::CompExport(int mode, bool select)
+void VRenderVulkanView::CompExport(int mode, bool select)
 {
 	switch (mode)
 	{
@@ -3397,7 +3038,7 @@ void VRenderGLView::CompExport(int mode, bool select)
 	}
 }
 
-void VRenderGLView::ShowAnnotations()
+void VRenderVulkanView::ShowAnnotations()
 {
 	Annotations* ann = m_selector.GetAnnotations();
 	if (ann)
@@ -3409,9 +3050,9 @@ void VRenderGLView::ShowAnnotations()
 	}
 }
 
-int VRenderGLView::NoiseAnalysis(double min_voxels, double max_voxels, double thresh)
+int VRenderVulkanView::NoiseAnalysis(double min_voxels, double max_voxels, double thresh)
 {
-	int return_val = 0;
+   	int return_val = 0;
 
 	bool copied = false;
 	VolumeData *vd = m_selector.GetVolume();
@@ -3423,17 +3064,17 @@ int VRenderGLView::NoiseAnalysis(double min_voxels, double max_voxels, double th
 	}
 
 	m_selector.Set2DMask(m_tex_paint);
-	m_selector.Set2DWeight(m_tex_final, glIsTexture(m_tex_wt2)?m_tex_wt2:m_tex);
-	return_val = m_selector.NoiseAnalysis(min_voxels, max_voxels, 10.0, thresh);
+	m_selector.Set2DWeight(m_tex_final, m_tex_wt2?m_tex_wt2:m_tex);
+	return_val = m_selector.CompAnalysis(min_voxels, max_voxels, thresh, 1.0, false, false);
 
 	if (copied) RefreshGL(false, true);
 
 	return return_val;
 }
 
-void VRenderGLView::NoiseRemoval(int iter, double thresh)
+void VRenderVulkanView::NoiseRemoval(int iter, double thresh)
 {
-	VolumeData* vd = m_selector.GetVolume();
+    VolumeData* vd = m_selector.GetVolume();
 	if (!vd || !vd->GetMask(false)) return;
 
 	//if(!vd->GetMask()) NoiseAnalysis(0.0, iter, thresh);
@@ -3468,7 +3109,7 @@ void VRenderGLView::NoiseRemoval(int iter, double thresh)
 
 //brush properties
 //load default
-void VRenderGLView::LoadDefaultBrushSettings()
+void VRenderVulkanView::LoadDefaultBrushSettings()
 {
 	wxString expath = wxStandardPaths::Get().GetExecutablePath();
 	expath = expath.BeforeLast(GETSLASH(),NULL);
@@ -3553,17 +3194,17 @@ void VRenderGLView::LoadDefaultBrushSettings()
 		m_selector.SetBrushDSLT_C(val);
 }
 
-void VRenderGLView::SetBrushUsePres(bool pres)
+void VRenderVulkanView::SetBrushUsePres(bool pres)
 {
 	m_use_pres = pres;
 }
 
-bool VRenderGLView::GetBrushUsePres()
+bool VRenderVulkanView::GetBrushUsePres()
 {
 	return m_use_pres;
 }
 
-void VRenderGLView::SetUseBrushSize2(bool val)
+void VRenderVulkanView::SetUseBrushSize2(bool val)
 {
 	m_use_brush_radius2 = val;
 	m_selector.SetUseBrushSize2(val);
@@ -3571,12 +3212,12 @@ void VRenderGLView::SetUseBrushSize2(bool val)
 		m_brush_radius2 = m_brush_radius1;
 }
 
-bool VRenderGLView::GetBrushSize2Link()
+bool VRenderVulkanView::GetBrushSize2Link()
 {
 	return m_use_brush_radius2;
 }
 
-void VRenderGLView::SetBrushSize(double size1, double size2)
+void VRenderVulkanView::SetBrushSize(double size1, double size2)
 {
 	if (size1 > 0.0)
 		m_brush_radius1 = size1;
@@ -3586,181 +3227,181 @@ void VRenderGLView::SetBrushSize(double size1, double size2)
 		m_brush_radius2 = m_brush_radius1;
 }
 
-double VRenderGLView::GetBrushSize1()
+double VRenderVulkanView::GetBrushSize1()
 {
 	return m_brush_radius1;
 }
 
-double VRenderGLView::GetBrushSize2()
+double VRenderVulkanView::GetBrushSize2()
 {
 	return m_brush_radius2;
 }
 
-void VRenderGLView::SetBrushSpacing(double spacing)
+void VRenderVulkanView::SetBrushSpacing(double spacing)
 {
 	if (spacing > 0.0)
 		m_brush_spacing = spacing;
 }
 
-double VRenderGLView::GetBrushSpacing()
+double VRenderVulkanView::GetBrushSpacing()
 {
 	return m_brush_spacing;
 }
 
-void VRenderGLView::SetBrushIteration(int num)
+void VRenderVulkanView::SetBrushIteration(int num)
 {
 	m_selector.SetBrushIteration(num);
 }
 
-int VRenderGLView::GetBrushIteration()
+int VRenderVulkanView::GetBrushIteration()
 {
 	return m_selector.GetBrushIteration();
 }
 
 //brush translate
-void VRenderGLView::SetBrushSclTranslate(double val)
+void VRenderVulkanView::SetBrushSclTranslate(double val)
 {
 	m_selector.SetBrushSclTranslate(val);
 	m_calculator.SetThreshold(val);
 }
 
-double VRenderGLView::GetBrushSclTranslate()
+double VRenderVulkanView::GetBrushSclTranslate()
 {
 	return m_selector.GetBrushSclTranslate();
 }
 
 //gm falloff
-void VRenderGLView::SetBrushGmFalloff(double val)
+void VRenderVulkanView::SetBrushGmFalloff(double val)
 {
 	m_selector.SetBrushGmFalloff(val);
 }
 
-double VRenderGLView::GetBrushGmFalloff()
+double VRenderVulkanView::GetBrushGmFalloff()
 {
 	return m_selector.GetBrushGmFalloff();
 }
 
-void VRenderGLView::SetW2d(double val)
+void VRenderVulkanView::SetW2d(double val)
 {
 	m_selector.SetW2d(val);
 }
 
-double VRenderGLView::GetW2d()
+double VRenderVulkanView::GetW2d()
 {
 	return m_selector.GetW2d();
 }
 
 //edge detect
-void VRenderGLView::SetEdgeDetect(bool value)
+void VRenderVulkanView::SetEdgeDetect(bool value)
 {
 	m_selector.SetEdgeDetect(value);
 }
 
-bool VRenderGLView::GetEdgeDetect()
+bool VRenderVulkanView::GetEdgeDetect()
 {
 	return m_selector.GetEdgeDetect();
 }
 
 //hidden removal
-void VRenderGLView::SetHiddenRemoval(bool value)
+void VRenderVulkanView::SetHiddenRemoval(bool value)
 {
 	m_selector.SetHiddenRemoval(value);
 }
 
-bool VRenderGLView::GetHiddenRemoval()
+bool VRenderVulkanView::GetHiddenRemoval()
 {
 	return m_selector.GetHiddenRemoval();
 }
 
 //select group
-void VRenderGLView::SetSelectGroup(bool value)
+void VRenderVulkanView::SetSelectGroup(bool value)
 {
 	m_selector.SetSelectGroup(value);
 }
 
-bool VRenderGLView::GetSelectGroup()
+bool VRenderVulkanView::GetSelectGroup()
 {
 	return m_selector.GetSelectGroup();
 }
 
 //estimate threshold
-void VRenderGLView::SetEstimateThresh(bool value)
+void VRenderVulkanView::SetEstimateThresh(bool value)
 {
 	m_selector.SetEstimateThreshold(value);
 }
 
-bool VRenderGLView::GetEstimateThresh()
+bool VRenderVulkanView::GetEstimateThresh()
 {
 	return m_selector.GetEstimateThreshold();
 }
 
 //select both
-void VRenderGLView::SetSelectBoth(bool value)
+void VRenderVulkanView::SetSelectBoth(bool value)
 {
 	m_selector.SetSelectBoth(value);
 }
 
-bool VRenderGLView::GetSelectBoth()
+bool VRenderVulkanView::GetSelectBoth()
 {
 	return m_selector.GetSelectBoth();
 }
 
-void VRenderGLView::SetUseDSLTBrush(bool value)
+void VRenderVulkanView::SetUseDSLTBrush(bool value)
 {
 	m_selector.SetUseDSLTBrush(value);
 }
 
-bool VRenderGLView::GetUseDSLTBrush()
+bool VRenderVulkanView::GetUseDSLTBrush()
 {
 	return m_selector.GetUseDSLTBrush();
 }
 
-void VRenderGLView::SetBrushDSLT_R(int rad)
+void VRenderVulkanView::SetBrushDSLT_R(int rad)
 {
 	m_selector.SetBrushDSLT_R(rad);
 }
 
-int VRenderGLView::GetBrushDSLT_R()
+int VRenderVulkanView::GetBrushDSLT_R()
 {
 	return m_selector.GetBrushDSLT_R();
 }
 
-void VRenderGLView::SetBrushDSLT_Q(int quality)
+void VRenderVulkanView::SetBrushDSLT_Q(int quality)
 {
 	m_selector.SetBrushDSLT_Q(quality);
 }
 
-int VRenderGLView::GetBrushDSLT_Q()
+int VRenderVulkanView::GetBrushDSLT_Q()
 {
 	return m_selector.GetBrushDSLT_Q();
 }
 
-void VRenderGLView::SetBrushDSLT_C(double c)
+void VRenderVulkanView::SetBrushDSLT_C(double c)
 {
 	m_selector.SetBrushDSLT_C(c);
 }
 
-double VRenderGLView::GetBrushDSLT_C()
+double VRenderVulkanView::GetBrushDSLT_C()
 {
 	return m_selector.GetBrushDSLT_C();
 }
 
 
 //calculations
-void VRenderGLView::SetVolumeA(VolumeData* vd)
+void VRenderVulkanView::SetVolumeA(VolumeData* vd)
 {
 	m_calculator.SetVolumeA(vd);
 	m_selector.SetVolume(vd);
 }
 
-void VRenderGLView::SetVolumeB(VolumeData* vd)
+void VRenderVulkanView::SetVolumeB(VolumeData* vd)
 {
 	m_calculator.SetVolumeB(vd);
 }
 
-void VRenderGLView::CalculateSingle(int type, wxString prev_group, bool add)
+void VRenderVulkanView::CalculateSingle(int type, wxString prev_group, bool add)
 {
-	bool copied = false;
+    bool copied = false;
 	VolumeData* vd_A = m_calculator.GetVolumeA();
 	if (vd_A && vd_A->isBrxml())
 	{
@@ -3868,8 +3509,8 @@ void VRenderGLView::CalculateSingle(int type, wxString prev_group, bool add)
 			VolumeData* vd_a = m_calculator.GetVolumeA();
 			if (vd_a)
 			{
-				vd_a->Replace(vd);
-				delete vd;
+                wxString nm = vd_A->GetName();
+				ReplaceVolumeData(nm, vd_a);
 				VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 				if (vr_frame)
 					vr_frame->GetPropView()->SetVolumeData(vd_a);
@@ -3884,7 +3525,7 @@ void VRenderGLView::CalculateSingle(int type, wxString prev_group, bool add)
 	}
 }
 
-void VRenderGLView::Calculate(int type, wxString prev_group, bool add)
+void VRenderVulkanView::Calculate(int type, wxString prev_group, bool add)
 {
 	if (type == 5 ||
 		type == 6 ||
@@ -3942,100 +3583,301 @@ void VRenderGLView::Calculate(int type, wxString prev_group, bool add)
 		CalculateSingle(type, prev_group, add);
 }
 
-//draw out the framebuffer after composition
-void VRenderGLView::PrepFinalBuffer()
+void VRenderVulkanView::StartTileRendering(int w_, int h_, int tilew_, int tileh_)
 {
+	m_tile_rendering = true;
+	m_capture_change_res = true;
+	m_capture_resx = w_;
+	m_capture_resy = h_;
+	m_tile_w = tilew_;
+	m_tile_h = tileh_;
+	m_tile_xnum = w_/tilew_ + (w_%tilew_ > 0);
+	m_tile_ynum = h_/tileh_ + (h_%tileh_ > 0);
+	m_current_tileid = 0;
+
+	m_tmp_res_mode = m_res_mode;
+	m_res_mode = 0;
+	if (!m_tmp_sample_rates.empty())
+		m_tmp_sample_rates.clear();
+	PopVolumeList();
+	for (VolumeData* vd : m_vd_pop_list) {
+		if (vd) {
+			m_tmp_sample_rates[vd] = vd->GetSampleRate();
+			//vd->SetSampleRate(1.0);
+		}
+	}
+
+	if (m_capture) {
+		if (m_tiled_image)
+			delete [] m_tiled_image;
+		m_tiled_image = new unsigned char [(size_t)m_capture_resx*(size_t)m_capture_resy*3];
+	}
+
+	if (m_tile_vobj.vertBuf.buffer != VK_NULL_HANDLE)
+		m_tile_vobj.vertBuf.destroy();
+	if (m_tile_vobj.idxBuf.buffer != VK_NULL_HANDLE)
+		m_tile_vobj.idxBuf.destroy();
+
+	vector<Vulkan2dRender::Vertex> verts;
+	std::vector<uint32_t> indices = { 0,1,2, 2,3,0 };
+
+	int w = GetSize().x;
+	int h = GetSize().y;
+
+	double win_aspect = (double)w / (double)h;
+	double ren_aspect = (double)m_capture_resx / (double)m_capture_resy;
+	double stpos_x = -1.0;
+	double stpos_y = -1.0;
+	double edpos_x = 1.0;
+	double edpos_y = 1.0;
+	double tilew = 1.0;
+	double tileh = 1.0;
+
+	double xbound = 1.0;
+	double ybound = -1.0;
+
+	for (int tileid = 0; tileid < m_tile_xnum * m_tile_ynum; tileid++) {
+
+		if (win_aspect > ren_aspect) {
+			tilew = 2.0 * m_tile_w * h / m_capture_resy / w;
+			tileh = 2.0 * m_tile_h * h / m_capture_resy / h;
+			stpos_x = -1.0 + 2.0 * (w - h * ren_aspect) / 2.0 / w;
+			stpos_y = -1.0;
+			xbound = stpos_x + 2.0 * h * ren_aspect / w;
+			ybound = 1.0;
+
+			stpos_x = stpos_x + tilew * (tileid % m_tile_xnum);
+			stpos_y = stpos_y + tileh * (tileid / m_tile_xnum);
+			edpos_x = stpos_x + tilew;
+			edpos_y = stpos_y + tileh;
+		}
+		else {
+			tilew = 2.0 * m_tile_w * w / m_capture_resx / w;
+			tileh = 2.0 * m_tile_h * w / m_capture_resx / h;
+			stpos_x = -1.0;
+			stpos_y = -1.0 + 2.0 * (h - w / ren_aspect) / 2.0 / h;
+			xbound = 1.0;
+			ybound = stpos_y + 2.0 * w / ren_aspect / h;
+
+			stpos_x = stpos_x + tilew * (tileid % m_tile_xnum);
+			stpos_y = stpos_y + tileh * (tileid / m_tile_xnum);
+			edpos_x = stpos_x + tilew;
+			edpos_y = stpos_y + tileh;
+		}
+
+		double tex_x = 1.0;
+		double tex_y = 1.0;
+		if (edpos_x > xbound) {
+			tex_x = (xbound - stpos_x) / tilew;
+			edpos_x = xbound;
+		}
+		if (edpos_y > ybound) {
+			tex_y = (ybound - stpos_y) / tileh;
+			edpos_y = ybound;
+		}
+
+		verts.push_back(Vulkan2dRender::Vertex{ {(float)edpos_x, (float)edpos_y, 0.0f}, {(float)tex_x, (float)tex_y, 0.0f} });
+		verts.push_back(Vulkan2dRender::Vertex{ {(float)stpos_x, (float)edpos_y, 0.0f}, {0.0f,         (float)tex_y, 0.0f} });
+		verts.push_back(Vulkan2dRender::Vertex{ {(float)stpos_x, (float)stpos_y, 0.0f}, {0.0f,         0.0f,         0.0f} });
+		verts.push_back(Vulkan2dRender::Vertex{ {(float)edpos_x, (float)stpos_y, 0.0f}, {(float)tex_x, 0.0f,         0.0f} });
+
+	}
+
+	VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+		&m_tile_vobj.vertBuf,
+		verts.size() * sizeof(Vulkan2dRender::Vertex),
+		verts.data()));
+
+	VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+		VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+		&m_tile_vobj.idxBuf,
+		indices.size() * sizeof(uint32_t),
+		indices.data()));
+
+	m_tile_vobj.idxCount = indices.size();
+	m_tile_vobj.idxOffset = 0;
+	m_tile_vobj.vertCount = verts.size();
+	m_tile_vobj.vertOffset = 0;
+
+	Resize();
+}
+
+void VRenderVulkanView::EndTileRendering()
+{
+	m_tile_rendering = false;
+	m_res_mode = m_tmp_res_mode;
+	PopVolumeList();
+/*	for (VolumeData* vd : m_vd_pop_list) {
+		if (vd && m_tmp_sample_rates.count(vd) > 0)
+			vd->SetSampleRate(m_tmp_sample_rates[vd]);
+	}
+*/	if (m_tiled_image != NULL) {
+		delete [] m_tiled_image;
+		m_tiled_image = NULL;
+	}
+
+	Resize(false);
+}
+
+void VRenderVulkanView::Get1x1DispSize(int &w, int &h)
+{
+	int nx = GetSize().x;
+	int ny = GetSize().y;
+	PopVolumeList();
+
+	double maxvpd = 0.0;
+	for (VolumeData* vd : m_vd_pop_list) {
+		Texture *vtex = vd->GetTexture();
+		if (vtex)
+		{
+			double res_scale = 1.0;
+			double aspect = (double)nx / (double)ny;
+			double spc_x;
+			double spc_y;
+			double spc_z;
+			vtex->get_spacings(spc_x, spc_y, spc_z, 0);
+			spc_x = spc_x<EPS?1.0:spc_x;
+			spc_y = spc_y<EPS?1.0:spc_y;
+
+			double sf;
+			if (aspect > 1.0)
+				sf = 2.0*m_radius/spc_y/double(ny);
+			else
+				sf = 2.0*m_radius/spc_x/double(nx);
+
+			double vx_per_dot = m_scale_factor / sf;
+
+			if (maxvpd < vx_per_dot) maxvpd = vx_per_dot;
+		}
+	}
+
+	w = (int)(nx / maxvpd);
+	h = (int)(ny / maxvpd);
+}
+
+void VRenderVulkanView::DrawTile()
+{
+	vks::VulkanDevice* prim_dev = m_vulkan->vulkanDevice;
+
 	int nx, ny;
-	nx = GetSize().x;
-	ny = GetSize().y;
+	nx = m_nx;
+	ny = m_ny;
 
 	//generate textures & buffer objects
-	glActiveTexture(GL_TEXTURE0);
-	glEnable(GL_TEXTURE_2D);
+	if (m_fbo_tile && (m_fbo_tile->w != nx || m_fbo_tile->h != ny))
+	{
+		m_fbo_tile.reset();
+		m_tex_tile.reset();
+	}
+
+	if (!m_fbo_tile)
+	{
+		m_fbo_tile = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+		m_fbo_tile->w = m_nx;
+		m_fbo_tile->h = m_ny;
+		m_fbo_tile->device = prim_dev;
+
+		m_tex_tile = prim_dev->GenTexture2D(VK_FORMAT_R8G8B8A8_UNORM, VK_FILTER_LINEAR, m_nx, m_ny);
+		m_fbo_tile->addAttachment(m_tex_tile);
+	}
+
+	Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+
+	params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b(), 0.0f };
+	params.clear = true;
+
+	params.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR,
+			V2DRENDER_BLEND_OVER,
+			m_fbo_tile->attachments[0]->format,
+			m_fbo_tile->attachments.size(),
+			0,
+			m_fbo_tile->attachments[0]->is_swapchain_images);
+	params.tex[0] = m_tex_final.get();
+	params.loc[0] = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+	params.loc[1] = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+	params.loc[2] = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
+
+	if (!m_fbo_tile->renderPass)
+		m_fbo_tile->replaceRenderPass(params.pipeline.pass);
+
+	m_v2drender->render(m_fbo_tile, params);
+}
+
+//draw out the framebuffer after composition
+void VRenderVulkanView::PrepFinalBuffer()
+{
+	vks::VulkanDevice* prim_dev = m_vulkan->vulkanDevice;
+
+	int nx, ny;
+	nx = m_nx;
+	ny = m_ny;
+
+	//generate textures & buffer objects
 	//frame buffer for final
-	if (!glIsFramebuffer(m_fbo_final))
+	if (m_fbo_final && (m_fbo_final->w != nx || m_fbo_final->h != ny))
 	{
-		glGenFramebuffers(1, &m_fbo_final);
-		//color buffer/texture for final
-		if (!glIsTexture(m_tex_final))
-			glGenTextures(1, &m_tex_final);
-		//fbo_final
-		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_final);
-		//color buffer for final
-		glBindTexture(GL_TEXTURE_2D, m_tex_final);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-			GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-		glFramebufferTexture2D(GL_FRAMEBUFFER,
-			GL_COLOR_ATTACHMENT0,
-			GL_TEXTURE_2D, m_tex_final, 0);
+		m_fbo_final.reset();
+		m_tex_final.reset();
 	}
-
-	if (m_resize)
+	if (!m_fbo_final)
 	{
-		glBindTexture(GL_TEXTURE_2D, m_tex_final);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-			GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-		//m_resize = false;
+		m_fbo_final = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+		m_fbo_final->w = m_nx;
+		m_fbo_final->h = m_ny;
+		m_fbo_final->device = prim_dev;
+
+		m_tex_final = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+		m_fbo_final->addAttachment(m_tex_final);
 	}
 
 }
 
-void VRenderGLView::ClearFinalBuffer()
+void VRenderVulkanView::ClearFinalBuffer()
 {
-	glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_final);
-	//clear color buffer to black for compositing
-	glClearColor(0.0, 0.0, 0.0, 0.0);
-	glClear(GL_COLOR_BUFFER_BIT);
+	m_clear_final_buffer = true;
 }
 
-void VRenderGLView::DrawFinalBuffer()
+void VRenderVulkanView::DrawFinalBuffer(bool clear)
 {
-	//bind back the window frame buffer
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
 	//draw the final buffer to the windows buffer
-	glActiveTexture(GL_TEXTURE0);
-	glEnable(GL_TEXTURE_2D);
-	glBindTexture(GL_TEXTURE_2D, m_tex_final);
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-	//glBlendFunc(GL_ONE, GL_ONE);
-	glDisable(GL_DEPTH_TEST);
+	Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+	vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+	params.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR,
+			V2DRENDER_BLEND_OVER,
+			current_fbo->attachments[0]->format,
+			current_fbo->attachments.size(),
+			0,
+			current_fbo->attachments[0]->is_swapchain_images);
+	params.tex[0] = m_tex_final.get();
+	params.loc[0] = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+	params.loc[1] = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+	params.loc[2] = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
 
-	//2d adjustment
-	ShaderProgram* img_shader =
-		m_img_shader_factory.shader(IMG_SHDR_BLEND_BRIGHT_BACKGROUND_HDR);
-	if (img_shader)
-	{
-		if (!img_shader->valid())
-			img_shader->create();
-		img_shader->bind();
-	}
+	params.clear = clear;
+	params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b(), 0.0f };
+	m_frame_clear = false;
+	
+	if (!current_fbo->renderPass)
+		current_fbo->replaceRenderPass(params.pipeline.pass);
 
-	img_shader->setLocalParam(0, 1.0, 1.0, 1.0, 1.0);
-	img_shader->setLocalParam(1, 1.0, 1.0, 1.0, 1.0);
-	img_shader->setLocalParam(2, 0.0, 0.0, 0.0, 0.0);
-
-	//2d adjustment
-
-	DrawViewQuad();
-
-	if (img_shader && img_shader->valid())
-		img_shader->release();
-
-	glBindTexture(GL_TEXTURE_2D, 0);
+	m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
 }
 
 //Draw the volmues with compositing
 //peel==true -- depth peeling
-void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int peel)
+void VRenderVulkanView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int peel)
 {
 	if (list.size() <= 0)
 		return;
+
+	vks::VulkanDevice *prim_dev = m_vulkan->vulkanDevice;
 
 	int i;
 
@@ -4045,7 +3887,7 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int pe
 	//calculate sampling frequency factor
 	int cnt_mask = 0;
 	bool use_tex_wt2 = false;
-	double sampling_frq_fac = 2 / (m_ortho_right - m_ortho_left);
+	double sampling_frq_fac = 2 / min(m_ortho_right-m_ortho_left, m_ortho_top-m_ortho_bottom);
 	for (i=0; i<(int)list.size(); i++)
 	{
 		VolumeData* vd = list[i];
@@ -4070,7 +3912,7 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int pe
 			}
 			if (maxlen > sampling_frq_fac) sampling_frq_fac = maxlen;
 			*/
-			if (tex->nmask()!=-1)
+			if ( (tex->nmask()!=-1 || !vd->GetSharedMaskName().IsEmpty()) && vd->GetMaskHideMode() == VOL_MASK_HIDE_NONE)
 			{
 				cnt_mask++;
 				if (vr_frame &&
@@ -4085,87 +3927,43 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int pe
 		return;
 
 	int nx, ny;
-	nx = GetSize().x;
-	ny = GetSize().y;
+	nx = m_nx;
+	ny = m_ny;
+
+	if (m_fbo && (m_fbo->w != nx || m_fbo->h != ny))
+	{
+		m_fbo.reset();
+		m_tex.reset();
+	}
+	if (use_tex_wt2 && m_fbo_wt2 && (m_fbo_wt2->w != nx || m_fbo_wt2->h != ny))
+	{
+		m_fbo_wt2.reset();
+		m_tex_wt2.reset();
+	}
 
 	//generate textures & buffer objects
 	//frame buffer for each volume
-	if (glIsFramebuffer(m_fbo)!=GL_TRUE)
+	if (!m_fbo)
 	{
-		glGenFramebuffers(1, &m_fbo);
-		//color buffer/texture for each volume
-		if (glIsTexture(m_tex)!=GL_TRUE)
-			glGenTextures(1, &m_tex);
-		//fbo
-		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-		//color buffer for each volume
-		glBindTexture(GL_TEXTURE_2D, m_tex);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-			GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-		glFramebufferTexture2D(GL_FRAMEBUFFER,
-			GL_COLOR_ATTACHMENT0,
-			GL_TEXTURE_2D, m_tex, 0);
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	}
-	if (TextureRenderer::get_mem_swap())
-	{
-		if (glIsFramebuffer(m_fbo_temp)!=GL_TRUE)
-		{
-			glGenFramebuffers(1, &m_fbo_temp);
-			if (glIsTexture(m_tex_temp)!=GL_TRUE)
-				glGenTextures(1, &m_tex_temp);
-			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_temp);
-			//color buffer for each volume
-			glBindTexture(GL_TEXTURE_2D, m_tex_temp);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-				GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-			glFramebufferTexture2D(GL_FRAMEBUFFER,
-				GL_COLOR_ATTACHMENT0,
-				GL_TEXTURE_2D, m_tex_temp, 0);
-			glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		}
-	}
-	if (use_tex_wt2)
-	{
-		if (glIsTexture(m_tex_wt2)!=GL_TRUE)
-			glGenTextures(1, &m_tex_wt2);
-		//color buffer for current segmented volume
-		glBindTexture(GL_TEXTURE_2D, m_tex_wt2);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-			GL_RGBA, GL_FLOAT, NULL);
-	}
+		m_fbo = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+		m_fbo->w = m_nx;
+		m_fbo->h = m_ny;
+		m_fbo->device = prim_dev;
 
-	if (m_resize)
-	{
-		if (TextureRenderer::get_mem_swap())
-		{
-			glBindTexture(GL_TEXTURE_2D, m_tex_temp);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-				GL_RGBA, GL_FLOAT, NULL);
-		}
-		if (use_tex_wt2)
-		{
-			glBindTexture(GL_TEXTURE_2D, m_tex_wt2);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-				GL_RGBA, GL_FLOAT, NULL);
-		}
-		glBindTexture(GL_TEXTURE_2D, m_tex);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-			GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
+		m_tex = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+		m_fbo->addAttachment(m_tex);
 	}
+	if (use_tex_wt2 && !m_fbo_wt2)
+	{
+		m_fbo_wt2 = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+		m_fbo_wt2->w = m_nx;
+		m_fbo_wt2->h = m_ny;
+		m_fbo_wt2->device = prim_dev;
 
+		m_tex_wt2 = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+		m_fbo_wt2->addAttachment(m_tex_wt2);
+	}
+	
 	//draw each volume to fbo
 	for (i=0; i<(int)list.size(); i++)
 	{
@@ -4174,6 +3972,8 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int pe
 			continue;
 		if (mask)
 		{
+			if (vd->GetMaskHideMode() != VOL_MASK_HIDE_NONE)
+				continue;
 			//when run script
 			VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 			if (vr_frame &&
@@ -4183,7 +3983,7 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int pe
 				vd->GetLabel(false))
 				continue;
 
-			if (vd->GetTexture() && vd->GetTexture()->nmask()!=-1)
+			if ( vd->GetTexture() && (vd->GetTexture()->nmask()!=-1 || !vd->GetSharedMaskName().IsEmpty()) )
 			{
 				Color tmp_hdr;
 				if (m_enhance_sel)
@@ -4203,13 +4003,16 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int pe
 					vd->SetHdr(hdr_color);
 				}
 
+				//wxString dbgstr = wxString::Format("Drawing Mask: duration %d\n", duration);
+				//OutputDebugStringA(dbgstr.ToStdString().c_str());
+
 				vd->SetMaskMode(1);
 				int vol_method = m_vol_method;
 				m_vol_method = VOL_METHOD_COMP;
 				if (vd->GetMode() == 1)
-					DrawMIP(vd, m_tex, peel, sampling_frq_fac);
+					DrawMIP(vd, m_fbo, peel, sampling_frq_fac);
 				else
-					DrawOVER(vd, m_tex, peel, sampling_frq_fac);
+					DrawOVER(vd, m_fbo, peel, sampling_frq_fac);
 				vd->SetMaskMode(0);
 				m_vol_method = vol_method;
 
@@ -4218,16 +4021,11 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int pe
 		}
 		else
 		{
-			GLuint tex = m_tex;
+			bool wt2_enable = false;
 			if (vr_frame && vd==vr_frame->GetCurSelVol() &&
-				vd->GetTexture() && vd->GetTexture()->nmask()!=-1)
+				vd->GetTexture() && use_tex_wt2)
 			{
-				glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-				glFramebufferTexture2D(GL_FRAMEBUFFER,
-					GL_COLOR_ATTACHMENT0,
-					GL_TEXTURE_2D, m_tex_wt2, 0);
-				tex = m_tex_wt2;
-				glBindFramebuffer(GL_FRAMEBUFFER, 0);
+				wt2_enable = true;
 			}
 			if (vd->GetBlendMode()!=2)
 			{
@@ -4241,29 +4039,43 @@ void VRenderGLView::DrawVolumesComp(vector<VolumeData*> &list, bool mask, int pe
 					vd->SetMaskMode(4);
 
 				if (vd->GetMode() == 1)
-					DrawMIP(vd, tex, peel, sampling_frq_fac);
+					DrawMIP(vd, wt2_enable ? m_fbo_wt2 : m_fbo, peel, sampling_frq_fac);
 				else
-					DrawOVER(vd, tex, peel, sampling_frq_fac);
-			}
-			if (tex==m_tex_wt2)
-			{
-				glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-				glFramebufferTexture2D(GL_FRAMEBUFFER,
-					GL_COLOR_ATTACHMENT0,
-					GL_TEXTURE_2D, m_tex, 0);
-				glBindFramebuffer(GL_FRAMEBUFFER, 0);
+					DrawOVER(vd, wt2_enable ? m_fbo_wt2 : m_fbo, peel, sampling_frq_fac);
 			}
 		}
 	}
 }
 
-void VRenderGLView::switchLevel(VolumeData *vd)
+void VRenderVulkanView::SetBufferScale(int mode)
+{
+	m_res_scale = 1.0;
+	switch(m_res_mode)
+	{
+	case 1:
+		m_res_scale = 1;
+		break;
+	case 2:
+		m_res_scale = 1.5;
+		break;
+	case 3:
+		m_res_scale = 2.0;
+		break;
+	case 4:
+		m_res_scale = 3.0;
+		break;
+	default:
+		m_res_scale = 1.0;
+	}
+}
+
+void VRenderVulkanView::switchLevel(VolumeData *vd)
 {
 	if(!vd) return;
 
 	int nx, ny;
-	nx = GetSize().x;
-	ny = GetSize().y;
+	nx = m_nx;
+	ny = m_ny;
 	/*
 	if(m_min_ppi < 0)m_min_ppi = 60;
 	//wxDisplay disp(wxDisplay::GetFromWindow(m_frame));
@@ -4279,7 +4091,10 @@ void VRenderGLView::switchLevel(VolumeData *vd)
 		int prev_lv = vd->GetLevel();
 		int new_lv = 0;
 
-		if (m_res_mode > 0)
+		if (m_res_mode == 5)
+			new_lv = vtex->GetLevelNum()-1;
+
+		if (m_res_mode > 0 && m_res_mode < 5)
 		{
 			double res_scale = 1.0;
 			switch(m_res_mode)
@@ -4334,10 +4149,42 @@ void VRenderGLView::switchLevel(VolumeData *vd)
 				}
 			}
 			if (lv < 0) lv = 0;
-			//if (m_interactive) lv += 2;
 			if (lv >= lvnum) lv = lvnum - 1;
 			new_lv = lv;
-			//vd->GetVR()->set_scalar_scale();
+			
+			/*
+			if (lv == 0)
+			{
+				
+				double vxsize_on_screen = m_scale_factor / (sfs[0]/res_scale);
+				if (vxsize_on_screen > 1.5)
+				{
+					double fac = 0.0;
+					switch(m_res_mode)
+					{
+					case 1:
+						fac = 0.0;
+						break;
+					case 2:
+						fac = 0.5;
+						break;
+					case 3:
+						fac = 1.0;
+						break;
+					case 4:
+						fac = 2.0;
+						break;
+					default:
+						fac = 0.0;
+					}
+					double bscale = (vxsize_on_screen - 1.5)*fac + 1.0;
+					vd->GetVR()->set_buffer_scale(1.0/bscale);
+				}
+				else
+				vd->GetVR()->set_buffer_scale(1.0);
+			}
+			else*/
+				vd->GetVR()->set_buffer_scale(1.0);
 		}
 		if (prev_lv != new_lv)
 		{
@@ -4351,260 +4198,367 @@ void VRenderGLView::switchLevel(VolumeData *vd)
 			vtex->set_sort_bricks();
 		}
 	}
+
+	if (vtex && !vtex->isBrxml())
+	{
+/*		double max_res_scale = 1.0;
+		switch(m_res_mode)
+		{
+		case 1:
+			max_res_scale = 1;
+			break;
+		case 2:
+			max_res_scale = 1.5;
+			break;
+		case 3:
+			max_res_scale = 2.0;
+			break;
+		case 4:
+			max_res_scale = 3.0;
+			break;
+		default:
+			max_res_scale = 1.0;
+		}
+
+		if (max_res_scale > 1.0)
+		{
+			vector<double> sfs;
+			vector<double> spx, spy, spz;
+
+			double aspect = (double)nx / (double)ny;
+
+			double spc_x;
+			double spc_y;
+			double spc_z;
+			vtex->get_spacings(spc_x, spc_y, spc_z);
+			spc_x = spc_x<EPS?1.0:spc_x;
+			spc_y = spc_y<EPS?1.0:spc_y;
+
+			spx.push_back(spc_x);
+			spy.push_back(spc_y);
+			spz.push_back(spc_z);
+
+			double sf;
+			if (aspect > 1.0)
+				sf = 2.0*m_radius/spc_y/double(ny);
+			else
+				sf = 2.0*m_radius/spc_x/double(nx);
+
+			double vxsize_on_screen = m_scale_factor / sf;
+
+			if (vxsize_on_screen > 1.5)
+			{
+				double fac = 0.0;
+				switch(m_res_mode)
+				{
+				case 1:
+					fac = 0.0;
+					break;
+				case 2:
+					fac = 0.25;
+					break;
+				case 3:
+					fac = 0.5;
+					break;
+				case 4:
+					fac = 1.0;
+					break;
+				default:
+					fac = 0.0;
+				}
+				double bscale = (vxsize_on_screen - 1.5)*fac + 1.0;
+				vd->GetVR()->set_buffer_scale(1.0/bscale);
+			}
+			else
+				vd->GetVR()->set_buffer_scale(1.0);
+		}
+		else*/
+			vd->GetVR()->set_buffer_scale(1.0);
+	}
 }
 
-void VRenderGLView::DrawOVER(VolumeData* vd, GLuint tex, int peel, double sampling_frq_fac)
+void VRenderVulkanView::DrawOVER(VolumeData* vd, std::unique_ptr<vks::VFrameBuffer>& fb, int peel, double sampling_frq_fac)
 {
 	ShaderProgram* img_shader = 0;
 
 	bool do_over = true;
+
+	vks::VulkanDevice* prim_dev = m_vulkan->vulkanDevice;
+	if (TextureRenderer::get_mem_swap() && m_fbo_temp && (m_fbo_temp->w != m_nx || m_fbo_temp->h != m_ny))
+	{
+		m_fbo_temp.reset();
+		m_tex_temp.reset();
+		m_fbo_temp_restore.reset();
+	}
+	if (TextureRenderer::get_mem_swap() && !m_fbo_temp)
+	{
+		m_fbo_temp = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+		m_fbo_temp->w = m_nx;
+		m_fbo_temp->h = m_ny;
+		m_fbo_temp->device = prim_dev;
+
+		m_tex_temp = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+		m_fbo_temp->addAttachment(m_tex_temp);
+
+		m_fbo_temp_restore = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+		m_fbo_temp_restore->w = m_nx;
+		m_fbo_temp_restore->h = m_ny;
+		m_fbo_temp_restore->device = prim_dev;
+		m_fbo_temp_restore->addAttachment(m_fbo_final->attachments[0]);
+	}
+
 	if (TextureRenderer::get_mem_swap() &&
 		TextureRenderer::get_start_update_loop() &&
 		!TextureRenderer::get_done_update_loop())
 	{
-		unsigned int rn_time = GET_TICK_COUNT();
-		if (rn_time - TextureRenderer::get_st_time() >
-			TextureRenderer::get_up_time())
-			return;
 		if (vd->GetVR()->get_done_loop(0) && 
 			( !vd->isActiveMask()  || vd->GetVR()->get_done_loop(TEXTURE_RENDER_MODE_MASK)  ) &&
 			( !vd->isActiveLabel() || vd->GetVR()->get_done_loop(TEXTURE_RENDER_MODE_LABEL) )   )
 			do_over = false;
+
+		if (!do_over && !(vd->GetShadow() || !vd->GetVR()->get_done_loop(3)))
+			return;
+
+		if (do_over)
+		{
+			//before rendering this channel, save m_fbo_final to m_fbo_temp
+			if (TextureRenderer::get_mem_swap() &&
+				TextureRenderer::get_start_update_loop() &&
+				TextureRenderer::get_save_final_buffer())
+			{
+				TextureRenderer::reset_save_final_buffer();
+				TextureRenderer::validate_temp_final_buffer();
+
+				Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+
+				params.clear = true;
+				params.pipeline =
+					m_v2drender->preparePipeline(
+						IMG_SHADER_TEXTURE_LOOKUP,
+						V2DRENDER_BLEND_DISABLE,
+						m_fbo_temp->attachments[0]->format,
+						m_fbo_temp->attachments.size(),
+						0,
+						m_fbo_temp->attachments[0]->is_swapchain_images);
+				params.tex[0] = m_tex_final.get();
+				
+				if (!m_fbo_temp->renderPass)
+					m_fbo_temp->replaceRenderPass(params.pipeline.pass);
+				m_v2drender->render(m_fbo_temp, params);
+			}
+		}
+
+		if (TextureRenderer::get_streaming())
+		{
+			unsigned int rn_time = GET_TICK_COUNT();
+			if (rn_time - TextureRenderer::get_st_time() >
+				TextureRenderer::get_up_time()/* && vd->GetMaskMode() != 1*/)
+				return;
+		}
 	}
 
 	if (do_over)
 	{
-		//before rendering this channel, save m_fbo_final to m_fbo_temp
-		if (TextureRenderer::get_mem_swap() &&
-			TextureRenderer::get_start_update_loop() &&
-			TextureRenderer::get_save_final_buffer())
-		{
-			TextureRenderer::reset_save_final_buffer();
-
-			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_temp);
-			glClearColor(0.0, 0.0, 0.0, 0.0);
-			glClear(GL_COLOR_BUFFER_BIT);
-			glActiveTexture(GL_TEXTURE0);
-			glEnable(GL_TEXTURE_2D);
-			glBindTexture(GL_TEXTURE_2D, m_tex_final);
-			glDisable(GL_BLEND);
-			glDisable(GL_DEPTH_TEST);
-
-			img_shader =
-				m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
-			if (img_shader)
-			{
-				if (!img_shader->valid())
-					img_shader->create();
-				img_shader->bind();
-			}
-			DrawViewQuad();
-			if (img_shader && img_shader->valid())
-				img_shader->release();
-
-			glBindTexture(GL_TEXTURE_2D, 0);
-			glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		}
-		//bind the fbo
-		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-
+		bool clear = false;
 		if (!TextureRenderer::get_mem_swap() ||
 			(TextureRenderer::get_mem_swap() &&
 			TextureRenderer::get_clear_chan_buffer()))
 		{
-			glClearColor(0.0, 0.0, 0.0, 0.0);
-			glClear(GL_COLOR_BUFFER_BIT);
 			TextureRenderer::reset_clear_chan_buffer();
+			clear = true;
 		}
+
+		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+		Texture* ext_lbl = NULL;
+		if (!vd->GetSharedLabelName().IsEmpty() && vr_frame && vr_frame->GetDataManager())
+		{
+			VolumeData* lbl = vr_frame->GetDataManager()->GetVolumeData(vd->GetSharedLabelName());
+			if (lbl)
+				ext_lbl = lbl->GetTexture();
+		}
+        Texture* ext_msk = NULL;
+        if (!vd->GetSharedMaskName().IsEmpty() && vr_frame && vr_frame->GetDataManager())
+        {
+            VolumeData* msk = vr_frame->GetDataManager()->GetVolumeData(vd->GetSharedMaskName());
+            if (msk)
+                ext_msk = msk->GetTexture();
+        }
 
 		if (vd->GetVR())
 			vd->GetVR()->set_depth_peel(peel);
 		vd->SetStreamMode(0);
 		vd->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
 		vd->SetFog(m_use_fog, m_fog_intensity, m_fog_start, m_fog_end);
-		vd->Draw(!m_persp, m_interactive, m_scale_factor, sampling_frq_fac);
+		VkClearColorValue clear_color = { 0.0, 0.0, 0.0, 0.0 };
+		vd->Draw(fb, clear, !m_persp, m_interactive, m_scale_factor, sampling_frq_fac, clear_color, ext_msk, ext_lbl);
 	}
 
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-	if (vd->GetShadow())
+	if (vd->GetShadow() && vd->GetVR()->get_done_loop(0))
 	{
 		vector<VolumeData*> list;
 		list.push_back(vd);
-		DrawOLShadows(list, tex);
+		DrawOLShadows(list, fb);
 	}
 
 	//bind fbo for final composition
-	glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_final);
-
-	if (TextureRenderer::get_mem_swap())
+	if (TextureRenderer::get_mem_swap() && m_fbo_temp && m_tex_temp && TextureRenderer::isvalid_temp_final_buffer())
 	{
 		//restore m_fbo_temp to m_fbo_final
-		glClearColor(0.0, 0.0, 0.0, 0.0);
-		glClear(GL_COLOR_BUFFER_BIT);
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, m_tex_temp);
-		glDisable(GL_BLEND);
-		glDisable(GL_DEPTH_TEST);
+		Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 
-		img_shader =
-			m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
-		if (img_shader)
-		{
-			if (!img_shader->valid())
-				img_shader->create();
-			img_shader->bind();
-		}
-		DrawViewQuad();
-		if (img_shader && img_shader->valid())
-			img_shader->release();
+		params.clear = m_clear_final_buffer;
+		m_clear_final_buffer = false;
 
-		glBindTexture(GL_TEXTURE_2D, 0);
+		params.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHADER_TEXTURE_LOOKUP,
+				V2DRENDER_BLEND_DISABLE,
+				m_fbo_temp_restore->attachments[0]->format,
+				m_fbo_temp_restore->attachments.size(),
+				0,
+				m_fbo_temp_restore->attachments[0]->is_swapchain_images);
+		params.tex[0] = m_tex_temp.get();
+		
+		if (!m_fbo_temp_restore->renderPass)
+			m_fbo_temp_restore->replaceRenderPass(params.pipeline.pass);
+		m_v2drender->render(m_fbo_temp_restore, params);
 	}
-
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, tex);
-	//build mipmap
-	glGenerateMipmap(GL_TEXTURE_2D);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-	glEnable(GL_BLEND);
-	if (m_vol_method == VOL_METHOD_COMP)
-		glBlendFunc(GL_ONE, GL_ONE);
-	else
-		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-	glDisable(GL_DEPTH_TEST);
-
-	//2d adjustment
-	img_shader =
-		m_img_shader_factory.shader(IMG_SHDR_BRIGHTNESS_CONTRAST_HDR);
-	if (img_shader)
-	{
-		if (!img_shader->valid())
-		{
-			img_shader->create();
-		}
-		img_shader->bind();
-	}
-
+	
+	Vulkan2dRender::V2DRenderParams params_final = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+	
+	params_final.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_BRIGHTNESS_CONTRAST_HDR,
+			m_vol_method == VOL_METHOD_COMP ? V2DRENDER_BLEND_ADD : V2DRENDER_BLEND_OVER,
+			m_fbo_final->attachments[0]->format,
+			m_fbo_final->attachments.size(),
+			0,
+			m_fbo_final->attachments[0]->is_swapchain_images);
+	params_final.tex[0] = fb->attachments[0].get();
 	Color gamma = vd->GetGamma();
 	Color brightness = vd->GetBrightness();
-	img_shader->setLocalParam(0, gamma.r(), gamma.g(), gamma.b(), 1.0);
-	img_shader->setLocalParam(1, brightness.r(), brightness.g(), brightness.b(), 1.0);
 	Color hdr = vd->GetHdr();
-	img_shader->setLocalParam(2, hdr.r(), hdr.g(), hdr.b(), 0.0);
-	//2d adjustment
+	params_final.loc[0] = glm::vec4((float)gamma.r(), (float)gamma.g(), (float)gamma.b(), 1.0f);
+	params_final.loc[1] = glm::vec4((float)brightness.r(), (float)brightness.g(), (float)brightness.b(), 1.0f);
+	params_final.loc[2] = glm::vec4((float)hdr.r(), (float)hdr.g(), (float)hdr.b(), 0.0f);
+	params_final.clear = m_clear_final_buffer;
+	m_clear_final_buffer = false;
 
-	DrawViewQuad();
-
-	if (img_shader && img_shader->valid())
-		img_shader->release();
-
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	if (!m_fbo_final->renderPass)
+		m_fbo_final->replaceRenderPass(params_final.pipeline.pass);
+	m_v2drender->render(m_fbo_final, params_final);
 }
 
-void VRenderGLView::DrawMIP(VolumeData* vd, GLuint tex, int peel, double sampling_frq_fac)
+void VRenderVulkanView::DrawMIP(VolumeData* vd, std::unique_ptr<vks::VFrameBuffer>& fb, int peel, double sampling_frq_fac)
 {
 	bool do_mip = true;
+
+	vks::VulkanDevice* prim_dev = m_vulkan->vulkanDevice;
+	if (TextureRenderer::get_mem_swap() && m_fbo_temp && (m_fbo_temp->w != m_nx || m_fbo_temp->h != m_ny))
+	{
+		m_fbo_temp.reset();
+		m_tex_temp.reset();
+	}
+	if (TextureRenderer::get_mem_swap() && !m_fbo_temp)
+	{
+		m_fbo_temp = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+		m_fbo_temp->w = m_nx;
+		m_fbo_temp->h = m_ny;
+		m_fbo_temp->device = prim_dev;
+
+		m_tex_temp = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+		m_fbo_temp->addAttachment(m_tex_temp);
+	}
+
+	ShaderProgram* img_shader = 0;
 	if (TextureRenderer::get_mem_swap() &&
 		TextureRenderer::get_start_update_loop() &&
 		!TextureRenderer::get_done_update_loop())
 	{
-		unsigned int rn_time = GET_TICK_COUNT();
-		if (rn_time - TextureRenderer::get_st_time() >
-			TextureRenderer::get_up_time())
-			return;
 		if (vd->GetVR()->get_done_loop(1) && 
 			( !vd->isActiveMask()  || vd->GetVR()->get_done_loop(TEXTURE_RENDER_MODE_MASK)  ) &&
 			( !vd->isActiveLabel() || vd->GetVR()->get_done_loop(TEXTURE_RENDER_MODE_LABEL) )   )
 			do_mip = false;
+
+		if (!do_mip && !(vd->GetShadow() || !vd->GetVR()->get_done_loop(3)) && !(vd->GetShading() || !vd->GetVR()->get_done_loop(2)))
+			return;
+
+		if (do_mip)
+		{
+			//before rendering this channel, save m_fbo_final to m_fbo_temp
+			if (TextureRenderer::get_mem_swap() &&
+				TextureRenderer::get_start_update_loop() &&
+				TextureRenderer::get_save_final_buffer())
+			{
+				TextureRenderer::reset_save_final_buffer();
+				TextureRenderer::validate_temp_final_buffer();
+
+				Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+
+				params.clear = true;
+				params.pipeline =
+					m_v2drender->preparePipeline(
+						IMG_SHADER_TEXTURE_LOOKUP,
+						V2DRENDER_BLEND_DISABLE,
+						m_fbo_temp->attachments[0]->format,
+						m_fbo_temp->attachments.size(),
+						0,
+						m_fbo_temp->attachments[0]->is_swapchain_images);
+				params.tex[0] = m_tex_final.get();
+
+				m_fbo_temp->replaceRenderPass(params.pipeline.pass);
+				m_v2drender->render(m_fbo_temp, params);
+			}
+		}
+
+		if (TextureRenderer::get_streaming())
+		{
+			unsigned int rn_time = GET_TICK_COUNT();
+			if (rn_time - TextureRenderer::get_st_time() >
+				TextureRenderer::get_up_time())
+				return;
+		}
 	}
 
 	int nx, ny;
-	nx = GetSize().x;
-	ny = GetSize().y;
+	nx = m_nx;
+	ny = m_ny;
 
 	bool shading = vd->GetVR()->get_shading();
 	bool shadow = vd->GetShadow();
 	int color_mode = vd->GetColormapMode();
 	bool enable_alpha = vd->GetEnableAlpha();
-	ShaderProgram* img_shader = 0;
 
 	if (do_mip)
 	{
-		//before rendering this channel, save m_fbo_final to m_fbo_temp
-		if (TextureRenderer::get_mem_swap() &&
-			TextureRenderer::get_start_update_loop() &&
-			TextureRenderer::get_save_final_buffer())
+		if (m_fbo_ol1 && (m_fbo_ol1->w != nx || m_fbo_ol1->h != ny))
 		{
-			TextureRenderer::reset_save_final_buffer();
-
-			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_temp);
-			glClearColor(0.0, 0.0, 0.0, 0.0);
-			glClear(GL_COLOR_BUFFER_BIT);
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, m_tex_final);
-			glDisable(GL_BLEND);
-			glDisable(GL_DEPTH_TEST);
-
-			img_shader =
-				m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
-			if (img_shader)
-			{
-				if (!img_shader->valid())
-					img_shader->create();
-				img_shader->bind();
-			}
-			DrawViewQuad();
-			if (img_shader && img_shader->valid())
-				img_shader->release();
-
-			glBindTexture(GL_TEXTURE_2D, 0);
-			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			m_fbo_ol1.reset();
+			m_tex_ol1.reset();
 		}
-
-		if (!glIsFramebuffer(m_fbo_ol1))
+		if (!m_fbo_ol1)
 		{
-			glGenFramebuffers(1, &m_fbo_ol1);
-			if (!glIsTexture(m_tex_ol1))
-				glGenTextures(1, &m_tex_ol1);
-			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_ol1);
-			glBindTexture(GL_TEXTURE_2D, m_tex_ol1);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-				GL_RGBA, GL_FLOAT, NULL);
-			glFramebufferTexture2D(GL_FRAMEBUFFER,
-				GL_COLOR_ATTACHMENT0,
-				GL_TEXTURE_2D, m_tex_ol1, 0);
-		}
+			m_fbo_ol1 = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+			m_fbo_ol1->w = m_nx;
+			m_fbo_ol1->h = m_ny;
+			m_fbo_ol1->device = prim_dev;
 
-		if (m_resize_ol1)
-		{
-			glBindTexture(GL_TEXTURE_2D, m_tex_ol1);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-				GL_RGBA, GL_FLOAT, NULL);
-			m_resize_ol1 = false;
+			m_tex_ol1 = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+			m_fbo_ol1->addAttachment(m_tex_ol1);
 		}
-
+		
 		//bind the fbo
-		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_ol1);
-
+		bool clear = false;
 		if (!TextureRenderer::get_mem_swap() ||
 			(TextureRenderer::get_mem_swap() &&
 			TextureRenderer::get_clear_chan_buffer()))
 		{
-			glClearColor(0.0, 0.0, 0.0, 0.0);
-			glClear(GL_COLOR_BUFFER_BIT);
 			TextureRenderer::reset_clear_chan_buffer();
+			clear = true;
 		}
 
 		if (vd->GetVR())
 			vd->GetVR()->set_depth_peel(peel);
-		vd->GetVR()->set_shading(false);
 		if (color_mode == 1)
 		{
 			vd->SetMode(3);
@@ -4618,10 +4572,29 @@ void VRenderGLView::DrawMIP(VolumeData* vd, GLuint tex, int peel, double samplin
 		//turn off alpha
 		if (color_mode == 1)
 			vd->SetEnableAlpha(false);
+
+		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+		Texture* ext_lbl = NULL;
+		if (!vd->GetSharedLabelName().IsEmpty() && vr_frame && vr_frame->GetDataManager())
+		{
+			VolumeData* lbl = vr_frame->GetDataManager()->GetVolumeData(vd->GetSharedLabelName());
+			if (lbl)
+				ext_lbl = lbl->GetTexture();
+		}
+        Texture* ext_msk = NULL;
+        if (!vd->GetSharedMaskName().IsEmpty() && vr_frame && vr_frame->GetDataManager())
+        {
+            VolumeData* msk = vr_frame->GetDataManager()->GetVolumeData(vd->GetSharedMaskName());
+            if (msk)
+                ext_msk = msk->GetTexture();
+        }
+        
+		VkClearColorValue clear_color = { 0.0, 0.0, 0.0, 0.0 };
+        
 		//draw
 		vd->SetStreamMode(1);
 		vd->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
-		vd->Draw(!m_persp, m_interactive, m_scale_factor, sampling_frq_fac);
+		vd->Draw(m_fbo_ol1, clear, !m_persp, m_interactive, m_scale_factor, sampling_frq_fac, clear_color, ext_msk, ext_lbl);
 		//
 		if (color_mode == 1)
 		{
@@ -4630,205 +4603,153 @@ void VRenderGLView::DrawMIP(VolumeData* vd, GLuint tex, int peel, double samplin
 			vd->SetEnableAlpha(enable_alpha);
 		}
 
-		glBindTexture(GL_TEXTURE_2D, 0);
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
 		//bind fbo for final composition
-		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-		glClearColor(0.0, 0.0, 0.0, 0.0);
-		glClear(GL_COLOR_BUFFER_BIT);
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, m_tex_ol1);
-		glEnable(GL_BLEND);
-		glBlendEquation(GL_FUNC_ADD);
-		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+		Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+		params.clear = true;
 
 		if (color_mode == 1)
 		{
 			//2d adjustment
-			img_shader =
-				m_img_shader_factory.shader(IMG_SHDR_GRADIENT_MAP, vd->GetColormap());
-			if (img_shader)
-			{
-				if (!img_shader->valid())
-				{
-					img_shader->create();
-				}
-				img_shader->bind();
-			}
+			params.pipeline =
+				m_v2drender->preparePipeline(
+					IMG_SHDR_GRADIENT_MAP,
+					V2DRENDER_BLEND_OVER,
+					fb->attachments[0]->format,
+					fb->attachments.size(),
+					vd->GetColormap(),
+					fb->attachments[0]->is_swapchain_images);
 			double lo, hi;
 			vd->GetColormapValues(lo, hi);
-			img_shader->setLocalParam(0, lo, hi, hi-lo, enable_alpha?0.0:1.0);
-			//2d adjustment
+			params.loc[0] = glm::vec4((float)lo, (float)hi, (float)(hi - lo), enable_alpha ? 0.0f : 1.0f);
 		}
 		else
 		{
-			img_shader =
-				m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
+			params.pipeline =
+				m_v2drender->preparePipeline(
+					IMG_SHADER_TEXTURE_LOOKUP,
+					V2DRENDER_BLEND_OVER,
+					fb->attachments[0]->format,
+					fb->attachments.size(),
+					0,
+					fb->attachments[0]->is_swapchain_images);
 		}
+		params.tex[0] = m_tex_ol1.get();
+		if (!fb->renderPass)
+			fb->replaceRenderPass(params.pipeline.pass);
+		m_v2drender->render(fb, params);
 
-		if (img_shader)
-		{
-			if (!img_shader->valid())
-				img_shader->create();
-			img_shader->bind();
-		}
-		DrawViewQuad();
-		if (img_shader && img_shader->valid())
-			img_shader->release();
-
-		if (color_mode == 1 &&
-			img_shader &&
-			img_shader->valid())
-		{
-			img_shader->release();
-		}
-
-		glBindTexture(GL_TEXTURE_2D, 0);
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	}
 
-	if (shading)
-	{
-		DrawOLShading(vd);
-	}
-
-	if (shadow)
+	if (shadow && vd->GetVR()->get_done_loop(1))
 	{
 		vector<VolumeData*> list;
 		list.push_back(vd);
-		DrawOLShadows(list, tex);
+		DrawOLShadows(list, fb);
 	}
 
 	//bind fbo for final composition
-	glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_final);
-
-	if (TextureRenderer::get_mem_swap())
+	if (TextureRenderer::get_mem_swap() && m_fbo_temp && m_tex_temp && TextureRenderer::isvalid_temp_final_buffer())
 	{
 		//restore m_fbo_temp to m_fbo_final
-		glClearColor(0.0, 0.0, 0.0, 0.0);
-		glClear(GL_COLOR_BUFFER_BIT);
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, m_tex_temp);
-		glDisable(GL_BLEND);
-		glDisable(GL_DEPTH_TEST);
+		Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 
-		img_shader =
-			m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
-		if (img_shader)
-		{
-			if (!img_shader->valid())
-				img_shader->create();
-			img_shader->bind();
-		}
-		DrawViewQuad();
-		if (img_shader && img_shader->valid())
-			img_shader->release();
+		params.clear = m_clear_final_buffer;
+		m_clear_final_buffer = false;
 
-		glBindTexture(GL_TEXTURE_2D, 0);
+		params.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHADER_TEXTURE_LOOKUP,
+				V2DRENDER_BLEND_DISABLE,
+				m_fbo_final->attachments[0]->format,
+				m_fbo_final->attachments.size(),
+				0,
+				m_fbo_final->attachments[0]->is_swapchain_images);
+		params.tex[0] = m_tex_temp.get();
+		
+		if (!m_fbo_final->renderPass)
+			m_fbo_final->replaceRenderPass(params.pipeline.pass);
+		m_v2drender->render(m_fbo_final, params);
 	}
 
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, tex);
-	//build mipmap
-	glGenerateMipmap(GL_TEXTURE_2D);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-	glEnable(GL_BLEND);
-	if (m_vol_method == VOL_METHOD_COMP)
-		glBlendFunc(GL_ONE, GL_ONE);
-	else
-		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-	glDisable(GL_DEPTH_TEST);
+	Vulkan2dRender::V2DRenderParams params_final = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 
-	//2d adjustment
-	img_shader =
-		m_img_shader_factory.shader(IMG_SHDR_BRIGHTNESS_CONTRAST_HDR);
-	if (img_shader)
-	{
-		if (!img_shader->valid())
-			img_shader->create();
-		img_shader->bind();
-	}
+	params_final.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_BRIGHTNESS_CONTRAST_HDR,
+			m_vol_method == VOL_METHOD_COMP ? V2DRENDER_BLEND_ADD : V2DRENDER_BLEND_OVER,
+			m_fbo_final->attachments[0]->format,
+			m_fbo_final->attachments.size(),
+			0,
+			m_fbo_final->attachments[0]->is_swapchain_images);
+	params_final.tex[0] = fb->attachments[0].get();
 	Color gamma = vd->GetGamma();
 	Color brightness = vd->GetBrightness();
-	img_shader->setLocalParam(0, gamma.r(), gamma.g(), gamma.b(), 1.0);
-	img_shader->setLocalParam(1, brightness.r(), brightness.g(), brightness.b(), 1.0);
 	Color hdr = vd->GetHdr();
-	img_shader->setLocalParam(2, hdr.r(), hdr.g(), hdr.b(), 0.0);
-	//2d adjustment
+	params_final.loc[0] = glm::vec4((float)gamma.r(), (float)gamma.g(), (float)gamma.b(), 1.0f);
+	params_final.loc[1] = glm::vec4((float)brightness.r(), (float)brightness.g(), (float)brightness.b(), 1.0f);
+	params_final.loc[2] = glm::vec4((float)hdr.r(), (float)hdr.g(), (float)hdr.b(), 0.0f);
+	params_final.clear = m_clear_final_buffer;
+	m_clear_final_buffer = false;
 
-	DrawViewQuad();
+	if (!m_fbo_final->renderPass)
+		m_fbo_final->replaceRenderPass(params_final.pipeline.pass);
+	m_v2drender->render(m_fbo_final, params_final);
 
-	if (img_shader && img_shader->valid())
-		img_shader->release();
-
-	vd->GetVR()->set_shading(shading);
 	vd->SetColormapMode(color_mode);
 }
 
-void VRenderGLView::DrawOLShading(VolumeData* vd)
+void VRenderVulkanView::DrawOLShading(VolumeData* vd, std::unique_ptr<vks::VFrameBuffer>& fb)
 {
 	if (TextureRenderer::get_mem_swap() &&
 		TextureRenderer::get_start_update_loop() &&
 		!TextureRenderer::get_done_update_loop())
 	{
-		unsigned int rn_time = GET_TICK_COUNT();
-		if (rn_time - TextureRenderer::get_st_time() >
-			TextureRenderer::get_up_time())
+		if (TextureRenderer::get_done_update_loop())
 			return;
+
 		if (vd->GetVR()->get_done_loop(2))
 			return;
+
+		if (TextureRenderer::get_save_final_buffer())
+			TextureRenderer::reset_save_final_buffer();
+		if (TextureRenderer::get_clear_chan_buffer())
+			TextureRenderer::reset_clear_chan_buffer();
 	}
 
 	//shading pass
-	glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_ol1);
-	glClearColor(1.0, 1.0, 1.0, 1.0);
-	glClear(GL_COLOR_BUFFER_BIT);
-
 	vd->GetVR()->set_shading(true);
 	vd->SetMode(2);
 	int colormode = vd->GetColormapMode();
 	vd->SetStreamMode(2);
 	vd->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
 	vd->SetFog(m_use_fog, m_fog_intensity, m_fog_start, m_fog_end);
-	double sampling_frq_fac = 2 / (m_ortho_right - m_ortho_left);
-	vd->Draw(!m_persp, m_interactive, m_scale_factor, sampling_frq_fac);
+	double sampling_frq_fac = 2 / min(m_ortho_right-m_ortho_left, m_ortho_top-m_ortho_bottom);
+	VkClearColorValue clear_color = { 1.0, 1.0, 1.0, 1.0 };
+	vd->Draw(m_fbo_ol1, true, !m_persp, m_interactive, m_scale_factor, sampling_frq_fac, clear_color);
 	vd->RestoreMode();
 	vd->SetColormapMode(colormode);
 
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
 	//bind fbo for final composition
-	glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, m_tex_ol1);
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_ZERO, GL_SRC_COLOR);
-	//glBlendEquation(GL_MIN);
-	glDisable(GL_DEPTH_TEST);
+	Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 
-	ShaderProgram* img_shader =
-		m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
-	if (img_shader)
-	{
-		if (!img_shader->valid())
-			img_shader->create();
-		img_shader->bind();
-	}
-	DrawViewQuad();
-	if (img_shader && img_shader->valid())
-		img_shader->release();
+	params.clear = true;
+	params.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHADER_TEXTURE_LOOKUP,
+			V2DRENDER_BLEND_SHADE_SHADOW,
+			fb->attachments[0]->format,
+			fb->attachments.size(),
+			0,
+			fb->attachments[0]->is_swapchain_images);
+	params.tex[0] = m_tex_ol1.get();
 
-	glBlendEquation(GL_FUNC_ADD);
-	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	if (!fb->renderPass)
+		fb->replaceRenderPass(params.pipeline.pass);
+	m_v2drender->render(fb, params);
 }
 
 //get mesh shadow
-bool VRenderGLView::GetMeshShadow(double &val)
+bool VRenderVulkanView::GetMeshShadow(double &val)
 {
 	for (int i=0 ; i<(int)m_layer_list.size() ; i++)
 	{
@@ -4864,117 +4785,224 @@ bool VRenderGLView::GetMeshShadow(double &val)
 	return false;
 }
 
-void VRenderGLView::DrawOLShadowsMesh(GLuint tex_depth, double darkness)
+void VRenderVulkanView::DrawOLShadowsMesh(const std::shared_ptr<vks::VTexture>& tex_depth, double darkness)
 {
 	int nx, ny;
-	nx = GetSize().x;
-	ny = GetSize().y;
+	nx = m_nx;
+	ny = m_ny;
 
-	//shadow pass
-	if (!glIsFramebuffer(m_fbo_ol2))
+	vks::VulkanDevice* prim_dev = m_vulkan->vulkanDevice;
+
+	//generate gradient map from depth map
+	if (m_fbo_ol2 && (m_fbo_ol2->w != nx || m_fbo_ol2->h != ny))
 	{
-		glGenFramebuffers(1, &m_fbo_ol2);
-		if (!glIsTexture(m_tex_ol2))
-			glGenTextures(1, &m_tex_ol2);
-		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_ol2);
-		glBindTexture(GL_TEXTURE_2D, m_tex_ol2);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-			GL_RGBA, GL_FLOAT, NULL);
-		glFramebufferTexture2D(GL_FRAMEBUFFER,
-			GL_COLOR_ATTACHMENT0,
-			GL_TEXTURE_2D, m_tex_ol2, 0);
+		m_fbo_ol2.reset();
+		m_tex_ol2.reset();
 	}
-
-	if (m_resize_ol2)
+	if (!m_fbo_ol2)
 	{
-		glBindTexture(GL_TEXTURE_2D, m_tex_ol2);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-			GL_RGBA, GL_FLOAT, NULL);
-		m_resize_ol2 = false;
-	}
+		m_fbo_ol2 = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+		m_fbo_ol2->w = m_nx;
+		m_fbo_ol2->h = m_ny;
+		m_fbo_ol2->device = prim_dev;
 
-	//bind the fbo
-	glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_ol2);
-	glClearColor(1.0, 1.0, 1.0, 1.0);
-	glClear(GL_COLOR_BUFFER_BIT);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, tex_depth);
-	glDisable(GL_BLEND);
-	glDisable(GL_DEPTH_TEST);
-
-	//2d adjustment
-	ShaderProgram* img_shader =
-		m_img_shader_factory.shader(IMG_SHDR_DEPTH_TO_GRADIENT);
-	if (img_shader)
-	{
-		if (!img_shader->valid())
-		{
-			img_shader->create();
-		}
-		img_shader->bind();
+		m_tex_ol2 = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+		m_fbo_ol2->addAttachment(m_tex_ol2);
 	}
-	img_shader->setLocalParam(0, 1.0/nx, 1.0/ny, m_persp?2e10:1e6, 0.0);
+	
+	Vulkan2dRender::V2DRenderParams params_ol2 = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+	params_ol2.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_DEPTH_TO_GRADIENT,
+			V2DRENDER_BLEND_DISABLE,
+			m_fbo_ol2->attachments[0]->format,
+			m_fbo_ol2->attachments.size(),
+			0,
+			m_fbo_ol2->attachments[0]->is_swapchain_images);
+	params_ol2.tex[0] = tex_depth.get();
+	
 	double dir_x = 0.0, dir_y = 0.0;
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (vr_frame && vr_frame->GetSettingDlg())
 		vr_frame->GetSettingDlg()->GetShadowDir(dir_x, dir_y);
-	img_shader->setLocalParam(1, dir_x, dir_y, 0.0, 0.0);
-	//2d adjustment
 
-	DrawViewQuad();
+	params_ol2.loc[0] = { 1.0f/nx, 1.0f/ny, m_persp ? 2e10f : 1e6f, 0.0f };
+	params_ol2.loc[1] = { (float)dir_x, (float)dir_y, 0.0f, 0.0f };
 
-	if (img_shader && img_shader->valid())
-	{
-		img_shader->release();
-	}
+	params_ol2.clear = true;
+	params_ol2.clearColor = { 1.0, 1.0, 1.0, 1.0 };
+	
+	if (!m_fbo_ol2->renderPass)
+		m_fbo_ol2->replaceRenderPass(params_ol2.pipeline.pass);
+	m_v2drender->render(m_fbo_ol2, params_ol2);
+	
+	//draw shadow
+	Vulkan2dRender::V2DRenderParams params_final;
+	params_final.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_GRADIENT_TO_SHADOW_MESH,
+			V2DRENDER_BLEND_SHADE_SHADOW,
+			m_fbo_final->attachments[0]->format,
+			m_fbo_final->attachments.size(),
+			0,
+			m_fbo_final->attachments[0]->is_swapchain_images);
+	params_final.tex[0] = m_tex_ol2.get();
+	params_final.tex[1] = tex_depth.get();
+	params_final.tex[2] = m_tex_final.get();
+	params_final.loc[0] = { 1.0f / nx, 1.0f / ny, max(m_scale_factor, 1.0), 0.0f };
+	params_final.loc[1] = { (float)darkness, 0.0f, 0.0f, 0.0f };
+	params_final.clear = m_clear_final_buffer;
+	m_clear_final_buffer = false;
 
+	if (!m_fbo_final->renderPass)
+		m_fbo_final->replaceRenderPass(params_final.pipeline.pass);
+	m_v2drender->render(m_fbo_final, params_final);
+
+	//bool drawshadow = false;
+	//for (int i = 0; i < (int)m_md_pop_list.size(); i++)
+	//{
+	//	MeshData* md = m_md_pop_list[i];
+	//	if (md && md->GetShadow())
+	//	{
+	//		drawshadow = true;
+	//		break;
+	//	}
+	//}
+	//if (!drawshadow)
+	//	return;
+
+	//int nx, ny;
+	//nx = m_nx;
+	//ny = m_ny;
+
+	//vks::VulkanDevice* prim_dev = m_vulkan->vulkanDevice;
+
+	////write ID and depth map
+	//if (m_fbo_pick && (m_fbo_pick->w != nx || m_fbo_pick->h != ny))
+	//{
+	//	m_fbo_pick.reset();
+	//	m_tex_pick.reset();
+	//	m_tex_pick_depth.reset();
+	//}
+	//if (!m_fbo_pick)
+	//{
+	//	m_fbo_pick = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+	//	m_fbo_pick->w = m_nx;
+	//	m_fbo_pick->h = m_ny;
+	//	m_fbo_pick->device = prim_dev;
+
+	//	m_tex_pick = prim_dev->GenTexture2D(VK_FORMAT_R32_UINT, VK_FILTER_NEAREST, m_nx, m_ny);
+	//	m_fbo_pick->addAttachment(m_tex_pick);
+
+	//	m_tex_pick_depth = prim_dev->GenTexture2D(
+	//		m_vulkan->depthFormat,
+	//		VK_FILTER_NEAREST,
+	//		m_nx, m_ny,
+	//		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+	//		VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+	//		VK_IMAGE_USAGE_SAMPLED_BIT |
+	//		VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+	//	);
+	//	m_fbo_pick->addAttachment(m_tex_pick_depth);
+	//}
+
+	//VkRect2D scissor = { 0, 0, m_nx, m_ny };
+	//bool clear = true;
+	//for (int i = 0; i < (int)m_md_pop_list.size(); i++)
+	//{
+	//	MeshData* md = m_md_pop_list[i];
+	//	if (md)
+	//	{
+	//		md->SetMatrices(m_mv_mat, m_proj_mat);
+	//		md->DrawInt(i + 1, m_fbo_pick, clear);
+	//		clear = false;
+	//	}
+	//}
+
+	////generate gradient map from depth map
+	//if (m_fbo_ol2 && (m_fbo_ol2->w != nx || m_fbo_ol2->h != ny))
+	//{
+	//	m_fbo_ol2.reset();
+	//	m_tex_ol2.reset();
+	//}
+	//if (!m_fbo_ol2)
+	//{
+	//	m_fbo_ol2 = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+	//	m_fbo_ol2->w = m_nx;
+	//	m_fbo_ol2->h = m_ny;
+	//	m_fbo_ol2->device = prim_dev;
+
+	//	m_tex_ol2 = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+	//	m_fbo_ol2->addAttachment(m_tex_ol2);
+	//}
 	//
-	//bind fbo for final composition
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, m_tex_ol2);
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_ZERO, GL_SRC_COLOR);
-	glDisable(GL_DEPTH_TEST);
+	//Vulkan2dRender::V2DRenderParams params_ol2 = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+	//params_ol2.pipeline =
+	//	m_v2drender->preparePipeline(
+	//		IMG_SHDR_DEPTH_TO_GRADIENT,
+	//		V2DRENDER_BLEND_DISABLE,
+	//		m_fbo_ol2->attachments[0]->format,
+	//		m_fbo_ol2->attachments.size(),
+	//		0,
+	//		m_fbo_ol2->attachments[0]->is_swapchain_images);
+	//params_ol2.tex[0] = m_tex_pick_depth.get();
+	//
+	//double dir_x = 0.0, dir_y = 0.0;
+	//VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	//if (vr_frame && vr_frame->GetSettingDlg())
+	//	vr_frame->GetSettingDlg()->GetShadowDir(dir_x, dir_y);
 
-	//2d adjustment
-	img_shader =
-		m_img_shader_factory.shader(IMG_SHDR_GRADIENT_TO_SHADOW_MESH);
-	if (img_shader)
-	{
-		if (!img_shader->valid())
-			img_shader->create();
-		img_shader->bind();
-	}
-	img_shader->setLocalParam(0, 1.0/nx, 1.0/ny, max(m_scale_factor, 1.0), 0.0);
-	img_shader->setLocalParam(1, darkness, 0.0, 0.0, 0.0);
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, tex_depth);
-	glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_2D, m_tex_final);
-	//2d adjustment
+	//params_ol2.loc[0] = { 1.0f/nx, 1.0f/ny, m_persp ? 2e10f : 1e6f, 0.0f };
+	//params_ol2.loc[1] = { (float)dir_x, (float)dir_y, 0.0f, 0.0f };
 
-	DrawViewQuad();
+	//params_ol2.clear = true;
+	//params_ol2.clearColor = { 1.0, 1.0, 1.0, 1.0 };
 
-	if (img_shader && img_shader->valid())
-	{
-		img_shader->release();
-	}
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, 0);
+	//m_fbo_ol2->replaceRenderPass(params_ol2.pipeline.pass);
+	//m_v2drender->render(m_fbo_ol2, params_ol2);
+	//
+	////draw shadow
+	//std::vector<Vulkan2dRender::V2DRenderParams> v2drender_params;
+	//Vulkan2dRender::V2dPipeline pl =
+	//	m_v2drender->preparePipeline(
+	//		IMG_SHDR_GRADIENT_TO_SHADOW_MESH,
+	//		V2DRENDER_BLEND_SHADE_SHADOW,
+	//		m_fbo_final->attachments[0]->format,
+	//		m_fbo_final->attachments.size(),
+	//		0,
+	//		m_fbo_final->attachments[0]->is_swapchain_images);
+	//for (int i = 0; i < (int)m_md_pop_list.size(); i++)
+	//{
+	//	MeshData* md = m_md_pop_list[i];
+	//	if (md && md->GetShadow())
+	//	{
+	//		double darkness = 0.0;
+	//		md->GetShadowParams(darkness);
 
-	glBlendEquation(GL_FUNC_ADD);
-	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-	glEnable(GL_DEPTH_TEST);
+	//		Vulkan2dRender::V2DRenderParams param;
+	//		param.pipeline = pl;
+	//		param.clear = false;
+	//		param.tex[0] = m_tex_ol2.get();
+	//		param.tex[1] = m_tex_pick.get();
+	//		param.tex[2] = m_tex_final.get();
+	//		param.loc[0] = { 1.0f / nx, 1.0f / ny, max(m_scale_factor, 1.0), 0.0f };
+	//		param.loc[1] = { (float)darkness, (float)(i+1), 0.0f, 0.0f };
+	//		v2drender_params.push_back(param);
+	//	}
+	//}
+	//v2drender_params[0].clear = m_clear_final_buffer;
+	//m_clear_final_buffer = false;
+	//vks::VulkanSemaphoreSettings sem = prim_dev->GetNextRenderSemaphoreSettings();
+	//v2drender_params[0].waitSemaphores = sem.waitSemaphores;
+	//v2drender_params[0].waitSemaphoreCount = sem.waitSemaphoreCount;
+	//v2drender_params[0].signalSemaphores = sem.signalSemaphores;
+	//v2drender_params[0].signalSemaphoreCount = sem.signalSemaphoreCount;
+	//m_fbo_final->replaceRenderPass(pl.pass);
+	//m_v2drender->seq_render(m_fbo_final, v2drender_params.data(), v2drender_params.size());
+
 }
 
-void VRenderGLView::DrawOLShadows(vector<VolumeData*> &vlist, GLuint tex)
+void VRenderVulkanView::DrawOLShadows(vector<VolumeData*> &vlist, std::unique_ptr<vks::VFrameBuffer>& fb)
 {
 	if (vlist.empty())
 		return;
@@ -4984,57 +5012,58 @@ void VRenderGLView::DrawOLShadows(vector<VolumeData*> &vlist, GLuint tex)
 	{
 		if (TextureRenderer::get_done_update_loop())
 			return;
-		else if (vlist.size() == 1 && vlist[0]->GetShadow())
-			if (vlist[0]->GetVR()->get_done_loop(3))
+		else
+		{
+			bool doShadow = false;
+			for (int i = 0; i < vlist.size(); i++)
+			{
+				if (vlist[0]->GetVR())
+					doShadow |= !(vlist[0]->GetVR()->get_done_loop(3));
+			}
+			if (!doShadow)
 				return;
+		}
+
+		if (TextureRenderer::get_save_final_buffer())
+			TextureRenderer::reset_save_final_buffer();
 	}
 
-	double sampling_frq_fac = 2 / (m_ortho_right - m_ortho_left);
+	double sampling_frq_fac = 2 / min(m_ortho_right-m_ortho_left, m_ortho_top-m_ortho_bottom);
 
 	int nx, ny;
-	nx = GetSize().x;
-	ny = GetSize().y;
+	nx = m_nx;
+	ny = m_ny;
 
+	vks::VulkanDevice* prim_dev = m_vulkan->vulkanDevice;
+	
 	//gradient pass
-	if (!glIsFramebuffer(m_fbo_ol1))
+	if (m_fbo_ol1 && (m_fbo_ol1->w != nx || m_fbo_ol1->h != ny))
 	{
-		glGenFramebuffers(1, &m_fbo_ol1);
-		if (!glIsTexture(m_tex_ol1))
-			glGenTextures(1, &m_tex_ol1);
-		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_ol1);
-		glBindTexture(GL_TEXTURE_2D, m_tex_ol1);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-			GL_RGBA, GL_FLOAT, NULL);
-		glFramebufferTexture2D(GL_FRAMEBUFFER,
-			GL_COLOR_ATTACHMENT0,
-			GL_TEXTURE_2D, m_tex_ol1, 0);
+		m_fbo_ol1.reset();
+		m_tex_ol1.reset();
 	}
-
-	if (m_resize_ol1)
+	if (!m_fbo_ol1)
 	{
-		glBindTexture(GL_TEXTURE_2D, m_tex_ol1);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-			GL_RGBA, GL_FLOAT, NULL);
-		m_resize_ol1 = false;
-	}
+		m_fbo_ol1 = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+		m_fbo_ol1->w = m_nx;
+		m_fbo_ol1->h = m_ny;
+		m_fbo_ol1->device = prim_dev;
 
-	glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_ol1);
+		m_tex_ol1 = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+		m_fbo_ol1->addAttachment(m_tex_ol1);
+	}
+	
+	bool clear = false;
 	if (!TextureRenderer::get_mem_swap() ||
 		(TextureRenderer::get_mem_swap() &&
 		TextureRenderer::get_clear_chan_buffer()))
 	{
-		glClearColor(1.0, 1.0, 1.0, 1.0);
-		glClear(GL_COLOR_BUFFER_BIT);
 		TextureRenderer::reset_clear_chan_buffer();
+		clear = true;
 	}
-	glDisable(GL_BLEND);
-	glDisable(GL_DEPTH_TEST);
 
 	double shadow_darkness = 0.0;
+	VkClearColorValue clear_color = { 1.0, 1.0, 1.0, 1.0 };
 
 	if (vlist.size() == 1 && vlist[0]->GetShadow())
 	{
@@ -5057,7 +5086,7 @@ void VRenderGLView::DrawOLShadows(vector<VolumeData*> &vlist, GLuint tex)
 			vd->GetTexture()->set_sort_bricks();
 			vd->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
 			vd->SetFog(m_use_fog, m_fog_intensity, m_fog_start, m_fog_end);
-			vd->Draw(!m_persp, m_interactive, m_scale_factor, sampling_frq_fac);
+			vd->Draw(m_fbo_ol1, clear, !m_persp, m_interactive, m_scale_factor, sampling_frq_fac, clear_color);
 			//restore
 			vd->RestoreMode();
 			vd->SetColormapMode(colormode);
@@ -5092,6 +5121,7 @@ void VRenderGLView::DrawOLShadows(vector<VolumeData*> &vlist, GLuint tex)
 		if (!list.empty())
 		{
 			m_mvr->clear_vr();
+			m_mvr->set_main_membuf_size((long long)TextureRenderer::mainmem_buf_size_ * 1024LL * 1024LL);
 			for (i=0; i<(int)list.size(); i++)
 			{
 				VolumeData* vd = list[i];
@@ -5112,7 +5142,7 @@ void VRenderGLView::DrawOLShadows(vector<VolumeData*> &vlist, GLuint tex)
 			}
 			m_mvr->set_colormap_mode(2);
 			//draw
-			m_mvr->draw(m_test_wiref, m_interactive, !m_persp, m_scale_factor, m_intp, sampling_frq_fac);
+			m_mvr->draw(m_fbo_ol1, clear, m_interactive, !m_persp, m_scale_factor, m_intp, sampling_frq_fac, clear_color);
 			//restore
 			m_mvr->set_colormap_mode(0);
 			for (i=0; i<(int)list.size(); i++)
@@ -5129,117 +5159,95 @@ void VRenderGLView::DrawOLShadows(vector<VolumeData*> &vlist, GLuint tex)
 		TextureRenderer::set_update_order(uporder);
 	}
 
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
 	//
 	if (!TextureRenderer::get_mem_swap() ||
 		(TextureRenderer::get_mem_swap() &&
 		TextureRenderer::get_clear_chan_buffer()))
 	{
-		//shadow pass
-		if (!glIsFramebuffer(m_fbo_ol2))
+		if (m_fbo_ol2 && (m_fbo_ol2->w != nx || m_fbo_ol2->h != ny))
 		{
-			glGenFramebuffers(1, &m_fbo_ol2);
-			if (!glIsTexture(m_tex_ol2))
-				glGenTextures(1, &m_tex_ol2);
-			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_ol2);
-			glBindTexture(GL_TEXTURE_2D, m_tex_ol2);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-				GL_RGBA, GL_FLOAT, NULL);
-			glFramebufferTexture2D(GL_FRAMEBUFFER,
-				GL_COLOR_ATTACHMENT0,
-				GL_TEXTURE_2D, m_tex_ol2, 0);
+			m_fbo_ol2.reset();
+			m_tex_ol2.reset();
 		}
-
-		if (m_resize_ol2)
+		if (!m_fbo_ol2)
 		{
-			glBindTexture(GL_TEXTURE_2D, m_tex_ol2);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-				GL_RGBA, GL_FLOAT, NULL);
-			m_resize_ol2 = false;
+			m_fbo_ol2 = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+			m_fbo_ol2->w = m_nx;
+			m_fbo_ol2->h = m_ny;
+			m_fbo_ol2->device = prim_dev;
+
+			m_tex_ol2 = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+			m_fbo_ol2->addAttachment(m_tex_ol2);
 		}
 
 		//bind the fbo
-		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_ol2);
-		glClearColor(1.0, 1.0, 1.0, 1.0);
-		glClear(GL_COLOR_BUFFER_BIT);
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, m_tex_ol1);
-		glDisable(GL_BLEND);
-		glDisable(GL_DEPTH_TEST);
+		Vulkan2dRender::V2DRenderParams params_ol2 = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 
-		//2d adjustment
-		ShaderProgram* img_shader =
-			m_img_shader_factory.shader(IMG_SHDR_DEPTH_TO_GRADIENT);
-		if (img_shader)
-		{
-			if (!img_shader->valid())
-				img_shader->create();
-			img_shader->bind();
-		}
-		img_shader->setLocalParam(0, 1.0/nx, 1.0/ny, m_persp?2e10:1e6, 0.0);
+		params_ol2.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHDR_DEPTH_TO_GRADIENT,
+				V2DRENDER_BLEND_DISABLE,
+				m_fbo_ol2->attachments[0]->format,
+				m_fbo_ol2->attachments.size(),
+				0,
+				m_fbo_ol2->attachments[0]->is_swapchain_images);
+		params_ol2.tex[0] = m_tex_ol1.get();
+
 		double dir_x = 0.0, dir_y = 0.0;
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 		if (vr_frame && vr_frame->GetSettingDlg())
 			vr_frame->GetSettingDlg()->GetShadowDir(dir_x, dir_y);
-		img_shader->setLocalParam(1, dir_x, dir_y, 0.0, 0.0);
-		//2d adjustment
 
-		DrawViewQuad();
+		params_ol2.loc[0] = { 1.0f / nx, 1.0f / ny, m_persp ? 2e10f : 1e6f, 0.0f };
+		params_ol2.loc[1] = { (float)dir_x, (float)dir_y, 0.0f, 0.0f };
 
-		if (img_shader && img_shader->valid())
-			img_shader->release();
+		params_ol2.clear = true;
+		params_ol2.clearColor = { 1.0f, 1.0f, 1.0f, 1.0f };
 
-		glBindTexture(GL_TEXTURE_2D, 0);
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		m_fbo_ol2->replaceRenderPass(params_ol2.pipeline.pass);
+		m_v2drender->render(m_fbo_ol2, params_ol2);
 
 		//bind fbo for final composition
-		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, m_tex_ol2);
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_ZERO, GL_SRC_COLOR);
-		glDisable(GL_DEPTH_TEST);
+		Vulkan2dRender::V2DRenderParams params_final = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 
-		//2d adjustment
-		img_shader =
-			m_img_shader_factory.shader(IMG_SHDR_GRADIENT_TO_SHADOW);
-		if (img_shader)
-		{
-			if (!img_shader->valid())
-				img_shader->create();
-			img_shader->bind();
-		}
-		img_shader->setLocalParam(0, 1.0/nx, 1.0/ny, max(m_scale_factor, 1.0), 0.0);
-		img_shader->setLocalParam(1, shadow_darkness, 0.0, 0.0, 0.0);
-		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D, tex);
-		//2d adjustment
+		params_final.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHDR_GRADIENT_TO_SHADOW,
+				V2DRENDER_BLEND_SHADE_SHADOW,
+				fb->attachments[0]->format,
+				fb->attachments.size(),
+				0,
+				fb->attachments[0]->is_swapchain_images);
+		params_final.tex[0] = m_tex_ol2.get();
+		params_final.tex[1] = fb->attachments[0].get();
+		params_final.loc[0] = { 1.0f / nx, 1.0f / ny, max(m_scale_factor, 1.0), 0.0f };
+		params_final.loc[1] = { (float)shadow_darkness, 0.0f, 0.0f, 0.0f };
 
-		DrawViewQuad();
+		if (!fb->renderPass)
+			fb->replaceRenderPass(params_final.pipeline.pass);
+		m_v2drender->render(fb, params_final);
 
-		if (img_shader && img_shader->valid())
-			img_shader->release();
-
-		glBindTexture(GL_TEXTURE_2D, 0);
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+/*
+		Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+		params.clear = true;
+		params.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHADER_TEXTURE_LOOKUP,
+				V2DRENDER_BLEND_DISABLE,
+				fb->attachments[0]->format,
+				fb->attachments.size(),
+				0,
+				fb->attachments[0]->is_swapchain_images);
+		params.tex[0] = m_tex_ol2.get();
+		if (!fb->renderPass)
+			fb->replaceRenderPass(params.pipeline.pass);
+		m_v2drender->render(fb, params);*/
 	}
-
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, 0);
-
-	glActiveTexture(GL_TEXTURE0);
-	glBlendEquation(GL_FUNC_ADD);
 }
 
 //draw multi volumes with depth consideration
 //peel==true -- depth peeling
-void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
+void VRenderVulkanView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 {
 	if (list.empty())
 		return;
@@ -5256,7 +5264,10 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 	int i;
 	bool use_tex_wt2 = false;
 	bool shadow = false;
+	bool doMulti = false;
+	bool doShadow = false;
 	m_mvr->clear_vr();
+	VolumeRenderer* vrfirst = 0;
 	for (i=0; i<(int)list.size(); i++)
 	{
 		if (list[i] && list[i]->GetDisp())
@@ -5271,8 +5282,17 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 				list[i]->SetMatrices(m_mv_mat, m_proj_mat, m_tex_mat);
 				list[i]->SetFog(m_use_fog, m_fog_intensity, m_fog_start, m_fog_end);
 				m_mvr->add_vr(vr);
+				if (!vrfirst) vrfirst = vr;
 				m_mvr->set_sampling_rate(vr->get_sampling_rate());
 				m_mvr->SetNoiseRed(vr->GetNoiseRed());
+				
+				if (TextureRenderer::get_mem_swap() &&
+					TextureRenderer::get_start_update_loop() &&
+					!TextureRenderer::get_done_update_loop())
+				{
+					doMulti |= !vr->get_done_loop(0);
+					doShadow |= !vr->get_done_loop(3);
+				}
 			}
 			VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 			if (list[i]->GetTexture() &&
@@ -5283,68 +5303,41 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 		}
 	}
 
+	if (!TextureRenderer::get_mem_swap())
+	{
+		doMulti = true;
+		doShadow = true;
+	}
+
 	if (m_mvr->get_vr_num()<=0)
 		return;
-	m_mvr->set_depth_peel(peel);
 
 	int nx, ny;
-	nx = GetSize().x;
-	ny = GetSize().y;
+	nx = m_nx;
+	ny = m_ny;
 
-	//generate textures & buffer objects
-	//frame buffer for each volume
-	if (glIsFramebuffer(m_fbo)!=GL_TRUE)
+	vks::VulkanDevice* prim_dev = m_vulkan->vulkanDevice;
+	if (TextureRenderer::get_mem_swap() && m_fbo_temp && (m_fbo_temp->w != m_nx || m_fbo_temp->h != m_ny))
 	{
-		glGenFramebuffers(1, &m_fbo);
-		//fbo
-		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-		//color buffer/texture for each volume
-		if (glIsTexture(m_tex)!=GL_TRUE)
-			glGenTextures(1, &m_tex);
-		//color buffer for each volume
-		glBindTexture(GL_TEXTURE_2D, m_tex);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-			GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-		glFramebufferTexture2D(GL_FRAMEBUFFER,
-			GL_COLOR_ATTACHMENT0,
-			GL_TEXTURE_2D, m_tex, 0);
+		m_fbo_temp.reset();
+		m_tex_temp.reset();
+		m_fbo_temp_restore.reset();
 	}
-	if (use_tex_wt2)
+	if (TextureRenderer::get_mem_swap() && !m_fbo_temp)
 	{
-		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-		if (glIsTexture(m_tex_wt2)!=GL_TRUE)
-			glGenTextures(1, &m_tex_wt2);
-		//color buffer for current segmented volume
-		glBindTexture(GL_TEXTURE_2D, m_tex_wt2);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-			GL_RGBA, GL_FLOAT, NULL);
-		glFramebufferTexture2D(GL_FRAMEBUFFER,
-			GL_COLOR_ATTACHMENT0,
-			GL_TEXTURE_2D, m_tex_wt2, 0);
-	}
+		m_fbo_temp = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+		m_fbo_temp->w = m_nx;
+		m_fbo_temp->h = m_ny;
+		m_fbo_temp->device = prim_dev;
 
-	if (m_resize)
-	{
-		if (use_tex_wt2)
-		{
-			glBindTexture(GL_TEXTURE_2D, m_tex_wt2);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-				GL_RGBA, GL_FLOAT, NULL);
-		}
-		else
-		{
-			glBindTexture(GL_TEXTURE_2D, m_tex);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-				GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-		}
+		m_tex_temp = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+		m_fbo_temp->addAttachment(m_tex_temp);
+
+		m_fbo_temp_restore = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+		m_fbo_temp_restore->w = m_nx;
+		m_fbo_temp_restore->h = m_ny;
+		m_fbo_temp_restore->device = prim_dev;
+		m_fbo_temp_restore->addAttachment(m_fbo_final->attachments[0]);
 	}
 
 	if (TextureRenderer::get_mem_swap() &&
@@ -5352,126 +5345,141 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 		TextureRenderer::get_save_final_buffer())
 	{
 		TextureRenderer::reset_save_final_buffer();
+		TextureRenderer::validate_temp_final_buffer();
 
-		if (glIsFramebuffer(m_fbo_temp)!=GL_TRUE)
-		{
-			glGenFramebuffers(1, &m_fbo_temp);
-			if (glIsTexture(m_tex_temp)!=GL_TRUE)
-				glGenTextures(1, &m_tex_temp);
-			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_temp);
-			//color buffer for each volume
-			glBindTexture(GL_TEXTURE_2D, m_tex_temp);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0,
-				GL_RGBA, GL_FLOAT, NULL);//GL_RGBA16F
-			glFramebufferTexture2D(GL_FRAMEBUFFER,
-				GL_COLOR_ATTACHMENT0,
-				GL_TEXTURE_2D, m_tex_temp, 0);
-		}
-		else
-			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_temp);
+		Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 
-		glClearColor(0.0, 0.0, 0.0, 0.0);
-		glClear(GL_COLOR_BUFFER_BIT);
-		glActiveTexture(GL_TEXTURE0);
-		glEnable(GL_TEXTURE_2D);
-		glBindTexture(GL_TEXTURE_2D, m_tex_final);
-		glDisable(GL_BLEND);
-		glDisable(GL_DEPTH_TEST);
+		params.clear = true;
+		params.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHADER_TEXTURE_LOOKUP,
+				V2DRENDER_BLEND_DISABLE,
+				m_fbo_temp->attachments[0]->format,
+				m_fbo_temp->attachments.size(),
+				0,
+				m_fbo_temp->attachments[0]->is_swapchain_images);
+		params.tex[0] = m_tex_final.get();
 
-		img_shader =
-			m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
-		if (img_shader)
-		{
-			if (!img_shader->valid())
-				img_shader->create();
-			img_shader->bind();
-		}
-		DrawViewQuad();
-		if (img_shader && img_shader->valid())
-			img_shader->release();
-
-		glBindTexture(GL_TEXTURE_2D, 0);
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		if (!m_fbo_temp->renderPass)
+			m_fbo_temp->replaceRenderPass(params.pipeline.pass);
+		m_v2drender->render(m_fbo_temp, params);
 	}
 
-	//bind the fbo
-	glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-	if (!TextureRenderer::get_mem_swap() ||
-		(TextureRenderer::get_mem_swap() &&
-		TextureRenderer::get_clear_chan_buffer()))
+	if (!doMulti && !(shadow && doShadow))
+		return;
+
+	m_mvr->set_depth_peel(peel);
+	if (peel > 0)
 	{
-		glClearColor(0.0, 0.0, 0.0, 0.0);
-		glClear(GL_COLOR_BUFFER_BIT);
-		TextureRenderer::reset_clear_chan_buffer();
+		m_mvr->set_front_depth_tex(m_vol_dp_fr_tex);
+		m_mvr->set_back_depth_tex(m_vol_dp_bk_tex);
 	}
 
-	//draw multiple volumes at the same time
-	double sampling_frq_fac = 2 / (m_ortho_right - m_ortho_left);
-	m_mvr->draw(m_test_wiref, m_interactive, !m_persp, m_scale_factor, m_intp, sampling_frq_fac);
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	//generate textures & buffer objects
+	//frame buffer for each volume
+	if (m_fbo && (m_fbo->w != nx || m_fbo->h != ny))
+	{
+		m_fbo.reset();
+		m_tex.reset();
+	}
+	if (use_tex_wt2 && m_fbo_wt2 && (m_fbo_wt2->w != nx || m_fbo_wt2->h != ny))
+	{
+		m_fbo_wt2.reset();
+		m_tex_wt2.reset();
+	}
+	if (!m_fbo)
+	{
+		m_fbo = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+		m_fbo->w = m_nx;
+		m_fbo->h = m_ny;
+		m_fbo->device = prim_dev;
 
-	if (shadow)
+		m_tex = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+		m_fbo->addAttachment(m_tex);
+	}
+	if (use_tex_wt2 && !m_fbo_wt2)
+	{
+		m_fbo_wt2 = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+		m_fbo_wt2->w = m_nx;
+		m_fbo_wt2->h = m_ny;
+		m_fbo_wt2->device = prim_dev;
+
+		m_tex_wt2 = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+		m_fbo_wt2->addAttachment(m_tex_wt2);
+	}
+
+	if (doMulti)
+	{
+		//bind the fbo
+		bool clear = false;
+		if (!TextureRenderer::get_mem_swap() ||
+			(TextureRenderer::get_mem_swap() &&
+			TextureRenderer::get_clear_chan_buffer()))
+		{
+			clear = true;
+			TextureRenderer::reset_clear_chan_buffer();
+		}
+
+		//draw multiple volumes at the same time
+		double sampling_frq_fac = 2 / min(m_ortho_right-m_ortho_left, m_ortho_top-m_ortho_bottom);
+		m_mvr->set_main_membuf_size((long long)TextureRenderer::mainmem_buf_size_ * 1024LL * 1024LL);
+		m_mvr->draw(use_tex_wt2 ? m_fbo_wt2 : m_fbo, clear, m_interactive, !m_persp, m_scale_factor, m_intp, sampling_frq_fac);
+	}
+
+	if (shadow && doShadow && vrfirst && vrfirst->get_done_loop(0))
 	{
 		//draw shadows
-		DrawOLShadows(list, use_tex_wt2?m_tex_wt2:m_tex);
+		DrawOLShadows(list, use_tex_wt2 ? m_fbo_wt2 : m_fbo);
 	}
 
 	//bind fbo for final composition
-	glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_final);
-
-	if (TextureRenderer::get_mem_swap())
+	if (TextureRenderer::get_mem_swap() && m_fbo_temp && m_tex_temp && TextureRenderer::isvalid_temp_final_buffer())
 	{
 		//restore m_fbo_temp to m_fbo_final
-		glClearColor(0.0, 0.0, 0.0, 0.0);
-		glClear(GL_COLOR_BUFFER_BIT);
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, m_tex_temp);
-		glDisable(GL_BLEND);
-		glDisable(GL_DEPTH_TEST);
+		Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 
-		img_shader =
-			m_img_shader_factory.shader(IMG_SHADER_TEXTURE_LOOKUP);
-		if (img_shader)
-		{
-			if (!img_shader->valid())
-				img_shader->create();
-			img_shader->bind();
-		}
-		DrawViewQuad();
-		if (img_shader && img_shader->valid())
-			img_shader->release();
+		params.clear = m_clear_final_buffer;
+		m_clear_final_buffer = false;
 
-		glBindTexture(GL_TEXTURE_2D, 0);
+		params.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHADER_TEXTURE_LOOKUP,
+				V2DRENDER_BLEND_DISABLE,
+				m_fbo_temp_restore->attachments[0]->format,
+				m_fbo_temp_restore->attachments.size(),
+				0,
+				m_fbo_temp_restore->attachments[0]->is_swapchain_images);
+		params.tex[0] = m_tex_temp.get();
+
+		if (!m_fbo_temp_restore->renderPass)
+			m_fbo_temp_restore->replaceRenderPass(params.pipeline.pass);
+		m_v2drender->render(m_fbo_temp_restore, params);
 	}
 
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, use_tex_wt2?m_tex_wt2:m_tex);
-	//build mipmap
-	glGenerateMipmap(GL_TEXTURE_2D);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-	glEnable(GL_BLEND);
-	if (m_vol_method == VOL_METHOD_COMP)
-		glBlendFunc(GL_ONE, GL_ONE);
+	Vulkan2dRender::V2DRenderParams params_final = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+
+	int blend_method = V2DRENDER_BLEND_ADD;
+
+	if (m_dpeel)
+		blend_method = V2DRENDER_BLEND_OVER_INV;
 	else
-		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-	glDisable(GL_DEPTH_TEST);
-
-	//2d adjustment
-	img_shader =
-		m_img_shader_factory.shader(IMG_SHDR_BRIGHTNESS_CONTRAST_HDR);
-	if (img_shader)
 	{
-		if (!img_shader->valid())
-		{
-			img_shader->create();
-		}
-		img_shader->bind();
+		if (m_vol_method == VOL_METHOD_COMP)
+			blend_method = V2DRENDER_BLEND_ADD;
+		else if (m_vol_method == VOL_METHOD_SEQ)
+			blend_method = V2DRENDER_BLEND_OVER;
+
 	}
+
+	params_final.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_BRIGHTNESS_CONTRAST_HDR,
+			blend_method,
+			m_fbo_final->attachments[0]->format,
+			m_fbo_final->attachments.size(),
+			0,
+			m_fbo_final->attachments[0]->is_swapchain_images);
+	params_final.tex[0] = use_tex_wt2 ? m_fbo_wt2->attachments[0].get() : m_fbo->attachments[0].get();
 	Color gamma, brightness, hdr;
 	if (m_vol_method == VOL_METHOD_MULTI)
 	{
@@ -5486,30 +5494,18 @@ void VRenderGLView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 		brightness = vd->GetBrightness();
 		hdr = vd->GetHdr();
 	}
-	img_shader->setLocalParam(0, gamma.r(), gamma.g(), gamma.b(), 1.0);
-	img_shader->setLocalParam(1, brightness.r(), brightness.g(), brightness.b(), 1.0);
-	img_shader->setLocalParam(2, hdr.r(), hdr.g(), hdr.b(), 0.0);
-	//2d adjustment
+	params_final.loc[0] = glm::vec4((float)gamma.r(), (float)gamma.g(), (float)gamma.b(), 1.0f);
+	params_final.loc[1] = glm::vec4((float)brightness.r(), (float)brightness.g(), (float)brightness.b(), 1.0f);
+	params_final.loc[2] = glm::vec4((float)hdr.r(), (float)hdr.g(), (float)hdr.b(), 0.0f);
+	params_final.clear = m_clear_final_buffer;
+	m_clear_final_buffer = false;
 
-	DrawViewQuad();
-
-	if (img_shader && img_shader->valid())
-		img_shader->release();
-
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-	if (use_tex_wt2)
-	{
-		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-		glFramebufferTexture2D(GL_FRAMEBUFFER,
-			GL_COLOR_ATTACHMENT0,
-			GL_TEXTURE_2D, m_tex, 0);
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	}
+	if (!m_fbo_final->renderPass)
+		m_fbo_final->replaceRenderPass(params_final.pipeline.pass);
+	m_v2drender->render(m_fbo_final, params_final);
 }
 
-void VRenderGLView::SetBrush(int mode)
+void VRenderVulkanView::SetBrush(int mode)
 {
 	m_prev_focus = FindFocus();
 	SetFocus();
@@ -5546,7 +5542,7 @@ void VRenderGLView::SetBrush(int mode)
 	m_draw_brush = true;
 }
 
-void VRenderGLView::UpdateBrushState()
+void VRenderVulkanView::UpdateBrushState()
 {
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	TreePanel* tree_panel = 0;
@@ -5568,6 +5564,7 @@ void VRenderGLView::UpdateBrushState()
 				tree_panel->SelectBrush(TreePanel::ID_BrushAppend);
 			if (brush_dlg)
 				brush_dlg->SelectBrush(BrushToolDlg::ID_BrushAppend);
+			m_clear_paint = true;
 			RefreshGLOverlays();
 		}
 		else if (wxGetKeyState(wxKeyCode('Z')))
@@ -5577,6 +5574,7 @@ void VRenderGLView::UpdateBrushState()
 				tree_panel->SelectBrush(TreePanel::ID_BrushDiffuse);
 			if (brush_dlg)
 				brush_dlg->SelectBrush(BrushToolDlg::ID_BrushDiffuse);
+			m_clear_paint = true;
 			RefreshGLOverlays();
 		}
 		else if (wxGetKeyState(wxKeyCode('X')))
@@ -5586,6 +5584,7 @@ void VRenderGLView::UpdateBrushState()
 				tree_panel->SelectBrush(TreePanel::ID_BrushDesel);
 			if (brush_dlg)
 				brush_dlg->SelectBrush(BrushToolDlg::ID_BrushDesel);
+			m_clear_paint = true;
 			RefreshGLOverlays();
 		}
 	}
@@ -5601,6 +5600,7 @@ void VRenderGLView::UpdateBrushState()
 					tree_panel->SelectBrush(TreePanel::ID_BrushAppend);
 				if (brush_dlg)
 					brush_dlg->SelectBrush(BrushToolDlg::ID_BrushAppend);
+				m_clear_paint = true;
 				RefreshGLOverlays();
 			}
 			else if (wxGetKeyState(wxKeyCode('Z')))
@@ -5611,6 +5611,7 @@ void VRenderGLView::UpdateBrushState()
 					tree_panel->SelectBrush(TreePanel::ID_BrushDiffuse);
 				if (brush_dlg)
 					brush_dlg->SelectBrush(BrushToolDlg::ID_BrushDiffuse);
+				m_clear_paint = true;
 				RefreshGLOverlays();
 			}
 			else if (wxGetKeyState(wxKeyCode('X')))
@@ -5621,6 +5622,7 @@ void VRenderGLView::UpdateBrushState()
 					tree_panel->SelectBrush(TreePanel::ID_BrushDesel);
 				if (brush_dlg)
 					brush_dlg->SelectBrush(BrushToolDlg::ID_BrushDesel);
+				m_clear_paint = true;
 				RefreshGLOverlays();
 			}
 			else
@@ -5645,7 +5647,15 @@ void VRenderGLView::UpdateBrushState()
 				tree_panel->SelectBrush(0);
 			if (brush_dlg)
 				brush_dlg->SelectBrush(0);
-			RefreshGLOverlays();
+
+			if (m_paint_enable)
+			{
+                SetForceHideMask(false);
+				Segment();
+				RefreshGL();
+			}
+			else
+				RefreshGLOverlays();
 
 			if (m_prev_focus)
 			{
@@ -5657,7 +5667,7 @@ void VRenderGLView::UpdateBrushState()
 }
 
 //selection
-void VRenderGLView::Pick()
+void VRenderVulkanView::Pick()
 {
 	if (m_draw_all)
 	{
@@ -5680,7 +5690,7 @@ void VRenderGLView::Pick()
 	}
 }
 
-void VRenderGLView::PickMesh()
+void VRenderVulkanView::PickMesh()
 {
 	int i;
 	int nx = GetSize().x;
@@ -5702,78 +5712,60 @@ void VRenderGLView::PickMesh()
 	m_mv_mat = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
 	//rotate object
 	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
-	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
-	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
+	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
 	//center object
 	m_mv_mat = glm::translate(m_mv_mat, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
 
 	//set up fbo
-	GLint cur_framebuffer_id;
-	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &cur_framebuffer_id);
-	if (glIsFramebuffer(m_fbo_pick)!=GL_TRUE)
+	vks::VulkanDevice *prim_dev = m_vulkan->vulkanDevice;
+	if (m_fbo_pick && (m_fbo_pick->w != nx || m_fbo_pick->h != ny))
 	{
-		glGenFramebuffers(1, &m_fbo_pick);
-		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_pick);
-		if (glIsTexture(m_tex_pick)!=GL_TRUE)
-			glGenTextures(1, &m_tex_pick);
-		glBindTexture(GL_TEXTURE_2D, m_tex_pick);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_R32UI, nx, ny, 0,
-			GL_RED_INTEGER, GL_UNSIGNED_INT, 0);
-		glFramebufferTexture2D(GL_FRAMEBUFFER,
-			GL_COLOR_ATTACHMENT0,
-			GL_TEXTURE_2D, m_tex_pick, 0);
-		if (glIsTexture(m_tex_pick_depth)!=GL_TRUE)
-			glGenTextures(1, &m_tex_pick_depth);
-		glBindTexture(GL_TEXTURE_2D, m_tex_pick_depth);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
-			GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-		glFramebufferTexture2D(GL_FRAMEBUFFER,
-			GL_DEPTH_ATTACHMENT,
-			GL_TEXTURE_2D, m_tex_pick_depth, 0);
-		glBindTexture(GL_TEXTURE_2D, 0);
+		m_fbo_pick.reset();
+		m_tex_pick.reset();
+		m_tex_pick_depth.reset();
 	}
-	if (m_resize)
+	if (!m_fbo_pick)
 	{
-		glBindTexture(GL_TEXTURE_2D, m_tex_pick);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_R32UI, nx, ny, 0,
-			GL_RED_INTEGER, GL_UNSIGNED_INT, NULL);
-		glBindTexture(GL_TEXTURE_2D, m_tex_pick_depth);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, nx, ny, 0,
-			GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-		glBindTexture(GL_TEXTURE_2D, 0);
-	}
+		m_fbo_pick = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+		m_fbo_pick->w = m_nx;
+		m_fbo_pick->h = m_ny;
+		m_fbo_pick->device = prim_dev;
 
+		m_tex_pick = prim_dev->GenTexture2D(VK_FORMAT_R32_UINT, VK_FILTER_NEAREST, m_nx, m_ny);
+		m_fbo_pick->addAttachment(m_tex_pick);
+
+		m_tex_pick_depth = prim_dev->GenTexture2D(
+			m_vulkan->depthFormat,
+			VK_FILTER_NEAREST,
+			m_nx, m_ny,
+			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+			VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+			VK_IMAGE_USAGE_SAMPLED_BIT |
+			VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+		);
+		m_fbo_pick->addAttachment(m_tex_pick_depth);
+	}
+	
 	//bind
-	glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_pick);
-	GLenum Status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-	glClearColor(0.0, 0.0, 0.0, 0.0);
-	glClearDepth(1.0);
-	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
-
-	glScissor(mouse_pos.x, ny-mouse_pos.y, 1, 1);
-	glEnable(GL_SCISSOR_TEST);
-	glEnable(GL_DEPTH_TEST);
-	glDepthFunc(GL_LEQUAL);
+	VkRect2D scissor = { mouse_pos.x, mouse_pos.y, 1, 1 };
+	bool clear = true;
 	for (i=0; i<(int)m_md_pop_list.size(); i++)
 	{
 		MeshData* md = m_md_pop_list[i];
 		if (md)
 		{
 			md->SetMatrices(m_mv_mat, m_proj_mat);
-			md->DrawInt(i+1);
+			md->DrawInt(i+1, m_fbo_pick, clear);
+			clear = false;
 		}
 	}
-	glDisable(GL_SCISSOR_TEST);
-
+	
 	unsigned int choose = 0;
-	glReadPixels(mouse_pos.x, ny-mouse_pos.y, 1, 1, GL_RED_INTEGER,
-		GL_UNSIGNED_INT, (GLvoid*)&choose);
-	glBindFramebuffer(GL_FRAMEBUFFER, cur_framebuffer_id);
-
+	VkOffset2D offset = { mouse_pos.x, mouse_pos.y };
+	VkExtent2D extent = { 1, 1 };
+	prim_dev->DownloadSubTexture2D(m_fbo_pick->attachments[0], &choose, offset, extent);
+	
 	if (choose >0 && choose<=(int)m_md_pop_list.size())
 	{
 		MeshData* md = m_md_pop_list[choose-1];
@@ -5796,7 +5788,7 @@ void VRenderGLView::PickMesh()
 	m_mv_mat = mv_temp;
 }
 
-void VRenderGLView::PickVolume()
+void VRenderVulkanView::PickVolume()
 {
 	double dist = 0.0;
 	double min_dist = -1.0;
@@ -5811,9 +5803,9 @@ void VRenderGLView::PickVolume()
 		int cmode = vd->GetColormapMode();
 		double sel_id;
 		if (cmode == 3)
-			dist = GetPointAndIntVolume(p, sel_id, false, old_mouse_X, old_mouse_Y, vd);
+			dist = GetPointAndIntVolume(p, sel_id, false, old_mouse_X, old_mouse_Y, vd, 0.3);
 		else 
-			dist = GetPointVolume(p, old_mouse_X, old_mouse_Y, vd, 2, true, 0.5);
+			dist = GetPointVolume(p, old_mouse_X, old_mouse_Y, vd, 2, true, 0.3);
 
 		if (dist > 0.0)
 		{
@@ -5855,7 +5847,7 @@ void VRenderGLView::PickVolume()
 	}
 }
 
-bool VRenderGLView::SelSegVolume(int mode)
+bool VRenderVulkanView::SelSegVolume(int mode)
 {
 	double dist = 0.0;
 	double min_dist = -1.0;
@@ -5956,14 +5948,119 @@ bool VRenderGLView::SelSegVolume(int mode)
 	return rval;
 }
 
-void VRenderGLView::OnIdle(wxIdleEvent& event)
+
+bool VRenderVulkanView::SelLabelSegVolume(int mode)
 {
-	bool refresh = false;
+	double dist = 0.0;
+	double min_dist = -1.0;
+	Point p;
+	VolumeData* vd = 0;
+	VolumeData* picked_vd = 0;
+	vector<VolumeData*> navds;
+	int picked_sel_id = 0;
+	bool rval = false;
+	for (int i = 0; i < (int)m_vd_pop_list.size(); i++)
+	{
+		vd = m_vd_pop_list[i];
+		if (!vd || !vd->GetDisp() || !vd->GetNAMode()) continue;
+		navds.push_back(vd);
+		if (!vd->GetLabel(false)) continue;
+
+		if (picked_vd)
+			continue;
+
+		int sel_id;
+		dist = GetPointAndLabel(p, sel_id, old_mouse_X, old_mouse_Y, vd);
+
+		if (dist > 0.0)
+		{
+			if (min_dist < 0.0)
+			{
+				min_dist = dist;
+				picked_vd = vd;
+				picked_sel_id = sel_id;
+			}
+			else
+			{
+				if (m_persp)
+				{
+					if (dist < min_dist)
+					{
+						min_dist = dist;
+						picked_vd = vd;
+						picked_sel_id = sel_id;
+					}
+				}
+				else
+				{
+					if (dist > min_dist)
+					{
+						min_dist = dist;
+						picked_vd = vd;
+						picked_sel_id = sel_id;
+					}
+				}
+			}
+		}
+	}
+
+	if (picked_vd && picked_sel_id > 0)
+	{
+		for (int i = 0; i < (int)navds.size(); i++)
+		{
+			switch (mode)
+			{
+			case 0:
+				if (navds[i]->GetSegmentMask(picked_sel_id) == 2)
+					navds[i]->SetSegmentMask(picked_sel_id, 1);
+				else if (navds[i]->GetSegmentMask(picked_sel_id) == 1)
+					navds[i]->SetSegmentMask(picked_sel_id, 2);
+				break;
+			case 1:
+				if (navds[i]->GetSegmentMask(picked_sel_id) == 2)
+					navds[i]->SetSegmentMask(picked_sel_id, false);
+				else if (navds[i]->GetSegmentMask(picked_sel_id) == 1)
+				{
+					auto ids = navds[i]->GetActiveSegIDs();
+					if (ids)
+					{
+						auto it = ids->begin();
+						while (it != ids->end())
+							navds[i]->SetSegmentMask(*it, 1);
+					}
+					navds[i]->SetSegmentMask(picked_sel_id, 2);
+				}
+				break;
+			}
+
+			VRenderFrame* frame = (VRenderFrame*)m_frame;
+			if (frame)
+			{
+				//VPropView* vprop_view = frame->GetPropView();
+				//if (vprop_view)
+				//	vprop_view->UpdateUIsROI();
+
+				if (frame->GetTree())
+				{
+					if (mode != 3) frame->UpdateTreeIcons();
+					//frame->GetTree()->SetFocus();
+				}
+			}
+			rval = true;
+		}
+	}
+
+	return rval;
+}
+
+void VRenderVulkanView::OnIdle(wxTimerEvent& event)
+{
+	bool refresh = m_refresh | m_refresh_start_loop;
 	bool ref_stat = false;
 	bool start_loop = true;
 	m_drawing_coord = false;
 
-	event.RequestMore(true);
+	//event.RequestMore(true);
 
 	//check memory swap status
 	if (TextureRenderer::get_mem_swap() &&
@@ -5971,8 +6068,10 @@ void VRenderGLView::OnIdle(wxIdleEvent& event)
 		!TextureRenderer::get_done_update_loop())
 	{
 		refresh = true;
-		start_loop = false;
+		start_loop = m_refresh_start_loop;
 	}
+	m_refresh_start_loop = false;
+
 	if (m_capture_rotat ||
 		m_capture_tsequ ||
 		m_capture_param ||
@@ -5988,15 +6087,27 @@ void VRenderGLView::OnIdle(wxIdleEvent& event)
 	wxRect view_reg = GetScreenRect();
 
 	wxWindow *window = wxWindow::FindFocus();
+	bool editting = false;
+	if (window)
+	{
+		wxClassInfo *wclass = window->GetClassInfo();
+		if (wclass) 
+		{
+			wxString cname = wclass->GetClassName();
+			if (cname == "wxTextCtrl" || cname == "wxDirPickerCtrl" || cname == "wxFilePickerCtrl")
+				editting = true;
+		}
+	}
+
 	VRenderFrame* frame = (VRenderFrame*)m_frame;
-	VRenderGLView* cur_glview = NULL;
+	VRenderVulkanView* cur_glview = NULL;
 	if (frame && frame->GetTree())
 	{
 		VRenderView *vrv = frame->GetTree()->GetCurrentView();
 		if (vrv) cur_glview = vrv->m_glview;
 	}
 
-	if (window && !m_key_lock)
+	if (window && !editting && !m_key_lock)
 	{
 		//move view
 		//left
@@ -6137,26 +6248,34 @@ void VRenderGLView::OnIdle(wxIdleEvent& event)
 			m_clip_down = false;
 
 		//draw_mask
-		if (wxGetKeyState(wxKeyCode('V')) &&
-			m_draw_mask)
-		{
-			m_draw_mask = false;
-			refresh = true;
-		}
-		if (!wxGetKeyState(wxKeyCode('V')) &&
-			!m_draw_mask)
-		{
-			m_draw_mask = true;
-			refresh = true;
-		}
+        if (!m_force_hide_mask)
+        {
+            if (wxGetKeyState(wxKeyCode('V')) &&
+                m_draw_mask)
+            {
+                m_draw_mask = false;
+                refresh = true;
+            }
+            if (!wxGetKeyState(wxKeyCode('V')) &&
+                !m_draw_mask)
+            {
+                m_draw_mask = true;
+                refresh = true;
+            }
+        }
+        else if (m_draw_mask)
+        {
+            m_draw_mask = false;
+            refresh = true;
+        }
 	}
 
-	if (window && view_reg.Contains(mouse_pos) && !m_key_lock)
+	if (window && !editting && view_reg.Contains(mouse_pos) && !m_key_lock)
 	{
 		UpdateBrushState();
 	}
 
-	if (window && this == cur_glview && !m_key_lock)
+	if (window && !editting && this == cur_glview && !m_key_lock)
 	{
 		//cell full
 		if (!m_cell_full &&
@@ -6183,7 +6302,7 @@ void VRenderGLView::OnIdle(wxIdleEvent& event)
 			!wxGetKeyState(wxKeyCode('l')))
 			m_cell_link = false;
 		//new cell id
-		if (!m_cell_new_id &&
+/*		if (!m_cell_new_id &&
 			wxGetKeyState(wxKeyCode('n')))
 		{
 			m_cell_new_id = true;
@@ -6194,8 +6313,8 @@ void VRenderGLView::OnIdle(wxIdleEvent& event)
 		if (m_cell_new_id &&
 			!wxGetKeyState(wxKeyCode('n')))
 			m_cell_new_id = false;
-		//clear
-		if (wxGetKeyState(wxKeyCode('c')) &&
+*/		//clear
+/*		if (wxGetKeyState(wxKeyCode('c')) &&
 			!m_clear_mask)
 		{
 			if (frame && frame->GetTraceDlg())
@@ -6206,7 +6325,7 @@ void VRenderGLView::OnIdle(wxIdleEvent& event)
 		if (!wxGetKeyState(wxKeyCode('c')) &&
 			m_clear_mask)
 			m_clear_mask = false;
-		//full screen
+*/		//full screen
 		if (wxGetKeyState(WXK_ESCAPE))
 		{
 			/*			if (GetParent() == m_vrv->m_full_frame)
@@ -6234,6 +6353,14 @@ void VRenderGLView::OnIdle(wxIdleEvent& event)
 		}
 	}
 
+	if (window && !editting && this == cur_glview && !m_key_lock && m_tile_rendering)
+	{
+		if (wxGetKeyState(WXK_ESCAPE))
+		{
+			EndTileRendering();
+		}
+	}
+
 	extern CURLM * _g_curlm;
 	int handle_count;
 	curl_multi_perform(_g_curlm, &handle_count);
@@ -6246,17 +6373,438 @@ void VRenderGLView::OnIdle(wxIdleEvent& event)
 
 	if (refresh)
 	{
+        m_refresh = false;
 		m_updating = true;
 		RefreshGL(ref_stat, start_loop);
 	}
 }
 
-void VRenderGLView::OnKeyDown(wxKeyEvent& event)
+void VRenderVulkanView::OnKeyDown(wxKeyEvent& event)
 {
 	event.Skip();
 }
 
-void VRenderGLView::Set3DRotCapture(double start_angle,
+void VRenderVulkanView::OnContextMenu(wxContextMenuEvent& event)
+{
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+
+	bool na_mode = false;
+	for (int i = 0; i < m_vd_pop_list.size(); i++)
+	{
+		if (m_vd_pop_list[i]->GetDisp() && m_vd_pop_list[i]->GetNAMode())
+		{
+			na_mode = true;
+			break;
+		}
+	}
+
+	wxMenu menu;
+	if (na_mode)
+	{
+		menu.Append(ID_CTXMENU_SHOW_ALL_FRAGMENTS, "Show all fragments");
+        menu.Append(ID_CTXMENU_DESELECT_ALL_FRAGMENTS, "Deselect all fragments");
+		menu.Append(ID_CTXMENU_HIDE_OTHER_FRAGMENTS, "Show only selected fragments");
+		menu.Append(ID_CTXMENU_HIDE_SELECTED_FLAGMENTS, "Hide selected fragments");
+	}
+	else
+	{
+		menu.Append(ID_CTXMENU_SHOW_ALL, "Show all volumes");
+		menu.Append(ID_CTXMENU_HIDE_OTHER_VOLS, "Sohw only selected volumes");
+		menu.Append(ID_CTXMENU_HIDE_THIS_VOL, "Hide selected volume data");
+	}
+	menu.Append(ID_CTXMENU_UNDO_VISIBILITY_SETTING_CHANGES, "Undo visibility settings");
+	menu.Append(ID_CTXMENU_REDO_VISIBILITY_SETTING_CHANGES, "Redo visibility settings");
+
+	wxPoint point = event.GetPosition();
+	// If from keyboard
+	if (point.x == -1 && point.y == -1) {
+		wxSize size = GetSize();
+		point.x = size.x / 2;
+		point.y = size.y / 2;
+	}
+	else {
+		point = ScreenToClient(point);
+	}
+
+	PopupMenu(&menu, point.x, point.y);
+
+}
+
+void VRenderVulkanView::OnShowAllVolumes(wxCommandEvent& event)
+{
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+	TreePanel* tree_panel = vr_frame->GetTree();
+	if (!tree_panel) return;
+
+	bool changed = false;
+	for (int i = 0; i < (int)m_layer_list.size(); i++)
+	{
+		if (!m_layer_list[i])
+			continue;
+		switch (m_layer_list[i]->IsA())
+		{
+		case 2://volume data
+		{
+			VolumeData* vd = (VolumeData*)m_layer_list[i];
+			if (!vd->GetDisp())
+			{
+				if (!changed)
+				{
+					tree_panel->PushVisHistory();
+					changed = true;
+				}
+				vd->SetDisp(true);
+			}
+		}
+		break;
+		case 5://group
+		{
+			DataGroup* group = (DataGroup*)m_layer_list[i];
+			for (int j = 0; j < group->GetVolumeNum(); j++)
+			{
+				VolumeData* vd = group->GetVolumeData(j);
+				if (!vd->GetDisp())
+				{
+					if (!changed)
+					{
+						tree_panel->PushVisHistory();
+						changed = true;
+					}
+					vd->SetDisp(true);
+				}
+			}
+		}
+		break;
+		}
+	}
+
+	if (changed)
+	{
+		for (int i = 0; i < vr_frame->GetViewNum(); i++)
+		{
+			VRenderView* vrv = vr_frame->GetView(i);
+			if (vrv)
+				vrv->SetVolPopDirty();
+		}
+		RefreshGL();
+		vr_frame->UpdateTreeIcons();
+	}
+}
+void VRenderVulkanView::OnHideOtherVolumes(wxCommandEvent& event)
+{
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+
+	VolumeData *vd = vr_frame->GetCurSelVol();
+	if (!vd) return;
+
+	TreePanel* tree_panel = vr_frame->GetTree();
+	if (!tree_panel) return;
+
+	tree_panel->HideOtherVolumes(vd->GetName());
+}
+void VRenderVulkanView::OnHideSelectedVolume(wxCommandEvent& event)
+{
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+
+	TreePanel* tree_panel = vr_frame->GetTree();
+	if (!tree_panel) return;
+
+	tree_panel->HideSelectedItem();
+}
+
+void VRenderVulkanView::OnShowAllFragments(wxCommandEvent& event)
+{
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+	TreePanel* tree_panel = vr_frame->GetTree();
+	if (!tree_panel) return;
+
+	vector<VolumeData*> na_vols;
+
+	for (int i = 0; i < (int)m_layer_list.size(); i++)
+	{
+		if (!m_layer_list[i])
+			continue;
+		switch (m_layer_list[i]->IsA())
+		{
+		case 2://volume data
+		{
+			VolumeData* vd = (VolumeData*)m_layer_list[i];
+			if (vd && vd->GetNAMode())
+				na_vols.push_back(vd);
+		}
+		break;
+		case 5://group
+		{
+			DataGroup* group = (DataGroup*)m_layer_list[i];
+			if (!group->GetDisp())
+				continue;
+			for (int j = 0; j < group->GetVolumeNum(); j++)
+			{
+				VolumeData* vd = group->GetVolumeData(j);
+				if (vd && vd->GetNAMode())
+					na_vols.push_back(vd);
+			}
+		}
+		break;
+		}
+	}
+
+	bool changed = false;
+	for (auto vd : na_vols)
+	{
+		auto ids = vd->GetActiveSegIDs();
+		if (ids)
+		{
+			auto it = ids->begin();
+			while (it != ids->end())
+			{
+				if (vd->GetSegmentMask(*it) == 0 && *it != 0)
+				{
+					if (!changed)
+					{
+						tree_panel->PushVisHistory();
+						changed = true;
+					}
+					vd->SetSegmentMask(*it, 1);
+				}
+				it++;
+			}
+		}
+	}
+
+	if (changed)
+	{
+		RefreshGL();
+		vr_frame->UpdateTreeIcons();
+	}
+}
+
+void VRenderVulkanView::OnDeselectAllFragments(wxCommandEvent& event)
+{
+    VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+    if (!vr_frame) return;
+    TreePanel* tree_panel = vr_frame->GetTree();
+    if (!tree_panel) return;
+    
+    vector<VolumeData*> na_vols;
+    
+    for (int i = 0; i < (int)m_layer_list.size(); i++)
+    {
+        if (!m_layer_list[i])
+            continue;
+        switch (m_layer_list[i]->IsA())
+        {
+            case 2://volume data
+            {
+                VolumeData* vd = (VolumeData*)m_layer_list[i];
+                if (vd && vd->GetNAMode())
+                    na_vols.push_back(vd);
+            }
+                break;
+            case 5://group
+            {
+                DataGroup* group = (DataGroup*)m_layer_list[i];
+                if (!group->GetDisp())
+                    continue;
+                for (int j = 0; j < group->GetVolumeNum(); j++)
+                {
+                    VolumeData* vd = group->GetVolumeData(j);
+                    if (vd && vd->GetNAMode())
+                        na_vols.push_back(vd);
+                }
+            }
+                break;
+        }
+    }
+    
+    bool changed = false;
+    for (auto vd : na_vols)
+    {
+        auto ids = vd->GetActiveSegIDs();
+        if (ids)
+        {
+            auto it = ids->begin();
+            while (it != ids->end())
+            {
+                if (vd->GetSegmentMask(*it) == 2 && *it != 0)
+                {
+                    if (!changed)
+                    {
+                        tree_panel->PushVisHistory();
+                        changed = true;
+                    }
+                    vd->SetSegmentMask(*it, 1);
+                }
+                it++;
+            }
+        }
+    }
+    
+    if (changed)
+    {
+        RefreshGL();
+        vr_frame->UpdateTreeIcons();
+    }
+}
+
+void VRenderVulkanView::OnHideOtherFragments(wxCommandEvent& event)
+{
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+	TreePanel* tree_panel = vr_frame->GetTree();
+	if (!tree_panel) return;
+
+	vector<VolumeData*> na_vols;
+
+	for (int i = 0; i < (int)m_layer_list.size(); i++)
+	{
+		if (!m_layer_list[i])
+			continue;
+		switch (m_layer_list[i]->IsA())
+		{
+		case 2://volume data
+		{
+			VolumeData* vd = (VolumeData*)m_layer_list[i];
+			if (vd && vd->GetNAMode())
+				na_vols.push_back(vd);
+		}
+		break;
+		case 5://group
+		{
+			DataGroup* group = (DataGroup*)m_layer_list[i];
+			for (int j = 0; j < group->GetVolumeNum(); j++)
+			{
+				VolumeData* vd = group->GetVolumeData(j);
+				if (vd && vd->GetNAMode())
+					na_vols.push_back(vd);
+			}
+		}
+		break;
+		}
+	}
+
+	bool changed = false;
+	for (auto vd : na_vols)
+	{
+		auto ids = vd->GetActiveSegIDs();
+		if (ids)
+		{
+			auto it = ids->begin();
+			while (it != ids->end())
+			{
+				if (vd->GetSegmentMask(*it) == 1)
+				{
+					if (!changed)
+					{
+						tree_panel->PushVisHistory();
+						changed = true;
+					}
+					vd->SetSegmentMask(*it, 0);
+				}
+				it++;
+			}
+		}
+	}
+
+	if (changed)
+	{
+		RefreshGL();
+		vr_frame->UpdateTreeIcons();
+	}
+}
+void VRenderVulkanView::OnHideSelectedFragments(wxCommandEvent& event)
+{
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+	TreePanel* tree_panel = vr_frame->GetTree();
+	if (!tree_panel) return;
+
+	vector<VolumeData*> na_vols;
+
+	for (int i = 0; i < (int)m_layer_list.size(); i++)
+	{
+		if (!m_layer_list[i])
+			continue;
+		switch (m_layer_list[i]->IsA())
+		{
+		case 2://volume data
+		{
+			VolumeData* vd = (VolumeData*)m_layer_list[i];
+			if (vd && vd->GetNAMode())
+				na_vols.push_back(vd);
+		}
+		break;
+		case 5://group
+		{
+			DataGroup* group = (DataGroup*)m_layer_list[i];
+			for (int j = 0; j < group->GetVolumeNum(); j++)
+			{
+				VolumeData* vd = group->GetVolumeData(j);
+				if (vd && vd->GetNAMode())
+					na_vols.push_back(vd);
+			}
+		}
+		break;
+		}
+	}
+
+	bool changed = false;
+	for (auto vd : na_vols)
+	{
+		auto ids = vd->GetActiveSegIDs();
+		if (ids)
+		{
+			auto it = ids->begin();
+			while (it != ids->end())
+			{
+				if (vd->GetSegmentMask(*it) == 2)
+				{
+					if (!changed)
+					{
+						tree_panel->PushVisHistory();
+						changed = true;
+					}
+					vd->SetSegmentMask(*it, 0);
+				}
+				it++;
+			}
+		}
+	}
+
+	if (changed)
+	{
+		RefreshGL();
+		vr_frame->UpdateTreeIcons();
+	}
+}
+void VRenderVulkanView::OnUndoVisibilitySettings(wxCommandEvent& event)
+{
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+
+	TreePanel* tree_panel = vr_frame->GetTree();
+	if (!tree_panel) return;
+
+	tree_panel->UndoVisibility();
+}
+void VRenderVulkanView::OnRedoVisibilitySettings(wxCommandEvent& event)
+{
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+
+	TreePanel* tree_panel = vr_frame->GetTree();
+	if (!tree_panel) return;
+
+	tree_panel->RedoVisibility();
+}
+
+
+void VRenderVulkanView::Set3DRotCapture(double start_angle,
 									double end_angle,
 									double step,
 									int frames,
@@ -6319,7 +6867,7 @@ void VRenderGLView::Set3DRotCapture(double start_angle,
 	m_stages = 0;
 }
 
-void VRenderGLView::Set3DBatCapture(wxString &cap_file, int begin_frame, int end_frame)
+void VRenderVulkanView::Set3DBatCapture(wxString &cap_file, int begin_frame, int end_frame)
 {
 	m_cap_file = cap_file;
 	m_begin_frame = begin_frame;
@@ -6345,7 +6893,7 @@ void VRenderGLView::Set3DBatCapture(wxString &cap_file, int begin_frame, int end
 	//m_fr_length = (int)s_fr_length.length();
 }
 
-void VRenderGLView::Set4DSeqCapture(wxString &cap_file, int begin_frame, int end_frame, bool rewind)
+void VRenderVulkanView::Set4DSeqCapture(wxString &cap_file, int begin_frame, int end_frame, bool rewind)
 {
 	m_cap_file = cap_file;
 	m_tseq_cur_num = begin_frame;
@@ -6364,7 +6912,7 @@ void VRenderGLView::Set4DSeqCapture(wxString &cap_file, int begin_frame, int end
 	//m_fr_length = (int)s_fr_length.length();
 }
 
-void VRenderGLView::SetParamCapture(wxString &cap_file, int begin_frame, int end_frame, bool rewind)
+void VRenderVulkanView::SetParamCapture(wxString &cap_file, int begin_frame, int end_frame, bool rewind)
 {
 	m_cap_file = cap_file;
 	m_param_cur_num = begin_frame;
@@ -6379,7 +6927,7 @@ void VRenderGLView::SetParamCapture(wxString &cap_file, int begin_frame, int end
 	//m_fr_length = (int)s_fr_length.length();
 }
 
-void VRenderGLView::SetParams(double t)
+void VRenderVulkanView::SetParams(double t)
 {
 	if (!m_vrv)
 		return;
@@ -6458,7 +7006,21 @@ void VRenderGLView::SetParams(double t)
 			plane->ChangePlane(Point(0.0, 0.0, abs(val)),
 			Vector(0.0, 0.0, -1.0));
 	}
+/*
+	//t
+	double frame;
+	keycode.l2 = 0;
+	keycode.l2_name = "frame";
+	if (interpolator->GetDouble(keycode, t, frame))
+		Set4DSeqFrame(int(frame + 0.5), false);
 
+	//batch
+	double batch;
+	keycode.l2 = 0;
+	keycode.l2_name = "batch";
+	if (interpolator->GetDouble(keycode, t, batch))
+		Set3DBatFrame(int(batch + 0.5));
+*/
 	bool bx, by, bz;
 	//for the view
 	keycode.l1 = 1;
@@ -6524,7 +7086,7 @@ void VRenderGLView::SetParams(double t)
 	SetVolPopDirty();
 }
 
-void VRenderGLView::ResetMovieAngle()
+void VRenderVulkanView::ResetMovieAngle()
 {
 	double rotx, roty, rotz;
 	GetRotations(rotx, roty, rotz);
@@ -6547,7 +7109,7 @@ void VRenderGLView::ResetMovieAngle()
 	RefreshGL();
 }
 
-void VRenderGLView::StopMovie()
+void VRenderVulkanView::StopMovie()
 {
 	m_capture = false;
 	m_capture_rotat = false;
@@ -6555,7 +7117,7 @@ void VRenderGLView::StopMovie()
 	m_capture_param = false;
 }
 
-void VRenderGLView::Get4DSeqFrames(int &start_frame, int &end_frame, int &cur_frame)
+void VRenderVulkanView::Get4DSeqFrames(int &start_frame, int &end_frame, int &cur_frame)
 {
 	for (int i=0; i<(int)m_vd_pop_list.size(); i++)
 	{
@@ -6585,7 +7147,7 @@ void VRenderGLView::Get4DSeqFrames(int &start_frame, int &end_frame, int &cur_fr
 	}
 }
 
-void VRenderGLView::Set4DSeqFrame(int frame, bool run_script)
+void VRenderVulkanView::Set4DSeqFrame(int frame, bool run_script)
 {
 	int start_frame, end_frame, cur_frame;
 	Get4DSeqFrames(start_frame, end_frame, cur_frame);
@@ -6617,18 +7179,13 @@ void VRenderGLView::Set4DSeqFrame(int frame, bool run_script)
 				{
 					BRKXMLReader *br = (BRKXMLReader *)reader;
 					br->SetCurTime(frame);
-					int curlv = tex->GetCurLevel();
-					for (int j = 0; j < br->GetLevelNum(); j++)
-					{
-						tex->setLevel(j);
-						if (vd->GetVR()) vd->GetVR()->clear_brick_buf();
-					}
-					tex->setLevel(curlv);
 					tex->set_FrameAndChannel(frame, vd->GetCurChannel());
 					vd->SetCurTime(reader->GetCurTime());
 					//update rulers
 					if (vframe && vframe->GetMeasureDlg())
 						vframe->GetMeasureDlg()->UpdateList();
+					m_loader.RemoveAllLoadedBrick();
+					clear_pool = true;
 				}
 				else
 				{
@@ -6638,6 +7195,13 @@ void VRenderGLView::Set4DSeqFrame(int frame, bool run_script)
 					Nrrd* data = reader->Convert(frame, vd->GetCurChannel(), false);
 					if (!vd->Replace(data, false))
 						continue;
+
+					wxString data_path = wxString(reader->GetCurName(frame, vd->GetCurChannel()));
+					wxString data_name = data_path.AfterLast(wxFileName::GetPathSeparator());
+					if (reader->GetChanNum() > 1)
+						data_name += wxString::Format("_Ch%d", vd->GetCurChannel()+1);
+					vd->SetName(data_name);
+					vd->SetPath(data_path);
 
 					vd->SetCurTime(reader->GetCurTime());
 					vd->SetSpacings(spcx, spcy, spcz);
@@ -6655,13 +7219,22 @@ void VRenderGLView::Set4DSeqFrame(int frame, bool run_script)
 			}
 
 			if (clear_pool && vd->GetVR())
-				vd->GetVR()->clear_tex_pool();
+				vd->GetVR()->clear_tex_current();
 		}
 	}
 	RefreshGL();
+
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (vr_frame)
+	{
+		vr_frame->UpdateTree(
+			vr_frame->GetCurSelVol()?
+			vr_frame->GetCurSelVol()->GetName():
+			"");
+	}
 }
 
-void VRenderGLView::Get3DBatFrames(int &start_frame, int &end_frame, int &cur_frame)
+void VRenderVulkanView::Get3DBatFrames(int &start_frame, int &end_frame, int &cur_frame)
 {
 	m_bat_folder = "";
 
@@ -6703,7 +7276,7 @@ void VRenderGLView::Get3DBatFrames(int &start_frame, int &end_frame, int &cur_fr
 	start_frame = 0;
 }
 
-void VRenderGLView::Set3DBatFrame(int offset)
+void VRenderVulkanView::Set3DBatFrame(int offset)
 {
 	int i, j;
 	vector<BaseReader*> reader_list;
@@ -6714,20 +7287,13 @@ void VRenderGLView::Set3DBatFrame(int offset)
 	for (i=0; i<(int)m_vd_pop_list.size(); i++)
 	{
 		VolumeData* vd = m_vd_pop_list[i];
-		if (vd && vd->GetReader())
+		if (vd && vd->GetReader() && vd->GetReader()->GetBatch())
 		{
 			Texture *tex = vd->GetTexture();
 			BaseReader* reader = vd->GetReader();
 			if(tex && tex->isBrxml())
 			{
 				BRKXMLReader *br = (BRKXMLReader *)reader;
-				int curlv = tex->GetCurLevel();
-				for (int j = 0; j < br->GetLevelNum(); j++)
-				{
-					tex->setLevel(j);
-					if (vd->GetVR()) vd->GetVR()->clear_brick_buf();
-				}
-				tex->setLevel(curlv);
 				tex->set_FrameAndChannel(0, vd->GetCurChannel());
 				vd->SetCurTime(reader->GetCurTime());
 				wxString data_name = wxString(reader->GetDataName());
@@ -6799,12 +7365,12 @@ void VRenderGLView::Set3DBatFrame(int offset)
 				vd->SetName(data_name);
 				vd->SetPath(wxString(reader->GetPathName()));
 				vd->SetCurTime(reader->GetCurTime());
-				if (!reader->IsSpcInfoValid())
+				//if (!reader->IsSpcInfoValid())
 					vd->SetSpacings(spcx, spcy, spcz);
-				else
-					vd->SetSpacings(reader->GetXSpc(), reader->GetYSpc(), reader->GetZSpc());
+				//else
+				//	vd->SetSpacings(reader->GetXSpc(), reader->GetYSpc(), reader->GetZSpc());
 				if (vd->GetVR())
-					vd->GetVR()->clear_tex_pool();
+					vd->GetVR()->clear_tex_current();
 			}
 		}
 	}
@@ -6824,7 +7390,7 @@ void VRenderGLView::Set3DBatFrame(int offset)
 }
 
 //pre-draw processings
-void VRenderGLView::PreDraw()
+void VRenderVulkanView::PreDraw()
 {
 	//skip if not done with loop
 	if (TextureRenderer::get_mem_swap())
@@ -6851,22 +7417,24 @@ void VRenderGLView::PreDraw()
 	}
 }
 
-void VRenderGLView::PostDraw()
+void VRenderVulkanView::PostDraw()
 {
 	//skip if not done with loop
-	if (TextureRenderer::get_mem_swap() &&
-		TextureRenderer::get_start_update_loop() &&
-		!TextureRenderer::get_done_update_loop())
-		return;
+	if (!m_postdraw) {
+		if (TextureRenderer::get_mem_swap() &&
+			TextureRenderer::get_start_update_loop() &&
+			!TextureRenderer::get_done_update_loop())
+			return;
+	}
 
 	//output animations
 	if (m_capture && !m_cap_file.IsEmpty())
 	{
 		wxString outputfilename = m_cap_file;
-
+		
 		//capture
 		int x, y, w, h;
-		if (m_draw_frame)
+		if (m_draw_frame && !m_tile_rendering)
 		{
 			x = m_frame_x;
 			y = m_frame_y;
@@ -6877,53 +7445,150 @@ void VRenderGLView::PostDraw()
 		{
 			x = 0;
 			y = 0;
-			w = GetSize().x;
-			h = GetSize().y;
+			w = m_nx;
+			h = m_ny;
 		}
 
-		int chann = 3; //RGB or RGBA
-		glPixelStorei(GL_PACK_ROW_LENGTH, w);
-		glPixelStorei(GL_PACK_ALIGNMENT, 1);
-		unsigned char *image = new unsigned char[w*h*chann];
-		glReadBuffer(GL_BACK);
-		glReadPixels(x, y, w, h, chann==3?GL_RGB:GL_RGBA, GL_UNSIGNED_BYTE, image);
-		glPixelStorei(GL_PACK_ROW_LENGTH, 0);
-		string str_fn = outputfilename.ToStdString();
-		TIFF *out = TIFFOpen(str_fn.c_str(), "wb");
-		if (!out)
-			return;
-		TIFFSetField(out, TIFFTAG_IMAGEWIDTH, w);
-		TIFFSetField(out, TIFFTAG_IMAGELENGTH, h);
-		TIFFSetField(out, TIFFTAG_SAMPLESPERPIXEL, chann);
-		TIFFSetField(out, TIFFTAG_BITSPERSAMPLE, 8);
-		TIFFSetField(out, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
-		TIFFSetField(out, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
-		TIFFSetField(out, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
-		if (VRenderFrame::GetCompression())
-			TIFFSetField(out, TIFFTAG_COMPRESSION, COMPRESSION_LZW);
+		vks::VulkanDevice* prim_dev = m_vulkan->vulkanDevice;
 
-		tsize_t linebytes = chann * w;
-		unsigned char *buf = NULL;
-		buf = (unsigned char *)_TIFFmalloc(linebytes);
-		TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(out, 0));
-		for (uint32 row = 0; row < (uint32)h; row++)
-		{
-			memcpy(buf, &image[(h-row-1)*linebytes], linebytes);// check the index here, and figure out why not using h*linebytes
-			if (TIFFWriteScanline(out, buf, row, 0) < 0)
-				break;
+		int chann = 4;
+		int dst_chann = 3;
+		unsigned char* image = new unsigned char[w * h * chann];
+		if (m_tile_rendering && m_tiled_image != NULL) {
+
+			prim_dev->DownloadTexture(m_tex_tile, image);
+			size_t stx = (m_current_tileid - 1) % m_tile_xnum * m_tile_w;
+			size_t sty = (m_current_tileid - 1) / m_tile_xnum * m_tile_h;
+			size_t edx = stx + m_tile_w;
+			size_t edy = sty + m_tile_h;
+			if (edx > m_capture_resx) edx = m_capture_resx;
+			if (edy > m_capture_resy) edy = m_capture_resy;
+			for (size_t y = sty; y < edy; y++) {
+				for (size_t x = stx; x < edx; x++) {
+					for (int c = 0; c < dst_chann; c++) {
+						m_tiled_image[(y * m_capture_resx + x) * dst_chann + c] = image[((y - sty) * m_tile_w + (x - stx)) * chann + c];
+					}
+				}
+			}
 		}
-		TIFFClose(out);
-		if (buf)
-			_TIFFfree(buf);
+		else {
+			vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+			prim_dev->DownloadTexture(current_fbo->attachments[0], image);
+
+			bool colorSwizzleBGR = false;
+			std::vector<VkFormat> formatsBGR = { VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_B8G8R8A8_SNORM };
+			colorSwizzleBGR = (std::find(formatsBGR.begin(), formatsBGR.end(), current_fbo->attachments[0]->format) != formatsBGR.end());
+
+			unsigned char* rgb_image = new unsigned char[w * h * dst_chann];
+
+			if (colorSwizzleBGR)
+			{
+				for (size_t y = 0; y < h; y++) {
+					for (size_t x = 0; x < w; x++) {
+						rgb_image[(y * w + x) * dst_chann + 2] = image[(y * w + x) * chann + 0];
+						rgb_image[(y * w + x) * dst_chann + 1] = image[(y * w + x) * chann + 1];
+						rgb_image[(y * w + x) * dst_chann + 0] = image[(y * w + x) * chann + 2];
+					}
+				}
+			}
+			else
+			{
+				for (size_t y = 0; y < h; y++) {
+					for (size_t x = 0; x < w; x++) {
+						for (int c = 0; c < dst_chann; c++) {
+							rgb_image[(y * w + x) * dst_chann + c] = image[(y * w + x) * chann + c];
+						}
+					}
+				}
+			}
+			
+			string str_fn = outputfilename.ToStdString();
+			TIFF* out = TIFFOpen(str_fn.c_str(), "wb");
+			if (!out)
+				return;
+			TIFFSetField(out, TIFFTAG_IMAGEWIDTH, w);
+			TIFFSetField(out, TIFFTAG_IMAGELENGTH, h);
+			TIFFSetField(out, TIFFTAG_SAMPLESPERPIXEL, dst_chann);
+			TIFFSetField(out, TIFFTAG_BITSPERSAMPLE, 8);
+			TIFFSetField(out, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
+			TIFFSetField(out, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
+			TIFFSetField(out, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
+			if (VRenderFrame::GetCompression())
+				TIFFSetField(out, TIFFTAG_COMPRESSION, COMPRESSION_LZW);
+
+			tsize_t linebytes = dst_chann * w;
+			unsigned char* buf = NULL;
+			buf = (unsigned char*)_TIFFmalloc(linebytes);
+			TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(out, 0));
+			for (uint32 row = 0; row < (uint32)h; row++)
+			{
+				memcpy(buf, &rgb_image[row*linebytes], linebytes);
+				if (TIFFWriteScanline(out, buf, row, 0) < 0)
+					break;
+			}
+			TIFFClose(out);
+			if (buf)
+				_TIFFfree(buf);
+
+			delete[] rgb_image;
+		}
+		
 		if (image)
-			delete []image;
+			delete[] image;
 
 		m_capture = false;
+		
+		if (m_tile_rendering) {
+			if (m_current_tileid < m_tile_xnum*m_tile_ynum)
+				m_capture = true;
+			else if (m_tiled_image){
+				double scalex = (double)m_capture_resx/(double)GetSize().x;
+				double scaley = (double)m_capture_resy/(double)GetSize().y;
+				size_t cap_ox = m_draw_frame ? (size_t)(m_frame_x*scalex) : 0;
+				size_t cap_oy = m_draw_frame ? (size_t)(m_frame_y*scaley) : 0;
+				size_t cap_w  = m_draw_frame ? (size_t)(m_frame_w*scalex) : m_capture_resx;
+				size_t cap_h  = m_draw_frame ? (size_t)(m_frame_h*scaley) : m_capture_resy;
+				size_t imsize = (size_t)cap_w * (size_t)cap_h;
+				string str_fn = outputfilename.ToStdString();
+				TIFF *out = TIFFOpen(str_fn.c_str(), imsize <= 3758096384ULL ? "wb" : "wb8");
+				if (!out)
+					return;
+				TIFFSetField(out, TIFFTAG_IMAGEWIDTH, cap_w);
+				TIFFSetField(out, TIFFTAG_IMAGELENGTH, cap_h);
+				TIFFSetField(out, TIFFTAG_SAMPLESPERPIXEL, dst_chann);
+				TIFFSetField(out, TIFFTAG_BITSPERSAMPLE, 8);
+				TIFFSetField(out, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
+				TIFFSetField(out, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
+				TIFFSetField(out, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
+				if (VRenderFrame::GetCompression())
+					TIFFSetField(out, TIFFTAG_COMPRESSION, COMPRESSION_LZW);
+
+				tsize_t linebytes = dst_chann * cap_w;
+				tsize_t pitchX = dst_chann * m_capture_resx;
+				unsigned char *buf = NULL;
+				buf = (unsigned char *)_TIFFmalloc(linebytes);
+				TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(out, 0));
+				for (uint32 row = 0; row < (uint32)cap_h; row++)
+				{
+					memcpy(buf, &m_tiled_image[(row+cap_oy)*pitchX + cap_ox*dst_chann], linebytes);
+					if (TIFFWriteScanline(out, buf, row, 0) < 0)
+						break;
+				}
+				TIFFClose(out);
+				if (buf)
+					_TIFFfree(buf);
+
+				delete [] m_tiled_image;
+				m_tiled_image = NULL;
+			}
+		}
 	}
+
+	m_postdraw = false;
 }
 
 //run 4d script
-void VRenderGLView::Run4DScript(wxString &scriptname, VolumeData* vd)
+void VRenderVulkanView::Run4DScript(wxString &scriptname, VolumeData* vd)
 {
 	if (m_run_script && wxFileExists(m_script_file))
 	{
@@ -6971,7 +7636,7 @@ void VRenderGLView::Run4DScript(wxString &scriptname, VolumeData* vd)
 	}
 }
 
-void VRenderGLView::RunNoiseReduction(wxFileConfig &fconfig)
+void VRenderVulkanView::RunNoiseReduction(wxFileConfig &fconfig)
 {
 	wxString str;
 	wxString pathname;
@@ -7023,7 +7688,7 @@ void VRenderGLView::RunNoiseReduction(wxFileConfig &fconfig)
 	m_cur_vol->DeleteLabel();
 }
 
-void VRenderGLView::RunSelectionTracking(wxFileConfig &fconfig)
+void VRenderVulkanView::RunSelectionTracking(wxFileConfig &fconfig)
 {
 	//read the size threshold
 	int slimit;
@@ -7146,7 +7811,7 @@ void VRenderGLView::RunSelectionTracking(wxFileConfig &fconfig)
 						vr_frame->GetTraceDlg()->GetSettings(m_vrv);
 }
 
-void VRenderGLView::RunRandomColors(wxFileConfig &fconfig)
+void VRenderVulkanView::RunRandomColors(wxFileConfig &fconfig)
 {
 	int hmode;
 	fconfig.Read("huemode", &hmode, 1);
@@ -7203,7 +7868,7 @@ void VRenderGLView::RunRandomColors(wxFileConfig &fconfig)
 	}
 }
 
-void VRenderGLView::RunSeparateChannels(wxFileConfig &fconfig)
+void VRenderVulkanView::RunSeparateChannels(wxFileConfig &fconfig)
 {
 	wxString str, pathname;
 	int mode;
@@ -7242,7 +7907,7 @@ void VRenderGLView::RunSeparateChannels(wxFileConfig &fconfig)
 	}
 }
 
-void VRenderGLView::RunExternalExe(wxFileConfig &fconfig)
+void VRenderVulkanView::RunExternalExe(wxFileConfig &fconfig)
 {
 	/*	wxString pathname;
 	fconfig.Read("exepath", &pathname);
@@ -7268,7 +7933,7 @@ void VRenderGLView::RunExternalExe(wxFileConfig &fconfig)
 	*/
 }
 
-void VRenderGLView::RunFetchMask(wxFileConfig &fconfig)
+void VRenderVulkanView::RunFetchMask(wxFileConfig &fconfig)
 {
 	//load and replace the mask
 	if (!m_cur_vol)
@@ -7296,32 +7961,39 @@ void VRenderGLView::RunFetchMask(wxFileConfig &fconfig)
 }
 
 //draw
-void VRenderGLView::OnDraw(wxPaintEvent& event)
+void VRenderVulkanView::OnDraw(wxPaintEvent& event)
 {
 	Init();
 	wxPaintDC dc(this);
-	SetCurrent(*m_glRC);
 
-	int nx = GetSize().x;
-	int ny = GetSize().y;
+	m_nx = GetSize().x;
+	m_ny = GetSize().y;
+	if (m_tile_rendering) {
+		m_nx = m_tile_w;
+		m_ny = m_tile_h;
+	}
+
+	int nx = m_nx;
+	int ny = m_ny;
+
+	if (nx <= 0 || ny <= 0)
+	{
+		return;
+	}
+    
+    SetEvtHandlerEnabled(false);
+	
+	m_vulkan->ResetRenderSemaphores();
+	m_vulkan->prepareFrame();
+	m_frame_clear = true;
 
 	PopMeshList();
-	if (m_md_pop_list.size()>0 && m_vd_pop_list.size()>0 && m_vol_method == VOL_METHOD_MULTI)
-		m_draw_type = 2;
-	else
-		m_draw_type = 1;
+
+	m_draw_type = 1;
 
 	PreDraw();
 
-	switch (m_draw_type)
-	{
-	case 1:  //draw volumes only
-		Draw();
-		break;
-	case 2:  //draw volumes and meshes with depth peeling
-		DrawDP();
-		break;
-	}
+	Draw();
 
 	if (m_draw_camctr)
 		DrawCamCtr();
@@ -7375,19 +8047,73 @@ void VRenderGLView::OnDraw(wxPaintEvent& event)
 
 	goTimer->sample();
 
-	SwapBuffers();
-
 	if (m_resize)
 		m_resize = false;
 
+	if (m_tile_rendering && m_current_tileid >= m_tile_xnum*m_tile_ynum) {
+		EndTileRendering();
+	}
+    
+    if (m_recording)
+    {
+        vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+        vks::VulkanDevice* prim_dev = m_vulkan->devices[0];
+        
+        if (m_fbo_record && (m_fbo_record->w != nx || m_fbo_record->h != ny))
+        {
+            m_fbo_record.reset();
+            m_tex_record.reset();
+        }
+        if (!m_fbo_record)
+        {
+            m_fbo_record = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+            m_fbo_record->w = m_nx;
+            m_fbo_record->h = m_ny;
+            m_fbo_record->device = prim_dev;
+            
+            m_tex_record = prim_dev->GenTexture2D(current_fbo->attachments[0]->format, VK_FILTER_LINEAR, m_nx, m_ny);
+            m_fbo_record->addAttachment(m_tex_record);
+        }
+        
+        Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+        params.pipeline =
+        m_v2drender->preparePipeline(
+                                     IMG_SHADER_TEXTURE_LOOKUP,
+                                     V2DRENDER_BLEND_DISABLE,
+                                     m_fbo_record->attachments[0]->format,
+                                     m_fbo_record->attachments.size(),
+                                     0,
+                                     m_fbo_record->attachments[0]->is_swapchain_images);
+        params.tex[0] = current_fbo->attachments[0].get();
+        params.clear = true;
+        
+        if (!m_fbo_record->renderPass)
+            m_fbo_record->replaceRenderPass(params.pipeline.pass);
+        
+        m_v2drender->render(m_fbo_record, params);
+    }
+
+	m_vulkan->submitFrame();
+
+	SetEvtHandlerEnabled(true);
 }
 
-void VRenderGLView::SetRadius(double r)
+void VRenderVulkanView::DownloadRecordedFrame(void *image, VkFormat &format)
+{
+    if (!m_recording)
+        return;
+    
+    vkQueueWaitIdle(m_vulkan->vulkanDevice->queue);
+    m_vulkan->vulkanDevice->DownloadTexture(m_tex_record, image);
+    format = m_tex_record->format;
+}
+
+void VRenderVulkanView::SetRadius(double r)
 {
 	m_radius = r;
 }
 
-void VRenderGLView::SetCenter()
+void VRenderVulkanView::SetCenter()
 {
 	InitView(INIT_BOUNDS|INIT_CENTER|INIT_OBJ_TRANSL);
 
@@ -7429,7 +8155,7 @@ void VRenderGLView::SetCenter()
 	}
 }
 
-void VRenderGLView::SetScale121()
+void VRenderVulkanView::SetScale121()
 {
 	//SetCenter();
 
@@ -7464,7 +8190,7 @@ void VRenderGLView::SetScale121()
 	RefreshGL();
 }
 
-void VRenderGLView::SetPersp(bool persp)
+void VRenderVulkanView::SetPersp(bool persp)
 {
 	m_persp = persp;
 	if (m_free && !m_persp)
@@ -7498,7 +8224,7 @@ void VRenderGLView::SetPersp(bool persp)
 	//SetSortBricks();
 }
 
-void VRenderGLView::SetFree(bool free)
+void VRenderVulkanView::SetFree(bool free)
 {
 	m_free = free;
 	if (m_vrv->m_free_chk->GetValue() != m_free)
@@ -7510,7 +8236,7 @@ void VRenderGLView::SetFree(bool free)
 		Vector d = pos;
 		d.normalize();
 		Vector ctr;
-		ctr = pos - 0.1*d;
+		ctr = pos - m_radius*0.01*d;
 		m_ctrx = ctr.x();
 		m_ctry = ctr.y();
 		m_ctrz = ctr.z();
@@ -7565,7 +8291,7 @@ void VRenderGLView::SetFree(bool free)
 	//SetSortBricks();
 }
 
-void VRenderGLView::SetAov(double aov)
+void VRenderVulkanView::SetAov(double aov)
 {
 	//view has been changed, sort bricks
 	//SetSortBricks();
@@ -7578,14 +8304,14 @@ void VRenderGLView::SetAov(double aov)
 	}
 }
 
-void VRenderGLView::SetMinPPI(double ppi)
+void VRenderVulkanView::SetMinPPI(double ppi)
 {
 	m_min_ppi = ppi;
 	m_vrv->m_ppi_text->ChangeValue(wxString::Format("%d", int(m_min_ppi)));
 	m_vrv->m_ppi_sldr->SetValue(int(m_min_ppi));
 }
 
-void VRenderGLView::SetVolMethod(int method)
+void VRenderVulkanView::SetVolMethod(int method)
 {
 	//get the volume list m_vd_pop_list
 	PopVolumeList();
@@ -7610,7 +8336,7 @@ void VRenderGLView::SetVolMethod(int method)
 	}
 }
 
-VolumeData* VRenderGLView::GetAllVolumeData(int index)
+VolumeData* VRenderVulkanView::GetAllVolumeData(int index)
 {
 	int cnt = 0;
 	int i, j;
@@ -7643,7 +8369,7 @@ VolumeData* VRenderGLView::GetAllVolumeData(int index)
 	return 0;
 }
 
-VolumeData* VRenderGLView::GetDispVolumeData(int index)
+VolumeData* VRenderVulkanView::GetDispVolumeData(int index)
 {
 	if (GetDispVolumeNum()<=0)
 		return 0;
@@ -7657,7 +8383,7 @@ VolumeData* VRenderGLView::GetDispVolumeData(int index)
 		return 0;
 }
 
-MeshData* VRenderGLView::GetMeshData(int index)
+MeshData* VRenderVulkanView::GetMeshData(int index)
 {
 	if (GetMeshNum()<=0)
 		return 0;
@@ -7670,7 +8396,7 @@ MeshData* VRenderGLView::GetMeshData(int index)
 		return 0;
 }
 
-VolumeData* VRenderGLView::GetVolumeData(wxString &name)
+VolumeData* VRenderVulkanView::GetVolumeData(wxString &name)
 {
 	int i, j;
 
@@ -7706,7 +8432,7 @@ VolumeData* VRenderGLView::GetVolumeData(wxString &name)
 	return 0;
 }
 
-MeshData* VRenderGLView::GetMeshData(wxString &name)
+MeshData* VRenderVulkanView::GetMeshData(wxString &name)
 {
 	int i, j;
 
@@ -7740,7 +8466,7 @@ MeshData* VRenderGLView::GetMeshData(wxString &name)
 	return 0;
 }
 
-Annotations* VRenderGLView::GetAnnotations(wxString &name)
+Annotations* VRenderVulkanView::GetAnnotations(wxString &name)
 {
 	int i;
 
@@ -7761,7 +8487,7 @@ Annotations* VRenderGLView::GetAnnotations(wxString &name)
 	return 0;
 }
 
-DataGroup* VRenderGLView::GetGroup(wxString &name)
+DataGroup* VRenderVulkanView::GetGroup(wxString &name)
 {
 	int i;
 
@@ -7782,14 +8508,43 @@ DataGroup* VRenderGLView::GetGroup(wxString &name)
 	return 0;
 }
 
-int VRenderGLView::GetAny()
+DataGroup* VRenderVulkanView::GetParentGroup(wxString& name)
+{
+	int i, j;
+
+	for (i = 0; i < (int)m_layer_list.size(); i++)
+	{
+		if (!m_layer_list[i])
+			continue;
+		switch (m_layer_list[i]->IsA())
+		{
+		case 5://group
+		{
+			DataGroup* group = (DataGroup*)m_layer_list[i];
+			if (!group)
+				break;
+			for (j = 0; j < group->GetVolumeNum(); j++)
+			{
+				VolumeData* vd = group->GetVolumeData(j);
+				if (vd && vd->GetName() == name)
+					return group;
+			}
+		}
+		break;
+		}
+	}
+
+	return 0;
+}
+
+int VRenderVulkanView::GetAny()
 {
 	PopVolumeList();
 	PopMeshList();
 	return m_vd_pop_list.size() + m_md_pop_list.size();
 }
 
-int VRenderGLView::GetDispVolumeNum()
+int VRenderVulkanView::GetDispVolumeNum()
 {
 	//get the volume list m_vd_pop_list
 	PopVolumeList();
@@ -7797,7 +8552,7 @@ int VRenderGLView::GetDispVolumeNum()
 	return m_vd_pop_list.size();
 }
 
-int VRenderGLView::GetAllVolumeNum()
+int VRenderVulkanView::GetAllVolumeNum()
 {
 	int num = 0;
 	for (int i=0; i<(int)m_layer_list.size(); i++)
@@ -7820,18 +8575,46 @@ int VRenderGLView::GetAllVolumeNum()
 	return num;
 }
 
-int VRenderGLView::GetMeshNum()
+int VRenderVulkanView::GetMeshNum()
 {
 	PopMeshList();
 	return m_md_pop_list.size();
 }
 
-DataGroup* VRenderGLView::AddVolumeData(VolumeData* vd, wxString group_name)
+DataGroup* VRenderVulkanView::GetCurrentVolGroup()
+{
+	int i;
+	DataGroup* group = 0;
+	DataGroup* cur_group = 0;
+
+	for (i=0; i<(int)m_layer_list.size(); i++)
+	{
+		TreeLayer* layer = m_layer_list[i];
+		if (layer && layer->IsA() == 5)
+		{
+			//layer is group
+			group = (DataGroup*) layer;
+			if (group)
+			{
+				for (int j = 0; j < group->GetVolumeNum(); j++)
+				{
+					if (m_cur_vol && m_cur_vol == group->GetVolumeData(j))
+						cur_group = group;
+				}
+			}
+		}
+	}
+
+	return cur_group != NULL ? cur_group : group;
+}
+
+DataGroup* VRenderVulkanView::AddVolumeData(VolumeData* vd, wxString group_name)
 {
 	//m_layer_list.push_back(vd);
 	int i;
 	DataGroup* group = 0;
 	DataGroup* group_temp = 0;
+	DataGroup* cur_group = 0;
 
 	for (i=0; i<(int)m_layer_list.size(); i++)
 	{
@@ -7845,8 +8628,19 @@ DataGroup* VRenderGLView::AddVolumeData(VolumeData* vd, wxString group_name)
 				group = group_temp;
 				break;
 			}
+			if (group_temp)
+			{
+				for (int j = 0; j < group_temp->GetVolumeNum(); j++)
+				{
+					if (m_cur_vol && m_cur_vol == group_temp->GetVolumeData(j))
+						cur_group = group_temp;
+				}
+			}
 		}
 	}
+
+	if (!group && cur_group)
+		group = cur_group;
 
 	if (!group && group_temp)
 		group = group_temp;
@@ -7887,15 +8681,82 @@ DataGroup* VRenderGLView::AddVolumeData(VolumeData* vd, wxString group_name)
 		bool sync_b = group->GetSyncB();
 		vd->SetSyncB(sync_b);
 
+		if ((group->GetVolumeSyncSpc() || group->GetVolumeSyncProp()) && group->GetVolumeNum() > 0)
+		{
+			double spcx=1.0, spcy=1.0, spcz=1.0;
+			group->GetVolumeData(0)->GetSpacings(spcx, spcy, spcz, 0);
+			vd->SetSpacings(spcx, spcy, spcz);
+		}
+
+		if (group->GetVolumeSyncProp() && group->GetVolumeData(0) != vd)
+		{
+			VolumeData *srcvd = group->GetVolumeData(0);
+			double dval = 0.0;
+			double dval2 = 0.0;
+			vd->Set3DGamma(srcvd->Get3DGamma());
+			vd->SetBoundary(srcvd->GetBoundary());
+			vd->SetOffset(srcvd->GetOffset());
+			vd->SetLeftThresh(srcvd->GetLeftThresh());
+			vd->SetRightThresh(srcvd->GetRightThresh());
+			vd->SetLuminance(srcvd->GetLuminance());
+			vd->SetShadow(srcvd->GetShadow());
+			srcvd->GetShadowParams(dval);
+			vd->SetShadowParams(dval);
+			vd->SetShading(srcvd->GetShading());
+			double amb, diff, spec, shine;
+			srcvd->GetMaterial(amb, diff, spec, shine);
+			vd->SetMaterial(amb, diff, spec, shine);
+			vd->SetAlpha(srcvd->GetAlpha());
+			vd->SetSampleRate(srcvd->GetSampleRate());
+			vd->SetShading(srcvd->GetShading());
+			vd->SetColormap(srcvd->GetColormap());
+			srcvd->GetColormapValues(dval, dval2);
+			vd->SetColormapValues(dval, dval2);
+			vd->SetInvert(srcvd->GetInvert());
+			vd->SetMode(srcvd->GetMode());
+			vd->SetNR(srcvd->GetNR());
+		}
+
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 		if (vr_frame)
 		{
 			vr_frame->GetAdjustView()->SetVolumeData(vd);
 			vr_frame->GetAdjustView()->SetGroupLink(group);
+
+			VolumeData* cvd = vr_frame->GetClippingView()->GetVolumeData();
+			MeshData* cmd = vr_frame->GetClippingView()->GetMeshData();
+			vector<Plane*> *src_planes = 0;
+			if (cmd && cmd->GetMR())
+				src_planes = cmd->GetMR()->get_planes();
+			else if (cvd && cvd->GetVR())
+				src_planes = cvd->GetVR()->get_planes();
+
+			if (vr_frame->GetClippingView()->GetChannLink() && group->GetVolumeData(0) != vd && src_planes)
+			{
+				vector<Plane*> *dst_planes = vd->GetVR()->get_planes();
+				for (int k=0; k<(int)dst_planes->size(); k++)
+				{
+					if ((*dst_planes)[k])
+						delete (*dst_planes)[k];
+				}
+				dst_planes->clear();
+
+				for (int k=0; k<(int)src_planes->size(); k++)
+				{
+					Plane* plane = new Plane(*(*src_planes)[k]);
+					dst_planes->push_back(plane);
+				}
+			}
 		}
 	}
 
 	m_vd_pop_dirty = true;
+
+	if (vd->isBrxml())
+	{
+		m_loader.SetMemoryLimitByte((long long)TextureRenderer::mainmem_buf_size_*1024LL*1024LL);
+		m_loader.PreloadLevel(vd, vd->GetMaskLv(), true);
+	}
 
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (m_frame)
@@ -7908,16 +8769,51 @@ DataGroup* VRenderGLView::AddVolumeData(VolumeData* vd, wxString group_name)
 		}
 	}
 
+	InitView(INIT_BOUNDS | INIT_CENTER);
+
 	return group;
 }
 
-void VRenderGLView::AddMeshData(MeshData* md)
+void VRenderVulkanView::AddMeshData(MeshData* md)
 {
+	if (!md)
+		return;
+
 	m_layer_list.push_back(md);
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (vr_frame && vr_frame->GetClippingView())
+	{
+		VolumeData* cvd = vr_frame->GetClippingView()->GetVolumeData();
+		MeshData* cmd = vr_frame->GetClippingView()->GetMeshData();
+		vector<Plane*> *src_planes = 0;
+		if (cmd && cmd->GetMR())
+			src_planes = cmd->GetMR()->get_planes();
+		else if (cvd && cvd->GetVR())
+			src_planes = cvd->GetVR()->get_planes();
+
+		if (src_planes && vr_frame->GetClippingView()->GetChannLink())
+		{
+			vector<Plane*> *dst_planes = md->GetMR()->get_planes();
+			for (int k=0; k<(int)dst_planes->size(); k++)
+			{
+				if ((*dst_planes)[k])
+					delete (*dst_planes)[k];
+			}
+			dst_planes->clear();
+
+			for (int k=0; k<(int)src_planes->size(); k++)
+			{
+				Plane* plane = new Plane(*(*src_planes)[k]);
+				dst_planes->push_back(plane);
+			}
+		}
+	}
 	m_md_pop_dirty = true;
+
+	InitView(INIT_BOUNDS | INIT_CENTER);
 }
 
-void VRenderGLView::AddAnnotations(Annotations* ann)
+void VRenderVulkanView::AddAnnotations(Annotations* ann)
 {
 	bool exist = false;
 	for (auto layer : m_layer_list)
@@ -7926,7 +8822,7 @@ void VRenderGLView::AddAnnotations(Annotations* ann)
 	if (!exist) m_layer_list.push_back(ann);
 }
 
-void VRenderGLView::ReplaceVolumeData(wxString &name, VolumeData *dst)
+void VRenderVulkanView::ReplaceVolumeData(wxString &name, VolumeData *dst)
 {
 	int i, j;
 
@@ -7986,6 +8882,11 @@ void VRenderGLView::ReplaceVolumeData(wxString &name, VolumeData *dst)
 
 	if (found)
 	{
+		if (dst->isBrxml())
+		{
+			m_loader.SetMemoryLimitByte((long long)TextureRenderer::mainmem_buf_size_*1024LL*1024LL);
+			m_loader.PreloadLevel(dst, dst->GetMaskLv(), true);
+		}
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 		if (vr_frame)
 		{
@@ -7998,9 +8899,11 @@ void VRenderGLView::ReplaceVolumeData(wxString &name, VolumeData *dst)
 			}
 		}
 	}
+
+	InitView(INIT_BOUNDS | INIT_CENTER);
 }
 
-void VRenderGLView::RemoveVolumeData(wxString &name)
+void VRenderVulkanView::RemoveVolumeData(wxString &name)
 {
 	int i, j;
 	
@@ -8026,6 +8929,7 @@ void VRenderGLView::RemoveVolumeData(wxString &name)
 					m_loader.RemoveBrickVD(vd);
 					vd->GetVR()->clear_tex_current();
 					dm->RemoveVolumeData(name);
+					InitView(INIT_BOUNDS | INIT_CENTER);
 					return;
 				}
 			}
@@ -8044,6 +8948,7 @@ void VRenderGLView::RemoveVolumeData(wxString &name)
 						m_loader.RemoveBrickVD(vd);
 						vd->GetVR()->clear_tex_current();
 						dm->RemoveVolumeData(name);
+						InitView(INIT_BOUNDS | INIT_CENTER);
 						return;
 					}
 				}
@@ -8053,7 +8958,7 @@ void VRenderGLView::RemoveVolumeData(wxString &name)
 	}
 }
 
-void VRenderGLView::RemoveVolumeDataset(BaseReader *reader, int channel)
+void VRenderVulkanView::RemoveVolumeDataset(BaseReader *reader, int channel)
 {
 	int i, j;
 
@@ -8102,9 +9007,10 @@ void VRenderGLView::RemoveVolumeDataset(BaseReader *reader, int channel)
 			break;
 		}
 	}
+	InitView(INIT_BOUNDS | INIT_CENTER);
 }
 
-void VRenderGLView::RemoveMeshData(wxString &name)
+void VRenderVulkanView::RemoveMeshData(wxString &name)
 {
 	int i, j;
 
@@ -8127,6 +9033,7 @@ void VRenderGLView::RemoveMeshData(wxString &name)
 					m_layer_list.erase(m_layer_list.begin()+i);
 					m_md_pop_dirty = true;
 					dm->RemoveMeshData(name);
+					InitView(INIT_BOUNDS | INIT_CENTER);
 					return;
 				}
 			}
@@ -8143,6 +9050,7 @@ void VRenderGLView::RemoveMeshData(wxString &name)
 						group->RemoveMeshData(j);
 						m_md_pop_dirty = true;
 						dm->RemoveMeshData(name);
+						InitView(INIT_BOUNDS | INIT_CENTER);
 						return;
 					}
 				}
@@ -8152,8 +9060,13 @@ void VRenderGLView::RemoveMeshData(wxString &name)
 	}
 }
 
-void VRenderGLView::RemoveAnnotations(wxString &name)
+void VRenderVulkanView::RemoveAnnotations(wxString &name)
 {
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+	DataManager *dm = vr_frame->GetDataManager();
+	if (!dm) return;
+
 	for (int i=0; i<(int)m_layer_list.size(); i++)
 	{
 		if (!m_layer_list[i])
@@ -8164,12 +9077,13 @@ void VRenderGLView::RemoveAnnotations(wxString &name)
 			if (ann && ann->GetName() == name)
 			{
 				m_layer_list.erase(m_layer_list.begin()+i);
+				dm->RemoveAnnotations(name);
 			}
 		}
 	}
 }
 
-void VRenderGLView::RemoveGroup(wxString &name)
+void VRenderVulkanView::RemoveGroup(wxString &name)
 {
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (!vr_frame) return;
@@ -8193,6 +9107,8 @@ void VRenderGLView::RemoveGroup(wxString &name)
 						VolumeData* vd = group->GetVolumeData(j);
 						if (vd)
 						{
+							if (m_cur_vol == vd)
+								m_cur_vol = NULL;
 							group->RemoveVolumeData(j);
 							m_loader.RemoveBrickVD(vd);
 							vd->GetVR()->clear_tex_current();
@@ -8227,10 +9143,11 @@ void VRenderGLView::RemoveGroup(wxString &name)
 			break;
 		}
 	}
+	InitView(INIT_BOUNDS | INIT_CENTER);
 }
 
 //isolate
-void VRenderGLView::Isolate(int type, wxString name)
+void VRenderVulkanView::Isolate(int type, wxString name)
 {
 	for (int i=0; i<(int)m_layer_list.size(); i++)
 	{
@@ -8325,7 +9242,7 @@ void VRenderGLView::Isolate(int type, wxString name)
 
 //move layer of the same level within this view
 //source is after the destination
-void VRenderGLView::MoveLayerinView(wxString &src_name, wxString &dst_name)
+void VRenderVulkanView::MoveLayerinView(wxString &src_name, wxString &dst_name)
 {
 	int i, src_index;
 	TreeLayer* src = 0;
@@ -8356,7 +9273,7 @@ void VRenderGLView::MoveLayerinView(wxString &src_name, wxString &dst_name)
 	m_md_pop_dirty = true;
 }
 
-void VRenderGLView::ShowAll()
+void VRenderVulkanView::ShowAll()
 {
 	for (unsigned int i=0; i<m_layer_list.size(); ++i)
 	{
@@ -8421,7 +9338,7 @@ void VRenderGLView::ShowAll()
 
 //move layer (volume) of the same level within the given group
 //source is after the destination
-void VRenderGLView::MoveLayerinGroup(wxString &group_name, wxString &src_name, wxString &dst_name, int insert_mode)
+void VRenderVulkanView::MoveLayerinGroup(wxString &group_name, wxString &src_name, wxString &dst_name, int insert_mode)
 {
 	DataGroup* group = GetGroup(group_name);
 	if (!group)
@@ -8458,7 +9375,7 @@ void VRenderGLView::MoveLayerinGroup(wxString &group_name, wxString &src_name, w
 
 //move layer (volume) from the given group up one level to this view
 //source is after the destination
-void VRenderGLView::MoveLayertoView(wxString &group_name, wxString &src_name, wxString &dst_name)
+void VRenderVulkanView::MoveLayertoView(wxString &group_name, wxString &src_name, wxString &dst_name)
 {
 	DataGroup* group = GetGroup(group_name);
 	if (!group)
@@ -8500,7 +9417,7 @@ void VRenderGLView::MoveLayertoView(wxString &group_name, wxString &src_name, wx
 
 //move layer (volume) one level down to the given group
 //source is after the destination
-void VRenderGLView::MoveLayertoGroup(wxString &group_name, wxString &src_name, wxString &dst_name)
+void VRenderVulkanView::MoveLayertoGroup(wxString &group_name, wxString &src_name, wxString &dst_name)
 {
 	VolumeData* src_vd = 0;
 	int i;
@@ -8549,13 +9466,73 @@ void VRenderGLView::MoveLayertoGroup(wxString &group_name, wxString &src_name, w
 	bool sync_b = group->GetSyncB();
 	src_vd->SetSyncB(sync_b);
 
+	if ((group->GetVolumeSyncSpc() || group->GetVolumeSyncProp()) && group->GetVolumeNum() > 0)
+	{
+		double spcx=1.0, spcy=1.0, spcz=1.0;
+		group->GetVolumeData(0)->GetSpacings(spcx, spcy, spcz, 0);
+		src_vd->SetSpacings(spcx, spcy, spcz);
+	}
+
+	if (group->GetVolumeSyncProp() && group->GetVolumeData(0) != src_vd)
+	{
+		VolumeData *gvd = group->GetVolumeData(0);
+		double dval = 0.0;
+		double dval2 = 0.0;
+		src_vd->Set3DGamma(gvd->Get3DGamma());
+		src_vd->SetBoundary(gvd->GetBoundary());
+		src_vd->SetOffset(gvd->GetOffset());
+		src_vd->SetLeftThresh(gvd->GetLeftThresh());
+		src_vd->SetRightThresh(gvd->GetRightThresh());
+		src_vd->SetLuminance(gvd->GetLuminance());
+		src_vd->SetShadow(gvd->GetShadow());
+		gvd->GetShadowParams(dval);
+		src_vd->SetShadowParams(dval);
+		src_vd->SetShading(gvd->GetShading());
+		double amb, diff, spec, shine;
+		gvd->GetMaterial(amb, diff, spec, shine);
+		src_vd->SetMaterial(amb, diff, spec, shine);
+		src_vd->SetAlpha(gvd->GetAlpha());
+		src_vd->SetSampleRate(gvd->GetSampleRate());
+		src_vd->SetShading(gvd->GetShading());
+		src_vd->SetColormap(gvd->GetColormap());
+		gvd->GetColormapValues(dval, dval2);
+		src_vd->SetColormapValues(dval, dval2);
+		src_vd->SetInvert(gvd->GetInvert());
+		src_vd->SetMode(gvd->GetMode());
+		src_vd->SetNR(gvd->GetNR());
+	}
+
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (vr_frame)
+	{
+		vr_frame->GetAdjustView()->SetVolumeData(src_vd);
+		vr_frame->GetAdjustView()->SetGroupLink(group);
+		if (vr_frame->GetClippingView()->GetChannLink() && group->GetVolumeData(0) != src_vd)
+		{
+			vector<Plane*> *dst_planes = src_vd->GetVR()->get_planes();
+			for (int k=0; k<(int)dst_planes->size(); k++)
+			{
+				if ((*dst_planes)[k])
+					delete (*dst_planes)[k];
+			}
+			dst_planes->clear();
+
+			vector<Plane*> *src_planes = group->GetVolumeData(0)->GetVR()->get_planes();
+			for (int k=0; k<(int)src_planes->size(); k++)
+			{
+				Plane* plane = new Plane(*(*src_planes)[k]);
+				dst_planes->push_back(plane);
+			}
+		}
+	}
+
 	m_vd_pop_dirty = true;
 	m_md_pop_dirty = true;
 }
 
 //move layer (volume from one group to another different group
 //sourece is after the destination
-void VRenderGLView::MoveLayerfromtoGroup(wxString &src_group_name, wxString &dst_group_name, wxString &src_name, wxString &dst_name, int insert_mode)
+void VRenderVulkanView::MoveLayerfromtoGroup(wxString &src_group_name, wxString &dst_group_name, wxString &src_name, wxString &dst_name, int insert_mode)
 {
 	DataGroup* src_group = GetGroup(src_group_name);
 	if (!src_group)
@@ -8610,10 +9587,69 @@ void VRenderGLView::MoveLayerfromtoGroup(wxString &src_group_name, wxString &dst
 	bool sync_b = dst_group->GetSyncB();
 	src_vd->SetSyncB(sync_b);
 
+	if ((dst_group->GetVolumeSyncSpc() || dst_group->GetVolumeSyncProp()) && dst_group->GetVolumeNum() > 0)
+	{
+		double spcx=1.0, spcy=1.0, spcz=1.0;
+		dst_group->GetVolumeData(0)->GetSpacings(spcx, spcy, spcz, 0);
+		src_vd->SetSpacings(spcx, spcy, spcz);
+	}
+
+	if (dst_group->GetVolumeSyncProp() && dst_group->GetVolumeData(0) != src_vd)
+	{
+		VolumeData *gvd = dst_group->GetVolumeData(0);
+		double dval = 0.0;
+		double dval2 = 0.0;
+		src_vd->Set3DGamma(gvd->Get3DGamma());
+		src_vd->SetBoundary(gvd->GetBoundary());
+		src_vd->SetOffset(gvd->GetOffset());
+		src_vd->SetLeftThresh(gvd->GetLeftThresh());
+		src_vd->SetRightThresh(gvd->GetRightThresh());
+		src_vd->SetLuminance(gvd->GetLuminance());
+		src_vd->SetShadow(gvd->GetShadow());
+		gvd->GetShadowParams(dval);
+		src_vd->SetShadowParams(dval);
+		src_vd->SetShading(gvd->GetShading());
+		double amb, diff, spec, shine;
+		gvd->GetMaterial(amb, diff, spec, shine);
+		src_vd->SetMaterial(amb, diff, spec, shine);
+		src_vd->SetAlpha(gvd->GetAlpha());
+		src_vd->SetSampleRate(gvd->GetSampleRate());
+		src_vd->SetShading(gvd->GetShading());
+		src_vd->SetColormap(gvd->GetColormap());
+		gvd->GetColormapValues(dval, dval2);
+		src_vd->SetColormapValues(dval, dval2);
+		src_vd->SetInvert(gvd->GetInvert());
+		src_vd->SetMode(gvd->GetMode());
+		src_vd->SetNR(gvd->GetNR());
+	}
+
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (vr_frame)
+	{
+		vr_frame->GetAdjustView()->SetVolumeData(src_vd);
+		vr_frame->GetAdjustView()->SetGroupLink(dst_group);
+		if (vr_frame->GetClippingView()->GetChannLink() && dst_group->GetVolumeData(0) != src_vd)
+		{
+			vector<Plane*> *dst_planes = src_vd->GetVR()->get_planes();
+			for (int k=0; k<(int)dst_planes->size(); k++)
+			{
+				if ((*dst_planes)[k])
+					delete (*dst_planes)[k];
+			}
+			dst_planes->clear();
+
+			vector<Plane*> *src_planes = dst_group->GetVolumeData(0)->GetVR()->get_planes();
+			for (int k=0; k<(int)src_planes->size(); k++)
+			{
+				Plane* plane = new Plane(*(*src_planes)[k]);
+				dst_planes->push_back(plane);
+			}
+		}
+	}
+
 	m_vd_pop_dirty = true;
 	m_md_pop_dirty = true;
 
-	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (m_frame)
 	{
 		AdjustView* adjust_view = vr_frame->GetAdjustView();
@@ -8627,7 +9663,7 @@ void VRenderGLView::MoveLayerfromtoGroup(wxString &src_group_name, wxString &dst
 }
 
 //move mesh within a group
-void VRenderGLView::MoveMeshinGroup(wxString &group_name, wxString &src_name, wxString &dst_name, int insert_mode)
+void VRenderVulkanView::MoveMeshinGroup(wxString &group_name, wxString &src_name, wxString &dst_name, int insert_mode)
 {
 	MeshGroup* group = GetMGroup(group_name);
 	if (!group)
@@ -8658,13 +9694,15 @@ void VRenderGLView::MoveMeshinGroup(wxString &group_name, wxString &src_name, wx
 			break;
 		}
 	}
+    
+    InitView(INIT_BOUNDS|INIT_CENTER);
 
 	m_vd_pop_dirty = true;
 	m_md_pop_dirty = true;
 }
 
 //move mesh out of a group
-void VRenderGLView::MoveMeshtoView(wxString &group_name, wxString &src_name, wxString &dst_name)
+void VRenderVulkanView::MoveMeshtoView(wxString &group_name, wxString &src_name, wxString &dst_name)
 {
 	MeshGroup* group = GetMGroup(group_name);
 	if (!group)
@@ -8703,7 +9741,7 @@ void VRenderGLView::MoveMeshtoView(wxString &group_name, wxString &src_name, wxS
 }
 
 //move mesh into a group
-void VRenderGLView::MoveMeshtoGroup(wxString &group_name, wxString &src_name, wxString &dst_name)
+void VRenderVulkanView::MoveMeshtoGroup(wxString &group_name, wxString &src_name, wxString &dst_name)
 {
 	MeshData* src_md = 0;
 	int i;
@@ -8735,12 +9773,13 @@ void VRenderGLView::MoveMeshtoGroup(wxString &group_name, wxString &src_name, wx
 			}
 		}
 	}
+    InitView(INIT_BOUNDS|INIT_CENTER);
 	m_vd_pop_dirty = true;
 	m_md_pop_dirty = true;
 }
 
 //move mesh out of then into a group
-void VRenderGLView::MoveMeshfromtoGroup(wxString &src_group_name, wxString &dst_group_name, wxString &src_name, wxString &dst_name, int insert_mode)
+void VRenderVulkanView::MoveMeshfromtoGroup(wxString &src_group_name, wxString &dst_group_name, wxString &src_name, wxString &dst_name, int insert_mode)
 {
 	MeshGroup* src_group = GetMGroup(src_group_name);
 	if (!src_group)
@@ -8775,12 +9814,13 @@ void VRenderGLView::MoveMeshfromtoGroup(wxString &src_group_name, wxString &dst_
 			}
 		}
 	}
+    InitView(INIT_BOUNDS|INIT_CENTER);
 	m_vd_pop_dirty = true;
 	m_md_pop_dirty = true;
 }
 
 //layer control
-int VRenderGLView::GetGroupNum()
+int VRenderVulkanView::GetGroupNum()
 {
 	int group_num = 0;
 
@@ -8793,12 +9833,12 @@ int VRenderGLView::GetGroupNum()
 	return group_num;
 }
 
-int VRenderGLView::GetLayerNum()
+int VRenderVulkanView::GetLayerNum()
 {
 	return m_layer_list.size();
 }
 
-TreeLayer* VRenderGLView::GetLayer(int index)
+TreeLayer* VRenderVulkanView::GetLayer(int index)
 {
 	if (index>=0 && index<(int)m_layer_list.size())
 		return m_layer_list[index];
@@ -8806,7 +9846,7 @@ TreeLayer* VRenderGLView::GetLayer(int index)
 		return 0;
 }
 
-wxString VRenderGLView::CheckNewGroupName(const wxString &name, int type)
+wxString VRenderVulkanView::CheckNewGroupName(const wxString &name, int type)
 {
 	wxString result = name;
 
@@ -8817,7 +9857,7 @@ wxString VRenderGLView::CheckNewGroupName(const wxString &name, int type)
 	return result;
 }
 
-bool VRenderGLView::CheckGroupNames(const wxString &name, int type)
+bool VRenderVulkanView::CheckGroupNames(const wxString &name, int type)
 {
 	bool result = false;
 	for (unsigned int i=0; i<m_layer_list.size(); i++)
@@ -8833,7 +9873,7 @@ bool VRenderGLView::CheckGroupNames(const wxString &name, int type)
 	return result;
 }
 
-wxString VRenderGLView::AddGroup(wxString str, wxString prev_group)
+wxString VRenderVulkanView::AddGroup(wxString str, wxString prev_group)
 {
 	DataGroup* group = new DataGroup();
 	if (group && str != "")
@@ -8886,7 +9926,7 @@ wxString VRenderGLView::AddGroup(wxString str, wxString prev_group)
 		return "";
 }
 
-wxString VRenderGLView::AddMGroup(wxString str)
+wxString VRenderVulkanView::AddMGroup(wxString str)
 {
 	MeshGroup* group = new MeshGroup();
 	if (group && str != "")
@@ -8899,7 +9939,7 @@ wxString VRenderGLView::AddMGroup(wxString str)
 		return "";
 }
 
-MeshGroup* VRenderGLView::GetMGroup(wxString str)
+MeshGroup* VRenderVulkanView::GetMGroup(wxString str)
 {
 	int i;
 
@@ -8921,7 +9961,7 @@ MeshGroup* VRenderGLView::GetMGroup(wxString str)
 }
 
 //init
-void VRenderGLView::InitView(unsigned int type)
+void VRenderVulkanView::InitView(unsigned int type)
 {
 	int i;
 
@@ -8931,19 +9971,35 @@ void VRenderGLView::InitView(unsigned int type)
 		PopVolumeList();
 		PopMeshList();
 
-		for (i=0 ; i<(int)m_vd_pop_list.size() ; i++)
-			m_bounds.extend(m_vd_pop_list[i]->GetBounds());
-		for (i=0 ; i<(int)m_md_pop_list.size() ; i++)
-			m_bounds.extend(m_md_pop_list[i]->GetBounds());
+		if (m_vd_pop_list.size() > 0)
+		{
+			for (i = 0; i < (int)m_vd_pop_list.size(); i++)
+				m_bounds.extend(m_vd_pop_list[i]->GetBounds());
+			for (i = 0; i < (int)m_md_pop_list.size(); i++)
+			{
+				m_md_pop_list[i]->RecalcBounds();
+				m_bounds.extend(m_md_pop_list[i]->GetBounds());
+			}
+		}
+		else
+		{
+			for (i = 0; i < (int)m_md_pop_list.size(); i++)
+			{
+				m_md_pop_list[i]->RecalcBounds();
+				m_bounds.extend(m_md_pop_list[i]->GetBounds());
+			}
+		}
 
 		if (m_bounds.valid())
 		{
 			Vector diag = m_bounds.diagonal();
 			m_radius = sqrt(diag.x()*diag.x()+diag.y()*diag.y()) / 2.0;
-			if (m_radius<0.1)
-				m_radius = 5.0;
+//			if (m_radius<0.1)
+//				m_radius = 5.0;
 			m_near_clip = m_radius / 1000.0;
 			m_far_clip = m_radius * 100.0;
+			for (i=0 ; i<(int)m_md_pop_list.size() ; i++)
+				m_md_pop_list[i]->SetBounds(m_bounds);
 		}
 	}
 
@@ -8988,9 +10044,9 @@ void VRenderGLView::InitView(unsigned int type)
 
 }
 
-void VRenderGLView::DrawBounds()
+void VRenderVulkanView::DrawBounds()
 {
-	glDisable(GL_DEPTH_TEST);
+	/*glDisable(GL_DEPTH_TEST);
 	glDisable(GL_BLEND);
 
 	vector<float> vertex;
@@ -9044,516 +10100,1262 @@ void VRenderGLView::DrawBounds()
 		shader->release();
 
 	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
+	glEnable(GL_BLEND);*/
 }
 
-void VRenderGLView::DrawClippingPlanes(bool border, int face_winding)
+double VRenderVulkanView::CalcCameraDistance()
+{
+	glm::mat4 mv_temp = m_mv_mat;
+	//translate object
+	mv_temp = glm::translate(mv_temp, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
+	//rotate object
+	mv_temp = glm::rotate(mv_temp, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
+	//center object
+	mv_temp = glm::translate(mv_temp, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
+
+	double mvmat[16] =
+		{ mv_temp[0][0], mv_temp[0][1], mv_temp[0][2], mv_temp[0][3],
+		  mv_temp[1][0], mv_temp[1][1], mv_temp[1][2], mv_temp[1][3],
+		  mv_temp[2][0], mv_temp[2][1], mv_temp[2][2], mv_temp[2][3],
+		  mv_temp[3][0], mv_temp[3][1], mv_temp[3][2], mv_temp[3][3]};
+
+	
+	Transform mv;
+	mv.set_trans(mvmat);
+
+	vector<Vector> points;
+	points.reserve(8);
+
+	points.push_back(Vector(m_bounds.min().x(), m_bounds.min().y(), m_bounds.min().z()));
+	points.push_back(Vector(m_bounds.max().x(), m_bounds.min().y(), m_bounds.min().z()));
+	points.push_back(Vector(m_bounds.min().x(), m_bounds.max().y(), m_bounds.min().z()));
+	points.push_back(Vector(m_bounds.max().x(), m_bounds.max().y(), m_bounds.min().z()));
+	points.push_back(Vector(m_bounds.min().x(), m_bounds.min().y(), m_bounds.max().z()));
+	points.push_back(Vector(m_bounds.max().x(), m_bounds.min().y(), m_bounds.max().z()));
+	points.push_back(Vector(m_bounds.min().x(), m_bounds.max().y(), m_bounds.max().z()));
+	points.push_back(Vector(m_bounds.max().x(), m_bounds.max().y(), m_bounds.max().z()));
+
+	static int edges[12*2] = {0, 1,  1, 3,  3, 2,  2, 0,
+							  0, 4,  1, 5,  3, 7,  2, 6,
+							  4, 5,  5, 7,  7, 6,  6, 4};
+
+	static int planes[3*6] = {0, 1, 2,  0, 1, 4,  1, 3, 5,  3, 2, 7,  2, 0, 6,  4, 5, 6};
+	
+	for (int i = 0; i < 8; i++)
+		points[i] = mv.project(points[i].asPoint()).asVector();
+
+	double dmin = DBL_MAX;
+	
+	//point
+	for (int i = 0; i < 8; i++)
+	{
+		double d = points[i].length2();
+		if (d < dmin) dmin = d;
+	}
+	
+	//edge
+	for (int i = 0; i < 12; i++)
+	{
+		Vector p = points[edges[i*2]];
+		Vector q = points[edges[i*2+1]];
+
+		if (Dot(p,p-q) <= 0 || Dot(q,q-p) <= 0) continue;
+
+		Vector e = q - p;
+		e.safe_normalize();
+		double d = Dot(p, e);
+		d = p.length2() - d*d;
+
+		if (d < dmin) dmin = d;
+	}
+
+	//planes
+	for (int i = 0; i < 6; i++)
+	{
+		Vector o = points[planes[i*3]];
+		Vector p = points[planes[i*3+1]] - points[planes[i*3]];
+		Vector q = points[planes[i*3+2]] - points[planes[i*3]];
+		double plen = p.length();
+		double qlen = q.length();
+		p.safe_normalize();
+		q.safe_normalize();
+		Vector c = Cross(p, q);
+		c.safe_normalize();
+
+		double d = Dot(points[planes[i*3+1]], c);
+		Vector v = c*d - o;
+
+		double s = Dot(v, p) / plen;
+		double t = Dot(v, q) / qlen;
+
+		d = d*d;
+
+		if (s > 0 && s < 1 && t > 0 && t < 1 && d < dmin) 
+			dmin = d;
+	}
+
+	//inside?
+	bool inside = false;
+	//double padding = 0.0;
+	{
+		Vector ex = points[1] - points[0];
+		Vector ey = points[2] - points[0];
+		Vector ez = points[4] - points[0];
+		double xlen = ex.length();
+		double ylen = ey.length();
+		double zlen = ez.length();
+		ex.safe_normalize();
+		ey.safe_normalize();
+		ez.safe_normalize();
+
+		Vector v = Vector(0)-points[0];
+
+		double x = Dot(v, ex) / xlen;
+		double y = Dot(v, ey) / ylen;
+		double z = Dot(v, ez) / zlen;
+		if (x > 0 && x < 1 && y > 0 && y < 1 && z > 0 && z < 1) 
+			inside = true;
+
+		//padding = Min(Min(xlen, ylen), zlen) / 2.0;
+	}
+	
+	dmin = inside ? 0 : sqrt(dmin);
+
+	return dmin;
+}
+
+void VRenderVulkanView::DrawClippingPlanes(bool border, int face_winding)
 {
 	int i;
 	bool link = false;
 	int plane_mode = PM_NORMAL;
+	int draw_type = 2;
+	VolumeData *cur_vd = NULL;
+	MeshData *cur_md = NULL;
+
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (vr_frame && vr_frame->GetClippingView())
 	{
 		link = vr_frame->GetClippingView()->GetChannLink();
 		plane_mode = vr_frame->GetClippingView()->GetPlaneMode();
+		draw_type = vr_frame->GetClippingView()->GetSelType();
+		if (draw_type == 2)
+		{
+			cur_vd = vr_frame->GetClippingView()->GetVolumeData();
+			if (!cur_vd) return;
+		}
+		if (draw_type == 3)
+		{
+			cur_md = vr_frame->GetClippingView()->GetMeshData();
+			if (!cur_md) return;
+		}
 	}
 
+	VkCullModeFlags cullmode = VK_CULL_MODE_NONE;
 	bool draw_plane = plane_mode != PM_FRAME;
 	if ((plane_mode == PM_LOWTRANSBACK ||
 		plane_mode == PM_NORMALBACK) &&
 		m_clip_mask == -1)
 	{
-		glCullFace(GL_FRONT);
+		cullmode = VK_CULL_MODE_FRONT_BIT;
 		if (face_winding == BACK_FACE)
 			face_winding = FRONT_FACE;
 		else
 			draw_plane = false;
 	}
 	else
-		glCullFace(GL_BACK);
+		cullmode = VK_CULL_MODE_BACK_BIT;
 
 	if (!border && plane_mode == PM_FRAME)
 		return;
 
-	glDisable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
+	bool cull = false;
+	VkFrontFace frontface = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	if (face_winding == FRONT_FACE)
 	{
-		glEnable(GL_CULL_FACE);
-		glFrontFace(GL_CCW);
+		cull = true;
+		frontface = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	}
 	else if (face_winding == BACK_FACE)
 	{
-		glEnable(GL_CULL_FACE);
-		glFrontFace(GL_CW);
-	}
-	else if (face_winding == CULL_OFF)
-		glDisable(GL_CULL_FACE);
-
-	ShaderProgram* shader =
-		m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY);
-	if (shader)
-	{
-		if (!shader->valid())
-			shader->create();
-		shader->bind();
+		cull = true;
+		frontface = VK_FRONT_FACE_CLOCKWISE;
 	}
 
-	for (i=0; i<GetDispVolumeNum(); i++)
+	//ShaderProgram* shader =
+	//	m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY);
+	//if (shader)
+	//{
+	//	if (!shader->valid())
+	//		shader->create();
+	//	shader->bind();
+	//}
+
+	if (draw_type == 2)
 	{
-		VolumeData* vd = GetDispVolumeData(i);
-		if (!vd)
-			continue;
-
-		if (vd!=m_cur_vol)
-			continue;
-
-		VolumeRenderer *vr = vd->GetVR();
-		if (!vr)
-			continue;
-
-		vector<Plane*> *planes = vr->get_planes();
-		if (planes->size() != 6)
-			continue;
-
-		//calculating planes
-		//get six planes
-		Plane* px1 = (*planes)[0];
-		Plane* px2 = (*planes)[1];
-		Plane* py1 = (*planes)[2];
-		Plane* py2 = (*planes)[3];
-		Plane* pz1 = (*planes)[4];
-		Plane* pz2 = (*planes)[5];
-
-		//calculate 4 lines
-		Vector lv_x1z1, lv_x1z2, lv_x2z1, lv_x2z2;
-		Point lp_x1z1, lp_x1z2, lp_x2z1, lp_x2z2;
-		//x1z1
-		if (!px1->Intersect(*pz1, lp_x1z1, lv_x1z1))
-			continue;
-		//x1z2
-		if (!px1->Intersect(*pz2, lp_x1z2, lv_x1z2))
-			continue;
-		//x2z1
-		if (!px2->Intersect(*pz1, lp_x2z1, lv_x2z1))
-			continue;
-		//x2z2
-		if (!px2->Intersect(*pz2, lp_x2z2, lv_x2z2))
-			continue;
-
-		//calculate 8 points
-		Point pp[8];
-		//p0 = l_x1z1 * py1
-		if (!py1->Intersect(lp_x1z1, lv_x1z1, pp[0]))
-			continue;
-		//p1 = l_x1z2 * py1
-		if (!py1->Intersect(lp_x1z2, lv_x1z2, pp[1]))
-			continue;
-		//p2 = l_x2z1 *py1
-		if (!py1->Intersect(lp_x2z1, lv_x2z1, pp[2]))
-			continue;
-		//p3 = l_x2z2 * py1
-		if (!py1->Intersect(lp_x2z2, lv_x2z2, pp[3]))
-			continue;
-		//p4 = l_x1z1 * py2
-		if (!py2->Intersect(lp_x1z1, lv_x1z1, pp[4]))
-			continue;
-		//p5 = l_x1z2 * py2
-		if (!py2->Intersect(lp_x1z2, lv_x1z2, pp[5]))
-			continue;
-		//p6 = l_x2z1 * py2
-		if (!py2->Intersect(lp_x2z1, lv_x2z1, pp[6]))
-			continue;
-		//p7 = l_x2z2 * py2
-		if (!py2->Intersect(lp_x2z2, lv_x2z2, pp[7]))
-			continue;
-
-		//draw the six planes out of the eight points
-		//get color
-		Color color(1.0, 1.0, 1.0);
-		double plane_trans = 0.0;
-		if (face_winding == BACK_FACE &&
-			(m_clip_mask == 3 ||
-			m_clip_mask == 12 ||
-			m_clip_mask == 48 ||
-			m_clip_mask == 1 ||
-			m_clip_mask == 2 ||
-			m_clip_mask == 4 ||
-			m_clip_mask == 8 ||
-			m_clip_mask == 16 ||
-			m_clip_mask == 32 ||
-			m_clip_mask == 64)
-			)
-			plane_trans = plane_mode == PM_LOWTRANS ||
-			plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
-
-		if (face_winding == FRONT_FACE)
+		for (i=0; i<GetDispVolumeNum(); i++)
 		{
-			plane_trans = plane_mode == PM_LOWTRANS ||
+			VolumeData* vd = GetDispVolumeData(i);
+			if (!vd)
+				continue;
+
+			if (vd!=cur_vd)
+				continue;
+
+			VolumeRenderer *vr = vd->GetVR();
+			if (!vr)
+				continue;
+
+			vector<Plane*> *planes = vr->get_planes();
+			if (planes->size() != 6)
+				continue;
+
+			//calculating planes
+			//get six planes
+			Plane* px1 = (*planes)[0];
+			Plane* px2 = (*planes)[1];
+			Plane* py1 = (*planes)[2];
+			Plane* py2 = (*planes)[3];
+			Plane* pz1 = (*planes)[4];
+			Plane* pz2 = (*planes)[5];
+
+			//calculate 4 lines
+			Vector lv_x1z1, lv_x1z2, lv_x2z1, lv_x2z2;
+			Point lp_x1z1, lp_x1z2, lp_x2z1, lp_x2z2;
+			//x1z1
+			if (!px1->Intersect(*pz1, lp_x1z1, lv_x1z1))
+				continue;
+			//x1z2
+			if (!px1->Intersect(*pz2, lp_x1z2, lv_x1z2))
+				continue;
+			//x2z1
+			if (!px2->Intersect(*pz1, lp_x2z1, lv_x2z1))
+				continue;
+			//x2z2
+			if (!px2->Intersect(*pz2, lp_x2z2, lv_x2z2))
+				continue;
+
+			//calculate 8 points
+			Point pp[8];
+			//p0 = l_x1z1 * py1
+			if (!py1->Intersect(lp_x1z1, lv_x1z1, pp[0]))
+				continue;
+			//p1 = l_x1z2 * py1
+			if (!py1->Intersect(lp_x1z2, lv_x1z2, pp[1]))
+				continue;
+			//p2 = l_x2z1 *py1
+			if (!py1->Intersect(lp_x2z1, lv_x2z1, pp[2]))
+				continue;
+			//p3 = l_x2z2 * py1
+			if (!py1->Intersect(lp_x2z2, lv_x2z2, pp[3]))
+				continue;
+			//p4 = l_x1z1 * py2
+			if (!py2->Intersect(lp_x1z1, lv_x1z1, pp[4]))
+				continue;
+			//p5 = l_x1z2 * py2
+			if (!py2->Intersect(lp_x1z2, lv_x1z2, pp[5]))
+				continue;
+			//p6 = l_x2z1 * py2
+			if (!py2->Intersect(lp_x2z1, lv_x2z1, pp[6]))
+				continue;
+			//p7 = l_x2z2 * py2
+			if (!py2->Intersect(lp_x2z2, lv_x2z2, pp[7]))
+				continue;
+
+			//draw the six planes out of the eight points
+			//get color
+			Color color(1.0, 1.0, 1.0);
+			double plane_trans = 0.0;
+			if (face_winding == BACK_FACE &&
+				(m_clip_mask == 3 ||
+				m_clip_mask == 12 ||
+				m_clip_mask == 48 ||
+				m_clip_mask == 1 ||
+				m_clip_mask == 2 ||
+				m_clip_mask == 4 ||
+				m_clip_mask == 8 ||
+				m_clip_mask == 16 ||
+				m_clip_mask == 32 ||
+				m_clip_mask == 64)
+				)
+				plane_trans = plane_mode == PM_LOWTRANS ||
 				plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
-		}
 
-		if (plane_mode == PM_NORMAL ||
-			plane_mode == PM_NORMALBACK)
-		{
-			if (!link)
-				color = vd->GetColor();
-		}
-		else
-			color = GetTextColor();
+			if (face_winding == FRONT_FACE)
+			{
+				plane_trans = plane_mode == PM_LOWTRANS ||
+					plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
+			}
 
-		//transform
-		if (!vd->GetTexture())
-			continue;
-		Transform *tform = vd->GetTexture()->transform();
-		if (!tform)
-			continue;
-		double mvmat[16];
-		tform->get_trans(mvmat);
-		double sclx, scly, sclz;
-		vd->GetScalings(sclx, scly, sclz);
-		glm::mat4 mv_mat = glm::scale(m_mv_mat,
-			glm::vec3(float(sclx), float(scly), float(sclz)));
-		glm::mat4 mv_mat2 = glm::mat4(
-			mvmat[0], mvmat[4], mvmat[8], mvmat[12],
-			mvmat[1], mvmat[5], mvmat[9], mvmat[13],
-			mvmat[2], mvmat[6], mvmat[10], mvmat[14],
-			mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
-		mv_mat = mv_mat * mv_mat2;
-		glm::mat4 matrix = m_proj_mat * mv_mat;
-		shader->setLocalParamMatrix(0, glm::value_ptr(matrix));
+			if (plane_mode == PM_NORMAL ||
+				plane_mode == PM_NORMALBACK)
+			{
+				if (!link)
+					color = vd->GetColor();
+			}
+			else
+				color = GetTextColor();
 
-		vector<float> vertex;
-		vertex.reserve(8*3);
-		vector<uint32_t> index;
-		index.reserve(6*4*2);
+			//transform
+			if (!vd->GetTexture())
+				continue;
+			Transform *tform = vd->GetTexture()->transform();
+			if (!tform)
+				continue;
+			double mvmat[16];
+			tform->get_trans(mvmat);
+			double sclx, scly, sclz;
+			vd->GetScalings(sclx, scly, sclz);
+			glm::mat4 mv_mat = glm::scale(m_mv_mat,
+				glm::vec3(float(sclx), float(scly), float(sclz)));
+			glm::mat4 mv_mat2 = glm::mat4(
+				mvmat[0], mvmat[4], mvmat[8], mvmat[12],
+				mvmat[1], mvmat[5], mvmat[9], mvmat[13],
+				mvmat[2], mvmat[6], mvmat[10], mvmat[14],
+				mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
+			mv_mat = mv_mat * mv_mat2;
+			glm::mat4 matrix = m_proj_mat * mv_mat;
 
-		//vertices
-		for (size_t pi=0; pi<8; ++pi)
-		{
-			vertex.push_back(pp[pi].x());
-			vertex.push_back(pp[pi].y());
-			vertex.push_back(pp[pi].z());
-		}
-		//indices
-		index.push_back(4); index.push_back(0); index.push_back(5); index.push_back(1);
-		index.push_back(4); index.push_back(0); index.push_back(1); index.push_back(5);
-		index.push_back(7); index.push_back(3); index.push_back(6); index.push_back(2);
-		index.push_back(7); index.push_back(3); index.push_back(2); index.push_back(6);
-		index.push_back(1); index.push_back(0); index.push_back(3); index.push_back(2);
-		index.push_back(1); index.push_back(0); index.push_back(2); index.push_back(3);
-		index.push_back(4); index.push_back(5); index.push_back(6); index.push_back(7);
-		index.push_back(4); index.push_back(5); index.push_back(7); index.push_back(6);
-		index.push_back(0); index.push_back(4); index.push_back(2); index.push_back(6);
-		index.push_back(0); index.push_back(4); index.push_back(6); index.push_back(2);
-		index.push_back(5); index.push_back(1); index.push_back(7); index.push_back(3);
-		index.push_back(5); index.push_back(1); index.push_back(3); index.push_back(7);
+			vector<Vulkan2dRender::Vertex> vertex;
+			vector<uint32_t> index;
+			vertex.reserve(8);
+			index.reserve(6 * 4 + 6 * 5);
 
-		glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_misc_ibo);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*index.size(), &index[0], GL_DYNAMIC_DRAW);
+			//vertices
+			for (size_t pi = 0; pi < 8; ++pi)
+			{
+				vertex.push_back(Vulkan2dRender::Vertex{
+					{ (float)pp[pi].x(), (float)pp[pi].y(), (float)pp[pi].z() },
+					{ 0.0f, 0.0f, 0.0f }
+				});
+			}
 
-		glBindVertexArray(m_misc_vao);
-		glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_misc_ibo);
+			if (m_clip_vobj.vertBuf.buffer == VK_NULL_HANDLE)
+			{
+				//indices
+				index.push_back(4); index.push_back(0); index.push_back(5); index.push_back(1);
+				index.push_back(7); index.push_back(3); index.push_back(6); index.push_back(2);
+				index.push_back(1); index.push_back(0); index.push_back(3); index.push_back(2);
+				index.push_back(4); index.push_back(5); index.push_back(6); index.push_back(7);
+				index.push_back(0); index.push_back(4); index.push_back(2); index.push_back(6);
+				index.push_back(5); index.push_back(1); index.push_back(7); index.push_back(3);
+				index.push_back(4); index.push_back(0); index.push_back(1); index.push_back(5); index.push_back(4);
+				index.push_back(7); index.push_back(3); index.push_back(2); index.push_back(6); index.push_back(7);
+				index.push_back(1); index.push_back(0); index.push_back(2); index.push_back(3); index.push_back(1);
+				index.push_back(4); index.push_back(5); index.push_back(7); index.push_back(6); index.push_back(4);
+				index.push_back(0); index.push_back(4); index.push_back(6); index.push_back(2); index.push_back(0);
+				index.push_back(5); index.push_back(1); index.push_back(3); index.push_back(7); index.push_back(5);
 
-		//draw
-		//x1 = (p4, p0, p1, p5)
-		if (m_clip_mask & 1)
-		{
-			if (draw_plane)
-			{
-				if (plane_mode == PM_NORMAL ||
-					plane_mode == PM_NORMALBACK)
-					shader->setLocalParam(0, 1.0, 0.5, 0.5, plane_trans);
-				else
-					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)0);
-			}
-			if (border)
-			{
-				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(4*4));
-			}
-		}
-		//x2 = (p7, p3, p2, p6)
-		if (m_clip_mask & 2)
-		{
-			if (draw_plane)
-			{
-				if (plane_mode == PM_NORMAL ||
-					plane_mode == PM_NORMALBACK)
-					shader->setLocalParam(0, 1.0, 0.5, 1.0, plane_trans);
-				else
-					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(8 * 4));
-			}
-			if (border)
-			{
-				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(12*4));
-			}
-		}
-		//y1 = (p1, p0, p2, p3)
-		if (m_clip_mask & 4)
-		{
-			if (draw_plane)
-			{
-				if (plane_mode == PM_NORMAL ||
-					plane_mode == PM_NORMALBACK)
-					shader->setLocalParam(0, 0.5, 1.0, 0.5, plane_trans);
-				else
-					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(16 * 4));
-			}
-			if (border)
-			{
-				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(20*4));
-			}
-		}
-		//y2 = (p4, p5, p7, p6)
-		if (m_clip_mask & 8)
-		{
-			if (draw_plane)
-			{
-				if (plane_mode == PM_NORMAL ||
-					plane_mode == PM_NORMALBACK)
-					shader->setLocalParam(0, 1.0, 1.0, 0.5, plane_trans);
-				else
-					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(24 * 4));
-			}
-			if (border)
-			{
-				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(28*4));
-			}
-		}
-		//z1 = (p0, p4, p6, p2)
-		if (m_clip_mask & 16)
-		{
-			if (draw_plane)
-			{
-				if (plane_mode == PM_NORMAL ||
-					plane_mode == PM_NORMALBACK)
-					shader->setLocalParam(0, 0.5, 0.5, 1.0, plane_trans);
-				else
-					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(32 * 4));
-			}
-			if (border)
-			{
-				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(36*4));
-			}
-		}
-		//z2 = (p5, p1, p3, p7)
-		if (m_clip_mask & 32)
-		{
-			if (draw_plane)
-			{
-				if (plane_mode == PM_NORMAL ||
-					plane_mode == PM_NORMALBACK)
-					shader->setLocalParam(0, 0.5, 1.0, 1.0, plane_trans);
-				else
-					shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-				glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (const GLvoid*)(40 * 4));
-			}
-			if (border)
-			{
-				shader->setLocalParam(0, color.r(), color.g(), color.b(), plane_trans);
-				glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, (const GLvoid*)(44*4));
-			}
-		}
+				VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+					VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+					&m_clip_vobj.vertBuf,
+					vertex.size() * sizeof(Vulkan2dRender::Vertex),
+					vertex.data()));
 
-		glDisableVertexAttribArray(0);
-		//unbind
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-		glBindVertexArray(0);
+				VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+					VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+					&m_clip_vobj.idxBuf,
+					index.size() * sizeof(uint32_t),
+					index.data()));
+
+				m_clip_vobj.idxCount = index.size();
+				m_clip_vobj.idxOffset = 0;
+				m_clip_vobj.vertCount = vertex.size();
+				m_clip_vobj.vertOffset = 0;
+
+				m_clip_vobj.idxBuf.map();
+				m_clip_vobj.idxBuf.copyTo(index.data(), index.size() * sizeof(uint32_t));
+				m_clip_vobj.idxBuf.unmap();
+			}
+			m_clip_vobj.vertBuf.map();
+			m_clip_vobj.vertBuf.copyTo(vertex.data(), vertex.size() * sizeof(Vulkan2dRender::Vertex));
+			m_clip_vobj.vertBuf.unmap();
+
+			vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+			Vulkan2dRender::V2dPipeline pipeline_line =
+				m_v2drender->preparePipeline(
+					IMG_SHDR_DRAW_GEOMETRY,
+					V2DRENDER_BLEND_OVER_UI,
+					current_fbo->attachments[0]->format,
+					current_fbo->attachments.size(),
+					0,
+					current_fbo->attachments[0]->is_swapchain_images,
+					VK_PRIMITIVE_TOPOLOGY_LINE_STRIP,
+					VK_POLYGON_MODE_FILL,
+					cull ? cullmode : VK_CULL_MODE_NONE,
+					frontface);
+			Vulkan2dRender::V2dPipeline pipeline_tri =
+				m_v2drender->preparePipeline(
+					IMG_SHDR_DRAW_GEOMETRY,
+					V2DRENDER_BLEND_OVER_UI,
+					current_fbo->attachments[0]->format,
+					current_fbo->attachments.size(),
+					0,
+					current_fbo->attachments[0]->is_swapchain_images,
+					VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
+					VK_POLYGON_MODE_FILL,
+					cull ? cullmode : VK_CULL_MODE_NONE,
+					frontface);
+			if (!current_fbo->renderPass)
+				current_fbo->replaceRenderPass(pipeline_line.pass);
+			
+			std::vector<Vulkan2dRender::V2DRenderParams> params_list;
+			Vulkan2dRender::V2DRenderParams params;
+			params.matrix[0] = matrix;
+			params.clear = m_frame_clear;
+			params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
+			m_frame_clear = false;
+			params.obj = &m_clip_vobj;
+
+			//draw
+			//x1 = (p4, p0, p1, p5)
+			if (m_clip_mask & 1)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						params.loc[0] = glm::vec4(1.0f, 0.5f, 0.5f, plane_trans);
+					else
+						params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_tri;
+					params.render_idxCount = 4;
+					params.render_idxBase = 4 * 0;
+					params_list.push_back(params);
+				}
+				if (border)
+				{
+					params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_line;
+					params.render_idxCount = 5;
+					params.render_idxBase = 4 * 6 + 5 * 0;
+					params_list.push_back(params);
+				}
+			}
+			//x2 = (p7, p3, p2, p6)
+			if (m_clip_mask & 2)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						params.loc[0] = glm::vec4(1.0f, 0.5f, 1.0f, plane_trans);
+					else
+						params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_tri;
+					params.render_idxCount = 4;
+					params.render_idxBase = 4 * 1;
+					params_list.push_back(params);
+				}
+				if (border)
+				{
+					params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_line;
+					params.render_idxCount = 5;
+					params.render_idxBase = 4 * 6 + 5 * 1;
+					params_list.push_back(params);
+				}
+			}
+			//y1 = (p1, p0, p2, p3)
+			if (m_clip_mask & 4)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						params.loc[0] = glm::vec4(0.5f, 1.0f, 0.5f, plane_trans);
+					else
+						params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_tri;
+					params.render_idxCount = 4;
+					params.render_idxBase = 4 * 2;
+					params_list.push_back(params);
+				}
+				if (border)
+				{
+					params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_line;
+					params.render_idxCount = 5;
+					params.render_idxBase = 4 * 6 + 5 * 2;
+					params_list.push_back(params);
+				}
+			}
+			//y2 = (p4, p5, p7, p6)
+			if (m_clip_mask & 8)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						params.loc[0] = glm::vec4(1.0f, 1.0f, 0.5f, plane_trans);
+					else
+						params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_tri;
+					params.render_idxCount = 4;
+					params.render_idxBase = 4 * 3;
+					params_list.push_back(params);
+				}
+				if (border)
+				{
+					params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_line;
+					params.render_idxCount = 5;
+					params.render_idxBase = 4 * 6 + 5 * 3;
+					params_list.push_back(params);
+				}
+			}
+			//z1 = (p0, p4, p6, p2)
+			if (m_clip_mask & 16)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						params.loc[0] = glm::vec4(0.5f, 0.5f, 1.0f, plane_trans);
+					else
+						params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_tri;
+					params.render_idxCount = 4;
+					params.render_idxBase = 4 * 4;
+					params_list.push_back(params);
+				}
+				if (border)
+				{
+					params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_line;
+					params.render_idxCount = 5;
+					params.render_idxBase = 4 * 6 + 5 * 4;
+					params_list.push_back(params);
+				}
+			}
+			//z2 = (p5, p1, p3, p7)
+			if (m_clip_mask & 32)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						params.loc[0] = glm::vec4(0.5f, 1.0f, 1.0f, plane_trans);
+					else
+						params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_tri;
+					params.render_idxCount = 4;
+					params.render_idxBase = 4 * 5;
+					params_list.push_back(params);
+				}
+				if (border)
+				{
+					params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_line;
+					params.render_idxCount = 5;
+					params.render_idxBase = 4 * 6 + 5 * 5;
+					params_list.push_back(params);
+				}
+			}
+
+			if (params_list.size() > 0)
+			{
+				m_v2drender->GetNextV2dRenderSemaphoreSettings(params_list[0]);
+				m_v2drender->seq_render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params_list.data(), params_list.size());
+			}
+		}
 	}
 
-	if (shader && shader->valid())
-		shader->release();
+	if (draw_type == 3)
+	{
+		for (i=0; i<GetMeshNum(); i++)
+		{
+			MeshData* md = GetMeshData(i);
+			if (!md)
+				continue;
 
-	glFrontFace(GL_CCW);
-	glCullFace(GL_BACK);
+			if (md!=cur_md)
+				continue;
+
+			MeshRenderer *mr = md->GetMR();
+			if (!mr)
+				continue;
+
+			vector<Plane*> *planes = mr->get_planes();
+			if (planes->size() != 6)
+				continue;
+
+			//calculating planes
+			//get six planes
+			Plane* px1 = (*planes)[0];
+			Plane* px2 = (*planes)[1];
+			Plane* py1 = (*planes)[2];
+			Plane* py2 = (*planes)[3];
+			Plane* pz1 = (*planes)[4];
+			Plane* pz2 = (*planes)[5];
+
+			//calculate 4 lines
+			Vector lv_x1z1, lv_x1z2, lv_x2z1, lv_x2z2;
+			Point lp_x1z1, lp_x1z2, lp_x2z1, lp_x2z2;
+			//x1z1
+			if (!px1->Intersect(*pz1, lp_x1z1, lv_x1z1))
+				continue;
+			//x1z2
+			if (!px1->Intersect(*pz2, lp_x1z2, lv_x1z2))
+				continue;
+			//x2z1
+			if (!px2->Intersect(*pz1, lp_x2z1, lv_x2z1))
+				continue;
+			//x2z2
+			if (!px2->Intersect(*pz2, lp_x2z2, lv_x2z2))
+				continue;
+
+			//calculate 8 points
+			Point pp[8];
+			//p0 = l_x1z1 * py1
+			if (!py1->Intersect(lp_x1z1, lv_x1z1, pp[0]))
+				continue;
+			//p1 = l_x1z2 * py1
+			if (!py1->Intersect(lp_x1z2, lv_x1z2, pp[1]))
+				continue;
+			//p2 = l_x2z1 *py1
+			if (!py1->Intersect(lp_x2z1, lv_x2z1, pp[2]))
+				continue;
+			//p3 = l_x2z2 * py1
+			if (!py1->Intersect(lp_x2z2, lv_x2z2, pp[3]))
+				continue;
+			//p4 = l_x1z1 * py2
+			if (!py2->Intersect(lp_x1z1, lv_x1z1, pp[4]))
+				continue;
+			//p5 = l_x1z2 * py2
+			if (!py2->Intersect(lp_x1z2, lv_x1z2, pp[5]))
+				continue;
+			//p6 = l_x2z1 * py2
+			if (!py2->Intersect(lp_x2z1, lv_x2z1, pp[6]))
+				continue;
+			//p7 = l_x2z2 * py2
+			if (!py2->Intersect(lp_x2z2, lv_x2z2, pp[7]))
+				continue;
+
+			//draw the six planes out of the eight points
+			//get color
+			Color color(1.0, 1.0, 1.0);
+			double plane_trans = 0.0;
+			if (face_winding == BACK_FACE &&
+				(m_clip_mask == 3 ||
+				m_clip_mask == 12 ||
+				m_clip_mask == 48 ||
+				m_clip_mask == 1 ||
+				m_clip_mask == 2 ||
+				m_clip_mask == 4 ||
+				m_clip_mask == 8 ||
+				m_clip_mask == 16 ||
+				m_clip_mask == 32 ||
+				m_clip_mask == 64)
+				)
+				plane_trans = plane_mode == PM_LOWTRANS ||
+				plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
+
+			if (face_winding == FRONT_FACE)
+			{
+				plane_trans = plane_mode == PM_LOWTRANS ||
+					plane_mode == PM_LOWTRANSBACK ? 0.1 : 0.3;
+			}
+
+			if (plane_mode == PM_NORMAL ||
+				plane_mode == PM_NORMALBACK)
+			{
+				if (!link)
+				{
+					Color amb, diff, spec;
+					double shine, alpha;
+					md->GetMaterial(amb, diff, spec, shine, alpha);
+					color = diff;
+				}
+			}
+			else
+				color = GetTextColor();
+
+			//transform
+			BBox dbox = md->GetBounds();
+			glm::mat4 mvmat = glm::mat4(float(dbox.max().x()-dbox.min().x()), 0.0f, 0.0f, 0.0f,
+										0.0f, float(dbox.max().y()-dbox.min().y()), 0.0f, 0.0f,
+										0.0f, 0.0f, -float(dbox.max().z()-dbox.min().z()), 0.0f,
+										float(dbox.min().x()), float(dbox.min().y()), float(dbox.max().z()), 1.0f);
+			glm::mat4 matrix = m_proj_mat * m_mv_mat * mvmat;
+
+			vector<Vulkan2dRender::Vertex> vertex;
+			vector<uint32_t> index;
+			vertex.reserve(8);
+			index.reserve(6 * 4 + 6 * 5);
+
+			//vertices
+			for (size_t pi = 0; pi < 8; ++pi)
+			{
+				vertex.push_back(Vulkan2dRender::Vertex{
+					{ (float)pp[pi].x(), (float)pp[pi].y(), (float)pp[pi].z() },
+					{ 0.0f, 0.0f, 0.0f }
+					});
+			}
+
+			if (m_clip_vobj.vertBuf.buffer == VK_NULL_HANDLE)
+			{
+				//indices
+				index.push_back(4); index.push_back(0); index.push_back(5); index.push_back(1);
+				index.push_back(7); index.push_back(3); index.push_back(6); index.push_back(2);
+				index.push_back(1); index.push_back(0); index.push_back(3); index.push_back(2);
+				index.push_back(4); index.push_back(5); index.push_back(6); index.push_back(7);
+				index.push_back(0); index.push_back(4); index.push_back(2); index.push_back(6);
+				index.push_back(5); index.push_back(1); index.push_back(7); index.push_back(3);
+				index.push_back(4); index.push_back(0); index.push_back(1); index.push_back(5); index.push_back(4);
+				index.push_back(7); index.push_back(3); index.push_back(2); index.push_back(6); index.push_back(7);
+				index.push_back(1); index.push_back(0); index.push_back(2); index.push_back(3); index.push_back(1);
+				index.push_back(4); index.push_back(5); index.push_back(7); index.push_back(6); index.push_back(4);
+				index.push_back(0); index.push_back(4); index.push_back(6); index.push_back(2); index.push_back(0);
+				index.push_back(5); index.push_back(1); index.push_back(3); index.push_back(7); index.push_back(5);
+
+				VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+					VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+					&m_clip_vobj.vertBuf,
+					vertex.size() * sizeof(Vulkan2dRender::Vertex),
+					vertex.data()));
+
+				VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+					VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+					&m_clip_vobj.idxBuf,
+					index.size() * sizeof(uint32_t),
+					index.data()));
+
+				m_clip_vobj.idxCount = index.size();
+				m_clip_vobj.idxOffset = 0;
+				m_clip_vobj.vertCount = vertex.size();
+				m_clip_vobj.vertOffset = 0;
+
+				m_clip_vobj.idxBuf.map();
+				m_clip_vobj.idxBuf.copyTo(index.data(), index.size() * sizeof(uint32_t));
+				m_clip_vobj.idxBuf.unmap();
+			}
+			m_clip_vobj.vertBuf.map();
+			m_clip_vobj.vertBuf.copyTo(vertex.data(), vertex.size() * sizeof(Vulkan2dRender::Vertex));
+			m_clip_vobj.vertBuf.unmap();
+
+			vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+			Vulkan2dRender::V2dPipeline pipeline_line =
+				m_v2drender->preparePipeline(
+					IMG_SHDR_DRAW_GEOMETRY,
+					V2DRENDER_BLEND_OVER_UI,
+					current_fbo->attachments[0]->format,
+					current_fbo->attachments.size(),
+					0,
+					current_fbo->attachments[0]->is_swapchain_images,
+					VK_PRIMITIVE_TOPOLOGY_LINE_STRIP,
+					VK_POLYGON_MODE_FILL,
+					cull ? cullmode : VK_CULL_MODE_NONE,
+					frontface);
+			Vulkan2dRender::V2dPipeline pipeline_tri =
+				m_v2drender->preparePipeline(
+					IMG_SHDR_DRAW_GEOMETRY,
+					V2DRENDER_BLEND_OVER_UI,
+					current_fbo->attachments[0]->format,
+					current_fbo->attachments.size(),
+					0,
+					current_fbo->attachments[0]->is_swapchain_images,
+					VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
+					VK_POLYGON_MODE_FILL,
+					cull ? cullmode : VK_CULL_MODE_NONE,
+					frontface);
+			if (!current_fbo->renderPass)
+				current_fbo->replaceRenderPass(pipeline_line.pass);
+
+			std::vector<Vulkan2dRender::V2DRenderParams> params_list;
+			Vulkan2dRender::V2DRenderParams params;
+			params.matrix[0] = matrix;
+			params.clear = m_frame_clear;
+			params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
+			m_frame_clear = false;
+			params.obj = &m_clip_vobj;
+
+			//draw
+			//x1 = (p4, p0, p1, p5)
+			if (m_clip_mask & 1)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						params.loc[0] = glm::vec4(1.0f, 0.5f, 0.5f, plane_trans);
+					else
+						params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_tri;
+					params.render_idxCount = 4;
+					params.render_idxBase = 4 * 0;
+					params_list.push_back(params);
+				}
+				if (border)
+				{
+					params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_line;
+					params.render_idxCount = 5;
+					params.render_idxBase = 4 * 6 + 5 * 0;
+					params_list.push_back(params);
+				}
+			}
+			//x2 = (p7, p3, p2, p6)
+			if (m_clip_mask & 2)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						params.loc[0] = glm::vec4(1.0f, 0.5f, 1.0f, plane_trans);
+					else
+						params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_tri;
+					params.render_idxCount = 4;
+					params.render_idxBase = 4 * 1;
+					params_list.push_back(params);
+				}
+				if (border)
+				{
+					params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_line;
+					params.render_idxCount = 5;
+					params.render_idxBase = 4 * 6 + 5 * 1;
+					params_list.push_back(params);
+				}
+			}
+			//y1 = (p1, p0, p2, p3)
+			if (m_clip_mask & 4)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						params.loc[0] = glm::vec4(0.5f, 1.0f, 0.5f, plane_trans);
+					else
+						params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_tri;
+					params.render_idxCount = 4;
+					params.render_idxBase = 4 * 2;
+					params_list.push_back(params);
+				}
+				if (border)
+				{
+					params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_line;
+					params.render_idxCount = 5;
+					params.render_idxBase = 4 * 6 + 5 * 2;
+					params_list.push_back(params);
+				}
+			}
+			//y2 = (p4, p5, p7, p6)
+			if (m_clip_mask & 8)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						params.loc[0] = glm::vec4(1.0f, 1.0f, 0.5f, plane_trans);
+					else
+						params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_tri;
+					params.render_idxCount = 4;
+					params.render_idxBase = 4 * 3;
+					params_list.push_back(params);
+				}
+				if (border)
+				{
+					params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_line;
+					params.render_idxCount = 5;
+					params.render_idxBase = 4 * 6 + 5 * 3;
+					params_list.push_back(params);
+				}
+			}
+			//z1 = (p0, p4, p6, p2)
+			if (m_clip_mask & 16)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						params.loc[0] = glm::vec4(0.5f, 0.5f, 1.0f, plane_trans);
+					else
+						params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_tri;
+					params.render_idxCount = 4;
+					params.render_idxBase = 4 * 4;
+					params_list.push_back(params);
+				}
+				if (border)
+				{
+					params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_line;
+					params.render_idxCount = 5;
+					params.render_idxBase = 4 * 6 + 5 * 4;
+					params_list.push_back(params);
+				}
+			}
+			//z2 = (p5, p1, p3, p7)
+			if (m_clip_mask & 32)
+			{
+				if (draw_plane)
+				{
+					if (plane_mode == PM_NORMAL ||
+						plane_mode == PM_NORMALBACK)
+						params.loc[0] = glm::vec4(0.5f, 1.0f, 1.0f, plane_trans);
+					else
+						params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_tri;
+					params.render_idxCount = 4;
+					params.render_idxBase = 4 * 5;
+					params_list.push_back(params);
+				}
+				if (border)
+				{
+					params.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), (float)plane_trans);
+					params.pipeline = pipeline_line;
+					params.render_idxCount = 5;
+					params.render_idxBase = 4 * 6 + 5 * 5;
+					params_list.push_back(params);
+				}
+			}
+
+			if (params_list.size() > 0)
+			{
+				m_v2drender->GetNextV2dRenderSemaphoreSettings(params_list[0]);
+				m_v2drender->seq_render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params_list.data(), params_list.size());
+			}
+		}
+	}
+
 }
 
-void VRenderGLView::DrawGrid()
+void VRenderVulkanView::DrawGrid()
 {
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_BLEND);
-
 	size_t grid_num = 5;
 	size_t line_num = grid_num*2 + 1;
-	size_t i;
-	vector<float> vertex;
-	vertex.reserve(line_num*4*3);
-
 	double gap = m_distance / grid_num;
-	for (i=0; i<line_num; ++i)
+	size_t i;
+	vector<Vulkan2dRender::Vertex> vertex;
+	vector<uint32_t> index;
+	vertex.reserve(line_num * 2 * 2);
+	index.reserve(line_num * 2 * 2);
+
+	for (i = 0; i < line_num; ++i)
 	{
-		vertex.push_back(float(-m_distance+gap*i));
-		vertex.push_back(float(0.0));
-		vertex.push_back(float(-m_distance));
-		vertex.push_back(float(-m_distance+gap*i));
-		vertex.push_back(float(0.0));
-		vertex.push_back(float(m_distance));
+		vertex.push_back(
+			Vulkan2dRender::Vertex{
+				{float(-m_distance + gap*i), 0.0f, float(-m_distance)},
+				{0.0f, 0.0f, 0.0f}
+			}
+		);
+		vertex.push_back(
+			Vulkan2dRender::Vertex{
+				{float(-m_distance + gap*i), 0.0f, float(m_distance)},
+				{0.0f, 0.0f, 0.0f}
+			}
+		);
+		index.push_back(2*i);
+		index.push_back(2*i + 1);
 	}
-	for (i=0; i<line_num; ++i)
+	for (i = 0; i < line_num; ++i)
 	{
-		vertex.push_back(float(-m_distance));
-		vertex.push_back(float(0.0));
-		vertex.push_back(float(-m_distance+gap*i));
-		vertex.push_back(float(m_distance));
-		vertex.push_back(float(0.0));
-		vertex.push_back(float(-m_distance+gap*i));
+		vertex.push_back(
+			Vulkan2dRender::Vertex{
+				{float(-m_distance), 0.0f, float(-m_distance + gap * i)},
+				{0.0f, 0.0f, 0.0f}
+			}
+		);
+		vertex.push_back(
+			Vulkan2dRender::Vertex{
+				{float(m_distance), 0.0f, float(-m_distance + gap * i)},
+				{0.0f, 0.0f, 0.0f}
+			}
+		);
+		index.push_back(2*line_num + 2*i);
+		index.push_back(2*line_num + 2*i + 1);
 	}
 
-	ShaderProgram* shader =
-		m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY);
-	if (shader)
+	if (m_grid_vobj.vertBuf.buffer == VK_NULL_HANDLE)
 	{
-		if (!shader->valid())
-			shader->create();
-		shader->bind();
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_grid_vobj.vertBuf,
+			vertex.size() * sizeof(Vulkan2dRender::Vertex),
+			vertex.data()));
+
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_grid_vobj.idxBuf,
+			index.size() * sizeof(uint32_t),
+			index.data()));
+
+		m_grid_vobj.idxCount = index.size();
+		m_grid_vobj.idxOffset = 0;
+		m_grid_vobj.vertCount = vertex.size();
+		m_grid_vobj.vertOffset = 0;
 	}
+	m_grid_vobj.vertBuf.map();
+	m_grid_vobj.idxBuf.map();
+	m_grid_vobj.vertBuf.copyTo(vertex.data(), vertex.size() * sizeof(Vulkan2dRender::Vertex));
+	m_grid_vobj.idxBuf.copyTo(index.data(), index.size() * sizeof(uint32_t));
+	m_grid_vobj.vertBuf.unmap();
+	m_grid_vobj.idxBuf.unmap();
+
+
+	Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+	vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+	params.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_DRAW_GEOMETRY,
+			V2DRENDER_BLEND_OVER_UI,
+			current_fbo->attachments[0]->format,
+			current_fbo->attachments.size(),
+			0,
+			current_fbo->attachments[0]->is_swapchain_images,
+			VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
 	Color text_color = GetTextColor();
-	shader->setLocalParam(0, text_color.r(), text_color.g(), text_color.b(), 1.0);
-	glm::mat4 matrix = m_proj_mat * m_mv_mat;
-	shader->setLocalParamMatrix(0, glm::value_ptr(matrix));
+	params.loc[0] = glm::vec4((float)text_color.r(), (float)text_color.g(), (float)text_color.b(), 1.0f);
+	params.matrix[0] = m_proj_mat * m_mv_mat;
+	params.clear = m_frame_clear;
+	params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
+	m_frame_clear = false;
 
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-	glBindVertexArray(m_misc_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
-	glDrawArrays(GL_LINES, 0, line_num*4);
-	glDisableVertexAttribArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
+	params.obj = &m_grid_vobj;
 
-	if (shader && shader->valid())
-		shader->release();
+	if (!current_fbo->renderPass)
+		current_fbo->replaceRenderPass(params.pipeline.pass);
 
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
+	m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
 }
 
-void VRenderGLView::DrawCamCtr()
+void VRenderVulkanView::DrawCamCtr()
 {
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_BLEND);
-
-	double len;
+	float len;
 	if (m_camctr_size > 0.0)
-		len = m_distance*tan(d2r(m_aov/2.0))*m_camctr_size/10.0;
+		len = m_distance * tan(d2r(m_aov / 2.0)) * m_camctr_size / 10.0;
 	else
 		len = fabs(m_camctr_size);
 
-	vector<float> vertex;
-	vertex.reserve(6*3);
+	vector<Vulkan2dRender::Vertex> vertex;
+	vector<uint32_t> index = { 0,1,2,3,4,5 };
+	vertex.reserve(6);
 
-	vertex.push_back(0.0); vertex.push_back(0.0); vertex.push_back(0.0);
-	vertex.push_back(len); vertex.push_back(0.0); vertex.push_back(0.0);
-	vertex.push_back(0.0); vertex.push_back(0.0); vertex.push_back(0.0);
-	vertex.push_back(0.0); vertex.push_back(len); vertex.push_back(0.0);
-	vertex.push_back(0.0); vertex.push_back(0.0); vertex.push_back(0.0);
-	vertex.push_back(0.0); vertex.push_back(0.0); vertex.push_back(len);
-
-	ShaderProgram* shader =
-		m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY);
-	if (shader)
+	vertex.push_back(Vulkan2dRender::Vertex{ {0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {len,  0.0f, 0.0f}, {1.0f, 0.0f, 0.0f} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {0.0f, len,  0.0f}, {0.0f, 1.0f, 0.0f} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {0.0f, 0.0f, len }, {0.0f, 0.0f, 1.0f} });
+	
+	if (m_camctr_vobj.vertBuf.buffer == VK_NULL_HANDLE)
 	{
-		if (!shader->valid())
-			shader->create();
-		shader->bind();
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_camctr_vobj.vertBuf,
+			vertex.size() * sizeof(Vulkan2dRender::Vertex),
+			vertex.data()));
+
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_camctr_vobj.idxBuf,
+			index.size() * sizeof(uint32_t),
+			index.data()));
+
+		m_camctr_vobj.idxCount = index.size();
+		m_camctr_vobj.idxOffset = 0;
+		m_camctr_vobj.vertCount = vertex.size();
+		m_camctr_vobj.vertOffset = 0;
 	}
-	glm::mat4 matrix = m_proj_mat * m_mv_mat;
-	shader->setLocalParamMatrix(0, glm::value_ptr(matrix));
+	m_camctr_vobj.vertBuf.map();
+	m_camctr_vobj.idxBuf.map();
+	m_camctr_vobj.vertBuf.copyTo(vertex.data(), vertex.size() * sizeof(Vulkan2dRender::Vertex));
+	m_camctr_vobj.idxBuf.copyTo(index.data(), index.size() * sizeof(uint32_t));
+	m_camctr_vobj.vertBuf.unmap();
+	m_camctr_vobj.idxBuf.unmap();
 
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-	glBindVertexArray(m_misc_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
 
-	shader->setLocalParam(0, 1.0, 0.0, 0.0, 1.0);
-	glDrawArrays(GL_LINES, 0, 2);
-	shader->setLocalParam(0, 0.0, 1.0, 0.0, 1.0);
-	glDrawArrays(GL_LINES, 2, 2);
-	shader->setLocalParam(0, 0.0, 0.0, 1.0, 1.0);
-	glDrawArrays(GL_LINES, 4, 2);
+	Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+	vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+	params.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_DRAW_GEOMETRY_COLOR3,
+			V2DRENDER_BLEND_OVER_UI,
+			current_fbo->attachments[0]->format,
+			current_fbo->attachments.size(),
+			0,
+			current_fbo->attachments[0]->is_swapchain_images,
+			VK_PRIMITIVE_TOPOLOGY_LINE_LIST
+		);
+	params.matrix[0] = m_proj_mat * m_mv_mat;
+	params.clear = m_frame_clear;
+	params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
+	m_frame_clear = false;
 
-	glDisableVertexAttribArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
+	params.obj = &m_camctr_vobj;
 
-	if (shader && shader->valid())
-		shader->release();
+	if (!current_fbo->renderPass)
+		current_fbo->replaceRenderPass(params.pipeline.pass);
 
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
+	m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
 }
 
-void VRenderGLView::DrawFrame()
+void VRenderVulkanView::DrawFrame()
 {
 	int nx, ny;
 	nx = GetSize().x;
 	ny = GetSize().y;
 	glm::mat4 proj_mat = glm::ortho(float(0), float(nx), float(0), float(ny));
 
-	glDisable(GL_DEPTH_TEST);
-	GLfloat line_width = 1.0f;
+	float line_width = 1.0f;
 
-	vector<float> vertex;
-	vertex.reserve(4*3);
+	vector<Vulkan2dRender::Vertex> vertex;
+	vector<uint32_t> index = { 0,1,2,3,0 };
+	vertex.reserve(4);
 
-	vertex.push_back(m_frame_x-1); vertex.push_back(m_frame_y-1); vertex.push_back(0.0);
-	vertex.push_back(m_frame_x+m_frame_w+1); vertex.push_back(m_frame_y-1); vertex.push_back(0.0);
-	vertex.push_back(m_frame_x+m_frame_w+1); vertex.push_back(m_frame_y+m_frame_h+1); vertex.push_back(0.0);
-	vertex.push_back(m_frame_x-1); vertex.push_back(m_frame_y+m_frame_h+1); vertex.push_back(0.0);
+	vertex.push_back(Vulkan2dRender::Vertex{ {(float)(m_frame_x - 1), (float)(m_frame_y - 1), 0.0f}, {0.0f, 0.0f, 0.0f} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {(float)(m_frame_x + m_frame_w + 1), (float)(m_frame_y - 1), 0.0f}, {0.0f, 0.0f, 0.0f} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {(float)(m_frame_x + m_frame_w + 1), (float)(m_frame_y + m_frame_h + 1), 0.0f}, {0.0f, 0.0f, 0.0f} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {(float)(m_frame_x - 1), (float)(m_frame_y + m_frame_h + 1), 0.0f}, {0.0f, 0.0f, 0.0f} });
 
-	ShaderProgram* shader =
-		m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY);
-	if (shader)
+	if (m_frame_vobj.vertBuf.buffer == VK_NULL_HANDLE)
 	{
-		if (!shader->valid())
-			shader->create();
-		shader->bind();
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_frame_vobj.vertBuf,
+			vertex.size() * sizeof(Vulkan2dRender::Vertex),
+			vertex.data()));
+
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_frame_vobj.idxBuf,
+			index.size() * sizeof(uint32_t),
+			index.data()));
+
+		m_frame_vobj.idxCount = index.size();
+		m_frame_vobj.idxOffset = 0;
+		m_frame_vobj.vertCount = vertex.size();
+		m_frame_vobj.vertOffset = 0;
 	}
-	shader->setLocalParam(0, 1.0, 1.0, 0.0, 1.0);
-	shader->setLocalParamMatrix(0, glm::value_ptr(proj_mat));
+	m_frame_vobj.vertBuf.map();
+	m_frame_vobj.idxBuf.map();
+	m_frame_vobj.vertBuf.copyTo(vertex.data(), vertex.size() * sizeof(Vulkan2dRender::Vertex));
+	m_frame_vobj.idxBuf.copyTo(index.data(), index.size() * sizeof(uint32_t));
+	m_frame_vobj.vertBuf.unmap();
+	m_frame_vobj.idxBuf.unmap();
 
-	//draw frame
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-	glBindVertexArray(m_misc_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
-	glDrawArrays(GL_LINE_LOOP, 0, 4);
-	glDisableVertexAttribArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
 
-	if (shader && shader->valid())
-		shader->release();
+	Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+	vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+	params.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_DRAW_GEOMETRY,
+			V2DRENDER_BLEND_OVER_UI,
+			current_fbo->attachments[0]->format,
+			current_fbo->attachments.size(),
+			0,
+			current_fbo->attachments[0]->is_swapchain_images,
+			VK_PRIMITIVE_TOPOLOGY_LINE_STRIP
+		);
+	params.loc[0] = glm::vec4(1.0f, 1.0f, 0.0f, 1.0f);
+	params.matrix[0] = proj_mat;
+	params.clear = m_frame_clear;
+	params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
+	m_frame_clear = false;
 
-	glEnable(GL_DEPTH_TEST);
+	params.obj = &m_frame_vobj;
+
+	if (!current_fbo->renderPass)
+		current_fbo->replaceRenderPass(params.pipeline.pass);
+
+	m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
 }
 
-void VRenderGLView::DrawScaleBar()
+void VRenderVulkanView::FixScaleBarLen(bool fix, double len)
+{ 
+	int nx = GetSize().x;
+	int ny = GetSize().y;
+
+	m_fix_sclbar = fix;
+	if (len > 0.0) m_sb_length = len;
+	m_fixed_sclbar_fac = m_sb_length*m_scale_factor*min(nx,ny);
+}
+
+void VRenderVulkanView::GetScaleBarFixed(bool &fix, double &len, int &unitid)
+{
+	int nx = GetSize().x;
+	int ny = GetSize().y;
+
+	fix = m_fix_sclbar;
+	
+	if (m_fix_sclbar)
+		m_sb_length = m_fixed_sclbar_fac/(m_scale_factor*min(nx,ny));
+	
+	double len_txt = m_sb_length;
+	int unit_id = m_sb_unit;
+	wxString unit_txt = m_sb_text;
+
+	wxString num_txt = (len_txt==(int)len_txt) ? wxString::Format(wxT("%i "), (int)len_txt) :
+												 wxString::Format( ((int)(len_txt*100.0))%10==0 ? wxT("%.1f ") : wxT("%.2f "), len_txt);
+/*	if (m_fix_sclbar)
+	{
+
+		if (log10(len_txt) < 0.0)
+		{
+			while (log10(len_txt) < 0.0 && unit_id > 0)
+			{
+				len_txt *= 1000.0;
+				unit_id--;
+			}
+		}
+		else if (log10(len_txt) >= 3.0)
+		{
+			while (log10(len_txt) >= 3.0 && unit_id < 2)
+			{
+				len_txt *= 0.001;
+				unit_id++;
+			}
+		}
+
+		switch (unit_id)
+		{
+		case 0:
+			unit_txt = "nm";
+			break;
+		case 1:
+		default:
+			unit_txt = wxString::Format("%c%c", 181, 'm');
+			break;
+		case 2:
+			unit_txt = "mm";
+			break;
+		}
+
+		if (log10(len_txt) >= 2.0)
+			num_txt = wxString::Format(wxT("%i "), (int)len_txt);
+		else if (len_txt < 1.0)
+			num_txt = wxString::Format(wxT("%.3f "), len_txt);
+		else
+		{
+			int pr = 2.0 - (int)log10(len_txt);
+			wxString f = wxT("%.") + wxString::Format(wxT("%i"), pr) + wxT("f ");
+			num_txt = wxString::Format(f, len_txt);
+		}
+	}
+*/	
+	len = len_txt;
+	unitid = unit_id;
+}
+
+void VRenderVulkanView::DrawScaleBar()
 {
 	double offset = 0.0;
 	if (m_draw_legend)
@@ -9567,92 +11369,227 @@ void VRenderGLView::DrawScaleBar()
 	float px, py, ph;
 
 	glm::mat4 proj_mat = glm::ortho(0.0f, 1.0f, 0.0f, 1.0f);
+	
+	if (m_fix_sclbar)
+		m_sb_length = m_fixed_sclbar_fac/(m_scale_factor*min(nx,ny));
+	float len = m_sb_length / (m_ortho_right-m_ortho_left);
 
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_BLEND);
+	double len_txt = m_sb_length;
+	int unit_id = m_sb_unit;
+	wxString unit_txt = m_sb_text;
 
-	double len = m_sb_length / (m_ortho_right-m_ortho_left);
-	wstring wsb_text = m_sb_text.ToStdWstring();
-	double textlen = m_text_renderer?
-		m_text_renderer->RenderTextLen(wsb_text):0.0;
-	vector<float> vertex;
-	vertex.reserve(4*3);
+	wxString num_txt;
+	
+	if (m_sclbar_digit == 0)
+		num_txt = wxString::Format(wxT("%i "), (int)len_txt);
+	else if (m_sclbar_digit > 0)
+	{
+		wxString f = wxT("%.9f");
+		num_txt = wxString::Format(f, len_txt);
+		wxString intstr = num_txt.BeforeFirst(wxT('.'));
+		wxString fracstr = num_txt.AfterFirst(wxT('.'));
+		int fractextlen = m_sclbar_digit;
+		if (fractextlen > fracstr.Length()) fractextlen = fracstr.Length();
+		num_txt = intstr + wxT(".") + fracstr.Mid(0, fractextlen) + wxT(" ");
+	}
 
+/*
+	if (m_sclbar_digit == 0)
+		num_txt = wxString::Format(wxT("%i "), (int)len_txt);
+	else if (m_sclbar_digit > 0)
+	{
+		wxString f = wxT("%.15f");
+		num_txt = wxString::Format(f, len_txt);
+		wxString intstr = num_txt.BeforeFirst(wxT('.'));
+		if (intstr.Length() >= m_sclbar_digit)
+			num_txt = intstr;
+		else if (intstr.GetChar(0) != wxT('0'))
+		{
+			int textlen = m_sclbar_digit+1;
+			if (textlen >= num_txt.Length()) textlen = num_txt.Length();
+			num_txt = num_txt.Mid(0, m_sclbar_digit+1);
+		}
+		else
+		{
+			int count;
+			bool zero = true;
+			for(count = 0; count < num_txt.Length(); count++)
+			{
+				if (num_txt.GetChar(count) != wxT('0') && num_txt.GetChar(count) != wxT('.'))
+				{
+					zero = false;
+					break;
+				}
+			}
+			if (!zero)
+			{
+				count += m_sclbar_digit;
+				if (count >= num_txt.Length()) count = num_txt.Length()-1;
+			}
+			else
+				count = 1;
+			num_txt = num_txt.Mid(0, count);
+		}
+		num_txt += wxT(" ");
+	}
+*/
+
+/*	wxString num_txt = (len_txt==(int)len_txt) ? wxString::Format(wxT("%i "), (int)len_txt) :
+												 wxString::Format( ((int)(len_txt*100.0))%10==0 ? wxT("%.1f ") : wxT("%.2f "), len_txt);
+	if (m_fix_sclbar)
+	{
+		if (log10(len_txt) < 0.0)
+		{
+			while (log10(len_txt) < 0.0 && unit_id > 0)
+			{
+				len_txt *= 1000.0;
+				unit_id--;
+			}
+		}
+		else if (log10(len_txt) >= 3.0)
+		{
+			while (log10(len_txt) >= 3.0 && unit_id < 2)
+			{
+				len_txt *= 0.001;
+				unit_id++;
+			}
+		}
+
+		switch (unit_id)
+		{
+		case 0:
+			unit_txt = "nm";
+			break;
+		case 1:
+		default:
+			unit_txt = wxString::Format("%c%c", 181, 'm');
+			break;
+		case 2:
+			unit_txt = "mm";
+			break;
+		}
+
+		if (log10(len_txt) >= 2.0)
+			num_txt = wxString::Format(wxT("%i "), (int)len_txt);
+		else if (len_txt < 1.0)
+			num_txt = wxString::Format(wxT("%.3f "), len_txt);
+		else
+		{
+			int pr = 2.0 - (int)log10(len_txt);
+			wxString f = wxT("%.") + wxString::Format(wxT("%i"), pr) + wxT("f ");
+			num_txt = wxString::Format(f, len_txt);
+		}
+	}
+*/
+	wstring wsb_text;
+	wsb_text = num_txt + unit_txt.ToStdWstring();
+	
+	float textlen = m_text_renderer?
+		m_text_renderer->RenderTextDims(wsb_text).width : 0.0f;
 	Color text_color = GetTextColor();
+
+	vector<Vulkan2dRender::Vertex> vertex;
+	vector<uint32_t> index = { 0,1,2, 2,3,0 };
+	vertex.reserve(4);
 
 	if (m_draw_frame)
 	{
-		px = (0.95*m_frame_w+m_frame_x)/nx;
-		py = (0.05*m_frame_h+m_frame_y+offset)/ny;
-		ph = 5.0/ny;
-		vertex.push_back(px); vertex.push_back(py); vertex.push_back(0.0);
-		vertex.push_back(px-len); vertex.push_back(py); vertex.push_back(0.0);
-		vertex.push_back(px); vertex.push_back(py-ph); vertex.push_back(0.0);
-		vertex.push_back(px-len); vertex.push_back(py-ph); vertex.push_back(0.0);
+		px = (0.95 * m_frame_w + m_frame_x) / nx;
+		py = (0.95 * m_frame_h + m_frame_y - offset) / ny;
+		ph = 5.0 / ny;
+		vertex.push_back(Vulkan2dRender::Vertex{ {px, py, 0}, {0.0f, 0.0f, 0.0f} });
+		vertex.push_back(Vulkan2dRender::Vertex{ {px - len, py, 0}, {0.0f, 0.0f, 0.0f} });
+		vertex.push_back(Vulkan2dRender::Vertex{ {px - len, py + ph, 0}, {0.0f, 0.0f, 0.0f} });
+		vertex.push_back(Vulkan2dRender::Vertex{ {px, py + ph, 0}, {0.0f, 0.0f, 0.0f} });
 
 		if (m_disp_scale_bar_text)
 		{
-			px = 0.95*m_frame_w+m_frame_x-(len*nx+textlen+nx)/2.0;
-			py = ny/2.0-ny+0.065*m_frame_h+m_frame_y+offset;
+			px = 0.95 * m_frame_w + m_frame_x - (len * nx + textlen + nx) / 2.0;
+			py = 0.95 * m_frame_h + m_frame_y - 15.0f - offset - ny / 2.0;
 			if (m_text_renderer)
 				m_text_renderer->RenderText(
-				wsb_text, text_color,
-				px*sx, py*sy, sx, sy);
+					m_vulkan->frameBuffers[m_vulkan->currentBuffer],
+					wsb_text, text_color,
+					px * sx, py * sy);
 		}
 	}
 	else
 	{
 		px = 0.95;
-		py = 0.05+offset/ny;
-		ph = 5.0/ny;
-		vertex.push_back(px); vertex.push_back(py); vertex.push_back(0.0);
-		vertex.push_back(px-len); vertex.push_back(py); vertex.push_back(0.0);
-		vertex.push_back(px); vertex.push_back(py-ph); vertex.push_back(0.0);
-		vertex.push_back(px-len); vertex.push_back(py-ph); vertex.push_back(0.0);
+		py = 0.95 - offset / ny;
+		ph = 5.0 / ny;
+		vertex.push_back(Vulkan2dRender::Vertex{ {px, py, 0}, {0.0f, 0.0f, 0.0f} });
+		vertex.push_back(Vulkan2dRender::Vertex{ {px - len, py, 0}, {0.0f, 0.0f, 0.0f} });
+		vertex.push_back(Vulkan2dRender::Vertex{ {px - len, py + ph, 0}, {0.0f, 0.0f, 0.0f} });
+		vertex.push_back(Vulkan2dRender::Vertex{ {px, py + ph, 0}, {0.0f, 0.0f, 0.0f} });
 
 		if (m_disp_scale_bar_text)
 		{
-			px = 0.95*nx-(len*nx+textlen+nx)/2.0;
-			py = ny/2.0-0.935*ny+offset;
+			px = 0.95 * nx - (len * nx + textlen + nx) / 2.0;
+			py = 0.95 * ny - 15.0f - offset - ny / 2.0;
 			if (m_text_renderer)
 				m_text_renderer->RenderText(
-				wsb_text, text_color,
-				px*sx, py*sy, sx, sy);
+					m_vulkan->frameBuffers[m_vulkan->currentBuffer],
+					wsb_text, text_color,
+					px * sx, py * sy);
 		}
 	}
 
-	ShaderProgram* shader =
-		m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY);
-	if (shader)
+	if (m_scbar_vobj.vertBuf.buffer == VK_NULL_HANDLE)
 	{
-		if (!shader->valid())
-			shader->create();
-		shader->bind();
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_scbar_vobj.vertBuf,
+			vertex.size() * sizeof(Vulkan2dRender::Vertex),
+			vertex.data()));
+
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_scbar_vobj.idxBuf,
+			index.size() * sizeof(uint32_t),
+			index.data()));
+
+		m_scbar_vobj.idxCount = index.size();
+		m_scbar_vobj.idxOffset = 0;
+		m_scbar_vobj.vertCount = vertex.size();
+		m_scbar_vobj.vertOffset = 0;
 	}
-	shader->setLocalParamMatrix(0, glm::value_ptr(proj_mat));
+	m_scbar_vobj.vertBuf.map();
+	m_scbar_vobj.idxBuf.map();
+	m_scbar_vobj.vertBuf.copyTo(vertex.data(), vertex.size() * sizeof(Vulkan2dRender::Vertex));
+	m_scbar_vobj.idxBuf.copyTo(index.data(), index.size() * sizeof(uint32_t));
+	m_scbar_vobj.vertBuf.unmap();
+	m_scbar_vobj.idxBuf.unmap();
 
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-	glBindVertexArray(m_misc_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
 
-	shader->setLocalParam(0, text_color.r(), text_color.g(), text_color.b(), 1.0);
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+	vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+	params.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_DRAW_GEOMETRY,
+			V2DRENDER_BLEND_OVER_UI,
+			current_fbo->attachments[0]->format,
+			current_fbo->attachments.size(),
+			0,
+			current_fbo->attachments[0]->is_swapchain_images
+		);
+	params.loc[0] = glm::vec4((float)text_color.r(), (float)text_color.g(), (float)text_color.b(), 1.0f);
+	params.matrix[0] = proj_mat;
+	params.clear = m_frame_clear;
+	params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
+	m_frame_clear = false;
 
-	glDisableVertexAttribArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
+	params.obj = &m_scbar_vobj;
 
-	if (shader && shader->valid())
-		shader->release();
+	if (!current_fbo->renderPass)
+		current_fbo->replaceRenderPass(params.pipeline.pass);
 
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
+	m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
 }
 
-void VRenderGLView::DrawLegend()
+void VRenderVulkanView::DrawLegend()
 {
 	if (!m_text_renderer)
 		return;
@@ -9665,12 +11602,12 @@ void VRenderGLView::DrawLegend()
 	int nx = GetSize().x;
 	int ny = GetSize().y;
 
-	double xoffset = 10.0;
-	double yoffset = 10.0;
+	float xoffset = 10.0;
+	float yoffset = 10.0;
 	if (m_draw_frame)
 	{
 		xoffset = 10.0+m_frame_x;
-		yoffset = ny-m_frame_h-m_frame_y+10.0;
+		yoffset = 10.0+m_frame_y;
 	}
 
 	wxString wxstr;
@@ -9687,7 +11624,7 @@ void VRenderGLView::DrawLegend()
 		{
 			wxstr = m_vd_pop_list[i]->GetName();
 			wstr = wxstr.ToStdWstring();
-			name_len = m_text_renderer->RenderTextLen(wstr)+font_height;
+			name_len = m_text_renderer->RenderTextDims(wstr).width+font_height;
 			length += name_len;
 			if (length < double(m_draw_frame?m_frame_w:nx)-gap_width)
 			{
@@ -9706,7 +11643,7 @@ void VRenderGLView::DrawLegend()
 		{
 			wxstr = m_md_pop_list[i]->GetName();
 			wstr = wxstr.ToStdWstring();
-			name_len = m_text_renderer->RenderTextLen(wstr)+font_height;
+			name_len = m_text_renderer->RenderTextDims(wstr).width+font_height;
 			length += name_len;
 			if (length < double(m_draw_frame?m_frame_w:nx)-gap_width)
 			{
@@ -9731,7 +11668,7 @@ void VRenderGLView::DrawLegend()
 			wxstr = m_vd_pop_list[i]->GetName();
 			xpos = length;
 			wstr = wxstr.ToStdWstring();
-			name_len = m_text_renderer->RenderTextLen(wstr)+font_height;
+			name_len = m_text_renderer->RenderTextDims(wstr).width+font_height;
 			length += name_len;
 			if (length < double(m_draw_frame?m_frame_w:nx)-gap_width)
 			{
@@ -9760,7 +11697,7 @@ void VRenderGLView::DrawLegend()
 			wxstr = m_md_pop_list[i]->GetName();
 			xpos = length;
 			wstr = wxstr.ToStdWstring();
-			name_len = m_text_renderer->RenderTextLen(wstr)+font_height;
+			name_len = m_text_renderer->RenderTextDims(wstr).width+font_height;
 			length += name_len;
 			if (length < double(m_draw_frame?m_frame_w:nx)-gap_width)
 			{
@@ -9789,95 +11726,126 @@ void VRenderGLView::DrawLegend()
 	m_sb_height = (lines+1)*font_height;
 }
 
-void VRenderGLView::DrawName(
+void VRenderVulkanView::DrawName(
 	double x, double y, int nx, int ny,
 	wxString name, Color color,
 	double font_height,
 	bool highlighted)
 {
 	float sx, sy;
-	sx = 2.0/nx;
-	sy = 2.0/ny;
+	sx = 2.0 / nx;
+	sy = 2.0 / ny;
 
 	wstring wstr;
 
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_BLEND);
-
 	glm::mat4 proj_mat = glm::ortho(0.0f, float(nx), 0.0f, float(ny));
 	vector<float> vertex;
-	vertex.reserve(8*3);
+	vertex.reserve(8 * 3);
 
-	float px1, py1, px2, py2;
-	px1 = x+0.2*font_height;
-	py1 = ny-y+0.2*font_height;
-	px2 = x+0.8*font_height;
-	py2 = ny-y+0.8*font_height;
-	vertex.push_back(px1-1.0); vertex.push_back(py2+1.0); vertex.push_back(0.0);
-	vertex.push_back(px2+1.0); vertex.push_back(py2+1.0); vertex.push_back(0.0);
-	vertex.push_back(px1-1.0); vertex.push_back(py1-1.0); vertex.push_back(0.0);
-	vertex.push_back(px2+1.0); vertex.push_back(py1-1.0); vertex.push_back(0.0);
+	glm::vec3 trans1 = glm::vec3((float)(x + 0.2 * font_height - 1.0), (float)(y - 0.2 * font_height + 1.0), 0.0f);
+	glm::vec3 scale1 = glm::vec3((float)(0.6 * font_height + 2.0), (float)(0.6 * font_height + 2.0), 1.0f);
 
-	vertex.push_back(px1); vertex.push_back(py2); vertex.push_back(0.0);
-	vertex.push_back(px2); vertex.push_back(py2); vertex.push_back(0.0);
-	vertex.push_back(px1); vertex.push_back(py1); vertex.push_back(0.0);
-	vertex.push_back(px2); vertex.push_back(py1); vertex.push_back(0.0);
+	glm::vec3 trans2 = glm::vec3((float)(x + 0.2 * font_height), (float)(y - 0.2 * font_height), 0.0f);
+	glm::vec3 scale2 = glm::vec3((float)(0.6 * font_height), (float)(0.6 * font_height), 1.0f);
 
-	ShaderProgram* shader =
-		m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY);
-	if (shader)
+	if (m_name_vobj.vertBuf.buffer == VK_NULL_HANDLE)
 	{
-		if (!shader->valid())
-			shader->create();
-		shader->bind();
-	}
-	shader->setLocalParamMatrix(0, glm::value_ptr(proj_mat));
+		vector<Vulkan2dRender::Vertex> vertex;
+		vector<uint32_t> index = { 0,1,2,2,3,0 };
+		vertex.reserve(4);
 
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-	glBindVertexArray(m_misc_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
+		vertex.push_back(Vulkan2dRender::Vertex{ {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} });
+		vertex.push_back(Vulkan2dRender::Vertex{ {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} });
+		vertex.push_back(Vulkan2dRender::Vertex{ {1.0f, -1.0f, 0.0f}, {0.0f, 0.0f, 0.0f} });
+		vertex.push_back(Vulkan2dRender::Vertex{ {0.0f, -1.0f, 0.0f}, {0.0f, 0.0f, 0.0f} });
+
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_name_vobj.vertBuf,
+			vertex.size() * sizeof(Vulkan2dRender::Vertex),
+			vertex.data()));
+
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_name_vobj.idxBuf,
+			index.size() * sizeof(uint32_t),
+			index.data()));
+
+		m_name_vobj.idxCount = index.size();
+		m_name_vobj.idxOffset = 0;
+		m_name_vobj.vertCount = vertex.size();
+		m_name_vobj.vertOffset = 0;
+
+		m_name_vobj.vertBuf.map();
+		m_name_vobj.idxBuf.map();
+		m_name_vobj.vertBuf.copyTo(vertex.data(), vertex.size() * sizeof(Vulkan2dRender::Vertex));
+		m_name_vobj.idxBuf.copyTo(index.data(), index.size() * sizeof(uint32_t));
+		m_name_vobj.vertBuf.unmap();
+		m_name_vobj.idxBuf.unmap();
+	}
+
+	std::vector<Vulkan2dRender::V2DRenderParams> v2drender_params;
+
+	vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+	Vulkan2dRender::V2dPipeline pl =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_DRAW_GEOMETRY,
+			V2DRENDER_BLEND_DISABLE,
+			current_fbo->attachments[0]->format,
+			current_fbo->attachments.size(),
+			0,
+			current_fbo->attachments[0]->is_swapchain_images
+		);
 
 	Color text_color = GetTextColor();
-	shader->setLocalParam(0, text_color.r(), text_color.g(), text_color.b(), 1.0);
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-	shader->setLocalParam(0, color.r(), color.g(), color.b(), 1.0);
-	glDrawArrays(GL_TRIANGLE_STRIP, 4, 4);
+	Vulkan2dRender::V2DRenderParams params1 = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+	params1.pipeline = pl;
+	params1.loc[0] = glm::vec4((float)text_color.r(), (float)text_color.g(), (float)text_color.b(), 1.0f);
+	params1.matrix[0] = proj_mat * glm::translate(trans1) * glm::scale(scale1);
+	params1.clear = m_frame_clear;
+	params1.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
+	m_frame_clear = false;
+	params1.obj = &m_name_vobj;
 
-	glDisableVertexAttribArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
+	Vulkan2dRender::V2DRenderParams params2;
+	params2.pipeline = pl;
+	params2.loc[0] = glm::vec4((float)color.r(), (float)color.g(), (float)color.b(), 1.0f);
+	params2.matrix[0] = proj_mat * glm::translate(trans2) * glm::scale(scale2);
+	params2.clear = false;
+	params2.obj = &m_name_vobj;
 
-	if (shader && shader->valid())
-		shader->release();
+	v2drender_params.push_back(params1);
+	v2drender_params.push_back(params2);
 
-	px1 = x+font_height-nx/2;
-	py1 = ny/2-y+0.25*font_height;
+	if (!current_fbo->renderPass)
+		current_fbo->replaceRenderPass(pl.pass);
+
+	m_v2drender->seq_render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], v2drender_params.data(), v2drender_params.size());
+	
+	float px1 = x + font_height - nx / 2;
+	float py1 = y - 0.25 * font_height - ny / 2;
 	wstr = name.ToStdWstring();
 	m_text_renderer->RenderText(
+		m_vulkan->frameBuffers[m_vulkan->currentBuffer],
 		wstr, text_color,
-		px1*sx, py1*sy, sx, sy);
+		px1 * sx, py1 * sy);
 	if (highlighted)
 	{
 		px1 -= 0.5;
-		py1 += 0.5;
+		py1 -= 0.5;
 		m_text_renderer->RenderText(
+			m_vulkan->frameBuffers[m_vulkan->currentBuffer],
 			wstr, color,
-			px1*sx, py1*sy, sx, sy);
+			px1 * sx, py1 * sy);
 	}
 
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
 }
 
-void VRenderGLView::DrawGradBg()
+void VRenderVulkanView::DrawGradBg()
 {
 	glm::mat4 proj_mat = glm::ortho(0.0f, 1.0f, 0.0f, 1.0f);
-
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_BLEND);
 
 	Color color1, color2;
 	HSVColor hsv_color1(m_bg_color);
@@ -9912,59 +11880,75 @@ void VRenderGLView::DrawGradBg()
 			Min(hsv_color1.val() + 0.5, 1.0)));
 	}
 
-	vector<float> vertex;
-	vertex.reserve(16*3);
-	vertex.push_back(0.0); vertex.push_back(0.0); vertex.push_back(0.0);
-	vertex.push_back(m_bg_color.r()); vertex.push_back(m_bg_color.g()); vertex.push_back(m_bg_color.b());
-	vertex.push_back(1.0); vertex.push_back(0.0); vertex.push_back(0.0);
-	vertex.push_back(m_bg_color.r()); vertex.push_back(m_bg_color.g()); vertex.push_back(m_bg_color.b());
-	vertex.push_back(0.0); vertex.push_back(0.3); vertex.push_back(0.0);
-	vertex.push_back(color1.r()); vertex.push_back(color1.g()); vertex.push_back(color1.b());
-	vertex.push_back(1.0); vertex.push_back(0.3); vertex.push_back(0.0);
-	vertex.push_back(color1.r()); vertex.push_back(color1.g()); vertex.push_back(color1.b());
-	vertex.push_back(0.0); vertex.push_back(0.5); vertex.push_back(0.0);
-	vertex.push_back(color2.r()); vertex.push_back(color2.g()); vertex.push_back(color2.b());
-	vertex.push_back(1.0); vertex.push_back(0.5); vertex.push_back(0.0);
-	vertex.push_back(color2.r()); vertex.push_back(color2.g()); vertex.push_back(color2.b());
-	vertex.push_back(0.0); vertex.push_back(1.0); vertex.push_back(0.0);
-	vertex.push_back(m_bg_color.r()); vertex.push_back(m_bg_color.g()); vertex.push_back(m_bg_color.b());
-	vertex.push_back(1.0); vertex.push_back(1.0); vertex.push_back(0.0);
-	vertex.push_back(m_bg_color.r()); vertex.push_back(m_bg_color.g()); vertex.push_back(m_bg_color.b());
+	vector<Vulkan2dRender::Vertex> vertex;
+	vertex.reserve(8);
 
-	ShaderProgram* shader =
-		m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY_COLOR3);
-	if (shader)
+	vertex.push_back(Vulkan2dRender::Vertex{ {0.0f, 1.0f, 0.0f}, {(float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b()} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {1.0f, 1.0f, 0.0f}, {(float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b()} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {0.0f, 0.7f, 0.0f}, {(float)color1.r(), (float)color1.g(), (float)color1.b()} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {1.0f, 0.7f, 0.0f}, {(float)color1.r(), (float)color1.g(), (float)color1.b()} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {0.0f, 0.5f, 0.0f}, {(float)color2.r(), (float)color2.g(), (float)color2.b()} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {1.0f, 0.5f, 0.0f}, {(float)color2.r(), (float)color2.g(), (float)color2.b()} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {0.0f, 0.0f, 0.0f}, {(float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b()} });
+	vertex.push_back(Vulkan2dRender::Vertex{ {1.0f, 0.0f, 0.0f}, {(float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b()} });
+
+	if (m_grad_vobj.vertBuf.buffer == VK_NULL_HANDLE)
 	{
-		if (!shader->valid())
-			shader->create();
-		shader->bind();
+		vector<uint32_t> index = { 0,1,2,3,4,5,6,7 };
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_grad_vobj.vertBuf,
+			vertex.size() * sizeof(Vulkan2dRender::Vertex),
+			vertex.data()));
+
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_grad_vobj.idxBuf,
+			index.size() * sizeof(uint32_t),
+			index.data()));
+
+		m_grad_vobj.idxCount = index.size();
+		m_grad_vobj.idxOffset = 0;
+		m_grad_vobj.vertCount = vertex.size();
+		m_grad_vobj.vertOffset = 0;
+
+		m_grad_vobj.idxBuf.map();
+		m_grad_vobj.idxBuf.copyTo(index.data(), index.size() * sizeof(uint32_t));
+		m_grad_vobj.idxBuf.unmap();
 	}
-	shader->setLocalParamMatrix(0, glm::value_ptr(proj_mat));
+	m_grad_vobj.vertBuf.map();
+	m_grad_vobj.vertBuf.copyTo(vertex.data(), vertex.size() * sizeof(Vulkan2dRender::Vertex));
+	m_grad_vobj.vertBuf.unmap();
+	
+	Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+	vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+	params.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_DRAW_GEOMETRY_COLOR3,
+			V2DRENDER_BLEND_OVER_UI,
+			current_fbo->attachments[0]->format,
+			current_fbo->attachments.size(),
+			0,
+			current_fbo->attachments[0]->is_swapchain_images,
+			VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP
+		);
+	params.matrix[0] = proj_mat;
+	params.clear = m_frame_clear;
+	params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
+	m_frame_clear = false;
 
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-	glBindVertexArray(m_misc_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)0);
-	glEnableVertexAttribArray(1);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)12);
+	params.obj = &m_grad_vobj;
 
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 8);
+	if (!current_fbo->renderPass)
+		current_fbo->replaceRenderPass(params.pipeline.pass);
 
-	glDisableVertexAttribArray(0);
-	glDisableVertexAttribArray(1);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
+	m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
 
-	if (shader && shader->valid())
-		shader->release();
-
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
 }
 
-void VRenderGLView::SetColormapColors(int colormap)
+void VRenderVulkanView::SetColormapColors(int colormap)
 {
 	switch (colormap)
 	{
@@ -10016,7 +12000,7 @@ void VRenderGLView::SetColormapColors(int colormap)
 	}
 }
 
-void VRenderGLView::DrawColormap()
+void VRenderVulkanView::DrawColormap()
 {
 	bool draw = false;
 
@@ -10086,7 +12070,7 @@ void VRenderGLView::DrawColormap()
 	if (!draw)
 		return;
 
-	double offset = 0.0;
+	float offset = 0.0f;
 	if (m_draw_legend)
 		offset = m_sb_height;
 
@@ -10098,234 +12082,219 @@ void VRenderGLView::DrawColormap()
 
 	glm::mat4 proj_mat = glm::ortho(0.0f, 1.0f, 0.0f, 1.0f);
 
-	vector<float> vertex;
-	vertex.reserve(14*7);
+	vector<Vulkan2dRender::Vertex34> vertex;
+	vertex.reserve(8);
 
 	float px, py;
-	//draw colormap
+	float fx, fy, fw, fh;
 	if (m_draw_frame)
 	{
-		px = (0.01*m_frame_w+m_frame_x)/nx;
-		py = (0.05*m_frame_w+m_frame_x)/nx;
-		vertex.push_back(px); vertex.push_back((0.1*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_1.r()); vertex.push_back(m_color_1.g()); vertex.push_back(m_color_1.b()); vertex.push_back(enable_alpha?0.0:1.0);
-		vertex.push_back(py); vertex.push_back((0.1*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_1.r()); vertex.push_back(m_color_1.g()); vertex.push_back(m_color_1.b()); vertex.push_back(enable_alpha?0.0:1.0);
-		vertex.push_back(px); vertex.push_back(((0.1+0.4*m_value_2)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_2.r()); vertex.push_back(m_color_2.g()); vertex.push_back(m_color_2.b()); vertex.push_back(enable_alpha?m_value_2:1.0);
-		vertex.push_back(py); vertex.push_back(((0.1+0.4*m_value_2)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_2.r()); vertex.push_back(m_color_2.g()); vertex.push_back(m_color_2.b()); vertex.push_back(enable_alpha?m_value_2:1.0);
-		vertex.push_back(px); vertex.push_back(((0.1+0.4*m_value_3)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_3.r()); vertex.push_back(m_color_3.g()); vertex.push_back(m_color_3.b()); vertex.push_back(enable_alpha?m_value_3:1.0);
-		vertex.push_back(py); vertex.push_back(((0.1+0.4*m_value_3)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_3.r()); vertex.push_back(m_color_3.g()); vertex.push_back(m_color_3.b()); vertex.push_back(enable_alpha?m_value_3:1.0);
-		vertex.push_back(px); vertex.push_back(((0.1+0.4*m_value_4)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_4.r()); vertex.push_back(m_color_4.g()); vertex.push_back(m_color_4.b()); vertex.push_back(enable_alpha?m_value_4:1.0);
-		vertex.push_back(py); vertex.push_back(((0.1+0.4*m_value_4)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_4.r()); vertex.push_back(m_color_4.g()); vertex.push_back(m_color_4.b()); vertex.push_back(enable_alpha?m_value_4:1.0);
-		vertex.push_back(px); vertex.push_back(((0.1+0.4*m_value_5)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_5.r()); vertex.push_back(m_color_5.g()); vertex.push_back(m_color_5.b()); vertex.push_back(enable_alpha?m_value_5:1.0);
-		vertex.push_back(py); vertex.push_back(((0.1+0.4*m_value_5)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_5.r()); vertex.push_back(m_color_5.g()); vertex.push_back(m_color_5.b()); vertex.push_back(enable_alpha?m_value_5:1.0);
-		vertex.push_back(px); vertex.push_back(((0.1+0.4*m_value_6)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_6.r()); vertex.push_back(m_color_6.g()); vertex.push_back(m_color_6.b()); vertex.push_back(enable_alpha?m_value_6:1.0);
-		vertex.push_back(py); vertex.push_back(((0.1+0.4*m_value_6)*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_6.r()); vertex.push_back(m_color_6.g()); vertex.push_back(m_color_6.b()); vertex.push_back(enable_alpha?m_value_6:1.0);
-		vertex.push_back(px); vertex.push_back((0.5*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_7.r()); vertex.push_back(m_color_7.g()); vertex.push_back(m_color_7.b()); vertex.push_back(1.0);
-		vertex.push_back(py); vertex.push_back((0.5*m_frame_h+m_frame_y+offset)/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_7.r()); vertex.push_back(m_color_7.g()); vertex.push_back(m_color_7.b()); vertex.push_back(1.0);
-
-		if (m_text_renderer)
-		{
-			wxString str;
-			wstring wstr;
-
-			Color text_color = GetTextColor();
-
-			//value 1
-			px = 0.052*m_frame_w+m_frame_x-nx/2.0;
-			py = 0.1*m_frame_h+m_frame_y+offset-ny/2.0;
-			str = wxString::Format("%d", 0);
-			wstr = str.ToStdWstring();
-			m_text_renderer->RenderText(
-				wstr, text_color,
-				px*sx, py*sy, sx, sy);
-			//value 2
-			px = 0.052*m_frame_w+m_frame_x-nx/2.0;
-			py = (0.1+0.4*m_value_2)*m_frame_h+m_frame_y+offset-ny/2.0;
-			str = wxString::Format("%d", int(m_value_2*max_val));
-			wstr = str.ToStdWstring();
-			m_text_renderer->RenderText(
-				wstr, text_color,
-				px*sx, py*sy, sx, sy);
-			//value 4
-			px = 0.052*m_frame_w+m_frame_x-nx/2.0;
-			py = (0.1+0.4*m_value_4)*m_frame_h+m_frame_y+offset-ny/2.0;
-			str = wxString::Format("%d", int(m_value_4*max_val));
-			wstr = str.ToStdWstring();
-			m_text_renderer->RenderText(
-				wstr, text_color,
-				px*sx, py*sy, sx, sy);
-			//value 6
-			px = 0.052*m_frame_w+m_frame_x-nx/2.0;
-			py = (0.1+0.4*m_value_6)*m_frame_h+m_frame_y+offset-ny/2.0;
-			str = wxString::Format("%d", int(m_value_6*max_val));
-			wstr = str.ToStdWstring();
-			m_text_renderer->RenderText(
-				wstr, text_color,
-				px*sx, py*sy, sx, sy);
-			//value 7
-			px = 0.052*m_frame_w+m_frame_x-nx/2.0;
-			py = 0.5*m_frame_h+m_frame_y+offset-ny/2.0;
-			str = wxString::Format("%d", int(max_val));
-			wstr = str.ToStdWstring();
-			m_text_renderer->RenderText(
-				wstr, text_color,
-				px*sx, py*sy, sx, sy);
-		}
+		fx = m_frame_x;
+		fy = m_frame_y;
+		fw = m_frame_w;
+		fh = m_frame_h;
 	}
 	else
 	{
-		vertex.push_back(0.01); vertex.push_back(0.1+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_1.r()); vertex.push_back(m_color_1.g()); vertex.push_back(m_color_1.b()); vertex.push_back(enable_alpha?0.0:1.0);
-		vertex.push_back(0.05); vertex.push_back(0.1+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_1.r()); vertex.push_back(m_color_1.g()); vertex.push_back(m_color_1.b()); vertex.push_back(enable_alpha?0.0:1.0);
-		vertex.push_back(0.01); vertex.push_back(0.1+0.4*m_value_2+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_2.r()); vertex.push_back(m_color_2.g()); vertex.push_back(m_color_2.b()); vertex.push_back(enable_alpha?m_value_2:1.0);
-		vertex.push_back(0.05); vertex.push_back(0.1+0.4*m_value_2+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_2.r()); vertex.push_back(m_color_2.g()); vertex.push_back(m_color_2.b()); vertex.push_back(enable_alpha?m_value_2:1.0);
-		vertex.push_back(0.01); vertex.push_back(0.1+0.4*m_value_3+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_3.r()); vertex.push_back(m_color_3.g()); vertex.push_back(m_color_3.b()); vertex.push_back(enable_alpha?m_value_3:1.0);
-		vertex.push_back(0.05); vertex.push_back(0.1+0.4*m_value_3+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_3.r()); vertex.push_back(m_color_3.g()); vertex.push_back(m_color_3.b()); vertex.push_back(enable_alpha?m_value_3:1.0);
-		vertex.push_back(0.01); vertex.push_back(0.1+0.4*m_value_4+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_4.r()); vertex.push_back(m_color_4.g()); vertex.push_back(m_color_4.b()); vertex.push_back(enable_alpha?m_value_4:1.0);
-		vertex.push_back(0.05); vertex.push_back(0.1+0.4*m_value_4+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_4.r()); vertex.push_back(m_color_4.g()); vertex.push_back(m_color_4.b()); vertex.push_back(enable_alpha?m_value_4:1.0);
-		vertex.push_back(0.01); vertex.push_back(0.1+0.4*m_value_5+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_5.r()); vertex.push_back(m_color_5.g()); vertex.push_back(m_color_5.b()); vertex.push_back(enable_alpha?m_value_5:1.0);
-		vertex.push_back(0.05); vertex.push_back(0.1+0.4*m_value_5+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_5.r()); vertex.push_back(m_color_5.g()); vertex.push_back(m_color_5.b()); vertex.push_back(enable_alpha?m_value_5:1.0);
-		vertex.push_back(0.01); vertex.push_back(0.1+0.4*m_value_6+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_6.r()); vertex.push_back(m_color_6.g()); vertex.push_back(m_color_6.b()); vertex.push_back(enable_alpha?m_value_6:1.0);
-		vertex.push_back(0.05); vertex.push_back(0.1+0.4*m_value_6+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_6.r()); vertex.push_back(m_color_6.g()); vertex.push_back(m_color_6.b()); vertex.push_back(enable_alpha?m_value_6:1.0);
-		vertex.push_back(0.01); vertex.push_back(0.5+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_7.r()); vertex.push_back(m_color_7.g()); vertex.push_back(m_color_7.b()); vertex.push_back(1.0);
-		vertex.push_back(0.05); vertex.push_back(0.5+offset/ny); vertex.push_back(0.0);
-		vertex.push_back(m_color_7.r()); vertex.push_back(m_color_7.g()); vertex.push_back(m_color_7.b()); vertex.push_back(1.0);
-
-		if (m_text_renderer)
-		{
-			wxString str;
-			wstring wstr;
-
-			Color text_color = GetTextColor();
-
-			//value 1
-			px = 0.052*nx-nx/2.0;
-			py = ny/2.0-0.9*ny+offset;
-			str = wxString::Format("%d", 0);
-			wstr = str.ToStdWstring();
-			m_text_renderer->RenderText(
-				wstr, text_color,
-				px*sx, py*sy, sx, sy);
-			//value 2
-			px = 0.052*nx-nx/2.0;
-			py = ny/2.0-(0.9-0.4*m_value_2)*ny+offset;
-			str = wxString::Format("%d", int(m_value_2*max_val));
-			wstr = str.ToStdWstring();
-			m_text_renderer->RenderText(
-				wstr, text_color,
-				px*sx, py*sy, sx, sy);
-			//value 4
-			px = 0.052*nx-nx/2.0;
-			py = ny/2.0-(0.9-0.4*m_value_4)*ny+offset;
-			str = wxString::Format("%d", int(m_value_4*max_val));
-			wstr = str.ToStdWstring();
-			m_text_renderer->RenderText(
-				wstr, text_color,
-				px*sx, py*sy, sx, sy);
-			//value 6
-			px = 0.052*nx-nx/2.0;
-			py = ny/2.0-(0.9-0.4*m_value_6)*ny+offset;
-			str = wxString::Format("%d", int(m_value_6*max_val));
-			wstr = str.ToStdWstring();
-			m_text_renderer->RenderText(
-				wstr, text_color,
-				px*sx, py*sy, sx, sy);
-			//value 7
-			px = 0.052*nx-nx/2.0;
-			py = ny/2.0-0.5*ny+offset;
-			str = wxString::Format("%d", int(max_val));
-			wstr = str.ToStdWstring();
-			m_text_renderer->RenderText(
-				wstr, text_color,
-				px*sx, py*sy, sx, sy);
-		}
+		fx = 0.0f;
+		fy = 0.0f;
+		fw = nx;
+		fh = ny;
 	}
 
-	glDisable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	px = (0.01 * fw + fx) / nx;
+	py = (0.05 * fw + fx) / nx;
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{px, (fh - (0.1f * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_1.r(), (float)m_color_1.g(), (float)m_color_1.b(), enable_alpha ? 0.0f : 1.0f}
+		});
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{py, (fh - (0.1f * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_1.r(), (float)m_color_1.g(), (float)m_color_1.b(), enable_alpha ? 0.0f : 1.0f}
+		});
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{px, (fh - ((0.1f + 0.4f * m_value_2) * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_2.r(), (float)m_color_2.g(), (float)m_color_2.b(), enable_alpha ? m_value_2 : 1.0f}
+		});
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{py, (fh - ((0.1f + 0.4f * m_value_2) * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_2.r(), (float)m_color_2.g(), (float)m_color_2.b(), enable_alpha ? m_value_2 : 1.0f}
+		});
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{px, (fh - ((0.1f + 0.4f * m_value_3) * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_3.r(), (float)m_color_3.g(), (float)m_color_3.b(), enable_alpha ? m_value_3 : 1.0f}
+		});
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{py, (fh - ((0.1f + 0.4f * m_value_3) * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_3.r(), (float)m_color_3.g(), (float)m_color_3.b(), enable_alpha ? m_value_3 : 1.0f}
+		});
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{px, (fh - ((0.1f + 0.4f * m_value_4) * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_4.r(), (float)m_color_4.g(), (float)m_color_4.b(), enable_alpha ? m_value_4 : 1.0f}
+		});
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{py, (fh - ((0.1f + 0.4f * m_value_4) * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_4.r(), (float)m_color_4.g(), (float)m_color_4.b(), enable_alpha ? m_value_4 : 1.0f}
+		});
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{px, (fh - ((0.1f + 0.4f * m_value_5) * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_5.r(), (float)m_color_5.g(), (float)m_color_5.b(), enable_alpha ? m_value_5 : 1.0f}
+		});
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{py, (fh - ((0.1f + 0.4f * m_value_5) * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_5.r(), (float)m_color_5.g(), (float)m_color_5.b(), enable_alpha ? m_value_5 : 1.0f}
+		});
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{px, (fh - ((0.1f + 0.4f * m_value_6) * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_6.r(), (float)m_color_6.g(), (float)m_color_6.b(), enable_alpha ? m_value_6 : 1.0f}
+		});
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{py, (fh - ((0.1f + 0.4f * m_value_6) * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_6.r(), (float)m_color_6.g(), (float)m_color_6.b(), enable_alpha ? m_value_6 : 1.0f}
+		});
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{px, (fh - (0.5f * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_7.r(), (float)m_color_7.g(), (float)m_color_7.b(), 1.0f}
+		});
+	vertex.push_back(Vulkan2dRender::Vertex34{
+		{py, (fh - (0.5f * fh + fy + offset)) / ny, 0.0f},
+		{(float)m_color_7.r(), (float)m_color_7.g(), (float)m_color_7.b(), 1.0f}
+		});
 
-	ShaderProgram* shader =
-		m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY_COLOR4);
-	if (shader)
+	if (m_cmap_vobj.vertBuf.buffer == VK_NULL_HANDLE)
 	{
-		if (!shader->valid())
-			shader->create();
-		shader->bind();
+		vector<uint32_t> index = { 0,1,2,3,4,5,6,7,8,9,10,11,12,13 };
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_cmap_vobj.vertBuf,
+			vertex.size() * sizeof(Vulkan2dRender::Vertex34),
+			vertex.data()));
+
+		VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			&m_cmap_vobj.idxBuf,
+			index.size() * sizeof(uint32_t),
+			index.data()));
+
+		m_cmap_vobj.idxCount = index.size();
+		m_cmap_vobj.idxOffset = 0;
+		m_cmap_vobj.vertCount = vertex.size();
+		m_cmap_vobj.vertOffset = 0;
+
+		m_cmap_vobj.idxBuf.map();
+		m_cmap_vobj.idxBuf.copyTo(index.data(), index.size() * sizeof(uint32_t));
+		m_cmap_vobj.idxBuf.unmap();
 	}
-	shader->setLocalParamMatrix(0, glm::value_ptr(proj_mat));
+	m_cmap_vobj.vertBuf.map();
+	m_cmap_vobj.vertBuf.copyTo(vertex.data(), vertex.size() * sizeof(Vulkan2dRender::Vertex34));
+	m_cmap_vobj.vertBuf.unmap();
 
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(float)*vertex.size(), &vertex[0], GL_DYNAMIC_DRAW);
-	glBindVertexArray(m_misc_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 7*sizeof(float), (const GLvoid*)0);
-	glEnableVertexAttribArray(1);
-	glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 7*sizeof(float), (const GLvoid*)12);
+	Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+	vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+	params.pipeline =
+		m_v2drender->preparePipeline(
+			IMG_SHDR_DRAW_GEOMETRY_COLOR4,
+			V2DRENDER_BLEND_OVER_UI,
+			current_fbo->attachments[0]->format,
+			current_fbo->attachments.size(),
+			0,
+			current_fbo->attachments[0]->is_swapchain_images,
+			VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP
+		);
+	params.matrix[0] = proj_mat;
+	params.clear = m_frame_clear;
+	params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
+	m_frame_clear = false;
 
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 14);
+	params.obj = &m_cmap_vobj;
 
-	glDisableVertexAttribArray(0);
-	glDisableVertexAttribArray(1);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
+	if (!current_fbo->renderPass)
+		current_fbo->replaceRenderPass(params.pipeline.pass);
 
-	if (shader && shader->valid())
-		shader->release();
+	m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
 
-	glEnable(GL_DEPTH_TEST);
+	if (m_text_renderer)
+	{
+		wxString str;
+		wstring wstr;
+
+		Color text_color = GetTextColor();
+
+		//value 1
+		px = 0.052 * fw + fx - nx / 2.0;
+		py = fh - (0.1 * fh + fy + offset) - ny / 2.0;
+		str = wxString::Format("%d", 0);
+		wstr = str.ToStdWstring();
+		m_text_renderer->RenderText(
+			m_vulkan->frameBuffers[m_vulkan->currentBuffer],
+			wstr, text_color,
+			px * sx, py * sy);
+		//value 2
+		px = 0.052 * fw + fx - nx / 2.0;
+		py = fh - ((0.1 + 0.4 * m_value_2) * fh + fy + offset) - ny / 2.0;
+		str = wxString::Format("%d", int(m_value_2 * max_val));
+		wstr = str.ToStdWstring();
+		m_text_renderer->RenderText(
+			m_vulkan->frameBuffers[m_vulkan->currentBuffer],
+			wstr, text_color,
+			px * sx, py * sy);
+		//value 4
+		px = 0.052 * fw + fx - nx / 2.0;
+		py = fh - ((0.1 + 0.4 * m_value_4) * fh + fy + offset) - ny / 2.0;
+		str = wxString::Format("%d", int(m_value_4 * max_val));
+		wstr = str.ToStdWstring();
+		m_text_renderer->RenderText(
+			m_vulkan->frameBuffers[m_vulkan->currentBuffer],
+			wstr, text_color,
+			px * sx, py * sy);
+		//value 6
+		px = 0.052 * fw + fx - nx / 2.0;
+		py = fh - ((0.1 + 0.4 * m_value_6) * fh + fy + offset) - ny / 2.0;
+		str = wxString::Format("%d", int(m_value_6 * max_val));
+		wstr = str.ToStdWstring();
+		m_text_renderer->RenderText(
+			m_vulkan->frameBuffers[m_vulkan->currentBuffer],
+			wstr, text_color,
+			px * sx, py * sy);
+		//value 7
+		px = 0.052 * fw + fx - nx / 2.0;
+		py = fh - (0.5 * fh + fy + offset) - ny / 2.0;
+		str = wxString::Format("%d", int(max_val));
+		wstr = str.ToStdWstring();
+		m_text_renderer->RenderText(
+			m_vulkan->frameBuffers[m_vulkan->currentBuffer],
+			wstr, text_color,
+			px * sx, py * sy);
+	}
 }
 
-void VRenderGLView::DrawInfo(int nx, int ny)
+void VRenderVulkanView::DrawInfo(int nx, int ny)
 {
-	if (!m_text_renderer)
-		return;
+	//if (!m_text_renderer)
+	//	return;
 
 	float sx, sy;
 	sx = 2.0/nx;
 	sy = 2.0/ny;
 	float px, py;
 	float gapw = m_text_renderer->GetSize();
-	float gaph = gapw*2;
+	float gaph = gapw;
 
 	double fps_ = 1.0/goTimer->average();
 	wxString str;
 	Color text_color = GetTextColor();
-	if (TextureRenderer::get_mem_swap())
+	if (TextureRenderer::get_streaming())
 	{
 		str = wxString::Format(
-			"FPS: %.2f, Bricks: %d, Quota: %d, Int: %s, Time: %lu",
+			"FPS: %.2f, Bricks: %d, Quota: %d, Int: %s, Time: %lu, Dist: %f",
 			fps_>=0.0&&fps_<300.0?fps_:0.0,
 			TextureRenderer::get_total_brick_num(),
 			TextureRenderer::get_quota_bricks(),
 			m_interactive?"Yes":"No",
-			TextureRenderer::get_cor_up_time());
+			TextureRenderer::get_cor_up_time(),
+			CalcCameraDistance());
 		////budget_test
 		//if (m_interactive)
 		//  tos <<
@@ -10345,19 +12314,29 @@ void VRenderGLView::DrawInfo(int nx, int ny)
 
 	if (m_cur_vol && m_cur_vol->isBrxml())
 	{
-		str += wxString::Format(" VVD_Level: %d/%d,", m_cur_vol->GetLevel()+1, m_cur_vol->GetLevelNum());
+		int resx=0, resy=0, resz=0;
+		if (m_cur_vol->GetTexture())
+		{
+			resx = m_cur_vol->GetTexture()->nx();
+			resy = m_cur_vol->GetTexture()->ny();
+			resz = m_cur_vol->GetTexture()->nz();
+		}
+		str += wxString::Format(" VVD_Level: %d/%d W:%d H:%d D:%d,", m_cur_vol->GetLevel()+1, m_cur_vol->GetLevelNum(), resx, resy, resz);
 		long long used_mem;
 		int dtnum, qnum, dqnum;
 		m_loader.GetPalams(used_mem, dtnum, qnum, dqnum);
-		str += wxString::Format(" Mem: %lld Th: %d Q: %d DQ: %d,", used_mem, dtnum, qnum, dqnum);
+		str += wxString::Format(" Mem:%lld(MB) Th: %d Q: %d DQ: %d,", used_mem/(1024LL*1024LL), dtnum, qnum, dqnum);
 	}
 
 	wstring wstr_temp = str.ToStdWstring();
-	px = gapw-nx/2;
-	py = ny/2-gaph/2;
+	px = gapw - nx/2.0f;
+	py = gaph - ny/2.0f;
 	m_text_renderer->RenderText(
+		m_vulkan->frameBuffers[m_vulkan->currentBuffer],
 		wstr_temp, text_color,
-		px*sx, py*sy, sx, sy);
+		px*sx, py*sy);
+
+	gaph += m_text_renderer->GetSize();
 
 	if (m_draw_coord)
 	{
@@ -10370,57 +12349,62 @@ void VRenderGLView::DrawInfo(int nx, int ny)
 				m_tseq_cur_num, p.x(), p.y(), p.z());
 			wstr_temp = str.ToStdWstring();
 			px = gapw-nx/2;
-			py = ny/2-gaph;
+			py = gaph-ny/2;
 			m_text_renderer->RenderText(
+				m_vulkan->frameBuffers[m_vulkan->currentBuffer],
 				wstr_temp, text_color,
-				px*sx, py*sy, sx, sy);
+				px*sx, py*sy);
 		}
 	}
 	else
 	{
 		str = wxString::Format("T: %d", m_tseq_cur_num);
 		wstr_temp = str.ToStdWstring();
-		px = gapw-nx/2;
-		py = ny/2-gaph;
+		px = gapw - nx / 2;
+		py = gaph - ny / 2;
 		m_text_renderer->RenderText(
+			m_vulkan->frameBuffers[m_vulkan->currentBuffer],
 			wstr_temp, text_color,
-			px*sx, py*sy, sx, sy);
+			px*sx, py*sy);
 	}
 
-	if (m_test_wiref)
-	{
-		if (m_vol_method == VOL_METHOD_MULTI && m_mvr)
-		{
-			str = wxString::Format("SLICES: %d", m_mvr->get_slice_num());
-			wstr_temp = str.ToStdWstring();
-			px = gapw-nx/2;
-			py = ny/2-gaph*1.5;
-			m_text_renderer->RenderText(
-				wstr_temp, text_color,
-				px*sx, py*sy, sx, sy);
-		}
-		else
-		{
-			for (int i=0; i<(int)m_vd_pop_list.size(); i++)
-			{
-				VolumeData* vd = m_vd_pop_list[i];
-				if (vd && vd->GetVR())
-				{
-					str = wxString::Format("SLICES_%d: %d", i+1, vd->GetVR()->get_slice_num());
-					wstr_temp = str.ToStdWstring();
-					px = gapw-nx/2;
-					py = ny/2-gaph*(3+i)/2;
-					if (m_text_renderer)
-						m_text_renderer->RenderText(
-						wstr_temp, text_color,
-						px*sx, py*sy, sx, sy);
-				}
-			}
-		}
-	}
+	//if (m_test_wiref)
+	//{
+	//	if (m_vol_method == VOL_METHOD_MULTI && m_mvr)
+	//	{
+	//		str = wxString::Format("SLICES: %d", m_mvr->get_slice_num());
+	//		wstr_temp = str.ToStdWstring();
+	//		px = gapw-nx/2;
+	//		py = ny/2-gaph*1.5;
+	//		m_text_renderer->RenderText(
+	//			wstr_temp, text_color,
+	//			px*sx, py*sy, sx, sy);
+	//	}
+	//	else
+	//	{
+	//		for (int i=0; i<(int)m_vd_pop_list.size(); i++)
+	//		{
+	//			VolumeData* vd = m_vd_pop_list[i];
+	//			if (vd && vd->GetVR())
+	//			{
+	//				str = wxString::Format("SLICES_%d: %d", i+1, vd->GetVR()->get_slice_num());
+	//				wstr_temp = str.ToStdWstring();
+	//				px = gapw-nx/2;
+	//				py = ny/2-gaph*(3+i)/2;
+	//				if (m_text_renderer)
+	//					m_text_renderer->RenderText(
+	//					wstr_temp, text_color,
+	//					px*sx, py*sy, sx, sy);
+	//			}
+	//		}
+	//	}
+	//}
+
+	//wxString dbgstr = wxString::Format("fps: %.2f\n", fps_ >= 0.0 && fps_ < 300.0 ? fps_ : 0.0);
+	//OutputDebugStringA(dbgstr.ToStdString().c_str());
 }
 
-Quaternion VRenderGLView::Trackball(int p1x, int p1y, int p2x, int p2y)
+Quaternion VRenderVulkanView::Trackball(int p1x, int p1y, int p2x, int p2y)
 {
 	Quaternion q;
 	Vector a; /* Axis of rotation */
@@ -10439,7 +12423,7 @@ Quaternion VRenderGLView::Trackball(int p1x, int p1y, int p2x, int p2y)
 			return q;
 	}
 
-	a = Vector(p1y-p2y, p2x-p1x, 0.0);
+	a = Vector(p2y-p1y, p2x-p1x, 0.0);
 	phi = a.length()/3.0;
 	a.normalize();
 	Quaternion q_a(a);
@@ -10464,7 +12448,7 @@ Quaternion VRenderGLView::Trackball(int p1x, int p1y, int p2x, int p2y)
 	return q;
 }
 
-Quaternion VRenderGLView::TrackballClip(int p1x, int p1y, int p2x, int p2y)
+Quaternion VRenderVulkanView::TrackballClip(int p1x, int p1y, int p2x, int p2y)
 {
 	Quaternion q;
 	Vector a; /* Axis of rotation */
@@ -10476,7 +12460,7 @@ Quaternion VRenderGLView::TrackballClip(int p1x, int p1y, int p2x, int p2y)
 		return q;
 	}
 
-	a = Vector(p2y-p1y, p2x-p1x, 0.0);
+	a = Vector(p1y-p2y, p2x-p1x, 0.0);
 	phi = a.length()/3.0;
 	a.normalize();
 	Quaternion q_a(a);
@@ -10494,7 +12478,7 @@ Quaternion VRenderGLView::TrackballClip(int p1x, int p1y, int p2x, int p2y)
 	return q;
 }
 
-void VRenderGLView::Q2A()
+void VRenderVulkanView::Q2A()
 {
 	//view changed, re-sort bricks
 	//SetSortBricks();
@@ -10517,7 +12501,29 @@ void VRenderGLView::Q2A()
 	if (m_clip_mode)
 	{
 		if (m_clip_mode == 1)
-			m_q_cl.FromEuler(m_rotx, -m_roty, -m_rotz);
+			m_q_cl.FromEuler(-m_rotx, -m_roty, m_rotz);
+		else if (m_clip_mode == 3)
+		{
+			m_q_cl_zero.FromEuler(-m_rotx, -m_roty, m_rotz);
+			m_q_cl = m_q_fix * m_q_cl_zero;
+			/*
+            m_q_cl.ToEuler(m_rotx_cl, m_roty_cl, m_rotz_cl);
+			if (m_rotx_cl > 180.0) m_rotx_cl -= 360.0;
+			if (m_roty_cl > 180.0) m_roty_cl -= 360.0;
+			if (m_rotz_cl > 180.0) m_rotz_cl -= 360.0;
+			VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+			if (vr_frame)
+			{
+				ClippingView* clip_view = vr_frame->GetClippingView();
+				if (clip_view)
+					clip_view->SetClippingPlaneRotations(
+						m_rotx_cl <= 180.0 ? m_rotx_cl : 360.0 - m_rotx_cl,
+						m_roty_cl <= 180.0 ? m_roty_cl : 360.0 - m_roty_cl,
+						m_rotz_cl <= 180.0 ? m_rotz_cl : 360.0 - m_rotz_cl,
+						true);
+			}
+             */
+		}
 
 		vector<Plane*> *planes = 0;
 		for (int i=0; i<(int)m_vd_pop_list.size(); i++)
@@ -10529,14 +12535,22 @@ void VRenderGLView::Q2A()
 			int resx, resy, resz;
 			m_vd_pop_list[i]->GetSpacings(spcx, spcy, spcz);
 			m_vd_pop_list[i]->GetResolution(resx, resy, resz);
-			Vector scale;
-			if (spcx>0.0 && spcy>0.0 && spcz>0.0)
-			{
-				scale = Vector(1.0/resx/spcx, 1.0/resy/spcy, 1.0/resz/spcz);
-				scale.safe_normalize();
-			}
-			else
-				scale = Vector(1.0, 1.0, 1.0);
+			Vector scale, scale2, scale2inv;
+            if (spcx>0.0 && spcy>0.0 && spcz>0.0)
+            {
+                scale = Vector(1.0/resx/spcx, 1.0/resy/spcy, 1.0/resz/spcz);
+                scale.safe_normalize();
+                scale2 = Vector(resx*spcx, resy*spcy, resz*spcz);
+                //scale2.safe_normalize();
+                scale2inv = Vector(1.0/(resx*spcx), 1.0/(resy*spcy), 1.0/(resz*spcz));
+                //scale2inv.safe_normalize();
+            }
+            else
+            {
+                scale = Vector(1.0, 1.0, 1.0);
+                scale2 = Vector(1.0, 1.0, 1.0);
+                scale2inv = Vector(1.0, 1.0, 1.0);
+            }
 
 			if (m_vd_pop_list[i]->GetVR())
 				planes = m_vd_pop_list[i]->GetVR()->get_planes();
@@ -10557,51 +12571,186 @@ void VRenderGLView::Q2A()
 				z1 = fabs(abcd[3]);
 				(*planes)[5]->get_copy(abcd);
 				z2 = fabs(abcd[3]);
-
-				Vector trans1(-0.5, -0.5, -0.5);
-				Vector trans2(0.5, 0.5, 0.5);
-
-				(*planes)[0]->Restore();
-				(*planes)[0]->Translate(trans1);
-				(*planes)[0]->Rotate(m_q_cl);
-				(*planes)[0]->Scale(scale);
-				(*planes)[0]->Translate(trans2);
-
-				(*planes)[1]->Restore();
-				(*planes)[1]->Translate(trans1);
-				(*planes)[1]->Rotate(m_q_cl);
-				(*planes)[1]->Scale(scale);
-				(*planes)[1]->Translate(trans2);
-
-				(*planes)[2]->Restore();
-				(*planes)[2]->Translate(trans1);
-				(*planes)[2]->Rotate(m_q_cl);
-				(*planes)[2]->Scale(scale);
-				(*planes)[2]->Translate(trans2);
-
-				(*planes)[3]->Restore();
-				(*planes)[3]->Translate(trans1);
-				(*planes)[3]->Rotate(m_q_cl);
-				(*planes)[3]->Scale(scale);
-				(*planes)[3]->Translate(trans2);
-
-				(*planes)[4]->Restore();
-				(*planes)[4]->Translate(trans1);
-				(*planes)[4]->Rotate(m_q_cl);
-				(*planes)[4]->Scale(scale);
-				(*planes)[4]->Translate(trans2);
-
-				(*planes)[5]->Restore();
-				(*planes)[5]->Translate(trans1);
-				(*planes)[5]->Rotate(m_q_cl);
-				(*planes)[5]->Scale(scale);
-				(*planes)[5]->Translate(trans2);
+                
+                Vector trans1(-0.5, -0.5, -0.5);
+                Vector trans2(0.5, 0.5, 0.5);
+                
+                if (m_clip_mode == 3)
+                {
+                    Vector obj_trans1 = m_trans_fix;
+                    Vector obj_trans2 = -obj_trans1;
+                    Vector obj_trans3 = obj_trans1 - Vector(m_obj_transx, m_obj_transy, -m_obj_transz);
+                    
+                    for (int i = 0; i < 6; i++)
+                    {
+                        (*planes)[i]->Restore();
+                        (*planes)[i]->Translate(trans1);
+                        (*planes)[i]->Scale2(scale2);
+                        (*planes)[i]->Rotate(m_q_cl_fix);
+                        (*planes)[i]->Translate(obj_trans1);
+                        (*planes)[i]->Rotate(m_q_cl);
+                        (*planes)[i]->Translate(obj_trans2);
+                        (*planes)[i]->Translate(obj_trans3);
+                        (*planes)[i]->Scale2(scale2inv);
+                        (*planes)[i]->Translate(trans2);
+                    }
+                }
+                else
+                {
+                    (*planes)[0]->Restore();
+                    (*planes)[0]->Translate(trans1);
+                    (*planes)[0]->Scale2(scale2);
+                    (*planes)[0]->Rotate(m_q_cl);
+                    (*planes)[0]->Scale2(scale2inv);
+                    (*planes)[0]->Translate(trans2);
+                    
+                    (*planes)[1]->Restore();
+                    (*planes)[1]->Translate(trans1);
+                    (*planes)[1]->Scale2(scale2);
+                    (*planes)[1]->Rotate(m_q_cl);
+                    (*planes)[1]->Scale2(scale2inv);
+                    (*planes)[1]->Translate(trans2);
+                    
+                    (*planes)[2]->Restore();
+                    (*planes)[2]->Translate(trans1);
+                    (*planes)[2]->Scale2(scale2);
+                    (*planes)[2]->Rotate(m_q_cl);
+                    (*planes)[2]->Scale2(scale2inv);
+                    (*planes)[2]->Translate(trans2);
+                    
+                    (*planes)[3]->Restore();
+                    (*planes)[3]->Translate(trans1);
+                    (*planes)[3]->Scale2(scale2);
+                    (*planes)[3]->Rotate(m_q_cl);
+                    (*planes)[3]->Scale2(scale2inv);
+                    (*planes)[3]->Translate(trans2);
+                    
+                    (*planes)[4]->Restore();
+                    (*planes)[4]->Translate(trans1);
+                    (*planes)[4]->Scale2(scale2);
+                    (*planes)[4]->Rotate(m_q_cl);
+                    (*planes)[4]->Scale2(scale2inv);
+                    (*planes)[4]->Translate(trans2);
+                    
+                    (*planes)[5]->Restore();
+                    (*planes)[5]->Translate(trans1);
+                    (*planes)[5]->Scale2(scale2);
+                    (*planes)[5]->Rotate(m_q_cl);
+                    (*planes)[5]->Scale2(scale2inv);
+                    (*planes)[5]->Translate(trans2);
+                }
 			}
 		}
+        
+        for (int i=0; i<(int)m_md_pop_list.size(); i++)
+        {
+            if (!m_md_pop_list[i])
+                continue;
+            
+            vector<Plane*> *planes = 0;
+            
+            Vector sz = m_md_pop_list[i]->GetBounds().diagonal();
+            Vector scale, scale2, scale2inv;
+            scale = Vector(1.0/sz.x(), 1.0/sz.y(), 1.0/sz.z());
+            scale.safe_normalize();
+            scale2 = Vector(sz.x(), sz.y(), sz.z());
+            //scale2.safe_normalize();
+            scale2inv = Vector(1.0/sz.x(), 1.0/sz.y(), 1.0/sz.z());
+            //scale2inv.safe_normalize();
+            
+            if (m_md_pop_list[i]->GetMR())
+                planes = m_md_pop_list[i]->GetMR()->get_planes();
+            if (planes && planes->size()==6)
+            {
+                double x1, x2, y1, y2, z1, z2;
+                double abcd[4];
+                
+                (*planes)[0]->get_copy(abcd);
+                x1 = fabs(abcd[3]);
+                (*planes)[1]->get_copy(abcd);
+                x2 = fabs(abcd[3]);
+                (*planes)[2]->get_copy(abcd);
+                y1 = fabs(abcd[3]);
+                (*planes)[3]->get_copy(abcd);
+                y2 = fabs(abcd[3]);
+                (*planes)[4]->get_copy(abcd);
+                z1 = fabs(abcd[3]);
+                (*planes)[5]->get_copy(abcd);
+                z2 = fabs(abcd[3]);
+                
+                Vector trans1(-0.5, -0.5, -0.5);
+                Vector trans2(0.5, 0.5, 0.5);
+                
+                if (m_clip_mode == 3)
+                {
+                    Vector obj_trans1 = m_trans_fix;
+                    Vector obj_trans2 = -obj_trans1;
+                    Vector obj_trans3 = obj_trans1 - Vector(m_obj_transx, m_obj_transy, -m_obj_transz);
+                    
+                    for (int i = 0; i < 6; i++)
+                    {
+                        (*planes)[i]->Restore();
+                        (*planes)[i]->Translate(trans1);
+                        (*planes)[i]->Scale2(scale2);
+                        (*planes)[i]->Rotate(m_q_cl_fix);
+                        (*planes)[i]->Translate(obj_trans1);
+                        (*planes)[i]->Rotate(m_q_cl);
+                        (*planes)[i]->Translate(obj_trans2);
+                        (*planes)[i]->Translate(obj_trans3);
+                        (*planes)[i]->Scale2(scale2inv);
+                        (*planes)[i]->Translate(trans2);
+                    }
+                }
+                else
+                {
+                    (*planes)[0]->Restore();
+                    (*planes)[0]->Translate(trans1);
+                    (*planes)[0]->Scale2(scale2);
+                    (*planes)[0]->Rotate(m_q_cl);
+                    (*planes)[0]->Scale2(scale2inv);
+                    (*planes)[0]->Translate(trans2);
+                    
+                    (*planes)[1]->Restore();
+                    (*planes)[1]->Translate(trans1);
+                    (*planes)[1]->Scale2(scale2);
+                    (*planes)[1]->Rotate(m_q_cl);
+                    (*planes)[1]->Scale2(scale2inv);
+                    (*planes)[1]->Translate(trans2);
+                    
+                    (*planes)[2]->Restore();
+                    (*planes)[2]->Translate(trans1);
+                    (*planes)[2]->Scale2(scale2);
+                    (*planes)[2]->Rotate(m_q_cl);
+                    (*planes)[2]->Scale2(scale2inv);
+                    (*planes)[2]->Translate(trans2);
+                    
+                    (*planes)[3]->Restore();
+                    (*planes)[3]->Translate(trans1);
+                    (*planes)[3]->Scale2(scale2);
+                    (*planes)[3]->Rotate(m_q_cl);
+                    (*planes)[3]->Scale2(scale2inv);
+                    (*planes)[3]->Translate(trans2);
+                    
+                    (*planes)[4]->Restore();
+                    (*planes)[4]->Translate(trans1);
+                    (*planes)[4]->Scale2(scale2);
+                    (*planes)[4]->Rotate(m_q_cl);
+                    (*planes)[4]->Scale2(scale2inv);
+                    (*planes)[4]->Translate(trans2);
+                    
+                    (*planes)[5]->Restore();
+                    (*planes)[5]->Translate(trans1);
+                    (*planes)[5]->Scale2(scale2);
+                    (*planes)[5]->Rotate(m_q_cl);
+                    (*planes)[5]->Scale2(scale2inv);
+                    (*planes)[5]->Translate(trans2);
+                }
+            }
+        }
 	}
 }
 
-void VRenderGLView::A2Q()
+void VRenderVulkanView::A2Q()
 {
 	//view changed, re-sort bricks
 	//SetSortBricks();
@@ -10611,7 +12760,29 @@ void VRenderGLView::A2Q()
 	if (m_clip_mode)
 	{
 		if (m_clip_mode == 1)
-			m_q_cl.FromEuler(m_rotx, -m_roty, -m_rotz);
+			m_q_cl.FromEuler(-m_rotx, -m_roty, m_rotz);
+		else if (m_clip_mode == 3)
+		{
+            m_q_cl_zero.FromEuler(-m_rotx, -m_roty, m_rotz);
+            m_q_cl = m_q_fix * m_q_cl_zero;
+            /*
+			m_q_cl.ToEuler(m_rotx_cl, m_roty_cl, m_rotz_cl);
+			if (m_rotx_cl > 180.0) m_rotx_cl -= 360.0;
+			if (m_roty_cl > 180.0) m_roty_cl -= 360.0;
+			if (m_rotz_cl > 180.0) m_rotz_cl -= 360.0;
+			VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+			if (vr_frame)
+			{
+				ClippingView* clip_view = vr_frame->GetClippingView();
+				if (clip_view)
+					clip_view->SetClippingPlaneRotations(
+						m_rotx_cl <= 180.0 ? m_rotx_cl : 360.0 - m_rotx_cl,
+						m_roty_cl <= 180.0 ? m_roty_cl : 360.0 - m_roty_cl,
+						m_rotz_cl <= 180.0 ? m_rotz_cl : 360.0 - m_rotz_cl,
+						true);
+			}
+             */
+		}
 
 		for (int i=0; i<(int)m_vd_pop_list.size(); i++)
 		{
@@ -10623,14 +12794,22 @@ void VRenderGLView::A2Q()
 			int resx, resy, resz;
 			m_vd_pop_list[i]->GetSpacings(spcx, spcy, spcz);
 			m_vd_pop_list[i]->GetResolution(resx, resy, resz);
-			Vector scale;
+			Vector scale, scale2, scale2inv;
 			if (spcx>0.0 && spcy>0.0 && spcz>0.0)
 			{
 				scale = Vector(1.0/resx/spcx, 1.0/resy/spcy, 1.0/resz/spcz);
 				scale.safe_normalize();
+                scale2 = Vector(resx*spcx, resy*spcy, resz*spcz);
+                //scale2.safe_normalize();
+                scale2inv = Vector(1.0/(resx*spcx), 1.0/(resy*spcy), 1.0/(resz*spcz));
+                //scale2inv.safe_normalize();
 			}
 			else
+            {
 				scale = Vector(1.0, 1.0, 1.0);
+                scale2 = Vector(1.0, 1.0, 1.0);
+                scale2inv = Vector(1.0, 1.0, 1.0);
+            }
 
 			if (m_vd_pop_list[i]->GetVR())
 				planes = m_vd_pop_list[i]->GetVR()->get_planes();
@@ -10653,51 +12832,186 @@ void VRenderGLView::A2Q()
 				(*planes)[5]->get_copy(abcd);
 				z2 = fabs(abcd[3]);
 
-				Vector trans1(-0.5, -0.5, -0.5);
-				Vector trans2(0.5, 0.5, 0.5);
+                Vector trans1(-0.5, -0.5, -0.5);
+                Vector trans2(0.5, 0.5, 0.5);
+                
+                if (m_clip_mode == 3)
+                {
+                    Vector obj_trans1 = m_trans_fix;
+                    Vector obj_trans2 = -obj_trans1;
+                    Vector obj_trans3 = obj_trans1 - Vector(m_obj_transx, m_obj_transy, -m_obj_transz);
+                    
+                    for (int i = 0; i < 6; i++)
+                    {
+                        (*planes)[i]->Restore();
+                        (*planes)[i]->Translate(trans1);
+                        (*planes)[i]->Scale2(scale2);
+                        (*planes)[i]->Rotate(m_q_cl_fix);
+                        (*planes)[i]->Translate(obj_trans1);
+                        (*planes)[i]->Rotate(m_q_cl);
+                        (*planes)[i]->Translate(obj_trans2);
+                        (*planes)[i]->Translate(obj_trans3);
+                        (*planes)[i]->Scale2(scale2inv);
+                        (*planes)[i]->Translate(trans2);
+                    }
+                }
+                else
+                {
+                    (*planes)[0]->Restore();
+                    (*planes)[0]->Translate(trans1);
+                    (*planes)[0]->Scale2(scale2);
+                    (*planes)[0]->Rotate(m_q_cl);
+                    (*planes)[0]->Scale2(scale2inv);
+                    (*planes)[0]->Translate(trans2);
+                    
+                    (*planes)[1]->Restore();
+                    (*planes)[1]->Translate(trans1);
+                    (*planes)[1]->Scale2(scale2);
+                    (*planes)[1]->Rotate(m_q_cl);
+                    (*planes)[1]->Scale2(scale2inv);
+                    (*planes)[1]->Translate(trans2);
+                    
+                    (*planes)[2]->Restore();
+                    (*planes)[2]->Translate(trans1);
+                    (*planes)[2]->Scale2(scale2);
+                    (*planes)[2]->Rotate(m_q_cl);
+                    (*planes)[2]->Scale2(scale2inv);
+                    (*planes)[2]->Translate(trans2);
+                    
+                    (*planes)[3]->Restore();
+                    (*planes)[3]->Translate(trans1);
+                    (*planes)[3]->Scale2(scale2);
+                    (*planes)[3]->Rotate(m_q_cl);
+                    (*planes)[3]->Scale2(scale2inv);
+                    (*planes)[3]->Translate(trans2);
+                    
+                    (*planes)[4]->Restore();
+                    (*planes)[4]->Translate(trans1);
+                    (*planes)[4]->Scale2(scale2);
+                    (*planes)[4]->Rotate(m_q_cl);
+                    (*planes)[4]->Scale2(scale2inv);
+                    (*planes)[4]->Translate(trans2);
+                    
+                    (*planes)[5]->Restore();
+                    (*planes)[5]->Translate(trans1);
+                    (*planes)[5]->Scale2(scale2);
+                    (*planes)[5]->Rotate(m_q_cl);
+                    (*planes)[5]->Scale2(scale2inv);
+                    (*planes)[5]->Translate(trans2);
+                }
+			}
+		}
 
-				(*planes)[0]->Restore();
-				(*planes)[0]->Translate(trans1);
-				(*planes)[0]->Rotate(m_q_cl);
-				(*planes)[0]->Scale(scale);
-				(*planes)[0]->Translate(trans2);
+		for (int i=0; i<(int)m_md_pop_list.size(); i++)
+		{
+			if (!m_md_pop_list[i])
+				continue;
 
-				(*planes)[1]->Restore();
-				(*planes)[1]->Translate(trans1);
-				(*planes)[1]->Rotate(m_q_cl);
-				(*planes)[1]->Scale(scale);
-				(*planes)[1]->Translate(trans2);
+			vector<Plane*> *planes = 0;
 
-				(*planes)[2]->Restore();
-				(*planes)[2]->Translate(trans1);
-				(*planes)[2]->Rotate(m_q_cl);
-				(*planes)[2]->Scale(scale);
-				(*planes)[2]->Translate(trans2);
+			Vector sz = m_md_pop_list[i]->GetBounds().diagonal();
+			Vector scale, scale2, scale2inv;
+			scale = Vector(1.0/sz.x(), 1.0/sz.y(), 1.0/sz.z());
+			scale.safe_normalize();
+            scale2 = Vector(sz.x(), sz.y(), sz.z());
+            //scale2.safe_normalize();
+            scale2inv = Vector(1.0/sz.x(), 1.0/sz.y(), 1.0/sz.z());
+            //scale2inv.safe_normalize();
+			
+			if (m_md_pop_list[i]->GetMR())
+				planes = m_md_pop_list[i]->GetMR()->get_planes();
+			if (planes && planes->size()==6)
+			{
+				double x1, x2, y1, y2, z1, z2;
+				double abcd[4];
 
-				(*planes)[3]->Restore();
-				(*planes)[3]->Translate(trans1);
-				(*planes)[3]->Rotate(m_q_cl);
-				(*planes)[3]->Scale(scale);
-				(*planes)[3]->Translate(trans2);
+				(*planes)[0]->get_copy(abcd);
+				x1 = fabs(abcd[3]);
+				(*planes)[1]->get_copy(abcd);
+				x2 = fabs(abcd[3]);
+				(*planes)[2]->get_copy(abcd);
+				y1 = fabs(abcd[3]);
+				(*planes)[3]->get_copy(abcd);
+				y2 = fabs(abcd[3]);
+				(*planes)[4]->get_copy(abcd);
+				z1 = fabs(abcd[3]);
+				(*planes)[5]->get_copy(abcd);
+				z2 = fabs(abcd[3]);
 
-				(*planes)[4]->Restore();
-				(*planes)[4]->Translate(trans1);
-				(*planes)[4]->Rotate(m_q_cl);
-				(*planes)[4]->Scale(scale);
-				(*planes)[4]->Translate(trans2);
-
-				(*planes)[5]->Restore();
-				(*planes)[5]->Translate(trans1);
-				(*planes)[5]->Rotate(m_q_cl);
-				(*planes)[5]->Scale(scale);
-				(*planes)[5]->Translate(trans2);
+                Vector trans1(-0.5, -0.5, -0.5);
+                Vector trans2(0.5, 0.5, 0.5);
+                
+                if (m_clip_mode == 3)
+                {
+                    Vector obj_trans1 = m_trans_fix;
+                    Vector obj_trans2 = -obj_trans1;
+                    Vector obj_trans3 = obj_trans1 - Vector(m_obj_transx, m_obj_transy, -m_obj_transz);
+                    
+                    for (int i = 0; i < 6; i++)
+                    {
+                        (*planes)[i]->Restore();
+                        (*planes)[i]->Translate(trans1);
+                        (*planes)[i]->Scale2(scale2);
+                        (*planes)[i]->Rotate(m_q_cl_fix);
+                        (*planes)[i]->Translate(obj_trans1);
+                        (*planes)[i]->Rotate(m_q_cl);
+                        (*planes)[i]->Translate(obj_trans2);
+                        (*planes)[i]->Translate(obj_trans3);
+                        (*planes)[i]->Scale2(scale2inv);
+                        (*planes)[i]->Translate(trans2);
+                    }
+                }
+                else
+                {
+                    (*planes)[0]->Restore();
+                    (*planes)[0]->Translate(trans1);
+                    (*planes)[0]->Scale2(scale2);
+                    (*planes)[0]->Rotate(m_q_cl);
+                    (*planes)[0]->Scale2(scale2inv);
+                    (*planes)[0]->Translate(trans2);
+                    
+                    (*planes)[1]->Restore();
+                    (*planes)[1]->Translate(trans1);
+                    (*planes)[1]->Scale2(scale2);
+                    (*planes)[1]->Rotate(m_q_cl);
+                    (*planes)[1]->Scale2(scale2inv);
+                    (*planes)[1]->Translate(trans2);
+                    
+                    (*planes)[2]->Restore();
+                    (*planes)[2]->Translate(trans1);
+                    (*planes)[2]->Scale2(scale2);
+                    (*planes)[2]->Rotate(m_q_cl);
+                    (*planes)[2]->Scale2(scale2inv);
+                    (*planes)[2]->Translate(trans2);
+                    
+                    (*planes)[3]->Restore();
+                    (*planes)[3]->Translate(trans1);
+                    (*planes)[3]->Scale2(scale2);
+                    (*planes)[3]->Rotate(m_q_cl);
+                    (*planes)[3]->Scale2(scale2inv);
+                    (*planes)[3]->Translate(trans2);
+                    
+                    (*planes)[4]->Restore();
+                    (*planes)[4]->Translate(trans1);
+                    (*planes)[4]->Scale2(scale2);
+                    (*planes)[4]->Rotate(m_q_cl);
+                    (*planes)[4]->Scale2(scale2inv);
+                    (*planes)[4]->Translate(trans2);
+                    
+                    (*planes)[5]->Restore();
+                    (*planes)[5]->Translate(trans1);
+                    (*planes)[5]->Scale2(scale2);
+                    (*planes)[5]->Rotate(m_q_cl);
+                    (*planes)[5]->Scale2(scale2inv);
+                    (*planes)[5]->Translate(trans2);
+                }
 			}
 		}
 	}
 }
 
 //sort bricks after view changes
-void VRenderGLView::SetSortBricks()
+void VRenderVulkanView::SetSortBricks()
 {
 	PopVolumeList();
 
@@ -10709,7 +13023,7 @@ void VRenderGLView::SetSortBricks()
 	}
 }
 
-void VRenderGLView::SetClipMode(int mode)
+void VRenderVulkanView::SetClipMode(int mode)
 {
 	switch (mode)
 	{
@@ -10726,7 +13040,7 @@ void VRenderGLView::SetClipMode(int mode)
 		break;
 	case 2:
 		m_clip_mode = 2;
-		m_q_cl_zero.FromEuler(m_rotx, -m_roty, -m_rotz);
+		m_q_cl_zero.FromEuler(-m_rotx, -m_roty, m_rotz);
 		m_q_cl = m_q_cl_zero;
 		m_q_cl.ToEuler(m_rotx_cl, m_roty_cl, m_rotz_cl);
 		if (m_rotx_cl > 180.0) m_rotx_cl -= 360.0;
@@ -10734,10 +13048,36 @@ void VRenderGLView::SetClipMode(int mode)
 		if (m_rotz_cl > 180.0) m_rotz_cl -= 360.0;
 		SetRotations(m_rotx, m_roty, m_rotz);
 		break;
+	case 3:
+		m_clip_mode = 3;
+        m_rotx_cl_fix = m_rotx_cl;
+        m_roty_cl_fix = m_roty_cl;
+        m_rotz_cl_fix = m_rotz_cl;
+        m_rotx_fix = m_rotx;
+        m_roty_fix = m_roty;
+        m_rotz_fix = m_rotz;
+		m_q_cl_fix.FromEuler(m_rotx_cl, m_roty_cl, m_rotz_cl);
+		m_q_fix.FromEuler(m_rotx, m_roty, m_rotz);
+		m_q_fix.z *= -1;
+		m_q_cl_zero.FromEuler(-m_rotx, -m_roty, m_rotz);
+        m_trans_fix = Vector(m_obj_transx, m_obj_transy, -m_obj_transz);
+		break;
+	case 4:
+		m_clip_mode = 2;
+        m_rotx_cl = m_rotx_cl_fix;
+        m_roty_cl = m_roty_cl_fix;
+        m_rotz_cl = m_rotz_cl_fix;
+        m_rotx = m_rotx_fix;
+        m_roty = m_roty_fix;
+        m_rotz = m_rotz_fix;
+        m_q_cl.FromEuler(m_rotx_cl, m_roty_cl, m_rotz_cl);
+        m_q_cl.Normalize();
+		SetRotations(m_rotx, m_roty, m_rotz);
+		break;
 	}
 }
 
-void VRenderGLView::RestorePlanes()
+void VRenderVulkanView::RestorePlanes()
 {
 	vector<Plane*> *planes = 0;
 	for (int i=0; i<(int)m_vd_pop_list.size(); i++)
@@ -10760,11 +13100,11 @@ void VRenderGLView::RestorePlanes()
 	}
 }
 
-void VRenderGLView::SetClippingPlaneRotations(double rotx, double roty, double rotz)
+void VRenderVulkanView::SetClippingPlaneRotations(double rotx, double roty, double rotz)
 {
-	m_rotx_cl = -rotx;
+	m_rotx_cl = rotx;
 	m_roty_cl = roty;
-	m_rotz_cl = rotz;
+	m_rotz_cl = -rotz;
 
 	m_q_cl.FromEuler(m_rotx_cl, m_roty_cl, m_rotz_cl);
 	m_q_cl.Normalize();
@@ -10772,25 +13112,25 @@ void VRenderGLView::SetClippingPlaneRotations(double rotx, double roty, double r
 	SetRotations(m_rotx, m_roty, m_rotz);
 }
 
-void VRenderGLView::GetClippingPlaneRotations(double &rotx, double &roty, double &rotz)
+void VRenderVulkanView::GetClippingPlaneRotations(double &rotx, double &roty, double &rotz)
 {
-	rotx = -m_rotx_cl;
+	rotx = m_rotx_cl;
 	roty = m_roty_cl;
-	rotz = m_rotz_cl;
+	rotz = -m_rotz_cl;
 }
 
 //interpolation
-void VRenderGLView::SetIntp(bool mode)
+void VRenderVulkanView::SetIntp(bool mode)
 {
 	m_intp = mode;
 }
 
-bool VRenderGLView::GetIntp()
+bool VRenderVulkanView::GetIntp()
 {
 	return m_intp;
 }
 
-void VRenderGLView::Run4DScript()
+void VRenderVulkanView::Run4DScript()
 {
 	for (int i = 0; i < (int)m_vd_pop_list.size(); ++i)
 	{
@@ -10801,7 +13141,7 @@ void VRenderGLView::Run4DScript()
 }
 
 //start loop update
-void VRenderGLView::StartLoopUpdate()
+void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 {
 	////this is for debug_ds, comment when done
 	//if (TextureRenderer::get_mem_swap() &&
@@ -10809,11 +13149,29 @@ void VRenderGLView::StartLoopUpdate()
 	//  !TextureRenderer::get_done_update_loop())
 	//  return;
 
-	int nx = GetSize().x;
-	int ny = GetSize().y;
+	//st_time = milliseconds_now();
+
+	if (reset_peeling_layer)
+		m_finished_peeling_layer = 0;
+
+	SetSortBricks();
+
+	m_nx = GetSize().x;
+	m_ny = GetSize().y;
+	if (m_tile_rendering) {
+		m_nx = m_tile_w;
+		m_ny = m_tile_h;
+	}
+
+	int nx = m_nx;
+	int ny = m_ny;
+
+	if (m_fix_sclbar)
+		m_sb_length = m_fixed_sclbar_fac/(m_scale_factor*min(nx,ny));
 
 	//projection
-	HandleProjection(nx, ny);
+	if (m_tile_rendering) HandleProjection(m_capture_resx, m_capture_resy);
+	else HandleProjection(nx, ny);
 	//Transformation
 	HandleCamera();
 
@@ -10822,15 +13180,17 @@ void VRenderGLView::StartLoopUpdate()
 	m_mv_mat = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
 	//rotate object
 	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
-	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
-	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
+	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+	m_mv_mat = glm::rotate(m_mv_mat, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
 	//center object
 	m_mv_mat = glm::translate(m_mv_mat, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
 
 	PopMeshList();
+	SetBufferScale(m_res_mode);
 
 	int i, j, k;
 	m_dpeel = false;
+	m_mdtrans = false;
 	for (i=0; i<m_md_pop_list.size(); i++)
 	{
 		MeshData *md = m_md_pop_list[i];
@@ -10838,7 +13198,7 @@ void VRenderGLView::StartLoopUpdate()
 		Color amb, diff, spec;
 		double shine, alpha;
 		md->GetMaterial(amb, diff, spec, shine, alpha);
-		if (alpha < 1.0) m_dpeel = true;
+		if (alpha < 1.0) m_mdtrans = true;
 	}
 
 	//	if (TextureRenderer::get_mem_swap())
@@ -10848,9 +13208,46 @@ void VRenderGLView::StartLoopUpdate()
 		int num_chan;
 		//reset drawn status for all bricks
 
-		for (i=0; i<m_vd_pop_list.size(); i++)
+		vector<VolumeData*> displist;
+		for (i=(int)m_layer_list.size()-1; i>=0; i--)
 		{
-			VolumeData* vd = m_vd_pop_list[i];
+			if (!m_layer_list[i])
+				continue;
+			switch (m_layer_list[i]->IsA())
+			{
+			case 5://group
+				{
+					DataGroup* group = (DataGroup*)m_layer_list[i];
+					if (!group->GetDisp() || group->GetBlendMode() != VOL_METHOD_MULTI)
+						continue;
+
+					for (j=group->GetVolumeNum()-1; j>=0; j--)
+					{
+						VolumeData* vd = group->GetVolumeData(j);
+						if (!vd || !vd->GetDisp())
+							continue;
+						Texture* tex = vd->GetTexture();
+						if (!tex)
+							continue;
+						Ray view_ray = vd->GetVR()->compute_view();
+						vector<TextureBrick*> *bricks = tex->get_sorted_bricks(view_ray, !m_persp);
+						if (!bricks || bricks->size()==0)
+							continue;
+						displist.push_back(vd);
+					}
+				}
+				break;
+			}
+		}
+		m_dpeel = !(displist.empty() && m_vol_method != VOL_METHOD_MULTI);
+		if (m_md_pop_list.size() == 0)
+			m_dpeel = false;
+//		if (reset_peeling_layer || m_vol_method == VOL_METHOD_MULTI)
+			displist = m_vd_pop_list;
+
+		for (i=0; i<displist.size(); i++)
+		{
+			VolumeData* vd = displist[i];
 			if (vd && vd->GetDisp())
 			{
 				switchLevel(vd);
@@ -10861,8 +13258,52 @@ void VRenderGLView::StartLoopUpdate()
 
 				num_chan = 0;
 				Texture* tex = vd->GetTexture();
-				if (tex)
+				if (tex && vd->GetVR())
 				{
+					if (m_draw_mask && tex->isBrxml())
+					{
+						int curlv = vd->GetLevel();
+						vd->SetLevel(vd->GetMaskLv());
+						Transform *tform = tex->transform();
+						double mvmat2[16];
+						tform->get_trans(mvmat2);
+						vd->GetVR()->m_mv_mat2 = glm::mat4(
+							mvmat2[0], mvmat2[4], mvmat2[8], mvmat2[12],
+							mvmat2[1], mvmat2[5], mvmat2[9], mvmat2[13],
+							mvmat2[2], mvmat2[6], mvmat2[10], mvmat2[14],
+							mvmat2[3], mvmat2[7], mvmat2[11], mvmat2[15]);
+						vd->GetVR()->m_mv_mat2 = vd->GetVR()->m_mv_mat * vd->GetVR()->m_mv_mat2;
+
+						Ray view_ray = vd->GetVR()->compute_view();
+
+						vector<TextureBrick*> *bricks2 = tex->get_sorted_bricks(view_ray, !m_persp);
+						if (!bricks2 || bricks2->size()==0)
+							continue;
+						for (j=0; j<bricks2->size(); j++)
+						{
+							(*bricks2)[j]->set_drawn(false);
+							if ((*bricks2)[j]->get_priority()>0 ||
+								!vd->GetVR()->test_against_view_clip((*bricks2)[j]->bbox(), (*bricks2)[j]->tbox(), (*bricks2)[j]->dbox(), m_persp))//changed by takashi
+							{
+								(*bricks2)[j]->set_disp(false);
+								continue;
+							}
+							else
+								(*bricks2)[j]->set_disp(true);
+							if (m_draw_mask && tex->nmask() != -1 && vd->GetMaskHideMode() == VOL_MASK_HIDE_NONE)
+							{
+								total_num++;
+								num_chan++;
+							}
+							if (m_draw_label && tex->nlabel() != -1)
+							{
+								total_num++;
+								num_chan++;
+							}
+						}
+						vd->SetLevel(curlv);
+					}
+
 					Transform *tform = tex->transform();
 					double mvmat[16];
 					tform->get_trans(mvmat);
@@ -10891,22 +13332,17 @@ void VRenderGLView::StartLoopUpdate()
 							(*bricks)[j]->set_disp(true);
 						total_num++;
 						num_chan++;
-						if (vd->GetMode()==1 && vd->GetShading())
-						{
-							total_num++;
-							num_chan++;
-						}
 						if (vd->GetShadow())
 						{
 							total_num++;
 							num_chan++;
 						}
-						if (m_draw_mask && tex->nmask() != -1)
+						if (m_draw_mask && (tex->nmask() != -1 || !vd->GetSharedMaskName().IsEmpty()) && !tex->isBrxml() && vd->GetMaskHideMode() == VOL_MASK_HIDE_NONE)
 						{
 							total_num++;
 							num_chan++;
 						}
-						if (m_draw_label && tex->nlabel() != -1)
+						if (m_draw_label && tex->nlabel() != -1 && !tex->isBrxml())
 						{
 							total_num++;
 							num_chan++;
@@ -10923,9 +13359,9 @@ void VRenderGLView::StartLoopUpdate()
 		if (m_vol_method == VOL_METHOD_MULTI)
 		{
 			vector<VolumeData*> list;
-			for (i=0; i<m_vd_pop_list.size(); i++)
+			for (i=0; i<displist.size(); i++)
 			{
-				VolumeData* vd = m_vd_pop_list[i];
+				VolumeData* vd = displist[i];
 				if (!vd || !vd->GetDisp() || !vd->isBrxml())
 					continue;
 				Texture* tex = vd->GetTexture();
@@ -10937,16 +13373,15 @@ void VRenderGLView::StartLoopUpdate()
 				list.push_back(vd);
 			}
 
-			vector<VolumeLoaderData> tmp_shade;
 			vector<VolumeLoaderData> tmp_shadow;
 			for (i = 0; i < list.size(); i++)
 			{
 				VolumeData* vd = list[i];
 				Texture* tex = vd->GetTexture();
 				Ray view_ray = vd->GetVR()->compute_view();
-				vector<TextureBrick*> *bricks = tex->get_sorted_bricks(view_ray, !m_persp);
+				tex->set_sort_bricks();
+				vector<TextureBrick*> *bricks = tex->get_sorted_bricks_dir(view_ray); // distance from view plane
 				int mode = vd->GetMode() == 1 ? 1 : 0;
-				bool shade = (mode == 1 && vd->GetShading());
 				bool shadow = vd->GetShadow();
 				for (j = 0; j < bricks->size(); j++)
 				{
@@ -10962,11 +13397,6 @@ void VRenderGLView::StartLoopUpdate()
 							d.mode = mode;
 							queues.push_back(d);
 						}
-						if (shade && !b->drawn(2))
-						{
-							d.mode = 2;
-							tmp_shade.push_back(d);
-						}
 						if (shadow && !b->drawn(3))
 						{
 							d.mode = 3;
@@ -10980,14 +13410,6 @@ void VRenderGLView::StartLoopUpdate()
 			else if (TextureRenderer::get_update_order() == 0)
 				std::sort(queues.begin(), queues.end(), VolumeLoader::sort_data_asc);
 
-			if (!tmp_shade.empty())
-			{
-				if (TextureRenderer::get_update_order() == 1)
-					std::sort(tmp_shade.begin(), tmp_shade.end(), VolumeLoader::sort_data_dsc);
-				else if (TextureRenderer::get_update_order() == 0)
-					std::sort(tmp_shade.begin(), tmp_shade.end(), VolumeLoader::sort_data_asc);
-				queues.insert(queues.end(), tmp_shade.begin(), tmp_shade.end());
-			}
 			if (!tmp_shadow.empty())
 			{
 				if (TextureRenderer::get_update_order() == 1)
@@ -10998,7 +13420,7 @@ void VRenderGLView::StartLoopUpdate()
 					{
 						Ray view_ray = list[i]->GetVR()->compute_view();
 						list[i]->GetTexture()->set_sort_bricks();
-						list[i]->GetTexture()->get_sorted_bricks(view_ray, !m_persp); //recalculate brick.d_
+						list[i]->GetTexture()->get_sorted_bricks_dir(view_ray); // distance from view plane
 						list[i]->GetTexture()->set_sort_bricks();
 					}
 					TextureRenderer::set_update_order(order);
@@ -11008,6 +13430,41 @@ void VRenderGLView::StartLoopUpdate()
 					std::sort(tmp_shadow.begin(), tmp_shadow.end(), VolumeLoader::sort_data_asc);
 				queues.insert(queues.end(), tmp_shadow.begin(), tmp_shadow.end());
 			}
+
+			//for mask
+			if (m_draw_mask)
+			{
+				for (i = 0; i < list.size(); i++)
+				{
+					VolumeData* vd = list[i];
+					if (vd->GetTexture()->nmask() < 0 && vd->GetSharedMaskName().IsEmpty()) continue;
+					int curlevel = vd->GetLevel();
+					vd->SetLevel(vd->GetMaskLv());
+					Texture* tex = vd->GetTexture();
+					if (tex->nmask() < 0) continue;
+					Ray view_ray = vd->GetVR()->compute_view();
+					vector<TextureBrick*> *bricks = tex->get_sorted_bricks(view_ray, !m_persp);
+					int mode = TEXTURE_RENDER_MODE_MASK;
+					for (j = 0; j < bricks->size(); j++)
+					{
+						VolumeLoaderData d;
+						TextureBrick* b = (*bricks)[j];
+						if (b->get_disp())
+						{
+							d.brick = b;
+							d.finfo = tex->GetFileName(b->getID());
+							d.vd = vd;
+							if (!b->drawn(mode))
+							{
+								d.mode = mode;
+								queues.push_back(d);
+							}
+						}
+					}
+					vd->SetLevel(curlevel);
+				}
+			}
+
 		}
 		else if (m_layer_list.size() > 0)
 		{
@@ -11017,68 +13474,6 @@ void VRenderGLView::StartLoopUpdate()
 					continue;
 				switch (m_layer_list[i]->IsA())
 				{
-				case 2://volume data (this won't happen now)
-					{
-						VolumeData* vd = (VolumeData*)m_layer_list[i];
-						vector<VolumeLoaderData> tmp_shade;
-						vector<VolumeLoaderData> tmp_shadow;
-						if (vd && vd->GetDisp() && vd->isBrxml())
-						{
-							Texture* tex = vd->GetTexture();
-							if (!tex)
-								continue;
-							Ray view_ray = vd->GetVR()->compute_view();
-							vector<TextureBrick*> *bricks = tex->get_sorted_bricks(view_ray, !m_persp);
-							if (!bricks || bricks->size()==0)
-								continue;
-							int mode = vd->GetMode() == 1 ? 1 : 0;
-							bool shade = (mode == 1 && vd->GetShading());
-							bool shadow = vd->GetShadow();
-							for (j=0; j<bricks->size(); j++)
-							{
-								VolumeLoaderData d;
-								TextureBrick* b = (*bricks)[j];
-								if (b->get_disp())
-								{
-									d.brick = b;
-									d.finfo = tex->GetFileName(b->getID());
-									d.vd = vd;
-									if (!b->drawn(mode))
-									{
-										d.mode = mode;
-										queues.push_back(d);
-									}
-									if (shade && !b->drawn(2))
-									{
-										d.mode = 2;
-										tmp_shade.push_back(d);
-									}
-									if (shadow && !b->drawn(3))
-									{
-										d.mode = 3;
-										tmp_shadow.push_back(d);
-									}
-								}
-							}
-							if (!tmp_shade.empty()) queues.insert(queues.end(), tmp_shade.begin(), tmp_shade.end());
-							if (!tmp_shadow.empty())
-							{
-								if (TextureRenderer::get_update_order() == 1)
-								{
-									int order = TextureRenderer::get_update_order();
-									TextureRenderer::set_update_order(0);
-									Ray view_ray = vd->GetVR()->compute_view();
-									tex->set_sort_bricks();
-									tex->get_sorted_bricks(view_ray, !m_persp); //recalculate brick.d_
-									tex->set_sort_bricks();
-									TextureRenderer::set_update_order(order);
-									std::sort(tmp_shadow.begin(), tmp_shadow.end(), VolumeLoader::sort_data_asc);
-								}
-								queues.insert(queues.end(), tmp_shadow.begin(), tmp_shadow.end());
-							}
-						}
-					}
-					break;
 				case 5://group
 					{
 						vector<VolumeData*> list;
@@ -11103,7 +13498,6 @@ void VRenderGLView::StartLoopUpdate()
 							continue;
 
 						vector<VolumeLoaderData> tmp_q;
-						vector<VolumeLoaderData> tmp_shade;
 						vector<VolumeLoaderData> tmp_shadow;
 						if (group->GetBlendMode() == VOL_METHOD_MULTI)
 						{
@@ -11112,9 +13506,9 @@ void VRenderGLView::StartLoopUpdate()
 								VolumeData* vd = list[k];
 								Texture* tex = vd->GetTexture();
 								Ray view_ray = vd->GetVR()->compute_view();
-								vector<TextureBrick*> *bricks = tex->get_sorted_bricks(view_ray, !m_persp);
+								tex->set_sort_bricks();
+								vector<TextureBrick*> *bricks = tex->get_sorted_bricks_dir(view_ray); // distance from view plane
 								int mode = vd->GetMode() == 1 ? 1 : 0;
-								bool shade = (mode == 1 && vd->GetShading());
 								bool shadow = vd->GetShadow();
 								for (j = 0; j < bricks->size(); j++)
 								{
@@ -11129,11 +13523,6 @@ void VRenderGLView::StartLoopUpdate()
 										{
 											d.mode = mode;
 											tmp_q.push_back(d);
-										}
-										if (shade && !b->drawn(2))
-										{
-											d.mode = 2;
-											tmp_shade.push_back(d);
 										}
 										if (shadow && !b->drawn(3))
 										{
@@ -11151,14 +13540,6 @@ void VRenderGLView::StartLoopUpdate()
 									std::sort(tmp_q.begin(), tmp_q.end(), VolumeLoader::sort_data_asc);
 								queues.insert(queues.end(), tmp_q.begin(), tmp_q.end());
 							}
-							if (!tmp_shade.empty())
-							{
-								if (TextureRenderer::get_update_order() == 1)
-									std::sort(tmp_shade.begin(), tmp_shade.end(), VolumeLoader::sort_data_dsc);
-								else if (TextureRenderer::get_update_order() == 0)
-									std::sort(tmp_shade.begin(), tmp_shade.end(), VolumeLoader::sort_data_asc);
-								queues.insert(queues.end(), tmp_shade.begin(), tmp_shade.end());
-							}
 							if (!tmp_shadow.empty())
 							{
 								if (TextureRenderer::get_update_order() == 1)
@@ -11169,7 +13550,7 @@ void VRenderGLView::StartLoopUpdate()
 									{
 										Ray view_ray = list[k]->GetVR()->compute_view();
 										list[i]->GetTexture()->set_sort_bricks();
-										list[i]->GetTexture()->get_sorted_bricks(view_ray, !m_persp); //recalculate brick.d_
+										list[i]->GetTexture()->get_sorted_bricks_dir(view_ray); // distance from view plane
 										list[i]->GetTexture()->set_sort_bricks();
 									}
 									TextureRenderer::set_update_order(order);
@@ -11182,6 +13563,8 @@ void VRenderGLView::StartLoopUpdate()
 						}
 						else
 						{
+							if (!reset_peeling_layer)
+								continue;
 							for (j = 0; j < list.size(); j++)
 							{
 								VolumeData* vd = list[j];
@@ -11189,7 +13572,6 @@ void VRenderGLView::StartLoopUpdate()
 								Ray view_ray = vd->GetVR()->compute_view();
 								vector<TextureBrick*> *bricks = tex->get_sorted_bricks(view_ray, !m_persp);
 								int mode = vd->GetMode() == 1 ? 1 : 0;
-								bool shade = (mode == 1 && vd->GetShading());
 								bool shadow = vd->GetShadow();
 								for (k=0; k<bricks->size(); k++)
 								{
@@ -11205,11 +13587,6 @@ void VRenderGLView::StartLoopUpdate()
 											d.mode = mode;
 											queues.push_back(d);
 										}
-										if (shade && !b->drawn(2))
-										{
-											d.mode = 2;
-											tmp_shade.push_back(d);
-										}
 										if (shadow && !b->drawn(3))
 										{
 											d.mode = 3;
@@ -11217,7 +13594,6 @@ void VRenderGLView::StartLoopUpdate()
 										}
 									}
 								}
-								if (!tmp_shade.empty()) queues.insert(queues.end(), tmp_shade.begin(), tmp_shade.end());
 								if (!tmp_shadow.empty())
 								{
 									if (TextureRenderer::get_update_order() == 1)
@@ -11236,6 +13612,39 @@ void VRenderGLView::StartLoopUpdate()
 							}
 						}
 
+						//for mask
+						if (m_draw_mask)
+						{
+							for (j = 0; j < list.size(); j++)
+							{
+								VolumeData* vd = list[j];
+								if (vd->GetTexture()->nmask() < 0 && vd->GetSharedMaskName().IsEmpty()) continue;
+								int curlevel = vd->GetLevel();
+								vd->SetLevel(vd->GetMaskLv());
+								Texture* tex = vd->GetTexture();
+								Ray view_ray = vd->GetVR()->compute_view();
+								vector<TextureBrick*> *bricks = tex->get_sorted_bricks(view_ray, !m_persp);
+								int mode = TEXTURE_RENDER_MODE_MASK;
+								for (k=0; k<bricks->size(); k++)
+								{
+									VolumeLoaderData d;
+									TextureBrick* b = (*bricks)[k];
+									if (b->get_disp())
+									{
+										d.brick = b;
+										d.finfo = tex->GetFileName(b->getID());
+										d.vd = vd;
+										if (!b->drawn(mode))
+										{
+											d.mode = mode;
+											queues.push_back(d);
+										}
+									}
+								}
+								vd->SetLevel(curlevel);
+							}
+						}
+
 					}
 					break;
 				}
@@ -11244,10 +13653,23 @@ void VRenderGLView::StartLoopUpdate()
 
 		if (queues.size() > 0 && !m_interactive)
 		{
-			m_loader.Set(queues);
-			m_loader.SetMemoryLimitByte((long long)TextureRenderer::mainmem_buf_size_*1024LL*1024LL);
-			TextureRenderer::set_load_on_main_thread(false);
-			m_loader.Run();
+            bool runvl = false;
+            for (auto q : queues)
+            {
+                if (q.brick && !q.brick->isLoaded() && !q.brick->isLoading())
+                {
+                    runvl = true;
+                    break;
+                }
+            }
+            if (runvl)
+            {
+				//m_loader.SetMaxThreadNum(1);
+                m_loader.Set(queues);
+                m_loader.SetMemoryLimitByte((long long)TextureRenderer::mainmem_buf_size_*1024LL*1024LL);
+                TextureRenderer::set_load_on_main_thread(false);
+                m_loader.Run();
+            }
 		}
 
 		if (total_num > 0)
@@ -11258,11 +13680,14 @@ void VRenderGLView::StartLoopUpdate()
 		}
 		else
 			TextureRenderer::set_total_brick_num(0);
+
+		TextureRenderer::reset_save_final_buffer();
+		TextureRenderer::invalidate_temp_final_buffer();
 	}
 }
 
 //halt loop update
-void VRenderGLView::HaltLoopUpdate()
+void VRenderVulkanView::HaltLoopUpdate()
 {
 	if (TextureRenderer::get_mem_swap())
 	{
@@ -11271,7 +13696,7 @@ void VRenderGLView::HaltLoopUpdate()
 }
 
 //new function to refresh
-void VRenderGLView::RefreshGL(bool erase, bool start_loop)
+void VRenderVulkanView::RefreshGL(bool erase, bool start_loop)
 {
 	m_draw_overlays_only = false;
 	m_updating = true;
@@ -11282,7 +13707,7 @@ void VRenderGLView::RefreshGL(bool erase, bool start_loop)
 }
 
 //new function to refresh
-void VRenderGLView::RefreshGLOverlays(bool erase)
+void VRenderVulkanView::RefreshGLOverlays(bool erase)
 {
 	if (m_updating) return;
 	if (TextureRenderer::get_mem_swap() && !TextureRenderer::get_done_update_loop()) return;
@@ -11293,7 +13718,15 @@ void VRenderGLView::RefreshGLOverlays(bool erase)
 
 }
 
-double VRenderGLView::GetPointVolume(Point& mp, int mx, int my,
+//#ifdef __WXMAC__
+void VRenderVulkanView::Refresh( bool eraseBackground, const wxRect *rect)
+{
+    wxPaintEvent ev;
+    OnDraw(ev);
+}
+//#endif
+
+double VRenderVulkanView::GetPointVolume(Point& mp, int mx, int my,
 									 VolumeData* vd, int mode, bool use_transf, double thresh)
 {
 	if (!vd)
@@ -11322,8 +13755,8 @@ double VRenderGLView::GetPointVolume(Point& mp, int mx, int my,
 	//translate object
 	mv_temp = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
 	//rotate object
-	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
-	mv_temp = glm::rotate(mv_temp, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
 	mv_temp = glm::rotate(mv_temp, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
 	//center object
 	mv_temp = glm::translate(mv_temp, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
@@ -11335,7 +13768,7 @@ double VRenderGLView::GetPointVolume(Point& mp, int mx, int my,
 
 	double x, y;
 	x = double(mx) * 2.0 / double(nx) - 1.0;
-	y = 1.0 - double(my) * 2.0 / double(ny);
+	y = double(my) * 2.0 / double(ny) - 1.0;
 	p.invert();
 	mv.invert();
 	//transform mp1 and mp2 to object space
@@ -11351,7 +13784,6 @@ double VRenderGLView::GetPointVolume(Point& mp, int mx, int my,
 	int yy = -1;
 	int zz = -1;
 	int tmp_xx, tmp_yy, tmp_zz;
-	Point nmp;
 	double spcx, spcy, spcz;
 	vd->GetSpacings(spcx, spcy, spcz);
 	int resx, resy, resz;
@@ -11368,21 +13800,25 @@ double VRenderGLView::GetPointVolume(Point& mp, int mx, int my,
 	double mspc = 1.0;
 	double return_val = -1.0;
 	if (vd->GetSampleRate() > 0.0)
-		mspc = sqrt(spcx*spcx + spcy*spcy + spcz*spcz)/vd->GetSampleRate();
+		mspc = sqrt(1.0 / (resx * resx) + 1.0 / (resy * resy) + 1.0 / (resz * resz)) / 2.0;
 	if (vd->GetVR())
 		planes = vd->GetVR()->get_planes();
 	if (bbox.intersect(mp1, vv, hit))
 	{
+		Transform *textrans = tex->transform();
+		Vector vv2 = textrans->unproject(vv);
+		vv2.normalize();
+		Point hp1 = textrans->unproject(hit);
 		while (true)
 		{
-			tmp_xx = int(hit.x() / spcx);
-			tmp_yy = int(hit.y() / spcy);
-			tmp_zz = int(hit.z() / spcz);
+			tmp_xx = int(hp1.x() * resx);
+			tmp_yy = int(hp1.y() * resy);
+			tmp_zz = int(hp1.z() * resz);
 			if (mode==1 &&
 				tmp_xx==xx && tmp_yy==yy && tmp_zz==zz)
 			{
 				//same, skip
-				hit += vv*mspc;
+				hp1 += vv2 * mspc;
 				continue;
 			}
 			else
@@ -11396,52 +13832,55 @@ double VRenderGLView::GetPointVolume(Point& mp, int mx, int my,
 				yy<0 || yy>resy ||
 				zz<0 || zz>resz)
 				break;
-			//normalize
-			nmp.x(hit.x() / bbox.max().x());
-			nmp.y(hit.y() / bbox.max().y());
-			nmp.z(hit.z() / bbox.max().z());
+
 			bool inside = true;
 			if (planes)
-				for (int i=0; i<6; i++)
+			{
+				for (int i = 0; i < 6; i++)
+				{
 					if ((*planes)[i] &&
-						(*planes)[i]->eval_point(nmp)<0.0)
+						(*planes)[i]->eval_point(hp1) < 0.0)
 					{
 						inside = false;
 						break;
 					}
-					if (inside)
+				}
+			}
+			if (inside)
+			{
+				xx = xx == resx ? resx - 1 : xx;
+				yy = yy == resy ? resy - 1 : yy;
+				zz = zz == resz ? resz - 1 : zz;
+
+				if (use_transf)
+					value = vd->GetTransferedValue(xx, yy, zz);
+				else
+					value = vd->GetOriginalValue(xx, yy, zz);
+
+				if (mode == 1)
+				{
+					if (value > max_int)
 					{
-						xx = xx==resx?resx-1:xx;
-						yy = yy==resy?resy-1:yy;
-						zz = zz==resz?resz-1:zz;
-
-						if (use_transf)
-							value = vd->GetTransferedValue(xx, yy, zz);
-						else
-							value = vd->GetOriginalValue(xx, yy, zz);
-
-						if (mode == 1)
-						{
-							if (value > max_int)
-							{
-								mp = Point((xx+0.5)*spcx, (yy+0.5)*spcy, (zz+0.5)*spcz);
-								max_int = value;
-							}
-						}
-						else if (mode == 2)
-						{
-							//accumulate
-							if (value > 0.0)
-							{
-								alpha = 1.0 - pow(Clamp(1.0-value, 0.0, 1.0), vd->GetSampleRate());
-								max_int += alpha*(1.0-max_int);
-								mp = Point((xx+0.5)*spcx, (yy+0.5)*spcy, (zz+0.5)*spcz);
-							}
-							if (max_int >= thresh)
-								break;
-						}
+						mp = Point((xx + 0.5) / resx, (yy + 0.5) / resy, (zz + 0.5) / resz);
+						mp = textrans->project(mp);
+						max_int = value;
 					}
-					hit += vv*mspc;
+				}
+				else if (mode == 2)
+				{
+					//accumulate
+					if (value > 0.0)
+					{
+						alpha = 1.0 - pow(Clamp(1.0 - value, 0.0, 1.0), vd->GetSampleRate());
+						max_int += alpha * (1.0 - max_int);
+						mp = Point((xx + 0.5) / resx, (yy + 0.5) / resy, (zz + 0.5) / resz);
+						mp = textrans->project(mp);
+					}
+					if (max_int >= thresh)
+						break;
+				}
+			}
+			hp1 += vv2 * mspc;
 		}
 	}
 
@@ -11461,7 +13900,155 @@ double VRenderGLView::GetPointVolume(Point& mp, int mx, int my,
 	return return_val;
 }
 
-double VRenderGLView::GetPointAndIntVolume(Point& mp, double &intensity, bool normalize, int mx, int my, VolumeData* vd, double thresh)
+double VRenderVulkanView::GetPointAndLabel(Point& mp, int& lblval, int mx, int my, VolumeData* vd)
+{
+	if (!vd)
+		return -1.0;
+	Texture* tex = vd->GetTexture();
+	if (!tex) return -1.0;
+	Nrrd* nrrd = tex->get_nrrd(tex->nlabel());
+	if (!nrrd) return -1.0;
+	void* data = nrrd->data;
+	if (!data && !tex->isBrxml()) return -1.0;
+
+	int nx = GetSize().x;
+	int ny = GetSize().y;
+
+	if (nx <= 0 || ny <= 0)
+		return -1.0;
+
+	glm::mat4 cur_mv_mat = m_mv_mat;
+	glm::mat4 cur_proj_mat = m_proj_mat;
+
+	//projection
+	HandleProjection(nx, ny);
+	//Transformation
+	HandleCamera();
+	glm::mat4 mv_temp;
+	//translate object
+	mv_temp = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
+	//rotate object
+	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
+	//center object
+	mv_temp = glm::translate(mv_temp, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
+
+	Transform mv;
+	Transform p;
+	mv.set(glm::value_ptr(mv_temp));
+	p.set(glm::value_ptr(m_proj_mat));
+
+	double x, y;
+	x = double(mx) * 2.0 / double(nx) - 1.0;
+	y = double(my) * 2.0 / double(ny) - 1.0;
+	p.invert();
+	mv.invert();
+	//transform mp1 and mp2 to object space
+	Point mp1(x, y, 0.0);
+	mp1 = p.transform(mp1);
+	mp1 = mv.transform(mp1);
+	Point mp2(x, y, 1.0);
+	mp2 = p.transform(mp2);
+	mp2 = mv.transform(mp2);
+
+	//volume res
+	int xx = -1;
+	int yy = -1;
+	int zz = -1;
+	int tmp_xx, tmp_yy, tmp_zz;
+	double spcx, spcy, spcz;
+	vd->GetSpacings(spcx, spcy, spcz);
+	int resx, resy, resz;
+	vd->GetResolution(resx, resy, resz);
+	//volume bounding box
+	BBox bbox = vd->GetBounds();
+	Vector vv = mp2 - mp1;
+	vv.normalize();
+	Point hit;
+	int p_int = 0;
+	double alpha = 0.0;
+	int value = 0;
+	vector<Plane*>* planes = 0;
+	double mspc = 1.0;
+	double return_val = -1.0;
+	if (vd->GetSampleRate() > 0.0)
+		mspc = sqrt(1.0 / (resx * resx) + 1.0 / (resy * resy) + 1.0 / (resz * resz)) / 2.0;
+	if (vd->GetVR())
+		planes = vd->GetVR()->get_planes();
+	if (bbox.intersect(mp1, vv, hit))
+	{
+		Transform* textrans = tex->transform();
+		Vector vv2 = textrans->unproject(vv);
+		vv2.normalize();
+		Point hp1 = textrans->unproject(hit);
+		while (true)
+		{
+			tmp_xx = int(hp1.x() * resx);
+			tmp_yy = int(hp1.y() * resy);
+			tmp_zz = int(hp1.z() * resz);
+			if (tmp_xx == xx && tmp_yy == yy && tmp_zz == zz)
+			{
+				//same, skip
+				hp1 += vv2 * mspc;
+				continue;
+			}
+			else
+			{
+				xx = tmp_xx;
+				yy = tmp_yy;
+				zz = tmp_zz;
+			}
+			//out of bound, stop
+			if (xx<0 || xx>resx ||
+				yy<0 || yy>resy ||
+				zz<0 || zz>resz)
+				break;
+
+			bool inside = true;
+			if (planes)
+			{
+				for (int i = 0; i < 6; i++)
+				{
+					if ((*planes)[i] &&
+						(*planes)[i]->eval_point(hp1) < 0.0)
+					{
+						inside = false;
+						break;
+					}
+				}
+			}
+			if (inside)
+			{
+				xx = xx == resx ? resx - 1 : xx;
+				yy = yy == resy ? resy - 1 : yy;
+				zz = zz == resz ? resz - 1 : zz;
+
+				value = vd->GetLabellValue(xx, yy, zz);
+
+				if (value > 0 && vd->GetSegmentMask(value) > 0)
+				{
+					mp = Point((xx + 0.5) / resx, (yy + 0.5) / resy, (zz + 0.5) / resz);
+					mp = textrans->project(mp);
+					p_int = value;
+					break;
+				}
+			}
+			hp1 += vv2 * mspc;
+		}
+	}
+
+	if (p_int > 0)
+		return_val = (mp - mp1).length();
+
+	lblval = p_int;
+
+	m_mv_mat = cur_mv_mat;
+	m_proj_mat = cur_proj_mat;
+	return return_val;
+}
+
+double VRenderVulkanView::GetPointAndIntVolume(Point& mp, double &intensity, bool normalize, int mx, int my, VolumeData* vd, double thresh)
 {
 	if (!vd)
 		return -1.0;
@@ -11489,8 +14076,8 @@ double VRenderGLView::GetPointAndIntVolume(Point& mp, double &intensity, bool no
 	//translate object
 	mv_temp = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
 	//rotate object
-	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
-	mv_temp = glm::rotate(mv_temp, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
 	mv_temp = glm::rotate(mv_temp, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
 	//center object
 	mv_temp = glm::translate(mv_temp, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
@@ -11502,7 +14089,7 @@ double VRenderGLView::GetPointAndIntVolume(Point& mp, double &intensity, bool no
 
 	double x, y;
 	x = double(mx) * 2.0 / double(nx) - 1.0;
-	y = 1.0 - double(my) * 2.0 / double(ny);
+	y = double(my) * 2.0 / double(ny) - 1.0;
 	p.invert();
 	mv.invert();
 	//transform mp1 and mp2 to object space
@@ -11518,7 +14105,6 @@ double VRenderGLView::GetPointAndIntVolume(Point& mp, double &intensity, bool no
 	int yy = -1;
 	int zz = -1;
 	int tmp_xx, tmp_yy, tmp_zz;
-	Point nmp;
 	double spcx, spcy, spcz;
 	vd->GetSpacings(spcx, spcy, spcz);
 	int resx, resy, resz;
@@ -11535,20 +14121,24 @@ double VRenderGLView::GetPointAndIntVolume(Point& mp, double &intensity, bool no
 	double mspc = 1.0;
 	double return_val = -1.0;
 	if (vd->GetSampleRate() > 0.0)
-		mspc = sqrt(spcx*spcx + spcy*spcy + spcz*spcz)/vd->GetSampleRate();
+		mspc = sqrt(1.0 / (resx * resx) + 1.0 / (resy * resy) + 1.0 / (resz * resz)) / 2.0;
 	if (vd->GetVR())
 		planes = vd->GetVR()->get_planes();
 	if (bbox.intersect(mp1, vv, hit))
 	{
+		Transform* textrans = tex->transform();
+		Vector vv2 = textrans->unproject(vv);
+		vv2.normalize();
+		Point hp1 = textrans->unproject(hit);
 		while (true)
 		{
-			tmp_xx = int(hit.x() / spcx);
-			tmp_yy = int(hit.y() / spcy);
-			tmp_zz = int(hit.z() / spcz);
+			tmp_xx = int(hp1.x() * resx);
+			tmp_yy = int(hp1.y() * resy);
+			tmp_zz = int(hp1.z() * resz);
 			if (tmp_xx==xx && tmp_yy==yy && tmp_zz==zz)
 			{
 				//same, skip
-				hit += vv*mspc;
+				hp1 += vv2 * mspc;
 				continue;
 			}
 			else
@@ -11562,17 +14152,14 @@ double VRenderGLView::GetPointAndIntVolume(Point& mp, double &intensity, bool no
 				yy<0 || yy>resy ||
 				zz<0 || zz>resz)
 				break;
-			//normalize
-			nmp.x(hit.x() / bbox.max().x());
-			nmp.y(hit.y() / bbox.max().y());
-			nmp.z(hit.z() / bbox.max().z());
+
 			bool inside = true;
 			if (planes)
 			{
-				for (int i=0; i<6; i++)
+				for (int i = 0; i < 6; i++)
 				{
 					if ((*planes)[i] &&
-						(*planes)[i]->eval_point(nmp)<0.0)
+						(*planes)[i]->eval_point(hp1) < 0.0)
 					{
 						inside = false;
 						break;
@@ -11593,19 +14180,20 @@ double VRenderGLView::GetPointAndIntVolume(Point& mp, double &intensity, bool no
 					vd->GetRenderedIDColor(r, g, b, (int)value);
 					if (r == 0 && g == 0 && b == 0)
 					{
-						hit += vv*mspc;
+						hp1 += vv2 * mspc;
 						continue;
 					}
 				}
 
 				if (value >= thresh)
 				{
-					mp = Point((xx+0.5)*spcx, (yy+0.5)*spcy, (zz+0.5)*spcz);
+					mp = Point((xx + 0.5) / resx, (yy + 0.5) / resy, (zz + 0.5) / resz);
+					mp = textrans->project(mp);
 					p_int = value;
 					break;
 				}
 			}
-			hit += vv*mspc;
+			hp1 += vv2 * mspc;
 		}
 	}
 
@@ -11619,7 +14207,7 @@ double VRenderGLView::GetPointAndIntVolume(Point& mp, double &intensity, bool no
 	return return_val;
 }
 
-double VRenderGLView::GetPointVolumeBox(Point &mp, int mx, int my, VolumeData* vd, bool calc_mats)
+double VRenderVulkanView::GetPointVolumeBox(Point &mp, int mx, int my, VolumeData* vd, bool calc_mats)
 {
 	if (!vd)
 		return -1.0;
@@ -11653,8 +14241,8 @@ double VRenderGLView::GetPointVolumeBox(Point &mp, int mx, int my, VolumeData* v
 		//translate object
 		mv_temp = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
 		//rotate object
-		mv_temp = glm::rotate(mv_temp, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
-		mv_temp = glm::rotate(mv_temp, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
+		mv_temp = glm::rotate(mv_temp, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+		mv_temp = glm::rotate(mv_temp, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
 		mv_temp = glm::rotate(mv_temp, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
 		//center object
 		mv_temp = glm::translate(mv_temp, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
@@ -11674,7 +14262,7 @@ double VRenderGLView::GetPointVolumeBox(Point &mp, int mx, int my, VolumeData* v
 
 	double x, y;
 	x = double(mx) * 2.0 / double(nx) - 1.0;
-	y = 1.0 - double(my) * 2.0 / double(ny);
+	y = double(my) * 2.0 / double(ny) - 1.0;
 	p.invert();
 	mv.invert();
 	//transform mp1 and mp2 to object space
@@ -11738,7 +14326,7 @@ double VRenderGLView::GetPointVolumeBox(Point &mp, int mx, int my, VolumeData* v
 	return mint;
 }
 
-double VRenderGLView::GetPointVolumeBox2(Point &p1, Point &p2, int mx, int my, VolumeData* vd)
+double VRenderVulkanView::GetPointVolumeBox2(Point &p1, Point &p2, int mx, int my, VolumeData* vd)
 {
 	if (!vd)
 		return -1.0;
@@ -11761,8 +14349,8 @@ double VRenderGLView::GetPointVolumeBox2(Point &p1, Point &p2, int mx, int my, V
 	//translate object
 	mv_temp = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
 	//rotate object
-	mv_temp = glm::rotate(mv_temp, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
-	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
 	mv_temp = glm::rotate(mv_temp, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
 	//center object
 	mv_temp = glm::translate(mv_temp, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
@@ -11783,7 +14371,7 @@ double VRenderGLView::GetPointVolumeBox2(Point &p1, Point &p2, int mx, int my, V
 
 	double x, y;
 	x = double(mx) * 2.0 / double(nx) - 1.0;
-	y = 1.0 - double(my) * 2.0 / double(ny);
+	y = double(my) * 2.0 / double(ny) - 1.0;
 	p.invert();
 	mv.invert();
 	//transform mp1 and mp2 to object space
@@ -11851,7 +14439,7 @@ double VRenderGLView::GetPointVolumeBox2(Point &p1, Point &p2, int mx, int my, V
 	return mint;
 }
 
-double VRenderGLView::GetPointPlane(Point &mp, int mx, int my, Point* planep, bool calc_mats)
+double VRenderVulkanView::GetPointPlane(Point &mp, int mx, int my, Point* planep, bool calc_mats)
 {
 	int nx = GetSize().x;
 	int ny = GetSize().y;
@@ -11875,8 +14463,8 @@ double VRenderGLView::GetPointPlane(Point &mp, int mx, int my, Point* planep, bo
 		//translate object
 		mv_temp = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
 		//rotate object
-		mv_temp = glm::rotate(mv_temp, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
-		mv_temp = glm::rotate(mv_temp, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
+		mv_temp = glm::rotate(mv_temp, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+		mv_temp = glm::rotate(mv_temp, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
 		mv_temp = glm::rotate(mv_temp, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
 		//center object
 		mv_temp = glm::translate(mv_temp, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
@@ -11898,7 +14486,7 @@ double VRenderGLView::GetPointPlane(Point &mp, int mx, int my, Point* planep, bo
 	}
 	double x, y;
 	x = double(mx) * 2.0 / double(nx) - 1.0;
-	y = 1.0 - double(my) * 2.0 / double(ny);
+	y = double(my) * 2.0 / double(ny) - 1.0;
 	p.invert();
 	mv.invert();
 	//transform mp1 and mp2 to eye space
@@ -11923,7 +14511,7 @@ double VRenderGLView::GetPointPlane(Point &mp, int mx, int my, Point* planep, bo
 	return (mp-mp1).length();
 }
 
-Point* VRenderGLView::GetEditingRulerPoint(int mx, int my)
+Point* VRenderVulkanView::GetEditingRulerPoint(int mx, int my)
 {
 	Point* point = 0;
 
@@ -11935,7 +14523,7 @@ Point* VRenderGLView::GetEditingRulerPoint(int mx, int my)
 
 	double x, y;
 	x = double(mx) * 2.0 / double(nx) - 1.0;
-	y = 1.0 - double(my) * 2.0 / double(ny);
+	y = double(my) * 2.0 / double(ny) - 1.0;
 	double aspect = (double)nx / (double)ny;
 
 	glm::mat4 cur_mv_mat = m_mv_mat;
@@ -11949,8 +14537,8 @@ Point* VRenderGLView::GetEditingRulerPoint(int mx, int my)
 	//translate object
 	mv_temp = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
 	//rotate object
-	mv_temp = glm::rotate(mv_temp, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
-	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
 	mv_temp = glm::rotate(mv_temp, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
 	//center object
 	mv_temp = glm::translate(mv_temp, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
@@ -11975,8 +14563,7 @@ Point* VRenderGLView::GetEditingRulerPoint(int mx, int my)
 			ptemp = *point;
 			ptemp = mv.transform(ptemp);
 			ptemp = p.transform(ptemp);
-			if ((m_persp && (ptemp.z()<=0.0 || ptemp.z()>=1.0)) ||
-				(!m_persp && (ptemp.z()>=0.0 || ptemp.z()<=-1.0)))
+			if (ptemp.z()<=0.0 || ptemp.z()>=1.0)
 				continue;
 			if (x<ptemp.x()+0.02/aspect &&
 				x>ptemp.x()-0.02/aspect &&
@@ -12003,8 +14590,7 @@ Point* VRenderGLView::GetEditingRulerPoint(int mx, int my)
 				ptemp = *point;
 				ptemp = mv.transform(ptemp);
 				ptemp = p.transform(ptemp);
-				if ((m_persp && (ptemp.z()<=0.0 || ptemp.z()>=1.0)) ||
-					(!m_persp && (ptemp.z()>=0.0 || ptemp.z()<=-1.0)))
+				if (ptemp.z()<=0.0 || ptemp.z()>=1.0)
 					continue;
 				if (x<ptemp.x()+0.02/aspect &&
 					x>ptemp.x()-0.02/aspect &&
@@ -12028,7 +14614,7 @@ Point* VRenderGLView::GetEditingRulerPoint(int mx, int my)
 }
 
 //added by takashi
-bool VRenderGLView::SwitchRulerBalloonVisibility_Point(int mx, int my)
+bool VRenderVulkanView::SwitchRulerBalloonVisibility_Point(int mx, int my)
 {
 	Point* point = 0;
 
@@ -12040,7 +14626,7 @@ bool VRenderGLView::SwitchRulerBalloonVisibility_Point(int mx, int my)
 
 	double x, y;
 	x = double(mx) * 2.0 / double(nx) - 1.0;
-	y = 1.0 - double(my) * 2.0 / double(ny);
+	y = double(my) * 2.0 / double(ny) - 1.0;
 	double aspect = (double)nx / (double)ny;
 
 	glm::mat4 cur_mv_mat = m_mv_mat;
@@ -12054,8 +14640,8 @@ bool VRenderGLView::SwitchRulerBalloonVisibility_Point(int mx, int my)
 	//translate object
 	mv_temp = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
 	//rotate object
-	mv_temp = glm::rotate(mv_temp, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
-	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+	mv_temp = glm::rotate(mv_temp, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
 	mv_temp = glm::rotate(mv_temp, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
 	//center object
 	mv_temp = glm::translate(mv_temp, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
@@ -12080,8 +14666,7 @@ bool VRenderGLView::SwitchRulerBalloonVisibility_Point(int mx, int my)
 			ptemp = *point;
 			ptemp = mv.transform(ptemp);
 			ptemp = p.transform(ptemp);
-			if ((m_persp && (ptemp.z()<=0.0 || ptemp.z()>=1.0)) ||
-				(!m_persp && (ptemp.z()>=0.0 || ptemp.z()<=-1.0)))
+			if (ptemp.z()<=0.0 || ptemp.z()>=1.0)
 				continue;
 			if (x<ptemp.x()+0.02/aspect &&
 				x>ptemp.x()-0.02/aspect &&
@@ -12109,8 +14694,7 @@ bool VRenderGLView::SwitchRulerBalloonVisibility_Point(int mx, int my)
 				ptemp = *point;
 				ptemp = mv.transform(ptemp);
 				ptemp = p.transform(ptemp);
-				if ((m_persp && (ptemp.z()<=0.0 || ptemp.z()>=1.0)) ||
-					(!m_persp && (ptemp.z()>=0.0 || ptemp.z()<=-1.0)))
+				if (ptemp.z()<=0.0 || ptemp.z()>=1.0)
 					continue;
 				if (x<ptemp.x()+0.02/aspect &&
 					x>ptemp.x()-0.02/aspect &&
@@ -12134,17 +14718,17 @@ bool VRenderGLView::SwitchRulerBalloonVisibility_Point(int mx, int my)
 		return false;
 }
 
-int VRenderGLView::GetRulerType()
+int VRenderVulkanView::GetRulerType()
 {
 	return m_ruler_type;
 }
 
-void VRenderGLView::SetRulerType(int type)
+void VRenderVulkanView::SetRulerType(int type)
 {
 	m_ruler_type = type;
 }
 
-void VRenderGLView::FinishRuler()
+void VRenderVulkanView::FinishRuler()
 {
 	size_t size = m_ruler_list.size();
 	if (!size) return;
@@ -12153,7 +14737,7 @@ void VRenderGLView::FinishRuler()
 		m_ruler_list[size-1]->SetFinished();
 }
 
-bool VRenderGLView::GetRulerFinished()
+bool VRenderVulkanView::GetRulerFinished()
 {
 	size_t size = m_ruler_list.size();
 	if (!size) return true;
@@ -12163,7 +14747,7 @@ bool VRenderGLView::GetRulerFinished()
 		return true;
 }
 
-void VRenderGLView::AddRulerPoint(int mx, int my)
+void VRenderVulkanView::AddRulerPoint(int mx, int my)
 {
 	if (m_ruler_type == 3)
 	{
@@ -12224,7 +14808,7 @@ void VRenderGLView::AddRulerPoint(int mx, int my)
 		vr_frame->GetMeasureDlg()->GetSettings(m_vrv);
 }
 
-void VRenderGLView::AddPaintRulerPoint()
+void VRenderVulkanView::AddPaintRulerPoint()
 {
 	if (m_selector.ProcessSel(0.01))
 	{
@@ -12268,7 +14852,7 @@ void VRenderGLView::AddPaintRulerPoint()
 	}
 }
 
-void VRenderGLView::DrawRulers()
+void VRenderVulkanView::DrawRulers()
 {
 	if (!m_text_renderer)
 		return;
@@ -12281,26 +14865,28 @@ void VRenderGLView::DrawRulers()
 	float w = m_text_renderer->GetSize()/4.0f;
 	float px, py, p2x, p2y;
 
-	vector<float> verts;
+	vector<Vulkan2dRender::Vertex> verts;
+	vector<uint32_t> index;
 	int vert_num = 0;
 	for (size_t i=0; i<m_ruler_list.size(); ++i)
 		if (m_ruler_list[i])
 			vert_num += m_ruler_list[i]->GetNumPoint();
-	verts.reserve(vert_num*10*3);
+	verts.reserve(vert_num*4);
+	index.reserve(vert_num*8);
 
 	Transform mv;
 	Transform p;
 	mv.set(glm::value_ptr(m_mv_mat));
 	p.set(glm::value_ptr(m_proj_mat));
 	Point p1, p2;
-	unsigned int num;
-	vector<unsigned int> nums;
 	Color color;
 	Color text_color = GetTextColor();
 
 	double spcx = 1.0;
 	double spcy = 1.0;
 	double spcz = 1.0;
+
+	int fsize = m_text_renderer->GetSize();
 
 	if(m_cur_vol){
 		Texture *vtex = m_cur_vol->GetTexture();
@@ -12314,6 +14900,7 @@ void VRenderGLView::DrawRulers()
 		}
 	}
 
+	uint32_t vnum = 0;
 	for (size_t i=0; i<m_ruler_list.size(); i++)
 	{
 		Ruler* ruler = m_ruler_list[i];
@@ -12322,7 +14909,6 @@ void VRenderGLView::DrawRulers()
 			(ruler->GetTimeDep() &&
 			ruler->GetTime() == m_tseq_cur_num))
 		{
-			num = 0;
 			if (ruler->GetUseColor())
 				color = ruler->GetColor();
 			else
@@ -12332,42 +14918,41 @@ void VRenderGLView::DrawRulers()
 				p2 = *(ruler->GetPoint(j));
 				p2 = mv.transform(p2);
 				p2 = p.transform(p2);
-				if ((m_persp && (p2.z()<=0.0 || p2.z()>=1.0)) ||
-					(!m_persp && (p2.z()>=0.0 || p2.z()<=-1.0)))
+				if (p2.z() <= 0.0 || p2.z() >= 1.0)
 					continue;
 				px = (p2.x()+1.0)*nx/2.0;
 				py = (p2.y()+1.0)*ny/2.0;
-				verts.push_back(px-w); verts.push_back(py-w); verts.push_back(0.0);
-				verts.push_back(px+w); verts.push_back(py-w); verts.push_back(0.0);
-				verts.push_back(px+w); verts.push_back(py-w); verts.push_back(0.0);
-				verts.push_back(px+w); verts.push_back(py+w); verts.push_back(0.0);
-				verts.push_back(px+w); verts.push_back(py+w); verts.push_back(0.0);
-				verts.push_back(px-w); verts.push_back(py+w); verts.push_back(0.0);
-				verts.push_back(px-w); verts.push_back(py+w); verts.push_back(0.0);
-				verts.push_back(px-w); verts.push_back(py-w); verts.push_back(0.0);
-				num += 8;
+				verts.push_back(Vulkan2dRender::Vertex{ {px - w, py - w, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+				verts.push_back(Vulkan2dRender::Vertex{ {px + w, py - w, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+				verts.push_back(Vulkan2dRender::Vertex{ {px + w, py + w, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+				verts.push_back(Vulkan2dRender::Vertex{ {px - w, py + w, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+				uint32_t tmp[] = { vnum+0, vnum+1, vnum+1, vnum+2, vnum+2, vnum+3, vnum+3, vnum+0 };
+				index.insert(index.end(), tmp, tmp + 8);
+				vnum += 4;
+
 				if (j+1 == ruler->GetNumPoint())
 				{
 					p2x = p2.x()*nx/2.0;
 					p2y = p2.y()*ny/2.0;
 					m_text_renderer->RenderText(
+						m_vulkan->frameBuffers[m_vulkan->currentBuffer],
 						ruler->GetNameDisp().ToStdWstring(),
 						color,
-						(p2x+w)*sx, (p2y+w)*sy, sx, sy);
+						(p2x+w)*sx, (p2y-w)*sy);
 				}
 				if (j > 0)
 				{
 					p1 = *(ruler->GetPoint(j-1));
 					p1 = mv.transform(p1);
 					p1 = p.transform(p1);
-					if ((m_persp && (p1.z()<=0.0 || p1.z()>=1.0)) ||
-						(!m_persp && (p1.z()>=0.0 || p1.z()<=-1.0)))
+					if (p1.z() <= 0.0 || p1.z() >= 1.0)
 						continue;
-					verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
+					verts.push_back(Vulkan2dRender::Vertex{ {px, py, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
 					px = (p1.x()+1.0)*nx/2.0;
 					py = (p1.y()+1.0)*ny/2.0;
-					verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
-					num += 2;
+					verts.push_back(Vulkan2dRender::Vertex{ {px, py, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+					index.push_back(vnum); index.push_back(vnum+1);
+					vnum += 2;
 				}
 
 				if(ruler->GetBalloonVisibility(j))
@@ -12389,32 +14974,31 @@ void VRenderGLView::DrawRulers()
 						double maxlw, lw, lh;
 
 						lh = m_text_renderer->GetSize();
-						margin_bottom += lh/2;//�e�L�X�g��Y���W��baseline�Ɉ��v���邽��
+						margin_bottom += lh/2;
 						maxlw = 0.0;
 
 						for(int i = 0; i < lnum; i++)
 						{
 							wstring wstr_temp = ann.Item(i).ToStdWstring();
-							m_text_renderer->RenderText(wstr_temp, color,
-								p2x*sx+margin_x*sx, p2y*sy-(lh*(i+1)+line_spc*i+margin_top)*sy, sx, sy);
-							lw = m_text_renderer->RenderTextLen(wstr_temp);
+							m_text_renderer->RenderText(m_vulkan->frameBuffers[m_vulkan->currentBuffer],
+								wstr_temp, color,
+								p2x*sx+margin_x*sx, p2y*sy+(lh*(i+1)+line_spc*i+margin_top)*sy);
+							lw = m_text_renderer->RenderTextDims(wstr_temp).width;
 							if (lw > maxlw) maxlw = lw;
 						}
 
-						double bw = (margin_x*2 + maxlw);
-						double bh = (margin_top + margin_bottom + lh*lnum + line_spc*(lnum-1));
+						float bw = (margin_x*2 + maxlw);
+						float bh = (margin_top + margin_bottom + lh*lnum + line_spc*(lnum-1));
 
 						px = (p2.x()+1.0)*nx/2.0;
 						py = (p2.y()+1.0)*ny/2.0;
-						verts.push_back(px);    verts.push_back(py);    verts.push_back(0.0);
-						verts.push_back(px+bw); verts.push_back(py);    verts.push_back(0.0);
-						verts.push_back(px+bw); verts.push_back(py);    verts.push_back(0.0);
-						verts.push_back(px+bw); verts.push_back(py-bh); verts.push_back(0.0);
-						verts.push_back(px+bw); verts.push_back(py-bh); verts.push_back(0.0);
-						verts.push_back(px);    verts.push_back(py-bh); verts.push_back(0.0);
-						verts.push_back(px);    verts.push_back(py-bh); verts.push_back(0.0);
-						verts.push_back(px);    verts.push_back(py);    verts.push_back(0.0);
-						num += 8;
+						verts.push_back(Vulkan2dRender::Vertex{ {px,      py,      0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+						verts.push_back(Vulkan2dRender::Vertex{ {px + bw, py,      0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+						verts.push_back(Vulkan2dRender::Vertex{ {px + bw, py + bh, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+						verts.push_back(Vulkan2dRender::Vertex{ {px,      py + bh, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+						uint32_t tmp[] = { vnum+0, vnum+1, vnum+1, vnum+2, vnum+2, vnum+3, vnum+3, vnum+0 };
+						index.insert(index.end(), tmp, tmp + 8);
+						vnum += 4;
 					}
 				}
 			}
@@ -12434,17 +15018,17 @@ void VRenderGLView::DrawRulers()
 					p1 = p.transform(p1);
 					px = (p1.x()+1.0)*nx/2.0;
 					py = (p1.y()+1.0)*ny/2.0;
-					verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
+					verts.push_back(Vulkan2dRender::Vertex{ {px, py, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
 					p1 = center + v2*w;
 					p1 = mv.transform(p1);
 					p1 = p.transform(p1);
 					px = (p1.x()+1.0)*nx/2.0;
 					py = (p1.y()+1.0)*ny/2.0;
-					verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
-					num += 2;
+					verts.push_back(Vulkan2dRender::Vertex{ {px, py, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+					index.push_back(vnum); index.push_back(vnum + 1);
+					vnum += 2;
 				}
 			}
-			nums.push_back(num);
 		}
 	}
 
@@ -12483,8 +15067,8 @@ void VRenderGLView::DrawRulers()
 			break;
 		}
 	}
-	sort(displist.begin(), displist.end());
-	sort(m_lm_vdlist.begin(), m_lm_vdlist.end());
+	std::sort(displist.begin(), displist.end());
+	std::sort(m_lm_vdlist.begin(), m_lm_vdlist.end());
 
 	if (m_lm_vdlist != displist)
 	{
@@ -12569,7 +15153,6 @@ void VRenderGLView::DrawRulers()
 				(ruler->GetTimeDep() &&
 				ruler->GetTime() == m_tseq_cur_num))
 			{
-				num = 0;
 				if (ruler->GetUseColor())
 					color = ruler->GetColor();
 				else
@@ -12579,42 +15162,41 @@ void VRenderGLView::DrawRulers()
 					p2 = *(ruler->GetPoint(j));
 					p2 = mv.transform(p2);
 					p2 = p.transform(p2);
-					if ((m_persp && (p2.z()<=0.0 || p2.z()>=1.0)) ||
-						(!m_persp && (p2.z()>=0.0 || p2.z()<=-1.0)))
+					if (p2.z() <= 0.0 || p2.z() >= 1.0)
 						continue;
 					px = (p2.x()+1.0)*nx/2.0;
 					py = (p2.y()+1.0)*ny/2.0;
-					verts.push_back(px-w); verts.push_back(py-w); verts.push_back(0.0);
-					verts.push_back(px+w); verts.push_back(py-w); verts.push_back(0.0);
-					verts.push_back(px+w); verts.push_back(py-w); verts.push_back(0.0);
-					verts.push_back(px+w); verts.push_back(py+w); verts.push_back(0.0);
-					verts.push_back(px+w); verts.push_back(py+w); verts.push_back(0.0);
-					verts.push_back(px-w); verts.push_back(py+w); verts.push_back(0.0);
-					verts.push_back(px-w); verts.push_back(py+w); verts.push_back(0.0);
-					verts.push_back(px-w); verts.push_back(py-w); verts.push_back(0.0);
-					num += 8;
+					verts.push_back(Vulkan2dRender::Vertex{ {px - w, py - w, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+					verts.push_back(Vulkan2dRender::Vertex{ {px + w, py - w, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+					verts.push_back(Vulkan2dRender::Vertex{ {px + w, py + w, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+					verts.push_back(Vulkan2dRender::Vertex{ {px - w, py + w, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+					uint32_t tmp[] = { vnum+0, vnum+1, vnum+1, vnum+2, vnum+2, vnum+3, vnum+3, vnum+0 };
+					index.insert(index.end(), tmp, tmp + 8);
+					vnum += 4;
+
 					if (j+1 == ruler->GetNumPoint())
 					{
 						p2x = p2.x()*nx/2.0;
 						p2y = p2.y()*ny/2.0;
 						m_text_renderer->RenderText(
+							m_vulkan->frameBuffers[m_vulkan->currentBuffer],
 							ruler->GetNameDisp().ToStdWstring(),
 							color,
-							(p2x+w)*sx, (p2y+w)*sy, sx, sy);
+							(p2x+w)*sx, (p2y-w)*sy);
 					}
 					if (j > 0)
 					{
 						p1 = *(ruler->GetPoint(j-1));
 						p1 = mv.transform(p1);
 						p1 = p.transform(p1);
-						if ((m_persp && (p1.z()<=0.0 || p1.z()>=1.0)) ||
-							(!m_persp && (p1.z()>=0.0 || p1.z()<=-1.0)))
+						if (p1.z() <= 0.0 || p1.z() >= 1.0)
 							continue;
-						verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
-						px = (p1.x()+1.0)*nx/2.0;
-						py = (p1.y()+1.0)*ny/2.0;
-						verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
-						num += 2;
+						verts.push_back(Vulkan2dRender::Vertex{ {px, py, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+						px = (p1.x() + 1.0) * nx / 2.0;
+						py = (p1.y() + 1.0) * ny / 2.0;
+						verts.push_back(Vulkan2dRender::Vertex{ {px, py, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+						index.push_back(vnum); index.push_back(vnum + 1);
+						vnum += 2;
 					}
 
 					if(ruler->GetBalloonVisibility(j))
@@ -12636,32 +15218,31 @@ void VRenderGLView::DrawRulers()
 							double maxlw, lw, lh;
 
 							lh = m_text_renderer->GetSize();
-							margin_bottom += lh/2;//�e�L�X�g��Y���W��baseline�Ɉ��v���邽��
+							margin_bottom += lh/2;
 							maxlw = 0.0;
 
 							for(int i = 0; i < lnum; i++)
 							{
 								wstring wstr_temp = ann.Item(i).ToStdWstring();
-								m_text_renderer->RenderText(wstr_temp, color,
-									p2x*sx+margin_x*sx, p2y*sy-(lh*(i+1)+line_spc*i+margin_top)*sy, sx, sy);
-								lw = m_text_renderer->RenderTextLen(wstr_temp);
+								m_text_renderer->RenderText(m_vulkan->frameBuffers[m_vulkan->currentBuffer],
+									wstr_temp, color,
+									p2x*sx+margin_x*sx, p2y*sy+(lh*(i+1)+line_spc*i+margin_top)*sy);
+								lw = m_text_renderer->RenderTextDims(wstr_temp).width;
 								if (lw > maxlw) maxlw = lw;
 							}
 
-							double bw = (margin_x*2 + maxlw);
-							double bh = (margin_top + margin_bottom + lh*lnum + line_spc*(lnum-1));
+							float bw = (margin_x*2 + maxlw);
+							float bh = (margin_top + margin_bottom + lh*lnum + line_spc*(lnum-1));
 
-							px = (p2.x()+1.0)*nx/2.0;
-							py = (p2.y()+1.0)*ny/2.0;
-							verts.push_back(px);    verts.push_back(py);    verts.push_back(0.0);
-							verts.push_back(px+bw); verts.push_back(py);    verts.push_back(0.0);
-							verts.push_back(px+bw); verts.push_back(py);    verts.push_back(0.0);
-							verts.push_back(px+bw); verts.push_back(py-bh); verts.push_back(0.0);
-							verts.push_back(px+bw); verts.push_back(py-bh); verts.push_back(0.0);
-							verts.push_back(px);    verts.push_back(py-bh); verts.push_back(0.0);
-							verts.push_back(px);    verts.push_back(py-bh); verts.push_back(0.0);
-							verts.push_back(px);    verts.push_back(py);    verts.push_back(0.0);
-							num += 8;
+							px = (p2.x() + 1.0) * nx / 2.0;
+							py = (p2.y() + 1.0) * ny / 2.0;
+							verts.push_back(Vulkan2dRender::Vertex{ {px,      py,      0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+							verts.push_back(Vulkan2dRender::Vertex{ {px + bw, py,      0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+							verts.push_back(Vulkan2dRender::Vertex{ {px + bw, py + bh, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+							verts.push_back(Vulkan2dRender::Vertex{ {px,      py + bh, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+							uint32_t tmp[] = { vnum + 0, vnum + 1, vnum + 1, vnum + 2, vnum + 2, vnum + 3, vnum + 3, vnum + 0 };
+							index.insert(index.end(), tmp, tmp + 8);
+							vnum += 4;
 						}
 					}
 				}
@@ -12681,117 +15262,94 @@ void VRenderGLView::DrawRulers()
 						p1 = p.transform(p1);
 						px = (p1.x()+1.0)*nx/2.0;
 						py = (p1.y()+1.0)*ny/2.0;
-						verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
+						verts.push_back(Vulkan2dRender::Vertex{ {px, py, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
 						p1 = center + v2*w;
 						p1 = mv.transform(p1);
 						p1 = p.transform(p1);
 						px = (p1.x()+1.0)*nx/2.0;
 						py = (p1.y()+1.0)*ny/2.0;
-						verts.push_back(px); verts.push_back(py); verts.push_back(0.0);
-						num += 2;
+						verts.push_back(Vulkan2dRender::Vertex{ {px, py, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+						index.push_back(vnum); index.push_back(vnum + 1);
+						vnum += 2;
 					}
 				}
-				nums.push_back(num);
 			}
 		}
 	}
-
-	///////////////////////////////////////////////////////////////////////////////////////////
-	if (!verts.empty())
+	if (!verts.empty() && !index.empty())
 	{
-		double width = m_text_renderer->GetSize()/10.0;
-		glEnable(GL_LINE_SMOOTH);
-		glLineWidth(GLfloat(width));
-		glEnable(GL_DEPTH_TEST);
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-
-		glm::mat4 matrix = glm::ortho(float(0), float(nx), float(0), float(ny));
-
-		ShaderProgram* shader =
-			m_img_shader_factory.shader(IMG_SHDR_DRAW_GEOMETRY);
-		if (shader)
+		if (m_ruler_vobj.vertCount != verts.size())
 		{
-			if (!shader->valid())
-				shader->create();
-			shader->bind();
+			if (m_ruler_vobj.vertBuf.buffer != VK_NULL_HANDLE)
+				m_ruler_vobj.vertBuf.destroy();
+			VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+				VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+				&m_ruler_vobj.vertBuf,
+				verts.size() * sizeof(Vulkan2dRender::Vertex),
+				verts.data()));
+			m_ruler_vobj.vertCount = verts.size();
+			m_ruler_vobj.vertOffset = 0;
 		}
-		shader->setLocalParamMatrix(0, glm::value_ptr(matrix));
-
-		glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(float)*verts.size(), &verts[0], GL_DYNAMIC_DRAW);
-		glBindVertexArray(m_misc_vao);
-		glBindBuffer(GL_ARRAY_BUFFER, m_misc_vbo);
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (const GLvoid*)0);
-
-		GLint pos = 0;
-		size_t j = 0;
-		for (size_t i=0; i<m_ruler_list.size(); i++)
+		if (m_ruler_vobj.idxCount != index.size())
 		{
-			Ruler* ruler = m_ruler_list[i];
-			if (!ruler) continue;
-			if (!ruler->GetTimeDep() ||
-				(ruler->GetTimeDep() &&
-				ruler->GetTime() == m_tseq_cur_num))
-			{
-				num = 0;
-				if (ruler->GetUseColor())
-					color = ruler->GetColor();
-				else
-					color = text_color;
-				shader->setLocalParam(0, color.r(), color.g(), color.b(), 1.0);
-				glDrawArrays(GL_LINES, pos, (GLsizei)(nums[j++]));
-				pos += nums[j-1];
-			}
+			if (m_ruler_vobj.idxBuf.buffer != VK_NULL_HANDLE)
+				m_ruler_vobj.idxBuf.destroy();
+			VK_CHECK_RESULT(m_vulkan->vulkanDevice->createBuffer(
+				VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+				&m_ruler_vobj.idxBuf,
+				index.size() * sizeof(uint32_t),
+				index.data()));
+
+			m_ruler_vobj.idxCount = index.size();
+			m_ruler_vobj.idxOffset = 0;
 		}
+		m_ruler_vobj.vertBuf.map();
+		m_ruler_vobj.idxBuf.map();
+		m_ruler_vobj.vertBuf.copyTo(verts.data(), verts.size() * sizeof(Vulkan2dRender::Vertex));
+		m_ruler_vobj.idxBuf.copyTo(index.data(), index.size() * sizeof(uint32_t));
+		m_ruler_vobj.vertBuf.unmap();
+		m_ruler_vobj.idxBuf.unmap();
 
-		if(m_draw_landmarks)
-		{
-			for (size_t i=0; i<m_landmarks.size(); i++)
-			{
-				Ruler* ruler = m_landmarks[i];
-				if (!ruler) continue;
-				if (!ruler->GetTimeDep() ||
-					(ruler->GetTimeDep() &&
-					ruler->GetTime() == m_tseq_cur_num))
-				{
-					num = 0;
-					if (ruler->GetUseColor())
-						color = ruler->GetColor();
-					else
-						color = text_color;
-					shader->setLocalParam(0, color.r(), color.g(), color.b(), 1.0);
-					glDrawArrays(GL_LINES, pos, (GLsizei)(nums[j++]));
-					pos += nums[j-1];
-				}
-			}
-		}
+		Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+		vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+		params.pipeline =
+			m_v2drender->preparePipeline(
+				IMG_SHDR_DRAW_GEOMETRY_COLOR3,
+				V2DRENDER_BLEND_OVER_UI,
+				current_fbo->attachments[0]->format,
+				current_fbo->attachments.size(),
+				0,
+				current_fbo->attachments[0]->is_swapchain_images,
+				VK_PRIMITIVE_TOPOLOGY_LINE_LIST
+			);
+		params.matrix[0] = glm::ortho(float(0), float(nx), float(0), float(ny));
+		params.clear = m_frame_clear;
+		params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
+		m_frame_clear = false;
 
-		glDisableVertexAttribArray(0);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindVertexArray(0);
+		params.obj = &m_ruler_vobj;
 
-		if (shader && shader->valid())
-			shader->release();
+		if (!current_fbo->renderPass)
+			current_fbo->replaceRenderPass(params.pipeline.pass);
 
-		glDisable(GL_LINE_SMOOTH);
-		glLineWidth(1.0);
+		m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
 	}
 }
 
-vector<Ruler*>* VRenderGLView::GetRulerList()
+vector<Ruler*>* VRenderVulkanView::GetRulerList()
 {
 	return &m_ruler_list;
 }
 
 //traces
-TraceGroup* VRenderGLView::GetTraceGroup()
+TraceGroup* VRenderVulkanView::GetTraceGroup()
 {
 	return m_trace_group;
 }
 
-void VRenderGLView::CreateTraceGroup()
+void VRenderVulkanView::CreateTraceGroup()
 {
 	if (m_trace_group)
 		delete m_trace_group;
@@ -12799,7 +15357,7 @@ void VRenderGLView::CreateTraceGroup()
 	m_trace_group = new TraceGroup;
 }
 
-int VRenderGLView::LoadTraceGroup(wxString filename)
+int VRenderVulkanView::LoadTraceGroup(wxString filename)
 {
 	if (m_trace_group)
 		delete m_trace_group;
@@ -12808,7 +15366,7 @@ int VRenderGLView::LoadTraceGroup(wxString filename)
 	return m_trace_group->Load(filename);
 }
 
-int VRenderGLView::SaveTraceGroup(wxString filename)
+int VRenderVulkanView::SaveTraceGroup(wxString filename)
 {
 	if (m_trace_group)
 		return m_trace_group->Save(filename);
@@ -12816,15 +15374,15 @@ int VRenderGLView::SaveTraceGroup(wxString filename)
 		return 0;
 }
 
-void VRenderGLView::ExportTrace(wxString filename, unsigned int id)
+void VRenderVulkanView::ExportTrace(wxString filename, unsigned int id)
 {
 	if (!m_trace_group)
 		return;
 }
 
-void VRenderGLView::DrawTraces()
+void VRenderVulkanView::DrawTraces()
 {
-	if (m_cur_vol && m_trace_group && m_text_renderer)
+	/*if (m_cur_vol && m_trace_group && m_text_renderer)
 	{
 		vector<float> verts;
 		unsigned int num = m_trace_group->Draw(verts);
@@ -12833,7 +15391,7 @@ void VRenderGLView::DrawTraces()
 		{
 			double width = m_text_renderer->GetSize()/3.0;
 			glEnable(GL_LINE_SMOOTH);
-			glLineWidth(GLfloat(width));
+			glLineWidth(float(width));
 			glEnable(GL_DEPTH_TEST);
 			glEnable(GL_BLEND);
 			glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
@@ -12876,10 +15434,10 @@ void VRenderGLView::DrawTraces()
 			glDisable(GL_LINE_SMOOTH);
 			glLineWidth(1.0);
 		}
-	}
+	}*/
 }
 
-void VRenderGLView::GetTraces()
+void VRenderVulkanView::GetTraces()
 {
 	if (!m_trace_group)
 		return;
@@ -12935,7 +15493,7 @@ void VRenderGLView::GetTraces()
 				vr_frame->GetTraceDlg()->GetSettings(m_vrv);
 }
 
-/*WXLRESULT VRenderGLView::MSWWindowProc(WXUINT message, WXWPARAM wParam, WXLPARAM lParam)
+/*WXLRESULT VRenderVulkanView::MSWWindowProc(WXUINT message, WXWPARAM wParam, WXLPARAM lParam)
 {
 PACKET pkt;
 
@@ -13012,7 +15570,7 @@ RefreshGL();
 return wxWindow::MSWWindowProc(message, wParam, lParam);
 }*/
 
-void VRenderGLView::OnMouse(wxMouseEvent& event)
+void VRenderVulkanView::OnMouse(wxMouseEvent& event)
 {
 	wxWindow *window = wxWindow::FindFocus();
 	//	if (window &&
@@ -13020,19 +15578,19 @@ void VRenderGLView::OnMouse(wxMouseEvent& event)
 	//		SetFocus();
 	//mouse interactive flag
 	//m_interactive = false; //deleted by takashi
-	m_paint_enable = false;
-	m_drawing_coord = false;
-
+	
 	wxPoint mouse_pos = wxGetMousePosition();
 	wxRect view_reg = GetScreenRect();
 	if (view_reg.Contains(mouse_pos))
 		UpdateBrushState();
 
+	m_paint_enable = false;
+	m_drawing_coord = false;
+
 	extern CURLM * _g_curlm;
 	int handle_count;
 	curl_multi_perform(_g_curlm, &handle_count);
 
-	//added by takashi
 	if(event.LeftDClick())
 	{
 		Point *p = GetEditingRulerPoint(event.GetX(), event.GetY());
@@ -13044,7 +15602,21 @@ void VRenderGLView::OnMouse(wxMouseEvent& event)
 			StartManipulation(NULL, NULL, NULL, &trans, NULL);
 		}
 		else
-			SelSegVolume();
+		{
+			bool na_mode = false;
+			for (int i = 0; i < m_vd_pop_list.size(); i++)
+			{
+				if (m_vd_pop_list[i]->GetDisp() && m_vd_pop_list[i]->GetNAMode())
+				{
+					na_mode = true;
+					break;
+				}
+			}
+			if (na_mode)
+				SelLabelSegVolume();
+			else
+				SelSegVolume();
+		}
 
 		RefreshGL();
 		return;
@@ -13058,24 +15630,23 @@ void VRenderGLView::OnMouse(wxMouseEvent& event)
 		if (m_int_mode == 6)
 			m_editing_ruler_point = GetEditingRulerPoint(event.GetX(), event.GetY());
 
+		old_mouse_X = event.GetX();
+		old_mouse_Y = event.GetY();
+		prv_mouse_X = old_mouse_X;
+		prv_mouse_Y = old_mouse_Y;
+
 		if (m_int_mode == 1 ||
 			(m_int_mode==5 &&
 			event.AltDown()) ||
 			(m_int_mode==6 &&
 			m_editing_ruler_point==0))
 		{
-			old_mouse_X = event.GetX();
-			old_mouse_Y = event.GetY();
 			m_pick = true;
 		}
 		else if (m_int_mode == 2 || m_int_mode == 7)
 		{
-			old_mouse_X = event.GetX();
-			old_mouse_Y = event.GetY();
-			prv_mouse_X = old_mouse_X;
-			prv_mouse_Y = old_mouse_Y;
 			m_paint_enable = true;
-			//			m_clear_paint = true;
+			m_clear_paint = true;
 			RefreshGLOverlays();
 		}
 		return;
@@ -13102,14 +15673,23 @@ void VRenderGLView::OnMouse(wxMouseEvent& event)
 	{
 		if (m_int_mode == 1)
 		{
+			bool na_mode = false;
+			for (int i = 0; i < m_vd_pop_list.size(); i++)
+			{
+				if (m_vd_pop_list[i]->GetDisp() && m_vd_pop_list[i]->GetNAMode())
+				{
+					na_mode = true;
+					break;
+				}
+			}
 			//pick polygon models
-			if (m_pick)
+			if (m_pick && !na_mode)
 				Pick();
 		}
 		else if (m_int_mode == 2)
 		{
 			//segment volumes
-			m_paint_enable = true;
+            SetForceHideMask(false);
 			Segment();
 			m_int_mode = 4;
 			m_force_clear = true;
@@ -13130,7 +15710,7 @@ void VRenderGLView::OnMouse(wxMouseEvent& event)
 		else if (m_int_mode == 7)
 		{
 			//segment volume, calculate center, add ruler point
-			m_paint_enable = true;
+            SetForceHideMask(false);
 			Segment();
 			if (m_ruler_type == 3)
 				AddRulerPoint(event.GetX(), event.GetY());
@@ -13138,6 +15718,7 @@ void VRenderGLView::OnMouse(wxMouseEvent& event)
 				AddPaintRulerPoint();
 			m_int_mode = 8;
 			m_force_clear = true;
+			m_clear_paint = true;
 		}
 
 		RefreshGL();
@@ -13166,13 +15747,19 @@ void VRenderGLView::OnMouse(wxMouseEvent& event)
 				AddRulerPoint(event.GetX(), event.GetY());
 				FinishRuler();
 			}
+
+			RefreshGL();
+		}
+		else
+		{
+			wxContextMenuEvent e;
+			e.SetPosition(mouse_pos);
+			OnContextMenu(e);
 		}
 
 		//added by takashi
-		SwitchRulerBalloonVisibility_Point(event.GetX(), event.GetY());
-
-		//SetSortBricks();
-		RefreshGL();
+		//SwitchRulerBalloonVisibility_Point(event.GetX(), event.GetY());
+		
 		return;
 	}
 
@@ -13272,13 +15859,15 @@ void VRenderGLView::OnMouse(wxMouseEvent& event)
 					Vector side = Cross(m_up, m_head);
 					Vector trans = -(
 						side*(double(dx)*(m_ortho_right-m_ortho_left)/double(GetSize().x))+
-						m_up*(double(dy)*(m_ortho_top-m_ortho_bottom)/double(GetSize().y)));
+						m_up*(double(-dy)*(m_ortho_top-m_ortho_bottom)/double(GetSize().y)));
 					m_obj_transx += trans.x();
 					m_obj_transy += trans.y();
 					m_obj_transz += trans.z();
 
 					m_interactive = m_adaptive;
 					m_int_res = m_adaptive_res;
+                    
+                    Q2A();
 
 					//SetSortBricks();
 					RefreshGL();
@@ -13287,25 +15876,27 @@ void VRenderGLView::OnMouse(wxMouseEvent& event)
 				{
 					long dx = event.GetX() - old_mouse_X;
 					long dy = event.GetY() - old_mouse_Y;
-
-					double delta = abs(dx)>abs(dy)?
-						(double)dx/(double)GetSize().x:
-					(double)-dy/(double)GetSize().y;
-					m_scale_factor += m_scale_factor*delta;
-					wxString str = wxString::Format("%.0f", m_scale_factor*100.0);
-					m_vrv->m_scale_factor_sldr->SetValue(m_scale_factor*100);
-					m_vrv->m_scale_factor_text->ChangeValue(str);
+					double delta = abs(dx) > abs(dy) ?
+									(double)dx / (double)GetSize().x :
+									(double)-dy / (double)GetSize().y;
 
 					if (m_free)
 					{
 						Vector pos(m_transx, m_transy, m_transz);
 						pos.normalize();
 						Vector ctr(m_ctrx, m_ctry, m_ctrz);
-						ctr -= delta*pos*1000;
+						ctr -= delta * pos * m_radius * 10;//1000;
 						m_ctrx = ctr.x();
 						m_ctry = ctr.y();
 						m_ctrz = ctr.z();
+						m_scale_factor = m_radius/tan(d2r(m_aov/2.0)) / ( CalcCameraDistance() + (m_radius/tan(d2r(m_aov/2.0))/12.0) );
 					}
+					else
+						m_scale_factor += m_scale_factor*delta;
+
+					wxString str = wxString::Format("%.0f", m_scale_factor*100.0);
+					m_vrv->m_scale_factor_sldr->SetValue(m_scale_factor*100);
+					m_vrv->m_scale_factor_text->ChangeValue(str);
 
 					m_interactive = m_adaptive;
 					m_int_res = m_adaptive_res;
@@ -13456,27 +16047,27 @@ void VRenderGLView::OnMouse(wxMouseEvent& event)
 	}
 }
 
-void VRenderGLView::SetDraw(bool draw)
+void VRenderVulkanView::SetDraw(bool draw)
 {
 	m_draw_all = draw;
 }
 
-void VRenderGLView::ToggleDraw()
+void VRenderVulkanView::ToggleDraw()
 {
 	m_draw_all = !m_draw_all;
 }
 
-bool VRenderGLView::GetDraw()
+bool VRenderVulkanView::GetDraw()
 {
 	return m_draw_all;
 }
 
-Color VRenderGLView::GetBackgroundColor()
+Color VRenderVulkanView::GetBackgroundColor()
 {
 	return m_bg_color;
 }
 
-Color VRenderGLView::GetTextColor()
+Color VRenderVulkanView::GetTextColor()
 {
 	VRenderFrame* frame = (VRenderFrame*)m_frame;
 	if (!frame || !frame->GetSettingDlg())
@@ -13496,7 +16087,7 @@ Color VRenderGLView::GetTextColor()
 	return m_bg_color_inv;
 }
 
-void VRenderGLView::SetBackgroundColor(Color &color)
+void VRenderVulkanView::SetBackgroundColor(Color &color)
 {
 	m_bg_color = color;
 	HSVColor bg_color(m_bg_color);
@@ -13518,12 +16109,12 @@ void VRenderGLView::SetBackgroundColor(Color &color)
 	}
 }
 
-void VRenderGLView::SetGradBg(bool val)
+void VRenderVulkanView::SetGradBg(bool val)
 {
 	m_grad_bg = val;
 }
 
-void VRenderGLView::SetRotations(double rotx, double roty, double rotz, bool ui_update, bool link_update)
+void VRenderVulkanView::SetRotations(double rotx, double roty, double rotz, bool ui_update, bool link_update)
 {
 	m_rotx = rotx;
 	m_roty = roty;
@@ -13597,7 +16188,7 @@ void VRenderGLView::SetRotations(double rotx, double roty, double rotz, bool ui_
 	}
 }
 
-char* VRenderGLView::wxStringToChar(wxString input)
+char* VRenderVulkanView::wxStringToChar(wxString input)
 {
 #if (wxUSE_UNICODE)
 	size_t size = input.size() + 1;
@@ -13612,7 +16203,7 @@ char* VRenderGLView::wxStringToChar(wxString input)
 #endif
 }
 
-void VRenderGLView::GetFrame(int &x, int &y, int &w, int &h)
+void VRenderVulkanView::GetFrame(int &x, int &y, int &w, int &h)
 {
 	x = m_frame_x;
 	y = m_frame_y;
@@ -13620,12 +16211,16 @@ void VRenderGLView::GetFrame(int &x, int &y, int &w, int &h)
 	h = m_frame_h;
 }
 
-void VRenderGLView::CalcFrame()
+void VRenderVulkanView::CalcFrame()
 {
 	int w, h;
 	w = GetSize().x;
 	h = GetSize().y;
-
+	if (m_tile_rendering) {
+		w = m_capture_resx;
+		h = m_capture_resy;
+	}
+	/*
 	if (m_cur_vol)
 	{
 		//projection
@@ -13638,8 +16233,8 @@ void VRenderGLView::CalcFrame()
 		mv_temp = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
 		//rotate object
 		mv_temp = glm::rotate(mv_temp, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
-		mv_temp = glm::rotate(mv_temp, float(m_obj_roty+180.0), glm::vec3(0.0, 1.0, 0.0));
-		mv_temp = glm::rotate(mv_temp, float(m_obj_rotz+180.0), glm::vec3(0.0, 0.0, 1.0));
+		mv_temp = glm::rotate(mv_temp, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+		mv_temp = glm::rotate(mv_temp, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
 		//center object
 		mv_temp = glm::translate(mv_temp, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
 
@@ -13686,7 +16281,7 @@ void VRenderGLView::CalcFrame()
 		m_frame_h = int((maxy-miny)*h/2.0-1.5);
 
 	}
-	else
+	else*/
 	{
 		int size;
 		if (w > h)
@@ -13705,7 +16300,7 @@ void VRenderGLView::CalcFrame()
 	}
 }
 
-void VRenderGLView::StartManipulation(const Point *view_trans, const Point *view_center, const Point *view_rot, const Point *obj_trans, const double *scale)
+void VRenderVulkanView::StartManipulation(const Point *view_trans, const Point *view_center, const Point *view_rot, const Point *obj_trans, const double *scale)
 {
 	if(m_capture) return;
 
@@ -13736,7 +16331,7 @@ void VRenderGLView::StartManipulation(const Point *view_trans, const Point *view
 	m_manip_end_frame = t;
 }
 
-void VRenderGLView::EndManipulation()
+void VRenderVulkanView::EndManipulation()
 {
 	TextureRenderer::set_up_time(m_saved_uptime);
 	m_manip_interpolator.Clear();
@@ -13746,7 +16341,7 @@ void VRenderGLView::EndManipulation()
 	TextureRenderer::set_done_update_loop(true);
 }
 
-void VRenderGLView::SetManipKey(double t, int interpolation, const Point *view_trans, const Point *view_center, const Point *view_rot, const Point *obj_trans, const double *scale)
+void VRenderVulkanView::SetManipKey(double t, int interpolation, const Point *view_trans, const Point *view_center, const Point *view_rot, const Point *obj_trans, const double *scale)
 {
 	if(!m_vrv)
 		return;
@@ -13907,7 +16502,7 @@ void VRenderGLView::SetManipKey(double t, int interpolation, const Point *view_t
 
 }
 
-void VRenderGLView::SetManipParams(double t)
+void VRenderVulkanView::SetManipParams(double t)
 {
 	if (!m_vrv)
 		return;
@@ -14044,9 +16639,9 @@ void VRenderGLView::SetManipParams(double t)
 	SetVolPopDirty();
 }
 
-void VRenderGLView::DrawViewQuad()
+void VRenderVulkanView::DrawViewQuad()
 {
-	glEnable(GL_TEXTURE_2D);
+	/*glEnable(GL_TEXTURE_2D);
 	if (!glIsVertexArray(m_quad_vao))
 	{
 		float points[] = {
@@ -14066,11 +16661,77 @@ void VRenderGLView::DrawViewQuad()
 		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)0);
 		glEnableVertexAttribArray(1);
 		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (const GLvoid*)12);
-	}
-
+	} else
+		glBindBuffer(GL_ARRAY_BUFFER, m_quad_vbo);
+	
 	glBindVertexArray(m_quad_vao);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 	glBindVertexArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);*/
+}
+
+void VRenderVulkanView::GetTiledViewQuadVerts(int tileid, vector<Vulkan2dRender::Vertex> &verts)
+{
+	if (!verts.empty())
+		verts.clear();
+
+	int w = GetSize().x;
+	int h = GetSize().y;
+
+	double win_aspect = (double)w/(double)h;
+	double ren_aspect = (double)m_capture_resx/(double)m_capture_resy;
+	double stpos_x = -1.0;
+	double stpos_y = -1.0;
+	double edpos_x = 1.0;
+	double edpos_y = 1.0;
+	double tilew = 1.0;
+	double tileh = 1.0;
+
+	double xbound = 1.0;
+	double ybound = -1.0;
+	
+	if (win_aspect > ren_aspect) {
+		tilew = 2.0 * m_tile_w * h/m_capture_resy / w;
+		tileh = 2.0 * m_tile_h * h/m_capture_resy / h;
+		stpos_x = -1.0 + 2.0 * (w - h*ren_aspect) / 2.0 / w;
+		stpos_y = 1.0;
+		xbound = stpos_x + 2.0 * h*ren_aspect / w;
+		ybound = -1.0;
+
+		stpos_x = stpos_x + tilew * (tileid % m_tile_xnum);
+		stpos_y = stpos_y - tileh * (tileid / m_tile_xnum + 1);
+		edpos_x = stpos_x + tilew;
+		edpos_y = stpos_y + tileh;
+	} else {
+		tilew = 2.0 * m_tile_w * w/m_capture_resx / w;
+		tileh = 2.0 * m_tile_h * w/m_capture_resx / h;
+		stpos_x = -1.0;
+		stpos_y = 1.0 - 2.0*(h - w/ren_aspect) / 2.0 / h;
+		xbound = 1.0;
+		ybound = stpos_y - 2.0 * w/ren_aspect / h;
+
+		stpos_x = stpos_x + tilew * (tileid % m_tile_xnum);
+		stpos_y = stpos_y - tileh * (tileid / m_tile_xnum + 1);
+		edpos_x = stpos_x + tilew;
+		edpos_y = stpos_y + tileh;
+	}
+
+	double tex_x = 1.0;
+	double tex_y = 0.0;
+	if (edpos_x > xbound) {
+		tex_x = (xbound - stpos_x) / tilew;
+		edpos_x = xbound;
+	}
+	if (stpos_y < ybound) {
+		tex_y = 1.0 - (edpos_y - ybound) / tileh;
+		stpos_y = ybound;
+	}
+
+	verts.push_back(Vulkan2dRender::Vertex{ {(float)edpos_x, (float)edpos_y, 0.0f}, {(float)tex_x, 1.0f,         0.0f} });
+	verts.push_back(Vulkan2dRender::Vertex{ {(float)stpos_x, (float)edpos_y, 0.0f}, {0.0f,         1.0f,         0.0f} });
+	verts.push_back(Vulkan2dRender::Vertex{ {(float)stpos_x, (float)stpos_y, 0.0f}, {0.0f,         (float)tex_y, 0.0f} });
+	verts.push_back(Vulkan2dRender::Vertex{ {(float)edpos_x, (float)stpos_y, 0.0f}, {(float)tex_x, (float)tex_y, 0.0f} });
+	
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -14126,14 +16787,24 @@ BEGIN_EVENT_TABLE(VRenderView, wxPanel)
 	EVT_SPIN_DOWN(ID_ZRotSpin, VRenderView::OnZRotSpinDown)
 	//reset
 	EVT_BUTTON(ID_DefaultBtn, VRenderView::OnSaveDefault)
+	EVT_TIMER(ID_Timer, VRenderView::OnAovSldrIdle)
 
 	EVT_KEY_DOWN(VRenderView::OnKeyDown)
 	END_EVENT_TABLE()
 
-	VRenderView::VRenderView(wxWindow* frame,
+int VRenderView::m_cap_resx = -1;
+int VRenderView::m_cap_resy = -1;
+int VRenderView::m_cap_orgresx = -1;
+int VRenderView::m_cap_orgresy = -1;
+int VRenderView::m_cap_dispresx = -1;
+int VRenderView::m_cap_dispresy = -1;
+wxTextCtrl* VRenderView::m_cap_w_txt = NULL;
+wxTextCtrl* VRenderView::m_cap_h_txt = NULL;
+
+VRenderView::VRenderView(wxWindow* frame,
 	wxWindow* parent,
 	wxWindowID id,
-	wxGLContext* sharedContext,
+	const std::shared_ptr<VVulkan> &sharedContext,
 	const wxPoint& pos,
 	const wxSize& size,
 	long style) :
@@ -14153,103 +16824,28 @@ wxPanel(parent, id, pos, size, style),
 
 	wxString name = wxString::Format("Render View:%d", m_id++);
 	this->SetName(name);
-	// this list takes care of both pixel and context attributes (no custom edits of wx is preferred)
-	//render view/////////////////////////////////////////////////
-	int red_bit = 8;
-	int green_bit = 8;
-	int blue_bit = 8;
-	int alpha_bit = 8;
-	int depth_bit = 24;
-	int samples = 0;
-	int gl_major_ver = 4;
-	int gl_minor_ver = 4;
-	int gl_profile_mask = WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
-	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-	if (vr_frame && vr_frame->GetSettingDlg())
-	{
-		red_bit = vr_frame->GetSettingDlg()->GetRedBit();
-		green_bit = vr_frame->GetSettingDlg()->GetGreenBit();
-		blue_bit = vr_frame->GetSettingDlg()->GetBlueBit();
-		alpha_bit = vr_frame->GetSettingDlg()->GetAlphaBit();
-		depth_bit = vr_frame->GetSettingDlg()->GetDepthBit();
-		samples = vr_frame->GetSettingDlg()->GetSamples();
-		gl_major_ver = vr_frame->GetSettingDlg()->GetGLMajorVer();
-		gl_minor_ver = vr_frame->GetSettingDlg()->GetGLMinorVer();
-		gl_profile_mask = vr_frame->GetSettingDlg()->GetGLProfileMask();
-	}
-	int attriblist[] =
-	{
-		//pixel properties
-		WX_GL_MIN_RED, red_bit,
-		WX_GL_MIN_GREEN, green_bit,
-		WX_GL_MIN_BLUE, blue_bit,
-		WX_GL_MIN_ALPHA, alpha_bit,
-		WX_GL_DEPTH_SIZE, depth_bit,
-		WX_GL_DOUBLEBUFFER,
-		WX_GL_SAMPLE_BUFFERS, 1,
-		WX_GL_SAMPLES, samples,
-		// context properties.
-		WX_GL_CORE_PROFILE,
-		WX_GL_MAJOR_VERSION, gl_major_ver,
-		WX_GL_MINOR_VERSION, gl_minor_ver,
-		0, 0
-	};
-	m_glview = new VRenderGLView(frame, this, wxID_ANY, attriblist, sharedContext);
+
+	m_glview = new VRenderVulkanView(frame, this, wxID_ANY);
 	m_glview->SetCanFocus(false);
-	//m_view_sizer->Add(m_glview, 1, wxEXPAND);
-#ifdef _WIN32
-	//example Pixel format descriptor detailing each part
-	//PIXELFORMATDESCRIPTOR pfd = { 
-	// sizeof(PIXELFORMATDESCRIPTOR),  //  size of this pfd  
-	// 1,                     // version number  
-	// PFD_DRAW_TO_WINDOW |   // support window  
-	// PFD_SUPPORT_OPENGL |   // support OpenGL  
-	// PFD_DOUBLEBUFFER,      // double buffered  
-	// PFD_TYPE_RGBA,         // RGBA type  
-	// 24,                    // 24-bit color depth  
-	// 0, 0, 0, 0, 0, 0,      // color bits ignored  
-	// 0,                     // no alpha buffer  
-	// 0,                     // shift bit ignored  
-	// 0,                     // no accumulation buffer  
-	// 0, 0, 0, 0,            // accum bits ignored  
-	// 32,                    // 32-bit z-buffer      
-	// 0,                     // no stencil buffer  
-	// 0,                     // no auxiliary buffer  
-	// PFD_MAIN_PLANE,        // main layer  
-	// 0,                     // reserved  
-	// 0, 0, 0                // layer masks ignored  
-	// }; 
-	PIXELFORMATDESCRIPTOR  pfd;
-	//check ret. this is an error code when the pixel format is invalid.
-	int ret = m_glview->GetPixelFormat(&pfd);
-#endif
+
 	CreateBar();
 	if (m_glview) {
-		m_glview->SetSBText("50 µm");
-		m_glview->SetScaleBarLen(1.);
+		m_glview->SetSBText("µm");
+		m_glview->SetScaleBarLen(50.);
 	}
 	LoadSettings();
 
 	Thaw();
 	SetEvtHandlerEnabled(true);
-}
 
-#ifdef _WIN32
-int VRenderGLView::GetPixelFormat(PIXELFORMATDESCRIPTOR *pfd) {
-	int pixelFormat = ::GetPixelFormat(m_hDC);
-	if (pixelFormat == 0) return GetLastError();
-	pixelFormat = DescribePixelFormat(m_hDC, pixelFormat, sizeof(PIXELFORMATDESCRIPTOR), pfd);
-	if (pixelFormat == 0) return GetLastError();
-	return pixelFormat;
-}
-#endif
-
-wxString VRenderGLView::GetOGLVersion() {
-	return m_GLversion;
+	m_idleTimer = new wxTimer(this, ID_Timer);
+	m_idleTimer->Start(100);
 }
 
 VRenderView::~VRenderView()
 {
+	m_idleTimer->Stop();
+	wxDELETE(m_idleTimer);
 	if (m_glview)
 		delete m_glview;
 	if (m_full_frame)
@@ -14324,9 +16920,6 @@ void VRenderView::CreateBar()
 	m_aov_sldr = new wxSlider(this, ID_AovSldr, 45, 10, 100,
 		wxDefaultPosition, wxSize(120, 20), wxSL_HORIZONTAL);
 	m_aov_sldr->SetValue(GetPersp()?GetAov():10);
-	m_aov_sldr->Connect(wxID_ANY, wxEVT_IDLE,
-		wxIdleEventHandler(VRenderView::OnAovSldrIdle),
-		NULL, this);
 	m_aov_text = new wxTextCtrl(this, ID_AovText, "",
 		wxDefaultPosition, wxSize(60, 20), 0, vald_int);
 	m_aov_text->ChangeValue(GetPersp()?wxString::Format("%d", int(GetAov())):"Ortho");
@@ -14353,6 +16946,7 @@ void VRenderView::CreateBar()
 	mode_list.push_back("Fine(x1.5)");
 	mode_list.push_back("Standard(x2)");
 	mode_list.push_back("Coarse(x3)");
+	mode_list.push_back("Min");
 	for (size_t i=0; i<mode_list.size(); ++i)
 		m_res_mode_combo->Append(mode_list[i]);
 	m_res_mode_combo->SetSelection(m_res_mode);
@@ -14494,7 +17088,6 @@ void VRenderView::CreateBar()
 
 	SetSizer(sizer_v);
 	Layout();
-
 }
 
 //recalculate view according to object bounds
@@ -14630,6 +17223,14 @@ DataGroup* VRenderView::GetGroup(wxString &name)
 {
 	if (m_glview)
 		return m_glview->GetGroup(name);
+	else
+		return 0;
+}
+
+DataGroup* VRenderView::GetParentGroup(wxString& name)
+{
+	if (m_glview)
+		return m_glview->GetParentGroup(name);
 	else
 		return 0;
 }
@@ -15153,12 +17754,12 @@ void VRenderView::ResetID()
 }
 
 //get rendering context
-wxGLContext* VRenderView::GetContext()
+std::shared_ptr<VVulkan> VRenderView::GetContext()
 {
 	if (m_glview)
-		return m_glview->m_glRC/*GetContext()*/;
+		return m_glview->m_vulkan;
 	else
-		return 0;
+		return nullptr;
 }
 
 void VRenderView::RefreshGL(bool interactive, bool start_loop)
@@ -15367,6 +17968,40 @@ wxWindow* VRenderView::CreateExtraCaptureControl(wxWindow* parent)
 	if (ch1)
 		ch1->SetValue(VRenderFrame::GetCompression());
 
+	wxIntegerValidator<unsigned int> vald_int;
+
+	wxBoxSizer* sizer1 = new wxBoxSizer(wxHORIZONTAL);
+	wxStaticText* st = new wxStaticText(panel, 0, "width:");
+	m_cap_w_txt = new wxTextCtrl(panel, wxID_HIGHEST+3006,
+		"", wxDefaultPosition, wxSize(50, 20), wxALIGN_RIGHT, vald_int);
+	m_cap_w_txt->SetValue(wxString::Format(wxT("%i"),m_cap_resx));
+	m_cap_w_txt->Connect(m_cap_w_txt->GetId(), wxEVT_COMMAND_TEXT_UPDATED,
+		wxCommandEventHandler(VRenderView::OnCapWidthTextChange), NULL, panel);
+	sizer1->Add(st);
+	sizer1->Add(10, 10);
+	sizer1->Add(m_cap_w_txt);
+	sizer1->Add(20, 10);
+
+	st = new wxStaticText(panel, 0, "height:");
+	m_cap_h_txt = new wxTextCtrl(panel, wxID_HIGHEST+3007,
+		"", wxDefaultPosition, wxSize(50, 20), wxALIGN_RIGHT, vald_int);
+	m_cap_h_txt->SetValue(wxString::Format(wxT("%i"),m_cap_resy));
+	m_cap_h_txt->Connect(m_cap_h_txt->GetId(), wxEVT_COMMAND_TEXT_UPDATED,
+		wxCommandEventHandler(VRenderView::OnCapHeightTextChange), NULL, panel);
+	sizer1->Add(st);
+	sizer1->Add(10, 10);
+	sizer1->Add(m_cap_h_txt);
+	sizer1->Add(20, 10);
+	wxButton* orgresbtn = new wxButton(panel, wxID_HIGHEST+3008, "1:1", wxDefaultPosition, wxSize(40,20));
+	orgresbtn->Connect(orgresbtn->GetId(), wxEVT_COMMAND_BUTTON_CLICKED,
+		wxCommandEventHandler(VRenderView::OnSetOrgResButton), NULL, panel);
+	sizer1->Add(orgresbtn);
+	sizer1->Add(5, 10);
+	wxButton* dispresbtn = new wxButton(panel, wxID_HIGHEST+3009, "Disp", wxDefaultPosition, wxSize(40,20));
+	dispresbtn->Connect(dispresbtn->GetId(), wxEVT_COMMAND_BUTTON_CLICKED,
+		wxCommandEventHandler(VRenderView::OnSetDispResButton), NULL, panel);
+	sizer1->Add(dispresbtn);
+
 	//copy all files check box
 	wxCheckBox* ch_embed = 0;
 	if (VRenderFrame::GetSaveProject())
@@ -15382,6 +18017,8 @@ wxWindow* VRenderView::CreateExtraCaptureControl(wxWindow* parent)
 	group1->Add(10, 10);
 	group1->Add(ch1);
 	group1->Add(10, 10);
+	group1->Add(sizer1);
+	group1->Add(10, 10);
 	if (VRenderFrame::GetSaveProject() &&
 		ch_embed)
 	{
@@ -15395,12 +18032,54 @@ wxWindow* VRenderView::CreateExtraCaptureControl(wxWindow* parent)
 	return panel;
 }
 
+void VRenderView::OnCapWidthTextChange(wxCommandEvent &event)
+{
+	wxTextCtrl* txt1 = (wxTextCtrl*)event.GetEventObject();
+	wxString num_text = txt1->GetValue();
+	long w;
+	num_text.ToLong(&w);
+	m_cap_resx = w;
+}
+
+void VRenderView::OnCapHeightTextChange(wxCommandEvent &event)
+{
+	wxTextCtrl* txt1 = (wxTextCtrl*)event.GetEventObject();
+	wxString num_text = txt1->GetValue();
+	long h;
+	num_text.ToLong(&h);
+	m_cap_resy = h;
+}
+
+void VRenderView::OnSetOrgResButton(wxCommandEvent &event)
+{
+	if (m_cap_w_txt) m_cap_w_txt->SetValue(wxString::Format(wxT("%i"),m_cap_orgresx));
+	if (m_cap_h_txt) m_cap_h_txt->SetValue(wxString::Format(wxT("%i"),m_cap_orgresy));
+}
+
+void VRenderView::OnSetDispResButton(wxCommandEvent &event)
+{
+	if (m_cap_w_txt) m_cap_w_txt->SetValue(wxString::Format(wxT("%i"),m_cap_dispresx));
+	if (m_cap_h_txt) m_cap_h_txt->SetValue(wxString::Format(wxT("%i"),m_cap_dispresy));
+}
+
 void VRenderView::OnCapture(wxCommandEvent& event)
 {
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 
 	if (vr_frame && vr_frame->GetSettingDlg())
 		VRenderFrame::SetSaveProject(vr_frame->GetSettingDlg()->GetProjSave());
+
+	m_cap_resx = m_glview->m_capture_resx;
+	if (m_cap_resx <= 0) m_cap_resx = m_glview->GetSize().x;
+	m_cap_resy = m_glview->m_capture_resy;
+	if (m_cap_resy <= 0) m_cap_resy = m_glview->GetSize().y;
+	
+	m_glview->Get1x1DispSize(m_cap_orgresx, m_cap_orgresy);
+	if (m_cap_orgresx <= 0) m_cap_orgresx = m_glview->GetSize().x;
+	if (m_cap_orgresy <= 0) m_cap_orgresy = m_glview->GetSize().y;
+
+	m_cap_dispresx = m_glview->GetSize().x;
+	m_cap_dispresy = m_glview->GetSize().y;
 
 	wxFileDialog file_dlg(m_frame, "Save captured image", "", "", "*.tif", wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
 	file_dlg.SetExtraControlCreator(CreateExtraCaptureControl);
@@ -15409,7 +18088,15 @@ void VRenderView::OnCapture(wxCommandEvent& event)
 	{
 		m_glview->m_cap_file = file_dlg.GetDirectory() + "/" + file_dlg.GetFilename();
 		m_glview->m_capture = true;
-		RefreshGL();
+		
+		if (m_cap_resx > 4000 && m_cap_resy > 4000 && m_cap_resx != m_cap_dispresx && m_cap_resy != m_cap_dispresy)
+		{
+			int tilew = m_cap_resx / (m_cap_resx / 2000 + 1) + (m_cap_resx / 2000 + 1);
+			int tileh = m_cap_resy / (m_cap_resy / 2000 + 1) + (m_cap_resy / 2000 + 1);
+			m_glview->StartTileRendering(m_cap_resx, m_cap_resy, tilew, tileh);
+		}
+		else
+			RefreshGL();
 
 		if (vr_frame && vr_frame->GetSettingDlg() &&
 			vr_frame->GetSettingDlg()->GetProjSave())
@@ -15631,6 +18318,7 @@ void VRenderView::OnRotReset(wxCommandEvent &event)
 	m_y_rot_text->ChangeValue("0.0");
 	m_z_rot_text->ChangeValue("0.0");
 	SetRotations(0.0, 0.0, 0.0);
+    m_glview->InitView(INIT_BOUNDS|INIT_CENTER|INIT_OBJ_TRANSL|INIT_ROTATE);
 	RefreshGL();
 	if (m_glview->m_mouse_focus)
 		m_glview->SetFocus();
@@ -15783,7 +18471,7 @@ void VRenderView::OnSearchCheck(wxCommandEvent& event)
 	m_glview->SetSearcherVisibility(m_search_chk->GetValue());
 }
 
-void VRenderView::OnAovSldrIdle(wxIdleEvent& event)
+void VRenderView::OnAovSldrIdle(wxTimerEvent& event)
 {
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (!vr_frame) return;

@@ -29,12 +29,13 @@ DEALINGS IN THE SOFTWARE.
 #define _COUNTINGDLG_H_
 
 #include <wx/wx.h>
+#include "DLLExport.h"
 
 class VRenderView;
 class VolumeData;
 class DataGroup;
 
-class CountingDlg : public wxPanel
+class EXPORT_API CountingDlg : public wxPanel
 {
 public:
 	enum

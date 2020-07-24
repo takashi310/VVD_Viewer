@@ -30,61 +30,61 @@
 #define ShaderProgram_h
 
 #include <string>
+#include <memory>
+
+#include "vulkan/vulkan.h"
+
+#ifdef _DARWIN
+#include "SPIRV/GlslangToSpv.h"
+#else
+#include "glslang/SPIRV/GlslangToSpv.h"
+#endif
+
+#include "DLLExport.h"
 
 namespace FLIVR
 {
 
-	class ShaderProgram
+	class EXPORT_API ShaderProgram
 	{
 	public:
 		ShaderProgram(const std::string& vert_shader,const std::string& frag_shader);
-		ShaderProgram(const std::string& frag_shader);
+		ShaderProgram(const std::string& compute_shader);
 		~ShaderProgram();
 
-		unsigned int id();
-		bool create();
+		bool create(VkDevice device);
 		bool valid();
 		void destroy();
 
-		void bind();
-		void bind_frag_data_location(int color_num, const char* name);
-		void release();
+		VkPipelineShaderStageCreateInfo get_vertex_shader() { return vert_shader_stage_; }
+		VkPipelineShaderStageCreateInfo get_fragment_shader() { return frag_shader_stage_; }
+		VkPipelineShaderStageCreateInfo get_compute_shader() { return compute_shader_stage_; }
+		std::string get_vertex_shader_code() { return vert_shader_; }
+		std::string get_fragment_shader_code() { return frag_shader_; }
+		std::string get_compute_shader_code() { return frag_shader_; }
 
-		//set vector uniform (4x1)
-		void setLocalParam(int, double, double, double, double);
-		//set matrix uniform (4x4)
-		void setLocalParamMatrix(int, float*);
-		//set integer
-		void setLocalParamUInt(int, unsigned int);
-
-		// Call init_shaders_supported before shaders_supported queries!
-		static bool init();
-		static void init_shaders_supported();
-		static bool shaders_supported();
-		static int max_texture_size();
-		static bool texture_non_power_of_two();
 		static const int MAX_SHADER_UNIFORMS = 16;
 		static std::string glsl_version_;
 
+		static EShLanguage FindLanguage(const VkShaderStageFlagBits shader_type);
+		static void init_resources(TBuiltInResource &Resources);
+		static bool GLSLtoSPV(const VkShaderStageFlagBits shader_type, const char *pshader, std::vector<unsigned int> &spirv);
+		static void init_glslang();
+		static void finalize_glslang();
+
 	protected:
-		unsigned int id_;
 		std::string  vert_shader_;
 		std::string  frag_shader_;
+		std::string  compute_shader_;
+		VkPipelineShaderStageCreateInfo vert_shader_stage_;
+		VkPipelineShaderStageCreateInfo frag_shader_stage_;
+		VkPipelineShaderStageCreateInfo compute_shader_stage_;
 
 		//validation
 		bool valid_;
 
-		//locations
-		int loc_ui[MAX_SHADER_UNIFORMS];
-		int loc_vec4[MAX_SHADER_UNIFORMS];
-		int loc_mat4[MAX_SHADER_UNIFORMS];
+		VkDevice device_;
 
-		static bool init_;
-		static bool supported_;
-		static bool non_2_textures_;
-		static int  max_texture_size_;
-		static int v_major_;
-		static int v_minor_;
 	};
 
 } // end namespace FLIVR

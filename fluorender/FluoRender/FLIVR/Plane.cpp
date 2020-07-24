@@ -286,6 +286,14 @@ namespace FLIVR
 		n = Vector(n.x()/v.x(), n.y()/v.y(), n.z()/v.z());
 		n.safe_normalize();
 	}
+    
+    void Plane::Scale2(Vector &v)
+    {
+        n = Vector(n.x()/v.x(), n.y()/v.y(), n.z()/v.z());
+        double dd = n.length();
+        n.safe_normalize();
+        d = d / dd;
+    }
 
 } // End namespace FLIVR
 

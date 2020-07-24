@@ -25,43 +25,44 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 */
-#include "DataManager.h"
-#include <FLIVR/KernelProgram.h>
-#include <FLIVR/VolKernel.h>
-
-#ifndef _KERNELEXECUTOR_H_
-#define _KERNELEXECUTOR_H_
-
-class KernelExecutor
-{
-public:
-	KernelExecutor();
-	~KernelExecutor();
-
-	void SetCode(wxString &code);
-	void LoadCode(wxString &filename);
-	void SetVolume(VolumeData *vd);
-	void SetDuplicate(bool dup);
-	VolumeData* GetVolume();
-	VolumeData* GetResult();
-	void DeleteResult();
-	bool GetMessage(wxString &msg);
-
-	bool Execute();
-
-private:
-	VolumeData *m_vd;
-	VolumeData *m_vd_r;//result
-	bool m_duplicate;//whether duplicate the input volume
-
-	wxString m_code;
-	wxString m_message;
-
-	bool ExecuteKernel(KernelProgram* kernel,
-		GLuint data_id, void* result,
-		size_t brick_x, size_t brick_y,
-		size_t brick_z);
-
-};
-
-#endif//_KERNELEXECUTOR_H_
+//#include "DataManager.h"
+//#include <FLIVR/KernelProgram.h>
+//#include <FLIVR/VolKernel.h>
+//#include "DLLExport.h"
+//
+//#ifndef _KERNELEXECUTOR_H_
+//#define _KERNELEXECUTOR_H_
+//
+//class EXPORT_API KernelExecutor
+//{
+//public:
+//	KernelExecutor();
+//	~KernelExecutor();
+//
+//	void SetCode(wxString &code);
+//	void LoadCode(wxString &filename);
+//	void SetVolume(VolumeData *vd);
+//	void SetDuplicate(bool dup);
+//	VolumeData* GetVolume();
+//	VolumeData* GetResult();
+//	void DeleteResult();
+//	bool GetMessage(wxString &msg);
+//
+//	bool Execute();
+//
+//private:
+//	VolumeData *m_vd;
+//	VolumeData *m_vd_r;//result
+//	bool m_duplicate;//whether duplicate the input volume
+//
+//	wxString m_code;
+//	wxString m_message;
+//
+//	bool ExecuteKernel(KernelProgram* kernel,
+//		GLuint data_id, void* result,
+//		size_t brick_x, size_t brick_y,
+//		size_t brick_z);
+//
+//};
+//
+//#endif//_KERNELEXECUTOR_H_

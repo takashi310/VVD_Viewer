@@ -8,7 +8,7 @@
 #include <boost/optional.hpp>
 #include <map>
 
-class BRKXMLWriter : public BaseWriter
+class EXPORT_API BRKXMLWriter : public BaseWriter
 {
 public:
 	BRKXMLWriter();

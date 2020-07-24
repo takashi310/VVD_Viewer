@@ -33,6 +33,7 @@ DEALINGS IN THE SOFTWARE.
 MSKReader::MSKReader()
 {
 	m_id_string = L"FluoRender_mask_reader_id";
+	m_add_extension = true;
 }
 
 MSKReader::~MSKReader()
@@ -97,13 +98,20 @@ int MSKReader::LoadBatch(int index)
 
 Nrrd* MSKReader::Convert(int t, int c, bool get_max)
 {
-	int64_t pos = m_path_name.find_last_of('.');
-	if (pos == -1)
-		return 0;
-	wstring str_name = m_path_name.substr(0, pos);
-	wostringstream strs;
-	strs << str_name /*<< "_t" << t << "_c" << c*/ << ".msk";
-	str_name = strs.str();
+	wstring str_name;
+	if (m_add_extension)
+	{
+		int64_t pos = m_path_name.find_last_of('.');
+		if (pos == -1)
+			return 0;
+		str_name = m_path_name.substr(0, pos);
+		wostringstream strs;
+		strs << str_name /*<< "_t" << t << "_c" << c*/ << ".msk";
+		str_name = strs.str();
+	}
+	else
+		str_name = m_path_name;
+
 	FILE* msk_file = 0;
 	if (!WFOPEN(&msk_file, str_name.c_str(), L"rb"))
 		return 0;
@@ -127,10 +135,10 @@ Nrrd* MSKReader::Convert(int t, int c, bool get_max)
 		fclose(msk_file);
 		return 0;
 	}
-	int slice_num = int(output->axis[2].size);
-	int x_size = int(output->axis[0].size);
-	int y_size = int(output->axis[1].size);
-	int data_size = slice_num * x_size * y_size;
+	size_t slice_num = output->axis[2].size;
+	size_t x_size = output->axis[0].size;
+	size_t y_size = output->axis[1].size;
+	size_t data_size = (size_t)slice_num * (size_t)x_size * (size_t)y_size;
 	output->data = new unsigned char[data_size];
 
 	if (nrrdRead(output, msk_file, NULL))

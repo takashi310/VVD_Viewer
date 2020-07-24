@@ -32,7 +32,7 @@ DEALINGS IN THE SOFTWARE.
 
 using namespace std;
 
-class LBLReader : public BaseReader
+class EXPORT_API LBLReader : public BaseReader
 {
 public:
 	LBLReader();

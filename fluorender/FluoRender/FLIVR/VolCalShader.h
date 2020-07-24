@@ -29,8 +29,12 @@
 #ifndef VolCalShader_h
 #define VolCalShader_h
 
+#include <glm/glm.hpp>
 #include <string>
 #include <vector>
+
+#include "DLLExport.h"
+#include "VulkanDevice.hpp"
 
 namespace FLIVR
 {
@@ -42,22 +46,27 @@ namespace FLIVR
 	#define CAL_APPLYMASKINV	6	//apply the inverted mask
 	#define CAL_APPLYMASKINV2	7	//apply the inverted mask
 	#define CAL_INTERSECTION_WITH_MASK	8	//minimum of two with mask
+	#define CAL_MASK_THRESHOLD	9	//minimum of two with mask
+
+	#define CAL_SAMPLER_NUM 4
 
 	class ShaderProgram;
 
-	class VolCalShader
+	class EXPORT_API VolCalShader
 	{
 	public:
-		VolCalShader(int type);
+		VolCalShader(VkDevice device, int type, int out_bytes);
 		~VolCalShader();
 
 		bool create();
 
+		inline VkDevice device() { return device_; }
 		inline int type() {return type_;}
+		inline int out_bytes() { return out_bytes_; }
 
-		inline bool match(int type)
+		inline bool match(VkDevice device, int type, int out_bytes)
 		{ 
-			return (type_ == type);
+			return (device_ == device && type_ == type && out_bytes_ == out_bytes);
 		}
 
 		inline ShaderProgram* program() { return program_; }
@@ -65,19 +74,81 @@ namespace FLIVR
 	protected:
 		bool emit(std::string& s);
 
+		VkDevice device_;
 		int type_;
+		int out_bytes_;
 
 		ShaderProgram* program_;
 	};
 
-	class VolCalShaderFactory
+	class EXPORT_API VolCalShaderFactory
 	{
 	public:
 		VolCalShaderFactory();
+		VolCalShaderFactory(std::vector<vks::VulkanDevice*> &devices);
 		~VolCalShaderFactory();
 
-		ShaderProgram* shader(int type);
+		ShaderProgram* shader(VkDevice device, int type, int out_bytes);
 
+		void init(std::vector<vks::VulkanDevice*> &devices);
+
+		struct VolCalPipeline {
+			VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
+			VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+			VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+		};
+
+		struct CalCompShaderBrickConst {
+			glm::vec4 loc0_scale_usemask;	//(scale_a, scale_b, use_mask_a, use_mask_b)
+			glm::vec4 loc1_dim_inv;
+		};
+
+		static inline VkWriteDescriptorSet writeDescriptorSetTex(
+			VkDescriptorSet dstSet,
+			uint32_t texid,
+			VkDescriptorImageInfo* imageInfo,
+			uint32_t descriptorCount = 1)
+		{
+			VkWriteDescriptorSet writeDescriptorSet{};
+			writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writeDescriptorSet.dstSet = dstSet;
+			writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			writeDescriptorSet.dstBinding = texid+1;
+			writeDescriptorSet.pImageInfo = imageInfo;
+			writeDescriptorSet.descriptorCount = descriptorCount;
+			return writeDescriptorSet;
+		}
+
+		static inline VkWriteDescriptorSet writeDescriptorSetStrageImage(
+			VkDescriptorSet dstSet,
+			uint32_t id,
+			VkDescriptorImageInfo* imageInfo,
+			uint32_t descriptorCount = 1)
+		{
+			VkWriteDescriptorSet writeDescriptorSet{};
+			writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writeDescriptorSet.dstSet = dstSet;
+			writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+			writeDescriptorSet.dstBinding = id;
+			writeDescriptorSet.pImageInfo = imageInfo;
+			writeDescriptorSet.descriptorCount = descriptorCount;
+			return writeDescriptorSet;
+		}
+
+		static inline VkWriteDescriptorSet writeDescriptorSetOutput(
+			VkDescriptorSet dstSet,
+			VkDescriptorImageInfo* imageInfo,
+			uint32_t descriptorCount = 1)
+		{
+			return writeDescriptorSetStrageImage(dstSet, 0, imageInfo, descriptorCount);
+		}
+
+		void setupDescriptorSetLayout();
+			
+		std::map<vks::VulkanDevice*, VolCalPipeline> pipeline_;
+
+		std::vector<vks::VulkanDevice*> vdevices_;
+		
 	protected:
 		std::vector<VolCalShader*> shader_;
 		int prev_shader_;

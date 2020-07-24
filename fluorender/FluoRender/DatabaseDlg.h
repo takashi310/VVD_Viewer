@@ -8,6 +8,7 @@
 
 #include <vector>
 #include <map>
+#include "DLLExport.h"
 
 #ifndef _DATABASEDLG_H_
 #define _DATABASEDLG_H_
@@ -17,7 +18,7 @@ class VRenderView;
 wxDECLARE_EVENT(wxEVT_MYTHREAD_COMPLETED, wxCommandEvent);
 wxDECLARE_EVENT(wxEVT_MYTHREAD_PAUSED, wxCommandEvent);
 
-class AnnotationDB
+class EXPORT_API AnnotationDB
 {
 public:
 	wxString url;
@@ -30,7 +31,7 @@ public:
 };
 
 //tree item data
-class DBItemInfo : public wxTreeItemData
+class EXPORT_API DBItemInfo : public wxTreeItemData
 {
 public:
 	DBItemInfo()
@@ -70,7 +71,7 @@ struct DBCatalog
 	std::vector<DBItemInfo*> items;
 };
 
-class DBTreeCtrl : public wxTreeCtrl
+class EXPORT_API DBTreeCtrl : public wxTreeCtrl
 {
 	enum
 	{
@@ -130,7 +131,7 @@ class DBTreeCtrl : public wxTreeCtrl
          }
 };
 
-class DBListCtrl : public wxListCtrl
+class EXPORT_API DBListCtrl : public wxListCtrl
 {
 	
    public:
@@ -171,7 +172,7 @@ class DBListCtrl : public wxListCtrl
 };
 
 
-class DBSearcher : public wxTextCtrl
+class EXPORT_API DBSearcher : public wxTextCtrl
 {
 	public:
       DBSearcher(wxWindow *frame,
@@ -210,7 +211,7 @@ struct MyThreadData
 	std::vector<DBItemInfo*> m_results;
 };
 
-class MyThread : public wxThread
+class EXPORT_API MyThread : public wxThread
 {
     public:
 		MyThread(wxEvtHandler* pParent, std::vector<DBCatalog> *cats, int st_cat, int st_item, wxString schtxts, unsigned int time_limit, wxGauge *gauge = NULL);
@@ -230,7 +231,7 @@ class MyThread : public wxThread
         wxEvtHandler* m_pParent;
 };
 
-class MyThread_deleter : public wxThread
+class EXPORT_API MyThread_deleter : public wxThread
 {
     public:
 		MyThread_deleter(wxEvtHandler* pParent);
@@ -240,7 +241,7 @@ class MyThread_deleter : public wxThread
         wxEvtHandler* m_pParent;
 };
 
-class DatabaseDlg : public wxPanel
+class EXPORT_API DatabaseDlg : public wxPanel
 {
 public:
 	enum

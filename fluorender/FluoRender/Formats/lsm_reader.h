@@ -33,7 +33,7 @@ DEALINGS IN THE SOFTWARE.
 
 using namespace std;
 
-class LSMReader : public BaseReader
+class EXPORT_API LSMReader : public BaseReader
 {
 public:
 	LSMReader();

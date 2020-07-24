@@ -31,12 +31,14 @@ DEALINGS IN THE SOFTWARE.
 
 #include "Vector.h"
 
+#include "DLLExport.h"
+
 namespace FLIVR
 {
 
 	class Point;
 	class Quaternion;
-	class Plane
+	class EXPORT_API Plane
 	{
 		Vector n;
 		double d;
@@ -83,6 +85,7 @@ namespace FLIVR
 		void Rotate(Quaternion &q);
 		//scale the plane from the origin by a vector
 		void Scale(Vector &v);
+        void Scale2(Vector &v);
 
 		//remember and restore
 		void Remember() {n_copy = n; d_copy = d;};

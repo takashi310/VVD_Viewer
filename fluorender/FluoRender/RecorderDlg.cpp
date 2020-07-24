@@ -30,6 +30,8 @@ DEALINGS IN THE SOFTWARE.
 #include <wx/artprov.h>
 #include <wx/valnum.h>
 #include "key.xpm"
+#include "png_resource.h"
+#include "img/icons.h"
 
 BEGIN_EVENT_TABLE(KeyListCtrl, wxListCtrl)
 	EVT_LIST_ITEM_ACTIVATED(wxID_ANY, KeyListCtrl::OnAct)
@@ -170,6 +172,9 @@ void KeyListCtrl::Update()
 	Interpolator* interpolator = vr_frame->GetInterpolator();
 	if (!interpolator)
 		return;
+	VMovieView* mov_view = vr_frame->GetMovieView();
+	if (!mov_view)
+		return;
 
 	DeleteAllItems();
 	for (int i=0; i<interpolator->GetKeyNum(); i++)
@@ -181,6 +186,14 @@ void KeyListCtrl::Update()
 		string desc = interpolator->GetKeyDesc(i);
 		Append(id, time, duration, interp, desc);
 	}
+
+	long fps = mov_view->GetFPS();
+	int frames = int(interpolator->GetLastT());
+	if (frames > 0 && fps > 0)
+	{
+		double runtime = (double)frames / (double)fps;
+		mov_view->SetMovieTime(runtime);
+	}
 }
 
 void KeyListCtrl::UpdateText()
@@ -190,6 +203,9 @@ void KeyListCtrl::UpdateText()
 		return;
 	Interpolator* interpolator = vr_frame->GetInterpolator();
 	if (!interpolator)
+		return;
+	VMovieView* mov_view = vr_frame->GetMovieView();
+	if (!mov_view)
 		return;
 
 	wxString str;
@@ -213,6 +229,14 @@ void KeyListCtrl::UpdateText()
 		str = desc;
 		SetText(i, 4, str);
 	}
+
+	long fps = mov_view->GetFPS();
+	int frames = int(interpolator->GetLastT());
+	if (frames > 0 && fps > 0)
+	{
+		double runtime = (double)frames / (double)fps;
+		mov_view->SetMovieTime(runtime);
+	}
 }
 
 void KeyListCtrl::OnAct(wxListEvent &event)
@@ -235,6 +259,15 @@ void KeyListCtrl::OnAct(wxListEvent &event)
 
 	int index = interpolator->GetKeyIndex(int(id));
 	double time = interpolator->GetKeyTime(index);
+	double end_frame = interpolator->GetLastT();
+	VMovieView *mov_view = vr_frame->GetMovieView();
+	if (mov_view)
+	{
+		mov_view->SetProgress(time / end_frame);
+		mov_view->SetRendering(time / end_frame);
+	}
+
+	/*
 	VRenderView* view = vr_frame->GetRecorderDlg()->GetView();
 	if (!view)
 		view = vr_frame->GetView(0);
@@ -243,6 +276,7 @@ void KeyListCtrl::OnAct(wxListEvent &event)
 		view->m_glview->SetParams(time);
 		view->RefreshGL();
 	}
+	*/
 }
 
 wxString KeyListCtrl::GetText(long item, int col)
@@ -472,6 +506,8 @@ void KeyListCtrl::OnDragging(wxMouseEvent& event)
 	long index = HitTest(pos, flags, NULL); // got to use it at last
 	if (index >=0 && index != m_editing_item && index != m_dragging_to_item)
 	{
+		SetEvtHandlerEnabled(false);
+
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 		if (!vr_frame)
 			return;
@@ -481,18 +517,23 @@ void KeyListCtrl::OnDragging(wxMouseEvent& event)
 
 		m_dragging_to_item = index;
 
+		if (m_dragging_to_item - m_editing_item < -1)
+			m_dragging_to_item = index;
+
 		//change the content in the interpolator
 		if (m_editing_item > m_dragging_to_item)
 			interpolator->MoveKeyBefore(m_editing_item, m_dragging_to_item);
 		else
 			interpolator->MoveKeyAfter(m_editing_item, m_dragging_to_item);
 
-		DeleteItem(m_editing_item);
-		InsertItem(m_dragging_to_item, "", 0);
+		//DeleteItem(m_editing_item);
+		//InsertItem(m_dragging_to_item, "", 0);
 		UpdateText();
 
 		m_editing_item = m_dragging_to_item;
 		SetItemState(m_editing_item, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
+
+		SetEvtHandlerEnabled(true);
 	}
 }
 
@@ -596,6 +637,47 @@ m_view(0)
 	group3->Add(5, 5);
 	group3->Add(m_del_all_btn, 0, wxALIGN_CENTER);
 
+/*
+	m_seq_chk = new wxCheckBox(this,ID_SeqChk,
+		"Time Sequence / Batch");
+	m_time_start_text = new wxTextCtrl(this, ID_TimeStartText, "1",
+		wxDefaultPosition,wxSize(35,-1));
+	m_time_end_text = new wxTextCtrl(this, ID_TimeEndText, "10",
+		wxDefaultPosition,wxSize(35,-1));
+	st2 = new wxStaticText(this,wxID_ANY, "End: ",
+		wxDefaultPosition,wxSize(-1,-1));
+	//sizer 1
+	sizer_1->Add(m_seq_chk, 0, wxALIGN_CENTER);
+	sizer_1->AddStretchSpacer();
+	st = new wxStaticText(this,wxID_ANY, "Current Time");
+	sizer_1->Add(st, 0, wxALIGN_CENTER);
+	sizer_1->Add(20,5,0);
+	//sizer 2
+	st = new wxStaticText(this,wxID_ANY, "Start: ",
+		wxDefaultPosition,wxSize(-1,-1));
+	sizer_2->Add(5,5,0);
+	sizer_2->Add(st, 0, wxALIGN_CENTER);
+	sizer_2->Add(m_time_start_text, 0, wxALIGN_CENTER);
+	sizer_2->Add(15,5,0);
+	sizer_2->Add(st2, 0, wxALIGN_CENTER);
+	sizer_2->Add(m_time_end_text, 0, wxALIGN_CENTER);
+	m_inc_time_btn = new wxButton(this, ID_IncTimeBtn, "",
+		wxDefaultPosition, wxSize(30, 30));
+	m_dec_time_btn = new wxButton(this, ID_DecTimeBtn, "",
+		wxDefaultPosition, wxSize(30, 30));
+	m_time_current_text = new wxTextCtrl(this, ID_CurrentTimeText, "0",
+		wxDefaultPosition,wxSize(35,-1));
+	m_inc_time_btn->SetBitmap(wxGetBitmapFromMemory(plus));
+	m_dec_time_btn->SetBitmap(wxGetBitmapFromMemory(minus));
+	sizer_2->AddStretchSpacer();
+	sizer_2->Add(m_dec_time_btn, 0, wxALIGN_CENTER);
+	sizer_2->Add(5,15,0);
+	sizer_2->Add(m_time_current_text, 0, wxALIGN_CENTER);
+	sizer_2->Add(5,15,0);
+	sizer_2->Add(m_inc_time_btn, 0, wxALIGN_CENTER);
+	sizer_2->Add(5,15,0);
+*/
+
 	//all controls
 	wxBoxSizer *sizerV = new wxBoxSizer(wxVERTICAL);
 	//sizerV->Add(10, 5);
@@ -687,9 +769,76 @@ void RecorderDlg::OnInsKey(wxCommandEvent &event)
 		str.ToLong(&id);
 		index = interpolator->GetKeyIndex(id);
 	}
-	str = m_duration_text->GetValue();
-	double duration;
-	str.ToDouble(&duration);
+	double duration = 0.0;
+/*
+	//check if 4D
+	bool is_4d = false;
+	bool is_3dbat = false;
+	VolumeData* vd = 0;
+	DataManager* mgr = vr_frame->GetDataManager();
+	if (mgr)
+	{
+		for (int i = 0; i < mgr->GetVolumeNum(); i++)
+		{
+			vd = mgr->GetVolumeData(i);
+			if (vd->GetReader() &&
+				vd->GetReader()->GetTimeNum() > 1)
+			{
+				is_4d = true;
+				break;
+			}
+			if (vd->GetReader() &&
+				vd->GetReader()->GetBatchNum() > 1)
+			{
+				is_3dbat = true;
+				break;
+			}
+		}
+	}
+	if (is_4d)
+	{
+		Interpolator *interpolator = vr_frame->GetInterpolator();
+		if (interpolator && m_view)
+		{
+			double ct = vd->GetCurTime();
+			KeyCode keycode;
+			keycode.l0 = 1;
+			keycode.l0_name = m_view->GetName();
+			keycode.l1 = 2;
+			keycode.l1_name = vd->GetName();
+			keycode.l2 = 0;
+			keycode.l2_name = "frame";
+			double frame;
+			if (interpolator->GetDouble(keycode, 
+				interpolator->GetLastIndex(), frame))
+				duration = fabs(ct - frame);
+		}
+	}
+	if (is_3dbat)
+	{
+		Interpolator *interpolator = vr_frame->GetInterpolator();
+		if (interpolator && m_view)
+		{
+			double ct = vd->GetCurTime();
+			KeyCode keycode;
+			keycode.l0 = 1;
+			keycode.l0_name = m_view->GetName();
+			keycode.l1 = 2;
+			keycode.l1_name = vd->GetName();
+			keycode.l2 = 0;
+			keycode.l2_name = "batch";
+			double batch;
+			if (interpolator->GetDouble(keycode, 
+				interpolator->GetLastIndex(), batch))
+				duration = fabs(ct - batch);
+		}
+	}
+	if (!is_4d && !is_3dbat)
+	{*/
+		str = m_duration_text->GetValue();
+		str.ToDouble(&duration);
+/*	}*/
+
 	int interpolation = m_interpolation_cmb->GetSelection();
 	InsertKey(index, duration, interpolation);
 

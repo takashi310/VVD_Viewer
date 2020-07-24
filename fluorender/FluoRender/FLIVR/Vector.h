@@ -36,13 +36,15 @@ DEALINGS IN THE SOFTWARE.
 
 #include "Utils.h"
 
+#include "DLLExport.h"
+
 namespace FLIVR
 {
 	using std::string;
 
 	class Point;
 
-	class Vector
+	class EXPORT_API Vector
 	{
 		double x_,y_,z_;
 	public:

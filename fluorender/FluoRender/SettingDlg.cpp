@@ -1608,19 +1608,20 @@ void SettingDlg::OnFontChange(wxCommandEvent &event)
 		m_font_file = str + ".ttf";
 		std::string exePath = wxStandardPaths::Get().GetExecutablePath().ToStdString();
 		exePath = exePath.substr(0,exePath.find_last_of(std::string()+GETSLASH()));
-		std::string loc = exePath + GETSLASH() + "Fonts" +
-			GETSLASH() + str.ToStdString() + ".ttf";
-
+		std::string loc = exePath + GETSLASHS() + "Fonts" +
+			GETSLASHS() + str.ToStdString() + ".ttf";
+        
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 		if (vr_frame)
 		{
-			vr_frame->GetTextRenderer()->LoadNewFace(loc);
-			vr_frame->GetTextRenderer()->SetSize(m_text_size);
 			for (int i=0 ; i<(int)vr_frame->GetViewList()->size() ; i++)
 			{
 				VRenderView* vrv = (*vr_frame->GetViewList())[i];
 				if (vrv)
+				{
+					vrv->GetTextRenderer()->LoadNewFace(loc, m_text_size);
 					vrv->RefreshGL();
+				}
 			}
 		}
 	}
@@ -1637,12 +1638,14 @@ void SettingDlg::OnFontSizeChange(wxCommandEvent &event)
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 		if (vr_frame)
 		{
-			vr_frame->GetTextRenderer()->SetSize(m_text_size);
 			for (int i=0 ; i<(int)vr_frame->GetViewList()->size() ; i++)
 			{
 				VRenderView* vrv = (*vr_frame->GetViewList())[i];
 				if (vrv)
+				{
+					vrv->GetTextRenderer()->SetSize(m_text_size);
 					vrv->RefreshGL();
+				}
 			}
 		}
 	}

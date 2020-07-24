@@ -1,4 +1,4 @@
-﻿#include "DataManager.h"
+#include "DataManager.h"
 #include "teem/Nrrd/nrrd.h"
 #include <wx/msgdlg.h>
 #include <wx/progdlg.h>
@@ -8,14 +8,32 @@
 #include <wx/file.h>
 #include <wx/stdpaths.h>
 #include "utility.h"
+#include <iostream>
 #include <sstream>
 #include <fstream>
 #include <algorithm>
 #include <set>
+#include <thread>
+#include <mutex>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
 #ifdef _WIN32
+//
+//#include <vtkVersion.h>
+//#include <vtkSmartPointer.h>
+//#include <vtkImageImport.h>
+//#include <vtkFlyingEdges3D.h>
+//#include <vtkImageData.h>
+//#include <vtkFloatArray.h>
+//#include <vtkDoubleArray.h>
+//#include <vtkPoints.h>
+//#include <vtkPolyData.h>
+//#include <vtkPolyDataNormals.h>
+//#include <vtkPointData.h>
+//#include <vtkCellData.h>
+
+#include <omp.h>
 #  undef min
 #  undef max
 #endif
@@ -131,6 +149,10 @@ VolumeData::VolumeData()
 
 	//valid brick number
 	m_brick_num = 0;
+	
+	m_brkxml_mask = NULL;
+
+	m_skip_brick = false;
 }
 
 /*
@@ -257,11 +279,12 @@ VolumeData::VolumeData(VolumeData &copy)
 
 VolumeData::~VolumeData()
 {
-	//m_vr�̊J�������ɂ��Ȃ���loadedbrks���̗v�f�N���A���ł��Ȃ�
 	if (m_vr)
 		delete m_vr;
 	if (m_tex)
 		delete m_tex;
+	if (m_brkxml_mask)
+		delete m_brkxml_mask;
 }
 
 VolumeData* VolumeData::DeepCopy(VolumeData &copy, bool use_default_settings, DataManager *d_manager)
@@ -282,31 +305,32 @@ VolumeData* VolumeData::DeepCopy(VolumeData &copy, bool use_default_settings, Da
 	}
 	bool is_brxml = tex->isBrxml();
 	int time = is_brxml ? 0 : copy.GetCurTime();
-	Nrrd *nv = vd->m_reader->Convert(time, copy.GetCurChannel(), true);
-	if (!nv)
-	{
-		delete(vd);
-		return NULL;
-	}
+    Nrrd *nv = NULL;
+    if (is_brxml)
+    {
+        nv = vd->m_reader->Convert(time, copy.GetCurChannel(), true);
+        if (!nv)
+        {
+            delete(vd);
+            return NULL;
+        }
+    }
+    else
+    {
+        if (copy.GetVolume(true))
+        {
+            nv = nrrdNew();
+            nrrdCopy(nv, copy.GetVolume(false));
+        }
+        else
+        {
+            delete(vd);
+            return NULL;
+        }
+    }
 
-	if (is_brxml)	vd->Load(nv, copy.GetName()+wxString::Format("_%d", vd->m_dup_counter), wxString(""), (BRKXMLReader*)vd->m_reader);
+	if (is_brxml) vd->Load(nv, copy.GetName()+wxString::Format("_%d", vd->m_dup_counter), wxString(""), (BRKXMLReader*)vd->m_reader);
 	else vd->Load(nv, copy.GetName()+wxString::Format("_%d", vd->m_dup_counter), wxString(""));
-
-	if (copy.GetMask(true))
-	{
-		Nrrd *mask;
-		mask = nrrdNew();
-		nrrdCopy(mask, copy.GetMask(false));
-		vd->LoadMask(mask);
-	}
-
-	if (copy.GetLabel(true))
-	{
-		Nrrd *label;
-		label = nrrdNew();
-		nrrdCopy(label, copy.GetLabel(false));
-		vd->LoadLabel(label);
-	}
 
 	if (use_default_settings && d_manager)
 	{
@@ -461,9 +485,277 @@ VolumeData* VolumeData::DeepCopy(VolumeData &copy, bool use_default_settings, Da
 		vd->m_annotation = copy.m_annotation;
 
 		vd->m_landmarks = copy.m_landmarks;
+
+		vd->SetMaskHideMode(copy.GetMaskHideMode());
 	}
 
+	if (is_brxml) vd->SetLevel(copy.GetLevel());
+
+	if (copy.GetMask(true))
+	{
+		Nrrd *mask;
+		mask = nrrdNew();
+		nrrdCopy(mask, copy.GetMask(false));
+		vd->LoadMask(mask);
+	}
+
+	if (copy.GetLabel(true))
+	{
+		Nrrd *label;
+		label = nrrdNew();
+		nrrdCopy(label, copy.GetLabel(false));
+		vd->LoadLabel(label);
+	}
+
+	if (copy.GetStroke(true))
+	{
+		Nrrd *stroke;
+		stroke = nrrdNew();
+		nrrdCopy(stroke, copy.GetStroke(false));
+		vd->LoadStroke(stroke);
+	}
+
+
 	return vd;
+}
+
+void VolumeData::FlipHorizontally()
+{
+	if (!m_tex || !m_vr || isBrxml()) return;
+	Nrrd *nrrd = GetVolume(true);
+	Nrrd *mask = GetMask(true);
+	Nrrd *label = GetLabel(true);
+	Nrrd *stroke = GetStroke(true);
+	int iw, ih, id;
+	GetResolution(iw, ih, id);
+	size_t w = iw, h = ih, d = id;
+	size_t linenum = h*d;
+	size_t nthreads = std::thread::hardware_concurrency();
+	if (nthreads > linenum) nthreads = linenum;
+	if (nrrd)
+	{
+		std::vector<std::thread> threads(nthreads);
+		if (nrrd->type == nrrdTypeUChar) {
+			unsigned char *data = (unsigned char *)nrrd->data;
+			for(size_t t = 0; t < nthreads; t++)
+			{
+				threads[t] = std::thread(std::bind(
+					[&](const size_t bi, const size_t ei, const size_t t)
+					{
+						for(size_t i = bi; i<ei; i++)
+						{
+							size_t baseid = i*w;
+							for (size_t j = 0; j < w/2; j++) {
+								swap(data[baseid + w-j-1], data[baseid + j]);
+							}
+						}
+					}, t*linenum/nthreads, (t+1)==nthreads ? linenum : (t+1)*linenum/nthreads, t));
+			}
+			std::for_each(threads.begin(),threads.end(),[](std::thread& x){x.join();});
+		} else if (nrrd->type == nrrdTypeUShort) {
+			unsigned short *data = (unsigned short *)nrrd->data;
+			for(size_t t = 0; t < nthreads; t++)
+			{
+				threads[t] = std::thread(std::bind(
+					[&](const size_t bi, const size_t ei, const size_t t)
+				{
+					for(size_t i = bi; i<ei; i++)
+					{
+						size_t baseid = i*w;
+						for (size_t j = 0; j < w/2; j++) {
+							swap(data[baseid + w-j-1], data[baseid + j]);
+						}
+					}
+				}, t*linenum/nthreads, (t+1)==nthreads ? linenum : (t+1)*linenum/nthreads, t));
+			}
+			std::for_each(threads.begin(),threads.end(),[](std::thread& x){x.join();});
+		}
+	}
+
+	if (mask)
+	{
+		std::vector<std::thread> threads(nthreads);
+		unsigned char *data = (unsigned char *)mask->data;
+		for(size_t t = 0; t < nthreads; t++)
+		{
+			threads[t] = std::thread(std::bind(
+				[&](const size_t bi, const size_t ei, const size_t t)
+			{
+				for(size_t i = bi; i<ei; i++)
+				{
+					size_t baseid = i*w;
+					for (size_t j = 0; j < w/2; j++) {
+						swap(data[baseid + w-j-1], data[baseid + j]);
+					}
+				}
+			}, t*linenum/nthreads, (t+1)==nthreads ? linenum : (t+1)*linenum/nthreads, t));
+		}
+		std::for_each(threads.begin(),threads.end(),[](std::thread& x){x.join();});
+	}
+
+	if (label)
+	{
+		std::vector<std::thread> threads(nthreads);
+		unsigned int *data = (unsigned int *)label->data;
+		for(size_t t = 0; t < nthreads; t++)
+		{
+			threads[t] = std::thread(std::bind(
+				[&](const size_t bi, const size_t ei, const size_t t)
+			{
+				for(size_t i = bi; i<ei; i++)
+				{
+					size_t baseid = i*w;
+					for (size_t j = 0; j < w/2; j++) {
+						swap(data[baseid + w-j-1], data[baseid + j]);
+					}
+				}
+			}, t*linenum/nthreads, (t+1)==nthreads ? linenum : (t+1)*linenum/nthreads, t));
+		}
+		std::for_each(threads.begin(),threads.end(),[](std::thread& x){x.join();});
+	}
+
+	if (stroke)
+	{
+		std::vector<std::thread> threads(nthreads);
+		unsigned char *data = (unsigned char *)stroke->data;
+		for(size_t t = 0; t < nthreads; t++)
+		{
+			threads[t] = std::thread(std::bind(
+				[&](const size_t bi, const size_t ei, const size_t t)
+			{
+				for(size_t i = bi; i<ei; i++)
+				{
+					size_t baseid = i*w;
+					for (size_t j = 0; j < w/2; j++) {
+						swap(data[baseid + w-j-1], data[baseid + j]);
+					}
+				}
+			}, t*linenum/nthreads, (t+1)==nthreads ? linenum : (t+1)*linenum/nthreads, t));
+		}
+		std::for_each(threads.begin(),threads.end(),[](std::thread& x){x.join();});
+	}
+
+	m_vr->clear_tex_current();
+}
+
+void VolumeData::FlipVertically()
+{
+	if (!m_tex || !m_vr || isBrxml()) return;
+	Nrrd *nrrd = GetVolume(true);
+	Nrrd *mask = GetMask(true);
+	Nrrd *label = GetLabel(true);
+	Nrrd *stroke = GetStroke(true);
+	int iw, ih, id;
+	GetResolution(iw, ih, id);
+	size_t w = iw, h = ih, d = id;
+
+	size_t nthreads = std::thread::hardware_concurrency();
+	if (nthreads > d) nthreads = d;
+	if (nrrd)
+	{
+		std::vector<std::thread> threads(nthreads);
+		if (nrrd->type == nrrdTypeUChar) {
+			unsigned char *data = (unsigned char *)nrrd->data;
+			for (size_t t = 0; t < nthreads; t++)
+			{
+				threads[t] = std::thread(std::bind(
+					[&](const size_t bi, const size_t ei, const size_t t)
+				{
+					for (size_t z = bi; z < ei; z++)
+					for (size_t x = 0; x < w; x++)
+					{
+						size_t baseid = z * w*h + x;
+						for (size_t y = 0; y < h / 2; y++)
+							swap(data[baseid + (h - y - 1)*w], data[baseid + y * w]);
+					}
+				}, t*d / nthreads, (t + 1) == nthreads ? d : (t + 1)*d / nthreads, t));
+			}
+			std::for_each(threads.begin(), threads.end(), [](std::thread& x) {x.join(); });
+		}
+		else if (nrrd->type == nrrdTypeUShort) {
+			unsigned short *data = (unsigned short *)nrrd->data;
+			for (size_t t = 0; t < nthreads; t++)
+			{
+				threads[t] = std::thread(std::bind(
+					[&](const size_t bi, const size_t ei, const size_t t)
+				{
+					for (size_t z = bi; z < ei; z++)
+					for (size_t x = 0; x < w; x++)
+					{
+						size_t baseid = z * w*h + x;
+						for (size_t y = 0; y < h / 2; y++)
+							swap(data[baseid + (h - y - 1)*w], data[baseid + y * w]);
+					}
+				}, t*d / nthreads, (t + 1) == nthreads ? d : (t + 1)*d / nthreads, t));
+			}
+			std::for_each(threads.begin(), threads.end(), [](std::thread& x) {x.join(); });
+		}
+	}
+	
+	if (mask)
+	{
+		std::vector<std::thread> threads(nthreads);
+		unsigned char *data = (unsigned char *)mask->data;
+		for (size_t t = 0; t < nthreads; t++)
+		{
+			threads[t] = std::thread(std::bind(
+				[&](const size_t bi, const size_t ei, const size_t t)
+			{
+				for (size_t z = bi; z < ei; z++)
+				for (size_t x = 0; x < w; x++)
+				{
+					size_t baseid = z * w*h + x;
+					for (size_t y = 0; y < h / 2; y++)
+						swap(data[baseid + (h - y - 1)*w], data[baseid + y * w]);
+				}
+			}, t*d / nthreads, (t + 1) == nthreads ? d : (t + 1)*d / nthreads, t));
+		}
+		std::for_each(threads.begin(), threads.end(), [](std::thread& x) {x.join(); });
+	}
+
+	if (label)
+	{
+		std::vector<std::thread> threads(nthreads);
+		unsigned int *data = (unsigned int *)label->data;
+		for (size_t t = 0; t < nthreads; t++)
+		{
+			threads[t] = std::thread(std::bind(
+				[&](const size_t bi, const size_t ei, const size_t t)
+			{
+				for (size_t z = bi; z < ei; z++)
+				for (size_t x = 0; x < w; x++)
+				{
+					size_t baseid = z * w*h + x;
+					for (size_t y = 0; y < h / 2; y++)
+						swap(data[baseid + (h - y - 1)*w], data[baseid + y * w]);
+				}
+			}, t*d / nthreads, (t + 1) == nthreads ? d : (t + 1)*d / nthreads, t));
+		}
+		std::for_each(threads.begin(), threads.end(), [](std::thread& x) {x.join(); });
+	}
+
+	if (stroke)
+	{
+		std::vector<std::thread> threads(nthreads);
+		unsigned char *data = (unsigned char *)stroke->data;
+		for (size_t t = 0; t < nthreads; t++)
+		{
+			threads[t] = std::thread(std::bind(
+				[&](const size_t bi, const size_t ei, const size_t t)
+			{
+				for (size_t z = bi; z < ei; z++)
+				for (size_t x = 0; x < w; x++)
+				{
+					size_t baseid = z * w*h + x;
+					for (size_t y = 0; y < h / 2; y++)
+						swap(data[baseid + (h - y - 1)*w], data[baseid + y * w]);
+				}
+			}, t*d / nthreads, (t + 1) == nthreads ? d : (t + 1)*d / nthreads, t));
+		}
+		std::for_each(threads.begin(), threads.end(), [](std::thread& x) {x.join(); });
+	}
+
+	m_vr->clear_tex_current();
 }
 
 //duplication
@@ -605,7 +897,8 @@ int VolumeData::Replace(Nrrd* data, bool del_tex)
 {
 	if (!data || data->dim!=3)
 		return 0;
-
+	
+	double spcx = 1.0, spcy = 1.0, spcz = 1.0;
 	if (del_tex)
 	{
 		Nrrd *nv = data;
@@ -614,11 +907,18 @@ int VolumeData::Replace(Nrrd* data, bool del_tex)
 		m_res_y = nv->axis[1].size;
 		m_res_z = nv->axis[2].size;
 
-		if (m_tex)
+		if (m_vr) {
+			m_vr->clear_tex_current();
+			m_vr->reset_texture();
+		}
+		if (m_tex) {
+			m_tex->get_spacings(spcx, spcy, spcz);
 			delete m_tex;
+		}
 		m_tex = new Texture();
 		m_tex->set_use_priority(m_skip_brick);
 		m_tex->build(nv, gm, 0, m_max_value, 0, 0);
+		m_tex->set_spacings(spcx, spcy, spcz);
 	}
 	else
 	{
@@ -759,14 +1059,42 @@ void VolumeData::AddEmptyData(int bits,
 }
 
 //volume mask
-void VolumeData::LoadMask(Nrrd* mask)
+bool VolumeData::LoadMask(Nrrd* mask)
 {
 	if (!mask || !m_tex || !m_vr)
-		return;
+		return false;
 
 	//prepare the texture bricks for the mask
+	int curlv = -1;
+	if (isBrxml())
+	{
+		curlv = GetLevel();
+		SetLevel(GetMaskLv());
+	}
+
+	size_t dim = mask->dim;
+	std::vector<int> size(dim);
+	int offset = 0;
+	if (dim > 3) offset = 1; 
+	for (size_t p = 0; p < dim; p++) 
+		size[p] = (int)mask->axis[p + offset].size;
+	int mskw = size[0];
+	int mskh = size[1];
+	int mskd = size[2];
+	int w, h, d;
+	m_tex->GetDimensionLv(GetLevel(), w, h, d);
+	if (w != mskw || h != mskh || d != mskd)
+		return false;
+
+	m_vr->clear_tex_current_mask();
 	m_tex->add_empty_mask();
+	if (!isBrxml()) AddEmptyStroke();
 	m_tex->set_nrrd(mask, m_tex->nmask());
+
+	if (isBrxml())
+		SetLevel(curlv);
+
+	return true;
 }
 
 void VolumeData::DeleteMask()
@@ -774,7 +1102,45 @@ void VolumeData::DeleteMask()
 	if (!m_tex || !m_vr)
 		return;
 
+	int curlv = -1;
+	if (isBrxml())
+	{
+		curlv = GetLevel();
+		SetLevel(GetMaskLv());
+	}
+
 	m_tex->delete_mask();
+
+	if (isBrxml())
+		SetLevel(curlv);
+}
+
+void VolumeData::LoadStroke(Nrrd* stroke)
+{
+	if (!stroke || !m_tex || !m_vr)
+		return;
+
+	int curlv = -1;
+	if (isBrxml())
+	{
+		curlv = GetLevel();
+		SetLevel(GetMaskLv());
+	}
+
+	//prepare the texture bricks for the mask
+	m_tex->add_empty_stroke();
+	m_tex->set_nrrd(stroke, m_tex->nstroke());
+
+	if (isBrxml())
+		SetLevel(curlv);
+}
+
+void VolumeData::DeleteStroke()
+{
+	if (!m_tex || !m_vr)
+		return;
+
+	m_tex->delete_stroke();
 }
 
 void VolumeData::AddEmptyMask()
@@ -782,13 +1148,23 @@ void VolumeData::AddEmptyMask()
 	if (!m_tex || !m_vr)
 		return;
 
+	int curlv = -1;
+	if (isBrxml())
+	{
+		curlv = GetLevel();
+		SetLevel(GetMaskLv());
+	}
+
+	size_t res_x = m_tex->nx();
+	size_t res_y = m_tex->ny();
+	size_t res_z = m_tex->nz();
+
 	//prepare the texture bricks for the mask
 	if (m_tex->add_empty_mask())
 	{
 		//add the nrrd data for mask
 		Nrrd *nrrd_mask = nrrdNew();
-		unsigned long long mem_size = (unsigned long long)m_res_x*
-			(unsigned long long)m_res_y*(unsigned long long)m_res_z;
+		size_t mem_size = res_x*res_y*res_z;
 		uint8 *val8 = new (std::nothrow) uint8[mem_size];
 		if (!val8)
 		{
@@ -798,14 +1174,63 @@ void VolumeData::AddEmptyMask()
 		double spcx, spcy, spcz;
 		m_tex->get_spacings(spcx, spcy, spcz);
 		memset((void*)val8, 0, mem_size*sizeof(uint8));
-		nrrdWrap(nrrd_mask, val8, nrrdTypeUChar, 3, (size_t)m_res_x, (size_t)m_res_y, (size_t)m_res_z);
-		nrrdAxisInfoSet(nrrd_mask, nrrdAxisInfoSize, (size_t)m_res_x, (size_t)m_res_y, (size_t)m_res_z);
+		nrrdWrap(nrrd_mask, val8, nrrdTypeUChar, 3, res_x, res_y, res_z);
+		nrrdAxisInfoSet(nrrd_mask, nrrdAxisInfoSize, res_x, res_y, res_z);
 		nrrdAxisInfoSet(nrrd_mask, nrrdAxisInfoSpacing, spcx, spcy, spcz);
 		nrrdAxisInfoSet(nrrd_mask, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
-		nrrdAxisInfoSet(nrrd_mask, nrrdAxisInfoMax, spcx*m_res_x, spcy*m_res_y, spcz*m_res_z);
+		nrrdAxisInfoSet(nrrd_mask, nrrdAxisInfoMax, spcx*res_x, spcy*res_y, spcz*res_z);
 
 		m_tex->set_nrrd(nrrd_mask, m_tex->nmask());
 	}
+
+	if (!isBrxml())
+		AddEmptyStroke();
+
+	if (isBrxml())
+		SetLevel(curlv);
+}
+
+void VolumeData::AddEmptyStroke()
+{
+	if (!m_tex || !m_vr)
+		return;
+
+	int curlv = -1;
+	if (isBrxml())
+	{
+		curlv = GetLevel();
+		SetLevel(GetMaskLv());
+	}
+
+	size_t res_x = m_tex->nx();
+	size_t res_y = m_tex->ny();
+	size_t res_z = m_tex->nz();
+
+	if (m_tex->add_empty_stroke())
+	{
+		//add the nrrd data for mask
+		Nrrd *nrrd_stroke = nrrdNew();
+		size_t mem_size = res_x*res_y*res_z;
+		uint8 *val8 = new (std::nothrow) uint8[mem_size];
+		if (!val8)
+		{
+			wxMessageBox("Not enough memory. Please save project and restart.");
+			return;
+		}
+		double spcx, spcy, spcz;
+		m_tex->get_spacings(spcx, spcy, spcz);
+		memset((void*)val8, 0, mem_size*sizeof(uint8));
+		nrrdWrap(nrrd_stroke, val8, nrrdTypeUChar, 3, res_x, res_y, res_z);
+		nrrdAxisInfoSet(nrrd_stroke, nrrdAxisInfoSize, res_x, res_y, res_z);
+		nrrdAxisInfoSet(nrrd_stroke, nrrdAxisInfoSpacing, spcx, spcy, spcz);
+		nrrdAxisInfoSet(nrrd_stroke, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
+		nrrdAxisInfoSet(nrrd_stroke, nrrdAxisInfoMax, spcx*res_x, spcy*res_y, spcz*res_z);
+
+		m_tex->set_nrrd(nrrd_stroke, m_tex->nstroke());
+	}
+
+	if (isBrxml())
+		SetLevel(curlv);
 }
 
 //volume label
@@ -814,7 +1239,15 @@ void VolumeData::LoadLabel(Nrrd* label)
 	if (!m_tex || !m_vr)
 		return;
 
-	m_tex->add_empty_label();
+	int nb = 4;
+	if (label->type == nrrdTypeChar)   nb = 1;
+	if (label->type == nrrdTypeUChar)  nb = 1;
+	if (label->type == nrrdTypeShort)  nb = 2;
+	if (label->type == nrrdTypeUShort) nb = 2;
+	if (label->type == nrrdTypeInt)    nb = 4;
+	if (label->type == nrrdTypeUInt)   nb = 4;
+	if (label->type == nrrdTypeFloat)  nb = 4;
+	m_tex->add_empty_label(nb);
 	m_tex->set_nrrd(label, m_tex->nlabel());
 }
 
@@ -883,6 +1316,17 @@ void VolumeData::AddEmptyLabel(int mode)
 	if (!m_tex || !m_vr)
 		return;
 
+	int curlv = -1;
+	if (isBrxml())
+	{
+		curlv = GetLevel();
+		SetLevel(GetMaskLv());
+	}
+
+	size_t res_x = m_tex->nx();
+	size_t res_y = m_tex->ny();
+	size_t res_z = m_tex->nz();
+
 	Nrrd *nrrd_label = 0;
 	unsigned int *val32 = 0;
 	//prepare the texture bricks for the labeling mask
@@ -890,8 +1334,7 @@ void VolumeData::AddEmptyLabel(int mode)
 	{
 		//add the nrrd data for the labeling mask
 		nrrd_label = nrrdNew();
-		unsigned long long mem_size = (unsigned long long)m_res_x*
-			(unsigned long long)m_res_y*(unsigned long long)m_res_z;
+		size_t mem_size = res_x*res_y*res_z;
 		val32 = new (std::nothrow) unsigned int[mem_size];
 		if (!val32)
 		{
@@ -901,11 +1344,11 @@ void VolumeData::AddEmptyLabel(int mode)
 
 		double spcx, spcy, spcz;
 		m_tex->get_spacings(spcx, spcy, spcz);
-		nrrdWrap(nrrd_label, val32, nrrdTypeUInt, 3, (size_t)m_res_x, (size_t)m_res_y, (size_t)m_res_z);
+		nrrdWrap(nrrd_label, val32, nrrdTypeUInt, 3, res_x, res_y, res_z);
 		nrrdAxisInfoSet(nrrd_label, nrrdAxisInfoSpacing, spcx, spcy, spcz);
 		nrrdAxisInfoSet(nrrd_label, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
-		nrrdAxisInfoSet(nrrd_label, nrrdAxisInfoMax, spcx*m_res_x, spcy*m_res_y, spcz*m_res_z);
-		nrrdAxisInfoSet(nrrd_label, nrrdAxisInfoSize, (size_t)m_res_x, (size_t)m_res_y, (size_t)m_res_z);
+		nrrdAxisInfoSet(nrrd_label, nrrdAxisInfoMax, res_x, res_y, res_z);
+		nrrdAxisInfoSet(nrrd_label, nrrdAxisInfoSize, res_x, res_y, res_z);
 
 		m_tex->set_nrrd(nrrd_label, m_tex->nlabel());
 	}
@@ -930,6 +1373,8 @@ void VolumeData::AddEmptyLabel(int mode)
 		break;
 	}
 
+	if (isBrxml())
+		SetLevel(curlv);
 }
 
 bool VolumeData::SearchLabel(unsigned int label)
@@ -957,7 +1402,7 @@ Nrrd* VolumeData::GetVolume(bool ret)
 	if (m_vr && m_tex)
 	{
 		if (ret) m_vr->return_volume();
-		return m_tex->get_nrrd(m_tex->nmask());
+		return m_tex->get_nrrd(0);
 	}
 
 	return 0;
@@ -967,8 +1412,18 @@ Nrrd* VolumeData::GetMask(bool ret)
 {
 	if (m_vr && m_tex && m_tex->nmask()!=-1)
 	{
+		int curlv = -1;
+		if (isBrxml())
+		{
+			curlv = GetLevel();
+			SetLevel(GetMaskLv());
+		}
+
 		if (ret) m_vr->return_mask();
 		return m_tex->get_nrrd(m_tex->nmask());
+
+		if (isBrxml())
+			SetLevel(curlv);
 	}
 
 	return 0;
@@ -978,8 +1433,40 @@ Nrrd* VolumeData::GetLabel(bool ret)
 {
 	if (m_vr && m_tex && m_tex->nlabel() != -1)
 	{
+
+		int curlv = -1;
+		if (isBrxml())
+		{
+			curlv = GetLevel();
+			SetLevel(GetMaskLv());
+		}
+
 		if (ret) m_vr->return_label();
 		return m_tex->get_nrrd(m_tex->nlabel());
+
+		if (isBrxml())
+			SetLevel(curlv);
+	}
+
+	return 0;
+}
+
+Nrrd* VolumeData::GetStroke(bool ret)
+{
+	if (m_vr && m_tex && m_tex->nstroke()!=-1)
+	{
+		int curlv = -1;
+		if (isBrxml())
+		{
+			curlv = GetLevel();
+			SetLevel(GetMaskLv());
+		}
+
+		if (ret) m_vr->return_stroke();
+		return m_tex->get_nrrd(m_tex->nstroke());
+
+		if (isBrxml())
+			SetLevel(curlv);
 	}
 
 	return 0;
@@ -1172,14 +1659,55 @@ double VolumeData::GetTransferedValue(int i, int j, int k)
 	return 0.0;
 }
 
+int VolumeData::GetLabellValue(int i, int j, int k)
+{
+	Nrrd* data = m_tex->get_nrrd(m_tex->nlabel());
+	if (!data) return 0.0;
+
+	int bits = data->type;
+	int64_t nx = (int64_t)(data->axis[0].size);
+	int64_t ny = (int64_t)(data->axis[1].size);
+	int64_t nz = (int64_t)(data->axis[2].size);
+
+	if (i < 0 || i >= nx || j < 0 || j >= ny || k < 0 || k >= nz)
+		return 0.0;
+	uint64_t ii = i, jj = j, kk = k;
+
+	if (!data->data) return 0.0;
+	if (bits == nrrdTypeUChar)
+	{
+		uint64_t index = (nx) * (ny) * (kk)+(nx) * (jj)+(ii);
+		uint8 old_value = ((uint8*)(data->data))[index];
+		return int(old_value);
+	}
+	else if (bits == nrrdTypeUShort)
+	{
+		uint64_t index = (nx) * (ny) * (kk)+(nx) * (jj)+(ii);
+		uint16 old_value = ((uint16*)(data->data))[index];
+		return int(old_value);
+	}
+	else if (bits == nrrdTypeUInt)
+	{
+		uint64_t index = (nx) * (ny) * (kk)+(nx) * (jj)+(ii);
+		uint16 old_value = ((uint32*)(data->data))[index];
+		return int(old_value);
+	}
+
+	return 0.0;
+}
+
+
 //save
-void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bool save_msk, bool save_label)
+void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bool save_msk, bool save_label, VolumeLoader *vl)
 {
 	if (m_vr && m_tex)
 	{
 		Nrrd* data = 0;
 
 		BaseWriter *writer = 0;
+
+		if (isBrxml()) mode = 1;
+
 		switch (mode)
 		{
 		case 0://multi-page tiff
@@ -1200,132 +1728,264 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 		data = m_tex->get_nrrd(0);
 		if (data)
 		{
-			if (bake)
+			if (!isBrxml())
 			{
-				wxProgressDialog *prg_diag = new wxProgressDialog(
-					"FluoRender: Baking volume data...",
-					"Baking volume data. Please wait.",
-					100, 0, wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);
-
-				//process the data
-				int bits = data->type==nrrdTypeUShort?16:8;
-				int nx = int(data->axis[0].size);
-				int ny = int(data->axis[1].size);
-				int nz = int(data->axis[2].size);
-
-				//clipping planes
-				vector<Plane*> *planes = m_vr->get_planes();
-
-				Nrrd* baked_data = nrrdNew();
-				if (bits == 8)
+				if (bake)
 				{
-					unsigned long long mem_size = (unsigned long long)nx*
-						(unsigned long long)ny*(unsigned long long)nz;
-					uint8 *val8 = new (std::nothrow) uint8[mem_size];
-					if (!val8)
+					wxProgressDialog *prg_diag = new wxProgressDialog(
+						"FluoRender: Baking volume data...",
+						"Baking volume data. Please wait.",
+						100, 0, wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);
+
+					//process the data
+					int bits = data->type==nrrdTypeUShort?16:8;
+					int nx = int(data->axis[0].size);
+					int ny = int(data->axis[1].size);
+					int nz = int(data->axis[2].size);
+
+					//clipping planes
+					vector<Plane*> *planes = m_vr->get_planes();
+
+					Nrrd* baked_data = nrrdNew();
+					if (bits == 8)
 					{
-						wxMessageBox("Not enough memory. Please save project and restart.");
-						return;
-					}
-					//transfer function
-					for (int i=0; i<nx; i++)
-					{
-						prg_diag->Update(95*(i+1)/nx);
-						for (int j=0; j<ny; j++)
-							for (int k=0; k<nz; k++)
-							{
-								int index = nx*ny*k + nx*j + i;
-								bool clipped = false;
-								Point p(double(i) / double(nx),
-									double(j) / double(ny),
-									double(k) / double(nz));
-								for (int pi = 0; pi < 6; ++pi)
+						unsigned long long mem_size = (unsigned long long)nx*
+							(unsigned long long)ny*(unsigned long long)nz;
+						uint8 *val8 = new (std::nothrow) uint8[mem_size];
+						if (!val8)
+						{
+							wxMessageBox("Not enough memory. Please save project and restart.");
+							return;
+						}
+						//transfer function
+						for (int i=0; i<nx; i++)
+						{
+							prg_diag->Update(95*(i+1)/nx);
+							for (int j=0; j<ny; j++)
+								for (int k=0; k<nz; k++)
 								{
-									if ((*planes)[pi] &&
-										(*planes)[pi]->eval_point(p) < 0.0)
+									int index = nx*ny*k + nx*j + i;
+									bool clipped = false;
+									Point p(double(i) / double(nx),
+										double(j) / double(ny),
+										double(k) / double(nz));
+									for (int pi = 0; pi < 6; ++pi)
 									{
-										val8[index] = 0;
-										clipped = true;
+										if ((*planes)[pi] &&
+											(*planes)[pi]->eval_point(p) < 0.0)
+										{
+											val8[index] = 0;
+											clipped = true;
+										}
+									}
+									if (!clipped)
+									{
+										double new_value = GetTransferedValue(i, j, k);
+										val8[index] = uint8(new_value*255.0);
 									}
 								}
-								if (!clipped)
-								{
-									double new_value = GetTransferedValue(i, j, k);
-									val8[index] = uint8(new_value*255.0);
-								}
-							}
+						}
+						nrrdWrap(baked_data, val8, nrrdTypeUChar, 3, (size_t)nx, (size_t)ny, (size_t)nz);
 					}
-					nrrdWrap(baked_data, val8, nrrdTypeUChar, 3, (size_t)nx, (size_t)ny, (size_t)nz);
-				}
-				else if (bits == 16)
-				{
-					unsigned long long mem_size = (unsigned long long)nx*
-						(unsigned long long)ny*(unsigned long long)nz;
-					uint16 *val16 = new (std::nothrow) uint16[mem_size];
-					if (!val16)
+					else if (bits == 16)
 					{
-						wxMessageBox("Not enough memory. Please save project and restart.");
-						return;
-					}
-					//transfer function
-					for (int i=0; i<nx; i++)
-					{
-						prg_diag->Update(95*(i+1)/nx);
-						for (int j=0; j<ny; j++)
-							for (int k=0; k<nz; k++)
-							{
-								int index = nx*ny*k + nx*j + i;
-								bool clipped = false;
-								Point p(double(i) / double(nx),
-									double(j) / double(ny),
-									double(k) / double(nz));
-								for (int pi = 0; pi < 6; ++pi)
+						unsigned long long mem_size = (unsigned long long)nx*
+							(unsigned long long)ny*(unsigned long long)nz;
+						uint16 *val16 = new (std::nothrow) uint16[mem_size];
+						if (!val16)
+						{
+							wxMessageBox("Not enough memory. Please save project and restart.");
+							return;
+						}
+						//transfer function
+						for (int i=0; i<nx; i++)
+						{
+							prg_diag->Update(95*(i+1)/nx);
+							for (int j=0; j<ny; j++)
+								for (int k=0; k<nz; k++)
 								{
-									if ((*planes)[pi] &&
-										(*planes)[pi]->eval_point(p) < 0.0)
+									int index = nx*ny*k + nx*j + i;
+									bool clipped = false;
+									Point p(double(i) / double(nx),
+										double(j) / double(ny),
+										double(k) / double(nz));
+									for (int pi = 0; pi < 6; ++pi)
 									{
-										val16[index] = 0;
-										clipped = true;
+										if ((*planes)[pi] &&
+											(*planes)[pi]->eval_point(p) < 0.0)
+										{
+											val16[index] = 0;
+											clipped = true;
+										}
+									}
+									if (!clipped)
+									{
+										double new_value = GetTransferedValue(i, j, k);
+										val16[index] = uint16(new_value*65535.0);
 									}
 								}
-								if (!clipped)
-								{
-									double new_value = GetTransferedValue(i, j, k);
-									val16[index] = uint16(new_value*65535.0);
-								}
-							}
+						}
+						nrrdWrap(baked_data, val16, nrrdTypeUShort, 3, (size_t)nx, (size_t)ny, (size_t)nz);
 					}
-					nrrdWrap(baked_data, val16, nrrdTypeUShort, 3, (size_t)nx, (size_t)ny, (size_t)nz);
+					nrrdAxisInfoSet(baked_data, nrrdAxisInfoSpacing, spcx, spcy, spcz);
+					nrrdAxisInfoSet(baked_data, nrrdAxisInfoMax, spcx*nx, spcy*ny, spcz*nz);
+					nrrdAxisInfoSet(baked_data, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
+					nrrdAxisInfoSet(baked_data, nrrdAxisInfoSize, (size_t)nx, (size_t)ny, (size_t)nz);
+
+					writer->SetData(baked_data);
+					writer->SetSpacings(spcx, spcy, spcz);
+					writer->SetCompression(compress);
+					writer->Save(filename.ToStdWstring(), mode);
+
+					//free memory
+					delete []baked_data->data;
+					nrrdNix(baked_data);
+
+					prg_diag->Update(100);
+					delete prg_diag;
 				}
-				nrrdAxisInfoSet(baked_data, nrrdAxisInfoSpacing, spcx, spcy, spcz);
-				nrrdAxisInfoSet(baked_data, nrrdAxisInfoMax, spcx*nx, spcy*ny, spcz*nz);
-				nrrdAxisInfoSet(baked_data, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
-				nrrdAxisInfoSet(baked_data, nrrdAxisInfoSize, (size_t)nx, (size_t)ny, (size_t)nz);
-
-				writer->SetData(baked_data);
-				writer->SetSpacings(spcx, spcy, spcz);
-				writer->SetCompression(compress);
-				writer->Save(filename.ToStdWstring(), mode);
-
-				//free memory
-				delete []baked_data->data;
-				nrrdNix(baked_data);
-
-				prg_diag->Update(100);
-				delete prg_diag;
+				else
+				{
+					writer->SetData(data);
+					writer->SetSpacings(spcx, spcy, spcz);
+					writer->SetCompression(compress);
+					writer->Save(filename.ToStdWstring(), mode);
+				}
 			}
 			else
 			{
-				writer->SetData(data);
-				writer->SetSpacings(spcx, spcy, spcz);
-				writer->SetCompression(compress);
-				writer->Save(filename.ToStdWstring(), mode);
+				int curlv = -1;
+				curlv = GetLevel();
+				int tarlv = 0;
+				SetLevel(tarlv);
+				GetSpacings(spcx, spcy, spcz);
+				size_t w, h, d;
+				m_tex->get_dimensions(w, h, d);
+
+				TIFWriter *tifwriter = (TIFWriter *)writer;
+				int ndigit = int(log10(double(d))) + 1;
+				
+				auto bricks = m_tex->get_bricks();
+				std::sort(
+					bricks->begin(),
+					bricks->end(),
+					[](TextureBrick *x, TextureBrick *y){ return x->bbox().min().z() < y->bbox().min().z(); }
+				);
+
+				vector<int> bricknum_layer;
+				int count = 0;
+				int minz = (*bricks)[0]->oz();
+				int nz = (*bricks)[0]->nz();
+				bool check = false;
+				for (auto &b : *bricks)
+				{
+					if (minz == b->oz())
+					{
+						if (nz != b->nz())
+							check = true;
+						count++;
+					}
+					else
+					{
+						bricknum_layer.push_back(count);
+						minz = b->oz();
+						nz = b->nz();
+						count = 1;
+					}
+				}
+				bricknum_layer.push_back(count);
+
+				if (!check)
+				{
+					int bid = 0;
+					for (auto layercount : bricknum_layer)
+					{
+						vector<VolumeLoaderData> queues;
+						vector<TextureBrick*> lbs;
+						long long req_mem = 0;
+						for (int i = 0; i < layercount; i++, bid++)
+						{
+							TextureBrick* b = (*bricks)[bid];
+							b->lock_brickdata(true);
+							lbs.push_back(b);
+
+							VolumeLoaderData d;
+							d.brick = b;
+							d.finfo = m_tex->GetFileName(b->getID());
+							d.vd = this;
+							d.mode = 0;
+							queues.push_back(d);
+
+							if (!b->isLoaded())
+								req_mem += (size_t)(b->nx())*(size_t)(b->ny())*(size_t)(b->nz())*(size_t)(b->nb(0));
+						}
+						
+						size_t slicenum = lbs[0]->nz();
+						size_t buffer_size = w*h*slicenum*(size_t)(lbs[0]->nb(0));
+						vl->TryToFreeMemory(req_mem + buffer_size);
+						long long avmem = vl->GetAvailableMemory();
+						bool runVL = true;
+						if (avmem < req_mem + buffer_size)
+						{
+							if (avmem > req_mem)
+								slicenum = (avmem - req_mem) / (w*h*lbs[0]->nb(0));
+							else
+							{
+								slicenum = avmem / (w*h*lbs[0]->nb(0));
+								runVL = false;
+							}
+							if (slicenum == 0) slicenum = 1;
+							buffer_size = w*h*slicenum*(size_t)(lbs[0]->nb(0));
+						}
+
+						if (runVL)
+						{
+							vl->Set(queues);
+							vl->Run();
+							vl->Join();
+						}
+
+						int lnz = lbs[0]->nz();
+						int loz = lbs[0]->oz();
+						for (int s = 0; s < lnz; s += slicenum)
+						{
+							size_t bufd = (s+slicenum <= lnz) ? slicenum : lnz-s;
+
+							Nrrd* datablock = m_tex->getSubData(tarlv, GetMaskHideMode(), &lbs, 0, 0, s+loz, w, h, bufd);
+							tifwriter->SetData(datablock);
+							tifwriter->SetBaseSeqID(s+loz+1); //start from 1
+							tifwriter->SetDigitNum(ndigit);
+							tifwriter->SetSpacings(spcx, spcy, spcz);
+							tifwriter->SetCompression(compress);
+							tifwriter->Save(filename.ToStdWstring(), mode);
+							
+							delete [] datablock->data;
+							nrrdNix(datablock);
+						}
+
+						for (auto &b : lbs)
+							b->lock_brickdata(false);
+					}
+				}
+
+				m_tex->set_sort_bricks();
+				SetLevel(curlv);
 			}
 		}
 		delete writer;
 
+
+		int curlv = -1;
+		if ( isBrxml() )
+		{
+			curlv = GetLevel();
+			SetLevel(GetMaskLv());
+		}
+
+		GetSpacings(spcx, spcy, spcz);
+
 		//save mask
-		if (m_tex->nmask() != -1 && save_msk)
+		if (m_tex->nmask() != -1 && save_msk && GetMaskHideMode() == VOL_MASK_HIDE_NONE)
 		{
 			m_vr->return_mask();
 			data = m_tex->get_nrrd(m_tex->nmask());
@@ -1339,7 +1999,7 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 		}
 
 		//save label
-		if (m_tex->nlabel() != -1 && save_label)
+		if (m_tex->nlabel() != -1 && save_label && GetMaskHideMode() == VOL_MASK_HIDE_NONE)
 		{
 			data = m_tex->get_nrrd(m_tex->nlabel());
 			if (data)
@@ -1351,7 +2011,198 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 			}
 		}
 
-		m_tex_path = filename;
+		if ( isBrxml() )
+			SetLevel(curlv);
+
+		if ( !isBrxml() ) m_tex_path = filename;
+	}
+}
+
+
+void VolumeData::ExportMask(wxString &filename)
+{
+	if (m_vr && m_tex)
+	{
+		Nrrd* data = 0;
+
+		int curlv = -1;
+		if ( isBrxml() )
+		{
+			curlv = GetLevel();
+			SetLevel(GetMaskLv());
+		}
+
+		double spcx, spcy, spcz;
+		GetSpacings(spcx, spcy, spcz);
+
+		//save mask
+		if (m_tex->nmask() != -1)
+		{
+			m_vr->return_mask();
+			data = m_tex->get_nrrd(m_tex->nmask());
+			if (data)
+			{
+				MSKWriter msk_writer;
+				msk_writer.SetData(data);
+				msk_writer.SetSpacings(spcx, spcy, spcz);
+				msk_writer.Save(filename.ToStdWstring(), -1);
+			}
+		}
+
+		if ( isBrxml() )
+			SetLevel(curlv);
+	}
+}
+
+void VolumeData::ImportMask(wxString &filename)
+{
+	MSKReader msk_reader;
+	msk_reader.SetAddExt(false);
+    std::string str = filename.ToStdString();
+	msk_reader.SetFile(str);
+	Nrrd* mask = msk_reader.Convert(0, 0, true);
+	if (mask)
+	{
+		if (!LoadMask(mask))
+		{
+			delete [] mask->data;
+			nrrdNix(mask);
+			wxMessageBox(wxT("Unable to load the mask data.\nMask data must have same dimensions as the volume data."), wxT("Mask Import Error"));
+		}
+	}
+}
+
+void VolumeData::ExportEachSegment(wxString dir, Nrrd *label_nrrd, int mode, bool compress)
+{
+	if (m_vr && m_tex)
+	{
+		wxProgressDialog* prog_diag = new wxProgressDialog(
+			"FluoRender: Export Segments...",
+			"Please wait.",
+			100, 0,
+			wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);
+		int progress = 0;
+
+		Nrrd* main = 0;
+		Nrrd* label = 0;
+		
+		BaseWriter *writer = 0;
+		switch (mode)
+		{
+		case 0://multi-page tiff
+			writer = new TIFWriter();
+			break;
+		case 1://single-page tiff sequence
+			writer = new TIFWriter();
+			break;
+		case 2://nrrd
+			writer = new NRRDWriter();
+			break;
+		}
+
+		double spcx, spcy, spcz;
+		GetSpacings(spcx, spcy, spcz);
+
+		//save data
+		main = m_tex->get_nrrd(0);
+
+		if (label_nrrd) label = label_nrrd;
+		else
+		{
+			m_vr->return_label();
+			label = m_tex->get_nrrd(m_tex->nlabel());
+		}
+
+		if (main && main->data && label && label->data)
+		{
+			size_t voxelnum = (size_t)m_res_x * (size_t)m_res_y * (size_t)m_res_z;
+			size_t data_size = voxelnum;
+			
+			void *origdata = main->data;
+			
+			if (main->type == nrrdTypeUShort || main->type == nrrdTypeShort)
+				data_size *= 2;
+			void *tmpdata = new unsigned char[data_size];
+			memset(tmpdata, 0, data_size);
+			
+			//scan label
+			unsigned int* label_data = (unsigned int*)(label->data);
+			unordered_map <unsigned int, vector<size_t>> segs;
+			int segnum = 0;
+			for (size_t pos = 0; pos < voxelnum; pos++)
+			{
+				if (label_data[pos] > 0)
+				{
+					unsigned int id = label_data[pos];
+					unordered_map <unsigned int, vector<size_t>>::iterator ite = segs.find(id);
+					if (ite != segs.end())
+						ite->second.push_back(pos);
+					else 
+					{
+						vector<size_t> v;
+						v.push_back(pos);
+						segs.insert(pair<unsigned int, vector<size_t>>(id, v));
+						segnum++;
+					}
+				}
+			}
+
+			//save segments
+			main->data = tmpdata;
+			if (!dir.EndsWith(wxFileName::GetPathSeparator())) dir += wxFileName::GetPathSeparator();
+			unordered_map <unsigned int, vector<size_t>>:: const_iterator cite;
+			int segcount = 0;
+			if (main->type == nrrdTypeChar || main->type == nrrdTypeUChar) {
+				unsigned char *src = (unsigned char *)origdata;
+				unsigned char *tar = (unsigned char *)tmpdata;
+				for ( cite = segs.begin(); cite != segs.end(); ++cite )
+				{
+					wxString fname = dir + wxString::Format("%05d", cite->first) + "_" + m_name;
+					size_t segsize = cite->second.size();
+					for (size_t i = 0; i < segsize; i++)
+						tar[cite->second[i]] = src[cite->second[i]];
+					
+					writer->SetData(main);
+					writer->SetSpacings(spcx, spcy, spcz);
+					writer->SetCompression(compress);
+					writer->Save(fname.ToStdWstring(), mode);
+
+					memset(tmpdata, 0, data_size);
+					
+					segcount++;
+					prog_diag->Update(100 * segcount / segnum);
+				}
+			}
+			else if (main->type == nrrdTypeShort || main->type == nrrdTypeUShort) {
+				unsigned short *src = (unsigned short *)origdata;
+				unsigned short *tar = (unsigned short *)tmpdata;
+				for ( cite = segs.begin(); cite != segs.end(); ++cite )
+				{
+					wxString fname = dir + wxString::Format("%05d", cite->first) + "_" + m_name;
+					size_t segsize = cite->second.size();
+					for (size_t i = 0; i < segsize; i++)
+						tar[cite->second[i]] = src[cite->second[i]];
+					
+					writer->SetData(main);
+					writer->SetSpacings(spcx, spcy, spcz);
+					writer->SetCompression(compress);
+					writer->Save(fname.ToStdWstring(), mode);
+
+					memset(tmpdata, 0, data_size);
+					
+					segcount++;
+					prog_diag->Update(100 * segcount / segnum);
+				}
+			}
+
+			main->data = origdata;
+			delete [] tmpdata;
+		}
+
+		delete writer;
+
+		prog_diag->Update(100);
+		delete prog_diag;
 	}
 }
 
@@ -1499,7 +2350,7 @@ int VolumeData::GetMaskMode()
 
 bool VolumeData::isActiveMask()
 {
-	if (m_tex->nmask()==-1) return false;
+	if (m_tex->nmask()==-1 && m_shared_msk_name.IsEmpty()) return false;
 
 	bool mask;
 	switch (m_mask_mode)
@@ -1526,7 +2377,7 @@ bool VolumeData::isActiveMask()
 
 bool VolumeData::isActiveLabel()
 {
-	if (m_tex->nlabel()==-1) return false;
+	if (m_tex->nlabel()==-1 && m_shared_lbl_name.IsEmpty()) return false;
 
 	bool label;
 	switch (m_mask_mode)
@@ -1592,11 +2443,23 @@ void VolumeData::SetMatrices(glm::mat4 &mv_mat,
 }
 
 //draw volume
-void VolumeData::Draw(bool ortho, bool interactive, double zoom, double sampling_frq_fac)
+void VolumeData::Draw(
+	std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf,
+	bool ortho, bool interactive, double zoom, double sampling_frq_fac, VkClearColorValue clearColor, Texture* ext_msk, Texture* ext_lbl)
 {
 	if (m_vr)
 	{
-		m_vr->draw(m_test_wiref, interactive, ortho, zoom, m_stream_mode, sampling_frq_fac);
+		int curlv = -1;
+		if ( isBrxml() && (m_vr->is_mask_active() || m_vr->is_label_active()) )
+		{
+			curlv = GetLevel();
+			SetLevel(GetMaskLv());
+		}
+		
+		m_vr->draw(framebuf, clear_framebuf, m_test_wiref, interactive, ortho, zoom, m_stream_mode, sampling_frq_fac, clearColor, ext_msk, ext_lbl);
+		
+		if ( isBrxml() && (m_vr->is_mask_active() || m_vr->is_label_active()) )
+			SetLevel(curlv);
 	}
 	if (m_draw_bounds)
 		DrawBounds();
@@ -1613,13 +2476,41 @@ void VolumeData::DrawBounds()
 //hr_mode (hidden removal): 0-none; 1-ortho; 2-persp
 void VolumeData::DrawMask(int type, int paint_mode, int hr_mode,
 						  double ini_thresh, double gm_falloff, double scl_falloff, double scl_translate,
-						  double w2d, double bins, bool ortho)
+						  double w2d, double bins, bool ortho, Texture* ext_msk)
 {
 	if (m_vr)
 	{
+		int curlv = -1;
+		if (isBrxml())
+		{
+			curlv = GetLevel();
+			SetLevel(GetMaskLv());
+		}
+		//OutputDebugStringA("DrawMask Enter\n");
 		m_vr->set_2d_mask(m_2d_mask);
 		m_vr->set_2d_weight(m_2d_weight1, m_2d_weight2);
-		m_vr->draw_mask(type, paint_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, scl_translate, w2d, bins, ortho, false);
+		m_vr->draw_mask(type, paint_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, scl_translate, w2d, bins, ortho, false, ext_msk);
+		if (isBrxml())
+			SetLevel(curlv);
+		//OutputDebugStringA("DrawMask Leave\n");
+	}
+}
+
+void VolumeData::DrawMaskThreshold(float th, bool ortho)
+{
+	if (m_vr)
+	{
+		int curlv = -1;
+		if (isBrxml())
+		{
+			curlv = GetLevel();
+			SetLevel(GetMaskLv());
+		}
+
+		m_vr->draw_mask_th(th, ortho);
+
+		if (isBrxml())
+			SetLevel(curlv);
 	}
 }
 
@@ -1627,12 +2518,21 @@ void VolumeData::DrawMaskDSLT(int type, int paint_mode, int hr_mode,
 							  double ini_thresh, double gm_falloff, double scl_falloff, double scl_translate,
 							  double w2d, double bins, int dslt_r, int dslt_q, double dslt_c, bool ortho)
 {
-	if (m_vr)
+	/*if (m_vr)
 	{
+		int curlv = -1;
+		if (isBrxml())
+		{
+			curlv = GetLevel();
+			SetLevel(GetMaskLv());
+		}
 		m_vr->set_2d_mask(m_2d_mask);
 		m_vr->set_2d_weight(m_2d_weight1, m_2d_weight2);
 		m_vr->draw_mask_dslt(type, paint_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, scl_translate, w2d, bins, ortho, false, dslt_r, dslt_q, dslt_c*GetMaxValue());
-	}
+
+		if (isBrxml())
+			SetLevel(curlv);
+	}*/
 }
 
 //draw label (create the label)
@@ -1641,7 +2541,19 @@ void VolumeData::DrawMaskDSLT(int type, int paint_mode, int hr_mode,
 void VolumeData::DrawLabel(int type, int mode, double thresh, double gm_falloff)
 {
 	if (m_vr)
+	{
+		int curlv = -1;
+		if (isBrxml())
+		{
+			curlv = GetLevel();
+			SetLevel(GetMaskLv());
+		}
+
 		m_vr->draw_label(type, mode, thresh, gm_falloff);
+
+		if (isBrxml())
+			SetLevel(curlv);
+	}
 }
 
 //calculation
@@ -1660,7 +2572,7 @@ void VolumeData::Calculate(int type, VolumeData *vd_a, VolumeData *vd_b)
 			int max_val = 255;
 			int bytes = 1;
 			if (nrrd_data->type == nrrdTypeUShort) bytes = 2;
-			int mem_size = (unsigned long long)m_res_x * (unsigned long long)m_res_y * (unsigned long long)m_res_z * bytes;
+			unsigned long long mem_size = (unsigned long long)m_res_x * (unsigned long long)m_res_y * (unsigned long long)m_res_z * bytes;
 			if (nrrd_data->type == nrrdTypeUChar)
 				max_val = *std::max_element(val8nr, val8nr+mem_size);
 			else if (nrrd_data->type == nrrdTypeUShort)
@@ -1671,20 +2583,20 @@ void VolumeData::Calculate(int type, VolumeData *vd_a, VolumeData *vd_b)
 }
 
 //set 2d mask for segmentation
-void VolumeData::Set2dMask(GLuint mask)
+void VolumeData::Set2dMask(std::shared_ptr<vks::VTexture>& mask)
 {
 	m_2d_mask = mask;
 }
 
 //set 2d weight map for segmentation
-void VolumeData::Set2DWeight(GLuint weight1, GLuint weight2)
+void VolumeData::Set2DWeight(std::shared_ptr<vks::VTexture>& weight1, std::shared_ptr<vks::VTexture>& weight2)
 {
 	m_2d_weight1 = weight1;
 	m_2d_weight2 = weight2;
 }
 
 //set 2d depth map for rendering shadows
-void VolumeData::Set2dDmap(GLuint dmap)
+void VolumeData::Set2dDmap(std::shared_ptr<vks::VTexture>& dmap)
 {
 	m_2d_dmap = dmap;
 	if (m_vr)
@@ -2234,12 +3146,31 @@ void VolumeData::SetFog(bool use_fog,
 		m_vr->set_fog(use_fog, fog_intensity, fog_start, fog_end);
 }
 
+int VolumeData::GetLevelBySize(size_t size)
+{
+	if (!m_tex || !m_tex->isBrxml())
+		return 0;
+
+	size_t nx, ny, nz, nb;
+	int lvnum = m_tex->GetLevelNum();
+	int i;
+	for (i = 0; i < lvnum; i++)
+	{
+		nx = ny = nz = nb = 0;
+		m_tex->get_dimensions(nx, ny, nz, i);
+		nb = m_tex->nb(0);
+		if (nx*ny*nz*nb <= size) break; 
+	}
+	return i;
+}
+
 VolumeData* VolumeData::CopyLevel(int lv)
 {
 	if(!m_tex->isBrxml()) return NULL;
 
 	VolumeData* vd = new VolumeData();
 
+	m_tex->set_FrameAndChannel(m_time, m_chan);
 	Nrrd *src_nv = m_tex->loadData(lv);
 	if (!src_nv) return NULL;
 	vd->Load(src_nv, GetName() + wxT("_Copy_Lv") + wxString::Format("%d", lv), wxString(""));
@@ -2354,6 +3285,587 @@ bool VolumeData::isBrxml()
 	return m_tex->isBrxml();
 }
 
+MeshData *VolumeData::ExportMeshMask()
+{
+    MeshData *result = NULL;
+//    
+//#ifdef _WIN32
+//    
+//	if (!m_tex || m_tex->nmask() == -1) return NULL;
+//
+//	int curlv = -1;
+//	if (isBrxml())
+//	{
+//		curlv = GetLevel();
+//		SetLevel(GetMaskLv());
+//	}
+//	
+//	m_vr->return_mask();
+//	
+//	Nrrd *nrrd = m_tex->get_nrrd(m_tex->nmask());
+//	double spcx = 1.0, spcy = 1.0, spcz = 1.0;
+//	GetSpacings(spcx, spcy, spcz);
+//	size_t res_x = m_tex->nx();
+//	size_t res_y = m_tex->ny();
+//	size_t res_z = m_tex->nz();
+//
+//	vtkSmartPointer<vtkImageImport> imageImport = vtkSmartPointer<vtkImageImport>::New();
+//	imageImport->SetDataSpacing(spcx, spcy, spcz);
+//	imageImport->SetDataOrigin(0, 0, 0);
+//	imageImport->SetWholeExtent(0, res_x-1, 0, res_y-1, 0, res_z-1);
+//	imageImport->SetDataExtentToWholeExtent();
+//	imageImport->SetDataScalarTypeToUnsignedChar();
+//	imageImport->SetNumberOfScalarComponents(1);
+//	imageImport->SetImportVoidPointer(nrrd->data);
+//	imageImport->Update();
+//	vtkSmartPointer<vtkImageData> volume = imageImport->GetOutput();
+//
+//	vtkSmartPointer<vtkFlyingEdges3D> surface = vtkSmartPointer<vtkFlyingEdges3D>::New();
+//	surface->SetInputData(imageImport->GetOutput());
+//	surface->ComputeNormalsOn();
+//	surface->SetValue(0, 0.5);
+//	surface->Update();
+///*	vtkSmartPointer<vtkPolyDataNormals> normalGenerator = vtkSmartPointer<vtkPolyDataNormals>::New();
+//	normalGenerator->SetInputData(surface->GetOutput());
+//	normalGenerator->ComputePointNormalsOn();
+//	normalGenerator->ComputeCellNormalsOff();
+//	normalGenerator->SetOutputPointsPrecision(vtkAlgorithm::DesiredOutputPrecision::SINGLE_PRECISION);
+//	normalGenerator->Update();
+//	vtkSmartPointer<vtkPolyData> mesh = normalGenerator->GetOutput();
+//*/	
+//	vtkSmartPointer<vtkPolyData> mesh = surface->GetOutput();
+//
+//	//Convert to MeshData
+//	vtkSmartPointer<vtkPoints> points = mesh->GetPoints();
+//	vtkSmartPointer<vtkCellArray> faces = mesh->GetPolys();
+//	vtkSmartPointer<vtkFloatArray> normals = vtkFloatArray::SafeDownCast(mesh->GetPointData()->GetNormals());
+//	float *raw_normals = normals->GetPointer(0); 
+//	
+//	vtkIdType vnum = points->GetNumberOfPoints();
+//	vtkIdType fnum = faces->GetNumberOfCells();
+//
+//	GLMmodel *model = (GLMmodel*)malloc(sizeof(GLMmodel));
+//	float *verts = (float*)malloc(sizeof(float)*vnum*3);
+//	float *norms = (float*)malloc(sizeof(float)*vnum*3);
+//	GLMtriangle *tris = (GLMtriangle*)malloc(sizeof(GLMtriangle)*fnum);
+//	unsigned int *gtris = (unsigned int*)malloc(sizeof(unsigned int)*fnum);
+//
+//	#pragma omp parallel
+//	{
+//		#pragma omp for
+//		for (int i = 0; i < vnum; i++)
+//		{
+//			double v[3];
+//			points->GetPoint(i, v);
+//			verts[3*i  ] = (float)v[0];
+//			verts[3*i+1] = (float)v[1];
+//			verts[3*i+2] = (float)v[2];
+//			norms[3*i  ] = raw_normals[3*i  ];
+//			norms[3*i+1] = raw_normals[3*i+1];
+//			norms[3*i+2] = raw_normals[3*i+2];
+//		}
+//
+//		#pragma omp for
+//		for (vtkIdType i = 0; i < fnum; i++)
+//		{
+//			vtkIdType numIds;
+//			vtkIdType *pointIds;
+//
+//			faces->GetCell(4*i, numIds, pointIds);
+//
+//			if (numIds != 3)
+//				break;
+//
+//			tris[i].vindices[0] = pointIds[0];
+//			tris[i].nindices[0] = pointIds[0];
+//			tris[i].vindices[1] = pointIds[1];
+//			tris[i].nindices[1] = pointIds[1];
+//			tris[i].vindices[2] = pointIds[2];
+//			tris[i].nindices[2] = pointIds[2];
+//			gtris[i] = i;
+//		}
+//	}
+//
+//	model->pathname    = STRDUP(m_name.ToStdString().c_str());
+//	model->mtllibname    = NULL;
+//	model->numvertices   = vnum;
+//	model->vertices    = verts;
+//	model->numnormals    = fnum;
+//	model->normals     = norms;
+//	model->numtexcoords  = 0;
+//	model->texcoords       = NULL;
+//	model->numfacetnorms = 0;
+//	model->facetnorms    = NULL;
+//	model->numtriangles  = fnum;
+//	model->triangles       = tris;
+//	model->numlines = 0;
+//	model->lines = NULL;
+//	model->nummaterials  = 0;
+//	model->materials       = NULL;
+//	model->numgroups       = 0;
+//	model->groups      = NULL;
+//	model->position[0]   = 0.0;
+//	model->position[1]   = 0.0;
+//	model->position[2]   = 0.0;
+//	model->hastexture = false;
+//	
+//	GLMgroup* group;
+//	group = (GLMgroup*)malloc(sizeof(GLMgroup));
+//	group->name = STRDUP("default");
+//	group->material = 0;
+//	group->numtriangles = fnum;
+//	group->triangles = gtris;
+//	group->next = model->groups;
+//	model->groups = group;
+//	model->numgroups++;
+//
+//	result = new MeshData();
+//	result->Load(model);
+//	wxString newname = m_name + wxT("_MeshMask");
+//	result->SetName(newname);
+//    
+//#endif
+//
+//	if (isBrxml())
+//		SetLevel(curlv);
+    
+    return result;
+}
+
+Nrrd* VolumeData::NrrdScale(Nrrd* src, size_t dst_datasize, bool interpolation)
+{
+	if (!src) return nullptr;
+
+	int bits = 0;
+	int nx, ny, nz;
+	double spcx, spcy, spcz;
+
+	if (src->type == nrrdTypeChar || src->type == nrrdTypeUChar)
+		bits = 1;
+	else if(src->type == nrrdTypeShort || src->type == nrrdTypeUShort)
+		bits = 2;
+
+	size_t dim = src->dim;
+
+	if (dim <= 2)
+		return nullptr;
+
+	std::vector<size_t> ssize(dim);
+	std::vector<double> sspc(dim);
+
+	int offset = 0;
+	if (dim > 3) offset = 1;
+
+	double maxspc = sspc[0];
+	int maxspc_id = 0;
+	for (size_t p = 0; p < dim; p++)
+	{
+		ssize[p] = (int)src->axis[p + offset].size;
+		sspc[p] = src->axis[p + offset].spacing;
+		if (sspc[p] > maxspc)
+		{
+			maxspc = sspc[p];
+			maxspc_id = p;
+		}
+	}
+
+	std::vector<double> sc1(3);
+	for (size_t p = 0; p < 3; p++)
+		sc1[p] = sspc[p] / maxspc;
+	
+	size_t src_datasize = ssize[0] * ssize[1] * ssize[2] * bits;
+
+	if (src_datasize < dst_datasize)
+		return nullptr;
+
+	if (src_datasize * sc1[0] * sc1[1] * sc1[2] > dst_datasize)
+	{
+		double dnx = ssize[0] * sc1[0];
+		double dny = ssize[1] * sc1[1];
+		double dnz = ssize[2] * sc1[2];
+
+		double sc2 = cbrt(dst_datasize / (dnx * dny * dnz * bits));
+
+		nx = (size_t)(dnx * sc2);
+		ny = (size_t)(dny * sc2);
+		nz = (size_t)(dnz * sc2);
+		spcx = spcy = spcz = maxspc / sc2;
+	}
+	else
+	{
+		std::vector<size_t> dsize(3);
+		std::vector<double> dspc(3);
+
+		double sc2 = sqrt(dst_datasize / src_datasize);
+		for (size_t p = 0; p < 3; p++)
+		{
+			if (p != maxspc_id)
+			{
+				dsize[p] = (size_t)(ssize[p] * sc2);
+				dspc[p] = sspc[p] / sc2;
+			}
+		}
+		nx = dsize[0];
+		ny = dsize[1];
+		nz = dsize[2];
+		spcx = dspc[0];
+		spcy = dspc[1];
+		spcz = dspc[2];
+	}
+
+	return NrrdScale(src, nx, ny, nz, interpolation);
+}
+
+Nrrd* VolumeData::NrrdScale(Nrrd* src, size_t nx, size_t ny, size_t nz, bool interpolation)
+{
+	if (!src) return nullptr;
+
+	int bits = 0;
+
+	if (src->type == nrrdTypeChar || src->type == nrrdTypeUChar)
+		bits = 1;
+	else if (src->type == nrrdTypeShort || src->type == nrrdTypeUShort)
+		bits = 2;
+
+	size_t dim = src->dim;
+
+	if (dim <= 2)
+		return nullptr;
+
+	std::vector<size_t> ssize(dim);
+	std::vector<double> sspc(dim);
+
+	int offset = 0;
+	if (dim > 3) offset = 1;
+
+	double maxspc = sspc[0];
+	int maxspc_id = 0;
+	for (size_t p = 0; p < dim; p++)
+	{
+		ssize[p] = (int)src->axis[p + offset].size;
+		sspc[p] = src->axis[p + offset].spacing;
+	}
+
+	double spcx = sspc[0] * ssize[0] / nx;
+	double spcy = sspc[1] * ssize[1] / ny;
+	double spcz = sspc[2] * ssize[2] / nz;
+
+	Nrrd* nv = nrrdNew();
+	if (bits == 1)
+	{
+		unsigned long long mem_size = (unsigned long long)nx *
+			(unsigned long long)ny * (unsigned long long)nz;
+		uint8* val8 = new (std::nothrow) uint8[mem_size];
+		if (!val8)
+		{
+			wxMessageBox("Not enough memory. Please save project and restart.");
+			return nullptr;
+		}
+		memset((void*)val8, 0, sizeof(uint8) * nx * ny * nz);
+		nrrdWrap(nv, val8, nrrdTypeUChar, 3, (size_t)nx, (size_t)ny, (size_t)nz);
+	}
+	else if (bits == 2)
+	{
+		unsigned long long mem_size = (unsigned long long)nx *
+			(unsigned long long)ny * (unsigned long long)nz;
+		uint16* val16 = new (std::nothrow) uint16[mem_size];
+		if (!val16)
+		{
+			wxMessageBox("Not enough memory. Please save project and restart.");
+			return nullptr;
+		}
+		memset((void*)val16, 0, sizeof(uint16) * nx * ny * nz);
+		nrrdWrap(nv, val16, nrrdTypeUShort, 3, (size_t)nx, (size_t)ny, (size_t)nz);
+	}
+	nrrdAxisInfoSet(nv, nrrdAxisInfoSpacing, spcx, spcy, spcz);
+	nrrdAxisInfoSet(nv, nrrdAxisInfoMax, spcx * nx, spcy * ny, spcz * nz);
+	nrrdAxisInfoSet(nv, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
+	nrrdAxisInfoSet(nv, nrrdAxisInfoSize, (size_t)nx, (size_t)ny, (size_t)nz);
+
+	NrrdScaler scaler(src, nv, interpolation);
+
+	scaler.Run();
+
+	return nv;
+}
+
+NrrdScaler::NrrdScaler(Nrrd* src, Nrrd* dst, bool interpolation)
+{
+	m_src = src;
+	m_dst = dst;
+	m_interpolation = interpolation;
+}
+
+NrrdScaler::~NrrdScaler()
+{
+
+}
+
+void NrrdScaler::Run()
+{
+	m_running_nrrd_scale_th = 0;
+
+	size_t dim = m_dst->dim;
+
+	std::vector<size_t> dsize(dim);
+	std::vector<double> dspc(dim);
+
+	int doffset = 0;
+	if (dim > 3) doffset = 1;
+
+	for (size_t p = 0; p < dim; p++)
+		dsize[p] = (int)m_dst->axis[p + doffset].size;
+
+	int nz = dsize[2];
+
+	int thread_num = wxThread::GetCPUCount() - 1;
+	if (thread_num <= 0)
+		thread_num = 1;
+	if (nz / thread_num == 0)
+		thread_num = nz;
+	int interval = nz / thread_num;
+
+	for (int z = 0; z < nz; z += interval)
+	{
+		int zed = (z + interval > nz) ? nz : z + interval;
+		NrrdScaleThread* th = new NrrdScaleThread(this, m_src, m_dst, z, zed, m_interpolation);
+		th->Run();
+	}
+
+	while (1)
+	{
+		{
+			wxCriticalSectionLocker enter(m_pThreadCS);
+			if (m_running_nrrd_scale_th <= 0)
+				break;
+		}
+		wxThread::This()->Sleep(10);
+	}
+	m_running_nrrd_scale_th = 0;
+
+}
+
+NrrdScaleThread::NrrdScaleThread(NrrdScaler* scaler, Nrrd* src, Nrrd* dst, int zst, int zed, bool interpolation)
+{
+	m_scaler = scaler;
+	m_src = src;
+	m_dst = dst;
+	m_zst = zst;
+	m_zed = zed;
+	m_interpolation = interpolation;
+}
+
+NrrdScaleThread::~NrrdScaleThread()
+{
+	if (m_scaler)
+	{
+		wxCriticalSectionLocker enter(m_scaler->m_pThreadCS);
+		m_scaler->m_running_nrrd_scale_th--;
+	}
+}
+
+wxThread::ExitCode NrrdScaleThread::Entry()
+{
+	m_scaler->m_pThreadCS.Enter();
+	m_scaler->m_running_nrrd_scale_th++;
+	m_scaler->m_pThreadCS.Leave();
+
+	int bits = 0;
+
+	if (m_src->type == nrrdTypeChar || m_src->type == nrrdTypeUChar)
+		bits = 1;
+	else if (m_src->type == nrrdTypeShort || m_src->type == nrrdTypeUShort)
+		bits = 2;
+
+	size_t dim = m_src->dim;
+
+	if (dim <= 2)
+		return nullptr;
+
+	std::vector<size_t> ssize(dim);
+	std::vector<double> sspc(dim);
+
+	int offset = 0;
+	if (dim > 3) offset = 1;
+
+	for (size_t p = 0; p < dim; p++)
+	{
+		ssize[p] = (int)m_src->axis[p + offset].size;
+		sspc[p] = m_src->axis[p + offset].spacing;
+	}
+
+	std::vector<size_t> dsize(dim);
+	std::vector<double> dspc(dim);
+
+	int doffset = 0;
+	if (dim > 3) doffset = 1;
+
+	for (size_t p = 0; p < dim; p++)
+	{
+		dsize[p] = (int)m_dst->axis[p + doffset].size;
+		dspc[p] = m_dst->axis[p + doffset].spacing;
+	}
+
+	double scx = (double)ssize[0] / dsize[0];
+	double scy = (double)ssize[1] / dsize[1];
+	double scz = (double)ssize[2] / dsize[2];
+	int nx = dsize[0];
+	int ny = dsize[1];
+	int nz = dsize[2];
+	if (m_interpolation)
+	{
+		if (bits == 1)
+		{
+			uint8* data = (uint8*)m_src->data;
+			uint8* dst_data = (uint8*)m_dst->data;
+			for (int z = m_zst; z < m_zed; z++)
+			{
+				for (int y = 0; y < ny; y++)
+				{
+					for (int x = 0; x < nx; x++)
+					{
+						double dx = x * scx;
+						double dy = y * scy;
+						double dz = z * scz;
+
+						size_t ix = (size_t)dx;
+						size_t iy = (size_t)dy;
+						size_t iz = (size_t)dz;
+
+						dx = dx - ix;
+						dy = dy - iy;
+						dz = dz - iz;
+
+						size_t id = iz * ssize[1] * ssize[0] + iy * ssize[0] + ix;
+
+						float c000 = data[id];
+						float c100 = data[id + 1];
+						float c010 = data[id + ssize[0]];
+						float c110 = data[id + ssize[0] + 1];
+						float c001 = data[id + ssize[1] * ssize[0]];
+						float c101 = data[id + ssize[1] * ssize[0] + 1];
+						float c011 = data[id + ssize[1] * ssize[0] + ssize[0]];
+						float c111 = data[id + ssize[1] * ssize[0] + ssize[0] + 1];
+
+						float c00 = c000 * (1 - dx) + c100 * dx;
+						float c01 = c001 * (1 - dx) + c101 * dx;
+						float c10 = c010 * (1 - dx) + c110 * dx;
+						float c11 = c011 * (1 - dx) + c111 * dx;
+
+						float c0 = c00 * (1 - dy) + c10 * dy;
+						float c1 = c01 * (1 - dy) + c11 * dy;
+
+						float c = c0 * (1 - dz) + c1 * dz;
+
+						dst_data[z * ny * nx + y * nx + x] = (uint8)c;
+					}
+				}
+			}
+		}
+		else if (bits == 2)
+		{
+			uint16* data = (uint16*)m_src->data;
+			uint16* dst_data = (uint16*)m_dst->data;
+			for (int z = m_zst; z < m_zed; z++)
+			{
+				for (int y = 0; y < ny; y++)
+				{
+					for (int x = 0; x < nx; x++)
+					{
+						double dx = x * scx;
+						double dy = y * scy;
+						double dz = z * scz;
+
+						size_t ix = (size_t)dx;
+						size_t iy = (size_t)dy;
+						size_t iz = (size_t)dz;
+
+						dx = dx - ix;
+						dy = dy - iy;
+						dz = dz - iz;
+
+						size_t id = iz * ssize[1] * ssize[0] + iy * ssize[0] + ix;
+
+						float c000 = data[id];
+						float c100 = data[id + 1];
+						float c010 = data[id + ssize[0]];
+						float c110 = data[id + ssize[0] + 1];
+						float c001 = data[id + ssize[1] * ssize[0]];
+						float c101 = data[id + ssize[1] * ssize[0] + 1];
+						float c011 = data[id + ssize[1] * ssize[0] + ssize[0]];
+						float c111 = data[id + ssize[1] * ssize[0] + ssize[0] + 1];
+
+						float c00 = c000 * (1 - dx) + c100 * dx;
+						float c01 = c001 * (1 - dx) + c101 * dx;
+						float c10 = c010 * (1 - dx) + c110 * dx;
+						float c11 = c011 * (1 - dx) + c111 * dx;
+
+						float c0 = c00 * (1 - dy) + c10 * dy;
+						float c1 = c01 * (1 - dy) + c11 * dy;
+
+						float c = c0 * (1 - dz) + c1 * dz;
+
+						dst_data[z * ny * nx + y * nx + x] = (uint16)c;
+					}
+				}
+			}
+		}
+	}
+	else {
+		if (bits == 1)
+		{
+			uint8* data = (uint8*)m_src->data;
+			uint8* dst_data = (uint8*)m_dst->data;
+			for (int z = m_zst; z < m_zed; z++)
+			{
+				for (int y = 0; y < ny; y++)
+				{
+					for (int x = 0; x < nx; x++)
+					{
+						double dx = x * scx;
+						double dy = y * scy;
+						double dz = z * scz;
+
+						size_t ix = (size_t)round(dx);
+						size_t iy = (size_t)round(dy);
+						size_t iz = (size_t)round(dz);
+
+						size_t id = iz * ssize[1] * ssize[0] + iy * ssize[0] + ix;
+
+						dst_data[z * ny * nx + y * nx + x] = (uint8)data[id];
+					}
+				}
+			}
+		}
+		else if (bits == 2)
+		{
+			uint16* data = (uint16*)m_src->data;
+			uint16* dst_data = (uint16*)m_dst->data;
+			for (int z = m_zst; z < m_zed; z++)
+			{
+				for (int y = 0; y < ny; y++)
+				{
+					for (int x = 0; x < nx; x++)
+					{
+						double dx = x * scx;
+						double dy = y * scy;
+						double dz = z * scz;
+
+						size_t ix = (size_t)round(dx);
+						size_t iy = (size_t)round(dy);
+						size_t iz = (size_t)round(dz);
+
+						size_t id = iz * ssize[1] * ssize[0] + iy * ssize[0] + ix;
+
+						dst_data[z * ny * nx + y * nx + x] = (uint16)data[id];
+					}
+				}
+			}
+		}
+	}
+}
+
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 MeshData::MeshData() :
 m_data(0),
@@ -2396,8 +3908,11 @@ m_data(0),
 	m_swc = false;
 	m_r_scale = 1.0;
 	m_def_r = 0.25;
-	m_subdiv = 1;
+	m_subdiv = 0;
 	m_swc_reader = NULL;
+	m_clip_dist_x = 1;
+	m_clip_dist_y = 1;
+	m_clip_dist_z = 1;
 }
 
 MeshData::~MeshData()
@@ -2453,11 +3968,11 @@ int MeshData::Load(GLMmodel* mesh)
 	m_data->materials[0].emmissive[1] = 0.0;
 	m_data->materials[0].emmissive[2] = 0.0;
 	m_data->materials[0].emmissive[3] = 0.0;
-	m_data->materials[0].havetexture = GL_FALSE;
+	m_data->materials[0].havetexture = false;
 	m_data->materials[0].textureID = 0;
 
 	//bounds
-	GLfloat fbounds[6];
+	float fbounds[6];
 	glmBoundingBox(m_data, fbounds);
 	BBox bounds;
 	Point pmin(fbounds[0], fbounds[2], fbounds[4]);
@@ -2547,11 +4062,11 @@ int MeshData::Load(wxString &filename)
 	m_data->materials[0].emmissive[1] = 0.0;
 	m_data->materials[0].emmissive[2] = 0.0;
 	m_data->materials[0].emmissive[3] = 0.0;
-	m_data->materials[0].havetexture = GL_FALSE;
+	m_data->materials[0].havetexture = false;
 	m_data->materials[0].textureID = 0;
 
 	//bounds
-	GLfloat fbounds[6];
+	float fbounds[6];
 	glmBoundingBox(m_data, fbounds);
 	BBox bounds;
 	Point pmin(fbounds[0], fbounds[2], fbounds[4]);
@@ -2587,29 +4102,29 @@ MeshData* MeshData::DeepCopy(MeshData &copy, bool use_default_settings, DataMana
 	model->vertices =  NULL;
 	if (model->numvertices)
 	{
-		model->vertices = (GLfloat*)malloc(sizeof(GLfloat) * 3 * (model->numvertices + 1));
-		memcpy(model->vertices, mi->vertices, sizeof(GLfloat) * 3 * (model->numvertices + 1));
+		model->vertices = (float*)malloc(sizeof(float) * 3 * (model->numvertices + 1));
+		memcpy(model->vertices, mi->vertices, sizeof(float) * 3 * (model->numvertices + 1));
 	}
 	model->numnormals = mi->numnormals;
 	model->normals = NULL;
 	if (model->numnormals)
 	{
-		model->normals = (GLfloat*)malloc(sizeof(GLfloat) * 3 * (model->numnormals + 1));
-		memcpy(model->normals, mi->normals, sizeof(GLfloat) * 3 * (model->numnormals + 1));
+		model->normals = (float*)malloc(sizeof(float) * 3 * (model->numnormals + 1));
+		memcpy(model->normals, mi->normals, sizeof(float) * 3 * (model->numnormals + 1));
 	}
 	model->numtexcoords = mi->numtexcoords;
 	model->texcoords = NULL;
 	if (model->numtexcoords)
 	{
-		model->texcoords = (GLfloat*)malloc(sizeof(GLfloat) * 2 * (model->numtexcoords + 1));
-		memcpy(model->texcoords, mi->texcoords, sizeof(GLfloat) * 2 * (model->numtexcoords + 1));
+		model->texcoords = (float*)malloc(sizeof(float) * 2 * (model->numtexcoords + 1));
+		memcpy(model->texcoords, mi->texcoords, sizeof(float) * 2 * (model->numtexcoords + 1));
 	}
 	model->numfacetnorms = mi->numfacetnorms;
 	model->facetnorms = NULL;
 	if (model->numfacetnorms)
 	{
-		model->facetnorms = (GLfloat*)malloc(sizeof(GLfloat) * 3 * (model->numfacetnorms + 1));
-		memcpy(model->facetnorms, mi->facetnorms, sizeof(GLfloat) * 3 * (model->numfacetnorms + 1));
+		model->facetnorms = (float*)malloc(sizeof(float) * 3 * (model->numfacetnorms + 1));
+		memcpy(model->facetnorms, mi->facetnorms, sizeof(float) * 3 * (model->numfacetnorms + 1));
 	}
 	model->numtriangles = mi->numtriangles;
 	model->triangles = NULL;
@@ -2668,8 +4183,8 @@ MeshData* MeshData::DeepCopy(MeshData &copy, bool use_default_settings, DataMana
 		og->next = NULL;
 		if (group->numtriangles)
 		{
-			og->triangles = (GLuint*)malloc(sizeof(GLuint) * group->numtriangles);
-			memcpy(og->triangles, group->triangles, sizeof(GLuint) * group->numtriangles);
+			og->triangles = (unsigned int*)malloc(sizeof(unsigned int) * group->numtriangles);
+			memcpy(og->triangles, group->triangles, sizeof(unsigned int) * group->numtriangles);
 		}
 		if (!model->groups) 
 		{
@@ -2717,11 +4232,11 @@ MeshData* MeshData::DeepCopy(MeshData &copy, bool use_default_settings, DataMana
 		md->m_data->materials[0].emmissive[1] = 0.0;
 		md->m_data->materials[0].emmissive[2] = 0.0;
 		md->m_data->materials[0].emmissive[3] = 0.0;
-		md->m_data->materials[0].havetexture = GL_FALSE;
+		md->m_data->materials[0].havetexture = false;
 		md->m_data->materials[0].textureID = 0;
 
 		//bounds
-		GLfloat fbounds[6];
+		float fbounds[6];
 		glmBoundingBox(md->m_data, fbounds);
 		BBox bounds;
 		Point pmin(fbounds[0], fbounds[2], fbounds[4]);
@@ -2770,12 +4285,18 @@ MeshData* MeshData::DeepCopy(MeshData &copy, bool use_default_settings, DataMana
 		md->m_sync_g = copy.m_sync_g;
 		md->m_sync_b = copy.m_sync_b;
 	}
+
+	md->m_clip_dist_x = copy.m_clip_dist_x;
+	md->m_clip_dist_y = copy.m_clip_dist_y;
+	md->m_clip_dist_z = copy.m_clip_dist_z;
 	
 	md->m_mr = new FLIVR::MeshRenderer(md->m_data);
 	md->m_mr->set_alpha(copy.m_mr->get_alpha());
 	md->m_mr->set_depth_peel(copy.m_mr->get_depth_peel());
 	md->m_mr->set_lighting(copy.m_mr->get_lighting());
 	md->m_mr->set_limit(copy.m_mr->get_limit());
+	md->m_mr->set_planes(copy.m_mr->get_planes());
+	md->m_mr->set_bounds(md->GetBounds());
 	
 	return md;
 }
@@ -2792,6 +4313,21 @@ void MeshData::Save(wxString& filename)
 		delete []str;
 		m_data_path = filename;
 	}
+}
+
+//clip distance
+void MeshData::SetClipDistance(int distx, int disty, int distz)
+{
+	m_clip_dist_x = distx;
+	m_clip_dist_y = disty;
+	m_clip_dist_z = distz;
+}
+
+void MeshData::GetClipDistance(int &distx, int &disty, int &distz)
+{
+	distx = m_clip_dist_x;
+	disty = m_clip_dist_y;
+	distz = m_clip_dist_z;
 }
 
 bool MeshData::UpdateModelSWC()
@@ -2839,28 +4375,48 @@ bool MeshData::UpdateModelSWC()
 	m_data->materials[0].emmissive[1] = 0.0;
 	m_data->materials[0].emmissive[2] = 0.0;
 	m_data->materials[0].emmissive[3] = 0.0;
-	m_data->materials[0].havetexture = GL_FALSE;
+	m_data->materials[0].havetexture = false;
 	m_data->materials[0].textureID = 0;
 
 	//bounds
-	GLfloat fbounds[6];
+	float fbounds[6];
 	glmBoundingBox(m_data, fbounds);
 	BBox bounds;
 	Point pmin(fbounds[0], fbounds[2], fbounds[4]);
 	Point pmax(fbounds[1], fbounds[3], fbounds[5]);
 	bounds.extend(pmin);
 	bounds.extend(pmax);
-	m_bounds = bounds;
+	m_bounds.extend(bounds);
 	m_center = Point((m_bounds.min().x()+m_bounds.max().x())*0.5,
 		(m_bounds.min().y()+m_bounds.max().y())*0.5,
 		(m_bounds.min().z()+m_bounds.max().z())*0.5);
 
+
+	MeshRenderer *tmp = 0;
 	if (m_mr)
-		delete m_mr;
+		tmp = m_mr;
 	m_mr = new FLIVR::MeshRenderer(m_data);
+
 	m_mr->set_alpha(m_mat_alpha);
+	m_mr->set_bounds(m_bounds);
+	if (tmp)
+	{
+		m_mr->set_planes(tmp->get_planes());
+		m_mr->set_depth_peel(tmp->get_depth_peel());
+		m_mr->set_lighting(tmp->get_lighting());
+		m_mr->set_limit(tmp->get_limit());
+		delete tmp;
+	}
 
 	return true;
+}
+
+void MeshData::SetBounds(BBox b)
+{
+	m_bounds = b;
+	m_center = Point((m_bounds.min().x()+m_bounds.max().x())*0.5,
+					 (m_bounds.min().y()+m_bounds.max().y())*0.5,
+					 (m_bounds.min().z()+m_bounds.max().z())*0.5);
 }
 
 //MR
@@ -2897,33 +4453,32 @@ void MeshData::SetMatrices(glm::mat4 &mv_mat, glm::mat4 &proj_mat)
 	}
 }
 
-void MeshData::Draw(int peel)
+void MeshData::Draw(const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf, int peel)
 {
 	if (!m_mr)
 		return;
 
-	glDisable(GL_CULL_FACE);
 	m_mr->set_depth_peel(peel);
-	m_mr->draw();
+	m_mr->set_bounds(m_bounds);
+	m_mr->draw(framebuf, clear_framebuf);
 	if (m_draw_bounds)
-		DrawBounds();
-	glEnable(GL_CULL_FACE);
+		DrawBounds(framebuf, false);
 }
 
-void MeshData::DrawBounds()
+void MeshData::DrawBounds(const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf)
 {
 	if (!m_mr)
 		return;
 
-	m_mr->draw_wireframe();
+	m_mr->draw_wireframe(framebuf, clear_framebuf);
 }
 
-void MeshData::DrawInt(unsigned int name)
+void MeshData::DrawInt(unsigned int name, const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf, VkRect2D scissor)
 {
 	if (!m_mr)
 		return;
 
-	m_mr->draw_integer(name);
+	m_mr->draw_integer(name, framebuf, clear_framebuf, scissor);
 }
 
 //lighting
@@ -3253,6 +4808,21 @@ int MeshData::GetLimitNumber()
 	return m_limit;
 }
 
+void MeshData::RecalcBounds()
+{
+	float fbounds[6];
+	glmBoundingBox(m_data, fbounds);
+	BBox bounds;
+	Point pmin(fbounds[0], fbounds[2], fbounds[4]);
+	Point pmax(fbounds[1], fbounds[3], fbounds[5]);
+	bounds.extend(pmin);
+	bounds.extend(pmax);
+	m_bounds = bounds;
+	m_center = Point((m_bounds.min().x() + m_bounds.max().x()) * 0.5,
+		(m_bounds.min().y() + m_bounds.max().y()) * 0.5,
+		(m_bounds.min().z() + m_bounds.max().z()) * 0.5);
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 AText::AText()
 {
@@ -3304,6 +4874,7 @@ Annotations::Annotations()
 	m_vd = 0;
 	m_disp = true;
 	m_memo_ro = false;
+	m_label = NULL;
 }
 
 Annotations::~Annotations()
@@ -3393,6 +4964,11 @@ void Annotations::Clear()
 			delete atext;
 	}
 	m_alist.clear();
+
+	if (m_label) {
+		delete [] m_label->data;
+		nrrdNix(m_label);
+	}
 }
 
 //memo
@@ -3551,6 +5127,19 @@ void Annotations::Save(wxString &filename)
 	}
 
 	m_data_path = filename;
+
+	wxString labelpath = filename.Mid(0, filename.find_last_of(wxT('.'))) + ".lbl";
+
+	if (m_label && m_vd)
+	{
+		double spcx = 1.0, spcy = 1.0, spcz = 1.0; 
+		m_vd->GetSpacings(spcx, spcy, spcz);
+		NRRDWriter writer;
+		writer.SetData(m_label);
+		writer.SetSpacings(spcx, spcy, spcz);
+		writer.SetCompression(true);
+		writer.Save(labelpath.ToStdWstring(), 0);
+	}
 }
 
 wxString Annotations::GetInfoMeaning()
@@ -3702,7 +5291,7 @@ void RulerBalloon::SetAnnotationsFromDatabase(vector<AnnotationDB> ann, Point ne
 		curl_multi_remove_handle(_g_curlm, m_curl[i]);
 
 		if (m_curl[i] == NULL) {
-			cerr << "curl_easy_init() failed" << endl;
+			//cerr << "curl_easy_init() failed" << endl;
 			return;
 		}
 		curl_easy_reset(m_curl[i]);
@@ -3782,69 +5371,6 @@ wxArrayString RulerBalloon::GetAnnotations()
     }
 */    
     return annotations;
-}
-
-void RulerBalloon::DrawBalloon(int nx, int ny, Point orig)
-{
-	m_annotations.Clear();
-
-	int stline = 0;
-	for(int a = 0; a < m_bufs.size(); a++)
-	{
-		stringstream ss(m_bufs[a]);
-		string temp, elem;
-		int i = 0;
-		while (getline(ss, temp))
-		{
-			std::stringstream ls(temp);
-			int j = stline;
-			while (getline(ls, elem, '\t'))
-			{
-				if(i == 0) m_annotations.Add(wxString(elem) + wxT(": "));
-				else if (j < m_annotations.size()) m_annotations.Item(j) += wxT(" ") + elem;
-				j++;
-			}
-			i++;
-		}
-		stline = m_annotations.size();
-	}
-
-	double xpx = 2.0/nx;
-	double ypx = 2.0/ny;
-	double asp = (double)nx / (double)ny;;
-	double margin_x = 5;
-	double margin_top = 3;
-	double margin_bottom = 3;
-	double line_spc = 2;
-	int lnum = m_annotations.size();
-	const BitmapFontType ftype = BITMAP_FONT_TYPE_HELVETICA_12;
-
-	if(lnum <= 0) return;
-
-	double maxlw, lw, lh;
-
-	lh = fontHeight(ftype);
-	margin_bottom += lh/2;//�e�L�X�g��Y���W��baseline�Ɉ��v���邽��
-	maxlw = 0.0;
-
-	for(int i = 0; i < lnum; i++)
-	{
-		lw = renderTextLen(ftype, m_annotations.Item(i).To8BitData().data());
-		if(lw > maxlw) maxlw = lw;
-		renderText(orig.x()+1.0+margin_x*xpx, 1.05+(lh*(i+1)+line_spc*i+margin_top)*ypx-orig.y(),
-				ftype, m_annotations.Item(i).To8BitData().data());
-	}
-
-	double bw = (margin_x*2 + maxlw)*xpx;
-	double bh = (margin_top + margin_bottom + lh*lnum + line_spc*(lnum-1))*ypx;
-
-	glBegin(GL_LINE_LOOP);
-	glVertex2d(orig.x()+1.0, 1.0-orig.y());
-	glVertex2d(orig.x()+1.0+0.03/asp, 1.05-orig.y());
-	glVertex2d(orig.x()+1.0+bw, 1.05-orig.y());
-	glVertex2d(orig.x()+1.0+bw, 1.05+bh-orig.y());
-	glVertex2d(orig.x()+1.0, 1.05+bh-orig.y());
-	glEnd();
 }
 
 int Ruler::m_num = 0;
@@ -4024,66 +5550,6 @@ wxArrayString Ruler::GetAnnotations(int index, vector<AnnotationDB> annotationdb
     
     m_balloons[index].SetAnnotationsFromDatabase(annotationdb, m_ruler[index], spcx, spcy, spcz);
     return m_balloons[index].GetAnnotations();
-}
-
-void Ruler::Draw(bool persp, int nx, int ny, glm::mat4 mv_mat, glm::mat4 proj_mat, vector<AnnotationDB> annotationdb, double spcx, double spcy, double spcz)
-{
-	double asp = (double)nx / (double)ny;
-	Transform mv;
-	Transform p;
-	mv.set(glm::value_ptr(mv_mat));
-	p.set(glm::value_ptr(proj_mat));
-
-	beginRenderText(2, 2, true);//glOrtho�ō��オ(0,0)�E����(2,2)�ɂȂ�
-	for (int i=0; i<(int)m_ruler.size(); i++)
-	{
-		Point p1, p2;
-		p2 = m_ruler[i];
-		//if (m_tform)
-		//	p2 = m_tform->transform(p2);
-		p2 = mv.transform(p2);
-		p2 = p.transform(p2);
-		if ((persp && (p2.z()<=0.0 || p2.z()>=1.0)) ||
-			(!persp && (p2.z()>=0.0 || p2.z()<=-1.0)))
-			continue;
-		glBegin(GL_LINE_LOOP);
-			glVertex2d(p2.x()+1.0-0.01/asp, 0.99-p2.y());
-			glVertex2d(p2.x()+1.0+0.01/asp, 0.99-p2.y());
-			glVertex2d(p2.x()+1.0+0.01/asp, 1.01-p2.y());
-			glVertex2d(p2.x()+1.0-0.01/asp, 1.01-p2.y());
-		glEnd();
-		if(m_balloons[i].GetVisibility())
-		{
-			m_balloons[i].SetAnnotationsFromDatabase(annotationdb, Point(m_ruler[i]), spcx, spcy, spcz);
-			m_balloons[i].DrawBalloon(nx, ny, p2);
-		}
-		if (i+1 == m_ruler.size())
-			renderText(p2.x()+1.02, 1.01-p2.y(),
-			BITMAP_FONT_TYPE_HELVETICA_12,
-			m_name_disp.To8BitData().data());
-		if (m_ruler_type==2 && i==0)
-		{
-			glBegin(GL_POINTS);
-				glVertex2d(p2.x()+1.0, 1.0-p2.y());
-			glEnd();
-		}
-		if (i > 0)
-		{
-			p1 = m_ruler[i-1];
-			if (m_tform)
-				p1 = m_tform->transform(p1);
-			p1 = mv.transform(p1);
-			p1 = p.transform(p1);
-			if ((persp && (p1.z()<=0.0 || p1.z()>=1.0)) ||
-				(!persp && (p1.z()>=0.0 || p1.z()<=-1.0)))
-				continue;
-			glBegin(GL_LINES);
-				glVertex2d(p1.x()+1.0, 1.0-p1.y());
-				glVertex2d(p2.x()+1.0, 1.0-p2.y());
-			glEnd();
-		}
-	}
-	endRenderText();
 }
 
 wxString Ruler::GetDelInfoValues(wxString del)
@@ -4794,6 +6260,17 @@ void DataGroup::RandomizeColor()
 	}
 }
 
+void DataGroup::SetMaskHideMode(int mode)
+{
+    for (int i=0; i<GetVolumeNum(); i++)
+    {
+        VolumeData* vd = GetVolumeData(i);
+        if (vd)
+            vd->SetMaskHideMode(mode);
+    }
+}
+
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 int MeshGroup::m_num = 0;
 MeshGroup::MeshGroup()
@@ -5057,6 +6534,7 @@ wxString DataManager::SearchProjectPath(wxString &filename)
 		search_str.Prepend(pathname[i]);
 		if (pathname[i]=='\\' || pathname[i]=='/')
 		{
+            search_str[0] = GETSLASH();
 			wxString name_temp = m_prj_path + search_str;
 			if (wxFileExists(name_temp))
 				return name_temp;
@@ -5102,7 +6580,7 @@ bool DataManager::DownloadToCurrentDir(wxString &filename)
 	return true;
 }
 
-int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_num)
+int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_num, size_t datasize)
 {
 	wxString pathname = filename;
 	bool isURL = false;
@@ -5192,6 +6670,10 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 			reader = new PVXMLReader();
 		else if (type == LOAD_TYPE_BRKXML)
 			reader = new BRKXMLReader();
+		else if (type == LOAD_TYPE_H5J)
+			reader = new H5JReader();
+		else if (type == LOAD_TYPE_V3DPBD)
+			reader = new V3DPBDReader();
 
 		m_reader_list.push_back(reader);
 		wstring str_w = pathname.ToStdWstring();
@@ -5227,14 +6709,14 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 		}
 	}
 
-	//align data for compression if vtc is not supported
-	if (!GLEW_NV_texture_compression_vtc && m_compression)
-	{
-		reader->SetResize(1);
-		reader->SetAlignment(4);
-	}
+	if (!m_latest_vols.empty())
+		m_latest_vols.clear();
 
 	int chan = reader->GetChanNum();
+	size_t voxnum = reader->GetXSize() * reader->GetYSize() * reader->GetSliceNum();
+	size_t ch_datasize = 0;
+	size_t bytes = 0;
+
 	for (i=(ch_num>=0?ch_num:0);
 		i<(ch_num>=0?ch_num+1:chan); i++)
 	{
@@ -5244,17 +6726,53 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 			if (m_vd_list[j] && m_vd_list[j]->GetReader() == reader && !m_vd_list[j]->GetDup() &&
 				m_vd_list[j]->GetCurChannel() == i)
 				found_vd = m_vd_list[j];
-		if (found_vd)
+		/*if (found_vd)
 		{
 			vd = VolumeData::DeepCopy(*found_vd, true, this);
 			AddVolumeData(vd);
 			result++;
 		}
-		else
+		else*/
 		{
 			VolumeData *vd = new VolumeData();
 			vd->SetSkipBrick(m_skip_brick);
 			Nrrd* data = reader->Convert(t_num>=0?t_num:reader->GetCurTime(), i, true);
+
+			if (datasize > 0)
+			{
+				if (ch_datasize == 0)
+				{
+					switch (data->type)
+					{
+					case nrrdTypeUChar:
+					case nrrdTypeChar:
+						bytes = 1;
+						break;
+					case nrrdTypeUShort:
+					case nrrdTypeShort:
+						bytes = 2;
+						break;
+					default:
+						bytes = 0;
+					}
+					if (ch_num >= 0)
+						ch_datasize = (datasize * bytes) / (3ULL + bytes);
+					else
+						ch_datasize = (datasize * bytes) / (3ULL + bytes * chan);
+				}
+				if (ch_datasize > 0 && bytes > 0 && ch_datasize < voxnum * bytes)
+				{
+					Nrrd* tmp;
+					tmp = VolumeData::NrrdScale(data, ch_datasize);
+					if (tmp)
+					{
+						delete[] data->data;
+						nrrdNix(data);
+						data = tmp;
+					}
+				}
+			}
+
 			if (!data)
 				continue;
 
@@ -5323,6 +6841,16 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 			AddVolumeData(vd);
 
 			SetVolumeDefault(vd);
+			if (type == LOAD_TYPE_TIFF)
+			{
+				double minval, maxval, vxmax;
+				((TIFReader*)reader)->GetDisplayRange(i, minval, maxval);
+				vxmax = vd->GetMaxValue();
+				if (minval >= 0)
+					vd->SetLeftThresh(minval/vxmax);
+				if (maxval >= 0)
+					vd->SetOffset(maxval/vxmax);
+			}
 
 			//get excitation wavelength
 			double wavelength = reader->GetExcitationWavelength(i);
@@ -5355,6 +6883,8 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 						vd->SetColor(white);
 				}
 			}
+			
+			m_latest_vols.push_back(vd);
 		}
 
 	}
@@ -5483,6 +7013,10 @@ void DataManager::ReplaceVolumeData(int index, VolumeData *vd)
 	VolumeData* data = m_vd_list[index];
 	if (data)
 	{
+		auto p = find(m_latest_vols.begin(), m_latest_vols.end(), data);
+		if (p != m_latest_vols.end())
+			m_latest_vols.erase(p);
+
 		delete data;
 		data = 0;
 	}
@@ -5497,6 +7031,10 @@ void DataManager::RemoveVolumeData(int index)
 	VolumeData* data = m_vd_list[index];
 	if (data)
 	{
+		auto p = find(m_latest_vols.begin(), m_latest_vols.end(), data);
+		if (p != m_latest_vols.end())
+			m_latest_vols.erase(p);
+
 		m_vd_list.erase(m_vd_list.begin()+index);
 		delete data;
 		data = 0;
@@ -5581,12 +7119,39 @@ void DataManager::AddVolumeData(VolumeData* vd)
 		if (m_vd_list.size() > 0)
 		{
 			double spcx, spcy, spcz;
-			m_vd_list[0]->GetBaseSpacings(spcx, spcy, spcz);
-			vd->SetBaseSpacings(spcx, spcy, spcz);
+			m_vd_list[0]->GetSpacings(spcx, spcy, spcz, 0);
+			vd->SetSpacings(spcx, spcy, spcz);
 			vd->SetSpcFromFile(true);
 		}
 	}
 	
+	m_vd_list.push_back(vd);
+}
+
+void DataManager::AddEmptyVolumeData(wxString name, int bits, int nx, int ny, int nz, double spcx, double spcy, double spcz)
+{
+	wxString new_name = name;
+
+	int i;
+	for (i = 1; CheckNames(new_name, DATA_VOLUME); i++)
+		new_name = name + wxString::Format("_%d", i);
+
+	VolumeData* vd = new VolumeData();
+	vd->AddEmptyData(bits, nx, ny, nz, spcx, spcy, spcz);
+
+	vd->SetName(new_name);
+
+	if (m_override_vox)
+	{
+		if (m_vd_list.size() > 0)
+		{
+			double spcx, spcy, spcz;
+			m_vd_list[0]->GetSpacings(spcx, spcy, spcz, 0);
+			vd->SetSpacings(spcx, spcy, spcz);
+			vd->SetSpcFromFile(true);
+		}
+	}
+
 	m_vd_list.push_back(vd);
 }
 
@@ -5650,6 +7215,22 @@ int DataManager::LoadAnnotations(wxString &filename)
 		new_name = name+wxString::Format("_%d", i);
 	if (i>1)
 		ann->SetName(new_name);
+
+	wxString labelpathname = filename.Mid(0, filename.find_last_of(wxT('.'))) + ".lbl";
+	if (!wxFileExists(labelpathname))
+	{
+		labelpathname = SearchProjectPath(labelpathname);
+		if (!wxFileExists(labelpathname)) 
+			labelpathname = "";
+	}
+
+	if (wxFileExists(labelpathname)) {
+		LBLReader reader;
+        wstring fn = labelpathname.ToStdWstring();
+		reader.SetFile(fn);
+		ann->SetLabel(reader.Convert(0, 0, false));
+	}
+
 	m_annotation_list.push_back(ann);
 
 	return 1;
@@ -5928,4 +7509,783 @@ Color DataManager::GetWavelengthColor(double wavelength)
 		return m_vol_wav[3];
 	else
 		return Color(1.0, 1.0, 1.0);
+}
+
+
+
+
+/////////////////////////////////////////////////////////////////////////
+
+VolumeDecompressorThread::VolumeDecompressorThread(VolumeLoader *vl)
+	: wxThread(wxTHREAD_DETACHED), m_vl(vl)
+{
+
+}
+
+VolumeDecompressorThread::~VolumeDecompressorThread()
+{
+	wxCriticalSectionLocker enter(m_vl->m_pThreadCS);
+	// the thread is being destroyed; make sure not to leave dangling pointers around
+	m_vl->m_running_decomp_th--;
+}
+
+wxThread::ExitCode VolumeDecompressorThread::Entry()
+{
+	unsigned int st_time = GET_TICK_COUNT();
+
+	m_vl->m_pThreadCS.Enter();
+	m_vl->m_running_decomp_th++;
+	m_vl->m_pThreadCS.Leave();
+
+	while(1)
+	{
+		m_vl->m_pThreadCS.Enter();
+
+		if (m_vl->m_decomp_queues.size() == 0)
+		{
+			m_vl->m_pThreadCS.Leave();
+			break;
+		}
+		VolumeDecompressorData q = m_vl->m_decomp_queues[0];
+		m_vl->m_decomp_queues.erase(m_vl->m_decomp_queues.begin());
+
+		m_vl->m_pThreadCS.Leave();
+
+
+		size_t bsize = (size_t)(q.b->nx())*(size_t)(q.b->ny())*(size_t)(q.b->nz())*(size_t)(q.b->nb(0));
+		char *result = new char[bsize];
+		if (TextureBrick::decompress_brick(result, q.in_data, bsize, q.in_size, q.finfo->type, q.b->nx(), q.b->ny()))
+		{
+			m_vl->m_pThreadCS.Enter();
+
+			delete [] q.in_data;
+			shared_ptr<VL_Array> sp = make_shared<VL_Array>(result, bsize);
+			q.b->set_brkdata(sp);
+			q.b->set_loading_state(false);
+			m_vl->m_memcached_data[q.finfo->id_string] = sp;
+			m_vl->m_pThreadCS.Leave();
+		}
+		else
+		{
+			delete [] result;
+
+			m_vl->m_pThreadCS.Enter();
+			delete [] q.in_data;
+			m_vl->m_used_memory -= bsize;
+			q.b->set_drawn(q.mode, true);
+			q.b->set_loading_state(false);
+			m_vl->m_pThreadCS.Leave();
+		}
+	}
+
+	return (wxThread::ExitCode)0;
+}
+
+/*
+wxDEFINE_EVENT(wxEVT_VLTHREAD_COMPLETED, wxCommandEvent);
+wxDEFINE_EVENT(wxEVT_VLTHREAD_PAUSED, wxCommandEvent);
+*/
+VolumeLoaderThread::VolumeLoaderThread(VolumeLoader *vl)
+	: wxThread(wxTHREAD_JOINABLE), m_vl(vl)
+{
+
+}
+
+VolumeLoaderThread::~VolumeLoaderThread()
+{
+	wxCriticalSectionLocker enter(m_vl->m_pThreadCS);
+	if (!m_vl->m_decomp_queues.empty())
+	{
+		for (int i = 0; i < m_vl->m_decomp_queues.size(); i++)
+		{
+			if (m_vl->m_decomp_queues[i].in_data != NULL)
+				delete [] m_vl->m_decomp_queues[i].in_data;
+			m_vl->m_used_memory -= m_vl->m_decomp_queues[i].datasize;
+		}
+		m_vl->m_decomp_queues.clear();
+	}
+	// the thread is being destroyed; make sure not to leave dangling pointers around
+}
+
+wxThread::ExitCode VolumeLoaderThread::Entry()
+{
+	unsigned int st_time = GET_TICK_COUNT();
+
+	while(m_vl->m_running_decomp_th > 0)
+	{
+		if (TestDestroy())
+			return (wxThread::ExitCode)0;
+		Sleep(10);
+	}
+
+	m_vl->m_pThreadCS.Enter();
+	auto ite = m_vl->m_loaded.begin();
+	while(ite != m_vl->m_loaded.end())
+	{
+		if (!ite->second.brick->isLoaded() && ite->second.brick->isLoading())
+		{
+			ite->second.brick->set_loading_state(false);
+			ite = m_vl->m_loaded.erase(ite);
+		}
+		else
+			ite++;
+	}
+
+	m_vl->m_pThreadCS.Leave();
+
+	while(1)
+	{
+		if (TestDestroy())
+			break;
+
+		m_vl->m_pThreadCS.Enter();
+		if (m_vl->m_queues.size() == 0)
+		{
+			m_vl->m_pThreadCS.Leave();
+			break;
+		}
+		VolumeLoaderData b = m_vl->m_queues[0];
+		b.brick->set_loading_state(false);
+		m_vl->m_queues.erase(m_vl->m_queues.begin());
+		m_vl->m_queued.push_back(b);
+		m_vl->m_pThreadCS.Leave();
+
+		if (!b.brick->isLoaded() && !b.brick->isLoading())
+		{
+			wstring id = b.finfo->id_string;
+			if (m_vl->m_memcached_data.find(b.finfo->id_string) != m_vl->m_memcached_data.end())
+			{
+				m_vl->m_pThreadCS.Enter();
+				b.brick->set_brkdata(m_vl->m_memcached_data[b.finfo->id_string]);
+				m_vl->m_loaded[b.brick] = b;
+				m_vl->m_pThreadCS.Leave();
+				continue;
+			}
+
+			if (m_vl->m_used_memory >= m_vl->m_memory_limit)
+			{
+				m_vl->m_pThreadCS.Enter();
+				while(1)
+				{
+					m_vl->CleanupLoadedBrick();
+					if (m_vl->m_used_memory < m_vl->m_memory_limit || TestDestroy())
+						break;
+					m_vl->m_pThreadCS.Leave();
+					Sleep(10);
+					m_vl->m_pThreadCS.Enter();
+				}
+				m_vl->m_pThreadCS.Leave();
+			}
+
+			char *ptr = NULL;
+			size_t readsize;
+			TextureBrick::read_brick_without_decomp(ptr, readsize, b.finfo, this);
+			if (!ptr) continue;
+
+			if (b.finfo->type == BRICK_FILE_TYPE_RAW)
+			{
+				m_vl->m_pThreadCS.Enter();
+				shared_ptr<VL_Array> sp = make_shared<VL_Array>(ptr, readsize);
+				b.brick->set_brkdata(sp);
+				b.datasize = readsize;
+				m_vl->AddLoadedBrick(b);
+				m_vl->m_pThreadCS.Leave();
+			}
+			else
+			{
+				bool decomp_in_this_thread = false;
+				VolumeDecompressorData dq;
+				dq.b = b.brick;
+				dq.finfo = b.finfo;
+				dq.vd = b.vd;
+				dq.mode = b.mode;
+				dq.in_data = ptr;
+				dq.in_size = readsize;
+
+				size_t bsize = (size_t)(b.brick->nx())*(size_t)(b.brick->ny())*(size_t)(b.brick->nz())*(size_t)(b.brick->nb(0));
+				b.datasize = bsize;
+				dq.datasize = bsize;
+
+				if (m_vl->m_max_decomp_th == 0)
+					decomp_in_this_thread = true;
+				else if (m_vl->m_max_decomp_th < 0 || 
+					m_vl->m_running_decomp_th < m_vl->m_max_decomp_th)
+				{
+					VolumeDecompressorThread *dthread = new VolumeDecompressorThread(m_vl);
+					if (dthread->Create() == wxTHREAD_NO_ERROR)
+					{
+						m_vl->m_pThreadCS.Enter();
+						m_vl->m_decomp_queues.push_back(dq);
+						m_vl->m_used_memory += bsize;
+						b.brick->set_loading_state(true);
+						m_vl->m_loaded[b.brick] = b;
+						m_vl->m_pThreadCS.Leave();
+
+						dthread->Run();
+					}
+					else
+					{
+						if (m_vl->m_running_decomp_th <= 0)
+							decomp_in_this_thread = true;
+						else
+						{
+							m_vl->m_pThreadCS.Enter();
+							m_vl->m_decomp_queues.push_back(dq);
+							m_vl->m_used_memory += bsize;
+							b.brick->set_loading_state(true);
+							m_vl->m_loaded[b.brick] = b;
+							m_vl->m_pThreadCS.Leave();
+						}
+					}
+				}
+				else
+				{
+					m_vl->m_pThreadCS.Enter();
+					m_vl->m_decomp_queues.push_back(dq);
+					m_vl->m_used_memory += bsize;
+					b.brick->set_loading_state(true);
+					m_vl->m_loaded[b.brick] = b;
+					m_vl->m_pThreadCS.Leave();
+				}
+
+				if (decomp_in_this_thread)
+				{
+					char *result = new char[bsize];
+					if (TextureBrick::decompress_brick(result, dq.in_data, bsize, dq.in_size, dq.finfo->type))
+					{
+						m_vl->m_pThreadCS.Enter();
+						delete [] dq.in_data;
+						shared_ptr<VL_Array> sp = make_shared<VL_Array>(result, bsize);
+						b.brick->set_brkdata(sp);
+						b.datasize = bsize;
+						m_vl->AddLoadedBrick(b);
+						m_vl->m_pThreadCS.Leave();
+					}
+					else
+					{
+						delete [] result;
+
+						m_vl->m_pThreadCS.Enter();
+						delete [] dq.in_data;
+						m_vl->m_used_memory -= bsize;
+						dq.b->set_drawn(dq.mode, true);
+						m_vl->m_pThreadCS.Leave();
+					}
+				}
+			}
+
+		}
+		else
+		{
+			size_t bsize = (size_t)(b.brick->nx())*(size_t)(b.brick->ny())*(size_t)(b.brick->nz())*(size_t)(b.brick->nb(0));
+			b.datasize = bsize;
+
+			m_vl->m_pThreadCS.Enter();
+			if (m_vl->m_loaded.find(b.brick) != m_vl->m_loaded.end())
+				m_vl->m_loaded[b.brick] = b;
+			m_vl->m_pThreadCS.Leave();
+		}
+	}
+
+	/*
+	wxCommandEvent evt(wxEVT_VLTHREAD_COMPLETED, GetId());
+	VolumeLoaderData *data = new VolumeLoaderData;
+	data->m_cur_cat = 0;
+	data->m_cur_item = 0;
+	data->m_progress = 0;
+	evt.SetClientData(data);
+	wxPostEvent(m_pParent, evt);
+	*/
+	return (wxThread::ExitCode)0;
+}
+
+VolumeLoader::VolumeLoader()
+{
+	m_thread = NULL;
+	m_running_decomp_th = 0;
+	m_max_decomp_th = wxThread::GetCPUCount()-1;
+	if (m_max_decomp_th < 0)
+		m_max_decomp_th = -1;
+	m_memory_limit = 10000000LL;
+	m_used_memory = 0LL;
+}
+
+VolumeLoader::~VolumeLoader()
+{
+	if (m_thread)
+	{
+		if (m_thread->IsAlive())
+		{
+			m_thread->Delete();
+			if (m_thread->IsAlive()) m_thread->Wait();
+		}
+		delete m_thread;
+	}
+	RemoveAllLoadedBrick();
+}
+
+void VolumeLoader::Queue(VolumeLoaderData brick)
+{
+	wxCriticalSectionLocker enter(m_pThreadCS);
+	m_queues.push_back(brick);
+}
+
+void VolumeLoader::ClearQueues()
+{
+	if (!m_queues.empty())
+	{
+		Abort();
+		m_queues.clear();
+	}
+}
+
+void VolumeLoader::Set(vector<VolumeLoaderData> vld)
+{
+	Abort();
+	//StopAll();
+	m_queues = vld;
+}
+
+void VolumeLoader::Abort()
+{
+	if (m_thread)
+	{
+		if (m_thread->IsAlive())
+		{
+			m_thread->Delete();
+			if (m_thread->IsAlive()) m_thread->Wait();
+		}
+		delete m_thread;
+		m_thread = NULL;
+	}
+}
+
+void VolumeLoader::StopAll()
+{
+	Abort();
+
+	while(m_running_decomp_th > 0)
+	{
+		wxMilliSleep(10);
+	}
+}
+
+void VolumeLoader::Join()
+{
+	while(m_thread->IsRunning() || m_running_decomp_th > 0)
+	{
+		wxMilliSleep(10);
+	}
+}
+
+bool VolumeLoader::Run()
+{
+	Abort();
+	//StopAll();
+	if (!m_queued.empty())
+		m_queued.clear();
+
+	m_thread = new VolumeLoaderThread(this);
+	if (m_thread->Create() != wxTHREAD_NO_ERROR)
+	{
+		delete m_thread;
+		m_thread = NULL;
+		return false;
+	}
+	m_thread->Run();
+
+	return true;
+}
+
+void VolumeLoader::CheckMemoryCache()
+{
+	for(int i = 0; i < m_queues.size(); i++)
+	{
+		TextureBrick *b = m_queues[i].brick;
+		if (!b->isLoaded())
+		{
+			if (m_memcached_data.find(m_queues[i].finfo->id_string) != m_memcached_data.end())
+			{
+				b->set_brkdata(m_memcached_data[m_queues[i].finfo->id_string]);
+				m_loaded[b] = m_queues[i];
+			}
+		}
+	}
+}
+
+void VolumeLoader::CleanupLoadedBrick()
+{
+	long long required = 0;
+
+	for(int i = 0; i < m_queues.size(); i++)
+	{
+		TextureBrick *b = m_queues[i].brick;
+		if (!b->isLoaded())
+		{
+			wstring id = m_queues[i].finfo->id_string;
+			if (m_memcached_data.find(m_queues[i].finfo->id_string) != m_memcached_data.end())
+			{
+				b->set_brkdata(m_memcached_data[m_queues[i].finfo->id_string]);
+				m_loaded[b] = m_queues[i];
+			}
+			else
+				required += (size_t)b->nx()*(size_t)b->ny()*(size_t)b->nz()*(size_t)b->nb(0);
+		}
+	}
+
+	if (required > 3LL*1024LL*1024LL*1024LL) 
+		required = 3LL*1024LL*1024LL*1024LL;
+
+	vector<VolumeLoaderData> b_locked;
+	vector<VolumeLoaderData> vd_undisp;
+	vector<VolumeLoaderData> b_undisp;
+	vector<VolumeLoaderData> b_drawn;
+	for(auto elem : m_loaded)
+	{
+		if(elem.second.brick->is_brickdata_locked())
+			b_locked.push_back(elem.second);
+		else if (!elem.second.vd->GetDisp())
+			vd_undisp.push_back(elem.second);
+		else if(!elem.second.brick->get_disp())
+			b_undisp.push_back(elem.second);
+		else if (elem.second.brick->drawn(elem.second.mode))
+			b_drawn.push_back(elem.second);
+	}
+	if (required > 0 || m_used_memory >= m_memory_limit)
+	{
+		for (int i = 0; i < vd_undisp.size(); i++)
+		{
+			if (!vd_undisp[i].brick->isLoaded())
+				continue;
+			if (vd_undisp[i].brick->getBrickDataSPCount() <= 2)
+			{
+				required -= vd_undisp[i].datasize;
+				m_used_memory -= vd_undisp[i].datasize;
+				m_memcached_data[vd_undisp[i].finfo->id_string].reset();
+				m_memcached_data.erase(vd_undisp[i].finfo->id_string);
+			}
+			vd_undisp[i].brick->freeBrkData();
+			m_loaded.erase(vd_undisp[i].brick);
+			if (required <= 0 && m_used_memory < m_memory_limit)
+				break;
+		}
+	}
+	if (required > 0 || m_used_memory >= m_memory_limit)
+	{
+		for (int i = 0; i < b_undisp.size(); i++)
+		{
+			if (!b_undisp[i].brick->isLoaded())
+				continue;
+			if (b_undisp[i].brick->getBrickDataSPCount() <= 2)
+			{
+				required -= b_undisp[i].datasize;
+				m_used_memory -= b_undisp[i].datasize;
+				m_memcached_data[b_undisp[i].finfo->id_string].reset();
+				m_memcached_data.erase(b_undisp[i].finfo->id_string);
+			}
+			b_undisp[i].brick->freeBrkData();
+			m_loaded.erase(b_undisp[i].brick);
+			if (required <= 0 && m_used_memory < m_memory_limit)
+				break;
+		}
+	}
+	if (required > 0 || m_used_memory >= m_memory_limit)
+	{
+		for (int i = 0; i < b_drawn.size(); i++)
+		{
+			if (!b_drawn[i].brick->isLoaded())
+				continue;
+			if (b_drawn[i].brick->getBrickDataSPCount() <= 2)
+			{
+				required -= b_drawn[i].datasize;
+				m_used_memory -= b_drawn[i].datasize;
+				m_memcached_data[b_drawn[i].finfo->id_string].reset();
+				m_memcached_data.erase(b_drawn[i].finfo->id_string);
+			}
+			b_drawn[i].brick->freeBrkData();
+			m_loaded.erase(b_drawn[i].brick);
+			if (required <= 0 && m_used_memory < m_memory_limit)
+				break;
+		}
+	}
+	if (m_used_memory >= m_memory_limit)
+	{
+		for(int i = m_queues.size()-1; i >= 0; i--)
+		{
+			TextureBrick *b = m_queues[i].brick;
+			if (b->isLoaded() && !b->is_brickdata_locked() && m_loaded.find(b) != m_loaded.end())
+			{
+				bool skip = false;
+				for (int j = m_queued.size()-1; j >= 0; j--)
+				{
+					if (m_queued[j].brick == b && !b->drawn(m_queued[j].mode))
+						skip = true;
+				}
+				if (!skip)
+				{
+					if (b->getBrickDataSPCount() <= 2)
+					{
+						long long datasize = (size_t)(b->nx())*(size_t)(b->ny())*(size_t)(b->nz())*(size_t)(b->nb(0));
+						required -= datasize;
+						m_used_memory -= datasize;
+						m_memcached_data[m_queues[i].finfo->id_string].reset();
+						m_memcached_data.erase(m_queues[i].finfo->id_string);
+					}
+
+					b->freeBrkData();
+					m_loaded.erase(b);
+
+					if (m_used_memory < m_memory_limit)
+						break;
+				}
+			}
+		}
+	}
+
+	if (m_used_memory >= m_memory_limit)
+	{
+		for (int i = 0; i < b_locked.size(); i++)
+		{
+			TextureBrick *b = b_locked[i].brick;
+			if (!b->isLoaded())
+				continue;
+			bool skip = false;
+			for (int j = m_queued.size()-1; j >= 0; j--)
+			{
+				if (m_queued[j].brick == b && !b->drawn(m_queued[j].mode))
+					skip = true;
+			}
+			if (!skip)
+			{
+				if (b->getBrickDataSPCount() <= 2)
+				{
+					required -= b_locked[i].datasize;
+					m_used_memory -= b_locked[i].datasize;
+					m_memcached_data[b_locked[i].finfo->id_string].reset();
+					m_memcached_data.erase(b_locked[i].finfo->id_string);
+				}
+				b->freeBrkData();
+				m_loaded.erase(b);
+				if (m_used_memory < m_memory_limit)
+					break;
+			}
+		}
+	}
+
+	//something wrong
+	if (m_used_memory < 0)
+	{
+		m_used_memory = 0;
+		for(auto &elem : m_memcached_data)
+			m_used_memory += elem.second->getSize();
+		//cerr << "Volume Loader: error in CleanupLoadedBrick" << endl;
+	}
+}
+
+void VolumeLoader::TryToFreeMemory(long long req)
+{
+	StopAll();
+
+	if (!m_queued.empty())
+		m_queued.clear();
+
+	long long available_memory = m_memory_limit - m_used_memory;
+
+	if (available_memory >= req) return;
+
+	long long required = req > 0 ? req-available_memory : m_used_memory;
+
+	vector<VolumeLoaderData> b_locked;
+	vector<VolumeLoaderData> vd_undisp;
+	vector<VolumeLoaderData> b_undisp;
+	vector<VolumeLoaderData> b_others;
+	for(auto elem : m_loaded)
+	{
+		if(elem.second.brick->is_brickdata_locked())
+			b_locked.push_back(elem.second);
+		else if (!elem.second.vd->GetDisp())
+			vd_undisp.push_back(elem.second);
+		else if(!elem.second.brick->get_disp())
+			b_undisp.push_back(elem.second);
+		else
+			b_others.push_back(elem.second);
+	}
+	if (required > 0)
+	{
+		for (int i = 0; i < vd_undisp.size(); i++)
+		{
+			if (!vd_undisp[i].brick->isLoaded())
+				continue;
+			if (vd_undisp[i].brick->getBrickDataSPCount() <= 2)
+			{
+				required -= vd_undisp[i].datasize;
+				m_used_memory -= vd_undisp[i].datasize;
+				m_memcached_data[vd_undisp[i].finfo->id_string].reset();
+				m_memcached_data.erase(vd_undisp[i].finfo->id_string);
+			}
+			vd_undisp[i].brick->freeBrkData();
+			m_loaded.erase(vd_undisp[i].brick);
+			if (required <= 0)
+				break;
+		}
+	}
+	if (required > 0)
+	{
+		for (int i = 0; i < b_undisp.size(); i++)
+		{
+			if (!b_undisp[i].brick->isLoaded())
+				continue;
+			if (b_undisp[i].brick->getBrickDataSPCount() <= 2)
+			{
+				required -= b_undisp[i].datasize;
+				m_used_memory -= b_undisp[i].datasize;
+				m_memcached_data[b_undisp[i].finfo->id_string].reset();
+				m_memcached_data.erase(b_undisp[i].finfo->id_string);
+			}
+			b_undisp[i].brick->freeBrkData();
+			m_loaded.erase(b_undisp[i].brick);
+			if (required <= 0)
+				break;
+		}
+	}
+	if (required > 0)
+	{
+		for (int i = 0; i < b_others.size(); i++)
+		{
+			if (!b_others[i].brick->isLoaded())
+				continue;
+			if (b_others[i].brick->getBrickDataSPCount() <= 2)
+			{
+				required -= b_others[i].datasize;
+				m_used_memory -= b_others[i].datasize;
+				m_memcached_data[b_others[i].finfo->id_string].reset();
+				m_memcached_data.erase(b_others[i].finfo->id_string);
+			}
+			b_others[i].brick->freeBrkData();
+			m_loaded.erase(b_others[i].brick);
+			if (required <= 0)
+				break;
+		}
+	}
+	
+	//something wrong
+	if (m_used_memory < 0)
+	{
+		m_used_memory = 0;
+		for(auto &elem : m_memcached_data)
+			m_used_memory += elem.second->getSize();
+		//cerr << "Volume Loader: error in CleanupLoadedBrick" << endl;
+	}
+
+}
+
+void VolumeLoader::RemoveAllLoadedBrick()
+{
+	StopAll();
+	for(auto e : m_loaded)
+	{
+		if (e.second.brick->isLoaded())
+			e.second.brick->freeBrkData();
+	}
+	for(auto &elem : m_memcached_data)
+	{
+		m_used_memory -= elem.second->getSize();
+		elem.second.reset();
+	}
+	m_loaded.clear();
+	m_memcached_data.clear();
+}
+
+void VolumeLoader::RemoveBrickVD(VolumeData *vd)
+{
+	StopAll();
+	auto ite = m_loaded.begin();
+	while(ite != m_loaded.end())
+	{
+		if (ite->second.vd == vd && ite->second.brick->isLoaded())
+		{
+			ite->second.brick->freeBrkData();
+			ite = m_loaded.erase(ite);
+		}
+		else
+			ite++;
+	}
+
+	auto ite2 = m_memcached_data.begin();
+	while (ite2 != m_memcached_data.end())
+	{
+		if (ite2->second.use_count() == 1)
+		{
+			m_used_memory -= ite2->second->getSize();
+			ite2->second.reset();
+			ite2 = m_memcached_data.erase(ite2);
+		}
+		else
+			ite2++;
+	}
+}
+
+void VolumeLoader::PreloadLevel(VolumeData *vd, int lv, bool lock)
+{
+	//OutputDebugStringA("Preloader enter.\n");
+
+	if (!vd || !vd->isBrxml()) return;
+	if (lv < 0 || lv >= vd->GetLevelNum()) return;
+
+	Texture *tex = vd->GetTexture();
+	if (!tex) return;
+
+	StopAll();
+
+	int curlevel = vd->GetLevel();
+
+	vd->SetLevel(lv);
+
+	vector<TextureBrick*> *bricks = tex->get_bricks();
+	vector<VolumeLoaderData> queues;
+	int mode = vd->GetMode() == 1 ? 1 : 0;
+	size_t required = 0;
+	for (int i = 0; i < bricks->size(); i++)
+	{
+		VolumeLoaderData d;
+		TextureBrick* b = (*bricks)[i];
+		b->lock_brickdata(true);
+		if (!b->isLoaded())
+		{
+			d.brick = b;
+			d.finfo = tex->GetFileName(b->getID());
+			d.vd = vd;
+			d.mode = mode;
+			queues.push_back(d);
+			required += (size_t)b->nx()*(size_t)b->ny()*(size_t)b->nz()*(size_t)b->nb(0);
+		}
+	}
+
+	if (queues.empty()) return;
+
+	Set(queues);
+	long long cur_memlimit = m_memory_limit;
+	SetMemoryLimitByte(m_used_memory + required + 100);
+	//OutputDebugStringA("Preloader running.\n");
+	Run();
+	Join();
+	//OutputDebugStringA("Preload done.\n");
+	SetMemoryLimitByte(cur_memlimit);
+}
+
+void VolumeLoader::GetPalams(long long &used_mem, int &running_decomp_th, int &queue_num, int &decomp_queue_num)
+{
+	long long us = 0;
+	int ll = 0;
+/*	for(auto e : m_loaded)
+	{
+		if (e.second.brick->isLoaded())
+			us += e.second.datasize;
+		if (!e.second.brick->get_disp())
+			ll++;
+	}
+*/	used_mem = m_used_memory;
+	running_decomp_th = m_running_decomp_th;
+	queue_num = m_queues.size();
+	decomp_queue_num = m_decomp_queues.size();
 }

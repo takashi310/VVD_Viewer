@@ -32,12 +32,13 @@
 #include "Vector.h"
 #include "../utility.h"
 #include <math.h>
+#include "DLLExport.h"
 
 #pragma warning (disable : 4521 4522)
 
 namespace FLIVR{
 
-class Quaternion
+class EXPORT_API Quaternion
 {
 public:
 	Quaternion() : x(0), y(0), z(0), w(1)

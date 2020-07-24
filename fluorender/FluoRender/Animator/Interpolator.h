@@ -31,6 +31,8 @@ DEALINGS IN THE SOFTWARE.
 #include "FlKeyInt.h"
 #include "../FLIVR/Quaternion.h"
 
+#include "DLLExport.h"
+
 using namespace std;
 using namespace FLIVR;
 
@@ -43,7 +45,7 @@ typedef struct
 	string desc;//descriptions
 } FlKeyGroup;
 
-class Interpolator
+class EXPORT_API Interpolator
 {
 public:
 	Interpolator();

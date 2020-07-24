@@ -29,35 +29,44 @@
 #ifndef MshShader_h
 #define MshShader_h
 
+#include <glm/glm.hpp>
 #include <string>
 #include <vector>
+#include "DLLExport.h"
+
+#include "VulkanDevice.hpp"
+
 
 namespace FLIVR
 {
 
 	class ShaderProgram;
 
-	class MshShader
+	class EXPORT_API MshShader
 	{
 	public:
-		MshShader(int type,
+		static const int MSH_SAMPLER_NUM = 2;
+
+		MshShader(VkDevice device, int type,
 			int peel, bool tex,
 			bool fog, bool light);
 		~MshShader();
 
 		bool create();
 
+		inline VkDevice device() { return device_; }
 		inline int type() { return type_; }
 		inline int peel() { return peel_; }
 		inline bool tex() { return tex_; }
 		inline bool fog() { return fog_; }
 		inline bool light() { return light_; }
 
-		inline bool match(int type,
+		inline bool match(VkDevice device, int type,
 			int peel, bool tex,
 			bool fog, bool light)
 		{ 
-			return (type_ == type &&
+			return (device_ == device &&
+					type_ == type &&
 					fog_ == fog && 
 					peel_ == peel &&
 					tex_ == tex &&
@@ -70,6 +79,7 @@ namespace FLIVR
 		bool emit_v(std::string& s);
 		bool emit_f(std::string& s);
 
+		VkDevice device_;
 		int type_;	//0:normal; 1:integer
 		int peel_;	//0:no peeling; 1:peel positive; 2:peel both; -1:peel negative
 		bool tex_;
@@ -80,14 +90,77 @@ namespace FLIVR
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	class MshShaderFactory
+	class EXPORT_API MshShaderFactory
 	{
 	public:
 		MshShaderFactory();
+		MshShaderFactory(std::vector<vks::VulkanDevice*>& devices);
 		~MshShaderFactory();
 
-		ShaderProgram* shader(int type, int peel, bool tex,
+		ShaderProgram* shader(VkDevice device, int type, int peel, bool tex,
 			bool fog, bool light);
+
+		void init(std::vector<vks::VulkanDevice*>& devices);
+
+		struct MshPipelineSettings {
+			VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
+			VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+			VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+		};
+
+		struct MshVertShaderUBO {
+			glm::mat4 proj_mat;
+			glm::mat4 mv_mat;
+			glm::mat4 normal_mat;
+		};
+
+		struct MshFragShaderUBO {
+			glm::vec4 loc0;//ambient color
+			glm::vec4 loc1;//diffuse color
+			glm::vec4 loc2;//specular color
+			glm::vec4 loc3;//(shine, alpha, 0, 0)
+			glm::vec4 loc7;//(1/vx, 1/vy, 0, 0)
+			glm::vec4 loc8;//(int, start, end, 0.0)
+			glm::vec4 plane0; //plane0
+			glm::vec4 plane1; //plane1
+			glm::vec4 plane2; //plane2
+			glm::vec4 plane3; //plane3
+			glm::vec4 plane4; //plane4
+			glm::vec4 plane5; //plane5
+			glm::mat4 matrix3;
+			uint32_t loci0;//name
+		};
+
+		struct MshUniformBufs {
+			vks::Buffer vert;
+			vks::Buffer frag;
+		};
+
+		void setupDescriptorSetLayout();
+		void getDescriptorSetWriteUniforms(vks::VulkanDevice* vdev, MshUniformBufs& uniformBuffers, std::vector<VkWriteDescriptorSet>& writeDescriptorSets);
+		void getDescriptorSetWriteUniforms(vks::VulkanDevice* vdev, vks::Buffer& vert, vks::Buffer& frag, std::vector<VkWriteDescriptorSet>& writeDescriptorSets);
+		void prepareUniformBuffers(std::map<vks::VulkanDevice*, MshUniformBufs>& uniformBuffers);
+		static void updateUniformBuffers(MshUniformBufs& uniformBuffers, MshVertShaderUBO vubo, MshFragShaderUBO fubo);
+
+		static inline VkWriteDescriptorSet writeDescriptorSetTex(
+			VkDescriptorSet dstSet,
+			uint32_t texid,
+			VkDescriptorImageInfo* imageInfo,
+			uint32_t descriptorCount = 1)
+		{
+			VkWriteDescriptorSet writeDescriptorSet{};
+			writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writeDescriptorSet.dstSet = dstSet;
+			writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			writeDescriptorSet.dstBinding = texid + 2;
+			writeDescriptorSet.pImageInfo = imageInfo;
+			writeDescriptorSet.descriptorCount = descriptorCount;
+			return writeDescriptorSet;
+		}
+
+		std::map<vks::VulkanDevice*, MshPipelineSettings> pipeline_;
+
+		std::vector<vks::VulkanDevice*> vdevices_;
 
 	protected:
 		std::vector<MshShader*> shader_;
