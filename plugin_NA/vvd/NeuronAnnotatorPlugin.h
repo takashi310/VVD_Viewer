@@ -97,6 +97,9 @@ public:
 	void setDirty(bool val) { m_dirty = val; }
     bool isReloaded() { return m_reload_list; }
     void setReloaded(bool val) { m_reload_list = val; }
+    
+    wxString getLabelPath() { return m_id_path; }
+    wxString getVolumePath() { return m_vol_path; }
 
 	V3DPBDReader* m_lbl_reader;
 	BaseReader* m_vol_reader;

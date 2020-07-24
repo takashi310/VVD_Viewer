@@ -5505,6 +5505,7 @@ void VRenderFrame::ToggleVisibilityPluginWindow(wxString name, bool show, int do
 					Dockable(true).CloseButton(true));
 				//m_aui_mgr.GetPane(pp).Float();
 				m_aui_mgr.GetPane(pp).Left().Layer(3);
+                m_aui_mgr.GetPane(pp).dock_proportion = 100;
 				m_aui_mgr.Update();
 				SetEvtHandlerEnabled(true);
 			}
@@ -5527,6 +5528,7 @@ void VRenderFrame::ToggleVisibilityPluginWindow(wxString name, bool show, int do
 					Dockable(true).CloseButton(true).Hide());
 				//m_aui_mgr.GetPane(pp).Float();
 				m_aui_mgr.GetPane(pp).Left().Layer(3);
+                m_aui_mgr.GetPane(pp).dock_proportion = 100;
 				m_aui_mgr.Update();
 				SetEvtHandlerEnabled(true);
 			}

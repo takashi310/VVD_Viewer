@@ -3496,7 +3496,7 @@ Nrrd* VolumeData::NrrdScale(Nrrd* src, size_t dst_datasize, bool interpolation)
 		std::vector<size_t> dsize(3);
 		std::vector<double> dspc(3);
 
-		double sc2 = sqrt(dst_datasize / src_datasize);
+		double sc2 = sqrt((double)dst_datasize / (double)src_datasize);
 		for (size_t p = 0; p < 3; p++)
 		{
 			if (p != maxspc_id)
@@ -3504,6 +3504,11 @@ Nrrd* VolumeData::NrrdScale(Nrrd* src, size_t dst_datasize, bool interpolation)
 				dsize[p] = (size_t)(ssize[p] * sc2);
 				dspc[p] = sspc[p] / sc2;
 			}
+            else
+            {
+                dsize[p] = ssize[p];
+                dspc[p] = sspc[p];
+            }
 		}
 		nx = dsize[0];
 		ny = dsize[1];
@@ -3737,15 +3742,19 @@ wxThread::ExitCode NrrdScaleThread::Entry()
 						dz = dz - iz;
 
 						size_t id = iz * ssize[1] * ssize[0] + iy * ssize[0] + ix;
+                        
+                        size_t iddx = (x == nx - 1) ? 0 : 1;
+                        size_t iddy = (y == ny - 1) ? 0 : ssize[0];
+                        size_t iddz = (z == m_zed - 1) ? 0 : ssize[1] * ssize[0];
 
 						float c000 = data[id];
-						float c100 = data[id + 1];
-						float c010 = data[id + ssize[0]];
-						float c110 = data[id + ssize[0] + 1];
-						float c001 = data[id + ssize[1] * ssize[0]];
-						float c101 = data[id + ssize[1] * ssize[0] + 1];
-						float c011 = data[id + ssize[1] * ssize[0] + ssize[0]];
-						float c111 = data[id + ssize[1] * ssize[0] + ssize[0] + 1];
+						float c100 = data[id + iddx];
+						float c010 = data[id + iddy];
+						float c110 = data[id + iddy + iddx];
+						float c001 = data[id + iddz];
+						float c101 = data[id + iddz + iddx];
+						float c011 = data[id + iddz + iddy];
+						float c111 = data[id + iddz + iddy + iddx];
 
 						float c00 = c000 * (1 - dx) + c100 * dx;
 						float c01 = c001 * (1 - dx) + c101 * dx;
@@ -3785,15 +3794,19 @@ wxThread::ExitCode NrrdScaleThread::Entry()
 						dz = dz - iz;
 
 						size_t id = iz * ssize[1] * ssize[0] + iy * ssize[0] + ix;
-
-						float c000 = data[id];
-						float c100 = data[id + 1];
-						float c010 = data[id + ssize[0]];
-						float c110 = data[id + ssize[0] + 1];
-						float c001 = data[id + ssize[1] * ssize[0]];
-						float c101 = data[id + ssize[1] * ssize[0] + 1];
-						float c011 = data[id + ssize[1] * ssize[0] + ssize[0]];
-						float c111 = data[id + ssize[1] * ssize[0] + ssize[0] + 1];
+                        
+                        size_t iddx = (x == nx - 1) ? 0 : 1;
+                        size_t iddy = (y == ny - 1) ? 0 : ssize[0];
+                        size_t iddz = (z == m_zed - 1) ? 0 : ssize[1] * ssize[0];
+                        
+                        float c000 = data[id];
+                        float c100 = data[id + iddx];
+                        float c010 = data[id + iddy];
+                        float c110 = data[id + iddy + iddx];
+                        float c001 = data[id + iddz];
+                        float c101 = data[id + iddz + iddx];
+                        float c011 = data[id + iddz + iddy];
+                        float c111 = data[id + iddz + iddy + iddx];
 
 						float c00 = c000 * (1 - dx) + c100 * dx;
 						float c01 = c001 * (1 - dx) + c101 * dx;
@@ -6716,6 +6729,10 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 	size_t voxnum = reader->GetXSize() * reader->GetYSize() * reader->GetSliceNum();
 	size_t ch_datasize = 0;
 	size_t bytes = 0;
+    
+    double sspcx = -1.0;
+    double sspcy = -1.0;
+    double sspcz = -1.0;
 
 	for (i=(ch_num>=0?ch_num:0);
 		i<(ch_num>=0?ch_num+1:chan); i++)
@@ -6769,6 +6786,16 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 						delete[] data->data;
 						nrrdNix(data);
 						data = tmp;
+                        
+                        size_t dim = tmp->dim;
+                        if (dim >= 3)
+                        {
+                            int offset = 0;
+                            if (dim > 3) offset = 1;
+                            sspcx = tmp->axis[0 + offset].spacing;
+                            sspcy = tmp->axis[1 + offset].spacing;
+                            sspcz = tmp->axis[2 + offset].spacing;
+                        }
 					}
 				}
 			}
@@ -6822,7 +6849,8 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 				double zspcfac = (double)Max(xres,yres)/256.0;
 				if (zspcfac < 1.0) zspcfac = 1.0;
 				if (zres == 1) vd->SetBaseSpacings(reader->GetXSpc(), reader->GetYSpc(), reader->GetXSpc()*zspcfac);
-				else vd->SetBaseSpacings(reader->GetXSpc(), reader->GetYSpc(), reader->GetZSpc());
+				else if (sspcx > 0.0 && sspcy > 0.0 && sspcz > 0.0) vd->SetBaseSpacings(sspcx, sspcy, sspcz);
+                else vd->SetBaseSpacings(reader->GetXSpc(), reader->GetYSpc(), reader->GetZSpc());
 				vd->SetSpcFromFile(valid_spc);
 				vd->SetScalarScale(reader->GetScalarScale());
 				vd->SetMaxValue(reader->GetMaxValue());

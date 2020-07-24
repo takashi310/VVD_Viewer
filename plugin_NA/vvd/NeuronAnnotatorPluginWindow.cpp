@@ -1309,12 +1309,17 @@ void NAGuiPluginWindow::OnImportResultsButtonClick( wxCommandEvent& event )
 	if (rval != wxID_OK)
 		return;
 	wxString idpath = file_dlg.GetPath();
+    
+    wxString volpath = idpath.BeforeLast('.') + wxT(".h5j");
 
-	wxFileDialog file_dlg2(this, "Choose an image", "", "", "All Supported|*.v3dpbd;*.h5j", wxFD_OPEN);
-	int rval2 = file_dlg2.ShowModal();
-	if (rval2 != wxID_OK)
-		return;
-	wxString volpath = file_dlg2.GetPath();
+    if (!wxFileExists(volpath))
+    {
+        wxFileDialog file_dlg2(this, "Choose a confocal image file (h5j)", "", "", "All Supported|*.h5j", wxFD_OPEN);
+        int rval2 = file_dlg2.ShowModal();
+        if (rval2 != wxID_OK)
+            return;
+        volpath = file_dlg2.GetPath();
+    }
 
 	m_results->LoadResults(idpath, volpath, "sssr", "");
 
@@ -1335,7 +1340,12 @@ void NAGuiPluginWindow::OnExport( wxCommandEvent& event )
     if (!m_results || !plugin)
         return;
     
-    wxFileDialog saveFileDialog(this, _("Save Combined Fragments"), "", "", "Nrrd files (*.nrrd)|*.nrrd", wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
+    wxString vname = plugin->getVolumePath();
+    
+    vname = vname.AfterLast(GETSLASH());
+    vname = vname.BeforeLast('.', NULL);
+    
+    wxFileDialog saveFileDialog(this, _("Save Combined Fragments"), "", vname, "Nrrd files (*.nrrd)|*.nrrd", wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
     
     if (saveFileDialog.ShowModal() == wxID_CANCEL)
         return;
