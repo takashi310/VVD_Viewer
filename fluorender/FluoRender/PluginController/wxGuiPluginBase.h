@@ -22,6 +22,9 @@ public:
 	virtual void OnDestroy() = 0;
 
 	virtual void OnTreeUpdate() {}
+    
+    virtual void LoadProjectSettingFile(wxString path) {}
+    virtual void SaveProjectSettingFile(wxString path) {}
 	
 	//For command line.
 	virtual bool OnRun(wxString options);

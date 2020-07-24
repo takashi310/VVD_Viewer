@@ -54,11 +54,14 @@ public:
 	
 	wxString GetPID() { return m_pid; }
 
-	void LoadConfigFile();
-	void SaveConfigFile();
+	virtual void LoadProjectSettingFile(wxString path);
+	virtual void SaveProjectSettingFile(wxString path);
+    void LoadConfigFile();
+    void SaveConfigFile();
 
 	bool runNALoader();
 	bool runNALoader(wxString id_path, wxString vol_path, wxString chflags=wxT("sssr"), wxString spacings=wxT(""), wxString prefix=wxT(""), bool set_dirty=false);
+    void LoadSettings();
 	bool runNALoaderRemote(wxString url, wxString usr, wxString pwd, wxString outdir, wxString ofname);
 	bool LoadFragment(wxString name, int id);
     bool LoadSWC(wxString name, wxString swc_zip_path);

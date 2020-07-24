@@ -191,11 +191,6 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 	vframe->UpdateTree();
 	tree->ClearVisHistory();
 
-	wxProgressDialog* prg_diag = new wxProgressDialog(
-		"Neuron Annotator Plugin",
-		"Loading labels...",
-		4, 0, wxPD_SMOOTH | wxPD_AUTO_HIDE);
-
 	if (m_lbl_reader)
 		delete m_lbl_reader;
 	if (m_vol_reader)
@@ -235,13 +230,11 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 	Nrrd* v3d_nrrd = m_lbl_reader->Convert(0, 0, true);
 	void* v3d_data = v3d_nrrd->data;
 
-	//size_t avmem = (size_t)(vrv->GetAvailableGraphicsMemory(0) * 1024.0 * 1024.0);
-	size_t avmem = (size_t)(1024.0 * 1024.0 * 1024.0);
+	size_t avmem = (size_t)(vrv->GetAvailableGraphicsMemory(0) * 1024.0 * 1024.0 * 0.8);
+	//size_t avmem = (size_t)(1024.0 * 1024.0 * 1024.0);
 
 	LoadFiles(vol_path, avmem);
 	int vol_chan = dm->GetLatestVolumeChannelNum();
-
-	prg_diag->Update(1, "Loading volumes...");
 	
 	m_vol_suffix = vol_path.Mid(vol_path.Find('.', true)).MakeLower();
 
@@ -322,6 +315,11 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
         volr->SetSharedMaskName(vols[0]->GetName());
 
 	m_scount = scount;
+    
+    wxProgressDialog* prg_diag = new wxProgressDialog(
+                                                      "Neuron Annotator Plugin",
+                                                      "Loading labels...",
+                                                      4, 0, wxPD_SMOOTH | wxPD_AUTO_HIDE);
 
 	prg_diag->Update(2, "Calculating bounding boxes...");
 
@@ -1503,6 +1501,20 @@ void NAGuiPlugin::OnTimer(wxTimerEvent& event)
 
 void NAGuiPlugin::LoadConfigFile()
 {
+    wxString expath = wxStandardPaths::Get().GetExecutablePath();
+    expath = expath.BeforeLast(GETSLASH(), NULL);
+#ifdef _WIN32
+    wxString dft = expath + "\\NA_plugin_settings.dft";
+    if (!wxFileExists(dft))
+        dft = wxStandardPaths::Get().GetUserConfigDir() + "\\NA_plugin_settings.dft";
+#else
+    wxString dft = expath + "/../Resources/NA_plugin_settings.dft";
+#endif
+    LoadProjectSettingFile(dft);
+}
+
+void NAGuiPlugin::LoadProjectSettingFile(wxString path)
+{
 /*
 	wxString expath = wxStandardPaths::Get().GetExecutablePath();
 	expath = expath.BeforeLast(GETSLASH(), NULL);
@@ -1513,74 +1525,365 @@ void NAGuiPlugin::LoadConfigFile()
 #else
 	wxString dft = expath + "/../Resources/NA_plugin_settings.dft";
 #endif
-	if (wxFileExists(dft))
+*/
+	if (wxFileExists(path))
 	{
-		wxFileInputStream is(dft);
+		wxFileInputStream is(path);
 		if (is.IsOk())
 		{
 			wxFileConfig fconfig(is);
 			wxString str;
-			if (fconfig.Read("R_path", &str))
-				m_R_path = str;
-			if (fconfig.Read("neuronlib_path", &str))
-				m_nlib_path = str;
-			if (fconfig.Read("output_dir", &str))
-				m_out_dir = str;
-			
-			if (fconfig.Read("rnum", &str))
-				m_rnum = str;
-			else
-				m_rnum = "10";
-
-			bool bval = false;
-			if (fconfig.Read("export_swc", &bval))
-				m_exp_swc = bval;
-			if (fconfig.Read("export_swcprev", &bval))
-				m_exp_swcprev = bval;
-			if (fconfig.Read("export_mip", &bval))
-				m_exp_mip = bval;
-			if (fconfig.Read("export_vol", &bval))
-				m_exp_vol = bval;
-			if (fconfig.Read("prefix_score", &bval))
-				m_pfx_score = bval;
-			if (fconfig.Read("prefix_database", &bval))
-				m_pfx_db = bval;
-			
-			if (fconfig.Read("scoring_method", &str))
-				m_scmtd = str;
+            int ival = 0;
+            double dval = 0.0;
+            
+			if (fconfig.Read("Reference", &str))
+				m_vol_r = str;
+			if (fconfig.Read("Signal1", &str))
+				m_vol_s[0] = str;
+            if (fconfig.Read("Signal2", &str))
+                m_vol_s[1] = str;
+            if (fconfig.Read("Signal3", &str))
+                m_vol_s[2] = str;
+            
+            if (fconfig.Read("s_count", &ival))
+                m_scount = ival;
+            
+            if (fconfig.Read("xspc", &dval))
+                m_xspc = dval;
+            if (fconfig.Read("yspc", &dval))
+                m_yspc = dval;
+            if (fconfig.Read("zspc", &dval))
+                m_zspc = dval;
+            
+            if (fconfig.Read("id_path", &str))
+                m_id_path = str;
+            if (fconfig.Read("vol_path", &str))
+                m_vol_path = str;
+            if (fconfig.Read("prefix", &str))
+                m_prefix = str;
+            
+            if (fconfig.Read("s_count", &ival))
+                m_scount = ival;
+            
+            int seg_count = 0;
+            if (fconfig.Read("seg_num", &ival))
+                seg_count = ival;
+            
+            m_segs.clear();
+            
+            for (int i = 0; i < seg_count; i++)
+            {
+                if (fconfig.Read(wxString::Format("seg_%d", i), &str))
+                {
+                    NASegment seg;
+                    wxStringTokenizer tkz(str, wxT(","));
+                    wxArrayString strspc;
+                    while (tkz.HasMoreTokens())
+                        strspc.Add(tkz.GetNextToken());
+                
+                    if (strspc.Count() == 2)
+                    {
+                        long val;
+                        if (strspc.Item(0).ToLong(&val))
+                            seg.id = val;
+                        if (strspc.Item(1).ToLong(&val))
+                            seg.visible = val;
+                    }
+                    m_segs.push_back(seg);
+                }
+            }
+            
+            LoadSettings();
 		}
 	}
- */
+
+}
+
+void NAGuiPlugin::LoadSettings()
+{
+    VRenderFrame* vframe = (VRenderFrame*)m_vvd;
+    if (!vframe) return;
+    DataManager* dm = vframe->GetDataManager();
+    if (!dm) return;
+    VRenderView* vrv = vframe->GetView(0);
+    if (!vrv) return;
+    TreePanel* tree = vframe->GetTree();
+    if (!tree) return;
+    BrushToolDlg* brushdlg = vframe->GetBrushToolDlg();
+    if (!brushdlg) return;
+    
+    Lock();
+    
+    vframe->UpdateTree();
+    tree->ClearVisHistory();
+    
+    if (m_lbl_reader)
+        delete m_lbl_reader;
+    if (m_vol_reader)
+        delete m_vol_reader;
+    
+    size_t avmem = (size_t)(vrv->GetAvailableGraphicsMemory(0) * 1024.0 * 1024.0);
+    
+    m_lbl_nrrd = NULL;
+    VolumeData* vd_s = dm->GetVolumeData(m_vol_s[0]);
+    if (vd_s && !vd_s->GetSharedLabelName().IsEmpty())
+        vd_s = dm->GetVolumeData(vd_s->GetSharedLabelName());
+    if (vd_s)
+    {
+        Texture* tex = vd_s->GetTexture();
+        if (tex)
+        {
+            m_lbl_nrrd = tex->get_nrrd(tex->nlabel());
+        }
+    }
+    
+    if (!m_lbl_nrrd) return;
+    void* lbl_data = m_lbl_nrrd->data;
+    
+    m_nrrd_r = NULL;
+    VolumeData* vd_r = dm->GetVolumeData(m_vol_r);
+    if (vd_r)
+    {
+        Texture* tex = vd_r->GetTexture();
+        if (tex)
+            m_nrrd_r = tex->get_nrrd(0);
+    }
+    for (int i = 0; i < 3; i++)
+    {
+        m_nrrd_s[i] = NULL;
+        vd_s = dm->GetVolumeData(m_vol_s[i]);
+        if (vd_s)
+        {
+            Texture* tex = vd_s->GetTexture();
+            if (tex)
+                m_nrrd_s[i] = tex->get_nrrd(0);
+        }
+    }
+    
+    void* data_r = m_nrrd_r ? m_nrrd_r->data : NULL;
+    
+    int dim_offset = 0;
+    if (m_nrrd_s[0]->dim > 3) dim_offset = 1;
+    int nx = m_nrrd_s[0]->axis[dim_offset + 0].size;
+    int ny = m_nrrd_s[0]->axis[dim_offset + 1].size;
+    int nz = m_nrrd_s[0]->axis[dim_offset + 2].size;
+    
+    wxProgressDialog* prg_diag = new wxProgressDialog(
+                                                      "Neuron Annotator Plugin",
+                                                      "Loading labels...",
+                                                      4, 0, wxPD_SMOOTH | wxPD_AUTO_HIDE);
+    
+    prg_diag->Update(2, "Calculating bounding boxes...");
+    
+    int i, j, k;
+    map<int, BBox> seg_bbox;
+    map<int, size_t> seg_size;
+    double gmaxval_r = (m_nrrd_s[0]->type == nrrdTypeUChar) ? 255.0 : 4096.0;
+    m_gmaxvals[0] = m_gmaxvals[1] = m_gmaxvals[2] = (m_nrrd_s[0]->type == nrrdTypeUChar) ? 255.0 : 4096.0;
+    //first pass: finding max value and calculating BBox
+    for (i = 0; i < nx; i++)
+    {
+        for (j = 0; j < ny; j++)
+        {
+            for (k = 0; k < nz; k++)
+            {
+                size_t index = (size_t)nx * ny * k + nx * j + i;
+                int label = 0;
+                if (m_lbl_nrrd->type == nrrdTypeUChar)
+                    label = ((unsigned char*)lbl_data)[index];
+                else if (m_lbl_nrrd->type == nrrdTypeUShort)
+                    label = ((unsigned short*)lbl_data)[index];
+                if (label > 0)
+                {
+                    if (seg_bbox.find(label) == seg_bbox.end())
+                    {
+                        BBox bbox;
+                        bbox.extend(Point(i, j, k));
+                        seg_bbox[label] = bbox;
+                        seg_size[label] = 1;
+                    }
+                    else
+                    {
+                        seg_bbox[label].extend(Point(i, j, k));
+                        seg_size[label]++;
+                    }
+                }
+            }
+        }
+    }
+    
+    prg_diag->Update(3, "Generating MIP images...");
+    
+    map<int, BBox>::iterator it = seg_bbox.begin();
+    
+    map<int, int> seg_vis;
+    for (int i = 0; i < m_segs.size(); i++)
+        seg_vis[m_segs[i].id] = m_segs[i].visible;
+    
+    m_segs.clear();
+    
+    NASegment bgseg;
+    bgseg.id = 0;
+    bgseg.size = (size_t) nx * ny * nz;
+    bgseg.bbox = BBox(Point(0, 0, 0), Point(nx-1, ny-1, nz-1));
+    if (seg_vis.count(0) == 1)
+        bgseg.visible = seg_vis[0];
+    m_segs.push_back(bgseg);
+    
+    while (it != seg_bbox.end())
+    {
+        NASegment seg;
+        seg.id = it->first;
+        seg.size = seg_size[seg.id];
+        seg.bbox = it->second;
+        if (seg_vis.count(seg.id) == 1)
+            seg.visible = seg_vis[seg.id];
+        
+        m_segs.push_back(seg);
+        it++;
+    }
+    std::sort(m_segs.begin()+1, m_segs.end(), NAGuiPlugin::sort_data_asc);
+    
+    m_running_mip_th = 0;
+    int thread_num = wxThread::GetCPUCount() - 1;
+    if (thread_num <= 0)
+        thread_num = 1;
+    if (m_segs.size() / thread_num == 0)
+        thread_num = m_segs.size();
+    int qnum = m_segs.size() / thread_num;
+    
+    for (int i = 0; i < thread_num; i++)
+    {
+        vector<int> queue;
+        for (int j = 0; j < qnum; j++)
+            queue.push_back(qnum*i + j);
+        if (i == thread_num - 1)
+        {
+            int remainder = m_segs.size() % thread_num;
+            int offset = qnum * (i + 1);
+            for (int k = 0; k < remainder; k++)
+                queue.push_back(offset + k);
+        }
+        MIPGeneratorThread* th = new MIPGeneratorThread(this, queue);
+        th->Run();
+    }
+    
+    size_t mx = 300;
+    size_t my = (size_t)(300.0 * ny / nx);
+    double dx = (double)nx / mx;
+    double dy = (double)ny / my;
+    unsigned char* temp_r = (unsigned char*)malloc((size_t)mx * my * 3 * sizeof(unsigned char));
+    for (i = 0; i < mx; i++)
+    {
+        for (j = 0; j < my; j++)
+        {
+            if (m_nrrd_r)
+            {
+                size_t xx = (size_t)(i * dx);
+                size_t yy = (size_t)(j * dy);
+                double maxval_r = 0.0;
+                for (k = 0; k < nz; k++)
+                {
+                    int index = (size_t)nx * ny * k + nx * yy + xx;
+                    double val = 0.0;
+                    if (m_nrrd_r->type == nrrdTypeUChar)
+                        val = ((unsigned char*)data_r)[index];
+                    else if (m_nrrd_r->type == nrrdTypeUShort)
+                        val = ((unsigned short*)data_r)[index];
+                    if (val > maxval_r)
+                        maxval_r = val;
+                }
+                unsigned char v = 0;
+                if (m_nrrd_r->type == nrrdTypeUChar)
+                    v = (unsigned char)maxval_r;
+                else if (m_nrrd_r->type == nrrdTypeUShort)
+                    v = (unsigned char)(maxval_r / gmaxval_r * 255.0);
+                temp_r[(size_t)mx * 3 * j + 3 * i + 0] = v;
+                temp_r[(size_t)mx * 3 * j + 3 * i + 1] = v;
+                temp_r[(size_t)mx * 3 * j + 3 * i + 2] = v;
+            }
+        }
+    }
+    
+    while (1)
+    {
+        {
+            wxCriticalSectionLocker enter(m_pThreadCS);
+            if (m_running_mip_th <= 0)
+                break;
+        }
+        wxThread::This()->Sleep(10);
+    }
+    m_running_mip_th = 0;
+    
+    prg_diag->Update(4, "Generating MIP images...");
+    
+    m_ref_image.Create(mx, my, temp_r);
+    m_ref_image_thumb = m_ref_image.Scale(300, (int)((double)m_ref_image.GetHeight() / (double)m_ref_image.GetWidth() * 300.0), wxIMAGE_QUALITY_HIGH);
+    
+    delete prg_diag;
+    
+    m_dirty = true;
+    m_reload_list = true;
+    
+    for (int s = 0; s < m_segs.size(); s++)
+    {
+        int id = m_segs[s].id;
+        for (int c = 0; c < m_scount; c++)
+        {
+            vd_s = dm->GetVolumeData(m_vol_s[c]);
+            if (vd_s)
+            {
+                vd_s->SetNAMode(true);
+                vd_s->SetSegmentMask(id, m_segs[s].visible);
+            }
+        }
+    }
+    
+    vrv->RefreshGL();
+    
+    Unlock();
+    
+    return;
 }
 
 void NAGuiPlugin::SaveConfigFile()
 {
-/*
+    wxString expath = wxStandardPaths::Get().GetExecutablePath();
+    expath = expath.BeforeLast(GETSLASH(),NULL);
+#ifdef _WIN32
+    wxString dft = expath + "\\NA_plugin_settings.dft";
+    wxString dft2 = wxStandardPaths::Get().GetUserConfigDir() + "\\NA_plugin_settings.dft";
+    if (!wxFileExists(dft) && wxFileExists(dft2))
+        dft = dft2;
+#else
+    wxString dft = expath + "/../Resources/NA_plugin_settings.dft";
+#endif
+    
+    SaveProjectSettingFile(dft);
+}
+
+void NAGuiPlugin::SaveProjectSettingFile(wxString path)
+{
+
 	wxFileConfig fconfig("NA plugin default settings");
 
-	fconfig.Write("R_path", m_R_path);
-	fconfig.Write("neuronlib_path", m_nlib_path);
-	fconfig.Write("output_dir", m_out_dir);
-	fconfig.Write("rnum", m_rnum);
-	fconfig.Write("export_swc", m_exp_swc);
-	fconfig.Write("export_swcprev", m_exp_swcprev);
-	fconfig.Write("export_mip", m_exp_mip);
-	fconfig.Write("export_vol", m_exp_vol);
-	fconfig.Write("prefix_score", m_pfx_score);
-	fconfig.Write("prefix_database", m_pfx_db);
-	fconfig.Write("scoring_method", m_scmtd);
+	fconfig.Write("Reference", m_vol_r);
+	fconfig.Write("Signal1", m_vol_s[0]);
+    fconfig.Write("Signal2", m_vol_s[1]);
+    fconfig.Write("Signal3", m_vol_s[2]);
+	fconfig.Write("s_count", m_scount);
+	fconfig.Write("xspc", m_xspc);
+    fconfig.Write("yspc", m_yspc);
+    fconfig.Write("zspc", m_zspc);
+	fconfig.Write("id_path", m_id_path);
+	fconfig.Write("vol_path", m_vol_path);
+    fconfig.Write("prefix", m_prefix);
+	fconfig.Write("seg_num", m_segs.size());
+    for (int i = 0; i < m_segs.size(); i++)
+        fconfig.Write(wxString::Format("seg_%d", i), wxString::Format("%d,%d", m_segs[i].id, m_segs[i].visible));
 
-	wxString expath = wxStandardPaths::Get().GetExecutablePath();
-	expath = expath.BeforeLast(GETSLASH(),NULL);
-#ifdef _WIN32
-	wxString dft = expath + "\\NBLAST_plugin_settings.dft";
-	wxString dft2 = wxStandardPaths::Get().GetUserConfigDir() + "\\NBLAST_plugin_settings.dft";
-	if (!wxFileExists(dft) && wxFileExists(dft2))
-		dft = dft2;
-#else
-	wxString dft = expath + "/../Resources/NBLAST_plugin_settings.dft";
-#endif
-	wxFileOutputStream os(dft);
+	wxFileOutputStream os(path);
 	fconfig.Save(os);
- */
+ 
 }

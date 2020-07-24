@@ -118,9 +118,7 @@ Nrrd* LBLReader::Convert(int t, int c, bool get_max)
 	}
 	nio = nrrdIoStateNix(nio);
 	rewind(lbl_file);
-	if (output->dim != 3 ||
-		(output->type != nrrdTypeInt &&
-		output->type != nrrdTypeUInt))
+	if (output->dim != 3)
 	{
 		delete []output->data;
 		nrrdNix(output);
@@ -131,7 +129,12 @@ Nrrd* LBLReader::Convert(int t, int c, bool get_max)
 	size_t x_size = output->axis[0].size;
 	size_t y_size = output->axis[1].size;
 	size_t data_size = (size_t)slice_num * (size_t)x_size * (size_t)y_size;
-	output->data = new unsigned int[data_size];
+    if (output->type != nrrdTypeInt && output->type != nrrdTypeUInt)
+        output->data = new unsigned int[data_size];
+    else if (output->type != nrrdTypeShort && output->type != nrrdTypeUShort)
+        output->data = new unsigned short[data_size];
+    else if (output->type != nrrdTypeChar && output->type != nrrdTypeUChar)
+        output->data = new unsigned char[data_size];
 
 	if (nrrdRead(output, lbl_file, NULL))
 	{

@@ -2786,9 +2786,29 @@ void VRenderFrame::SaveProject(wxString& filename)
 				msk_writer.Save(str.ToStdWstring(), 0);
 			}
 			fconfig.Write("mask", str);
+            
+            //label
+            Nrrd* label = vd->GetLabel(true);
+            str = "";
+            if (label)
+            {
+                wxString new_folder;
+                new_folder = filename + "_files";
+                CREATE_DIR(new_folder.fn_str());
+                str = new_folder + GETSLASH() + vd->GetName() + ".lbl";
+                MSKWriter lbl_writer;
+                lbl_writer.SetData(label);
+                lbl_writer.SetSpacings(resx, resy, resz);
+                lbl_writer.Save(str.ToStdWstring(), 1);
+            }
+            fconfig.Write("label", str);
 			
 			fconfig.Write("mask_disp_mode", vd->GetMaskHideMode());
 			fconfig.Write("mask_lv", vd->GetMaskLv());
+            
+            fconfig.Write("na_mode", vd->GetNAMode());
+            fconfig.Write("shared_mask", vd->GetSharedMaskName());
+            fconfig.Write("shared_label", vd->GetSharedLabelName());
 		}
 	}
 	//mesh
@@ -3224,7 +3244,7 @@ void VRenderFrame::SaveProject(wxString& filename)
 	fconfig.SetPath("/ui_layout");
 	fconfig.Write("ui_main_tb", m_main_tb->IsShown());
 	fconfig.Write("ui_tree_view", m_tree_panel->IsShown());
-	fconfig.Write("ui_measure_view", m_measure_dlg->IsShown());
+	fconfig.Write("ui_measure_view", false);
 	fconfig.Write("ui_adjust_view", m_adjust_view->IsShown());
 	fconfig.Write("ui_clip_view", m_clip_view->IsShown());
 	fconfig.Write("ui_prop_view", m_prop_panel->IsShown());
@@ -3240,6 +3260,24 @@ void VRenderFrame::SaveProject(wxString& filename)
 		m_aui_mgr.GetPane(m_clip_view).IsFloating():false);
 	fconfig.Write("ui_prop_view_float", m_aui_mgr.GetPane(m_prop_panel).IsOk()?
 		m_aui_mgr.GetPane(m_prop_panel).IsFloating():false);
+    
+    wxGuiPluginBaseList gplist = m_plugin_manager->GetGuiPlugins();
+    for(wxGuiPluginBaseList::Node * node = gplist.GetFirst(); node; node = node->GetNext())
+    {
+        wxGuiPluginBase *plugin = node->GetData();
+        fconfig.Write(plugin->GetDisplayName(), m_aui_mgr.GetPane(plugin->GetDisplayName()).IsOk() ? m_aui_mgr.GetPane(plugin->GetDisplayName()).IsShown() : false);
+        fconfig.Write(plugin->GetDisplayName()+"_float", m_aui_mgr.GetPane(plugin->GetDisplayName()).IsOk() ? m_aui_mgr.GetPane(plugin->GetDisplayName()).IsFloating() : false);
+        
+        wxString new_folder;
+        new_folder = filename + "_files";
+        CREATE_DIR(new_folder.fn_str());
+        wxString ext = ".set";
+        str = new_folder + GETSLASH() + plugin->GetDisplayName() + ext;
+        plugin->SaveProjectSettingFile(str);
+        if (wxFileExists(str))
+            fconfig.Write(plugin->GetDisplayName()+"_setting", str);
+    }
+    
 	//interpolator
 	fconfig.SetPath("/interpolator");
 	fconfig.Write("max_id", Interpolator::m_id);
@@ -3690,9 +3728,31 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 							if (mask)
 								vd->LoadMask(mask);
 						}
+                        
+                        //label
+                        if (fconfig.Read("label", &str))
+                        {
+                            LBLReader lbl_reader;
+                            wstring lblname = str.ToStdWstring();
+                            lbl_reader.SetFile(lblname);
+                            BaseReader *br = &lbl_reader;
+                            Nrrd* label = br->Convert(true);
+                            Nrrd* oldlabel = vd->GetLabel(false);
+                            if (oldlabel)
+                                vd->DeleteLabel();
+                            if (label)
+                                vd->LoadLabel(label);
+                        }
 
 						if (fconfig.Read("mask_disp_mode", &iVal))
 							vd->SetMaskHideMode(iVal);
+                        
+                        if (fconfig.Read("na_mode", &bVal))
+                            vd->SetNAMode(bVal);
+                        if (fconfig.Read("shared_mask", &str))
+                            vd->SetSharedMaskName(str);
+                        if (fconfig.Read("shared_label", &str))
+                            vd->SetSharedLabelName(str);
 					}
 				}
 			}
@@ -4921,6 +4981,31 @@ void VRenderFrame::OpenProject(wxString& filename)
 				m_tb_menu_ui->Check(ID_UIPropView, false);
 			}
 		}
+        
+        wxGuiPluginBaseList gplist = m_plugin_manager->GetGuiPlugins();
+        for(wxGuiPluginBaseList::Node * node = gplist.GetFirst(); node; node = node->GetNext())
+        {
+            wxGuiPluginBase *plugin = node->GetData();
+            if (fconfig.Read(plugin->GetDisplayName(), &bVal))
+            {
+                ToggleVisibilityPluginWindow(plugin->GetName(), bVal);
+                bool fl;
+                if (fconfig.Read(plugin->GetDisplayName()+"_float", &fl))
+                {
+                    if (m_aui_mgr.GetPane(plugin->GetDisplayName()).IsOk())
+                    {
+                        if (fl)
+                            m_aui_mgr.GetPane(plugin->GetDisplayName()).Float();
+                        else
+                            m_aui_mgr.GetPane(plugin->GetDisplayName()).Dock();
+                    }
+                }
+                
+                wxString str;
+                if (fconfig.Read(plugin->GetDisplayName()+"_setting", &str))
+                    plugin->LoadProjectSettingFile(str);
+            }
+        }
 
 		m_aui_mgr.Update();
 	}
