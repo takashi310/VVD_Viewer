@@ -6404,15 +6404,18 @@ void VRenderVulkanView::OnContextMenu(wxContextMenuEvent& event)
 	{
 		menu.Append(ID_CTXMENU_SHOW_ALL_FRAGMENTS, "Show all fragments");
         menu.Append(ID_CTXMENU_DESELECT_ALL_FRAGMENTS, "Deselect all fragments");
+        menu.AppendSeparator();
 		menu.Append(ID_CTXMENU_HIDE_OTHER_FRAGMENTS, "Show only selected fragments");
 		menu.Append(ID_CTXMENU_HIDE_SELECTED_FLAGMENTS, "Hide selected fragments");
 	}
 	else
 	{
 		menu.Append(ID_CTXMENU_SHOW_ALL, "Show all volumes");
+        menu.AppendSeparator();
 		menu.Append(ID_CTXMENU_HIDE_OTHER_VOLS, "Sohw only selected volumes");
 		menu.Append(ID_CTXMENU_HIDE_THIS_VOL, "Hide selected volume data");
 	}
+    menu.AppendSeparator();
 	menu.Append(ID_CTXMENU_UNDO_VISIBILITY_SETTING_CHANGES, "Undo visibility settings");
 	menu.Append(ID_CTXMENU_REDO_VISIBILITY_SETTING_CHANGES, "Redo visibility settings");
 

@@ -1879,7 +1879,7 @@ void NAGuiPlugin::SaveProjectSettingFile(wxString path)
 	fconfig.Write("id_path", m_id_path);
 	fconfig.Write("vol_path", m_vol_path);
     fconfig.Write("prefix", m_prefix);
-	fconfig.Write("seg_num", m_segs.size());
+	fconfig.Write("seg_num", (int)m_segs.size());
     for (int i = 0; i < m_segs.size(); i++)
         fconfig.Write(wxString::Format("seg_%d", i), wxString::Format("%d,%d", m_segs[i].id, m_segs[i].visible));
 
