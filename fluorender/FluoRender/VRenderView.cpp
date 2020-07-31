@@ -5949,7 +5949,7 @@ bool VRenderVulkanView::SelSegVolume(int mode)
 }
 
 
-bool VRenderVulkanView::SelLabelSegVolume(int mode)
+bool VRenderVulkanView::SelLabelSegVolumeMax(int mode, vector<VolumeData*> ref)
 {
 	double dist = 0.0;
 	double min_dist = -1.0;
@@ -5970,7 +5970,7 @@ bool VRenderVulkanView::SelLabelSegVolume(int mode)
 			continue;
 
 		int sel_id;
-		dist = GetPointAndLabel(p, sel_id, old_mouse_X, old_mouse_Y, vd);
+		dist = GetPointAndLabelMax(p, sel_id, old_mouse_X, old_mouse_Y, vd, ref);
 
 		if (dist > 0.0)
 		{
@@ -6402,22 +6402,22 @@ void VRenderVulkanView::OnContextMenu(wxContextMenuEvent& event)
 	wxMenu menu;
 	if (na_mode)
 	{
-		menu.Append(ID_CTXMENU_SHOW_ALL_FRAGMENTS, "Show all fragments");
-        menu.Append(ID_CTXMENU_DESELECT_ALL_FRAGMENTS, "Deselect all fragments");
+		menu.Append(ID_CTXMENU_SHOW_ALL_FRAGMENTS, "Show all");
+        menu.Append(ID_CTXMENU_DESELECT_ALL_FRAGMENTS, "Deselect all");
         menu.AppendSeparator();
-		menu.Append(ID_CTXMENU_HIDE_OTHER_FRAGMENTS, "Show only selected fragments");
-		menu.Append(ID_CTXMENU_HIDE_SELECTED_FLAGMENTS, "Hide selected fragments");
+		menu.Append(ID_CTXMENU_HIDE_OTHER_FRAGMENTS, "Show only selected");
+		menu.Append(ID_CTXMENU_HIDE_SELECTED_FLAGMENTS, "Hide selected");
 	}
 	else
 	{
-		menu.Append(ID_CTXMENU_SHOW_ALL, "Show all volumes");
+		menu.Append(ID_CTXMENU_SHOW_ALL, "Show all");
         menu.AppendSeparator();
-		menu.Append(ID_CTXMENU_HIDE_OTHER_VOLS, "Sohw only selected volumes");
-		menu.Append(ID_CTXMENU_HIDE_THIS_VOL, "Hide selected volume data");
+		menu.Append(ID_CTXMENU_HIDE_OTHER_VOLS, "Sohw only selected");
+		menu.Append(ID_CTXMENU_HIDE_THIS_VOL, "Hide selected");
 	}
     menu.AppendSeparator();
-	menu.Append(ID_CTXMENU_UNDO_VISIBILITY_SETTING_CHANGES, "Undo visibility settings");
-	menu.Append(ID_CTXMENU_REDO_VISIBILITY_SETTING_CHANGES, "Redo visibility settings");
+	menu.Append(ID_CTXMENU_UNDO_VISIBILITY_SETTING_CHANGES, "Undo visibility");
+	menu.Append(ID_CTXMENU_REDO_VISIBILITY_SETTING_CHANGES, "Redo visibility");
 
 	wxPoint point = event.GetPosition();
 	// If from keyboard
@@ -13903,6 +13903,168 @@ double VRenderVulkanView::GetPointVolume(Point& mp, int mx, int my,
 	return return_val;
 }
 
+double VRenderVulkanView::GetPointAndLabelMax(Point& mp, int& lblval, int mx, int my, VolumeData* vd, vector<VolumeData*> ref)
+{
+    if (!vd)
+        return -1.0;
+    Texture* tex = vd->GetTexture();
+    if (!tex) return -1.0;
+    Nrrd* nrrd = tex->get_nrrd(tex->nlabel());
+    if (!nrrd) return -1.0;
+    void* data = nrrd->data;
+    if (!data && !tex->isBrxml()) return -1.0;
+    
+    int nx = GetSize().x;
+    int ny = GetSize().y;
+    
+    if (nx <= 0 || ny <= 0)
+        return -1.0;
+    
+    glm::mat4 cur_mv_mat = m_mv_mat;
+    glm::mat4 cur_proj_mat = m_proj_mat;
+    
+    //projection
+    HandleProjection(nx, ny);
+    //Transformation
+    HandleCamera();
+    glm::mat4 mv_temp;
+    //translate object
+    mv_temp = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
+    //rotate object
+    mv_temp = glm::rotate(mv_temp, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
+    mv_temp = glm::rotate(mv_temp, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+    mv_temp = glm::rotate(mv_temp, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
+    //center object
+    mv_temp = glm::translate(mv_temp, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
+    
+    Transform mv;
+    Transform p;
+    mv.set(glm::value_ptr(mv_temp));
+    p.set(glm::value_ptr(m_proj_mat));
+    
+    double x, y;
+    x = double(mx) * 2.0 / double(nx) - 1.0;
+    y = double(my) * 2.0 / double(ny) - 1.0;
+    p.invert();
+    mv.invert();
+    //transform mp1 and mp2 to object space
+    Point mp1(x, y, 0.0);
+    mp1 = p.transform(mp1);
+    mp1 = mv.transform(mp1);
+    Point mp2(x, y, 1.0);
+    mp2 = p.transform(mp2);
+    mp2 = mv.transform(mp2);
+    
+    //volume res
+    int xx = -1;
+    int yy = -1;
+    int zz = -1;
+    int tmp_xx, tmp_yy, tmp_zz;
+    double spcx, spcy, spcz;
+    vd->GetSpacings(spcx, spcy, spcz);
+    int resx, resy, resz;
+    vd->GetResolution(resx, resy, resz);
+    //volume bounding box
+    BBox bbox = vd->GetBounds();
+    Vector vv = mp2 - mp1;
+    vv.normalize();
+    Point hit;
+    int p_int = 0;
+    double max_int = 0.0;
+    int colvalue = 0;
+    double alpha = 0.0;
+    int value = 0;
+    vector<Plane*>* planes = 0;
+    double mspc = 1.0;
+    double return_val = -1.0;
+    if (vd->GetSampleRate() > 0.0)
+        mspc = sqrt(1.0 / (resx * resx) + 1.0 / (resy * resy) + 1.0 / (resz * resz)) / 2.0;
+    if (vd->GetVR())
+        planes = vd->GetVR()->get_planes();
+    if (bbox.intersect(mp1, vv, hit))
+    {
+        Transform* textrans = tex->transform();
+        Vector vv2 = textrans->unproject(vv);
+        vv2.normalize();
+        Point hp1 = textrans->unproject(hit);
+        while (true)
+        {
+            tmp_xx = int(hp1.x() * resx);
+            tmp_yy = int(hp1.y() * resy);
+            tmp_zz = int(hp1.z() * resz);
+            if (tmp_xx == xx && tmp_yy == yy && tmp_zz == zz)
+            {
+                //same, skip
+                hp1 += vv2 * mspc;
+                continue;
+            }
+            else
+            {
+                xx = tmp_xx;
+                yy = tmp_yy;
+                zz = tmp_zz;
+            }
+            //out of bound, stop
+            if (xx<0 || xx>resx ||
+                yy<0 || yy>resy ||
+                zz<0 || zz>resz)
+                break;
+            
+            bool inside = true;
+            if (planes)
+            {
+                for (int i = 0; i < 6; i++)
+                {
+                    if ((*planes)[i] &&
+                        (*planes)[i]->eval_point(hp1) < 0.0)
+                    {
+                        inside = false;
+                        break;
+                    }
+                }
+            }
+            if (inside)
+            {
+                xx = xx == resx ? resx - 1 : xx;
+                yy = yy == resy ? resy - 1 : yy;
+                zz = zz == resz ? resz - 1 : zz;
+                
+                value = vd->GetLabellValue(xx, yy, zz);
+                
+                if (value > 0 && vd->GetSegmentMask(value) > 0)
+                {
+                    bool ismax = false;
+                    for (auto v : ref)
+                    {
+                        double dval = v->GetOriginalValue(xx, yy, zz);
+                        if (dval > max_int)
+                        {
+                            max_int = dval;
+                            ismax = true;
+                        }
+                    }
+                    if (ismax)
+                    {
+                        mp = Point((xx + 0.5) / resx, (yy + 0.5) / resy, (zz + 0.5) / resz);
+                        mp = textrans->project(mp);
+                        p_int = value;
+                    }
+                }
+            }
+            hp1 += vv2 * mspc;
+        }
+    }
+    
+    if (p_int > 0)
+        return_val = (mp - mp1).length();
+    
+    lblval = p_int;
+    
+    m_mv_mat = cur_mv_mat;
+    m_proj_mat = cur_proj_mat;
+    return return_val;
+}
+
 double VRenderVulkanView::GetPointAndLabel(Point& mp, int& lblval, int mx, int my, VolumeData* vd)
 {
 	if (!vd)
@@ -15607,16 +15769,17 @@ void VRenderVulkanView::OnMouse(wxMouseEvent& event)
 		else
 		{
 			bool na_mode = false;
+            vector<VolumeData*> ref;
 			for (int i = 0; i < m_vd_pop_list.size(); i++)
 			{
 				if (m_vd_pop_list[i]->GetDisp() && m_vd_pop_list[i]->GetNAMode())
 				{
 					na_mode = true;
-					break;
+                    ref.push_back(m_vd_pop_list[i]);
 				}
 			}
 			if (na_mode)
-				SelLabelSegVolume();
+				SelLabelSegVolumeMax(0, ref);
 			else
 				SelSegVolume();
 		}

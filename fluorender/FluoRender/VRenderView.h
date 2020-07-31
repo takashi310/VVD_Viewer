@@ -1260,12 +1260,13 @@ private:
 	//mode: 0-add selection; 1-single selection; 2-subtract selection, 3-switch an editing segment
 	bool SelSegVolume(int mode=0);
 	//mode: 0-add selection; 1-single selection; 2-subtract selection, 3-switch an editing segment
-	bool SelLabelSegVolume(int mode = 0);
+	bool SelLabelSegVolumeMax(int mode, vector<VolumeData*> ref);
 
 	//get mouse point in 3D
 	//mode: 0-maximum with original value; 1-maximum with transfered value; 2-accumulated with original value; 3-accumulated with transfered value
 	double GetPointVolume(Point &mp, int mx, int my, VolumeData* vd, int mode, bool use_transf, double thresh = 0.5);
 	double GetPointAndLabel(Point& mp, int& lblval, int mx, int my, VolumeData* vd);
+    double GetPointAndLabelMax(Point& mp, int& lblval, int mx, int my, VolumeData* vd, vector<VolumeData*> ref);
 	double GetPointAndIntVolume(Point& mp, double &intensity, bool normalize, int mx, int my, VolumeData* vd, double thresh = 0.5);
 	double GetPointVolumeBox(Point &mp, int mx, int my, VolumeData* vd, bool calc_mats=true);
 	double GetPointVolumeBox2(Point &p1, Point &p2, int mx, int my, VolumeData* vd);
