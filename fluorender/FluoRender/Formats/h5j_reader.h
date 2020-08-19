@@ -92,6 +92,7 @@ public:
 	void SetBatch(bool batch);
 	int LoadBatch(int index);
 	Nrrd* Convert(int t, int c, bool get_max);
+	Nrrd* Convert_ThreadSafe(int t, int c, bool get_max) { return NULL; }
 	wstring GetCurDataName(int t, int c);
 	wstring GetCurMaskName(int t, int c);
 	wstring GetCurLabelName(int t, int c);

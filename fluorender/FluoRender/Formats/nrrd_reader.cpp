@@ -410,6 +410,196 @@ Nrrd* NRRDReader::Convert(int t, int c, bool get_max)
 	return output;
 }
 
+Nrrd* NRRDReader::Convert_ThreadSafe(int t, int c, bool get_max)
+{
+	if (t < 0 || t >= m_time_num)
+		return 0;
+
+	size_t i;
+
+	wstring str_name = m_4d_seq[t].filename;
+	wstring data_name = str_name.substr(str_name.find_last_of(GETSLASH()) + 1);
+	FILE* nrrd_file = 0;
+	if (!WFOPEN(&nrrd_file, str_name.c_str(), L"rb"))
+		return 0;
+
+	Nrrd* output = nrrdNew();
+	NrrdIoState* nio = nrrdIoStateNew();
+	nrrdIoStateSet(nio, nrrdIoStateSkipData, AIR_TRUE);
+	if (nrrdRead(output, nrrd_file, nio))
+	{
+		fclose(nrrd_file);
+		return 0;
+	}
+	nio = nrrdIoStateNix(nio);
+	rewind(nrrd_file);
+	if (!(output->dim == 3 || output->dim == 2))
+	{
+		delete[]output->data;
+		nrrdNix(output);
+		fclose(nrrd_file);
+		return 0;
+	}
+
+	if (output->dim == 2)
+	{
+		output->axis[2].size = 1;
+		output->axis[2].spacing = 1.0;
+		output->axis[0].spaceDirection[2] = 0.0;
+		output->axis[1].spaceDirection[2] = 0.0;
+		output->axis[2].spaceDirection[0] = 0.0;
+		output->axis[2].spaceDirection[1] = 0.0;
+		output->axis[2].spaceDirection[2] = 1.0;
+	}
+
+	int slice_num = int(output->axis[2].size);
+	int x_size = int(output->axis[0].size);
+	int y_size = int(output->axis[1].size);
+	double xspc = output->axis[0].spacing;
+	double yspc = output->axis[1].spacing;
+	double zspc = output->axis[2].spacing;
+
+	if (!(xspc > 0.0 && xspc < 100.0))
+	{
+		double n = output->axis[0].spaceDirection[0] * output->axis[0].spaceDirection[0] +
+			output->axis[0].spaceDirection[1] * output->axis[0].spaceDirection[1] +
+			output->axis[0].spaceDirection[2] * output->axis[0].spaceDirection[2];
+		xspc = sqrt(n);
+	}
+	if (!(yspc > 0.0 && yspc < 100.0))
+	{
+		double n = output->axis[1].spaceDirection[0] * output->axis[1].spaceDirection[0] +
+			output->axis[1].spaceDirection[1] * output->axis[1].spaceDirection[1] +
+			output->axis[1].spaceDirection[2] * output->axis[1].spaceDirection[2];
+		yspc = sqrt(n);
+	}
+	if (!(zspc > 0.0 && zspc < 100.0))
+	{
+		double n = output->axis[2].spaceDirection[0] * output->axis[2].spaceDirection[0] +
+			output->axis[2].spaceDirection[1] * output->axis[2].spaceDirection[1] +
+			output->axis[2].spaceDirection[2] * output->axis[2].spaceDirection[2];
+		zspc = sqrt(n);
+	}
+	nrrdAxisInfoSet(output, nrrdAxisInfoSpacing, xspc, yspc, zspc);
+	nrrdAxisInfoSet(output, nrrdAxisInfoMax, xspc * output->axis[0].size, yspc * output->axis[1].size, zspc * output->axis[2].size);
+
+	bool valid_spc = false;
+	if (xspc > 0.0 && xspc < 100.0 &&
+		yspc>0.0 && yspc < 100.0 &&
+		zspc>0.0 && zspc < 100.0)
+		valid_spc = true;
+	else
+	{
+		valid_spc = false;
+		xspc = 1.0;
+		yspc = 1.0;
+		zspc = 1.0;
+	}
+	size_t voxelnum = (size_t)m_slice_num * (size_t)m_x_size * (size_t)m_y_size;
+	size_t data_size = voxelnum;
+	if (output->type == nrrdTypeUShort || output->type == nrrdTypeShort)
+		data_size *= 2;
+	output->data = new unsigned char[data_size];
+
+	//if (data_size >= 1073741824UL)
+	//	get_max = false;
+
+	if (nrrdRead(output, nrrd_file, NULL))
+	{
+		delete[] output->data;
+		nrrdNix(output);
+		fclose(nrrd_file);
+		return 0;
+	}
+
+	if (output->dim == 2)
+	{
+		output->dim = 3;
+		output->axis[2].size = 1;
+		output->axis[2].spacing = 1.0;
+		output->axis[0].spaceDirection[2] = 0.0;
+		output->axis[1].spaceDirection[2] = 0.0;
+		output->axis[2].spaceDirection[0] = 0.0;
+		output->axis[2].spaceDirection[1] = 0.0;
+		output->axis[2].spaceDirection[2] = 1.0;
+	}
+
+	// turn signed into unsigned
+	if (output->type == nrrdTypeChar) {
+		for (i = 0; i < voxelnum; i++) {
+			char val = ((char*)output->data)[i];
+			unsigned char n = val + 128;
+			((unsigned char*)output->data)[i] = n;
+		}
+		output->type = nrrdTypeUChar;
+	}
+
+	double max_value = 0.0;
+	double scalar_scale = 1.0;
+	// turn signed into unsigned
+	unsigned short min_value = 32768, n;
+	if (output->type == nrrdTypeShort || (output->type == nrrdTypeUShort && get_max)) {
+		for (i = 0; i < voxelnum; i++) {
+			if (output->type == nrrdTypeShort) {
+				short val = ((short*)output->data)[i];
+				n = val + 32768;
+				((unsigned short*)output->data)[i] = n;
+				min_value = (n < min_value) ? n : min_value;
+			}
+			else {
+				n = ((unsigned short*)output->data)[i];
+			}
+			if (get_max)
+				max_value = (n > max_value) ? n : max_value;
+		}
+	}
+	//find max value
+	if (output->type == nrrdTypeUChar)
+	{
+		//8 bit
+		max_value = 255.0;
+		scalar_scale = 1.0;
+	}
+	else if (output->type == nrrdTypeShort)
+	{
+		max_value -= min_value;
+		//16 bit
+		for (i = 0; i < voxelnum; i++) {
+			((unsigned short*)output->data)[i] =
+				((unsigned short*)output->data)[i] - min_value;
+		}
+		if (max_value > 0.0)
+			scalar_scale = 65535.0 / max_value;
+		else
+			scalar_scale = 1.0;
+		output->type = nrrdTypeUShort;
+	}
+	else if (output->type == nrrdTypeUShort)
+	{
+		if (max_value > 0.0)
+			scalar_scale = 65535.0 / max_value;
+		else
+		{
+			max_value = 65535.0;
+			scalar_scale = 1.0;
+		}
+	}
+	else
+	{
+		delete[]output->data;
+		nrrdNix(output);
+		fclose(nrrd_file);
+		return 0;
+	}
+
+	//m_cur_time = t;
+	fclose(nrrd_file);
+
+	//SetInfo();
+
+	return output;
+}
+
 bool NRRDReader::nrrd_sort(const TimeDataInfo& info1, const TimeDataInfo& info2)
 {
 	return info1.filenumber < info2.filenumber;

@@ -32,6 +32,7 @@ public:
 	int LoadBatch(int index);
 	int LoadOffset(int offset);
 	Nrrd* Convert(int t, int c, bool get_max);
+	Nrrd* Convert_ThreadSafe(int t, int c, bool get_max) { return NULL; }
 	wstring GetCurName(int t, int c);
 
 	wstring GetPathName() {return m_path_name;}

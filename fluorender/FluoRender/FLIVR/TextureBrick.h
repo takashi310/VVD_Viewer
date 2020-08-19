@@ -81,19 +81,26 @@ namespace FLIVR {
 		char *m_data;
 		size_t m_size;
 		bool m_protected;
+
+		Nrrd* m_nrrd;
 	public:
 		VL_Array() {
 			m_data = NULL; m_protected = false; m_size = 0;
 		}
-		VL_Array(char *data, size_t size, bool protection = false) {
-			 m_data = data; m_size = size; m_protected = protection;
+		VL_Array(char *data, size_t size, bool protection = false, Nrrd* nrrd = NULL) {
+			m_data = data; m_size = size; m_protected = protection; m_nrrd = nrrd;
 		}
 		~VL_Array() {
 			if (m_data) {
 				delete [] m_data;
 			}
+			if (m_nrrd) {
+				delete[] m_nrrd->data;
+				nrrdNix(m_nrrd);
+			}
 		}
 		const void *getData() { return m_data; }
+		Nrrd* getNrrd() { return m_nrrd; }
 		size_t getSize() { return m_size; }
 		bool isProtected() { return m_protected; }
 		void SetProtection(bool protection) { m_protected = protection; }

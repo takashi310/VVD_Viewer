@@ -1950,7 +1950,7 @@ public:
 	TextRenderer* GetTextRenderer() { if (m_glview) return m_glview->GetTextRenderer(); else return nullptr; }
     
     void SetForceHideMask(bool val) { if (m_glview) m_glview->SetForceHideMask(val); }
-    bool GetForceHideMask() { if (m_glview) return m_glview->GetForceHideMask(); }
+	bool GetForceHideMask() { if (m_glview) return m_glview->GetForceHideMask(); else return false; }
 
 public:
 	wxWindow* m_frame;

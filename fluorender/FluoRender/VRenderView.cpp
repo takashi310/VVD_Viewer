@@ -7195,7 +7195,10 @@ void VRenderVulkanView::Set4DSeqFrame(int frame, bool run_script)
 					double spcx, spcy, spcz;
 					vd->GetSpacings(spcx, spcy, spcz);
 
-					Nrrd* data = reader->Convert(frame, vd->GetCurChannel(), false);
+					Nrrd* data = m_loader.GetLoadedNrrd(vd, vd->GetCurChannel(), frame);
+					if (!data)
+						data = reader->Convert(frame, vd->GetCurChannel(), false);
+
 					if (!vd->Replace(data, false))
 						continue;
 
@@ -7226,7 +7229,7 @@ void VRenderVulkanView::Set4DSeqFrame(int frame, bool run_script)
 		}
 	}
 	RefreshGL();
-
+/* //very slow
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (vr_frame)
 	{
@@ -7235,6 +7238,7 @@ void VRenderVulkanView::Set4DSeqFrame(int frame, bool run_script)
 			vr_frame->GetCurSelVol()->GetName():
 			"");
 	}
+*/
 }
 
 void VRenderVulkanView::Get3DBatFrames(int &start_frame, int &end_frame, int &cur_frame)
@@ -13388,7 +13392,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 				bool shadow = vd->GetShadow();
 				for (j = 0; j < bricks->size(); j++)
 				{
-					VolumeLoaderData d;
+					VolumeLoaderData d = {};
 					TextureBrick* b = (*bricks)[j];
 					if (b->get_disp())
 					{
@@ -13450,7 +13454,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 					int mode = TEXTURE_RENDER_MODE_MASK;
 					for (j = 0; j < bricks->size(); j++)
 					{
-						VolumeLoaderData d;
+						VolumeLoaderData d = {};
 						TextureBrick* b = (*bricks)[j];
 						if (b->get_disp())
 						{
@@ -13515,7 +13519,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 								bool shadow = vd->GetShadow();
 								for (j = 0; j < bricks->size(); j++)
 								{
-									VolumeLoaderData d;
+									VolumeLoaderData d = {};
 									TextureBrick* b = (*bricks)[j];
 									if (b->get_disp())
 									{
@@ -13578,7 +13582,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 								bool shadow = vd->GetShadow();
 								for (k=0; k<bricks->size(); k++)
 								{
-									VolumeLoaderData d;
+									VolumeLoaderData d = {};
 									TextureBrick* b = (*bricks)[k];
 									if (b->get_disp())
 									{
@@ -13630,7 +13634,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 								int mode = TEXTURE_RENDER_MODE_MASK;
 								for (k=0; k<bricks->size(); k++)
 								{
-									VolumeLoaderData d;
+									VolumeLoaderData d = {};
 									TextureBrick* b = (*bricks)[k];
 									if (b->get_disp())
 									{
@@ -13654,12 +13658,58 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 			}
 		}
 
+		if (1)
+		{
+			long long avmem = m_loader.GetAvailableMemory();
+
+			int maxtime = 0;
+			int maxcurtime = 0;
+			vector<VolumeData*> vd_4d_list;
+			for (i = 0; i < displist.size(); i++)
+			{
+				VolumeData* vd = displist[i];
+				if (vd && vd->GetDisp() && !vd->isBrxml() && vd->GetReader() && 
+					vd->GetReader()->GetCurTime() != vd->GetReader()->GetTimeNum())
+				{
+					int tnum = vd->GetReader()->GetTimeNum();
+					if (tnum > maxtime)
+						maxtime = tnum;
+					vd_4d_list.push_back(vd);
+				}
+			}
+			
+			int toffset = 1;
+			while (1)
+			{
+				bool remain = false;
+				for (i = 0; i < vd_4d_list.size(); i++)
+				{
+					VolumeData* vd = vd_4d_list[i];
+					if (vd->GetCurTime() + toffset < vd->GetReader()->GetTimeNum())
+					{
+						VolumeLoaderData d = {};
+						d.chid = vd->GetCurChannel();
+						d.frameid = vd->GetCurTime() + toffset;
+						d.nrrd = NULL;
+						d.vd = vd;
+						d.datasize = vd->GetDataSize();
+						d.brick = NULL;
+						queues.push_back(d);
+						remain = true;
+					}
+				}
+				if (!remain) break;
+				toffset++;
+			}
+		}
+
 		if (queues.size() > 0 && !m_interactive)
 		{
             bool runvl = false;
             for (auto q : queues)
             {
-                if (q.brick && !q.brick->isLoaded() && !q.brick->isLoading())
+                if ( (q.brick && !q.brick->isLoaded() && !q.brick->isLoading()) ||
+					 (q.vd && !q.vd->isBrxml()) )
                 {
                     runvl = true;
                     break;

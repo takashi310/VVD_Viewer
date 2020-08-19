@@ -72,6 +72,8 @@ public:
 	virtual Nrrd* Convert(int t, int c, bool get_max) = 0;//convert the specified channel and time point to nrrd
 	virtual wstring GetCurName(int t, int c) = 0;//for a 4d sequence, get the file name for specified time and channel
 
+	virtual Nrrd* Convert_ThreadSafe(int t, int c, bool get_max) = 0;
+
 	virtual wstring GetPathName() = 0;
 	virtual wstring GetDataName() = 0;
 	virtual int GetTimeNum() = 0;

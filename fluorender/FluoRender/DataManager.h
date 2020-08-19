@@ -703,6 +703,20 @@ public:
 	static Nrrd* NrrdScale(Nrrd* src, size_t dst_datasize, bool interpolation = true);
 	static Nrrd* NrrdScale(Nrrd* src, size_t nx, size_t ny, size_t nz, bool interpolation = true);
 
+	size_t GetDataSize()
+	{
+		size_t ret = 0;
+		size_t w, h, d, bd;
+		if (m_tex)
+		{
+			m_tex->get_dimensions(w, h, d);
+			bd = m_tex->nb(0);
+			ret = w * h * d * bd;
+		}
+
+		return ret;
+	}
+
 private:
 	//duplication indicator and counter
 	bool m_dup;
@@ -1732,6 +1746,10 @@ struct VolumeLoaderData
 	VolumeData *vd;
 	unsigned long long datasize;
 	int mode;
+
+	int chid;
+	int frameid;
+	Nrrd* nrrd;
 };
 
 struct VolumeDecompressorData
@@ -1743,18 +1761,21 @@ struct VolumeDecompressorData
 	VolumeData *vd;
 	unsigned long long datasize;
 	int mode;
+
+	int chid;
+	int frameid;
 };
 
 class VolumeLoader;
 
 class EXPORT_API VolumeDecompressorThread : public wxThread
 {
-    public:
-		VolumeDecompressorThread(VolumeLoader *vl);
-		~VolumeDecompressorThread();
-    protected:
-		virtual ExitCode Entry();
-        VolumeLoader* m_vl;
+public:
+	VolumeDecompressorThread(VolumeLoader* vl);
+	~VolumeDecompressorThread();
+protected:
+	virtual ExitCode Entry();
+	VolumeLoader* m_vl;
 };
 
 class EXPORT_API VolumeLoaderThread : public wxThread
@@ -1788,6 +1809,9 @@ class EXPORT_API VolumeLoader
 		void RemoveBrickVD(VolumeData *vd);
 		void GetPalams(long long &used_mem, int &running_decomp_th, int &queue_num, int &decomp_queue_num);
 		void PreloadLevel(VolumeData *vd, int lv, bool lock=false);
+		Nrrd* GetLoadedNrrd(VolumeData* vd, int ch, int frame);
+		void AddLoadedNrrd(Nrrd *nrrd, VolumeData* vd, int ch, int frame);
+		//void DeleteLoadedNrrd(Nrrd* nrrd, VolumeData* vd, int ch, int frame);
 
 		long long GetAvailableMemory() { return m_memory_limit - m_used_memory; }
 		long long GetMemoryLimitByte() { return m_memory_limit; }
@@ -1807,6 +1831,8 @@ class EXPORT_API VolumeLoader
 		vector<VolumeDecompressorThread *> m_decomp_threads;
 		unordered_map<TextureBrick*, VolumeLoaderData> m_loaded;
 		unordered_map<wstring, std::shared_ptr<VL_Array>> m_memcached_data;
+		unordered_set<wstring> m_loading_files;
+		unordered_map<wstring, VolumeLoaderData> m_loaded_files;
 		int m_running_decomp_th;
 		int m_max_decomp_th;
 		bool m_valid;
@@ -1820,6 +1846,8 @@ class EXPORT_API VolumeLoader
 			m_memcached_data[lbd.finfo->id_string] = lbd.brick->getBrickDataSP();
 			m_used_memory += lbd.datasize;
 		}
+
+		static bool less_vld_frame(const VolumeLoaderData &d1, const VolumeLoaderData &d2) { return d1.frameid < d2.frameid; }
 
 		friend class VolumeLoaderThread;
 		friend class VolumeDecompressorThread;
