@@ -934,7 +934,7 @@ void VRenderVulkanView::Init()
 
 void VRenderVulkanView::Clear()
 {
-	m_loader.RemoveAllLoadedBrick();
+	m_loader.RemoveAllLoadedData();
 	m_vulkan->clearTexPools();
 
 	//delete groups
@@ -2414,7 +2414,7 @@ void VRenderVulkanView::RandomizeColor()
 
 void VRenderVulkanView::ClearVolList()
 {
-	m_loader.RemoveAllLoadedBrick();
+	m_loader.RemoveAllLoadedData();
 	m_vulkan->clearTexPools();
 	m_vd_pop_list.clear();
 }
@@ -8853,7 +8853,7 @@ void VRenderVulkanView::ReplaceVolumeData(wxString &name, VolumeData *dst)
 				if (vd && vd->GetName() == name)
 				{
 					if (m_cur_vol == vd) m_cur_vol = dst;
-					m_loader.RemoveBrickVD(vd);
+					m_loader.RemoveDataVD(vd);
 					vd->GetVR()->clear_tex_current();
 					m_layer_list[i] = dst;
 					m_vd_pop_dirty = true;
@@ -8872,7 +8872,7 @@ void VRenderVulkanView::ReplaceVolumeData(wxString &name, VolumeData *dst)
 					if (vd && vd->GetName() == name)
 					{
 						if (m_cur_vol == vd) m_cur_vol = dst;
-						m_loader.RemoveBrickVD(vd);
+						m_loader.RemoveDataVD(vd);
 						vd->GetVR()->clear_tex_current();
 						tmpgroup->ReplaceVolumeData(j, dst);
 						m_vd_pop_dirty = true;
@@ -8933,7 +8933,7 @@ void VRenderVulkanView::RemoveVolumeData(wxString &name)
 					m_layer_list.erase(m_layer_list.begin()+i);
 					m_vd_pop_dirty = true;
 					m_cur_vol = NULL;
-					m_loader.RemoveBrickVD(vd);
+					m_loader.RemoveDataVD(vd);
 					vd->GetVR()->clear_tex_current();
 					dm->RemoveVolumeData(name);
 					InitView(INIT_BOUNDS | INIT_CENTER);
@@ -8952,7 +8952,7 @@ void VRenderVulkanView::RemoveVolumeData(wxString &name)
 						group->RemoveVolumeData(j);
 						m_vd_pop_dirty = true;
 						m_cur_vol = NULL;
-						m_loader.RemoveBrickVD(vd);
+						m_loader.RemoveDataVD(vd);
 						vd->GetVR()->clear_tex_current();
 						dm->RemoveVolumeData(name);
 						InitView(INIT_BOUNDS | INIT_CENTER);
@@ -8988,7 +8988,7 @@ void VRenderVulkanView::RemoveVolumeDataset(BaseReader *reader, int channel)
 					m_layer_list.erase(m_layer_list.begin()+i);
 					m_vd_pop_dirty = true;
 					if (vd == m_cur_vol) m_cur_vol = NULL;
-					m_loader.RemoveBrickVD(vd);
+					m_loader.RemoveDataVD(vd);
 					vd->GetVR()->clear_tex_current();
 					dm->RemoveVolumeData(vd->GetName());
 				}
@@ -9005,7 +9005,7 @@ void VRenderVulkanView::RemoveVolumeDataset(BaseReader *reader, int channel)
 						group->RemoveVolumeData(j);
 						m_vd_pop_dirty = true;
 						if (vd == m_cur_vol) m_cur_vol = NULL;
-						m_loader.RemoveBrickVD(vd);
+						m_loader.RemoveDataVD(vd);
 						vd->GetVR()->clear_tex_current();
 						dm->RemoveVolumeData(vd->GetName());
 					}
@@ -9117,7 +9117,7 @@ void VRenderVulkanView::RemoveGroup(wxString &name)
 							if (m_cur_vol == vd)
 								m_cur_vol = NULL;
 							group->RemoveVolumeData(j);
-							m_loader.RemoveBrickVD(vd);
+							m_loader.RemoveDataVD(vd);
 							vd->GetVR()->clear_tex_current();
 							dm->RemoveVolumeData(vd->GetName());
 						}

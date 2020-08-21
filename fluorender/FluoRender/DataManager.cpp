@@ -7614,27 +7614,20 @@ wxThread::ExitCode VolumeDecompressorThread::Entry()
 			Nrrd* nrrd = reader->Convert_ThreadSafe(q.frameid, q.chid, false);
 			if (nrrd)
 			{
-				VolumeLoaderData tmp;
-				tmp.vd = q.vd;
-				tmp.chid = q.chid;
-				tmp.datasize = q.datasize;
-				tmp.finfo = q.finfo;
-				tmp.frameid = q.frameid;
-				tmp.nrrd = nrrd;
-
 				wstring nrrd_idstring;
 				std::wstringstream wss;
 				wss << reader->GetPathName() << L" " << q.chid << L" " << q.frameid;
 				nrrd_idstring = wss.str();
 
 				m_vl->m_pThreadCS.Enter();
+				VolumeLoaderImage tmp;
+				tmp.vd = q.vd;
+				tmp.chid = q.chid;
+				tmp.frameid = q.frameid;
+				tmp.vlnrrd = make_shared<VL_Nrrd>(nrrd);
+				m_vl->m_used_memory += tmp.vlnrrd->getDatasize();
 				m_vl->m_loaded_files[nrrd_idstring] = tmp;
-				m_vl->m_used_memory += q.datasize;
 				m_vl->m_pThreadCS.Leave();
-			}
-			else
-			{
-				int dummy = 0;
 			}
 		}
 	}
@@ -7940,13 +7933,22 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 			if (decomp_in_this_thread)
 			{
 				BaseReader* reader = b.vd->GetReader();
-				Nrrd* nrrd = reader->Convert(b.frameid, b.chid, false);
+				Nrrd* nrrd = reader->Convert_ThreadSafe(b.frameid, b.chid, false);
 				if (nrrd)
 				{
+					wstring nrrd_idstring;
+					std::wstringstream wss;
+					wss << reader->GetPathName() << L" " << b.chid << L" " << b.frameid;
+					nrrd_idstring = wss.str();
+
 					m_vl->m_pThreadCS.Enter();
-					b.nrrd = nrrd;
-					m_vl->m_loaded_files[nrrd_idstring] = b;
-					m_vl->m_used_memory += b.datasize;
+					VolumeLoaderImage tmp;
+					tmp.vd = b.vd;
+					tmp.chid = b.chid;
+					tmp.frameid = b.frameid;
+					tmp.vlnrrd = make_shared<VL_Nrrd>(nrrd);
+					m_vl->m_used_memory += tmp.vlnrrd->getDatasize();
+					m_vl->m_loaded_files[nrrd_idstring] = tmp;
 					m_vl->m_pThreadCS.Leave();
 				}
 			}
@@ -8105,41 +8107,94 @@ void VolumeLoader::CleanupLoadedBrick()
 
 	if (required > 3LL*1024LL*1024LL*1024LL) 
 		required = 3LL*1024LL*1024LL*1024LL;
-
-	vector<VolumeLoaderData> loaded_frames;
-	for (auto elem : m_loaded_files)
-	{
-		if (elem.second.vd->GetCurTime() != elem.second.frameid)
-		{
-			int curtime = elem.second.vd->GetCurTime();
-			VolumeLoaderData tmp = elem.second;
-			tmp.frameid = tmp.vd->GetCurTime() - curtime;
-			tmp.datasize = tmp.vd->GetDataSize();
-			loaded_frames.push_back(tmp);
-		}
-	}
 	
-	std::sort(loaded_frames.begin(), loaded_frames.end(), less_vld_frame);
+	vector<VolumeLoaderImageKey> loaded_image_keys;
+	size_t cur_time = 0;
+	for (auto &elem : m_loaded_files)
+	{
+		if (cur_time < elem.second.vd->GetCurTime())
+			cur_time = elem.second.vd->GetCurTime();
+		VolumeLoaderImageKey k;
+		k.frameid = elem.second.frameid;
+		k.key = elem.first;
+		loaded_image_keys.push_back(k);
+	}
+	std::sort(loaded_image_keys.begin(), loaded_image_keys.end(), less_vld_frame);
+
 	if (required > 0 || m_used_memory >= m_memory_limit)
 	{
-		for (int i = 0; i < loaded_frames.size(); i++)
+		auto it = loaded_image_keys.begin();
+		while (it != loaded_image_keys.end() &&
+			m_loaded_files[it->key].frameid < cur_time &&
+			(required > 0 || m_used_memory >= m_memory_limit))
 		{
-			if (loaded_frames[i].frameid >= 0)
-				break;
-			delete[] loaded_frames[i].nrrd->data;
-			nrrdNix(loaded_frames[i].nrrd);
-			m_used_memory -= loaded_frames[i].datasize;
+			if (!m_loaded_files[it->key].vd->GetDisp() && m_loaded_files[it->key].vlnrrd)
+			{
+				long long datasize = m_loaded_files[it->key].vlnrrd->getDatasize();
+				required -= datasize;
+				m_used_memory -= datasize;
+				m_loaded_files.erase(it->key);
+				it = loaded_image_keys.erase(it);
+			}
+			else
+				it++;
 		}
 	}
 	if (required > 0 || m_used_memory >= m_memory_limit)
 	{
-		for (int i = loaded_frames.size() - 1; i >= 0; i--)
+		auto it = loaded_image_keys.rbegin();
+		while (it != loaded_image_keys.rend() &&
+			m_loaded_files[it->key].frameid > cur_time &&
+			(required > 0 || m_used_memory >= m_memory_limit))
 		{
-			if (loaded_frames[i].frameid <= 0)
-				break;
-			delete[] loaded_frames[i].nrrd->data;
-			nrrdNix(loaded_frames[i].nrrd);
-			m_used_memory -= loaded_frames[i].datasize;
+			if (!m_loaded_files[it->key].vd->GetDisp() && m_loaded_files[it->key].vlnrrd)
+			{
+				long long datasize = m_loaded_files[it->key].vlnrrd->getDatasize();
+				required -= datasize;
+				m_used_memory -= datasize;
+				m_loaded_files.erase(it->key);
+				loaded_image_keys.erase((++it).base());
+			}
+			else
+				it++;
+		}
+	}
+	if (required > 0 || m_used_memory >= m_memory_limit)
+	{
+		auto it = loaded_image_keys.begin();
+		while (it != loaded_image_keys.end() &&
+			m_loaded_files[it->key].frameid < cur_time &&
+			(required > 0 || m_used_memory >= m_memory_limit))
+		{
+			if (m_loaded_files[it->key].vlnrrd)
+			{
+				long long datasize = m_loaded_files[it->key].vlnrrd->getDatasize();
+				required -= datasize;
+				m_used_memory -= datasize;
+				m_loaded_files.erase(it->key);
+				it = loaded_image_keys.erase(it);
+			}
+			else
+				it++;
+		}
+	}
+	if (required > 0 || m_used_memory >= m_memory_limit)
+	{
+		auto it = loaded_image_keys.rbegin();
+		while (it != loaded_image_keys.rend() &&
+			m_loaded_files[it->key].frameid > cur_time &&
+			(required > 0 || m_used_memory >= m_memory_limit))
+		{
+			if (m_loaded_files[it->key].vlnrrd)
+			{
+				long long datasize = m_loaded_files[it->key].vlnrrd->getDatasize();
+				required -= datasize;
+				m_used_memory -= datasize;
+				m_loaded_files.erase(it->key);
+				loaded_image_keys.erase((++it).base());
+			}
+			else
+				it++;
 		}
 	}
 
@@ -8147,19 +8202,20 @@ void VolumeLoader::CleanupLoadedBrick()
 	vector<VolumeLoaderData> vd_undisp;
 	vector<VolumeLoaderData> b_undisp;
 	vector<VolumeLoaderData> b_drawn;
-	for(auto elem : m_loaded)
-	{
-		if(elem.second.brick->is_brickdata_locked())
-			b_locked.push_back(elem.second);
-		else if (!elem.second.vd->GetDisp())
-			vd_undisp.push_back(elem.second);
-		else if(!elem.second.brick->get_disp())
-			b_undisp.push_back(elem.second);
-		else if (elem.second.brick->drawn(elem.second.mode))
-			b_drawn.push_back(elem.second);
-	}
 	if (required > 0 || m_used_memory >= m_memory_limit)
 	{
+		for (auto elem : m_loaded)
+		{
+			if (elem.second.brick->is_brickdata_locked())
+				b_locked.push_back(elem.second);
+			else if (!elem.second.vd->GetDisp())
+				vd_undisp.push_back(elem.second);
+			else if (!elem.second.brick->get_disp())
+				b_undisp.push_back(elem.second);
+			else if (elem.second.brick->drawn(elem.second.mode))
+				b_drawn.push_back(elem.second);
+		}
+
 		for (int i = 0; i < vd_undisp.size(); i++)
 		{
 			if (!vd_undisp[i].brick->isLoaded())
@@ -8302,23 +8358,116 @@ void VolumeLoader::TryToFreeMemory(long long req)
 
 	long long required = req > 0 ? req-available_memory : m_used_memory;
 
+
+	vector<VolumeLoaderImageKey> loaded_image_keys;
+	size_t cur_time = 0;
+	for (auto& elem : m_loaded_files)
+	{
+		if (cur_time < elem.second.vd->GetCurTime())
+			cur_time = elem.second.vd->GetCurTime();
+		VolumeLoaderImageKey k;
+		k.frameid = elem.second.frameid;
+		k.key = elem.first;
+		loaded_image_keys.push_back(k);
+	}
+	std::sort(loaded_image_keys.begin(), loaded_image_keys.end(), less_vld_frame);
+
+	if (required > 0)
+	{
+		auto it = loaded_image_keys.begin();
+		while (it != loaded_image_keys.end() &&
+			m_loaded_files[it->key].frameid < cur_time &&
+			(required > 0 || m_used_memory >= m_memory_limit))
+		{
+			if (!m_loaded_files[it->key].vd->GetDisp() && m_loaded_files[it->key].vlnrrd)
+			{
+				long long datasize = m_loaded_files[it->key].vlnrrd->getDatasize();
+				required -= datasize;
+				m_used_memory -= datasize;
+				m_loaded_files.erase(it->key);
+				it = loaded_image_keys.erase(it);
+			}
+			else
+				it++;
+		}
+	}
+	if (required > 0)
+	{
+		auto it = loaded_image_keys.rbegin();
+		while (it != loaded_image_keys.rend() &&
+			m_loaded_files[it->key].frameid > cur_time &&
+			(required > 0 || m_used_memory >= m_memory_limit))
+		{
+			if (!m_loaded_files[it->key].vd->GetDisp() && m_loaded_files[it->key].vlnrrd)
+			{
+				long long datasize = m_loaded_files[it->key].vlnrrd->getDatasize();
+				required -= datasize;
+				m_used_memory -= datasize;
+				m_loaded_files.erase(it->key);
+				loaded_image_keys.erase((++it).base());
+			}
+			else
+				it++;
+		}
+	}
+	if (required > 0)
+	{
+		auto it = loaded_image_keys.begin();
+		while (it != loaded_image_keys.end() &&
+			m_loaded_files[it->key].frameid < cur_time &&
+			(required > 0 || m_used_memory >= m_memory_limit))
+		{
+			if (m_loaded_files[it->key].vlnrrd)
+			{
+				long long datasize = m_loaded_files[it->key].vlnrrd->getDatasize();
+				required -= datasize;
+				m_used_memory -= datasize;
+				m_loaded_files.erase(it->key);
+				it = loaded_image_keys.erase(it);
+			}
+			else
+				it++;
+		}
+	}
+	if (required > 0)
+	{
+		auto it = loaded_image_keys.rbegin();
+		while (it != loaded_image_keys.rend() &&
+			m_loaded_files[it->key].frameid > cur_time &&
+			(required > 0 || m_used_memory >= m_memory_limit))
+		{
+			if (m_loaded_files[it->key].vlnrrd)
+			{
+				long long datasize = m_loaded_files[it->key].vlnrrd->getDatasize();
+				required -= datasize;
+				m_used_memory -= datasize;
+				m_loaded_files.erase(it->key);
+				loaded_image_keys.erase((++it).base());
+			}
+			else
+				it++;
+		}
+	}
+
 	vector<VolumeLoaderData> b_locked;
 	vector<VolumeLoaderData> vd_undisp;
 	vector<VolumeLoaderData> b_undisp;
 	vector<VolumeLoaderData> b_others;
-	for(auto elem : m_loaded)
-	{
-		if(elem.second.brick->is_brickdata_locked())
-			b_locked.push_back(elem.second);
-		else if (!elem.second.vd->GetDisp())
-			vd_undisp.push_back(elem.second);
-		else if(!elem.second.brick->get_disp())
-			b_undisp.push_back(elem.second);
-		else
-			b_others.push_back(elem.second);
-	}
+	
 	if (required > 0)
 	{
+		for (auto elem : m_loaded)
+		{
+			if (elem.second.brick->is_brickdata_locked())
+				b_locked.push_back(elem.second);
+			else if (!elem.second.vd->GetDisp())
+				vd_undisp.push_back(elem.second);
+			else if (!elem.second.brick->get_disp())
+				b_undisp.push_back(elem.second);
+			else
+				b_others.push_back(elem.second);
+		}
+
 		for (int i = 0; i < vd_undisp.size(); i++)
 		{
 			if (!vd_undisp[i].brick->isLoaded())
@@ -8403,7 +8552,18 @@ void VolumeLoader::RemoveAllLoadedBrick()
 	m_memcached_data.clear();
 }
 
-void VolumeLoader::RemoveBrickVD(VolumeData *vd)
+void VolumeLoader::RemoveAllLoadedData()
+{
+	StopAll();
+
+	for (auto& elem : m_loaded_files)
+		m_used_memory -= elem.second.vlnrrd->getDatasize();
+	m_loaded_files.clear();
+
+	RemoveAllLoadedBrick();
+}
+
+void VolumeLoader::RemoveDataVD(VolumeData *vd)
 {
 	StopAll();
 	auto ite = m_loaded.begin();
@@ -8429,6 +8589,18 @@ void VolumeLoader::RemoveBrickVD(VolumeData *vd)
 		}
 		else
 			ite2++;
+	}
+
+	auto ite3 = m_loaded_files.begin();
+	while (ite3 != m_loaded_files.end())
+	{
+		if (ite3->second.vd == vd)
+		{
+			m_used_memory -= ite3->second.vlnrrd->getDatasize();
+			ite3 = m_loaded_files.erase(ite3);
+		}
+		else
+			ite3++;
 	}
 }
 
@@ -8480,7 +8652,7 @@ void VolumeLoader::PreloadLevel(VolumeData *vd, int lv, bool lock)
 	SetMemoryLimitByte(cur_memlimit);
 }
 
-Nrrd* VolumeLoader::GetLoadedNrrd(VolumeData* vd, int ch, int frame)
+std::shared_ptr<VL_Nrrd> VolumeLoader::GetLoadedNrrd(VolumeData* vd, int ch, int frame)
 {
 	BaseReader* reader = vd->GetReader();
 	wstring nrrd_idstring;
@@ -8488,21 +8660,19 @@ Nrrd* VolumeLoader::GetLoadedNrrd(VolumeData* vd, int ch, int frame)
 	wss << reader->GetPathName() << L" " << ch << L" " << frame;
 	nrrd_idstring = wss.str();
 
-	Nrrd* nrrd = NULL;
 	if (m_loaded_files.find(nrrd_idstring) != m_loaded_files.end())
-		nrrd = m_loaded_files[nrrd_idstring].nrrd;
+		return m_loaded_files[nrrd_idstring].vlnrrd;
 	
-	return nrrd;
+	return nullptr;
 }
 
-void VolumeLoader::AddLoadedNrrd(Nrrd* nrrd, VolumeData* vd, int ch, int frame)
+void VolumeLoader::AddLoadedNrrd(const std::shared_ptr<VL_Nrrd> &nrrd, VolumeData* vd, int ch, int frame)
 {
-	VolumeLoaderData vld;
-	vld.chid = ch;
-	vld.frameid = frame;
-	vld.datasize = vd->GetDataSize();
-	vld.vd = vd;
-	vld.nrrd = nrrd;
+	VolumeLoaderImage vli;
+	vli.chid = ch;
+	vli.frameid = frame;
+	vli.vd = vd;
+	vli.vlnrrd = nrrd;
 
 	BaseReader* reader = vd->GetReader();
 	wstring nrrd_idstring;
@@ -8510,7 +8680,7 @@ void VolumeLoader::AddLoadedNrrd(Nrrd* nrrd, VolumeData* vd, int ch, int frame)
 	wss << reader->GetPathName() << L" " << ch << L" " << frame;
 	nrrd_idstring = wss.str();
 
-	m_loaded_files[nrrd_idstring] = vld;
+	m_loaded_files[nrrd_idstring] = vli;
 }
 
 void VolumeLoader::GetPalams(long long &used_mem, int &running_decomp_th, int &queue_num, int &decomp_queue_num)

@@ -75,6 +75,85 @@ namespace FLIVR {
 #define BRICK_FILE_TYPE_ZLIB	3
 #define BRICK_FILE_TYPE_H265	4
 
+	class EXPORT_API VL_Nrrd
+	{
+		Nrrd* m_nrrd;
+		bool m_protected;
+
+	public:
+		VL_Nrrd() {
+			m_nrrd = NULL; m_protected = false;
+		}
+		VL_Nrrd(Nrrd* nrrd, bool protection = false) {
+			m_nrrd = nrrd; m_protected = protection;
+		}
+		~VL_Nrrd() {
+			if (m_nrrd) {
+				if (m_nrrd->data)
+				{
+					switch (m_nrrd->type)
+					{
+					case nrrdTypeChar:
+					case nrrdTypeUChar:
+						delete[] static_cast<unsigned char*>(m_nrrd->data);
+						break;
+					case nrrdTypeShort:
+					case nrrdTypeUShort:
+						delete[] static_cast<unsigned short*>(m_nrrd->data);
+						break;
+					case nrrdTypeInt:
+					case nrrdTypeUInt:
+						delete[] static_cast<unsigned int*>(m_nrrd->data);
+						break;
+					case nrrdTypeFloat:
+						delete[] static_cast<float*>(m_nrrd->data);
+					default:
+						delete[] m_nrrd->data;
+					}
+					m_nrrd->data = nullptr;
+				}
+				nrrdNix(m_nrrd);
+			}
+		}
+		const Nrrd* getNrrd() { return m_nrrd; }
+		bool isProtected() { return m_protected; }
+		void SetProtection(bool protection) { m_protected = protection; }
+		size_t getDatasize()
+		{
+			if (!m_nrrd)
+				return 0;
+			size_t b = 0;
+			if (m_nrrd->data)
+			{
+				switch (m_nrrd->type)
+				{
+				case nrrdTypeChar:
+				case nrrdTypeUChar:
+					b = 1;
+					break;
+				case nrrdTypeShort:
+				case nrrdTypeUShort:
+					b = 2;
+					break;
+				case nrrdTypeInt:
+				case nrrdTypeUInt:
+					b = 4;
+					break;
+				case nrrdTypeFloat:
+					b = 4;
+				default:
+					b = 0;
+				}
+			}
+			size_t size[3];
+			int offset = 0;
+			if (m_nrrd->dim > 3) offset = 1;
+
+			for (size_t p = 0; p < 3; p++)
+				size[p] = (int)m_nrrd->axis[p + offset].size;
+			return size[0] * size[1] * size[2] * b;
+		}
+	};
 
 	class EXPORT_API VL_Array
 	{
@@ -82,25 +161,19 @@ namespace FLIVR {
 		size_t m_size;
 		bool m_protected;
 
-		Nrrd* m_nrrd;
 	public:
 		VL_Array() {
 			m_data = NULL; m_protected = false; m_size = 0;
 		}
-		VL_Array(char *data, size_t size, bool protection = false, Nrrd* nrrd = NULL) {
-			m_data = data; m_size = size; m_protected = protection; m_nrrd = nrrd;
+		VL_Array(char *data, size_t size, bool protection = false) {
+			m_data = data; m_size = size; m_protected = protection;
 		}
 		~VL_Array() {
 			if (m_data) {
 				delete [] m_data;
 			}
-			if (m_nrrd) {
-				delete[] m_nrrd->data;
-				nrrdNix(m_nrrd);
-			}
 		}
 		const void *getData() { return m_data; }
-		Nrrd* getNrrd() { return m_nrrd; }
 		size_t getSize() { return m_size; }
 		bool isProtected() { return m_protected; }
 		void SetProtection(bool protection) { m_protected = protection; }

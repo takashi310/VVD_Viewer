@@ -1749,7 +1749,20 @@ struct VolumeLoaderData
 
 	int chid;
 	int frameid;
-	Nrrd* nrrd;
+};
+
+struct VolumeLoaderImage
+{
+	VolumeData* vd;
+	int chid;
+	int frameid;
+	std::shared_ptr<VL_Nrrd> vlnrrd;
+};
+
+struct VolumeLoaderImageKey
+{
+	int frameid;
+	wstring key;
 };
 
 struct VolumeDecompressorData
@@ -1806,11 +1819,12 @@ class EXPORT_API VolumeLoader
 		void TryToFreeMemory(long long req=-1);
 		void CheckMemoryCache();
 		void RemoveAllLoadedBrick();
-		void RemoveBrickVD(VolumeData *vd);
+		void RemoveAllLoadedData();
+		void RemoveDataVD(VolumeData *vd);
 		void GetPalams(long long &used_mem, int &running_decomp_th, int &queue_num, int &decomp_queue_num);
 		void PreloadLevel(VolumeData *vd, int lv, bool lock=false);
-		Nrrd* GetLoadedNrrd(VolumeData* vd, int ch, int frame);
-		void AddLoadedNrrd(Nrrd *nrrd, VolumeData* vd, int ch, int frame);
+		std::shared_ptr<VL_Nrrd> GetLoadedNrrd(VolumeData* vd, int ch, int frame);
+		void AddLoadedNrrd(const std::shared_ptr<VL_Nrrd> &nrrd, VolumeData* vd, int ch, int frame);
 		//void DeleteLoadedNrrd(Nrrd* nrrd, VolumeData* vd, int ch, int frame);
 
 		long long GetAvailableMemory() { return m_memory_limit - m_used_memory; }
@@ -1832,7 +1846,7 @@ class EXPORT_API VolumeLoader
 		unordered_map<TextureBrick*, VolumeLoaderData> m_loaded;
 		unordered_map<wstring, std::shared_ptr<VL_Array>> m_memcached_data;
 		unordered_set<wstring> m_loading_files;
-		unordered_map<wstring, VolumeLoaderData> m_loaded_files;
+		unordered_map<wstring, VolumeLoaderImage> m_loaded_files;
 		int m_running_decomp_th;
 		int m_max_decomp_th;
 		bool m_valid;
@@ -1847,7 +1861,7 @@ class EXPORT_API VolumeLoader
 			m_used_memory += lbd.datasize;
 		}
 
-		static bool less_vld_frame(const VolumeLoaderData &d1, const VolumeLoaderData &d2) { return d1.frameid < d2.frameid; }
+		static bool less_vld_frame(const VolumeLoaderImageKey&d1, const VolumeLoaderImageKey&d2) { return d1.frameid < d2.frameid; }
 
 		friend class VolumeLoaderThread;
 		friend class VolumeDecompressorThread;
