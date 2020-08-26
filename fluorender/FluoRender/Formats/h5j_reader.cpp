@@ -318,7 +318,7 @@ int H5JReader::LoadBatch(int index)
 	return result;
 }
 
-Nrrd* H5JReader::Convert(int t, int c, bool get_max)
+Nrrd* H5JReader::ConvertNrrd(int t, int c, bool get_max)
 {
 	if (t < 0 || t >= m_time_num ||
 		c < 0 || c >= m_chan_num)

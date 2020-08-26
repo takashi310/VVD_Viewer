@@ -49,7 +49,6 @@ public:
 	void Preprocess();
 	void SetBatch(bool batch);
 	int LoadBatch(int index);
-	Nrrd* Convert(int t, int c, bool get_max);
 	Nrrd* Convert_ThreadSafe(int t, int c, bool get_max) { return NULL; }
 	wstring GetCurName(int t, int c);
 
@@ -71,6 +70,9 @@ public:
 	bool GetBatch() {return false;}
 	int GetBatchNum() {return 0;}
 	int GetCurBatch() {return 0;}
+
+protected:
+	Nrrd* ConvertNrrd(int t, int c, bool get_max);
 };
 
 #endif//_LBL_READER_H_

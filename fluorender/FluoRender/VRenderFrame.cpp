@@ -2772,7 +2772,7 @@ void VRenderFrame::SaveProject(wxString& filename)
 			fconfig.Write("roi_disp_mode", vd->GetIDColDispMode());
 
 			//mask
-			Nrrd* mask = vd->GetMask(true);
+			auto mask = vd->GetMask(true);
 			str = "";
 			if (mask)
 			{
@@ -2788,7 +2788,7 @@ void VRenderFrame::SaveProject(wxString& filename)
 			fconfig.Write("mask", str);
             
             //label
-            Nrrd* label = vd->GetLabel(true);
+            auto label = vd->GetLabel(true);
             str = "";
             if (label)
             {
@@ -3721,8 +3721,8 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 							wstring maskname = str.ToStdWstring();
 							msk_reader.SetFile(maskname);
 							BaseReader *br = &msk_reader;
-							Nrrd* mask = br->Convert(true);
-							Nrrd* oldmask = vd->GetMask(false);
+							auto mask = br->Convert(true);
+							auto oldmask = vd->GetMask(false);
 							if (oldmask)
 								vd->DeleteMask();
 							if (mask)
@@ -3736,8 +3736,8 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
                             wstring lblname = str.ToStdWstring();
                             lbl_reader.SetFile(lblname);
                             BaseReader *br = &lbl_reader;
-                            Nrrd* label = br->Convert(true);
-                            Nrrd* oldlabel = vd->GetLabel(false);
+                            auto label = br->Convert(true);
+                            auto oldlabel = vd->GetLabel(false);
                             if (oldlabel)
                                 vd->DeleteLabel();
                             if (label)

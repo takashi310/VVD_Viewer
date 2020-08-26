@@ -63,7 +63,7 @@ namespace FLIVR
 	size_t TextureBrick::memcache_limit = 1024*1024*1024;
 
     
-   TextureBrick::TextureBrick (Nrrd* n0, Nrrd* n1,
+   TextureBrick::TextureBrick (const shared_ptr<VL_Nrrd>& n0, const shared_ptr<VL_Nrrd>& n1,
          int nx, int ny, int nz, int nc, int* nb,
          int ox, int oy, int oz,
          int mx, int my, int mz,
@@ -127,8 +127,6 @@ namespace FLIVR
    {
       // Creator of the brick owns the nrrds.
       // This object never deletes that memory.
-      data_[0] = 0;
-      data_[1] = 0;
    }
 
    /* The cube is numbered in the following way
@@ -876,26 +874,32 @@ z
 
    int TextureBrick::sx()
    {
-      if (data_[0]->dim == 3)
-         return (int)data_[0]->axis[0].size;
-      else
-         return (int)data_[0]->axis[1].size;
+	   if (!data_[0]->getNrrd())
+		   return 0;
+	   if (data_[0]->getNrrd()->dim == 3)
+		   return (int)data_[0]->getNrrd()->axis[0].size;
+	   else
+		   return (int)data_[0]->getNrrd()->axis[1].size;
    }
 
    int TextureBrick::sy()
    {
-      if (data_[0]->dim == 3)
-         return (int)data_[0]->axis[1].size;
-      else
-         return (int)data_[0]->axis[2].size;
+	   if (!data_[0]->getNrrd())
+		   return 0;
+	   if (data_[0]->getNrrd()->dim == 3)
+		   return (int)data_[0]->getNrrd()->axis[1].size;
+	   else
+		   return (int)data_[0]->getNrrd()->axis[2].size;
    }
 
    int TextureBrick::sz()
    {
-      if (data_[0]->dim == 3)
-         return (int)data_[0]->axis[2].size;
-      else
-         return (int)data_[0]->axis[3].size;
+	   if (!data_[0]->getNrrd())
+		   return 0;
+	   if (data_[0]->getNrrd()->dim == 3)
+		   return (int)data_[0]->getNrrd()->axis[2].size;
+	   else
+		   return (int)data_[0]->getNrrd()->axis[3].size;
    }
 
    VkFormat TextureBrick::tex_format_aux(Nrrd* n)
@@ -925,16 +929,16 @@ z
    VkFormat TextureBrick::tex_format(int c)
    {
       if (c < nc_)
-         return tex_format_aux(data_[c]);
+         return tex_format_aux(data_[c]->getNrrd());
       else if (c == nmask_)
 		 return VK_FORMAT_R8_UNORM;
 	  else if (c == nlabel_)
 	  {
-		  if (data_[c]->type == nrrdTypeUChar)
+		  if (data_[c]->getNrrd()->type == nrrdTypeUChar)
 			  return VK_FORMAT_R8_UINT;
-		  else if (data_[c]->type == nrrdTypeUShort)
+		  else if (data_[c]->getNrrd()->type == nrrdTypeUShort)
 			  return VK_FORMAT_R16_UINT;
-		  else if (data_[c]->type == nrrdTypeUInt)
+		  else if (data_[c]->getNrrd()->type == nrrdTypeUInt)
 			  return VK_FORMAT_R32_UINT;
 	  }
 	  else if (c == nstroke_)
@@ -945,11 +949,11 @@ z
 
    void *TextureBrick::tex_data(int c)
    {
-	   if (c >= 0 && data_[c])
+	   if (c >= 0 && data_[c] && data_[c]->getNrrd())
 	   {
-		   if(data_[c]->data)
+		   if(data_[c]->getNrrd()->data)
 		   {
-			   char *ptr = (char *)(data_[c]->data);
+			   char *ptr = (char *)(data_[c]->getNrrd()->data);
 			   long long offset = (long long)(oz()) * (long long)(sx()) * (long long)(sy()) +
 								  (long long)(oy()) * (long long)(sx()) +
 								  (long long)(ox());
@@ -981,18 +985,18 @@ z
    
    void TextureBrick::set_priority()
    {
-      if (!data_[0])
+      if (!data_[0] && !data_[0]->getNrrd())
       {
          priority_ = 0;
          return;
       }
       size_t vs = tex_format_size(tex_format(0));
-      size_t sx = data_[0]->axis[0].size;
-      size_t sy = data_[0]->axis[1].size;
+      size_t sx = data_[0]->getNrrd()->axis[0].size;
+      size_t sy = data_[0]->getNrrd()->axis[1].size;
       if (vs == 1)
       {
          unsigned char max = 0;
-         unsigned char *ptr = (unsigned char *)(data_[0]->data);
+         unsigned char *ptr = (unsigned char *)(data_[0]->getNrrd()->data);
          for (int i=0; i<nx_; i++)
             for (int j=0; j<ny_; j++)
                for (int k=0; k<nz_; k++)
@@ -1010,7 +1014,7 @@ z
       else if (vs == 2)
       {
          unsigned short max = 0;
-         unsigned short *ptr = (unsigned short *)(data_[0]->data);
+         unsigned short *ptr = (unsigned short *)(data_[0]->getNrrd()->data);
          for (int i=0; i<nx_; i++)
             for (int j=0; j<ny_; j++)
                for (int k=0; k<nz_; k++)

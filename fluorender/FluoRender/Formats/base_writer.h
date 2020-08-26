@@ -30,6 +30,7 @@ DEALINGS IN THE SOFTWARE.
 
 #include <string>
 #include <nrrd.h>
+#include <FLIVR/TextureBrick.h>
 #include "DLLExport.h"
 
 using namespace std;
@@ -45,7 +46,7 @@ public:
 	//BaseWriter();
 	virtual ~BaseWriter() {};
 
-	virtual void SetData(Nrrd* data) = 0;
+	virtual void SetData(const std::shared_ptr<FLIVR::VL_Nrrd> &data) = 0;
 	virtual void SetSpacings(double spcx, double spcy, double spcz) = 0;
 	virtual void SetCompression(bool value) = 0;
 	virtual void Save(wstring filename, int mode) = 0;

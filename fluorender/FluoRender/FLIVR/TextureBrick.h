@@ -107,6 +107,7 @@ namespace FLIVR {
 						break;
 					case nrrdTypeFloat:
 						delete[] static_cast<float*>(m_nrrd->data);
+						break;
 					default:
 						delete[] m_nrrd->data;
 					}
@@ -115,36 +116,93 @@ namespace FLIVR {
 				nrrdNix(m_nrrd);
 			}
 		}
-		const Nrrd* getNrrd() { return m_nrrd; }
+
+		int getBytesPerSample() {
+			int ret = 0;
+			if (m_nrrd) {
+				if (m_nrrd->data)
+				{
+					switch (m_nrrd->type)
+					{
+					case nrrdTypeChar:
+					case nrrdTypeUChar:
+						ret = 1;
+						break;
+					case nrrdTypeShort:
+					case nrrdTypeUShort:
+						ret = 2;
+						break;
+					case nrrdTypeInt:
+					case nrrdTypeUInt:
+					case nrrdTypeFloat:
+						ret = 4;
+						break;
+					default:
+						ret = 0;
+					}
+				}
+			}
+			return ret;
+		}
+
+		Nrrd* getNrrd() { return m_nrrd; }
+
+		Nrrd* getNrrdDeepCopy()
+		{
+			Nrrd* output = nullptr;
+			void* indata = m_nrrd->data;
+			m_nrrd->data = NULL;
+			nrrdCopy(output, m_nrrd);
+			m_nrrd->data = indata;
+
+			size_t dim = m_nrrd->dim;
+			std::vector<int> size(dim);
+
+			int offset = 0;
+			if (dim > 3) offset = 1;
+
+			for (size_t p = 0; p < dim; p++)
+				size[p] = (int)m_nrrd->axis[p + offset].size;
+
+			size_t width = size[0];
+			size_t height = size[1];
+			size_t depth = size[2];
+
+			size_t voxelnum = width * height * depth;
+
+			switch (m_nrrd->type)
+			{
+			case nrrdTypeChar:
+			case nrrdTypeUChar:
+				output->data = new unsigned char[voxelnum];
+				break;
+			case nrrdTypeShort:
+			case nrrdTypeUShort:
+				output->data = new unsigned short[voxelnum];
+				break;
+			case nrrdTypeInt:
+			case nrrdTypeUInt:
+				output->data = new unsigned int[voxelnum];
+				break;
+			case nrrdTypeFloat:
+				output->data = new float[voxelnum];
+				break;
+			default:
+				delete[] m_nrrd->data;
+			}
+
+			memcpy(output->data, indata, size_t(voxelnum * getBytesPerSample()));
+
+			return output;
+		}
+
 		bool isProtected() { return m_protected; }
 		void SetProtection(bool protection) { m_protected = protection; }
 		size_t getDatasize()
 		{
 			if (!m_nrrd)
 				return 0;
-			size_t b = 0;
-			if (m_nrrd->data)
-			{
-				switch (m_nrrd->type)
-				{
-				case nrrdTypeChar:
-				case nrrdTypeUChar:
-					b = 1;
-					break;
-				case nrrdTypeShort:
-				case nrrdTypeUShort:
-					b = 2;
-					break;
-				case nrrdTypeInt:
-				case nrrdTypeUInt:
-					b = 4;
-					break;
-				case nrrdTypeFloat:
-					b = 4;
-				default:
-					b = 0;
-				}
-			}
+			size_t b = getBytesPerSample();
 			size_t size[3];
 			int offset = 0;
 			if (m_nrrd->dim > 3) offset = 1;
@@ -153,6 +211,7 @@ namespace FLIVR {
 				size[p] = (int)m_nrrd->axis[p + offset].size;
 			return size[0] * size[1] * size[2] * b;
 		}
+
 	};
 
 	class EXPORT_API VL_Array
@@ -255,7 +314,7 @@ namespace FLIVR {
 			TYPE_NONE=0, TYPE_INT, TYPE_INT_GRAD, TYPE_GM, TYPE_MASK, TYPE_LABEL, TYPE_STROKE
 		};
 		// Creator of the brick owns the nrrd memory.
-		TextureBrick(Nrrd* n0, Nrrd* n1,
+		TextureBrick(const std::shared_ptr<VL_Nrrd>& n0, const std::shared_ptr<VL_Nrrd>& n1,
 			int nx, int ny, int nz, int nc, int* nb, int ox, int oy, int oz,
 			int mx, int my, int mz, const BBox& bbox, const BBox& tbox, const BBox& dbox, int findex = 0, long long offset = 0LL, long long fsize = 0LL);
 		virtual ~TextureBrick();
@@ -332,10 +391,12 @@ namespace FLIVR {
 		{ if (comp>=0 && comp<TEXTURE_MAX_COMPONENTS) return dirty_[comp]; else return false;}
 
 		// Creator of the brick owns the nrrd memory.
-		void set_nrrd(Nrrd* data, int index)
+		void set_nrrd(const std::shared_ptr<FLIVR::VL_Nrrd> &data, int index)
 		{if (index>=0&&index<TEXTURE_MAX_COMPONENTS) data_[index] = data;}
-		Nrrd* get_nrrd(int index)
+		std::shared_ptr<FLIVR::VL_Nrrd> get_nrrd(int index)
 		{if (index>=0&&index<TEXTURE_MAX_COMPONENTS) return data_[index]; else return 0;}
+		Nrrd* get_nrrd_raw(int index)
+		{if (index >= 0 && index < TEXTURE_MAX_COMPONENTS) return data_[index] ? data_[index]->getNrrd() : nullptr; else return 0;}
 
 		//find out priority
 		void set_priority();
@@ -469,7 +530,7 @@ namespace FLIVR {
 		Ray edge_[12]; 
 		//! tbox edges
 		Ray tex_edge_[12]; 
-		Nrrd* data_[TEXTURE_MAX_COMPONENTS];
+		std::shared_ptr<VL_Nrrd> data_[TEXTURE_MAX_COMPONENTS];
 		//! axis sizes (pow2)
 		int nx_, ny_, nz_; 
 		//! number of components (< TEXTURE_MAX_COMPONENTS)
@@ -541,7 +602,7 @@ namespace FLIVR {
 	struct Pyramid_Level {
 			std::vector<FileLocInfo *> *filenames;
 			int filetype;
-			Nrrd* data;
+			std::shared_ptr<FLIVR::VL_Nrrd> data;
 			std::vector<TextureBrick *> bricks;
 	};
 

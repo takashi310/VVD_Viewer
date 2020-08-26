@@ -156,7 +156,6 @@ public:
 	uint64_t GetNumTiffPages();
 	void SetBatch(bool batch);
 	int LoadBatch(int index);
-	Nrrd* Convert(int t, int c, bool get_max);
 	Nrrd* Convert_ThreadSafe(int t, int c, bool get_max) { return NULL; }
 	wstring GetCurDataName(int t, int c);
 	wstring GetCurMaskName(int t, int c);
@@ -186,6 +185,9 @@ public:
 	bool GetTimeSeq();
 
 	void GetDisplayRange(int ch, double &minxal, double &maxval);
+
+protected:
+	Nrrd* ConvertNrrd(int t, int c, bool get_max);
 
 private:
 	wstring m_data_name;

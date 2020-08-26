@@ -257,7 +257,7 @@ int V3DPBDReader::LoadBatch(int index)
 	return result;
 }
 
-Nrrd* V3DPBDReader::Convert(int t, int c, bool get_max)
+Nrrd* V3DPBDReader::ConvertNrrd(int t, int c, bool get_max)
 {
 	if (t<0 || t>=m_time_num)
 		return 0;

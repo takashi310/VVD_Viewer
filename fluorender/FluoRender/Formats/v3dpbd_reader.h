@@ -52,7 +52,6 @@ public:
 	void Preprocess();
 	void SetBatch(bool batch);
 	int LoadBatch(int index);
-	Nrrd* Convert(int t, int c, bool get_max);
 	Nrrd* Convert_ThreadSafe(int t, int c, bool get_max) { return NULL; }
 	wstring GetCurName(int t, int c);
 
@@ -88,6 +87,9 @@ public:
     static char checkMachineEndian();
     void swap2bytes(void *targetp);
     void swap4bytes(void *targetp);
+
+protected:
+	Nrrd* ConvertNrrd(int t, int c, bool get_max);
 
 private:
 	wstring m_data_name;

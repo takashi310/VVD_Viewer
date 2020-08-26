@@ -781,8 +781,8 @@ namespace FLIVR
 							int cox = b->ox(), coy = b->oy(), coz = b->oz();
 							int cmx = b->mx(), cmy = b->my(), cmz = b->mz();
 							int csx = b->sx(), csy = b->sy(), csz = b->sz();
-							Nrrd* cdata = b->get_nrrd(0);
-							Nrrd* cmdata = b->get_nrrd(vr->tex_->nmask());
+							auto cdata = b->get_nrrd(0);
+							auto cmdata = b->get_nrrd(vr->tex_->nmask());
 
 							b->set_nrrd(vr->tex_->get_nrrd_lv(vr->tex_->GetMaskLv(), 0), 0);
 							b->set_nrrd(vr->tex_->get_nrrd(vr->tex_->nmask()), vr->tex_->nmask());

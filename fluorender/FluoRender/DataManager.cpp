@@ -305,22 +305,19 @@ VolumeData* VolumeData::DeepCopy(VolumeData &copy, bool use_default_settings, Da
 	}
 	bool is_brxml = tex->isBrxml();
 	int time = is_brxml ? 0 : copy.GetCurTime();
-    Nrrd *nv = NULL;
+    shared_ptr<VL_Nrrd> nv;
     if (is_brxml)
     {
         nv = vd->m_reader->Convert(time, copy.GetCurChannel(), true);
         if (!nv)
-        {
-            delete(vd);
             return NULL;
-        }
     }
     else
     {
-        if (copy.GetVolume(true))
+		auto indata = copy.GetVolume(true);
+        if (indata)
         {
-            nv = nrrdNew();
-            nrrdCopy(nv, copy.GetVolume(false));
+			nv = make_shared<VL_Nrrd>(indata->getNrrdDeepCopy());
         }
         else
         {
@@ -491,30 +488,26 @@ VolumeData* VolumeData::DeepCopy(VolumeData &copy, bool use_default_settings, Da
 
 	if (is_brxml) vd->SetLevel(copy.GetLevel());
 
-	if (copy.GetMask(true))
+	auto maskindata = copy.GetMask(true);
+	if (maskindata)
 	{
-		Nrrd *mask;
-		mask = nrrdNew();
-		nrrdCopy(mask, copy.GetMask(false));
+		auto mask = make_shared<VL_Nrrd>(maskindata->getNrrdDeepCopy());
 		vd->LoadMask(mask);
 	}
 
-	if (copy.GetLabel(true))
+	auto labelindata = copy.GetLabel(true);
+	if (labelindata)
 	{
-		Nrrd *label;
-		label = nrrdNew();
-		nrrdCopy(label, copy.GetLabel(false));
+		auto label = make_shared<VL_Nrrd>(labelindata->getNrrdDeepCopy());
 		vd->LoadLabel(label);
 	}
 
-	if (copy.GetStroke(true))
+	auto strokeindata = copy.GetStroke(true);
+	if (strokeindata)
 	{
-		Nrrd *stroke;
-		stroke = nrrdNew();
-		nrrdCopy(stroke, copy.GetStroke(false));
+		auto stroke = make_shared<VL_Nrrd>(strokeindata->getNrrdDeepCopy());
 		vd->LoadStroke(stroke);
 	}
-
 
 	return vd;
 }
@@ -522,10 +515,16 @@ VolumeData* VolumeData::DeepCopy(VolumeData &copy, bool use_default_settings, Da
 void VolumeData::FlipHorizontally()
 {
 	if (!m_tex || !m_vr || isBrxml()) return;
-	Nrrd *nrrd = GetVolume(true);
-	Nrrd *mask = GetMask(true);
-	Nrrd *label = GetLabel(true);
-	Nrrd *stroke = GetStroke(true);
+	shared_ptr<VL_Nrrd> vlnrrd = GetVolume(true);
+	shared_ptr<VL_Nrrd> vlmask = GetMask(true);
+	shared_ptr<VL_Nrrd> vllabel = GetLabel(true);
+	shared_ptr<VL_Nrrd> vlstroke = GetStroke(true);
+
+	Nrrd* nrrd = vlnrrd && vlnrrd->getNrrd() ? vlnrrd->getNrrd() : nullptr;
+	Nrrd* mask = vlmask && vlmask->getNrrd() ? vlmask->getNrrd() : nullptr;
+	Nrrd* label = vllabel && vllabel->getNrrd() ? vllabel->getNrrd() : nullptr;
+	Nrrd* stroke = vlstroke && vlstroke->getNrrd() ? vlstroke->getNrrd() : nullptr;
+
 	int iw, ih, id;
 	GetResolution(iw, ih, id);
 	size_t w = iw, h = ih, d = id;
@@ -641,10 +640,16 @@ void VolumeData::FlipHorizontally()
 void VolumeData::FlipVertically()
 {
 	if (!m_tex || !m_vr || isBrxml()) return;
-	Nrrd *nrrd = GetVolume(true);
-	Nrrd *mask = GetMask(true);
-	Nrrd *label = GetLabel(true);
-	Nrrd *stroke = GetStroke(true);
+	shared_ptr<VL_Nrrd> vlnrrd = GetVolume(true);
+	shared_ptr<VL_Nrrd> vlmask = GetMask(true);
+	shared_ptr<VL_Nrrd> vllabel = GetLabel(true);
+	shared_ptr<VL_Nrrd> vlstroke = GetStroke(true);
+
+	Nrrd* nrrd = vlnrrd && vlnrrd->getNrrd() ? vlnrrd->getNrrd() : nullptr;
+	Nrrd* mask = vlmask && vlmask->getNrrd() ? vlmask->getNrrd() : nullptr;
+	Nrrd* label = vllabel && vllabel->getNrrd() ? vllabel->getNrrd() : nullptr;
+	Nrrd* stroke = vlstroke && vlstroke->getNrrd() ? vlstroke->getNrrd() : nullptr;
+
 	int iw, ih, id;
 	GetResolution(iw, ih, id);
 	size_t w = iw, h = ih, d = id;
@@ -795,9 +800,9 @@ bool VolumeData::GetSkipBrick()
 	return m_skip_brick;
 }
 
-int VolumeData::Load(Nrrd* data, const wxString &name, const wxString &path, BRKXMLReader *breader)
+int VolumeData::Load(const shared_ptr<VL_Nrrd> &data, const wxString &name, const wxString &path, BRKXMLReader *breader)
 {
-	if (!data || data->dim!=3)
+	if (!data || !data->getNrrd() || data->getNrrd()->dim != 3)
 		return 0;
 
 	m_tex_path = path;
@@ -809,15 +814,15 @@ int VolumeData::Load(Nrrd* data, const wxString &name, const wxString &path, BRK
 		m_tex = NULL;
 	}
 
-	Nrrd *nv = data;
+	Nrrd *nv = data->getNrrd();
 	Nrrd *gm = 0;
 	m_res_x = nv->axis[0].size;
 	m_res_y = nv->axis[1].size;
 	m_res_z = nv->axis[2].size;
 
 	BBox bounds;
-	Point pmax(data->axis[0].max, data->axis[1].max, data->axis[2].max);
-	Point pmin(data->axis[0].min, data->axis[1].min, data->axis[2].min);
+	Point pmax(nv->axis[0].max, nv->axis[1].max, nv->axis[2].max);
+	Point pmin(nv->axis[0].min, nv->axis[1].min, nv->axis[2].min);
 	bounds.extend(pmin);
 	bounds.extend(pmax);
 	m_bounds = bounds;
@@ -844,7 +849,7 @@ int VolumeData::Load(Nrrd* data, const wxString &name, const wxString &path, BRK
 		}
 		if (!m_tex->buildPyramid(pyramid, fnames, breader->isURL())) return 0;
 	}
-	else if(!m_tex->build(nv, gm, 0, 256, 0, 0)) return 0;
+	else if(!m_tex->build(data, nullptr, 0, 256, 0, 0)) return 0;
 	
 	if (m_tex)
 	{
@@ -893,9 +898,9 @@ int VolumeData::Load(Nrrd* data, const wxString &name, const wxString &path, BRK
 	return 1;
 }
 
-int VolumeData::Replace(Nrrd* data, bool del_tex)
+int VolumeData::Replace(const std::shared_ptr<VL_Nrrd>& data, bool del_tex)
 {
-	if (!data || data->dim!=3)
+	if (!data || !data->getNrrd() || data->getNrrd()->dim != 3)
 		return 0;
 	if (m_tex && m_tex->get_nrrd(0) == data)
 		return 0;
@@ -903,7 +908,7 @@ int VolumeData::Replace(Nrrd* data, bool del_tex)
 	double spcx = 1.0, spcy = 1.0, spcz = 1.0;
 	if (del_tex)
 	{
-		Nrrd *nv = data;
+		Nrrd *nv = data->getNrrd();
 		Nrrd *gm = 0;
 		m_res_x = nv->axis[0].size;
 		m_res_y = nv->axis[1].size;
@@ -919,7 +924,7 @@ int VolumeData::Replace(Nrrd* data, bool del_tex)
 		}
 		m_tex = new Texture();
 		m_tex->set_use_priority(m_skip_brick);
-		m_tex->build(nv, gm, 0, m_max_value, 0, 0);
+		m_tex->build(data, nullptr, 0, m_max_value, 0, 0);
 		m_tex->set_spacings(spcx, spcy, spcz);
 	}
 	else
@@ -1027,7 +1032,8 @@ void VolumeData::AddEmptyData(int bits,
 	//create texture
 	m_tex = new Texture();
 	m_tex->set_use_priority(false);
-	m_tex->build(nv, 0, 0, 256, 0, 0);
+	shared_ptr<VL_Nrrd> sptr = make_shared<VL_Nrrd>(nv);
+	m_tex->build(sptr, 0, 0, 256, 0, 0);
 	m_tex->set_spacings(spcx, spcy, spcz);
 
 	//clipping planes
@@ -1061,9 +1067,9 @@ void VolumeData::AddEmptyData(int bits,
 }
 
 //volume mask
-bool VolumeData::LoadMask(Nrrd* mask)
+bool VolumeData::LoadMask(const std::shared_ptr<VL_Nrrd>& mask)
 {
-	if (!mask || !m_tex || !m_vr)
+	if (!mask || !mask->getNrrd() || !m_tex || !m_vr)
 		return false;
 
 	//prepare the texture bricks for the mask
@@ -1074,12 +1080,14 @@ bool VolumeData::LoadMask(Nrrd* mask)
 		SetLevel(GetMaskLv());
 	}
 
-	size_t dim = mask->dim;
+	Nrrd* mnrrd = mask->getNrrd();
+
+	size_t dim = mnrrd->dim;
 	std::vector<int> size(dim);
 	int offset = 0;
 	if (dim > 3) offset = 1; 
 	for (size_t p = 0; p < dim; p++) 
-		size[p] = (int)mask->axis[p + offset].size;
+		size[p] = (int)mnrrd->axis[p + offset].size;
 	int mskw = size[0];
 	int mskh = size[1];
 	int mskd = size[2];
@@ -1117,7 +1125,7 @@ void VolumeData::DeleteMask()
 		SetLevel(curlv);
 }
 
-void VolumeData::LoadStroke(Nrrd* stroke)
+void VolumeData::LoadStroke(const std::shared_ptr<VL_Nrrd>& stroke)
 {
 	if (!stroke || !m_tex || !m_vr)
 		return;
@@ -1182,7 +1190,8 @@ void VolumeData::AddEmptyMask()
 		nrrdAxisInfoSet(nrrd_mask, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
 		nrrdAxisInfoSet(nrrd_mask, nrrdAxisInfoMax, spcx*res_x, spcy*res_y, spcz*res_z);
 
-		m_tex->set_nrrd(nrrd_mask, m_tex->nmask());
+		auto sptr = make_shared<VL_Nrrd>(nrrd_mask);
+		m_tex->set_nrrd(sptr, m_tex->nmask());
 	}
 
 	if (!isBrxml())
@@ -1228,7 +1237,8 @@ void VolumeData::AddEmptyStroke()
 		nrrdAxisInfoSet(nrrd_stroke, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
 		nrrdAxisInfoSet(nrrd_stroke, nrrdAxisInfoMax, spcx*res_x, spcy*res_y, spcz*res_z);
 
-		m_tex->set_nrrd(nrrd_stroke, m_tex->nstroke());
+		auto sptr = make_shared<VL_Nrrd>(nrrd_stroke);
+		m_tex->set_nrrd(sptr, m_tex->nstroke());
 	}
 
 	if (isBrxml())
@@ -1236,19 +1246,12 @@ void VolumeData::AddEmptyStroke()
 }
 
 //volume label
-void VolumeData::LoadLabel(Nrrd* label)
+void VolumeData::LoadLabel(const std::shared_ptr<VL_Nrrd>& label)
 {
-	if (!m_tex || !m_vr)
+	if (!label || !label->getNrrd() || !m_tex || !m_vr)
 		return;
 
-	int nb = 4;
-	if (label->type == nrrdTypeChar)   nb = 1;
-	if (label->type == nrrdTypeUChar)  nb = 1;
-	if (label->type == nrrdTypeShort)  nb = 2;
-	if (label->type == nrrdTypeUShort) nb = 2;
-	if (label->type == nrrdTypeInt)    nb = 4;
-	if (label->type == nrrdTypeUInt)   nb = 4;
-	if (label->type == nrrdTypeFloat)  nb = 4;
+	int nb = label->getBytesPerSample();
 	m_tex->add_empty_label(nb);
 	m_tex->set_nrrd(label, m_tex->nlabel());
 }
@@ -1352,27 +1355,34 @@ void VolumeData::AddEmptyLabel(int mode)
 		nrrdAxisInfoSet(nrrd_label, nrrdAxisInfoMax, res_x, res_y, res_z);
 		nrrdAxisInfoSet(nrrd_label, nrrdAxisInfoSize, res_x, res_y, res_z);
 
-		m_tex->set_nrrd(nrrd_label, m_tex->nlabel());
+		auto sptr = make_shared<VL_Nrrd>(nrrd_label);
+		m_tex->set_nrrd(sptr, m_tex->nlabel());
+
+		//apply values
+		switch (mode)
+		{
+		case 0://zeros
+			memset(val32, 0, sizeof(unsigned int) * (unsigned long long)m_res_x *
+				(unsigned long long)m_res_y * (unsigned long long)m_res_z);
+			break;
+		case 1://ordered
+			SetOrderedID(val32);
+			break;
+		case 2://shuffled
+			SetShuffledID(val32);
+			break;
+		}
 	}
 	else
 	{
-		nrrd_label = m_tex->get_nrrd(m_tex->nlabel());
-		val32 = (unsigned int*)nrrd_label->data;
-	}
-
-	//apply values
-	switch (mode)
-	{
-	case 0://zeros
-		memset(val32, 0, sizeof(unsigned int)*(unsigned long long)m_res_x*
-			(unsigned long long)m_res_y*(unsigned long long)m_res_z);
-		break;
-	case 1://ordered
-		SetOrderedID(val32);
-		break;
-	case 2://shuffled
-		SetShuffledID(val32);
-		break;
+		auto vlnrrd_label = m_tex->get_nrrd(m_tex->nlabel());
+		if (vlnrrd_label && vlnrrd_label->getNrrd())
+		{
+			auto data = (unsigned char*)vlnrrd_label->getNrrd()->data;
+			if (data)
+				memset(val32, 0, sizeof(unsigned char) * (unsigned long long)m_res_x * (unsigned long long)m_res_y *
+					(unsigned long long)m_res_z * (unsigned long long)vlnrrd_label->getBytesPerSample());
+		}
 	}
 
 	if (isBrxml())
@@ -1384,22 +1394,45 @@ bool VolumeData::SearchLabel(unsigned int label)
 	if (!m_tex)
 		return false;
 
-	Nrrd* nrrd_label = m_tex->get_nrrd(m_tex->nlabel());
-	if (!nrrd_label)
+	auto nrrd_label = m_tex->get_nrrd(m_tex->nlabel());
+	if (!nrrd_label || !nrrd_label->getNrrd())
 		return false;
-	unsigned int* data_label = (unsigned int*)(nrrd_label->data);
-	if (!data_label)
-		return false;
-
+	
 	unsigned long long for_size = (unsigned long long)m_res_x *
 		(unsigned long long)m_res_y * (unsigned long long)m_res_z;
-	for (unsigned long long index = 0; index < for_size; ++index)
-		if (data_label[index] == label)
-			return true;
+
+	int bytes = nrrd_label->getBytesPerSample();
+	if (bytes == 4)
+	{
+		unsigned int* data_label = (unsigned int*)(nrrd_label->getNrrd()->data);
+		if (!data_label)
+			return false;
+		for (unsigned long long index = 0; index < for_size; ++index)
+			if (data_label[index] == label)
+				return true;
+	}
+	else if (bytes == 2)
+	{
+		unsigned short* data_label = (unsigned short*)(nrrd_label->getNrrd()->data);
+		if (!data_label)
+			return false;
+		for (unsigned long long index = 0; index < for_size; ++index)
+			if (data_label[index] == label)
+				return true;
+	}
+	else if (bytes == 1)
+	{
+		unsigned char* data_label = (unsigned char*)(nrrd_label->getNrrd()->data);
+		if (!data_label)
+			return false;
+		for (unsigned long long index = 0; index < for_size; ++index)
+			if (data_label[index] == label)
+				return true;
+	}
 	return false;
 }
 
-Nrrd* VolumeData::GetVolume(bool ret)
+std::shared_ptr<VL_Nrrd> VolumeData::GetVolume(bool ret)
 {
 	if (m_vr && m_tex)
 	{
@@ -1407,10 +1440,10 @@ Nrrd* VolumeData::GetVolume(bool ret)
 		return m_tex->get_nrrd(0);
 	}
 
-	return 0;
+	return nullptr;
 }
 
-Nrrd* VolumeData::GetMask(bool ret)
+std::shared_ptr<VL_Nrrd> VolumeData::GetMask(bool ret)
 {
 	if (m_vr && m_tex && m_tex->nmask()!=-1)
 	{
@@ -1428,10 +1461,10 @@ Nrrd* VolumeData::GetMask(bool ret)
 			SetLevel(curlv);
 	}
 
-	return 0;
+	return nullptr;
 }
 
-Nrrd* VolumeData::GetLabel(bool ret)
+std::shared_ptr<VL_Nrrd> VolumeData::GetLabel(bool ret)
 {
 	if (m_vr && m_tex && m_tex->nlabel() != -1)
 	{
@@ -1450,10 +1483,10 @@ Nrrd* VolumeData::GetLabel(bool ret)
 			SetLevel(curlv);
 	}
 
-	return 0;
+	return nullptr;
 }
 
-Nrrd* VolumeData::GetStroke(bool ret)
+std::shared_ptr<VL_Nrrd> VolumeData::GetStroke(bool ret)
 {
 	if (m_vr && m_tex && m_tex->nstroke()!=-1)
 	{
@@ -1471,12 +1504,14 @@ Nrrd* VolumeData::GetStroke(bool ret)
 			SetLevel(curlv);
 	}
 
-	return 0;
+	return nullptr;
 }
 
 double VolumeData::GetOriginalValue(int i, int j, int k, bool normalize)
 {
-	Nrrd* data = m_tex->get_nrrd(0);
+	auto vlnrrd = m_tex->get_nrrd(0);
+	if (!vlnrrd) return 0.0;
+	Nrrd* data = vlnrrd->getNrrd();
 	if (!data) return 0.0;
 
 	int bits = data->type;
@@ -1518,7 +1553,9 @@ double VolumeData::GetOriginalValue(int i, int j, int k, bool normalize)
 
 double VolumeData::GetTransferedValue(int i, int j, int k)
 {
-	Nrrd* data = m_tex->get_nrrd(0);
+	auto vlnrrd = m_tex->get_nrrd(0);
+	if (!vlnrrd) return 0.0;
+	Nrrd* data = vlnrrd->getNrrd();
 	if (!data) return 0.0;
 
 	int bits = data->type;
@@ -1663,8 +1700,10 @@ double VolumeData::GetTransferedValue(int i, int j, int k)
 
 int VolumeData::GetLabellValue(int i, int j, int k)
 {
-	Nrrd* data = m_tex->get_nrrd(m_tex->nlabel());
-	if (!data) return 0.0;
+	auto vlnrrd = m_tex->get_nrrd(0);
+	if (!vlnrrd) return 0;
+	Nrrd* data = vlnrrd->getNrrd();
+	if (!data) return 0;
 
 	int bits = data->type;
 	int64_t nx = (int64_t)(data->axis[0].size);
@@ -1672,7 +1711,7 @@ int VolumeData::GetLabellValue(int i, int j, int k)
 	int64_t nz = (int64_t)(data->axis[2].size);
 
 	if (i < 0 || i >= nx || j < 0 || j >= ny || k < 0 || k >= nz)
-		return 0.0;
+		return 0;
 	uint64_t ii = i, jj = j, kk = k;
 
 	if (!data->data) return 0.0;
@@ -1695,7 +1734,7 @@ int VolumeData::GetLabellValue(int i, int j, int k)
 		return int(old_value);
 	}
 
-	return 0.0;
+	return 0;
 }
 
 
@@ -1727,9 +1766,10 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 		GetSpacings(spcx, spcy, spcz);
 
 		//save data
-		data = m_tex->get_nrrd(0);
-		if (data)
+		auto vlnrrd = m_tex->get_nrrd(0);
+		if (vlnrrd && vlnrrd->getNrrd())
 		{
+			data = vlnrrd->getNrrd();
 			if (!isBrxml())
 			{
 				if (bake)
@@ -1834,21 +1874,18 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 					nrrdAxisInfoSet(baked_data, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
 					nrrdAxisInfoSet(baked_data, nrrdAxisInfoSize, (size_t)nx, (size_t)ny, (size_t)nz);
 
-					writer->SetData(baked_data);
+					auto baked_vlnrrd = make_shared<VL_Nrrd>(baked_data);
+					writer->SetData(baked_vlnrrd);
 					writer->SetSpacings(spcx, spcy, spcz);
 					writer->SetCompression(compress);
 					writer->Save(filename.ToStdWstring(), mode);
-
-					//free memory
-					delete []baked_data->data;
-					nrrdNix(baked_data);
 
 					prg_diag->Update(100);
 					delete prg_diag;
 				}
 				else
 				{
-					writer->SetData(data);
+					writer->SetData(vlnrrd);
 					writer->SetSpacings(spcx, spcy, spcz);
 					writer->SetCompression(compress);
 					writer->Save(filename.ToStdWstring(), mode);
@@ -1954,15 +1991,13 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 							size_t bufd = (s+slicenum <= lnz) ? slicenum : lnz-s;
 
 							Nrrd* datablock = m_tex->getSubData(tarlv, GetMaskHideMode(), &lbs, 0, 0, s+loz, w, h, bufd);
-							tifwriter->SetData(datablock);
+							auto block_vlnrrd = make_shared<VL_Nrrd>(datablock);
+							tifwriter->SetData(block_vlnrrd);
 							tifwriter->SetBaseSeqID(s+loz+1); //start from 1
 							tifwriter->SetDigitNum(ndigit);
 							tifwriter->SetSpacings(spcx, spcy, spcz);
 							tifwriter->SetCompression(compress);
 							tifwriter->Save(filename.ToStdWstring(), mode);
-							
-							delete [] datablock->data;
-							nrrdNix(datablock);
 						}
 
 						for (auto &b : lbs)
@@ -1990,11 +2025,11 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 		if (m_tex->nmask() != -1 && save_msk && GetMaskHideMode() == VOL_MASK_HIDE_NONE)
 		{
 			m_vr->return_mask();
-			data = m_tex->get_nrrd(m_tex->nmask());
-			if (data)
+			vlnrrd = m_tex->get_nrrd(m_tex->nmask());
+			if (vlnrrd)
 			{
 				MSKWriter msk_writer;
-				msk_writer.SetData(data);
+				msk_writer.SetData(vlnrrd);
 				msk_writer.SetSpacings(spcx, spcy, spcz);
 				msk_writer.Save(filename.ToStdWstring(), 0);
 			}
@@ -2003,11 +2038,11 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 		//save label
 		if (m_tex->nlabel() != -1 && save_label && GetMaskHideMode() == VOL_MASK_HIDE_NONE)
 		{
-			data = m_tex->get_nrrd(m_tex->nlabel());
-			if (data)
+			vlnrrd = m_tex->get_nrrd(m_tex->nlabel());
+			if (vlnrrd)
 			{
 				MSKWriter msk_writer;
-				msk_writer.SetData(data);
+				msk_writer.SetData(vlnrrd);
 				msk_writer.SetSpacings(spcx, spcy, spcz);
 				msk_writer.Save(filename.ToStdWstring(), 1);
 			}
@@ -2025,8 +2060,6 @@ void VolumeData::ExportMask(wxString &filename)
 {
 	if (m_vr && m_tex)
 	{
-		Nrrd* data = 0;
-
 		int curlv = -1;
 		if ( isBrxml() )
 		{
@@ -2041,7 +2074,7 @@ void VolumeData::ExportMask(wxString &filename)
 		if (m_tex->nmask() != -1)
 		{
 			m_vr->return_mask();
-			data = m_tex->get_nrrd(m_tex->nmask());
+			auto data = m_tex->get_nrrd(m_tex->nmask());
 			if (data)
 			{
 				MSKWriter msk_writer;
@@ -2062,19 +2095,17 @@ void VolumeData::ImportMask(wxString &filename)
 	msk_reader.SetAddExt(false);
     std::string str = filename.ToStdString();
 	msk_reader.SetFile(str);
-	Nrrd* mask = msk_reader.Convert(0, 0, true);
+	auto mask = msk_reader.Convert(0, 0, true);
 	if (mask)
 	{
 		if (!LoadMask(mask))
 		{
-			delete [] mask->data;
-			nrrdNix(mask);
 			wxMessageBox(wxT("Unable to load the mask data.\nMask data must have same dimensions as the volume data."), wxT("Mask Import Error"));
 		}
 	}
 }
 
-void VolumeData::ExportEachSegment(wxString dir, Nrrd *label_nrrd, int mode, bool compress)
+void VolumeData::ExportEachSegment(wxString dir, const std::shared_ptr<VL_Nrrd>& label_nrrd, int mode, bool compress)
 {
 	if (m_vr && m_tex)
 	{
@@ -2085,9 +2116,6 @@ void VolumeData::ExportEachSegment(wxString dir, Nrrd *label_nrrd, int mode, boo
 			wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);
 		int progress = 0;
 
-		Nrrd* main = 0;
-		Nrrd* label = 0;
-		
 		BaseWriter *writer = 0;
 		switch (mode)
 		{
@@ -2106,8 +2134,9 @@ void VolumeData::ExportEachSegment(wxString dir, Nrrd *label_nrrd, int mode, boo
 		GetSpacings(spcx, spcy, spcz);
 
 		//save data
-		main = m_tex->get_nrrd(0);
+		auto main = m_tex->get_nrrd(0);
 
+		shared_ptr<VL_Nrrd> label;
 		if (label_nrrd) label = label_nrrd;
 		else
 		{
@@ -2115,27 +2144,40 @@ void VolumeData::ExportEachSegment(wxString dir, Nrrd *label_nrrd, int mode, boo
 			label = m_tex->get_nrrd(m_tex->nlabel());
 		}
 
-		if (main && main->data && label && label->data)
+		if (main && main->getNrrd() && main->getNrrd()->data && label && label->getNrrd() && label->getNrrd()->data)
 		{
 			size_t voxelnum = (size_t)m_res_x * (size_t)m_res_y * (size_t)m_res_z;
 			size_t data_size = voxelnum;
 			
-			void *origdata = main->data;
+			void *origdata = main->getNrrd()->data;
 			
-			if (main->type == nrrdTypeUShort || main->type == nrrdTypeShort)
+			if (main->getNrrd()->type == nrrdTypeUShort || main->getNrrd()->type == nrrdTypeShort)
 				data_size *= 2;
 			void *tmpdata = new unsigned char[data_size];
 			memset(tmpdata, 0, data_size);
 			
 			//scan label
-			unsigned int* label_data = (unsigned int*)(label->data);
+			void* label_data = label->getNrrd()->data;
+			int bytes = label->getBytesPerSample();
 			unordered_map <unsigned int, vector<size_t>> segs;
 			int segnum = 0;
 			for (size_t pos = 0; pos < voxelnum; pos++)
 			{
-				if (label_data[pos] > 0)
+				unsigned int id = 0;
+				switch (bytes)
 				{
-					unsigned int id = label_data[pos];
+				case 1:
+					id = ((unsigned char*)label_data)[pos];
+					break;
+				case 2:
+					id = ((unsigned short*)label_data)[pos];
+					break;
+				case 4:
+					id = ((unsigned int*)label_data)[pos];
+					break;
+				}
+				if (id > 0)
+				{
 					unordered_map <unsigned int, vector<size_t>>::iterator ite = segs.find(id);
 					if (ite != segs.end())
 						ite->second.push_back(pos);
@@ -2150,11 +2192,11 @@ void VolumeData::ExportEachSegment(wxString dir, Nrrd *label_nrrd, int mode, boo
 			}
 
 			//save segments
-			main->data = tmpdata;
+			main->getNrrd()->data = tmpdata;
 			if (!dir.EndsWith(wxFileName::GetPathSeparator())) dir += wxFileName::GetPathSeparator();
 			unordered_map <unsigned int, vector<size_t>>:: const_iterator cite;
 			int segcount = 0;
-			if (main->type == nrrdTypeChar || main->type == nrrdTypeUChar) {
+			if (main->getNrrd()->type == nrrdTypeChar || main->getNrrd()->type == nrrdTypeUChar) {
 				unsigned char *src = (unsigned char *)origdata;
 				unsigned char *tar = (unsigned char *)tmpdata;
 				for ( cite = segs.begin(); cite != segs.end(); ++cite )
@@ -2175,7 +2217,7 @@ void VolumeData::ExportEachSegment(wxString dir, Nrrd *label_nrrd, int mode, boo
 					prog_diag->Update(100 * segcount / segnum);
 				}
 			}
-			else if (main->type == nrrdTypeShort || main->type == nrrdTypeUShort) {
+			else if (main->getNrrd()->type == nrrdTypeShort || main->getNrrd()->type == nrrdTypeUShort) {
 				unsigned short *src = (unsigned short *)origdata;
 				unsigned short *tar = (unsigned short *)tmpdata;
 				for ( cite = segs.begin(); cite != segs.end(); ++cite )
@@ -2197,7 +2239,7 @@ void VolumeData::ExportEachSegment(wxString dir, Nrrd *label_nrrd, int mode, boo
 				}
 			}
 
-			main->data = origdata;
+			main->getNrrd()->data = origdata;
 			delete [] tmpdata;
 		}
 
@@ -2569,7 +2611,7 @@ void VolumeData::Calculate(int type, VolumeData *vd_a, VolumeData *vd_b)
 		m_vr->return_volume();
 		if (m_tex && m_tex->get_nrrd(0))
 		{
-			Nrrd* nrrd_data = m_tex->get_nrrd(0);
+			Nrrd* nrrd_data = m_tex->get_nrrd(0)->getNrrd();
 			uint8 *val8nr = (uint8*)nrrd_data->data;
 			int max_val = 255;
 			int bytes = 1;
@@ -3173,7 +3215,7 @@ VolumeData* VolumeData::CopyLevel(int lv)
 	VolumeData* vd = new VolumeData();
 
 	m_tex->set_FrameAndChannel(m_time, m_chan);
-	Nrrd *src_nv = m_tex->loadData(lv);
+	auto src_nv = make_shared<VL_Nrrd>(m_tex->loadData(lv));
 	if (!src_nv) return NULL;
 	vd->Load(src_nv, GetName() + wxT("_Copy_Lv") + wxString::Format("%d", lv), wxString(""));
 
@@ -3181,9 +3223,7 @@ VolumeData* VolumeData::CopyLevel(int lv)
 	vd->m_dup_counter = m_dup_counter;
 	
 	Texture *tex = vd->GetTexture();
-	if (!tex) return NULL;
-	Nrrd *nv = tex->get_nrrd(0);
-	if (!nv) return NULL;
+	if (!tex || !tex->get_nrrd(0)) return NULL;
 
 	vector<Plane*> *planes = GetVR() ? GetVR()->get_planes() : 0;
 	if (planes && vd->GetVR())
@@ -4979,11 +5019,6 @@ void Annotations::Clear()
 			delete atext;
 	}
 	m_alist.clear();
-
-	if (m_label) {
-		delete [] m_label->data;
-		nrrdNix(m_label);
-	}
 }
 
 //memo
@@ -6755,13 +6790,13 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 		{
 			VolumeData *vd = new VolumeData();
 			vd->SetSkipBrick(m_skip_brick);
-			Nrrd* data = reader->Convert(t_num>=0?t_num:reader->GetCurTime(), i, true);
+			auto data = reader->Convert(t_num>=0?t_num:reader->GetCurTime(), i, true);
 
 			if (datasize > 0)
 			{
 				if (ch_datasize == 0)
 				{
-					switch (data->type)
+					switch (data->getNrrd()->type)
 					{
 					case nrrdTypeUChar:
 					case nrrdTypeChar:
@@ -6782,14 +6817,12 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 				if (ch_datasize > 0 && bytes > 0 && ch_datasize < voxnum * bytes)
 				{
 					Nrrd* tmp;
-					tmp = VolumeData::NrrdScale(data, ch_datasize);
+					tmp = VolumeData::NrrdScale(data->getNrrd(), ch_datasize);
 					if (tmp)
 					{
-						delete[] data->data;
-						nrrdNix(data);
-						data = tmp;
+						data = make_shared<VL_Nrrd>(tmp);
                         
-                        size_t dim = tmp->dim;
+                        size_t dim = data->getNrrd()->dim;
                         if (dim >= 3)
                         {
                             int offset = 0;
@@ -6832,7 +6865,7 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 					MSKReader msk_reader;
 					std::wstring str = reader->GetPathName();
 					msk_reader.SetFile(str);
-					Nrrd* mask = msk_reader.Convert(t_num>=0?t_num:reader->GetCurTime(), i, true);
+					auto mask = msk_reader.Convert(t_num>=0?t_num:reader->GetCurTime(), i, true);
 					if (mask)
 						vd->LoadMask(mask);
 					//label mask
@@ -6840,7 +6873,7 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 					str = reader->GetPathName();
 					lbl_reader.SetFile(str);
 
-					Nrrd* label = lbl_reader.Convert(t_num>=0?t_num:reader->GetCurTime(), i, true);
+					auto label = lbl_reader.Convert(t_num>=0?t_num:reader->GetCurTime(), i, true);
 					if (label)
 						vd->LoadLabel(label);
 				}

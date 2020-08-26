@@ -109,7 +109,7 @@ namespace vks
 		zpitch = (VkDeviceSize)b->sy() * b->sx() * b->nb(c);
 
 		vks::VulkanDevice *device = texp.tex->device;
-		void* data = b->get_nrrd(c)->data;
+		void* data = b->get_nrrd_raw(c)->data;
 		device->DownloadTexture3D(texp.tex, data, offset, ypitch, zpitch);
 
 		b->set_dirty(c, false);

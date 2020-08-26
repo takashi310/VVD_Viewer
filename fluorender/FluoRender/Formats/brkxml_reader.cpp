@@ -856,7 +856,7 @@ double BRKXMLReader::GetExcitationWavelength(int chan)
 }
 
 //This function does not load image data into Nrrd.
-Nrrd *BRKXMLReader::Convert(int t, int c, bool get_max)
+Nrrd* BRKXMLReader::ConvertNrrd(int t, int c, bool get_max)
 {
 	Nrrd *data = 0;
 
@@ -1112,7 +1112,7 @@ void BRKXMLReader::build_pyramid(vector<FLIVR::Pyramid_Level> &pyramid, vector<v
 	{
 		for (int i = 0; i < pyramid.size(); i++)
 		{
-			if (pyramid[i].data) nrrdNix(pyramid[i].data);
+			if (pyramid[i].data) pyramid[i].data.reset();
 			for (int j = 0; j < pyramid[i].bricks.size(); j++)
 				if (pyramid[i].bricks[j]) delete pyramid[i].bricks[j];
 		}

@@ -126,7 +126,9 @@ void VolumeCalculator::CreateVolumeResult1()
    int bits = 8;
    Texture* tex_a = m_vd_a->GetTexture();
    if (!tex_a) return;
-   Nrrd* nrrd_a = tex_a->get_nrrd(0);
+   auto vlnrrd_a = tex_a->get_nrrd(0);
+   if (!vlnrrd_a) return;
+   Nrrd* nrrd_a = vlnrrd_a->getNrrd();
    if (!nrrd_a) return;
    
    if (nrrd_a->type == nrrdTypeUChar)
@@ -175,7 +177,9 @@ void VolumeCalculator::CreateVolumeResult2()
    int bits = 8;
    Texture* tex_a = m_vd_a->GetTexture();
    if (!tex_a) return;
-   Nrrd* nrrd_a = tex_a->get_nrrd(0);
+   auto vlnrrd_a = tex_a->get_nrrd(0);
+   if (!vlnrrd_a) return;
+   Nrrd* nrrd_a = vlnrrd_a->getNrrd();
    if (!nrrd_a) return;
    
    if (nrrd_a->type == nrrdTypeUChar)
@@ -235,7 +239,10 @@ void VolumeCalculator::FillHoles(double thresh)
    Texture* tex_a = m_vd_a->GetTexture();
    if (!tex_a)
       return;
-   Nrrd* nrrd_a = tex_a->get_nrrd(0);
+   auto vlnrrd_a = tex_a->get_nrrd(0);
+   if (!vlnrrd_a)
+       return;
+   Nrrd* nrrd_a = vlnrrd_a->getNrrd();
    if (!nrrd_a)
       return;
    void* data_a = nrrd_a->data;
@@ -245,7 +252,10 @@ void VolumeCalculator::FillHoles(double thresh)
    Texture* tex_r = m_vd_r->GetTexture();
    if (!tex_r)
       return;
-   Nrrd* nrrd_r = tex_r->get_nrrd(0);
+   auto vlnrrd_r = tex_r->get_nrrd(0);
+   if (!vlnrrd_r)
+       return;
+   Nrrd* nrrd_r = vlnrrd_r->getNrrd();
    if (!nrrd_r)
       return;
    void* data_r = nrrd_r->data;

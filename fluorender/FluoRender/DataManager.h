@@ -372,29 +372,29 @@ public:
 	void SetSkipBrick(bool skip);
 	bool GetSkipBrick();
 	//load
-	int Load(Nrrd* data, const wxString &name, const wxString &path, BRKXMLReader *breader = NULL);
-	int Replace(Nrrd* data, bool del_tex);
+	int Load(const std::shared_ptr<VL_Nrrd> &data, const wxString &name, const wxString &path, BRKXMLReader *breader = NULL);
+	int Replace(const std::shared_ptr<VL_Nrrd>& data, bool del_tex);
 	int Replace(VolumeData* data);
-	Nrrd* GetVolume(bool ret);
+	std::shared_ptr<VL_Nrrd> GetVolume(bool ret);
 	//empty data
 	void AddEmptyData(int bits,
 		int nx, int ny, int nz,
 		double spcx, double spcy, double spcz);
 	//load mask
-	bool LoadMask(Nrrd* mask);
+	bool LoadMask(const std::shared_ptr<VL_Nrrd>& mask);
 	void DeleteMask();
-	Nrrd* GetMask(bool ret);
+	std::shared_ptr<VL_Nrrd> GetMask(bool ret);
 	//empty mask
 	void AddEmptyMask();
 	//load label
-	void LoadLabel(Nrrd* label);
+	void LoadLabel(const std::shared_ptr<VL_Nrrd>& label);
 	void DeleteLabel();
-	Nrrd* GetLabel(bool ret);
+	std::shared_ptr<VL_Nrrd> GetLabel(bool ret);
 	//empty label
 	//load stroke
-	void LoadStroke(Nrrd* stroke);
+	void LoadStroke(const std::shared_ptr<VL_Nrrd>& stroke);
 	void DeleteStroke();
-	Nrrd* GetStroke(bool ret);
+	std::shared_ptr<VL_Nrrd> GetStroke(bool ret);
 	void AddEmptyStroke();
 	//mode: 0-zeros;1-ordered; 2-shuffled
 	void AddEmptyLabel(int mode=0);
@@ -407,7 +407,7 @@ public:
 	void Save(wxString &filename, int mode=0, bool bake=false, bool compress=false, bool save_msk=true, bool save_label=true, VolumeLoader *vl=NULL);
 	void ExportMask(wxString &filename);
 	void ImportMask(wxString &filename);
-	void ExportEachSegment(wxString dir, Nrrd* label_nrrd=NULL, int mode=2, bool compress=true);
+	void ExportEachSegment(wxString dir, const std::shared_ptr<VL_Nrrd>& label_nrrd=nullptr, int mode=2, bool compress=true);
 
 	//volumerenderer
 	VolumeRenderer *GetVR();
@@ -961,15 +961,15 @@ public:
 
 	bool InsideClippingPlanes(Point &pos);
 
-	void SetLabel(Nrrd *label) {m_label = label;}
-	Nrrd *GetLabel() {return m_label;}
+	void SetLabel(const std::shared_ptr<VL_Nrrd>& label) {m_label = label;}
+	std::shared_ptr<VL_Nrrd> GetLabel() {return m_label;}
 
 private:
 	static int m_num;
 	vector<AText*> m_alist;
 	Transform *m_tform;
 	VolumeData* m_vd;
-	Nrrd* m_label;
+	std::shared_ptr<VL_Nrrd> m_label;
 
 	bool m_disp;
 

@@ -27,6 +27,7 @@ DEALINGS IN THE SOFTWARE.
 #include <vector>
 #include "../FLIVR/glm.h"
 #include "../FLIVR/Vector.h"
+#include "../FLIVR/TextureBrick.h"
 #include "nrrd.h"
 
 using namespace std;
@@ -39,15 +40,15 @@ public:
 	VolumeMeshConv();
 	~VolumeMeshConv();
 
-	void SetVolume(Nrrd* volume);
-	Nrrd* GetVolume();
+	void SetVolume(const std::shared_ptr<VL_Nrrd>& volume);
+	std::shared_ptr<VL_Nrrd> GetVolume();
 	GLMmodel* GetMesh();
 	void SetVolumeSpacings(double x, double y, double z);
 	void SetVolumeUseTrans(bool use);
 	void SetVolumeTransfer(double gamma, double lo_thresh,
 		double hi_thresh, double offset, double gm_thresh);
 	void SetVolumeUseMask(bool use);
-	void SetVolumeMask(Nrrd* mask);
+	void SetVolumeMask(const std::shared_ptr<VL_Nrrd>& mask);
 
 	void SetMaxValue(double mv);
 	void SetIsoValue(double iso);
@@ -64,8 +65,8 @@ private:
 	{
 		Vector p[3];
 	} MCTriangle;
-	Nrrd* m_volume;
-	Nrrd* m_mask;
+	std::shared_ptr<VL_Nrrd> m_volume;
+	std::shared_ptr<VL_Nrrd> m_mask;
 	GLMmodel* m_mesh;
 	
 	//iso value

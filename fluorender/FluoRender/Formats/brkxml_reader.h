@@ -31,7 +31,6 @@ public:
 	void SetBatch(bool batch);
 	int LoadBatch(int index);
 	int LoadOffset(int offset);
-	Nrrd* Convert(int t, int c, bool get_max);
 	Nrrd* Convert_ThreadSafe(int t, int c, bool get_max) { return NULL; }
 	wstring GetCurName(int t, int c);
 
@@ -81,6 +80,9 @@ public:
 
 	tinyxml2::XMLDocument *GetVVDXMLDoc() {return &m_doc;}
 	tinyxml2::XMLDocument *GetMetadataXMLDoc() {return &m_md_doc;}
+
+protected:
+	Nrrd* ConvertNrrd(int t, int c, bool get_max);
 
 private:
 	wstring m_path_name;

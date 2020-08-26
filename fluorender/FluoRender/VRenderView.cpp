@@ -7195,7 +7195,7 @@ void VRenderVulkanView::Set4DSeqFrame(int frame, bool run_script)
 					double spcx, spcy, spcz;
 					vd->GetSpacings(spcx, spcy, spcz);
 
-					Nrrd* data = m_loader.GetLoadedNrrd(vd, vd->GetCurChannel(), frame);
+					auto data = m_loader.GetLoadedNrrd(vd, vd->GetCurChannel(), frame);
 					if (!data)
 						data = reader->Convert(frame, vd->GetCurChannel(), false);
 
@@ -7343,7 +7343,7 @@ void VRenderVulkanView::Set3DBatFrame(int offset)
 				double spcx, spcy, spcz;
 				vd->GetSpacings(spcx, spcy, spcz);
 
-				Nrrd* data = reader->Convert(0, vd->GetCurChannel(), true);
+				auto data = reader->Convert(0, vd->GetCurChannel(), true);
 				if (vd->Replace(data, true))
 					vd->SetDisp(true);
 				else
@@ -7716,19 +7716,19 @@ void VRenderVulkanView::RunSelectionTracking(wxFileConfig &fconfig)
 	m_cur_vol->GetVR()->return_mask();
 	m_cur_vol->GetResolution(nx, ny, nz);
 	//find labels in the old that are selected by the current mask
-	Nrrd* mask_nrrd = m_cur_vol->GetMask(true);
-	if (!mask_nrrd)
+	auto mask_nrrd = m_cur_vol->GetMask(true);
+	if (!mask_nrrd || !mask_nrrd->getNrrd())
 	{
 		m_cur_vol->AddEmptyMask();
 		mask_nrrd = m_cur_vol->GetMask(false);
 	}
-	Nrrd* label_nrrd = m_cur_vol->GetLabel(false);
-	if (!label_nrrd)
+	auto label_nrrd = m_cur_vol->GetLabel(false);
+	if (!label_nrrd || !label_nrrd->getNrrd())
 		return;
-	unsigned char* mask_data = (unsigned char*)(mask_nrrd->data);
+	unsigned char* mask_data = (unsigned char*)(mask_nrrd->getNrrd()->data);
 	if (!mask_data)
 		return;
-	unsigned int* label_data = (unsigned int*)(label_nrrd->data);
+	unsigned int* label_data = (unsigned int*)(label_nrrd->getNrrd()->data);
 	if (!label_data)
 		return;
 	FL::CellList sel_labels;
@@ -7779,15 +7779,15 @@ void VRenderVulkanView::RunSelectionTracking(wxFileConfig &fconfig)
 			LBLReader lbl_reader;
 			wstring lblname = label_name.ToStdWstring();
 			lbl_reader.SetFile(lblname);
-			Nrrd* label_nrrd_new = lbl_reader.Convert(m_tseq_cur_num, m_cur_vol->GetCurChannel(), true);
-			if (!label_nrrd_new)
+			auto label_nrrd_new = lbl_reader.Convert(m_tseq_cur_num, m_cur_vol->GetCurChannel(), true);
+			if (!label_nrrd_new || !label_nrrd_new->getNrrd())
 			{
 				m_cur_vol->AddEmptyLabel();
 				label_nrrd_new = m_cur_vol->GetLabel(false);
 			}
 			else
 				m_cur_vol->LoadLabel(label_nrrd_new);
-			label_data = (unsigned int*)(label_nrrd_new->data);
+			label_data = (unsigned int*)(label_nrrd_new->getNrrd()->data);
 			if (!label_data)
 				return;
 			//update the mask according to the new label
@@ -7850,7 +7850,7 @@ void VRenderVulkanView::RunRandomColors(wxFileConfig &fconfig)
 	LBLReader lbl_reader;
 	wstring lblname = label_name.ToStdWstring();
 	lbl_reader.SetFile(lblname);
-	Nrrd* label_nrrd_new = lbl_reader.Convert(m_tseq_cur_num, m_cur_vol->GetCurChannel(), true);
+	auto label_nrrd_new = lbl_reader.Convert(m_tseq_cur_num, m_cur_vol->GetCurChannel(), true);
 	if (!label_nrrd_new)
 		return;
 	m_cur_vol->LoadLabel(label_nrrd_new);
@@ -7953,7 +7953,7 @@ void VRenderVulkanView::RunFetchMask(wxFileConfig &fconfig)
 	MSKReader msk_reader;
 	wstring mskname = mask_name.ToStdWstring();
 	msk_reader.SetFile(mskname);
-	Nrrd* mask_nrrd_new = msk_reader.Convert(m_tseq_cur_num, m_cur_vol->GetCurChannel(), true);
+	auto mask_nrrd_new = msk_reader.Convert(m_tseq_cur_num, m_cur_vol->GetCurChannel(), true);
 	if (mask_nrrd_new)
 		m_cur_vol->LoadMask(mask_nrrd_new);
 
@@ -7962,7 +7962,7 @@ void VRenderVulkanView::RunFetchMask(wxFileConfig &fconfig)
 	LBLReader lbl_reader;
 	wstring lblname = label_name.ToStdWstring();
 	lbl_reader.SetFile(lblname);
-	Nrrd* label_nrrd_new = lbl_reader.Convert(m_tseq_cur_num, m_cur_vol->GetCurChannel(), true);
+	auto label_nrrd_new = lbl_reader.Convert(m_tseq_cur_num, m_cur_vol->GetCurChannel(), true);
 	if (label_nrrd_new)
 		m_cur_vol->LoadLabel(label_nrrd_new);
 }
@@ -13690,7 +13690,6 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 						VolumeLoaderData d = {};
 						d.chid = vd->GetCurChannel();
 						d.frameid = vd->GetCurTime() + toffset;
-						d.nrrd = NULL;
 						d.vd = vd;
 						d.datasize = vd->GetDataSize();
 						d.brick = NULL;
@@ -13786,7 +13785,7 @@ double VRenderVulkanView::GetPointVolume(Point& mp, int mx, int my,
 		return -1.0;
 	Texture* tex = vd->GetTexture();
 	if (!tex) return -1.0;
-	Nrrd* nrrd = tex->get_nrrd(0);
+	Nrrd* nrrd = tex->get_nrrd_raw(0);
 	if (!nrrd) return -1.0;
 	void* data = nrrd->data;
 	if (!data && !tex->isBrxml()) return -1.0;
@@ -13959,7 +13958,7 @@ double VRenderVulkanView::GetPointAndLabelMax(Point& mp, int& lblval, int mx, in
         return -1.0;
     Texture* tex = vd->GetTexture();
     if (!tex) return -1.0;
-    Nrrd* nrrd = tex->get_nrrd(tex->nlabel());
+    Nrrd* nrrd = tex->get_nrrd_raw(tex->nlabel());
     if (!nrrd) return -1.0;
     void* data = nrrd->data;
     if (!data && !tex->isBrxml()) return -1.0;
@@ -14121,7 +14120,7 @@ double VRenderVulkanView::GetPointAndLabel(Point& mp, int& lblval, int mx, int m
 		return -1.0;
 	Texture* tex = vd->GetTexture();
 	if (!tex) return -1.0;
-	Nrrd* nrrd = tex->get_nrrd(tex->nlabel());
+	Nrrd* nrrd = tex->get_nrrd_raw(tex->nlabel());
 	if (!nrrd) return -1.0;
 	void* data = nrrd->data;
 	if (!data && !tex->isBrxml()) return -1.0;
@@ -14269,7 +14268,7 @@ double VRenderVulkanView::GetPointAndIntVolume(Point& mp, double &intensity, boo
 		return -1.0;
 	Texture* tex = vd->GetTexture();
 	if (!tex) return -1.0;
-	Nrrd* nrrd = tex->get_nrrd(0);
+	Nrrd* nrrd = tex->get_nrrd_raw(0);
 	if (!nrrd) return -1.0;
 	void* data = nrrd->data;
 	if (!data && !tex->isBrxml()) return -1.0;
@@ -15664,13 +15663,13 @@ void VRenderVulkanView::GetTraces()
 	m_cur_vol->GetVR()->return_mask();
 	m_cur_vol->GetResolution(nx, ny, nz);
 	//find labels in the old that are selected by the current mask
-	Nrrd* mask_nrrd = m_cur_vol->GetMask(true);
-	if (!mask_nrrd) return;
-	Nrrd* label_nrrd = m_cur_vol->GetLabel(false);
-	if(!label_nrrd) return;
-	unsigned char* mask_data = (unsigned char*)(mask_nrrd->data);
+	auto mask_nrrd = m_cur_vol->GetMask(true);
+	if (!mask_nrrd || !mask_nrrd->getNrrd()) return;
+	auto label_nrrd = m_cur_vol->GetLabel(false);
+	if(!label_nrrd || !label_nrrd->getNrrd()) return;
+	unsigned char* mask_data = (unsigned char*)(mask_nrrd->getNrrd()->data);
 	if (!mask_data) return;
-	unsigned int* label_data = (unsigned int*)(label_nrrd->data);
+	unsigned int* label_data = (unsigned int*)(label_nrrd->getNrrd()->data);
 	if (!label_data) return;
 	FL::CellList sel_labels;
 	FL::CellListIter label_iter;

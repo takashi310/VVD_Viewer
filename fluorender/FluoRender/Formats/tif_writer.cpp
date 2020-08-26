@@ -46,7 +46,7 @@ TIFWriter::~TIFWriter()
 {
 }
 
-void TIFWriter::SetData(Nrrd *data)
+void TIFWriter::SetData(const std::shared_ptr<FLIVR::VL_Nrrd>& data)
 {
 	m_data = data;
 }
@@ -91,14 +91,18 @@ void TIFWriter::Save(wstring filename, int mode)
 
 void TIFWriter::SaveSingleFile(wstring filename)
 {
-	if (!m_data || !m_data->data || m_data->dim!=3)
+	if (!m_data)
 		return;
 
-	int numPages = int(m_data->axis[2].size);
-	int width = int(m_data->axis[0].size);
-	int height = int(m_data->axis[1].size);
+	Nrrd* data = m_data->getNrrd();
+	if (!data)
+		return;
+
+	int numPages = int(data->axis[2].size);
+	int width = int(data->axis[0].size);
+	int height = int(data->axis[1].size);
 	int samples = 1;
-	int bits = m_data->type==nrrdTypeUShort?16:8;
+	int bits = data->type==nrrdTypeUShort?16:8;
 	float x_res;
 	float y_res;
 	double z_res;
@@ -110,9 +114,9 @@ void TIFWriter::SaveSingleFile(wstring filename)
 	}
 	else
 	{
-		x_res = float(m_data->axis[0].spacing>0.0?1.0/m_data->axis[0].spacing:1.0);
-		y_res = float(m_data->axis[1].spacing>0.0?1.0/m_data->axis[1].spacing:1.0);
-		z_res = m_data->axis[2].spacing;
+		x_res = float(data->axis[0].spacing>0.0?1.0/data->axis[0].spacing:1.0);
+		y_res = float(data->axis[1].spacing>0.0?1.0/data->axis[1].spacing:1.0);
+		z_res = data->axis[2].spacing;
 	}
 
 	//buffers
@@ -158,12 +162,12 @@ void TIFWriter::SaveSingleFile(wstring filename)
 			int lineindex = (width*height*i + width*j)*samples;
 			if (bits == 16)
 			{
-				memcpy(buf16, ((uint16*)m_data->data)+lineindex, width*sizeof(uint16)*samples);
+				memcpy(buf16, ((uint16*)data->data)+lineindex, width*sizeof(uint16)*samples);
 				TIFFWriteScanline(outfile, buf16, j, 0);
 			}
 			else
 			{
-				memcpy(buf8, ((uint8*)m_data->data)+lineindex, width*sizeof(uint8)*samples);
+				memcpy(buf8, ((uint8*)data->data)+lineindex, width*sizeof(uint8)*samples);
 				TIFFWriteScanline(outfile, buf8, j, 0);
 			}
 		}
@@ -179,18 +183,22 @@ void TIFWriter::SaveSingleFile(wstring filename)
 
 void TIFWriter::SaveSequence(wstring filename)
 {
-	if (!m_data || !m_data->data || m_data->dim!=3)
+	if (!m_data)
+		return;
+
+	Nrrd* data = m_data->getNrrd();
+	if (!data || !data->data || data->dim!=3)
 		return;
 
 	int64_t pos = filename.find_last_of(L'.');
 	if (pos != -1)
 		filename = filename.substr(0, pos);
 
-	int numPages = int(m_data->axis[2].size);
-	int width = int(m_data->axis[0].size);
-	int height = int(m_data->axis[1].size);
+	int numPages = int(data->axis[2].size);
+	int width = int(data->axis[0].size);
+	int height = int(data->axis[1].size);
 	int samples = 1;
-	int bits = m_data->type==nrrdTypeUShort?16:8;
+	int bits = data->type==nrrdTypeUShort?16:8;
 	float x_res;
 	float y_res;
 	double z_res;
@@ -202,9 +210,9 @@ void TIFWriter::SaveSequence(wstring filename)
 	}
 	else
 	{
-		x_res = float(m_data->axis[0].spacing>0.0?1.0/m_data->axis[0].spacing:1.0);
-		y_res = float(m_data->axis[1].spacing>0.0?1.0/m_data->axis[1].spacing:1.0);
-		z_res = m_data->axis[2].spacing;
+		x_res = float(data->axis[0].spacing>0.0?1.0/data->axis[0].spacing:1.0);
+		y_res = float(data->axis[1].spacing>0.0?1.0/data->axis[1].spacing:1.0);
+		z_res = data->axis[2].spacing;
 	}
 
 	//buffers
@@ -257,12 +265,12 @@ void TIFWriter::SaveSequence(wstring filename)
 			size_t lineindex = ((size_t)width*(size_t)height*(size_t)i + (size_t)width*(size_t)j)*(size_t)samples;
 			if (bits == 16)
 			{
-				memcpy(buf16, ((uint16*)m_data->data)+lineindex, (size_t)width*sizeof(uint16)*samples);
+				memcpy(buf16, ((uint16*)data->data)+lineindex, (size_t)width*sizeof(uint16)*samples);
 				TIFFWriteScanline(outfile, buf16, j, 0);
 			}
 			else
 			{
-				memcpy(buf8, ((uint8*)m_data->data)+lineindex, (size_t)width*sizeof(uint8)*samples);
+				memcpy(buf8, ((uint8*)data->data)+lineindex, (size_t)width*sizeof(uint8)*samples);
 				TIFFWriteScanline(outfile, buf8, j, 0);
 			}
 		}

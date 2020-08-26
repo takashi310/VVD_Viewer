@@ -41,7 +41,7 @@ NRRDWriter::~NRRDWriter()
 {
 }
 
-void NRRDWriter::SetData(Nrrd *data)
+void NRRDWriter::SetData(const std::shared_ptr<FLIVR::VL_Nrrd>& data)
 {
    m_data = data;
 }
@@ -64,6 +64,10 @@ void NRRDWriter::Save(wstring filename, int mode)
 	if (!m_data)
 		return;
 
+	Nrrd* data = m_data->getNrrd();
+	if (!data)
+		return;
+
 	NrrdIoState *nio = nrrdIoStateNew();
 	if (!nio)
 		return;
@@ -73,7 +77,7 @@ void NRRDWriter::Save(wstring filename, int mode)
 	nio->format = nrrdFormatNRRD;
 
 	if (m_use_spacings &&
-		m_data->dim == 3)
+		data->dim == 3)
 	{
 		double spc_org[NRRD_SPACE_DIM_MAX] = {0.0, 0.0, 0.0};
 		double spc_vec[3][NRRD_SPACE_DIM_MAX]= {
@@ -81,25 +85,25 @@ void NRRDWriter::Save(wstring filename, int mode)
 			{0.0, m_spcy, 0.0},
 			{0.0, 0.0, m_spcz} };
 
-		nrrdSpaceSet(m_data, nrrdSpaceRightAnteriorSuperior);
-		nrrdSpaceOriginSet(m_data, spc_org);
+		nrrdSpaceSet(data, nrrdSpaceRightAnteriorSuperior);
+		nrrdSpaceOriginSet(data, spc_org);
 		
-		nrrdAxisInfoSet(m_data, nrrdAxisInfoSpaceDirection, spc_vec[0], spc_vec[1], spc_vec[2]);
-		nrrdAxisInfoSet(m_data, nrrdAxisInfoSize, m_data->axis[0].size, m_data->axis[1].size, m_data->axis[2].size);
-		nrrdAxisInfoSet(m_data, nrrdAxisInfoSpacing, AIR_NAN, AIR_NAN, AIR_NAN);
-		nrrdAxisInfoSet(m_data, nrrdAxisInfoMax, AIR_NAN, AIR_NAN, AIR_NAN);
-		nrrdAxisInfoSet(m_data, nrrdAxisInfoMin, AIR_NAN, AIR_NAN, AIR_NAN);
+		nrrdAxisInfoSet(data, nrrdAxisInfoSpaceDirection, spc_vec[0], spc_vec[1], spc_vec[2]);
+		nrrdAxisInfoSet(data, nrrdAxisInfoSize, data->axis[0].size, data->axis[1].size, data->axis[2].size);
+		nrrdAxisInfoSet(data, nrrdAxisInfoSpacing, AIR_NAN, AIR_NAN, AIR_NAN);
+		nrrdAxisInfoSet(data, nrrdAxisInfoMax, AIR_NAN, AIR_NAN, AIR_NAN);
+		nrrdAxisInfoSet(data, nrrdAxisInfoMin, AIR_NAN, AIR_NAN, AIR_NAN);
 	}
 
 	string str;
 	str.assign(filename.length(), 0);
 	for (int i=0; i<(int)filename.length(); i++)
 		str[i] = (char)filename[i];
-	nrrdSave(str.c_str(), m_data, nio);
+	nrrdSave(str.c_str(), data, nio);
 
 	nrrdIoStateNix(nio);
 
-	nrrdAxisInfoSet(m_data, nrrdAxisInfoSpacing, m_spcx, m_spcy, m_spcz);
-	nrrdAxisInfoSet(m_data, nrrdAxisInfoMax, m_spcx*m_data->axis[0].size, m_spcy*m_data->axis[1].size, m_spcz*m_data->axis[2].size);
-	nrrdAxisInfoSet(m_data, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
+	nrrdAxisInfoSet(data, nrrdAxisInfoSpacing, m_spcx, m_spcy, m_spcz);
+	nrrdAxisInfoSet(data, nrrdAxisInfoMax, m_spcx*data->axis[0].size, m_spcy*data->axis[1].size, m_spcz*data->axis[2].size);
+	nrrdAxisInfoSet(data, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
 }

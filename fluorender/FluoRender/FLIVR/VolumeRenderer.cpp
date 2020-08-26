@@ -2027,8 +2027,8 @@ namespace FLIVR
 					int cox = b->ox(), coy = b->oy(), coz = b->oz();
 					int cmx = b->mx(), cmy = b->my(), cmz = b->mz();
 					int csx = b->sx(), csy = b->sy(), csz = b->sz();
-					Nrrd *cdata = b->get_nrrd(0);
-					Nrrd *cmdata = b->get_nrrd(tex_->nmask());
+					auto cdata = b->get_nrrd(0);
+					auto cmdata = b->get_nrrd(tex_->nmask());
 					
 					b->set_nrrd(tex_->get_nrrd_lv(tex_->GetMaskLv(),0), 0);
 					b->set_nrrd(tex_->get_nrrd(tex_->nmask()), tex_->nmask());
@@ -2897,8 +2897,8 @@ namespace FLIVR
 					int cox = b->ox(), coy = b->oy(), coz = b->oz();
 					int cmx = b->mx(), cmy = b->my(), cmz = b->mz();
 					int csx = b->sx(), csy = b->sy(), csz = b->sz();
-					Nrrd* cdata = b->get_nrrd(0);
-					Nrrd* cmdata = b->get_nrrd(tex_->nmask());
+					auto cdata = b->get_nrrd(0);
+					auto cmdata = b->get_nrrd(tex_->nmask());
 
 					b->set_nrrd(tex_->get_nrrd_lv(tex_->GetMaskLv(), 0), 0);
 					b->set_nrrd(tex_->get_nrrd(tex_->nmask()), tex_->nmask());

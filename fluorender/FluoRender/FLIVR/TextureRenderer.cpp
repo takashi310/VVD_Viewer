@@ -1649,7 +1649,7 @@ namespace FLIVR
 				else if (filter == VK_FILTER_NEAREST)
 					result->descriptor.sampler = device->nearest_sampler;
 
-				void *texdata = brick->get_nrrd(c)->data;
+				void *texdata = brick->get_nrrd(c)->getNrrd()->data;
 				device->UploadTexture3D(result, texdata, offset, ypitch, zpitch, !mem_swap_ || (flush && semaphore == nullptr), semaphore, !swapped);
 				if (updated)
 					*updated = true;
@@ -1839,7 +1839,7 @@ namespace FLIVR
 			else if (filter == VK_FILTER_NEAREST)
 				result->descriptor.sampler = device->nearest_sampler;
 
-			void* texdata = brick->get_nrrd(c)->data;
+			void* texdata = brick->get_nrrd(c)->getNrrd()->data;
 			device->UploadTexture3D(result, texdata, offset, ypitch, zpitch, !mem_swap_ || (flush && semaphore == nullptr), semaphore, !swapped);
 			
 			if (updated)

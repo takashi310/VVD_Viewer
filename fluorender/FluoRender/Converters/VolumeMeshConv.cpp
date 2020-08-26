@@ -72,12 +72,12 @@ VolumeMeshConv::~VolumeMeshConv()
 {
 }
 
-void VolumeMeshConv::SetVolume(Nrrd* volume)
+void VolumeMeshConv::SetVolume(const std::shared_ptr<VL_Nrrd>& volume)
 {
 	m_volume = volume;
 }
 
-Nrrd* VolumeMeshConv::GetVolume()
+std::shared_ptr<VL_Nrrd> VolumeMeshConv::GetVolume()
 {
 	return m_volume;
 }
@@ -114,7 +114,7 @@ void VolumeMeshConv::SetVolumeUseMask(bool use)
 	m_use_mask = use;
 }
 
-void VolumeMeshConv::SetVolumeMask(Nrrd* mask)
+void VolumeMeshConv::SetVolumeMask(const std::shared_ptr<VL_Nrrd>& mask)
 {
 	m_mask = mask;
 }
@@ -141,7 +141,10 @@ void VolumeMeshConv::SetDownsampleZ(int downsample)
 
 void VolumeMeshConv::Convert()
 {
-	if (!m_volume || m_volume->dim!=3)
+	if (!m_volume)
+		return;
+	Nrrd* nrrd = m_volume->getNrrd();
+	if (!nrrd || nrrd->dim!=3)
 		return;
 	if (m_mesh)
 		glmClear(m_mesh);
@@ -164,9 +167,9 @@ void VolumeMeshConv::Convert()
 	m_mesh->numgroups = 1;
 
 	//get volume info
-	m_nx = int(m_volume->axis[0].size);
-	m_ny = int(m_volume->axis[1].size);
-	m_nz = int(m_volume->axis[2].size);
+	m_nx = int(nrrd->axis[0].size);
+	m_ny = int(nrrd->axis[1].size);
+	m_nz = int(nrrd->axis[2].size);
 
 	//marching cubes
 	//parse the volume data
@@ -281,7 +284,10 @@ void VolumeMeshConv::Convert()
 
 double VolumeMeshConv::GetValue(int x, int y, int z)
 {
-	if (!m_volume || !m_volume->data)
+	if (!m_volume)
+		return 0.0;
+	Nrrd* nrrd = m_volume->getNrrd();
+	if (!nrrd || !nrrd->data)
 		return 0.0;
 	if (x<0 || x>=m_nx ||
 		y<0 || y>=m_ny ||
@@ -290,9 +296,9 @@ double VolumeMeshConv::GetValue(int x, int y, int z)
 
 	double value = 0.0;
 	int index = m_nx*m_ny*z + m_nx*y + x;
-	if (m_volume->type == nrrdTypeUChar)
+	if (nrrd->type == nrrdTypeUChar)
 	{
-		value = ((unsigned char*)m_volume->data)[index];
+		value = ((unsigned char*)nrrd->data)[index];
 		value /= 255.0;
 		if (m_use_transfer)
 		{
@@ -301,12 +307,12 @@ double VolumeMeshConv::GetValue(int x, int y, int z)
 				y>0 && y<m_ny-1 &&
 				z>0 && z<m_nz-1)
 			{
-				double v1 = ((unsigned char*)(m_volume->data))[m_nx*m_ny*z + m_nx*y + (x-1)];
-				double v2 = ((unsigned char*)(m_volume->data))[m_nx*m_ny*z + m_nx*y + (x+1)];
-				double v3 = ((unsigned char*)(m_volume->data))[m_nx*m_ny*z + m_nx*(y-1) + x];
-				double v4 = ((unsigned char*)(m_volume->data))[m_nx*m_ny*z + m_nx*(y+1) + x];
-				double v5 = ((unsigned char*)(m_volume->data))[m_nx*m_ny*(z-1) + m_nx*y + x];
-				double v6 = ((unsigned char*)(m_volume->data))[m_nx*m_ny*(z+1) + m_nx*y + x];
+				double v1 = ((unsigned char*)(nrrd->data))[m_nx*m_ny*z + m_nx*y + (x-1)];
+				double v2 = ((unsigned char*)(nrrd->data))[m_nx*m_ny*z + m_nx*y + (x+1)];
+				double v3 = ((unsigned char*)(nrrd->data))[m_nx*m_ny*z + m_nx*(y-1) + x];
+				double v4 = ((unsigned char*)(nrrd->data))[m_nx*m_ny*z + m_nx*(y+1) + x];
+				double v5 = ((unsigned char*)(nrrd->data))[m_nx*m_ny*(z-1) + m_nx*y + x];
+				double v6 = ((unsigned char*)(nrrd->data))[m_nx*m_ny*(z+1) + m_nx*y + x];
 				double normal_x, normal_y, normal_z;
 				normal_x = (v2 - v1) / 255.0;
 				normal_y = (v4 - v3) / 255.0;
@@ -331,9 +337,9 @@ double VolumeMeshConv::GetValue(int x, int y, int z)
 			}
 		}
 	}
-	else if (m_volume->type == nrrdTypeUShort)
+	else if (nrrd->type == nrrdTypeUShort)
 	{
-		value = ((unsigned short*)m_volume->data)[index];
+		value = ((unsigned short*)nrrd->data)[index];
 		value /= m_vol_max;
 		if (m_use_transfer)
 		{
@@ -342,12 +348,12 @@ double VolumeMeshConv::GetValue(int x, int y, int z)
 				y>0 && y<m_ny-1 &&
 				z>0 && z<m_nz-1)
 			{
-				double v1 = ((unsigned short*)(m_volume->data))[m_nx*m_ny*z + m_nx*y + (x-1)];
-				double v2 = ((unsigned short*)(m_volume->data))[m_nx*m_ny*z + m_nx*y + (x+1)];
-				double v3 = ((unsigned short*)(m_volume->data))[m_nx*m_ny*z + m_nx*(y-1) + x];
-				double v4 = ((unsigned short*)(m_volume->data))[m_nx*m_ny*z + m_nx*(y+1) + x];
-				double v5 = ((unsigned short*)(m_volume->data))[m_nx*m_ny*(z-1) + m_nx*y + x];
-				double v6 = ((unsigned short*)(m_volume->data))[m_nx*m_ny*(z+1) + m_nx*y + x];
+				double v1 = ((unsigned short*)(nrrd->data))[m_nx*m_ny*z + m_nx*y + (x-1)];
+				double v2 = ((unsigned short*)(nrrd->data))[m_nx*m_ny*z + m_nx*y + (x+1)];
+				double v3 = ((unsigned short*)(nrrd->data))[m_nx*m_ny*z + m_nx*(y-1) + x];
+				double v4 = ((unsigned short*)(nrrd->data))[m_nx*m_ny*z + m_nx*(y+1) + x];
+				double v5 = ((unsigned short*)(nrrd->data))[m_nx*m_ny*(z-1) + m_nx*y + x];
+				double v6 = ((unsigned short*)(nrrd->data))[m_nx*m_ny*(z+1) + m_nx*y + x];
 				double normal_x, normal_y, normal_z;
 				normal_x = (v2 - v1) / m_vol_max;
 				normal_y = (v4 - v3) / m_vol_max;
@@ -373,9 +379,9 @@ double VolumeMeshConv::GetValue(int x, int y, int z)
 		}
 	}
 
-	if (m_use_mask && m_mask)
+	if (m_use_mask && m_mask && m_mask->getNrrd())
 	{
-		double mask_value = ((unsigned char*)m_mask->data)[index];
+		double mask_value = ((unsigned char*)m_mask->getNrrd()->data)[index];
 		mask_value /= 255.0;
 		value *= mask_value;
 	}

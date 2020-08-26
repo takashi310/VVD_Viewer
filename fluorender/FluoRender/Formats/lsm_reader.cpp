@@ -682,7 +682,7 @@ double LSMReader::GetExcitationWavelength(int chan)
    return 0.0;
 }
 
-Nrrd* LSMReader::Convert(int t, int c, bool get_max)
+Nrrd* LSMReader::ConvertNrrd(int t, int c, bool get_max)
 {
    Nrrd *data = 0;
    FILE* pfile = 0;

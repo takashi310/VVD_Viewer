@@ -224,7 +224,7 @@ int NRRDReader::LoadBatch(int index)
 	return result;
 }
 
-Nrrd* NRRDReader::Convert(int t, int c, bool get_max)
+Nrrd* NRRDReader::ConvertNrrd(int t, int c, bool get_max)
 {
 	if (t<0 || t>=m_time_num)
 		return 0;
