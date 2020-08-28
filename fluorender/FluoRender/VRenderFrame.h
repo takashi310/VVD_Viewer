@@ -174,6 +174,7 @@ public:
 	void UpdateROITree(VolumeData *vd, bool set_calc=true);
 	void UpdateTreeColors();
 	void UpdateTreeIcons();
+	void UpdateTreeFrames();
 	
 	//data manager
 	DataManager* GetDataManager();

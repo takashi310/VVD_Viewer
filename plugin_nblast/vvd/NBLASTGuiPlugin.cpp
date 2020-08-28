@@ -60,7 +60,7 @@ bool NBLASTGuiPlugin::runNBLAST(wxString rpath, wxString nlibpath, wxString outd
 		if (vd->GetTexture()->nmask() != -1)
 		{
 			vd->GetVR()->return_mask();
-			Nrrd *data = vd->GetTexture()->get_nrrd(vd->GetTexture()->nmask());
+			auto data = vd->GetTexture()->get_nrrd(vd->GetTexture()->nmask());
 			double spcx, spcy, spcz;
 			vd->GetSpacings(spcx, spcy, spcz);
 			
@@ -155,7 +155,7 @@ bool NBLASTGuiPlugin::runNBLASTremote(wxString url, wxString usr, wxString pwd, 
 	if (vd->GetTexture()->nmask() != -1)
 	{
 		vd->GetVR()->return_mask();
-		Nrrd *data = vd->GetTexture()->get_nrrd(vd->GetTexture()->nmask());
+		auto data = vd->GetTexture()->get_nrrd(vd->GetTexture()->nmask());
 		double spcx, spcy, spcz;
 		vd->GetSpacings(spcx, spcy, spcz);
 

@@ -4776,6 +4776,12 @@ void TreePanel::SetMGroupItemImage(const wxTreeItemId item, int image)
 		m_datatree->SetMGroupItemImage(item, image);
 }
 
+void TreePanel::SetItemName(const wxTreeItemId item, const wxString &name)
+{
+	if (m_datatree)
+		m_datatree->SetItemText(item, name);
+}
+
 void TreePanel::UpdateSelection()
 {
 	if (m_datatree)

@@ -109,10 +109,10 @@ public:
 	wxImage m_ref_image_thumb;
 	wxImage m_sig_image_thumb;
 
-	Nrrd* m_lbl_nrrd;
-	Nrrd* m_nrrd_r;
+	std::shared_ptr<VL_Nrrd> m_lbl_nrrd;
+	std::shared_ptr<VL_Nrrd> m_nrrd_r;
 	wxString m_vol_r;
-	Nrrd* m_nrrd_s[3];
+	std::shared_ptr<VL_Nrrd> m_nrrd_s[3];
 	wxString m_vol_s[3];
 
 	double m_gmaxvals[3];

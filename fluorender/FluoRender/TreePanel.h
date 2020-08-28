@@ -405,6 +405,7 @@ public:
 	void SetGroupItemImage(const wxTreeItemId item, int image);
 	wxTreeItemId AddMGroupItem(wxTreeItemId par_item, const wxString &text);
 	void SetMGroupItemImage(const wxTreeItemId item, int image);
+	void SetItemName(const wxTreeItemId item, const wxString& name);
 
 	//seelction
 	void UpdateSelection();

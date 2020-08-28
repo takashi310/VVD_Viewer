@@ -1446,6 +1446,104 @@ void VRenderFrame::OnInfo(wxCommandEvent& WXUNUSED(event))
 	d->ShowModal();
 }
 
+void VRenderFrame::UpdateTreeFrames()
+{
+	int i, j, k;
+	if (!m_tree_panel || !m_tree_panel->GetTreeCtrl())
+		return;
+
+	m_tree_panel->SetEvtHandlerEnabled(false);
+	m_tree_panel->Freeze();
+
+	DataTreeCtrl* treectrl = m_tree_panel->GetTreeCtrl();
+	wxTreeItemId root = treectrl->GetRootItem();
+	wxTreeItemIdValue ck_view;
+
+	for (i = 0; i < (int)m_vrv_list.size(); i++)
+	{
+		VRenderView* vrv = m_vrv_list[i];
+		wxTreeItemId vrv_item;
+		if (i == 0)
+			vrv_item = treectrl->GetFirstChild(root, ck_view);
+		else
+			vrv_item = treectrl->GetNextChild(root, ck_view);
+
+		if (!vrv_item.IsOk())
+			continue;
+
+		wxTreeItemIdValue ck_layer;
+		for (j = 0; j < vrv->GetLayerNum(); j++)
+		{
+			TreeLayer* layer = vrv->GetLayer(j);
+			wxTreeItemId layer_item;
+			if (j == 0)
+				layer_item = treectrl->GetFirstChild(vrv_item, ck_layer);
+			else
+				layer_item = treectrl->GetNextChild(vrv_item, ck_layer);
+
+			if (!layer_item.IsOk())
+				continue;
+
+			LayerInfo* item_data = (LayerInfo*)treectrl->GetItemData(layer_item);
+			if (!item_data)
+				continue;
+
+			int iconid = item_data->icon / 2;
+
+			switch (layer->IsA())
+			{
+			case 2://volume
+			{
+				VolumeData* vd = (VolumeData*)layer;
+				if (!vd)
+					break;
+				m_tree_panel->SetItemName(layer_item, vd->GetName());
+			}
+			break;
+			case 5://volume group
+			{
+				DataGroup* group = (DataGroup*)layer;
+				if (!group)
+					break;
+				m_tree_panel->SetGroupItemImage(layer_item, int(group->GetDisp()));
+				wxTreeItemIdValue ck_volume;
+				for (k = 0; k < group->GetVolumeNum(); k++)
+				{
+					VolumeData* vd = group->GetVolumeData(k);
+					if (!vd)
+						continue;
+					wxTreeItemId volume_item;
+					if (k == 0)
+						volume_item = treectrl->GetFirstChild(layer_item, ck_volume);
+					else
+						volume_item = treectrl->GetNextChild(layer_item, ck_volume);
+					if (!volume_item.IsOk())
+						continue;
+					m_tree_panel->SetItemName(volume_item, vd->GetName());
+				}
+			}
+			break;
+			}
+		}
+	}
+
+	m_tree_panel->Thaw();
+	m_tree_panel->SetEvtHandlerEnabled(true);
+
+	m_tree_panel->Refresh(false);
+
+	VolumeData* sel_vd = m_data_mgr.GetVolumeData(m_cur_sel_vol);
+	if (sel_vd && sel_vd->GetDisp())
+	{
+		m_aui_mgr.GetPane(m_prop_panel).Caption(
+			wxString(UITEXT_PROPERTIES) + wxString(" - ") + sel_vd->GetName());
+		//m_aui_mgr.Update();
+	}
+
+	//if (m_plugin_manager)
+	//	m_plugin_manager->OnTreeUpdate();
+}
+
 void VRenderFrame::UpdateTreeIcons()
 {
 	int i, j, k;

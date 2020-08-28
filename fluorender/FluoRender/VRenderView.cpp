@@ -7229,16 +7229,11 @@ void VRenderVulkanView::Set4DSeqFrame(int frame, bool run_script)
 		}
 	}
 	RefreshGL();
-/* //very slow
+ //very slow
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (vr_frame)
-	{
-		vr_frame->UpdateTree(
-			vr_frame->GetCurSelVol()?
-			vr_frame->GetCurSelVol()->GetName():
-			"");
-	}
-*/
+		vr_frame->UpdateTreeFrames();
+
 }
 
 void VRenderVulkanView::Get3DBatFrames(int &start_frame, int &end_frame, int &cur_frame)
