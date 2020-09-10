@@ -506,8 +506,6 @@ wxPanel(parent, id, pos, size,style, name),
 
 	sizer_sl_b->Add(sizer_sliders, 0, wxEXPAND);
 	sizer_sl_b->Add(sizer_b, 0, wxEXPAND);
-	
-	wxStaticLine *st_line = new wxStaticLine(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLI_VERTICAL);
 
 	sizer_all->Add(sizer_sl_b, 1, wxEXPAND);
 	sizer_all->AddSpacer(20);

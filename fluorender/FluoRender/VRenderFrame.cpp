@@ -1537,7 +1537,43 @@ void VRenderFrame::UpdateTreeFrames()
 	{
 		m_aui_mgr.GetPane(m_prop_panel).Caption(
 			wxString(UITEXT_PROPERTIES) + wxString(" - ") + sel_vd->GetName());
-		//m_aui_mgr.Update();
+		m_main_tb->SetEvtHandlerEnabled(false);
+		m_tree_panel->SetEvtHandlerEnabled(false);
+		m_movie_view->SetEvtHandlerEnabled(false);
+		m_measure_dlg->SetEvtHandlerEnabled(false);
+		m_prop_panel->SetEvtHandlerEnabled(false);
+		m_adjust_view->SetEvtHandlerEnabled(false);
+		m_clip_view->SetEvtHandlerEnabled(false);
+		m_vrv_list[0]->SetEvtHandlerEnabled(false);
+		m_brush_tool_dlg->SetEvtHandlerEnabled(false);
+		m_noise_cancelling_dlg->SetEvtHandlerEnabled(false);
+		m_counting_dlg->SetEvtHandlerEnabled(false);
+		m_convert_dlg->SetEvtHandlerEnabled(false);
+		m_colocalization_dlg->SetEvtHandlerEnabled(false);
+		m_trace_dlg->SetEvtHandlerEnabled(false);
+		m_anno_view->SetEvtHandlerEnabled(false);
+		m_setting_dlg->SetEvtHandlerEnabled(false);
+		m_help_dlg->SetEvtHandlerEnabled(false);
+
+		m_aui_mgr.Update();
+
+		m_main_tb->SetEvtHandlerEnabled(true);
+		m_tree_panel->SetEvtHandlerEnabled(true);
+		m_movie_view->SetEvtHandlerEnabled(true);
+		m_measure_dlg->SetEvtHandlerEnabled(true);
+		m_prop_panel->SetEvtHandlerEnabled(true);
+		m_adjust_view->SetEvtHandlerEnabled(true);
+		m_clip_view->SetEvtHandlerEnabled(true);
+		m_vrv_list[0]->SetEvtHandlerEnabled(true);
+		m_brush_tool_dlg->SetEvtHandlerEnabled(true);
+		m_noise_cancelling_dlg->SetEvtHandlerEnabled(true);
+		m_counting_dlg->SetEvtHandlerEnabled(true);
+		m_convert_dlg->SetEvtHandlerEnabled(true);
+		m_colocalization_dlg->SetEvtHandlerEnabled(true);
+		m_trace_dlg->SetEvtHandlerEnabled(true);
+		m_anno_view->SetEvtHandlerEnabled(true);
+		m_setting_dlg->SetEvtHandlerEnabled(true);
+		m_help_dlg->SetEvtHandlerEnabled(true);
 	}
 
 	//if (m_plugin_manager)
