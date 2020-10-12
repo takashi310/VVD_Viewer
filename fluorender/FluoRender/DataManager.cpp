@@ -1700,7 +1700,7 @@ double VolumeData::GetTransferedValue(int i, int j, int k)
 
 int VolumeData::GetLabellValue(int i, int j, int k)
 {
-	auto vlnrrd = m_tex->get_nrrd(0);
+	auto vlnrrd = m_tex->get_nrrd(m_tex->nlabel());
 	if (!vlnrrd) return 0;
 	Nrrd* data = vlnrrd->getNrrd();
 	if (!data) return 0;

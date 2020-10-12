@@ -906,11 +906,13 @@ void VRenderVulkanView::Resize(bool refresh)
 	m_resize_ol2 = true;
 	m_resize_paint = true;
 
-	m_vulkan->setSize(size.GetWidth(), size.GetHeight());
-	wxRect refreshRect(size);
-	RefreshRect(refreshRect, false);
-
-	if (refresh) RefreshGL();
+	if (refresh)
+    {
+        m_vulkan->setSize(size.GetWidth(), size.GetHeight());
+        wxRect refreshRect(size);
+        RefreshRect(refreshRect, false);
+        RefreshGL();
+    }
 }
 
 void VRenderVulkanView::Init()
@@ -5971,6 +5973,7 @@ bool VRenderVulkanView::SelLabelSegVolumeMax(int mode, vector<VolumeData*> ref)
 
 		int sel_id;
 		dist = GetPointAndLabelMax(p, sel_id, old_mouse_X, old_mouse_Y, vd, ref);
+        //dist = GetPointAndLabel(p, sel_id, old_mouse_X, old_mouse_Y, vd);
 
 		if (dist > 0.0)
 		{
@@ -7428,6 +7431,8 @@ void VRenderVulkanView::PostDraw()
 			!TextureRenderer::get_done_update_loop())
 			return;
 	}
+    
+    vkQueueWaitIdle(m_vulkan->vulkanDevice->queue);
 
 	//output animations
 	if (m_capture && !m_cap_file.IsEmpty())
@@ -18306,7 +18311,10 @@ void VRenderView::OnCapture(wxCommandEvent& event)
 			m_glview->StartTileRendering(m_cap_resx, m_cap_resy, tilew, tileh);
 		}
 		else
-			RefreshGL();
+        {
+            m_glview->StartTileRendering(m_cap_resx, m_cap_resy, m_cap_resx, m_cap_resy);
+            //RefreshGL();
+        }
 
 		if (vr_frame && vr_frame->GetSettingDlg() &&
 			vr_frame->GetSettingDlg()->GetProjSave())
