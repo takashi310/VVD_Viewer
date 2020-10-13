@@ -77,6 +77,20 @@ namespace FLIVR
 	"} ct;" \
 	"\n"
 
+#define CAL_UNIFORMS_RGB_WITH_MASK \
+	"//CAL_UNIFORMS_RGB_WITH_MASK\n" \
+	"layout (binding = 1) uniform sampler3D tex1;//operand A\n" \
+	"layout (binding = 3) uniform sampler3D tex3;//mask of A\n" \
+	"layout (binding = 2) uniform sampler3D tex2;//operand B\n" \
+	"layout (binding = 4) uniform sampler3D tex4;//mask of B\n" \
+	"layout (binding = 5) uniform sampler3D tex5;//operand C\n" \
+	"layout (binding = 6) uniform sampler3D tex6;//mask of C\n" \
+	"layout (push_constant) uniform PushConsts {\n" \
+	"	vec4 loc0;//(scale_A, scale_B, scale_C, 0.0)\n" \
+	"	vec4 loc1;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
+	"} ct;" \
+	"\n"
+
 #define CAL_HEAD \
 	"//CAL_HEAD\n" \
 	"void main()\n" \
@@ -84,6 +98,7 @@ namespace FLIVR
 	"	vec4 t = vec4((gl_GlobalInvocationID.x+0.5)*ct.loc1.x, (gl_GlobalInvocationID.y+0.5)*ct.loc1.y, (gl_GlobalInvocationID.z+0.5)*ct.loc1.z, 1.0);\n" \
 	"	vec4 t1 = t;//position in the operand A\n" \
 	"	vec4 t2 = t;//position in the operand B\n" \
+	"	vec4 t3 = t;//position in the operand C\n" \
 	"\n"
 
 #define CAL_TEX_LOOKUP \
@@ -94,10 +109,20 @@ namespace FLIVR
 
 #define CAL_TEX_LOOKUP_WITH_MASK \
 	"	//CAL_TEX_LOOKUP_WITH_MASK\n" \
-	"	vec4 c1 = texture3D(tex1, t1.stp)*ct.loc0.x;\n" \
+	"	vec4 c1 = texture(tex1, t1.stp)*ct.loc0.x;\n" \
 	"	vec4 m1 = ct.loc0.z>0.0?texture(tex3, t1.stp):vec4(1.0);\n" \
 	"	vec4 c2 = texture(tex2, t2.stp)*ct.loc0.y;\n" \
 	"	vec4 m2 = ct.loc0.w>0.0?texture(tex4, t2.stp):vec4(1.0);\n" \
+	"\n"
+
+#define CAL_TEX_LOOKUP_RGB_WITH_MASK \
+	"	//CAL_TEX_LOOKUP_RGB_WITH_MASK\n" \
+	"	vec4 c1 = texture(tex1, t1.stp)*ct.loc0.x;\n" \
+	"	vec4 m1 = texture(tex3, t1.stp)*ct.loc0.x;\n" \
+	"	vec4 c2 = texture(tex2, t2.stp)*ct.loc0.y;\n" \
+	"	vec4 m2 = texture(tex4, t2.stp)*ct.loc0.y;\n" \
+	"	vec4 c3 = texture(tex5, t3.stp)*ct.loc0.z;\n" \
+	"	vec4 m3 = texture(tex6, t3.stp)*ct.loc0.z;\n" \
 	"\n"
 
 #define CAL_BODY_SUBSTRACTION \
@@ -144,6 +169,16 @@ namespace FLIVR
 	"		//CAL_RESULT\n" \
 	"		imageStore(outimg, ivec3(gl_GlobalInvocationID.xyz), vec4(c1.r >= ct.loc0.z ? 1.0 : 0.0));\n" \
 	"	}\n" \
+
+#define CAL_BODY_RGBAPPLYMASK \
+	"	//CAL_BODY_RGBAPPLYMASK\n" \
+	"	vec4 c = vec4(max(max(c1.x*m1.x, c2.x*m2.x), c3.x*m3.x));\n" \
+	"\n"
+
+#define CAL_BODY_RGBAPPLYMASKINV \
+	"	//CAL_BODY_RGBAPPLYMASKINV\n" \
+	"	vec4 c = vec4(max(max(c1.x*(1.0-m1.x), c2.x*(1.0-m2.x)), c3.x*(1.0-m3.x)));\n" \
+	"\n"
 
 #define CAL_RESULT \
 	"	//CAL_RESULT\n" \
@@ -200,11 +235,17 @@ namespace FLIVR
 		case CAL_INTERSECTION_WITH_MASK:
 			z << CAL_UNIFORMS_WITH_MASK;
 			break;
+		case CAL_RGBAPPLYMASK:
+		case CAL_RGBAPPLYMASKINV:
+			z << CAL_UNIFORMS_RGB_WITH_MASK;
+			break;
 		}
 
 		z << CAL_HEAD;
 
-		if (type_ == CAL_INTERSECTION_WITH_MASK)
+		if (type_ == CAL_RGBAPPLYMASK || type_ == CAL_RGBAPPLYMASKINV)
+			z << CAL_TEX_LOOKUP_RGB_WITH_MASK;
+		else if (type_ == CAL_INTERSECTION_WITH_MASK)
 			z << CAL_TEX_LOOKUP_WITH_MASK;
 		else
 			z << CAL_TEX_LOOKUP;
@@ -234,6 +275,12 @@ namespace FLIVR
 			z << CAL_BODY_INTERSECTION_WITH_MASK;
 		case CAL_MASK_THRESHOLD:
 			z << CAL_BODY_MASK_THRESHOLD;
+			break;
+		case CAL_RGBAPPLYMASK:
+			z << CAL_BODY_RGBAPPLYMASK;
+			break;
+		case CAL_RGBAPPLYMASKINV:
+			z << CAL_BODY_RGBAPPLYMASKINV;
 			break;
 		}
 

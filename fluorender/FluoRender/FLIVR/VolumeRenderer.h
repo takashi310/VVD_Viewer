@@ -378,7 +378,7 @@ public:
 		void draw_label(int type, int mode, double thresh, double gm_falloff);
 
 		//calculation
-		void calculate(int type, VolumeRenderer* vr_a, VolumeRenderer* vr_b);
+		void calculate(int type, VolumeRenderer* vr_a, VolumeRenderer* vr_b, VolumeRenderer* vr_c = NULL);
 
 		//double calc_hist_3d(GLuint, GLuint, size_t, size_t, size_t);
 		////return

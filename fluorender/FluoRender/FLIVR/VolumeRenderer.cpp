@@ -4056,7 +4056,7 @@ namespace FLIVR
 	//7:apply mask inverted, then replace volume a
 	//8:intersection with masks if available
 	//9:fill holes
-	void VolumeRenderer::calculate(int type, FLIVR::VolumeRenderer *vr_a, FLIVR::VolumeRenderer *vr_b)
+	void VolumeRenderer::calculate(int type, FLIVR::VolumeRenderer *vr_a, FLIVR::VolumeRenderer *vr_b, FLIVR::VolumeRenderer* vr_c)
 	{
 		//sync sorting
 		Ray view_ray(Point(0.802,0.267,0.534), Vector(0.802,0.267,0.534));
@@ -4066,10 +4066,12 @@ namespace FLIVR
 			return;
 		vector<TextureBrick*> *bricks_a = 0;
 		vector<TextureBrick*> *bricks_b = 0;
+		vector<TextureBrick*>* bricks_c = 0;
 
 		bool compression_this = false;
 		bool compression_a = false;
 		bool compression_b = false;
+		bool compression_c = false;
 
 		compression_this = compression_;
 		if (compression_)
@@ -4101,6 +4103,17 @@ namespace FLIVR
 				vr_b->compression_ = false;
 			}
 		}
+		if (vr_c)
+		{
+			vr_c->tex_->set_sort_bricks();
+			bricks_c = vr_c->tex_->get_sorted_bricks(view_ray);
+			compression_c = vr_c->compression_;
+			if (vr_c->compression_)
+			{
+				m_vulkan->eraseBricksFromTexpools(bricks_c, 0);
+				vr_c->compression_ = false;
+			}
+		}
 
 		int out_bytes = tex_->nb(0);
 
@@ -4112,11 +4125,21 @@ namespace FLIVR
 		VolCalShaderFactory::CalCompShaderBrickConst cal_const;
 
 		//set uniforms
-		if (type == 1 ||
-			type == 2 ||
-			type == 3 ||
-			type == 4 ||
-			type == 8)
+		if (type == 10 ||
+			type == 11)
+		{
+			cal_const.loc0_scale_usemask = {
+				vr_a ? vr_a->get_scalar_scale() : 1.0,
+				vr_b ? vr_b->get_scalar_scale() : 1.0,
+				vr_c ? vr_c->get_scalar_scale() : 1.0,
+				0.0
+			};
+		}
+		else if (type == 1 ||
+				 type == 2 ||
+				 type == 3 ||
+				 type == 4 ||
+				 type == 8)
 		{
 			cal_const.loc0_scale_usemask = {
 				vr_a ? vr_a->get_scalar_scale() : 1.0,
@@ -4144,17 +4167,19 @@ namespace FLIVR
 			TextureBrick* b = (*bricks)[i];
 			TextureBrick* b_a = bricks_a ? (*bricks_a)[i] : nullptr;
 			TextureBrick* b_b = bricks_b ? (*bricks_b)[i] : nullptr;
+			TextureBrick* b_c = bricks_c ? (*bricks_c)[i] : nullptr;
 
 			//size and sample rate
 			cal_const.loc1_dim_inv = { 1.0 / b->nx(), 1.0 / b->ny(), 1.0 / b->nz(), 1.0 / sampling_rate_ };
 
-			shared_ptr<vks::VTexture> dsttex, tex_a, tex_b, mask_a, mask_b;
+			shared_ptr<vks::VTexture> dsttex, tex_a, tex_b, tex_c, mask_a, mask_b, mask_c;
 			std::vector<VkWriteDescriptorSet> descriptorWrites;
 
 			//load the texture
 			b->prevent_tex_deletion(true);
 			if (b_a) b_a->prevent_tex_deletion(true);
 			if (b_b) b_b->prevent_tex_deletion(true);
+			if (b_c) b_c->prevent_tex_deletion(true);
 
 			dsttex = load_brick(prim_dev, 0, 0, bricks, i, VK_FILTER_NEAREST, false, 0, false);
 			if (!dsttex) continue;
@@ -4173,6 +4198,13 @@ namespace FLIVR
 				if (!tex_b) continue;
 				descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 1, &tex_b->descriptor));
 			}
+
+			if (bricks_c)
+			{
+				tex_c = vr_c->load_brick(prim_dev, 0, 0, bricks_c, i, VK_FILTER_NEAREST, false, 0, false);
+				if (!tex_c) continue;
+				descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 4, &tex_c->descriptor));
+			}
 				
 			if ((type == 5 || type == 6 || type == 7) && bricks_a)
 			{
@@ -4181,7 +4213,7 @@ namespace FLIVR
 				descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 1, &mask_a->descriptor));
 			}
 				
-			if (type==8)
+			if (type==8 || type==10 || type==11)
 			{
 				if (bricks_a)
 				{
@@ -4195,12 +4227,20 @@ namespace FLIVR
 					mask_b = vr_b->load_brick_mask(prim_dev, bricks_b, i, VK_FILTER_NEAREST, false, 0, true);
 					if (!mask_b) continue;
 					descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 3, &mask_b->descriptor));
-				}	
+				}
+
+				if (bricks_c)
+				{
+					mask_c = vr_b->load_brick_mask(prim_dev, bricks_c, i, VK_FILTER_NEAREST, false, 0, true);
+					if (!mask_c) continue;
+					descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 5, &mask_c->descriptor));
+				}
 			}
 
 			b->prevent_tex_deletion(false);
 			if (b_a) b_a->prevent_tex_deletion(false);
 			if (b_b) b_b->prevent_tex_deletion(false);
+			if (b_c) b_c->prevent_tex_deletion(false);
 
 			VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
 			VK_CHECK_RESULT(vkBeginCommandBuffer(cmdbuf, &cmdBufInfo));
@@ -4279,6 +4319,11 @@ namespace FLIVR
 		{
 			m_vulkan->eraseBricksFromTexpools(bricks_b, 0);
 			vr_b->compression_ = compression_b;
+		}
+		if (compression_c)
+		{
+			m_vulkan->eraseBricksFromTexpools(bricks_c, 0);
+			vr_c->compression_ = compression_c;
 		}
 	}
 

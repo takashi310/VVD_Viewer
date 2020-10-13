@@ -2601,27 +2601,49 @@ void VolumeData::DrawLabel(int type, int mode, double thresh, double gm_falloff)
 }
 
 //calculation
-void VolumeData::Calculate(int type, VolumeData *vd_a, VolumeData *vd_b)
+void VolumeData::Calculate(int type, VolumeData *vd_a, VolumeData *vd_b, VolumeData* vd_c)
 {
 	if (m_vr)
 	{
-		if (type==6 || type==7)
-			m_vr->set_hi_thresh(vd_a->GetRightThresh());
-		m_vr->calculate(type, vd_a?vd_a->GetVR():0, vd_b?vd_b->GetVR():0);
-		m_vr->return_volume();
-		if (m_tex && m_tex->get_nrrd(0))
+		if (type == 10 || type == 11)
 		{
-			Nrrd* nrrd_data = m_tex->get_nrrd(0)->getNrrd();
-			uint8 *val8nr = (uint8*)nrrd_data->data;
-			int max_val = 255;
-			int bytes = 1;
-			if (nrrd_data->type == nrrdTypeUShort) bytes = 2;
-			unsigned long long mem_size = (unsigned long long)m_res_x * (unsigned long long)m_res_y * (unsigned long long)m_res_z * bytes;
-			if (nrrd_data->type == nrrdTypeUChar)
-				max_val = *std::max_element(val8nr, val8nr+mem_size);
-			else if (nrrd_data->type == nrrdTypeUShort)
-				max_val = *std::max_element((uint16*)val8nr, (uint16*)val8nr+mem_size/2);
-			SetMaxValue(max_val);
+			m_vr->calculate(type, vd_a ? vd_a->GetVR() : 0, vd_b ? vd_b->GetVR() : 0, vd_c ? vd_c->GetVR() : 0);
+			m_vr->return_volume();
+			if (m_tex && m_tex->get_nrrd(0))
+			{
+				Nrrd* nrrd_data = m_tex->get_nrrd(0)->getNrrd();
+				uint8* val8nr = (uint8*)nrrd_data->data;
+				int max_val = 255;
+				int bytes = 1;
+				if (nrrd_data->type == nrrdTypeUShort) bytes = 2;
+				unsigned long long mem_size = (unsigned long long)m_res_x * (unsigned long long)m_res_y * (unsigned long long)m_res_z * bytes;
+				if (nrrd_data->type == nrrdTypeUChar)
+					max_val = *std::max_element(val8nr, val8nr + mem_size);
+				else if (nrrd_data->type == nrrdTypeUShort)
+					max_val = *std::max_element((uint16*)val8nr, (uint16*)val8nr + mem_size / 2);
+				SetMaxValue(max_val);
+			}
+		}
+		else
+		{
+			if (type == 6 || type == 7)
+				m_vr->set_hi_thresh(vd_a->GetRightThresh());
+			m_vr->calculate(type, vd_a ? vd_a->GetVR() : 0, vd_b ? vd_b->GetVR() : 0);
+			m_vr->return_volume();
+			if (m_tex && m_tex->get_nrrd(0))
+			{
+				Nrrd* nrrd_data = m_tex->get_nrrd(0)->getNrrd();
+				uint8* val8nr = (uint8*)nrrd_data->data;
+				int max_val = 255;
+				int bytes = 1;
+				if (nrrd_data->type == nrrdTypeUShort) bytes = 2;
+				unsigned long long mem_size = (unsigned long long)m_res_x * (unsigned long long)m_res_y * (unsigned long long)m_res_z * bytes;
+				if (nrrd_data->type == nrrdTypeUChar)
+					max_val = *std::max_element(val8nr, val8nr + mem_size);
+				else if (nrrd_data->type == nrrdTypeUShort)
+					max_val = *std::max_element((uint16*)val8nr, (uint16*)val8nr + mem_size / 2);
+				SetMaxValue(max_val);
+			}
 		}
 	}
 }

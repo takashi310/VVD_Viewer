@@ -518,8 +518,10 @@ public:
 	//calculations
 	void SetVolumeA(VolumeData* vd);
 	void SetVolumeB(VolumeData* vd);
-	VolumeData* GetVolumeA() {return m_calculator.GetVolumeA();}
-	VolumeData* GetVolumeB() {return m_calculator.GetVolumeB();}
+	void SetVolumeC(VolumeData* vd);
+	VolumeData* GetVolumeA() { return m_calculator.GetVolumeA(); }
+	VolumeData* GetVolumeB() { return m_calculator.GetVolumeB(); }
+	VolumeData* GetVolumeC() { return m_calculator.GetVolumeC(); }
 	//1-sub;2-add;3-div;4-and;5-new;6-new inv;7-clear
 	void Calculate(int type, wxString prev_group="", bool add=true);
 	void CalculateSingle(int type, wxString prev_group, bool add);

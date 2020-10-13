@@ -906,11 +906,13 @@ void VRenderVulkanView::Resize(bool refresh)
 	m_resize_ol2 = true;
 	m_resize_paint = true;
 
-	m_vulkan->setSize(size.GetWidth(), size.GetHeight());
-	wxRect refreshRect(size);
-	RefreshRect(refreshRect, false);
-
-	if (refresh) RefreshGL();
+	if (refresh)
+	{
+		m_vulkan->setSize(size.GetWidth(), size.GetHeight());
+		wxRect refreshRect(size);
+		RefreshRect(refreshRect, false);
+		RefreshGL();
+	}
 }
 
 void VRenderVulkanView::Init()
@@ -3399,6 +3401,11 @@ void VRenderVulkanView::SetVolumeB(VolumeData* vd)
 	m_calculator.SetVolumeB(vd);
 }
 
+void VRenderVulkanView::SetVolumeC(VolumeData* vd)
+{
+	m_calculator.SetVolumeC(vd);
+}
+
 void VRenderVulkanView::CalculateSingle(int type, wxString prev_group, bool add)
 {
     bool copied = false;
@@ -3414,8 +3421,15 @@ void VRenderVulkanView::CalculateSingle(int type, wxString prev_group, bool add)
 		vd_B = CopyLevel(vd_B);
 		if (vd_B) copied = true;
 	}
+	VolumeData* vd_C = m_calculator.GetVolumeC();
+	if (vd_C && vd_C->isBrxml())
+	{
+		vd_C = CopyLevel(vd_C);
+		if (vd_C) copied = true;
+	}
 	m_calculator.SetVolumeA(vd_A);
 	m_calculator.SetVolumeB(vd_B);
+	m_calculator.SetVolumeC(vd_C);
 
 	m_calculator.Calculate(type);
 	VolumeData* vd = m_calculator.GetResult();
@@ -18306,7 +18320,7 @@ void VRenderView::OnCapture(wxCommandEvent& event)
 			m_glview->StartTileRendering(m_cap_resx, m_cap_resy, tilew, tileh);
 		}
 		else
-			RefreshGL();
+			m_glview->StartTileRendering(m_cap_resx, m_cap_resy, m_cap_resx, m_cap_resy);
 
 		if (vr_frame && vr_frame->GetSettingDlg() &&
 			vr_frame->GetSettingDlg()->GetProjSave())

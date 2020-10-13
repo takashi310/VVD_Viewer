@@ -32,6 +32,7 @@ VolumeCalculator::VolumeCalculator()
 : m_vd_r(0),
    m_vd_a(0),
    m_vd_b(0),
+   m_vd_c(0),
    m_type(0)
 {
 }
@@ -50,6 +51,11 @@ void VolumeCalculator::SetVolumeB(VolumeData *vd)
    m_vd_b = vd;
 }
 
+void VolumeCalculator::SetVolumeC(VolumeData* vd)
+{
+    m_vd_c = vd;
+}
+
 VolumeData* VolumeCalculator::GetVolumeA()
 {
    return m_vd_a;
@@ -58,6 +64,11 @@ VolumeData* VolumeCalculator::GetVolumeA()
 VolumeData* VolumeCalculator::GetVolumeB()
 {
    return m_vd_b;
+}
+
+VolumeData* VolumeCalculator::GetVolumeC()
+{
+    return m_vd_c;
 }
 
 VolumeData* VolumeCalculator::GetResult()
@@ -109,6 +120,18 @@ void VolumeCalculator::Calculate(int type)
          return;
       FillHoles(m_threshold);
       return;
+   case 10:
+       if (!m_vd_a || !m_vd_a->GetMask(false))
+           return;
+       if (!m_vd_b || !m_vd_b->GetMask(false))
+           return;
+       if (!m_vd_c || !m_vd_c->GetMask(false))
+           return;
+       CreateVolumeResult3();
+       if (!m_vd_r)
+           return;
+       m_vd_r->Calculate(m_type, m_vd_a, m_vd_b, m_vd_c);
+       return;
    }
 }
 
@@ -228,6 +251,68 @@ void VolumeCalculator::CreateVolumeResult2()
    }
    wxString name = name_a + str_type + name_b;
    m_vd_r->SetName(name);
+}
+
+void VolumeCalculator::CreateVolumeResult3()
+{
+    if (!m_vd_a || !m_vd_b || !m_vd_c)
+        return;
+
+    int res_x_a, res_y_a, res_z_a;
+    int res_x_b, res_y_b, res_z_b;
+    int res_x_c, res_y_c, res_z_c;
+    double spc_x_a, spc_y_a, spc_z_a;
+    double spc_x_b, spc_y_b, spc_z_b;
+    double spc_x_c, spc_y_c, spc_z_c;
+
+    m_vd_a->GetResolution(res_x_a, res_y_a, res_z_a);
+    m_vd_b->GetResolution(res_x_b, res_y_b, res_z_b);
+    m_vd_c->GetResolution(res_x_c, res_y_c, res_z_c);
+    m_vd_a->GetSpacings(spc_x_a, spc_y_a, spc_z_a);
+    m_vd_b->GetSpacings(spc_x_b, spc_y_b, spc_z_b);
+    m_vd_c->GetSpacings(spc_x_c, spc_y_c, spc_z_c);
+
+    int bits = 8;
+    Texture* tex_a = m_vd_a->GetTexture();
+    if (!tex_a) return;
+    auto vlnrrd_a = tex_a->get_nrrd(0);
+    if (!vlnrrd_a) return;
+    Nrrd* nrrd_a = vlnrrd_a->getNrrd();
+    if (!nrrd_a) return;
+
+    if (nrrd_a->type == nrrdTypeUChar)
+        bits = 8;
+    else if (nrrd_a->type == nrrdTypeUShort)
+        bits = 16;
+
+    int res_x, res_y, res_z;
+    double spc_x, spc_y, spc_z;
+
+    res_x = max(max(res_x_a, res_x_b), res_x_c);
+    res_y = max(max(res_y_a, res_y_b), res_y_c);
+    res_z = max(max(res_z_a, res_z_b), res_z_c);
+    spc_x = max(max(spc_x_a, spc_x_b), spc_x_c);
+    spc_y = max(max(spc_y_a, spc_y_b), spc_y_c);
+    spc_z = max(max(spc_z_a, spc_z_b), spc_z_c);
+
+    m_vd_r = new VolumeData();
+    m_vd_r->AddEmptyData(bits,
+        res_x, res_y, res_z,
+        spc_x, spc_y, spc_z);
+    m_vd_r->SetSpcFromFile(true);
+
+    wxString name = m_vd_a->GetName();
+    wxString str_type;
+    switch (m_type)
+    {
+    case 10:
+        str_type = "_EXTRACTED";
+        break;
+    case 11:
+        str_type = "_DELETED";
+        break;
+    }
+    m_vd_r->SetName(name + str_type);
 }
 
 //fill holes

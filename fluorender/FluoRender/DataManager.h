@@ -458,7 +458,7 @@ public:
 	void DrawLabel(int type, int mode, double thresh, double gm_falloff);
 
 	//calculation
-	void Calculate(int type, VolumeData* vd_a, VolumeData* vd_b);
+	void Calculate(int type, VolumeData* vd_a, VolumeData* vd_b, VolumeData* vd_c = NULL);
 
 	//set 2d mask for segmentation
 	void Set2dMask(std::shared_ptr<vks::VTexture>& mask);
