@@ -2607,7 +2607,25 @@ void VolumeData::Calculate(int type, VolumeData *vd_a, VolumeData *vd_b, VolumeD
 	{
 		if (type == 10 || type == 11)
 		{
-			m_vr->calculate(type, vd_a ? vd_a->GetVR() : 0, vd_b ? vd_b->GetVR() : 0, vd_c ? vd_c->GetVR() : 0);
+			VolumeRenderer *a, *b, *c;
+			Texture *ma = nullptr, *mb = nullptr, *mc = nullptr;
+			Texture* la = nullptr, *lb = nullptr, *lc = nullptr;
+			a = vd_a ? vd_a->GetVR() : nullptr;
+			b = vd_b ? vd_b->GetVR() : nullptr;
+			c = vd_c ? vd_c->GetVR() : nullptr;
+			if (vd_a && vd_a->GetSharedMaskName().length() > 0)
+			{
+				if (vd_b && vd_b->GetName() == vd_a->GetSharedMaskName())
+					ma = vd_b->GetTexture();
+				else if (vd_c && vd_c->GetName() == vd_a->GetSharedMaskName())
+					ma = vd_c->GetTexture();
+
+				if (vd_b && vd_b->GetName() == vd_a->GetSharedLabelName())
+					la = vd_b->GetTexture();
+				else if (vd_c && vd_c->GetName() == vd_a->GetSharedLabelName())
+					la = vd_c->GetTexture();
+			}
+			m_vr->calculate(type, a, b, c, ma, la);
 			m_vr->return_volume();
 			if (m_tex && m_tex->get_nrrd(0))
 			{

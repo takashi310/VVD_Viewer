@@ -1700,10 +1700,14 @@ public:
 	{if (m_glview) m_glview->SetVolumeA(vd);}
 	void SetVolumeB(VolumeData* vd)
 	{if (m_glview) m_glview->SetVolumeB(vd);}
+	void SetVolumeC(VolumeData* vd)
+	{if (m_glview) m_glview->SetVolumeC(vd);}
 	VolumeData* GetVolumeA()
 	{if (m_glview) return m_glview->GetVolumeA(); else return 0;}
 	VolumeData* GetVolumeB()
 	{if (m_glview) return m_glview->GetVolumeB(); else return 0;}
+	VolumeData* GetVolumeC()
+	{if (m_glview) return m_glview->GetVolumeC(); else return 0;}
 	void Calculate(int type, wxString prev_group="")
 	{if (m_glview) return m_glview->Calculate(type, prev_group);}
 

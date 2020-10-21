@@ -50,7 +50,7 @@ namespace FLIVR
 	#define CAL_RGBAPPLYMASK	10	//apply mask to rgb volume
 	#define CAL_RGBAPPLYMASKINV 11	//apply the inverted mask to rgb mask
 
-	#define CAL_SAMPLER_NUM 4
+	#define CAL_SAMPLER_NUM 6
 
 	class ShaderProgram;
 

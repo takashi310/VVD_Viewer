@@ -121,13 +121,10 @@ void VolumeCalculator::Calculate(int type)
       FillHoles(m_threshold);
       return;
    case 10:
+   case 11:
        if (!m_vd_a || !m_vd_a->GetMask(false))
            return;
-       if (!m_vd_b || !m_vd_b->GetMask(false))
-           return;
-       if (!m_vd_c || !m_vd_c->GetMask(false))
-           return;
-       CreateVolumeResult3();
+       CreateVolumeResult1();
        if (!m_vd_r)
            return;
        m_vd_r->Calculate(m_type, m_vd_a, m_vd_b, m_vd_c);
@@ -170,9 +167,11 @@ void VolumeCalculator::CreateVolumeResult1()
    switch (m_type)
    {
    case 5://substraction
+   case 11:
       str_type = "_EXTRACTED";
       break;
    case 6:
+   case 10:
       str_type = "_DELETED";
       break;
    case 9:
@@ -180,6 +179,11 @@ void VolumeCalculator::CreateVolumeResult1()
       break;
    }
    m_vd_r->SetName(name + str_type);
+
+   if (m_type == 5 || m_type == 6 || m_type == 10 || m_type == 11)
+   {
+       m_vd_r->SetScalarScale(m_vd_a->GetScalarScale());
+   }
 }
 
 void VolumeCalculator::CreateVolumeResult2()
@@ -305,10 +309,10 @@ void VolumeCalculator::CreateVolumeResult3()
     wxString str_type;
     switch (m_type)
     {
-    case 10:
+    case 11:
         str_type = "_EXTRACTED";
         break;
-    case 11:
+    case 10:
         str_type = "_DELETED";
         break;
     }

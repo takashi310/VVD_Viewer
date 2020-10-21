@@ -80,11 +80,11 @@ namespace FLIVR
 #define CAL_UNIFORMS_RGB_WITH_MASK \
 	"//CAL_UNIFORMS_RGB_WITH_MASK\n" \
 	"layout (binding = 1) uniform sampler3D tex1;//operand A\n" \
-	"layout (binding = 3) uniform sampler3D tex3;//mask of A\n" \
 	"layout (binding = 2) uniform sampler3D tex2;//operand B\n" \
-	"layout (binding = 4) uniform sampler3D tex4;//mask of B\n" \
 	"layout (binding = 5) uniform sampler3D tex5;//operand C\n" \
-	"layout (binding = 6) uniform sampler3D tex6;//mask of C\n" \
+	"layout (binding = 3) uniform sampler3D tex3;//mask\n" \
+	"layout (binding = 4) uniform usampler3D tex4;//label\n" \
+	"layout (binding = 6) uniform sampler2D tex6;//segstat\n" \
 	"layout (push_constant) uniform PushConsts {\n" \
 	"	vec4 loc0;//(scale_A, scale_B, scale_C, 0.0)\n" \
 	"	vec4 loc1;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
@@ -117,12 +117,12 @@ namespace FLIVR
 
 #define CAL_TEX_LOOKUP_RGB_WITH_MASK \
 	"	//CAL_TEX_LOOKUP_RGB_WITH_MASK\n" \
-	"	vec4 c1 = texture(tex1, t1.stp)*ct.loc0.x;\n" \
-	"	vec4 m1 = texture(tex3, t1.stp)*ct.loc0.x;\n" \
-	"	vec4 c2 = texture(tex2, t2.stp)*ct.loc0.y;\n" \
-	"	vec4 m2 = texture(tex4, t2.stp)*ct.loc0.y;\n" \
-	"	vec4 c3 = texture(tex5, t3.stp)*ct.loc0.z;\n" \
-	"	vec4 m3 = texture(tex6, t3.stp)*ct.loc0.z;\n" \
+	"	vec4 c1 = ct.loc0.x >= 0.0 ? texture(tex1, t1.stp)*ct.loc0.x : vec4(0.0);\n" \
+	"	vec4 c2 = ct.loc0.y >= 0.0 ? texture(tex2, t2.stp)*ct.loc0.y : vec4(0.0);\n" \
+	"	vec4 c3 = ct.loc0.z >= 0.0 ? texture(tex5, t3.stp)*ct.loc0.z : vec4(0.0);\n" \
+	"	vec4 msk = ct.loc0.x >= 0.0 ? texture(tex3, t1.stp)*ct.loc0.x : vec4(0.0);\n" \
+	"	uint lbl = texture(tex4, t1.stp).x;\n" \
+    "	vec4 b = texture(tex6, vec2((float(lbl%uint(256))+0.5)/256.0, (float(lbl/256)+0.5)/256.0));\n" \
 	"\n"
 
 #define CAL_BODY_SUBSTRACTION \
@@ -172,12 +172,12 @@ namespace FLIVR
 
 #define CAL_BODY_RGBAPPLYMASK \
 	"	//CAL_BODY_RGBAPPLYMASK\n" \
-	"	vec4 c = vec4(max(max(c1.x*m1.x, c2.x*m2.x), c3.x*m3.x));\n" \
+	"	vec4 c = vec4(b.x > 0.1 ? max(max(c1.x*msk.x, c2.x*msk.x), c3.x*msk.x) : 0.0);\n" \
 	"\n"
 
 #define CAL_BODY_RGBAPPLYMASKINV \
 	"	//CAL_BODY_RGBAPPLYMASKINV\n" \
-	"	vec4 c = vec4(max(max(c1.x*(1.0-m1.x), c2.x*(1.0-m2.x)), c3.x*(1.0-m3.x)));\n" \
+	"	vec4 c = vec4(b.x > 0.1 ? max(max(c1.x*(1.0-msk.x), c2.x*(1.0-msk.x)), c3.x*(1.0-msk.x)) : 0.0);\n" \
 	"\n"
 
 #define CAL_RESULT \

@@ -3677,13 +3677,37 @@ void DataTreeCtrl::BrushCreate()
 					wxString group_name = GetItemBaseText(par_item);
 					wxString str = GetItemBaseText(GetItemParent(par_item));
 					VRenderView* vrv = vr_frame->GetView(str);
-					if (vrv)
+					VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
+					if (vd)
 					{
-						VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
-						if (vd)
+						if (vd->GetNAMode())
 						{
-							vrv->SetVolumeA(vd);
-							vrv->Calculate(5, group_name);
+							vector<VolumeData*> vols;
+							DataGroup* group = vrv->GetGroup(group_name);
+							if (group)
+							{
+								for (int j = 0; j < group->GetVolumeNum(); j++)
+								{
+									VolumeData* gvd = group->GetVolumeData(j);
+									if (gvd && gvd->GetNAMode() && (gvd->GetLabel(false) || !gvd->GetSharedLabelName().IsEmpty()))
+										vols.push_back(gvd);
+								}
+								if (vols.size() > 0)
+									vrv->SetVolumeA(vols[0]);
+								if (vols.size() > 1)
+									vrv->SetVolumeB(vols[1]);
+								if (vols.size() > 2)
+									vrv->SetVolumeC(vols[2]);
+								vrv->Calculate(10, group_name);
+							}
+						}
+						else
+						{
+							if (vrv)
+							{
+								vrv->SetVolumeA(vd);
+								vrv->Calculate(5, group_name);
+							}
 						}
 					}
 				}
@@ -3731,13 +3755,37 @@ void DataTreeCtrl::BrushCreateInv()
 					wxString group_name = GetItemBaseText(par_item);
 					wxString str = GetItemBaseText(GetItemParent(par_item));
 					VRenderView* vrv = vr_frame->GetView(str);
-					if (vrv)
+					VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
+					if (vd)
 					{
-						VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
-						if (vd)
+						if (vd->GetNAMode())
 						{
-							vrv->SetVolumeA(vd);
-							vrv->Calculate(cal_type, group_name);
+							vector<VolumeData*> vols;
+							DataGroup* group = vrv->GetGroup(group_name);
+							if (group)
+							{
+								for (int j = 0; j < group->GetVolumeNum(); j++)
+								{
+									VolumeData* gvd = group->GetVolumeData(j);
+									if (gvd && gvd->GetNAMode() && (gvd->GetLabel(false)) || !gvd->GetSharedLabelName().IsEmpty())
+										vols.push_back(gvd);
+								}
+								if (vols.size() > 0)
+									vrv->SetVolumeA(vols[0]);
+								if (vols.size() > 1)
+									vrv->SetVolumeB(vols[1]);
+								if (vols.size() > 2)
+									vrv->SetVolumeC(vols[2]);
+								vrv->Calculate(11, group_name);
+							}
+						}
+						else
+						{
+							if (vrv)
+							{
+								vrv->SetVolumeA(vd);
+								vrv->Calculate(cal_type, group_name);
+							}
 						}
 					}
 				}

@@ -3442,7 +3442,9 @@ void VRenderVulkanView::CalculateSingle(int type, wxString prev_group, bool add)
 			type==5 ||
 			type==6 ||
 			type==8 ||
-			type==9)
+			type==9 ||
+			type==10 ||
+			type==11)
 		{
 			VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 			if (vr_frame)
@@ -3511,6 +3513,17 @@ void VRenderVulkanView::CalculateSingle(int type, wxString prev_group, bool add)
 						VolumeData* vd_b = m_calculator.GetVolumeB();
 						if (vd_b)
 							vd_b->SetDisp(false);
+					}
+					else if (type == 10 || type == 11)
+					{
+						if (vd_a)
+							vd_a->SetDisp(false);
+						VolumeData* vd_b = m_calculator.GetVolumeB();
+						if (vd_b)
+							vd_b->SetDisp(false);
+						VolumeData* vd_c = m_calculator.GetVolumeC();
+						if (vd_c)
+							vd_c->SetDisp(false);
 					}
 					vr_frame->UpdateTree(vd->GetName(), 2, false); //UpdateTree line1: m_tree_panel->DeleteAll(); <- buffer overrun
 					m_calculator.SetVolumeA(vd_A);
