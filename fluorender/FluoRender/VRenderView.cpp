@@ -907,12 +907,12 @@ void VRenderVulkanView::Resize(bool refresh)
 	m_resize_paint = true;
 
 	if (refresh)
-    {
-        m_vulkan->setSize(size.GetWidth(), size.GetHeight());
-        wxRect refreshRect(size);
-        RefreshRect(refreshRect, false);
-        RefreshGL();
-    }
+	{
+		m_vulkan->setSize(size.GetWidth(), size.GetHeight());
+		wxRect refreshRect(size);
+		RefreshRect(refreshRect, false);
+		RefreshGL();
+	}
 }
 
 void VRenderVulkanView::Init()
@@ -3401,6 +3401,11 @@ void VRenderVulkanView::SetVolumeB(VolumeData* vd)
 	m_calculator.SetVolumeB(vd);
 }
 
+void VRenderVulkanView::SetVolumeC(VolumeData* vd)
+{
+	m_calculator.SetVolumeC(vd);
+}
+
 void VRenderVulkanView::CalculateSingle(int type, wxString prev_group, bool add)
 {
     bool copied = false;
@@ -3416,8 +3421,15 @@ void VRenderVulkanView::CalculateSingle(int type, wxString prev_group, bool add)
 		vd_B = CopyLevel(vd_B);
 		if (vd_B) copied = true;
 	}
+	VolumeData* vd_C = m_calculator.GetVolumeC();
+	if (vd_C && vd_C->isBrxml())
+	{
+		vd_C = CopyLevel(vd_C);
+		if (vd_C) copied = true;
+	}
 	m_calculator.SetVolumeA(vd_A);
 	m_calculator.SetVolumeB(vd_B);
+	m_calculator.SetVolumeC(vd_C);
 
 	m_calculator.Calculate(type);
 	VolumeData* vd = m_calculator.GetResult();
@@ -3430,7 +3442,9 @@ void VRenderVulkanView::CalculateSingle(int type, wxString prev_group, bool add)
 			type==5 ||
 			type==6 ||
 			type==8 ||
-			type==9)
+			type==9 ||
+			type==10 ||
+			type==11)
 		{
 			VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 			if (vr_frame)
@@ -3499,6 +3513,17 @@ void VRenderVulkanView::CalculateSingle(int type, wxString prev_group, bool add)
 						VolumeData* vd_b = m_calculator.GetVolumeB();
 						if (vd_b)
 							vd_b->SetDisp(false);
+					}
+					else if (type == 10 || type == 11)
+					{
+						if (vd_a)
+							vd_a->SetDisp(false);
+						VolumeData* vd_b = m_calculator.GetVolumeB();
+						if (vd_b)
+							vd_b->SetDisp(false);
+						VolumeData* vd_c = m_calculator.GetVolumeC();
+						if (vd_c)
+							vd_c->SetDisp(false);
 					}
 					vr_frame->UpdateTree(vd->GetName(), 2, false); //UpdateTree line1: m_tree_panel->DeleteAll(); <- buffer overrun
 					m_calculator.SetVolumeA(vd_A);
@@ -18311,10 +18336,14 @@ void VRenderView::OnCapture(wxCommandEvent& event)
 			m_glview->StartTileRendering(m_cap_resx, m_cap_resy, tilew, tileh);
 		}
 		else
+<<<<<<< HEAD
         {
             m_glview->StartTileRendering(m_cap_resx, m_cap_resy, m_cap_resx, m_cap_resy);
             //RefreshGL();
         }
+=======
+			m_glview->StartTileRendering(m_cap_resx, m_cap_resy, m_cap_resx, m_cap_resy);
+>>>>>>> 2d4cc5af965cc4b26044774e8d94143bd4f58549
 
 		if (vr_frame && vr_frame->GetSettingDlg() &&
 			vr_frame->GetSettingDlg()->GetProjSave())
