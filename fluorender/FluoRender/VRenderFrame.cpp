@@ -3919,11 +3919,13 @@ MeshData* VRenderFrame::OpenMeshFromProject(wxString name, wxFileConfig &fconfig
 				if (str != name)
 					continue;
 
+				int ret = 0;
 				if (fconfig.Read("path", &str))
 				{
-					m_data_mgr.LoadMeshData(str);
+					ret = m_data_mgr.LoadMeshData(str);
 				}
-				md = m_data_mgr.GetLastMeshData();
+				if (ret != 0)
+					md = m_data_mgr.GetLastMeshData();
 				if (md)
 				{
 					if (fconfig.Read("name", &str))
