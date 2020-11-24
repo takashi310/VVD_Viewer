@@ -69,8 +69,8 @@ namespace vks
 		}
 
 		double dev_max_mem = (double)cur_mem_lim / 1024.0 / 1024.0;
-		if (dev_max_mem >= 4096.0) dev_max_mem -= 512.0;
-		else if (dev_max_mem >= 1024.0) dev_max_mem -= 256.0;
+		if (dev_max_mem >= 4096.0) dev_max_mem -= 1024.0;
+		else if (dev_max_mem >= 1024.0) dev_max_mem -= 512.0;
 		else dev_max_mem *= 0.8;
 
 		double new_mem_limit = 0.0;

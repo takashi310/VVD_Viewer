@@ -2931,12 +2931,12 @@ namespace FLIVR
                     else if (tex_->nmask() != -1)
                         msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, false, &mask_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
 
-					double trans_x = (ox_d - ox) / nx;
-					double trans_y = (oy_d - oy) / ny;
-					double trans_z = (oz_d - oz) / nz;
-					double scale_x = (endx_d - ox_d) / nx;
-					double scale_y = (endy_d - oy_d) / ny;
-					double scale_z = (endz_d - oz_d) / nz;
+					double trans_x = ox_d / sx;
+					double trans_y = oy_d / sy;
+					double trans_z = oz_d / sz;
+					double scale_x = (endx_d - ox_d) / sx;
+					double scale_y = (endy_d - oy_d) / sy;
+					double scale_z = (endz_d - oz_d) / sz;
 
 					frag_const.mask_b_scale_invnz = { (float)scale_x, (float)scale_y, (float)scale_z , 1.0f};
 					frag_const.mask_b_trans = { (float)trans_x, (float)trans_y, (float)trans_z, 0.0f };
@@ -2956,8 +2956,12 @@ namespace FLIVR
                     else if (tex_->nmask() != -1)
                         msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, false, &mask_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
 
-					frag_const.mask_b_scale_invnz = { 1.0f, 1.0f, 1.0f, 1.0f };
-					frag_const.mask_b_trans = { 0.0f, 0.0f, 0.0f, 0.0f };
+					BBox dbox = b->dbox();
+					frag_const.mask_b_scale_invnz = { float(dbox.max().x() - dbox.min().x()),
+													  float(dbox.max().y() - dbox.min().y()),
+													  float(dbox.max().z() - dbox.min().z()),
+													  1.0f };
+					frag_const.mask_b_trans = { float(dbox.min().x()), float(dbox.min().y()), float(dbox.min().z()), 0.0f };
 				}
 #endif
 			}

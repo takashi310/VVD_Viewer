@@ -18336,14 +18336,7 @@ void VRenderView::OnCapture(wxCommandEvent& event)
 			m_glview->StartTileRendering(m_cap_resx, m_cap_resy, tilew, tileh);
 		}
 		else
-<<<<<<< HEAD
-        {
-            m_glview->StartTileRendering(m_cap_resx, m_cap_resy, m_cap_resx, m_cap_resy);
-            //RefreshGL();
-        }
-=======
 			m_glview->StartTileRendering(m_cap_resx, m_cap_resy, m_cap_resx, m_cap_resy);
->>>>>>> 2d4cc5af965cc4b26044774e8d94143bd4f58549
 
 		if (vr_frame && vr_frame->GetSettingDlg() &&
 			vr_frame->GetSettingDlg()->GetProjSave())
