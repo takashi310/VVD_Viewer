@@ -622,7 +622,7 @@ void N5Reader::SetInfo()
 
 	wss << L"------------------------\n";
 	wss << m_path_name << '\n';
-	wss << L"File type: NRRD\n";
+	wss << L"File type: N5\n";
 	wss << L"Width: " << m_x_size << L'\n';
 	wss << L"Height: " << m_y_size << L'\n';
 	wss << L"Depth: " << m_slice_num << L'\n';
@@ -635,7 +635,10 @@ void N5Reader::SetInfo()
 
 void N5Reader::getJson()
 {
-	std::ifstream ifs(m_path_name);
+    boost::filesystem::path::imbue(std::locale( std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
+	boost::filesystem::path path(m_path_name);
+    std::ifstream ifs(path.string());
+    
 	jf = json::parse(ifs);
 
 	vector<long> dim_str = jf[DimensionsKey].get<vector<long>>();
@@ -789,8 +792,8 @@ vector<wstring> N5Reader::list(wstring pathName)
 	{
 		if (is_directory(itr->status()))
 		{
-			auto p = relative(itr->path(), parent_path);
-			ret.push_back(p.wstring());
+			//auto p = relative(itr->path(), parent_path);
+			//ret.push_back(p.wstring());
 		}
 	}
 

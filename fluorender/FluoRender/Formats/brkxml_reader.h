@@ -7,7 +7,119 @@
 #include <tinyxml2.h>
 #include <memory>
 
+#include <json.hpp>
+
+#define N5DataTypeChar 0
+#define N5DataTypeUChar 1
+#define N5DataTypeShort 2
+#define N5DataTypeUShort 3
+#define N5DataTypeInt 4
+#define N5DataTypeUInt 5
+#define N5DataTypeFloat 6
+
+#define SerialVersionUID -4521467080388947553L
+#define DimensionsKey "dimensions"
+#define BlockSizeKey "blockSize"
+#define DataTypeKey "dataType"
+#define CompressionKey "compression"
+#define CompressionTypeKey "compressionType"
+
 using namespace std;
+
+class DataBlock
+{
+public:
+    
+    int m_type;
+    void* m_data;
+    
+    DataBlock() {
+        m_data = NULL; m_type = 0;
+    }
+    DataBlock(void* data, int type) {
+        m_data = data; m_type = type;
+    }
+    ~DataBlock() {
+        if (m_data)
+        {
+            switch (m_type)
+            {
+                case N5DataTypeChar:
+                case N5DataTypeUChar:
+                    delete[] static_cast<unsigned char*>(m_data);
+                    break;
+                case N5DataTypeShort:
+                case N5DataTypeUShort:
+                    delete[] static_cast<unsigned short*>(m_data);
+                    break;
+                case N5DataTypeInt:
+                case N5DataTypeUInt:
+                    delete[] static_cast<unsigned int*>(m_data);
+                    break;
+                case N5DataTypeFloat:
+                    delete[] static_cast<float*>(m_data);
+                    break;
+                default:
+                    delete[] m_data;
+            }
+            m_data = nullptr;
+        }
+    }
+};
+
+class DatasetAttributes
+{
+public:
+    
+    vector<long> m_dimensions;
+    vector<int> m_blockSize;
+    int m_dataType;
+    int m_compression;
+    
+    DatasetAttributes(vector<long> dimensions, vector<int> blockSize, int dataType, int compression)
+    {
+        m_dimensions = dimensions;
+        m_blockSize = blockSize;
+        m_dataType = dataType;
+        m_compression = compression;
+    }
+    
+    vector<long> getDimensions() {
+        
+        return m_dimensions;
+    }
+    
+    int getNumDimensions() {
+        
+        return m_dimensions.size();
+    }
+    
+    vector<int> getBlockSize() {
+        
+        return m_blockSize;
+    }
+    
+    int getCompression() {
+        
+        return m_compression;
+    }
+    
+    int getDataType() {
+        
+        return m_dataType;
+    }
+    /*
+     HashMap<String, Object> asMap() {
+     
+     final HashMap<String, Object> map = new HashMap<>();
+     map.put(dimensionsKey, dimensions);
+     map.put(blockSizeKey, blockSize);
+     map.put(dataTypeKey, dataType.toString());
+     map.put(compressionKey, compression);
+     return map;
+     }
+     */
+};
 
 class EXPORT_API BRKXMLReader : public BaseReader
 {
@@ -80,6 +192,14 @@ public:
 
 	tinyxml2::XMLDocument *GetVVDXMLDoc() {return &m_doc;}
 	tinyxml2::XMLDocument *GetMetadataXMLDoc() {return &m_md_doc;}
+    
+    void getJson();
+    map<wstring, wstring> getAttributes(wstring pathName);
+    DataBlock readBlock(wstring pathName, const DatasetAttributes& datasetAttributes, const vector<long> gridPosition);
+    vector<wstring> list(wstring pathName);
+    wstring getDataBlockPath(wstring datasetPathName, const vector<long>& gridPosition);
+    wstring getAttributesPath(wstring pathName);
+    wstring removeLeadingSlash(const wstring pathName);
 
 protected:
 	Nrrd* ConvertNrrd(int t, int c, bool get_max);
@@ -183,6 +303,8 @@ private:
 	};
 	vector<Landmark> m_landmarks;
 	wstring m_metadata_id;
+    
+    nlohmann::json jf;
 
 private:
 	ImageInfo ReadImageInfo(tinyxml2::XMLElement *seqNode);

@@ -11,6 +11,11 @@
 #include <algorithm>
 #include <boost/foreach.hpp>
 #include <boost/lexical_cast.hpp>
+#include "boost/filesystem.hpp"
+
+using namespace boost::filesystem;
+
+using nlohmann::json;
 
 template <typename _T> void clear2DVector(std::vector<std::vector<_T>> &vec2d)
 {
@@ -194,69 +199,79 @@ void BRKXMLReader::Preprocess()
 	size_t pos = m_path_name.find_last_of(slash);
 	wstring path = m_path_name.substr(0, pos+1);
 	wstring name = m_path_name.substr(pos+1);
-
-	if (m_doc.LoadFile(ws2s(m_path_name).c_str()) != 0){
-		return;
-	}
+    
+    size_t ext_pos = m_path_name.find_last_of(L".");
+    wstring ext = m_path_name.substr(ext_pos+1);
+    transform(ext.begin(), ext.end(), ext.begin(), towlower);
+    
+    if (ext == L"n5" || ext == L"json") {
+        getJson();
+        
+    }
+    else if (ext == L"vvd") {
+        if (m_doc.LoadFile(ws2s(m_path_name).c_str()) != 0){
+            return;
+        }
 		
-	tinyxml2::XMLElement *root = m_doc.RootElement();
-	if (!root || strcmp(root->Name(), "BRK"))
-		return;
-	m_imageinfo = ReadImageInfo(root);
+        tinyxml2::XMLElement *root = m_doc.RootElement();
+        if (!root || strcmp(root->Name(), "BRK"))
+            return;
+        m_imageinfo = ReadImageInfo(root);
 
-	if (root->Attribute("exMetadataPath"))
-	{
-		string str = root->Attribute("exMetadataPath");
-		m_ex_metadata_path = s2ws(str);
-	}
-	if (root->Attribute("exMetadataURL"))
-	{
-		string str = root->Attribute("exMetadataURL");
-		m_ex_metadata_url = s2ws(str);
-	}
+        if (root->Attribute("exMetadataPath"))
+        {
+            string str = root->Attribute("exMetadataPath");
+            m_ex_metadata_path = s2ws(str);
+        }
+        if (root->Attribute("exMetadataURL"))
+        {
+            string str = root->Attribute("exMetadataURL");
+            m_ex_metadata_url = s2ws(str);
+        }
 
-	ReadPyramid(root, m_pyramid);
+        ReadPyramid(root, m_pyramid);
 	
-	m_time_num = m_imageinfo.nFrame;
-	m_chan_num = m_imageinfo.nChannel;
-	m_copy_lv = m_imageinfo.copyableLv;
+        m_time_num = m_imageinfo.nFrame;
+        m_chan_num = m_imageinfo.nChannel;
+        m_copy_lv = m_imageinfo.copyableLv;
 
-	m_cur_time = 0;
+        m_cur_time = 0;
 
-	if(m_pyramid.empty()) return;
+        if(m_pyramid.empty()) return;
 
-	m_xspc = m_pyramid[0].xspc;
-	m_yspc = m_pyramid[0].yspc;
-	m_zspc = m_pyramid[0].zspc;
+        m_xspc = m_pyramid[0].xspc;
+        m_yspc = m_pyramid[0].yspc;
+        m_zspc = m_pyramid[0].zspc;
 
-	m_x_size = m_pyramid[0].imageW;
-	m_y_size = m_pyramid[0].imageH;
-	m_slice_num = m_pyramid[0].imageD;
+        m_x_size = m_pyramid[0].imageW;
+        m_y_size = m_pyramid[0].imageH;
+        m_slice_num = m_pyramid[0].imageD;
 
-	m_file_type = m_pyramid[0].file_type;
+        m_file_type = m_pyramid[0].file_type;
 
-	m_level_num = m_pyramid.size();
-	m_cur_level = 0;
+        m_level_num = m_pyramid.size();
+        m_cur_level = 0;
 
-	wstring cur_dir_name = m_path_name.substr(0, m_path_name.find_last_of(slash)+1);
-	loadMetadata(m_path_name);
-	loadMetadata(cur_dir_name + L"_metadata.xml");
+        wstring cur_dir_name = m_path_name.substr(0, m_path_name.find_last_of(slash)+1);
+        loadMetadata(m_path_name);
+        loadMetadata(cur_dir_name + L"_metadata.xml");
 
-	if (!m_ex_metadata_path.empty())
-	{
-		bool is_rel = false;
-#ifdef _WIN32
-		if (m_ex_metadata_path.length() > 2 && m_ex_metadata_path[1] != L':')
-			is_rel = true;
-#else
-		if (m_ex_metadata_path[0] != L'/')
-			is_rel = true;
-#endif
-		if (is_rel)
-			loadMetadata(cur_dir_name + m_ex_metadata_path);
-		else
-			loadMetadata(m_ex_metadata_path);
-	}
+        if (!m_ex_metadata_path.empty())
+        {
+            bool is_rel = false;
+    #ifdef _WIN32
+            if (m_ex_metadata_path.length() > 2 && m_ex_metadata_path[1] != L':')
+                is_rel = true;
+    #else
+            if (m_ex_metadata_path[0] != L'/')
+                is_rel = true;
+    #endif
+            if (is_rel)
+                loadMetadata(cur_dir_name + m_ex_metadata_path);
+            else
+                loadMetadata(m_ex_metadata_path);
+        }
+    }
 
 	SetInfo();
 
@@ -449,6 +464,16 @@ void BRKXMLReader::ReadFilenames(tinyxml2::XMLElement* fileRootNode, vector<vect
 {
 	string str;
 	int frame, channel, id;
+    
+    wstring prev_fname;
+    
+#ifdef _WIN32
+    wchar_t slash = L'\\';
+#else
+    wchar_t slash = L'/';
+#endif
+    wstring cur_dir = m_path_name.substr(0, m_path_name.find_last_of(slash)+1);
+    
 
 	tinyxml2::XMLElement *child = fileRootNode->FirstChildElement();
 	while (child)
@@ -505,11 +530,25 @@ void BRKXMLReader::ReadFilenames(tinyxml2::XMLElement* fileRootNode, vector<vect
 				{
 					filename[frame][channel][id]->filename = m_dir_name + s2ws(str);
 					filename[frame][channel][id]->isurl = m_isURL;
+                    
+                    if (!m_isURL && prev_fname != filename[frame][channel][id]->filename)
+                    {
+                        wstring secpath = cur_dir + s2ws(str);
+                        if (!exists(filename[frame][channel][id]->filename) && exists(secpath))
+                            filename[frame][channel][id]->filename = secpath;
+                    }
 				}
 				else //absolute path
 				{
 					filename[frame][channel][id]->filename = s2ws(str);
 					filename[frame][channel][id]->isurl = false;
+                    
+                    if (prev_fname != filename[frame][channel][id]->filename)
+                    {
+                        wstring secpath = cur_dir + s2ws(str);
+                        if (!exists(filename[frame][channel][id]->filename) && exists(secpath))
+                            filename[frame][channel][id]->filename = secpath;
+                    }
 				}
 
 				filename[frame][channel][id]->offset = 0;
@@ -1174,4 +1213,217 @@ void BRKXMLReader::SetInfo()
 	wss << L"Frames: " << m_time_num << L'\n';
 
 	m_info = wss.str();
+}
+
+
+void BRKXMLReader::getJson()
+{
+    boost::filesystem::path::imbue(std::locale( std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
+    boost::filesystem::path path(m_path_name);
+    std::ifstream ifs(path.string());
+    
+    jf = json::parse(ifs);
+    
+    vector<long> dim_str = jf[DimensionsKey].get<vector<long>>();
+    
+    int dataType = jf[DataTypeKey].get<int>();
+    
+    vector<int> blockSize = jf[BlockSizeKey].get<vector<int>>();
+    
+    int compression = jf[CompressionKey].get<int>();
+    
+    /* version 0 */
+    if (jf.find(CompressionKey) != jf.end() && jf.find(CompressionTypeKey) != jf.end()) {
+        auto cptype = jf[CompressionTypeKey].get<string>();
+        if (cptype == "raw")
+            compression = 0;
+        else if (cptype == "gzip")
+            compression = 1;
+        else if (cptype == "bzip2")
+            compression = 2;
+        else if (cptype == "lz4")
+            compression = 3;
+        else if (cptype == "xz")
+            compression = 4;
+    }
+}
+
+/*
+ template <class T> T BRKXMLReader::parseAttribute(string key, T clazz, const json j)
+ {
+ if (attribute != null && j.contains(attribute))
+ return j.at(attribute).get<T>();
+ else
+ return null;
+ }
+ 
+ HashMap<String, JsonElement> BRKXMLReader::readAttributes(final Reader reader, final Gson gson) throws IOException {
+ 
+ final Type mapType = new TypeToken<HashMap<String, JsonElement>>() {}.getType();
+ final HashMap<String, JsonElement> map = gson.fromJson(reader, mapType);
+ return map == null ? new HashMap<>() : map;
+ }
+ */
+/**
+ * Return a reasonable class for a {@link JsonPrimitive}.  Possible return
+ * types are
+ * <ul>
+ * <li>boolean</li>
+ * <li>double</li>
+ * <li>String</li>
+ * <li>Object</li>
+ * </ul>
+ *
+ * @param jsonPrimitive
+ * @return
+ */
+/*
+ public static Class< ? > BRKXMLReader::classForJsonPrimitive(final JsonPrimitive jsonPrimitive) {
+ 
+ if (jsonPrimitive.isBoolean())
+ return boolean.class;
+ else if (jsonPrimitive.isNumber())
+ return double.class;
+ else if (jsonPrimitive.isString())
+ return String.class;
+ else return Object.class;
+ }
+ */
+
+/**
+ * Best effort implementation of {@link N5Reader#listAttributes(String)}
+ * with limited type resolution.  Possible return types are
+ * <ul>
+ * <li>null</li>
+ * <li>boolean</li>
+ * <li>double</li>
+ * <li>String</li>
+ * <li>Object</li>
+ * <li>boolean[]</li>
+ * <li>double[]</li>
+ * <li>String[]</li>
+ * <li>Object[]</li>
+ * </ul>
+ */
+/*
+ @Override
+ public default Map<String, Class< ? >> BRKXMLReader::listAttributes(final String pathName) throws IOException {
+ 
+ final HashMap<String, JsonElement> jsonElementMap = getAttributes(pathName);
+ final HashMap<String, Class< ? >> attributes = new HashMap<>();
+ jsonElementMap.forEach(
+ (key, jsonElement) -> {
+ final Class< ? > clazz;
+ if (jsonElement.isJsonNull())
+ clazz = null;
+ else if (jsonElement.isJsonPrimitive())
+ clazz = classForJsonPrimitive((JsonPrimitive)jsonElement);
+ else if (jsonElement.isJsonArray()) {
+ final JsonArray jsonArray = (JsonArray)jsonElement;
+ if (jsonArray.size() > 0) {
+ final JsonElement firstElement = jsonArray.get(0);
+ if (firstElement.isJsonPrimitive())
+ clazz = Array.newInstance(classForJsonPrimitive((JsonPrimitive)firstElement), 0).getClass();
+ else
+ clazz = Object[].class;
+ }
+ else
+ clazz = Object[].class;
+ }
+ else
+ clazz = Object.class;
+ attributes.put(key, clazz);
+ });
+ return attributes;
+ }
+ */
+
+map<wstring, wstring> BRKXMLReader::getAttributes(wstring pathName)
+{
+    map<wstring, wstring> mmap;
+    path ppath(m_path_name + GETSLASH() + getAttributesPath(pathName));
+    if (exists(pathName) && !exists(ppath))
+        return mmap;
+    
+    //mmap = jf.fromJson(reader, mapType);
+    return mmap;
+}
+
+
+DataBlock BRKXMLReader::readBlock(wstring pathName, const DatasetAttributes &datasetAttributes, const vector<long> gridPosition)
+{
+    DataBlock ret;
+    
+    path ppath(m_path_name + GETSLASH() + getDataBlockPath(pathName, gridPosition));
+    if (!exists(ppath))
+        return ret;
+    
+    return readBlock(ppath.wstring(), datasetAttributes, gridPosition);
+}
+
+vector<wstring> BRKXMLReader::list(wstring pathName)
+{
+    vector<wstring> ret;
+    path parent_path(m_path_name + GETSLASH() + pathName);
+    
+    if (!exists(parent_path))
+        return ret;
+    
+    directory_iterator end_itr; // default construction yields past-the-end
+    
+    for (directory_iterator itr(parent_path); itr != end_itr; ++itr)
+    {
+        if (is_directory(itr->status()))
+        {
+            //auto p = relative(itr->path(), parent_path);
+            //ret.push_back(p.wstring());
+        }
+    }
+    
+    return ret;
+}
+
+/**
+ * Constructs the path for a data block in a dataset at a given grid position.
+ *
+ * The returned path is
+ * <pre>
+ * $datasetPathName/$gridPosition[0]/$gridPosition[1]/.../$gridPosition[n]
+ * </pre>
+ *
+ * This is the file into which the data block will be stored.
+ *
+ * @param datasetPathName
+ * @param gridPosition
+ * @return
+ */
+wstring BRKXMLReader::getDataBlockPath(wstring datasetPathName, const vector<long> &gridPosition) {
+    
+    wstringstream wss;
+    wss << removeLeadingSlash(datasetPathName) << GETSLASH();
+    for (int i = 0; i < gridPosition.size(); ++i)
+        wss << gridPosition[i];
+    
+    return wss.str();
+}
+
+/**
+ * Constructs the path for the attributes file of a group or dataset.
+ *
+ * @param pathName
+ * @return
+ */
+wstring BRKXMLReader::getAttributesPath(wstring pathName) {
+    
+    return removeLeadingSlash(pathName) + L"attributes.json";
+}
+
+/**
+ * Removes the leading slash from a given path and returns the corrected path.
+ * It ensures correctness on both Unix and Windows, otherwise {@code pathName} is treated
+ * as UNC path on Windows, and {@code Paths.get(pathName, ...)} fails with {@code InvalidPathException}.
+ */
+wstring BRKXMLReader::removeLeadingSlash(const wstring pathName)
+{
+    return (pathName.rfind(L"/", 0) == 0) || (pathName.rfind(L"\\", 0) == 0) ? pathName.substr(1) : pathName;
 }

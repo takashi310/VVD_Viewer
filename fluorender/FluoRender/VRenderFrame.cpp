@@ -1021,7 +1021,7 @@ void VRenderFrame::OnOpenVolume(wxCommandEvent& WXUNUSED(event))
 
 	wxFileDialog *fopendlg = new wxFileDialog(
 		this, "Choose the volume data file", "", "",
-		"All Supported|*.tif;*.tiff;*.zip;*.oib;*.oif;*.lsm;*.xml;*.nrrd;*.h5j;*.vvd;*.v3dpbd|"\
+        "All Supported|*.tif;*.tiff;*.zip;*.oib;*.oif;*.lsm;*.xml;*.nrrd;*.h5j;*.vvd;*.v3dpbd;*.n5;*.json;|"\
 		"Tiff Files (*.tif, *.tiff, *.zip)|*.tif;*.tiff;*.zip|"\
 		"Olympus Image Binary Files (*.oib)|*.oib|"\
 		"Olympus Original Imaging Format (*.oif)|*.oif|"\
@@ -1031,7 +1031,8 @@ void VRenderFrame::OnOpenVolume(wxCommandEvent& WXUNUSED(event))
 		"H5J files (*.h5j)|*.h5j|"\
 		"V3DPBD files (*.v3dpbd)|*.v3dpbd|"\
         "Indexed images (*.idi)|*.idi|"\
-		"VVD files (*.vvd)|*.vvd", wxFD_OPEN|wxFD_MULTIPLE);
+		"VVD files (*.vvd)|*.vvd|"\
+        "N5 files (*.n5, *.json)|*.n5;*.json|", wxFD_OPEN|wxFD_MULTIPLE);
 	fopendlg->SetExtraControlCreator(CreateExtraControlVolume);
 
 	int rval = fopendlg->ShowModal();
@@ -1113,7 +1114,7 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_LSM, -1, -1, datasize);
 			else if (suffix==".xml")
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_PVXML, -1, -1, datasize);
-			else if (suffix==".vvd")
+			else if (suffix==".vvd" || suffix==".n5" || suffix==".json")
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_BRKXML, -1, -1, datasize);
 			else if (suffix == ".h5j")
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_H5J, -1, -1, datasize);
@@ -1279,6 +1280,8 @@ void VRenderFrame::StartupLoad(wxArrayString files, size_t datasize)
 			suffix == ".lsm" ||
 			suffix == ".xml" ||
 			suffix == ".vvd" ||
+            suffix == ".n5" ||
+            suffix == ".json" ||
 			suffix == ".h5j" ||
 			suffix == ".v3dpbd" ||
 			suffix == ".zip" ||
@@ -3558,7 +3561,7 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_LSM, cur_chan, cur_time);
 					else if (suffix == ".xml")
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_PVXML, cur_chan, cur_time);
-					else if (suffix == ".vvd")
+					else if (suffix == ".vvd" || suffix == ".n5" || suffix == ".json")
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_BRKXML, cur_chan, cur_time);
 					else if (suffix == ".h5j")
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_H5J, cur_chan, cur_time);
