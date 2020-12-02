@@ -1032,7 +1032,7 @@ void VRenderFrame::OnOpenVolume(wxCommandEvent& WXUNUSED(event))
 		"V3DPBD files (*.v3dpbd)|*.v3dpbd|"\
         "Indexed images (*.idi)|*.idi|"\
 		"VVD files (*.vvd)|*.vvd|"\
-        "N5 files (*.n5, *.json)|*.n5;*.json|", wxFD_OPEN|wxFD_MULTIPLE);
+        "N5 files (*.n5, *.json)|*.n5;*.json", wxFD_OPEN|wxFD_MULTIPLE);
 	fopendlg->SetExtraControlCreator(CreateExtraControlVolume);
 
 	int rval = fopendlg->ShowModal();

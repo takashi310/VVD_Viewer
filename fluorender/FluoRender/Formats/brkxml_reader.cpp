@@ -533,10 +533,13 @@ void BRKXMLReader::ReadFilenames(tinyxml2::XMLElement* fileRootNode, vector<vect
                     
                     if (!m_isURL && prev_fname != filename[frame][channel][id]->filename)
                     {
-                        wstring secpath = cur_dir + s2ws(str);
+						size_t pos = filename[frame][channel][id]->filename.find_last_of(slash);
+						wstring name = filename[frame][channel][id]->filename.substr(pos + 1);
+                        wstring secpath = cur_dir + name;
                         if (!exists(filename[frame][channel][id]->filename) && exists(secpath))
                             filename[frame][channel][id]->filename = secpath;
                     }
+					prev_fname = filename[frame][channel][id]->filename;
 				}
 				else //absolute path
 				{
@@ -545,10 +548,13 @@ void BRKXMLReader::ReadFilenames(tinyxml2::XMLElement* fileRootNode, vector<vect
                     
                     if (prev_fname != filename[frame][channel][id]->filename)
                     {
-                        wstring secpath = cur_dir + s2ws(str);
-                        if (!exists(filename[frame][channel][id]->filename) && exists(secpath))
-                            filename[frame][channel][id]->filename = secpath;
+						size_t pos = filename[frame][channel][id]->filename.find_last_of(slash);
+						wstring name = filename[frame][channel][id]->filename.substr(pos + 1);
+						wstring secpath = cur_dir + name;
+						if (!exists(filename[frame][channel][id]->filename) && exists(secpath))
+							filename[frame][channel][id]->filename = secpath;
                     }
+					prev_fname = filename[frame][channel][id]->filename;
 				}
 
 				filename[frame][channel][id]->offset = 0;
@@ -1003,7 +1009,7 @@ int BRKXMLReader::GetFileType(int lv)
 
 void BRKXMLReader::OutputInfo()
 {
-	ofstream ofs;
+	std::ofstream ofs;
 	ofs.open("PyramidInfo.txt");
 
 	ofs << "nChannel: " << m_imageinfo.nChannel << "\n";
