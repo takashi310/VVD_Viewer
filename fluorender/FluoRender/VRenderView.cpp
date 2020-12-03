@@ -3623,7 +3623,7 @@ void VRenderVulkanView::StartTileRendering(int w_, int h_, int tilew_, int tileh
 	m_current_tileid = 0;
 
 	m_tmp_res_mode = m_res_mode;
-	m_res_mode = 0;
+	m_res_mode = 1;
 	if (!m_tmp_sample_rates.empty())
 		m_tmp_sample_rates.clear();
 	PopVolumeList();
@@ -7574,41 +7574,53 @@ void VRenderVulkanView::PostDraw()
 			if (m_current_tileid < m_tile_xnum*m_tile_ynum)
 				m_capture = true;
 			else if (m_tiled_image){
-				double scalex = (double)m_capture_resx/(double)GetSize().x;
-				double scaley = (double)m_capture_resy/(double)GetSize().y;
-				size_t cap_ox = m_draw_frame ? (size_t)(m_frame_x*scalex) : 0;
-				size_t cap_oy = m_draw_frame ? (size_t)(m_frame_y*scaley) : 0;
-				size_t cap_w  = m_draw_frame ? (size_t)(m_frame_w*scalex) : m_capture_resx;
-				size_t cap_h  = m_draw_frame ? (size_t)(m_frame_h*scaley) : m_capture_resy;
-				size_t imsize = (size_t)cap_w * (size_t)cap_h;
-				string str_fn = outputfilename.ToStdString();
-				TIFF *out = TIFFOpen(str_fn.c_str(), imsize <= 3758096384ULL ? "wb" : "wb8");
-				if (!out)
-					return;
-				TIFFSetField(out, TIFFTAG_IMAGEWIDTH, cap_w);
-				TIFFSetField(out, TIFFTAG_IMAGELENGTH, cap_h);
-				TIFFSetField(out, TIFFTAG_SAMPLESPERPIXEL, dst_chann);
-				TIFFSetField(out, TIFFTAG_BITSPERSAMPLE, 8);
-				TIFFSetField(out, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
-				TIFFSetField(out, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
-				TIFFSetField(out, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
-				if (VRenderFrame::GetCompression())
-					TIFFSetField(out, TIFFTAG_COMPRESSION, COMPRESSION_LZW);
 
-				tsize_t linebytes = dst_chann * cap_w;
-				tsize_t pitchX = dst_chann * m_capture_resx;
-				unsigned char *buf = NULL;
-				buf = (unsigned char *)_TIFFmalloc(linebytes);
-				TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(out, 0));
-				for (uint32 row = 0; row < (uint32)cap_h; row++)
-				{
-					memcpy(buf, &m_tiled_image[(row+cap_oy)*pitchX + cap_ox*dst_chann], linebytes);
-					if (TIFFWriteScanline(out, buf, row, 0) < 0)
-						break;
+
+				double scalefac = GetSize().x > GetSize().y ? 
+					(double)m_capture_resy / (double)GetSize().y :
+					(double)m_capture_resx / (double)GetSize().x;
+
+				size_t cap_ox = m_draw_frame ? (size_t)(m_frame_x*scalefac) : 0;
+				size_t cap_oy = m_draw_frame ? (size_t)(m_frame_y*scalefac) : 0;
+				size_t cap_w  = m_draw_frame ? (size_t)(m_frame_w*scalefac) : m_capture_resx;
+				size_t cap_h  = m_draw_frame ? (size_t)(m_frame_h*scalefac) : m_capture_resy;
+
+				if (cap_ox <= m_capture_resx && cap_oy <= m_capture_resy) {
+					if (cap_ox + cap_w > m_capture_resx)
+						cap_w = m_capture_resx - cap_ox;
+					if (cap_oy + cap_h > m_capture_resy)
+						cap_h = m_capture_resy - cap_oy;
+
+					size_t imsize = (size_t)cap_w * (size_t)cap_h;
+					string str_fn = outputfilename.ToStdString();
+					TIFF* out = TIFFOpen(str_fn.c_str(), imsize <= 3758096384ULL ? "wb" : "wb8");
+					if (out) {
+						TIFFSetField(out, TIFFTAG_IMAGEWIDTH, cap_w);
+						TIFFSetField(out, TIFFTAG_IMAGELENGTH, cap_h);
+						TIFFSetField(out, TIFFTAG_SAMPLESPERPIXEL, dst_chann);
+						TIFFSetField(out, TIFFTAG_BITSPERSAMPLE, 8);
+						TIFFSetField(out, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
+						TIFFSetField(out, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
+						TIFFSetField(out, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
+						if (VRenderFrame::GetCompression())
+							TIFFSetField(out, TIFFTAG_COMPRESSION, COMPRESSION_LZW);
+
+						tsize_t linebytes = dst_chann * cap_w;
+						tsize_t pitchX = dst_chann * m_capture_resx;
+						unsigned char* buf = NULL;
+						buf = (unsigned char*)_TIFFmalloc(linebytes);
+						TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(out, 0));
+						for (uint32 row = 0; row < (uint32)cap_h; row++)
+						{
+							memcpy(buf, &m_tiled_image[(row + cap_oy) * pitchX + cap_ox * dst_chann], linebytes);
+							if (TIFFWriteScanline(out, buf, row, 0) < 0)
+								break;
+						}
+						TIFFClose(out);
+						if (buf)
+							_TIFFfree(buf);
+					}
 				}
-				TIFFClose(out);
-				if (buf)
-					_TIFFfree(buf);
 
 				delete [] m_tiled_image;
 				m_tiled_image = NULL;

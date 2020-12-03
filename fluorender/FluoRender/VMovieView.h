@@ -216,6 +216,11 @@ private:
 	//3d batch
 	void Get3DFrames();
 
+	void SetInitRotation();
+
+	void SaveDefault();
+	void LoadSettings();
+
 private:
 	wxWindow* CreateSimplePage(wxWindow *parent);
 	wxWindow* CreateAdvancedPage(wxWindow *parent);
