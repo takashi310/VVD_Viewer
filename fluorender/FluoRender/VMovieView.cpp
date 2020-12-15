@@ -590,17 +590,21 @@ void VMovieView::OnTimer(wxTimerEvent& event) {
 	m_movie_time->GetValue().ToDouble(&len);
 	m_fps_text->GetValue().ToLong(&fps);
 
-	if (TextureRenderer::get_mem_swap() &&
-		TextureRenderer::get_start_update_loop() &&
-		!TextureRenderer::get_done_update_loop() && !m_batch_mode)
+	if (!m_batch_mode)
 	{
 		wxString str = m_views_cmb->GetValue();
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 		if (!vr_frame) return;
 		VRenderView* vrv = vr_frame->GetView(str);
 		if (!vrv) return;
-		vrv->RefreshGL(false, false);
-		return;
+
+		if ( (m_record && !vrv->IsRecordedFrameReady()) || 
+			 (!m_record && TextureRenderer::get_mem_swap() && !TextureRenderer::get_done_update_loop() && TextureRenderer::get_start_update_loop()) )
+		{
+			vrv->RefreshGL(false, false);
+			return;
+		}
+
 	}
 
 	if (m_delayed_stop)
@@ -1203,6 +1207,9 @@ void VMovieView::SetProgress(double pcnt) {
 }
 
 void VMovieView::WriteFrameToFile(int total_frames) {
+
+	wxCriticalSectionLocker enter(m_pThreadCS);
+
 	wxString str = m_views_cmb->GetValue();
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (!vr_frame) return; 

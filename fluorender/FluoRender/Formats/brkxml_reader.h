@@ -22,7 +22,8 @@
 #define BlockSizeKey "blockSize"
 #define DataTypeKey "dataType"
 #define CompressionKey "compression"
-#define CompressionTypeKey "compressionType"
+#define CompressionTypeKey "type"
+#define PixelResolutionKey "pixelResolution"
 
 using namespace std;
 
@@ -75,13 +76,19 @@ public:
     vector<int> m_blockSize;
     int m_dataType;
     int m_compression;
+	vector<double> m_pix_res;
+
+	DatasetAttributes()
+	{
+	}
     
-    DatasetAttributes(vector<long> dimensions, vector<int> blockSize, int dataType, int compression)
+    DatasetAttributes(const vector<long>& dimensions, const vector<int>& blockSize, int dataType, int compression, const vector<double>& pix_res)
     {
         m_dimensions = dimensions;
         m_blockSize = blockSize;
         m_dataType = dataType;
         m_compression = compression;
+		m_pix_res = pix_res;
     }
     
     vector<long> getDimensions() {
@@ -193,7 +200,8 @@ public:
 	tinyxml2::XMLDocument *GetVVDXMLDoc() {return &m_doc;}
 	tinyxml2::XMLDocument *GetMetadataXMLDoc() {return &m_md_doc;}
     
-    void getJson();
+	void loadFSN5();
+	DatasetAttributes* parseDatasetMetadata(wstring jpath);
     map<wstring, wstring> getAttributes(wstring pathName);
     DataBlock readBlock(wstring pathName, const DatasetAttributes& datasetAttributes, const vector<long> gridPosition);
     vector<wstring> list(wstring pathName);
@@ -303,8 +311,6 @@ private:
 	};
 	vector<Landmark> m_landmarks;
 	wstring m_metadata_id;
-    
-    nlohmann::json jf;
 
 private:
 	ImageInfo ReadImageInfo(tinyxml2::XMLElement *seqNode);

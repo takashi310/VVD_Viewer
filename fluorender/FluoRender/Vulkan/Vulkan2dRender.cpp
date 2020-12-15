@@ -577,7 +577,10 @@ void Vulkan2dRender::buildCommandBuffer(
 				layout[j] = params.tex[j]->descriptor.imageLayout;
 				switch (params.tex[j]->descriptor.imageLayout) {
 				case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
-					dst = layout[j] = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+					dst = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+					break;
+				case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
+					dst = VK_IMAGE_LAYOUT_GENERAL;
 					break;
 				}
 

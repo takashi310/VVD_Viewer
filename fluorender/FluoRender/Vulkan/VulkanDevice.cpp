@@ -1134,6 +1134,10 @@ namespace vks
 		// Copy texture data into staging buffer
 		if (tex->format != VK_FORMAT_BC4_UNORM_BLOCK)
 		{
+			std::stringstream debugMessage;
+			debugMessage << "uploadTex: " << data;
+			//OutputDebugStringA(debugMessage.str().c_str()); OutputDebugString(L"\n");
+			
 			size_t nthreads = std::thread::hardware_concurrency();
 			if (nthreads > 8) nthreads = 8;
 			std::vector<std::thread> threads(nthreads);
@@ -1160,6 +1164,22 @@ namespace vks
 			for (auto&& i : threads) {
 				i.join();
 			}
+			
+			/*
+			unsigned char* dstp = (unsigned char*)staging_buf.mapped;
+			unsigned char* stp = (unsigned char*)data;
+			int ite = texMemSize / 4096;
+			for (int i = 0; i < ite; i++)
+			{
+				memcpy(dstp, stp, 4096);
+				dstp += 4096;
+				stp += 4096;
+			}
+			if (texMemSize % 4096 > 0)
+				memcpy(dstp, stp, texMemSize % 4096);
+			*/
+			//OutputDebugStringA("uploadtex finished\n");
+			
 		}
 		else
 		{

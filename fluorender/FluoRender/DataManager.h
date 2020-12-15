@@ -1836,9 +1836,10 @@ class EXPORT_API VolumeLoader
 		static bool sort_data_asc(const VolumeLoaderData b1, const VolumeLoaderData b2)
 		{ return b2.brick->get_d() < b1.brick->get_d(); }
 
+		static void setCriticalSection(wxCriticalSection* crtsec) { ms_pThreadCS = crtsec; }
+
 	protected:
 		VolumeLoaderThread *m_thread;
-		wxCriticalSection m_pThreadCS;
 		vector<VolumeLoaderData> m_queues;
 		vector<VolumeLoaderData> m_queued;
 		vector<VolumeDecompressorData> m_decomp_queues;
@@ -1853,6 +1854,8 @@ class EXPORT_API VolumeLoader
 
 		long long m_memory_limit;
 		long long m_used_memory;
+
+		static wxCriticalSection* ms_pThreadCS;
 
 		inline void AddLoadedBrick(const VolumeLoaderData &lbd)
 		{

@@ -415,6 +415,7 @@ void LMSeacher::OnMouse(wxMouseEvent& event)
 
 //////////////////////////////////////////////////////////////////////////
 
+wxCriticalSection* VRenderVulkanView::ms_pThreadCS = nullptr;
 
 BEGIN_EVENT_TABLE(VRenderVulkanView, wxWindow)
 	EVT_MENU(ID_CTXMENU_SHOW_ALL, VRenderVulkanView::OnShowAllVolumes)
@@ -694,7 +695,9 @@ VRenderVulkanView::VRenderVulkanView(wxWindow* frame,
 	m_clear_final_buffer(false),
     m_refresh(false),
 	m_refresh_start_loop(false),
-	m_recording(false)
+	m_recording(false),
+	m_recording_frame(false),
+	m_abort(false)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -8007,6 +8010,12 @@ void VRenderVulkanView::RunFetchMask(wxFileConfig &fconfig)
 //draw
 void VRenderVulkanView::OnDraw(wxPaintEvent& event)
 {
+	if (m_abort)
+	{
+		m_abort = false;
+		return;
+	}
+
 	Init();
 	wxPaintDC dc(this);
 
@@ -8026,6 +8035,9 @@ void VRenderVulkanView::OnDraw(wxPaintEvent& event)
 	}
     
     SetEvtHandlerEnabled(false);
+
+	if (m_recording)
+		m_recording_frame = true;
 	
 	m_vulkan->ResetRenderSemaphores();
 	m_vulkan->prepareFrame();
@@ -8083,22 +8095,9 @@ void VRenderVulkanView::OnDraw(wxPaintEvent& event)
 	{
 		PaintStroke();
 	}
-
-	if (m_int_mode == 4)
-		m_int_mode = 2;
-	if (m_int_mode == 8)
-		m_int_mode = 7;
-
-	goTimer->sample();
-
-	if (m_resize)
-		m_resize = false;
-
-	if (m_tile_rendering && m_current_tileid >= m_tile_xnum*m_tile_ynum) {
-		EndTileRendering();
-	}
     
-    if (m_recording)
+    if ( m_recording &&
+		(VolumeRenderer::get_done_update_loop() || !VolumeRenderer::get_mem_swap()) )
     {
         vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
         vks::VulkanDevice* prim_dev = m_vulkan->devices[0];
@@ -8136,8 +8135,29 @@ void VRenderVulkanView::OnDraw(wxPaintEvent& event)
         
         m_v2drender->render(m_fbo_record, params);
     }
-
+	
 	m_vulkan->submitFrame();
+
+	if ( m_recording &&
+		(VolumeRenderer::get_done_update_loop() || !VolumeRenderer::get_mem_swap()) )
+	{
+		m_recording_frame = false;
+	}
+
+
+	if (m_tile_rendering && m_current_tileid >= m_tile_xnum * m_tile_ynum) {
+		EndTileRendering();
+	}
+
+	if (m_int_mode == 4)
+		m_int_mode = 2;
+	if (m_int_mode == 8)
+		m_int_mode = 7;
+
+	goTimer->sample();
+
+	if (m_resize)
+		m_resize = false;
 
 	SetEvtHandlerEnabled(true);
 }
@@ -13614,6 +13634,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 								VolumeData* vd = list[j];
 								Texture* tex = vd->GetTexture();
 								Ray view_ray = vd->GetVR()->compute_view();
+								tex->set_sort_bricks();
 								vector<TextureBrick*> *bricks = tex->get_sorted_bricks(view_ray, !m_persp);
 								int mode = vd->GetMode() == 1 ? 1 : 0;
 								bool shadow = vd->GetShadow();
@@ -13642,6 +13663,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 								{
 									if (TextureRenderer::get_update_order() == 1)
 									{
+										/*
 										int order = TextureRenderer::get_update_order();
 										TextureRenderer::set_update_order(0);
 										Ray view_ray = vd->GetVR()->compute_view();
@@ -13649,6 +13671,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 										tex->get_sorted_bricks(view_ray, !m_persp); //recalculate brick.d_
 										tex->set_sort_bricks();
 										TextureRenderer::set_update_order(order);
+										*/
 										std::sort(tmp_shadow.begin(), tmp_shadow.end(), VolumeLoader::sort_data_asc);
 									}
 									queues.insert(queues.end(), tmp_shadow.begin(), tmp_shadow.end());

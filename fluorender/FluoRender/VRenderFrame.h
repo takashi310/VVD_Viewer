@@ -435,6 +435,8 @@ private:
 
 	wxApp* m_app; 
 
+	static wxCriticalSection ms_criticalSection;
+
 private:
 	//views
 	wxString CreateView(int row=1);

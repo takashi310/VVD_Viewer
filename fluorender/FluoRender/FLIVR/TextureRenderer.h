@@ -469,7 +469,8 @@ namespace FLIVR
 			   vks::Buffer m_slices_vbo, m_slices_ibo, m_slices_vao;
 
 #ifndef _UNIT_TEST_VOLUME_RENDERER_
-			   wxCriticalSection m_pThreadCS;
+			   static wxCriticalSection *ms_pThreadCS;
+               static void setCriticalSection(wxCriticalSection* crtsec) { ms_pThreadCS = crtsec; }
 #endif
 
                //compute view

@@ -204,6 +204,8 @@ private:
 	int m_prv_fr;
 	std::map<wxString, int> m_vol_fr;
 
+	wxCriticalSection m_pThreadCS;
+
 private:
 	void GetSettings(int view=0);
 

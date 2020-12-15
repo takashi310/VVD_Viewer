@@ -95,6 +95,8 @@ namespace FLIVR
 	std::shared_ptr<VVulkan> TextureRenderer::m_vulkan;
 	std::shared_ptr<Vulkan2dRender> TextureRenderer::m_v2drender;
 
+	wxCriticalSection* TextureRenderer::ms_pThreadCS = nullptr;
+
 	TextureRenderer::TextureRenderer(Texture* tex)
 		:
 		tex_(tex),
@@ -1657,7 +1659,8 @@ namespace FLIVR
 			else if(tex_->isBrxml())
 			{
 #ifndef _UNIT_TEST_VOLUME_RENDERER_
-				m_pThreadCS.Enter();
+				if (ms_pThreadCS)
+					ms_pThreadCS->Enter();
 				if (brick->isLoaded())
 				{
 					//see if it needs to free some memory
@@ -1682,7 +1685,10 @@ namespace FLIVR
 						result->descriptor.sampler = device->nearest_sampler;
 
 					bool brkerror = false;
-					void *texdata = brick->tex_data_brk(c, NULL);
+					void *texdata = brick->getBrickData();
+					if (texdata != brick->getBrickData())
+						int dummy = 0;
+					void** testptr = &texdata;
 					if (texdata)
 						device->UploadTexture(result, texdata, !mem_swap_ || (flush && semaphore == nullptr), semaphore, !swapped);
 					else
@@ -1693,7 +1699,8 @@ namespace FLIVR
 				}
 				else if (!interactive_)
 				{
-					m_pThreadCS.Leave();
+					if (ms_pThreadCS)
+						ms_pThreadCS->Leave();
 					if (streaming_)
 					{
 						uint32_t rn_time;
@@ -1715,7 +1722,8 @@ namespace FLIVR
 							elapsed += 10;
 						}
 					}
-					m_pThreadCS.Enter();
+					if (ms_pThreadCS)
+						ms_pThreadCS->Enter();
 
 					if (brick->isLoaded())
 					{
@@ -1741,7 +1749,7 @@ namespace FLIVR
 							result->descriptor.sampler = device->nearest_sampler;
 
 						bool brkerror = false;
-						void *texdata = brick->tex_data_brk(c, NULL);
+						void *texdata = brick->getBrickData();
 						if (texdata)
 							device->UploadTexture(result, texdata, !mem_swap_ || (flush && semaphore == nullptr), semaphore, !swapped);
 						else
@@ -1751,7 +1759,8 @@ namespace FLIVR
 							*updated = true;
 					} 
 				}
-				m_pThreadCS.Leave();
+				if (ms_pThreadCS)
+					ms_pThreadCS->Leave();
 #endif
 			}
 

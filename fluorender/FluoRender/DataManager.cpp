@@ -6721,7 +6721,7 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 		}
 	}
 
-	if (reader)
+	if (reader && type != LOAD_TYPE_BRKXML)
 	{
 		bool preprocess = false;
 		if (reader->GetSliceSeq() != m_sliceSequence)
@@ -7627,7 +7627,7 @@ VolumeDecompressorThread::VolumeDecompressorThread(VolumeLoader *vl)
 
 VolumeDecompressorThread::~VolumeDecompressorThread()
 {
-	wxCriticalSectionLocker enter(m_vl->m_pThreadCS);
+	wxCriticalSectionLocker enter(*m_vl->ms_pThreadCS);
 	// the thread is being destroyed; make sure not to leave dangling pointers around
 	m_vl->m_running_decomp_th--;
 }
@@ -7636,23 +7636,26 @@ wxThread::ExitCode VolumeDecompressorThread::Entry()
 {
 	unsigned int st_time = GET_TICK_COUNT();
 
-	m_vl->m_pThreadCS.Enter();
+	if (!m_vl->ms_pThreadCS)
+		return (wxThread::ExitCode)0;
+
+	m_vl->ms_pThreadCS->Enter();
 	m_vl->m_running_decomp_th++;
-	m_vl->m_pThreadCS.Leave();
+	m_vl->ms_pThreadCS->Leave();
 
 	while(1)
 	{
-		m_vl->m_pThreadCS.Enter();
+		m_vl->ms_pThreadCS->Enter();
 
 		if (m_vl->m_decomp_queues.size() == 0)
 		{
-			m_vl->m_pThreadCS.Leave();
+			m_vl->ms_pThreadCS->Leave();
 			break;
 		}
 		VolumeDecompressorData q = m_vl->m_decomp_queues[0];
 		m_vl->m_decomp_queues.erase(m_vl->m_decomp_queues.begin());
 
-		m_vl->m_pThreadCS.Leave();
+		m_vl->ms_pThreadCS->Leave();
 
 		if (q.vd->isBrxml())
 		{
@@ -7660,25 +7663,43 @@ wxThread::ExitCode VolumeDecompressorThread::Entry()
 			char* result = new char[bsize];
 			if (TextureBrick::decompress_brick(result, q.in_data, bsize, q.in_size, q.finfo->type, q.b->nx(), q.b->ny()))
 			{
-				m_vl->m_pThreadCS.Enter();
+				m_vl->ms_pThreadCS->Enter();
+
+				//OutputDebugStringA("decompress: enter\n");
 
 				delete[] q.in_data;
 				shared_ptr<VL_Array> sp = make_shared<VL_Array>(result, bsize);
 				q.b->set_brkdata(sp);
 				q.b->set_loading_state(false);
 				m_vl->m_memcached_data[q.finfo->id_string] = sp;
-				m_vl->m_pThreadCS.Leave();
+				
+				VolumeLoaderData vld;
+				vld.brick = q.b;
+				vld.datasize = q.datasize;
+				vld.finfo = q.finfo;
+				vld.mode = q.mode;
+				vld.vd = q.vd;
+				m_vl->m_loaded[q.b] = vld;
+
+				//OutputDebugStringA("decompress: leave\n");
+
+				m_vl->ms_pThreadCS->Leave();
 			}
 			else
 			{
 				delete[] result;
 
-				m_vl->m_pThreadCS.Enter();
+				m_vl->ms_pThreadCS->Enter();
+
+				//OutputDebugStringA("decompress: failed enter\n");
+
 				delete[] q.in_data;
 				m_vl->m_used_memory -= bsize;
 				q.b->set_drawn(q.mode, true);
 				q.b->set_loading_state(false);
-				m_vl->m_pThreadCS.Leave();
+
+				//OutputDebugStringA("decompress: failed leave\n");
+				m_vl->ms_pThreadCS->Leave();
 			}
 		}
 		else
@@ -7692,7 +7713,7 @@ wxThread::ExitCode VolumeDecompressorThread::Entry()
 				wss << reader->GetPathName() << L" " << q.chid << L" " << q.frameid;
 				nrrd_idstring = wss.str();
 
-				m_vl->m_pThreadCS.Enter();
+				m_vl->ms_pThreadCS->Enter();
 				VolumeLoaderImage tmp;
 				tmp.vd = q.vd;
 				tmp.chid = q.chid;
@@ -7700,7 +7721,7 @@ wxThread::ExitCode VolumeDecompressorThread::Entry()
 				tmp.vlnrrd = make_shared<VL_Nrrd>(nrrd);
 				m_vl->m_used_memory += tmp.vlnrrd->getDatasize();
 				m_vl->m_loaded_files[nrrd_idstring] = tmp;
-				m_vl->m_pThreadCS.Leave();
+				m_vl->ms_pThreadCS->Leave();
 			}
 		}
 	}
@@ -7720,7 +7741,7 @@ VolumeLoaderThread::VolumeLoaderThread(VolumeLoader *vl)
 
 VolumeLoaderThread::~VolumeLoaderThread()
 {
-	wxCriticalSectionLocker enter(m_vl->m_pThreadCS);
+	wxCriticalSectionLocker enter(*m_vl->ms_pThreadCS);
 	if (!m_vl->m_decomp_queues.empty())
 	{
 		for (int i = 0; i < m_vl->m_decomp_queues.size(); i++)
@@ -7747,8 +7768,12 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 			return (wxThread::ExitCode)0;
 		Sleep(10);
 	}
+	
+	
+	m_vl->ms_pThreadCS->Enter();
 
-	m_vl->m_pThreadCS.Enter();
+	//OutputDebugStringA("vl cleaning loading brick: enter\n");
+
 	auto ite = m_vl->m_loaded.begin();
 	while(ite != m_vl->m_loaded.end())
 	{
@@ -7760,18 +7785,20 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 		else
 			ite++;
 	}
+	
+	//OutputDebugStringA("vl cleaning loading brick: leave\n");
 
-	m_vl->m_pThreadCS.Leave();
+	m_vl->ms_pThreadCS->Leave();
 
 	while(1)
 	{
 		if (TestDestroy())
 			break;
 
-		m_vl->m_pThreadCS.Enter();
+		m_vl->ms_pThreadCS->Enter();
 		if (m_vl->m_queues.size() == 0)
 		{
-			m_vl->m_pThreadCS.Leave();
+			m_vl->ms_pThreadCS->Leave();
 			break;
 		}
 		VolumeLoaderData b = m_vl->m_queues[0];
@@ -7781,48 +7808,51 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 			b.brick->set_loading_state(false);
 			m_vl->m_queues.erase(m_vl->m_queues.begin());
 			m_vl->m_queued.push_back(b);
-			m_vl->m_pThreadCS.Leave();
+			m_vl->ms_pThreadCS->Leave();
 
 			if (!b.brick->isLoaded() && !b.brick->isLoading())
 			{
 				wstring id = b.finfo->id_string;
 				if (m_vl->m_memcached_data.find(b.finfo->id_string) != m_vl->m_memcached_data.end())
 				{
-					m_vl->m_pThreadCS.Enter();
+					m_vl->ms_pThreadCS->Enter();
 					b.brick->set_brkdata(m_vl->m_memcached_data[b.finfo->id_string]);
 					m_vl->m_loaded[b.brick] = b;
-					m_vl->m_pThreadCS.Leave();
+					m_vl->ms_pThreadCS->Leave();
 					continue;
 				}
 
 				if (m_vl->m_used_memory >= m_vl->m_memory_limit)
 				{
-					m_vl->m_pThreadCS.Enter();
+					m_vl->ms_pThreadCS->Enter();
+					//OutputDebugStringA("CleanupLoadedBrick: enter\n");
 					while (1)
 					{
 						m_vl->CleanupLoadedBrick();
 						if (m_vl->m_used_memory < m_vl->m_memory_limit || TestDestroy())
 							break;
-						m_vl->m_pThreadCS.Leave();
+						m_vl->ms_pThreadCS->Leave();
 						Sleep(10);
-						m_vl->m_pThreadCS.Enter();
+						m_vl->ms_pThreadCS->Enter();
 					}
-					m_vl->m_pThreadCS.Leave();
+					//OutputDebugStringA("CleanupLoadedBrick: leave\n");
+					m_vl->ms_pThreadCS->Leave();
 				}
 
 				char* ptr = NULL;
 				size_t readsize;
 				TextureBrick::read_brick_without_decomp(ptr, readsize, b.finfo, this);
-				if (!ptr) continue;
+				if (!ptr)
+					continue;
 
 				if (b.finfo->type == BRICK_FILE_TYPE_RAW)
 				{
-					m_vl->m_pThreadCS.Enter();
+					m_vl->ms_pThreadCS->Enter();
 					shared_ptr<VL_Array> sp = make_shared<VL_Array>(ptr, readsize);
 					b.brick->set_brkdata(sp);
 					b.datasize = readsize;
 					m_vl->AddLoadedBrick(b);
-					m_vl->m_pThreadCS.Leave();
+					m_vl->ms_pThreadCS->Leave();
 				}
 				else
 				{
@@ -7847,12 +7877,18 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 						VolumeDecompressorThread* dthread = new VolumeDecompressorThread(m_vl);
 						if (dthread->Create() == wxTHREAD_NO_ERROR)
 						{
-							m_vl->m_pThreadCS.Enter();
+							m_vl->ms_pThreadCS->Enter();
+
+							//OutputDebugStringA("vl-1: enter\n");
+
 							m_vl->m_decomp_queues.push_back(dq);
 							m_vl->m_used_memory += bsize;
 							b.brick->set_loading_state(true);
 							m_vl->m_loaded[b.brick] = b;
-							m_vl->m_pThreadCS.Leave();
+
+							//OutputDebugStringA("vl-1: leave\n");
+
+							m_vl->ms_pThreadCS->Leave();
 
 							dthread->Run();
 						}
@@ -7862,23 +7898,36 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 								decomp_in_this_thread = true;
 							else
 							{
-								m_vl->m_pThreadCS.Enter();
+
+								m_vl->ms_pThreadCS->Enter();
+
+								//OutputDebugStringA("vl-2: enter\n");
+
 								m_vl->m_decomp_queues.push_back(dq);
 								m_vl->m_used_memory += bsize;
 								b.brick->set_loading_state(true);
 								m_vl->m_loaded[b.brick] = b;
-								m_vl->m_pThreadCS.Leave();
+
+								//OutputDebugStringA("vl-2: leave\n");
+
+								m_vl->ms_pThreadCS->Leave();
 							}
 						}
 					}
 					else
 					{
-						m_vl->m_pThreadCS.Enter();
+						m_vl->ms_pThreadCS->Enter();
+
+						//OutputDebugStringA("vl-3: enter\n");
+
 						m_vl->m_decomp_queues.push_back(dq);
 						m_vl->m_used_memory += bsize;
 						b.brick->set_loading_state(true);
 						m_vl->m_loaded[b.brick] = b;
-						m_vl->m_pThreadCS.Leave();
+
+						//OutputDebugStringA("vl-3: leave\n");
+
+						m_vl->ms_pThreadCS->Leave();
 					}
 
 					if (decomp_in_this_thread)
@@ -7886,22 +7935,30 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 						char* result = new char[bsize];
 						if (TextureBrick::decompress_brick(result, dq.in_data, bsize, dq.in_size, dq.finfo->type))
 						{
-							m_vl->m_pThreadCS.Enter();
+							m_vl->ms_pThreadCS->Enter();
+
+							//OutputDebugStringA("vl-4: enter\n");
+
 							delete[] dq.in_data;
 							shared_ptr<VL_Array> sp = make_shared<VL_Array>(result, bsize);
 							b.brick->set_brkdata(sp);
 							b.datasize = bsize;
 							m_vl->AddLoadedBrick(b);
-							m_vl->m_pThreadCS.Leave();
+
+							//OutputDebugStringA("vl-4: leave\n");
+
+							m_vl->ms_pThreadCS->Leave();
 						}
 						else
 						{
 							delete[] result;
 
-							m_vl->m_pThreadCS.Enter();
+							m_vl->ms_pThreadCS->Enter();
+							//OutputDebugStringA("vl-5: enter\n");
 							delete[] dq.in_data;
 							dq.b->set_drawn(dq.mode, true);
-							m_vl->m_pThreadCS.Leave();
+							//OutputDebugStringA("vl-5: leave\n");
+							m_vl->ms_pThreadCS->Leave();
 						}
 					}
 				}
@@ -7912,17 +7969,17 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 				size_t bsize = (size_t)(b.brick->nx()) * (size_t)(b.brick->ny()) * (size_t)(b.brick->nz()) * (size_t)(b.brick->nb(0));
 				b.datasize = bsize;
 
-				m_vl->m_pThreadCS.Enter();
+				m_vl->ms_pThreadCS->Enter();
 				if (m_vl->m_loaded.find(b.brick) != m_vl->m_loaded.end())
 					m_vl->m_loaded[b.brick] = b;
-				m_vl->m_pThreadCS.Leave();
+				m_vl->ms_pThreadCS->Leave();
 			}
 		}
 		else
 		{
 			if (!b.vd || !b.vd->GetReader())
 			{
-				m_vl->m_pThreadCS.Leave();
+				m_vl->ms_pThreadCS->Leave();
 				continue;
 			}
 
@@ -7934,7 +7991,7 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 			m_vl->m_loading_files.erase(nrrd_idstring);
 			m_vl->m_queues.erase(m_vl->m_queues.begin());
 			m_vl->m_queued.push_back(b);
-			m_vl->m_pThreadCS.Leave();
+			m_vl->ms_pThreadCS->Leave();
 
 			if (m_vl->m_loaded_files.find(nrrd_idstring) != m_vl->m_loaded_files.end() ||
 				m_vl->m_loading_files.find(nrrd_idstring) != m_vl->m_loading_files.end())
@@ -7942,17 +7999,17 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 
 			if (m_vl->m_used_memory >= m_vl->m_memory_limit)
 			{
-				m_vl->m_pThreadCS.Enter();
+				m_vl->ms_pThreadCS->Enter();
 				while (1)
 				{
 					m_vl->CleanupLoadedBrick();
 					if (m_vl->m_used_memory < m_vl->m_memory_limit || TestDestroy())
 						break;
-					m_vl->m_pThreadCS.Leave();
+					m_vl->ms_pThreadCS->Leave();
 					Sleep(10);
-					m_vl->m_pThreadCS.Enter();
+					m_vl->ms_pThreadCS->Enter();
 				}
-				m_vl->m_pThreadCS.Leave();
+				m_vl->ms_pThreadCS->Leave();
 			}
 
 			bool read_in_this_thread = false;
@@ -7975,10 +8032,10 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 				VolumeDecompressorThread* dthread = new VolumeDecompressorThread(m_vl);
 				if (dthread->Create() == wxTHREAD_NO_ERROR)
 				{
-					m_vl->m_pThreadCS.Enter();
+					m_vl->ms_pThreadCS->Enter();
 					m_vl->m_decomp_queues.push_back(dq);
 					m_vl->m_loading_files.insert(nrrd_idstring);
-					m_vl->m_pThreadCS.Leave();
+					m_vl->ms_pThreadCS->Leave();
 
 					dthread->Run();
 				}
@@ -7988,19 +8045,19 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 						decomp_in_this_thread = true;
 					else
 					{
-						m_vl->m_pThreadCS.Enter();
+						m_vl->ms_pThreadCS->Enter();
 						m_vl->m_decomp_queues.push_back(dq);
 						m_vl->m_loading_files.insert(nrrd_idstring);
-						m_vl->m_pThreadCS.Leave();
+						m_vl->ms_pThreadCS->Leave();
 					}
 				}
 			}
 			else
 			{
-				m_vl->m_pThreadCS.Enter();
+				m_vl->ms_pThreadCS->Enter();
 				m_vl->m_decomp_queues.push_back(dq);
 				m_vl->m_loading_files.insert(nrrd_idstring);
-				m_vl->m_pThreadCS.Leave();
+				m_vl->ms_pThreadCS->Leave();
 			}
 
 			if (decomp_in_this_thread)
@@ -8014,7 +8071,7 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 					wss << reader->GetPathName() << L" " << b.chid << L" " << b.frameid;
 					nrrd_idstring = wss.str();
 
-					m_vl->m_pThreadCS.Enter();
+					m_vl->ms_pThreadCS->Enter();
 					VolumeLoaderImage tmp;
 					tmp.vd = b.vd;
 					tmp.chid = b.chid;
@@ -8022,7 +8079,7 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 					tmp.vlnrrd = make_shared<VL_Nrrd>(nrrd);
 					m_vl->m_used_memory += tmp.vlnrrd->getDatasize();
 					m_vl->m_loaded_files[nrrd_idstring] = tmp;
-					m_vl->m_pThreadCS.Leave();
+					m_vl->ms_pThreadCS->Leave();
 				}
 			}
 		}
@@ -8039,6 +8096,8 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 	*/
 	return (wxThread::ExitCode)0;
 }
+
+wxCriticalSection* VolumeLoader::ms_pThreadCS = nullptr;
 
 VolumeLoader::VolumeLoader()
 {
@@ -8067,7 +8126,7 @@ VolumeLoader::~VolumeLoader()
 
 void VolumeLoader::Queue(VolumeLoaderData brick)
 {
-	wxCriticalSectionLocker enter(m_pThreadCS);
+	wxCriticalSectionLocker enter(*ms_pThreadCS);
 	m_queues.push_back(brick);
 }
 
@@ -8180,94 +8239,101 @@ void VolumeLoader::CleanupLoadedBrick()
 
 	if (required > 3LL*1024LL*1024LL*1024LL) 
 		required = 3LL*1024LL*1024LL*1024LL;
-	
-	vector<VolumeLoaderImageKey> loaded_image_keys;
-	size_t cur_time = 0;
-	for (auto &elem : m_loaded_files)
-	{
-		if (cur_time < elem.second.vd->GetCurTime())
-			cur_time = elem.second.vd->GetCurTime();
-		VolumeLoaderImageKey k;
-		k.frameid = elem.second.frameid;
-		k.key = elem.first;
-		loaded_image_keys.push_back(k);
-	}
-	std::sort(loaded_image_keys.begin(), loaded_image_keys.end(), less_vld_frame);
+
+	m_used_memory = 0;
+	for (auto& elem : m_memcached_data)
+		m_used_memory += elem.second->getSize();
 
 	if (required > 0 || m_used_memory >= m_memory_limit)
 	{
-		auto it = loaded_image_keys.begin();
-		while (it != loaded_image_keys.end() &&
-			m_loaded_files[it->key].frameid < cur_time &&
-			(required > 0 || m_used_memory >= m_memory_limit))
+		vector<VolumeLoaderImageKey> loaded_image_keys;
+		size_t cur_time = 0;
+		for (auto& elem : m_loaded_files)
 		{
-			if (!m_loaded_files[it->key].vd->GetDisp() && m_loaded_files[it->key].vlnrrd)
-			{
-				long long datasize = m_loaded_files[it->key].vlnrrd->getDatasize();
-				required -= datasize;
-				m_used_memory -= datasize;
-				m_loaded_files.erase(it->key);
-				it = loaded_image_keys.erase(it);
-			}
-			else
-				it++;
+			if (cur_time < elem.second.vd->GetCurTime())
+				cur_time = elem.second.vd->GetCurTime();
+			VolumeLoaderImageKey k;
+			k.frameid = elem.second.frameid;
+			k.key = elem.first;
+			loaded_image_keys.push_back(k);
 		}
-	}
-	if (required > 0 || m_used_memory >= m_memory_limit)
-	{
-		auto it = loaded_image_keys.rbegin();
-		while (it != loaded_image_keys.rend() &&
-			m_loaded_files[it->key].frameid > cur_time &&
-			(required > 0 || m_used_memory >= m_memory_limit))
+		std::sort(loaded_image_keys.begin(), loaded_image_keys.end(), less_vld_frame);
+
+		if (required > 0 || m_used_memory >= m_memory_limit)
 		{
-			if (!m_loaded_files[it->key].vd->GetDisp() && m_loaded_files[it->key].vlnrrd)
+			auto it = loaded_image_keys.begin();
+			while (it != loaded_image_keys.end() &&
+				m_loaded_files[it->key].frameid < cur_time &&
+				(required > 0 || m_used_memory >= m_memory_limit))
 			{
-				long long datasize = m_loaded_files[it->key].vlnrrd->getDatasize();
-				required -= datasize;
-				m_used_memory -= datasize;
-				m_loaded_files.erase(it->key);
-				loaded_image_keys.erase((++it).base());
+				if (!m_loaded_files[it->key].vd->GetDisp() && m_loaded_files[it->key].vlnrrd)
+				{
+					long long datasize = m_loaded_files[it->key].vlnrrd->getDatasize();
+					required -= datasize;
+					m_used_memory -= datasize;
+					m_loaded_files.erase(it->key);
+					it = loaded_image_keys.erase(it);
+				}
+				else
+					it++;
 			}
-			else
-				it++;
 		}
-	}
-	if (required > 0 || m_used_memory >= m_memory_limit)
-	{
-		auto it = loaded_image_keys.begin();
-		while (it != loaded_image_keys.end() &&
-			m_loaded_files[it->key].frameid < cur_time &&
-			(required > 0 || m_used_memory >= m_memory_limit))
+		if (required > 0 || m_used_memory >= m_memory_limit)
 		{
-			if (m_loaded_files[it->key].vlnrrd)
+			auto it = loaded_image_keys.rbegin();
+			while (it != loaded_image_keys.rend() &&
+				m_loaded_files[it->key].frameid > cur_time &&
+				(required > 0 || m_used_memory >= m_memory_limit))
 			{
-				long long datasize = m_loaded_files[it->key].vlnrrd->getDatasize();
-				required -= datasize;
-				m_used_memory -= datasize;
-				m_loaded_files.erase(it->key);
-				it = loaded_image_keys.erase(it);
+				if (!m_loaded_files[it->key].vd->GetDisp() && m_loaded_files[it->key].vlnrrd)
+				{
+					long long datasize = m_loaded_files[it->key].vlnrrd->getDatasize();
+					required -= datasize;
+					m_used_memory -= datasize;
+					m_loaded_files.erase(it->key);
+					loaded_image_keys.erase((++it).base());
+				}
+				else
+					it++;
 			}
-			else
-				it++;
 		}
-	}
-	if (required > 0 || m_used_memory >= m_memory_limit)
-	{
-		auto it = loaded_image_keys.rbegin();
-		while (it != loaded_image_keys.rend() &&
-			m_loaded_files[it->key].frameid > cur_time &&
-			(required > 0 || m_used_memory >= m_memory_limit))
+		if (required > 0 || m_used_memory >= m_memory_limit)
 		{
-			if (m_loaded_files[it->key].vlnrrd)
+			auto it = loaded_image_keys.begin();
+			while (it != loaded_image_keys.end() &&
+				m_loaded_files[it->key].frameid < cur_time &&
+				(required > 0 || m_used_memory >= m_memory_limit))
 			{
-				long long datasize = m_loaded_files[it->key].vlnrrd->getDatasize();
-				required -= datasize;
-				m_used_memory -= datasize;
-				m_loaded_files.erase(it->key);
-				loaded_image_keys.erase((++it).base());
+				if (m_loaded_files[it->key].vlnrrd)
+				{
+					long long datasize = m_loaded_files[it->key].vlnrrd->getDatasize();
+					required -= datasize;
+					m_used_memory -= datasize;
+					m_loaded_files.erase(it->key);
+					it = loaded_image_keys.erase(it);
+				}
+				else
+					it++;
 			}
-			else
-				it++;
+		}
+		if (required > 0 || m_used_memory >= m_memory_limit)
+		{
+			auto it = loaded_image_keys.rbegin();
+			while (it != loaded_image_keys.rend() &&
+				m_loaded_files[it->key].frameid > cur_time &&
+				(required > 0 || m_used_memory >= m_memory_limit))
+			{
+				if (m_loaded_files[it->key].vlnrrd)
+				{
+					long long datasize = m_loaded_files[it->key].vlnrrd->getDatasize();
+					required -= datasize;
+					m_used_memory -= datasize;
+					m_loaded_files.erase(it->key);
+					loaded_image_keys.erase((++it).base());
+				}
+				else
+					it++;
+			}
 		}
 	}
 
@@ -8329,17 +8395,29 @@ void VolumeLoader::CleanupLoadedBrick()
 	{
 		for (int i = 0; i < b_drawn.size(); i++)
 		{
-			if (!b_drawn[i].brick->isLoaded())
+			TextureBrick* b = b_drawn[i].brick;
+
+			if (!b->isLoaded())
 				continue;
-			if (b_drawn[i].brick->getBrickDataSPCount() <= 2)
+
+			bool skip = false;
+			for (int j = m_queued.size() - 1; j >= 0; j--)
 			{
-				required -= b_drawn[i].datasize;
-				m_used_memory -= b_drawn[i].datasize;
-				m_memcached_data[b_drawn[i].finfo->id_string].reset();
-				m_memcached_data.erase(b_drawn[i].finfo->id_string);
+				if (m_queued[j].brick == b && !b->drawn(m_queued[j].mode))
+					skip = true;
 			}
-			b_drawn[i].brick->freeBrkData();
-			m_loaded.erase(b_drawn[i].brick);
+			if (!skip)
+			{
+				if (b->getBrickDataSPCount() <= 2)
+				{
+					required -= b_drawn[i].datasize;
+					m_used_memory -= b_drawn[i].datasize;
+					m_memcached_data[b_drawn[i].finfo->id_string].reset();
+					m_memcached_data.erase(b_drawn[i].finfo->id_string);
+				}
+				b->freeBrkData();
+				m_loaded.erase(b);
+			}
 			if (required <= 0 && m_used_memory < m_memory_limit)
 				break;
 		}
@@ -8361,12 +8439,14 @@ void VolumeLoader::CleanupLoadedBrick()
 				{
 					if (b->getBrickDataSPCount() <= 2)
 					{
-						long long datasize = (size_t)(b->nx())*(size_t)(b->ny())*(size_t)(b->nz())*(size_t)(b->nb(0));
+						long long datasize = (size_t)(b->nx()) * (size_t)(b->ny()) * (size_t)(b->nz()) * (size_t)(b->nb(0));
 						required -= datasize;
 						m_used_memory -= datasize;
 						m_memcached_data[m_queues[i].finfo->id_string].reset();
 						m_memcached_data.erase(m_queues[i].finfo->id_string);
 					}
+					else
+						int dummy = 0;
 
 					b->freeBrkData();
 					m_loaded.erase(b);
@@ -8406,15 +8486,6 @@ void VolumeLoader::CleanupLoadedBrick()
 					break;
 			}
 		}
-	}
-
-	//something wrong
-	if (m_used_memory < 0)
-	{
-		m_used_memory = 0;
-		for(auto &elem : m_memcached_data)
-			m_used_memory += elem.second->getSize();
-		//cerr << "Volume Loader: error in CleanupLoadedBrick" << endl;
 	}
 }
 

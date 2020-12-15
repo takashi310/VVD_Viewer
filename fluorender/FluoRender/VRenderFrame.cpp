@@ -110,6 +110,8 @@ bool VRenderFrame::m_save_project = false;
 CURLM *_g_curlm;//add by takashi
 CURL *_g_curl;//add by takashi
 
+wxCriticalSection VRenderFrame::ms_criticalSection;
+
 VRenderFrame::VRenderFrame(
 	wxApp* app, wxFrame* frame,
 	const wxString& title,
@@ -560,6 +562,9 @@ VRenderFrame::VRenderFrame(
 
 	TextureRenderer::set_mainmem_buf_size(m_setting_dlg->GetMainMemBufSize());
 	TextureRenderer::set_available_mainmem_buf_size(m_setting_dlg->GetMainMemBufSize());
+	TextureRenderer::setCriticalSection(&ms_criticalSection);
+
+	VRenderVulkanView::setCriticalSection(&ms_criticalSection);
 
 	//drop target
 	SetDropTarget(new DnDFile(this));
@@ -724,6 +729,17 @@ void VRenderFrame::OnExit(wxCommandEvent& WXUNUSED(event))
 void VRenderFrame::OnClose(wxCloseEvent &event)
 {
 	m_setting_dlg->SaveSettings();
+
+	for (int i = 0; i < (int)m_vrv_list.size(); i++)
+	{
+		VRenderView* vrv = m_vrv_list[i];
+		if (vrv)
+		{
+			vrv->SetEvtHandlerEnabled(false);
+			vrv->Freeze();
+			vrv->AbortRendering();
+		}
+	}
 /*	bool vrv_saved = false;
 	for (unsigned int i=0; i<m_vrv_list.size(); ++i)
 	{

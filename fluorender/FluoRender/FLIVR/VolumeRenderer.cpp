@@ -2021,7 +2021,7 @@ namespace FLIVR
 #ifndef _UNIT_TEST_VOLUME_RENDERER_
 				if (tex_->isBrxml() && tex_->GetMaskLv() != tex_->GetCurLevel())
 				{
-					m_pThreadCS.Enter();
+					ms_pThreadCS->Enter();
 
 					int cnx = b->nx(), cny = b->ny(), cnz = b->nz();
 					int cox = b->ox(), coy = b->oy(), coz = b->oz();
@@ -2074,7 +2074,7 @@ namespace FLIVR
 					b->set_nrrd(cdata, 0);
 					b->set_nrrd(cmdata, tex_->nmask());
 
-					m_pThreadCS.Leave();
+					ms_pThreadCS->Leave();
 				}
 				else
 				{
@@ -2891,7 +2891,7 @@ namespace FLIVR
 #ifndef _UNIT_TEST_VOLUME_RENDERER_
 				if (tex_->isBrxml() && tex_->GetMaskLv() != tex_->GetCurLevel())
 				{
-					m_pThreadCS.Enter();
+					ms_pThreadCS->Enter();
 
 					int cnx = b->nx(), cny = b->ny(), cnz = b->nz();
 					int cox = b->ox(), coy = b->oy(), coz = b->oz();
@@ -2947,7 +2947,7 @@ namespace FLIVR
 					b->set_nrrd(cdata, 0);
 					b->set_nrrd(cmdata, tex_->nmask());
 
-					m_pThreadCS.Leave();
+					ms_pThreadCS->Leave();
 				}
 				else
 				{

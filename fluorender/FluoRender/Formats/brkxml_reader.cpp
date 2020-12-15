@@ -9,6 +9,7 @@
 #include <sstream>
 #include <locale>
 #include <algorithm>
+#include <regex>
 #include <boost/foreach.hpp>
 #include <boost/lexical_cast.hpp>
 #include "boost/filesystem.hpp"
@@ -205,8 +206,7 @@ void BRKXMLReader::Preprocess()
     transform(ext.begin(), ext.end(), ext.begin(), towlower);
     
     if (ext == L"n5" || ext == L"json") {
-        getJson();
-        
+        loadFSN5();
     }
     else if (ext == L"vvd") {
         if (m_doc.LoadFile(ws2s(m_path_name).c_str()) != 0){
@@ -1221,37 +1221,263 @@ void BRKXMLReader::SetInfo()
 	m_info = wss.str();
 }
 
+void BRKXMLReader::loadFSN5()
+{
+	boost::filesystem::path::imbue(std::locale(std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
+	boost::filesystem::path root_path(m_dir_name);
 
-void BRKXMLReader::getJson()
+	vector<double> pix_res(3, 1.0);
+	auto root_attrpath = root_path / "attributes.json";
+	std::ifstream ifs(root_attrpath.string());
+	if (ifs.is_open()) {
+		auto jf = json::parse(ifs);
+		if (!jf.is_null() && jf.contains(PixelResolutionKey) && jf[PixelResolutionKey].contains(DimensionsKey))
+			pix_res = jf[PixelResolutionKey][DimensionsKey].get<vector<double>>();
+	}
+
+	directory_iterator end_itr; // default construction yields past-the-end
+
+	vector<wstring> ch_dirs;
+	std::regex chdir_pattern("^c\\d+$");
+	for (directory_iterator itr(root_path); itr != end_itr; ++itr)
+	{
+		if (is_directory(itr->status()))
+		{
+			if (regex_match(itr->path().filename().string(), chdir_pattern))
+				ch_dirs.push_back(itr->path().filename().wstring());
+		}
+	}
+
+	if (ch_dirs.empty())
+		return;
+
+	sort(ch_dirs.begin(), ch_dirs.end(),
+		[](const wstring& x, const wstring& y) { return WSTOI(x.substr(1)) < WSTOI(y.substr(1)); });
+
+	for (int i = 0; i < ch_dirs.size(); i++) {
+		vector<wstring> scale_dirs;
+		std::regex scdir_pattern("^s\\d+$");
+		for (directory_iterator itr(root_path / ch_dirs[i]); itr != end_itr; ++itr)
+		{
+			if (is_directory(itr->status()))
+			{
+				if (regex_match(itr->path().filename().string(), scdir_pattern))
+					scale_dirs.push_back(itr->path().filename().wstring());
+			}
+		}
+
+		if (scale_dirs.empty())
+			continue;
+
+		sort(scale_dirs.begin(), scale_dirs.end(),
+			[](const wstring& x, const wstring& y) { return WSTOI(x.substr(1)) < WSTOI(y.substr(1)); });
+
+		int orgw = 0;
+		int orgh = 0;
+		int orgd = 0;
+
+		if (m_pyramid.size() < scale_dirs.size()) {
+			m_pyramid.resize(scale_dirs.size());
+			for (int j = 0; j < scale_dirs.size(); j++) {
+				auto attrpath = root_path / ch_dirs[i] / scale_dirs[j] / "attributes.json";
+				DatasetAttributes* attr = parseDatasetMetadata(attrpath.wstring());
+
+				LevelInfo lvinfo;
+
+				lvinfo.imageW = attr->m_dimensions[0];
+
+				lvinfo.imageH = attr->m_dimensions[1];
+
+				lvinfo.imageD = attr->m_dimensions[2];
+
+				if (j == 0) {
+					orgw = lvinfo.imageW;
+					orgh = lvinfo.imageH;
+					orgd = lvinfo.imageD;
+				}
+
+				lvinfo.file_type = attr->m_compression;
+
+				if (attr->m_pix_res[0] > 0.0)
+					lvinfo.xspc = attr->m_pix_res[0];
+				else
+					lvinfo.xspc = pix_res[0] * ((double)lvinfo.imageW / orgw);
+
+				if (attr->m_pix_res[1] > 0.0)
+					lvinfo.yspc = attr->m_pix_res[1];
+				else
+					lvinfo.yspc = pix_res[1] * ((double)lvinfo.imageH / orgh);
+
+				if (attr->m_pix_res[2] > 0.0)
+					lvinfo.zspc = attr->m_pix_res[2];
+				else
+					lvinfo.zspc = pix_res[2] * ((double)lvinfo.imageD / orgd);
+
+				lvinfo.bit_depth = attr->m_dataType;
+
+				lvinfo.brick_baseW = attr->m_blockSize[0];
+
+				lvinfo.brick_baseH = attr->m_blockSize[1];
+
+				lvinfo.brick_baseD = attr->m_blockSize[2];
+				/*
+				if (j == 0) {
+					int ii, jj, kk;
+					int mx, my, mz, mx2, my2, mz2, ox, oy, oz;
+					double tx0, ty0, tz0, tx1, ty1, tz1;
+					double bx1, by1, bz1;
+					double dx0, dy0, dz0, dx1, dy1, dz1;
+					const int overlapx = 0;
+					const int overlapy = 0;
+					const int overlapz = 0;
+					for (kk = 0; kk < lvinfo.imageD; kk += lvinfo.brick_baseD)
+					{
+						if (kk) kk -= overlapz;
+						for (jj = 0; jj < lvinfo.imageH; jj += lvinfo.brick_baseH)
+						{
+							if (jj) jj -= overlapy;
+							for (ii = 0; ii < lvinfo.imageW; ii += lvinfo.brick_baseW)
+							{
+								if (ii) ii -= overlapx;
+								mx = min(lvinfo.brick_baseW, lvinfo.imageW - ii);
+								my = min(lvinfo.brick_baseH, lvinfo.imageH - jj);
+								mz = min(lvinfo.brick_baseD, lvinfo.imageD - kk);
+
+								mx2 = mx;
+								my2 = my;
+								mz2 = mz;
+
+								// Compute Texture Box.
+								tx0 = ii ? ((mx2 - mx + overlapx / 2.0) / mx2) : 0.0;
+								ty0 = jj ? ((my2 - my + overlapy / 2.0) / my2) : 0.0;
+								tz0 = kk ? ((mz2 - mz + overlapz / 2.0) / mz2) : 0.0;
+
+								tx1 = 1.0 - overlapx / 2.0 / mx2;
+								if (mx < lvinfo.brick_baseW) tx1 = 1.0;
+								if (lvinfo.imageW - ii == lvinfo.brick_baseW) tx1 = 1.0;
+
+								ty1 = 1.0 - overlapy / 2.0 / my2;
+								if (my < lvinfo.brick_baseH) ty1 = 1.0;
+								if (lvinfo.imageH - jj == lvinfo.brick_baseH) ty1 = 1.0;
+
+								tz1 = 1.0 - overlapz / 2.0 / mz2;
+								if (mz < lvinfo.brick_baseD) tz1 = 1.0;
+								if (lvinfo.imageD - kk == lvinfo.brick_baseD) tz1 = 1.0;
+
+								BBox tbox(Point(tx0, ty0, tz0), Point(tx1, ty1, tz1));
+
+								// Compute BBox.
+								bx1 = min((ii + lvinfo.brick_baseW - overlapx / 2.0) / (double)lvinfo.imageW, 1.0);
+								if (lvinfo.imageW - ii == lvinfo.brick_baseW) bx1 = 1.0;
+
+								by1 = min((jj + lvinfo.brick_baseH - overlapy / 2.0) / (double)lvinfo.imageH, 1.0);
+								if (lvinfo.imageH - jj == lvinfo.brick_baseH) by1 = 1.0;
+
+								bz1 = min((kk + lvinfo.brick_baseD - overlapz / 2.0) / (double)lvinfo.imageD, 1.0);
+								if (lvinfo.imageD - kk == lvinfo.brick_baseD) bz1 = 1.0;
+
+								BBox bbox(Point(ii == 0 ? 0 : (ii + overlapx / 2.0) / (double)sz_x,
+									jj == 0 ? 0 : (jj + overlapy / 2.0) / (double)sz_y,
+									kk == 0 ? 0 : (kk + overlapz / 2.0) / (double)sz_z),
+									Point(bx1, by1, bz1));
+								 
+								ox = ii - (mx2 - mx);
+								oy = jj - (my2 - my);
+								oz = kk - (mz2 - mz);
+
+								dx0 = (double)ox / sz_x;
+								dy0 = (double)oy / sz_y;
+								dz0 = (double)oz / sz_z;
+								dx1 = (double)(ox + mx2) / sz_x;
+								dy1 = (double)(oy + my2) / sz_y;
+								dz1 = (double)(oz + mz2) / sz_z;
+
+								BBox dbox(Point(dx0, dy0, dz0), Point(dx1, dy1, dz1));
+
+								TextureBrick* b = new TextureBrick(0, 0, mx2, my2, mz2, numc, numb,
+									ox, oy, oz, mx2, my2, mz2, bbox, tbox, dbox);
+								bricks.push_back(b);
+							}
+						}
+					}
+				}
+				*/
+				//ReadPackedBricks(child, lvinfo.bricks);
+				//ReadFilenames(child, lvinfo.filename);
+				
+				delete attr;
+			}
+		}
+	}
+}
+
+DatasetAttributes* BRKXMLReader::parseDatasetMetadata(wstring jpath)
 {
     boost::filesystem::path::imbue(std::locale( std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
-    boost::filesystem::path path(m_path_name);
+    boost::filesystem::path path(jpath);
     std::ifstream ifs(path.string());
+
+	if (!ifs.is_open())
+		return nullptr;
     
-    jf = json::parse(ifs);
+    auto jf = json::parse(ifs);
+
+	if (jf.is_null() ||
+		!jf.contains(DimensionsKey) ||
+		!jf.contains(DataTypeKey) ||
+		!jf.contains(BlockSizeKey))
+		return nullptr;
+
+	DatasetAttributes* ret = new DatasetAttributes();
     
-    vector<long> dim_str = jf[DimensionsKey].get<vector<long>>();
+    ret->m_dimensions = jf[DimensionsKey].get<vector<long>>();
     
-    int dataType = jf[DataTypeKey].get<int>();
+	string str = jf[DataTypeKey].get<string>();
+	if (str == "uint8")
+		ret->m_dataType = 8;
+	else if (str == "uint16")
+		ret->m_dataType = 16;
+	else
+		ret->m_dataType = 0;
     
-    vector<int> blockSize = jf[BlockSizeKey].get<vector<int>>();
+    ret->m_blockSize = jf[BlockSizeKey].get<vector<int>>();
     
-    int compression = jf[CompressionKey].get<int>();
+	if (jf.contains(CompressionKey) &&
+		(jf[CompressionKey].type() == json::value_t::number_integer || jf[CompressionKey].type() == json::value_t::number_unsigned))
+		ret->m_compression = jf[CompressionKey].get<int>();
+	if (jf.contains(PixelResolutionKey) && jf[PixelResolutionKey].contains(DimensionsKey))
+		ret->m_pix_res = jf[PixelResolutionKey][DimensionsKey].get<vector<double>>();
+	else
+		ret->m_pix_res = vector<double>(3, -1.0);
     
     /* version 0 */
-    if (jf.find(CompressionKey) != jf.end() && jf.find(CompressionTypeKey) != jf.end()) {
-        auto cptype = jf[CompressionTypeKey].get<string>();
+    if (jf.contains(CompressionKey) && jf[CompressionKey].contains(CompressionTypeKey)) {
+        auto cptype = jf[CompressionKey][CompressionTypeKey].get<string>();
         if (cptype == "raw")
-            compression = 0;
+			ret->m_compression = 0;
         else if (cptype == "gzip")
-            compression = 1;
+			ret->m_compression = 1;
         else if (cptype == "bzip2")
-            compression = 2;
+			ret->m_compression = 2;
         else if (cptype == "lz4")
-            compression = 3;
+			ret->m_compression = 3;
         else if (cptype == "xz")
-            compression = 4;
+			ret->m_compression = 4;
     }
+
+	switch (ret->m_compression)
+	{
+	case 0:
+		ret->m_compression = BRICK_FILE_TYPE_RAW;
+		break;
+	case 1:
+		ret->m_compression = BRICK_FILE_TYPE_ZLIB;
+		break;
+	default:
+		ret->m_compression = BRICK_FILE_TYPE_NONE;
+	}
+
+	return ret;
 }
 
 /*
@@ -1381,8 +1607,8 @@ vector<wstring> BRKXMLReader::list(wstring pathName)
     {
         if (is_directory(itr->status()))
         {
-            //auto p = relative(itr->path(), parent_path);
-            //ret.push_back(p.wstring());
+            auto p = relative(itr->path(), parent_path);
+            ret.push_back(p.wstring());
         }
     }
     

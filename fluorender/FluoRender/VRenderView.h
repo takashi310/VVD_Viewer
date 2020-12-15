@@ -704,10 +704,20 @@ public:
     
     void SetRecording(bool val) { m_recording = val; }
     bool GetRecording() { return m_recording; }
+	bool IsRecordedFrameReady() { return !m_recording_frame; }
     void DownloadRecordedFrame(void *image, VkFormat &format);
     
     void SetForceHideMask(bool val) { m_force_hide_mask = val; m_draw_mask = !val; }
     bool GetForceHideMask() { return m_force_hide_mask; }
+
+	void AbortRendering() { m_abort = true; }
+
+	static void setCriticalSection(wxCriticalSection* crtsec) 
+	{
+		ms_pThreadCS = crtsec;
+		VolumeLoader::setCriticalSection(crtsec);
+	}
+	static wxCriticalSection* ms_pThreadCS;
 
 public:
 	//script run
@@ -915,6 +925,7 @@ private:
     std::unique_ptr<vks::VFrameBuffer> m_fbo_record;
     std::shared_ptr<vks::VTexture> m_tex_record;
     bool m_recording;
+	bool m_recording_frame;
 
 	//camera controls
 	bool m_persp;
@@ -1147,6 +1158,8 @@ private:
 	Vulkan2dRender::V2dObject m_ruler_vobj;
 
 	bool m_frame_clear;
+
+	bool m_abort;
 
 private:
 #ifdef _WIN32
@@ -1921,8 +1934,12 @@ public:
     }
     bool GetRecording()
     {
-        if (m_glview) return m_glview->GetRecording(); else return 0;
+        if (m_glview) return m_glview->GetRecording(); else return false;
     }
+	bool IsRecordedFrameReady()
+	{
+		if (m_glview) return m_glview->IsRecordedFrameReady(); else return false;
+	}
     void DownloadRecordedFrame(void *image, VkFormat &format)
     {
         if (m_glview) m_glview->DownloadRecordedFrame(image, format);
@@ -1957,6 +1974,8 @@ public:
     
     void SetForceHideMask(bool val) { if (m_glview) m_glview->SetForceHideMask(val); }
 	bool GetForceHideMask() { if (m_glview) return m_glview->GetForceHideMask(); else return false; }
+
+	void AbortRendering() { if (m_glview) m_glview->AbortRendering(); }
 
 public:
 	wxWindow* m_frame;

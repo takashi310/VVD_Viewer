@@ -188,10 +188,12 @@ namespace FLIVR {
 				output->data = new float[voxelnum];
 				break;
 			default:
-				delete[] m_nrrd->data;
+				nrrdNix(output);
+				output = nullptr;
 			}
 
-			memcpy(output->data, indata, size_t(voxelnum * getBytesPerSample()));
+			if (output)
+				memcpy(output->data, indata, size_t(voxelnum * getBytesPerSample()));
 
 			return output;
 		}
@@ -230,9 +232,10 @@ namespace FLIVR {
 		~VL_Array() {
 			if (m_data) {
 				delete [] m_data;
+				m_data = NULL;
 			}
 		}
-		const void *getData() { return m_data; }
+		void *getData() { return m_data; }
 		size_t getSize() { return m_size; }
 		bool isProtected() { return m_protected; }
 		void SetProtection(bool protection) { m_protected = protection; }
@@ -459,7 +462,7 @@ namespace FLIVR {
 		void set_id_in_loadedbrks(int id) {id_in_loadedbrks = id;};
 		int get_id_in_loadedbrks() {return id_in_loadedbrks;}
 		int getID() {return findex_;}
-		const void *getBrickData() {return brkdata_ ? brkdata_->getData() : NULL;}
+		void *getBrickData() {return brkdata_ ? brkdata_->getData() : NULL;}
 		std::shared_ptr<VL_Array> getBrickDataSP() {return brkdata_;}
 		long getBrickDataSPCount() {return brkdata_.use_count();}
 
@@ -480,7 +483,7 @@ namespace FLIVR {
 		std::vector<uint32_t> *get_index_list() {return &index_;}
 		std::vector<int> *get_v_size_list() {return &size_v_;}
 
-		void set_disp(bool disp) {disp_ = disp;}
+		void set_disp(bool disp) { disp_ = disp; }
 		bool get_disp() {return disp_;}
 
 		void set_compression(bool compression) {compression_ = compression;}
