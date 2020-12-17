@@ -130,6 +130,9 @@ public:
 	void SetMovieTime(double t);
 	long GetFPS();
 
+	void DisableRendering() { m_without_rendering = true; }
+	void EnableRendering() { m_without_rendering = false; }
+
 public:
 	//controls
 	wxTextCtrl *m_fps_text;
@@ -203,6 +206,8 @@ private:
 	bool m_batch_mode;
 	int m_prv_fr;
 	std::map<wxString, int> m_vol_fr;
+
+	bool m_without_rendering;
 
 	wxCriticalSection m_pThreadCS;
 

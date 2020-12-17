@@ -3823,7 +3823,6 @@ namespace FLIVR
 
 			b->set_dirty(b->nmask(), true);
 		}
-		
 	}
 
 	//generate the labeling assuming the mask is already generated

@@ -149,7 +149,7 @@ namespace FLIVR {
 
 		Nrrd* getNrrdDeepCopy()
 		{
-			Nrrd* output = nullptr;
+			Nrrd* output = nrrdNew();
 			void* indata = m_nrrd->data;
 			m_nrrd->data = NULL;
 			nrrdCopy(output, m_nrrd);

@@ -368,7 +368,8 @@ m_record(false),
 m_current_page(0),
 m_rot_int_type(0),
 m_delayed_stop(false),
-m_batch_mode(false)
+m_batch_mode(false),
+m_without_rendering(false)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -1074,6 +1075,10 @@ void VMovieView::OnTimeChange(wxScrollEvent &event) {
 }
 
 void VMovieView::SetRendering(double pcnt) {
+
+	if (m_without_rendering)
+		return;
+
 	wxString str = m_views_cmb->GetValue();
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (!vr_frame) return;

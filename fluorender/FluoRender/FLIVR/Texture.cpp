@@ -1490,6 +1490,8 @@ namespace FLIVR
 
 	void Texture::GetDimensionLv(int lv, int &x, int &y, int &z)
 	{
+		x = nx_; y = ny_; z = nz_;
+
 		if (!brkxml_) return;
 		if (!pyramid_[lv].data)
 			return;

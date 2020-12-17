@@ -2535,7 +2535,16 @@ void VolumeData::DrawMask(int type, int paint_mode, int hr_mode,
 		m_vr->set_2d_weight(m_2d_weight1, m_2d_weight2);
 		m_vr->draw_mask(type, paint_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, scl_translate, w2d, bins, ortho, false, ext_msk);
 		if (isBrxml())
+		{
+			int lvnum = GetLevelNum();
+			int masklv = GetMaskLv();
+			for (int i = 0; i < lvnum; i++)
+			{
+				SetLevel(i);
+				m_vr->clear_tex_current_mask();
+			}
 			SetLevel(curlv);
+		}
 		//OutputDebugStringA("DrawMask Leave\n");
 	}
 }
@@ -3356,6 +3365,13 @@ VolumeData* VolumeData::CopyLevel(int lv)
 	vd->m_annotation = m_annotation;
 
 	vd->m_landmarks = m_landmarks;
+
+	auto maskindata = GetMask(true);
+	if (maskindata)
+	{
+		auto mask = make_shared<VL_Nrrd>(maskindata->getNrrdDeepCopy());
+		vd->LoadMask(mask);
+	}
 
 	return vd;
 }
@@ -6721,7 +6737,7 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 		}
 	}
 
-	if (reader && type != LOAD_TYPE_BRKXML)
+	if (reader)
 	{
 		bool preprocess = false;
 		if (reader->GetSliceSeq() != m_sliceSequence)

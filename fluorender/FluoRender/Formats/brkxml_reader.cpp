@@ -1226,6 +1226,12 @@ void BRKXMLReader::loadFSN5()
 	boost::filesystem::path::imbue(std::locale(std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
 	boost::filesystem::path root_path(m_dir_name);
 
+#ifdef _WIN32
+	wchar_t slash = L'\\';
+#else
+	wchar_t slash = L'/';
+#endif
+
 	vector<double> pix_res(3, 1.0);
 	auto root_attrpath = root_path / "attributes.json";
 	std::ifstream ifs(root_attrpath.string());
@@ -1254,6 +1260,8 @@ void BRKXMLReader::loadFSN5()
 	sort(ch_dirs.begin(), ch_dirs.end(),
 		[](const wstring& x, const wstring& y) { return WSTOI(x.substr(1)) < WSTOI(y.substr(1)); });
 
+
+	vector<vector<wstring>> relpaths;
 	for (int i = 0; i < ch_dirs.size(); i++) {
 		vector<wstring> scale_dirs;
 		std::regex scdir_pattern("^s\\d+$");
@@ -1275,22 +1283,21 @@ void BRKXMLReader::loadFSN5()
 		int orgw = 0;
 		int orgh = 0;
 		int orgd = 0;
-
-		if (m_pyramid.size() < scale_dirs.size()) {
+		if (m_pyramid.size() < scale_dirs.size())
 			m_pyramid.resize(scale_dirs.size());
-			for (int j = 0; j < scale_dirs.size(); j++) {
-				auto attrpath = root_path / ch_dirs[i] / scale_dirs[j] / "attributes.json";
-				DatasetAttributes* attr = parseDatasetMetadata(attrpath.wstring());
+		for (int j = 0; j < scale_dirs.size(); j++) {
+			auto attrpath = root_path / ch_dirs[i] / scale_dirs[j] / "attributes.json";
+			DatasetAttributes* attr = parseDatasetMetadata(attrpath.wstring());
 
-				LevelInfo lvinfo;
-
+			LevelInfo& lvinfo = m_pyramid[j];
+			if (i == 0) {
 				lvinfo.imageW = attr->m_dimensions[0];
 
 				lvinfo.imageH = attr->m_dimensions[1];
 
 				lvinfo.imageD = attr->m_dimensions[2];
 
-				if (j == 0) {
+				if (i == 0 && j == 0) {
 					orgw = lvinfo.imageW;
 					orgh = lvinfo.imageH;
 					orgd = lvinfo.imageD;
@@ -1301,17 +1308,17 @@ void BRKXMLReader::loadFSN5()
 				if (attr->m_pix_res[0] > 0.0)
 					lvinfo.xspc = attr->m_pix_res[0];
 				else
-					lvinfo.xspc = pix_res[0] * ((double)lvinfo.imageW / orgw);
+					lvinfo.xspc = pix_res[0] / ((double)lvinfo.imageW / orgw);
 
 				if (attr->m_pix_res[1] > 0.0)
 					lvinfo.yspc = attr->m_pix_res[1];
 				else
-					lvinfo.yspc = pix_res[1] * ((double)lvinfo.imageH / orgh);
+					lvinfo.yspc = pix_res[1] / ((double)lvinfo.imageH / orgh);
 
 				if (attr->m_pix_res[2] > 0.0)
 					lvinfo.zspc = attr->m_pix_res[2];
 				else
-					lvinfo.zspc = pix_res[2] * ((double)lvinfo.imageD / orgd);
+					lvinfo.zspc = pix_res[2] / ((double)lvinfo.imageD / orgd);
 
 				lvinfo.bit_depth = attr->m_dataType;
 
@@ -1320,95 +1327,157 @@ void BRKXMLReader::loadFSN5()
 				lvinfo.brick_baseH = attr->m_blockSize[1];
 
 				lvinfo.brick_baseD = attr->m_blockSize[2];
-				/*
-				if (j == 0) {
-					int ii, jj, kk;
-					int mx, my, mz, mx2, my2, mz2, ox, oy, oz;
-					double tx0, ty0, tz0, tx1, ty1, tz1;
-					double bx1, by1, bz1;
-					double dx0, dy0, dz0, dx1, dy1, dz1;
-					const int overlapx = 0;
-					const int overlapy = 0;
-					const int overlapz = 0;
-					for (kk = 0; kk < lvinfo.imageD; kk += lvinfo.brick_baseD)
+
+				vector<wstring> lvpaths;
+				int ii, jj, kk;
+				int mx, my, mz, mx2, my2, mz2, ox, oy, oz;
+				double tx0, ty0, tz0, tx1, ty1, tz1;
+				double bx1, by1, bz1;
+				double dx0, dy0, dz0, dx1, dy1, dz1;
+				const int overlapx = 0;
+				const int overlapy = 0;
+				const int overlapz = 0;
+				size_t count = 0;
+				size_t zcount = 0;
+				for (kk = 0; kk < lvinfo.imageD; kk += lvinfo.brick_baseD)
+				{
+					if (kk) kk -= overlapz;
+					size_t ycount = 0;
+					for (jj = 0; jj < lvinfo.imageH; jj += lvinfo.brick_baseH)
 					{
-						if (kk) kk -= overlapz;
-						for (jj = 0; jj < lvinfo.imageH; jj += lvinfo.brick_baseH)
+						if (jj) jj -= overlapy;
+						size_t xcount = 0;
+						for (ii = 0; ii < lvinfo.imageW; ii += lvinfo.brick_baseW)
 						{
-							if (jj) jj -= overlapy;
-							for (ii = 0; ii < lvinfo.imageW; ii += lvinfo.brick_baseW)
-							{
-								if (ii) ii -= overlapx;
-								mx = min(lvinfo.brick_baseW, lvinfo.imageW - ii);
-								my = min(lvinfo.brick_baseH, lvinfo.imageH - jj);
-								mz = min(lvinfo.brick_baseD, lvinfo.imageD - kk);
+							BrickInfo* binfo = new BrickInfo();
 
-								mx2 = mx;
-								my2 = my;
-								mz2 = mz;
+							if (ii) ii -= overlapx;
+							mx = min(lvinfo.brick_baseW, lvinfo.imageW - ii);
+							my = min(lvinfo.brick_baseH, lvinfo.imageH - jj);
+							mz = min(lvinfo.brick_baseD, lvinfo.imageD - kk);
 
-								// Compute Texture Box.
-								tx0 = ii ? ((mx2 - mx + overlapx / 2.0) / mx2) : 0.0;
-								ty0 = jj ? ((my2 - my + overlapy / 2.0) / my2) : 0.0;
-								tz0 = kk ? ((mz2 - mz + overlapz / 2.0) / mz2) : 0.0;
+							mx2 = mx;
+							my2 = my;
+							mz2 = mz;
 
-								tx1 = 1.0 - overlapx / 2.0 / mx2;
-								if (mx < lvinfo.brick_baseW) tx1 = 1.0;
-								if (lvinfo.imageW - ii == lvinfo.brick_baseW) tx1 = 1.0;
+							// Compute Texture Box.
+							tx0 = ii ? ((mx2 - mx + overlapx / 2.0) / mx2) : 0.0;
+							ty0 = jj ? ((my2 - my + overlapy / 2.0) / my2) : 0.0;
+							tz0 = kk ? ((mz2 - mz + overlapz / 2.0) / mz2) : 0.0;
 
-								ty1 = 1.0 - overlapy / 2.0 / my2;
-								if (my < lvinfo.brick_baseH) ty1 = 1.0;
-								if (lvinfo.imageH - jj == lvinfo.brick_baseH) ty1 = 1.0;
+							tx1 = 1.0 - overlapx / 2.0 / mx2;
+							if (mx < lvinfo.brick_baseW) tx1 = 1.0;
+							if (lvinfo.imageW - ii == lvinfo.brick_baseW) tx1 = 1.0;
 
-								tz1 = 1.0 - overlapz / 2.0 / mz2;
-								if (mz < lvinfo.brick_baseD) tz1 = 1.0;
-								if (lvinfo.imageD - kk == lvinfo.brick_baseD) tz1 = 1.0;
+							ty1 = 1.0 - overlapy / 2.0 / my2;
+							if (my < lvinfo.brick_baseH) ty1 = 1.0;
+							if (lvinfo.imageH - jj == lvinfo.brick_baseH) ty1 = 1.0;
 
-								BBox tbox(Point(tx0, ty0, tz0), Point(tx1, ty1, tz1));
+							tz1 = 1.0 - overlapz / 2.0 / mz2;
+							if (mz < lvinfo.brick_baseD) tz1 = 1.0;
+							if (lvinfo.imageD - kk == lvinfo.brick_baseD) tz1 = 1.0;
 
-								// Compute BBox.
-								bx1 = min((ii + lvinfo.brick_baseW - overlapx / 2.0) / (double)lvinfo.imageW, 1.0);
-								if (lvinfo.imageW - ii == lvinfo.brick_baseW) bx1 = 1.0;
+							binfo->tx0 = tx0;
+							binfo->ty0 = ty0;
+							binfo->tz0 = tz0;
+							binfo->tx1 = tx1;
+							binfo->ty1 = ty1;
+							binfo->tz1 = tz1;
 
-								by1 = min((jj + lvinfo.brick_baseH - overlapy / 2.0) / (double)lvinfo.imageH, 1.0);
-								if (lvinfo.imageH - jj == lvinfo.brick_baseH) by1 = 1.0;
+							// Compute BBox.
+							bx1 = min((ii + lvinfo.brick_baseW - overlapx / 2.0) / (double)lvinfo.imageW, 1.0);
+							if (lvinfo.imageW - ii == lvinfo.brick_baseW) bx1 = 1.0;
 
-								bz1 = min((kk + lvinfo.brick_baseD - overlapz / 2.0) / (double)lvinfo.imageD, 1.0);
-								if (lvinfo.imageD - kk == lvinfo.brick_baseD) bz1 = 1.0;
+							by1 = min((jj + lvinfo.brick_baseH - overlapy / 2.0) / (double)lvinfo.imageH, 1.0);
+							if (lvinfo.imageH - jj == lvinfo.brick_baseH) by1 = 1.0;
 
-								BBox bbox(Point(ii == 0 ? 0 : (ii + overlapx / 2.0) / (double)sz_x,
-									jj == 0 ? 0 : (jj + overlapy / 2.0) / (double)sz_y,
-									kk == 0 ? 0 : (kk + overlapz / 2.0) / (double)sz_z),
-									Point(bx1, by1, bz1));
-								 
-								ox = ii - (mx2 - mx);
-								oy = jj - (my2 - my);
-								oz = kk - (mz2 - mz);
+							bz1 = min((kk + lvinfo.brick_baseD - overlapz / 2.0) / (double)lvinfo.imageD, 1.0);
+							if (lvinfo.imageD - kk == lvinfo.brick_baseD) bz1 = 1.0;
 
-								dx0 = (double)ox / sz_x;
-								dy0 = (double)oy / sz_y;
-								dz0 = (double)oz / sz_z;
-								dx1 = (double)(ox + mx2) / sz_x;
-								dy1 = (double)(oy + my2) / sz_y;
-								dz1 = (double)(oz + mz2) / sz_z;
+							binfo->bx0 = ii == 0 ? 0 : (ii + overlapx / 2.0) / (double)lvinfo.imageW;
+							binfo->by0 = jj == 0 ? 0 : (jj + overlapy / 2.0) / (double)lvinfo.imageH;
+							binfo->bz0 = kk == 0 ? 0 : (kk + overlapz / 2.0) / (double)lvinfo.imageD;
+							binfo->bx1 = bx1;
+							binfo->by1 = by1;
+							binfo->bz1 = bz1;
 
-								BBox dbox(Point(dx0, dy0, dz0), Point(dx1, dy1, dz1));
+							ox = ii - (mx2 - mx);
+							oy = jj - (my2 - my);
+							oz = kk - (mz2 - mz);
 
-								TextureBrick* b = new TextureBrick(0, 0, mx2, my2, mz2, numc, numb,
-									ox, oy, oz, mx2, my2, mz2, bbox, tbox, dbox);
-								bricks.push_back(b);
-							}
+							binfo->id = count++;
+							binfo->x_start = ox;
+							binfo->y_start = oy;
+							binfo->z_start = oz;
+							binfo->x_size = mx2;
+							binfo->y_size = my2;
+							binfo->z_size = mz2;
+
+							binfo->fsize = 0;
+							binfo->offset = 0;
+
+							if (count > lvinfo.bricks.size())
+								lvinfo.bricks.resize(count, NULL);
+
+							lvinfo.bricks[binfo->id] = binfo;
+
+							wstringstream wss;
+							wss << zcount << slash << ycount << slash << xcount;
+							lvpaths.push_back(wss.str());
+
+							xcount++;
 						}
+						ycount++;
 					}
+					zcount++;
 				}
-				*/
-				//ReadPackedBricks(child, lvinfo.bricks);
-				//ReadFilenames(child, lvinfo.filename);
-				
-				delete attr;
+				relpaths.push_back(lvpaths);
 			}
+
+			if (1 > lvinfo.filename.size())
+				lvinfo.filename.resize(1);
+			if (i + 1 > lvinfo.filename[0].size())
+				lvinfo.filename[0].resize(i + 1);
+			if (relpaths[j].size() > lvinfo.filename[0][i].size())
+				lvinfo.filename[0][i].resize(relpaths[j].size(), NULL);
+
+			for (int pid = 0; pid < relpaths[j].size(); pid++)
+			{
+				wstringstream wss2;
+				wss2 << m_dir_name << ch_dirs[i] << slash << scale_dirs[j] << slash << relpaths[j][pid];
+				FLIVR::FileLocInfo* fi = new FLIVR::FileLocInfo(wss2.str(), 0, 0, lvinfo.file_type, false);
+				lvinfo.filename[0][i][pid] = fi;
+			}
+
+			delete attr;
 		}
 	}
+
+	m_imageinfo.nFrame = 1;
+	m_imageinfo.nChannel = ch_dirs.size();
+	m_imageinfo.copyableLv = m_pyramid.size() - 1;
+
+	m_time_num = m_imageinfo.nFrame;
+	m_chan_num = m_imageinfo.nChannel;
+	m_copy_lv = m_imageinfo.copyableLv;
+
+	m_cur_time = 0;
+
+	if (m_pyramid.empty()) return;
+
+	m_xspc = m_pyramid[0].xspc;
+	m_yspc = m_pyramid[0].yspc;
+	m_zspc = m_pyramid[0].zspc;
+
+	m_x_size = m_pyramid[0].imageW;
+	m_y_size = m_pyramid[0].imageH;
+	m_slice_num = m_pyramid[0].imageD;
+
+	m_file_type = m_pyramid[0].file_type;
+
+	m_level_num = m_pyramid.size();
+	m_cur_level = 0;
+
 }
 
 DatasetAttributes* BRKXMLReader::parseDatasetMetadata(wstring jpath)

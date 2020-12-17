@@ -2773,7 +2773,8 @@ VolumeData *VRenderVulkanView::CopyLevel(VolumeData *src, int lv)
 			group->SetSyncG(src->GetSyncG());
 			group->SetSyncB(src->GetSyncB());
 		}
-
+		
+		/*
 		wxString src_name = src->GetName();
 		ReplaceVolumeData(src_name, vd_new);
 		mgr->AddVolumeData(vd_new);
@@ -2791,6 +2792,7 @@ VolumeData *VRenderVulkanView::CopyLevel(VolumeData *src, int lv)
 			tree->SetFix(fix);
 		}
 		if (swap_selection) vr_frame->OnSelection(2, m_vrv, group, vd_new);
+		*/
 	}
 
 	return vd_new;
@@ -3411,24 +3413,35 @@ void VRenderVulkanView::SetVolumeC(VolumeData* vd)
 
 void VRenderVulkanView::CalculateSingle(int type, wxString prev_group, bool add)
 {
-    bool copied = false;
+	bool copiedA = false;
+	bool copiedB = false;
+	bool copiedC = false;
 	VolumeData* vd_A = m_calculator.GetVolumeA();
+	VolumeData* vd_prevA = vd_A;
 	if (vd_A && vd_A->isBrxml())
 	{
+		vd_prevA = vd_A;
 		vd_A = CopyLevel(vd_A);
-		if (vd_A) copied = true;
+		if (vd_A)
+			copiedA = true;
 	}
 	VolumeData* vd_B = m_calculator.GetVolumeB();
+	VolumeData* vd_prevB = vd_B;
 	if (vd_B && vd_B->isBrxml())
 	{
+		vd_prevB = vd_B;
 		vd_B = CopyLevel(vd_B);
-		if (vd_B) copied = true;
+		if (vd_B) 
+			copiedB = true;
 	}
 	VolumeData* vd_C = m_calculator.GetVolumeC();
+	VolumeData* vd_prevC = vd_C;
 	if (vd_C && vd_C->isBrxml())
 	{
+		vd_prevC = vd_C;
 		vd_C = CopyLevel(vd_C);
-		if (vd_C) copied = true;
+		if (vd_C)
+			copiedC = true;
 	}
 	m_calculator.SetVolumeA(vd_A);
 	m_calculator.SetVolumeB(vd_B);
@@ -3438,26 +3451,26 @@ void VRenderVulkanView::CalculateSingle(int type, wxString prev_group, bool add)
 	VolumeData* vd = m_calculator.GetResult();
 	if (vd)
 	{
-		if (type==1 ||
-			type==2 ||
-			type==3 ||
-			type==4 ||
-			type==5 ||
-			type==6 ||
-			type==8 ||
-			type==9 ||
-			type==10 ||
-			type==11)
+		if (type == 1 ||
+			type == 2 ||
+			type == 3 ||
+			type == 4 ||
+			type == 5 ||
+			type == 6 ||
+			type == 8 ||
+			type == 9 ||
+			type == 10 ||
+			type == 11)
 		{
 			VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 			if (vr_frame)
 			{
 				//copy 2d adjust & color
 				VolumeData* vd_a = m_calculator.GetVolumeA();
-				if(vd_a)
+				if (vd_a)
 				{
 					//clipping planes
-					vector<Plane*> *planes = vd_a->GetVR()?vd_a->GetVR()->get_planes():0;
+					vector<Plane*>* planes = vd_a->GetVR() ? vd_a->GetVR()->get_planes() : 0;
 					if (planes && vd->GetVR())
 						vd->GetVR()->set_planes(planes);
 					//transfer function
@@ -3495,21 +3508,24 @@ void VRenderVulkanView::CalculateSingle(int type, wxString prev_group, bool add)
 
 				if (add)
 				{
+					bool btmp = vr_frame->GetDataManager()->GetOverrideVox();
+					vr_frame->GetDataManager()->SetOverrideVox(false);
 					vr_frame->GetDataManager()->AddVolumeData(vd);
 					//vr_frame->GetDataManager()->SetVolumeDefault(vd);
 					AddVolumeData(vd, prev_group);
+					vr_frame->GetDataManager()->SetOverrideVox(btmp);
 
-					if (type==5 ||
-						type==6 ||
-						type==9)
+					if (type == 5 ||
+						type == 6 ||
+						type == 9)
 					{
 						if (vd_a)
 							vd_a->SetDisp(false);
 					}
-					else if (type==1 ||
-						type==2 ||
-						type==3 ||
-						type==4)
+					else if (type == 1 ||
+						type == 2 ||
+						type == 3 ||
+						type == 4)
 					{
 						if (vd_a)
 							vd_a->SetDisp(false);
@@ -3528,28 +3544,48 @@ void VRenderVulkanView::CalculateSingle(int type, wxString prev_group, bool add)
 						if (vd_c)
 							vd_c->SetDisp(false);
 					}
+
+					if (copiedA)
+						vd_prevA->SetDisp(vd_A->GetDisp());
+					if (copiedB)
+						vd_prevB->SetDisp(vd_B->GetDisp());
+					if (copiedC)
+						vd_prevC->SetDisp(vd_C->GetDisp());
+
 					vr_frame->UpdateTree(vd->GetName(), 2, false); //UpdateTree line1: m_tree_panel->DeleteAll(); <- buffer overrun
-					m_calculator.SetVolumeA(vd_A);
+					m_calculator.SetVolumeA(vd_prevA);
 				}
 			}
 			RefreshGL();
+
+			if (copiedA)
+				delete vd_A;
+			if (copiedB)
+				delete vd_B;
+			if (copiedC)
+				delete vd_C;
 		}
 		else if (type == 7)
 		{
 			VolumeData* vd_a = m_calculator.GetVolumeA();
 			if (vd_a)
 			{
-                wxString nm = vd_A->GetName();
+				wxString nm = vd_A->GetName();
 				ReplaceVolumeData(nm, vd_a);
 				VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 				if (vr_frame)
 					vr_frame->GetPropView()->SetVolumeData(vd_a);
 			}
 			RefreshGL();
+
+			if (copiedB)
+				delete vd_B;
+			if (copiedC)
+				delete vd_C;
 		}
 	}
 
-	if (copied)
+	if (copiedA || copiedB || copiedC)
 	{
 		RefreshGL(false, true);
 	}

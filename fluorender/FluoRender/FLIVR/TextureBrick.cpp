@@ -1303,7 +1303,8 @@ z
 	   ifstream ifs;
 	   wstring fn = finfo->cached ? finfo->cache_filename : finfo->filename;
 	   ifs.open(ws2s(fn), ios::binary);
-	   if (!ifs) return false;
+	   if (!ifs) 
+		   return false;
 //	   if (finfo->type != BRICK_FILE_TYPE_H265) 
 //	   {
 		   size_t zsize = finfo->datasize;
@@ -1428,7 +1429,7 @@ z
 		   zInfo.next_out = (Bytef *)out;
 
 		   int nErr, nOut = -1;
-		   nErr = inflateInit( &zInfo );
+		   nErr = inflateInit2( &zInfo, MAX_WBITS | 32 );
 		   if ( nErr == Z_OK ) {
 			   nErr = inflate( &zInfo, Z_FINISH );
 			   if ( nErr == Z_STREAM_END ) {

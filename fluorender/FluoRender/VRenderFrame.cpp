@@ -4845,6 +4845,8 @@ void VRenderFrame::OpenProject(wxString& filename)
 		bool bVal;
 		int iVal;
 
+		m_movie_view->DisableRendering();
+
 		//set settings for frame
 		VRenderView* vrv = 0;
 		if (fconfig.Read("views_cmb", &iVal))
@@ -4945,6 +4947,8 @@ void VRenderFrame::OpenProject(wxString& filename)
 		if (fconfig.Read("time_cur_text", &sVal))
 			m_movie_view->m_time_current_text->SetValue(sVal);
 		fconfig.Read("progress_text", &mov_prog);
+
+		m_movie_view->EnableRendering();
 	}
 
 	//brushtool diag
@@ -5321,12 +5325,12 @@ void VRenderFrame::OpenProject(wxString& filename)
 		mov_prog.ToDouble(&movcur);
 		m_mov_step.ToDouble(&movlen);
 		m_movie_view->SetProgress(movcur/movlen);
-		m_movie_view->SetRendering(movcur/movlen);
+		//m_movie_view->SetRendering(movcur/movlen);
 	}
 	else
 	{
 		m_movie_view->SetProgress(0.0);
-		m_movie_view->SetRendering(0.0);
+		//m_movie_view->SetRendering(0.0);
 	}
 
 	if (m_setting_dlg)
