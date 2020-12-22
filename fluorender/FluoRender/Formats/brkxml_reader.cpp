@@ -1422,7 +1422,7 @@ void BRKXMLReader::loadFSN5()
 							lvinfo.bricks[binfo->id] = binfo;
 
 							wstringstream wss;
-							wss << zcount << slash << ycount << slash << xcount;
+							wss << xcount << slash << ycount << slash << zcount;
 							lvpaths.push_back(wss.str());
 
 							xcount++;
@@ -1445,7 +1445,7 @@ void BRKXMLReader::loadFSN5()
 			{
 				wstringstream wss2;
 				wss2 << m_dir_name << ch_dirs[i] << slash << scale_dirs[j] << slash << relpaths[j][pid];
-				FLIVR::FileLocInfo* fi = new FLIVR::FileLocInfo(wss2.str(), 0, 0, lvinfo.file_type, false);
+				FLIVR::FileLocInfo* fi = new FLIVR::FileLocInfo(wss2.str(), 16, 0, lvinfo.file_type, false);
 				lvinfo.filename[0][i][pid] = fi;
 			}
 
@@ -1540,7 +1540,7 @@ DatasetAttributes* BRKXMLReader::parseDatasetMetadata(wstring jpath)
 		ret->m_compression = BRICK_FILE_TYPE_RAW;
 		break;
 	case 1:
-		ret->m_compression = BRICK_FILE_TYPE_ZLIB;
+		ret->m_compression = BRICK_FILE_TYPE_N5GZIP;
 		break;
 	default:
 		ret->m_compression = BRICK_FILE_TYPE_NONE;

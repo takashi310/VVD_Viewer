@@ -1354,6 +1354,7 @@ z
    {
 	   if (type == BRICK_FILE_TYPE_JPEG) return jpeg_decompressor(out, in, out_size, in_size);
 	   if (type == BRICK_FILE_TYPE_ZLIB) return zlib_decompressor(out, in, out_size, in_size);
+	   if (type == BRICK_FILE_TYPE_N5GZIP) return zlib_decompressor(out, in, out_size, in_size, true);
 	   if (type == BRICK_FILE_TYPE_H265) return h265_decompressor(out, in, out_size, in_size, w, h);
 
 	   return false;
@@ -1418,28 +1419,51 @@ z
 	   return true;
    }
 
-   bool TextureBrick::zlib_decompressor(char *out, char* in, size_t out_size, size_t in_size)
+   bool TextureBrick::zlib_decompressor(char *out, char* in, size_t out_size, size_t in_size, bool isn5)
    {
 	   try
 	   {
 		   z_stream zInfo = {0};
-		   zInfo.total_in  = zInfo.avail_in  = in_size;
-		   zInfo.total_out = zInfo.avail_out = out_size;
-		   zInfo.next_in  = (Bytef *)in;
-		   zInfo.next_out = (Bytef *)out;
+		   zInfo.avail_in = in_size;
+		   zInfo.total_in = 0;
+		   zInfo.next_in = (Bytef*)in;
 
-		   int nErr, nOut = -1;
-		   nErr = inflateInit2( &zInfo, MAX_WBITS | 32 );
-		   if ( nErr == Z_OK ) {
-			   nErr = inflate( &zInfo, Z_FINISH );
-			   if ( nErr == Z_STREAM_END ) {
-				   nOut = zInfo.total_out;
+		   if (isn5)
+		   { 
+			   zInfo.avail_out = out_size;
+			   zInfo.total_out = 0;
+			   zInfo.next_out = (Bytef*)out;
+
+			   int nErr, nOut = -1;
+			   nErr = inflateInit2(&zInfo, MAX_WBITS | 32);
+			   if (nErr == Z_OK) {
+				   nErr = inflate(&zInfo, Z_FINISH);
+				   if (nErr == Z_STREAM_END) {
+					   nOut = zInfo.total_out;
+				   }
 			   }
+			   inflateEnd(&zInfo);
+			   if (nOut != out_size || nErr != Z_STREAM_END)
+				   return false;
 		   }
-		   inflateEnd( &zInfo );
+		   else
+		   {
+			   zInfo.avail_out = out_size;
+			   zInfo.total_out = 0;
+			   zInfo.next_out = (Bytef*)out;
 
-		   if (nOut != out_size || nErr != Z_STREAM_END)
-			   return false;
+			   int nErr, nOut = -1;
+			   nErr = inflateInit(&zInfo);
+			   if (nErr == Z_OK) {
+				   nErr = inflate(&zInfo, Z_FINISH);
+				   if (nErr == Z_STREAM_END) {
+					   nOut = zInfo.total_out;
+				   }
+			   }
+			   inflateEnd(&zInfo);
+			   if (nOut != out_size || nErr != Z_STREAM_END)
+				   return false;
+		   }
 	   }
 	   catch (std::exception &e)
 	   {
