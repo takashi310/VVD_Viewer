@@ -176,6 +176,8 @@ class EXPORT_API RecorderDlg : public wxPanel
       //delete all keys
       wxButton *m_del_all_btn;
 
+      wxCheckBox* m_vol_record_chk;
+
    private:
       //insert/append key
       void InsertKey(int index, double duration, int interpolation);

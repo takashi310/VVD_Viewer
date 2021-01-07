@@ -7075,6 +7075,41 @@ void VRenderVulkanView::SetParams(double t)
 		if (interpolator->GetDouble(keycode, t, val))
 			plane->ChangePlane(Point(0.0, 0.0, abs(val)),
 			Vector(0.0, 0.0, -1.0));
+
+		keycode.l2 = 0;
+		keycode.l2_name = "gamma";
+		if (interpolator->GetDouble(keycode, t, val))
+			vd->Set3DGamma(val);
+
+		keycode.l2 = 0;
+		keycode.l2_name = "saturation";
+		if (interpolator->GetDouble(keycode, t, val))
+			vd->SetOffset(val);
+
+		keycode.l2 = 0;
+		keycode.l2_name = "luminance";
+		if (interpolator->GetDouble(keycode, t, val))
+			vd->SetLuminance(val);
+
+		keycode.l2 = 0;
+		keycode.l2_name = "alpha";
+		if (interpolator->GetDouble(keycode, t, val))
+			vd->SetAlpha(val);
+
+		keycode.l2 = 0;
+		keycode.l2_name = "boundary";
+		if (interpolator->GetDouble(keycode, t, val))
+			vd->SetBoundary(val);
+
+		keycode.l2 = 0;
+		keycode.l2_name = "left_threshold";
+		if (interpolator->GetDouble(keycode, t, val))
+			vd->SetLeftThresh(val);
+
+		keycode.l2 = 0;
+		keycode.l2_name = "right_threshold";
+		if (interpolator->GetDouble(keycode, t, val))
+			vd->SetRightThresh(val);
 	}
 /*
 	//t

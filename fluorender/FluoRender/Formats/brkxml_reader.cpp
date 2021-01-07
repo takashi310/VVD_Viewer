@@ -121,6 +121,8 @@ void BRKXMLReader::SetFile(string &file)
 #endif
       m_data_name = m_path_name.substr(m_path_name.find_last_of(slash)+1);
 	  m_dir_name = m_path_name.substr(0, m_path_name.find_last_of(slash)+1);
+	  if (m_dir_name.size() > 1)
+		  m_data_name = m_dir_name.substr(m_dir_name.substr(0, m_dir_name.size()-1).find_last_of(slash)+1);
    }
    m_id_string = m_path_name;
 }
@@ -137,6 +139,8 @@ void BRKXMLReader::SetFile(wstring &file)
 #endif
    m_data_name = m_path_name.substr(m_path_name.find_last_of(slash)+1);
    m_dir_name = m_path_name.substr(0, m_path_name.find_last_of(slash)+1);
+   if (m_dir_name.size() > 1)
+	   m_data_name = m_dir_name.substr(m_dir_name.substr(0, m_dir_name.size() - 1).find_last_of(slash)+1);
    m_id_string = m_path_name;
 }
 
