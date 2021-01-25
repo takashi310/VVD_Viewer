@@ -51,7 +51,21 @@ bool DnDFile::OnDropFiles(wxCoord x, wxCoord y, const wxArrayString &filenames)
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 		if (vr_frame)
 		{
-			wxString filename = filenames[0];
+            wxArrayString flatfns;
+            for (auto fn : filenames)
+            {
+                if (wxDirExists(fn))
+                {
+                    wxArrayString list;
+                    wxDir::GetAllFiles(fn, &list, wxEmptyString, wxDIR_FILES);
+                    for (auto fn2 : list)
+                        flatfns.Add(fn2);
+                }
+                else
+                    flatfns.Add(fn);
+            }
+            
+			wxString filename = flatfns[0];
 			wxString suffix = filename.Mid(filename.Find('.', true)).MakeLower();
 
 			if (suffix == ".vrp")
@@ -74,13 +88,15 @@ bool DnDFile::OnDropFiles(wxCoord x, wxCoord y, const wxArrayString &filenames)
 				suffix == ".h5j" ||
 				suffix == ".v3dpbd" ||
 				suffix == ".zip" ||
-				suffix == ".idi")
+				suffix == ".idi" ||
+                suffix == ".n5" ||
+                suffix == ".json")
 			{
-				vr_frame->LoadVolumes(filenames, (VRenderView*)m_view);
+				vr_frame->LoadVolumes(flatfns, (VRenderView*)m_view);
 			}
 			else if (suffix == ".obj" || suffix == ".swc")
 			{
-				vr_frame->LoadMeshes(filenames, (VRenderView*)m_view);
+				vr_frame->LoadMeshes(flatfns, (VRenderView*)m_view);
 			}
 		}
 	}

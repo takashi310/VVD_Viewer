@@ -1885,14 +1885,139 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 				}
 				else
 				{
-					writer->SetData(vlnrrd);
-					writer->SetSpacings(spcx, spcy, spcz);
-					writer->SetCompression(compress);
-					writer->Save(filename.ToStdWstring(), mode);
+                    if (m_tex->nmask() != -1 && save_msk && GetMaskHideMode() != VOL_MASK_HIDE_NONE)
+                    {
+                        wxProgressDialog *prg_diag = new wxProgressDialog(
+                                                                          "FluoRender: Saving volume data...",
+                                                                          "Saving volume data. Please wait.",
+                                                                          100, 0, wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);
+                        
+                        m_vr->return_mask();
+                        auto vlnrrd_msk = m_tex->get_nrrd(m_tex->nmask());
+                        uint8 *mskdata = (uint8*)vlnrrd_msk->getNrrd()->data;
+                        
+                        Nrrd* baked_data = nrrdNew();
+                        
+                        //process the data
+                        int bits = data->type==nrrdTypeUShort?16:8;
+                        int nx = int(data->axis[0].size);
+                        int ny = int(data->axis[1].size);
+                        int nz = int(data->axis[2].size);
+                        
+                        //clipping planes
+                        vector<Plane*> *planes = m_vr->get_planes();
+                        
+                        Nrrd* segmented_data = nrrdNew();
+                        if (bits == 8)
+                        {
+                            unsigned long long mem_size = (unsigned long long)nx*
+                            (unsigned long long)ny*(unsigned long long)nz;
+                            uint8 *val8 = new (std::nothrow) uint8[mem_size];
+                            if (!val8)
+                            {
+                                wxMessageBox("Not enough memory. Please save project and restart.");
+                                return;
+                            }
+                            //transfer function
+                            for (int i=0; i<nx; i++)
+                            {
+                                prg_diag->Update(95*(i+1)/nx);
+                                for (int j=0; j<ny; j++)
+                                    for (int k=0; k<nz; k++)
+                                    {
+                                        int index = nx*ny*k + nx*j + i;
+                                        bool clipped = false;
+                                        Point p(double(i) / double(nx),
+                                                double(j) / double(ny),
+                                                double(k) / double(nz));
+                                        for (int pi = 0; pi < 6; ++pi)
+                                        {
+                                            if ((*planes)[pi] &&
+                                                (*planes)[pi]->eval_point(p) < 0.0)
+                                            {
+                                                val8[index] = 0;
+                                                clipped = true;
+                                            }
+                                        }
+                                        
+                                        if (!clipped && mskdata[index] >= 128)
+                                        {
+                                            double new_value = GetTransferedValue(i, j, k);
+                                            val8[index] = uint8(new_value*255.0);
+                                        }
+                                    }
+                            }
+                            nrrdWrap(baked_data, val8, nrrdTypeUChar, 3, (size_t)nx, (size_t)ny, (size_t)nz);
+                        }
+                        else if (bits == 16)
+                        {
+                            unsigned long long mem_size = (unsigned long long)nx*
+                            (unsigned long long)ny*(unsigned long long)nz;
+                            uint16 *val16 = new (std::nothrow) uint16[mem_size];
+                            if (!val16)
+                            {
+                                wxMessageBox("Not enough memory. Please save project and restart.");
+                                return;
+                            }
+                            //transfer function
+                            for (int i=0; i<nx; i++)
+                            {
+                                prg_diag->Update(95*(i+1)/nx);
+                                for (int j=0; j<ny; j++)
+                                    for (int k=0; k<nz; k++)
+                                    {
+                                        int index = nx*ny*k + nx*j + i;
+                                        bool clipped = false;
+                                        Point p(double(i) / double(nx),
+                                                double(j) / double(ny),
+                                                double(k) / double(nz));
+                                        for (int pi = 0; pi < 6; ++pi)
+                                        {
+                                            if ((*planes)[pi] &&
+                                                (*planes)[pi]->eval_point(p) < 0.0)
+                                            {
+                                                val16[index] = 0;
+                                                clipped = true;
+                                            }
+                                        }
+                                        if (!clipped && mskdata[index] >= 128)
+                                        {
+                                            double new_value = GetTransferedValue(i, j, k);
+                                            val16[index] = uint16(new_value*65535.0);
+                                        }
+                                    }
+                            }
+                            nrrdWrap(baked_data, val16, nrrdTypeUShort, 3, (size_t)nx, (size_t)ny, (size_t)nz);
+                        }
+                        nrrdAxisInfoSet(baked_data, nrrdAxisInfoSpacing, spcx, spcy, spcz);
+                        nrrdAxisInfoSet(baked_data, nrrdAxisInfoMax, spcx*nx, spcy*ny, spcz*nz);
+                        nrrdAxisInfoSet(baked_data, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
+                        nrrdAxisInfoSet(baked_data, nrrdAxisInfoSize, (size_t)nx, (size_t)ny, (size_t)nz);
+                        
+                        auto baked_vlnrrd = make_shared<VL_Nrrd>(baked_data);
+                        writer->SetData(baked_vlnrrd);
+                        writer->SetSpacings(spcx, spcy, spcz);
+                        writer->SetCompression(compress);
+                        writer->Save(filename.ToStdWstring(), mode);
+                        
+                        prg_diag->Update(100);
+                        delete prg_diag;
+                    }
+                    else {
+                        writer->SetData(vlnrrd);
+                        writer->SetSpacings(spcx, spcy, spcz);
+                        writer->SetCompression(compress);
+                        writer->Save(filename.ToStdWstring(), mode);
+                    }
 				}
 			}
 			else
 			{
+                wxProgressDialog *prg_diag = new wxProgressDialog(
+                                                                  "FluoRender: Saving volume data...",
+                                                                  "Saving volume data. Please wait.",
+                                                                  100, 0, wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);
+                
 				int curlv = -1;
 				curlv = GetLevel();
 				int tarlv = 0;
@@ -1937,8 +2062,13 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 				if (!check)
 				{
 					int bid = 0;
+                    int layernum = bricknum_layer.size();
+                    int cur_layer = 0;
 					for (auto layercount : bricknum_layer)
 					{
+                        prg_diag->Update(95*(cur_layer+1)/layernum);
+                        cur_layer++;
+                        
 						vector<VolumeLoaderData> queues;
 						vector<TextureBrick*> lbs;
 						long long req_mem = 0;
@@ -2007,6 +2137,9 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 
 				m_tex->set_sort_bricks();
 				SetLevel(curlv);
+                
+                prg_diag->Update(100);
+                delete prg_diag;
 			}
 		}
 		delete writer;

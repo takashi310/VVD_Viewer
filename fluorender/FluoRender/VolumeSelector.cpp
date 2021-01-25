@@ -184,16 +184,40 @@ void VolumeSelector::Select(double radius)
 		m_mode==3 ||*/
 		m_mode==4)
 	{
+        auto st_time = GET_TICK_COUNT();
+        wxProgressDialog* prog_diag = nullptr;
+        
 		//loop for growing
 		int iter = m_iter_num*(radius/20.0>1.0?radius/20.0:1.0);
 		for (int i=0; i<iter; i++)
+        {
 			m_vd->DrawMask(1, m_mode, 0, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0, ext_msk);
+            auto rn_time = GET_TICK_COUNT();
+            if (!prog_diag && rn_time - st_time > 3000)
+            {
+                prog_diag = new wxProgressDialog(
+                                "VVDViewer: Diffuse brush",
+                                 "Processing... Please wait.",
+                                 100, 0,
+                                 wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE|wxPD_APP_MODAL|wxPD_CAN_ABORT);
+            }
+            if (prog_diag)
+            {
+                if (!prog_diag->Update(95*(i+1)/iter))
+                    break;
+            }
+        }
 		/*if (m_vd->GetVR() && m_vd->GetBrickNum() > 1) {
 			m_vd->GetVR()->return_mask();
 			m_vd->GetVR()->clear_tex_current_mask();
 			for (int i = 0; i < iter; i++)
 				m_vd->DrawMask(1, m_mode, 0, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0);
 		}*/
+        if (prog_diag)
+        {
+            prog_diag->Update(100);
+            delete prog_diag;
+        }
 	}
 
 	if (m_mode == 6)
