@@ -1532,7 +1532,7 @@ DatasetAttributes* BRKXMLReader::parseDatasetMetadata(wstring jpath)
 			ret->m_compression = 1;
         else if (cptype == "bzip2")
 			ret->m_compression = 2;
-        else if (cptype == "lz4")
+        else if (cptype == "lz4" || cptype == "blosc")
 			ret->m_compression = 3;
         else if (cptype == "xz")
 			ret->m_compression = 4;
@@ -1545,6 +1545,9 @@ DatasetAttributes* BRKXMLReader::parseDatasetMetadata(wstring jpath)
 		break;
 	case 1:
 		ret->m_compression = BRICK_FILE_TYPE_N5GZIP;
+		break;
+	case 3:
+		ret->m_compression = BRICK_FILE_TYPE_LZ4;
 		break;
 	default:
 		ret->m_compression = BRICK_FILE_TYPE_NONE;

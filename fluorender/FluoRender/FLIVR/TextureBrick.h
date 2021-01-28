@@ -75,6 +75,7 @@ namespace FLIVR {
 #define BRICK_FILE_TYPE_ZLIB	3
 #define BRICK_FILE_TYPE_H265	4
 #define BRICK_FILE_TYPE_N5GZIP	5
+#define BRICK_FILE_TYPE_LZ4		6
 
 
 	class EXPORT_API VL_Nrrd
@@ -506,6 +507,7 @@ namespace FLIVR {
 		static bool jpeg_decompressor(char *out, char* in, size_t out_size, size_t in_size);
 		static bool zlib_decompressor(char *out, char* in, size_t out_size, size_t in_size, bool isn5 = false);
 		static bool h265_decompressor(char *out, char* in, size_t out_size, size_t in_size, int w, int h);
+		static bool lz4_decompressor(char* out, char* in, size_t out_size, size_t in_size);
 		static void delete_all_cache_files();
 
 		bool raw_brick_reader(char* data, size_t size, const FileLocInfo* finfo);
