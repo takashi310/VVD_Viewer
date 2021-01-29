@@ -209,7 +209,7 @@ void BRKXMLReader::Preprocess()
     wstring ext = m_path_name.substr(ext_pos+1);
     transform(ext.begin(), ext.end(), ext.begin(), towlower);
     
-    if (ext == L"n5" || ext == L"json") {
+    if (ext == L"n5" || ext == L"json" || ext == L"n5fs_ch") {
         loadFSN5();
     }
     else if (ext == L"vvd") {
@@ -1201,7 +1201,10 @@ void BRKXMLReader::build_pyramid(vector<FLIVR::Pyramid_Level> &pyramid, vector<v
 				filenames[i][j][k].resize(m_pyramid[i].filename[j][k].size());
 				for (int n = 0; n < filenames[i][j][k].size(); n++)
 				{
-					filenames[i][j][k][n] = new FLIVR::FileLocInfo(*m_pyramid[i].filename[j][k][n]);
+                    if (m_pyramid[i].filename[j][k][n])
+                        filenames[i][j][k][n] = new FLIVR::FileLocInfo(*m_pyramid[i].filename[j][k][n]);
+                    else
+                        filenames[i][j][k][n] = nullptr;
 				}
 			}
 		}
@@ -1227,6 +1230,11 @@ void BRKXMLReader::SetInfo()
 
 void BRKXMLReader::loadFSN5()
 {
+    size_t ext_pos = m_path_name.find_last_of(L".");
+    wstring ext = m_path_name.substr(ext_pos+1);
+    transform(ext.begin(), ext.end(), ext.begin(), towlower);
+    boost::filesystem::path file_path(m_path_name);
+    
 	boost::filesystem::path::imbue(std::locale(std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
 	boost::filesystem::path root_path(m_dir_name);
 
@@ -1244,19 +1252,24 @@ void BRKXMLReader::loadFSN5()
 		if (!jf.is_null() && jf.contains(PixelResolutionKey) && jf[PixelResolutionKey].contains(DimensionsKey))
 			pix_res = jf[PixelResolutionKey][DimensionsKey].get<vector<double>>();
 	}
-
-	directory_iterator end_itr; // default construction yields past-the-end
-
-	vector<wstring> ch_dirs;
-	std::regex chdir_pattern("^c\\d+$");
-	for (directory_iterator itr(root_path); itr != end_itr; ++itr)
-	{
-		if (is_directory(itr->status()))
-		{
-			if (regex_match(itr->path().filename().string(), chdir_pattern))
-				ch_dirs.push_back(itr->path().filename().wstring());
-		}
-	}
+    
+    directory_iterator end_itr; // default construction yields past-the-end
+    vector<wstring> ch_dirs;
+    if (file_path.extension() == ".n5fs_ch") {
+        ch_dirs.push_back((file_path.stem()).generic_wstring());
+    }
+    else
+    {
+        std::regex chdir_pattern("^c\\d+$");
+        for (directory_iterator itr(root_path); itr != end_itr; ++itr)
+        {
+            if (is_directory(itr->status()))
+            {
+                if (regex_match(itr->path().filename().string(), chdir_pattern))
+                    ch_dirs.push_back(itr->path().filename().wstring());
+            }
+        }
+    }
 
 	if (ch_dirs.empty())
 		return;
@@ -1449,7 +1462,11 @@ void BRKXMLReader::loadFSN5()
 			{
 				wstringstream wss2;
 				wss2 << m_dir_name << ch_dirs[i] << slash << scale_dirs[j] << slash << relpaths[j][pid];
-				FLIVR::FileLocInfo* fi = new FLIVR::FileLocInfo(wss2.str(), 16, 0, lvinfo.file_type, false);
+                boost::filesystem::path br_file_path(wss2.str());
+                
+                FLIVR::FileLocInfo* fi = nullptr;
+                if (boost::filesystem::exists(br_file_path))
+                    fi = new FLIVR::FileLocInfo(wss2.str(), 16, 0, lvinfo.file_type, false);
 				lvinfo.filename[0][i][pid] = fi;
 			}
 

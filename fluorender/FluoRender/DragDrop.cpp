@@ -28,6 +28,7 @@ DEALINGS IN THE SOFTWARE.
 #include "DragDrop.h"
 #include "VRenderFrame.h"
 #include "VRenderView.h"
+#include "wx/regex.h"
 
 DnDFile::DnDFile(wxWindow *frame, wxWindow *view)
 : m_frame(frame),
@@ -54,16 +55,37 @@ bool DnDFile::OnDropFiles(wxCoord x, wxCoord y, const wxArrayString &filenames)
             wxArrayString flatfns;
             for (auto fn : filenames)
             {
-                if (wxDirExists(fn))
+                wxDir dir(fn);
+                if (wxDirExists(fn) && dir.IsOpened())
                 {
-                    wxArrayString list;
-                    wxDir::GetAllFiles(fn, &list, wxEmptyString, wxDIR_FILES);
-                    for (auto fn2 : list)
-                        flatfns.Add(fn2);
+                    wxRegEx scdir_pattern("^s[0-9]+$");
+                    wxString n;
+                    
+                    bool bOk = dir.GetFirst(&n);
+                    while(bOk)
+                    {
+                        wxString fullpath = dir.GetNameWithSep() + n;
+                        if (wxDirExists(fullpath))
+                        {
+                            if (scdir_pattern.Matches(n))
+                            {
+                                if (wxFileExists(fullpath + wxFILE_SEP_PATH + "attributes.json"))
+                                {
+                                    flatfns.Add(fn + ".n5fs_ch");
+                                    break;
+                                }
+                            }
+                        }
+                        else if (wxFileExists(fullpath))
+                            flatfns.Add(fullpath);
+                    }
                 }
                 else
                     flatfns.Add(fn);
             }
+            
+            if (flatfns.IsEmpty())
+                return false;
             
 			wxString filename = flatfns[0];
 			wxString suffix = filename.Mid(filename.Find('.', true)).MakeLower();
@@ -90,7 +112,8 @@ bool DnDFile::OnDropFiles(wxCoord x, wxCoord y, const wxArrayString &filenames)
 				suffix == ".zip" ||
 				suffix == ".idi" ||
                 suffix == ".n5" ||
-                suffix == ".json")
+                suffix == ".json" ||
+                suffix == ".n5fs_ch")
 			{
 				vr_frame->LoadVolumes(flatfns, (VRenderView*)m_view);
 			}

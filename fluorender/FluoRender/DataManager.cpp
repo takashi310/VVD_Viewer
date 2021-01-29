@@ -6827,8 +6827,10 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 	wxString downloaded_filepath;
 	bool downloaded_metadata = false;
 	wxString downloaded_metadatafilepath;
+    
+    wxString suffix = filename.Mid(filename.Find('.', true)).MakeLower();
 	
-	if (!wxFileExists(pathname))
+	if (!wxFileExists(pathname) && suffix != ".n5fs_ch")
 	{
 		pathname = SearchProjectPath(filename);
 		if (!wxFileExists(pathname))
@@ -7959,7 +7961,7 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 			m_vl->m_queued.push_back(b);
 			m_vl->ms_pThreadCS->Leave();
 
-			if (!b.brick->isLoaded() && !b.brick->isLoading())
+			if (!b.brick->isLoaded() && !b.brick->isLoading() && b.finfo)
 			{
 				wstring id = b.finfo->id_string;
 				if (m_vl->m_memcached_data.find(b.finfo->id_string) != m_vl->m_memcached_data.end())

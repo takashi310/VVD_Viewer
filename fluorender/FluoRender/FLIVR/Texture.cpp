@@ -1290,48 +1290,52 @@ namespace FLIVR
 			if (nbyte == 1) {
 				unsigned char *ptr_dst = (unsigned char *)(data->data);
 				const unsigned char *ptr_src = (const unsigned char *)(*bricks)[i]->getBrickData();
-				#pragma omp parallel for
-				for (int z = 0; z < nz2; z++) {
-					for (int y = 0; y < ny2; y++) {
-						for (int x = 0; x < nx2; x++) {
-							size_t src_id = (size_t)(z+soz)*ny*nx + (size_t)(y+soy)*nx + (size_t)(x+sox);
-							size_t dst_id = (size_t)(z+doz)*h*w + (size_t)(y+doy)*w + (size_t)(x+dox);
-							if (!mask)
-								ptr_dst[dst_id] = ptr_src[src_id];
-							else {
-								size_t mx = (size_t)((x+ox2+0.5)*xscale);
-								size_t my = (size_t)((y+oy2+0.5)*yscale);
-								size_t mz = (size_t)((z+oz2+0.5)*zscale);
-								size_t mid = mz*mask_h*mask_w + my*mask_w + mx;
-								if		(mask_mode == 1) ptr_dst[dst_id] = ptr_mask[mid] > 0  ? ptr_src[src_id] : 0;
-								else if (mask_mode == 2) ptr_dst[dst_id] = ptr_mask[mid] == 0 ? ptr_src[src_id] : 0;
-							}
-						}
-					}
-				}
+                if (ptr_src) {
+				    #pragma omp parallel for
+                    for (int z = 0; z < nz2; z++) {
+                        for (int y = 0; y < ny2; y++) {
+                            for (int x = 0; x < nx2; x++) {
+                                size_t src_id = (size_t)(z+soz)*ny*nx + (size_t)(y+soy)*nx + (size_t)(x+sox);
+                                size_t dst_id = (size_t)(z+doz)*h*w + (size_t)(y+doy)*w + (size_t)(x+dox);
+                                if (!mask)
+                                    ptr_dst[dst_id] = ptr_src[src_id];
+                                else {
+                                    size_t mx = (size_t)((x+ox2+0.5)*xscale);
+                                    size_t my = (size_t)((y+oy2+0.5)*yscale);
+                                    size_t mz = (size_t)((z+oz2+0.5)*zscale);
+                                    size_t mid = mz*mask_h*mask_w + my*mask_w + mx;
+                                    if		(mask_mode == 1) ptr_dst[dst_id] = ptr_mask[mid] > 0  ? ptr_src[src_id] : 0;
+                                    else if (mask_mode == 2) ptr_dst[dst_id] = ptr_mask[mid] == 0 ? ptr_src[src_id] : 0;
+                                }
+                            }
+                        }
+                    }
+                }
 			} else if (nbyte == 2) {
 				unsigned short *ptr_dst = (unsigned short *)(data->data);
 				const unsigned short *ptr_src = (const unsigned short *)(*bricks)[i]->getBrickData();
-				#pragma omp parallel for
-				for (int z = 0; z < nz2; z++) {
-					for (int y = 0; y < ny2; y++) {
-						for (int x = 0; x < nx2; x++) {
-							size_t src_id = (size_t)(z+soz)*ny*nx + (size_t)(y+soy)*nx + (size_t)(x+sox);
-							size_t dst_id = (size_t)(z+doz)*h*w + (size_t)(y+doy)*w + (size_t)(x+dox);
-							if (!mask)
-								ptr_dst[dst_id] = ptr_src[src_id];
-							else {
-								size_t mx = (size_t)((x+ox2+0.5)*xscale);
-								size_t my = (size_t)((y+oy2+0.5)*yscale);
-								size_t mz = (size_t)((z+oz2+0.5)*zscale);
-								size_t mid = mz*mask_h*mask_w + my*mask_w + mx;
-								if		(mask_mode == 1) ptr_dst[dst_id] = ptr_mask[mid] > 0  ? ptr_src[src_id] : 0;
-								else if (mask_mode == 2) ptr_dst[dst_id] = ptr_mask[mid] == 0 ? ptr_src[src_id] : 0;
-							}
-						}
-					}
-				}
-			}
+                if (ptr_src) {
+				    #pragma omp parallel for
+                    for (int z = 0; z < nz2; z++) {
+                        for (int y = 0; y < ny2; y++) {
+                            for (int x = 0; x < nx2; x++) {
+                                size_t src_id = (size_t)(z+soz)*ny*nx + (size_t)(y+soy)*nx + (size_t)(x+sox);
+                                size_t dst_id = (size_t)(z+doz)*h*w + (size_t)(y+doy)*w + (size_t)(x+dox);
+                                if (!mask)
+                                    ptr_dst[dst_id] = ptr_src[src_id];
+                                else {
+                                    size_t mx = (size_t)((x+ox2+0.5)*xscale);
+                                    size_t my = (size_t)((y+oy2+0.5)*yscale);
+                                    size_t mz = (size_t)((z+oz2+0.5)*zscale);
+                                    size_t mid = mz*mask_h*mask_w + my*mask_w + mx;
+                                    if		(mask_mode == 1) ptr_dst[dst_id] = ptr_mask[mid] > 0  ? ptr_src[src_id] : 0;
+                                    else if (mask_mode == 2) ptr_dst[dst_id] = ptr_mask[mid] == 0 ? ptr_src[src_id] : 0;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
 			if (tmp) (*bricks)[i]->freeBrkData();
 		}

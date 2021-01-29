@@ -1130,7 +1130,7 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_LSM, -1, -1, datasize);
 			else if (suffix==".xml")
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_PVXML, -1, -1, datasize);
-			else if (suffix==".vvd" || suffix==".n5" || suffix==".json")
+			else if (suffix==".vvd" || suffix==".n5" || suffix==".json" || suffix==".n5fs_ch")
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_BRKXML, -1, -1, datasize);
 			else if (suffix == ".h5j")
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_H5J, -1, -1, datasize);
