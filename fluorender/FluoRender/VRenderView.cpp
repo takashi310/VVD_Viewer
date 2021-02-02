@@ -13460,7 +13460,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 						(*bricks)[j]->set_drawn(false);
 						if ((*bricks)[j]->get_priority()>0 ||
 							!vd->GetVR()->test_against_view_clip((*bricks)[j]->bbox(), (*bricks)[j]->tbox(), (*bricks)[j]->dbox(), m_persp) ||
-                            !tex->GetFileName((*bricks)[j]->getID()) )//changed by takashi
+                            (tex->isBrxml() && !tex->GetFileName((*bricks)[j]->getID())) )//changed by takashi
 						{
 							(*bricks)[j]->set_disp(false);
 							continue;
