@@ -78,6 +78,7 @@ bool DnDFile::OnDropFiles(wxCoord x, wxCoord y, const wxArrayString &filenames)
                         }
                         else if (wxFileExists(fullpath))
                             flatfns.Add(fullpath);
+                        bOk = dir.GetNext(&n);
                     }
                 }
                 else

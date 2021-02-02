@@ -3871,7 +3871,9 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 						if (fconfig.Read("mask", &str))
 						{
 							MSKReader msk_reader;
-							wstring maskname = str.ToStdWstring();
+                            if (!wxFileExists(str))
+                                str = m_data_mgr.SearchProjectPath(str);
+                            wstring maskname = str.ToStdWstring();
 							msk_reader.SetFile(maskname);
 							BaseReader *br = &msk_reader;
 							auto mask = br->Convert(true);
@@ -3886,6 +3888,8 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
                         if (fconfig.Read("label", &str))
                         {
                             LBLReader lbl_reader;
+                            if (!wxFileExists(str))
+                                str = m_data_mgr.SearchProjectPath(str);
                             wstring lblname = str.ToStdWstring();
                             lbl_reader.SetFile(lblname);
                             BaseReader *br = &lbl_reader;
