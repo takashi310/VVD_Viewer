@@ -1241,16 +1241,15 @@ void VMovieView::WriteFrameToFile(int total_frames) {
 	wxString outputfilename = wxString::Format("%s"+format+"%s",m_filename,
 		m_last_frame,".tif");
     //capture
-    int x, y, w, h;
+    int x, y, w, h, nx, ny;
 
-    if (m_frame_chk->GetValue())
-		vrv->GetFrame(x,y,w,h);
-    else {
-        x = 0;
-        y = 0;
-        w = vrv->GetGLSize().x;
-        h = vrv->GetGLSize().y;
-    }
+    x = 0;
+    y = 0;
+    w = vrv->GetGLSize().x;
+    h = vrv->GetGLSize().y;
+    nx = vrv->GetGLSize().x;
+    ny = vrv->GetGLSize().y;
+    
 	int chann = 4; //RGB or RGBA
 	int dst_chann = 3;
     unsigned char *image = new unsigned char[w*h*chann];
@@ -1260,25 +1259,28 @@ void VMovieView::WriteFrameToFile(int total_frames) {
 	bool colorSwizzleBGR = false;
 	std::vector<VkFormat> formatsBGR = { VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_B8G8R8A8_SNORM };
 	colorSwizzleBGR = (std::find(formatsBGR.begin(), formatsBGR.end(), texformat) != formatsBGR.end());
+    
+    if (m_frame_chk->GetValue())
+        vrv->GetFrame(x,y,w,h);
 
 	unsigned char* rgb_image = new unsigned char[w * h * dst_chann];
 
 	if (colorSwizzleBGR)
 	{
-		for (size_t y = 0; y < h; y++) {
-			for (size_t x = 0; x < w; x++) {
-				rgb_image[(y * w + x) * dst_chann + 2] = image[(y * w + x) * chann + 0];
-				rgb_image[(y * w + x) * dst_chann + 1] = image[(y * w + x) * chann + 1];
-				rgb_image[(y * w + x) * dst_chann + 0] = image[(y * w + x) * chann + 2];
+		for (size_t yy = 0; yy < h; yy++) {
+			for (size_t xx = 0; xx < w; xx++) {
+				rgb_image[(yy * w + xx) * dst_chann + 2] = image[((yy+y) * nx + xx+x) * chann + 0];
+				rgb_image[(yy * w + xx) * dst_chann + 1] = image[((yy+y) * nx + xx+x) * chann + 1];
+				rgb_image[(yy * w + xx) * dst_chann + 0] = image[((yy+y) * nx + xx+x) * chann + 2];
 			}
 		}
 	}
 	else
 	{
-		for (size_t y = 0; y < h; y++) {
-			for (size_t x = 0; x < w; x++) {
+		for (size_t yy = 0; yy < h; yy++) {
+			for (size_t xx = 0; xx < w; xx++) {
 				for (int c = 0; c < dst_chann; c++) {
-					rgb_image[(y * w + x) * dst_chann + c] = image[(y * w + x) * chann + c];
+					rgb_image[(yy * w + xx) * dst_chann + c] = image[((yy+y) * nx + xx+x)  * chann + c];
 				}
 			}
 		}

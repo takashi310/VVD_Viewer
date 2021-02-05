@@ -273,6 +273,8 @@ public:
 
 	void StartupLoad(wxArrayString files, size_t datasize = 0LL);
 	VolumeData* OpenVolumeFromProject(wxString name, wxFileConfig &fconfig);
+    void OpenVolumesFromProjectMT(wxFileConfig &fconfig, bool join);
+    void SetVolumePropertiesFromProject(wxFileConfig &fconfig);
 	MeshData* OpenMeshFromProject(wxString name, wxFileConfig &fconfig);
 	void OpenProject(wxString& filename);
 	void SaveProject(wxString& filename);
@@ -436,6 +438,8 @@ private:
 	wxApp* m_app; 
 
 	static wxCriticalSection ms_criticalSection;
+    
+    ProjectDataLoader m_project_data_loader;
 
 private:
 	//views

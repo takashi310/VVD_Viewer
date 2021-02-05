@@ -1672,6 +1672,8 @@ public:
 	bool GetPvxmlFlipX() {return m_pvxml_flip_x;}
 	void SetPvxmlFlipY(bool flip) {m_pvxml_flip_y = flip;}
 	bool GetPvxmlFlipY() {return m_pvxml_flip_y;}
+    
+    void PushReader(BaseReader* reader) { m_reader_list.push_back(reader); }
 
 public:
 	//default values
@@ -1868,6 +1870,127 @@ class EXPORT_API VolumeLoader
 
 		friend class VolumeLoaderThread;
 		friend class VolumeDecompressorThread;
+};
+
+
+class ProjectDataLoader;
+
+class ProjectDataLoaderQueue
+{
+public:
+    wxString path;
+    wxString name;
+    int ch;
+    int t;
+    bool compression;
+    bool skip_brick;
+    bool slice_seq;
+    bool time_seq;
+    wxString time_id;
+    bool load_mask;
+    wxString mskpath;
+    wxString lblpath;
+    int type;
+    
+    ProjectDataLoaderQueue(const wxString &_path, int _ch, int _t, wxString _name=wxEmptyString , bool _compression=false, bool _skip_brick=false, bool _slice_seq=false, bool _time_seq=false, wxString _time_id=wxEmptyString, bool _load_mask=true, wxString _mskpath=wxEmptyString, wxString _lblpath=wxEmptyString)
+    {
+        path = _path;
+        name = _name;
+        ch = _ch;
+        t = _t;
+        compression = _compression;
+        skip_brick = _skip_brick;
+        slice_seq = _slice_seq;
+        time_seq = _time_seq;
+        time_id = _time_id;
+        load_mask = _load_mask;
+        mskpath = _mskpath;
+        lblpath = _lblpath;
+        
+        wxString suffix = path.Mid(path.Find('.', true)).MakeLower();
+        if (suffix == ".nrrd")
+            type = LOAD_TYPE_NRRD;
+        else if (suffix == ".tif"||suffix == ".tiff"||suffix == ".zip")
+            type = LOAD_TYPE_TIFF;
+        else if (suffix == ".oib")
+            type = LOAD_TYPE_OIB;
+        else if (suffix == ".oif")
+            type = LOAD_TYPE_OIF;
+        else if (suffix == ".lsm")
+            type = LOAD_TYPE_LSM;
+        else if (suffix == ".xml")
+            type = LOAD_TYPE_PVXML;
+        else if (suffix == ".vvd" || suffix == ".n5" || suffix == ".json")
+            type = LOAD_TYPE_BRKXML;
+        else if (suffix == ".h5j")
+            type = LOAD_TYPE_H5J;
+        else if (suffix == ".v3dpbd")
+            type = LOAD_TYPE_V3DPBD;
+        else if (suffix == ".idi")
+            type = LOAD_TYPE_IDI;
+    }
+    
+    ProjectDataLoaderQueue(const ProjectDataLoaderQueue &copy)
+    {
+        path = copy.path;
+        name = copy.name;
+        ch = copy.ch;
+        t = copy.t;
+        compression = copy.compression;
+        skip_brick = copy.skip_brick;
+        slice_seq = copy.slice_seq;
+        time_seq = copy.time_seq;
+        time_id = copy.time_id;
+        load_mask = copy.load_mask;
+        mskpath = copy.mskpath;
+        lblpath = copy.lblpath;
+        type = copy.type;
+    }
+    
+};
+
+class EXPORT_API ProjectDataLoaderThread : public wxThread
+{
+public:
+    ProjectDataLoaderThread(ProjectDataLoader *pdl);
+    ~ProjectDataLoaderThread();
+    
+protected:
+    virtual ExitCode Entry();
+    ProjectDataLoader *m_pdl;
+};
+
+class EXPORT_API ProjectDataLoader
+{
+public:
+    ProjectDataLoader();
+    ~ProjectDataLoader();
+    void Queue(ProjectDataLoaderQueue path);
+    void ClearQueues();
+    void Set(vector<ProjectDataLoaderQueue> &queues);
+    void Join();
+    bool Run();
+    void GetPalams(long long &used_mem, int &running_decomp_th, int &queue_num, int &decomp_queue_num);
+    void SetMaxThreadNum(int num) {m_max_th = num;}
+    int GetMaxThreadNum() { return m_max_th;}
+    int GetProgress() { return m_progress; }
+    void SetDataManager(DataManager *dm) { m_dm = dm; }
+    bool IsRunning() { return m_running_th > 0; }
+    
+    static void setCriticalSection(wxCriticalSection* crtsec) { ms_pThreadCS = crtsec; }
+    
+protected:
+    vector<ProjectDataLoaderQueue> m_queues;
+    vector<ProjectDataLoaderQueue> m_queued;
+    DataManager *m_dm;
+    int m_running_th;
+    int m_max_th;
+    int m_queue_count;
+    int m_progress;
+    
+    static wxCriticalSection* ms_pThreadCS;
+    
+    friend class ProjectDataLoaderThread;
 };
 
 

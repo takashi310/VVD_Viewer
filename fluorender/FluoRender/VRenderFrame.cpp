@@ -3919,6 +3919,431 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 	return vd;
 }
 
+void VRenderFrame::OpenVolumesFromProjectMT(wxFileConfig &fconfig, bool join)
+{
+    wxString tmp_path = fconfig.GetPath();
+    fconfig.SetPath("/");
+    
+    wxString ver_major, ver_minor;
+    long l_major, l_minor;
+    l_major = 1;
+    if (fconfig.Read("ver_major", &ver_major) &&
+        fconfig.Read("ver_minor", &ver_minor))
+    {
+        ver_major.ToLong(&l_major);
+        ver_minor.ToLong(&l_minor);
+    }
+    
+    vector<ProjectDataLoaderQueue> queues;
+    
+    if (fconfig.Exists("/data/volume"))
+    {
+        fconfig.SetPath("/data/volume");
+        int num = fconfig.Read("num", 0l);
+        for (int i=0; i<num; i++)
+        {
+            wxString str;
+            str = wxString::Format("/data/volume/%d", i);
+            if (fconfig.Exists(str))
+            {
+                fconfig.SetPath(str);
+                if (!fconfig.Read("name", &str))
+                    continue;
+                wxString name = str;
+                
+                bool compression = false;
+                fconfig.Read("compression", &compression);
+                bool skip_brick = false;
+                fconfig.Read("skip_brick", &skip_brick);
+                //path
+                if (fconfig.Read("path", &str))
+                {
+                    wxString filepath = str;
+                    int cur_chan = 0;
+                    if (!fconfig.Read("cur_chan", &cur_chan))
+                        if (fconfig.Read("tiff_chan", &cur_chan))
+                            cur_chan--;
+                    int cur_time = 0;
+                    //fconfig.Read("cur_time", &cur_time);
+                    bool slice_seq = 0;
+                    fconfig.Read("slice_seq", &slice_seq);
+                    bool time_seq = 0;
+                    fconfig.Read("time_seq", &time_seq);
+                    wxString time_id;
+                    fconfig.Read("time_id", &time_id);
+                    
+                    wxString mskpath;
+                    wxString lblpath;
+                    if (fconfig.Exists("properties"))
+                    {
+                        fconfig.SetPath("properties");
+                        fconfig.Read("mask", &mskpath);
+                        fconfig.Read("label", &lblpath);
+                    }
+                    
+                    
+                    ProjectDataLoaderQueue queue(filepath,
+                                                 cur_chan,
+                                                 cur_time,
+                                                 name,
+                                                 compression,
+                                                 skip_brick,
+                                                 slice_seq,
+                                                 time_seq,
+                                                 time_id,
+                                                 m_load_mask,
+                                                 mskpath,
+                                                 lblpath);
+                    queues.push_back(queue);
+                }
+            }
+        }
+    }
+    
+    if (!queues.empty())
+    {
+        m_project_data_loader.Set(queues);
+        m_project_data_loader.Run();
+        if (join)
+            m_project_data_loader.Join();
+    }
+    
+    fconfig.SetPath(tmp_path);
+    return;
+}
+
+void VRenderFrame::SetVolumePropertiesFromProject(wxFileConfig &fconfig)
+{
+    int iVal;
+    VolumeData *vd = NULL;
+    
+    wxString tmp_path = fconfig.GetPath();
+    fconfig.SetPath("/");
+    
+    wxString ver_major, ver_minor;
+    long l_major, l_minor;
+    l_major = 1;
+    if (fconfig.Read("ver_major", &ver_major) &&
+        fconfig.Read("ver_minor", &ver_minor))
+    {
+        ver_major.ToLong(&l_major);
+        ver_minor.ToLong(&l_minor);
+    }
+    
+    if (fconfig.Exists("/data/volume"))
+    {
+        fconfig.SetPath("/data/volume");
+        int num = fconfig.Read("num", 0l);
+        for (int i=0; i<num; i++)
+        {
+            wxString str;
+            str = wxString::Format("/data/volume/%d", i);
+            if (fconfig.Exists(str))
+            {
+                fconfig.SetPath(str);
+                
+                wxString name;
+                if (!fconfig.Read("name", &name))
+                    continue;
+
+                vd = m_data_mgr.GetVolumeData(name);
+                if (vd)
+                {
+                    //volume properties
+                    if (fconfig.Exists("properties"))
+                    {
+                        fconfig.SetPath("properties");
+                        bool disp;
+                        if (fconfig.Read("display", &disp))
+                            vd->SetDisp(disp);
+                        
+                        //old colormap
+                        if (fconfig.Read("widget", &str))
+                        {
+                            int type;
+                            float left_x, left_y, width, height, offset1, offset2, gamma;
+                            wchar_t token[256];
+                            token[255] = '\0';
+                            const wchar_t* sstr = str.wc_str();
+                            std::wstringstream ss(sstr);
+                            ss.read(token,255);
+                            wchar_t c = 'x';
+                            while(!isspace(c)) ss.read(&c,1);
+                            ss >> type >> left_x >> left_y >> width >>
+                            height >> offset1 >> offset2 >> gamma;
+                            vd->Set3DGamma(gamma);
+                            vd->SetBoundary(left_y);
+                            vd->SetOffset(offset1);
+                            vd->SetLeftThresh(left_x);
+                            vd->SetRightThresh(left_x+width);
+                            if (fconfig.Read("widgetcolor", &str))
+                            {
+                                float red, green, blue;
+                                if (SSCANF(str.c_str(), "%f%f%f", &red, &green, &blue)){
+                                    FLIVR::Color col(red,green,blue);
+                                    vd->SetColor(col);
+                                }
+                            }
+                            double alpha;
+                            if (fconfig.Read("widgetalpha", &alpha))
+                                vd->SetAlpha(alpha);
+                        }
+                        
+                        //transfer function
+                        double dval;
+                        bool bval;
+                        if (fconfig.Read("3dgamma", &dval))
+                            vd->Set3DGamma(dval);
+                        if (fconfig.Read("boundary", &dval))
+                            vd->SetBoundary(dval);
+                        if (fconfig.Read("contrast", &dval))
+                            vd->SetOffset(dval);
+                        if (fconfig.Read("left_thresh", &dval))
+                            vd->SetLeftThresh(dval);
+                        if (fconfig.Read("right_thresh", &dval))
+                            vd->SetRightThresh(dval);
+                        if (fconfig.Read("color", &str))
+                        {
+                            float red, green, blue;
+                            if (SSCANF(str.c_str(), "%f%f%f", &red, &green, &blue)){
+                                FLIVR::Color col(red,green,blue);
+                                vd->SetColor(col);
+                            }
+                        }
+                        if (fconfig.Read("hsv", &str))
+                        {
+                            float hue, sat, val;
+                            if (SSCANF(str.c_str(), "%f%f%f", &hue, &sat, &val))
+                                vd->SetHSV(hue, sat, val);
+                        }
+                        if (fconfig.Read("mask_color", &str))
+                        {
+                            float red, green, blue;
+                            if (SSCANF(str.c_str(), "%f%f%f", &red, &green, &blue)){
+                                FLIVR::Color col(red,green,blue);
+                                if (fconfig.Read("mask_color_set", &bval))
+                                    vd->SetMaskColor(col, bval);
+                                else
+                                    vd->SetMaskColor(col);
+                            }
+                        }
+                        if (fconfig.Read("enable_alpha", &bval))
+                            vd->SetEnableAlpha(bval);
+                        if (fconfig.Read("alpha", &dval))
+                            vd->SetAlpha(dval);
+                        
+                        //shading
+                        double amb, diff, spec, shine;
+                        if (fconfig.Read("ambient", &amb)&&
+                            fconfig.Read("diffuse", &diff)&&
+                            fconfig.Read("specular", &spec)&&
+                            fconfig.Read("shininess", &shine))
+                            vd->SetMaterial(amb, diff, spec, shine);
+                        bool shading;
+                        if (fconfig.Read("shading", &shading))
+                            vd->SetShading(shading);
+                        double srate;
+                        if (fconfig.Read("samplerate", &srate))
+                        {
+                            if (l_major<2)
+                                vd->SetSampleRate(srate/5.0);
+                            else
+                                vd->SetSampleRate(srate);
+                        }
+                        
+                        //spacings and scales
+                        if (!vd->isBrxml())
+                        {
+                            if (fconfig.Read("res", &str))
+                            {
+                                double resx, resy, resz;
+                                if (SSCANF(str.c_str(), "%lf%lf%lf", &resx, &resy, &resz))
+                                    vd->SetSpacings(resx, resy, resz);
+                            }
+                        }
+                        else
+                        {
+                            if (fconfig.Read("b_res", &str))
+                            {
+                                double b_resx, b_resy, b_resz;
+                                if (SSCANF(str.c_str(), "%lf%lf%lf", &b_resx, &b_resy, &b_resz))
+                                    vd->SetBaseSpacings(b_resx, b_resy, b_resz);
+                            }
+                            if (fconfig.Read("s_res", &str))
+                            {
+                                double s_resx, s_resy, s_resz;
+                                if (SSCANF(str.c_str(), "%lf%lf%lf", &s_resx, &s_resy, &s_resz))
+                                    vd->SetSpacingScales(s_resx, s_resy, s_resz);
+                            }
+                        }
+                        if (fconfig.Read("scl", &str))
+                        {
+                            double sclx, scly, sclz;
+                            if (SSCANF(str.c_str(), "%lf%lf%lf", &sclx, &scly, &sclz))
+                                vd->SetScalings(sclx, scly, sclz);
+                        }
+                        
+                        vector<Plane*> *planes = 0;
+                        if (vd->GetVR())
+                            planes = vd->GetVR()->get_planes();
+                        int iresx, iresy, iresz;
+                        vd->GetResolution(iresx, iresy, iresz);
+                        if (planes && planes->size()==6)
+                        {
+                            double val;
+                            wxString splane;
+                            
+                            //x1
+                            if (fconfig.Read("x1_vali", &val))
+                                (*planes)[0]->ChangePlane(Point(abs(val/iresx), 0.0, 0.0),
+                                                          Vector(1.0, 0.0, 0.0));
+                            else if (fconfig.Read("x1_val", &val))
+                                (*planes)[0]->ChangePlane(Point(abs(val), 0.0, 0.0),
+                                                          Vector(1.0, 0.0, 0.0));
+                            
+                            //x2
+                            if (fconfig.Read("x2_vali", &val))
+                                (*planes)[1]->ChangePlane(Point(abs(val/iresx), 0.0, 0.0),
+                                                          Vector(-1.0, 0.0, 0.0));
+                            else if (fconfig.Read("x2_val", &val))
+                                (*planes)[1]->ChangePlane(Point(abs(val), 0.0, 0.0),
+                                                          Vector(-1.0, 0.0, 0.0));
+                            
+                            //y1
+                            if (fconfig.Read("y1_vali", &val))
+                                (*planes)[2]->ChangePlane(Point(0.0, abs(val/iresy), 0.0),
+                                                          Vector(0.0, 1.0, 0.0));
+                            else if (fconfig.Read("y1_val", &val))
+                                (*planes)[2]->ChangePlane(Point(0.0, abs(val), 0.0),
+                                                          Vector(0.0, 1.0, 0.0));
+                            
+                            //y2
+                            if (fconfig.Read("y2_vali", &val))
+                                (*planes)[3]->ChangePlane(Point(0.0, abs(val/iresy), 0.0),
+                                                          Vector(0.0, -1.0, 0.0));
+                            else if (fconfig.Read("y2_val", &val))
+                                (*planes)[3]->ChangePlane(Point(0.0, abs(val), 0.0),
+                                                          Vector(0.0, -1.0, 0.0));
+                            
+                            //z1
+                            if (fconfig.Read("z1_vali", &val))
+                                (*planes)[4]->ChangePlane(Point(0.0, 0.0, abs(val/iresz)),
+                                                          Vector(0.0, 0.0, 1.0));
+                            else if (fconfig.Read("z1_val", &val))
+                                (*planes)[4]->ChangePlane(Point(0.0, 0.0, abs(val)),
+                                                          Vector(0.0, 0.0, 1.0));
+                            
+                            //z2
+                            if (fconfig.Read("z2_vali", &val))
+                                (*planes)[5]->ChangePlane(Point(0.0, 0.0, abs(val/iresz)),
+                                                          Vector(0.0, 0.0, -1.0));
+                            else if (fconfig.Read("z2_val", &val))
+                                (*planes)[5]->ChangePlane(Point(0.0, 0.0, abs(val)),
+                                                          Vector(0.0, 0.0, -1.0));
+                        }
+                        
+                        //2d adjustment settings
+                        if (fconfig.Read("gamma", &str))
+                        {
+                            float r, g, b;
+                            if (SSCANF(str.c_str(), "%f%f%f", &r, &g, &b)){
+                                FLIVR::Color col(r,g,b);
+                                vd->SetGamma(col);
+                            }
+                        }
+                        if (fconfig.Read("brightness", &str))
+                        {
+                            float r, g, b;
+                            if (SSCANF(str.c_str(), "%f%f%f", &r, &g, &b)){
+                                FLIVR::Color col(r,g,b);
+                                vd->SetBrightness(col);
+                            }
+                        }
+                        if (fconfig.Read("hdr", &str))
+                        {
+                            float r, g, b;
+                            if (SSCANF(str.c_str(), "%f%f%f", &r, &g, &b)){
+                                FLIVR::Color col(r,g,b);
+                                vd->SetHdr(col);
+                            }
+                        }
+                        bool bVal;
+                        if (fconfig.Read("sync_r", &bVal))
+                            vd->SetSyncR(bVal);
+                        if (fconfig.Read("sync_g", &bVal))
+                            vd->SetSyncG(bVal);
+                        if (fconfig.Read("sync_b", &bVal))
+                            vd->SetSyncB(bVal);
+                        
+                        //colormap settings
+                        if (fconfig.Read("colormap_mode", &iVal))
+                            vd->SetColormapMode(iVal);
+                        if (fconfig.Read("colormap", &iVal))
+                            vd->SetColormap(iVal);
+                        double low, high;
+                        if (fconfig.Read("colormap_lo_value", &low) &&
+                            fconfig.Read("colormap_hi_value", &high))
+                        {
+                            vd->SetColormapValues(low, high);
+                        }
+                        if (fconfig.Read("id_color_disp_mode", &iVal))
+                            vd->SetIDColDispMode(iVal);
+                        
+                        //inversion
+                        if (fconfig.Read("inv", &bVal))
+                            vd->SetInvert(bVal);
+                        //mip enable
+                        if (fconfig.Read("mode", &iVal))
+                            vd->SetMode(iVal);
+                        //noise reduction
+                        if (fconfig.Read("noise_red", &bVal))
+                            vd->SetNR(bVal);
+                        //depth override
+                        if (fconfig.Read("depth_ovrd", &iVal))
+                            vd->SetBlendMode(iVal);
+                        
+                        //shadow
+                        if (fconfig.Read("shadow", &bVal))
+                            vd->SetShadow(bVal);
+                        //shaodw intensity
+                        if (fconfig.Read("shadow_darkness", &dval))
+                            vd->SetShadowParams(dval);
+                        
+                        //legend
+                        if (fconfig.Read("legend", &bVal))
+                            vd->SetLegend(bVal);
+                        
+                        //roi
+                        if (fconfig.Read("roi_tree", &str))
+                            vd->ImportROITree(str.ToStdWstring());
+                        if (fconfig.Read("selected_rois", &str))
+                            vd->ImportSelIDs(str.ToStdString());
+                        if (fconfig.Read("roi_disp_mode", &iVal))
+                            vd->SetIDColDispMode(iVal);
+                        
+                        if (fconfig.Read("mask_lv", &iVal))
+                            vd->SetMaskLv(iVal);
+                        
+                        if (fconfig.Read("mask_disp_mode", &iVal))
+                            vd->SetMaskHideMode(iVal);
+                        
+                        if (fconfig.Read("na_mode", &bVal))
+                            vd->SetNAMode(bVal);
+                        if (fconfig.Read("shared_mask", &str))
+                            vd->SetSharedMaskName(str);
+                        if (fconfig.Read("shared_label", &str))
+                            vd->SetSharedLabelName(str);
+                    }
+                }
+            }
+        }
+    }
+    
+    fconfig.SetPath(tmp_path);
+    
+    return;
+}
+
 MeshData* VRenderFrame::OpenMeshFromProject(wxString name, wxFileConfig &fconfig)
 {
 	MeshData *md = NULL;
@@ -4144,6 +4569,8 @@ MeshData* VRenderFrame::OpenMeshFromProject(wxString name, wxFileConfig &fconfig
 void VRenderFrame::OpenProject(wxString& filename)
 {
 	m_data_mgr.SetProjectPath(filename);
+    m_project_data_loader.SetDataManager(&m_data_mgr);
+    ProjectDataLoader::setCriticalSection(&ms_criticalSection);
     
     SetEvtHandlerEnabled(false);
     //Freeze();
@@ -4229,20 +4656,41 @@ void VRenderFrame::OpenProject(wxString& filename)
 	{
 		fconfig.SetPath("/data/volume");
 		int num = fconfig.Read("num", 0l);
-		for (i = 0; i < num; i++)
-		{
-			wxString str;
-			str = wxString::Format("/data/volume/%d", i);
-			if (fconfig.Exists(str))
-			{
-				fconfig.SetPath(str);
-				if (fconfig.Read("name", &str))
-				{
-					OpenVolumeFromProject(str, fconfig);
-				}
-			}
-			tick_cnt++;
-		}
+        
+        if (m_project_data_loader.GetMaxThreadNum() > 0)
+        {
+            OpenVolumesFromProjectMT(fconfig, false);
+            
+            int cur = tick_cnt;
+            while(m_project_data_loader.IsRunning())
+            {
+                wxMilliSleep(100);
+                prg_diag->Update(90 * (cur + m_project_data_loader.GetProgress()) / ticks);
+            }
+            
+            tick_cnt += m_project_data_loader.GetProgress();
+            
+            SetVolumePropertiesFromProject(fconfig);
+        }
+        else
+        {
+            for (i = 0; i < num; i++)
+            {
+                wxString str;
+                str = wxString::Format("/data/volume/%d", i);
+                if (fconfig.Exists(str))
+                {
+                    fconfig.SetPath(str);
+                    if (fconfig.Read("name", &str))
+                    {
+                        OpenVolumeFromProject(str, fconfig);
+                    }
+                }
+                tick_cnt++;
+                if (ticks && prg_diag)
+                    prg_diag->Update(90*tick_cnt/ticks);
+            }
+        }
 	}
 
 	//meshes
@@ -4263,6 +4711,8 @@ void VRenderFrame::OpenProject(wxString& filename)
 				}
 			}
 			tick_cnt++;
+            if (ticks && prg_diag)
+                prg_diag->Update(90*tick_cnt/ticks);
 		}
 	}
 
@@ -4284,6 +4734,8 @@ void VRenderFrame::OpenProject(wxString& filename)
 				}
 			}
 			tick_cnt++;
+            if (ticks && prg_diag)
+                prg_diag->Update(90*tick_cnt/ticks);
 		}
 	}
 

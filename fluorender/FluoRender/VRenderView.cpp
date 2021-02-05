@@ -7540,20 +7540,10 @@ void VRenderVulkanView::PostDraw()
 		
 		//capture
 		int x, y, w, h;
-		if (m_draw_frame && !m_tile_rendering)
-		{
-			x = m_frame_x;
-			y = m_frame_y;
-			w = m_frame_w;
-			h = m_frame_h;
-		}
-		else
-		{
-			x = 0;
-			y = 0;
-			w = m_nx;
-			h = m_ny;
-		}
+        x = 0;
+        y = 0;
+        w = m_nx;
+        h = m_ny;
 
 		vks::VulkanDevice* prim_dev = m_vulkan->vulkanDevice;
 
@@ -7561,7 +7551,6 @@ void VRenderVulkanView::PostDraw()
 		int dst_chann = 3;
 		unsigned char* image = new unsigned char[w * h * chann];
 		if (m_tile_rendering && m_tiled_image != NULL) {
-
 			prim_dev->DownloadTexture(m_tex_tile, image);
 			size_t stx = (m_current_tileid - 1) % m_tile_xnum * m_tile_w;
 			size_t sty = (m_current_tileid - 1) / m_tile_xnum * m_tile_h;
@@ -7607,6 +7596,14 @@ void VRenderVulkanView::PostDraw()
 					}
 				}
 			}
+            
+            if (m_draw_frame)
+            {
+                x = m_frame_x;
+                y = m_frame_y;
+                w = m_frame_w;
+                h = m_frame_h;
+            }
 			
 			string str_fn = outputfilename.ToStdString();
 			TIFF* out = TIFFOpen(str_fn.c_str(), "wb");
@@ -7623,13 +7620,14 @@ void VRenderVulkanView::PostDraw()
 				TIFFSetField(out, TIFFTAG_COMPRESSION, COMPRESSION_LZW);
 
 			tsize_t linebytes = dst_chann * w;
+            tsize_t ypitch = dst_chann * m_nx;
 			unsigned char* buf = NULL;
 			buf = (unsigned char*)_TIFFmalloc(linebytes);
 			TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(out, 0));
-			for (uint32 row = 0; row < (uint32)h; row++)
+			for (uint32 row = y; row < (uint32)h; row++)
 			{
-				memcpy(buf, &rgb_image[row*linebytes], linebytes);
-				if (TIFFWriteScanline(out, buf, row, 0) < 0)
+				memcpy(buf, &rgb_image[row*ypitch + x*dst_chann], linebytes);
+				if (TIFFWriteScanline(out, buf, row-y, 0) < 0)
 					break;
 			}
 			TIFFClose(out);

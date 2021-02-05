@@ -247,7 +247,7 @@ VolumeData::VolumeData(VolumeData &copy)
 	m_saved_mode = copy.m_saved_mode;
 
 	m_2d_mask = 0;
-	m_2d_weight1 = 0;
+	m_2d_weight1 = 0;f
 	m_2d_weight2 = 0;
 	m_2d_dmap = 0;
 
@@ -8994,3 +8994,423 @@ void VolumeLoader::GetPalams(long long &used_mem, int &running_decomp_th, int &q
 	queue_num = m_queues.size();
 	decomp_queue_num = m_decomp_queues.size();
 }
+
+
+
+ProjectDataLoaderThread::ProjectDataLoaderThread(ProjectDataLoader *pdl)
+: wxThread(wxTHREAD_DETACHED), m_pdl(pdl)
+{
+    wxCriticalSectionLocker enter(*m_pdl->ms_pThreadCS);
+    m_pdl->m_running_th++;
+}
+
+ProjectDataLoaderThread::~ProjectDataLoaderThread()
+{
+    wxCriticalSectionLocker enter(*m_pdl->ms_pThreadCS);
+    // the thread is being destroyed; make sure not to leave dangling pointers around
+    m_pdl->m_running_th--;
+}
+
+wxThread::ExitCode ProjectDataLoaderThread::Entry()
+{
+    if (!m_pdl || !m_pdl->m_dm)
+        return (wxThread::ExitCode)0;
+    
+    while(1)
+    {
+        if (TestDestroy())
+            break;
+        
+        m_pdl->ms_pThreadCS->Enter();
+        if (m_pdl->m_queues.size() == 0)
+        {
+            m_pdl->ms_pThreadCS->Leave();
+            break;
+        }
+        
+        wxString filename = m_pdl->m_queues[0].path;
+        wxString name = m_pdl->m_queues[0].name;
+        int ch_num = m_pdl->m_queues[0].ch;
+        int t_num = m_pdl->m_queues[0].t;
+        bool compression = m_pdl->m_queues[0].compression;
+        bool skip_brick = m_pdl->m_queues[0].skip_brick;
+        bool slice_seq =m_pdl->m_queues[0].slice_seq;
+        bool time_seq = m_pdl->m_queues[0].time_seq;
+        wxString time_id = m_pdl->m_queues[0].time_id;
+        bool load_mask = m_pdl->m_queues[0].load_mask;
+        wxString mskpath = m_pdl->m_queues[0].mskpath;
+        wxString lblpath = m_pdl->m_queues[0].lblpath;
+        int type = m_pdl->m_queues[0].type;
+        
+        m_pdl->m_queued.push_back(m_pdl->m_queues[0]);
+        m_pdl->m_queues.erase(m_pdl->m_queues.begin());
+        
+        m_pdl->ms_pThreadCS->Leave();
+        
+        
+        wxString pathname = filename;
+        bool isURL = false;
+        bool downloaded = false;
+        wxString downloaded_filepath;
+        bool downloaded_metadata = false;
+        wxString downloaded_metadatafilepath;
+        
+        wxString suffix = filename.Mid(filename.Find('.', true)).MakeLower();
+        
+        if (!wxFileExists(pathname) && suffix != ".n5fs_ch")
+        {
+            pathname = m_pdl->m_dm->SearchProjectPath(filename);
+            if (!wxFileExists(pathname))
+            {
+                pathname = filename;
+                if (!m_pdl->m_dm->DownloadToCurrentDir(pathname)) continue;
+                
+                downloaded = true;
+                downloaded_filepath = pathname;
+                
+                if(type == LOAD_TYPE_BRKXML)
+                {
+                    wxString metadatapath = filename;
+                    metadatapath = metadatapath.Mid(0, metadatapath.Find(wxT('/'), true)+1) + wxT("_metadata.xml");
+                    //std::remove("_metadata.xml");
+                    if (m_pdl->m_dm->DownloadToCurrentDir(metadatapath))
+                    {
+                        downloaded_metadata = true;
+                        downloaded_metadatafilepath = metadatapath;
+                    }
+                    isURL = true;
+                }
+            }
+        }
+        
+        if (!mskpath.IsEmpty() && !wxFileExists(mskpath))
+            mskpath = m_pdl->m_dm->SearchProjectPath(mskpath);
+        if (!lblpath.IsEmpty() && !wxFileExists(lblpath))
+            lblpath = m_pdl->m_dm->SearchProjectPath(lblpath);
+        
+        int i;
+        int result = 0;
+        BaseReader* reader = 0;
+        
+        //RGB tiff
+        if (type == LOAD_TYPE_TIFF)
+            reader = new TIFReader();
+        else if (type == LOAD_TYPE_NRRD)
+            reader = new NRRDReader();
+        else if (type == LOAD_TYPE_OIB)
+            reader = new OIBReader();
+        else if (type == LOAD_TYPE_OIF)
+            reader = new OIFReader();
+        else if (type == LOAD_TYPE_LSM)
+            reader = new LSMReader();
+        else if (type == LOAD_TYPE_PVXML)
+            reader = new PVXMLReader();
+        else if (type == LOAD_TYPE_BRKXML)
+            reader = new BRKXMLReader();
+        else if (type == LOAD_TYPE_H5J)
+            reader = new H5JReader();
+        else if (type == LOAD_TYPE_V3DPBD)
+            reader = new V3DPBDReader();
+        
+        m_pdl->ms_pThreadCS->Enter();
+        m_pdl->m_dm->PushReader(reader);
+        m_pdl->ms_pThreadCS->Leave();
+        
+        wstring str_w = pathname.ToStdWstring();
+        reader->SetFile(str_w);
+        reader->SetSliceSeq(slice_seq);
+        reader->SetTimeSeq(time_seq);
+        str_w = time_id.ToStdWstring();
+        reader->SetTimeId(str_w);
+        
+        if(isURL && type == LOAD_TYPE_BRKXML)
+        {
+            str_w = filename.ToStdWstring();
+#ifdef _WIN32
+            wchar_t slash = L'\\';
+#else
+            wchar_t slash = L'/';
+#endif
+            wstring dir_name = str_w.substr(0, str_w.find_last_of(slash)+1);
+            ((BRKXMLReader *)reader)->SetDir(str_w);
+        }
+        
+        reader->Preprocess();
+        
+        if (type == LOAD_TYPE_BRKXML && !((BRKXMLReader *)reader)->GetExMetadataURL().empty())
+        {
+            wxString metadatapath = ((BRKXMLReader *)reader)->GetExMetadataURL();
+            if (m_pdl->m_dm->DownloadToCurrentDir(metadatapath))
+            {
+                downloaded_metadata = true;
+                downloaded_metadatafilepath = metadatapath;
+                ((BRKXMLReader *)reader)->loadMetadata(metadatapath.ToStdWstring());
+            }
+        }
+        
+        int chan = reader->GetChanNum();
+        size_t voxnum = reader->GetXSize() * reader->GetYSize() * reader->GetSliceNum();
+        size_t ch_datasize = 0;
+        size_t bytes = 0;
+        
+        double sspcx = -1.0;
+        double sspcy = -1.0;
+        double sspcz = -1.0;
+        
+        for (i=(ch_num>=0?ch_num:0);
+             i<(ch_num>=0?ch_num+1:chan); i++)
+        {
+            VolumeData *vd = new VolumeData();
+            vd->SetSkipBrick(skip_brick);
+            auto data = reader->Convert(t_num>=0?t_num:reader->GetCurTime(), i, true);
+            
+            /*
+            if (datasize > 0)
+            {
+                if (ch_datasize == 0)
+                {
+                    switch (data->getNrrd()->type)
+                    {
+                        case nrrdTypeUChar:
+                        case nrrdTypeChar:
+                            bytes = 1;
+                            break;
+                        case nrrdTypeUShort:
+                        case nrrdTypeShort:
+                            bytes = 2;
+                            break;
+                        default:
+                            bytes = 0;
+                    }
+                    if (ch_num >= 0)
+                        ch_datasize = (datasize * bytes) / (3ULL + bytes);
+                    else
+                        ch_datasize = (datasize * bytes) / (3ULL + bytes * chan);
+                }
+                if (ch_datasize > 0 && bytes > 0 && ch_datasize < voxnum * bytes)
+                {
+                    Nrrd* tmp;
+                    tmp = VolumeData::NrrdScale(data->getNrrd(), ch_datasize);
+                    if (tmp)
+                    {
+                        data = make_shared<VL_Nrrd>(tmp);
+                        
+                        size_t dim = data->getNrrd()->dim;
+                        if (dim >= 3)
+                        {
+                            int offset = 0;
+                            if (dim > 3) offset = 1;
+                            sspcx = tmp->axis[0 + offset].spacing;
+                            sspcy = tmp->axis[1 + offset].spacing;
+                            sspcz = tmp->axis[2 + offset].spacing;
+                        }
+                    }
+                }
+            }
+            */
+            
+            if (!data)
+                continue;
+            
+            if (name.IsEmpty())
+            {
+                if (type != LOAD_TYPE_BRKXML)
+                {
+                    name = wxString(reader->GetDataName());
+                    if (chan > 1)
+                        name += wxString::Format("_Ch%d", i+1);
+                }
+                else
+                {
+                    BRKXMLReader* breader = (BRKXMLReader*)reader;
+                    name = reader->GetDataName();
+                    name = name.Mid(0, name.find_last_of(wxT('.')));
+                    if(ch_num > 1) name = wxT("_Ch") + wxString::Format("%i", i);
+                    pathname = filename;
+                    breader->SetCurChan(i);
+                    breader->SetCurTime(0);
+                }
+            }
+            
+            bool valid_spc = reader->IsSpcInfoValid();
+            if (vd && vd->Load(data, name, pathname, (type == LOAD_TYPE_BRKXML) ? (BRKXMLReader*)reader : NULL))
+            {
+                if (load_mask)
+                {
+                    //mask
+                    MSKReader msk_reader;
+                    std::wstring str = mskpath.IsEmpty() ? reader->GetPathName() : mskpath.ToStdWstring();
+                    msk_reader.SetFile(str);
+                    auto mask = msk_reader.Convert(t_num>=0?t_num:reader->GetCurTime(), i, true);
+                    if (mask)
+                        vd->LoadMask(mask);
+                    //label mask
+                    LBLReader lbl_reader;
+                    str = lblpath.IsEmpty() ? reader->GetPathName() : lblpath.ToStdWstring();
+                    lbl_reader.SetFile(str);
+                    
+                    auto label = lbl_reader.Convert(t_num>=0?t_num:reader->GetCurTime(), i, true);
+                    if (label)
+                        vd->LoadLabel(label);
+                }
+                if (type == LOAD_TYPE_BRKXML) ((BRKXMLReader*)reader)->SetLevel(0);
+                //for 2D data
+                int xres, yres, zres;
+                vd->GetResolution(xres, yres, zres);
+                double zspcfac = (double)Max(xres,yres)/256.0;
+                if (zspcfac < 1.0) zspcfac = 1.0;
+                if (zres == 1) vd->SetBaseSpacings(reader->GetXSpc(), reader->GetYSpc(), reader->GetXSpc()*zspcfac);
+                else if (sspcx > 0.0 && sspcy > 0.0 && sspcz > 0.0) vd->SetBaseSpacings(sspcx, sspcy, sspcz);
+                else vd->SetBaseSpacings(reader->GetXSpc(), reader->GetYSpc(), reader->GetZSpc());
+                vd->SetSpcFromFile(valid_spc);
+                vd->SetScalarScale(reader->GetScalarScale());
+                vd->SetMaxValue(reader->GetMaxValue());
+                vd->SetCurTime(reader->GetCurTime());
+                vd->SetCurChannel(i);
+                //++
+                result++;
+            }
+            else
+            {
+                delete vd;
+                continue;
+            }
+            vd->SetReader(reader);
+            vd->SetCompression(compression);
+            
+            m_pdl->ms_pThreadCS->Enter();
+            m_pdl->m_dm->AddVolumeData(vd);
+            m_pdl->ms_pThreadCS->Leave();
+            
+            m_pdl->m_dm->SetVolumeDefault(vd);
+            if (type == LOAD_TYPE_TIFF)
+            {
+                double minval, maxval, vxmax;
+                ((TIFReader*)reader)->GetDisplayRange(i, minval, maxval);
+                vxmax = vd->GetMaxValue();
+                if (minval >= 0)
+                    vd->SetLeftThresh(minval/vxmax);
+                if (maxval >= 0)
+                    vd->SetOffset(maxval/vxmax);
+            }
+            
+            //get excitation wavelength
+            double wavelength = reader->GetExcitationWavelength(i);
+            if (wavelength > 0.0) {
+                FLIVR::Color col = m_pdl->m_dm->GetWavelengthColor(wavelength);
+                vd->SetColor(col);
+            }
+            else if (wavelength < 0.) {
+                FLIVR::Color white = Color(1.0, 1.0, 1.0);
+                vd->SetColor(white);
+            }
+            else
+            {
+                FLIVR::Color white = Color(1.0, 1.0, 1.0);
+                FLIVR::Color red   = Color(1.0, 0.0, 0.0);
+                FLIVR::Color green = Color(0.0, 1.0, 0.0);
+                FLIVR::Color blue  = Color(0.0, 0.0, 1.0);
+                if (chan == 1) {
+                    vd->SetColor(white);
+                }
+                else
+                {
+                    if (i == 0)
+                        vd->SetColor(red);
+                    else if (i == 1)
+                        vd->SetColor(green);
+                    else if (i == 2)
+                        vd->SetColor(blue);
+                    else
+                        vd->SetColor(white);
+                }
+            }
+        }
+        
+        if (downloaded)
+        {
+            m_pdl->ms_pThreadCS->Enter();
+            wxRemoveFile(downloaded_filepath);
+            m_pdl->ms_pThreadCS->Leave();
+        }
+
+        if (downloaded_metadata)
+        {
+            m_pdl->ms_pThreadCS->Enter();
+            wxRemoveFile(downloaded_metadatafilepath);
+            m_pdl->ms_pThreadCS->Leave();
+        }
+        
+        m_pdl->m_progress++;
+    }
+    
+    return (wxThread::ExitCode)0;
+}
+
+wxCriticalSection* ProjectDataLoader::ms_pThreadCS = nullptr;
+
+ProjectDataLoader::ProjectDataLoader()
+{
+    m_max_th = wxThread::GetCPUCount()-1;
+    if (m_max_th < 0)
+        m_max_th = -1;
+    m_running_th = 0;
+}
+
+ProjectDataLoader::~ProjectDataLoader()
+{
+    ClearQueues();
+    Join();
+}
+
+void ProjectDataLoader::Queue(ProjectDataLoaderQueue path)
+{
+    wxCriticalSectionLocker enter(*ms_pThreadCS);
+    m_queues.push_back(path);
+}
+
+void ProjectDataLoader::ClearQueues()
+{
+    wxCriticalSectionLocker enter(*ms_pThreadCS);
+    if (!m_queues.empty())
+    {
+        m_queues.clear();
+    }
+}
+
+void ProjectDataLoader::Set(vector<ProjectDataLoaderQueue> &queues)
+{
+    Join();
+    m_queues = queues;
+}
+
+void ProjectDataLoader::Join()
+{
+    while(m_running_th > 0)
+    {
+        wxMilliSleep(10);
+    }
+    m_running_th = 0;
+}
+
+bool ProjectDataLoader::Run()
+{
+    Join();
+    if (!m_queued.empty())
+        m_queued.clear();
+    
+    m_queue_count = m_queues.size();
+    m_progress = 0;
+    
+    for (int i = 0; i < m_max_th; i++)
+    {
+        ProjectDataLoaderThread* th = new ProjectDataLoaderThread(this);
+        if (th->Create() == wxTHREAD_NO_ERROR)
+        {
+            th->Run();
+        }
+    }
+    
+    return true;
+}
+
