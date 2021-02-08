@@ -9233,48 +9233,57 @@ wxThread::ExitCode ProjectDataLoaderThread::Entry()
             }
             
             bool valid_spc = reader->IsSpcInfoValid();
-            if (vd && vd->Load(data, name, pathname, (type == LOAD_TYPE_BRKXML) ? (BRKXMLReader*)reader : NULL))
+            if (vd)
             {
-                if (load_mask)
+                m_pdl->ms_pThreadCS->Enter();
+                bool vd_result = vd->Load(data, name, pathname, (type == LOAD_TYPE_BRKXML) ? (BRKXMLReader*)reader : NULL);
+                m_pdl->ms_pThreadCS->Leave();
+                if (vd_result)
                 {
-                    //mask
-                    MSKReader msk_reader;
-                    std::wstring str = mskpath.IsEmpty() ? reader->GetPathName() : mskpath.ToStdWstring();
-                    msk_reader.SetFile(str);
-                    auto mask = msk_reader.Convert(t_num>=0?t_num:reader->GetCurTime(), i, true);
-                    if (mask)
-                        vd->LoadMask(mask);
-                    //label mask
-                    LBLReader lbl_reader;
-                    str = lblpath.IsEmpty() ? reader->GetPathName() : lblpath.ToStdWstring();
-                    lbl_reader.SetFile(str);
-                    
-                    auto label = lbl_reader.Convert(t_num>=0?t_num:reader->GetCurTime(), i, true);
-                    if (label)
-                        vd->LoadLabel(label);
+                    if (load_mask)
+                    {
+                        //mask
+                        MSKReader msk_reader;
+                        std::wstring str = mskpath.IsEmpty() ? reader->GetPathName() : mskpath.ToStdWstring();
+                        msk_reader.SetFile(str);
+                        auto mask = msk_reader.Convert(t_num>=0?t_num:reader->GetCurTime(), i, true);
+                        if (mask)
+                            vd->LoadMask(mask);
+                        //label mask
+                        LBLReader lbl_reader;
+                        str = lblpath.IsEmpty() ? reader->GetPathName() : lblpath.ToStdWstring();
+                        lbl_reader.SetFile(str);
+                        
+                        auto label = lbl_reader.Convert(t_num>=0?t_num:reader->GetCurTime(), i, true);
+                        if (label)
+                            vd->LoadLabel(label);
+                    }
+                    if (type == LOAD_TYPE_BRKXML) ((BRKXMLReader*)reader)->SetLevel(0);
+                    //for 2D data
+                    int xres, yres, zres;
+                    vd->GetResolution(xres, yres, zres);
+                    double zspcfac = (double)Max(xres,yres)/256.0;
+                    if (zspcfac < 1.0) zspcfac = 1.0;
+                    if (zres == 1) vd->SetBaseSpacings(reader->GetXSpc(), reader->GetYSpc(), reader->GetXSpc()*zspcfac);
+                    else if (sspcx > 0.0 && sspcy > 0.0 && sspcz > 0.0) vd->SetBaseSpacings(sspcx, sspcy, sspcz);
+                    else vd->SetBaseSpacings(reader->GetXSpc(), reader->GetYSpc(), reader->GetZSpc());
+                    vd->SetSpcFromFile(valid_spc);
+                    vd->SetScalarScale(reader->GetScalarScale());
+                    vd->SetMaxValue(reader->GetMaxValue());
+                    vd->SetCurTime(reader->GetCurTime());
+                    vd->SetCurChannel(i);
+                    //++
+                    result++;
                 }
-                if (type == LOAD_TYPE_BRKXML) ((BRKXMLReader*)reader)->SetLevel(0);
-                //for 2D data
-                int xres, yres, zres;
-                vd->GetResolution(xres, yres, zres);
-                double zspcfac = (double)Max(xres,yres)/256.0;
-                if (zspcfac < 1.0) zspcfac = 1.0;
-                if (zres == 1) vd->SetBaseSpacings(reader->GetXSpc(), reader->GetYSpc(), reader->GetXSpc()*zspcfac);
-                else if (sspcx > 0.0 && sspcy > 0.0 && sspcz > 0.0) vd->SetBaseSpacings(sspcx, sspcy, sspcz);
-                else vd->SetBaseSpacings(reader->GetXSpc(), reader->GetYSpc(), reader->GetZSpc());
-                vd->SetSpcFromFile(valid_spc);
-                vd->SetScalarScale(reader->GetScalarScale());
-                vd->SetMaxValue(reader->GetMaxValue());
-                vd->SetCurTime(reader->GetCurTime());
-                vd->SetCurChannel(i);
-                //++
-                result++;
+                else
+                {
+                    delete vd;
+                    continue;
+                }
             }
             else
-            {
-                delete vd;
                 continue;
-            }
+            
             vd->SetReader(reader);
             vd->SetCompression(compression);
             
