@@ -4610,7 +4610,7 @@ void VRenderFrame::OpenProject(wxString& filename)
 	}
 
 	int ticks = 0;
-	int tick_cnt = 1;
+	int tick_cnt = 0;
 	fconfig.Read("ticks", &ticks);
 	wxProgressDialog *prg_diag = 0;
 	prg_diag = new wxProgressDialog(
