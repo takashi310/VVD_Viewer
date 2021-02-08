@@ -9365,12 +9365,14 @@ ProjectDataLoader::~ProjectDataLoader()
 
 void ProjectDataLoader::Queue(ProjectDataLoaderQueue path)
 {
+	if (!ms_pThreadCS) return;
     wxCriticalSectionLocker enter(*ms_pThreadCS);
     m_queues.push_back(path);
 }
 
 void ProjectDataLoader::ClearQueues()
 {
+	if (!ms_pThreadCS) return;
     wxCriticalSectionLocker enter(*ms_pThreadCS);
     if (!m_queues.empty())
     {
