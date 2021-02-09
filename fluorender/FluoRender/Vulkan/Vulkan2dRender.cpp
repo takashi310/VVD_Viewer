@@ -160,7 +160,7 @@ VkRenderPass Vulkan2dRender::prepareRenderPass(VkFormat framebuf_format, int att
 		attd.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		attd.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		attd.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		attd.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		attd.initialLayout = isSwapChainImage ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		attd.finalLayout = isSwapChainImage ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		attchmentDescriptions.push_back(attd);
 
@@ -581,6 +581,9 @@ void Vulkan2dRender::buildCommandBuffer(
 					break;
 				case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
 					dst = VK_IMAGE_LAYOUT_GENERAL;
+					break;
+				case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+					dst = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 					break;
 				}
 
