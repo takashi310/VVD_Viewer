@@ -1347,6 +1347,13 @@ namespace vks
 			1,
 			&bufferCopyRegion);
 
+		vks::tools::setImageLayout(
+			copyCmd,
+			tex->image,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			tex->descriptor.imageLayout,
+			subresourceRange);
+
 		if (flush)
 			flushTransferCommandBuffer(copyCmd, true);
 		else
