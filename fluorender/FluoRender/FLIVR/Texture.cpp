@@ -1042,7 +1042,8 @@ namespace FLIVR
 		}
 		setLevel(pyramid_lv_num_ - 1);
 		pyramid_cur_lv_ = -1;
-		SetMaskLv(pyramid_lv_num_ - 1);
+        if (masklv_ < 0)
+            SetMaskLv(pyramid_lv_num_ - 1);
 
 		return true;
 	}

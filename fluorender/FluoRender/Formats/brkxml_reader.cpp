@@ -68,6 +68,7 @@ BRKXMLReader::BRKXMLReader()
    m_isURL = false;
 
    m_copy_lv = -1;
+   m_mask_lv = -1;
 }
 
 BRKXMLReader::~BRKXMLReader()
@@ -121,8 +122,16 @@ void BRKXMLReader::SetFile(string &file)
 #endif
       m_data_name = m_path_name.substr(m_path_name.find_last_of(slash)+1);
 	  m_dir_name = m_path_name.substr(0, m_path_name.find_last_of(slash)+1);
-	  if (m_dir_name.size() > 1)
-		  m_data_name = m_dir_name.substr(m_dir_name.substr(0, m_dir_name.size()-1).find_last_of(slash)+1);
+       
+       if (m_dir_name.size() > 1)
+       {
+           size_t ext_pos = m_path_name.find_last_of(L".");
+           wstring ext = m_path_name.substr(ext_pos+1);
+           transform(ext.begin(), ext.end(), ext.begin(), towlower);
+           if (ext == L"n5" || ext == L"json" || ext == L"n5fs_ch") {
+               m_data_name = m_dir_name.substr(m_dir_name.substr(0, m_dir_name.size() - 1).find_last_of(slash)+1);
+           }
+       }
    }
    m_id_string = m_path_name;
 }
@@ -139,8 +148,17 @@ void BRKXMLReader::SetFile(wstring &file)
 #endif
    m_data_name = m_path_name.substr(m_path_name.find_last_of(slash)+1);
    m_dir_name = m_path_name.substr(0, m_path_name.find_last_of(slash)+1);
-   if (m_dir_name.size() > 1)
-	   m_data_name = m_dir_name.substr(m_dir_name.substr(0, m_dir_name.size() - 1).find_last_of(slash)+1);
+    
+    if (m_dir_name.size() > 1)
+    {
+        size_t ext_pos = m_path_name.find_last_of(L".");
+        wstring ext = m_path_name.substr(ext_pos+1);
+        transform(ext.begin(), ext.end(), ext.begin(), towlower);
+        if (ext == L"n5" || ext == L"json" || ext == L"n5fs_ch") {
+            m_data_name = m_dir_name.substr(m_dir_name.substr(0, m_dir_name.size() - 1).find_last_of(slash)+1);
+        }
+    }
+
    m_id_string = m_path_name;
 }
 
@@ -238,6 +256,7 @@ void BRKXMLReader::Preprocess()
         m_time_num = m_imageinfo.nFrame;
         m_chan_num = m_imageinfo.nChannel;
         m_copy_lv = m_imageinfo.copyableLv;
+        m_mask_lv = m_imageinfo.maskLv;
 
         m_cur_time = 0;
 
@@ -305,6 +324,14 @@ BRKXMLReader::ImageInfo BRKXMLReader::ReadImageInfo(tinyxml2::XMLElement *infoNo
 	}
 	else
 		iinfo.copyableLv = -1;
+    
+    if (infoNode->Attribute("MaskLv"))
+    {
+        ival = STOI(infoNode->Attribute("MaskLv"));
+        iinfo.maskLv = ival;
+    }
+    else
+        iinfo.maskLv = -1;
 
 	return iinfo;
 }

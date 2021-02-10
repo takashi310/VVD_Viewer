@@ -183,6 +183,7 @@ public:
 	int GetLevelNum() {return m_level_num;}
 	void SetLevel(int lv);
 	int GetCopyableLevel() {return m_copy_lv;}
+    int GetMaskLevel() {return m_mask_lv;}
 
 	void build_bricks(vector<FLIVR::TextureBrick*> &tbrks, int lv = -1);
 	void build_pyramid(vector<FLIVR::Pyramid_Level> &pyramid, vector<vector<vector<vector<FLIVR::FileLocInfo *>>>> &filenames, int t, int c);
@@ -266,6 +267,7 @@ private:
 		int nFrame;
 		int nLevel;
 		int copyableLv;
+        int maskLv;
 	};
 	ImageInfo m_imageinfo;
 
@@ -274,6 +276,7 @@ private:
 	int m_level_num;
 	int m_cur_level;
 	int m_copy_lv;
+    int m_mask_lv;
 	
 	int m_time_num;
 	int m_cur_time;

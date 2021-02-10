@@ -836,7 +836,6 @@ int VolumeData::Load(const shared_ptr<VL_Nrrd> &data, const wxString &name, cons
 		int ftype = BRICK_FILE_TYPE_NONE;
 
 		breader->build_pyramid(pyramid, fnames, 0, breader->GetCurChan());
-		m_tex->SetCopyableLevel(breader->GetCopyableLevel());
 
 		int lmnum = breader->GetLandmarkNum();
 		for (int j = 0; j < lmnum; j++)
@@ -848,6 +847,9 @@ int VolumeData::Load(const shared_ptr<VL_Nrrd> &data, const wxString &name, cons
 			breader->GetMetadataID(m_metadata_id);
 		}
 		if (!m_tex->buildPyramid(pyramid, fnames, breader->isURL())) return 0;
+        
+        m_tex->SetCopyableLevel(breader->GetCopyableLevel());
+        m_tex->SetMaskLv(breader->GetMaskLevel());
 	}
 	else if(!m_tex->build(data, nullptr, 0, 256, 0, 0)) return 0;
 	
@@ -1073,13 +1075,6 @@ bool VolumeData::LoadMask(const std::shared_ptr<VL_Nrrd>& mask)
 		return false;
 
 	//prepare the texture bricks for the mask
-	int curlv = -1;
-	if (isBrxml())
-	{
-		curlv = GetLevel();
-		SetLevel(GetMaskLv());
-	}
-
 	Nrrd* mnrrd = mask->getNrrd();
 
 	size_t dim = mnrrd->dim;
@@ -1091,10 +1086,35 @@ bool VolumeData::LoadMask(const std::shared_ptr<VL_Nrrd>& mask)
 	int mskw = size[0];
 	int mskh = size[1];
 	int mskd = size[2];
+    
 	int w, h, d;
-	m_tex->GetDimensionLv(GetLevel(), w, h, d);
-	if (w != mskw || h != mskh || d != mskd)
-		return false;
+    int curlv = -1;
+    if (isBrxml())
+    {
+        curlv = GetLevel();
+        
+        bool found = false;
+        int lvnum = GetLevelNum();
+        for (int i = 0; i < lvnum; i++)
+        {
+            SetLevel(i);
+            m_tex->GetDimensionLv(GetLevel(), w, h, d);
+            if (w == mskw || h == mskh || d == mskd)
+            {
+                found = true;
+                m_tex->SetMaskLv(i);
+                break;
+            }
+        }
+        if (!found)
+            return false;
+    }
+    else
+    {
+        m_tex->GetDimensionLv(GetLevel(), w, h, d);
+        if (w != mskw || h != mskh || d != mskd)
+            return false;
+    }
 
 	m_vr->clear_tex_current_mask();
 	m_tex->add_empty_mask();
