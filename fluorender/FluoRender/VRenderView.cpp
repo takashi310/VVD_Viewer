@@ -13377,12 +13377,24 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 			m_dpeel = false;
 //		if (reset_peeling_layer || m_vol_method == VOL_METHOD_MULTI)
 			displist = m_vd_pop_list;
-
+        
 		for (i=0; i<displist.size(); i++)
 		{
 			VolumeData* vd = displist[i];
 			if (vd && vd->GetDisp())
 			{
+#ifdef _DARWIN
+                bool slice_mode = false;
+                VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+                if ( vr_frame && vr_frame->GetClippingView() && (displist.size() == 1 || vr_frame->GetClippingView()->GetChannLink()) &&
+                    (vr_frame->GetClippingView()->GetXdist() <= 3 || vr_frame->GetClippingView()->GetYdist() <= 3 || vr_frame->GetClippingView()->GetZdist() <= 3) )
+                    slice_mode = true;
+                if(slice_mode && vd->GetVR())
+                    vd->GetVR()->set_slice_mode(true);
+                else
+                    vd->GetVR()->set_slice_mode(false);
+#endif
+                
 				switchLevel(vd);
 				vd->SetInterpolate(m_intp);
 				if (!TextureRenderer::get_mem_swap()) continue;

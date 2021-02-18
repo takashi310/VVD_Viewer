@@ -1238,6 +1238,12 @@ namespace FLIVR
 	VolumeRenderer::VRayPipeline VolumeRenderer::prepareVRayPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode, bool persp, int multi_mode, bool na_mode, Texture* ext_msk)
 	{
 		VRayPipeline ret_pipeline;
+        
+#ifdef _DARWIN
+        bool cur_solid = solid_;
+        if (slice_mode_)
+            solid_ = true;
+#endif
 
 		bool use_fog = m_use_fog && colormap_mode_ != 2;
 		ShaderProgram* shader = m_vulkan->vray_shader_factory_->shader(
@@ -1248,6 +1254,11 @@ namespace FLIVR
 			hiqual_, ml_mode_,
 			colormap_mode_, colormap_, colormap_proj_,
 			solid_, 1, (tex_->nmask() != -1 || (ext_msk && ext_msk->nmask() != -1)) ? m_mask_hide_mode : VOL_MASK_HIDE_NONE, persp, mode_, multi_mode, na_mode);
+        
+#ifdef _DARWIN
+        if (slice_mode_)
+            solid_ = cur_solid;
+#endif
 
 		if (m_prev_vray_pipeline >= 0) {
 			if (m_vray_pipelines[m_prev_vray_pipeline].device == device &&

@@ -537,6 +537,39 @@ void ClippingView::ClearData()
 	DisableAll();
 }
 
+int ClippingView::GetXdist()
+{
+    wxString str = m_x1_clip_text->GetValue();
+    long ival = 0;
+    str.ToLong(&ival);
+    str = m_x2_clip_text->GetValue();
+    long ival2 = 0;
+    str.ToLong(&ival2);
+    return (int)abs(ival2 - ival);
+}
+
+int ClippingView::GetYdist()
+{
+    wxString str = m_y1_clip_text->GetValue();
+    long ival = 0;
+    str.ToLong(&ival);
+    str = m_y2_clip_text->GetValue();
+    long ival2 = 0;
+    str.ToLong(&ival2);
+    return (int)abs(ival2 - ival);
+}
+
+int ClippingView::GetZdist()
+{
+    wxString str = m_z1_clip_text->GetValue();
+    long ival = 0;
+    str.ToLong(&ival);
+    str = m_z2_clip_text->GetValue();
+    long ival2 = 0;
+    str.ToLong(&ival2);
+    return (int)abs(ival2 - ival);
+}
+
 void ClippingView::GetSettings()
 {
 	if ( !((m_sel_type==2 && m_vd) || (m_sel_type==3 && m_md)) )

@@ -204,10 +204,18 @@ namespace FLIVR
         
         void set_na_mode(bool val) { m_na_mode = val; }
         bool get_na_mode() { return m_na_mode; }
+        
+#ifdef _DARWIN
+        bool get_slice_mode() { return false; }
+        void set_slice_mode(bool val) { slice_mode_ = val; }
+#endif
 
 		friend class MultiVolumeRenderer;
 
 	protected:
+#ifdef _DARWIN
+        bool slice_mode_;
+#endif
 		double buffer_scale_;
 		double scalar_scale_;
 		double gm_scale_;
