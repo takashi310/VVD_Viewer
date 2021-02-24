@@ -7125,6 +7125,11 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 				if (maxval >= 0)
 					vd->SetOffset(maxval/vxmax);
 			}
+            
+            if (type == LOAD_TYPE_BRKXML && vd->GetMaxValue() == 65535)
+            {
+                vd->SetOffset(4096.0/65535.0);
+            }
 
 			//get excitation wavelength
 			double wavelength = reader->GetExcitationWavelength(i);
@@ -7832,7 +7837,7 @@ wxThread::ExitCode VolumeDecompressorThread::Entry()
 		{
 			size_t bsize = (size_t)(q.b->nx()) * (size_t)(q.b->ny()) * (size_t)(q.b->nz()) * (size_t)(q.b->nb(0));
 			char* result = new char[bsize];
-			if (TextureBrick::decompress_brick(result, q.in_data, bsize, q.in_size, q.finfo->type, q.b->nx(), q.b->ny()))
+			if (TextureBrick::decompress_brick(result, q.in_data, bsize, q.in_size, q.finfo->type, q.b->nx(), q.b->ny(), q.b->nb(0)))
 			{
 				m_vl->ms_pThreadCS->Enter();
 
@@ -8104,7 +8109,7 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 					if (decomp_in_this_thread)
 					{
 						char* result = new char[bsize];
-						if (TextureBrick::decompress_brick(result, dq.in_data, bsize, dq.in_size, dq.finfo->type))
+						if (TextureBrick::decompress_brick(result, dq.in_data, bsize, dq.in_size, dq.finfo->type, dq.b->nx(), dq.b->ny(), dq.b->nb(0)))
 						{
 							m_vl->ms_pThreadCS->Enter();
 

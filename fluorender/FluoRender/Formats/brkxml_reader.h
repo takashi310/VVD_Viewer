@@ -9,6 +9,8 @@
 
 #include <json.hpp>
 
+#include <blosc2.h>
+
 #define N5DataTypeChar 0
 #define N5DataTypeUChar 1
 #define N5DataTypeShort 2
@@ -24,6 +26,11 @@
 #define CompressionKey "compression"
 #define CompressionTypeKey "type"
 #define PixelResolutionKey "pixelResolution"
+
+#define BloscLevelKey "clevel"
+#define BloscBlockSizeKey "blockSize"
+#define BloscCompressionKey "cname"
+#define BloscShuffleKey "shuffle"
 
 using namespace std;
 
@@ -77,18 +84,28 @@ public:
     int m_dataType;
     int m_compression;
 	vector<double> m_pix_res;
+    
+    struct BloscParam {
+        int blocksize;
+        int clevel;
+        int ctype;
+        int suffle;
+    };
+    
+    BloscParam m_blosc_param;
 
 	DatasetAttributes()
 	{
 	}
     
-    DatasetAttributes(const vector<long>& dimensions, const vector<int>& blockSize, int dataType, int compression, const vector<double>& pix_res)
+    DatasetAttributes(const vector<long>& dimensions, const vector<int>& blockSize, int dataType, int compression, const vector<double>& pix_res, BloscParam bp)
     {
         m_dimensions = dimensions;
         m_blockSize = blockSize;
         m_dataType = dataType;
         m_compression = compression;
 		m_pix_res = pix_res;
+        m_blosc_param = bp;
     }
     
     vector<long> getDimensions() {
@@ -114,6 +131,10 @@ public:
     int getDataType() {
         
         return m_dataType;
+    }
+    
+    BloscParam getBloscParam() {
+        return m_blosc_param;
     }
     /*
      HashMap<String, Object> asMap() {
@@ -257,6 +278,11 @@ private:
 		int file_type;
 		vector<vector<vector<FLIVR::FileLocInfo *>>> filename;//Frame->Channel->BrickID->Filename
 		vector<BrickInfo *> bricks;
+        
+        int blosc_blocksize;
+        int blosc_clevel;
+        int blosc_ctype;
+        int blosc_suffle;
 	};
 	vector<LevelInfo> m_pyramid;
 

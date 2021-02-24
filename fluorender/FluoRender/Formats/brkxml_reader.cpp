@@ -1348,6 +1348,10 @@ void BRKXMLReader::loadFSN5()
 				}
 
 				lvinfo.file_type = attr->m_compression;
+                lvinfo.blosc_ctype = attr->m_blosc_param.ctype;
+                lvinfo.blosc_clevel = attr->m_blosc_param.clevel;
+                lvinfo.blosc_suffle = attr->m_blosc_param.suffle;
+                lvinfo.blosc_blocksize = attr->m_blosc_param.blocksize;
 
 				if (attr->m_pix_res[0] > 0.0)
 					lvinfo.xspc = attr->m_pix_res[0];
@@ -1493,7 +1497,7 @@ void BRKXMLReader::loadFSN5()
                 
                 FLIVR::FileLocInfo* fi = nullptr;
                 if (boost::filesystem::exists(br_file_path))
-                    fi = new FLIVR::FileLocInfo(wss2.str(), 16, 0, lvinfo.file_type, false);
+                    fi = new FLIVR::FileLocInfo(wss2.str(), 16, 0, lvinfo.file_type, false, lvinfo.blosc_blocksize, lvinfo.blosc_clevel, lvinfo.blosc_ctype, lvinfo.blosc_suffle);
 				lvinfo.filename[0][i][pid] = fi;
 			}
 
@@ -1576,10 +1580,44 @@ DatasetAttributes* BRKXMLReader::parseDatasetMetadata(wstring jpath)
 			ret->m_compression = 1;
         else if (cptype == "bzip2")
 			ret->m_compression = 2;
-        else if (cptype == "lz4" || cptype == "blosc")
+        else if (cptype == "lz4")
 			ret->m_compression = 3;
         else if (cptype == "xz")
 			ret->m_compression = 4;
+        else if (cptype == "blosc")
+        {
+            ret->m_compression = 5;
+            if (jf[CompressionKey].contains(BloscLevelKey))
+                ret->m_blosc_param.clevel = jf[CompressionKey][BloscLevelKey].get<int>();
+            else ret->m_blosc_param.clevel = 0;
+            
+            if (jf[CompressionKey].contains(BloscBlockSizeKey))
+                ret->m_blosc_param.blocksize = jf[CompressionKey][BloscBlockSizeKey].get<int>();
+            else ret->m_blosc_param.blocksize = 0;
+            
+            if (jf[CompressionKey].contains(BloscCompressionKey))
+            {
+                auto bcptype = jf[CompressionKey][BloscCompressionKey].get<string>();
+                
+                if (bcptype == BLOSC_BLOSCLZ_COMPNAME)
+                    ret->m_blosc_param.ctype = BLOSC_BLOSCLZ;
+                else if (bcptype == BLOSC_LZ4_COMPNAME)
+                    ret->m_blosc_param.ctype = BLOSC_LZ4;
+                else if (bcptype == BLOSC_LZ4HC_COMPNAME)
+                    ret->m_blosc_param.ctype = BLOSC_LZ4HC;
+                else if (bcptype == BLOSC_SNAPPY_COMPNAME)
+                    ret->m_blosc_param.ctype = BLOSC_SNAPPY;
+                else if (bcptype == BLOSC_ZLIB_COMPNAME)
+                    ret->m_blosc_param.ctype = BLOSC_ZLIB;
+                else if (bcptype == BLOSC_ZSTD_COMPNAME)
+                    ret->m_blosc_param.ctype = BLOSC_ZSTD;
+            }
+            else ret->m_blosc_param.ctype = BLOSC_BLOSCLZ;
+            
+            if (jf[CompressionKey].contains(BloscShuffleKey))
+                ret->m_blosc_param.suffle = jf[CompressionKey][BloscShuffleKey].get<int>();
+            else ret->m_blosc_param.suffle = 0;
+        }
     }
 
 	switch (ret->m_compression)
@@ -1593,6 +1631,9 @@ DatasetAttributes* BRKXMLReader::parseDatasetMetadata(wstring jpath)
 	case 3:
 		ret->m_compression = BRICK_FILE_TYPE_LZ4;
 		break;
+    case 5:
+        ret->m_compression = BRICK_FILE_TYPE_N5BLOSC;
+        break;
 	default:
 		ret->m_compression = BRICK_FILE_TYPE_NONE;
 	}

@@ -45,6 +45,7 @@
 #include <wx/stdpaths.h>
 #include <h5j_reader.h>
 #include <lz4.h>
+#include <blosc2.h>
 #endif
 
 using namespace std;
@@ -1351,13 +1352,14 @@ z
 	   return true;
    }
 
-   bool TextureBrick::decompress_brick(char *out, char* in, size_t out_size, size_t in_size, int type, int w, int h)
+   bool TextureBrick::decompress_brick(char *out, char* in, size_t out_size, size_t in_size, int type, int w, int h, int nb)
    {
 	   if	   (type == BRICK_FILE_TYPE_JPEG) return jpeg_decompressor(out, in, out_size, in_size);
 	   else if (type == BRICK_FILE_TYPE_ZLIB) return zlib_decompressor(out, in, out_size, in_size);
-	   else if (type == BRICK_FILE_TYPE_N5GZIP) return zlib_decompressor(out, in, out_size, in_size, true);
+	   else if (type == BRICK_FILE_TYPE_N5GZIP) return zlib_decompressor(out, in, out_size, in_size, true, nb);
 	   else if (type == BRICK_FILE_TYPE_H265) return h265_decompressor(out, in, out_size, in_size, w, h);
 	   else if (type == BRICK_FILE_TYPE_LZ4) return lz4_decompressor(out, in, out_size, in_size);
+       else if (type == BRICK_FILE_TYPE_N5BLOSC) return blosc_decompressor(out, in, out_size, in_size, true, nb);
 
 	   return false;
    }
@@ -1421,7 +1423,7 @@ z
 	   return true;
    }
 
-   bool TextureBrick::zlib_decompressor(char *out, char* in, size_t out_size, size_t in_size, bool isn5)
+   bool TextureBrick::zlib_decompressor(char *out, char* in, size_t out_size, size_t in_size, bool isn5, int nb)
    {
 	   try
 	   {
@@ -1447,6 +1449,16 @@ z
 			   inflateEnd(&zInfo);
 			   if (nOut != out_size || nErr != Z_STREAM_END)
 				   return false;
+               
+               if (isn5 && nb == 2)
+               {
+                   char e = check_machine_endian();
+                   if (e == 'L')
+                   {
+                       for (int i = 0; i < out_size-1; i += 2)
+                           swap(out[i], out[i+1]);
+                   }
+               }
 		   }
 		   else
 		   {
@@ -1498,6 +1510,54 @@ z
 
 	   return true;
    }
+    
+    bool TextureBrick::blosc_decompressor(char* out, char* in, size_t out_size, size_t in_size, bool isn5, int nb)
+    {
+        blosc2_dparams params;
+        params.nthreads = 1;
+        params.schunk = NULL;
+        
+        auto ctx = blosc2_create_dctx(params);
+        
+        if (!ctx)
+            return false;
+        
+        int decompressed_size = blosc2_decompress_ctx(ctx, in, in_size, out, out_size);
+        if (decompressed_size != out_size || decompressed_size < 0)
+            return false;
+        
+        if (isn5 && nb == 2)
+        {
+            char e = check_machine_endian();
+            if (e == 'L')
+            {
+                for (int i = 0; i < out_size-1; i += 2)
+                    swap(out[i], out[i+1]);
+            }
+        }
+        
+        blosc2_free_ctx(ctx);
+        
+        return true;
+    }
+    
+    char TextureBrick::check_machine_endian()
+    {
+        char e='N'; //for unknown endianness
+        
+        long int a=0x44332211;
+        unsigned char * p = (unsigned char *)&a;
+        if ((*p==0x11) && (*(p+1)==0x22) && (*(p+2)==0x33) && (*(p+3)==0x44))
+            e = 'L';
+        else if ((*p==0x44) && (*(p+1)==0x33) && (*(p+2)==0x22) && (*(p+3)==0x11))
+            e = 'B';
+        else if ((*p==0x22) && (*(p+1)==0x11) && (*(p+2)==0x44) && (*(p+3)==0x33))
+            e = 'M';
+        else
+            e = 'N';
+        
+        return e;
+    }
 
    void TextureBrick::delete_all_cache_files()
    {
