@@ -1145,33 +1145,86 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
 				DataGroup* group = vrv->GetGroup(group_name);
 				if (group)
 				{
-					for (int i=ch_num; i>0; i--)
-					{
-						VolumeData* vd = m_data_mgr.GetVolumeData(m_data_mgr.GetVolumeNum()-i);
-						if (vd)
-						{
-							vrv->AddVolumeData(vd);
-							wxString vol_name = vd->GetName();
-							if (vol_name.Find("_1ch")!=-1 &&
-								(i==1 || i==2))
-								vd->SetDisp(false);
-							if (vol_name.Find("_2ch")!=-1 && i==1)
-								vd->SetDisp(false);
-
-							if (i==ch_num)
-							{
-								vd_sel = vd;
-								group_sel = group;
-							}
-
-							if (vd->GetReader() && vd->GetReader()->GetTimeNum()>1)
-								enable_4d = true;
-
-							if(files.Count() == annotations.size())vd->SetAnnotation(annotations[j]);
-						}
-					}
-					if (j > 0)
-						group->SetDisp(false);
+                    if (suffix == ".h5j" && ch_num == 4)
+                    {
+                        for (int i=4; i>1; i--)
+                        {
+                            VolumeData* vd = m_data_mgr.GetVolumeData(m_data_mgr.GetVolumeNum()-i);
+                            if (vd)
+                            {
+                                vrv->AddVolumeData(vd);
+                                wxString vol_name = vd->GetName();
+                                if (vol_name.Find("_1ch")!=-1 &&
+                                    (i==1 || i==2))
+                                    vd->SetDisp(false);
+                                if (vol_name.Find("_2ch")!=-1 && i==1)
+                                    vd->SetDisp(false);
+                                
+                                if (i==ch_num)
+                                {
+                                    vd_sel = vd;
+                                    group_sel = group;
+                                }
+                                
+                                if (vd->GetReader() && vd->GetReader()->GetTimeNum()>1)
+                                    enable_4d = true;
+                                
+                                if(files.Count() == annotations.size())vd->SetAnnotation(annotations[j]);
+                            }
+                        }
+                        
+                        //reference
+                        wxString ref_group_name = vrv->AddGroup();
+                        DataGroup* ref_group = vrv->GetGroup(ref_group_name);
+                        VolumeData* rvd = m_data_mgr.GetVolumeData(m_data_mgr.GetVolumeNum()-1);
+                        if (rvd)
+                        {
+                            
+                            vrv->AddVolumeData(rvd);
+                            wxString vol_name = rvd->GetName();
+                            
+                            if (rvd->GetReader() && rvd->GetReader()->GetTimeNum()>1)
+                                enable_4d = true;
+                            
+                            if(files.Count() == annotations.size())rvd->SetAnnotation(annotations[j]);
+                        }
+                        
+                        if (j > 0)
+                        {
+                            group->SetDisp(false);
+                            ref_group->SetDisp(false);
+                        }
+                    }
+                    else
+                    {
+                        for (int i=ch_num; i>0; i--)
+                        {
+                            VolumeData* vd = m_data_mgr.GetVolumeData(m_data_mgr.GetVolumeNum()-i);
+                            if (vd)
+                            {
+                                vrv->AddVolumeData(vd);
+                                wxString vol_name = vd->GetName();
+                                if (vol_name.Find("_1ch")!=-1 &&
+                                    (i==1 || i==2))
+                                    vd->SetDisp(false);
+                                if (vol_name.Find("_2ch")!=-1 && i==1)
+                                    vd->SetDisp(false);
+                                
+                                if (i==ch_num)
+                                {
+                                    vd_sel = vd;
+                                    group_sel = group;
+                                }
+                                
+                                if (vd->GetReader() && vd->GetReader()->GetTimeNum()>1)
+                                    enable_4d = true;
+                                
+                                if(files.Count() == annotations.size())vd->SetAnnotation(annotations[j]);
+                            }
+                        }
+                        if (j > 0)
+                            group->SetDisp(false);
+                    }
 				}
 			}
 			else if (ch_num == 1)

@@ -80,7 +80,15 @@ m_dft_sync_b(false)
 #else
     wxSize sldrsize = wxSize(25,-1);
 #endif
-    
+/*
+    //first line: text
+    wxBoxSizer *sizer_h_0 = new wxBoxSizer(wxHORIZONTAL);
+    m_sync_r_chk = new wxCheckBox(this, ID_SyncRChk, "Easy Mode ");
+    sizer_h_0->Add(m_sync_r_chk, 1, wxEXPAND);
+    sizer_v->Add(sizer_h_0, 0, wxEXPAND);
+    //space
+    sizer_v->Add(5, 5, 0);
+  */
 	//first line: text
 	wxBoxSizer *sizer_h_1 = new wxBoxSizer(wxHORIZONTAL);
 	st = new wxStaticText(this, 0, "Gam.",

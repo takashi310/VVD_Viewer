@@ -61,7 +61,9 @@ class EXPORT_API AdjustView: public wxPanel
 		ID_SyncRChk,
 		ID_SyncGChk,
 		ID_SyncBChk,
-		ID_DefaultBtn
+		ID_DefaultBtn,
+        
+        ID_EasyModeChk
 	};
 
 public:
@@ -248,6 +250,9 @@ private:
 	wxTextCtrl *m_b_gamma_text;
 	wxTextCtrl *m_b_brightness_text;
 	wxTextCtrl *m_b_hdr_text;
+    
+    //easy mode
+    wxCheckBox *m_easy_chk;
 
 	//set default
 	wxButton *m_dft_btn;
