@@ -1018,11 +1018,11 @@ namespace FLIVR
 		// Color attachment
 		ad.format = VK_FORMAT_R32G32B32A32_SFLOAT;
 		ad.samples = VK_SAMPLE_COUNT_1_BIT;
-		ad.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		ad.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 		ad.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		ad.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		ad.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		ad.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		ad.initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		ad.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
 		for (uint32_t i = 0; i < attatchment_num; i++)

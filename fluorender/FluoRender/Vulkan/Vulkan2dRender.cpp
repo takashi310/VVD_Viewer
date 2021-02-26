@@ -156,7 +156,7 @@ VkRenderPass Vulkan2dRender::prepareRenderPass(VkFormat framebuf_format, int att
 		VkAttachmentDescription attd = {};
 		attd.format = framebuf_format;
 		attd.samples = VK_SAMPLE_COUNT_1_BIT;
-		attd.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		attd.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 		attd.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		attd.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		attd.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
