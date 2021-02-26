@@ -1325,7 +1325,7 @@ namespace vks
 		vks::tools::setImageLayout(
 			copyCmd,
 			tex->image,
-			VK_IMAGE_LAYOUT_UNDEFINED,
+			tex->descriptor.imageLayout,
 			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 			subresourceRange);
 
@@ -1384,7 +1384,7 @@ namespace vks
 
 	void VulkanDevice::CopyDataStagingBuf2SubTex2D(const std::shared_ptr<VTexture>& tex, VkOffset2D offset, VkExtent2D extent)
 	{
-		VkCommandBuffer copyCmd = createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+		VkCommandBuffer copyCmd = createTransferCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
 
 		// The sub resource range describes the regions of the image we will be transitioned
 		VkImageSubresourceRange subresourceRange = {};
@@ -1399,7 +1399,7 @@ namespace vks
 		vks::tools::setImageLayout(
 			copyCmd,
 			tex->image,
-			VK_IMAGE_LAYOUT_UNDEFINED,
+			tex->descriptor.imageLayout,
 			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 			subresourceRange);
 
@@ -1432,7 +1432,7 @@ namespace vks
 			tex->descriptor.imageLayout,
 			subresourceRange);
 
-		flushCommandBuffer(copyCmd, queue, true);
+		flushTransferCommandBuffer(copyCmd, true);
 	}
 
 	bool VulkanDevice::DownloadTexture3D(const std::shared_ptr<VTexture> &tex, void *data, VkOffset3D offset, uint32_t ypitch, uint32_t zpitch)
@@ -1494,7 +1494,7 @@ namespace vks
 
 	void VulkanDevice::CopyDataTex2StagingBuf(const std::shared_ptr<VTexture> &tex)
 	{
-		VkCommandBuffer copyCmd = createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+		VkCommandBuffer copyCmd = createTransferCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
 
 		// The sub resource range describes the regions of the image we will be transitioned
 		VkImageSubresourceRange subresourceRange = {};
@@ -1509,7 +1509,7 @@ namespace vks
 		vks::tools::setImageLayout(
 			copyCmd,
 			tex->image,
-			VK_IMAGE_LAYOUT_UNDEFINED,
+			tex->descriptor.imageLayout,
 			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 			subresourceRange);
 
@@ -1539,12 +1539,12 @@ namespace vks
 			tex->descriptor.imageLayout,
 			subresourceRange);
 
-		flushCommandBuffer(copyCmd, queue, true);
+		flushTransferCommandBuffer(copyCmd, true);
 	}
 
 	void VulkanDevice::CopyDataSubTex2StagingBuf2D(const std::shared_ptr<VTexture>& tex, VkOffset2D offset, VkExtent2D extent)
 	{
-		VkCommandBuffer copyCmd = createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+		VkCommandBuffer copyCmd = createTransferCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
 
 		// The sub resource range describes the regions of the image we will be transitioned
 		VkImageSubresourceRange subresourceRange = {};
@@ -1559,7 +1559,7 @@ namespace vks
 		vks::tools::setImageLayout(
 			copyCmd,
 			tex->image,
-			VK_IMAGE_LAYOUT_UNDEFINED,
+			tex->descriptor.imageLayout,
 			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 			subresourceRange);
 
@@ -1592,7 +1592,7 @@ namespace vks
 			tex->descriptor.imageLayout,
 			subresourceRange);
 
-		flushCommandBuffer(copyCmd, queue, true);
+		flushTransferCommandBuffer(copyCmd, true);
 	}
 
 	void VulkanDevice::ResetRenderSemaphores()
