@@ -7837,7 +7837,7 @@ wxThread::ExitCode VolumeDecompressorThread::Entry()
 		{
 			size_t bsize = (size_t)(q.b->nx()) * (size_t)(q.b->ny()) * (size_t)(q.b->nz()) * (size_t)(q.b->nb(0));
 			char* result = new char[bsize];
-			if (TextureBrick::decompress_brick(result, q.in_data, bsize, q.in_size, q.finfo->type, q.b->nx(), q.b->ny(), q.b->nb(0)))
+			if (TextureBrick::decompress_brick(result, q.in_data, bsize, q.in_size, q.finfo->type, q.b->nx(), q.b->ny(), q.b->nz(), q.b->nb(0), q.finfo->blosc_blocksize_x, q.finfo->blosc_blocksize_y, q.finfo->blosc_blocksize_z))
 			{
 				m_vl->ms_pThreadCS->Enter();
 
@@ -7863,19 +7863,38 @@ wxThread::ExitCode VolumeDecompressorThread::Entry()
 			}
 			else
 			{
+                m_vl->ms_pThreadCS->Enter();
+                
+                cerr << "failed to load " << q.finfo->filename << endl;
+                
+                delete[] q.in_data;
+                shared_ptr<VL_Array> sp = make_shared<VL_Array>(result, bsize);
+                q.b->set_brkdata(sp);
+                q.b->set_loading_state(false);
+                m_vl->m_memcached_data[q.finfo->id_string] = sp;
+                
+                VolumeLoaderData vld;
+                vld.brick = q.b;
+                vld.datasize = q.datasize;
+                vld.finfo = q.finfo;
+                vld.mode = q.mode;
+                vld.vd = q.vd;
+                m_vl->m_loaded[q.b] = vld;
+                
+                m_vl->ms_pThreadCS->Leave();
+                
+                /*
 				delete[] result;
 
 				m_vl->ms_pThreadCS->Enter();
-
-				//OutputDebugStringA("decompress: failed enter\n");
 
 				delete[] q.in_data;
 				m_vl->m_used_memory -= bsize;
 				q.b->set_drawn(q.mode, true);
 				q.b->set_loading_state(false);
 
-				//OutputDebugStringA("decompress: failed leave\n");
 				m_vl->ms_pThreadCS->Leave();
+                */
 			}
 		}
 		else
@@ -8109,7 +8128,7 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 					if (decomp_in_this_thread)
 					{
 						char* result = new char[bsize];
-						if (TextureBrick::decompress_brick(result, dq.in_data, bsize, dq.in_size, dq.finfo->type, dq.b->nx(), dq.b->ny(), dq.b->nb(0)))
+						if (TextureBrick::decompress_brick(result, dq.in_data, bsize, dq.in_size, dq.finfo->type, dq.b->nx(), dq.b->ny(), dq.b->nz(), dq.b->nb(0), dq.finfo->blosc_blocksize_x, dq.finfo->blosc_blocksize_y, dq.finfo->blosc_blocksize_z))
 						{
 							m_vl->ms_pThreadCS->Enter();
 

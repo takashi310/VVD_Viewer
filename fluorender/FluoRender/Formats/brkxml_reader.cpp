@@ -1497,7 +1497,7 @@ void BRKXMLReader::loadFSN5()
                 
                 FLIVR::FileLocInfo* fi = nullptr;
                 if (boost::filesystem::exists(br_file_path))
-                    fi = new FLIVR::FileLocInfo(wss2.str(), 16, 0, lvinfo.file_type, false, lvinfo.blosc_blocksize, lvinfo.blosc_clevel, lvinfo.blosc_ctype, lvinfo.blosc_suffle);
+                    fi = new FLIVR::FileLocInfo(wss2.str(), 0, 0, lvinfo.file_type, false, true, lvinfo.blosc_blocksize, lvinfo.blosc_clevel, lvinfo.blosc_ctype, lvinfo.blosc_suffle);
 				lvinfo.filename[0][i][pid] = fi;
 			}
 

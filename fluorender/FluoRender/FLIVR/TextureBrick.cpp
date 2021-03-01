@@ -1307,8 +1307,47 @@ z
 	   ifs.open(ws2s(fn), ios::binary);
 	   if (!ifs) 
 		   return false;
-//	   if (finfo->type != BRICK_FILE_TYPE_H265) 
-//	   {
+       
+       if (!finfo->isn5)
+       {
+           size_t zsize = finfo->datasize;
+           if (zsize <= 0) zsize = (size_t)ifs.seekg(0, std::ios::end).tellg();
+           char *zdata = new char[zsize];
+           ifs.seekg(finfo->offset, ios_base::beg);
+           ifs.read((char*)zdata, zsize);
+           if (ifs) ifs.close();
+           data = zdata;
+           readsize = zsize;
+       }
+       else
+       {
+           size_t zsize = finfo->datasize;
+           if (zsize <= 0) zsize = (size_t)ifs.seekg(0, std::ios::end).tellg();
+           unsigned char *zdata = new unsigned char[zsize];
+           char *blockdata = new char[zsize-16];
+           ifs.seekg(finfo->offset, ios_base::beg);
+           ifs.read((char*)zdata, zsize);
+           if (ifs) ifs.close();
+           
+           if (zsize >= 16)
+           {
+                int dnum = ((int)zdata[2] << 8) + (int)zdata[3];
+               if (dnum >= 1)
+                   finfo->blosc_blocksize_x = ((int)zdata[4] << 24) + ((int)zdata[5] << 16) + ((int)zdata[6] << 8) + (int)zdata[7];
+               if (dnum >= 2)
+                   finfo->blosc_blocksize_y = ((int)zdata[8] << 24) + ((int)zdata[9] << 16) + ((int)zdata[10] << 8) + (int)zdata[11];
+               if (dnum >= 3)
+                   finfo->blosc_blocksize_z = ((int)zdata[12] << 24) + ((int)zdata[13] << 16) + ((int)zdata[14] << 8) + (int)zdata[15];
+           }
+           
+           memcpy(blockdata, zdata + 16, zsize-16);
+           data = blockdata;
+           readsize = zsize - 16;
+       }
+
+/*
+       if (finfo->type != BRICK_FILE_TYPE_H265)
+	   {
 		   size_t zsize = finfo->datasize;
 		   if (zsize <= 0) zsize = (size_t)ifs.seekg(0, std::ios::end).tellg();
 		   char *zdata = new char[zsize];
@@ -1317,8 +1356,8 @@ z
 		   if (ifs) ifs.close();
 		   data = zdata;
 		   readsize = zsize;
-//	   } 
-/*	   else
+       }
+	   else
 	   {
 		   size_t h265size = finfo->datasize;
 		   size_t fsize = (size_t)ifs.seekg(0, std::ios::end).tellg();
@@ -1352,14 +1391,14 @@ z
 	   return true;
    }
 
-   bool TextureBrick::decompress_brick(char *out, char* in, size_t out_size, size_t in_size, int type, int w, int h, int nb)
+   bool TextureBrick::decompress_brick(char *out, char* in, size_t out_size, size_t in_size, int type, int w, int h, int d, int nb, int n5_w, int n5_h, int n5_d)
    {
 	   if	   (type == BRICK_FILE_TYPE_JPEG) return jpeg_decompressor(out, in, out_size, in_size);
 	   else if (type == BRICK_FILE_TYPE_ZLIB) return zlib_decompressor(out, in, out_size, in_size);
 	   else if (type == BRICK_FILE_TYPE_N5GZIP) return zlib_decompressor(out, in, out_size, in_size, true, nb);
 	   else if (type == BRICK_FILE_TYPE_H265) return h265_decompressor(out, in, out_size, in_size, w, h);
 	   else if (type == BRICK_FILE_TYPE_LZ4) return lz4_decompressor(out, in, out_size, in_size);
-       else if (type == BRICK_FILE_TYPE_N5BLOSC) return blosc_decompressor(out, in, out_size, in_size, true, nb);
+       else if (type == BRICK_FILE_TYPE_N5BLOSC) return blosc_decompressor(out, in, out_size, in_size, true, w, h, d, nb, n5_w, n5_h, n5_d);
 
 	   return false;
    }
@@ -1511,7 +1550,7 @@ z
 	   return true;
    }
     
-    bool TextureBrick::blosc_decompressor(char* out, char* in, size_t out_size, size_t in_size, bool isn5, int nb)
+    bool TextureBrick::blosc_decompressor(char* out, char* in, size_t out_size, size_t in_size, bool isn5, int w, int h, int d, int nb, int n5_w, int n5_h, int n5_d)
     {
         blosc2_dparams params;
         params.nthreads = 1;
@@ -1523,8 +1562,31 @@ z
             return false;
         
         int decompressed_size = blosc2_decompress_ctx(ctx, in, in_size, out, out_size);
-        if (decompressed_size != out_size || decompressed_size < 0)
-            return false;
+        if (decompressed_size < 0)
+        {
+            size_t nbytes, cbytes, bs;
+            blosc_cbuffer_sizes(in, &nbytes, &cbytes, &bs);
+            
+            char* buf = new char[nbytes];
+            int decompressed_size2 = blosc2_decompress_ctx(ctx, in, in_size, buf, nbytes);
+            if (decompressed_size2 < 0 || n5_w < w || n5_h < h || n5_d < d)
+                return false;
+            
+            char* src = buf;
+            char* dst = out;
+            int src_y_pitch = n5_w * nb;
+            int dst_y_pitch = w * nb;
+            int src_z_pitch = n5_w * n5_h * nb;
+            int dst_z_pitch = w * h * nb;
+            for (int zz = 0; zz < d; zz++)
+            {
+                for (int yy = 0; yy < h; yy++)
+                    memcpy(dst + dst_y_pitch * yy, src + src_y_pitch * yy, dst_y_pitch);
+                src += src_z_pitch;
+                dst += dst_z_pitch;
+            }
+            delete[] buf;
+        }
         
         if (isn5 && nb == 2)
         {

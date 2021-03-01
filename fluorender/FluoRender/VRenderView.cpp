@@ -12421,13 +12421,22 @@ void VRenderVulkanView::DrawInfo(int nx, int ny)
 	if (TextureRenderer::get_streaming())
 	{
 		str = wxString::Format(
-			"FPS: %.2f, Bricks: %d, Quota: %d, Int: %s, Time: %lu, Dist: %f",
+			"FPS: %.2f, Bricks: %d, CurBrk: %d",
 			fps_>=0.0&&fps_<300.0?fps_:0.0,
 			TextureRenderer::get_total_brick_num(),
-			TextureRenderer::get_quota_bricks(),
-			m_interactive?"Yes":"No",
-			TextureRenderer::get_cor_up_time(),
-			CalcCameraDistance());
+			TextureRenderer::get_cur_brick_num());
+        
+        /*
+        str = wxString::Format(
+                               "FPS: %.2f, Bricks: %d, Quota: %d, Int: %s, Time: %lu, Dist: %f",
+                               fps_>=0.0&&fps_<300.0?fps_:0.0,
+                               TextureRenderer::get_total_brick_num(),
+                               TextureRenderer::get_quota_bricks(),
+                               m_interactive?"Yes":"No",
+                               TextureRenderer::get_cor_up_time(),
+                               CalcCameraDistance());
+        */
+        
 		////budget_test
 		//if (m_interactive)
 		//  tos <<
@@ -13405,7 +13414,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 				Texture* tex = vd->GetTexture();
 				if (tex && vd->GetVR())
 				{
-					if (m_draw_mask && tex->isBrxml())
+					if (m_draw_mask && tex->isBrxml() && vd->GetTexture()->nmask() >= 0 && !vd->GetSharedMaskName().IsEmpty())
 					{
 						int curlv = vd->GetLevel();
 						vd->SetLevel(vd->GetMaskLv());
@@ -13429,7 +13438,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 							(*bricks2)[j]->set_drawn(false);
 							if ((*bricks2)[j]->get_priority()>0 ||
 								!vd->GetVR()->test_against_view_clip((*bricks2)[j]->bbox(), (*bricks2)[j]->tbox(), (*bricks2)[j]->dbox(), m_persp) ||
-                                !tex->GetFileName((*bricks2)[j]->getID()) )//changed by takashi
+                                !tex->GetFileName((*bricks2)[j]->getID()) )
 							{
 								(*bricks2)[j]->set_disp(false);
 								continue;
@@ -13470,7 +13479,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 						(*bricks)[j]->set_drawn(false);
 						if ((*bricks)[j]->get_priority()>0 ||
 							!vd->GetVR()->test_against_view_clip((*bricks)[j]->bbox(), (*bricks)[j]->tbox(), (*bricks)[j]->dbox(), m_persp) ||
-                            (tex->isBrxml() && !tex->GetFileName((*bricks)[j]->getID())) )//changed by takashi
+                            (tex->isBrxml() && !tex->GetFileName((*bricks)[j]->getID())) )
 						{
 							(*bricks)[j]->set_disp(false);
 							continue;

@@ -257,12 +257,15 @@ namespace FLIVR {
 			cached = false;
 			cache_filename = L"";
 			id_string = L"";
-            blosc_blocksize = 0;
+            blosc_blocksize_x = 0;
+            blosc_blocksize_y = 0;
+            blosc_blocksize_z = 0;
             blosc_clevel = 0;
             blosc_ctype = 0;
             blosc_suffle = 0;
+            isn5 = false;
 		}
-		FileLocInfo(std::wstring filename_, int offset_, int datasize_, int type_, bool isurl_, int bblocksize_ = 0, int bclevel_ = 0, int bctype_ = 0, int bsuffle_ = 0)
+		FileLocInfo(std::wstring filename_, int offset_, int datasize_, int type_, bool isurl_, bool isn5_, int bblocksize_x_ = 0, int bblocksize_y_ = 0, int bblocksize_z_ = 0, int bclevel_ = 0, int bctype_ = 0, int bsuffle_ = 0)
 		{
 			filename = filename_;
 			offset = offset_;
@@ -274,7 +277,10 @@ namespace FLIVR {
 			std::wstringstream wss;
 			wss << filename << L" " << offset;
 			id_string = wss.str();
-            blosc_blocksize = bblocksize_;
+            isn5 = isn5_;
+            blosc_blocksize_x = bblocksize_x_;
+            blosc_blocksize_y = bblocksize_y_;
+            blosc_blocksize_z = bblocksize_z_;
             blosc_clevel = bclevel_;
             blosc_ctype = bctype_;
             blosc_suffle = bsuffle_;
@@ -289,7 +295,10 @@ namespace FLIVR {
 			cached = copy.cached;
 			cache_filename = copy.cache_filename;
 			id_string = copy.id_string;
-            blosc_blocksize = copy.blosc_blocksize;
+            isn5 = copy.isn5;
+            blosc_blocksize_x = copy.blosc_blocksize_x;
+            blosc_blocksize_y = copy.blosc_blocksize_y;
+            blosc_blocksize_z = copy.blosc_blocksize_z;
             blosc_clevel = copy.blosc_clevel;
             blosc_ctype = copy.blosc_ctype;
             blosc_suffle = copy.blosc_suffle;
@@ -304,7 +313,10 @@ namespace FLIVR {
 		std::wstring cache_filename;
 		std::wstring id_string;
         
-        int blosc_blocksize;
+        bool isn5;
+        int blosc_blocksize_x;
+        int blosc_blocksize_y;
+        int blosc_blocksize_z;
         int blosc_clevel;
         int blosc_ctype;
         int blosc_suffle;
@@ -521,12 +533,12 @@ namespace FLIVR {
 		void set_brkdata(const std::shared_ptr<VL_Array> &brkdata) {brkdata_ = brkdata;}
 		void set_brkdata(void *brkdata, size_t size) {brkdata_ = std::make_shared<VL_Array>((char *)brkdata, size);}
 		static bool read_brick_without_decomp(char* &data, size_t &readsize, FileLocInfo* finfo, wxThread *th=NULL);
-		static bool decompress_brick(char *out, char* in, size_t out_size, size_t in_size, int type, int w, int h, int nb);
+		static bool decompress_brick(char *out, char* in, size_t out_size, size_t in_size, int type, int w, int h, int d, int nb, int n5_w = 0, int n5_h = 0, int n5_d = 0);
 		static bool jpeg_decompressor(char *out, char* in, size_t out_size, size_t in_size);
 		static bool zlib_decompressor(char *out, char* in, size_t out_size, size_t in_size, bool isn5 = false, int nb = 1);
 		static bool h265_decompressor(char *out, char* in, size_t out_size, size_t in_size, int w, int h);
 		static bool lz4_decompressor(char* out, char* in, size_t out_size, size_t in_size);
-        static bool blosc_decompressor(char* out, char* in, size_t out_size, size_t in_size, bool isn5 = false, int nb = 1);
+        static bool blosc_decompressor(char* out, char* in, size_t out_size, size_t in_size, bool isn5, int w, int h, int d, int nb, int n5_w = 0, int n5_h = 0, int n5_d = 0);
 		static void delete_all_cache_files();
         static char check_machine_endian();
 
