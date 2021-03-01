@@ -12420,13 +12420,13 @@ void VRenderVulkanView::DrawInfo(int nx, int ny)
 	Color text_color = GetTextColor();
 	if (TextureRenderer::get_streaming())
 	{
-		str = wxString::Format(
+		/*str = wxString::Format(
 			"FPS: %.2f, Bricks: %d, CurBrk: %d",
 			fps_>=0.0&&fps_<300.0?fps_:0.0,
 			TextureRenderer::get_total_brick_num(),
 			TextureRenderer::get_cur_brick_num());
+        */
         
-        /*
         str = wxString::Format(
                                "FPS: %.2f, Bricks: %d, Quota: %d, Int: %s, Time: %lu, Dist: %f",
                                fps_>=0.0&&fps_<300.0?fps_:0.0,
@@ -12435,7 +12435,6 @@ void VRenderVulkanView::DrawInfo(int nx, int ny)
                                m_interactive?"Yes":"No",
                                TextureRenderer::get_cor_up_time(),
                                CalcCameraDistance());
-        */
         
 		////budget_test
 		//if (m_interactive)
