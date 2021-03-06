@@ -184,6 +184,8 @@ public:
 	bool GetRSync() {return m_sync_r;}
 	bool GetGSync() {return m_sync_g;}
 	bool GetBSync() {return m_sync_b;}
+    
+    void UpdateEasyParams();
 
 	void UpdateSync();
 
@@ -208,6 +210,13 @@ private:
 	bool m_dft_sync_r;
 	bool m_dft_sync_g;
 	bool m_dft_sync_b;
+    
+    double m_easy_base_gamma_r;
+    double m_easy_base_gamma_g;
+    double m_easy_base_gamma_b;
+    double m_easy_base_brightness_r;
+    double m_easy_base_brightness_g;
+    double m_easy_base_brightness_b;
 
 	//sync red
 	wxCheckBox *m_sync_r_chk;
@@ -251,11 +260,46 @@ private:
 	wxTextCtrl *m_b_brightness_text;
 	wxTextCtrl *m_b_hdr_text;
     
+    //set default
+    wxButton *m_dft_btn;
+    
     //easy mode
     wxCheckBox *m_easy_chk;
 
-	//set default
-	wxButton *m_dft_btn;
+    //easy sync red
+    wxCheckBox *m_easy_sync_r_chk;
+    //easy red sliders
+    wxSlider *m_easy_r_gamma_sldr;
+    //easy red reset buttons
+    wxButton *m_easy_r_reset_btn;
+    //easy red input boxes
+    wxTextCtrl *m_easy_r_gamma_text;
+    
+    //easy sync green
+    wxCheckBox *m_easy_sync_g_chk;
+    //easy green sliders
+    wxSlider *m_easy_g_gamma_sldr;
+    //easy green reset buttons
+    wxButton *m_easy_g_reset_btn;
+    //easy green input boxes
+    wxTextCtrl *m_easy_g_gamma_text;
+    
+    //easy sync blue
+    wxCheckBox *m_easy_sync_b_chk;
+    //easy blue sliders
+    wxSlider *m_easy_b_gamma_sldr;
+    //easy blue reset buttons
+    wxButton *m_easy_b_reset_btn;
+    //easy blue input boxes
+    wxTextCtrl *m_easy_b_gamma_text;
+    
+    //easy set default
+    wxButton *m_easy_dft_btn;
+    
+    
+    wxBoxSizer *m_default_sizer;
+    wxBoxSizer *m_easy_sizer;
+    wxBoxSizer *m_main_sizer;
 
 private:
 	//gamma
@@ -289,6 +333,8 @@ private:
 	void OnSyncBCheck(wxCommandEvent &event);
 	//set default
 	void OnSaveDefault(wxCommandEvent &event);
+    
+    void OnEasyModeCheck(wxCommandEvent &event);
 
 	DECLARE_EVENT_TABLE();
 };

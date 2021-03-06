@@ -3,6 +3,8 @@
 #include <wx/valnum.h>
 #include <wx/stdpaths.h>
 
+#include <cmath>
+
 BEGIN_EVENT_TABLE(AdjustView, wxPanel)
 	//set gamme
 	EVT_COMMAND_SCROLL(ID_RGammaSldr, AdjustView::OnRGammaChange)
@@ -35,6 +37,8 @@ BEGIN_EVENT_TABLE(AdjustView, wxPanel)
 	EVT_CHECKBOX(ID_SyncBChk, AdjustView::OnSyncBCheck)
 	//set default
 	EVT_BUTTON(ID_DefaultBtn, AdjustView::OnSaveDefault)
+
+    EVT_CHECKBOX(ID_EasyModeChk, AdjustView::OnEasyModeCheck)
 END_EVENT_TABLE()
 
 AdjustView::AdjustView(wxWindow* frame,
@@ -72,7 +76,9 @@ m_dft_sync_b(false)
 	wxIntegerValidator<int> vald_int;
 	vald_int.SetRange(-256, 256);
 
-	wxBoxSizer *sizer_v = new wxBoxSizer(wxVERTICAL);
+    m_main_sizer = new wxBoxSizer(wxVERTICAL);
+    m_easy_sizer = new wxBoxSizer(wxVERTICAL);
+	m_default_sizer = new wxBoxSizer(wxVERTICAL);
 	wxStaticText *st;
 
 #ifdef _DARWIN
@@ -80,15 +86,15 @@ m_dft_sync_b(false)
 #else
     wxSize sldrsize = wxSize(25,-1);
 #endif
-/*
+
     //first line: text
     wxBoxSizer *sizer_h_0 = new wxBoxSizer(wxHORIZONTAL);
-    m_sync_r_chk = new wxCheckBox(this, ID_SyncRChk, "Easy Mode ");
-    sizer_h_0->Add(m_sync_r_chk, 1, wxEXPAND);
-    sizer_v->Add(sizer_h_0, 0, wxEXPAND);
+    m_easy_chk = new wxCheckBox(this, ID_EasyModeChk, "Easy Mode ");
+    sizer_h_0->Add(m_easy_chk, 1, wxEXPAND);
+    m_main_sizer->Add(sizer_h_0, 0, wxEXPAND);
     //space
-    sizer_v->Add(5, 5, 0);
-  */
+    m_main_sizer->Add(5, 5, 0);
+    
 	//first line: text
 	wxBoxSizer *sizer_h_1 = new wxBoxSizer(wxHORIZONTAL);
 	st = new wxStaticText(this, 0, "Gam.",
@@ -100,9 +106,9 @@ m_dft_sync_b(false)
 	st = new wxStaticText(this, 0, "Eql.",
                           wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER);
 	sizer_h_1->Add(st, 1, wxEXPAND);
-	sizer_v->Add(sizer_h_1, 0, wxEXPAND);
+	m_default_sizer->Add(sizer_h_1, 0, wxEXPAND);
 	//space
-	sizer_v->Add(5, 5, 0);
+	m_default_sizer->Add(5, 5, 0);
 
 	//second line: red
 	wxBoxSizer *sizer_h_2 = new wxBoxSizer(wxHORIZONTAL);
@@ -111,12 +117,12 @@ m_dft_sync_b(false)
 	sizer_h_2->Add(st, 1, wxEXPAND);
 	m_sync_r_chk = new wxCheckBox(this, ID_SyncRChk, "Link");
 	sizer_h_2->Add(m_sync_r_chk, 1, wxALIGN_CENTER);
-	sizer_v->Add(sizer_h_2, 0, wxEXPAND);
+	m_default_sizer->Add(sizer_h_2, 0, wxEXPAND);
 
 	//third line: red bar
 	st = new wxStaticText(this, 0, "", wxDefaultPosition, wxSize(5,5));
 	st->SetBackgroundColour(wxColor(255, 0, 0));
-	sizer_v->Add(st, 0, wxEXPAND);
+	m_default_sizer->Add(st, 0, wxEXPAND);
 
 	//fourth line: sliders
 	wxBoxSizer *sizer_h_3 = new wxBoxSizer(wxHORIZONTAL);
@@ -131,7 +137,7 @@ m_dft_sync_b(false)
                                 wxDefaultPosition, sldrsize, wxSL_VERTICAL);
 
 	sizer_h_3->Add(m_r_hdr_sldr, 1, wxEXPAND);
-	sizer_v->Add(sizer_h_3, 1, wxEXPAND);
+	m_default_sizer->Add(sizer_h_3, 1, wxEXPAND);
 
 	//fifth line: reset buttons
 #ifndef _DARWIN
@@ -141,7 +147,7 @@ m_dft_sync_b(false)
 	m_r_reset_btn = new wxButton(this, ID_RResetBtn, "Reset",
 								 wxDefaultPosition, wxSize(30, 30));
 #endif
-	sizer_v->Add(m_r_reset_btn, 0, wxEXPAND);
+	m_default_sizer->Add(m_r_reset_btn, 0, wxEXPAND);
 
 	//6th line: input boxes
 	wxBoxSizer *sizer_h_5 = new wxBoxSizer(wxHORIZONTAL);
@@ -156,10 +162,10 @@ m_dft_sync_b(false)
 	m_r_hdr_text = new wxTextCtrl(this, ID_RHdrText, "0.00",
                                   wxDefaultPosition, wxSize(30, 20), 0, vald_fp2);
 	sizer_h_5->Add(m_r_hdr_text, 1, wxEXPAND);
-	sizer_v->Add(sizer_h_5, 0, wxEXPAND);
+	m_default_sizer->Add(sizer_h_5, 0, wxEXPAND);
 
 	//space
-	sizer_v->Add(5, 5, 0);
+	m_default_sizer->Add(5, 5, 0);
 
 	//7th line: green
 	wxBoxSizer *sizer_h_6 = new wxBoxSizer(wxHORIZONTAL);
@@ -168,13 +174,13 @@ m_dft_sync_b(false)
 	sizer_h_6->Add(st, 1, wxEXPAND);
 	m_sync_g_chk = new wxCheckBox(this, ID_SyncGChk, "Link");
 	sizer_h_6->Add(m_sync_g_chk, 1, wxALIGN_CENTER);
-	sizer_v->Add(sizer_h_6, 0, wxEXPAND);
-	sizer_v->Add(3,3,0);
+	m_default_sizer->Add(sizer_h_6, 0, wxEXPAND);
+	m_default_sizer->Add(3,3,0);
 
 	//8th line: green bar
 	st = new wxStaticText(this, 0, "", wxDefaultPosition, wxSize(5, 5));
 	st->SetBackgroundColour(wxColor(0, 255, 0));
-	sizer_v->Add(st, 0, wxEXPAND);
+	m_default_sizer->Add(st, 0, wxEXPAND);
 
 	//9th line: sliders
 	wxBoxSizer *sizer_h_7 = new wxBoxSizer(wxHORIZONTAL);
@@ -187,7 +193,7 @@ m_dft_sync_b(false)
 	m_g_hdr_sldr = new wxSlider(this, ID_GHdrSldr, 0, 0, 100,
                                 wxDefaultPosition, sldrsize, wxSL_VERTICAL);
 	sizer_h_7->Add(m_g_hdr_sldr, 1, wxEXPAND);
-	sizer_v->Add(sizer_h_7, 1, wxEXPAND);
+	m_default_sizer->Add(sizer_h_7, 1, wxEXPAND);
 
 	//10th line: reset buttons
 #ifndef _DARWIN
@@ -197,7 +203,7 @@ m_dft_sync_b(false)
 	m_g_reset_btn = new wxButton(this, ID_GResetBtn, "Reset",
 								 wxDefaultPosition, wxSize(30, 30));
 #endif
-	sizer_v->Add(m_g_reset_btn, 0, wxEXPAND);
+	m_default_sizer->Add(m_g_reset_btn, 0, wxEXPAND);
 
 	//11th line: input boxes
 	wxBoxSizer *sizer_h_9 = new wxBoxSizer(wxHORIZONTAL);
@@ -212,10 +218,10 @@ m_dft_sync_b(false)
 	m_g_hdr_text = new wxTextCtrl(this, ID_GHdrText, "0.00",
                                   wxDefaultPosition, wxSize(30, 20), 0, vald_fp2);
 	sizer_h_9->Add(m_g_hdr_text, 1, wxEXPAND);
-	sizer_v->Add(sizer_h_9, 0, wxEXPAND);
+	m_default_sizer->Add(sizer_h_9, 0, wxEXPAND);
 
 	//space
-	sizer_v->Add(5, 5, 0);
+	m_default_sizer->Add(5, 5, 0);
 
 	//12th line: blue
 	wxBoxSizer *sizer_h_10 = new wxBoxSizer(wxHORIZONTAL);
@@ -224,13 +230,13 @@ m_dft_sync_b(false)
 	sizer_h_10->Add(st, 1, wxEXPAND);
 	m_sync_b_chk = new wxCheckBox(this, ID_SyncBChk, "Link");
 	sizer_h_10->Add(m_sync_b_chk, 1, wxALIGN_CENTER);
-	sizer_v->Add(sizer_h_10, 0, wxEXPAND);
-	sizer_v->Add(3,3,0);
+	m_default_sizer->Add(sizer_h_10, 0, wxEXPAND);
+	m_default_sizer->Add(3,3,0);
 
 	//13th line:blue bar
 	st = new wxStaticText(this, 0, "", wxDefaultPosition, wxSize(5, 5));
 	st->SetBackgroundColour(wxColor(0, 0, 255));
-	sizer_v->Add(st, 0, wxEXPAND);
+	m_default_sizer->Add(st, 0, wxEXPAND);
 
 	//14th line: sliders
 	wxBoxSizer *sizer_h_11 = new wxBoxSizer(wxHORIZONTAL);
@@ -243,7 +249,7 @@ m_dft_sync_b(false)
 	m_b_hdr_sldr = new wxSlider(this, ID_BHdrSldr, 0, 0, 100,
                                 wxDefaultPosition, sldrsize, wxSL_VERTICAL);
 	sizer_h_11->Add(m_b_hdr_sldr, 1, wxEXPAND);
-	sizer_v->Add(sizer_h_11, 1, wxEXPAND);
+	m_default_sizer->Add(sizer_h_11, 1, wxEXPAND);
     
 
 	//15th line: reset buttons
@@ -254,7 +260,7 @@ m_dft_sync_b(false)
 	m_b_reset_btn = new wxButton(this, ID_BResetBtn, "Reset",
 								 wxDefaultPosition, wxSize(30, 30));
 #endif
-	sizer_v->Add(m_b_reset_btn, 0, wxEXPAND);
+	m_default_sizer->Add(m_b_reset_btn, 0, wxEXPAND);
 
 	//16th line: input boxes
 	wxBoxSizer *sizer_h_13 = new wxBoxSizer(wxHORIZONTAL);
@@ -269,7 +275,7 @@ m_dft_sync_b(false)
 	m_b_hdr_text = new wxTextCtrl(this, ID_BHdrText, "0.00",
                                   wxDefaultPosition, wxSize(30, 20), 0, vald_fp2);
 	sizer_h_13->Add(m_b_hdr_text, 1, wxEXPAND);
-	sizer_v->Add(sizer_h_13, 0, wxEXPAND);
+	m_default_sizer->Add(sizer_h_13, 0, wxEXPAND);
 
 	//17th line: default button
 #ifndef _DARWIN
@@ -279,10 +285,162 @@ m_dft_sync_b(false)
 	m_dft_btn = new wxButton(this, ID_DefaultBtn, "Set Default",
 							 wxDefaultPosition, wxSize(95, 30));
 #endif
-	sizer_v->Add(m_dft_btn, 0, wxEXPAND);
+	m_default_sizer->Add(m_dft_btn, 0, wxEXPAND);
+    
+    m_main_sizer->Add(m_default_sizer, 0, wxEXPAND);
+    
+    
+    //first line: text
+    wxBoxSizer *sizer_h_e_1 = new wxBoxSizer(wxHORIZONTAL);
+    st = new wxStaticText(this, 0, "Contrast",
+                          wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER);
+    sizer_h_e_1->Add(st, 1, wxEXPAND);
+    m_easy_sizer->Add(sizer_h_e_1, 0, wxEXPAND);
+    //space
+    m_easy_sizer->Add(5, 5, 0);
+    
+    //second line: red
+    wxBoxSizer *sizer_h_e_2 = new wxBoxSizer(wxHORIZONTAL);
+    st = new wxStaticText(this, 0, "Red:",
+                          wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER);
+    sizer_h_e_2->Add(st, 1, wxEXPAND);
+    m_easy_sync_r_chk = new wxCheckBox(this, ID_SyncRChk, "Link");
+    sizer_h_e_2->Add(m_easy_sync_r_chk, 1, wxALIGN_CENTER);
+    m_easy_sizer->Add(sizer_h_e_2, 0, wxEXPAND);
+    m_easy_sizer->Add(3,3,0);
+    
+    //third line: red bar
+    st = new wxStaticText(this, 0, "", wxDefaultPosition, wxSize(5,5));
+    st->SetBackgroundColour(wxColor(255, 0, 0));
+    m_easy_sizer->Add(st, 0, wxEXPAND);
+    
+    //fourth line: sliders
+    wxBoxSizer *sizer_h_e_3 = new wxBoxSizer(wxHORIZONTAL);
+    m_easy_r_gamma_sldr = new wxSlider(this, ID_RGammaSldr, 100, 10, 999,
+                                  wxDefaultPosition, sldrsize, wxSL_VERTICAL);
+    sizer_h_e_3->Add(m_easy_r_gamma_sldr, 1, wxEXPAND);
+    m_easy_sizer->Add(sizer_h_e_3, 1, wxEXPAND);
+    
+    //5th line: input boxes
+    wxBoxSizer *sizer_h_e_5 = new wxBoxSizer(wxHORIZONTAL);
+    vald_fp2.SetRange(0.0, 10.0);
+    m_easy_r_gamma_text = new wxTextCtrl(this, ID_RGammaText, "1.00",
+                                    wxDefaultPosition, wxSize(40, 20), 0, vald_fp2);
+    sizer_h_e_5->Add(m_easy_r_gamma_text, 1, wxALIGN_CENTER);
+    m_easy_sizer->Add(sizer_h_e_5, 0, wxALIGN_CENTER);
+    
+    //6th line: reset buttons
+#ifndef _DARWIN
+    m_easy_r_reset_btn = new wxButton(this, ID_RResetBtn, "Reset",
+                                      wxDefaultPosition, wxSize(30, 22));
+#else
+    m_easy_r_reset_btn = new wxButton(this, ID_RResetBtn, "Reset",
+                                      wxDefaultPosition, wxSize(30, 30));
+#endif
+    m_easy_sizer->Add(m_easy_r_reset_btn, 0, wxEXPAND);
+    
+    //space
+    m_easy_sizer->Add(5, 5, 0);
+    
+    //7th line: green
+    wxBoxSizer *sizer_h_e_6 = new wxBoxSizer(wxHORIZONTAL);
+    st = new wxStaticText(this, 0, "Green:",
+                          wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER);
+    sizer_h_e_6->Add(st, 1, wxEXPAND);
+    m_easy_sync_g_chk = new wxCheckBox(this, ID_SyncGChk, "Link");
+    sizer_h_e_6->Add(m_easy_sync_g_chk, 1, wxALIGN_CENTER);
+    m_easy_sizer->Add(sizer_h_e_6, 0, wxEXPAND);
+    m_easy_sizer->Add(3,3,0);
+    
+    //8th line: green bar
+    st = new wxStaticText(this, 0, "", wxDefaultPosition, wxSize(5, 5));
+    st->SetBackgroundColour(wxColor(0, 255, 0));
+    m_easy_sizer->Add(st, 0, wxEXPAND);
+    
+    //9th line: sliders
+    wxBoxSizer *sizer_h_e_7 = new wxBoxSizer(wxHORIZONTAL);
+    m_easy_g_gamma_sldr = new wxSlider(this, ID_GGammaSldr, 100, 10, 999,
+                                       wxDefaultPosition, sldrsize, wxSL_VERTICAL);
+    sizer_h_e_7->Add(m_easy_g_gamma_sldr, 1, wxEXPAND);
+    m_easy_sizer->Add(sizer_h_e_7, 1, wxEXPAND);
+    
+    //10th line: input boxes
+    wxBoxSizer *sizer_h_e_8 = new wxBoxSizer(wxHORIZONTAL);
+    vald_fp2.SetRange(0.0, 10.0);
+    m_easy_g_gamma_text = new wxTextCtrl(this, ID_GGammaText, "1.00",
+                                         wxDefaultPosition, wxSize(40, 20), 0, vald_fp2);
+    sizer_h_e_8->Add(m_easy_g_gamma_text, 1, wxALIGN_CENTER);
+    m_easy_sizer->Add(sizer_h_e_8, 0, wxALIGN_CENTER);
+    
+    //11th line: reset buttons
+#ifndef _DARWIN
+    m_easy_g_reset_btn = new wxButton(this, ID_GResetBtn, "Reset",
+                                      wxDefaultPosition, wxSize(30, 22));
+#else
+    m_easy_g_reset_btn = new wxButton(this, ID_GResetBtn, "Reset",
+                                      wxDefaultPosition, wxSize(30, 30));
+#endif
+    m_easy_sizer->Add(m_easy_g_reset_btn, 0, wxEXPAND);
+    
+    //space
+    m_easy_sizer->Add(5, 5, 0);
+    
+    //12th line: blue
+    wxBoxSizer *sizer_h_e_10 = new wxBoxSizer(wxHORIZONTAL);
+    st = new wxStaticText(this, 0, "Blue:",
+                          wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER);
+    sizer_h_e_10->Add(st, 1, wxEXPAND);
+    m_easy_sync_b_chk = new wxCheckBox(this, ID_SyncBChk, "Link");
+    sizer_h_e_10->Add(m_easy_sync_b_chk, 1, wxALIGN_CENTER);
+    m_easy_sizer->Add(sizer_h_e_10, 0, wxEXPAND);
+    m_easy_sizer->Add(3,3,0);
+    
+    //13th line:blue bar
+    st = new wxStaticText(this, 0, "", wxDefaultPosition, wxSize(5, 5));
+    st->SetBackgroundColour(wxColor(0, 0, 255));
+    m_easy_sizer->Add(st, 0, wxEXPAND);
+    
+    //14th line: sliders
+    wxBoxSizer *sizer_h_e_11 = new wxBoxSizer(wxHORIZONTAL);
+    m_easy_b_gamma_sldr = new wxSlider(this, ID_BGammaSldr, 100, 10, 999,
+                                       wxDefaultPosition, sldrsize, wxSL_VERTICAL);
+    sizer_h_e_11->Add(m_easy_b_gamma_sldr, 1, wxEXPAND);
+    m_easy_sizer->Add(sizer_h_e_11, 1, wxEXPAND);
+    
+    //16th line: input boxes
+    wxBoxSizer *sizer_h_e_13 = new wxBoxSizer(wxHORIZONTAL);
+    vald_fp2.SetRange(0.0, 10.0);
+    m_easy_b_gamma_text = new wxTextCtrl(this, ID_BGammaText, "1.00",
+                                         wxDefaultPosition, wxSize(40, 20), 0, vald_fp2);
+    sizer_h_e_13->Add(m_easy_b_gamma_text, 1, wxALIGN_CENTER);
+    m_easy_sizer->Add(sizer_h_e_13, 0, wxALIGN_CENTER);
+    
+    //15th line: reset buttons
+#ifndef _DARWIN
+    m_easy_b_reset_btn = new wxButton(this, ID_BResetBtn, "Reset",
+                                      wxDefaultPosition, wxSize(30, 22));
+#else
+    m_easy_b_reset_btn = new wxButton(this, ID_BResetBtn, "Reset",
+                                      wxDefaultPosition, wxSize(30, 30));
+#endif
+    m_easy_sizer->Add(m_easy_b_reset_btn, 0, wxEXPAND);
+    
+    //17th line: default button
+#ifndef _DARWIN
+    m_easy_dft_btn = new wxButton(this, ID_DefaultBtn, "Set Default",
+                             wxDefaultPosition, wxSize(95, 22));
+#else
+    m_easy_dft_btn = new wxButton(this, ID_DefaultBtn, "Set Default",
+                             wxDefaultPosition, wxSize(95, 30));
+#endif
+    m_easy_sizer->Add(m_easy_dft_btn, 0, wxEXPAND);
 
-	SetSizer(sizer_v);
+    m_main_sizer->Add(m_easy_sizer, 0, wxEXPAND);
+
+	SetSizer(m_main_sizer);
 	Layout();
+    
+    m_main_sizer->Hide(m_easy_sizer);
 
 	DisableAll();
 
@@ -378,31 +536,47 @@ void AdjustView::GetSettings()
 	{
 		//red
 		m_sync_r_chk->SetValue(sync_r);
+        m_easy_sync_r_chk->SetValue(sync_r);
 		m_sync_r = sync_r;
 		m_r_gamma_sldr->SetValue(Gamma2UIP(r_gamma));
+        m_easy_r_gamma_sldr->SetValue(Gamma2UIP(r_gamma));
 		m_r_brightness_sldr->SetValue(Brightness2UIP(r_brightness));
 		m_r_hdr_sldr->SetValue(Hdr2UIP(r_hdr));
 		m_r_gamma_text->ChangeValue(wxString::Format("%.2f", r_gamma));
+        m_easy_r_gamma_text->ChangeValue(wxString::Format("%.2f", r_gamma));
 		m_r_brightness_text->ChangeValue(wxString::Format("%d", Brightness2UIP(r_brightness)));
 		m_r_hdr_text->ChangeValue(wxString::Format("%.2f", r_hdr));
 		//green
 		m_sync_g_chk->SetValue(sync_g);
+        m_easy_sync_g_chk->SetValue(sync_g);
 		m_sync_g = sync_g;
 		m_g_gamma_sldr->SetValue(Gamma2UIP(g_gamma));
+        m_easy_g_gamma_sldr->SetValue(Gamma2UIP(g_gamma));
 		m_g_brightness_sldr->SetValue(Brightness2UIP(g_brightness));
 		m_g_hdr_sldr->SetValue(Hdr2UIP(g_hdr));
 		m_g_gamma_text->ChangeValue(wxString::Format("%.2f", g_gamma));
+        m_easy_g_gamma_text->ChangeValue(wxString::Format("%.2f", g_gamma));
 		m_g_brightness_text->ChangeValue(wxString::Format("%d", int(g_brightness)));
 		m_g_hdr_text->ChangeValue(wxString::Format("%.2f", g_hdr));
 		//blue
 		m_sync_b_chk->SetValue(sync_b);
+        m_easy_sync_b_chk->SetValue(sync_b);
 		m_sync_b = sync_b;
 		m_b_gamma_sldr->SetValue(Gamma2UIP(b_gamma));
+        m_easy_b_gamma_sldr->SetValue(Gamma2UIP(b_gamma));
 		m_b_brightness_sldr->SetValue(Brightness2UIP(b_brightness));
 		m_b_hdr_sldr->SetValue(Hdr2UIP(b_hdr));
 		m_b_gamma_text->ChangeValue(wxString::Format("%.2f", b_gamma));
+        m_easy_b_gamma_text->ChangeValue(wxString::Format("%.2f", b_gamma));
 		m_b_brightness_text->ChangeValue(wxString::Format("%d", Brightness2UIP(b_brightness)));
 		m_b_hdr_text->ChangeValue(wxString::Format("%.2f", b_hdr));
+        
+        m_easy_base_gamma_r = 4.0;
+        m_easy_base_gamma_g = 4.0;
+        m_easy_base_gamma_b = 4.0;
+        m_easy_base_brightness_r = 0;
+        m_easy_base_brightness_g = 0;
+        m_easy_base_brightness_b = 0;
 		
 		if (m_type == 2 || m_type == 5 ||
 			(m_type == 1 && m_glview && m_glview->GetVolMethod() == VOL_METHOD_MULTI))
@@ -424,6 +598,9 @@ void AdjustView::DisableAll()
 	m_r_gamma_text->Disable();
 	m_r_brightness_text->Disable();
 	m_r_hdr_text->Disable();
+    m_easy_sync_r_chk->Disable();
+    m_easy_r_gamma_sldr->Disable();
+    m_easy_r_gamma_text->Disable();
 	//green
 	m_sync_g_chk->Disable();
 	m_g_gamma_sldr->Disable();
@@ -432,6 +609,9 @@ void AdjustView::DisableAll()
 	m_g_gamma_text->Disable();
 	m_g_brightness_text->Disable();
 	m_g_hdr_text->Disable();
+    m_easy_sync_g_chk->Disable();
+    m_easy_g_gamma_sldr->Disable();
+    m_easy_g_gamma_text->Disable();
 	//blue
 	m_sync_b_chk->Disable();
 	m_b_gamma_sldr->Disable();
@@ -440,10 +620,16 @@ void AdjustView::DisableAll()
 	m_b_gamma_text->Disable();
 	m_b_brightness_text->Disable();
 	m_b_hdr_text->Disable();
+    m_easy_sync_b_chk->Disable();
+    m_easy_b_gamma_sldr->Disable();
+    m_easy_b_gamma_text->Disable();
 	//reset
 	m_r_reset_btn->Disable();
 	m_g_reset_btn->Disable();
 	m_b_reset_btn->Disable();
+    m_easy_r_reset_btn->Disable();
+    m_easy_g_reset_btn->Disable();
+    m_easy_b_reset_btn->Disable();
 	//save as default
 	m_dft_btn->Disable();
 }
@@ -458,6 +644,9 @@ void AdjustView::EnableAll()
 	m_r_gamma_text->Enable();
 	m_r_brightness_text->Enable();
 	m_r_hdr_text->Enable();
+    m_easy_sync_r_chk->Enable();
+    m_easy_r_gamma_sldr->Enable();
+    m_easy_r_gamma_text->Enable();
 	//green
 	m_sync_g_chk->Enable();
 	m_g_gamma_sldr->Enable();
@@ -466,6 +655,9 @@ void AdjustView::EnableAll()
 	m_g_gamma_text->Enable();
 	m_g_brightness_text->Enable();
 	m_g_hdr_text->Enable();
+    m_easy_sync_g_chk->Enable();
+    m_easy_g_gamma_sldr->Enable();
+    m_easy_g_gamma_text->Enable();
 	//blue
 	m_sync_b_chk->Enable();
 	m_b_gamma_sldr->Enable();
@@ -474,10 +666,16 @@ void AdjustView::EnableAll()
 	m_b_gamma_text->Enable();
 	m_b_brightness_text->Enable();
 	m_b_hdr_text->Enable();
+    m_easy_sync_b_chk->Enable();
+    m_easy_b_gamma_sldr->Enable();
+    m_easy_b_gamma_text->Enable();
 	//reset
 	m_r_reset_btn->Enable();
 	m_g_reset_btn->Enable();
 	m_b_reset_btn->Enable();
+    m_easy_r_reset_btn->Enable();
+    m_easy_g_reset_btn->Enable();
+    m_easy_b_reset_btn->Enable();
 	//save as default
 	m_dft_btn->Enable();
 }
@@ -487,6 +685,7 @@ void AdjustView::OnRGammaChange(wxScrollEvent & event)
 	double val = (double)event.GetPosition() / 100.0;
 	wxString str = wxString::Format("%.2f", val);
 	m_r_gamma_text->SetValue(str);
+    m_easy_r_gamma_text->SetValue(str);
 }
 
 void AdjustView::OnRGammaText(wxCommandEvent& event)
@@ -495,6 +694,7 @@ void AdjustView::OnRGammaText(wxCommandEvent& event)
 	double val;
 	str.ToDouble(&val);
 	m_r_gamma_sldr->SetValue(int(val*100));
+    m_easy_r_gamma_sldr->SetValue(int(val*100));
 
 	if (m_sync_r)
 	{
@@ -502,13 +702,34 @@ void AdjustView::OnRGammaText(wxCommandEvent& event)
 		{
 			m_g_gamma_sldr->SetValue(int(val*100));
 			m_g_gamma_text->ChangeValue(str);
+            m_easy_g_gamma_sldr->SetValue(int(val*100));
+            m_easy_g_gamma_text->ChangeValue(str);
 		}
 		if (m_sync_b)
 		{
 			m_b_gamma_sldr->SetValue(int(val*100));
 			m_b_gamma_text->ChangeValue(str);
+            m_easy_b_gamma_sldr->SetValue(int(val*100));
+            m_easy_b_gamma_text->ChangeValue(str);
 		}
 	}
+    
+    if (m_easy_chk->GetValue())
+    {
+        double val2 = (val >= m_easy_base_gamma_r) ?
+            m_easy_base_brightness_r - ((val - m_easy_base_gamma_r) / (10.0 - m_easy_base_gamma_r)) * ((256.0 + m_easy_base_brightness_r) / 2.0) :
+            pow((m_easy_base_gamma_r - val) / m_easy_base_gamma_r, 1.5) * (256.0 - m_easy_base_brightness_r) + m_easy_base_brightness_r;
+        wxString str2 = wxString::Format("%d", Brightness2UIP(val2));
+        m_r_brightness_text->SetValue(str2);
+        
+        if (m_sync_r)
+        {
+            if (m_sync_g)
+                m_g_brightness_text->SetValue(str2);
+            if (m_sync_b)
+                m_b_brightness_text->SetValue(str2);
+        }
+    }
 
 	if (m_glview && m_type==1)
 	{
@@ -554,6 +775,7 @@ void AdjustView::OnGGammaChange(wxScrollEvent & event)
 	double val = (double)event.GetPosition() / 100.0;
 	wxString str = wxString::Format("%.2f", val);
 	m_g_gamma_text->SetValue(str);
+    m_easy_g_gamma_text->SetValue(str);
 }
 
 void AdjustView::OnGGammaText(wxCommandEvent& event)
@@ -562,6 +784,7 @@ void AdjustView::OnGGammaText(wxCommandEvent& event)
 	double val;
 	str.ToDouble(&val);
 	m_g_gamma_sldr->SetValue(int(val*100));
+    m_easy_g_gamma_sldr->SetValue(int(val*100));
 
 	if (m_sync_g)
 	{
@@ -569,13 +792,34 @@ void AdjustView::OnGGammaText(wxCommandEvent& event)
 		{
 			m_r_gamma_sldr->SetValue(int(val*100));
 			m_r_gamma_text->ChangeValue(str);
+            m_easy_r_gamma_sldr->SetValue(int(val*100));
+            m_easy_r_gamma_text->ChangeValue(str);
 		}
 		if (m_sync_b)
 		{
 			m_b_gamma_sldr->SetValue(int(val*100));
 			m_b_gamma_text->ChangeValue(str);
+            m_easy_b_gamma_sldr->SetValue(int(val*100));
+            m_easy_b_gamma_text->ChangeValue(str);
 		}
 	}
+    
+    if (m_easy_chk->GetValue())
+    {
+        double val2 = (val >= m_easy_base_gamma_g) ?
+        m_easy_base_brightness_g - ((val - m_easy_base_gamma_g) / (10.0 - m_easy_base_gamma_g)) * ((256.0 + m_easy_base_brightness_g) / 2.0) :
+        pow((m_easy_base_gamma_g - val) / m_easy_base_gamma_g, 1.5) * (256.0 - m_easy_base_brightness_g) + m_easy_base_brightness_g;
+        wxString str2 = wxString::Format("%d", Brightness2UIP(val2));
+        m_g_brightness_text->SetValue(str2);
+        
+        if (m_sync_g)
+        {
+            if (m_sync_r)
+                m_r_brightness_text->SetValue(str2);
+            if (m_sync_b)
+                m_b_brightness_text->SetValue(str2);
+        }
+    }
 
 	if (m_glview && m_type==1)
 	{
@@ -621,6 +865,7 @@ void AdjustView::OnBGammaChange(wxScrollEvent & event)
 	double val = (double)event.GetPosition() / 100.0;
 	wxString str = wxString::Format("%.2f", val);
 	m_b_gamma_text->SetValue(str);
+    m_easy_b_gamma_text->SetValue(str);
 }
 
 void AdjustView::OnBGammaText(wxCommandEvent& event)
@@ -629,6 +874,7 @@ void AdjustView::OnBGammaText(wxCommandEvent& event)
 	double val;
 	str.ToDouble(&val);
 	m_b_gamma_sldr->SetValue(int(val*100));
+    m_easy_b_gamma_sldr->SetValue(int(val*100));
 
 	if (m_sync_b)
 	{
@@ -636,13 +882,34 @@ void AdjustView::OnBGammaText(wxCommandEvent& event)
 		{
 			m_r_gamma_sldr->SetValue(int(val*100));
 			m_r_gamma_text->ChangeValue(str);
+            m_easy_r_gamma_sldr->SetValue(int(val*100));
+            m_easy_r_gamma_text->ChangeValue(str);
 		}
 		if (m_sync_g)
 		{
 			m_g_gamma_sldr->SetValue(int(val*100));
 			m_g_gamma_text->ChangeValue(str);
+            m_easy_g_gamma_sldr->SetValue(int(val*100));
+            m_easy_g_gamma_text->ChangeValue(str);
 		}
 	}
+    
+    if (m_easy_chk->GetValue())
+    {
+        double val2 = (val >= m_easy_base_gamma_b) ?
+        m_easy_base_brightness_b - ((val - m_easy_base_gamma_b) / (10.0 - m_easy_base_gamma_b)) * ((256.0 + m_easy_base_brightness_b) / 2.0) :
+        pow((m_easy_base_gamma_b - val) / m_easy_base_gamma_b, 1.5) * (256.0 - m_easy_base_brightness_b) + m_easy_base_brightness_b;
+        wxString str2 = wxString::Format("%d", Brightness2UIP(val2));
+        m_b_brightness_text->SetValue(str2);
+        
+        if (m_sync_b)
+        {
+            if (m_sync_g)
+                m_g_brightness_text->SetValue(str2);
+            if (m_sync_r)
+                m_r_brightness_text->SetValue(str2);
+        }
+    }
 
 	if (m_glview && m_type==1)
 	{
@@ -1089,6 +1356,8 @@ void AdjustView::OnBHdrText(wxCommandEvent &event)
 void AdjustView::OnSyncRCheck(wxCommandEvent &event)
 {
 	m_sync_r = m_sync_r_chk->GetValue();
+    m_sync_r_chk->SetValue(m_sync_r);
+    m_easy_sync_r_chk->SetValue(m_sync_r);
 	switch (m_type)
 	{
 	case 1://view
@@ -1113,6 +1382,8 @@ void AdjustView::OnSyncRCheck(wxCommandEvent &event)
 void AdjustView::OnSyncGCheck(wxCommandEvent &event)
 {
 	m_sync_g = m_sync_g_chk->GetValue();
+    m_sync_g_chk->SetValue(m_sync_g);
+    m_easy_sync_g_chk->SetValue(m_sync_g);
 	switch (m_type)
 	{
 	case 1://view
@@ -1137,6 +1408,8 @@ void AdjustView::OnSyncGCheck(wxCommandEvent &event)
 void AdjustView::OnSyncBCheck(wxCommandEvent &event)
 {
 	m_sync_b = m_sync_b_chk->GetValue();
+    m_sync_b_chk->SetValue(m_sync_b);
+    m_easy_sync_b_chk->SetValue(m_sync_b);
 	switch (m_type)
 	{
 	case 1://view
@@ -1535,7 +1808,8 @@ void AdjustView::UpdateSync()
 			}
 		}
 	}
-
+    
+    UpdateEasyParams();
 }
 
 void AdjustView::OnRReset(wxCommandEvent &event)
@@ -1546,19 +1820,25 @@ void AdjustView::OnRReset(wxCommandEvent &event)
 		dft_value = m_dft_gamma.r();
 
 	m_r_gamma_sldr->SetValue(int(dft_value*100.0));
+    m_easy_r_gamma_sldr->SetValue(int(dft_value*100.0));
 	wxString str = wxString::Format("%.2f", dft_value);
 	m_r_gamma_text->ChangeValue(str);
+    m_easy_r_gamma_text->ChangeValue(str);
 	if (m_sync_r)
 	{
 		if (m_sync_g)
 		{
 			m_g_gamma_sldr->SetValue(int(dft_value*100.0));
 			m_g_gamma_text->ChangeValue(str);
+            m_easy_g_gamma_sldr->SetValue(int(dft_value*100.0));
+            m_easy_g_gamma_text->ChangeValue(str);
 		}
 		if (m_sync_b)
 		{
 			m_b_gamma_sldr->SetValue(int(dft_value*100.0));
 			m_b_gamma_text->ChangeValue(str);
+            m_easy_b_gamma_sldr->SetValue(int(dft_value*100.0));
+            m_easy_b_gamma_text->ChangeValue(str);
 		}
 	}
 
@@ -1705,6 +1985,8 @@ void AdjustView::OnRReset(wxCommandEvent &event)
 	}
 
 	RefreshVRenderViews();
+    
+    UpdateEasyParams();
 }
 
 void AdjustView::OnGReset(wxCommandEvent &event)
@@ -1715,19 +1997,25 @@ void AdjustView::OnGReset(wxCommandEvent &event)
 		dft_value = m_dft_gamma.g();
 
 	m_g_gamma_sldr->SetValue(int(dft_value*100.0));
+    m_easy_g_gamma_sldr->SetValue(int(dft_value*100.0));
 	wxString str = wxString::Format("%.2f", dft_value);
 	m_g_gamma_text->ChangeValue(str);
+    m_easy_g_gamma_text->ChangeValue(str);
 	if (m_sync_g)
 	{
 		if (m_sync_r)
 		{
 			m_r_gamma_sldr->SetValue(int(dft_value*100.0));
 			m_r_gamma_text->ChangeValue(str);
+            m_easy_r_gamma_sldr->SetValue(int(dft_value*100.0));
+            m_easy_r_gamma_text->ChangeValue(str);
 		}
 		if (m_sync_b)
 		{
 			m_b_gamma_sldr->SetValue(int(dft_value*100.0));
 			m_b_gamma_text->ChangeValue(str);
+            m_easy_b_gamma_sldr->SetValue(int(dft_value*100.0));
+            m_easy_b_gamma_text->ChangeValue(str);
 		}
 	}
 
@@ -1874,6 +2162,8 @@ void AdjustView::OnGReset(wxCommandEvent &event)
 	}
 
 	RefreshVRenderViews();
+    
+    UpdateEasyParams();
 }
 
 void AdjustView::OnBReset(wxCommandEvent &event)
@@ -1884,19 +2174,25 @@ void AdjustView::OnBReset(wxCommandEvent &event)
 		dft_value = m_dft_gamma.b();
 
 	m_b_gamma_sldr->SetValue(int(dft_value*100.0));
+    m_easy_b_gamma_sldr->SetValue(int(dft_value*100.0));
 	wxString str = wxString::Format("%.2f", dft_value);
 	m_b_gamma_text->ChangeValue(str);
+    m_easy_b_gamma_text->ChangeValue(str);
 	if (m_sync_b)
 	{
 		if (m_sync_r)
 		{
 			m_r_gamma_sldr->SetValue(int(dft_value*100.0));
 			m_r_gamma_text->ChangeValue(str);
+            m_easy_r_gamma_sldr->SetValue(int(dft_value*100.0));
+            m_easy_r_gamma_text->ChangeValue(str);
 		}
 		if (m_sync_g)
 		{
 			m_g_gamma_sldr->SetValue(int(dft_value*100.0));
 			m_g_gamma_text->ChangeValue(str);
+            m_easy_g_gamma_sldr->SetValue(int(dft_value*100.0));
+            m_easy_g_gamma_text->ChangeValue(str);
 		}
 	}
 
@@ -2043,5 +2339,45 @@ void AdjustView::OnBReset(wxCommandEvent &event)
 	}
 
 	RefreshVRenderViews();
+    
+    UpdateEasyParams();
 }
 
+void AdjustView::OnEasyModeCheck(wxCommandEvent &event)
+{
+    bool m_easy_mode = m_easy_chk->GetValue();
+    if (m_easy_mode)
+    {
+        m_main_sizer->Hide(m_default_sizer);
+        m_main_sizer->Show(m_easy_sizer);
+        
+        UpdateEasyParams();
+        
+        Layout();
+    }
+    else
+    {
+        m_main_sizer->Hide(m_easy_sizer);
+        m_main_sizer->Show(m_default_sizer);
+        Layout();
+    }
+}
+
+void AdjustView::UpdateEasyParams()
+{
+    /*
+    wxString str;
+    str = m_r_gamma_text->GetValue();
+    str.ToDouble(&m_easy_base_gamma_r);
+    str = m_g_gamma_text->GetValue();
+    str.ToDouble(&m_easy_base_gamma_g);
+    str = m_b_gamma_text->GetValue();
+    str.ToDouble(&m_easy_base_gamma_b);
+    str = m_r_brightness_text->GetValue();
+    str.ToDouble(&m_easy_base_brightness_r);
+    str = m_g_brightness_text->GetValue();
+    str.ToDouble(&m_easy_base_brightness_g);
+    str = m_b_brightness_text->GetValue();
+    str.ToDouble(&m_easy_base_brightness_b);
+     */
+}
