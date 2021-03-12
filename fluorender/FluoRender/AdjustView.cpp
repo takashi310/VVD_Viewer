@@ -98,8 +98,8 @@ m_dft_sync_b(false)
     //first line: text
     wxBoxSizer *sizer_h_0 = new wxBoxSizer(wxHORIZONTAL);
     m_easy_chk = new wxCheckBox(this, ID_EasyModeChk, "Easy Mode ");
-    sizer_h_0->Add(m_easy_chk, 1, wxEXPAND);
-    m_main_sizer->Add(sizer_h_0, 0, wxEXPAND);
+    sizer_h_0->Add(m_easy_chk, 1, wxALIGN_CENTER);
+    m_main_sizer->Add(sizer_h_0, 0, wxALIGN_CENTER);
     //space
     m_main_sizer->Add(5, 5, 0);
     
@@ -327,7 +327,7 @@ m_dft_sync_b(false)
     m_easy_r_level_sldr = new wxSlider(this, ID_RLvSldr, 0, -99, 99,
                                   wxDefaultPosition, sldrsize, wxSL_VERTICAL);
     sizer_h_e_3->Add(m_easy_r_level_sldr, 1, wxEXPAND);
-    m_easy_sizer->Add(sizer_h_e_3, 1, wxEXPAND);
+    m_easy_sizer->Add(sizer_h_e_3, 1, wxALIGN_CENTER);
     
     //5th line: input boxes
     wxBoxSizer *sizer_h_e_5 = new wxBoxSizer(wxHORIZONTAL);
@@ -370,7 +370,7 @@ m_dft_sync_b(false)
     m_easy_g_level_sldr = new wxSlider(this, ID_GLvSldr, 0, -99, 99,
                                        wxDefaultPosition, sldrsize, wxSL_VERTICAL);
     sizer_h_e_7->Add(m_easy_g_level_sldr, 1, wxEXPAND);
-    m_easy_sizer->Add(sizer_h_e_7, 1, wxEXPAND);
+    m_easy_sizer->Add(sizer_h_e_7, 1, wxALIGN_CENTER);
     
     //10th line: input boxes
     wxBoxSizer *sizer_h_e_8 = new wxBoxSizer(wxHORIZONTAL);
@@ -413,7 +413,7 @@ m_dft_sync_b(false)
     m_easy_b_level_sldr = new wxSlider(this, ID_BLvSldr, 0, -99, 99,
                                        wxDefaultPosition, sldrsize, wxSL_VERTICAL);
     sizer_h_e_11->Add(m_easy_b_level_sldr, 1, wxEXPAND);
-    m_easy_sizer->Add(sizer_h_e_11, 1, wxEXPAND);
+    m_easy_sizer->Add(sizer_h_e_11, 1, wxALIGN_CENTER);
     
     //16th line: input boxes
     wxBoxSizer *sizer_h_e_13 = new wxBoxSizer(wxHORIZONTAL);
