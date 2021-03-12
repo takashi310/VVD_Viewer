@@ -174,6 +174,7 @@ public:
 	void UpdateROITree(VolumeData *vd, bool set_calc=true);
 	void UpdateTreeColors();
 	void UpdateTreeIcons();
+	void UpdateTreeFrames();
 	
 	//data manager
 	DataManager* GetDataManager();
@@ -272,6 +273,8 @@ public:
 
 	void StartupLoad(wxArrayString files, size_t datasize = 0LL);
 	VolumeData* OpenVolumeFromProject(wxString name, wxFileConfig &fconfig);
+    void OpenVolumesFromProjectMT(wxFileConfig &fconfig, bool join);
+    void SetVolumePropertiesFromProject(wxFileConfig &fconfig);
 	MeshData* OpenMeshFromProject(wxString name, wxFileConfig &fconfig);
 	void OpenProject(wxString& filename);
 	void SaveProject(wxString& filename);
@@ -433,6 +436,10 @@ private:
 	wxArrayString m_plugin_list;
 
 	wxApp* m_app; 
+
+	static wxCriticalSection ms_criticalSection;
+    
+    ProjectDataLoader m_project_data_loader;
 
 private:
 	//views

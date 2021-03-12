@@ -20,7 +20,7 @@ BRKXMLWriter::~BRKXMLWriter()
 {
 }
 
-void BRKXMLWriter::SetData(Nrrd* data)
+void BRKXMLWriter::SetData(const std::shared_ptr<FLIVR::VL_Nrrd>& data)
 {
 }
 

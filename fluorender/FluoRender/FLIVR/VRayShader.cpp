@@ -776,6 +776,27 @@ namespace FLIVR
 	"\n" \
 
 #define VRAY_TRANSFER_FUNCTION_SIN_COLOR_SOLID \
+"            //VRAY_TRANSFER_FUNCTION_SIN_COLOR_SOLID\n" \
+"            vec4 c;\n" \
+"            float tf_alp = 0.0;\n" \
+"            float alpha = 0.0;\n" \
+"            v.x = base.loc2.x<0.0?(1.0+v.x*base.loc2.x):v.x*base.loc2.x;\n" \
+"            if (v.x<base.loc2.z-base.loc3.w || v.x>base.loc2.w+base.loc3.w || v.y<base.loc3.y)\n" \
+"                c = vec4(0.0, 0.0, 0.0, 1.0);\n" \
+"            else\n" \
+"            {\n" \
+"                v.x = (v.x<base.loc2.z?(base.loc3.w-base.loc2.z+v.x)/base.loc3.w:(v.x>base.loc2.w?(base.loc3.w-v.x+base.loc2.w)/base.loc3.w:1.0))*v.x;\n" \
+"                v.x = (v.y < base.loc3.y ? (base.loc3.w - base.loc3.y + v.y) / base.loc3.w : 1.0) * v.x;\n" \
+"                tf_alp = pow(clamp(v.x/base.loc3.z,\n" \
+"                    base.loc3.x<1.0?-(base.loc3.x-1.0)*0.00001:0.0,\n" \
+"                    base.loc3.x>1.0?0.9999:1.0), base.loc3.x);\n" \
+"                alpha = 1.0 - clamp(1.0 - tf_alp * l.w, 0.0, 1.0);\n" \
+"                c = vec4(base.loc6.rgb*alpha*tf_alp, 1.0);\n" \
+"            }\n" \
+"\n"
+    
+/*
+#define VRAY_TRANSFER_FUNCTION_SIN_COLOR_SOLID \
 	"			//VRAY_TRANSFER_FUNCTION_SIN_COLOR_SOLID\n" \
 	"			vec4 c;\n" \
 	"			float tf_alp = 0.0;\n" \
@@ -792,7 +813,8 @@ namespace FLIVR
 	"				c = vec4(base.loc6.rgb*tf_alp, 1.0);\n" \
 	"			}\n" \
 	"\n"
-
+*/
+    
 #define VRAY_TRANSFER_FUNCTION_COLORMAP \
 	"			//VRAY_TRANSFER_FUNCTION_COLORMAP\n" \
 	"			vec4 c;\n" \

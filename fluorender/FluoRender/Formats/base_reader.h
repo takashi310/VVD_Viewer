@@ -31,6 +31,8 @@ DEALINGS IN THE SOFTWARE.
 #include <string>
 #include <nrrd.h>
 #include <vector>
+#include <memory>
+#include <FLIVR/TextureBrick.h>
 #include "DLLExport.h"
 
 using namespace std;
@@ -67,10 +69,12 @@ public:
 	virtual int LoadBatch(int index) = 0;	//load file for 3D batch mode
 	virtual int LoadOffset(int offset);	//load offset index for 3D batch
 	virtual int GetOffset();	//load offset index for 3D batch
-	virtual Nrrd* Convert(bool get_max);			//Convert the data to nrrd
-	virtual Nrrd* Convert(int c, bool get_max);		//convert the specified channel to nrrd
-	virtual Nrrd* Convert(int t, int c, bool get_max) = 0;//convert the specified channel and time point to nrrd
+	virtual std::shared_ptr<FLIVR::VL_Nrrd> Convert(bool get_max);			//Convert the data to VL_Nrrd
+	virtual std::shared_ptr<FLIVR::VL_Nrrd> Convert(int c, bool get_max);		//convert the specified channel to VL_Nrrd
+	virtual std::shared_ptr<FLIVR::VL_Nrrd> Convert(int t, int c, bool get_max);//convert the specified channel and time point to VL_Nrrd
 	virtual wstring GetCurName(int t, int c) = 0;//for a 4d sequence, get the file name for specified time and channel
+
+	virtual Nrrd* Convert_ThreadSafe(int t, int c, bool get_max) = 0;
 
 	virtual wstring GetPathName() = 0;
 	virtual wstring GetDataName() = 0;
@@ -227,6 +231,7 @@ protected:
 		case 0:  ;			\
 	}
 
+	virtual Nrrd* ConvertNrrd(int t, int c, bool get_max) = 0;//convert the specified channel and time point to nrrd
 	int LZWDecode(tidata_t tif, tidata_t op0, tsize_t occ0);
 	void DecodeAcc8(tidata_t cp0, tsize_t cc, tsize_t stride);
 	void DecodeAcc16(tidata_t cp0, tsize_t cc, tsize_t stride);

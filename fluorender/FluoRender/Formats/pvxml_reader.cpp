@@ -803,7 +803,7 @@ bool PVXMLReader::ConvertS(int c, TimeDataInfo* time_data_info, unsigned short *
 	return true;
 }
 
-Nrrd *PVXMLReader::Convert(int t, int c, bool get_max)
+Nrrd* PVXMLReader::ConvertNrrd(int t, int c, bool get_max)
 {
 	Nrrd *data = 0;
 

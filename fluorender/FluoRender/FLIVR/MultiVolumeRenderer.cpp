@@ -775,14 +775,14 @@ namespace FLIVR
 					{
 						if (vr->tex_->isBrxml() && vr->tex_->GetMaskLv() != vr->tex_->GetCurLevel())
 						{
-							vr->m_pThreadCS.Enter();
+							vr->ms_pThreadCS->Enter();
 
 							int cnx = b->nx(), cny = b->ny(), cnz = b->nz();
 							int cox = b->ox(), coy = b->oy(), coz = b->oz();
 							int cmx = b->mx(), cmy = b->my(), cmz = b->mz();
 							int csx = b->sx(), csy = b->sy(), csz = b->sz();
-							Nrrd* cdata = b->get_nrrd(0);
-							Nrrd* cmdata = b->get_nrrd(vr->tex_->nmask());
+							auto cdata = b->get_nrrd(0);
+							auto cmdata = b->get_nrrd(vr->tex_->nmask());
 
 							b->set_nrrd(vr->tex_->get_nrrd_lv(vr->tex_->GetMaskLv(), 0), 0);
 							b->set_nrrd(vr->tex_->get_nrrd(vr->tex_->nmask()), vr->tex_->nmask());
@@ -834,7 +834,7 @@ namespace FLIVR
 							b->set_nrrd(cdata, 0);
 							b->set_nrrd(cmdata, vr->tex_->nmask());
 
-							vr->m_pThreadCS.Leave();
+							vr->ms_pThreadCS->Leave();
 						}
 						else
 						{

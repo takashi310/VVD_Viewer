@@ -1018,11 +1018,11 @@ namespace FLIVR
 		// Color attachment
 		ad.format = VK_FORMAT_R32G32B32A32_SFLOAT;
 		ad.samples = VK_SAMPLE_COUNT_1_BIT;
-		ad.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		ad.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 		ad.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		ad.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		ad.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		ad.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		ad.initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		ad.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
 		for (uint32_t i = 0; i < attatchment_num; i++)
@@ -1238,6 +1238,12 @@ namespace FLIVR
 	VolumeRenderer::VRayPipeline VolumeRenderer::prepareVRayPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode, bool persp, int multi_mode, bool na_mode, Texture* ext_msk)
 	{
 		VRayPipeline ret_pipeline;
+        
+#ifdef _DARWIN
+        bool cur_solid = solid_;
+        if (slice_mode_)
+            solid_ = true;
+#endif
 
 		bool use_fog = m_use_fog && colormap_mode_ != 2;
 		ShaderProgram* shader = m_vulkan->vray_shader_factory_->shader(
@@ -1248,6 +1254,11 @@ namespace FLIVR
 			hiqual_, ml_mode_,
 			colormap_mode_, colormap_, colormap_proj_,
 			solid_, 1, (tex_->nmask() != -1 || (ext_msk && ext_msk->nmask() != -1)) ? m_mask_hide_mode : VOL_MASK_HIDE_NONE, persp, mode_, multi_mode, na_mode);
+        
+#ifdef _DARWIN
+        if (slice_mode_)
+            solid_ = cur_solid;
+#endif
 
 		if (m_prev_vray_pipeline >= 0) {
 			if (m_vray_pipelines[m_prev_vray_pipeline].device == device &&
@@ -2021,14 +2032,14 @@ namespace FLIVR
 #ifndef _UNIT_TEST_VOLUME_RENDERER_
 				if (tex_->isBrxml() && tex_->GetMaskLv() != tex_->GetCurLevel())
 				{
-					m_pThreadCS.Enter();
+					ms_pThreadCS->Enter();
 
 					int cnx = b->nx(), cny = b->ny(), cnz = b->nz();
 					int cox = b->ox(), coy = b->oy(), coz = b->oz();
 					int cmx = b->mx(), cmy = b->my(), cmz = b->mz();
 					int csx = b->sx(), csy = b->sy(), csz = b->sz();
-					Nrrd *cdata = b->get_nrrd(0);
-					Nrrd *cmdata = b->get_nrrd(tex_->nmask());
+					auto cdata = b->get_nrrd(0);
+					auto cmdata = b->get_nrrd(tex_->nmask());
 					
 					b->set_nrrd(tex_->get_nrrd_lv(tex_->GetMaskLv(),0), 0);
 					b->set_nrrd(tex_->get_nrrd(tex_->nmask()), tex_->nmask());
@@ -2074,7 +2085,7 @@ namespace FLIVR
 					b->set_nrrd(cdata, 0);
 					b->set_nrrd(cmdata, tex_->nmask());
 
-					m_pThreadCS.Leave();
+					ms_pThreadCS->Leave();
 				}
 				else
 				{
@@ -2891,14 +2902,14 @@ namespace FLIVR
 #ifndef _UNIT_TEST_VOLUME_RENDERER_
 				if (tex_->isBrxml() && tex_->GetMaskLv() != tex_->GetCurLevel())
 				{
-					m_pThreadCS.Enter();
+					ms_pThreadCS->Enter();
 
 					int cnx = b->nx(), cny = b->ny(), cnz = b->nz();
 					int cox = b->ox(), coy = b->oy(), coz = b->oz();
 					int cmx = b->mx(), cmy = b->my(), cmz = b->mz();
 					int csx = b->sx(), csy = b->sy(), csz = b->sz();
-					Nrrd* cdata = b->get_nrrd(0);
-					Nrrd* cmdata = b->get_nrrd(tex_->nmask());
+					auto cdata = b->get_nrrd(0);
+					auto cmdata = b->get_nrrd(tex_->nmask());
 
 					b->set_nrrd(tex_->get_nrrd_lv(tex_->GetMaskLv(), 0), 0);
 					b->set_nrrd(tex_->get_nrrd(tex_->nmask()), tex_->nmask());
@@ -2931,12 +2942,12 @@ namespace FLIVR
                     else if (tex_->nmask() != -1)
                         msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, false, &mask_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
 
-					double trans_x = (ox_d - ox) / nx;
-					double trans_y = (oy_d - oy) / ny;
-					double trans_z = (oz_d - oz) / nz;
-					double scale_x = (endx_d - ox_d) / nx;
-					double scale_y = (endy_d - oy_d) / ny;
-					double scale_z = (endz_d - oz_d) / nz;
+					double trans_x = ox_d / sx;
+					double trans_y = oy_d / sy;
+					double trans_z = oz_d / sz;
+					double scale_x = (endx_d - ox_d) / sx;
+					double scale_y = (endy_d - oy_d) / sy;
+					double scale_z = (endz_d - oz_d) / sz;
 
 					frag_const.mask_b_scale_invnz = { (float)scale_x, (float)scale_y, (float)scale_z , 1.0f};
 					frag_const.mask_b_trans = { (float)trans_x, (float)trans_y, (float)trans_z, 0.0f };
@@ -2947,7 +2958,7 @@ namespace FLIVR
 					b->set_nrrd(cdata, 0);
 					b->set_nrrd(cmdata, tex_->nmask());
 
-					m_pThreadCS.Leave();
+					ms_pThreadCS->Leave();
 				}
 				else
 				{
@@ -2956,8 +2967,12 @@ namespace FLIVR
                     else if (tex_->nmask() != -1)
                         msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, false, &mask_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
 
-					frag_const.mask_b_scale_invnz = { 1.0f, 1.0f, 1.0f, 1.0f };
-					frag_const.mask_b_trans = { 0.0f, 0.0f, 0.0f, 0.0f };
+					BBox dbox = b->dbox();
+					frag_const.mask_b_scale_invnz = { float(dbox.max().x() - dbox.min().x()),
+													  float(dbox.max().y() - dbox.min().y()),
+													  float(dbox.max().z() - dbox.min().z()),
+													  1.0f };
+					frag_const.mask_b_trans = { float(dbox.min().x()), float(dbox.min().y()), float(dbox.min().z()), 0.0f };
 				}
 #endif
 			}
@@ -3819,7 +3834,6 @@ namespace FLIVR
 
 			b->set_dirty(b->nmask(), true);
 		}
-		
 	}
 
 	//generate the labeling assuming the mask is already generated
@@ -4056,7 +4070,8 @@ namespace FLIVR
 	//7:apply mask inverted, then replace volume a
 	//8:intersection with masks if available
 	//9:fill holes
-	void VolumeRenderer::calculate(int type, FLIVR::VolumeRenderer *vr_a, FLIVR::VolumeRenderer *vr_b)
+	void VolumeRenderer::calculate(int type, FLIVR::VolumeRenderer *vr_a, FLIVR::VolumeRenderer *vr_b, FLIVR::VolumeRenderer* vr_c, 
+		Texture* ext_msk, Texture* ext_lbl)
 	{
 		//sync sorting
 		Ray view_ray(Point(0.802,0.267,0.534), Vector(0.802,0.267,0.534));
@@ -4066,10 +4081,14 @@ namespace FLIVR
 			return;
 		vector<TextureBrick*> *bricks_a = 0;
 		vector<TextureBrick*> *bricks_b = 0;
+		vector<TextureBrick*>* bricks_c = 0;
+		vector<TextureBrick*>* msk_bricks = 0;
+		vector<TextureBrick*>* lbl_bricks = 0;
 
 		bool compression_this = false;
 		bool compression_a = false;
 		bool compression_b = false;
+		bool compression_c = false;
 
 		compression_this = compression_;
 		if (compression_)
@@ -4089,6 +4108,18 @@ namespace FLIVR
 				m_vulkan->eraseBricksFromTexpools(bricks_a, 0);
 				vr_a->compression_ = false;
 			}
+			if (ext_msk)
+			{
+				msk_bricks = ext_msk->get_sorted_bricks(view_ray);
+				if (!msk_bricks || msk_bricks->size() == 0)
+					return;
+			}
+			if (ext_lbl)
+			{
+				lbl_bricks = ext_lbl->get_sorted_bricks(view_ray);
+				if (!lbl_bricks || lbl_bricks->size() == 0)
+					return;
+			}
 		}
 		if (vr_b)
 		{
@@ -4101,6 +4132,17 @@ namespace FLIVR
 				vr_b->compression_ = false;
 			}
 		}
+		if (vr_c)
+		{
+			vr_c->tex_->set_sort_bricks();
+			bricks_c = vr_c->tex_->get_sorted_bricks(view_ray);
+			compression_c = vr_c->compression_;
+			if (vr_c->compression_)
+			{
+				m_vulkan->eraseBricksFromTexpools(bricks_c, 0);
+				vr_c->compression_ = false;
+			}
+		}
 
 		int out_bytes = tex_->nb(0);
 
@@ -4111,18 +4153,44 @@ namespace FLIVR
 
 		VolCalShaderFactory::CalCompShaderBrickConst cal_const;
 
+		std::vector<VkWriteDescriptorSet> descriptorWritesBase;
+
 		//set uniforms
-		if (type == 1 ||
-			type == 2 ||
-			type == 3 ||
-			type == 4 ||
-			type == 8)
+		if (type == 10 ||
+			type == 11)
+		{
+			cal_const.loc0_scale_usemask = {
+				vr_a ? 1.0 : -1.0,
+				vr_b ? 1.0 : -1.0,
+				vr_c ? 1.0 : -1.0,
+				0.0
+			};
+			if (vr_a->get_na_mode())
+			{
+				auto sm_tex = vr_a->get_seg_mask_tex();
+				descriptorWritesBase.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 5, &sm_tex[prim_dev]->descriptor));
+			}
+		}
+		else if (type == 1 ||
+				 type == 2 ||
+				 type == 3 ||
+				 type == 4 ||
+				 type == 8)
 		{
 			cal_const.loc0_scale_usemask = {
 				vr_a ? vr_a->get_scalar_scale() : 1.0,
 				vr_b ? vr_b->get_scalar_scale() : 1.0,
 				(vr_a && vr_a->tex_ && vr_a->tex_->nmask() != -1) ? 1.0 : 0.0,
 				(vr_b && vr_b->tex_ && vr_b->tex_->nmask() != -1) ? 1.0 : 0.0
+			};
+		}
+		else if (type == 5 || type == 6)
+		{
+			cal_const.loc0_scale_usemask = {
+				1.0,
+				1.0,
+				(vr_a && vr_a->get_inversion()) ? -1.0 : 0.0,
+				(vr_b && vr_b->get_inversion()) ? -1.0 : 0.0
 			};
 		}
 		else
@@ -4144,17 +4212,19 @@ namespace FLIVR
 			TextureBrick* b = (*bricks)[i];
 			TextureBrick* b_a = bricks_a ? (*bricks_a)[i] : nullptr;
 			TextureBrick* b_b = bricks_b ? (*bricks_b)[i] : nullptr;
+			TextureBrick* b_c = bricks_c ? (*bricks_c)[i] : nullptr;
 
 			//size and sample rate
 			cal_const.loc1_dim_inv = { 1.0 / b->nx(), 1.0 / b->ny(), 1.0 / b->nz(), 1.0 / sampling_rate_ };
 
-			shared_ptr<vks::VTexture> dsttex, tex_a, tex_b, mask_a, mask_b;
-			std::vector<VkWriteDescriptorSet> descriptorWrites;
+			shared_ptr<vks::VTexture> dsttex, tex_a, tex_b, tex_c, mask, label;
+			std::vector<VkWriteDescriptorSet> descriptorWrites = descriptorWritesBase;
 
 			//load the texture
 			b->prevent_tex_deletion(true);
 			if (b_a) b_a->prevent_tex_deletion(true);
 			if (b_b) b_b->prevent_tex_deletion(true);
+			if (b_c) b_c->prevent_tex_deletion(true);
 
 			dsttex = load_brick(prim_dev, 0, 0, bricks, i, VK_FILTER_NEAREST, false, 0, false);
 			if (!dsttex) continue;
@@ -4173,34 +4243,48 @@ namespace FLIVR
 				if (!tex_b) continue;
 				descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 1, &tex_b->descriptor));
 			}
+
+			if (bricks_c)
+			{
+				tex_c = vr_c->load_brick(prim_dev, 0, 0, bricks_c, i, VK_FILTER_NEAREST, false, 0, false);
+				if (!tex_c) continue;
+				descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 4, &tex_c->descriptor));
+			}
 				
 			if ((type == 5 || type == 6 || type == 7) && bricks_a)
 			{
-				mask_a = vr_a->load_brick_mask(prim_dev, bricks_a, i, VK_FILTER_NEAREST, false, 0, true);
-				if (!mask_a) continue;
-				descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 1, &mask_a->descriptor));
+				if (ext_msk && ext_msk->nmask() != -1 && msk_bricks)
+					mask = vr_a->load_brick_mask(prim_dev, msk_bricks, i, VK_FILTER_NEAREST, false, 0, true);
+				else
+					mask = vr_a->load_brick_mask(prim_dev, bricks_a, i, VK_FILTER_NEAREST, false, 0, true);
+				if (!mask) continue;
+				descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 1, &mask->descriptor));
 			}
 				
-			if (type==8)
+			if (type==8 || type==10 || type==11)
 			{
 				if (bricks_a)
 				{
-					mask_a = vr_a->load_brick_mask(prim_dev, bricks_a, i, VK_FILTER_NEAREST, false, 0, true);
-					if (!mask_a) continue;
-					descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 2, &mask_a->descriptor));
+					if (ext_msk && ext_msk->nmask() != -1 && msk_bricks)
+						mask = vr_a->load_brick_mask(prim_dev, msk_bricks, i, VK_FILTER_NEAREST, false, 0, true);
+					else
+						mask = vr_a->load_brick_mask(prim_dev, bricks_a, i, VK_FILTER_NEAREST, false, 0, true);
+					if (!mask) continue;
+					descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 2, &mask->descriptor));
+
+					if (ext_lbl && ext_lbl->nlabel() != -1 && lbl_bricks)
+						label = vr_a->load_brick_label(prim_dev, lbl_bricks, i, false, false);
+					else
+						label = vr_a->load_brick_label(prim_dev, bricks_a, i, false, false);
+					if (!label) continue;
+					descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 3, &label->descriptor));
 				}
-					
-				if (bricks_b)
-				{
-					mask_b = vr_b->load_brick_mask(prim_dev, bricks_b, i, VK_FILTER_NEAREST, false, 0, true);
-					if (!mask_b) continue;
-					descriptorWrites.push_back(VolCalShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 3, &mask_b->descriptor));
-				}	
 			}
 
 			b->prevent_tex_deletion(false);
 			if (b_a) b_a->prevent_tex_deletion(false);
 			if (b_b) b_b->prevent_tex_deletion(false);
+			if (b_c) b_c->prevent_tex_deletion(false);
 
 			VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
 			VK_CHECK_RESULT(vkBeginCommandBuffer(cmdbuf, &cmdBufInfo));
@@ -4279,6 +4363,11 @@ namespace FLIVR
 		{
 			m_vulkan->eraseBricksFromTexpools(bricks_b, 0);
 			vr_b->compression_ = compression_b;
+		}
+		if (compression_c)
+		{
+			m_vulkan->eraseBricksFromTexpools(bricks_c, 0);
+			vr_c->compression_ = compression_c;
 		}
 	}
 

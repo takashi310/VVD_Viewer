@@ -407,10 +407,11 @@ void NAListCtrl::UpdateResults(bool refresh_items)
 
 	bool ref_selected = false;
 	bool bg_selected = false;
-	if (GetItemCount() > 0)
+    int id_offset = m_plugin->isRefExists() ? 1 : 0;
+	if (GetItemCount() > 0 && m_plugin->isRefExists())
 		ref_selected = (GetItemState(0, wxLIST_STATE_SELECTED) != 0);
-	if (GetItemCount() > 1)
-		bg_selected = (GetItemState(1, wxLIST_STATE_SELECTED) != 0);
+	if (GetItemCount() > id_offset)
+		bg_selected = (GetItemState(id_offset, wxLIST_STATE_SELECTED) != 0);
 
 	if (refresh_items)
 	{
@@ -482,14 +483,14 @@ void NAListCtrl::UpdateResults(bool refresh_items)
 
 	if (ref_selected)
 		SetItemState(0, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
-	if (GetItemCount() > 0)
+	if (GetItemCount() > 0 && m_plugin->isRefExists())
 		CheckItem(0, m_listdata[0].visibility > 0 ? true : false);
 	if (bg_selected)
 		SetItemState(1, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
-	if (GetItemCount() > 1)
-		CheckItem(1, m_listdata[1].visibility > 0 ? true : false);
+	if (GetItemCount() > id_offset)
+		CheckItem(id_offset, m_listdata[id_offset].visibility > 0 ? true : false);
 
-	for (long i = 2; i < GetItemCount() && i < m_listdata.size(); i++)
+	for (long i = id_offset + 1; i < GetItemCount() && i < m_listdata.size(); i++)
 	{
 		if (m_listdata[i].visibility == 2)
 			SetItemState(i, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
@@ -1309,12 +1310,17 @@ void NAGuiPluginWindow::OnImportResultsButtonClick( wxCommandEvent& event )
 	if (rval != wxID_OK)
 		return;
 	wxString idpath = file_dlg.GetPath();
+    
+    wxString volpath = idpath.BeforeLast('.') + wxT(".h5j");
 
-	wxFileDialog file_dlg2(this, "Choose an image", "", "", "All Supported|*.v3dpbd;*.h5j", wxFD_OPEN);
-	int rval2 = file_dlg2.ShowModal();
-	if (rval2 != wxID_OK)
-		return;
-	wxString volpath = file_dlg2.GetPath();
+    if (!wxFileExists(volpath))
+    {
+        wxFileDialog file_dlg2(this, "Choose a confocal image file (h5j)", "", "", "All Supported|*.h5j", wxFD_OPEN);
+        int rval2 = file_dlg2.ShowModal();
+        if (rval2 != wxID_OK)
+            return;
+        volpath = file_dlg2.GetPath();
+    }
 
 	m_results->LoadResults(idpath, volpath, "sssr", "");
 
@@ -1335,7 +1341,12 @@ void NAGuiPluginWindow::OnExport( wxCommandEvent& event )
     if (!m_results || !plugin)
         return;
     
-    wxFileDialog saveFileDialog(this, _("Save Combined Fragments"), "", "", "Nrrd files (*.nrrd)|*.nrrd", wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
+    wxString vname = plugin->getVolumePath();
+    
+    vname = vname.AfterLast(GETSLASH());
+    vname = vname.BeforeLast('.', NULL);
+    
+    wxFileDialog saveFileDialog(this, _("Save Combined Fragments"), "", vname, "Nrrd files (*.nrrd)|*.nrrd", wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
     
     if (saveFileDialog.ShowModal() == wxID_CANCEL)
         return;

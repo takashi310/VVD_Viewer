@@ -44,6 +44,8 @@
 #include <zlib.h>
 #include <wx/stdpaths.h>
 #include <h5j_reader.h>
+#include <lz4.h>
+#include <blosc2.h>
 #endif
 
 using namespace std;
@@ -63,7 +65,7 @@ namespace FLIVR
 	size_t TextureBrick::memcache_limit = 1024*1024*1024;
 
     
-   TextureBrick::TextureBrick (Nrrd* n0, Nrrd* n1,
+   TextureBrick::TextureBrick (const shared_ptr<VL_Nrrd>& n0, const shared_ptr<VL_Nrrd>& n1,
          int nx, int ny, int nz, int nc, int* nb,
          int ox, int oy, int oz,
          int mx, int my, int mz,
@@ -127,8 +129,6 @@ namespace FLIVR
    {
       // Creator of the brick owns the nrrds.
       // This object never deletes that memory.
-      data_[0] = 0;
-      data_[1] = 0;
    }
 
    /* The cube is numbered in the following way
@@ -876,26 +876,32 @@ z
 
    int TextureBrick::sx()
    {
-      if (data_[0]->dim == 3)
-         return (int)data_[0]->axis[0].size;
-      else
-         return (int)data_[0]->axis[1].size;
+	   if (!data_[0]->getNrrd())
+		   return 0;
+	   if (data_[0]->getNrrd()->dim == 3)
+		   return (int)data_[0]->getNrrd()->axis[0].size;
+	   else
+		   return (int)data_[0]->getNrrd()->axis[1].size;
    }
 
    int TextureBrick::sy()
    {
-      if (data_[0]->dim == 3)
-         return (int)data_[0]->axis[1].size;
-      else
-         return (int)data_[0]->axis[2].size;
+	   if (!data_[0]->getNrrd())
+		   return 0;
+	   if (data_[0]->getNrrd()->dim == 3)
+		   return (int)data_[0]->getNrrd()->axis[1].size;
+	   else
+		   return (int)data_[0]->getNrrd()->axis[2].size;
    }
 
    int TextureBrick::sz()
    {
-      if (data_[0]->dim == 3)
-         return (int)data_[0]->axis[2].size;
-      else
-         return (int)data_[0]->axis[3].size;
+	   if (!data_[0]->getNrrd())
+		   return 0;
+	   if (data_[0]->getNrrd()->dim == 3)
+		   return (int)data_[0]->getNrrd()->axis[2].size;
+	   else
+		   return (int)data_[0]->getNrrd()->axis[3].size;
    }
 
    VkFormat TextureBrick::tex_format_aux(Nrrd* n)
@@ -925,16 +931,16 @@ z
    VkFormat TextureBrick::tex_format(int c)
    {
       if (c < nc_)
-         return tex_format_aux(data_[c]);
+         return tex_format_aux(data_[c]->getNrrd());
       else if (c == nmask_)
 		 return VK_FORMAT_R8_UNORM;
 	  else if (c == nlabel_)
 	  {
-		  if (data_[c]->type == nrrdTypeUChar)
+		  if (data_[c]->getNrrd()->type == nrrdTypeUChar)
 			  return VK_FORMAT_R8_UINT;
-		  else if (data_[c]->type == nrrdTypeUShort)
+		  else if (data_[c]->getNrrd()->type == nrrdTypeUShort)
 			  return VK_FORMAT_R16_UINT;
-		  else if (data_[c]->type == nrrdTypeUInt)
+		  else if (data_[c]->getNrrd()->type == nrrdTypeUInt)
 			  return VK_FORMAT_R32_UINT;
 	  }
 	  else if (c == nstroke_)
@@ -945,11 +951,11 @@ z
 
    void *TextureBrick::tex_data(int c)
    {
-	   if (c >= 0 && data_[c])
+	   if (c >= 0 && data_[c] && data_[c]->getNrrd())
 	   {
-		   if(data_[c]->data)
+		   if(data_[c]->getNrrd()->data)
 		   {
-			   char *ptr = (char *)(data_[c]->data);
+			   char *ptr = (char *)(data_[c]->getNrrd()->data);
 			   long long offset = (long long)(oz()) * (long long)(sx()) * (long long)(sy()) +
 								  (long long)(oy()) * (long long)(sx()) +
 								  (long long)(ox());
@@ -981,18 +987,18 @@ z
    
    void TextureBrick::set_priority()
    {
-      if (!data_[0])
+      if (!data_[0] && !data_[0]->getNrrd())
       {
          priority_ = 0;
          return;
       }
       size_t vs = tex_format_size(tex_format(0));
-      size_t sx = data_[0]->axis[0].size;
-      size_t sy = data_[0]->axis[1].size;
+      size_t sx = data_[0]->getNrrd()->axis[0].size;
+      size_t sy = data_[0]->getNrrd()->axis[1].size;
       if (vs == 1)
       {
          unsigned char max = 0;
-         unsigned char *ptr = (unsigned char *)(data_[0]->data);
+         unsigned char *ptr = (unsigned char *)(data_[0]->getNrrd()->data);
          for (int i=0; i<nx_; i++)
             for (int j=0; j<ny_; j++)
                for (int k=0; k<nz_; k++)
@@ -1010,7 +1016,7 @@ z
       else if (vs == 2)
       {
          unsigned short max = 0;
-         unsigned short *ptr = (unsigned short *)(data_[0]->data);
+         unsigned short *ptr = (unsigned short *)(data_[0]->getNrrd()->data);
          for (int i=0; i<nx_; i++)
             for (int j=0; j<ny_; j++)
                for (int k=0; k<nz_; k++)
@@ -1299,9 +1305,49 @@ z
 	   ifstream ifs;
 	   wstring fn = finfo->cached ? finfo->cache_filename : finfo->filename;
 	   ifs.open(ws2s(fn), ios::binary);
-	   if (!ifs) return false;
-//	   if (finfo->type != BRICK_FILE_TYPE_H265) 
-//	   {
+	   if (!ifs) 
+		   return false;
+       
+       if (!finfo->isn5)
+       {
+           size_t zsize = finfo->datasize;
+           if (zsize <= 0) zsize = (size_t)ifs.seekg(0, std::ios::end).tellg();
+           char *zdata = new char[zsize];
+           ifs.seekg(finfo->offset, ios_base::beg);
+           ifs.read((char*)zdata, zsize);
+           if (ifs) ifs.close();
+           data = zdata;
+           readsize = zsize;
+       }
+       else
+       {
+           size_t zsize = finfo->datasize;
+           if (zsize <= 0) zsize = (size_t)ifs.seekg(0, std::ios::end).tellg();
+           unsigned char *zdata = new unsigned char[zsize];
+           char *blockdata = new char[zsize-16];
+           ifs.seekg(finfo->offset, ios_base::beg);
+           ifs.read((char*)zdata, zsize);
+           if (ifs) ifs.close();
+           
+           if (zsize >= 16)
+           {
+                int dnum = ((int)zdata[2] << 8) + (int)zdata[3];
+               if (dnum >= 1)
+                   finfo->blosc_blocksize_x = ((int)zdata[4] << 24) + ((int)zdata[5] << 16) + ((int)zdata[6] << 8) + (int)zdata[7];
+               if (dnum >= 2)
+                   finfo->blosc_blocksize_y = ((int)zdata[8] << 24) + ((int)zdata[9] << 16) + ((int)zdata[10] << 8) + (int)zdata[11];
+               if (dnum >= 3)
+                   finfo->blosc_blocksize_z = ((int)zdata[12] << 24) + ((int)zdata[13] << 16) + ((int)zdata[14] << 8) + (int)zdata[15];
+           }
+           
+           memcpy(blockdata, zdata + 16, zsize-16);
+           data = blockdata;
+           readsize = zsize - 16;
+       }
+
+/*
+       if (finfo->type != BRICK_FILE_TYPE_H265)
+	   {
 		   size_t zsize = finfo->datasize;
 		   if (zsize <= 0) zsize = (size_t)ifs.seekg(0, std::ios::end).tellg();
 		   char *zdata = new char[zsize];
@@ -1310,8 +1356,8 @@ z
 		   if (ifs) ifs.close();
 		   data = zdata;
 		   readsize = zsize;
-//	   } 
-/*	   else
+       }
+	   else
 	   {
 		   size_t h265size = finfo->datasize;
 		   size_t fsize = (size_t)ifs.seekg(0, std::ios::end).tellg();
@@ -1345,11 +1391,14 @@ z
 	   return true;
    }
 
-   bool TextureBrick::decompress_brick(char *out, char* in, size_t out_size, size_t in_size, int type, int w, int h)
+   bool TextureBrick::decompress_brick(char *out, char* in, size_t out_size, size_t in_size, int type, int w, int h, int d, int nb, int n5_w, int n5_h, int n5_d)
    {
-	   if (type == BRICK_FILE_TYPE_JPEG) return jpeg_decompressor(out, in, out_size, in_size);
-	   if (type == BRICK_FILE_TYPE_ZLIB) return zlib_decompressor(out, in, out_size, in_size);
-	   if (type == BRICK_FILE_TYPE_H265) return h265_decompressor(out, in, out_size, in_size, w, h);
+	   if	   (type == BRICK_FILE_TYPE_JPEG) return jpeg_decompressor(out, in, out_size, in_size);
+	   else if (type == BRICK_FILE_TYPE_ZLIB) return zlib_decompressor(out, in, out_size, in_size);
+	   else if (type == BRICK_FILE_TYPE_N5GZIP) return zlib_decompressor(out, in, out_size, in_size, true, nb);
+	   else if (type == BRICK_FILE_TYPE_H265) return h265_decompressor(out, in, out_size, in_size, w, h);
+	   else if (type == BRICK_FILE_TYPE_LZ4) return lz4_decompressor(out, in, out_size, in_size);
+       else if (type == BRICK_FILE_TYPE_N5BLOSC) return blosc_decompressor(out, in, out_size, in_size, true, w, h, d, nb, n5_w, n5_h, n5_d);
 
 	   return false;
    }
@@ -1413,28 +1462,61 @@ z
 	   return true;
    }
 
-   bool TextureBrick::zlib_decompressor(char *out, char* in, size_t out_size, size_t in_size)
+   bool TextureBrick::zlib_decompressor(char *out, char* in, size_t out_size, size_t in_size, bool isn5, int nb)
    {
 	   try
 	   {
 		   z_stream zInfo = {0};
-		   zInfo.total_in  = zInfo.avail_in  = in_size;
-		   zInfo.total_out = zInfo.avail_out = out_size;
-		   zInfo.next_in  = (Bytef *)in;
-		   zInfo.next_out = (Bytef *)out;
+		   zInfo.avail_in = in_size;
+		   zInfo.total_in = 0;
+		   zInfo.next_in = (Bytef*)in;
 
-		   int nErr, nOut = -1;
-		   nErr = inflateInit( &zInfo );
-		   if ( nErr == Z_OK ) {
-			   nErr = inflate( &zInfo, Z_FINISH );
-			   if ( nErr == Z_STREAM_END ) {
-				   nOut = zInfo.total_out;
+		   if (isn5)
+		   { 
+			   zInfo.avail_out = out_size;
+			   zInfo.total_out = 0;
+			   zInfo.next_out = (Bytef*)out;
+
+			   int nErr, nOut = -1;
+			   nErr = inflateInit2(&zInfo, MAX_WBITS | 32);
+			   if (nErr == Z_OK) {
+				   nErr = inflate(&zInfo, Z_FINISH);
+				   if (nErr == Z_STREAM_END) {
+					   nOut = zInfo.total_out;
+				   }
 			   }
+			   inflateEnd(&zInfo);
+			   if (nOut != out_size || nErr != Z_STREAM_END)
+				   return false;
+               
+               if (isn5 && nb == 2)
+               {
+                   char e = check_machine_endian();
+                   if (e == 'L')
+                   {
+                       for (int i = 0; i < out_size-1; i += 2)
+                           swap(out[i], out[i+1]);
+                   }
+               }
 		   }
-		   inflateEnd( &zInfo );
+		   else
+		   {
+			   zInfo.avail_out = out_size;
+			   zInfo.total_out = 0;
+			   zInfo.next_out = (Bytef*)out;
 
-		   if (nOut != out_size || nErr != Z_STREAM_END)
-			   return false;
+			   int nErr, nOut = -1;
+			   nErr = inflateInit(&zInfo);
+			   if (nErr == Z_OK) {
+				   nErr = inflate(&zInfo, Z_FINISH);
+				   if (nErr == Z_STREAM_END) {
+					   nOut = zInfo.total_out;
+				   }
+			   }
+			   inflateEnd(&zInfo);
+			   if (nOut != out_size || nErr != Z_STREAM_END)
+				   return false;
+		   }
 	   }
 	   catch (std::exception &e)
 	   {
@@ -1457,6 +1539,87 @@ z
 	   decoder.close();
 	   return true;
    }
+
+
+   bool TextureBrick::lz4_decompressor(char* out, char* in, size_t out_size, size_t in_size)
+   {
+	   const int decompressed_size = LZ4_decompress_safe(in, out, in_size, out_size);
+	   if (decompressed_size != out_size || decompressed_size < 0)
+		   return false;
+
+	   return true;
+   }
+    
+    bool TextureBrick::blosc_decompressor(char* out, char* in, size_t out_size, size_t in_size, bool isn5, int w, int h, int d, int nb, int n5_w, int n5_h, int n5_d)
+    {
+        blosc2_dparams params;
+        params.nthreads = 1;
+        params.schunk = NULL;
+        
+        auto ctx = blosc2_create_dctx(params);
+        
+        if (!ctx)
+            return false;
+        
+        int decompressed_size = blosc2_decompress_ctx(ctx, in, in_size, out, out_size);
+        if (decompressed_size < 0)
+        {
+            size_t nbytes, cbytes, bs;
+            blosc_cbuffer_sizes(in, &nbytes, &cbytes, &bs);
+            
+            char* buf = new char[nbytes];
+            int decompressed_size2 = blosc2_decompress_ctx(ctx, in, in_size, buf, nbytes);
+            if (decompressed_size2 < 0 || n5_w < w || n5_h < h || n5_d < d)
+                return false;
+            
+            char* src = buf;
+            char* dst = out;
+            int src_y_pitch = n5_w * nb;
+            int dst_y_pitch = w * nb;
+            int src_z_pitch = n5_w * n5_h * nb;
+            int dst_z_pitch = w * h * nb;
+            for (int zz = 0; zz < d; zz++)
+            {
+                for (int yy = 0; yy < h; yy++)
+                    memcpy(dst + dst_y_pitch * yy, src + src_y_pitch * yy, dst_y_pitch);
+                src += src_z_pitch;
+                dst += dst_z_pitch;
+            }
+            delete[] buf;
+        }
+        
+        if (isn5 && nb == 2)
+        {
+            char e = check_machine_endian();
+            if (e == 'L')
+            {
+                for (int i = 0; i < out_size-1; i += 2)
+                    swap(out[i], out[i+1]);
+            }
+        }
+        
+        blosc2_free_ctx(ctx);
+        
+        return true;
+    }
+    
+    char TextureBrick::check_machine_endian()
+    {
+        char e='N'; //for unknown endianness
+        
+        long int a=0x44332211;
+        unsigned char * p = (unsigned char *)&a;
+        if ((*p==0x11) && (*(p+1)==0x22) && (*(p+2)==0x33) && (*(p+3)==0x44))
+            e = 'L';
+        else if ((*p==0x44) && (*(p+1)==0x33) && (*(p+2)==0x22) && (*(p+3)==0x11))
+            e = 'B';
+        else if ((*p==0x22) && (*(p+1)==0x11) && (*(p+2)==0x44) && (*(p+3)==0x33))
+            e = 'M';
+        else
+            e = 'N';
+        
+        return e;
+    }
 
    void TextureBrick::delete_all_cache_files()
    {

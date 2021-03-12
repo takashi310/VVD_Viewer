@@ -44,6 +44,10 @@ BEGIN_EVENT_TABLE(DataTreeCtrl, wxTreeCtrl)
 	EVT_MENU(ID_Rename, DataTreeCtrl::OnRenameMenu)
 	EVT_MENU(ID_Duplicate, DataTreeCtrl::OnDuplicate)
 	EVT_MENU(ID_Save, DataTreeCtrl::OnSave)
+    EVT_MENU(ID_SaveSegVol, DataTreeCtrl::OnSaveSegmentedVolume)
+    EVT_MENU(ID_ShowEntireVolume, DataTreeCtrl::OnShowEntireVolume)
+    EVT_MENU(ID_HideOutsideMask, DataTreeCtrl::OnHideOutsideOfMask)
+    EVT_MENU(ID_HideInsideMask, DataTreeCtrl::OnHideInsideOfMask)
 	EVT_MENU(ID_ExportMask, DataTreeCtrl::OnExportMask)
 	EVT_MENU(ID_ImportMask, DataTreeCtrl::OnImportMask)
 	EVT_MENU(ID_BakeVolume, DataTreeCtrl::OnBakeVolume)
@@ -424,6 +428,10 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 					menu.Append(ID_Rename, "Rename");
 					menu.Append(ID_Duplicate, "Duplicate");
 					menu.Append(ID_Save, "Save");
+                    menu.Append(ID_SaveSegVol, "Save Segmented Volume");
+                    menu.Append(ID_ShowEntireVolume, "Show Entire Volume");
+                    menu.Append(ID_HideOutsideMask, "Show Only Inside of Mask");
+                    menu.Append(ID_HideInsideMask, "Show Only Outside of Mask");
 					menu.Append(ID_ExportMask, "Export Mask");
 					menu.Append(ID_ImportMask, "Import Mask");
 					menu.Append(ID_BakeVolume, "Bake");
@@ -877,6 +885,139 @@ void DataTreeCtrl::OnSave(wxCommandEvent& event)
 		}
 		delete fopendlg;
 	}
+}
+
+void DataTreeCtrl::OnSaveSegmentedVolume(wxCommandEvent& event)
+{
+    if (m_fixed)
+        return;
+    
+    wxTreeItemId sel_item = GetSelection();
+    VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+    
+    if (!sel_item.IsOk() || !vr_frame)
+        return;
+    LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+    if (!item_data)
+        return;
+    
+    wxString name = GetItemBaseText(sel_item);
+    
+    if (item_data->type == 2) //volume
+    {
+        VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
+        
+        wxString formats;
+        if (vd && vd->isBrxml())
+        {
+            formats = "Single-page Tiff sequence (*.tif)|*.tif;*.tiff";
+        }
+        else
+        {
+            formats = "Muti-page Tiff file (*.tif, *.tiff)|*.tif;*.tiff|"\
+            "Single-page Tiff sequence (*.tif)|*.tif;*.tiff|"\
+            "Nrrd file (*.nrrd)|*.nrrd";
+        }
+        wxFileDialog *fopendlg = new wxFileDialog(
+                                                  m_frame, "Save Volume Data", "", "",
+                                                  formats,
+                                                  wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
+        fopendlg->SetExtraControlCreator(CreateExtraControl);
+        
+        int rval = fopendlg->ShowModal();
+        
+        if (rval == wxID_OK)
+        {
+            wxString filename = fopendlg->GetPath();
+            if (vd)
+            {
+                auto mskmode = vd->GetMaskHideMode();
+                vd->SetMaskHideMode(VOL_MASK_HIDE_OUTSIDE);
+                vd->Save(filename, fopendlg->GetFilterIndex(), false, VRenderFrame::GetCompression(), true, true, GetCurrentView() ? GetCurrentView()->GetVolumeLoader() : NULL);
+                vd->SetMaskHideMode(mskmode);
+            }
+        }
+        if (vd && vd->isBrxml())
+            vr_frame->RefreshVRenderViews();
+        delete fopendlg;
+    }
+}
+
+
+void DataTreeCtrl::OnShowEntireVolume(wxCommandEvent& event)
+{
+    if (m_fixed)
+        return;
+    
+    wxTreeItemId sel_item = GetSelection();
+    VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+    
+    if (!sel_item.IsOk() || !vr_frame)
+        return;
+    LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+    if (!item_data)
+        return;
+    
+    wxString name = GetItemBaseText(sel_item);
+    
+    if (item_data->type == 2) //volume
+    {
+        VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
+        if (!vd) return;
+        vd->SetMaskHideMode(VOL_MASK_HIDE_NONE);
+        vr_frame->RefreshVRenderViews();
+    }
+}
+
+
+void DataTreeCtrl::OnHideOutsideOfMask(wxCommandEvent& event)
+{
+    if (m_fixed)
+        return;
+    
+    wxTreeItemId sel_item = GetSelection();
+    VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+    
+    if (!sel_item.IsOk() || !vr_frame)
+        return;
+    LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+    if (!item_data)
+        return;
+    
+    wxString name = GetItemBaseText(sel_item);
+    
+    if (item_data->type == 2) //volume
+    {
+        VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
+        if (!vd) return;
+        vd->SetMaskHideMode(VOL_MASK_HIDE_OUTSIDE);
+        vr_frame->RefreshVRenderViews();
+    }
+}
+
+void DataTreeCtrl::OnHideInsideOfMask(wxCommandEvent &event)
+{
+    if (m_fixed)
+        return;
+    
+    wxTreeItemId sel_item = GetSelection();
+    VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+    
+    if (!sel_item.IsOk() || !vr_frame)
+        return;
+    LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+    if (!item_data)
+        return;
+    
+    wxString name = GetItemBaseText(sel_item);
+    
+    if (item_data->type == 2) //volume
+    {
+        VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
+        if (!vd) return;
+        vd->SetMaskHideMode(VOL_MASK_HIDE_INSIDE);
+        vr_frame->RefreshVRenderViews();
+    }
 }
 
 void DataTreeCtrl::OnExportMask(wxCommandEvent& event)
@@ -3677,13 +3818,37 @@ void DataTreeCtrl::BrushCreate()
 					wxString group_name = GetItemBaseText(par_item);
 					wxString str = GetItemBaseText(GetItemParent(par_item));
 					VRenderView* vrv = vr_frame->GetView(str);
-					if (vrv)
+					VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
+					if (vd)
 					{
-						VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
-						if (vd)
+						if (vd->GetNAMode())
 						{
-							vrv->SetVolumeA(vd);
-							vrv->Calculate(5, group_name);
+							vector<VolumeData*> vols;
+							DataGroup* group = vrv->GetGroup(group_name);
+							if (group)
+							{
+								for (int j = 0; j < group->GetVolumeNum(); j++)
+								{
+									VolumeData* gvd = group->GetVolumeData(j);
+									if (gvd && gvd->GetNAMode() && (gvd->GetLabel(false) || !gvd->GetSharedLabelName().IsEmpty()))
+										vols.push_back(gvd);
+								}
+								if (vols.size() > 0)
+									vrv->SetVolumeA(vols[0]);
+								if (vols.size() > 1)
+									vrv->SetVolumeB(vols[1]);
+								if (vols.size() > 2)
+									vrv->SetVolumeC(vols[2]);
+								vrv->Calculate(10, group_name);
+							}
+						}
+						else
+						{
+							if (vrv)
+							{
+								vrv->SetVolumeA(vd);
+								vrv->Calculate(5, group_name);
+							}
 						}
 					}
 				}
@@ -3731,13 +3896,37 @@ void DataTreeCtrl::BrushCreateInv()
 					wxString group_name = GetItemBaseText(par_item);
 					wxString str = GetItemBaseText(GetItemParent(par_item));
 					VRenderView* vrv = vr_frame->GetView(str);
-					if (vrv)
+					VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
+					if (vd)
 					{
-						VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
-						if (vd)
+						if (vd->GetNAMode())
 						{
-							vrv->SetVolumeA(vd);
-							vrv->Calculate(cal_type, group_name);
+							vector<VolumeData*> vols;
+							DataGroup* group = vrv->GetGroup(group_name);
+							if (group)
+							{
+								for (int j = 0; j < group->GetVolumeNum(); j++)
+								{
+									VolumeData* gvd = group->GetVolumeData(j);
+									if (gvd && gvd->GetNAMode() && (gvd->GetLabel(false)) || !gvd->GetSharedLabelName().IsEmpty())
+										vols.push_back(gvd);
+								}
+								if (vols.size() > 0)
+									vrv->SetVolumeA(vols[0]);
+								if (vols.size() > 1)
+									vrv->SetVolumeB(vols[1]);
+								if (vols.size() > 2)
+									vrv->SetVolumeC(vols[2]);
+								vrv->Calculate(11, group_name);
+							}
+						}
+						else
+						{
+							if (vrv)
+							{
+								vrv->SetVolumeA(vd);
+								vrv->Calculate(cal_type, group_name);
+							}
 						}
 					}
 				}
@@ -4774,6 +4963,12 @@ void TreePanel::SetMGroupItemImage(const wxTreeItemId item, int image)
 {
 	if (m_datatree)
 		m_datatree->SetMGroupItemImage(item, image);
+}
+
+void TreePanel::SetItemName(const wxTreeItemId item, const wxString &name)
+{
+	if (m_datatree)
+		m_datatree->SetItemText(item, name);
 }
 
 void TreePanel::UpdateSelection()

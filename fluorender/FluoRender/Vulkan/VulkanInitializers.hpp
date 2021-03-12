@@ -448,6 +448,7 @@ namespace vks
 			pipelineColorBlendStateCreateInfo.pNext = nullptr;
 			pipelineColorBlendStateCreateInfo.attachmentCount = attachmentCount;
 			pipelineColorBlendStateCreateInfo.pAttachments = pAttachments;
+			pipelineColorBlendStateCreateInfo.logicOpEnable = VK_FALSE;
 			return pipelineColorBlendStateCreateInfo;
 		}
 

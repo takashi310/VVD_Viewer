@@ -129,6 +129,11 @@ public:
 	{return m_hdr;}
 	void SetHdr(Color hdr)
 	{m_hdr = hdr;}
+    //levels settings
+    const Color GetLevels()
+    {return m_levels;}
+    void SetLevels(Color levels)
+    {m_levels = levels;}
 	//sync values
 	bool GetSyncR()
 	{return m_sync_r;}
@@ -165,6 +170,7 @@ protected:
 	Color m_gamma;
 	Color m_brightness;
 	Color m_hdr;
+    Color m_levels;
 	bool m_sync_r;
 	bool m_sync_g;
 	bool m_sync_b;
@@ -372,29 +378,29 @@ public:
 	void SetSkipBrick(bool skip);
 	bool GetSkipBrick();
 	//load
-	int Load(Nrrd* data, const wxString &name, const wxString &path, BRKXMLReader *breader = NULL);
-	int Replace(Nrrd* data, bool del_tex);
+	int Load(const std::shared_ptr<VL_Nrrd> &data, const wxString &name, const wxString &path, BRKXMLReader *breader = NULL);
+	int Replace(const std::shared_ptr<VL_Nrrd>& data, bool del_tex);
 	int Replace(VolumeData* data);
-	Nrrd* GetVolume(bool ret);
+	std::shared_ptr<VL_Nrrd> GetVolume(bool ret);
 	//empty data
 	void AddEmptyData(int bits,
 		int nx, int ny, int nz,
 		double spcx, double spcy, double spcz);
 	//load mask
-	bool LoadMask(Nrrd* mask);
+	bool LoadMask(const std::shared_ptr<VL_Nrrd>& mask);
 	void DeleteMask();
-	Nrrd* GetMask(bool ret);
+	std::shared_ptr<VL_Nrrd> GetMask(bool ret);
 	//empty mask
 	void AddEmptyMask();
 	//load label
-	void LoadLabel(Nrrd* label);
+	void LoadLabel(const std::shared_ptr<VL_Nrrd>& label);
 	void DeleteLabel();
-	Nrrd* GetLabel(bool ret);
+	std::shared_ptr<VL_Nrrd> GetLabel(bool ret);
 	//empty label
 	//load stroke
-	void LoadStroke(Nrrd* stroke);
+	void LoadStroke(const std::shared_ptr<VL_Nrrd>& stroke);
 	void DeleteStroke();
-	Nrrd* GetStroke(bool ret);
+	std::shared_ptr<VL_Nrrd> GetStroke(bool ret);
 	void AddEmptyStroke();
 	//mode: 0-zeros;1-ordered; 2-shuffled
 	void AddEmptyLabel(int mode=0);
@@ -407,7 +413,7 @@ public:
 	void Save(wxString &filename, int mode=0, bool bake=false, bool compress=false, bool save_msk=true, bool save_label=true, VolumeLoader *vl=NULL);
 	void ExportMask(wxString &filename);
 	void ImportMask(wxString &filename);
-	void ExportEachSegment(wxString dir, Nrrd* label_nrrd=NULL, int mode=2, bool compress=true);
+	void ExportEachSegment(wxString dir, const std::shared_ptr<VL_Nrrd>& label_nrrd=nullptr, int mode=2, bool compress=true);
 
 	//volumerenderer
 	VolumeRenderer *GetVR();
@@ -458,7 +464,7 @@ public:
 	void DrawLabel(int type, int mode, double thresh, double gm_falloff);
 
 	//calculation
-	void Calculate(int type, VolumeData* vd_a, VolumeData* vd_b);
+	void Calculate(int type, VolumeData* vd_a, VolumeData* vd_b, VolumeData* vd_c = NULL);
 
 	//set 2d mask for segmentation
 	void Set2dMask(std::shared_ptr<vks::VTexture>& mask);
@@ -702,6 +708,20 @@ public:
 
 	static Nrrd* NrrdScale(Nrrd* src, size_t dst_datasize, bool interpolation = true);
 	static Nrrd* NrrdScale(Nrrd* src, size_t nx, size_t ny, size_t nz, bool interpolation = true);
+
+	size_t GetDataSize()
+	{
+		size_t ret = 0;
+		size_t w, h, d, bd;
+		if (m_tex)
+		{
+			m_tex->get_dimensions(w, h, d);
+			bd = m_tex->nb(0);
+			ret = w * h * d * bd;
+		}
+
+		return ret;
+	}
 
 private:
 	//duplication indicator and counter
@@ -947,15 +967,15 @@ public:
 
 	bool InsideClippingPlanes(Point &pos);
 
-	void SetLabel(Nrrd *label) {m_label = label;}
-	Nrrd *GetLabel() {return m_label;}
+	void SetLabel(const std::shared_ptr<VL_Nrrd>& label) {m_label = label;}
+	std::shared_ptr<VL_Nrrd> GetLabel() {return m_label;}
 
 private:
 	static int m_num;
 	vector<AText*> m_alist;
 	Transform *m_tform;
 	VolumeData* m_vd;
-	Nrrd* m_label;
+	std::shared_ptr<VL_Nrrd> m_label;
 
 	bool m_disp;
 
@@ -1387,6 +1407,8 @@ public:
 	void SetBrightnessAll(Color &brightness);
 	//set hdr to all
 	void SetHdrAll(Color &hdr);
+    //set levels to all
+    void SetLevelsAll(Color &levels);
 	//set sync to all
 	void SetSyncRAll(bool sync_r);
 	void SetSyncGAll(bool sync_g);
@@ -1658,6 +1680,8 @@ public:
 	bool GetPvxmlFlipX() {return m_pvxml_flip_x;}
 	void SetPvxmlFlipY(bool flip) {m_pvxml_flip_y = flip;}
 	bool GetPvxmlFlipY() {return m_pvxml_flip_y;}
+    
+    void PushReader(BaseReader* reader) { m_reader_list.push_back(reader); }
 
 public:
 	//default values
@@ -1732,6 +1756,23 @@ struct VolumeLoaderData
 	VolumeData *vd;
 	unsigned long long datasize;
 	int mode;
+
+	int chid;
+	int frameid;
+};
+
+struct VolumeLoaderImage
+{
+	VolumeData* vd;
+	int chid;
+	int frameid;
+	std::shared_ptr<VL_Nrrd> vlnrrd;
+};
+
+struct VolumeLoaderImageKey
+{
+	int frameid;
+	wstring key;
 };
 
 struct VolumeDecompressorData
@@ -1743,18 +1784,21 @@ struct VolumeDecompressorData
 	VolumeData *vd;
 	unsigned long long datasize;
 	int mode;
+
+	int chid;
+	int frameid;
 };
 
 class VolumeLoader;
 
 class EXPORT_API VolumeDecompressorThread : public wxThread
 {
-    public:
-		VolumeDecompressorThread(VolumeLoader *vl);
-		~VolumeDecompressorThread();
-    protected:
-		virtual ExitCode Entry();
-        VolumeLoader* m_vl;
+public:
+	VolumeDecompressorThread(VolumeLoader* vl);
+	~VolumeDecompressorThread();
+protected:
+	virtual ExitCode Entry();
+	VolumeLoader* m_vl;
 };
 
 class EXPORT_API VolumeLoaderThread : public wxThread
@@ -1785,9 +1829,13 @@ class EXPORT_API VolumeLoader
 		void TryToFreeMemory(long long req=-1);
 		void CheckMemoryCache();
 		void RemoveAllLoadedBrick();
-		void RemoveBrickVD(VolumeData *vd);
+		void RemoveAllLoadedData();
+		void RemoveDataVD(VolumeData *vd);
 		void GetPalams(long long &used_mem, int &running_decomp_th, int &queue_num, int &decomp_queue_num);
 		void PreloadLevel(VolumeData *vd, int lv, bool lock=false);
+		std::shared_ptr<VL_Nrrd> GetLoadedNrrd(VolumeData* vd, int ch, int frame);
+		void AddLoadedNrrd(const std::shared_ptr<VL_Nrrd> &nrrd, VolumeData* vd, int ch, int frame);
+		//void DeleteLoadedNrrd(Nrrd* nrrd, VolumeData* vd, int ch, int frame);
 
 		long long GetAvailableMemory() { return m_memory_limit - m_used_memory; }
 		long long GetMemoryLimitByte() { return m_memory_limit; }
@@ -1798,21 +1846,26 @@ class EXPORT_API VolumeLoader
 		static bool sort_data_asc(const VolumeLoaderData b1, const VolumeLoaderData b2)
 		{ return b2.brick->get_d() < b1.brick->get_d(); }
 
+		static void setCriticalSection(wxCriticalSection* crtsec) { ms_pThreadCS = crtsec; }
+
 	protected:
 		VolumeLoaderThread *m_thread;
-		wxCriticalSection m_pThreadCS;
 		vector<VolumeLoaderData> m_queues;
 		vector<VolumeLoaderData> m_queued;
 		vector<VolumeDecompressorData> m_decomp_queues;
 		vector<VolumeDecompressorThread *> m_decomp_threads;
 		unordered_map<TextureBrick*, VolumeLoaderData> m_loaded;
 		unordered_map<wstring, std::shared_ptr<VL_Array>> m_memcached_data;
+		unordered_set<wstring> m_loading_files;
+		unordered_map<wstring, VolumeLoaderImage> m_loaded_files;
 		int m_running_decomp_th;
 		int m_max_decomp_th;
 		bool m_valid;
 
 		long long m_memory_limit;
 		long long m_used_memory;
+
+		static wxCriticalSection* ms_pThreadCS;
 
 		inline void AddLoadedBrick(const VolumeLoaderData &lbd)
 		{
@@ -1821,9 +1874,196 @@ class EXPORT_API VolumeLoader
 			m_used_memory += lbd.datasize;
 		}
 
+		static bool less_vld_frame(const VolumeLoaderImageKey&d1, const VolumeLoaderImageKey&d2) { return d1.frameid < d2.frameid; }
+
 		friend class VolumeLoaderThread;
 		friend class VolumeDecompressorThread;
 };
+
+
+class ProjectDataLoader;
+
+class ProjectDataLoaderQueue
+{
+public:
+    wxString path;
+    wxString name;
+    int ch;
+    int t;
+    bool compression;
+    bool skip_brick;
+    bool slice_seq;
+    bool time_seq;
+    wxString time_id;
+    bool load_mask;
+    wxString mskpath;
+    wxString lblpath;
+    int type;
+    
+    ProjectDataLoaderQueue(const wxString &_path, int _ch, int _t, wxString _name=wxEmptyString , bool _compression=false, bool _skip_brick=false, bool _slice_seq=false, bool _time_seq=false, wxString _time_id=wxEmptyString, bool _load_mask=true, wxString _mskpath=wxEmptyString, wxString _lblpath=wxEmptyString)
+    {
+        path = _path;
+        name = _name;
+        ch = _ch;
+        t = _t;
+        compression = _compression;
+        skip_brick = _skip_brick;
+        slice_seq = _slice_seq;
+        time_seq = _time_seq;
+        time_id = _time_id;
+        load_mask = _load_mask;
+        mskpath = _mskpath;
+        lblpath = _lblpath;
+        
+        wxString suffix = path.Mid(path.Find('.', true)).MakeLower();
+        if (suffix == ".nrrd")
+            type = LOAD_TYPE_NRRD;
+        else if (suffix == ".tif"||suffix == ".tiff"||suffix == ".zip")
+            type = LOAD_TYPE_TIFF;
+        else if (suffix == ".oib")
+            type = LOAD_TYPE_OIB;
+        else if (suffix == ".oif")
+            type = LOAD_TYPE_OIF;
+        else if (suffix == ".lsm")
+            type = LOAD_TYPE_LSM;
+        else if (suffix == ".xml")
+            type = LOAD_TYPE_PVXML;
+        else if (suffix == ".vvd" || suffix == ".n5" || suffix == ".json")
+            type = LOAD_TYPE_BRKXML;
+        else if (suffix == ".h5j")
+            type = LOAD_TYPE_H5J;
+        else if (suffix == ".v3dpbd")
+            type = LOAD_TYPE_V3DPBD;
+        else if (suffix == ".idi")
+            type = LOAD_TYPE_IDI;
+    }
+    
+    ProjectDataLoaderQueue(const ProjectDataLoaderQueue &copy)
+    {
+        path = copy.path;
+        name = copy.name;
+        ch = copy.ch;
+        t = copy.t;
+        compression = copy.compression;
+        skip_brick = copy.skip_brick;
+        slice_seq = copy.slice_seq;
+        time_seq = copy.time_seq;
+        time_id = copy.time_id;
+        load_mask = copy.load_mask;
+        mskpath = copy.mskpath;
+        lblpath = copy.lblpath;
+        type = copy.type;
+    }
+    
+};
+
+class EXPORT_API ProjectDataLoaderThread : public wxThread
+{
+public:
+    ProjectDataLoaderThread(ProjectDataLoader *pdl);
+    ~ProjectDataLoaderThread();
+    
+protected:
+    virtual ExitCode Entry();
+    ProjectDataLoader *m_pdl;
+};
+
+class EXPORT_API ProjectDataLoader
+{
+public:
+    ProjectDataLoader();
+    ~ProjectDataLoader();
+    void Queue(ProjectDataLoaderQueue path);
+    void ClearQueues();
+    void Set(vector<ProjectDataLoaderQueue> &queues);
+    void Join();
+    bool Run();
+    void GetPalams(long long &used_mem, int &running_decomp_th, int &queue_num, int &decomp_queue_num);
+    void SetMaxThreadNum(int num) {m_max_th = num;}
+    int GetMaxThreadNum() { return m_max_th;}
+    int GetProgress() { return m_progress; }
+    void SetDataManager(DataManager *dm) { m_dm = dm; }
+    bool IsRunning() { return m_running_th > 0; }
+    
+    static void setCriticalSection(wxCriticalSection* crtsec) { ms_pThreadCS = crtsec; }
+    
+protected:
+    vector<ProjectDataLoaderQueue> m_queues;
+    vector<ProjectDataLoaderQueue> m_queued;
+    DataManager *m_dm;
+    int m_running_th;
+    int m_max_th;
+    int m_queue_count;
+    int m_progress;
+    
+    static wxCriticalSection* ms_pThreadCS;
+    
+    friend class ProjectDataLoaderThread;
+};
+
+
+class EmptyBlockDetector;
+
+class EmptyBlockDetectorQueue
+{
+public:
+    shared_ptr<VL_Nrrd> nv;
+    TextureBrick* b;
+    
+    EmptyBlockDetectorQueue(const shared_ptr<VL_Nrrd> &nv_, TextureBrick* b_)
+    {
+        nv = nv_;
+        b = b_;
+    }
+    
+    EmptyBlockDetectorQueue(const EmptyBlockDetectorQueue &copy)
+    {
+        nv = copy.nv;
+        b = copy.b;
+    }
+    
+};
+
+class EXPORT_API EmptyBlockDetectorThread : public wxThread
+{
+public:
+    EmptyBlockDetectorThread(EmptyBlockDetector *vl);
+    ~EmptyBlockDetectorThread();
+protected:
+    virtual ExitCode Entry();
+    EmptyBlockDetector* m_ebd;
+};
+
+class EXPORT_API EmptyBlockDetector
+{
+public:
+    EmptyBlockDetector();
+    ~EmptyBlockDetector();
+    void Queue(EmptyBlockDetectorQueue queue);
+    void ClearQueues();
+    void Set(vector<EmptyBlockDetectorQueue> &queues);
+    void Join();
+    bool Run();
+    void SetMaxThreadNum(int num) {m_max_th = num;}
+    int GetMaxThreadNum() { return m_max_th;}
+    int GetProgress() { return m_progress; }
+    bool IsRunning() { return m_running_th > 0; }
+    
+    static void setCriticalSection(wxCriticalSection* crtsec) { ms_pThreadCS = crtsec; }
+    
+protected:
+    vector<EmptyBlockDetectorQueue> m_queues;
+    vector<EmptyBlockDetectorQueue> m_queued;
+    int m_running_th;
+    int m_max_th;
+    int m_queue_count;
+    int m_progress;
+    
+    static wxCriticalSection* ms_pThreadCS;
+    
+    friend class EmptyBlockDetectorThread;
+};
+
 
 
 #endif//_DATAMANAGER_H_

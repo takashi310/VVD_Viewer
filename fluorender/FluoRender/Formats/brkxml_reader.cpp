@@ -9,8 +9,14 @@
 #include <sstream>
 #include <locale>
 #include <algorithm>
+#include <regex>
 #include <boost/foreach.hpp>
 #include <boost/lexical_cast.hpp>
+#include "boost/filesystem.hpp"
+
+using namespace boost::filesystem;
+
+using nlohmann::json;
 
 template <typename _T> void clear2DVector(std::vector<std::vector<_T>> &vec2d)
 {
@@ -62,6 +68,7 @@ BRKXMLReader::BRKXMLReader()
    m_isURL = false;
 
    m_copy_lv = -1;
+   m_mask_lv = -1;
 }
 
 BRKXMLReader::~BRKXMLReader()
@@ -115,6 +122,18 @@ void BRKXMLReader::SetFile(string &file)
 #endif
       m_data_name = m_path_name.substr(m_path_name.find_last_of(slash)+1);
 	  m_dir_name = m_path_name.substr(0, m_path_name.find_last_of(slash)+1);
+       
+       if (m_dir_name.size() > 1)
+       {
+           size_t ext_pos = m_path_name.find_last_of(L".");
+           wstring ext = m_path_name.substr(ext_pos+1);
+           transform(ext.begin(), ext.end(), ext.begin(), towlower);
+           if (ext == L"json" || ext == L"n5fs_ch") {
+               m_data_name = m_dir_name.substr(m_dir_name.substr(0, m_dir_name.size() - 1).find_last_of(slash)+1);
+           }
+           else if (ext == L"n5")
+               m_dir_name = m_path_name + slash;
+       }
    }
    m_id_string = m_path_name;
 }
@@ -131,6 +150,19 @@ void BRKXMLReader::SetFile(wstring &file)
 #endif
    m_data_name = m_path_name.substr(m_path_name.find_last_of(slash)+1);
    m_dir_name = m_path_name.substr(0, m_path_name.find_last_of(slash)+1);
+    
+    if (m_dir_name.size() > 1)
+    {
+        size_t ext_pos = m_path_name.find_last_of(L".");
+        wstring ext = m_path_name.substr(ext_pos+1);
+        transform(ext.begin(), ext.end(), ext.begin(), towlower);
+        if (ext == L"json" || ext == L"n5fs_ch") {
+            m_data_name = m_dir_name.substr(m_dir_name.substr(0, m_dir_name.size() - 1).find_last_of(slash)+1);
+        }
+        else if (ext == L"n5")
+            m_dir_name = m_path_name + slash;
+    }
+
    m_id_string = m_path_name;
 }
 
@@ -194,69 +226,79 @@ void BRKXMLReader::Preprocess()
 	size_t pos = m_path_name.find_last_of(slash);
 	wstring path = m_path_name.substr(0, pos+1);
 	wstring name = m_path_name.substr(pos+1);
-
-	if (m_doc.LoadFile(ws2s(m_path_name).c_str()) != 0){
-		return;
-	}
+    
+    size_t ext_pos = m_path_name.find_last_of(L".");
+    wstring ext = m_path_name.substr(ext_pos+1);
+    transform(ext.begin(), ext.end(), ext.begin(), towlower);
+    
+    if (ext == L"n5" || ext == L"json" || ext == L"n5fs_ch") {
+        loadFSN5();
+    }
+    else if (ext == L"vvd") {
+        if (m_doc.LoadFile(ws2s(m_path_name).c_str()) != 0){
+            return;
+        }
 		
-	tinyxml2::XMLElement *root = m_doc.RootElement();
-	if (!root || strcmp(root->Name(), "BRK"))
-		return;
-	m_imageinfo = ReadImageInfo(root);
+        tinyxml2::XMLElement *root = m_doc.RootElement();
+        if (!root || strcmp(root->Name(), "BRK"))
+            return;
+        m_imageinfo = ReadImageInfo(root);
 
-	if (root->Attribute("exMetadataPath"))
-	{
-		string str = root->Attribute("exMetadataPath");
-		m_ex_metadata_path = s2ws(str);
-	}
-	if (root->Attribute("exMetadataURL"))
-	{
-		string str = root->Attribute("exMetadataURL");
-		m_ex_metadata_url = s2ws(str);
-	}
+        if (root->Attribute("exMetadataPath"))
+        {
+            string str = root->Attribute("exMetadataPath");
+            m_ex_metadata_path = s2ws(str);
+        }
+        if (root->Attribute("exMetadataURL"))
+        {
+            string str = root->Attribute("exMetadataURL");
+            m_ex_metadata_url = s2ws(str);
+        }
 
-	ReadPyramid(root, m_pyramid);
+        ReadPyramid(root, m_pyramid);
 	
-	m_time_num = m_imageinfo.nFrame;
-	m_chan_num = m_imageinfo.nChannel;
-	m_copy_lv = m_imageinfo.copyableLv;
+        m_time_num = m_imageinfo.nFrame;
+        m_chan_num = m_imageinfo.nChannel;
+        m_copy_lv = m_imageinfo.copyableLv;
+        m_mask_lv = m_imageinfo.maskLv;
 
-	m_cur_time = 0;
+        m_cur_time = 0;
 
-	if(m_pyramid.empty()) return;
+        if(m_pyramid.empty()) return;
 
-	m_xspc = m_pyramid[0].xspc;
-	m_yspc = m_pyramid[0].yspc;
-	m_zspc = m_pyramid[0].zspc;
+        m_xspc = m_pyramid[0].xspc;
+        m_yspc = m_pyramid[0].yspc;
+        m_zspc = m_pyramid[0].zspc;
 
-	m_x_size = m_pyramid[0].imageW;
-	m_y_size = m_pyramid[0].imageH;
-	m_slice_num = m_pyramid[0].imageD;
+        m_x_size = m_pyramid[0].imageW;
+        m_y_size = m_pyramid[0].imageH;
+        m_slice_num = m_pyramid[0].imageD;
 
-	m_file_type = m_pyramid[0].file_type;
+        m_file_type = m_pyramid[0].file_type;
 
-	m_level_num = m_pyramid.size();
-	m_cur_level = 0;
+        m_level_num = m_pyramid.size();
+        m_cur_level = 0;
 
-	wstring cur_dir_name = m_path_name.substr(0, m_path_name.find_last_of(slash)+1);
-	loadMetadata(m_path_name);
-	loadMetadata(cur_dir_name + L"_metadata.xml");
+        wstring cur_dir_name = m_path_name.substr(0, m_path_name.find_last_of(slash)+1);
+        loadMetadata(m_path_name);
+        loadMetadata(cur_dir_name + L"_metadata.xml");
 
-	if (!m_ex_metadata_path.empty())
-	{
-		bool is_rel = false;
-#ifdef _WIN32
-		if (m_ex_metadata_path.length() > 2 && m_ex_metadata_path[1] != L':')
-			is_rel = true;
-#else
-		if (m_ex_metadata_path[0] != L'/')
-			is_rel = true;
-#endif
-		if (is_rel)
-			loadMetadata(cur_dir_name + m_ex_metadata_path);
-		else
-			loadMetadata(m_ex_metadata_path);
-	}
+        if (!m_ex_metadata_path.empty())
+        {
+            bool is_rel = false;
+    #ifdef _WIN32
+            if (m_ex_metadata_path.length() > 2 && m_ex_metadata_path[1] != L':')
+                is_rel = true;
+    #else
+            if (m_ex_metadata_path[0] != L'/')
+                is_rel = true;
+    #endif
+            if (is_rel)
+                loadMetadata(cur_dir_name + m_ex_metadata_path);
+            else
+                loadMetadata(m_ex_metadata_path);
+        }
+    }
 
 	SetInfo();
 
@@ -286,6 +328,14 @@ BRKXMLReader::ImageInfo BRKXMLReader::ReadImageInfo(tinyxml2::XMLElement *infoNo
 	}
 	else
 		iinfo.copyableLv = -1;
+    
+    if (infoNode->Attribute("MaskLv"))
+    {
+        ival = STOI(infoNode->Attribute("MaskLv"));
+        iinfo.maskLv = ival;
+    }
+    else
+        iinfo.maskLv = -1;
 
 	return iinfo;
 }
@@ -449,6 +499,16 @@ void BRKXMLReader::ReadFilenames(tinyxml2::XMLElement* fileRootNode, vector<vect
 {
 	string str;
 	int frame, channel, id;
+    
+    wstring prev_fname;
+    
+#ifdef _WIN32
+    wchar_t slash = L'\\';
+#else
+    wchar_t slash = L'/';
+#endif
+    wstring cur_dir = m_path_name.substr(0, m_path_name.find_last_of(slash)+1);
+    
 
 	tinyxml2::XMLElement *child = fileRootNode->FirstChildElement();
 	while (child)
@@ -505,11 +565,31 @@ void BRKXMLReader::ReadFilenames(tinyxml2::XMLElement* fileRootNode, vector<vect
 				{
 					filename[frame][channel][id]->filename = m_dir_name + s2ws(str);
 					filename[frame][channel][id]->isurl = m_isURL;
+                    
+                    if (!m_isURL && prev_fname != filename[frame][channel][id]->filename)
+                    {
+						size_t pos = filename[frame][channel][id]->filename.find_last_of(slash);
+						wstring name = filename[frame][channel][id]->filename.substr(pos + 1);
+                        wstring secpath = cur_dir + name;
+                        if (!exists(filename[frame][channel][id]->filename) && exists(secpath))
+                            filename[frame][channel][id]->filename = secpath;
+                    }
+					prev_fname = filename[frame][channel][id]->filename;
 				}
 				else //absolute path
 				{
 					filename[frame][channel][id]->filename = s2ws(str);
 					filename[frame][channel][id]->isurl = false;
+                    
+                    if (prev_fname != filename[frame][channel][id]->filename)
+                    {
+						size_t pos = filename[frame][channel][id]->filename.find_last_of(slash);
+						wstring name = filename[frame][channel][id]->filename.substr(pos + 1);
+						wstring secpath = cur_dir + name;
+						if (!exists(filename[frame][channel][id]->filename) && exists(secpath))
+							filename[frame][channel][id]->filename = secpath;
+                    }
+					prev_fname = filename[frame][channel][id]->filename;
 				}
 
 				filename[frame][channel][id]->offset = 0;
@@ -856,7 +936,7 @@ double BRKXMLReader::GetExcitationWavelength(int chan)
 }
 
 //This function does not load image data into Nrrd.
-Nrrd *BRKXMLReader::Convert(int t, int c, bool get_max)
+Nrrd* BRKXMLReader::ConvertNrrd(int t, int c, bool get_max)
 {
 	Nrrd *data = 0;
 
@@ -964,7 +1044,7 @@ int BRKXMLReader::GetFileType(int lv)
 
 void BRKXMLReader::OutputInfo()
 {
-	ofstream ofs;
+	std::ofstream ofs;
 	ofs.open("PyramidInfo.txt");
 
 	ofs << "nChannel: " << m_imageinfo.nChannel << "\n";
@@ -1112,7 +1192,7 @@ void BRKXMLReader::build_pyramid(vector<FLIVR::Pyramid_Level> &pyramid, vector<v
 	{
 		for (int i = 0; i < pyramid.size(); i++)
 		{
-			if (pyramid[i].data) nrrdNix(pyramid[i].data);
+			if (pyramid[i].data) pyramid[i].data.reset();
 			for (int j = 0; j < pyramid[i].bricks.size(); j++)
 				if (pyramid[i].bricks[j]) delete pyramid[i].bricks[j];
 		}
@@ -1152,7 +1232,10 @@ void BRKXMLReader::build_pyramid(vector<FLIVR::Pyramid_Level> &pyramid, vector<v
 				filenames[i][j][k].resize(m_pyramid[i].filename[j][k].size());
 				for (int n = 0; n < filenames[i][j][k].size(); n++)
 				{
-					filenames[i][j][k][n] = new FLIVR::FileLocInfo(*m_pyramid[i].filename[j][k][n]);
+                    if (m_pyramid[i].filename[j][k][n])
+                        filenames[i][j][k][n] = new FLIVR::FileLocInfo(*m_pyramid[i].filename[j][k][n]);
+                    else
+                        filenames[i][j][k][n] = nullptr;
 				}
 			}
 		}
@@ -1174,4 +1257,570 @@ void BRKXMLReader::SetInfo()
 	wss << L"Frames: " << m_time_num << L'\n';
 
 	m_info = wss.str();
+}
+
+void BRKXMLReader::loadFSN5()
+{
+    size_t ext_pos = m_path_name.find_last_of(L".");
+    wstring ext = m_path_name.substr(ext_pos+1);
+    transform(ext.begin(), ext.end(), ext.begin(), towlower);
+    boost::filesystem::path file_path(m_path_name);
+    
+	boost::filesystem::path::imbue(std::locale(std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
+	boost::filesystem::path root_path(m_dir_name);
+
+#ifdef _WIN32
+	wchar_t slash = L'\\';
+#else
+	wchar_t slash = L'/';
+#endif
+
+	vector<double> pix_res(3, 1.0);
+	auto root_attrpath = root_path / "attributes.json";
+	std::ifstream ifs(root_attrpath.string());
+	if (ifs.is_open()) {
+		auto jf = json::parse(ifs);
+		if (!jf.is_null() && jf.contains(PixelResolutionKey) && jf[PixelResolutionKey].contains(DimensionsKey))
+			pix_res = jf[PixelResolutionKey][DimensionsKey].get<vector<double>>();
+	}
+    
+    directory_iterator end_itr; // default construction yields past-the-end
+    vector<wstring> ch_dirs;
+    if (file_path.extension() == ".n5fs_ch") {
+        ch_dirs.push_back((file_path.stem()).generic_wstring());
+    }
+    else
+    {
+        std::regex chdir_pattern("^c\\d+$");
+        for (directory_iterator itr(root_path); itr != end_itr; ++itr)
+        {
+            if (is_directory(itr->status()))
+            {
+                if (regex_match(itr->path().filename().string(), chdir_pattern))
+                    ch_dirs.push_back(itr->path().filename().wstring());
+            }
+        }
+    }
+
+	if (ch_dirs.empty())
+		return;
+
+	sort(ch_dirs.begin(), ch_dirs.end(),
+		[](const wstring& x, const wstring& y) { return WSTOI(x.substr(1)) < WSTOI(y.substr(1)); });
+
+
+	vector<vector<wstring>> relpaths;
+	for (int i = 0; i < ch_dirs.size(); i++) {
+		vector<wstring> scale_dirs;
+		std::regex scdir_pattern("^s\\d+$");
+		for (directory_iterator itr(root_path / ch_dirs[i]); itr != end_itr; ++itr)
+		{
+			if (is_directory(itr->status()))
+			{
+				if (regex_match(itr->path().filename().string(), scdir_pattern))
+					scale_dirs.push_back(itr->path().filename().wstring());
+			}
+		}
+
+		if (scale_dirs.empty())
+			continue;
+
+		sort(scale_dirs.begin(), scale_dirs.end(),
+			[](const wstring& x, const wstring& y) { return WSTOI(x.substr(1)) < WSTOI(y.substr(1)); });
+
+		int orgw = 0;
+		int orgh = 0;
+		int orgd = 0;
+		if (m_pyramid.size() < scale_dirs.size())
+			m_pyramid.resize(scale_dirs.size());
+		for (int j = 0; j < scale_dirs.size(); j++) {
+			auto attrpath = root_path / ch_dirs[i] / scale_dirs[j] / "attributes.json";
+			DatasetAttributes* attr = parseDatasetMetadata(attrpath.wstring());
+
+			LevelInfo& lvinfo = m_pyramid[j];
+			if (i == 0) {
+				lvinfo.imageW = attr->m_dimensions[0];
+
+				lvinfo.imageH = attr->m_dimensions[1];
+
+				lvinfo.imageD = attr->m_dimensions[2];
+
+				if (i == 0 && j == 0) {
+					orgw = lvinfo.imageW;
+					orgh = lvinfo.imageH;
+					orgd = lvinfo.imageD;
+				}
+
+				lvinfo.file_type = attr->m_compression;
+                lvinfo.blosc_ctype = attr->m_blosc_param.ctype;
+                lvinfo.blosc_clevel = attr->m_blosc_param.clevel;
+                lvinfo.blosc_suffle = attr->m_blosc_param.suffle;
+                lvinfo.blosc_blocksize = attr->m_blosc_param.blocksize;
+
+				if (attr->m_pix_res[0] > 0.0)
+					lvinfo.xspc = attr->m_pix_res[0];
+				else
+					lvinfo.xspc = pix_res[0] / ((double)lvinfo.imageW / orgw);
+
+				if (attr->m_pix_res[1] > 0.0)
+					lvinfo.yspc = attr->m_pix_res[1];
+				else
+					lvinfo.yspc = pix_res[1] / ((double)lvinfo.imageH / orgh);
+
+				if (attr->m_pix_res[2] > 0.0)
+					lvinfo.zspc = attr->m_pix_res[2];
+				else
+					lvinfo.zspc = pix_res[2] / ((double)lvinfo.imageD / orgd);
+
+				lvinfo.bit_depth = attr->m_dataType;
+
+				lvinfo.brick_baseW = attr->m_blockSize[0];
+
+				lvinfo.brick_baseH = attr->m_blockSize[1];
+
+				lvinfo.brick_baseD = attr->m_blockSize[2];
+
+				vector<wstring> lvpaths;
+				int ii, jj, kk;
+				int mx, my, mz, mx2, my2, mz2, ox, oy, oz;
+				double tx0, ty0, tz0, tx1, ty1, tz1;
+				double bx1, by1, bz1;
+				double dx0, dy0, dz0, dx1, dy1, dz1;
+				const int overlapx = 0;
+				const int overlapy = 0;
+				const int overlapz = 0;
+				size_t count = 0;
+				size_t zcount = 0;
+				for (kk = 0; kk < lvinfo.imageD; kk += lvinfo.brick_baseD)
+				{
+					if (kk) kk -= overlapz;
+					size_t ycount = 0;
+					for (jj = 0; jj < lvinfo.imageH; jj += lvinfo.brick_baseH)
+					{
+						if (jj) jj -= overlapy;
+						size_t xcount = 0;
+						for (ii = 0; ii < lvinfo.imageW; ii += lvinfo.brick_baseW)
+						{
+							BrickInfo* binfo = new BrickInfo();
+
+							if (ii) ii -= overlapx;
+							mx = min(lvinfo.brick_baseW, lvinfo.imageW - ii);
+							my = min(lvinfo.brick_baseH, lvinfo.imageH - jj);
+							mz = min(lvinfo.brick_baseD, lvinfo.imageD - kk);
+
+							mx2 = mx;
+							my2 = my;
+							mz2 = mz;
+
+							// Compute Texture Box.
+							tx0 = ii ? ((mx2 - mx + overlapx / 2.0) / mx2) : 0.0;
+							ty0 = jj ? ((my2 - my + overlapy / 2.0) / my2) : 0.0;
+							tz0 = kk ? ((mz2 - mz + overlapz / 2.0) / mz2) : 0.0;
+
+							tx1 = 1.0 - overlapx / 2.0 / mx2;
+							if (mx < lvinfo.brick_baseW) tx1 = 1.0;
+							if (lvinfo.imageW - ii == lvinfo.brick_baseW) tx1 = 1.0;
+
+							ty1 = 1.0 - overlapy / 2.0 / my2;
+							if (my < lvinfo.brick_baseH) ty1 = 1.0;
+							if (lvinfo.imageH - jj == lvinfo.brick_baseH) ty1 = 1.0;
+
+							tz1 = 1.0 - overlapz / 2.0 / mz2;
+							if (mz < lvinfo.brick_baseD) tz1 = 1.0;
+							if (lvinfo.imageD - kk == lvinfo.brick_baseD) tz1 = 1.0;
+
+							binfo->tx0 = tx0;
+							binfo->ty0 = ty0;
+							binfo->tz0 = tz0;
+							binfo->tx1 = tx1;
+							binfo->ty1 = ty1;
+							binfo->tz1 = tz1;
+
+							// Compute BBox.
+							bx1 = min((ii + lvinfo.brick_baseW - overlapx / 2.0) / (double)lvinfo.imageW, 1.0);
+							if (lvinfo.imageW - ii == lvinfo.brick_baseW) bx1 = 1.0;
+
+							by1 = min((jj + lvinfo.brick_baseH - overlapy / 2.0) / (double)lvinfo.imageH, 1.0);
+							if (lvinfo.imageH - jj == lvinfo.brick_baseH) by1 = 1.0;
+
+							bz1 = min((kk + lvinfo.brick_baseD - overlapz / 2.0) / (double)lvinfo.imageD, 1.0);
+							if (lvinfo.imageD - kk == lvinfo.brick_baseD) bz1 = 1.0;
+
+							binfo->bx0 = ii == 0 ? 0 : (ii + overlapx / 2.0) / (double)lvinfo.imageW;
+							binfo->by0 = jj == 0 ? 0 : (jj + overlapy / 2.0) / (double)lvinfo.imageH;
+							binfo->bz0 = kk == 0 ? 0 : (kk + overlapz / 2.0) / (double)lvinfo.imageD;
+							binfo->bx1 = bx1;
+							binfo->by1 = by1;
+							binfo->bz1 = bz1;
+
+							ox = ii - (mx2 - mx);
+							oy = jj - (my2 - my);
+							oz = kk - (mz2 - mz);
+
+							binfo->id = count++;
+							binfo->x_start = ox;
+							binfo->y_start = oy;
+							binfo->z_start = oz;
+							binfo->x_size = mx2;
+							binfo->y_size = my2;
+							binfo->z_size = mz2;
+
+							binfo->fsize = 0;
+							binfo->offset = 0;
+
+							if (count > lvinfo.bricks.size())
+								lvinfo.bricks.resize(count, NULL);
+
+							lvinfo.bricks[binfo->id] = binfo;
+
+							wstringstream wss;
+							wss << xcount << slash << ycount << slash << zcount;
+							lvpaths.push_back(wss.str());
+
+							xcount++;
+						}
+						ycount++;
+					}
+					zcount++;
+				}
+				relpaths.push_back(lvpaths);
+			}
+
+			if (1 > lvinfo.filename.size())
+				lvinfo.filename.resize(1);
+			if (i + 1 > lvinfo.filename[0].size())
+				lvinfo.filename[0].resize(i + 1);
+			if (relpaths[j].size() > lvinfo.filename[0][i].size())
+				lvinfo.filename[0][i].resize(relpaths[j].size(), NULL);
+
+			for (int pid = 0; pid < relpaths[j].size(); pid++)
+			{
+				wstringstream wss2;
+				wss2 << m_dir_name << ch_dirs[i] << slash << scale_dirs[j] << slash << relpaths[j][pid];
+                boost::filesystem::path br_file_path(wss2.str());
+                
+                FLIVR::FileLocInfo* fi = nullptr;
+                if (boost::filesystem::exists(br_file_path))
+                    fi = new FLIVR::FileLocInfo(wss2.str(), 0, 0, lvinfo.file_type, false, true, lvinfo.blosc_blocksize, lvinfo.blosc_clevel, lvinfo.blosc_ctype, lvinfo.blosc_suffle);
+				lvinfo.filename[0][i][pid] = fi;
+			}
+
+			delete attr;
+		}
+	}
+
+	m_imageinfo.nFrame = 1;
+	m_imageinfo.nChannel = ch_dirs.size();
+	m_imageinfo.copyableLv = m_pyramid.size() - 1;
+
+	m_time_num = m_imageinfo.nFrame;
+	m_chan_num = m_imageinfo.nChannel;
+	m_copy_lv = m_imageinfo.copyableLv;
+
+	m_cur_time = 0;
+
+	if (m_pyramid.empty()) return;
+
+	m_xspc = m_pyramid[0].xspc;
+	m_yspc = m_pyramid[0].yspc;
+	m_zspc = m_pyramid[0].zspc;
+
+	m_x_size = m_pyramid[0].imageW;
+	m_y_size = m_pyramid[0].imageH;
+	m_slice_num = m_pyramid[0].imageD;
+
+	m_file_type = m_pyramid[0].file_type;
+
+	m_level_num = m_pyramid.size();
+	m_cur_level = 0;
+
+}
+
+DatasetAttributes* BRKXMLReader::parseDatasetMetadata(wstring jpath)
+{
+    boost::filesystem::path::imbue(std::locale( std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
+    boost::filesystem::path path(jpath);
+    std::ifstream ifs(path.string());
+
+	if (!ifs.is_open())
+		return nullptr;
+    
+    auto jf = json::parse(ifs);
+
+	if (jf.is_null() ||
+		!jf.contains(DimensionsKey) ||
+		!jf.contains(DataTypeKey) ||
+		!jf.contains(BlockSizeKey))
+		return nullptr;
+
+	DatasetAttributes* ret = new DatasetAttributes();
+    
+    ret->m_dimensions = jf[DimensionsKey].get<vector<long>>();
+    
+	string str = jf[DataTypeKey].get<string>();
+	if (str == "uint8")
+		ret->m_dataType = 8;
+	else if (str == "uint16")
+		ret->m_dataType = 16;
+	else
+		ret->m_dataType = 0;
+    
+    ret->m_blockSize = jf[BlockSizeKey].get<vector<int>>();
+    
+	if (jf.contains(CompressionKey) &&
+		(jf[CompressionKey].type() == json::value_t::number_integer || jf[CompressionKey].type() == json::value_t::number_unsigned))
+		ret->m_compression = jf[CompressionKey].get<int>();
+	if (jf.contains(PixelResolutionKey) && jf[PixelResolutionKey].contains(DimensionsKey))
+		ret->m_pix_res = jf[PixelResolutionKey][DimensionsKey].get<vector<double>>();
+	else
+		ret->m_pix_res = vector<double>(3, -1.0);
+    
+    /* version 0 */
+    if (jf.contains(CompressionKey) && jf[CompressionKey].contains(CompressionTypeKey)) {
+        auto cptype = jf[CompressionKey][CompressionTypeKey].get<string>();
+        if (cptype == "raw")
+			ret->m_compression = 0;
+        else if (cptype == "gzip")
+			ret->m_compression = 1;
+        else if (cptype == "bzip2")
+			ret->m_compression = 2;
+        else if (cptype == "lz4")
+			ret->m_compression = 3;
+        else if (cptype == "xz")
+			ret->m_compression = 4;
+        else if (cptype == "blosc")
+        {
+            ret->m_compression = 5;
+            if (jf[CompressionKey].contains(BloscLevelKey))
+                ret->m_blosc_param.clevel = jf[CompressionKey][BloscLevelKey].get<int>();
+            else ret->m_blosc_param.clevel = 0;
+            
+            if (jf[CompressionKey].contains(BloscBlockSizeKey))
+                ret->m_blosc_param.blocksize = jf[CompressionKey][BloscBlockSizeKey].get<int>();
+            else ret->m_blosc_param.blocksize = 0;
+            
+            if (jf[CompressionKey].contains(BloscCompressionKey))
+            {
+                auto bcptype = jf[CompressionKey][BloscCompressionKey].get<string>();
+                
+                if (bcptype == BLOSC_BLOSCLZ_COMPNAME)
+                    ret->m_blosc_param.ctype = BLOSC_BLOSCLZ;
+                else if (bcptype == BLOSC_LZ4_COMPNAME)
+                    ret->m_blosc_param.ctype = BLOSC_LZ4;
+                else if (bcptype == BLOSC_LZ4HC_COMPNAME)
+                    ret->m_blosc_param.ctype = BLOSC_LZ4HC;
+                else if (bcptype == BLOSC_SNAPPY_COMPNAME)
+                    ret->m_blosc_param.ctype = BLOSC_SNAPPY;
+                else if (bcptype == BLOSC_ZLIB_COMPNAME)
+                    ret->m_blosc_param.ctype = BLOSC_ZLIB;
+                else if (bcptype == BLOSC_ZSTD_COMPNAME)
+                    ret->m_blosc_param.ctype = BLOSC_ZSTD;
+            }
+            else ret->m_blosc_param.ctype = BLOSC_BLOSCLZ;
+            
+            if (jf[CompressionKey].contains(BloscShuffleKey))
+                ret->m_blosc_param.suffle = jf[CompressionKey][BloscShuffleKey].get<int>();
+            else ret->m_blosc_param.suffle = 0;
+        }
+    }
+
+	switch (ret->m_compression)
+	{
+	case 0:
+		ret->m_compression = BRICK_FILE_TYPE_RAW;
+		break;
+	case 1:
+		ret->m_compression = BRICK_FILE_TYPE_N5GZIP;
+		break;
+	case 3:
+		ret->m_compression = BRICK_FILE_TYPE_LZ4;
+		break;
+    case 5:
+        ret->m_compression = BRICK_FILE_TYPE_N5BLOSC;
+        break;
+	default:
+		ret->m_compression = BRICK_FILE_TYPE_NONE;
+	}
+
+	return ret;
+}
+
+/*
+ template <class T> T BRKXMLReader::parseAttribute(string key, T clazz, const json j)
+ {
+ if (attribute != null && j.contains(attribute))
+ return j.at(attribute).get<T>();
+ else
+ return null;
+ }
+ 
+ HashMap<String, JsonElement> BRKXMLReader::readAttributes(final Reader reader, final Gson gson) throws IOException {
+ 
+ final Type mapType = new TypeToken<HashMap<String, JsonElement>>() {}.getType();
+ final HashMap<String, JsonElement> map = gson.fromJson(reader, mapType);
+ return map == null ? new HashMap<>() : map;
+ }
+ */
+/**
+ * Return a reasonable class for a {@link JsonPrimitive}.  Possible return
+ * types are
+ * <ul>
+ * <li>boolean</li>
+ * <li>double</li>
+ * <li>String</li>
+ * <li>Object</li>
+ * </ul>
+ *
+ * @param jsonPrimitive
+ * @return
+ */
+/*
+ public static Class< ? > BRKXMLReader::classForJsonPrimitive(final JsonPrimitive jsonPrimitive) {
+ 
+ if (jsonPrimitive.isBoolean())
+ return boolean.class;
+ else if (jsonPrimitive.isNumber())
+ return double.class;
+ else if (jsonPrimitive.isString())
+ return String.class;
+ else return Object.class;
+ }
+ */
+
+/**
+ * Best effort implementation of {@link N5Reader#listAttributes(String)}
+ * with limited type resolution.  Possible return types are
+ * <ul>
+ * <li>null</li>
+ * <li>boolean</li>
+ * <li>double</li>
+ * <li>String</li>
+ * <li>Object</li>
+ * <li>boolean[]</li>
+ * <li>double[]</li>
+ * <li>String[]</li>
+ * <li>Object[]</li>
+ * </ul>
+ */
+/*
+ @Override
+ public default Map<String, Class< ? >> BRKXMLReader::listAttributes(final String pathName) throws IOException {
+ 
+ final HashMap<String, JsonElement> jsonElementMap = getAttributes(pathName);
+ final HashMap<String, Class< ? >> attributes = new HashMap<>();
+ jsonElementMap.forEach(
+ (key, jsonElement) -> {
+ final Class< ? > clazz;
+ if (jsonElement.isJsonNull())
+ clazz = null;
+ else if (jsonElement.isJsonPrimitive())
+ clazz = classForJsonPrimitive((JsonPrimitive)jsonElement);
+ else if (jsonElement.isJsonArray()) {
+ final JsonArray jsonArray = (JsonArray)jsonElement;
+ if (jsonArray.size() > 0) {
+ final JsonElement firstElement = jsonArray.get(0);
+ if (firstElement.isJsonPrimitive())
+ clazz = Array.newInstance(classForJsonPrimitive((JsonPrimitive)firstElement), 0).getClass();
+ else
+ clazz = Object[].class;
+ }
+ else
+ clazz = Object[].class;
+ }
+ else
+ clazz = Object.class;
+ attributes.put(key, clazz);
+ });
+ return attributes;
+ }
+ */
+
+map<wstring, wstring> BRKXMLReader::getAttributes(wstring pathName)
+{
+    map<wstring, wstring> mmap;
+    path ppath(m_path_name + GETSLASH() + getAttributesPath(pathName));
+    if (exists(pathName) && !exists(ppath))
+        return mmap;
+    
+    //mmap = jf.fromJson(reader, mapType);
+    return mmap;
+}
+
+
+DataBlock BRKXMLReader::readBlock(wstring pathName, const DatasetAttributes &datasetAttributes, const vector<long> gridPosition)
+{
+    DataBlock ret;
+    
+    path ppath(m_path_name + GETSLASH() + getDataBlockPath(pathName, gridPosition));
+    if (!exists(ppath))
+        return ret;
+    
+    return readBlock(ppath.wstring(), datasetAttributes, gridPosition);
+}
+
+vector<wstring> BRKXMLReader::list(wstring pathName)
+{
+    vector<wstring> ret;
+    path parent_path(m_path_name + GETSLASH() + pathName);
+    
+    if (!exists(parent_path))
+        return ret;
+    
+    directory_iterator end_itr; // default construction yields past-the-end
+    
+    for (directory_iterator itr(parent_path); itr != end_itr; ++itr)
+    {
+        if (is_directory(itr->status()))
+        {
+            auto p = relative(itr->path(), parent_path);
+            ret.push_back(p.wstring());
+        }
+    }
+    
+    return ret;
+}
+
+/**
+ * Constructs the path for a data block in a dataset at a given grid position.
+ *
+ * The returned path is
+ * <pre>
+ * $datasetPathName/$gridPosition[0]/$gridPosition[1]/.../$gridPosition[n]
+ * </pre>
+ *
+ * This is the file into which the data block will be stored.
+ *
+ * @param datasetPathName
+ * @param gridPosition
+ * @return
+ */
+wstring BRKXMLReader::getDataBlockPath(wstring datasetPathName, const vector<long> &gridPosition) {
+    
+    wstringstream wss;
+    wss << removeLeadingSlash(datasetPathName) << GETSLASH();
+    for (int i = 0; i < gridPosition.size(); ++i)
+        wss << gridPosition[i];
+    
+    return wss.str();
+}
+
+/**
+ * Constructs the path for the attributes file of a group or dataset.
+ *
+ * @param pathName
+ * @return
+ */
+wstring BRKXMLReader::getAttributesPath(wstring pathName) {
+    
+    return removeLeadingSlash(pathName) + L"attributes.json";
+}
+
+/**
+ * Removes the leading slash from a given path and returns the corrected path.
+ * It ensures correctness on both Unix and Windows, otherwise {@code pathName} is treated
+ * as UNC path on Windows, and {@code Paths.get(pathName, ...)} fails with {@code InvalidPathException}.
+ */
+wstring BRKXMLReader::removeLeadingSlash(const wstring pathName)
+{
+    return (pathName.rfind(L"/", 0) == 0) || (pathName.rfind(L"\\", 0) == 0) ? pathName.substr(1) : pathName;
 }

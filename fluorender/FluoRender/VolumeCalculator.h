@@ -39,12 +39,14 @@ public:
 
 	void SetVolumeA(VolumeData *vd);
 	void SetVolumeB(VolumeData *vd);
+	void SetVolumeC(VolumeData* vd);
 
 	void SetThreshold(double thresh)
 	{ m_threshold = thresh; }
 
 	VolumeData* GetVolumeA();
 	VolumeData* GetVolumeB();
+	VolumeData* GetVolumeC();
 	VolumeData* GetResult();
 
 	void Calculate(int type);
@@ -54,6 +56,7 @@ private:
 
 	VolumeData *m_vd_a;	//volume data A
 	VolumeData *m_vd_b;	//volume data B
+	VolumeData* m_vd_c;	//volume data B
 
 	int m_type;	//calculation type
 				//1:substraction;
@@ -71,6 +74,7 @@ private:
 private:
 	void CreateVolumeResult1();//create the resulting volume from one input
 	void CreateVolumeResult2();//create the resulting volume from two inputs
+	void CreateVolumeResult3();//create the resulting volume from two inputs
 
 	//fill holes
 	void FillHoles(double thresh);

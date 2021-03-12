@@ -52,7 +52,7 @@ public:
 	void Preprocess();
 	void SetBatch(bool batch);
 	int LoadBatch(int index);
-	Nrrd* Convert(int t, int c, bool get_max);
+	Nrrd* Convert_ThreadSafe(int t, int c, bool get_max) { return NULL; }
 	wstring GetCurName(int t, int c);
 
 	wstring GetPathName() {return m_path_name;}
@@ -79,6 +79,10 @@ public:
 	//flipping
 	void SetFlipX(int flip) {m_user_flip_x = flip;}
 	void SetFlipY(int flip) {m_user_flip_y = flip;}
+
+protected:
+	Nrrd* ConvertNrrd(int t, int c, bool get_max);
+
 private:
 	wstring m_data_name;
 

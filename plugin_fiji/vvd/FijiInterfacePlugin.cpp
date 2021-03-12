@@ -275,8 +275,8 @@ void SampleGuiPlugin1::doAction(ActionInfo *info)
 					VolumeData *vd = VolumeData::DeepCopy(*dm->GetVolumeData(name), false, dm);
 					if (!vd->GetMask(false)) vd->AddEmptyMask();
 					
-					Nrrd *nrrd = vd->GetMask(false);
-					memcpy(nrrd->data, ptr, nx*ny*nz*(bd/8));
+					auto vlnrrd = vd->GetMask(false);
+					memcpy(vlnrrd->getNrrd()->data, ptr, nx*ny*nz*(bd/8));
 					vframe->AddVolume(vd, NULL);
 				}
 				else
@@ -291,8 +291,8 @@ void SampleGuiPlugin1::doAction(ActionInfo *info)
 
 					if (dm) dm->SetVolumeDefault(vd);
 
-					Nrrd *nrrd = vd->GetVolume(false);
-					memcpy(nrrd->data, ptr, nx*ny*nz*(bd/8));
+					auto vlnrrd = vd->GetVolume(false);
+					memcpy(vlnrrd->getNrrd()->data, ptr, nx*ny*nz*(bd/8));
 
 					if (bd == 16)
 					{
@@ -376,7 +376,7 @@ bool SampleGuiPlugin1::SendCurrentVolume(bool send_mask)
     VolumeData *vd = vframe->GetCurSelVol();
     if (!vd) return false;
     
-    Nrrd *vol = NULL;
+    shared_ptr<VL_Nrrd> vol;
 	if (send_mask)
 	{
 		vol = vd->GetMask(true);
@@ -386,7 +386,7 @@ bool SampleGuiPlugin1::SendCurrentVolume(bool send_mask)
 	else
 		vol = vd->GetVolume(true);
     
-    if (!vol || !vol->data) return false;
+    if (!vol || !vol->getNrrd() || !vol->getNrrd()->data) return false;
     
     const wxString name = vd->GetName();
     size_t basesize = 4+name.Len()+4+4+4+4+4+4+4+8+8+8;
@@ -395,7 +395,7 @@ bool SampleGuiPlugin1::SendCurrentVolume(bool send_mask)
     double spcx, spcy, spcz;
     vd->GetSpacings(spcx, spcy, spcz);
     int bd;
-    if (vol->type == nrrdTypeChar || vol->type == nrrdTypeUChar)
+    if (vol->getNrrd()->type == nrrdTypeChar || vol->getNrrd()->type == nrrdTypeUChar)
         bd = 8;
     else
         bd = 16;
@@ -425,7 +425,7 @@ bool SampleGuiPlugin1::SendCurrentVolume(bool send_mask)
     mos.Write(&spcx, sizeof(double));
     mos.Write(&spcy, sizeof(double));
     mos.Write(&spcz, sizeof(double));
-    mos.Write(vol->data, imagesize);
+    mos.Write(vol->getNrrd()->data, imagesize);
     
     tmp32 = basesize+imagesize;
     if (tmp32 > 0)

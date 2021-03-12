@@ -191,6 +191,10 @@ public:
 
 	void SetFixRotations(bool val) { m_fix_rots = val; }
 	bool GetFixRotations() { return m_fix_rots; }
+    
+    int GetXdist();
+    int GetYdist();
+    int GetZdist();
 
 private:
 	wxWindow* m_frame;

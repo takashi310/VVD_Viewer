@@ -49,7 +49,7 @@ namespace FLIVR
 		Texture();
 		virtual ~Texture();
 
-		bool build(Nrrd* val, Nrrd* grad,
+		bool build(const std::shared_ptr<VL_Nrrd>& val, const std::shared_ptr<VL_Nrrd>& grad,
 			 double vmn, double vmx,
 			 double gmn, double gmx,
 			 vector<FLIVR::TextureBrick*>* brks = NULL);
@@ -159,16 +159,18 @@ namespace FLIVR
 		void get_dimensions(size_t &w, size_t &h, size_t &d, int lv = -1);
 		
 			// Creator of the brick owns the nrrd memory.
-		void set_nrrd(Nrrd* data, int index);
-		Nrrd* get_nrrd(int index)
-		{if (index>=0&&index<TEXTURE_MAX_COMPONENTS) return data_[index]; else return 0;}
+		void set_nrrd(const std::shared_ptr<VL_Nrrd>& data, int index);
+		std::shared_ptr<VL_Nrrd> get_nrrd(int index)
+		{if (index>=0&&index<TEXTURE_MAX_COMPONENTS) return data_[index]; else return nullptr;}
+		Nrrd* get_nrrd_raw(int index)
+		{if (index >= 0 && index < TEXTURE_MAX_COMPONENTS) return data_[index] ? data_[index]->getNrrd() : nullptr; else return nullptr;}
 		int get_max_tex_comp()
 		{return TEXTURE_MAX_COMPONENTS;}
 		bool trim_mask_undos_head();
 		bool trim_mask_undos_tail();
 		bool get_undo();
 		bool get_redo();
-		void set_mask(void* mask_data);
+		void set_mask(const shared_ptr<VL_Nrrd>& mask_data);
 		void push_mask();
 		void mask_undos_forward();
 		void mask_undos_backward();
@@ -219,7 +221,7 @@ namespace FLIVR
 			masklv_ = lv;
 		}
 		void GetDimensionLv(int lv, int &x, int &y, int &z);
-		Nrrd* get_nrrd_lv(int lv, int index);
+		std::shared_ptr<VL_Nrrd> get_nrrd_lv(int lv, int index);
 
 		void DeleteCacheFiles();
 
@@ -304,9 +306,9 @@ namespace FLIVR
 
 		void clearPyramid();
 
-		Nrrd* data_[TEXTURE_MAX_COMPONENTS];
+		std::shared_ptr<VL_Nrrd> data_[TEXTURE_MAX_COMPONENTS];
 		//undos for mask
-		vector<void*> mask_undos_;
+		vector<std::shared_ptr<VL_Nrrd>> mask_undos_;
 		int mask_undo_pointer_;
 	};
 

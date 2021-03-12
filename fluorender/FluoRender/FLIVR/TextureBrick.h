@@ -74,26 +74,172 @@ namespace FLIVR {
 #define BRICK_FILE_TYPE_JPEG	2
 #define BRICK_FILE_TYPE_ZLIB	3
 #define BRICK_FILE_TYPE_H265	4
+#define BRICK_FILE_TYPE_N5GZIP	5
+#define BRICK_FILE_TYPE_LZ4		6
+#define BRICK_FILE_TYPE_N5BLOSC 7
 
+
+	class EXPORT_API VL_Nrrd
+	{
+		Nrrd* m_nrrd;
+		bool m_protected;
+
+	public:
+		VL_Nrrd() {
+			m_nrrd = NULL; m_protected = false;
+		}
+		VL_Nrrd(Nrrd* nrrd, bool protection = false) {
+			m_nrrd = nrrd; m_protected = protection;
+		}
+		~VL_Nrrd() {
+			if (m_nrrd) {
+				if (m_nrrd->data)
+				{
+					switch (m_nrrd->type)
+					{
+					case nrrdTypeChar:
+					case nrrdTypeUChar:
+						delete[] static_cast<unsigned char*>(m_nrrd->data);
+						break;
+					case nrrdTypeShort:
+					case nrrdTypeUShort:
+						delete[] static_cast<unsigned short*>(m_nrrd->data);
+						break;
+					case nrrdTypeInt:
+					case nrrdTypeUInt:
+						delete[] static_cast<unsigned int*>(m_nrrd->data);
+						break;
+					case nrrdTypeFloat:
+						delete[] static_cast<float*>(m_nrrd->data);
+						break;
+					default:
+						delete[] m_nrrd->data;
+					}
+					m_nrrd->data = nullptr;
+				}
+				nrrdNix(m_nrrd);
+			}
+		}
+
+		int getBytesPerSample() {
+			int ret = 0;
+			if (m_nrrd) {
+				if (m_nrrd->data)
+				{
+					switch (m_nrrd->type)
+					{
+					case nrrdTypeChar:
+					case nrrdTypeUChar:
+						ret = 1;
+						break;
+					case nrrdTypeShort:
+					case nrrdTypeUShort:
+						ret = 2;
+						break;
+					case nrrdTypeInt:
+					case nrrdTypeUInt:
+					case nrrdTypeFloat:
+						ret = 4;
+						break;
+					default:
+						ret = 0;
+					}
+				}
+			}
+			return ret;
+		}
+
+		Nrrd* getNrrd() { return m_nrrd; }
+
+		Nrrd* getNrrdDeepCopy()
+		{
+			Nrrd* output = nrrdNew();
+			void* indata = m_nrrd->data;
+			m_nrrd->data = NULL;
+			nrrdCopy(output, m_nrrd);
+			m_nrrd->data = indata;
+
+			size_t dim = m_nrrd->dim;
+			std::vector<int> size(dim);
+
+			int offset = 0;
+			if (dim > 3) offset = 1;
+
+			for (size_t p = 0; p < dim; p++)
+				size[p] = (int)m_nrrd->axis[p + offset].size;
+
+			size_t width = size[0];
+			size_t height = size[1];
+			size_t depth = size[2];
+
+			size_t voxelnum = width * height * depth;
+
+			switch (m_nrrd->type)
+			{
+			case nrrdTypeChar:
+			case nrrdTypeUChar:
+				output->data = new unsigned char[voxelnum];
+				break;
+			case nrrdTypeShort:
+			case nrrdTypeUShort:
+				output->data = new unsigned short[voxelnum];
+				break;
+			case nrrdTypeInt:
+			case nrrdTypeUInt:
+				output->data = new unsigned int[voxelnum];
+				break;
+			case nrrdTypeFloat:
+				output->data = new float[voxelnum];
+				break;
+			default:
+				nrrdNix(output);
+				output = nullptr;
+			}
+
+			if (output)
+				memcpy(output->data, indata, size_t(voxelnum * getBytesPerSample()));
+
+			return output;
+		}
+
+		bool isProtected() { return m_protected; }
+		void SetProtection(bool protection) { m_protected = protection; }
+		size_t getDatasize()
+		{
+			if (!m_nrrd)
+				return 0;
+			size_t b = getBytesPerSample();
+			size_t size[3];
+			int offset = 0;
+			if (m_nrrd->dim > 3) offset = 1;
+
+			for (size_t p = 0; p < 3; p++)
+				size[p] = (int)m_nrrd->axis[p + offset].size;
+			return size[0] * size[1] * size[2] * b;
+		}
+
+	};
 
 	class EXPORT_API VL_Array
 	{
 		char *m_data;
 		size_t m_size;
 		bool m_protected;
+
 	public:
 		VL_Array() {
 			m_data = NULL; m_protected = false; m_size = 0;
 		}
 		VL_Array(char *data, size_t size, bool protection = false) {
-			 m_data = data; m_size = size; m_protected = protection;
+			m_data = data; m_size = size; m_protected = protection;
 		}
 		~VL_Array() {
 			if (m_data) {
 				delete [] m_data;
+				m_data = NULL;
 			}
 		}
-		const void *getData() { return m_data; }
+		void *getData() { return m_data; }
 		size_t getSize() { return m_size; }
 		bool isProtected() { return m_protected; }
 		void SetProtection(bool protection) { m_protected = protection; }
@@ -111,8 +257,15 @@ namespace FLIVR {
 			cached = false;
 			cache_filename = L"";
 			id_string = L"";
+            blosc_blocksize_x = 0;
+            blosc_blocksize_y = 0;
+            blosc_blocksize_z = 0;
+            blosc_clevel = 0;
+            blosc_ctype = 0;
+            blosc_suffle = 0;
+            isn5 = false;
 		}
-		FileLocInfo(std::wstring filename_, int offset_, int datasize_, int type_, bool isurl_)
+		FileLocInfo(std::wstring filename_, int offset_, int datasize_, int type_, bool isurl_, bool isn5_, int bblocksize_x_ = 0, int bblocksize_y_ = 0, int bblocksize_z_ = 0, int bclevel_ = 0, int bctype_ = 0, int bsuffle_ = 0)
 		{
 			filename = filename_;
 			offset = offset_;
@@ -124,6 +277,13 @@ namespace FLIVR {
 			std::wstringstream wss;
 			wss << filename << L" " << offset;
 			id_string = wss.str();
+            isn5 = isn5_;
+            blosc_blocksize_x = bblocksize_x_;
+            blosc_blocksize_y = bblocksize_y_;
+            blosc_blocksize_z = bblocksize_z_;
+            blosc_clevel = bclevel_;
+            blosc_ctype = bctype_;
+            blosc_suffle = bsuffle_;
 		}
 		FileLocInfo(const FileLocInfo &copy)
 		{
@@ -135,6 +295,13 @@ namespace FLIVR {
 			cached = copy.cached;
 			cache_filename = copy.cache_filename;
 			id_string = copy.id_string;
+            isn5 = copy.isn5;
+            blosc_blocksize_x = copy.blosc_blocksize_x;
+            blosc_blocksize_y = copy.blosc_blocksize_y;
+            blosc_blocksize_z = copy.blosc_blocksize_z;
+            blosc_clevel = copy.blosc_clevel;
+            blosc_ctype = copy.blosc_ctype;
+            blosc_suffle = copy.blosc_suffle;
 		}
 
 		std::wstring filename;
@@ -145,6 +312,14 @@ namespace FLIVR {
 		bool cached;
 		std::wstring cache_filename;
 		std::wstring id_string;
+        
+        bool isn5;
+        int blosc_blocksize_x;
+        int blosc_blocksize_y;
+        int blosc_blocksize_z;
+        int blosc_clevel;
+        int blosc_ctype;
+        int blosc_suffle;
 	};
 
 	class EXPORT_API MemCache {
@@ -175,7 +350,7 @@ namespace FLIVR {
 			TYPE_NONE=0, TYPE_INT, TYPE_INT_GRAD, TYPE_GM, TYPE_MASK, TYPE_LABEL, TYPE_STROKE
 		};
 		// Creator of the brick owns the nrrd memory.
-		TextureBrick(Nrrd* n0, Nrrd* n1,
+		TextureBrick(const std::shared_ptr<VL_Nrrd>& n0, const std::shared_ptr<VL_Nrrd>& n1,
 			int nx, int ny, int nz, int nc, int* nb, int ox, int oy, int oz,
 			int mx, int my, int mz, const BBox& bbox, const BBox& tbox, const BBox& dbox, int findex = 0, long long offset = 0LL, long long fsize = 0LL);
 		virtual ~TextureBrick();
@@ -250,12 +425,21 @@ namespace FLIVR {
 		{ for (int i=0; i<TEXTURE_MAX_COMPONENTS; i++) dirty_[i] = val; }
 		inline bool dirty(int comp)
 		{ if (comp>=0 && comp<TEXTURE_MAX_COMPONENTS) return dirty_[comp]; else return false;}
+        
+        inline void set_skip(int comp, bool val)
+        { if (comp>=0 && comp<TEXTURE_MAX_COMPONENTS) skip_[comp] = val; }
+        inline void set_skip(bool val)
+        { for (int i=0; i<TEXTURE_MAX_COMPONENTS; i++) skip_[i] = val; }
+        inline bool skip(int comp)
+        { if (comp>=0 && comp<TEXTURE_MAX_COMPONENTS) return skip_[comp]; else return false;}
 
 		// Creator of the brick owns the nrrd memory.
-		void set_nrrd(Nrrd* data, int index)
+		void set_nrrd(const std::shared_ptr<FLIVR::VL_Nrrd> &data, int index)
 		{if (index>=0&&index<TEXTURE_MAX_COMPONENTS) data_[index] = data;}
-		Nrrd* get_nrrd(int index)
+		std::shared_ptr<FLIVR::VL_Nrrd> get_nrrd(int index)
 		{if (index>=0&&index<TEXTURE_MAX_COMPONENTS) return data_[index]; else return 0;}
+		Nrrd* get_nrrd_raw(int index)
+		{if (index >= 0 && index < TEXTURE_MAX_COMPONENTS) return data_[index] ? data_[index]->getNrrd() : nullptr; else return 0;}
 
 		//find out priority
 		void set_priority();
@@ -318,7 +502,7 @@ namespace FLIVR {
 		void set_id_in_loadedbrks(int id) {id_in_loadedbrks = id;};
 		int get_id_in_loadedbrks() {return id_in_loadedbrks;}
 		int getID() {return findex_;}
-		const void *getBrickData() {return brkdata_ ? brkdata_->getData() : NULL;}
+		void *getBrickData() {return brkdata_ ? brkdata_->getData() : NULL;}
 		std::shared_ptr<VL_Array> getBrickDataSP() {return brkdata_;}
 		long getBrickDataSPCount() {return brkdata_.use_count();}
 
@@ -339,7 +523,7 @@ namespace FLIVR {
 		std::vector<uint32_t> *get_index_list() {return &index_;}
 		std::vector<int> *get_v_size_list() {return &size_v_;}
 
-		void set_disp(bool disp) {disp_ = disp;}
+		void set_disp(bool disp) { disp_ = disp; }
 		bool get_disp() {return disp_;}
 
 		void set_compression(bool compression) {compression_ = compression;}
@@ -356,11 +540,14 @@ namespace FLIVR {
 		void set_brkdata(const std::shared_ptr<VL_Array> &brkdata) {brkdata_ = brkdata;}
 		void set_brkdata(void *brkdata, size_t size) {brkdata_ = std::make_shared<VL_Array>((char *)brkdata, size);}
 		static bool read_brick_without_decomp(char* &data, size_t &readsize, FileLocInfo* finfo, wxThread *th=NULL);
-		static bool decompress_brick(char *out, char* in, size_t out_size, size_t in_size, int type, int w=0, int h=0);
+		static bool decompress_brick(char *out, char* in, size_t out_size, size_t in_size, int type, int w, int h, int d, int nb, int n5_w = 0, int n5_h = 0, int n5_d = 0);
 		static bool jpeg_decompressor(char *out, char* in, size_t out_size, size_t in_size);
-		static bool zlib_decompressor(char *out, char* in, size_t out_size, size_t in_size);
+		static bool zlib_decompressor(char *out, char* in, size_t out_size, size_t in_size, bool isn5 = false, int nb = 1);
 		static bool h265_decompressor(char *out, char* in, size_t out_size, size_t in_size, int w, int h);
+		static bool lz4_decompressor(char* out, char* in, size_t out_size, size_t in_size);
+        static bool blosc_decompressor(char* out, char* in, size_t out_size, size_t in_size, bool isn5, int w, int h, int d, int nb, int n5_w = 0, int n5_h = 0, int n5_d = 0);
 		static void delete_all_cache_files();
+        static char check_machine_endian();
 
 		bool raw_brick_reader(char* data, size_t size, const FileLocInfo* finfo);
 		bool jpeg_brick_reader(char* data, size_t size, const FileLocInfo* finfo);
@@ -389,7 +576,7 @@ namespace FLIVR {
 		Ray edge_[12]; 
 		//! tbox edges
 		Ray tex_edge_[12]; 
-		Nrrd* data_[TEXTURE_MAX_COMPONENTS];
+		std::shared_ptr<VL_Nrrd> data_[TEXTURE_MAX_COMPONENTS];
 		//! axis sizes (pow2)
 		int nx_, ny_, nz_; 
 		//! number of components (< TEXTURE_MAX_COMPONENTS)
@@ -421,7 +608,9 @@ namespace FLIVR {
 		//current index in the queue, for reverse searching
 		size_t ind_;
 
-		bool dirty_[TEXTURE_MAX_COMPONENTS]; 
+		bool dirty_[TEXTURE_MAX_COMPONENTS];
+        
+        bool skip_[TEXTURE_MAX_COMPONENTS];
 
 		long long offset_;
 		long long fsize_;
@@ -461,7 +650,7 @@ namespace FLIVR {
 	struct Pyramid_Level {
 			std::vector<FileLocInfo *> *filenames;
 			int filetype;
-			Nrrd* data;
+			std::shared_ptr<FLIVR::VL_Nrrd> data;
 			std::vector<TextureBrick *> bricks;
 	};
 

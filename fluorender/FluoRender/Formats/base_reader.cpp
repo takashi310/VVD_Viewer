@@ -269,9 +269,20 @@ void BaseReader::DecodeAcc16(tidata_t cp0, tsize_t cc, tsize_t stride)
     }
 }
 
-Nrrd* BaseReader::Convert(bool get_max) { return Convert(0,get_max); }
+std::shared_ptr<FLIVR::VL_Nrrd> BaseReader::Convert(bool get_max)
+{
+	return std::make_shared<FLIVR::VL_Nrrd>(ConvertNrrd(0, 0, get_max));
+}
 
-Nrrd* BaseReader::Convert(int c, bool get_max) { return Convert(0,c,get_max); }
+std::shared_ptr<FLIVR::VL_Nrrd> BaseReader::Convert(int c, bool get_max)
+{
+	return std::make_shared<FLIVR::VL_Nrrd>(ConvertNrrd(0, c, get_max));
+}
+
+std::shared_ptr<FLIVR::VL_Nrrd> BaseReader::Convert(int t, int c, bool get_max)
+{
+	return std::make_shared<FLIVR::VL_Nrrd>(ConvertNrrd(t, c, get_max));
+}
 
 int BaseReader::LoadOffset(int offset)
 {

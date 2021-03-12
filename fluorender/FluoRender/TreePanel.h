@@ -115,6 +115,10 @@ class EXPORT_API DataTreeCtrl: public wxTreeCtrl, Notifier
 		ID_Rename,
 		ID_Duplicate,
 		ID_Save,
+        ID_SaveSegVol,
+        ID_ShowEntireVolume,
+        ID_HideOutsideMask,
+        ID_HideInsideMask,
 		ID_ExportMask,
 		ID_ImportMask,
 		ID_BakeVolume,
@@ -292,6 +296,10 @@ private:
 	void OnToggleDisp(wxCommandEvent& event);
 	void OnDuplicate(wxCommandEvent& event);
 	void OnSave(wxCommandEvent& event);
+    void OnSaveSegmentedVolume(wxCommandEvent& event);
+    void OnShowEntireVolume(wxCommandEvent& event);
+    void OnHideOutsideOfMask(wxCommandEvent& event);
+    void OnHideInsideOfMask(wxCommandEvent& event);
 	void OnExportMask(wxCommandEvent& event);
 	void OnImportMask(wxCommandEvent& event);
 	void OnBakeVolume(wxCommandEvent& event);
@@ -405,6 +413,7 @@ public:
 	void SetGroupItemImage(const wxTreeItemId item, int image);
 	wxTreeItemId AddMGroupItem(wxTreeItemId par_item, const wxString &text);
 	void SetMGroupItemImage(const wxTreeItemId item, int image);
+	void SetItemName(const wxTreeItemId item, const wxString& name);
 
 	//seelction
 	void UpdateSelection();

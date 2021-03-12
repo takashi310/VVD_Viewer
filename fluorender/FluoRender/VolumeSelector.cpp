@@ -184,16 +184,40 @@ void VolumeSelector::Select(double radius)
 		m_mode==3 ||*/
 		m_mode==4)
 	{
+        auto st_time = GET_TICK_COUNT();
+        wxProgressDialog* prog_diag = nullptr;
+        
 		//loop for growing
 		int iter = m_iter_num*(radius/20.0>1.0?radius/20.0:1.0);
 		for (int i=0; i<iter; i++)
+        {
 			m_vd->DrawMask(1, m_mode, 0, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0, ext_msk);
+            auto rn_time = GET_TICK_COUNT();
+            if (!prog_diag && rn_time - st_time > 3000)
+            {
+                prog_diag = new wxProgressDialog(
+                                "VVDViewer: Diffuse brush",
+                                 "Processing... Please wait.",
+                                 100, 0,
+                                 wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE|wxPD_APP_MODAL|wxPD_CAN_ABORT);
+            }
+            if (prog_diag)
+            {
+                if (!prog_diag->Update(95*(i+1)/iter))
+                    break;
+            }
+        }
 		/*if (m_vd->GetVR() && m_vd->GetBrickNum() > 1) {
 			m_vd->GetVR()->return_mask();
 			m_vd->GetVR()->clear_tex_current_mask();
 			for (int i = 0; i < iter; i++)
 				m_vd->DrawMask(1, m_mode, 0, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0);
 		}*/
+        if (prog_diag)
+        {
+            prog_diag->Update(100);
+            delete prog_diag;
+        }
 	}
 
 	if (m_mode == 6)
@@ -315,7 +339,7 @@ int VolumeSelector::SetLabelBySize()
 	Texture* tex = m_vd->GetTexture();
 	if (!tex)
 		return 0;
-	Nrrd* nrrd_label = tex->get_nrrd(tex->nlabel());
+	Nrrd* nrrd_label = tex->get_nrrd_raw(tex->nlabel());
 	if (!nrrd_label)
 		return 0;
 	unsigned int* data_label = (unsigned int*)(nrrd_label->data);
@@ -402,7 +426,7 @@ int VolumeSelector::CompIslandCount(double min_voxels, double max_voxels)
 	if (!tex)
 		return 0;
 
-	Nrrd* orig_nrrd = tex->get_nrrd(0);
+	Nrrd* orig_nrrd = tex->get_nrrd_raw(0);
 	if (!orig_nrrd)
 		return 0;
 	void* orig_data = orig_nrrd->data;
@@ -422,14 +446,14 @@ int VolumeSelector::CompIslandCount(double min_voxels, double max_voxels)
 		
 		m_vd->AddEmptyLabel(0);
 
-		Nrrd* label_nrrd = tex->get_nrrd(tex->nlabel());
+		Nrrd* label_nrrd = tex->get_nrrd_raw(tex->nlabel());
 		if (!label_nrrd)
 			return 0;
 		unsigned int* label_data = (unsigned int*)(label_nrrd->data);
 		if (!label_data)
 			return 0;
 
-		Nrrd* mask_nrrd = tex->get_nrrd(tex->nmask());
+		Nrrd* mask_nrrd = tex->get_nrrd_raw(tex->nmask());
 		if (!mask_nrrd)
 			return 0;
 		unsigned char* mask_data = (unsigned char*)mask_nrrd->data;
@@ -770,11 +794,11 @@ void VolumeSelector::CompExportMultiChann(bool select)
 	//get all the data from original volume
 	Texture* tex_mvd = m_vd->GetTexture();
 	if (!tex_mvd) return;
-	Nrrd* nrrd_mvd = tex_mvd->get_nrrd(0);
+	Nrrd* nrrd_mvd = tex_mvd->get_nrrd_raw(0);
 	if (!nrrd_mvd) return;
-	Nrrd* nrrd_mvd_mask = tex_mvd->get_nrrd(tex_mvd->nmask());
+	Nrrd* nrrd_mvd_mask = tex_mvd->get_nrrd_raw(tex_mvd->nmask());
 	if (select && !nrrd_mvd_mask) return;
-	Nrrd* nrrd_mvd_label = tex_mvd->get_nrrd(tex_mvd->nlabel());
+	Nrrd* nrrd_mvd_label = tex_mvd->get_nrrd_raw(tex_mvd->nlabel());
 	if (!nrrd_mvd_label) return;
 	void* data_mvd = nrrd_mvd->data;
 	unsigned char* data_mvd_mask = (unsigned char*)nrrd_mvd_mask->data;
@@ -810,7 +834,7 @@ void VolumeSelector::CompExportMultiChann(bool select)
 		//the actual data
 		Texture* tex_vd = vd->GetTexture();
 		if (!tex_vd) continue;
-		Nrrd* nrrd_vd = tex_vd->get_nrrd(0);
+		Nrrd* nrrd_vd = tex_vd->get_nrrd_raw(0);
 		if (!nrrd_vd) continue;
 		unsigned char* data_vd = (unsigned char*)nrrd_vd->data;
 		if (!data_vd) continue;
@@ -886,11 +910,11 @@ void VolumeSelector::CompExportRandomColor(int hmode, VolumeData* vd_r,
 	//get all the data from original volume
 	Texture* tex_mvd = m_vd->GetTexture();
 	if (!tex_mvd) return;
-	Nrrd* nrrd_mvd = tex_mvd->get_nrrd(0);
+	Nrrd* nrrd_mvd = tex_mvd->get_nrrd_raw(0);
 	if (!nrrd_mvd) return;
-	Nrrd* nrrd_mvd_mask = tex_mvd->get_nrrd(tex_mvd->nmask());
+	Nrrd* nrrd_mvd_mask = tex_mvd->get_nrrd_raw(tex_mvd->nmask());
 	if (select && !nrrd_mvd_mask) return;
-	Nrrd* nrrd_mvd_label = tex_mvd->get_nrrd(tex_mvd->nlabel());
+	Nrrd* nrrd_mvd_label = tex_mvd->get_nrrd_raw(tex_mvd->nlabel());
 	if (!nrrd_mvd_label) return;
 	void* data_mvd = nrrd_mvd->data;
 	unsigned char* data_mvd_mask = (unsigned char*)nrrd_mvd_mask->data;
@@ -938,21 +962,21 @@ void VolumeSelector::CompExportRandomColor(int hmode, VolumeData* vd_r,
 	//red volume
 	Texture* tex_vd_r = vd_r->GetTexture();
 	if (!tex_vd_r) return;
-	Nrrd* nrrd_vd_r = tex_vd_r->get_nrrd(0);
+	Nrrd* nrrd_vd_r = tex_vd_r->get_nrrd_raw(0);
 	if (!nrrd_vd_r) return;
 	unsigned char* data_vd_r = (unsigned char*)nrrd_vd_r->data;
 	if (!data_vd_r) return;
 	//green volume
 	Texture* tex_vd_g = vd_g->GetTexture();
 	if (!tex_vd_g) return;
-	Nrrd* nrrd_vd_g = tex_vd_g->get_nrrd(0);
+	Nrrd* nrrd_vd_g = tex_vd_g->get_nrrd_raw(0);
 	if (!nrrd_vd_g) return;
 	unsigned char* data_vd_g = (unsigned char*)nrrd_vd_g->data;
 	if (!data_vd_g) return;
 	//blue volume
 	Texture* tex_vd_b = vd_b->GetTexture();
 	if (!tex_vd_b) return;
-	Nrrd* nrrd_vd_b = tex_vd_b->get_nrrd(0);
+	Nrrd* nrrd_vd_b = tex_vd_b->get_nrrd_raw(0);
 	if (!nrrd_vd_b) return;
 	unsigned char* data_vd_b = (unsigned char*)nrrd_vd_b->data;
 	if (!data_vd_b) return;
@@ -1076,9 +1100,9 @@ int VolumeSelector::ProcessSel(double thresh)
 	//get all the data from original volume
 	Texture* tex_mvd = m_vd->GetTexture();
 	if (!tex_mvd) return 0;
-	Nrrd* nrrd_mvd = tex_mvd->get_nrrd(0);
+	Nrrd* nrrd_mvd = tex_mvd->get_nrrd_raw(0);
 	if (!nrrd_mvd) return 0;
-	Nrrd* nrrd_mvd_mask = tex_mvd->get_nrrd(tex_mvd->nmask());
+	Nrrd* nrrd_mvd_mask = tex_mvd->get_nrrd_raw(tex_mvd->nmask());
 	if (!nrrd_mvd_mask) return 0;
 	void* data_mvd = nrrd_mvd->data;
 	unsigned char* data_mvd_mask = (unsigned char*)nrrd_mvd_mask->data;
@@ -1166,9 +1190,9 @@ void VolumeSelector::GenerateAnnotations(bool use_sel)
 	m_vd->GetSpacings(spcx, spcy, spcz);
 
 	double mul = 255.0;
-	if (m_vd->GetTexture()->get_nrrd(0)->type == nrrdTypeUChar)
+	if (m_vd->GetTexture()->get_nrrd_raw(0)->type == nrrdTypeUChar)
 		mul = 255.0;
-	else if (m_vd->GetTexture()->get_nrrd(0)->type == nrrdTypeUShort)
+	else if (m_vd->GetTexture()->get_nrrd_raw(0)->type == nrrdTypeUShort)
 		mul = 65535.0;
 	double total_int = 0.0;
 
@@ -1229,7 +1253,7 @@ void VolumeSelector::GenerateAnnotations(bool use_sel)
 	Texture* tex = m_vd->GetTexture();
 	if (!tex) return;
 
-	Nrrd* label_nrrd = tex->get_nrrd(tex->nlabel());
+	Nrrd* label_nrrd = tex->get_nrrd_raw(tex->nlabel());
 	if (!label_nrrd) return;
 	unsigned int* label_data = (unsigned int*)(label_nrrd->data);
 	if (!label_data) return;
@@ -1252,7 +1276,8 @@ void VolumeSelector::GenerateAnnotations(bool use_sel)
 	nrrdAxisInfoSet(copy, nrrdAxisInfoSize, (size_t)nx, (size_t)ny, (size_t)nz);
 
 	memcpy(val32, label_data, voxelnum*sizeof(unsigned int));
-	m_annotations->SetLabel(copy);
+	auto sptr = std::make_shared<VL_Nrrd>(copy);
+	m_annotations->SetLabel(sptr);
 }
 
 Annotations* VolumeSelector::GetAnnotations()
@@ -1363,7 +1388,7 @@ void VolumeSelector::NoiseRemoval(int iter, double thresh, int mode)
 		
 		Texture *tex = vd_new->GetTexture();
 		if (!tex) return;
-		Nrrd *nrrd_new = tex->get_nrrd(0);
+		Nrrd *nrrd_new = tex->get_nrrd_raw(0);
 		int res_x, res_y, res_z;
 		vd_new->GetResolution(res_x, res_y, res_z);
 		int bytes = 1;

@@ -52,7 +52,7 @@ public:
 	void Preprocess();
 	void SetBatch(bool batch);
 	int LoadBatch(int index);
-	Nrrd* Convert(int t, int c, bool get_max);
+	Nrrd* Convert_ThreadSafe(int t, int c, bool get_max);
 	wstring GetCurName(int t, int c);
 
 	wstring GetPathName() {return m_path_name;}
@@ -74,6 +74,9 @@ public:
 	int GetBatchNum() {return (int)m_batch_list.size();}
 	int GetCurBatch() {return m_cur_batch;}
 	void SetInfo();
+
+protected:
+	Nrrd* ConvertNrrd(int t, int c, bool get_max);
 
 private:
 	wstring m_data_name;

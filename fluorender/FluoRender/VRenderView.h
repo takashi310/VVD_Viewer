@@ -487,6 +487,9 @@ public:
 	//hdr settings
 	Color GetHdr() {return m_hdr;}
 	void SetHdr(Color hdr) {m_hdr = hdr;}
+    //levels settings
+    Color GetLevels() {return m_levels;}
+    void SetLevels(Color levels) {m_levels = levels;}
 	//sync values
 	bool GetSyncR() {return m_sync_r;}
 	void SetSyncR(bool sync_r) {m_sync_r = sync_r;}
@@ -518,8 +521,10 @@ public:
 	//calculations
 	void SetVolumeA(VolumeData* vd);
 	void SetVolumeB(VolumeData* vd);
-	VolumeData* GetVolumeA() {return m_calculator.GetVolumeA();}
-	VolumeData* GetVolumeB() {return m_calculator.GetVolumeB();}
+	void SetVolumeC(VolumeData* vd);
+	VolumeData* GetVolumeA() { return m_calculator.GetVolumeA(); }
+	VolumeData* GetVolumeB() { return m_calculator.GetVolumeB(); }
+	VolumeData* GetVolumeC() { return m_calculator.GetVolumeC(); }
 	//1-sub;2-add;3-div;4-and;5-new;6-new inv;7-clear
 	void Calculate(int type, wxString prev_group="", bool add=true);
 	void CalculateSingle(int type, wxString prev_group, bool add);
@@ -702,10 +707,23 @@ public:
     
     void SetRecording(bool val) { m_recording = val; }
     bool GetRecording() { return m_recording; }
+	bool IsRecordedFrameReady() { return !m_recording_frame; }
     void DownloadRecordedFrame(void *image, VkFormat &format);
     
     void SetForceHideMask(bool val) { m_force_hide_mask = val; m_draw_mask = !val; }
     bool GetForceHideMask() { return m_force_hide_mask; }
+
+	void AbortRendering() { m_abort = true; }
+    
+    bool GetEasy2DAdjustMode() { return m_easy_2d_adjust; }
+    void SetEasy2DAdjustMode(bool mode) { m_easy_2d_adjust = mode; }
+
+	static void setCriticalSection(wxCriticalSection* crtsec) 
+	{
+		ms_pThreadCS = crtsec;
+		VolumeLoader::setCriticalSection(crtsec);
+	}
+	static wxCriticalSection* ms_pThreadCS;
 
 public:
 	//script run
@@ -913,6 +931,7 @@ private:
     std::unique_ptr<vks::VFrameBuffer> m_fbo_record;
     std::shared_ptr<vks::VTexture> m_tex_record;
     bool m_recording;
+	bool m_recording_frame;
 
 	//camera controls
 	bool m_persp;
@@ -992,6 +1011,7 @@ private:
 	Color m_gamma;
 	Color m_brightness;
 	Color m_hdr;
+    Color m_levels;
 	bool m_sync_r;
 	bool m_sync_g;
 	bool m_sync_b;
@@ -1146,6 +1166,10 @@ private:
 
 	bool m_frame_clear;
 
+	bool m_abort;
+    
+    bool m_easy_2d_adjust;
+
 private:
 #ifdef _WIN32
 	//wacom tablet
@@ -1260,12 +1284,13 @@ private:
 	//mode: 0-add selection; 1-single selection; 2-subtract selection, 3-switch an editing segment
 	bool SelSegVolume(int mode=0);
 	//mode: 0-add selection; 1-single selection; 2-subtract selection, 3-switch an editing segment
-	bool SelLabelSegVolume(int mode = 0);
+	bool SelLabelSegVolumeMax(int mode, vector<VolumeData*> ref);
 
 	//get mouse point in 3D
 	//mode: 0-maximum with original value; 1-maximum with transfered value; 2-accumulated with original value; 3-accumulated with transfered value
 	double GetPointVolume(Point &mp, int mx, int my, VolumeData* vd, int mode, bool use_transf, double thresh = 0.5);
 	double GetPointAndLabel(Point& mp, int& lblval, int mx, int my, VolumeData* vd);
+    double GetPointAndLabelMax(Point& mp, int& lblval, int mx, int my, VolumeData* vd, vector<VolumeData*> ref);
 	double GetPointAndIntVolume(Point& mp, double &intensity, bool normalize, int mx, int my, VolumeData* vd, double thresh = 0.5);
 	double GetPointVolumeBox(Point &mp, int mx, int my, VolumeData* vd, bool calc_mats=true);
 	double GetPointVolumeBox2(Point &p1, Point &p2, int mx, int my, VolumeData* vd);
@@ -1697,10 +1722,14 @@ public:
 	{if (m_glview) m_glview->SetVolumeA(vd);}
 	void SetVolumeB(VolumeData* vd)
 	{if (m_glview) m_glview->SetVolumeB(vd);}
+	void SetVolumeC(VolumeData* vd)
+	{if (m_glview) m_glview->SetVolumeC(vd);}
 	VolumeData* GetVolumeA()
 	{if (m_glview) return m_glview->GetVolumeA(); else return 0;}
 	VolumeData* GetVolumeB()
 	{if (m_glview) return m_glview->GetVolumeB(); else return 0;}
+	VolumeData* GetVolumeC()
+	{if (m_glview) return m_glview->GetVolumeC(); else return 0;}
 	void Calculate(int type, wxString prev_group="")
 	{if (m_glview) return m_glview->Calculate(type, prev_group);}
 
@@ -1914,8 +1943,12 @@ public:
     }
     bool GetRecording()
     {
-        if (m_glview) return m_glview->GetRecording(); else return 0;
+        if (m_glview) return m_glview->GetRecording(); else return false;
     }
+	bool IsRecordedFrameReady()
+	{
+		if (m_glview) return m_glview->IsRecordedFrameReady(); else return false;
+	}
     void DownloadRecordedFrame(void *image, VkFormat &format)
     {
         if (m_glview) m_glview->DownloadRecordedFrame(image, format);
@@ -1949,7 +1982,12 @@ public:
 	TextRenderer* GetTextRenderer() { if (m_glview) return m_glview->GetTextRenderer(); else return nullptr; }
     
     void SetForceHideMask(bool val) { if (m_glview) m_glview->SetForceHideMask(val); }
-    bool GetForceHideMask() { if (m_glview) return m_glview->GetForceHideMask(); }
+	bool GetForceHideMask() { if (m_glview) return m_glview->GetForceHideMask(); else return false; }
+
+	void AbortRendering() { if (m_glview) m_glview->AbortRendering(); }
+    
+    void SetEasy2DAdjustMode(bool val) { if (m_glview) m_glview->SetEasy2DAdjustMode(val); }
+    bool GetEasy2DAdjustMode() { if (m_glview) return m_glview->GetEasy2DAdjustMode(); else return false; }
 
 public:
 	wxWindow* m_frame;

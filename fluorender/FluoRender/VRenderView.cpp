@@ -415,6 +415,7 @@ void LMSeacher::OnMouse(wxMouseEvent& event)
 
 //////////////////////////////////////////////////////////////////////////
 
+wxCriticalSection* VRenderVulkanView::ms_pThreadCS = nullptr;
 
 BEGIN_EVENT_TABLE(VRenderVulkanView, wxWindow)
 	EVT_MENU(ID_CTXMENU_SHOW_ALL, VRenderVulkanView::OnShowAllVolumes)
@@ -616,6 +617,7 @@ VRenderVulkanView::VRenderVulkanView(wxWindow* frame,
 	m_gamma(Color(1.0, 1.0, 1.0)),
 	m_brightness(Color(1.0, 1.0, 1.0)),
 	m_hdr(0.0, 0.0, 0.0),
+    m_levels(Color(1.0, 1.0, 1.0)),
 	m_sync_r(false),
 	m_sync_g(false),
 	m_sync_b(false),
@@ -694,7 +696,10 @@ VRenderVulkanView::VRenderVulkanView(wxWindow* frame,
 	m_clear_final_buffer(false),
     m_refresh(false),
 	m_refresh_start_loop(false),
-	m_recording(false)
+	m_recording(false),
+	m_recording_frame(false),
+	m_abort(false),
+    m_easy_2d_adjust(false)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -906,11 +911,13 @@ void VRenderVulkanView::Resize(bool refresh)
 	m_resize_ol2 = true;
 	m_resize_paint = true;
 
-	m_vulkan->setSize(size.GetWidth(), size.GetHeight());
-	wxRect refreshRect(size);
-	RefreshRect(refreshRect, false);
-
-	if (refresh) RefreshGL();
+	if (refresh)
+	{
+		m_vulkan->setSize(size.GetWidth(), size.GetHeight());
+		wxRect refreshRect(size);
+		RefreshRect(refreshRect, false);
+		RefreshGL();
+	}
 }
 
 void VRenderVulkanView::Init()
@@ -934,7 +941,7 @@ void VRenderVulkanView::Init()
 
 void VRenderVulkanView::Clear()
 {
-	m_loader.RemoveAllLoadedBrick();
+	m_loader.RemoveAllLoadedData();
 	m_vulkan->clearTexPools();
 
 	//delete groups
@@ -2414,7 +2421,7 @@ void VRenderVulkanView::RandomizeColor()
 
 void VRenderVulkanView::ClearVolList()
 {
-	m_loader.RemoveAllLoadedBrick();
+	m_loader.RemoveAllLoadedData();
 	m_vulkan->clearTexPools();
 	m_vd_pop_list.clear();
 }
@@ -2768,7 +2775,8 @@ VolumeData *VRenderVulkanView::CopyLevel(VolumeData *src, int lv)
 			group->SetSyncG(src->GetSyncG());
 			group->SetSyncB(src->GetSyncB());
 		}
-
+		
+		/*
 		wxString src_name = src->GetName();
 		ReplaceVolumeData(src_name, vd_new);
 		mgr->AddVolumeData(vd_new);
@@ -2786,6 +2794,7 @@ VolumeData *VRenderVulkanView::CopyLevel(VolumeData *src, int lv)
 			tree->SetFix(fix);
 		}
 		if (swap_selection) vr_frame->OnSelection(2, m_vrv, group, vd_new);
+		*/
 	}
 
 	return vd_new;
@@ -3399,46 +3408,71 @@ void VRenderVulkanView::SetVolumeB(VolumeData* vd)
 	m_calculator.SetVolumeB(vd);
 }
 
+void VRenderVulkanView::SetVolumeC(VolumeData* vd)
+{
+	m_calculator.SetVolumeC(vd);
+}
+
 void VRenderVulkanView::CalculateSingle(int type, wxString prev_group, bool add)
 {
-    bool copied = false;
+	bool copiedA = false;
+	bool copiedB = false;
+	bool copiedC = false;
 	VolumeData* vd_A = m_calculator.GetVolumeA();
+	VolumeData* vd_prevA = vd_A;
 	if (vd_A && vd_A->isBrxml())
 	{
+		vd_prevA = vd_A;
 		vd_A = CopyLevel(vd_A);
-		if (vd_A) copied = true;
+		if (vd_A)
+			copiedA = true;
 	}
 	VolumeData* vd_B = m_calculator.GetVolumeB();
+	VolumeData* vd_prevB = vd_B;
 	if (vd_B && vd_B->isBrxml())
 	{
+		vd_prevB = vd_B;
 		vd_B = CopyLevel(vd_B);
-		if (vd_B) copied = true;
+		if (vd_B) 
+			copiedB = true;
+	}
+	VolumeData* vd_C = m_calculator.GetVolumeC();
+	VolumeData* vd_prevC = vd_C;
+	if (vd_C && vd_C->isBrxml())
+	{
+		vd_prevC = vd_C;
+		vd_C = CopyLevel(vd_C);
+		if (vd_C)
+			copiedC = true;
 	}
 	m_calculator.SetVolumeA(vd_A);
 	m_calculator.SetVolumeB(vd_B);
+	m_calculator.SetVolumeC(vd_C);
 
 	m_calculator.Calculate(type);
 	VolumeData* vd = m_calculator.GetResult();
 	if (vd)
 	{
-		if (type==1 ||
-			type==2 ||
-			type==3 ||
-			type==4 ||
-			type==5 ||
-			type==6 ||
-			type==8 ||
-			type==9)
+		if (type == 1 ||
+			type == 2 ||
+			type == 3 ||
+			type == 4 ||
+			type == 5 ||
+			type == 6 ||
+			type == 8 ||
+			type == 9 ||
+			type == 10 ||
+			type == 11)
 		{
 			VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 			if (vr_frame)
 			{
 				//copy 2d adjust & color
 				VolumeData* vd_a = m_calculator.GetVolumeA();
-				if(vd_a)
+				if (vd_a)
 				{
 					//clipping planes
-					vector<Plane*> *planes = vd_a->GetVR()?vd_a->GetVR()->get_planes():0;
+					vector<Plane*>* planes = vd_a->GetVR() ? vd_a->GetVR()->get_planes() : 0;
 					if (planes && vd->GetVR())
 						vd->GetVR()->set_planes(planes);
 					//transfer function
@@ -3476,21 +3510,24 @@ void VRenderVulkanView::CalculateSingle(int type, wxString prev_group, bool add)
 
 				if (add)
 				{
+					bool btmp = vr_frame->GetDataManager()->GetOverrideVox();
+					vr_frame->GetDataManager()->SetOverrideVox(false);
 					vr_frame->GetDataManager()->AddVolumeData(vd);
 					//vr_frame->GetDataManager()->SetVolumeDefault(vd);
 					AddVolumeData(vd, prev_group);
+					vr_frame->GetDataManager()->SetOverrideVox(btmp);
 
-					if (type==5 ||
-						type==6 ||
-						type==9)
+					if (type == 5 ||
+						type == 6 ||
+						type == 9)
 					{
 						if (vd_a)
 							vd_a->SetDisp(false);
 					}
-					else if (type==1 ||
-						type==2 ||
-						type==3 ||
-						type==4)
+					else if (type == 1 ||
+						type == 2 ||
+						type == 3 ||
+						type == 4)
 					{
 						if (vd_a)
 							vd_a->SetDisp(false);
@@ -3498,28 +3535,59 @@ void VRenderVulkanView::CalculateSingle(int type, wxString prev_group, bool add)
 						if (vd_b)
 							vd_b->SetDisp(false);
 					}
+					else if (type == 10 || type == 11)
+					{
+						if (vd_a)
+							vd_a->SetDisp(false);
+						VolumeData* vd_b = m_calculator.GetVolumeB();
+						if (vd_b)
+							vd_b->SetDisp(false);
+						VolumeData* vd_c = m_calculator.GetVolumeC();
+						if (vd_c)
+							vd_c->SetDisp(false);
+					}
+
+					if (copiedA)
+						vd_prevA->SetDisp(vd_A->GetDisp());
+					if (copiedB)
+						vd_prevB->SetDisp(vd_B->GetDisp());
+					if (copiedC)
+						vd_prevC->SetDisp(vd_C->GetDisp());
+
 					vr_frame->UpdateTree(vd->GetName(), 2, false); //UpdateTree line1: m_tree_panel->DeleteAll(); <- buffer overrun
-					m_calculator.SetVolumeA(vd_A);
+					m_calculator.SetVolumeA(vd_prevA);
 				}
 			}
 			RefreshGL();
+
+			if (copiedA)
+				delete vd_A;
+			if (copiedB)
+				delete vd_B;
+			if (copiedC)
+				delete vd_C;
 		}
 		else if (type == 7)
 		{
 			VolumeData* vd_a = m_calculator.GetVolumeA();
 			if (vd_a)
 			{
-                wxString nm = vd_A->GetName();
+				wxString nm = vd_A->GetName();
 				ReplaceVolumeData(nm, vd_a);
 				VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 				if (vr_frame)
 					vr_frame->GetPropView()->SetVolumeData(vd_a);
 			}
 			RefreshGL();
+
+			if (copiedB)
+				delete vd_B;
+			if (copiedC)
+				delete vd_C;
 		}
 	}
 
-	if (copied)
+	if (copiedA || copiedB || copiedC)
 	{
 		RefreshGL(false, true);
 	}
@@ -3596,7 +3664,7 @@ void VRenderVulkanView::StartTileRendering(int w_, int h_, int tilew_, int tileh
 	m_current_tileid = 0;
 
 	m_tmp_res_mode = m_res_mode;
-	m_res_mode = 0;
+	m_res_mode = 1;
 	if (!m_tmp_sample_rates.empty())
 		m_tmp_sample_rates.clear();
 	PopVolumeList();
@@ -4426,21 +4494,40 @@ void VRenderVulkanView::DrawOVER(VolumeData* vd, std::unique_ptr<vks::VFrameBuff
 	
 	Vulkan2dRender::V2DRenderParams params_final = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 	
-	params_final.pipeline =
-		m_v2drender->preparePipeline(
-			IMG_SHDR_BRIGHTNESS_CONTRAST_HDR,
-			m_vol_method == VOL_METHOD_COMP ? V2DRENDER_BLEND_ADD : V2DRENDER_BLEND_OVER,
-			m_fbo_final->attachments[0]->format,
-			m_fbo_final->attachments.size(),
-			0,
-			m_fbo_final->attachments[0]->is_swapchain_images);
-	params_final.tex[0] = fb->attachments[0].get();
-	Color gamma = vd->GetGamma();
-	Color brightness = vd->GetBrightness();
-	Color hdr = vd->GetHdr();
-	params_final.loc[0] = glm::vec4((float)gamma.r(), (float)gamma.g(), (float)gamma.b(), 1.0f);
-	params_final.loc[1] = glm::vec4((float)brightness.r(), (float)brightness.g(), (float)brightness.b(), 1.0f);
-	params_final.loc[2] = glm::vec4((float)hdr.r(), (float)hdr.g(), (float)hdr.b(), 0.0f);
+    if (m_easy_2d_adjust)
+    {
+        params_final.pipeline =
+        m_v2drender->preparePipeline(
+                                     IMG_SHDR_LEVELS,
+                                     m_vol_method == VOL_METHOD_COMP ? V2DRENDER_BLEND_ADD : V2DRENDER_BLEND_OVER,
+                                     m_fbo_final->attachments[0]->format,
+                                     m_fbo_final->attachments.size(),
+                                     0,
+                                     m_fbo_final->attachments[0]->is_swapchain_images);
+        params_final.tex[0] = fb->attachments[0].get();
+        Color gamma = vd->GetGamma();
+        Color levels = vd->GetLevels();
+        params_final.loc[0] = glm::vec4((float)gamma.r(), (float)gamma.g(), (float)gamma.b(), 1.0f);
+        params_final.loc[1] = glm::vec4((float)levels.r(), (float)levels.g(), (float)levels.b(), 1.0f);
+    }
+    else
+    {
+        params_final.pipeline =
+        m_v2drender->preparePipeline(
+                                     IMG_SHDR_BRIGHTNESS_CONTRAST_HDR,
+                                     m_vol_method == VOL_METHOD_COMP ? V2DRENDER_BLEND_ADD : V2DRENDER_BLEND_OVER,
+                                     m_fbo_final->attachments[0]->format,
+                                     m_fbo_final->attachments.size(),
+                                     0,
+                                     m_fbo_final->attachments[0]->is_swapchain_images);
+        params_final.tex[0] = fb->attachments[0].get();
+        Color gamma = vd->GetGamma();
+        Color brightness = vd->GetBrightness();
+        Color hdr = vd->GetHdr();
+        params_final.loc[0] = glm::vec4((float)gamma.r(), (float)gamma.g(), (float)gamma.b(), 1.0f);
+        params_final.loc[1] = glm::vec4((float)brightness.r(), (float)brightness.g(), (float)brightness.b(), 1.0f);
+        params_final.loc[2] = glm::vec4((float)hdr.r(), (float)hdr.g(), (float)hdr.b(), 0.0f);
+    }
 	params_final.clear = m_clear_final_buffer;
 	m_clear_final_buffer = false;
 
@@ -4673,21 +4760,40 @@ void VRenderVulkanView::DrawMIP(VolumeData* vd, std::unique_ptr<vks::VFrameBuffe
 
 	Vulkan2dRender::V2DRenderParams params_final = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 
-	params_final.pipeline =
-		m_v2drender->preparePipeline(
-			IMG_SHDR_BRIGHTNESS_CONTRAST_HDR,
-			m_vol_method == VOL_METHOD_COMP ? V2DRENDER_BLEND_ADD : V2DRENDER_BLEND_OVER,
-			m_fbo_final->attachments[0]->format,
-			m_fbo_final->attachments.size(),
-			0,
-			m_fbo_final->attachments[0]->is_swapchain_images);
-	params_final.tex[0] = fb->attachments[0].get();
-	Color gamma = vd->GetGamma();
-	Color brightness = vd->GetBrightness();
-	Color hdr = vd->GetHdr();
-	params_final.loc[0] = glm::vec4((float)gamma.r(), (float)gamma.g(), (float)gamma.b(), 1.0f);
-	params_final.loc[1] = glm::vec4((float)brightness.r(), (float)brightness.g(), (float)brightness.b(), 1.0f);
-	params_final.loc[2] = glm::vec4((float)hdr.r(), (float)hdr.g(), (float)hdr.b(), 0.0f);
+    if (m_easy_2d_adjust)
+    {
+        params_final.pipeline =
+        m_v2drender->preparePipeline(
+                                     IMG_SHDR_LEVELS,
+                                     m_vol_method == VOL_METHOD_COMP ? V2DRENDER_BLEND_ADD : V2DRENDER_BLEND_OVER,
+                                     m_fbo_final->attachments[0]->format,
+                                     m_fbo_final->attachments.size(),
+                                     0,
+                                     m_fbo_final->attachments[0]->is_swapchain_images);
+        params_final.tex[0] = fb->attachments[0].get();
+        Color gamma = vd->GetGamma();
+        Color levels = vd->GetLevels();
+        params_final.loc[0] = glm::vec4((float)gamma.r(), (float)gamma.g(), (float)gamma.b(), 1.0f);
+        params_final.loc[1] = glm::vec4((float)levels.r(), (float)levels.g(), (float)levels.b(), 1.0f);
+    }
+    else
+    {
+        params_final.pipeline =
+        m_v2drender->preparePipeline(
+                                     IMG_SHDR_BRIGHTNESS_CONTRAST_HDR,
+                                     m_vol_method == VOL_METHOD_COMP ? V2DRENDER_BLEND_ADD : V2DRENDER_BLEND_OVER,
+                                     m_fbo_final->attachments[0]->format,
+                                     m_fbo_final->attachments.size(),
+                                     0,
+                                     m_fbo_final->attachments[0]->is_swapchain_images);
+        params_final.tex[0] = fb->attachments[0].get();
+        Color gamma = vd->GetGamma();
+        Color brightness = vd->GetBrightness();
+        Color hdr = vd->GetHdr();
+        params_final.loc[0] = glm::vec4((float)gamma.r(), (float)gamma.g(), (float)gamma.b(), 1.0f);
+        params_final.loc[1] = glm::vec4((float)brightness.r(), (float)brightness.g(), (float)brightness.b(), 1.0f);
+        params_final.loc[2] = glm::vec4((float)hdr.r(), (float)hdr.g(), (float)hdr.b(), 0.0f);
+    }
 	params_final.clear = m_clear_final_buffer;
 	m_clear_final_buffer = false;
 
@@ -5470,33 +5576,63 @@ void VRenderVulkanView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 			blend_method = V2DRENDER_BLEND_OVER;
 
 	}
-
-	params_final.pipeline =
-		m_v2drender->preparePipeline(
-			IMG_SHDR_BRIGHTNESS_CONTRAST_HDR,
-			blend_method,
-			m_fbo_final->attachments[0]->format,
-			m_fbo_final->attachments.size(),
-			0,
-			m_fbo_final->attachments[0]->is_swapchain_images);
-	params_final.tex[0] = use_tex_wt2 ? m_fbo_wt2->attachments[0].get() : m_fbo->attachments[0].get();
-	Color gamma, brightness, hdr;
-	if (m_vol_method == VOL_METHOD_MULTI)
-	{
-		gamma = m_gamma;
-		brightness = m_brightness;
-		hdr = m_hdr;
-	}
-	else
-	{
-		VolumeData* vd = list[0];
-		gamma = vd->GetGamma();
-		brightness = vd->GetBrightness();
-		hdr = vd->GetHdr();
-	}
-	params_final.loc[0] = glm::vec4((float)gamma.r(), (float)gamma.g(), (float)gamma.b(), 1.0f);
-	params_final.loc[1] = glm::vec4((float)brightness.r(), (float)brightness.g(), (float)brightness.b(), 1.0f);
-	params_final.loc[2] = glm::vec4((float)hdr.r(), (float)hdr.g(), (float)hdr.b(), 0.0f);
+    
+    if (m_easy_2d_adjust)
+    {
+        params_final.pipeline =
+        m_v2drender->preparePipeline(
+                                     IMG_SHDR_LEVELS,
+                                     blend_method,
+                                     m_fbo_final->attachments[0]->format,
+                                     m_fbo_final->attachments.size(),
+                                     0,
+                                     m_fbo_final->attachments[0]->is_swapchain_images);
+        params_final.tex[0] = use_tex_wt2 ? m_fbo_wt2->attachments[0].get() : m_fbo->attachments[0].get();
+        Color gamma, levels;
+        if (m_vol_method == VOL_METHOD_MULTI)
+        {
+            gamma = m_gamma;
+            levels = m_levels;
+        }
+        else
+        {
+            VolumeData* vd = list[0];
+            gamma = vd->GetGamma();
+            levels = vd->GetLevels();
+        }
+        params_final.loc[0] = glm::vec4((float)gamma.r(), (float)gamma.g(), (float)gamma.b(), 1.0f);
+        params_final.loc[1] = glm::vec4((float)levels.r(), (float)levels.g(), (float)levels.b(), 1.0f);
+    }
+    else
+    {
+        params_final.pipeline =
+        m_v2drender->preparePipeline(
+                                     IMG_SHDR_BRIGHTNESS_CONTRAST_HDR,
+                                     blend_method,
+                                     m_fbo_final->attachments[0]->format,
+                                     m_fbo_final->attachments.size(),
+                                     0,
+                                     m_fbo_final->attachments[0]->is_swapchain_images);
+        params_final.tex[0] = use_tex_wt2 ? m_fbo_wt2->attachments[0].get() : m_fbo->attachments[0].get();
+        Color gamma, brightness, hdr;
+        if (m_vol_method == VOL_METHOD_MULTI)
+        {
+            gamma = m_gamma;
+            brightness = m_brightness;
+            hdr = m_hdr;
+        }
+        else
+        {
+            VolumeData* vd = list[0];
+            gamma = vd->GetGamma();
+            brightness = vd->GetBrightness();
+            hdr = vd->GetHdr();
+        }
+        params_final.loc[0] = glm::vec4((float)gamma.r(), (float)gamma.g(), (float)gamma.b(), 1.0f);
+        params_final.loc[1] = glm::vec4((float)brightness.r(), (float)brightness.g(), (float)brightness.b(), 1.0f);
+        params_final.loc[2] = glm::vec4((float)hdr.r(), (float)hdr.g(), (float)hdr.b(), 0.0f);
+    }
+    
 	params_final.clear = m_clear_final_buffer;
 	m_clear_final_buffer = false;
 
@@ -5949,7 +6085,7 @@ bool VRenderVulkanView::SelSegVolume(int mode)
 }
 
 
-bool VRenderVulkanView::SelLabelSegVolume(int mode)
+bool VRenderVulkanView::SelLabelSegVolumeMax(int mode, vector<VolumeData*> ref)
 {
 	double dist = 0.0;
 	double min_dist = -1.0;
@@ -5970,7 +6106,8 @@ bool VRenderVulkanView::SelLabelSegVolume(int mode)
 			continue;
 
 		int sel_id;
-		dist = GetPointAndLabel(p, sel_id, old_mouse_X, old_mouse_Y, vd);
+		dist = GetPointAndLabelMax(p, sel_id, old_mouse_X, old_mouse_Y, vd, ref);
+        //dist = GetPointAndLabel(p, sel_id, old_mouse_X, old_mouse_Y, vd);
 
 		if (dist > 0.0)
 		{
@@ -6402,19 +6539,22 @@ void VRenderVulkanView::OnContextMenu(wxContextMenuEvent& event)
 	wxMenu menu;
 	if (na_mode)
 	{
-		menu.Append(ID_CTXMENU_SHOW_ALL_FRAGMENTS, "Show all fragments");
-        menu.Append(ID_CTXMENU_DESELECT_ALL_FRAGMENTS, "Deselect all fragments");
-		menu.Append(ID_CTXMENU_HIDE_OTHER_FRAGMENTS, "Show only selected fragments");
-		menu.Append(ID_CTXMENU_HIDE_SELECTED_FLAGMENTS, "Hide selected fragments");
+		menu.Append(ID_CTXMENU_SHOW_ALL_FRAGMENTS, "Show all");
+        menu.Append(ID_CTXMENU_DESELECT_ALL_FRAGMENTS, "Deselect all");
+        menu.AppendSeparator();
+		menu.Append(ID_CTXMENU_HIDE_OTHER_FRAGMENTS, "Show only selected");
+		menu.Append(ID_CTXMENU_HIDE_SELECTED_FLAGMENTS, "Hide selected");
 	}
 	else
 	{
-		menu.Append(ID_CTXMENU_SHOW_ALL, "Show all volumes");
-		menu.Append(ID_CTXMENU_HIDE_OTHER_VOLS, "Sohw only selected volumes");
-		menu.Append(ID_CTXMENU_HIDE_THIS_VOL, "Hide selected volume data");
+		menu.Append(ID_CTXMENU_SHOW_ALL, "Show all");
+        menu.AppendSeparator();
+		menu.Append(ID_CTXMENU_HIDE_OTHER_VOLS, "Sohw only selected");
+		menu.Append(ID_CTXMENU_HIDE_THIS_VOL, "Hide selected");
 	}
-	menu.Append(ID_CTXMENU_UNDO_VISIBILITY_SETTING_CHANGES, "Undo visibility settings");
-	menu.Append(ID_CTXMENU_REDO_VISIBILITY_SETTING_CHANGES, "Redo visibility settings");
+    menu.AppendSeparator();
+	menu.Append(ID_CTXMENU_UNDO_VISIBILITY_SETTING_CHANGES, "Undo visibility");
+	menu.Append(ID_CTXMENU_REDO_VISIBILITY_SETTING_CHANGES, "Redo visibility");
 
 	wxPoint point = event.GetPosition();
 	// If from keyboard
@@ -7005,6 +7145,41 @@ void VRenderVulkanView::SetParams(double t)
 		if (interpolator->GetDouble(keycode, t, val))
 			plane->ChangePlane(Point(0.0, 0.0, abs(val)),
 			Vector(0.0, 0.0, -1.0));
+
+		keycode.l2 = 0;
+		keycode.l2_name = "gamma";
+		if (interpolator->GetDouble(keycode, t, val))
+			vd->Set3DGamma(val);
+
+		keycode.l2 = 0;
+		keycode.l2_name = "saturation";
+		if (interpolator->GetDouble(keycode, t, val))
+			vd->SetOffset(val);
+
+		keycode.l2 = 0;
+		keycode.l2_name = "luminance";
+		if (interpolator->GetDouble(keycode, t, val))
+			vd->SetLuminance(val);
+
+		keycode.l2 = 0;
+		keycode.l2_name = "alpha";
+		if (interpolator->GetDouble(keycode, t, val))
+			vd->SetAlpha(val);
+
+		keycode.l2 = 0;
+		keycode.l2_name = "boundary";
+		if (interpolator->GetDouble(keycode, t, val))
+			vd->SetBoundary(val);
+
+		keycode.l2 = 0;
+		keycode.l2_name = "left_threshold";
+		if (interpolator->GetDouble(keycode, t, val))
+			vd->SetLeftThresh(val);
+
+		keycode.l2 = 0;
+		keycode.l2_name = "right_threshold";
+		if (interpolator->GetDouble(keycode, t, val))
+			vd->SetRightThresh(val);
 	}
 /*
 	//t
@@ -7192,7 +7367,10 @@ void VRenderVulkanView::Set4DSeqFrame(int frame, bool run_script)
 					double spcx, spcy, spcz;
 					vd->GetSpacings(spcx, spcy, spcz);
 
-					Nrrd* data = reader->Convert(frame, vd->GetCurChannel(), false);
+					auto data = m_loader.GetLoadedNrrd(vd, vd->GetCurChannel(), frame);
+					if (!data)
+						data = reader->Convert(frame, vd->GetCurChannel(), false);
+
 					if (!vd->Replace(data, false))
 						continue;
 
@@ -7223,15 +7401,11 @@ void VRenderVulkanView::Set4DSeqFrame(int frame, bool run_script)
 		}
 	}
 	RefreshGL();
-
+ //very slow
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (vr_frame)
-	{
-		vr_frame->UpdateTree(
-			vr_frame->GetCurSelVol()?
-			vr_frame->GetCurSelVol()->GetName():
-			"");
-	}
+		vr_frame->UpdateTreeFrames();
+
 }
 
 void VRenderVulkanView::Get3DBatFrames(int &start_frame, int &end_frame, int &cur_frame)
@@ -7336,7 +7510,7 @@ void VRenderVulkanView::Set3DBatFrame(int offset)
 				double spcx, spcy, spcz;
 				vd->GetSpacings(spcx, spcy, spcz);
 
-				Nrrd* data = reader->Convert(0, vd->GetCurChannel(), true);
+				auto data = reader->Convert(0, vd->GetCurChannel(), true);
 				if (vd->Replace(data, true))
 					vd->SetDisp(true);
 				else
@@ -7426,6 +7600,8 @@ void VRenderVulkanView::PostDraw()
 			!TextureRenderer::get_done_update_loop())
 			return;
 	}
+    
+    vkQueueWaitIdle(m_vulkan->vulkanDevice->queue);
 
 	//output animations
 	if (m_capture && !m_cap_file.IsEmpty())
@@ -7434,20 +7610,10 @@ void VRenderVulkanView::PostDraw()
 		
 		//capture
 		int x, y, w, h;
-		if (m_draw_frame && !m_tile_rendering)
-		{
-			x = m_frame_x;
-			y = m_frame_y;
-			w = m_frame_w;
-			h = m_frame_h;
-		}
-		else
-		{
-			x = 0;
-			y = 0;
-			w = m_nx;
-			h = m_ny;
-		}
+        x = 0;
+        y = 0;
+        w = m_nx;
+        h = m_ny;
 
 		vks::VulkanDevice* prim_dev = m_vulkan->vulkanDevice;
 
@@ -7455,7 +7621,6 @@ void VRenderVulkanView::PostDraw()
 		int dst_chann = 3;
 		unsigned char* image = new unsigned char[w * h * chann];
 		if (m_tile_rendering && m_tiled_image != NULL) {
-
 			prim_dev->DownloadTexture(m_tex_tile, image);
 			size_t stx = (m_current_tileid - 1) % m_tile_xnum * m_tile_w;
 			size_t sty = (m_current_tileid - 1) / m_tile_xnum * m_tile_h;
@@ -7501,6 +7666,14 @@ void VRenderVulkanView::PostDraw()
 					}
 				}
 			}
+            
+            if (m_draw_frame)
+            {
+                x = m_frame_x;
+                y = m_frame_y;
+                w = m_frame_w;
+                h = m_frame_h;
+            }
 			
 			string str_fn = outputfilename.ToStdString();
 			TIFF* out = TIFFOpen(str_fn.c_str(), "wb");
@@ -7517,13 +7690,14 @@ void VRenderVulkanView::PostDraw()
 				TIFFSetField(out, TIFFTAG_COMPRESSION, COMPRESSION_LZW);
 
 			tsize_t linebytes = dst_chann * w;
+            tsize_t ypitch = dst_chann * m_nx;
 			unsigned char* buf = NULL;
 			buf = (unsigned char*)_TIFFmalloc(linebytes);
 			TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(out, 0));
-			for (uint32 row = 0; row < (uint32)h; row++)
+			for (uint32 row = y; row < (uint32)h; row++)
 			{
-				memcpy(buf, &rgb_image[row*linebytes], linebytes);
-				if (TIFFWriteScanline(out, buf, row, 0) < 0)
+				memcpy(buf, &rgb_image[row*ypitch + x*dst_chann], linebytes);
+				if (TIFFWriteScanline(out, buf, row-y, 0) < 0)
 					break;
 			}
 			TIFFClose(out);
@@ -7542,41 +7716,53 @@ void VRenderVulkanView::PostDraw()
 			if (m_current_tileid < m_tile_xnum*m_tile_ynum)
 				m_capture = true;
 			else if (m_tiled_image){
-				double scalex = (double)m_capture_resx/(double)GetSize().x;
-				double scaley = (double)m_capture_resy/(double)GetSize().y;
-				size_t cap_ox = m_draw_frame ? (size_t)(m_frame_x*scalex) : 0;
-				size_t cap_oy = m_draw_frame ? (size_t)(m_frame_y*scaley) : 0;
-				size_t cap_w  = m_draw_frame ? (size_t)(m_frame_w*scalex) : m_capture_resx;
-				size_t cap_h  = m_draw_frame ? (size_t)(m_frame_h*scaley) : m_capture_resy;
-				size_t imsize = (size_t)cap_w * (size_t)cap_h;
-				string str_fn = outputfilename.ToStdString();
-				TIFF *out = TIFFOpen(str_fn.c_str(), imsize <= 3758096384ULL ? "wb" : "wb8");
-				if (!out)
-					return;
-				TIFFSetField(out, TIFFTAG_IMAGEWIDTH, cap_w);
-				TIFFSetField(out, TIFFTAG_IMAGELENGTH, cap_h);
-				TIFFSetField(out, TIFFTAG_SAMPLESPERPIXEL, dst_chann);
-				TIFFSetField(out, TIFFTAG_BITSPERSAMPLE, 8);
-				TIFFSetField(out, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
-				TIFFSetField(out, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
-				TIFFSetField(out, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
-				if (VRenderFrame::GetCompression())
-					TIFFSetField(out, TIFFTAG_COMPRESSION, COMPRESSION_LZW);
 
-				tsize_t linebytes = dst_chann * cap_w;
-				tsize_t pitchX = dst_chann * m_capture_resx;
-				unsigned char *buf = NULL;
-				buf = (unsigned char *)_TIFFmalloc(linebytes);
-				TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(out, 0));
-				for (uint32 row = 0; row < (uint32)cap_h; row++)
-				{
-					memcpy(buf, &m_tiled_image[(row+cap_oy)*pitchX + cap_ox*dst_chann], linebytes);
-					if (TIFFWriteScanline(out, buf, row, 0) < 0)
-						break;
+
+				double scalefac = GetSize().x > GetSize().y ? 
+					(double)m_capture_resy / (double)GetSize().y :
+					(double)m_capture_resx / (double)GetSize().x;
+
+				size_t cap_ox = m_draw_frame ? (size_t)(m_frame_x*scalefac) : 0;
+				size_t cap_oy = m_draw_frame ? (size_t)(m_frame_y*scalefac) : 0;
+				size_t cap_w  = m_draw_frame ? (size_t)(m_frame_w*scalefac) : m_capture_resx;
+				size_t cap_h  = m_draw_frame ? (size_t)(m_frame_h*scalefac) : m_capture_resy;
+
+				if (cap_ox <= m_capture_resx && cap_oy <= m_capture_resy) {
+					if (cap_ox + cap_w > m_capture_resx)
+						cap_w = m_capture_resx - cap_ox;
+					if (cap_oy + cap_h > m_capture_resy)
+						cap_h = m_capture_resy - cap_oy;
+
+					size_t imsize = (size_t)cap_w * (size_t)cap_h;
+					string str_fn = outputfilename.ToStdString();
+					TIFF* out = TIFFOpen(str_fn.c_str(), imsize <= 3758096384ULL ? "wb" : "wb8");
+					if (out) {
+						TIFFSetField(out, TIFFTAG_IMAGEWIDTH, cap_w);
+						TIFFSetField(out, TIFFTAG_IMAGELENGTH, cap_h);
+						TIFFSetField(out, TIFFTAG_SAMPLESPERPIXEL, dst_chann);
+						TIFFSetField(out, TIFFTAG_BITSPERSAMPLE, 8);
+						TIFFSetField(out, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
+						TIFFSetField(out, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
+						TIFFSetField(out, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
+						if (VRenderFrame::GetCompression())
+							TIFFSetField(out, TIFFTAG_COMPRESSION, COMPRESSION_LZW);
+
+						tsize_t linebytes = dst_chann * cap_w;
+						tsize_t pitchX = dst_chann * m_capture_resx;
+						unsigned char* buf = NULL;
+						buf = (unsigned char*)_TIFFmalloc(linebytes);
+						TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(out, 0));
+						for (uint32 row = 0; row < (uint32)cap_h; row++)
+						{
+							memcpy(buf, &m_tiled_image[(row + cap_oy) * pitchX + cap_ox * dst_chann], linebytes);
+							if (TIFFWriteScanline(out, buf, row, 0) < 0)
+								break;
+						}
+						TIFFClose(out);
+						if (buf)
+							_TIFFfree(buf);
+					}
 				}
-				TIFFClose(out);
-				if (buf)
-					_TIFFfree(buf);
 
 				delete [] m_tiled_image;
 				m_tiled_image = NULL;
@@ -7709,19 +7895,19 @@ void VRenderVulkanView::RunSelectionTracking(wxFileConfig &fconfig)
 	m_cur_vol->GetVR()->return_mask();
 	m_cur_vol->GetResolution(nx, ny, nz);
 	//find labels in the old that are selected by the current mask
-	Nrrd* mask_nrrd = m_cur_vol->GetMask(true);
-	if (!mask_nrrd)
+	auto mask_nrrd = m_cur_vol->GetMask(true);
+	if (!mask_nrrd || !mask_nrrd->getNrrd())
 	{
 		m_cur_vol->AddEmptyMask();
 		mask_nrrd = m_cur_vol->GetMask(false);
 	}
-	Nrrd* label_nrrd = m_cur_vol->GetLabel(false);
-	if (!label_nrrd)
+	auto label_nrrd = m_cur_vol->GetLabel(false);
+	if (!label_nrrd || !label_nrrd->getNrrd())
 		return;
-	unsigned char* mask_data = (unsigned char*)(mask_nrrd->data);
+	unsigned char* mask_data = (unsigned char*)(mask_nrrd->getNrrd()->data);
 	if (!mask_data)
 		return;
-	unsigned int* label_data = (unsigned int*)(label_nrrd->data);
+	unsigned int* label_data = (unsigned int*)(label_nrrd->getNrrd()->data);
 	if (!label_data)
 		return;
 	FL::CellList sel_labels;
@@ -7772,15 +7958,15 @@ void VRenderVulkanView::RunSelectionTracking(wxFileConfig &fconfig)
 			LBLReader lbl_reader;
 			wstring lblname = label_name.ToStdWstring();
 			lbl_reader.SetFile(lblname);
-			Nrrd* label_nrrd_new = lbl_reader.Convert(m_tseq_cur_num, m_cur_vol->GetCurChannel(), true);
-			if (!label_nrrd_new)
+			auto label_nrrd_new = lbl_reader.Convert(m_tseq_cur_num, m_cur_vol->GetCurChannel(), true);
+			if (!label_nrrd_new || !label_nrrd_new->getNrrd())
 			{
 				m_cur_vol->AddEmptyLabel();
 				label_nrrd_new = m_cur_vol->GetLabel(false);
 			}
 			else
 				m_cur_vol->LoadLabel(label_nrrd_new);
-			label_data = (unsigned int*)(label_nrrd_new->data);
+			label_data = (unsigned int*)(label_nrrd_new->getNrrd()->data);
 			if (!label_data)
 				return;
 			//update the mask according to the new label
@@ -7843,7 +8029,7 @@ void VRenderVulkanView::RunRandomColors(wxFileConfig &fconfig)
 	LBLReader lbl_reader;
 	wstring lblname = label_name.ToStdWstring();
 	lbl_reader.SetFile(lblname);
-	Nrrd* label_nrrd_new = lbl_reader.Convert(m_tseq_cur_num, m_cur_vol->GetCurChannel(), true);
+	auto label_nrrd_new = lbl_reader.Convert(m_tseq_cur_num, m_cur_vol->GetCurChannel(), true);
 	if (!label_nrrd_new)
 		return;
 	m_cur_vol->LoadLabel(label_nrrd_new);
@@ -7946,7 +8132,7 @@ void VRenderVulkanView::RunFetchMask(wxFileConfig &fconfig)
 	MSKReader msk_reader;
 	wstring mskname = mask_name.ToStdWstring();
 	msk_reader.SetFile(mskname);
-	Nrrd* mask_nrrd_new = msk_reader.Convert(m_tseq_cur_num, m_cur_vol->GetCurChannel(), true);
+	auto mask_nrrd_new = msk_reader.Convert(m_tseq_cur_num, m_cur_vol->GetCurChannel(), true);
 	if (mask_nrrd_new)
 		m_cur_vol->LoadMask(mask_nrrd_new);
 
@@ -7955,7 +8141,7 @@ void VRenderVulkanView::RunFetchMask(wxFileConfig &fconfig)
 	LBLReader lbl_reader;
 	wstring lblname = label_name.ToStdWstring();
 	lbl_reader.SetFile(lblname);
-	Nrrd* label_nrrd_new = lbl_reader.Convert(m_tseq_cur_num, m_cur_vol->GetCurChannel(), true);
+	auto label_nrrd_new = lbl_reader.Convert(m_tseq_cur_num, m_cur_vol->GetCurChannel(), true);
 	if (label_nrrd_new)
 		m_cur_vol->LoadLabel(label_nrrd_new);
 }
@@ -7963,6 +8149,12 @@ void VRenderVulkanView::RunFetchMask(wxFileConfig &fconfig)
 //draw
 void VRenderVulkanView::OnDraw(wxPaintEvent& event)
 {
+	if (m_abort)
+	{
+		m_abort = false;
+		return;
+	}
+
 	Init();
 	wxPaintDC dc(this);
 
@@ -7982,6 +8174,9 @@ void VRenderVulkanView::OnDraw(wxPaintEvent& event)
 	}
     
     SetEvtHandlerEnabled(false);
+
+	if (m_recording)
+		m_recording_frame = true;
 	
 	m_vulkan->ResetRenderSemaphores();
 	m_vulkan->prepareFrame();
@@ -8039,22 +8234,9 @@ void VRenderVulkanView::OnDraw(wxPaintEvent& event)
 	{
 		PaintStroke();
 	}
-
-	if (m_int_mode == 4)
-		m_int_mode = 2;
-	if (m_int_mode == 8)
-		m_int_mode = 7;
-
-	goTimer->sample();
-
-	if (m_resize)
-		m_resize = false;
-
-	if (m_tile_rendering && m_current_tileid >= m_tile_xnum*m_tile_ynum) {
-		EndTileRendering();
-	}
     
-    if (m_recording)
+    if ( m_recording &&
+		(VolumeRenderer::get_done_update_loop() || !VolumeRenderer::get_mem_swap()) )
     {
         vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
         vks::VulkanDevice* prim_dev = m_vulkan->devices[0];
@@ -8092,8 +8274,29 @@ void VRenderVulkanView::OnDraw(wxPaintEvent& event)
         
         m_v2drender->render(m_fbo_record, params);
     }
-
+	
 	m_vulkan->submitFrame();
+
+	if ( m_recording &&
+		(VolumeRenderer::get_done_update_loop() || !VolumeRenderer::get_mem_swap()) )
+	{
+		m_recording_frame = false;
+	}
+
+
+	if (m_tile_rendering && m_current_tileid >= m_tile_xnum * m_tile_ynum) {
+		EndTileRendering();
+	}
+
+	if (m_int_mode == 4)
+		m_int_mode = 2;
+	if (m_int_mode == 8)
+		m_int_mode = 7;
+
+	goTimer->sample();
+
+	if (m_resize)
+		m_resize = false;
 
 	SetEvtHandlerEnabled(true);
 }
@@ -8846,7 +9049,7 @@ void VRenderVulkanView::ReplaceVolumeData(wxString &name, VolumeData *dst)
 				if (vd && vd->GetName() == name)
 				{
 					if (m_cur_vol == vd) m_cur_vol = dst;
-					m_loader.RemoveBrickVD(vd);
+					m_loader.RemoveDataVD(vd);
 					vd->GetVR()->clear_tex_current();
 					m_layer_list[i] = dst;
 					m_vd_pop_dirty = true;
@@ -8865,7 +9068,7 @@ void VRenderVulkanView::ReplaceVolumeData(wxString &name, VolumeData *dst)
 					if (vd && vd->GetName() == name)
 					{
 						if (m_cur_vol == vd) m_cur_vol = dst;
-						m_loader.RemoveBrickVD(vd);
+						m_loader.RemoveDataVD(vd);
 						vd->GetVR()->clear_tex_current();
 						tmpgroup->ReplaceVolumeData(j, dst);
 						m_vd_pop_dirty = true;
@@ -8926,7 +9129,7 @@ void VRenderVulkanView::RemoveVolumeData(wxString &name)
 					m_layer_list.erase(m_layer_list.begin()+i);
 					m_vd_pop_dirty = true;
 					m_cur_vol = NULL;
-					m_loader.RemoveBrickVD(vd);
+					m_loader.RemoveDataVD(vd);
 					vd->GetVR()->clear_tex_current();
 					dm->RemoveVolumeData(name);
 					InitView(INIT_BOUNDS | INIT_CENTER);
@@ -8945,7 +9148,7 @@ void VRenderVulkanView::RemoveVolumeData(wxString &name)
 						group->RemoveVolumeData(j);
 						m_vd_pop_dirty = true;
 						m_cur_vol = NULL;
-						m_loader.RemoveBrickVD(vd);
+						m_loader.RemoveDataVD(vd);
 						vd->GetVR()->clear_tex_current();
 						dm->RemoveVolumeData(name);
 						InitView(INIT_BOUNDS | INIT_CENTER);
@@ -8981,7 +9184,7 @@ void VRenderVulkanView::RemoveVolumeDataset(BaseReader *reader, int channel)
 					m_layer_list.erase(m_layer_list.begin()+i);
 					m_vd_pop_dirty = true;
 					if (vd == m_cur_vol) m_cur_vol = NULL;
-					m_loader.RemoveBrickVD(vd);
+					m_loader.RemoveDataVD(vd);
 					vd->GetVR()->clear_tex_current();
 					dm->RemoveVolumeData(vd->GetName());
 				}
@@ -8998,7 +9201,7 @@ void VRenderVulkanView::RemoveVolumeDataset(BaseReader *reader, int channel)
 						group->RemoveVolumeData(j);
 						m_vd_pop_dirty = true;
 						if (vd == m_cur_vol) m_cur_vol = NULL;
-						m_loader.RemoveBrickVD(vd);
+						m_loader.RemoveDataVD(vd);
 						vd->GetVR()->clear_tex_current();
 						dm->RemoveVolumeData(vd->GetName());
 					}
@@ -9110,7 +9313,7 @@ void VRenderVulkanView::RemoveGroup(wxString &name)
 							if (m_cur_vol == vd)
 								m_cur_vol = NULL;
 							group->RemoveVolumeData(j);
-							m_loader.RemoveBrickVD(vd);
+							m_loader.RemoveDataVD(vd);
 							vd->GetVR()->clear_tex_current();
 							dm->RemoveVolumeData(vd->GetName());
 						}
@@ -9908,12 +10111,13 @@ wxString VRenderVulkanView::AddGroup(wxString str, wxString prev_group)
 		AdjustView* adjust_view = vr_frame->GetAdjustView();
 		if (adjust_view && group)
 		{
-			Color gamma, brightness, hdr;
+			Color gamma, brightness, hdr, level;
 			bool sync_r, sync_g, sync_b;
-			adjust_view->GetDefaults(gamma, brightness, hdr, sync_r, sync_g, sync_b);
+			adjust_view->GetDefaults(gamma, brightness, hdr, level, sync_r, sync_g, sync_b);
 			group->SetGamma(gamma);
 			group->SetBrightness(brightness);
 			group->SetHdr(hdr);
+            group->SetLevels(level);
 			group->SetSyncR(sync_r);
 			group->SetSyncG(sync_g);
 			group->SetSyncB(sync_b);
@@ -12287,14 +12491,22 @@ void VRenderVulkanView::DrawInfo(int nx, int ny)
 	Color text_color = GetTextColor();
 	if (TextureRenderer::get_streaming())
 	{
-		str = wxString::Format(
-			"FPS: %.2f, Bricks: %d, Quota: %d, Int: %s, Time: %lu, Dist: %f",
+		/*str = wxString::Format(
+			"FPS: %.2f, Bricks: %d, CurBrk: %d",
 			fps_>=0.0&&fps_<300.0?fps_:0.0,
 			TextureRenderer::get_total_brick_num(),
-			TextureRenderer::get_quota_bricks(),
-			m_interactive?"Yes":"No",
-			TextureRenderer::get_cor_up_time(),
-			CalcCameraDistance());
+			TextureRenderer::get_cur_brick_num());
+        */
+        
+        str = wxString::Format(
+                               "FPS: %.2f, Bricks: %d, Quota: %d, Int: %s, Time: %lu, Dist: %f",
+                               fps_>=0.0&&fps_<300.0?fps_:0.0,
+                               TextureRenderer::get_total_brick_num(),
+                               TextureRenderer::get_quota_bricks(),
+                               m_interactive?"Yes":"No",
+                               TextureRenderer::get_cor_up_time(),
+                               CalcCameraDistance());
+        
 		////budget_test
 		//if (m_interactive)
 		//  tos <<
@@ -13244,12 +13456,24 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 			m_dpeel = false;
 //		if (reset_peeling_layer || m_vol_method == VOL_METHOD_MULTI)
 			displist = m_vd_pop_list;
-
+        
 		for (i=0; i<displist.size(); i++)
 		{
 			VolumeData* vd = displist[i];
 			if (vd && vd->GetDisp())
 			{
+#ifdef _DARWIN
+                bool slice_mode = false;
+                VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+                if ( vr_frame && vr_frame->GetClippingView() && (displist.size() == 1 || vr_frame->GetClippingView()->GetChannLink()) &&
+                    (vr_frame->GetClippingView()->GetXdist() <= 3 || vr_frame->GetClippingView()->GetYdist() <= 3 || vr_frame->GetClippingView()->GetZdist() <= 3) )
+                    slice_mode = true;
+                if(slice_mode && vd->GetVR())
+                    vd->GetVR()->set_slice_mode(true);
+                else
+                    vd->GetVR()->set_slice_mode(false);
+#endif
+                
 				switchLevel(vd);
 				vd->SetInterpolate(m_intp);
 				if (!TextureRenderer::get_mem_swap()) continue;
@@ -13260,7 +13484,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 				Texture* tex = vd->GetTexture();
 				if (tex && vd->GetVR())
 				{
-					if (m_draw_mask && tex->isBrxml())
+					if (m_draw_mask && tex->isBrxml() && vd->GetTexture()->nmask() >= 0 && !vd->GetSharedMaskName().IsEmpty())
 					{
 						int curlv = vd->GetLevel();
 						vd->SetLevel(vd->GetMaskLv());
@@ -13283,7 +13507,8 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 						{
 							(*bricks2)[j]->set_drawn(false);
 							if ((*bricks2)[j]->get_priority()>0 ||
-								!vd->GetVR()->test_against_view_clip((*bricks2)[j]->bbox(), (*bricks2)[j]->tbox(), (*bricks2)[j]->dbox(), m_persp))//changed by takashi
+								!vd->GetVR()->test_against_view_clip((*bricks2)[j]->bbox(), (*bricks2)[j]->tbox(), (*bricks2)[j]->dbox(), m_persp) ||
+                                !tex->GetFileName((*bricks2)[j]->getID()) )
 							{
 								(*bricks2)[j]->set_disp(false);
 								continue;
@@ -13323,7 +13548,8 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 					{
 						(*bricks)[j]->set_drawn(false);
 						if ((*bricks)[j]->get_priority()>0 ||
-							!vd->GetVR()->test_against_view_clip((*bricks)[j]->bbox(), (*bricks)[j]->tbox(), (*bricks)[j]->dbox(), m_persp))//changed by takashi
+							!vd->GetVR()->test_against_view_clip((*bricks)[j]->bbox(), (*bricks)[j]->tbox(), (*bricks)[j]->dbox(), m_persp) ||
+                            (tex->isBrxml() && !tex->GetFileName((*bricks)[j]->getID())) )
 						{
 							(*bricks)[j]->set_disp(false);
 							continue;
@@ -13385,7 +13611,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 				bool shadow = vd->GetShadow();
 				for (j = 0; j < bricks->size(); j++)
 				{
-					VolumeLoaderData d;
+					VolumeLoaderData d = {};
 					TextureBrick* b = (*bricks)[j];
 					if (b->get_disp())
 					{
@@ -13447,7 +13673,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 					int mode = TEXTURE_RENDER_MODE_MASK;
 					for (j = 0; j < bricks->size(); j++)
 					{
-						VolumeLoaderData d;
+						VolumeLoaderData d = {};
 						TextureBrick* b = (*bricks)[j];
 						if (b->get_disp())
 						{
@@ -13512,7 +13738,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 								bool shadow = vd->GetShadow();
 								for (j = 0; j < bricks->size(); j++)
 								{
-									VolumeLoaderData d;
+									VolumeLoaderData d = {};
 									TextureBrick* b = (*bricks)[j];
 									if (b->get_disp())
 									{
@@ -13570,12 +13796,13 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 								VolumeData* vd = list[j];
 								Texture* tex = vd->GetTexture();
 								Ray view_ray = vd->GetVR()->compute_view();
+								tex->set_sort_bricks();
 								vector<TextureBrick*> *bricks = tex->get_sorted_bricks(view_ray, !m_persp);
 								int mode = vd->GetMode() == 1 ? 1 : 0;
 								bool shadow = vd->GetShadow();
 								for (k=0; k<bricks->size(); k++)
 								{
-									VolumeLoaderData d;
+									VolumeLoaderData d = {};
 									TextureBrick* b = (*bricks)[k];
 									if (b->get_disp())
 									{
@@ -13598,6 +13825,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 								{
 									if (TextureRenderer::get_update_order() == 1)
 									{
+										/*
 										int order = TextureRenderer::get_update_order();
 										TextureRenderer::set_update_order(0);
 										Ray view_ray = vd->GetVR()->compute_view();
@@ -13605,6 +13833,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 										tex->get_sorted_bricks(view_ray, !m_persp); //recalculate brick.d_
 										tex->set_sort_bricks();
 										TextureRenderer::set_update_order(order);
+										*/
 										std::sort(tmp_shadow.begin(), tmp_shadow.end(), VolumeLoader::sort_data_asc);
 									}
 									queues.insert(queues.end(), tmp_shadow.begin(), tmp_shadow.end());
@@ -13627,7 +13856,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 								int mode = TEXTURE_RENDER_MODE_MASK;
 								for (k=0; k<bricks->size(); k++)
 								{
-									VolumeLoaderData d;
+									VolumeLoaderData d = {};
 									TextureBrick* b = (*bricks)[k];
 									if (b->get_disp())
 									{
@@ -13651,12 +13880,57 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 			}
 		}
 
+		if (1)
+		{
+			long long avmem = m_loader.GetAvailableMemory();
+
+			int maxtime = 0;
+			int maxcurtime = 0;
+			vector<VolumeData*> vd_4d_list;
+			for (i = 0; i < displist.size(); i++)
+			{
+				VolumeData* vd = displist[i];
+				if (vd && vd->GetDisp() && !vd->isBrxml() && vd->GetReader() && 
+					vd->GetReader()->GetCurTime() != vd->GetReader()->GetTimeNum())
+				{
+					int tnum = vd->GetReader()->GetTimeNum();
+					if (tnum > maxtime)
+						maxtime = tnum;
+					vd_4d_list.push_back(vd);
+				}
+			}
+			
+			int toffset = 1;
+			while (1)
+			{
+				bool remain = false;
+				for (i = 0; i < vd_4d_list.size(); i++)
+				{
+					VolumeData* vd = vd_4d_list[i];
+					if (vd->GetCurTime() + toffset < vd->GetReader()->GetTimeNum())
+					{
+						VolumeLoaderData d = {};
+						d.chid = vd->GetCurChannel();
+						d.frameid = vd->GetCurTime() + toffset;
+						d.vd = vd;
+						d.datasize = vd->GetDataSize();
+						d.brick = NULL;
+						queues.push_back(d);
+						remain = true;
+					}
+				}
+				if (!remain) break;
+				toffset++;
+			}
+		}
+
 		if (queues.size() > 0 && !m_interactive)
 		{
             bool runvl = false;
             for (auto q : queues)
             {
-                if (q.brick && !q.brick->isLoaded() && !q.brick->isLoading())
+                if ( (q.brick && !q.brick->isLoaded() && !q.brick->isLoading()) ||
+					 (q.vd && !q.vd->isBrxml()) )
                 {
                     runvl = true;
                     break;
@@ -13733,7 +14007,7 @@ double VRenderVulkanView::GetPointVolume(Point& mp, int mx, int my,
 		return -1.0;
 	Texture* tex = vd->GetTexture();
 	if (!tex) return -1.0;
-	Nrrd* nrrd = tex->get_nrrd(0);
+	Nrrd* nrrd = tex->get_nrrd_raw(0);
 	if (!nrrd) return -1.0;
 	void* data = nrrd->data;
 	if (!data && !tex->isBrxml()) return -1.0;
@@ -13900,13 +14174,175 @@ double VRenderVulkanView::GetPointVolume(Point& mp, int mx, int my,
 	return return_val;
 }
 
+double VRenderVulkanView::GetPointAndLabelMax(Point& mp, int& lblval, int mx, int my, VolumeData* vd, vector<VolumeData*> ref)
+{
+    if (!vd)
+        return -1.0;
+    Texture* tex = vd->GetTexture();
+    if (!tex) return -1.0;
+    Nrrd* nrrd = tex->get_nrrd_raw(tex->nlabel());
+    if (!nrrd) return -1.0;
+    void* data = nrrd->data;
+    if (!data && !tex->isBrxml()) return -1.0;
+    
+    int nx = GetSize().x;
+    int ny = GetSize().y;
+    
+    if (nx <= 0 || ny <= 0)
+        return -1.0;
+    
+    glm::mat4 cur_mv_mat = m_mv_mat;
+    glm::mat4 cur_proj_mat = m_proj_mat;
+    
+    //projection
+    HandleProjection(nx, ny);
+    //Transformation
+    HandleCamera();
+    glm::mat4 mv_temp;
+    //translate object
+    mv_temp = glm::translate(m_mv_mat, glm::vec3(m_obj_transx, m_obj_transy, m_obj_transz));
+    //rotate object
+    mv_temp = glm::rotate(mv_temp, float(m_obj_rotz), glm::vec3(0.0, 0.0, 1.0));
+    mv_temp = glm::rotate(mv_temp, float(m_obj_roty), glm::vec3(0.0, 1.0, 0.0));
+    mv_temp = glm::rotate(mv_temp, float(m_obj_rotx), glm::vec3(1.0, 0.0, 0.0));
+    //center object
+    mv_temp = glm::translate(mv_temp, glm::vec3(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz));
+    
+    Transform mv;
+    Transform p;
+    mv.set(glm::value_ptr(mv_temp));
+    p.set(glm::value_ptr(m_proj_mat));
+    
+    double x, y;
+    x = double(mx) * 2.0 / double(nx) - 1.0;
+    y = double(my) * 2.0 / double(ny) - 1.0;
+    p.invert();
+    mv.invert();
+    //transform mp1 and mp2 to object space
+    Point mp1(x, y, 0.0);
+    mp1 = p.transform(mp1);
+    mp1 = mv.transform(mp1);
+    Point mp2(x, y, 1.0);
+    mp2 = p.transform(mp2);
+    mp2 = mv.transform(mp2);
+    
+    //volume res
+    int xx = -1;
+    int yy = -1;
+    int zz = -1;
+    int tmp_xx, tmp_yy, tmp_zz;
+    double spcx, spcy, spcz;
+    vd->GetSpacings(spcx, spcy, spcz);
+    int resx, resy, resz;
+    vd->GetResolution(resx, resy, resz);
+    //volume bounding box
+    BBox bbox = vd->GetBounds();
+    Vector vv = mp2 - mp1;
+    vv.normalize();
+    Point hit;
+    int p_int = 0;
+    double max_int = 0.0;
+    int colvalue = 0;
+    double alpha = 0.0;
+    int value = 0;
+    vector<Plane*>* planes = 0;
+    double mspc = 1.0;
+    double return_val = -1.0;
+    if (vd->GetSampleRate() > 0.0)
+        mspc = sqrt(1.0 / (resx * resx) + 1.0 / (resy * resy) + 1.0 / (resz * resz)) / 2.0;
+    if (vd->GetVR())
+        planes = vd->GetVR()->get_planes();
+    if (bbox.intersect(mp1, vv, hit))
+    {
+        Transform* textrans = tex->transform();
+        Vector vv2 = textrans->unproject(vv);
+        vv2.normalize();
+        Point hp1 = textrans->unproject(hit);
+        while (true)
+        {
+            tmp_xx = int(hp1.x() * resx);
+            tmp_yy = int(hp1.y() * resy);
+            tmp_zz = int(hp1.z() * resz);
+            if (tmp_xx == xx && tmp_yy == yy && tmp_zz == zz)
+            {
+                //same, skip
+                hp1 += vv2 * mspc;
+                continue;
+            }
+            else
+            {
+                xx = tmp_xx;
+                yy = tmp_yy;
+                zz = tmp_zz;
+            }
+            //out of bound, stop
+            if (xx<0 || xx>resx ||
+                yy<0 || yy>resy ||
+                zz<0 || zz>resz)
+                break;
+            
+            bool inside = true;
+            if (planes)
+            {
+                for (int i = 0; i < 6; i++)
+                {
+                    if ((*planes)[i] &&
+                        (*planes)[i]->eval_point(hp1) < 0.0)
+                    {
+                        inside = false;
+                        break;
+                    }
+                }
+            }
+            if (inside)
+            {
+                xx = xx == resx ? resx - 1 : xx;
+                yy = yy == resy ? resy - 1 : yy;
+                zz = zz == resz ? resz - 1 : zz;
+                
+                value = vd->GetLabellValue(xx, yy, zz);
+                
+                if (value > 0 && vd->GetSegmentMask(value) > 0)
+                {
+                    bool ismax = false;
+                    for (auto v : ref)
+                    {
+                        double dval = v->GetOriginalValue(xx, yy, zz);
+                        if (dval > max_int)
+                        {
+                            max_int = dval;
+                            ismax = true;
+                        }
+                    }
+                    if (ismax)
+                    {
+                        mp = Point((xx + 0.5) / resx, (yy + 0.5) / resy, (zz + 0.5) / resz);
+                        mp = textrans->project(mp);
+                        p_int = value;
+                    }
+                }
+            }
+            hp1 += vv2 * mspc;
+        }
+    }
+    
+    if (p_int > 0)
+        return_val = (mp - mp1).length();
+    
+    lblval = p_int;
+    
+    m_mv_mat = cur_mv_mat;
+    m_proj_mat = cur_proj_mat;
+    return return_val;
+}
+
 double VRenderVulkanView::GetPointAndLabel(Point& mp, int& lblval, int mx, int my, VolumeData* vd)
 {
 	if (!vd)
 		return -1.0;
 	Texture* tex = vd->GetTexture();
 	if (!tex) return -1.0;
-	Nrrd* nrrd = tex->get_nrrd(tex->nlabel());
+	Nrrd* nrrd = tex->get_nrrd_raw(tex->nlabel());
 	if (!nrrd) return -1.0;
 	void* data = nrrd->data;
 	if (!data && !tex->isBrxml()) return -1.0;
@@ -14054,7 +14490,7 @@ double VRenderVulkanView::GetPointAndIntVolume(Point& mp, double &intensity, boo
 		return -1.0;
 	Texture* tex = vd->GetTexture();
 	if (!tex) return -1.0;
-	Nrrd* nrrd = tex->get_nrrd(0);
+	Nrrd* nrrd = tex->get_nrrd_raw(0);
 	if (!nrrd) return -1.0;
 	void* data = nrrd->data;
 	if (!data && !tex->isBrxml()) return -1.0;
@@ -15449,13 +15885,13 @@ void VRenderVulkanView::GetTraces()
 	m_cur_vol->GetVR()->return_mask();
 	m_cur_vol->GetResolution(nx, ny, nz);
 	//find labels in the old that are selected by the current mask
-	Nrrd* mask_nrrd = m_cur_vol->GetMask(true);
-	if (!mask_nrrd) return;
-	Nrrd* label_nrrd = m_cur_vol->GetLabel(false);
-	if(!label_nrrd) return;
-	unsigned char* mask_data = (unsigned char*)(mask_nrrd->data);
+	auto mask_nrrd = m_cur_vol->GetMask(true);
+	if (!mask_nrrd || !mask_nrrd->getNrrd()) return;
+	auto label_nrrd = m_cur_vol->GetLabel(false);
+	if(!label_nrrd || !label_nrrd->getNrrd()) return;
+	unsigned char* mask_data = (unsigned char*)(mask_nrrd->getNrrd()->data);
 	if (!mask_data) return;
-	unsigned int* label_data = (unsigned int*)(label_nrrd->data);
+	unsigned int* label_data = (unsigned int*)(label_nrrd->getNrrd()->data);
 	if (!label_data) return;
 	FL::CellList sel_labels;
 	FL::CellListIter label_iter;
@@ -15604,16 +16040,17 @@ void VRenderVulkanView::OnMouse(wxMouseEvent& event)
 		else
 		{
 			bool na_mode = false;
+            vector<VolumeData*> ref;
 			for (int i = 0; i < m_vd_pop_list.size(); i++)
 			{
 				if (m_vd_pop_list[i]->GetDisp() && m_vd_pop_list[i]->GetNAMode())
 				{
 					na_mode = true;
-					break;
+                    ref.push_back(m_vd_pop_list[i]);
 				}
 			}
 			if (na_mode)
-				SelLabelSegVolume();
+				SelLabelSegVolumeMax(0, ref);
 			else
 				SelSegVolume();
 		}
@@ -18096,7 +18533,7 @@ void VRenderView::OnCapture(wxCommandEvent& event)
 			m_glview->StartTileRendering(m_cap_resx, m_cap_resy, tilew, tileh);
 		}
 		else
-			RefreshGL();
+			m_glview->StartTileRendering(m_cap_resx, m_cap_resy, m_cap_resx, m_cap_resy);
 
 		if (vr_frame && vr_frame->GetSettingDlg() &&
 			vr_frame->GetSettingDlg()->GetProjSave())
@@ -18318,7 +18755,7 @@ void VRenderView::OnRotReset(wxCommandEvent &event)
 	m_y_rot_text->ChangeValue("0.0");
 	m_z_rot_text->ChangeValue("0.0");
 	SetRotations(0.0, 0.0, 0.0);
-    m_glview->InitView(INIT_BOUNDS|INIT_CENTER|INIT_OBJ_TRANSL|INIT_ROTATE);
+    m_glview->InitView(INIT_BOUNDS|INIT_CENTER|INIT_ROTATE);
 	RefreshGL();
 	if (m_glview->m_mouse_focus)
 		m_glview->SetFocus();

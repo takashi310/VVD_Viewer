@@ -28,6 +28,7 @@ DEALINGS IN THE SOFTWARE.
 #include "DragDrop.h"
 #include "VRenderFrame.h"
 #include "VRenderView.h"
+#include "wx/regex.h"
 
 DnDFile::DnDFile(wxWindow *frame, wxWindow *view)
 : m_frame(frame),
@@ -51,7 +52,43 @@ bool DnDFile::OnDropFiles(wxCoord x, wxCoord y, const wxArrayString &filenames)
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 		if (vr_frame)
 		{
-			wxString filename = filenames[0];
+            wxArrayString flatfns;
+            for (auto fn : filenames)
+            {
+                wxDir dir(fn);
+                if (wxDirExists(fn) && dir.IsOpened())
+                {
+                    wxRegEx scdir_pattern("^s[0-9]+$");
+                    wxString n;
+                    
+                    bool bOk = dir.GetFirst(&n);
+                    while(bOk)
+                    {
+                        wxString fullpath = dir.GetNameWithSep() + n;
+                        if (wxDirExists(fullpath))
+                        {
+                            if (scdir_pattern.Matches(n))
+                            {
+                                if (wxFileExists(fullpath + wxFILE_SEP_PATH + "attributes.json"))
+                                {
+                                    flatfns.Add(fn + ".n5fs_ch");
+                                    break;
+                                }
+                            }
+                        }
+                        else if (wxFileExists(fullpath))
+                            flatfns.Add(fullpath);
+                        bOk = dir.GetNext(&n);
+                    }
+                }
+                else
+                    flatfns.Add(fn);
+            }
+            
+            if (flatfns.IsEmpty())
+                return false;
+            
+			wxString filename = flatfns[0];
 			wxString suffix = filename.Mid(filename.Find('.', true)).MakeLower();
 
 			if (suffix == ".vrp")
@@ -74,13 +111,16 @@ bool DnDFile::OnDropFiles(wxCoord x, wxCoord y, const wxArrayString &filenames)
 				suffix == ".h5j" ||
 				suffix == ".v3dpbd" ||
 				suffix == ".zip" ||
-				suffix == ".idi")
+				suffix == ".idi" ||
+                suffix == ".n5" ||
+                suffix == ".json" ||
+                suffix == ".n5fs_ch")
 			{
-				vr_frame->LoadVolumes(filenames, (VRenderView*)m_view);
+				vr_frame->LoadVolumes(flatfns, (VRenderView*)m_view);
 			}
 			else if (suffix == ".obj" || suffix == ".swc")
 			{
-				vr_frame->LoadMeshes(filenames, (VRenderView*)m_view);
+				vr_frame->LoadMeshes(flatfns, (VRenderView*)m_view);
 			}
 		}
 	}

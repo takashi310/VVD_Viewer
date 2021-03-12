@@ -368,10 +368,13 @@ m_record(false),
 m_current_page(0),
 m_rot_int_type(0),
 m_delayed_stop(false),
-m_batch_mode(false)
+m_batch_mode(false),
+m_without_rendering(false)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
+
+	LoadSettings();
 
 	//notebook
 	m_notebook = new wxNotebook(this, ID_PageChanged);
@@ -446,7 +449,9 @@ m_batch_mode(false)
 	SetEvtHandlerEnabled(true);
 }
 
-VMovieView::~VMovieView() {}
+VMovieView::~VMovieView() {
+	SaveDefault();
+}
 
 void VMovieView::OnViewSelected(wxCommandEvent& event) {
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
@@ -547,6 +552,38 @@ void VMovieView::SetView(int index) {
 		m_views_cmb->SetSelection(index);
 }
 
+void VMovieView::SetInitRotation() {
+	wxString str = m_views_cmb->GetValue();
+	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+	if (!vr_frame) return;
+	VRenderView* vrv = vr_frame->GetView(str);
+	if (!vrv) return;
+
+	int slider_pos = m_progress_sldr->GetValue();
+
+	//basic options
+	int rot_axis = 1;
+	if (m_x_rd->GetValue())
+		rot_axis = 1;
+	if (m_y_rd->GetValue())
+		rot_axis = 2;
+	if (m_z_rd->GetValue())
+		rot_axis = 3;
+
+	double x, y, z;
+	vrv->GetRotations(x, y, z);
+	if (rot_axis == 1)
+		m_starting_rot = x - slider_pos;
+	else if (rot_axis == 2)
+		m_starting_rot = y - slider_pos;
+	else
+		m_starting_rot = z - slider_pos;
+	while (m_starting_rot > 360.) m_starting_rot -= 360.;
+	while (m_starting_rot < -360.) m_starting_rot += 360.;
+	if (360. - std::abs(m_starting_rot) < 0.001)
+		m_starting_rot = 0.;
+}
+
 void VMovieView::OnTimer(wxTimerEvent& event) {
 	//get all of the progress info
 	double len;
@@ -554,17 +591,21 @@ void VMovieView::OnTimer(wxTimerEvent& event) {
 	m_movie_time->GetValue().ToDouble(&len);
 	m_fps_text->GetValue().ToLong(&fps);
 
-	if (TextureRenderer::get_mem_swap() &&
-		TextureRenderer::get_start_update_loop() &&
-		!TextureRenderer::get_done_update_loop() && !m_batch_mode)
+	if (!m_batch_mode)
 	{
 		wxString str = m_views_cmb->GetValue();
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 		if (!vr_frame) return;
 		VRenderView* vrv = vr_frame->GetView(str);
 		if (!vrv) return;
-		vrv->RefreshGL(false, false);
-		return;
+
+		if ( (m_record && !vrv->IsRecordedFrameReady()) || 
+			 (!m_record && TextureRenderer::get_mem_swap() && !TextureRenderer::get_done_update_loop() && TextureRenderer::get_start_update_loop()) )
+		{
+			vrv->RefreshGL(false, false);
+			return;
+		}
+
 	}
 
 	if (m_delayed_stop)
@@ -633,6 +674,9 @@ void VMovieView::OnPrev(wxCommandEvent& event) {
 	m_fps_text->GetValue().ToLong(&fps);
 	double len;
 	m_movie_time->GetValue().ToDouble(&len);
+
+	SetInitRotation();
+
 	if (slider_pos < 360 && slider_pos > 0 && 
 		!(len - m_cur_time < 0.1/double(fps) || m_cur_time > len)) {
 		m_timer.Start(int(1000.0/double(fps)+0.5));
@@ -644,27 +688,6 @@ void VMovieView::OnPrev(wxCommandEvent& event) {
 	VRenderView* vrv = vr_frame->GetView(str);
 	if (!vrv) return;
 	
-	//basic options
-	int rot_axis = 1;
-	if (m_x_rd->GetValue())
-		rot_axis = 1;
-	if (m_y_rd->GetValue())
-		rot_axis = 2;
-	if (m_z_rd->GetValue())
-		rot_axis = 3;
-
-	double x,y,z;
-	vrv->GetRotations(x,y,z);
-	if (rot_axis == 1)
-		m_starting_rot = x;
-	else if(rot_axis == 2)
-		m_starting_rot = y;
-	else
-		m_starting_rot = z;
-	while(m_starting_rot > 360.) m_starting_rot -= 360.;
-	while(m_starting_rot < -360.) m_starting_rot += 360.;
-	if (360. - std::abs(m_starting_rot) < 0.001) 
-		m_starting_rot = 0.;
 	//advanced options
 	int page = m_notebook->GetSelection();
 	if (page <= 1) m_current_page = page;
@@ -1052,6 +1075,10 @@ void VMovieView::OnTimeChange(wxScrollEvent &event) {
 }
 
 void VMovieView::SetRendering(double pcnt) {
+
+	if (m_without_rendering)
+		return;
+
 	wxString str = m_views_cmb->GetValue();
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (!vr_frame) return;
@@ -1185,6 +1212,9 @@ void VMovieView::SetProgress(double pcnt) {
 }
 
 void VMovieView::WriteFrameToFile(int total_frames) {
+
+	wxCriticalSectionLocker enter(m_pThreadCS);
+
 	wxString str = m_views_cmb->GetValue();
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (!vr_frame) return; 
@@ -1211,16 +1241,15 @@ void VMovieView::WriteFrameToFile(int total_frames) {
 	wxString outputfilename = wxString::Format("%s"+format+"%s",m_filename,
 		m_last_frame,".tif");
     //capture
-    int x, y, w, h;
+    int x, y, w, h, nx, ny;
 
-    if (m_frame_chk->GetValue())
-		vrv->GetFrame(x,y,w,h);
-    else {
-        x = 0;
-        y = 0;
-        w = vrv->GetGLSize().x;
-        h = vrv->GetGLSize().y;
-    }
+    x = 0;
+    y = 0;
+    w = vrv->GetGLSize().x;
+    h = vrv->GetGLSize().y;
+    nx = vrv->GetGLSize().x;
+    ny = vrv->GetGLSize().y;
+    
 	int chann = 4; //RGB or RGBA
 	int dst_chann = 3;
     unsigned char *image = new unsigned char[w*h*chann];
@@ -1230,25 +1259,28 @@ void VMovieView::WriteFrameToFile(int total_frames) {
 	bool colorSwizzleBGR = false;
 	std::vector<VkFormat> formatsBGR = { VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_B8G8R8A8_SNORM };
 	colorSwizzleBGR = (std::find(formatsBGR.begin(), formatsBGR.end(), texformat) != formatsBGR.end());
+    
+    if (m_frame_chk->GetValue())
+        vrv->GetFrame(x,y,w,h);
 
 	unsigned char* rgb_image = new unsigned char[w * h * dst_chann];
 
 	if (colorSwizzleBGR)
 	{
-		for (size_t y = 0; y < h; y++) {
-			for (size_t x = 0; x < w; x++) {
-				rgb_image[(y * w + x) * dst_chann + 2] = image[(y * w + x) * chann + 0];
-				rgb_image[(y * w + x) * dst_chann + 1] = image[(y * w + x) * chann + 1];
-				rgb_image[(y * w + x) * dst_chann + 0] = image[(y * w + x) * chann + 2];
+		for (size_t yy = 0; yy < h; yy++) {
+			for (size_t xx = 0; xx < w; xx++) {
+				rgb_image[(yy * w + xx) * dst_chann + 2] = image[((yy+y) * nx + xx+x) * chann + 0];
+				rgb_image[(yy * w + xx) * dst_chann + 1] = image[((yy+y) * nx + xx+x) * chann + 1];
+				rgb_image[(yy * w + xx) * dst_chann + 0] = image[((yy+y) * nx + xx+x) * chann + 2];
 			}
 		}
 	}
 	else
 	{
-		for (size_t y = 0; y < h; y++) {
-			for (size_t x = 0; x < w; x++) {
+		for (size_t yy = 0; yy < h; yy++) {
+			for (size_t xx = 0; xx < w; xx++) {
 				for (int c = 0; c < dst_chann; c++) {
-					rgb_image[(y * w + x) * dst_chann + c] = image[(y * w + x) * chann + c];
+					rgb_image[(yy * w + xx) * dst_chann + c] = image[((yy+y) * nx + xx+x)  * chann + c];
 				}
 			}
 		}
@@ -1365,7 +1397,7 @@ wxWindow* VMovieView::CreateExtraCaptureControl(wxWindow* parent) {
 	//bitrate
 	wxStaticText *MOVopts = new wxStaticText(panel,wxID_ANY, "MOV Options:",
 		wxDefaultPosition,wxSize(95,-1));
-	wxTextCtrl *bitrate_text = new wxTextCtrl(panel, wxID_ANY, "10.0",
+	wxTextCtrl *bitrate_text = new wxTextCtrl(panel, wxID_ANY, wxString::Format("%.1f", m_Mbitrate),
 		wxDefaultPosition,wxSize(50,-1));
 	bitrate_text->Connect(bitrate_text->GetId(), wxEVT_TEXT ,
 		wxCommandEventHandler(VMovieView::OnMovieQuality), NULL, panel);
@@ -1378,7 +1410,6 @@ wxWindow* VMovieView::CreateExtraCaptureControl(wxWindow* parent) {
 	m_estimated_size_text = new wxTextCtrl(panel, ID_BitrateText, "0.25",
 		wxDefaultPosition,wxSize(50,-1));
 	m_estimated_size_text->Disable();   
-	m_Mbitrate = STOD(bitrate_text->GetValue().fn_str());
 	double size = m_Mbitrate * STOI(
 		m_movie_time->GetValue().fn_str()) / 8.;
 	m_estimated_size_text->SetValue(wxString::Format("%.2f", size));
@@ -1462,6 +1493,7 @@ void VMovieView::OnPageChanged(wxBookCtrlEvent& event)
 		break;
 	}
 
+	SetInitRotation();
 	SetProgress(pcnt);
 	SetRendering(pcnt);
 
@@ -1492,4 +1524,54 @@ long VMovieView::GetFPS()
 	if (m_fps_text) m_fps_text->GetValue().ToLong(&fps);
 
 	return fps;
+}
+
+
+void VMovieView::SaveDefault()
+{
+	wxFileConfig fconfig("FluoRender default movie settings");
+	wxString str;
+
+	fconfig.Write("recorder_bitrate", m_Mbitrate);
+
+	wxString expath = wxStandardPaths::Get().GetExecutablePath();
+	expath = expath.BeforeLast(GETSLASH(), NULL);
+#ifdef _WIN32
+	wxString dft = expath + "\\default_movie_settings.dft";
+	wxString dft2 = wxStandardPaths::Get().GetUserConfigDir() + "\\default_movie_settings.dft";
+	if (!wxFileExists(dft) && wxFileExists(dft2))
+		dft = dft2;
+#else
+	wxString dft = expath + "/../Resources/default_movie_settings.dft";
+#endif
+	wxFileOutputStream os(dft);
+	fconfig.Save(os);
+
+}
+
+void VMovieView::LoadSettings()
+{
+	wxString expath = wxStandardPaths::Get().GetExecutablePath();
+	expath = expath.BeforeLast(GETSLASH(), NULL);
+#ifdef _WIN32
+	wxString dft = expath + "\\default_movie_settings.dft";
+	if (!wxFileExists(dft))
+		dft = wxStandardPaths::Get().GetUserConfigDir() + "\\default_movie_settings.dft";
+#else
+	wxString dft = expath + "/../Resources/default_movie_settings.dft";
+#endif
+
+	wxFileInputStream is(dft);
+
+	if (!is.IsOk())
+		return;
+
+	wxFileConfig fconfig(is);
+
+	double dVal;
+	if (fconfig.Read("recorder_bitrate", &dVal))
+	{
+		m_Mbitrate = dVal;
+	}
+	
 }

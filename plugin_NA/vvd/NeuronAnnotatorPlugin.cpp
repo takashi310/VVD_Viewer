@@ -32,10 +32,10 @@ wxThread::ExitCode MIPGeneratorThread::Entry()
 	m_plugin->m_running_mip_th++;
 
 	int dim_offset = 0;
-	if (m_plugin->m_nrrd_s[0]->dim > 3) dim_offset = 1;
-	int nx = m_plugin->m_nrrd_s[0]->axis[dim_offset + 0].size;
-	int ny = m_plugin->m_nrrd_s[0]->axis[dim_offset + 1].size;
-	int nz = m_plugin->m_nrrd_s[0]->axis[dim_offset + 2].size;
+	if (m_plugin->m_nrrd_s[0]->getNrrd()->dim > 3) dim_offset = 1;
+	int nx = m_plugin->m_nrrd_s[0]->getNrrd()->axis[dim_offset + 0].size;
+	int ny = m_plugin->m_nrrd_s[0]->getNrrd()->axis[dim_offset + 1].size;
+	int nz = m_plugin->m_nrrd_s[0]->getNrrd()->axis[dim_offset + 2].size;
 
 	int mx = 300;
 	int my = (int)((double)mx * ny / nx);
@@ -64,24 +64,24 @@ wxThread::ExitCode MIPGeneratorThread::Entry()
 					{
 						size_t index = (size_t)nx * ny * k + nx * yy + xx;
 						int label = 0;
-						if (m_plugin->m_lbl_nrrd->type == nrrdTypeUChar)
-							label = ((unsigned char*)m_plugin->m_lbl_nrrd->data)[index];
-						else if (m_plugin->m_lbl_nrrd->type == nrrdTypeUShort)
-							label = ((unsigned short*)m_plugin->m_lbl_nrrd->data)[index];
+						if (m_plugin->m_lbl_nrrd->getNrrd()->type == nrrdTypeUChar)
+							label = ((unsigned char*)m_plugin->m_lbl_nrrd->getNrrd()->data)[index];
+						else if (m_plugin->m_lbl_nrrd->getNrrd()->type == nrrdTypeUShort)
+							label = ((unsigned short*)m_plugin->m_lbl_nrrd->getNrrd()->data)[index];
 						if (m_plugin->m_segs[s].id == label)
 						{
 							double val = 0.0;
-							if (m_plugin->m_nrrd_s[c]->type == nrrdTypeUChar)
-								val = ((unsigned char*)m_plugin->m_nrrd_s[c]->data)[index];
-							else if (m_plugin->m_nrrd_s[c]->type == nrrdTypeUShort)
-								val = ((unsigned short*)m_plugin->m_nrrd_s[c]->data)[index];
+							if (m_plugin->m_nrrd_s[c]->getNrrd()->type == nrrdTypeUChar)
+								val = ((unsigned char*)m_plugin->m_nrrd_s[c]->getNrrd()->data)[index];
+							else if (m_plugin->m_nrrd_s[c]->getNrrd()->type == nrrdTypeUShort)
+								val = ((unsigned short*)m_plugin->m_nrrd_s[c]->getNrrd()->data)[index];
 							if (val > maxvals[c])
 								maxvals[c] = val;
 						}
 					}
-					if (m_plugin->m_nrrd_s[c]->type == nrrdTypeUChar)
+					if (m_plugin->m_nrrd_s[c]->getNrrd()->type == nrrdTypeUChar)
 						temp[(size_t)mx * 3 * j + 3 * i + c] = (unsigned char)maxvals[c];
-					else if (m_plugin->m_nrrd_s[c]->type == nrrdTypeUShort)
+					else if (m_plugin->m_nrrd_s[c]->getNrrd()->type == nrrdTypeUShort)
 						temp[(size_t)mx * 3 * j + 3 * i + c] = (unsigned char)(maxvals[c] / m_plugin->m_gmaxvals[c] * 255.0);
 				}
 			}
@@ -227,8 +227,8 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 	m_lbl_reader->SetFile(str_w);
 	m_lbl_reader->Preprocess();
 	int lbl_chan = m_lbl_reader->GetChanNum();
-	Nrrd* v3d_nrrd = m_lbl_reader->Convert(0, 0, true);
-	void* v3d_data = v3d_nrrd->data;
+	auto v3d_nrrd = m_lbl_reader->Convert(0, 0, true);
+	void* v3d_data = v3d_nrrd->getNrrd()->data;
 
 	size_t avmem = (size_t)(vrv->GetAvailableGraphicsMemory(0) * 1024.0 * 1024.0 * 0.8);
 	//size_t avmem = (size_t)(1024.0 * 1024.0 * 1024.0);
@@ -253,7 +253,7 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 				if (chspec[c].GetValue() == 's' && scount < 3)
 				{
 					m_nrrd_s[scount] = vd->GetTexture()->get_nrrd(0);
-					data_s[scount] = m_nrrd_s[scount]->data;
+					data_s[scount] = m_nrrd_s[scount]->getNrrd()->data;
 					m_vol_s[scount] = vd->GetName();
 					vols[scount] = vd;
                     if (m_xspc > 0.0 && m_yspc > 0.0 && m_zspc > 0.0)
@@ -263,7 +263,7 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 				if (chspec[c].GetValue() == 'r')
 				{
 					m_nrrd_r = vd->GetTexture()->get_nrrd(0);
-					data_r = m_nrrd_r->data;
+					data_r = m_nrrd_r->getNrrd()->data;
 					m_vol_r = vd->GetName();
                     volr = vd;
                     if (m_xspc > 0.0 && m_yspc > 0.0 && m_zspc > 0.0)
@@ -274,27 +274,26 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 	}
 
 	int dim_offset = 0;
-	if (m_nrrd_s[0]->dim > 3) dim_offset = 1;
-	size_t nx = m_nrrd_s[0]->axis[dim_offset + 0].size;
-	size_t ny = m_nrrd_s[0]->axis[dim_offset + 1].size;
-	size_t nz = m_nrrd_s[0]->axis[dim_offset + 2].size;
+	if (m_nrrd_s[0]->getNrrd()->dim > 3) dim_offset = 1;
+	size_t nx = m_nrrd_s[0]->getNrrd()->axis[dim_offset + 0].size;
+	size_t ny = m_nrrd_s[0]->getNrrd()->axis[dim_offset + 1].size;
+	size_t nz = m_nrrd_s[0]->getNrrd()->axis[dim_offset + 2].size;
 	if (m_xspc <= 0.0)
-		m_xspc = m_nrrd_s[0]->axis[dim_offset + 0].spacing;
+		m_xspc = m_nrrd_s[0]->getNrrd()->axis[dim_offset + 0].spacing;
 	if (m_yspc <= 0.0)
-		m_yspc = m_nrrd_s[0]->axis[dim_offset + 1].spacing;
+		m_yspc = m_nrrd_s[0]->getNrrd()->axis[dim_offset + 1].spacing;
 	if (m_zspc <= 0.0)
-		m_zspc = m_nrrd_s[0]->axis[dim_offset + 2].spacing;
+		m_zspc = m_nrrd_s[0]->getNrrd()->axis[dim_offset + 2].spacing;
 	
-	m_lbl_nrrd = VolumeData::NrrdScale(v3d_nrrd, nx, ny, nz, false);
+	m_lbl_nrrd = make_shared<VL_Nrrd>(VolumeData::NrrdScale(v3d_nrrd->getNrrd(), nx, ny, nz, false));
 
 	if (!m_lbl_nrrd) return false;
-	void* lbl_data = m_lbl_nrrd->data;
-	nrrdAxisInfoSet(m_lbl_nrrd, nrrdAxisInfoSpacing, m_xspc, m_yspc, m_zspc);
-	nrrdAxisInfoSet(m_lbl_nrrd, nrrdAxisInfoMax, m_xspc * nx, m_yspc * ny, m_zspc * nz);
-	nrrdAxisInfoSet(m_lbl_nrrd, nrrdAxisInfoMin, 0.0, 0.0, 0.0);
-	nrrdAxisInfoSet(m_lbl_nrrd, nrrdAxisInfoSize, (size_t)nx, (size_t)ny, (size_t)nz);
-	delete[] v3d_data;
-	nrrdNix(v3d_nrrd);
+	void* lbl_data = m_lbl_nrrd->getNrrd()->data;
+	nrrdAxisInfoSet(m_lbl_nrrd->getNrrd(), nrrdAxisInfoSpacing, m_xspc, m_yspc, m_zspc);
+	nrrdAxisInfoSet(m_lbl_nrrd->getNrrd(), nrrdAxisInfoMax, m_xspc * nx, m_yspc * ny, m_zspc * nz);
+	nrrdAxisInfoSet(m_lbl_nrrd->getNrrd(), nrrdAxisInfoMin, 0.0, 0.0, 0.0);
+	nrrdAxisInfoSet(m_lbl_nrrd->getNrrd(), nrrdAxisInfoSize, (size_t)nx, (size_t)ny, (size_t)nz);
+	v3d_nrrd.reset();
 
 	for (int c = 0; c < scount; c++)
 	{
@@ -326,8 +325,8 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 	int i, j, k;
 	map<int, BBox> seg_bbox;
 	map<int, size_t> seg_size;
-	double gmaxval_r = (m_nrrd_s[0]->type == nrrdTypeUChar) ? 255.0 : 4096.0;
-	m_gmaxvals[0] = m_gmaxvals[1] = m_gmaxvals[2] = (m_nrrd_s[0]->type == nrrdTypeUChar) ? 255.0 : 4096.0;
+	double gmaxval_r = (m_nrrd_s[0]->getNrrd()->type == nrrdTypeUChar) ? 255.0 : 4096.0;
+	m_gmaxvals[0] = m_gmaxvals[1] = m_gmaxvals[2] = (m_nrrd_s[0]->getNrrd()->type == nrrdTypeUChar) ? 255.0 : 4096.0;
 	//first pass: finding max value and calculating BBox
 	for (i = 0; i < nx; i++)
 	{
@@ -337,9 +336,9 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 			{
 				size_t index = (size_t)nx * ny * k + nx * j + i;
 				int label = 0;
-				if (m_lbl_nrrd->type == nrrdTypeUChar)
+				if (m_lbl_nrrd->getNrrd()->type == nrrdTypeUChar)
 					label = ((unsigned char*)lbl_data)[index];
-				else if (m_lbl_nrrd->type == nrrdTypeUShort)
+				else if (m_lbl_nrrd->getNrrd()->type == nrrdTypeUShort)
 					label = ((unsigned short*)lbl_data)[index];
 				if (label > 0)
 				{
@@ -425,17 +424,17 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 				{
 					int index = (size_t)nx * ny * k + nx * yy + xx;
 					double val = 0.0;
-					if (m_nrrd_r->type == nrrdTypeUChar)
+					if (m_nrrd_r->getNrrd()->type == nrrdTypeUChar)
 						val = ((unsigned char*)data_r)[index];
-					else if (m_nrrd_r->type == nrrdTypeUShort)
+					else if (m_nrrd_r->getNrrd()->type == nrrdTypeUShort)
 						val = ((unsigned short*)data_r)[index];
 					if (val > maxval_r)
 						maxval_r = val;
 				}
 				unsigned char v = 0;
-				if (m_nrrd_r->type == nrrdTypeUChar)
+				if (m_nrrd_r->getNrrd()->type == nrrdTypeUChar)
 					v = (unsigned char)maxval_r;
-				else if (m_nrrd_r->type == nrrdTypeUShort)
+				else if (m_nrrd_r->getNrrd()->type == nrrdTypeUShort)
 					v = (unsigned char)(maxval_r / gmaxval_r * 255.0);
 				temp_r[(size_t)mx * 3 * j + 3 * i + 0] = v;
 				temp_r[(size_t)mx * 3 * j + 3 * i + 1] = v;
@@ -877,7 +876,7 @@ bool NAGuiPlugin::runNALoaderRemote(wxString url, wxString usr, wxString pwd, wx
 	if (vd->GetTexture()->nmask() != -1)
 	{
 		vd->GetVR()->return_mask();
-		Nrrd *data = vd->GetTexture()->get_nrrd(vd->GetTexture()->nmask());
+		auto data = vd->GetTexture()->get_nrrd(vd->GetTexture()->nmask());
 		double spcx, spcy, spcz;
 		vd->GetSpacings(spcx, spcy, spcz);
 
@@ -1025,20 +1024,20 @@ void NAGuiPlugin::SaveCombinedFragment(wxString path)
     if (!vrv) return;
     
     int dim_offset = 0;
-    if (m_nrrd_s[0]->dim > 3) dim_offset = 1;
+    if (m_nrrd_s[0]->getNrrd()->dim > 3) dim_offset = 1;
     
-    int nx = m_nrrd_s[0]->axis[dim_offset + 0].size;
-    int ny = m_nrrd_s[0]->axis[dim_offset + 1].size;
-    int nz = m_nrrd_s[0]->axis[dim_offset + 2].size;
+    int nx = m_nrrd_s[0]->getNrrd()->axis[dim_offset + 0].size;
+    int ny = m_nrrd_s[0]->getNrrd()->axis[dim_offset + 1].size;
+    int nz = m_nrrd_s[0]->getNrrd()->axis[dim_offset + 2].size;
     
-    double spcx = m_nrrd_s[0]->axis[dim_offset + 0].spacing;
-    double spcy = m_nrrd_s[0]->axis[dim_offset + 1].spacing;
-    double spcz = m_nrrd_s[0]->axis[dim_offset + 2].spacing;
+    double spcx = m_nrrd_s[0]->getNrrd()->axis[dim_offset + 0].spacing;
+    double spcy = m_nrrd_s[0]->getNrrd()->axis[dim_offset + 1].spacing;
+    double spcz = m_nrrd_s[0]->getNrrd()->axis[dim_offset + 2].spacing;
     
     int bits = 8;
-    if (m_nrrd_s[0]->type == nrrdTypeUChar || m_nrrd_s[0]->type == nrrdTypeChar)
+    if (m_nrrd_s[0]->getNrrd()->type == nrrdTypeUChar || m_nrrd_s[0]->getNrrd()->type == nrrdTypeChar)
         bits = 8;
-    else if (m_nrrd_s[0]->type == nrrdTypeUShort || m_nrrd_s[0]->type == nrrdTypeShort)
+    else if (m_nrrd_s[0]->getNrrd()->type == nrrdTypeUShort || m_nrrd_s[0]->getNrrd()->type == nrrdTypeShort)
         bits = 16;
     
     unsigned long long mem_size = (unsigned long long)nx*(unsigned long long)ny*(unsigned long long)nz;
@@ -1093,16 +1092,16 @@ void NAGuiPlugin::SaveCombinedFragment(wxString path)
                     {
                         size_t index = (size_t)nx * ny * k + nx * j + i;
                         int label = 0;
-                        if (m_lbl_nrrd->type == nrrdTypeUChar)
-                            label = ((unsigned char*)m_lbl_nrrd->data)[index];
-                        else if (m_lbl_nrrd->type == nrrdTypeUShort)
-                            label = ((unsigned short*)m_lbl_nrrd->data)[index];
+                        if (m_lbl_nrrd->getNrrd()->type == nrrdTypeUChar)
+                            label = ((unsigned char*)m_lbl_nrrd->getNrrd()->data)[index];
+                        else if (m_lbl_nrrd->getNrrd()->type == nrrdTypeUShort)
+                            label = ((unsigned short*)m_lbl_nrrd->getNrrd()->data)[index];
                         if (m_segs[s].id == label)
                         {
                             unsigned char maxval = 0;
                             for (int c = 0; c < m_scount; c++)
                             {
-                                unsigned char val = ((unsigned char*)m_nrrd_s[c]->data)[index];
+                                unsigned char val = ((unsigned char*)m_nrrd_s[c]->getNrrd()->data)[index];
                                 if (val > maxval) maxval = val;
                             }
                             ndata8[index] = maxval;
@@ -1132,16 +1131,16 @@ void NAGuiPlugin::SaveCombinedFragment(wxString path)
                     {
                         size_t index = (size_t)nx * ny * k + nx * j + i;
                         int label = 0;
-                        if (m_lbl_nrrd->type == nrrdTypeUChar)
-                            label = ((unsigned char*)m_lbl_nrrd->data)[index];
-                        else if (m_lbl_nrrd->type == nrrdTypeUShort)
-                            label = ((unsigned short*)m_lbl_nrrd->data)[index];
+                        if (m_lbl_nrrd->getNrrd()->type == nrrdTypeUChar)
+                            label = ((unsigned char*)m_lbl_nrrd->getNrrd()->data)[index];
+                        else if (m_lbl_nrrd->getNrrd()->type == nrrdTypeUShort)
+                            label = ((unsigned short*)m_lbl_nrrd->getNrrd()->data)[index];
                         if (m_segs[s].id == label)
                         {
                             unsigned short maxval = 0;
                             for (int c = 0; c < m_scount; c++)
                             {
-                                unsigned short val = ((unsigned short*)m_nrrd_s[c]->data)[index];
+                                unsigned short val = ((unsigned short*)m_nrrd_s[c]->getNrrd()->data)[index];
                                 if (val > maxval) maxval = val;
                             }
                             ndata16[index] = maxval;
@@ -1153,17 +1152,12 @@ void NAGuiPlugin::SaveCombinedFragment(wxString path)
     }
     
     NRRDWriter writer;
-    writer.SetData(nv);
+	shared_ptr<VL_Nrrd> vlnv = make_shared<VL_Nrrd>(nv);
+    writer.SetData(vlnv);
     writer.SetCompression(true);
     writer.SetSpacings(spcx, spcy, spcz);
     writer.Save(path.ToStdWstring(), 0);
-    
-    if (bits == 8)
-        delete [] ndata8;
-    if (bits == 16)
-        delete [] ndata16;
-    
-    nrrdNix(nv);
+
 }
 
 bool NAGuiPlugin::LoadNrrd(int id)
@@ -1182,15 +1176,15 @@ bool NAGuiPlugin::LoadNrrd(int id)
 	prg_diag->Pulse("Uploading volume data to VVDViewer...");
 
 	int dim_offset = 0;
-	if (m_nrrd_s[0]->dim > 3) dim_offset = 1;
-	int nx = m_nrrd_s[0]->axis[dim_offset + 0].size;
-	int ny = m_nrrd_s[0]->axis[dim_offset + 1].size;
-	int nz = m_nrrd_s[0]->axis[dim_offset + 2].size;
+	if (m_nrrd_s[0]->getNrrd()->dim > 3) dim_offset = 1;
+	int nx = m_nrrd_s[0]->getNrrd()->axis[dim_offset + 0].size;
+	int ny = m_nrrd_s[0]->getNrrd()->axis[dim_offset + 1].size;
+	int nz = m_nrrd_s[0]->getNrrd()->axis[dim_offset + 2].size;
 
 	int bits = 8;
-	if (m_nrrd_s[0]->type == nrrdTypeUChar || m_nrrd_s[0]->type == nrrdTypeChar)
+	if (m_nrrd_s[0]->getNrrd()->type == nrrdTypeUChar || m_nrrd_s[0]->getNrrd()->type == nrrdTypeChar)
 		bits = 8;
-	else if (m_nrrd_s[0]->type == nrrdTypeUShort || m_nrrd_s[0]->type == nrrdTypeShort)
+	else if (m_nrrd_s[0]->getNrrd()->type == nrrdTypeUShort || m_nrrd_s[0]->getNrrd()->type == nrrdTypeShort)
 		bits = 16;
 
 	size_t mem_size = (size_t)nx * (size_t)ny * (size_t)nz * (size_t)(bits/8);
@@ -1205,8 +1199,8 @@ bool NAGuiPlugin::LoadNrrd(int id)
 		if (bits == 16)
 			vd->SetMaxValue(4096.0);
 
-		Nrrd *vn = vd->GetTexture()->get_nrrd(0);
-		memcpy(vn->data, m_nrrd_r->data, mem_size);
+		Nrrd *vn = vd->GetTexture()->get_nrrd(0)->getNrrd();
+		memcpy(vn->data, m_nrrd_r->getNrrd()->data, mem_size);
 
 		Color color(1.0, 1.0, 1.0);
 		vd->SetColor(color);
@@ -1229,8 +1223,8 @@ bool NAGuiPlugin::LoadNrrd(int id)
 				if (bits == 16)
 					vd->SetMaxValue(4096.0);
 
-				Nrrd* vn = vd->GetTexture()->get_nrrd(0);
-				memcpy(vn->data, m_nrrd_s[i]->data, mem_size);
+				auto vn = vd->GetTexture()->get_nrrd(0);
+				memcpy(vn->getNrrd()->data, m_nrrd_s[i]->getNrrd()->data, mem_size);
 				
 				Color color(1.0, 1.0, 1.0);
 				if (chan_num == 0)
@@ -1263,8 +1257,8 @@ bool NAGuiPlugin::LoadNrrd(int id)
 		if (bits == 16)
 			vd->SetMaxValue(4096.0);
 
-		Nrrd* vn = vd->GetTexture()->get_nrrd(0);
-		void* dst_data = vn->data;
+		auto vn = vd->GetTexture()->get_nrrd(0);
+		void* dst_data = vn->getNrrd()->data;
 
 		int scount = 0;
 		for (int c = 0; c < 3; c++, scount++)
@@ -1273,7 +1267,7 @@ bool NAGuiPlugin::LoadNrrd(int id)
 				break;
 		}
 
-		void* lbl_data = m_lbl_nrrd->data;
+		void* lbl_data = m_lbl_nrrd->getNrrd()->data;
 		BBox bbox = m_segs[id].bbox;
 		for (int i = int(bbox.min().x()); i <= int(bbox.max().x()); i++)
 		{
@@ -1283,9 +1277,9 @@ bool NAGuiPlugin::LoadNrrd(int id)
 				{
 					int index = nx * ny * k + nx * j + i;
 					int label = 0;
-					if (m_lbl_nrrd->type == nrrdTypeUChar)
+					if (m_lbl_nrrd->getNrrd()->type == nrrdTypeUChar)
 						label = ((unsigned char*)lbl_data)[index];
-					else if (m_lbl_nrrd->type == nrrdTypeUShort)
+					else if (m_lbl_nrrd->getNrrd()->type == nrrdTypeUShort)
 						label = ((unsigned short*)lbl_data)[index];
 					if (m_segs[id].id == label)
 					{
@@ -1293,10 +1287,10 @@ bool NAGuiPlugin::LoadNrrd(int id)
 						for (int c = 0; c < scount; c++)
 						{
 							double val = 0.0;
-							if (m_nrrd_s[c]->type == nrrdTypeUChar)
-								val = ((unsigned char*)(m_nrrd_s[c]->data))[index];
-							else if (m_nrrd_s[c]->type == nrrdTypeUShort)
-								val = ((unsigned short*)(m_nrrd_s[c]->data))[index];
+							if (m_nrrd_s[c]->getNrrd()->type == nrrdTypeUChar)
+								val = ((unsigned char*)(m_nrrd_s[c]->getNrrd()->data))[index];
+							else if (m_nrrd_s[c]->getNrrd()->type == nrrdTypeUShort)
+								val = ((unsigned short*)(m_nrrd_s[c]->getNrrd()->data))[index];
 							if (val > maxval)
 								maxval = val;
 						}
@@ -1638,7 +1632,7 @@ void NAGuiPlugin::LoadSettings()
     }
     
     if (!m_lbl_nrrd) return;
-    void* lbl_data = m_lbl_nrrd->data;
+    void* lbl_data = m_lbl_nrrd->getNrrd()->data;
     
     m_nrrd_r = NULL;
     VolumeData* vd_r = dm->GetVolumeData(m_vol_r);
@@ -1660,13 +1654,13 @@ void NAGuiPlugin::LoadSettings()
         }
     }
     
-    void* data_r = m_nrrd_r ? m_nrrd_r->data : NULL;
+    void* data_r = m_nrrd_r ? m_nrrd_r->getNrrd()->data : NULL;
     
     int dim_offset = 0;
-    if (m_nrrd_s[0]->dim > 3) dim_offset = 1;
-    int nx = m_nrrd_s[0]->axis[dim_offset + 0].size;
-    int ny = m_nrrd_s[0]->axis[dim_offset + 1].size;
-    int nz = m_nrrd_s[0]->axis[dim_offset + 2].size;
+    if (m_nrrd_s[0]->getNrrd()->dim > 3) dim_offset = 1;
+    int nx = m_nrrd_s[0]->getNrrd()->axis[dim_offset + 0].size;
+    int ny = m_nrrd_s[0]->getNrrd()->axis[dim_offset + 1].size;
+    int nz = m_nrrd_s[0]->getNrrd()->axis[dim_offset + 2].size;
     
     wxProgressDialog* prg_diag = new wxProgressDialog(
                                                       "Neuron Annotator Plugin",
@@ -1678,8 +1672,8 @@ void NAGuiPlugin::LoadSettings()
     int i, j, k;
     map<int, BBox> seg_bbox;
     map<int, size_t> seg_size;
-    double gmaxval_r = (m_nrrd_s[0]->type == nrrdTypeUChar) ? 255.0 : 4096.0;
-    m_gmaxvals[0] = m_gmaxvals[1] = m_gmaxvals[2] = (m_nrrd_s[0]->type == nrrdTypeUChar) ? 255.0 : 4096.0;
+    double gmaxval_r = (m_nrrd_s[0]->getNrrd()->type == nrrdTypeUChar) ? 255.0 : 4096.0;
+    m_gmaxvals[0] = m_gmaxvals[1] = m_gmaxvals[2] = (m_nrrd_s[0]->getNrrd()->type == nrrdTypeUChar) ? 255.0 : 4096.0;
     //first pass: finding max value and calculating BBox
     for (i = 0; i < nx; i++)
     {
@@ -1689,9 +1683,9 @@ void NAGuiPlugin::LoadSettings()
             {
                 size_t index = (size_t)nx * ny * k + nx * j + i;
                 int label = 0;
-                if (m_lbl_nrrd->type == nrrdTypeUChar)
+                if (m_lbl_nrrd->getNrrd()->type == nrrdTypeUChar)
                     label = ((unsigned char*)lbl_data)[index];
-                else if (m_lbl_nrrd->type == nrrdTypeUShort)
+                else if (m_lbl_nrrd->getNrrd()->type == nrrdTypeUShort)
                     label = ((unsigned short*)lbl_data)[index];
                 if (label > 0)
                 {
@@ -1786,17 +1780,17 @@ void NAGuiPlugin::LoadSettings()
                 {
                     int index = (size_t)nx * ny * k + nx * yy + xx;
                     double val = 0.0;
-                    if (m_nrrd_r->type == nrrdTypeUChar)
+                    if (m_nrrd_r->getNrrd()->type == nrrdTypeUChar)
                         val = ((unsigned char*)data_r)[index];
-                    else if (m_nrrd_r->type == nrrdTypeUShort)
+                    else if (m_nrrd_r->getNrrd()->type == nrrdTypeUShort)
                         val = ((unsigned short*)data_r)[index];
                     if (val > maxval_r)
                         maxval_r = val;
                 }
                 unsigned char v = 0;
-                if (m_nrrd_r->type == nrrdTypeUChar)
+                if (m_nrrd_r->getNrrd()->type == nrrdTypeUChar)
                     v = (unsigned char)maxval_r;
-                else if (m_nrrd_r->type == nrrdTypeUShort)
+                else if (m_nrrd_r->getNrrd()->type == nrrdTypeUShort)
                     v = (unsigned char)(maxval_r / gmaxval_r * 255.0);
                 temp_r[(size_t)mx * 3 * j + 3 * i + 0] = v;
                 temp_r[(size_t)mx * 3 * j + 3 * i + 1] = v;
@@ -1879,7 +1873,7 @@ void NAGuiPlugin::SaveProjectSettingFile(wxString path)
 	fconfig.Write("id_path", m_id_path);
 	fconfig.Write("vol_path", m_vol_path);
     fconfig.Write("prefix", m_prefix);
-	fconfig.Write("seg_num", m_segs.size());
+	fconfig.Write("seg_num", (int)m_segs.size());
     for (int i = 0; i < m_segs.size(); i++)
         fconfig.Write(wxString::Format("seg_%d", i), wxString::Format("%d,%d", m_segs[i].id, m_segs[i].visible));
 

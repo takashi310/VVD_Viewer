@@ -7,7 +7,147 @@
 #include <tinyxml2.h>
 #include <memory>
 
+#include <json.hpp>
+
+#include <blosc2.h>
+
+#define N5DataTypeChar 0
+#define N5DataTypeUChar 1
+#define N5DataTypeShort 2
+#define N5DataTypeUShort 3
+#define N5DataTypeInt 4
+#define N5DataTypeUInt 5
+#define N5DataTypeFloat 6
+
+#define SerialVersionUID -4521467080388947553L
+#define DimensionsKey "dimensions"
+#define BlockSizeKey "blockSize"
+#define DataTypeKey "dataType"
+#define CompressionKey "compression"
+#define CompressionTypeKey "type"
+#define PixelResolutionKey "pixelResolution"
+
+#define BloscLevelKey "clevel"
+#define BloscBlockSizeKey "blockSize"
+#define BloscCompressionKey "cname"
+#define BloscShuffleKey "shuffle"
+
 using namespace std;
+
+class DataBlock
+{
+public:
+    
+    int m_type;
+    void* m_data;
+    
+    DataBlock() {
+        m_data = NULL; m_type = 0;
+    }
+    DataBlock(void* data, int type) {
+        m_data = data; m_type = type;
+    }
+    ~DataBlock() {
+        if (m_data)
+        {
+            switch (m_type)
+            {
+                case N5DataTypeChar:
+                case N5DataTypeUChar:
+                    delete[] static_cast<unsigned char*>(m_data);
+                    break;
+                case N5DataTypeShort:
+                case N5DataTypeUShort:
+                    delete[] static_cast<unsigned short*>(m_data);
+                    break;
+                case N5DataTypeInt:
+                case N5DataTypeUInt:
+                    delete[] static_cast<unsigned int*>(m_data);
+                    break;
+                case N5DataTypeFloat:
+                    delete[] static_cast<float*>(m_data);
+                    break;
+                default:
+                    delete[] m_data;
+            }
+            m_data = nullptr;
+        }
+    }
+};
+
+class DatasetAttributes
+{
+public:
+    
+    vector<long> m_dimensions;
+    vector<int> m_blockSize;
+    int m_dataType;
+    int m_compression;
+	vector<double> m_pix_res;
+    
+    struct BloscParam {
+        int blocksize;
+        int clevel;
+        int ctype;
+        int suffle;
+    };
+    
+    BloscParam m_blosc_param;
+
+	DatasetAttributes()
+	{
+	}
+    
+    DatasetAttributes(const vector<long>& dimensions, const vector<int>& blockSize, int dataType, int compression, const vector<double>& pix_res, BloscParam bp)
+    {
+        m_dimensions = dimensions;
+        m_blockSize = blockSize;
+        m_dataType = dataType;
+        m_compression = compression;
+		m_pix_res = pix_res;
+        m_blosc_param = bp;
+    }
+    
+    vector<long> getDimensions() {
+        
+        return m_dimensions;
+    }
+    
+    int getNumDimensions() {
+        
+        return m_dimensions.size();
+    }
+    
+    vector<int> getBlockSize() {
+        
+        return m_blockSize;
+    }
+    
+    int getCompression() {
+        
+        return m_compression;
+    }
+    
+    int getDataType() {
+        
+        return m_dataType;
+    }
+    
+    BloscParam getBloscParam() {
+        return m_blosc_param;
+    }
+    /*
+     HashMap<String, Object> asMap() {
+     
+     final HashMap<String, Object> map = new HashMap<>();
+     map.put(dimensionsKey, dimensions);
+     map.put(blockSizeKey, blockSize);
+     map.put(dataTypeKey, dataType.toString());
+     map.put(compressionKey, compression);
+     return map;
+     }
+     */
+};
 
 class EXPORT_API BRKXMLReader : public BaseReader
 {
@@ -31,7 +171,7 @@ public:
 	void SetBatch(bool batch);
 	int LoadBatch(int index);
 	int LoadOffset(int offset);
-	Nrrd* Convert(int t, int c, bool get_max);
+	Nrrd* Convert_ThreadSafe(int t, int c, bool get_max) { return NULL; }
 	wstring GetCurName(int t, int c);
 
 	wstring GetPathName() {return m_path_name;}
@@ -64,6 +204,7 @@ public:
 	int GetLevelNum() {return m_level_num;}
 	void SetLevel(int lv);
 	int GetCopyableLevel() {return m_copy_lv;}
+    int GetMaskLevel() {return m_mask_lv;}
 
 	void build_bricks(vector<FLIVR::TextureBrick*> &tbrks, int lv = -1);
 	void build_pyramid(vector<FLIVR::Pyramid_Level> &pyramid, vector<vector<vector<vector<FLIVR::FileLocInfo *>>>> &filenames, int t, int c);
@@ -80,6 +221,18 @@ public:
 
 	tinyxml2::XMLDocument *GetVVDXMLDoc() {return &m_doc;}
 	tinyxml2::XMLDocument *GetMetadataXMLDoc() {return &m_md_doc;}
+    
+	void loadFSN5();
+	DatasetAttributes* parseDatasetMetadata(wstring jpath);
+    map<wstring, wstring> getAttributes(wstring pathName);
+    DataBlock readBlock(wstring pathName, const DatasetAttributes& datasetAttributes, const vector<long> gridPosition);
+    vector<wstring> list(wstring pathName);
+    wstring getDataBlockPath(wstring datasetPathName, const vector<long>& gridPosition);
+    wstring getAttributesPath(wstring pathName);
+    wstring removeLeadingSlash(const wstring pathName);
+
+protected:
+	Nrrd* ConvertNrrd(int t, int c, bool get_max);
 
 private:
 	wstring m_path_name;
@@ -125,6 +278,11 @@ private:
 		int file_type;
 		vector<vector<vector<FLIVR::FileLocInfo *>>> filename;//Frame->Channel->BrickID->Filename
 		vector<BrickInfo *> bricks;
+        
+        int blosc_blocksize;
+        int blosc_clevel;
+        int blosc_ctype;
+        int blosc_suffle;
 	};
 	vector<LevelInfo> m_pyramid;
 
@@ -135,6 +293,7 @@ private:
 		int nFrame;
 		int nLevel;
 		int copyableLv;
+        int maskLv;
 	};
 	ImageInfo m_imageinfo;
 
@@ -143,6 +302,7 @@ private:
 	int m_level_num;
 	int m_cur_level;
 	int m_copy_lv;
+    int m_mask_lv;
 	
 	int m_time_num;
 	int m_cur_time;

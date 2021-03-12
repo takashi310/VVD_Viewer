@@ -96,7 +96,7 @@ int MSKReader::LoadBatch(int index)
 	return 0;
 }
 
-Nrrd* MSKReader::Convert(int t, int c, bool get_max)
+Nrrd* MSKReader::ConvertNrrd(int t, int c, bool get_max)
 {
 	wstring str_name;
 	if (m_add_extension)

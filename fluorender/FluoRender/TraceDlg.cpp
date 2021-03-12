@@ -1128,10 +1128,10 @@ void TraceDlg::OnConvertConsistent(wxCommandEvent &event)
 		(unsigned long long)ny * (unsigned long long)nz;
 	unsigned long long index;
 
-	Nrrd* nrrd_label_in1 = 0;
-	Nrrd* nrrd_label_in2 = 0;
-	Nrrd* nrrd_label_out1 = 0;
-	Nrrd* nrrd_label_out2 = 0;
+	shared_ptr<VL_Nrrd> nrrd_label_in1;
+	shared_ptr<VL_Nrrd> nrrd_label_in2;
+	shared_ptr<VL_Nrrd> nrrd_label_out1;
+	shared_ptr<VL_Nrrd> nrrd_label_out2;
 	wxString data_name;
 	wxString label_name;
 	wstring lblname;
@@ -1149,22 +1149,21 @@ void TraceDlg::OnConvertConsistent(wxCommandEvent &event)
 	(*m_stat_text) << wxString::Format("Label in 1 of frame %d read.\n", 0);
 	if (m_app) m_app->Yield();
 	//duplicate
-	nrrd_label_in2 = nrrdNew();
-	nrrdCopy(nrrd_label_in2, nrrd_label_in1);
+	nrrd_label_in2 = make_shared<VL_Nrrd>(nrrd_label_in1->getNrrdDeepCopy());
 	for (index = 0; index < size; ++index)
 	{
-		label_in1 = ((unsigned int*)(nrrd_label_in1->data))[index];
+		label_in1 = ((unsigned int*)(nrrd_label_in1->getNrrd()->data))[index];
 		iter = cell_map.find(label_in1);
 		if (iter != cell_map.end())
 		{
-			((unsigned int*)(nrrd_label_in2->data))[index] = iter->second;
+			((unsigned int*)(nrrd_label_in2->getNrrd()->data))[index] = iter->second;
 		}
 		else
 		{
 			if (tm_processor.GetMappedID(track_map,
 				label_in1, label_in2, 0))
 			{
-				((unsigned int*)(nrrd_label_in2->data))[index] = label_in2;
+				((unsigned int*)(nrrd_label_in2->getNrrd()->data))[index] = label_in2;
 				cell_map.insert(pair<unsigned int, unsigned int>(label_in1, label_in2));
 			}
 		}
@@ -1192,16 +1191,15 @@ void TraceDlg::OnConvertConsistent(wxCommandEvent &event)
 		if (m_app) m_app->Yield();
 
 		//copy
-		nrrd_label_out2 = nrrdNew();
-		nrrdCopy(nrrd_label_out2, nrrd_label_out1);
+		nrrd_label_out2 = make_shared<VL_Nrrd>(nrrd_label_out1->getNrrdDeepCopy());
 
 		for (index = 0; index < size; ++index)
 		{
-			label_out1 = ((unsigned int*)(nrrd_label_out1->data))[index];
+			label_out1 = ((unsigned int*)(nrrd_label_out1->getNrrd()->data))[index];
 			iter = cell_map.find(label_out1);
 			if (iter != cell_map.end())
 			{
-				((unsigned int*)(nrrd_label_out2->data))[index] = iter->second;
+				((unsigned int*)(nrrd_label_out2->getNrrd()->data))[index] = iter->second;
 			}
 			else
 			{
@@ -1209,12 +1207,12 @@ void TraceDlg::OnConvertConsistent(wxCommandEvent &event)
 					label_out1, label_in1, fi, fi - 1))
 				{
 					label_out2 = GetMappedID(label_in1,
-						(unsigned int*)(nrrd_label_in1->data),
-						(unsigned int*)(nrrd_label_in2->data),
+						(unsigned int*)(nrrd_label_in1->getNrrd()->data),
+						(unsigned int*)(nrrd_label_in2->getNrrd()->data),
 						size);
 					if (label_out2)
 					{
-						((unsigned int*)(nrrd_label_out2->data))[index] = label_out2;
+						((unsigned int*)(nrrd_label_out2->getNrrd()->data))[index] = label_out2;
 						cell_map.insert(pair<unsigned int, unsigned int>(label_out1, label_out2));
 					}
 				}
@@ -1230,15 +1228,9 @@ void TraceDlg::OnConvertConsistent(wxCommandEvent &event)
 		if (m_app) m_app->Yield();
 
 		//swap
-		nrrdNuke(nrrd_label_in1);
-		nrrdNuke(nrrd_label_in2);
 		nrrd_label_in1 = nrrd_label_out1;
 		nrrd_label_in2 = nrrd_label_out2;
 	}
-
-	//release
-	nrrdNuke(nrrd_label_out1);
-	nrrdNuke(nrrd_label_out2);
 
 	(*m_stat_text) << "All done.\n";
 }
@@ -1357,20 +1349,20 @@ void TraceDlg::CompDelete()
 	VolumeData* vd = m_view->m_glview->m_cur_vol;
 	if (!vd)
 		return;
-	Nrrd* nrrd_mask = vd->GetMask(true);
-	if (!nrrd_mask)
+	auto nrrd_mask = vd->GetMask(true);
+	if (!nrrd_mask || !nrrd_mask->getNrrd())
 		return;
-	unsigned char* data_mask = (unsigned char*)(nrrd_mask->data);
+	unsigned char* data_mask = (unsigned char*)(nrrd_mask->getNrrd()->data);
 	if (!data_mask)
 		return;
 	//get current label
 	Texture* tex = vd->GetTexture();
 	if (!tex)
 		return;
-	Nrrd* nrrd_label = tex->get_nrrd(tex->nlabel());
-	if (!nrrd_label)
+	auto nrrd_label = tex->get_nrrd(tex->nlabel());
+	if (!nrrd_label || !nrrd_label->getNrrd())
 		return;
-	unsigned int* data_label = (unsigned int*)(nrrd_label->data);
+	unsigned int* data_label = (unsigned int*)(nrrd_label->getNrrd()->data);
 	if (!data_label)
 		return;
 	//select append
@@ -1475,23 +1467,23 @@ void TraceDlg::OnCompAppend(wxCommandEvent &event)
 		VolumeData* vd = m_view->m_glview->m_cur_vol;
 		if (!vd)
 			return;
-		Nrrd* nrrd_mask = vd->GetMask(true);
-		if (!nrrd_mask)
+		auto nrrd_mask = vd->GetMask(true);
+		if (!nrrd_mask || !nrrd_mask->getNrrd())
 		{
 			vd->AddEmptyMask();
 			nrrd_mask = vd->GetMask(false);
 		}
-		unsigned char* data_mask = (unsigned char*)(nrrd_mask->data);
+		unsigned char* data_mask = (unsigned char*)(nrrd_mask->getNrrd()->data);
 		if (!data_mask)
 			return;
 		//get current label
 		Texture* tex = vd->GetTexture();
 		if (!tex)
 			return;
-		Nrrd* nrrd_label = tex->get_nrrd(tex->nlabel());
-		if (!nrrd_label)
+		auto nrrd_label = tex->get_nrrd(tex->nlabel());
+		if (!nrrd_label || !nrrd_label->getNrrd())
 			return;
-		unsigned int* data_label = (unsigned int*)(nrrd_label->data);
+		unsigned int* data_label = (unsigned int*)(nrrd_label->getNrrd()->data);
 		if (!data_label)
 			return;
 		//select append
@@ -1537,20 +1529,20 @@ void TraceDlg::OnCompExclusive(wxCommandEvent &event)
 		VolumeData* vd = m_view->m_glview->m_cur_vol;
 		if (!vd)
 			return;
-		Nrrd* nrrd_mask = vd->GetMask(true);
-		if (!nrrd_mask)
+		auto nrrd_mask = vd->GetMask(true);
+		if (!nrrd_mask || !nrrd_mask->getNrrd())
 			return;
-		unsigned char* data_mask = (unsigned char*)(nrrd_mask->data);
+		unsigned char* data_mask = (unsigned char*)(nrrd_mask->getNrrd()->data);
 		if (!data_mask)
 			return;
 		//get current label
 		Texture* tex = vd->GetTexture();
 		if (!tex)
 			return;
-		Nrrd* nrrd_label = tex->get_nrrd(tex->nlabel());
-		if (!nrrd_label)
+		auto nrrd_label = tex->get_nrrd(tex->nlabel());
+		if (!nrrd_label || !nrrd_label->getNrrd())
 			return;
-		unsigned int* data_label = (unsigned int*)(nrrd_label->data);
+		unsigned int* data_label = (unsigned int*)(nrrd_label->getNrrd()->data);
 		if (!data_label)
 			return;
 		//select append
@@ -1607,20 +1599,20 @@ void TraceDlg::CellFull()
 	VolumeData* vd = m_view->m_glview->m_cur_vol;
 	if (!vd)
 		return;
-	Nrrd* nrrd_mask = vd->GetMask(true);
-	if (!nrrd_mask)
+	auto nrrd_mask = vd->GetMask(true);
+	if (!nrrd_mask || !nrrd_mask->getNrrd())
 		return;
-	unsigned char* data_mask = (unsigned char*)(nrrd_mask->data);
+	unsigned char* data_mask = (unsigned char*)(nrrd_mask->getNrrd()->data);
 	if (!data_mask)
 		return;
 	//get current label
 	Texture* tex = vd->GetTexture();
 	if (!tex)
 		return;
-	Nrrd* nrrd_label = tex->get_nrrd(tex->nlabel());
-	if (!nrrd_label)
+	auto nrrd_label = tex->get_nrrd(tex->nlabel());
+	if (!nrrd_label || !nrrd_label->getNrrd())
 		return;
-	unsigned int* data_label = (unsigned int*)(nrrd_label->data);
+	unsigned int* data_label = (unsigned int*)(nrrd_label->getNrrd()->data);
 	if (!data_label)
 		return;
 	//get selected IDs
@@ -1719,19 +1711,19 @@ void TraceDlg::CellNewID(bool append)
 	VolumeData* vd = m_view->m_glview->m_cur_vol;
 	if (!vd)
 		return;
-	Nrrd* nrrd_mask = 0;
+	shared_ptr<VL_Nrrd> nrrd_mask;
 	if (m_auto_id)
 		//get prev mask
 		nrrd_mask = vd->GetMask(false);
 	else
 		//get current mask
 		nrrd_mask = vd->GetMask(true);
-	if (!nrrd_mask)
+	if (!nrrd_mask || !nrrd_mask->getNrrd())
 	{
 		vd->AddEmptyMask();
 		nrrd_mask = vd->GetMask(false);
 	}
-	unsigned char* data_mask = (unsigned char*)(nrrd_mask->data);
+	unsigned char* data_mask = (unsigned char*)(nrrd_mask->getNrrd()->data);
 	if (!data_mask)
 		return;
 
@@ -1739,13 +1731,13 @@ void TraceDlg::CellNewID(bool append)
 	Texture* tex = vd->GetTexture();
 	if (!tex)
 		return;
-	Nrrd* nrrd_label = tex->get_nrrd(tex->nlabel());
-	if (!nrrd_label)
+	shared_ptr<VL_Nrrd> nrrd_label = tex->get_nrrd(tex->nlabel());
+	if (!nrrd_label || !nrrd_label->getNrrd())
 	{
 		vd->AddEmptyLabel();
 		nrrd_label = tex->get_nrrd(tex->nlabel());
 	}
-	unsigned int* data_label = (unsigned int*)(nrrd_label->data);
+	unsigned int* data_label = (unsigned int*)(nrrd_label->getNrrd()->data);
 	if (!data_label)
 		return;
 
@@ -1901,18 +1893,18 @@ void TraceDlg::CellEraseID()
 	if (!vd)
 		return;
 	//get prev mask
-	Nrrd* nrrd_mask = vd->GetMask(false);
-	if (!nrrd_mask)
+	auto nrrd_mask = vd->GetMask(false);
+	if (!nrrd_mask || !nrrd_mask->getNrrd())
 		return;
-	unsigned char* data_mask = (unsigned char*)(nrrd_mask->data);
+	unsigned char* data_mask = (unsigned char*)(nrrd_mask->getNrrd()->data);
 	if (!data_mask)
 		return;
 
 	//get prev label
-	Nrrd* nrrd_label = vd->GetLabel(false);
-	if (!nrrd_label)
+	auto nrrd_label = vd->GetLabel(false);
+	if (!nrrd_label || !nrrd_label->getNrrd())
 		return;
-	unsigned int* data_label = (unsigned int*)(nrrd_label->data);
+	unsigned int* data_label = (unsigned int*)(nrrd_label->getNrrd()->data);
 	if (!data_label)
 		return;
 
@@ -1936,7 +1928,7 @@ void TraceDlg::CellEraseID()
 		nrrd_mask = vd->GetMask(true);
 		if (!nrrd_mask)
 			return;
-		data_mask = (unsigned char*)(nrrd_mask->data);
+		data_mask = (unsigned char*)(nrrd_mask->getNrrd()->data);
 		if (!data_mask)
 			return;
 
@@ -2284,20 +2276,20 @@ void TraceDlg::OnCellReplaceID(wxCommandEvent &event)
 	VolumeData* vd = m_view->m_glview->m_cur_vol;
 	if (!vd)
 		return;
-	Nrrd* nrrd_mask = vd->GetMask(true);
-	if (!nrrd_mask)
+	auto nrrd_mask = vd->GetMask(true);
+	if (!nrrd_mask || !nrrd_mask->getNrrd())
 		return;
-	unsigned char* data_mask = (unsigned char*)(nrrd_mask->data);
+	unsigned char* data_mask = (unsigned char*)(nrrd_mask->getNrrd()->data);
 	if (!data_mask)
 		return;
 	//get current label
 	Texture* tex = vd->GetTexture();
 	if (!tex)
 		return;
-	Nrrd* nrrd_label = tex->get_nrrd(tex->nlabel());
-	if (!nrrd_label)
+	auto nrrd_label = tex->get_nrrd(tex->nlabel());
+	if (!nrrd_label || !nrrd_label->getNrrd())
 		return;
-	unsigned int* data_label = (unsigned int*)(nrrd_label->data);
+	unsigned int* data_label = (unsigned int*)(nrrd_label->getNrrd()->data);
 	if (!data_label)
 		return;
 
@@ -2418,20 +2410,20 @@ void TraceDlg::OnCellCombineID(wxCommandEvent &event)
 	VolumeData* vd = m_view->m_glview->m_cur_vol;
 	if (!vd)
 		return;
-	Nrrd* nrrd_mask = vd->GetMask(true);
-	if (!nrrd_mask)
+	auto nrrd_mask = vd->GetMask(true);
+	if (!nrrd_mask || !nrrd_mask->getNrrd())
 		return;
-	unsigned char* data_mask = (unsigned char*)(nrrd_mask->data);
+	unsigned char* data_mask = (unsigned char*)(nrrd_mask->getNrrd()->data);
 	if (!data_mask)
 		return;
 	//get current label
 	Texture* tex = vd->GetTexture();
 	if (!tex)
 		return;
-	Nrrd* nrrd_label = tex->get_nrrd(tex->nlabel());
-	if (!nrrd_label)
+	auto nrrd_label = tex->get_nrrd(tex->nlabel());
+	if (!nrrd_label || !nrrd_label->getNrrd())
 		return;
-	unsigned int* data_label = (unsigned int*)(nrrd_label->data);
+	unsigned int* data_label = (unsigned int*)(nrrd_label->getNrrd()->data);
 	if (!data_label)
 		return;
 	//combine IDs
@@ -2552,25 +2544,25 @@ void TraceDlg::Measure()
 	Texture* tex = vd->GetTexture();
 	if (!tex)
 		return;
-	Nrrd* nrrd_data = tex->get_nrrd(0);
-	if (!nrrd_data)
+	auto nrrd_data = tex->get_nrrd(0);
+	if (!nrrd_data || !nrrd_data->getNrrd())
 		return;
-	int bits = nrrd_data->type;
-	void* data_data = nrrd_data->data;
+	int bits = nrrd_data->getNrrd()->type;
+	void* data_data = nrrd_data->getNrrd()->data;
 	if (!data_data)
 		return;
 	//get mask
-	Nrrd* nrrd_mask = vd->GetMask(true);
-	if (!nrrd_mask)
+	auto nrrd_mask = vd->GetMask(true);
+	if (!nrrd_mask || !nrrd_mask->getNrrd())
 		return;
-	unsigned char* data_mask = (unsigned char*)(nrrd_mask->data);
+	unsigned char* data_mask = (unsigned char*)(nrrd_mask->getNrrd()->data);
 	if (!data_mask)
 		return;
 	//get label
-	Nrrd* nrrd_label = tex->get_nrrd(tex->nlabel());
-	if (!nrrd_label)
+	auto nrrd_label = tex->get_nrrd(tex->nlabel());
+	if (!nrrd_label || !nrrd_label->getNrrd())
 		return;
-	unsigned int* data_label = (unsigned int*)(nrrd_label->data);
+	unsigned int* data_label = (unsigned int*)(nrrd_label->getNrrd()->data);
 	if (!data_label)
 		return;
 
@@ -2837,20 +2829,20 @@ void TraceDlg::Test1()
 	if (!vd)
 		return;
 	//get mask
-	Nrrd* nrrd_mask = vd->GetMask(true);
-	if (!nrrd_mask)
+	auto nrrd_mask = vd->GetMask(true);
+	if (!nrrd_mask || !nrrd_mask->getNrrd())
 		return;
-	unsigned char* data_mask = (unsigned char*)(nrrd_mask->data);
+	unsigned char* data_mask = (unsigned char*)(nrrd_mask->getNrrd()->data);
 	if (!data_mask)
 		return;
 	//get label
 	Texture* tex = vd->GetTexture();
 	if (!tex)
 		return;
-	Nrrd* nrrd_label = tex->get_nrrd(tex->nlabel());
-	if (!nrrd_label)
+	auto nrrd_label = tex->get_nrrd(tex->nlabel());
+	if (!nrrd_label || !nrrd_label->getNrrd())
 		return;
-	unsigned int* data_label = (unsigned int*)(nrrd_label->data);
+	unsigned int* data_label = (unsigned int*)(nrrd_label->getNrrd()->data);
 	if (!data_label)
 		return;
 
@@ -3142,10 +3134,10 @@ void TraceDlg::GenMap()
 	int resx, resy, resz;
 	vd->GetResolution(resx, resy, resz);
 
-	Nrrd* nrrd_data1 = 0;
-	Nrrd* nrrd_data2 = 0;
-	Nrrd* nrrd_label1 = 0;
-	Nrrd* nrrd_label2 = 0;
+	shared_ptr<VL_Nrrd> nrrd_data1;
+	shared_ptr<VL_Nrrd> nrrd_data2;
+	shared_ptr<VL_Nrrd> nrrd_label1;
+	shared_ptr<VL_Nrrd> nrrd_label2;
 	wxString data_name;
 	wxString label_name;
 	wstring lblname;
@@ -3164,7 +3156,7 @@ void TraceDlg::GenMap()
 		if (i == 0)
 		{
 			nrrd_data1 = reader->Convert(i, chan, true);
-			if (!nrrd_data1)
+			if (!nrrd_data1 || !nrrd_data1->getNrrd())
 			{
 				file_err = true;
 				continue;
@@ -3180,12 +3172,12 @@ void TraceDlg::GenMap()
 				continue;
 			}
 			tm_processor.InitializeFrame(track_map,
-				nrrd_data1->data, nrrd_label1->data, i);
+				nrrd_data1->getNrrd()->data, nrrd_label1->getNrrd()->data, i);
 		}
 		else
 		{
 			nrrd_data2 = reader->Convert(i, chan, true);
-			if (!nrrd_data2)
+			if (!nrrd_data2 || !nrrd_data2->getNrrd())
 			{
 				file_err = true;
 				continue;
@@ -3201,15 +3193,13 @@ void TraceDlg::GenMap()
 				continue;
 			}
 			tm_processor.InitializeFrame(track_map,
-				nrrd_data2->data, nrrd_label2->data, i);
+				nrrd_data2->getNrrd()->data, nrrd_label2->getNrrd()->data, i);
 
 			//link maps 1 and 2
 			tm_processor.LinkMaps(track_map, i - 1, i,
-				nrrd_data1->data, nrrd_data2->data,
-				nrrd_label1->data, nrrd_label2->data);
+				nrrd_data1->getNrrd()->data, nrrd_data2->getNrrd()->data,
+				nrrd_label1->getNrrd()->data, nrrd_label2->getNrrd()->data);
 
-			nrrdNuke(nrrd_data1);
-			nrrdNuke(nrrd_label1);
 			nrrd_data1 = nrrd_data2;
 			nrrd_label1 = nrrd_label2;
 		}
@@ -3221,9 +3211,6 @@ void TraceDlg::GenMap()
 
 	if (file_err)
 		(*m_stat_text) << "ERROR! Certain file(s) missing. Check if label files exist.\n";
-
-	nrrdNuke(nrrd_data2);
-	nrrdNuke(nrrd_label2);
 
 	//resolve multiple links of single vertex
 	for (size_t fi = 0; fi < track_map.GetFrameNum(); ++fi)

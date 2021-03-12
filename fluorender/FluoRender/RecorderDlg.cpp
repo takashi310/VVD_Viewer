@@ -637,6 +637,12 @@ m_view(0)
 	group3->Add(5, 5);
 	group3->Add(m_del_all_btn, 0, wxALIGN_CENTER);
 
+	//recoding
+	wxBoxSizer* group4 = new wxBoxSizer(wxHORIZONTAL);
+	m_vol_record_chk = new wxCheckBox(this, wxID_ANY, "Record volume properties");
+	m_vol_record_chk->SetValue(false);
+	group4->Add(m_vol_record_chk, 0, wxALIGN_CENTER);
+
 /*
 	m_seq_chk = new wxCheckBox(this,ID_SeqChk,
 		"Time Sequence / Batch");
@@ -686,6 +692,8 @@ m_view(0)
 	sizerV->Add(group2, 1, wxEXPAND);
 	sizerV->Add(10, 5);
 	sizerV->Add(group3, 0, wxEXPAND);
+	sizerV->Add(5, 5);
+	sizerV->Add(group4, 0, wxEXPAND);
 	sizerV->Add(5, 5);
 
 	SetSizer(sizerV);
@@ -939,6 +947,44 @@ void RecorderDlg::InsertKey(int index, double duration, int interpolation)
 		keycode.l2_name = "z2_val";
 		flkey = new FlKeyDouble(keycode, abs(abcd[3]));
 		interpolator->AddKey(flkey);
+
+		if (m_vol_record_chk->GetValue())
+		{
+			keycode.l2 = 0;
+			keycode.l2_name = "gamma";
+			flkey = new FlKeyDouble(keycode, vd->Get3DGamma());
+			interpolator->AddKey(flkey);
+
+			keycode.l2 = 0;
+			keycode.l2_name = "saturation";
+			flkey = new FlKeyDouble(keycode, vd->GetOffset());
+			interpolator->AddKey(flkey);
+
+			keycode.l2 = 0;
+			keycode.l2_name = "luminance";
+			flkey = new FlKeyDouble(keycode, vd->GetLuminance());
+			interpolator->AddKey(flkey);
+
+			keycode.l2 = 0;
+			keycode.l2_name = "alpha";
+			flkey = new FlKeyDouble(keycode, vd->GetAlpha());
+			interpolator->AddKey(flkey);
+
+			keycode.l2 = 0;
+			keycode.l2_name = "boundary";
+			flkey = new FlKeyDouble(keycode, vd->GetBoundary());
+			interpolator->AddKey(flkey);
+
+			keycode.l2 = 0;
+			keycode.l2_name = "left_threshold";
+			flkey = new FlKeyDouble(keycode, vd->GetLeftThresh());
+			interpolator->AddKey(flkey);
+
+			keycode.l2 = 0;
+			keycode.l2_name = "right_threshold";
+			flkey = new FlKeyDouble(keycode, vd->GetRightThresh());
+			interpolator->AddKey(flkey);
+		}
 	}
 	//for the view
 	keycode.l0 = 1;

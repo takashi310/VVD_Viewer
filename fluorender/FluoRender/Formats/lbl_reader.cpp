@@ -95,7 +95,7 @@ int LBLReader::LoadBatch(int index)
 	return 0;
 }
 
-Nrrd* LBLReader::Convert(int t, int c, bool get_max)
+Nrrd* LBLReader::ConvertNrrd(int t, int c, bool get_max)
 {
 	int64_t pos = m_path_name.find_last_of('.');
 	if (pos == -1)
@@ -145,6 +145,7 @@ Nrrd* LBLReader::Convert(int t, int c, bool get_max)
 	}
 
 	fclose(lbl_file);
+
 	return output;
 }
 

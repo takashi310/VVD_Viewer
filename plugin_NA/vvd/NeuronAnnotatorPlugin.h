@@ -97,6 +97,9 @@ public:
 	void setDirty(bool val) { m_dirty = val; }
     bool isReloaded() { return m_reload_list; }
     void setReloaded(bool val) { m_reload_list = val; }
+    
+    wxString getLabelPath() { return m_id_path; }
+    wxString getVolumePath() { return m_vol_path; }
 
 	V3DPBDReader* m_lbl_reader;
 	BaseReader* m_vol_reader;
@@ -106,10 +109,10 @@ public:
 	wxImage m_ref_image_thumb;
 	wxImage m_sig_image_thumb;
 
-	Nrrd* m_lbl_nrrd;
-	Nrrd* m_nrrd_r;
+	std::shared_ptr<VL_Nrrd> m_lbl_nrrd;
+	std::shared_ptr<VL_Nrrd> m_nrrd_r;
 	wxString m_vol_r;
-	Nrrd* m_nrrd_s[3];
+	std::shared_ptr<VL_Nrrd> m_nrrd_s[3];
 	wxString m_vol_s[3];
 
 	double m_gmaxvals[3];

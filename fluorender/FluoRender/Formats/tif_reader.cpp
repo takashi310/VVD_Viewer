@@ -1444,7 +1444,7 @@ int TIFReader::LoadBatch(int index)
 	return result;
 }
 
-Nrrd* TIFReader::Convert(int t, int c, bool get_max)
+Nrrd* TIFReader::ConvertNrrd(int t, int c, bool get_max)
 {
 	if (t < 0 || t >= m_time_num ||
 		c < 0 || c >= m_chan_num)

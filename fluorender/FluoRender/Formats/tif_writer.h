@@ -36,7 +36,7 @@ public:
 	TIFWriter();
 	~TIFWriter();
 
-	void SetData(Nrrd* data);
+	void SetData(const std::shared_ptr<FLIVR::VL_Nrrd>& data);
 	void SetSpacings(double spcx, double spcy, double spcz);
 	void SetCompression(bool value);
 	void SetBaseSeqID(int startID);
@@ -45,7 +45,7 @@ public:
 											//1-file sequence
 
 private:
-	Nrrd* m_data;
+	std::shared_ptr<FLIVR::VL_Nrrd> m_data;
 	double m_spcx, m_spcy, m_spcz;
 	bool m_use_spacings;
 	bool m_compression;

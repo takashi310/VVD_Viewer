@@ -595,7 +595,7 @@ double OIFReader::GetExcitationWavelength(int chan)
    return 0.0;
 }
 
-Nrrd* OIFReader::Convert(int t, int c, bool get_max)
+Nrrd* OIFReader::ConvertNrrd(int t, int c, bool get_max)
 {
    Nrrd *data = 0;
    int sl_num = 0;

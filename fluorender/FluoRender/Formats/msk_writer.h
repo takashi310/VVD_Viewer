@@ -36,7 +36,7 @@ public:
 	MSKWriter();
 	~MSKWriter();
 
-	void SetData(Nrrd* data);
+	void SetData(const std::shared_ptr<FLIVR::VL_Nrrd>& data);
 	void SetSpacings(double spcx, double spcy, double spcz);
 	void SetCompression(bool value);
 	void Save(wstring filename, int mode);//mode: 0-normal mask; 1-label mask
@@ -44,7 +44,7 @@ public:
 	void SetTC(int t, int c);
 
 private:
-	Nrrd* m_data;
+	std::shared_ptr<FLIVR::VL_Nrrd> m_data;
 	double m_spcx, m_spcy, m_spcz;
 	bool m_use_spacings;
 

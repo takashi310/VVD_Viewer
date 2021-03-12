@@ -204,10 +204,18 @@ namespace FLIVR
         
         void set_na_mode(bool val) { m_na_mode = val; }
         bool get_na_mode() { return m_na_mode; }
+        
+#ifdef _DARWIN
+        bool get_slice_mode() { return false; }
+        void set_slice_mode(bool val) { slice_mode_ = val; }
+#endif
 
 		friend class MultiVolumeRenderer;
 
 	protected:
+#ifdef _DARWIN
+        bool slice_mode_;
+#endif
 		double buffer_scale_;
 		double scalar_scale_;
 		double gm_scale_;
@@ -378,7 +386,8 @@ public:
 		void draw_label(int type, int mode, double thresh, double gm_falloff);
 
 		//calculation
-		void calculate(int type, VolumeRenderer* vr_a, VolumeRenderer* vr_b);
+		void calculate(int type, VolumeRenderer* vr_a, VolumeRenderer* vr_b, VolumeRenderer* vr_c = NULL,
+			Texture* ext_msk = NULL, Texture* ext_lbl = NULL);
 
 		//double calc_hist_3d(GLuint, GLuint, size_t, size_t, size_t);
 		////return

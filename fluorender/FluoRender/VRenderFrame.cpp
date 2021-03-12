@@ -110,6 +110,8 @@ bool VRenderFrame::m_save_project = false;
 CURLM *_g_curlm;//add by takashi
 CURL *_g_curl;//add by takashi
 
+wxCriticalSection VRenderFrame::ms_criticalSection;
+
 VRenderFrame::VRenderFrame(
 	wxApp* app, wxFrame* frame,
 	const wxString& title,
@@ -546,13 +548,14 @@ VRenderFrame::VRenderFrame(
 	//set view default settings
 	if (m_adjust_view && vrv)
 	{
-		Color gamma, brightness, hdr;
+		Color gamma, brightness, hdr, level;
 		bool sync_r, sync_g, sync_b;
-		m_adjust_view->GetDefaults(gamma, brightness, hdr,
+		m_adjust_view->GetDefaults(gamma, brightness, hdr, level,
 			sync_r, sync_g, sync_b);
 		vrv->m_glview->SetGamma(gamma);
 		vrv->m_glview->SetBrightness(brightness);
 		vrv->m_glview->SetHdr(hdr);
+        vrv->m_glview->SetLevels(level);
 		vrv->m_glview->SetSyncR(sync_r);
 		vrv->m_glview->SetSyncG(sync_g);
 		vrv->m_glview->SetSyncB(sync_b);
@@ -560,6 +563,9 @@ VRenderFrame::VRenderFrame(
 
 	TextureRenderer::set_mainmem_buf_size(m_setting_dlg->GetMainMemBufSize());
 	TextureRenderer::set_available_mainmem_buf_size(m_setting_dlg->GetMainMemBufSize());
+	TextureRenderer::setCriticalSection(&ms_criticalSection);
+
+	VRenderVulkanView::setCriticalSection(&ms_criticalSection);
 
 	//drop target
 	SetDropTarget(new DnDFile(this));
@@ -724,6 +730,17 @@ void VRenderFrame::OnExit(wxCommandEvent& WXUNUSED(event))
 void VRenderFrame::OnClose(wxCloseEvent &event)
 {
 	m_setting_dlg->SaveSettings();
+
+	for (int i = 0; i < (int)m_vrv_list.size(); i++)
+	{
+		VRenderView* vrv = m_vrv_list[i];
+		if (vrv)
+		{
+			vrv->SetEvtHandlerEnabled(false);
+			vrv->Freeze();
+			vrv->AbortRendering();
+		}
+	}
 /*	bool vrv_saved = false;
 	for (unsigned int i=0; i<m_vrv_list.size(); ++i)
 	{
@@ -788,12 +805,13 @@ wxString VRenderFrame::CreateView(int row)
 	//set view default settings
 	if (m_adjust_view && vrv)
 	{
-		Color gamma, brightness, hdr;
+		Color gamma, brightness, hdr, level;
 		bool sync_r, sync_g, sync_b;
-		m_adjust_view->GetDefaults(gamma, brightness, hdr, sync_r, sync_g, sync_b);
+		m_adjust_view->GetDefaults(gamma, brightness, hdr, level, sync_r, sync_g, sync_b);
 		vrv->m_glview->SetGamma(gamma);
 		vrv->m_glview->SetBrightness(brightness);
 		vrv->m_glview->SetHdr(hdr);
+        vrv->m_glview->SetLevels(level);
 		vrv->m_glview->SetSyncR(sync_r);
 		vrv->m_glview->SetSyncG(sync_g);
 		vrv->m_glview->SetSyncB(sync_b);
@@ -1021,7 +1039,7 @@ void VRenderFrame::OnOpenVolume(wxCommandEvent& WXUNUSED(event))
 
 	wxFileDialog *fopendlg = new wxFileDialog(
 		this, "Choose the volume data file", "", "",
-		"All Supported|*.tif;*.tiff;*.zip;*.oib;*.oif;*.lsm;*.xml;*.nrrd;*.h5j;*.vvd;*.v3dpbd|"\
+        "All Supported|*.tif;*.tiff;*.zip;*.oib;*.oif;*.lsm;*.xml;*.nrrd;*.h5j;*.vvd;*.v3dpbd;*.n5;*.json;|"\
 		"Tiff Files (*.tif, *.tiff, *.zip)|*.tif;*.tiff;*.zip|"\
 		"Olympus Image Binary Files (*.oib)|*.oib|"\
 		"Olympus Original Imaging Format (*.oif)|*.oif|"\
@@ -1031,7 +1049,8 @@ void VRenderFrame::OnOpenVolume(wxCommandEvent& WXUNUSED(event))
 		"H5J files (*.h5j)|*.h5j|"\
 		"V3DPBD files (*.v3dpbd)|*.v3dpbd|"\
         "Indexed images (*.idi)|*.idi|"\
-		"VVD files (*.vvd)|*.vvd", wxFD_OPEN|wxFD_MULTIPLE);
+		"VVD files (*.vvd)|*.vvd|"\
+        "N5 files (*.n5, *.json)|*.n5;*.json", wxFD_OPEN|wxFD_MULTIPLE);
 	fopendlg->SetExtraControlCreator(CreateExtraControlVolume);
 
 	int rval = fopendlg->ShowModal();
@@ -1113,7 +1132,7 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_LSM, -1, -1, datasize);
 			else if (suffix==".xml")
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_PVXML, -1, -1, datasize);
-			else if (suffix==".vvd")
+			else if (suffix==".vvd" || suffix==".n5" || suffix==".json" || suffix==".n5fs_ch")
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_BRKXML, -1, -1, datasize);
 			else if (suffix == ".h5j")
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_H5J, -1, -1, datasize);
@@ -1128,33 +1147,86 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
 				DataGroup* group = vrv->GetGroup(group_name);
 				if (group)
 				{
-					for (int i=ch_num; i>0; i--)
-					{
-						VolumeData* vd = m_data_mgr.GetVolumeData(m_data_mgr.GetVolumeNum()-i);
-						if (vd)
-						{
-							vrv->AddVolumeData(vd);
-							wxString vol_name = vd->GetName();
-							if (vol_name.Find("_1ch")!=-1 &&
-								(i==1 || i==2))
-								vd->SetDisp(false);
-							if (vol_name.Find("_2ch")!=-1 && i==1)
-								vd->SetDisp(false);
-
-							if (i==ch_num)
-							{
-								vd_sel = vd;
-								group_sel = group;
-							}
-
-							if (vd->GetReader() && vd->GetReader()->GetTimeNum()>1)
-								enable_4d = true;
-
-							if(files.Count() == annotations.size())vd->SetAnnotation(annotations[j]);
-						}
-					}
-					if (j > 0)
-						group->SetDisp(false);
+                    if (suffix == ".h5j" && ch_num == 4)
+                    {
+                        for (int i=4; i>1; i--)
+                        {
+                            VolumeData* vd = m_data_mgr.GetVolumeData(m_data_mgr.GetVolumeNum()-i);
+                            if (vd)
+                            {
+                                vrv->AddVolumeData(vd);
+                                wxString vol_name = vd->GetName();
+                                if (vol_name.Find("_1ch")!=-1 &&
+                                    (i==1 || i==2))
+                                    vd->SetDisp(false);
+                                if (vol_name.Find("_2ch")!=-1 && i==1)
+                                    vd->SetDisp(false);
+                                
+                                if (i==ch_num)
+                                {
+                                    vd_sel = vd;
+                                    group_sel = group;
+                                }
+                                
+                                if (vd->GetReader() && vd->GetReader()->GetTimeNum()>1)
+                                    enable_4d = true;
+                                
+                                if(files.Count() == annotations.size())vd->SetAnnotation(annotations[j]);
+                            }
+                        }
+                        
+                        //reference
+                        wxString ref_group_name = vrv->AddGroup();
+                        DataGroup* ref_group = vrv->GetGroup(ref_group_name);
+                        VolumeData* rvd = m_data_mgr.GetVolumeData(m_data_mgr.GetVolumeNum()-1);
+                        if (rvd)
+                        {
+                            
+                            vrv->AddVolumeData(rvd);
+                            wxString vol_name = rvd->GetName();
+                            
+                            if (rvd->GetReader() && rvd->GetReader()->GetTimeNum()>1)
+                                enable_4d = true;
+                            
+                            if(files.Count() == annotations.size())rvd->SetAnnotation(annotations[j]);
+                        }
+                        
+                        if (j > 0)
+                        {
+                            group->SetDisp(false);
+                            ref_group->SetDisp(false);
+                        }
+                    }
+                    else
+                    {
+                        for (int i=ch_num; i>0; i--)
+                        {
+                            VolumeData* vd = m_data_mgr.GetVolumeData(m_data_mgr.GetVolumeNum()-i);
+                            if (vd)
+                            {
+                                vrv->AddVolumeData(vd);
+                                wxString vol_name = vd->GetName();
+                                if (vol_name.Find("_1ch")!=-1 &&
+                                    (i==1 || i==2))
+                                    vd->SetDisp(false);
+                                if (vol_name.Find("_2ch")!=-1 && i==1)
+                                    vd->SetDisp(false);
+                                
+                                if (i==ch_num)
+                                {
+                                    vd_sel = vd;
+                                    group_sel = group;
+                                }
+                                
+                                if (vd->GetReader() && vd->GetReader()->GetTimeNum()>1)
+                                    enable_4d = true;
+                                
+                                if(files.Count() == annotations.size())vd->SetAnnotation(annotations[j]);
+                            }
+                        }
+                        if (j > 0)
+                            group->SetDisp(false);
+                    }
 				}
 			}
 			else if (ch_num == 1)
@@ -1279,6 +1351,8 @@ void VRenderFrame::StartupLoad(wxArrayString files, size_t datasize)
 			suffix == ".lsm" ||
 			suffix == ".xml" ||
 			suffix == ".vvd" ||
+            suffix == ".n5" ||
+            suffix == ".json" ||
 			suffix == ".h5j" ||
 			suffix == ".v3dpbd" ||
 			suffix == ".zip" ||
@@ -1444,6 +1518,140 @@ void VRenderFrame::OnInfo(wxCommandEvent& WXUNUSED(event))
 	main->Add(right,0,wxEXPAND);
 	d->SetSizer(main);
 	d->ShowModal();
+}
+
+void VRenderFrame::UpdateTreeFrames()
+{
+	int i, j, k;
+	if (!m_tree_panel || !m_tree_panel->GetTreeCtrl())
+		return;
+
+	m_tree_panel->SetEvtHandlerEnabled(false);
+	m_tree_panel->Freeze();
+
+	DataTreeCtrl* treectrl = m_tree_panel->GetTreeCtrl();
+	wxTreeItemId root = treectrl->GetRootItem();
+	wxTreeItemIdValue ck_view;
+
+	for (i = 0; i < (int)m_vrv_list.size(); i++)
+	{
+		VRenderView* vrv = m_vrv_list[i];
+		wxTreeItemId vrv_item;
+		if (i == 0)
+			vrv_item = treectrl->GetFirstChild(root, ck_view);
+		else
+			vrv_item = treectrl->GetNextChild(root, ck_view);
+
+		if (!vrv_item.IsOk())
+			continue;
+
+		wxTreeItemIdValue ck_layer;
+		for (j = 0; j < vrv->GetLayerNum(); j++)
+		{
+			TreeLayer* layer = vrv->GetLayer(j);
+			wxTreeItemId layer_item;
+			if (j == 0)
+				layer_item = treectrl->GetFirstChild(vrv_item, ck_layer);
+			else
+				layer_item = treectrl->GetNextChild(vrv_item, ck_layer);
+
+			if (!layer_item.IsOk())
+				continue;
+
+			LayerInfo* item_data = (LayerInfo*)treectrl->GetItemData(layer_item);
+			if (!item_data)
+				continue;
+
+			int iconid = item_data->icon / 2;
+
+			switch (layer->IsA())
+			{
+			case 2://volume
+			{
+				VolumeData* vd = (VolumeData*)layer;
+				if (!vd)
+					break;
+				m_tree_panel->SetItemName(layer_item, vd->GetName());
+			}
+			break;
+			case 5://volume group
+			{
+				DataGroup* group = (DataGroup*)layer;
+				if (!group)
+					break;
+				m_tree_panel->SetGroupItemImage(layer_item, int(group->GetDisp()));
+				wxTreeItemIdValue ck_volume;
+				for (k = 0; k < group->GetVolumeNum(); k++)
+				{
+					VolumeData* vd = group->GetVolumeData(k);
+					if (!vd)
+						continue;
+					wxTreeItemId volume_item;
+					if (k == 0)
+						volume_item = treectrl->GetFirstChild(layer_item, ck_volume);
+					else
+						volume_item = treectrl->GetNextChild(layer_item, ck_volume);
+					if (!volume_item.IsOk())
+						continue;
+					m_tree_panel->SetItemName(volume_item, vd->GetName());
+				}
+			}
+			break;
+			}
+		}
+	}
+
+	m_tree_panel->Thaw();
+	m_tree_panel->SetEvtHandlerEnabled(true);
+
+	m_tree_panel->Refresh(false);
+
+	VolumeData* sel_vd = m_data_mgr.GetVolumeData(m_cur_sel_vol);
+	if (sel_vd && sel_vd->GetDisp())
+	{
+		m_aui_mgr.GetPane(m_prop_panel).Caption(
+			wxString(UITEXT_PROPERTIES) + wxString(" - ") + sel_vd->GetName());
+		m_main_tb->SetEvtHandlerEnabled(false);
+		m_tree_panel->SetEvtHandlerEnabled(false);
+		m_movie_view->SetEvtHandlerEnabled(false);
+		m_measure_dlg->SetEvtHandlerEnabled(false);
+		m_prop_panel->SetEvtHandlerEnabled(false);
+		m_adjust_view->SetEvtHandlerEnabled(false);
+		m_clip_view->SetEvtHandlerEnabled(false);
+		m_vrv_list[0]->SetEvtHandlerEnabled(false);
+		m_brush_tool_dlg->SetEvtHandlerEnabled(false);
+		m_noise_cancelling_dlg->SetEvtHandlerEnabled(false);
+		m_counting_dlg->SetEvtHandlerEnabled(false);
+		m_convert_dlg->SetEvtHandlerEnabled(false);
+		m_colocalization_dlg->SetEvtHandlerEnabled(false);
+		m_trace_dlg->SetEvtHandlerEnabled(false);
+		m_anno_view->SetEvtHandlerEnabled(false);
+		m_setting_dlg->SetEvtHandlerEnabled(false);
+		m_help_dlg->SetEvtHandlerEnabled(false);
+
+		m_aui_mgr.Update();
+
+		m_main_tb->SetEvtHandlerEnabled(true);
+		m_tree_panel->SetEvtHandlerEnabled(true);
+		m_movie_view->SetEvtHandlerEnabled(true);
+		m_measure_dlg->SetEvtHandlerEnabled(true);
+		m_prop_panel->SetEvtHandlerEnabled(true);
+		m_adjust_view->SetEvtHandlerEnabled(true);
+		m_clip_view->SetEvtHandlerEnabled(true);
+		m_vrv_list[0]->SetEvtHandlerEnabled(true);
+		m_brush_tool_dlg->SetEvtHandlerEnabled(true);
+		m_noise_cancelling_dlg->SetEvtHandlerEnabled(true);
+		m_counting_dlg->SetEvtHandlerEnabled(true);
+		m_convert_dlg->SetEvtHandlerEnabled(true);
+		m_colocalization_dlg->SetEvtHandlerEnabled(true);
+		m_trace_dlg->SetEvtHandlerEnabled(true);
+		m_anno_view->SetEvtHandlerEnabled(true);
+		m_setting_dlg->SetEvtHandlerEnabled(true);
+		m_help_dlg->SetEvtHandlerEnabled(true);
+	}
+
+	//if (m_plugin_manager)
+	//	m_plugin_manager->OnTreeUpdate();
 }
 
 void VRenderFrame::UpdateTreeIcons()
@@ -2724,6 +2932,8 @@ void VRenderFrame::SaveProject(wxString& filename)
 			fconfig.Write("brightness", str);
 			str = wxString::Format("%f %f %f", vd->GetHdr().r(), vd->GetHdr().g(), vd->GetHdr().b());
 			fconfig.Write("hdr", str);
+            str = wxString::Format("%f %f %f", vd->GetLevels().r(), vd->GetLevels().g(), vd->GetLevels().b());
+            fconfig.Write("levels", str);
 			fconfig.Write("sync_r", vd->GetSyncR());
 			fconfig.Write("sync_g", vd->GetSyncG());
 			fconfig.Write("sync_b", vd->GetSyncB());
@@ -2772,7 +2982,7 @@ void VRenderFrame::SaveProject(wxString& filename)
 			fconfig.Write("roi_disp_mode", vd->GetIDColDispMode());
 
 			//mask
-			Nrrd* mask = vd->GetMask(true);
+			auto mask = vd->GetMask(true);
 			str = "";
 			if (mask)
 			{
@@ -2788,7 +2998,7 @@ void VRenderFrame::SaveProject(wxString& filename)
 			fconfig.Write("mask", str);
             
             //label
-            Nrrd* label = vd->GetLabel(true);
+            auto label = vd->GetLabel(true);
             str = "";
             if (label)
             {
@@ -2880,6 +3090,8 @@ void VRenderFrame::SaveProject(wxString& filename)
 			fconfig.Write("brightness", str);
 			str = wxString::Format("%f %f %f", md->GetHdr().r(), md->GetHdr().g(), md->GetHdr().b());
 			fconfig.Write("hdr", str);
+            str = wxString::Format("%f %f %f", md->GetLevels().r(), md->GetLevels().g(), md->GetLevels().b());
+            fconfig.Write("levels", str);
 			fconfig.Write("sync_r", md->GetSyncR());
 			fconfig.Write("sync_g", md->GetSyncG());
 			fconfig.Write("sync_b", md->GetSyncB());
@@ -3025,6 +3237,9 @@ void VRenderFrame::SaveProject(wxString& filename)
 						str = wxString::Format("%f %f %f", group->GetHdr().r(),
 							group->GetHdr().g(), group->GetHdr().b());
 						fconfig.Write("hdr", str);
+                        str = wxString::Format("%f %f %f", group->GetLevels().r(),
+                            group->GetLevels().g(), group->GetLevels().b());
+                        fconfig.Write("levels", str);
 						fconfig.Write("sync_r", group->GetSyncR());
 						fconfig.Write("sync_g", group->GetSyncG());
 						fconfig.Write("sync_b", group->GetSyncB());
@@ -3135,9 +3350,13 @@ void VRenderFrame::SaveProject(wxString& filename)
 			str = wxString::Format("%f %f %f", vrv->m_glview->GetHdr().r(),
 				vrv->m_glview->GetHdr().g(), vrv->m_glview->GetHdr().b());
 			fconfig.Write("hdr", str);
+            str = wxString::Format("%f %f %f", vrv->m_glview->GetLevels().r(),
+                vrv->m_glview->GetLevels().g(), vrv->m_glview->GetLevels().b());
+            fconfig.Write("levels", str);
 			fconfig.Write("sync_r", vrv->m_glview->GetSyncR());
 			fconfig.Write("sync_g", vrv->m_glview->GetSyncG());
 			fconfig.Write("sync_b", vrv->m_glview->GetSyncB());
+            fconfig.Write("easy_2d_adjustment", vrv->m_glview->GetEasy2DAdjustMode());
 
 			//clipping plane rotations
 			fconfig.Write("clip_mode", vrv->GetClipMode());
@@ -3424,7 +3643,7 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_LSM, cur_chan, cur_time);
 					else if (suffix == ".xml")
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_PVXML, cur_chan, cur_time);
-					else if (suffix == ".vvd")
+					else if (suffix == ".vvd" || suffix == ".n5" || suffix == ".json")
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_BRKXML, cur_chan, cur_time);
 					else if (suffix == ".h5j")
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_H5J, cur_chan, cur_time);
@@ -3657,6 +3876,14 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 								vd->SetHdr(col);
 							}
 						}
+                        if (fconfig.Read("levels", &str))
+                        {
+                            float r, g, b;
+                            if (SSCANF(str.c_str(), "%f%f%f", &r, &g, &b)){
+                                FLIVR::Color col(r,g,b);
+                                vd->SetLevels(col);
+                            }
+                        }
 						bool bVal;
 						if (fconfig.Read("sync_r", &bVal))
 							vd->SetSyncR(bVal);
@@ -3718,11 +3945,13 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 						if (fconfig.Read("mask", &str))
 						{
 							MSKReader msk_reader;
-							wstring maskname = str.ToStdWstring();
+                            if (!wxFileExists(str))
+                                str = m_data_mgr.SearchProjectPath(str);
+                            wstring maskname = str.ToStdWstring();
 							msk_reader.SetFile(maskname);
 							BaseReader *br = &msk_reader;
-							Nrrd* mask = br->Convert(true);
-							Nrrd* oldmask = vd->GetMask(false);
+							auto mask = br->Convert(true);
+							auto oldmask = vd->GetMask(false);
 							if (oldmask)
 								vd->DeleteMask();
 							if (mask)
@@ -3733,11 +3962,13 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
                         if (fconfig.Read("label", &str))
                         {
                             LBLReader lbl_reader;
+                            if (!wxFileExists(str))
+                                str = m_data_mgr.SearchProjectPath(str);
                             wstring lblname = str.ToStdWstring();
                             lbl_reader.SetFile(lblname);
                             BaseReader *br = &lbl_reader;
-                            Nrrd* label = br->Convert(true);
-                            Nrrd* oldlabel = vd->GetLabel(false);
+                            auto label = br->Convert(true);
+                            auto oldlabel = vd->GetLabel(false);
                             if (oldlabel)
                                 vd->DeleteLabel();
                             if (label)
@@ -3760,6 +3991,439 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 	}
 	fconfig.SetPath(tmp_path);
 	return vd;
+}
+
+void VRenderFrame::OpenVolumesFromProjectMT(wxFileConfig &fconfig, bool join)
+{
+    wxString tmp_path = fconfig.GetPath();
+    fconfig.SetPath("/");
+    
+    wxString ver_major, ver_minor;
+    long l_major, l_minor;
+    l_major = 1;
+    if (fconfig.Read("ver_major", &ver_major) &&
+        fconfig.Read("ver_minor", &ver_minor))
+    {
+        ver_major.ToLong(&l_major);
+        ver_minor.ToLong(&l_minor);
+    }
+    
+    vector<ProjectDataLoaderQueue> queues;
+    
+    if (fconfig.Exists("/data/volume"))
+    {
+        fconfig.SetPath("/data/volume");
+        int num = fconfig.Read("num", 0l);
+        for (int i=0; i<num; i++)
+        {
+            wxString str;
+            str = wxString::Format("/data/volume/%d", i);
+            if (fconfig.Exists(str))
+            {
+                fconfig.SetPath(str);
+                if (!fconfig.Read("name", &str))
+                    continue;
+                wxString name = str;
+                
+                bool compression = false;
+                fconfig.Read("compression", &compression);
+                bool skip_brick = false;
+                fconfig.Read("skip_brick", &skip_brick);
+                //path
+                if (fconfig.Read("path", &str))
+                {
+                    wxString filepath = str;
+                    int cur_chan = 0;
+                    if (!fconfig.Read("cur_chan", &cur_chan))
+                        if (fconfig.Read("tiff_chan", &cur_chan))
+                            cur_chan--;
+                    int cur_time = 0;
+                    //fconfig.Read("cur_time", &cur_time);
+                    bool slice_seq = 0;
+                    fconfig.Read("slice_seq", &slice_seq);
+                    bool time_seq = 0;
+                    fconfig.Read("time_seq", &time_seq);
+                    wxString time_id;
+                    fconfig.Read("time_id", &time_id);
+                    
+                    wxString mskpath;
+                    wxString lblpath;
+                    if (fconfig.Exists("properties"))
+                    {
+                        fconfig.SetPath("properties");
+                        fconfig.Read("mask", &mskpath);
+                        fconfig.Read("label", &lblpath);
+                    }
+                    
+                    
+                    ProjectDataLoaderQueue queue(filepath,
+                                                 cur_chan,
+                                                 cur_time,
+                                                 name,
+                                                 compression,
+                                                 skip_brick,
+                                                 slice_seq,
+                                                 time_seq,
+                                                 time_id,
+                                                 m_load_mask,
+                                                 mskpath,
+                                                 lblpath);
+                    queues.push_back(queue);
+                }
+            }
+        }
+    }
+    
+    if (!queues.empty())
+    {
+        m_project_data_loader.Set(queues);
+        m_project_data_loader.Run();
+        if (join)
+            m_project_data_loader.Join();
+    }
+    
+    fconfig.SetPath(tmp_path);
+    return;
+}
+
+void VRenderFrame::SetVolumePropertiesFromProject(wxFileConfig &fconfig)
+{
+    int iVal;
+    VolumeData *vd = NULL;
+    
+    wxString tmp_path = fconfig.GetPath();
+    fconfig.SetPath("/");
+    
+    wxString ver_major, ver_minor;
+    long l_major, l_minor;
+    l_major = 1;
+    if (fconfig.Read("ver_major", &ver_major) &&
+        fconfig.Read("ver_minor", &ver_minor))
+    {
+        ver_major.ToLong(&l_major);
+        ver_minor.ToLong(&l_minor);
+    }
+    
+    if (fconfig.Exists("/data/volume"))
+    {
+        fconfig.SetPath("/data/volume");
+        int num = fconfig.Read("num", 0l);
+        for (int i=0; i<num; i++)
+        {
+            wxString str;
+            str = wxString::Format("/data/volume/%d", i);
+            if (fconfig.Exists(str))
+            {
+                fconfig.SetPath(str);
+                
+                wxString name;
+                if (!fconfig.Read("name", &name))
+                    continue;
+
+                vd = m_data_mgr.GetVolumeData(name);
+                if (vd)
+                {
+                    //volume properties
+                    if (fconfig.Exists("properties"))
+                    {
+                        fconfig.SetPath("properties");
+                        bool disp;
+                        if (fconfig.Read("display", &disp))
+                            vd->SetDisp(disp);
+                        
+                        //old colormap
+                        if (fconfig.Read("widget", &str))
+                        {
+                            int type;
+                            float left_x, left_y, width, height, offset1, offset2, gamma;
+                            wchar_t token[256];
+                            token[255] = '\0';
+                            const wchar_t* sstr = str.wc_str();
+                            std::wstringstream ss(sstr);
+                            ss.read(token,255);
+                            wchar_t c = 'x';
+                            while(!isspace(c)) ss.read(&c,1);
+                            ss >> type >> left_x >> left_y >> width >>
+                            height >> offset1 >> offset2 >> gamma;
+                            vd->Set3DGamma(gamma);
+                            vd->SetBoundary(left_y);
+                            vd->SetOffset(offset1);
+                            vd->SetLeftThresh(left_x);
+                            vd->SetRightThresh(left_x+width);
+                            if (fconfig.Read("widgetcolor", &str))
+                            {
+                                float red, green, blue;
+                                if (SSCANF(str.c_str(), "%f%f%f", &red, &green, &blue)){
+                                    FLIVR::Color col(red,green,blue);
+                                    vd->SetColor(col);
+                                }
+                            }
+                            double alpha;
+                            if (fconfig.Read("widgetalpha", &alpha))
+                                vd->SetAlpha(alpha);
+                        }
+                        
+                        //transfer function
+                        double dval;
+                        bool bval;
+                        if (fconfig.Read("3dgamma", &dval))
+                            vd->Set3DGamma(dval);
+                        if (fconfig.Read("boundary", &dval))
+                            vd->SetBoundary(dval);
+                        if (fconfig.Read("contrast", &dval))
+                            vd->SetOffset(dval);
+                        if (fconfig.Read("left_thresh", &dval))
+                            vd->SetLeftThresh(dval);
+                        if (fconfig.Read("right_thresh", &dval))
+                            vd->SetRightThresh(dval);
+                        if (fconfig.Read("color", &str))
+                        {
+                            float red, green, blue;
+                            if (SSCANF(str.c_str(), "%f%f%f", &red, &green, &blue)){
+                                FLIVR::Color col(red,green,blue);
+                                vd->SetColor(col);
+                            }
+                        }
+                        if (fconfig.Read("hsv", &str))
+                        {
+                            float hue, sat, val;
+                            if (SSCANF(str.c_str(), "%f%f%f", &hue, &sat, &val))
+                                vd->SetHSV(hue, sat, val);
+                        }
+                        if (fconfig.Read("mask_color", &str))
+                        {
+                            float red, green, blue;
+                            if (SSCANF(str.c_str(), "%f%f%f", &red, &green, &blue)){
+                                FLIVR::Color col(red,green,blue);
+                                if (fconfig.Read("mask_color_set", &bval))
+                                    vd->SetMaskColor(col, bval);
+                                else
+                                    vd->SetMaskColor(col);
+                            }
+                        }
+                        if (fconfig.Read("enable_alpha", &bval))
+                            vd->SetEnableAlpha(bval);
+                        if (fconfig.Read("alpha", &dval))
+                            vd->SetAlpha(dval);
+                        
+                        //shading
+                        double amb, diff, spec, shine;
+                        if (fconfig.Read("ambient", &amb)&&
+                            fconfig.Read("diffuse", &diff)&&
+                            fconfig.Read("specular", &spec)&&
+                            fconfig.Read("shininess", &shine))
+                            vd->SetMaterial(amb, diff, spec, shine);
+                        bool shading;
+                        if (fconfig.Read("shading", &shading))
+                            vd->SetShading(shading);
+                        double srate;
+                        if (fconfig.Read("samplerate", &srate))
+                        {
+                            if (l_major<2)
+                                vd->SetSampleRate(srate/5.0);
+                            else
+                                vd->SetSampleRate(srate);
+                        }
+                        
+                        //spacings and scales
+                        if (!vd->isBrxml())
+                        {
+                            if (fconfig.Read("res", &str))
+                            {
+                                double resx, resy, resz;
+                                if (SSCANF(str.c_str(), "%lf%lf%lf", &resx, &resy, &resz))
+                                    vd->SetSpacings(resx, resy, resz);
+                            }
+                        }
+                        else
+                        {
+                            if (fconfig.Read("b_res", &str))
+                            {
+                                double b_resx, b_resy, b_resz;
+                                if (SSCANF(str.c_str(), "%lf%lf%lf", &b_resx, &b_resy, &b_resz))
+                                    vd->SetBaseSpacings(b_resx, b_resy, b_resz);
+                            }
+                            if (fconfig.Read("s_res", &str))
+                            {
+                                double s_resx, s_resy, s_resz;
+                                if (SSCANF(str.c_str(), "%lf%lf%lf", &s_resx, &s_resy, &s_resz))
+                                    vd->SetSpacingScales(s_resx, s_resy, s_resz);
+                            }
+                        }
+                        if (fconfig.Read("scl", &str))
+                        {
+                            double sclx, scly, sclz;
+                            if (SSCANF(str.c_str(), "%lf%lf%lf", &sclx, &scly, &sclz))
+                                vd->SetScalings(sclx, scly, sclz);
+                        }
+                        
+                        vector<Plane*> *planes = 0;
+                        if (vd->GetVR())
+                            planes = vd->GetVR()->get_planes();
+                        int iresx, iresy, iresz;
+                        vd->GetResolution(iresx, iresy, iresz);
+                        if (planes && planes->size()==6)
+                        {
+                            double val;
+                            wxString splane;
+                            
+                            //x1
+                            if (fconfig.Read("x1_vali", &val))
+                                (*planes)[0]->ChangePlane(Point(abs(val/iresx), 0.0, 0.0),
+                                                          Vector(1.0, 0.0, 0.0));
+                            else if (fconfig.Read("x1_val", &val))
+                                (*planes)[0]->ChangePlane(Point(abs(val), 0.0, 0.0),
+                                                          Vector(1.0, 0.0, 0.0));
+                            
+                            //x2
+                            if (fconfig.Read("x2_vali", &val))
+                                (*planes)[1]->ChangePlane(Point(abs(val/iresx), 0.0, 0.0),
+                                                          Vector(-1.0, 0.0, 0.0));
+                            else if (fconfig.Read("x2_val", &val))
+                                (*planes)[1]->ChangePlane(Point(abs(val), 0.0, 0.0),
+                                                          Vector(-1.0, 0.0, 0.0));
+                            
+                            //y1
+                            if (fconfig.Read("y1_vali", &val))
+                                (*planes)[2]->ChangePlane(Point(0.0, abs(val/iresy), 0.0),
+                                                          Vector(0.0, 1.0, 0.0));
+                            else if (fconfig.Read("y1_val", &val))
+                                (*planes)[2]->ChangePlane(Point(0.0, abs(val), 0.0),
+                                                          Vector(0.0, 1.0, 0.0));
+                            
+                            //y2
+                            if (fconfig.Read("y2_vali", &val))
+                                (*planes)[3]->ChangePlane(Point(0.0, abs(val/iresy), 0.0),
+                                                          Vector(0.0, -1.0, 0.0));
+                            else if (fconfig.Read("y2_val", &val))
+                                (*planes)[3]->ChangePlane(Point(0.0, abs(val), 0.0),
+                                                          Vector(0.0, -1.0, 0.0));
+                            
+                            //z1
+                            if (fconfig.Read("z1_vali", &val))
+                                (*planes)[4]->ChangePlane(Point(0.0, 0.0, abs(val/iresz)),
+                                                          Vector(0.0, 0.0, 1.0));
+                            else if (fconfig.Read("z1_val", &val))
+                                (*planes)[4]->ChangePlane(Point(0.0, 0.0, abs(val)),
+                                                          Vector(0.0, 0.0, 1.0));
+                            
+                            //z2
+                            if (fconfig.Read("z2_vali", &val))
+                                (*planes)[5]->ChangePlane(Point(0.0, 0.0, abs(val/iresz)),
+                                                          Vector(0.0, 0.0, -1.0));
+                            else if (fconfig.Read("z2_val", &val))
+                                (*planes)[5]->ChangePlane(Point(0.0, 0.0, abs(val)),
+                                                          Vector(0.0, 0.0, -1.0));
+                        }
+                        
+                        //2d adjustment settings
+                        if (fconfig.Read("gamma", &str))
+                        {
+                            float r, g, b;
+                            if (SSCANF(str.c_str(), "%f%f%f", &r, &g, &b)){
+                                FLIVR::Color col(r,g,b);
+                                vd->SetGamma(col);
+                            }
+                        }
+                        if (fconfig.Read("brightness", &str))
+                        {
+                            float r, g, b;
+                            if (SSCANF(str.c_str(), "%f%f%f", &r, &g, &b)){
+                                FLIVR::Color col(r,g,b);
+                                vd->SetBrightness(col);
+                            }
+                        }
+                        if (fconfig.Read("hdr", &str))
+                        {
+                            float r, g, b;
+                            if (SSCANF(str.c_str(), "%f%f%f", &r, &g, &b)){
+                                FLIVR::Color col(r,g,b);
+                                vd->SetHdr(col);
+                            }
+                        }
+                        if (fconfig.Read("levels", &str))
+                        {
+                            float r, g, b;
+                            if (SSCANF(str.c_str(), "%f%f%f", &r, &g, &b)){
+                                FLIVR::Color col(r,g,b);
+                                vd->SetLevels(col);
+                            }
+                        }
+                        bool bVal;
+                        if (fconfig.Read("sync_r", &bVal))
+                            vd->SetSyncR(bVal);
+                        if (fconfig.Read("sync_g", &bVal))
+                            vd->SetSyncG(bVal);
+                        if (fconfig.Read("sync_b", &bVal))
+                            vd->SetSyncB(bVal);
+                        
+                        //colormap settings
+                        if (fconfig.Read("colormap_mode", &iVal))
+                            vd->SetColormapMode(iVal);
+                        if (fconfig.Read("colormap", &iVal))
+                            vd->SetColormap(iVal);
+                        double low, high;
+                        if (fconfig.Read("colormap_lo_value", &low) &&
+                            fconfig.Read("colormap_hi_value", &high))
+                        {
+                            vd->SetColormapValues(low, high);
+                        }
+                        if (fconfig.Read("id_color_disp_mode", &iVal))
+                            vd->SetIDColDispMode(iVal);
+                        
+                        //inversion
+                        if (fconfig.Read("inv", &bVal))
+                            vd->SetInvert(bVal);
+                        //mip enable
+                        if (fconfig.Read("mode", &iVal))
+                            vd->SetMode(iVal);
+                        //noise reduction
+                        if (fconfig.Read("noise_red", &bVal))
+                            vd->SetNR(bVal);
+                        //depth override
+                        if (fconfig.Read("depth_ovrd", &iVal))
+                            vd->SetBlendMode(iVal);
+                        
+                        //shadow
+                        if (fconfig.Read("shadow", &bVal))
+                            vd->SetShadow(bVal);
+                        //shaodw intensity
+                        if (fconfig.Read("shadow_darkness", &dval))
+                            vd->SetShadowParams(dval);
+                        
+                        //legend
+                        if (fconfig.Read("legend", &bVal))
+                            vd->SetLegend(bVal);
+                        
+                        //roi
+                        if (fconfig.Read("roi_tree", &str))
+                            vd->ImportROITree(str.ToStdWstring());
+                        if (fconfig.Read("selected_rois", &str))
+                            vd->ImportSelIDs(str.ToStdString());
+                        if (fconfig.Read("roi_disp_mode", &iVal))
+                            vd->SetIDColDispMode(iVal);
+                        
+                        if (fconfig.Read("mask_lv", &iVal))
+                            vd->SetMaskLv(iVal);
+                        
+                        if (fconfig.Read("mask_disp_mode", &iVal))
+                            vd->SetMaskHideMode(iVal);
+                        
+                        if (fconfig.Read("na_mode", &bVal))
+                            vd->SetNAMode(bVal);
+                        if (fconfig.Read("shared_mask", &str))
+                            vd->SetSharedMaskName(str);
+                        if (fconfig.Read("shared_label", &str))
+                            vd->SetSharedLabelName(str);
+                    }
+                }
+            }
+        }
+    }
+    
+    fconfig.SetPath(tmp_path);
+    
+    return;
 }
 
 MeshData* VRenderFrame::OpenMeshFromProject(wxString name, wxFileConfig &fconfig)
@@ -3785,11 +4449,13 @@ MeshData* VRenderFrame::OpenMeshFromProject(wxString name, wxFileConfig &fconfig
 				if (str != name)
 					continue;
 
+				int ret = 0;
 				if (fconfig.Read("path", &str))
 				{
-					m_data_mgr.LoadMeshData(str);
+					ret = m_data_mgr.LoadMeshData(str);
 				}
-				md = m_data_mgr.GetLastMeshData();
+				if (ret != 0)
+					md = m_data_mgr.GetLastMeshData();
 				if (md)
 				{
 					if (fconfig.Read("name", &str))
@@ -3844,6 +4510,14 @@ MeshData* VRenderFrame::OpenMeshFromProject(wxString name, wxFileConfig &fconfig
 								md->SetHdr(col);
 							}
 						}
+                        if (fconfig.Read("levels", &str))
+                        {
+                            float r, g, b;
+                            if (SSCANF(str.c_str(), "%f%f%f", &r, &g, &b)){
+                                FLIVR::Color col(r,g,b);
+                                md->SetLevels(col);
+                            }
+                        }
 						bool bVal;
 						if (fconfig.Read("sync_r", &bVal))
 							md->SetSyncG(bVal);
@@ -3985,6 +4659,8 @@ MeshData* VRenderFrame::OpenMeshFromProject(wxString name, wxFileConfig &fconfig
 void VRenderFrame::OpenProject(wxString& filename)
 {
 	m_data_mgr.SetProjectPath(filename);
+    m_project_data_loader.SetDataManager(&m_data_mgr);
+    ProjectDataLoader::setCriticalSection(&ms_criticalSection);
     
     SetEvtHandlerEnabled(false);
     //Freeze();
@@ -4024,7 +4700,7 @@ void VRenderFrame::OpenProject(wxString& filename)
 	}
 
 	int ticks = 0;
-	int tick_cnt = 1;
+	int tick_cnt = 0;
 	fconfig.Read("ticks", &ticks);
 	wxProgressDialog *prg_diag = 0;
 	prg_diag = new wxProgressDialog(
@@ -4070,20 +4746,41 @@ void VRenderFrame::OpenProject(wxString& filename)
 	{
 		fconfig.SetPath("/data/volume");
 		int num = fconfig.Read("num", 0l);
-		for (i = 0; i < num; i++)
-		{
-			wxString str;
-			str = wxString::Format("/data/volume/%d", i);
-			if (fconfig.Exists(str))
-			{
-				fconfig.SetPath(str);
-				if (fconfig.Read("name", &str))
-				{
-					OpenVolumeFromProject(str, fconfig);
-				}
-			}
-			tick_cnt++;
-		}
+        
+        if (m_project_data_loader.GetMaxThreadNum() > 0)
+        {
+            OpenVolumesFromProjectMT(fconfig, false);
+            
+            int cur = tick_cnt;
+            while(m_project_data_loader.IsRunning())
+            {
+                wxMilliSleep(100);
+                prg_diag->Update(90 * (cur + m_project_data_loader.GetProgress()) / ticks);
+            }
+            
+            tick_cnt += m_project_data_loader.GetProgress();
+            
+            SetVolumePropertiesFromProject(fconfig);
+        }
+        else
+        {
+            for (i = 0; i < num; i++)
+            {
+                wxString str;
+                str = wxString::Format("/data/volume/%d", i);
+                if (fconfig.Exists(str))
+                {
+                    fconfig.SetPath(str);
+                    if (fconfig.Read("name", &str))
+                    {
+                        OpenVolumeFromProject(str, fconfig);
+                    }
+                }
+                tick_cnt++;
+                if (ticks && prg_diag)
+                    prg_diag->Update(90*tick_cnt/ticks);
+            }
+        }
 	}
 
 	//meshes
@@ -4104,6 +4801,8 @@ void VRenderFrame::OpenProject(wxString& filename)
 				}
 			}
 			tick_cnt++;
+            if (ticks && prg_diag)
+                prg_diag->Update(90*tick_cnt/ticks);
 		}
 	}
 
@@ -4125,6 +4824,8 @@ void VRenderFrame::OpenProject(wxString& filename)
 				}
 			}
 			tick_cnt++;
+            if (ticks && prg_diag)
+                prg_diag->Update(90*tick_cnt/ticks);
 		}
 	}
 
@@ -4281,6 +4982,14 @@ void VRenderFrame::OpenProject(wxString& filename)
 													group->SetHdr(col);
 												}
 											}
+                                            if (fconfig.Read("levels", &str))
+                                            {
+                                                float r, g, b;
+                                                if (SSCANF(str.c_str(), "%f%f%f", &r, &g, &b)){
+                                                    FLIVR::Color col(r,g,b);
+                                                    group->SetLevels(col);
+                                                }
+                                            }
 											if (fconfig.Read("sync_r", &bVal))
 												group->SetSyncR(bVal);
 											if (fconfig.Read("sync_g", &bVal))
@@ -4526,12 +5235,22 @@ void VRenderFrame::OpenProject(wxString& filename)
 						vrv->m_glview->SetHdr(col);
 					}
 				}
+                if (fconfig.Read("levels", &str))
+                {
+                    float r, g, b;
+                    if (SSCANF(str.c_str(), "%f%f%f", &r, &g, &b)){
+                        FLIVR::Color col(r,g,b);
+                        vrv->m_glview->SetLevels(col);
+                    }
+                }
 				if (fconfig.Read("sync_r", &bVal))
 					vrv->m_glview->SetSyncR(bVal);
 				if (fconfig.Read("sync_g", &bVal))
 					vrv->m_glview->SetSyncG(bVal);
 				if (fconfig.Read("sync_b", &bVal))
 					vrv->m_glview->SetSyncB(bVal);
+                if (fconfig.Read("easy_2d_adjustment", &bVal))
+                    vrv->m_glview->SetEasy2DAdjustMode(bVal);
 
 				//clipping plane rotations
 				int clip_mode;
@@ -4690,6 +5409,8 @@ void VRenderFrame::OpenProject(wxString& filename)
 		bool bVal;
 		int iVal;
 
+		m_movie_view->DisableRendering();
+
 		//set settings for frame
 		VRenderView* vrv = 0;
 		if (fconfig.Read("views_cmb", &iVal))
@@ -4790,6 +5511,8 @@ void VRenderFrame::OpenProject(wxString& filename)
 		if (fconfig.Read("time_cur_text", &sVal))
 			m_movie_view->m_time_current_text->SetValue(sVal);
 		fconfig.Read("progress_text", &mov_prog);
+
+		m_movie_view->EnableRendering();
 	}
 
 	//brushtool diag
@@ -5166,12 +5889,12 @@ void VRenderFrame::OpenProject(wxString& filename)
 		mov_prog.ToDouble(&movcur);
 		m_mov_step.ToDouble(&movlen);
 		m_movie_view->SetProgress(movcur/movlen);
-		m_movie_view->SetRendering(movcur/movlen);
+		//m_movie_view->SetRendering(movcur/movlen);
 	}
 	else
 	{
 		m_movie_view->SetProgress(0.0);
-		m_movie_view->SetRendering(0.0);
+		//m_movie_view->SetRendering(0.0);
 	}
 
 	if (m_setting_dlg)
@@ -5505,6 +6228,7 @@ void VRenderFrame::ToggleVisibilityPluginWindow(wxString name, bool show, int do
 					Dockable(true).CloseButton(true));
 				//m_aui_mgr.GetPane(pp).Float();
 				m_aui_mgr.GetPane(pp).Left().Layer(3);
+                m_aui_mgr.GetPane(pp).dock_proportion = 100;
 				m_aui_mgr.Update();
 				SetEvtHandlerEnabled(true);
 			}
@@ -5527,6 +6251,7 @@ void VRenderFrame::ToggleVisibilityPluginWindow(wxString name, bool show, int do
 					Dockable(true).CloseButton(true).Hide());
 				//m_aui_mgr.GetPane(pp).Float();
 				m_aui_mgr.GetPane(pp).Left().Layer(3);
+                m_aui_mgr.GetPane(pp).dock_proportion = 100;
 				m_aui_mgr.Update();
 				SetEvtHandlerEnabled(true);
 			}
