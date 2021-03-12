@@ -548,13 +548,14 @@ VRenderFrame::VRenderFrame(
 	//set view default settings
 	if (m_adjust_view && vrv)
 	{
-		Color gamma, brightness, hdr;
+		Color gamma, brightness, hdr, level;
 		bool sync_r, sync_g, sync_b;
-		m_adjust_view->GetDefaults(gamma, brightness, hdr,
+		m_adjust_view->GetDefaults(gamma, brightness, hdr, level,
 			sync_r, sync_g, sync_b);
 		vrv->m_glview->SetGamma(gamma);
 		vrv->m_glview->SetBrightness(brightness);
 		vrv->m_glview->SetHdr(hdr);
+        vrv->m_glview->SetLevels(level);
 		vrv->m_glview->SetSyncR(sync_r);
 		vrv->m_glview->SetSyncG(sync_g);
 		vrv->m_glview->SetSyncB(sync_b);
@@ -804,12 +805,13 @@ wxString VRenderFrame::CreateView(int row)
 	//set view default settings
 	if (m_adjust_view && vrv)
 	{
-		Color gamma, brightness, hdr;
+		Color gamma, brightness, hdr, level;
 		bool sync_r, sync_g, sync_b;
-		m_adjust_view->GetDefaults(gamma, brightness, hdr, sync_r, sync_g, sync_b);
+		m_adjust_view->GetDefaults(gamma, brightness, hdr, level, sync_r, sync_g, sync_b);
 		vrv->m_glview->SetGamma(gamma);
 		vrv->m_glview->SetBrightness(brightness);
 		vrv->m_glview->SetHdr(hdr);
+        vrv->m_glview->SetLevels(level);
 		vrv->m_glview->SetSyncR(sync_r);
 		vrv->m_glview->SetSyncG(sync_g);
 		vrv->m_glview->SetSyncB(sync_b);
@@ -2930,6 +2932,8 @@ void VRenderFrame::SaveProject(wxString& filename)
 			fconfig.Write("brightness", str);
 			str = wxString::Format("%f %f %f", vd->GetHdr().r(), vd->GetHdr().g(), vd->GetHdr().b());
 			fconfig.Write("hdr", str);
+            str = wxString::Format("%f %f %f", vd->GetLevels().r(), vd->GetLevels().g(), vd->GetLevels().b());
+            fconfig.Write("levels", str);
 			fconfig.Write("sync_r", vd->GetSyncR());
 			fconfig.Write("sync_g", vd->GetSyncG());
 			fconfig.Write("sync_b", vd->GetSyncB());
@@ -3086,6 +3090,8 @@ void VRenderFrame::SaveProject(wxString& filename)
 			fconfig.Write("brightness", str);
 			str = wxString::Format("%f %f %f", md->GetHdr().r(), md->GetHdr().g(), md->GetHdr().b());
 			fconfig.Write("hdr", str);
+            str = wxString::Format("%f %f %f", md->GetLevels().r(), md->GetLevels().g(), md->GetLevels().b());
+            fconfig.Write("levels", str);
 			fconfig.Write("sync_r", md->GetSyncR());
 			fconfig.Write("sync_g", md->GetSyncG());
 			fconfig.Write("sync_b", md->GetSyncB());
@@ -3231,6 +3237,9 @@ void VRenderFrame::SaveProject(wxString& filename)
 						str = wxString::Format("%f %f %f", group->GetHdr().r(),
 							group->GetHdr().g(), group->GetHdr().b());
 						fconfig.Write("hdr", str);
+                        str = wxString::Format("%f %f %f", group->GetLevels().r(),
+                            group->GetLevels().g(), group->GetLevels().b());
+                        fconfig.Write("levels", str);
 						fconfig.Write("sync_r", group->GetSyncR());
 						fconfig.Write("sync_g", group->GetSyncG());
 						fconfig.Write("sync_b", group->GetSyncB());
@@ -3341,9 +3350,13 @@ void VRenderFrame::SaveProject(wxString& filename)
 			str = wxString::Format("%f %f %f", vrv->m_glview->GetHdr().r(),
 				vrv->m_glview->GetHdr().g(), vrv->m_glview->GetHdr().b());
 			fconfig.Write("hdr", str);
+            str = wxString::Format("%f %f %f", vrv->m_glview->GetLevels().r(),
+                vrv->m_glview->GetLevels().g(), vrv->m_glview->GetLevels().b());
+            fconfig.Write("levels", str);
 			fconfig.Write("sync_r", vrv->m_glview->GetSyncR());
 			fconfig.Write("sync_g", vrv->m_glview->GetSyncG());
 			fconfig.Write("sync_b", vrv->m_glview->GetSyncB());
+            fconfig.Write("easy_2d_adjustment", vrv->m_glview->GetEasy2DAdjustMode());
 
 			//clipping plane rotations
 			fconfig.Write("clip_mode", vrv->GetClipMode());
@@ -3863,6 +3876,14 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 								vd->SetHdr(col);
 							}
 						}
+                        if (fconfig.Read("levels", &str))
+                        {
+                            float r, g, b;
+                            if (SSCANF(str.c_str(), "%f%f%f", &r, &g, &b)){
+                                FLIVR::Color col(r,g,b);
+                                vd->SetLevels(col);
+                            }
+                        }
 						bool bVal;
 						if (fconfig.Read("sync_r", &bVal))
 							vd->SetSyncR(bVal);
@@ -4320,6 +4341,14 @@ void VRenderFrame::SetVolumePropertiesFromProject(wxFileConfig &fconfig)
                                 vd->SetHdr(col);
                             }
                         }
+                        if (fconfig.Read("levels", &str))
+                        {
+                            float r, g, b;
+                            if (SSCANF(str.c_str(), "%f%f%f", &r, &g, &b)){
+                                FLIVR::Color col(r,g,b);
+                                vd->SetLevels(col);
+                            }
+                        }
                         bool bVal;
                         if (fconfig.Read("sync_r", &bVal))
                             vd->SetSyncR(bVal);
@@ -4481,6 +4510,14 @@ MeshData* VRenderFrame::OpenMeshFromProject(wxString name, wxFileConfig &fconfig
 								md->SetHdr(col);
 							}
 						}
+                        if (fconfig.Read("levels", &str))
+                        {
+                            float r, g, b;
+                            if (SSCANF(str.c_str(), "%f%f%f", &r, &g, &b)){
+                                FLIVR::Color col(r,g,b);
+                                md->SetLevels(col);
+                            }
+                        }
 						bool bVal;
 						if (fconfig.Read("sync_r", &bVal))
 							md->SetSyncG(bVal);
@@ -4945,6 +4982,14 @@ void VRenderFrame::OpenProject(wxString& filename)
 													group->SetHdr(col);
 												}
 											}
+                                            if (fconfig.Read("levels", &str))
+                                            {
+                                                float r, g, b;
+                                                if (SSCANF(str.c_str(), "%f%f%f", &r, &g, &b)){
+                                                    FLIVR::Color col(r,g,b);
+                                                    group->SetLevels(col);
+                                                }
+                                            }
 											if (fconfig.Read("sync_r", &bVal))
 												group->SetSyncR(bVal);
 											if (fconfig.Read("sync_g", &bVal))
@@ -5190,12 +5235,22 @@ void VRenderFrame::OpenProject(wxString& filename)
 						vrv->m_glview->SetHdr(col);
 					}
 				}
+                if (fconfig.Read("levels", &str))
+                {
+                    float r, g, b;
+                    if (SSCANF(str.c_str(), "%f%f%f", &r, &g, &b)){
+                        FLIVR::Color col(r,g,b);
+                        vrv->m_glview->SetLevels(col);
+                    }
+                }
 				if (fconfig.Read("sync_r", &bVal))
 					vrv->m_glview->SetSyncR(bVal);
 				if (fconfig.Read("sync_g", &bVal))
 					vrv->m_glview->SetSyncG(bVal);
 				if (fconfig.Read("sync_b", &bVal))
 					vrv->m_glview->SetSyncB(bVal);
+                if (fconfig.Read("easy_2d_adjustment", &bVal))
+                    vrv->m_glview->SetEasy2DAdjustMode(bVal);
 
 				//clipping plane rotations
 				int clip_mode;

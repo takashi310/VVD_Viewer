@@ -27,6 +27,13 @@ BEGIN_EVENT_TABLE(AdjustView, wxPanel)
 	EVT_TEXT(ID_GHdrText, AdjustView::OnGHdrText)
 	EVT_COMMAND_SCROLL(ID_BHdrSldr, AdjustView::OnBHdrChange)
 	EVT_TEXT(ID_BHdrText, AdjustView::OnBHdrText)
+    //set hdr
+    EVT_COMMAND_SCROLL(ID_RLvSldr, AdjustView::OnRLevelChange)
+    EVT_TEXT(ID_RLvText, AdjustView::OnRLevelText)
+    EVT_COMMAND_SCROLL(ID_GLvSldr, AdjustView::OnGLevelChange)
+    EVT_TEXT(ID_GLvText, AdjustView::OnGLevelText)
+    EVT_COMMAND_SCROLL(ID_BLvSldr, AdjustView::OnBHdrChange)
+    EVT_TEXT(ID_BLvText, AdjustView::OnBLevelText)
 	//reset
 	EVT_BUTTON(ID_RResetBtn, AdjustView::OnRReset)
 	EVT_BUTTON(ID_GResetBtn, AdjustView::OnGReset)
@@ -62,6 +69,7 @@ m_use_dft_settings(false),
 m_dft_gamma(Color(1.0, 1.0, 1.0)),
 m_dft_brightness(Color(0.0, 0.0, 0.0)),
 m_dft_hdr(Color(0.0, 0.0, 0.0)),
+m_dft_level(Color(1.0, 1.0, 1.0)),
 m_dft_sync_r(false),
 m_dft_sync_g(false),
 m_dft_sync_b(false)
@@ -82,9 +90,9 @@ m_dft_sync_b(false)
 	wxStaticText *st;
 
 #ifdef _DARWIN
-    wxSize sldrsize = wxDefaultSize;
+    wxSize sldrsize = wxSize(-1,40);
 #else
-    wxSize sldrsize = wxSize(25,-1);
+    wxSize sldrsize = wxSize(25,40);
 #endif
 
     //first line: text
@@ -287,12 +295,12 @@ m_dft_sync_b(false)
 #endif
 	m_default_sizer->Add(m_dft_btn, 0, wxEXPAND);
     
-    m_main_sizer->Add(m_default_sizer, 0, wxEXPAND);
+    m_main_sizer->Add(m_default_sizer, 1, wxEXPAND);
     
     
     //first line: text
     wxBoxSizer *sizer_h_e_1 = new wxBoxSizer(wxHORIZONTAL);
-    st = new wxStaticText(this, 0, "Contrast",
+    st = new wxStaticText(this, 0, "Saturation",
                           wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER);
     sizer_h_e_1->Add(st, 1, wxEXPAND);
     m_easy_sizer->Add(sizer_h_e_1, 0, wxEXPAND);
@@ -316,17 +324,17 @@ m_dft_sync_b(false)
     
     //fourth line: sliders
     wxBoxSizer *sizer_h_e_3 = new wxBoxSizer(wxHORIZONTAL);
-    m_easy_r_gamma_sldr = new wxSlider(this, ID_RGammaSldr, 100, 10, 999,
+    m_easy_r_level_sldr = new wxSlider(this, ID_RLvSldr, 0, -99, 99,
                                   wxDefaultPosition, sldrsize, wxSL_VERTICAL);
-    sizer_h_e_3->Add(m_easy_r_gamma_sldr, 1, wxEXPAND);
+    sizer_h_e_3->Add(m_easy_r_level_sldr, 1, wxEXPAND);
     m_easy_sizer->Add(sizer_h_e_3, 1, wxEXPAND);
     
     //5th line: input boxes
     wxBoxSizer *sizer_h_e_5 = new wxBoxSizer(wxHORIZONTAL);
     vald_fp2.SetRange(0.0, 10.0);
-    m_easy_r_gamma_text = new wxTextCtrl(this, ID_RGammaText, "1.00",
+    m_easy_r_level_text = new wxTextCtrl(this, ID_RLvText, "0.00",
                                     wxDefaultPosition, wxSize(40, 20), 0, vald_fp2);
-    sizer_h_e_5->Add(m_easy_r_gamma_text, 1, wxALIGN_CENTER);
+    sizer_h_e_5->Add(m_easy_r_level_text, 1, wxALIGN_CENTER);
     m_easy_sizer->Add(sizer_h_e_5, 0, wxALIGN_CENTER);
     
     //6th line: reset buttons
@@ -359,17 +367,17 @@ m_dft_sync_b(false)
     
     //9th line: sliders
     wxBoxSizer *sizer_h_e_7 = new wxBoxSizer(wxHORIZONTAL);
-    m_easy_g_gamma_sldr = new wxSlider(this, ID_GGammaSldr, 100, 10, 999,
+    m_easy_g_level_sldr = new wxSlider(this, ID_GLvSldr, 0, -99, 99,
                                        wxDefaultPosition, sldrsize, wxSL_VERTICAL);
-    sizer_h_e_7->Add(m_easy_g_gamma_sldr, 1, wxEXPAND);
+    sizer_h_e_7->Add(m_easy_g_level_sldr, 1, wxEXPAND);
     m_easy_sizer->Add(sizer_h_e_7, 1, wxEXPAND);
     
     //10th line: input boxes
     wxBoxSizer *sizer_h_e_8 = new wxBoxSizer(wxHORIZONTAL);
     vald_fp2.SetRange(0.0, 10.0);
-    m_easy_g_gamma_text = new wxTextCtrl(this, ID_GGammaText, "1.00",
+    m_easy_g_level_text = new wxTextCtrl(this, ID_GLvText, "0.00",
                                          wxDefaultPosition, wxSize(40, 20), 0, vald_fp2);
-    sizer_h_e_8->Add(m_easy_g_gamma_text, 1, wxALIGN_CENTER);
+    sizer_h_e_8->Add(m_easy_g_level_text, 1, wxALIGN_CENTER);
     m_easy_sizer->Add(sizer_h_e_8, 0, wxALIGN_CENTER);
     
     //11th line: reset buttons
@@ -402,17 +410,17 @@ m_dft_sync_b(false)
     
     //14th line: sliders
     wxBoxSizer *sizer_h_e_11 = new wxBoxSizer(wxHORIZONTAL);
-    m_easy_b_gamma_sldr = new wxSlider(this, ID_BGammaSldr, 100, 10, 999,
+    m_easy_b_level_sldr = new wxSlider(this, ID_BLvSldr, 0, -99, 99,
                                        wxDefaultPosition, sldrsize, wxSL_VERTICAL);
-    sizer_h_e_11->Add(m_easy_b_gamma_sldr, 1, wxEXPAND);
+    sizer_h_e_11->Add(m_easy_b_level_sldr, 1, wxEXPAND);
     m_easy_sizer->Add(sizer_h_e_11, 1, wxEXPAND);
     
     //16th line: input boxes
     wxBoxSizer *sizer_h_e_13 = new wxBoxSizer(wxHORIZONTAL);
     vald_fp2.SetRange(0.0, 10.0);
-    m_easy_b_gamma_text = new wxTextCtrl(this, ID_BGammaText, "1.00",
+    m_easy_b_level_text = new wxTextCtrl(this, ID_BLvText, "0.00",
                                          wxDefaultPosition, wxSize(40, 20), 0, vald_fp2);
-    sizer_h_e_13->Add(m_easy_b_gamma_text, 1, wxALIGN_CENTER);
+    sizer_h_e_13->Add(m_easy_b_level_text, 1, wxALIGN_CENTER);
     m_easy_sizer->Add(sizer_h_e_13, 0, wxALIGN_CENTER);
     
     //15th line: reset buttons
@@ -435,7 +443,7 @@ m_dft_sync_b(false)
 #endif
     m_easy_sizer->Add(m_easy_dft_btn, 0, wxEXPAND);
 
-    m_main_sizer->Add(m_easy_sizer, 0, wxEXPAND);
+    m_main_sizer->Add(m_easy_sizer, 1, wxEXPAND);
 
 	SetSizer(m_main_sizer);
 	Layout();
@@ -468,16 +476,19 @@ void AdjustView::GetSettings()
 	double r_gamma = 1.0;
 	double r_brightness = 0.0;
 	double r_hdr = 0.0;
+    double r_level = 1.0;
 	//green
 	bool sync_g = false;
 	double g_gamma = 1.0;
 	double g_brightness = 0.0;
 	double g_hdr = 0.0;
+    double g_level = 1.0;
 	//blue
 	bool sync_b = false;
 	double b_gamma = 1.0;
 	double b_brightness = 0.0;
 	double b_hdr = 0.0;
+    double b_level = 1.0;
 
 	switch (m_type)
 	{
@@ -489,16 +500,19 @@ void AdjustView::GetSettings()
 			Gamma2UI(m_glview->GetGamma().r(), r_gamma);
 			Brightness2UI(m_glview->GetBrightness().r(), r_brightness);
 			Hdr2UI(m_glview->GetHdr().r(), r_hdr);
+            Level2UI(m_glview->GetLevels().r(), r_level);
 			//green
 			sync_g = m_glview->GetSyncG();
 			Gamma2UI(m_glview->GetGamma().g(), g_gamma);
 			Brightness2UI(m_glview->GetBrightness().g(), g_brightness);
 			Hdr2UI(m_glview->GetHdr().g(), g_hdr);
+            Level2UI(m_glview->GetLevels().g(), g_level);
 			//blue
 			sync_b = m_glview->GetSyncB();
 			Gamma2UI(m_glview->GetGamma().b(), b_gamma);
 			Brightness2UI(m_glview->GetBrightness().b(), b_brightness);
 			Hdr2UI(m_glview->GetHdr().b(), b_hdr);
+            Level2UI(m_glview->GetLevels().b(), b_level);
 		}
 		break;
 	case 2://volume data
@@ -517,16 +531,19 @@ void AdjustView::GetSettings()
 				Gamma2UI(layer->GetGamma().r(), r_gamma);
 				Brightness2UI(layer->GetBrightness().r(), r_brightness);
 				Hdr2UI(layer->GetHdr().r(), r_hdr);
+                Level2UI(layer->GetLevels().r(), r_level);
 				//green
 				sync_g = layer->GetSyncG();
 				Gamma2UI(layer->GetGamma().g(), g_gamma);
 				Brightness2UI(layer->GetBrightness().g(), g_brightness);
 				Hdr2UI(layer->GetHdr().g(), g_hdr);
+                Level2UI(layer->GetLevels().g(), g_level);
 				//blue
 				sync_b = layer->GetSyncB();
 				Gamma2UI(layer->GetGamma().b(), b_gamma);
 				Brightness2UI(layer->GetBrightness().b(), b_brightness);
 				Hdr2UI(layer->GetHdr().b(), b_hdr);
+                Level2UI(layer->GetLevels().b(), b_level);
 			}
 		}
 		break;
@@ -539,11 +556,11 @@ void AdjustView::GetSettings()
         m_easy_sync_r_chk->SetValue(sync_r);
 		m_sync_r = sync_r;
 		m_r_gamma_sldr->SetValue(Gamma2UIP(r_gamma));
-        m_easy_r_gamma_sldr->SetValue(Gamma2UIP(r_gamma));
+        m_easy_r_level_sldr->SetValue(Level2UIP(r_level));
 		m_r_brightness_sldr->SetValue(Brightness2UIP(r_brightness));
 		m_r_hdr_sldr->SetValue(Hdr2UIP(r_hdr));
 		m_r_gamma_text->ChangeValue(wxString::Format("%.2f", r_gamma));
-        m_easy_r_gamma_text->ChangeValue(wxString::Format("%.2f", r_gamma));
+        m_easy_r_level_text->ChangeValue(wxString::Format("%.2f", r_level));
 		m_r_brightness_text->ChangeValue(wxString::Format("%d", Brightness2UIP(r_brightness)));
 		m_r_hdr_text->ChangeValue(wxString::Format("%.2f", r_hdr));
 		//green
@@ -551,11 +568,11 @@ void AdjustView::GetSettings()
         m_easy_sync_g_chk->SetValue(sync_g);
 		m_sync_g = sync_g;
 		m_g_gamma_sldr->SetValue(Gamma2UIP(g_gamma));
-        m_easy_g_gamma_sldr->SetValue(Gamma2UIP(g_gamma));
+        m_easy_g_level_sldr->SetValue(Level2UIP(g_level));
 		m_g_brightness_sldr->SetValue(Brightness2UIP(g_brightness));
 		m_g_hdr_sldr->SetValue(Hdr2UIP(g_hdr));
 		m_g_gamma_text->ChangeValue(wxString::Format("%.2f", g_gamma));
-        m_easy_g_gamma_text->ChangeValue(wxString::Format("%.2f", g_gamma));
+        m_easy_g_level_text->ChangeValue(wxString::Format("%.2f", g_level));
 		m_g_brightness_text->ChangeValue(wxString::Format("%d", int(g_brightness)));
 		m_g_hdr_text->ChangeValue(wxString::Format("%.2f", g_hdr));
 		//blue
@@ -563,11 +580,11 @@ void AdjustView::GetSettings()
         m_easy_sync_b_chk->SetValue(sync_b);
 		m_sync_b = sync_b;
 		m_b_gamma_sldr->SetValue(Gamma2UIP(b_gamma));
-        m_easy_b_gamma_sldr->SetValue(Gamma2UIP(b_gamma));
+        m_easy_b_level_sldr->SetValue(Level2UIP(b_level));
 		m_b_brightness_sldr->SetValue(Brightness2UIP(b_brightness));
 		m_b_hdr_sldr->SetValue(Hdr2UIP(b_hdr));
 		m_b_gamma_text->ChangeValue(wxString::Format("%.2f", b_gamma));
-        m_easy_b_gamma_text->ChangeValue(wxString::Format("%.2f", b_gamma));
+        m_easy_b_level_text->ChangeValue(wxString::Format("%.2f", b_level));
 		m_b_brightness_text->ChangeValue(wxString::Format("%d", Brightness2UIP(b_brightness)));
 		m_b_hdr_text->ChangeValue(wxString::Format("%.2f", b_hdr));
         
@@ -586,6 +603,13 @@ void AdjustView::GetSettings()
 	}
 	else
 		DisableAll();
+    
+    if (m_glview)
+    {
+        m_easy_chk->SetValue(m_glview->GetEasy2DAdjustMode());
+        wxCommandEvent e;
+        OnEasyModeCheck(e);
+    }
 }
 
 void AdjustView::DisableAll()
@@ -599,8 +623,8 @@ void AdjustView::DisableAll()
 	m_r_brightness_text->Disable();
 	m_r_hdr_text->Disable();
     m_easy_sync_r_chk->Disable();
-    m_easy_r_gamma_sldr->Disable();
-    m_easy_r_gamma_text->Disable();
+    m_easy_r_level_sldr->Disable();
+    m_easy_r_level_text->Disable();
 	//green
 	m_sync_g_chk->Disable();
 	m_g_gamma_sldr->Disable();
@@ -610,8 +634,8 @@ void AdjustView::DisableAll()
 	m_g_brightness_text->Disable();
 	m_g_hdr_text->Disable();
     m_easy_sync_g_chk->Disable();
-    m_easy_g_gamma_sldr->Disable();
-    m_easy_g_gamma_text->Disable();
+    m_easy_g_level_sldr->Disable();
+    m_easy_g_level_text->Disable();
 	//blue
 	m_sync_b_chk->Disable();
 	m_b_gamma_sldr->Disable();
@@ -621,8 +645,8 @@ void AdjustView::DisableAll()
 	m_b_brightness_text->Disable();
 	m_b_hdr_text->Disable();
     m_easy_sync_b_chk->Disable();
-    m_easy_b_gamma_sldr->Disable();
-    m_easy_b_gamma_text->Disable();
+    m_easy_b_level_sldr->Disable();
+    m_easy_b_level_text->Disable();
 	//reset
 	m_r_reset_btn->Disable();
 	m_g_reset_btn->Disable();
@@ -632,6 +656,7 @@ void AdjustView::DisableAll()
     m_easy_b_reset_btn->Disable();
 	//save as default
 	m_dft_btn->Disable();
+    m_easy_dft_btn->Disable();
 }
 
 void AdjustView::EnableAll()
@@ -645,8 +670,8 @@ void AdjustView::EnableAll()
 	m_r_brightness_text->Enable();
 	m_r_hdr_text->Enable();
     m_easy_sync_r_chk->Enable();
-    m_easy_r_gamma_sldr->Enable();
-    m_easy_r_gamma_text->Enable();
+    m_easy_r_level_sldr->Enable();
+    m_easy_r_level_text->Enable();
 	//green
 	m_sync_g_chk->Enable();
 	m_g_gamma_sldr->Enable();
@@ -656,8 +681,8 @@ void AdjustView::EnableAll()
 	m_g_brightness_text->Enable();
 	m_g_hdr_text->Enable();
     m_easy_sync_g_chk->Enable();
-    m_easy_g_gamma_sldr->Enable();
-    m_easy_g_gamma_text->Enable();
+    m_easy_g_level_sldr->Enable();
+    m_easy_g_level_text->Enable();
 	//blue
 	m_sync_b_chk->Enable();
 	m_b_gamma_sldr->Enable();
@@ -667,8 +692,8 @@ void AdjustView::EnableAll()
 	m_b_brightness_text->Enable();
 	m_b_hdr_text->Enable();
     m_easy_sync_b_chk->Enable();
-    m_easy_b_gamma_sldr->Enable();
-    m_easy_b_gamma_text->Enable();
+    m_easy_b_level_sldr->Enable();
+    m_easy_b_level_text->Enable();
 	//reset
 	m_r_reset_btn->Enable();
 	m_g_reset_btn->Enable();
@@ -678,6 +703,208 @@ void AdjustView::EnableAll()
     m_easy_b_reset_btn->Enable();
 	//save as default
 	m_dft_btn->Enable();
+    m_easy_dft_btn->Enable();
+}
+
+void AdjustView::OnRLevelChange(wxScrollEvent & event)
+{
+    double val = (double)event.GetPosition() / 100.0;
+    wxString str = wxString::Format("%.2f", val);
+    m_easy_r_level_text->SetValue(str);
+}
+
+void AdjustView::OnRLevelText(wxCommandEvent& event)
+{
+    wxString str = m_easy_r_level_text->GetValue();
+    double val;
+    str.ToDouble(&val);
+    m_easy_r_level_sldr->SetValue(int(val*100));
+    
+    if (m_sync_r)
+    {
+        if (m_sync_g)
+        {
+            m_easy_g_level_sldr->SetValue(int(val*100));
+            m_easy_g_level_text->ChangeValue(str);
+        }
+        if (m_sync_b)
+        {
+            m_easy_b_level_sldr->SetValue(int(val*100));
+            m_easy_b_level_text->ChangeValue(str);
+        }
+    }
+    
+    if (m_glview && m_type==1)
+    {
+        Color level = m_glview->GetLevels();
+        LevelUI2(val, level[0]);
+        if (m_sync_r)
+        {
+            if (m_sync_g)
+                LevelUI2(val, level[1]);
+            if (m_sync_b)
+                LevelUI2(val, level[2]);
+        }
+        m_glview->SetLevels(level);
+    }
+    
+    TreeLayer *layer = 0;
+    if (m_type == 2 && m_vd)
+        layer = (TreeLayer*)m_vd;
+    else if (m_type == 5 && m_group)
+        layer = (TreeLayer*)m_group;
+    if (layer)
+    {
+        Color level = layer->GetLevels();
+        LevelUI2(val, level[0]);
+        if (m_sync_r)
+        {
+            if (m_sync_g)
+                LevelUI2(val, level[1]);
+            if (m_sync_b)
+                LevelUI2(val, level[2]);
+        }
+        layer->SetLevels(level);
+        
+        if (m_link_group && m_group)
+            m_group->SetLevelsAll(level);
+        
+    }
+    RefreshVRenderViews(true);
+}
+
+void AdjustView::OnGLevelChange(wxScrollEvent & event)
+{
+    double val = (double)event.GetPosition() / 100.0;
+    wxString str = wxString::Format("%.2f", val);
+    m_easy_g_level_text->SetValue(str);
+}
+
+void AdjustView::OnGLevelText(wxCommandEvent& event)
+{
+    wxString str = m_easy_g_level_text->GetValue();
+    double val;
+    str.ToDouble(&val);
+    m_easy_g_level_sldr->SetValue(int(val*100));
+    
+    if (m_sync_g)
+    {
+        if (m_sync_r)
+        {
+            m_easy_r_level_sldr->SetValue(int(val*100));
+            m_easy_r_level_text->ChangeValue(str);
+        }
+        if (m_sync_b)
+        {
+            m_easy_b_level_sldr->SetValue(int(val*100));
+            m_easy_b_level_text->ChangeValue(str);
+        }
+    }
+    
+    if (m_glview && m_type==1)
+    {
+        Color level = m_glview->GetLevels();
+        LevelUI2(val, level[1]);
+        if (m_sync_g)
+        {
+            if (m_sync_r)
+                LevelUI2(val, level[0]);
+            if (m_sync_b)
+                LevelUI2(val, level[2]);
+        }
+        m_glview->SetLevels(level);
+    }
+    
+    TreeLayer *layer = 0;
+    if (m_type == 2 && m_vd)
+        layer = (TreeLayer*)m_vd;
+    else if (m_type == 5 && m_group)
+        layer = (TreeLayer*)m_group;
+    if (layer)
+    {
+        Color level = layer->GetLevels();
+        LevelUI2(val, level[1]);
+        if (m_sync_g)
+        {
+            if (m_sync_r)
+                LevelUI2(val, level[0]);
+            if (m_sync_b)
+                LevelUI2(val, level[2]);
+        }
+        layer->SetLevels(level);
+        
+        if (m_link_group && m_group)
+            m_group->SetLevelsAll(level);
+        
+    }
+    RefreshVRenderViews(true);
+}
+
+void AdjustView::OnBLevelChange(wxScrollEvent & event)
+{
+    double val = (double)event.GetPosition() / 100.0;
+    wxString str = wxString::Format("%.2f", val);
+    m_easy_b_level_text->SetValue(str);
+}
+
+void AdjustView::OnBLevelText(wxCommandEvent& event)
+{
+    wxString str = m_easy_b_level_text->GetValue();
+    double val;
+    str.ToDouble(&val);
+    m_easy_b_level_sldr->SetValue(int(val*100));
+    
+    if (m_sync_b)
+    {
+        if (m_sync_r)
+        {
+            m_easy_r_level_sldr->SetValue(int(val*100));
+            m_easy_r_level_text->ChangeValue(str);
+        }
+        if (m_sync_g)
+        {
+            m_easy_g_level_sldr->SetValue(int(val*100));
+            m_easy_g_level_text->ChangeValue(str);
+        }
+    }
+    
+    if (m_glview && m_type==1)
+    {
+        Color level = m_glview->GetLevels();
+        LevelUI2(val, level[2]);
+        if (m_sync_b)
+        {
+            if (m_sync_r)
+                LevelUI2(val, level[0]);
+            if (m_sync_g)
+                LevelUI2(val, level[1]);
+        }
+        m_glview->SetLevels(level);
+    }
+    
+    TreeLayer *layer = 0;
+    if (m_type == 2 && m_vd)
+        layer = (TreeLayer*)m_vd;
+    else if (m_type == 5 && m_group)
+        layer = (TreeLayer*)m_group;
+    if (layer)
+    {
+        Color level = layer->GetLevels();
+        LevelUI2(val, level[2]);
+        if (m_sync_b)
+        {
+            if (m_sync_r)
+                LevelUI2(val, level[0]);
+            if (m_sync_g)
+                LevelUI2(val, level[1]);
+        }
+        layer->SetLevels(level);
+        
+        if (m_link_group && m_group)
+            m_group->SetLevelsAll(level);
+        
+    }
+    RefreshVRenderViews(true);
 }
 
 void AdjustView::OnRGammaChange(wxScrollEvent & event)
@@ -685,7 +912,6 @@ void AdjustView::OnRGammaChange(wxScrollEvent & event)
 	double val = (double)event.GetPosition() / 100.0;
 	wxString str = wxString::Format("%.2f", val);
 	m_r_gamma_text->SetValue(str);
-    m_easy_r_gamma_text->SetValue(str);
 }
 
 void AdjustView::OnRGammaText(wxCommandEvent& event)
@@ -694,7 +920,6 @@ void AdjustView::OnRGammaText(wxCommandEvent& event)
 	double val;
 	str.ToDouble(&val);
 	m_r_gamma_sldr->SetValue(int(val*100));
-    m_easy_r_gamma_sldr->SetValue(int(val*100));
 
 	if (m_sync_r)
 	{
@@ -702,34 +927,13 @@ void AdjustView::OnRGammaText(wxCommandEvent& event)
 		{
 			m_g_gamma_sldr->SetValue(int(val*100));
 			m_g_gamma_text->ChangeValue(str);
-            m_easy_g_gamma_sldr->SetValue(int(val*100));
-            m_easy_g_gamma_text->ChangeValue(str);
 		}
 		if (m_sync_b)
 		{
 			m_b_gamma_sldr->SetValue(int(val*100));
 			m_b_gamma_text->ChangeValue(str);
-            m_easy_b_gamma_sldr->SetValue(int(val*100));
-            m_easy_b_gamma_text->ChangeValue(str);
 		}
 	}
-    
-    if (m_easy_chk->GetValue())
-    {
-        double val2 = (val >= m_easy_base_gamma_r) ?
-            m_easy_base_brightness_r - ((val - m_easy_base_gamma_r) / (10.0 - m_easy_base_gamma_r)) * ((256.0 + m_easy_base_brightness_r) / 2.0) :
-            pow((m_easy_base_gamma_r - val) / m_easy_base_gamma_r, 1.5) * (256.0 - m_easy_base_brightness_r) + m_easy_base_brightness_r;
-        wxString str2 = wxString::Format("%d", Brightness2UIP(val2));
-        m_r_brightness_text->SetValue(str2);
-        
-        if (m_sync_r)
-        {
-            if (m_sync_g)
-                m_g_brightness_text->SetValue(str2);
-            if (m_sync_b)
-                m_b_brightness_text->SetValue(str2);
-        }
-    }
 
 	if (m_glview && m_type==1)
 	{
@@ -775,7 +979,6 @@ void AdjustView::OnGGammaChange(wxScrollEvent & event)
 	double val = (double)event.GetPosition() / 100.0;
 	wxString str = wxString::Format("%.2f", val);
 	m_g_gamma_text->SetValue(str);
-    m_easy_g_gamma_text->SetValue(str);
 }
 
 void AdjustView::OnGGammaText(wxCommandEvent& event)
@@ -784,7 +987,6 @@ void AdjustView::OnGGammaText(wxCommandEvent& event)
 	double val;
 	str.ToDouble(&val);
 	m_g_gamma_sldr->SetValue(int(val*100));
-    m_easy_g_gamma_sldr->SetValue(int(val*100));
 
 	if (m_sync_g)
 	{
@@ -792,34 +994,13 @@ void AdjustView::OnGGammaText(wxCommandEvent& event)
 		{
 			m_r_gamma_sldr->SetValue(int(val*100));
 			m_r_gamma_text->ChangeValue(str);
-            m_easy_r_gamma_sldr->SetValue(int(val*100));
-            m_easy_r_gamma_text->ChangeValue(str);
 		}
 		if (m_sync_b)
 		{
 			m_b_gamma_sldr->SetValue(int(val*100));
 			m_b_gamma_text->ChangeValue(str);
-            m_easy_b_gamma_sldr->SetValue(int(val*100));
-            m_easy_b_gamma_text->ChangeValue(str);
 		}
 	}
-    
-    if (m_easy_chk->GetValue())
-    {
-        double val2 = (val >= m_easy_base_gamma_g) ?
-        m_easy_base_brightness_g - ((val - m_easy_base_gamma_g) / (10.0 - m_easy_base_gamma_g)) * ((256.0 + m_easy_base_brightness_g) / 2.0) :
-        pow((m_easy_base_gamma_g - val) / m_easy_base_gamma_g, 1.5) * (256.0 - m_easy_base_brightness_g) + m_easy_base_brightness_g;
-        wxString str2 = wxString::Format("%d", Brightness2UIP(val2));
-        m_g_brightness_text->SetValue(str2);
-        
-        if (m_sync_g)
-        {
-            if (m_sync_r)
-                m_r_brightness_text->SetValue(str2);
-            if (m_sync_b)
-                m_b_brightness_text->SetValue(str2);
-        }
-    }
 
 	if (m_glview && m_type==1)
 	{
@@ -865,7 +1046,6 @@ void AdjustView::OnBGammaChange(wxScrollEvent & event)
 	double val = (double)event.GetPosition() / 100.0;
 	wxString str = wxString::Format("%.2f", val);
 	m_b_gamma_text->SetValue(str);
-    m_easy_b_gamma_text->SetValue(str);
 }
 
 void AdjustView::OnBGammaText(wxCommandEvent& event)
@@ -874,7 +1054,6 @@ void AdjustView::OnBGammaText(wxCommandEvent& event)
 	double val;
 	str.ToDouble(&val);
 	m_b_gamma_sldr->SetValue(int(val*100));
-    m_easy_b_gamma_sldr->SetValue(int(val*100));
 
 	if (m_sync_b)
 	{
@@ -882,34 +1061,13 @@ void AdjustView::OnBGammaText(wxCommandEvent& event)
 		{
 			m_r_gamma_sldr->SetValue(int(val*100));
 			m_r_gamma_text->ChangeValue(str);
-            m_easy_r_gamma_sldr->SetValue(int(val*100));
-            m_easy_r_gamma_text->ChangeValue(str);
 		}
 		if (m_sync_g)
 		{
 			m_g_gamma_sldr->SetValue(int(val*100));
 			m_g_gamma_text->ChangeValue(str);
-            m_easy_g_gamma_sldr->SetValue(int(val*100));
-            m_easy_g_gamma_text->ChangeValue(str);
 		}
 	}
-    
-    if (m_easy_chk->GetValue())
-    {
-        double val2 = (val >= m_easy_base_gamma_b) ?
-        m_easy_base_brightness_b - ((val - m_easy_base_gamma_b) / (10.0 - m_easy_base_gamma_b)) * ((256.0 + m_easy_base_brightness_b) / 2.0) :
-        pow((m_easy_base_gamma_b - val) / m_easy_base_gamma_b, 1.5) * (256.0 - m_easy_base_brightness_b) + m_easy_base_brightness_b;
-        wxString str2 = wxString::Format("%d", Brightness2UIP(val2));
-        m_b_brightness_text->SetValue(str2);
-        
-        if (m_sync_b)
-        {
-            if (m_sync_g)
-                m_g_brightness_text->SetValue(str2);
-            if (m_sync_r)
-                m_r_brightness_text->SetValue(str2);
-        }
-    }
 
 	if (m_glview && m_type==1)
 	{
@@ -1438,6 +1596,7 @@ void AdjustView::OnSaveDefault(wxCommandEvent &event)
 	double dft_r_gamma, dft_g_gamma, dft_b_gamma;
 	double dft_r_brightness, dft_g_brightness, dft_b_brightness;
 	double dft_r_hdr, dft_g_hdr, dft_b_hdr;
+    double dft_r_level, dft_g_level, dft_b_level;
 
 	//red
 	fconfig.Write("sync_r_chk", m_sync_r_chk->GetValue());
@@ -1450,6 +1609,9 @@ void AdjustView::OnSaveDefault(wxCommandEvent &event)
 	str = m_r_hdr_text->GetValue();
 	str.ToDouble(&dft_r_hdr);
 	fconfig.Write("r_hdr_text", dft_r_hdr);
+    str = m_easy_r_level_text->GetValue();
+    str.ToDouble(&dft_r_level);
+    fconfig.Write("r_level_text", dft_r_level);
 
 	//green
 	fconfig.Write("sync_g_chk", m_sync_g_chk->GetValue());
@@ -1462,6 +1624,9 @@ void AdjustView::OnSaveDefault(wxCommandEvent &event)
 	str = m_g_hdr_text->GetValue();
 	str.ToDouble(&dft_g_hdr);
 	fconfig.Write("g_hdr_text", dft_g_hdr);
+    str = m_easy_g_level_text->GetValue();
+    str.ToDouble(&dft_g_level);
+    fconfig.Write("g_level_text", dft_g_level);
 
 	//blue
 	fconfig.Write("sync_b_chk", m_sync_b_chk->GetValue());
@@ -1474,10 +1639,14 @@ void AdjustView::OnSaveDefault(wxCommandEvent &event)
 	str = m_b_hdr_text->GetValue();
 	str.ToDouble(&dft_b_hdr);
 	fconfig.Write("b_hdr_text", dft_b_hdr);
+    str = m_easy_b_level_text->GetValue();
+    str.ToDouble(&dft_b_level);
+    fconfig.Write("b_level_text", dft_b_level);
 
 	m_dft_gamma = Color(dft_r_gamma, dft_g_gamma, dft_b_gamma);
 	m_dft_brightness = Color(dft_r_brightness, dft_g_brightness, dft_b_brightness);
 	m_dft_hdr = Color(dft_r_hdr, dft_g_hdr, dft_b_hdr);
+    m_dft_level = Color(dft_r_level, dft_g_level, dft_b_level);
 	wxString expath = wxStandardPaths::Get().GetExecutablePath();
 	expath = expath.BeforeLast(GETSLASH(),NULL);
 #ifdef _WIN32
@@ -1520,6 +1689,9 @@ void AdjustView::LoadSettings()
 	double dft_r_hdr = 0.0;
 	double dft_g_hdr = 0.0;
 	double dft_b_hdr = 0.0;
+    double dft_r_level = 0.0;
+    double dft_g_level = 0.0;
+    double dft_b_level = 0.0;
 
 	//red
 	if (fconfig.Read("sync_r_chk", &bVal))
@@ -1530,6 +1702,8 @@ void AdjustView::LoadSettings()
 		sVal.ToDouble(&dft_r_brightness);
 	if (fconfig.Read("r_hdr_text", &sVal))
 		sVal.ToDouble(&dft_r_hdr);
+    if (fconfig.Read("r_level_text", &sVal))
+        sVal.ToDouble(&dft_r_level);
 
 	//green
 	if (fconfig.Read("sync_g_chk", &bVal))
@@ -1540,6 +1714,8 @@ void AdjustView::LoadSettings()
 		sVal.ToDouble(&dft_g_brightness);
 	if (fconfig.Read("g_hdr_text", &sVal))
 		sVal.ToDouble(&dft_g_hdr);
+    if (fconfig.Read("g_level_text", &sVal))
+        sVal.ToDouble(&dft_g_level);
 
 	//blue
 	if (fconfig.Read("sync_b_chk", &bVal))
@@ -1550,16 +1726,19 @@ void AdjustView::LoadSettings()
 		sVal.ToDouble(&dft_b_brightness);
 	if (fconfig.Read("b_hdr_text", &sVal))
 		sVal.ToDouble(&dft_b_hdr);
+    if (fconfig.Read("b_level_text", &sVal))
+        sVal.ToDouble(&dft_b_level);
 
 	m_dft_gamma = Color(dft_r_gamma, dft_g_gamma, dft_b_gamma);
 	m_dft_brightness = Color(dft_r_brightness, dft_g_brightness, dft_b_brightness);
 	m_dft_hdr = Color(dft_r_hdr, dft_g_hdr, dft_b_hdr);
+    m_dft_level = Color(dft_r_level, dft_g_level, dft_b_level);
 
 	m_use_dft_settings = true;
 
 }
 
-void AdjustView::GetDefaults(Color &gamma, Color &brightness, Color &hdr,
+void AdjustView::GetDefaults(Color &gamma, Color &brightness, Color &hdr, Color &level,
 							 bool &sync_r, bool &sync_g, bool &sync_b)
 {
 	GammaUI2(m_dft_gamma.r(), gamma[0]);
@@ -1568,6 +1747,9 @@ void AdjustView::GetDefaults(Color &gamma, Color &brightness, Color &hdr,
 	BrightnessUI2(m_dft_brightness.r(), brightness[0]);
 	BrightnessUI2(m_dft_brightness.g(), brightness[1]);
 	BrightnessUI2(m_dft_brightness.b(), brightness[2]);
+    LevelUI2(m_dft_level.r(), level[0]);
+    LevelUI2(m_dft_level.g(), level[1]);
+    LevelUI2(m_dft_level.b(), level[2]);
 	hdr = m_dft_hdr;
 	sync_r = m_dft_sync_r;
 	sync_g = m_dft_sync_g;
@@ -1627,6 +1809,24 @@ void AdjustView::ChangeBHdr(double hdr_b)
 {
 	Hdr2UI(hdr_b, hdr_b);
 	m_b_hdr_text->SetValue(wxString::Format("%.2f", hdr_b));
+}
+
+void AdjustView::ChangeRLevel(double lv_r)
+{
+    Level2UI(lv_r, lv_r);
+    m_easy_r_level_text->SetValue(wxString::Format("%.2f", lv_r));
+}
+
+void AdjustView::ChangeGLevel(double lv_g)
+{
+    Level2UI(lv_g, lv_g);
+    m_easy_g_level_text->SetValue(wxString::Format("%.2f", lv_g));
+}
+
+void AdjustView::ChangeBLevel(double lv_b)
+{
+    Level2UI(lv_b, lv_b);
+    m_easy_b_level_text->SetValue(wxString::Format("%.2f", lv_b));
 }
 
 void AdjustView::ChangeRSync(bool sync_r)
@@ -1701,18 +1901,20 @@ void AdjustView::UpdateSync()
 
 		if (cnt > 1)
 		{
-			double gamma = 1.0, brightness = 1.0, hdr = 0.0;
+			double gamma = 1.0, brightness = 1.0, hdr = 0.0, level = 1.0;
 			if (r_v)
 			{
 				gamma = m_group->GetGamma().r();
 				brightness = m_group->GetBrightness().r();
 				hdr = m_group->GetHdr().r();
+                level = m_group->GetLevels().r();
 			}
 			else if (g_v)
 			{
 				gamma = m_group->GetGamma().g();
 				brightness = m_group->GetBrightness().g();
 				hdr = m_group->GetHdr().g();
+                level = m_group->GetLevels().g();
 			}
 
 			if (g_v)
@@ -1720,12 +1922,14 @@ void AdjustView::UpdateSync()
 				ChangeGGamma(gamma);
 				ChangeGBrightness(brightness);
 				ChangeGHdr(hdr);
+                ChangeGLevel(level);
 			}
 			if (b_v)
 			{
 				ChangeBGamma(gamma);
 				ChangeBBrightness(brightness);
 				ChangeBHdr(hdr);
+                ChangeBLevel(level);
 			}
 		}
 	}
@@ -1780,18 +1984,20 @@ void AdjustView::UpdateSync()
 
 		if (cnt > 1)
 		{
-			double gamma = 1.0, brightness = 1.0, hdr = 0.0;
+			double gamma = 1.0, brightness = 1.0, hdr = 0.0, level = 1.0;
 			if (r_v)
 			{
 				gamma = m_glview->GetGamma().r();
 				brightness = m_glview->GetBrightness().r();
 				hdr = m_glview->GetHdr().r();
+                level = m_glview->GetLevels().r();
 			}
 			else if (g_v)
 			{
 				gamma = m_glview->GetGamma().g();
 				brightness = m_glview->GetBrightness().g();
 				hdr = m_glview->GetHdr().g();
+                level = m_glview->GetLevels().g();
 			}
 
 			if (g_v)
@@ -1799,12 +2005,14 @@ void AdjustView::UpdateSync()
 				ChangeGGamma(gamma);
 				ChangeGBrightness(brightness);
 				ChangeGHdr(hdr);
+                ChangeGLevel(level);
 			}
 			if (b_v)
 			{
 				ChangeBGamma(gamma);
 				ChangeBBrightness(brightness);
 				ChangeBHdr(hdr);
+                ChangeBLevel(level);
 			}
 		}
 	}
@@ -1820,25 +2028,19 @@ void AdjustView::OnRReset(wxCommandEvent &event)
 		dft_value = m_dft_gamma.r();
 
 	m_r_gamma_sldr->SetValue(int(dft_value*100.0));
-    m_easy_r_gamma_sldr->SetValue(int(dft_value*100.0));
 	wxString str = wxString::Format("%.2f", dft_value);
 	m_r_gamma_text->ChangeValue(str);
-    m_easy_r_gamma_text->ChangeValue(str);
 	if (m_sync_r)
 	{
 		if (m_sync_g)
 		{
 			m_g_gamma_sldr->SetValue(int(dft_value*100.0));
 			m_g_gamma_text->ChangeValue(str);
-            m_easy_g_gamma_sldr->SetValue(int(dft_value*100.0));
-            m_easy_g_gamma_text->ChangeValue(str);
 		}
 		if (m_sync_b)
 		{
 			m_b_gamma_sldr->SetValue(int(dft_value*100.0));
 			m_b_gamma_text->ChangeValue(str);
-            m_easy_b_gamma_sldr->SetValue(int(dft_value*100.0));
-            m_easy_b_gamma_text->ChangeValue(str);
 		}
 	}
 
@@ -1983,6 +2185,62 @@ void AdjustView::OnRReset(wxCommandEvent &event)
 		if (m_link_group && m_group)
 			m_group->SetHdrAll(hdr);
 	}
+    
+    //reset level
+    if (m_use_dft_settings)
+        dft_value = m_dft_level.r();
+    
+    m_easy_r_level_sldr->SetValue(int(dft_value*100.0));
+    str = wxString::Format("%.2f", dft_value);
+    m_easy_r_level_text->ChangeValue(str);
+    if (m_sync_r)
+    {
+        if (m_sync_g)
+        {
+            m_easy_g_level_sldr->SetValue(int(dft_value*100.0));
+            m_easy_g_level_text->ChangeValue(str);
+        }
+        if (m_sync_b)
+        {
+            m_easy_b_level_sldr->SetValue(int(dft_value*100.0));
+            m_easy_b_level_text->ChangeValue(str);
+        }
+    }
+    
+    if (m_glview)
+    {
+        Color level = m_glview->GetLevels();
+        LevelUI2(dft_value, level[0]);
+        if (m_sync_r)
+        {
+            if (m_sync_g)
+                LevelUI2(dft_value, level[1]);
+            if (m_sync_b)
+                LevelUI2(dft_value, level[2]);
+        }
+        m_glview->SetLevels(level);
+    }
+    
+    if (m_type == 2 && m_vd)
+        layer = (TreeLayer*)m_vd;
+    else if (m_type == 5 && m_group)
+        layer = (TreeLayer*)m_group;
+    if (layer)
+    {
+        Color level = layer->GetLevels();
+        LevelUI2(dft_value, level[0]);
+        if (m_sync_r)
+        {
+            if (m_sync_g)
+                LevelUI2(dft_value, level[1]);
+            if (m_sync_b)
+                LevelUI2(dft_value, level[2]);
+        }
+        layer->SetLevels(level);
+        
+        if (m_link_group && m_group)
+            m_group->SetLevelsAll(level);
+    }
 
 	RefreshVRenderViews();
     
@@ -1997,25 +2255,19 @@ void AdjustView::OnGReset(wxCommandEvent &event)
 		dft_value = m_dft_gamma.g();
 
 	m_g_gamma_sldr->SetValue(int(dft_value*100.0));
-    m_easy_g_gamma_sldr->SetValue(int(dft_value*100.0));
 	wxString str = wxString::Format("%.2f", dft_value);
 	m_g_gamma_text->ChangeValue(str);
-    m_easy_g_gamma_text->ChangeValue(str);
 	if (m_sync_g)
 	{
 		if (m_sync_r)
 		{
 			m_r_gamma_sldr->SetValue(int(dft_value*100.0));
 			m_r_gamma_text->ChangeValue(str);
-            m_easy_r_gamma_sldr->SetValue(int(dft_value*100.0));
-            m_easy_r_gamma_text->ChangeValue(str);
 		}
 		if (m_sync_b)
 		{
 			m_b_gamma_sldr->SetValue(int(dft_value*100.0));
 			m_b_gamma_text->ChangeValue(str);
-            m_easy_b_gamma_sldr->SetValue(int(dft_value*100.0));
-            m_easy_b_gamma_text->ChangeValue(str);
 		}
 	}
 
@@ -2160,6 +2412,62 @@ void AdjustView::OnGReset(wxCommandEvent &event)
 		if (m_link_group && m_group)
 			m_group->SetHdrAll(hdr);
 	}
+    
+    //reset level
+    if (m_use_dft_settings)
+        dft_value = m_dft_level.g();
+    
+    m_easy_g_level_sldr->SetValue(int(dft_value*100.0));
+    str = wxString::Format("%.2f", dft_value);
+    m_easy_g_level_text->ChangeValue(str);
+    if (m_sync_g)
+    {
+        if (m_sync_r)
+        {
+            m_easy_r_level_sldr->SetValue(int(dft_value*100.0));
+            m_easy_r_level_text->ChangeValue(str);
+        }
+        if (m_sync_b)
+        {
+            m_easy_b_level_sldr->SetValue(int(dft_value*100.0));
+            m_easy_b_level_text->ChangeValue(str);
+        }
+    }
+    
+    if (m_glview)
+    {
+        Color level = m_glview->GetLevels();
+        LevelUI2(dft_value, level[1]);
+        if (m_sync_g)
+        {
+            if (m_sync_r)
+                LevelUI2(dft_value, level[0]);
+            if (m_sync_b)
+                LevelUI2(dft_value, level[2]);
+        }
+        m_glview->SetLevels(level);
+    }
+    
+    if (m_type == 2 && m_vd)
+        layer = (TreeLayer*)m_vd;
+    else if (m_type == 5 && m_group)
+        layer = (TreeLayer*)m_group;
+    if (layer)
+    {
+        Color level = layer->GetLevels();
+        LevelUI2(dft_value, level[1]);
+        if (m_sync_g)
+        {
+            if (m_sync_r)
+                LevelUI2(dft_value, level[0]);
+            if (m_sync_b)
+                LevelUI2(dft_value, level[2]);
+        }
+        layer->SetLevels(level);
+        
+        if (m_link_group && m_group)
+            m_group->SetLevelsAll(level);
+    }
 
 	RefreshVRenderViews();
     
@@ -2174,25 +2482,19 @@ void AdjustView::OnBReset(wxCommandEvent &event)
 		dft_value = m_dft_gamma.b();
 
 	m_b_gamma_sldr->SetValue(int(dft_value*100.0));
-    m_easy_b_gamma_sldr->SetValue(int(dft_value*100.0));
 	wxString str = wxString::Format("%.2f", dft_value);
 	m_b_gamma_text->ChangeValue(str);
-    m_easy_b_gamma_text->ChangeValue(str);
 	if (m_sync_b)
 	{
 		if (m_sync_r)
 		{
 			m_r_gamma_sldr->SetValue(int(dft_value*100.0));
 			m_r_gamma_text->ChangeValue(str);
-            m_easy_r_gamma_sldr->SetValue(int(dft_value*100.0));
-            m_easy_r_gamma_text->ChangeValue(str);
 		}
 		if (m_sync_g)
 		{
 			m_g_gamma_sldr->SetValue(int(dft_value*100.0));
 			m_g_gamma_text->ChangeValue(str);
-            m_easy_g_gamma_sldr->SetValue(int(dft_value*100.0));
-            m_easy_g_gamma_text->ChangeValue(str);
 		}
 	}
 
@@ -2337,6 +2639,62 @@ void AdjustView::OnBReset(wxCommandEvent &event)
 		if (m_link_group && m_group)
 			m_group->SetHdrAll(hdr);
 	}
+    
+    //reset level
+    if (m_use_dft_settings)
+        dft_value = m_dft_level.b();
+    
+    m_easy_b_level_sldr->SetValue(int(dft_value*100.0));
+    str = wxString::Format("%.2f", dft_value);
+    m_easy_b_level_text->ChangeValue(str);
+    if (m_sync_b)
+    {
+        if (m_sync_r)
+        {
+            m_easy_r_level_sldr->SetValue(int(dft_value*100.0));
+            m_easy_r_level_text->ChangeValue(str);
+        }
+        if (m_sync_g)
+        {
+            m_easy_g_level_sldr->SetValue(int(dft_value*100.0));
+            m_easy_g_level_text->ChangeValue(str);
+        }
+    }
+    
+    if (m_glview)
+    {
+        Color level = m_glview->GetLevels();
+        LevelUI2(dft_value, level[2]);
+        if (m_sync_b)
+        {
+            if (m_sync_r)
+                LevelUI2(dft_value, level[0]);
+            if (m_sync_g)
+                LevelUI2(dft_value, level[1]);
+        }
+        m_glview->SetLevels(level);
+    }
+    
+    if (m_type == 2 && m_vd)
+        layer = (TreeLayer*)m_vd;
+    else if (m_type == 5 && m_group)
+        layer = (TreeLayer*)m_group;
+    if (layer)
+    {
+        Color level = layer->GetLevels();
+        LevelUI2(dft_value, level[2]);
+        if (m_sync_b)
+        {
+            if (m_sync_r)
+                LevelUI2(dft_value, level[0]);
+            if (m_sync_g)
+                LevelUI2(dft_value, level[1]);
+        }
+        layer->SetLevels(level);
+        
+        if (m_link_group && m_group)
+            m_group->SetLevelsAll(level);
+    }
 
 	RefreshVRenderViews();
     
@@ -2348,6 +2706,9 @@ void AdjustView::OnEasyModeCheck(wxCommandEvent &event)
     bool m_easy_mode = m_easy_chk->GetValue();
     if (m_easy_mode)
     {
+        if (m_glview)
+            m_glview->SetEasy2DAdjustMode(true);
+        
         m_main_sizer->Hide(m_default_sizer);
         m_main_sizer->Show(m_easy_sizer);
         
@@ -2357,6 +2718,9 @@ void AdjustView::OnEasyModeCheck(wxCommandEvent &event)
     }
     else
     {
+        if (m_glview)
+            m_glview->SetEasy2DAdjustMode(false);
+        
         m_main_sizer->Hide(m_easy_sizer);
         m_main_sizer->Show(m_default_sizer);
         Layout();

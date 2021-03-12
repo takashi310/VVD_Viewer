@@ -617,6 +617,7 @@ VRenderVulkanView::VRenderVulkanView(wxWindow* frame,
 	m_gamma(Color(1.0, 1.0, 1.0)),
 	m_brightness(Color(1.0, 1.0, 1.0)),
 	m_hdr(0.0, 0.0, 0.0),
+    m_levels(Color(1.0, 1.0, 1.0)),
 	m_sync_r(false),
 	m_sync_g(false),
 	m_sync_b(false),
@@ -697,7 +698,8 @@ VRenderVulkanView::VRenderVulkanView(wxWindow* frame,
 	m_refresh_start_loop(false),
 	m_recording(false),
 	m_recording_frame(false),
-	m_abort(false)
+	m_abort(false),
+    m_easy_2d_adjust(false)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -4492,21 +4494,40 @@ void VRenderVulkanView::DrawOVER(VolumeData* vd, std::unique_ptr<vks::VFrameBuff
 	
 	Vulkan2dRender::V2DRenderParams params_final = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 	
-	params_final.pipeline =
-		m_v2drender->preparePipeline(
-			IMG_SHDR_BRIGHTNESS_CONTRAST_HDR,
-			m_vol_method == VOL_METHOD_COMP ? V2DRENDER_BLEND_ADD : V2DRENDER_BLEND_OVER,
-			m_fbo_final->attachments[0]->format,
-			m_fbo_final->attachments.size(),
-			0,
-			m_fbo_final->attachments[0]->is_swapchain_images);
-	params_final.tex[0] = fb->attachments[0].get();
-	Color gamma = vd->GetGamma();
-	Color brightness = vd->GetBrightness();
-	Color hdr = vd->GetHdr();
-	params_final.loc[0] = glm::vec4((float)gamma.r(), (float)gamma.g(), (float)gamma.b(), 1.0f);
-	params_final.loc[1] = glm::vec4((float)brightness.r(), (float)brightness.g(), (float)brightness.b(), 1.0f);
-	params_final.loc[2] = glm::vec4((float)hdr.r(), (float)hdr.g(), (float)hdr.b(), 0.0f);
+    if (m_easy_2d_adjust)
+    {
+        params_final.pipeline =
+        m_v2drender->preparePipeline(
+                                     IMG_SHDR_LEVELS,
+                                     m_vol_method == VOL_METHOD_COMP ? V2DRENDER_BLEND_ADD : V2DRENDER_BLEND_OVER,
+                                     m_fbo_final->attachments[0]->format,
+                                     m_fbo_final->attachments.size(),
+                                     0,
+                                     m_fbo_final->attachments[0]->is_swapchain_images);
+        params_final.tex[0] = fb->attachments[0].get();
+        Color gamma = vd->GetGamma();
+        Color levels = vd->GetLevels();
+        params_final.loc[0] = glm::vec4((float)gamma.r(), (float)gamma.g(), (float)gamma.b(), 1.0f);
+        params_final.loc[1] = glm::vec4((float)levels.r(), (float)levels.g(), (float)levels.b(), 1.0f);
+    }
+    else
+    {
+        params_final.pipeline =
+        m_v2drender->preparePipeline(
+                                     IMG_SHDR_BRIGHTNESS_CONTRAST_HDR,
+                                     m_vol_method == VOL_METHOD_COMP ? V2DRENDER_BLEND_ADD : V2DRENDER_BLEND_OVER,
+                                     m_fbo_final->attachments[0]->format,
+                                     m_fbo_final->attachments.size(),
+                                     0,
+                                     m_fbo_final->attachments[0]->is_swapchain_images);
+        params_final.tex[0] = fb->attachments[0].get();
+        Color gamma = vd->GetGamma();
+        Color brightness = vd->GetBrightness();
+        Color hdr = vd->GetHdr();
+        params_final.loc[0] = glm::vec4((float)gamma.r(), (float)gamma.g(), (float)gamma.b(), 1.0f);
+        params_final.loc[1] = glm::vec4((float)brightness.r(), (float)brightness.g(), (float)brightness.b(), 1.0f);
+        params_final.loc[2] = glm::vec4((float)hdr.r(), (float)hdr.g(), (float)hdr.b(), 0.0f);
+    }
 	params_final.clear = m_clear_final_buffer;
 	m_clear_final_buffer = false;
 
@@ -4739,21 +4760,40 @@ void VRenderVulkanView::DrawMIP(VolumeData* vd, std::unique_ptr<vks::VFrameBuffe
 
 	Vulkan2dRender::V2DRenderParams params_final = m_v2drender->GetNextV2dRenderSemaphoreSettings();
 
-	params_final.pipeline =
-		m_v2drender->preparePipeline(
-			IMG_SHDR_BRIGHTNESS_CONTRAST_HDR,
-			m_vol_method == VOL_METHOD_COMP ? V2DRENDER_BLEND_ADD : V2DRENDER_BLEND_OVER,
-			m_fbo_final->attachments[0]->format,
-			m_fbo_final->attachments.size(),
-			0,
-			m_fbo_final->attachments[0]->is_swapchain_images);
-	params_final.tex[0] = fb->attachments[0].get();
-	Color gamma = vd->GetGamma();
-	Color brightness = vd->GetBrightness();
-	Color hdr = vd->GetHdr();
-	params_final.loc[0] = glm::vec4((float)gamma.r(), (float)gamma.g(), (float)gamma.b(), 1.0f);
-	params_final.loc[1] = glm::vec4((float)brightness.r(), (float)brightness.g(), (float)brightness.b(), 1.0f);
-	params_final.loc[2] = glm::vec4((float)hdr.r(), (float)hdr.g(), (float)hdr.b(), 0.0f);
+    if (m_easy_2d_adjust)
+    {
+        params_final.pipeline =
+        m_v2drender->preparePipeline(
+                                     IMG_SHDR_LEVELS,
+                                     m_vol_method == VOL_METHOD_COMP ? V2DRENDER_BLEND_ADD : V2DRENDER_BLEND_OVER,
+                                     m_fbo_final->attachments[0]->format,
+                                     m_fbo_final->attachments.size(),
+                                     0,
+                                     m_fbo_final->attachments[0]->is_swapchain_images);
+        params_final.tex[0] = fb->attachments[0].get();
+        Color gamma = vd->GetGamma();
+        Color levels = vd->GetLevels();
+        params_final.loc[0] = glm::vec4((float)gamma.r(), (float)gamma.g(), (float)gamma.b(), 1.0f);
+        params_final.loc[1] = glm::vec4((float)levels.r(), (float)levels.g(), (float)levels.b(), 1.0f);
+    }
+    else
+    {
+        params_final.pipeline =
+        m_v2drender->preparePipeline(
+                                     IMG_SHDR_BRIGHTNESS_CONTRAST_HDR,
+                                     m_vol_method == VOL_METHOD_COMP ? V2DRENDER_BLEND_ADD : V2DRENDER_BLEND_OVER,
+                                     m_fbo_final->attachments[0]->format,
+                                     m_fbo_final->attachments.size(),
+                                     0,
+                                     m_fbo_final->attachments[0]->is_swapchain_images);
+        params_final.tex[0] = fb->attachments[0].get();
+        Color gamma = vd->GetGamma();
+        Color brightness = vd->GetBrightness();
+        Color hdr = vd->GetHdr();
+        params_final.loc[0] = glm::vec4((float)gamma.r(), (float)gamma.g(), (float)gamma.b(), 1.0f);
+        params_final.loc[1] = glm::vec4((float)brightness.r(), (float)brightness.g(), (float)brightness.b(), 1.0f);
+        params_final.loc[2] = glm::vec4((float)hdr.r(), (float)hdr.g(), (float)hdr.b(), 0.0f);
+    }
 	params_final.clear = m_clear_final_buffer;
 	m_clear_final_buffer = false;
 
@@ -5536,33 +5576,63 @@ void VRenderVulkanView::DrawVolumesMulti(vector<VolumeData*> &list, int peel)
 			blend_method = V2DRENDER_BLEND_OVER;
 
 	}
-
-	params_final.pipeline =
-		m_v2drender->preparePipeline(
-			IMG_SHDR_BRIGHTNESS_CONTRAST_HDR,
-			blend_method,
-			m_fbo_final->attachments[0]->format,
-			m_fbo_final->attachments.size(),
-			0,
-			m_fbo_final->attachments[0]->is_swapchain_images);
-	params_final.tex[0] = use_tex_wt2 ? m_fbo_wt2->attachments[0].get() : m_fbo->attachments[0].get();
-	Color gamma, brightness, hdr;
-	if (m_vol_method == VOL_METHOD_MULTI)
-	{
-		gamma = m_gamma;
-		brightness = m_brightness;
-		hdr = m_hdr;
-	}
-	else
-	{
-		VolumeData* vd = list[0];
-		gamma = vd->GetGamma();
-		brightness = vd->GetBrightness();
-		hdr = vd->GetHdr();
-	}
-	params_final.loc[0] = glm::vec4((float)gamma.r(), (float)gamma.g(), (float)gamma.b(), 1.0f);
-	params_final.loc[1] = glm::vec4((float)brightness.r(), (float)brightness.g(), (float)brightness.b(), 1.0f);
-	params_final.loc[2] = glm::vec4((float)hdr.r(), (float)hdr.g(), (float)hdr.b(), 0.0f);
+    
+    if (m_easy_2d_adjust)
+    {
+        params_final.pipeline =
+        m_v2drender->preparePipeline(
+                                     IMG_SHDR_LEVELS,
+                                     blend_method,
+                                     m_fbo_final->attachments[0]->format,
+                                     m_fbo_final->attachments.size(),
+                                     0,
+                                     m_fbo_final->attachments[0]->is_swapchain_images);
+        params_final.tex[0] = use_tex_wt2 ? m_fbo_wt2->attachments[0].get() : m_fbo->attachments[0].get();
+        Color gamma, levels;
+        if (m_vol_method == VOL_METHOD_MULTI)
+        {
+            gamma = m_gamma;
+            levels = m_levels;
+        }
+        else
+        {
+            VolumeData* vd = list[0];
+            gamma = vd->GetGamma();
+            levels = vd->GetLevels();
+        }
+        params_final.loc[0] = glm::vec4((float)gamma.r(), (float)gamma.g(), (float)gamma.b(), 1.0f);
+        params_final.loc[1] = glm::vec4((float)levels.r(), (float)levels.g(), (float)levels.b(), 1.0f);
+    }
+    else
+    {
+        params_final.pipeline =
+        m_v2drender->preparePipeline(
+                                     IMG_SHDR_BRIGHTNESS_CONTRAST_HDR,
+                                     blend_method,
+                                     m_fbo_final->attachments[0]->format,
+                                     m_fbo_final->attachments.size(),
+                                     0,
+                                     m_fbo_final->attachments[0]->is_swapchain_images);
+        params_final.tex[0] = use_tex_wt2 ? m_fbo_wt2->attachments[0].get() : m_fbo->attachments[0].get();
+        Color gamma, brightness, hdr;
+        if (m_vol_method == VOL_METHOD_MULTI)
+        {
+            gamma = m_gamma;
+            brightness = m_brightness;
+            hdr = m_hdr;
+        }
+        else
+        {
+            VolumeData* vd = list[0];
+            gamma = vd->GetGamma();
+            brightness = vd->GetBrightness();
+            hdr = vd->GetHdr();
+        }
+        params_final.loc[0] = glm::vec4((float)gamma.r(), (float)gamma.g(), (float)gamma.b(), 1.0f);
+        params_final.loc[1] = glm::vec4((float)brightness.r(), (float)brightness.g(), (float)brightness.b(), 1.0f);
+        params_final.loc[2] = glm::vec4((float)hdr.r(), (float)hdr.g(), (float)hdr.b(), 0.0f);
+    }
+    
 	params_final.clear = m_clear_final_buffer;
 	m_clear_final_buffer = false;
 
@@ -10041,12 +10111,13 @@ wxString VRenderVulkanView::AddGroup(wxString str, wxString prev_group)
 		AdjustView* adjust_view = vr_frame->GetAdjustView();
 		if (adjust_view && group)
 		{
-			Color gamma, brightness, hdr;
+			Color gamma, brightness, hdr, level;
 			bool sync_r, sync_g, sync_b;
-			adjust_view->GetDefaults(gamma, brightness, hdr, sync_r, sync_g, sync_b);
+			adjust_view->GetDefaults(gamma, brightness, hdr, level, sync_r, sync_g, sync_b);
 			group->SetGamma(gamma);
 			group->SetBrightness(brightness);
 			group->SetHdr(hdr);
+            group->SetLevels(level);
 			group->SetSyncR(sync_r);
 			group->SetSyncG(sync_g);
 			group->SetSyncB(sync_b);

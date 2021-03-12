@@ -47,6 +47,7 @@ TreeLayer::TreeLayer()
 	m_gamma = Color(1.0, 1.0, 1.0);
 	m_brightness = Color(1.0, 1.0, 1.0);
 	m_hdr = Color(0.0, 0.0, 0.0);
+    m_levels = Color(1.0, 1.0, 1.0);
 	m_sync_r = m_sync_g = m_sync_b = false;
 }
 
@@ -6186,6 +6187,18 @@ void DataGroup::SetHdrAll(Color &hdr)
 	}
 }
 
+//set levels to all
+void DataGroup::SetLevelsAll(Color &levels)
+{
+    SetLevels(levels);
+    for (int i=0; i<(int)m_vd_list.size(); i++)
+    {
+        VolumeData* vd = m_vd_list[i];
+        if (vd)
+            vd->SetLevels(levels);
+    }
+}
+
 //set sync red to all
 void DataGroup::SetSyncRAll(bool sync_r)
 {
@@ -6850,7 +6863,7 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
     
     wxString suffix = filename.Mid(filename.Find('.', true)).MakeLower();
 	
-	if (!wxFileExists(pathname) && suffix != ".n5fs_ch")
+	if (!wxFileExists(pathname) && suffix != ".n5fs_ch" && suffix != ".n5")
 	{
 		pathname = SearchProjectPath(filename);
 		if (!wxFileExists(pathname))
@@ -9460,6 +9473,144 @@ bool ProjectDataLoader::Run()
     for (int i = 0; i < m_max_th; i++)
     {
         ProjectDataLoaderThread* th = new ProjectDataLoaderThread(this);
+        if (th->Create() == wxTHREAD_NO_ERROR)
+        {
+            th->Run();
+        }
+    }
+    
+    return true;
+}
+
+
+
+EmptyBlockDetectorThread::EmptyBlockDetectorThread(EmptyBlockDetector *ebd)
+: wxThread(wxTHREAD_DETACHED), m_ebd(ebd)
+{
+    wxCriticalSectionLocker enter(*m_ebd->ms_pThreadCS);
+    m_ebd->m_running_th++;
+}
+
+EmptyBlockDetectorThread::~EmptyBlockDetectorThread()
+{
+    wxCriticalSectionLocker enter(*m_ebd->ms_pThreadCS);
+    // the thread is being destroyed; make sure not to leave dangling pointers around
+    m_ebd->m_running_th--;
+}
+
+wxThread::ExitCode EmptyBlockDetectorThread::Entry()
+{
+    if (!m_ebd)
+        return (wxThread::ExitCode)0;
+    
+    while(1)
+    {
+        m_ebd->ms_pThreadCS->Enter();
+        
+        if (m_ebd->m_queues.size() == 0)
+        {
+            m_ebd->ms_pThreadCS->Leave();
+            break;
+        }
+        
+        TextureBrick *b = m_ebd->m_queues[0].b;
+        shared_ptr<VL_Nrrd> nv = m_ebd->m_queues[0].nv;
+        
+        m_ebd->m_queued.push_back(m_ebd->m_queues[0]);
+        m_ebd->m_queues.erase(m_ebd->m_queues.begin());
+        
+        m_ebd->ms_pThreadCS->Leave();
+        
+        Nrrd* nrrd = nv->getNrrd();
+        int numb;
+        if (nrrd)
+        {
+            if (nrrd->type == nrrdTypeChar ||
+                nrrd->type == nrrdTypeUChar)
+                numb = 1;
+            else
+                numb = 2;
+        }
+        else
+            numb = 0;
+        
+        BBox bb(Point(0,0,0), Point(1,1,1));
+        
+        size_t dim = nrrd->dim;
+        int size[3] = {};
+        
+        int offset = 0;
+        if (dim > 3) offset = 1;
+        
+        for (size_t p = 0; p < 3; p++)
+            size[p] = (int)nrrd->axis[p + offset].size;
+        
+        
+    }
+    
+    return (wxThread::ExitCode)0;
+}
+
+wxCriticalSection* EmptyBlockDetector::ms_pThreadCS = nullptr;
+
+EmptyBlockDetector::EmptyBlockDetector()
+{
+    m_max_th = wxThread::GetCPUCount()-1;
+    if (m_max_th < 0)
+        m_max_th = -1;
+    m_running_th = 0;
+}
+
+EmptyBlockDetector::~EmptyBlockDetector()
+{
+    ClearQueues();
+    Join();
+}
+
+void EmptyBlockDetector::Queue(EmptyBlockDetectorQueue path)
+{
+    if (!ms_pThreadCS) return;
+    wxCriticalSectionLocker enter(*ms_pThreadCS);
+    m_queues.push_back(path);
+}
+
+void EmptyBlockDetector::ClearQueues()
+{
+    if (!ms_pThreadCS) return;
+    wxCriticalSectionLocker enter(*ms_pThreadCS);
+    if (!m_queues.empty())
+    {
+        m_queues.clear();
+    }
+}
+
+void EmptyBlockDetector::Set(vector<EmptyBlockDetectorQueue> &queues)
+{
+    Join();
+    m_queues = queues;
+}
+
+void EmptyBlockDetector::Join()
+{
+    while(m_running_th > 0)
+    {
+        wxMilliSleep(10);
+    }
+    m_running_th = 0;
+}
+
+bool EmptyBlockDetector::Run()
+{
+    Join();
+    if (!m_queued.empty())
+        m_queued.clear();
+    
+    m_queue_count = m_queues.size();
+    m_progress = 0;
+    
+    for (int i = 0; i < m_max_th; i++)
+    {
+        EmptyBlockDetectorThread* th = new EmptyBlockDetectorThread(this);
         if (th->Create() == wxTHREAD_NO_ERROR)
         {
             th->Run();

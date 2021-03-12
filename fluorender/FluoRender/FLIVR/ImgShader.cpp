@@ -205,6 +205,28 @@ namespace FLIVR
 	"	b.z = b.z>1.0?1.0/(2.0-b.z):ct.loc1.z;\n" \
 	"	FragColor = pow(c, ct.loc0)*b;\n" \
 	"}\n"
+    
+#define IMG_SHADER_CODE_LEVELS \
+    "//IMG_SHADER_CODE_LEVELS\n" \
+    "layout(location = 0) in vec3 OutVertex;\n" \
+    "layout(location = 1) in vec3 OutTexCoord;\n" \
+    "layout(location = 0) out vec4 FragColor;\n" \
+    "\n" \
+    "layout (push_constant) uniform PushConsts {\n" \
+    "    vec4 loc0; //(r_gamma, g_gamma, b_gamma, 1.0)\n" \
+    "    vec4 loc1; //(r_level, g_level, b_level, 1.0)\n" \
+    "} ct;\n" \
+    "layout (binding = 0) uniform sampler2D tex0;\n" \
+    "\n" \
+    "void main()\n" \
+    "{\n" \
+    "    vec4 t = vec4(OutTexCoord, 1.0);\n" \
+    "    vec4 c = texture(tex0, t.xy);\n" \
+    "    c.x = ct.loc1.x <= 1.0 ? clamp(pow(c.x, ct.loc0.x) / clamp(ct.loc1.x, 0.001, 1.0), 0.0, 1.0) : clamp(pow(pow(c.x, ct.loc0.y), pow(ct.loc1.x, 3.0)), 0.0, 1.0);\n" \
+    "    c.y = ct.loc1.y <= 1.0 ? clamp(pow(c.y, ct.loc0.y) / clamp(ct.loc1.y, 0.001, 1.0), 0.0, 1.0) : clamp(pow(pow(c.y, ct.loc0.y), pow(ct.loc1.y, 3.0)), 0.0, 1.0);\n" \
+    "    c.z = ct.loc1.z <= 1.0 ? clamp(pow(c.z, ct.loc0.z) / clamp(ct.loc1.z, 0.001, 1.0), 0.0, 1.0) : clamp(pow(pow(c.z, ct.loc0.z), pow(ct.loc1.z, 3.0)), 0.0, 1.0);\n" \
+    "    FragColor = c;\n" \
+    "}\n"
 
 #define IMG_SHADER_CODE_BRIGHTNESS_CONTRAST_HDR \
 	"//IMG_SHADER_CODE_BRIGHTNESS_CONTRAST_HDR\n" \
@@ -900,6 +922,7 @@ namespace FLIVR
 		case IMG_SHDR_PAINT:
 		case IMG_SHDR_BLEND_FOR_DEPTH_MODE:
 		case IMG_SHDR_BLEND_ID_COLOR_FOR_DEPTH_MODE:
+        case IMG_SHDR_LEVELS:
 		default:
 			z << IMG_VERTEX_CODE;
 		}
@@ -1004,6 +1027,9 @@ namespace FLIVR
 		case IMG_SHDR_TEXT:
 			z << TXT_RENDER_FRG_CODE;
 			break;
+        case IMG_SHDR_LEVELS:
+            z << IMG_SHADER_CODE_LEVELS;
+            break;
 		default:
 			z << IMG_SHADER_CODE_TEXTURE_LOOKUP;
 		}

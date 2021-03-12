@@ -128,9 +128,11 @@ void BRKXMLReader::SetFile(string &file)
            size_t ext_pos = m_path_name.find_last_of(L".");
            wstring ext = m_path_name.substr(ext_pos+1);
            transform(ext.begin(), ext.end(), ext.begin(), towlower);
-           if (ext == L"n5" || ext == L"json" || ext == L"n5fs_ch") {
+           if (ext == L"json" || ext == L"n5fs_ch") {
                m_data_name = m_dir_name.substr(m_dir_name.substr(0, m_dir_name.size() - 1).find_last_of(slash)+1);
            }
+           else if (ext == L"n5")
+               m_dir_name = m_path_name + slash;
        }
    }
    m_id_string = m_path_name;
@@ -154,9 +156,11 @@ void BRKXMLReader::SetFile(wstring &file)
         size_t ext_pos = m_path_name.find_last_of(L".");
         wstring ext = m_path_name.substr(ext_pos+1);
         transform(ext.begin(), ext.end(), ext.begin(), towlower);
-        if (ext == L"n5" || ext == L"json" || ext == L"n5fs_ch") {
+        if (ext == L"json" || ext == L"n5fs_ch") {
             m_data_name = m_dir_name.substr(m_dir_name.substr(0, m_dir_name.size() - 1).find_last_of(slash)+1);
         }
+        else if (ext == L"n5")
+            m_dir_name = m_path_name + slash;
     }
 
    m_id_string = m_path_name;

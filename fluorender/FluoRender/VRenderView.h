@@ -487,6 +487,9 @@ public:
 	//hdr settings
 	Color GetHdr() {return m_hdr;}
 	void SetHdr(Color hdr) {m_hdr = hdr;}
+    //levels settings
+    Color GetLevels() {return m_levels;}
+    void SetLevels(Color levels) {m_levels = levels;}
 	//sync values
 	bool GetSyncR() {return m_sync_r;}
 	void SetSyncR(bool sync_r) {m_sync_r = sync_r;}
@@ -711,6 +714,9 @@ public:
     bool GetForceHideMask() { return m_force_hide_mask; }
 
 	void AbortRendering() { m_abort = true; }
+    
+    bool GetEasy2DAdjustMode() { return m_easy_2d_adjust; }
+    void SetEasy2DAdjustMode(bool mode) { m_easy_2d_adjust = mode; }
 
 	static void setCriticalSection(wxCriticalSection* crtsec) 
 	{
@@ -1005,6 +1011,7 @@ private:
 	Color m_gamma;
 	Color m_brightness;
 	Color m_hdr;
+    Color m_levels;
 	bool m_sync_r;
 	bool m_sync_g;
 	bool m_sync_b;
@@ -1160,6 +1167,8 @@ private:
 	bool m_frame_clear;
 
 	bool m_abort;
+    
+    bool m_easy_2d_adjust;
 
 private:
 #ifdef _WIN32
@@ -1976,6 +1985,9 @@ public:
 	bool GetForceHideMask() { if (m_glview) return m_glview->GetForceHideMask(); else return false; }
 
 	void AbortRendering() { if (m_glview) m_glview->AbortRendering(); }
+    
+    void SetEasy2DAdjustMode(bool val) { if (m_glview) m_glview->SetEasy2DAdjustMode(val); }
+    bool GetEasy2DAdjustMode() { if (m_glview) return m_glview->GetEasy2DAdjustMode(); else return false; }
 
 public:
 	wxWindow* m_frame;

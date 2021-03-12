@@ -425,6 +425,13 @@ namespace FLIVR {
 		{ for (int i=0; i<TEXTURE_MAX_COMPONENTS; i++) dirty_[i] = val; }
 		inline bool dirty(int comp)
 		{ if (comp>=0 && comp<TEXTURE_MAX_COMPONENTS) return dirty_[comp]; else return false;}
+        
+        inline void set_skip(int comp, bool val)
+        { if (comp>=0 && comp<TEXTURE_MAX_COMPONENTS) skip_[comp] = val; }
+        inline void set_skip(bool val)
+        { for (int i=0; i<TEXTURE_MAX_COMPONENTS; i++) skip_[i] = val; }
+        inline bool skip(int comp)
+        { if (comp>=0 && comp<TEXTURE_MAX_COMPONENTS) return skip_[comp]; else return false;}
 
 		// Creator of the brick owns the nrrd memory.
 		void set_nrrd(const std::shared_ptr<FLIVR::VL_Nrrd> &data, int index)
@@ -601,7 +608,9 @@ namespace FLIVR {
 		//current index in the queue, for reverse searching
 		size_t ind_;
 
-		bool dirty_[TEXTURE_MAX_COMPONENTS]; 
+		bool dirty_[TEXTURE_MAX_COMPONENTS];
+        
+        bool skip_[TEXTURE_MAX_COMPONENTS];
 
 		long long offset_;
 		long long fsize_;

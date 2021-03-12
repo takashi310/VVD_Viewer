@@ -129,6 +129,11 @@ public:
 	{return m_hdr;}
 	void SetHdr(Color hdr)
 	{m_hdr = hdr;}
+    //levels settings
+    const Color GetLevels()
+    {return m_levels;}
+    void SetLevels(Color levels)
+    {m_levels = levels;}
 	//sync values
 	bool GetSyncR()
 	{return m_sync_r;}
@@ -165,6 +170,7 @@ protected:
 	Color m_gamma;
 	Color m_brightness;
 	Color m_hdr;
+    Color m_levels;
 	bool m_sync_r;
 	bool m_sync_g;
 	bool m_sync_b;
@@ -1401,6 +1407,8 @@ public:
 	void SetBrightnessAll(Color &brightness);
 	//set hdr to all
 	void SetHdrAll(Color &hdr);
+    //set levels to all
+    void SetLevelsAll(Color &levels);
 	//set sync to all
 	void SetSyncRAll(bool sync_r);
 	void SetSyncGAll(bool sync_g);
@@ -1992,6 +2000,70 @@ protected:
     
     friend class ProjectDataLoaderThread;
 };
+
+
+class EmptyBlockDetector;
+
+class EmptyBlockDetectorQueue
+{
+public:
+    shared_ptr<VL_Nrrd> nv;
+    TextureBrick* b;
+    
+    EmptyBlockDetectorQueue(const shared_ptr<VL_Nrrd> &nv_, TextureBrick* b_)
+    {
+        nv = nv_;
+        b = b_;
+    }
+    
+    EmptyBlockDetectorQueue(const EmptyBlockDetectorQueue &copy)
+    {
+        nv = copy.nv;
+        b = copy.b;
+    }
+    
+};
+
+class EXPORT_API EmptyBlockDetectorThread : public wxThread
+{
+public:
+    EmptyBlockDetectorThread(EmptyBlockDetector *vl);
+    ~EmptyBlockDetectorThread();
+protected:
+    virtual ExitCode Entry();
+    EmptyBlockDetector* m_ebd;
+};
+
+class EXPORT_API EmptyBlockDetector
+{
+public:
+    EmptyBlockDetector();
+    ~EmptyBlockDetector();
+    void Queue(EmptyBlockDetectorQueue queue);
+    void ClearQueues();
+    void Set(vector<EmptyBlockDetectorQueue> &queues);
+    void Join();
+    bool Run();
+    void SetMaxThreadNum(int num) {m_max_th = num;}
+    int GetMaxThreadNum() { return m_max_th;}
+    int GetProgress() { return m_progress; }
+    bool IsRunning() { return m_running_th > 0; }
+    
+    static void setCriticalSection(wxCriticalSection* crtsec) { ms_pThreadCS = crtsec; }
+    
+protected:
+    vector<EmptyBlockDetectorQueue> m_queues;
+    vector<EmptyBlockDetectorQueue> m_queued;
+    int m_running_th;
+    int m_max_th;
+    int m_queue_count;
+    int m_progress;
+    
+    static wxCriticalSection* ms_pThreadCS;
+    
+    friend class EmptyBlockDetectorThread;
+};
+
 
 
 #endif//_DATAMANAGER_H_

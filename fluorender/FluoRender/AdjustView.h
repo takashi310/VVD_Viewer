@@ -27,6 +27,12 @@
 	{v2 = v1;}
 #define Hdr2UIP(v) \
 	int(v*100.0+0.5)
+#define LevelUI2(v1, v2) \
+    {v2 = 1.0-v1;}
+#define Level2UI(v1, v2) \
+    {v2 = 1.0-v1;}
+#define Level2UIP(v) \
+    int(v*100.0+0.5)
 
 class EXPORT_API AdjustView: public wxPanel
 {
@@ -53,6 +59,13 @@ class EXPORT_API AdjustView: public wxPanel
 		ID_GHdrText,
 		ID_BHdrSldr,
 		ID_BHdrText,
+        //level
+        ID_RLvSldr,
+        ID_RLvText,
+        ID_GLvSldr,
+        ID_GLvText,
+        ID_BLvSldr,
+        ID_BLvText,
 		//reset
 		ID_RResetBtn,
 		ID_GResetBtn,
@@ -164,7 +177,7 @@ public:
 	void LoadSettings();
 
 	//get defaults
-	void GetDefaults(Color &gamma, Color &brightness, Color &hdr,
+	void GetDefaults(Color &gamma, Color &brightness, Color &hdr, Color &level,
 		bool &snyc_r, bool &sync_g, bool &sync_b);
 
 	//change settings externally
@@ -177,6 +190,9 @@ public:
 	void ChangeRHdr(double hdr_r);
 	void ChangeGHdr(double hdr_g);
 	void ChangeBHdr(double hdr_b);
+    void ChangeRLevel(double lv_r);
+    void ChangeGLevel(double lv_g);
+    void ChangeBLevel(double lv_b);
 	void ChangeRSync(bool sync_r);
 	void ChangeGSync(bool sync_g);
 	void ChangeBSync(bool sync_b);
@@ -207,6 +223,7 @@ private:
 	Color m_dft_gamma;
 	Color m_dft_brightness;
 	Color m_dft_hdr;
+    Color m_dft_level;
 	bool m_dft_sync_r;
 	bool m_dft_sync_g;
 	bool m_dft_sync_b;
@@ -269,29 +286,29 @@ private:
     //easy sync red
     wxCheckBox *m_easy_sync_r_chk;
     //easy red sliders
-    wxSlider *m_easy_r_gamma_sldr;
+    wxSlider *m_easy_r_level_sldr;
     //easy red reset buttons
     wxButton *m_easy_r_reset_btn;
     //easy red input boxes
-    wxTextCtrl *m_easy_r_gamma_text;
+    wxTextCtrl *m_easy_r_level_text;
     
     //easy sync green
     wxCheckBox *m_easy_sync_g_chk;
     //easy green sliders
-    wxSlider *m_easy_g_gamma_sldr;
+    wxSlider *m_easy_g_level_sldr;
     //easy green reset buttons
     wxButton *m_easy_g_reset_btn;
     //easy green input boxes
-    wxTextCtrl *m_easy_g_gamma_text;
+    wxTextCtrl *m_easy_g_level_text;
     
     //easy sync blue
     wxCheckBox *m_easy_sync_b_chk;
     //easy blue sliders
-    wxSlider *m_easy_b_gamma_sldr;
+    wxSlider *m_easy_b_level_sldr;
     //easy blue reset buttons
     wxButton *m_easy_b_reset_btn;
     //easy blue input boxes
-    wxTextCtrl *m_easy_b_gamma_text;
+    wxTextCtrl *m_easy_b_level_text;
     
     //easy set default
     wxButton *m_easy_dft_btn;
@@ -323,6 +340,13 @@ private:
 	void OnGHdrText(wxCommandEvent &event);
 	void OnBHdrChange(wxScrollEvent &event);
 	void OnBHdrText(wxCommandEvent &event);
+    //level
+    void OnRLevelChange(wxScrollEvent &event);
+    void OnRLevelText(wxCommandEvent &event);
+    void OnGLevelChange(wxScrollEvent &event);
+    void OnGLevelText(wxCommandEvent &event);
+    void OnBLevelChange(wxScrollEvent &event);
+    void OnBLevelText(wxCommandEvent &event);
 	//reset
 	void OnRReset(wxCommandEvent &event);
 	void OnGReset(wxCommandEvent &event);
