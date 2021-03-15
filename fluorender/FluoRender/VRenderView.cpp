@@ -2771,6 +2771,7 @@ VolumeData *VRenderVulkanView::CopyLevel(VolumeData *src, int lv)
 			group->SetGamma(src->GetGamma());
 			group->SetBrightness(src->GetBrightness());
 			group->SetHdr(src->GetHdr());
+            group->SetLevels(src->GetLevels());
 			group->SetSyncR(src->GetSyncR());
 			group->SetSyncG(src->GetSyncG());
 			group->SetSyncB(src->GetSyncB());
@@ -3040,6 +3041,8 @@ void VRenderVulkanView::CompExport(int mode, bool select)
 				group->SetBrightnessAll(col);
 				col = vd->GetHdr();
 				group->SetHdrAll(col);
+                col = vd->GetLevels();
+                group->SetLevelsAll(col);
 			}
 		}
 		vr_frame->UpdateTree(m_selector.GetVolume()->GetName(), 2);
@@ -3104,6 +3107,7 @@ void VRenderVulkanView::NoiseRemoval(int iter, double thresh)
 			group->SetGamma(vd->GetGamma());
 			group->SetBrightness(vd->GetBrightness());
 			group->SetHdr(vd->GetHdr());
+            group->SetLevels(vd->GetLevels());
 			group->SetSyncR(vd->GetSyncR());
 			group->SetSyncG(vd->GetSyncG());
 			group->SetSyncB(vd->GetSyncB());
@@ -3503,6 +3507,8 @@ void VRenderVulkanView::CalculateSingle(int type, wxString prev_group, bool add)
 					vd->SetBrightness(col);
 					col = vd_a->GetHdr();
 					vd->SetHdr(col);
+                    col = vd_a->GetLevels();
+                    vd->SetLevels(col);
 					vd->SetSyncR(vd_a->GetSyncR());
 					vd->SetSyncG(vd_a->GetSyncG());
 					vd->SetSyncB(vd_a->GetSyncB());
@@ -8877,6 +8883,8 @@ DataGroup* VRenderVulkanView::AddVolumeData(VolumeData* vd, wxString group_name)
 		vd->SetBrightness(brightness);
 		Color hdr = group->GetHdr();
 		vd->SetHdr(hdr);
+        Color level = group->GetLevels();
+        vd->SetLevels(level);
 		bool sync_r = group->GetSyncR();
 		vd->SetSyncR(sync_r);
 		bool sync_g = group->GetSyncG();
@@ -9662,6 +9670,8 @@ void VRenderVulkanView::MoveLayertoGroup(wxString &group_name, wxString &src_nam
 	src_vd->SetBrightness(brightness);
 	Color hdr = group->GetHdr();
 	src_vd->SetHdr(hdr);
+    Color level = group->GetLevels();
+    src_vd->SetLevels(level);
 	bool sync_r = group->GetSyncR();
 	src_vd->SetSyncR(sync_r);
 	bool sync_g = group->GetSyncG();
@@ -9783,6 +9793,8 @@ void VRenderVulkanView::MoveLayerfromtoGroup(wxString &src_group_name, wxString 
 	src_vd->SetBrightness(brightness);
 	Color hdr = dst_group->GetHdr();
 	src_vd->SetHdr(hdr);
+    Color level = dst_group->GetLevels();
+    src_vd->SetLevels(level);
 	bool sync_r = dst_group->GetSyncR();
 	src_vd->SetSyncR(sync_r);
 	bool sync_g = dst_group->GetSyncG();
@@ -18263,6 +18275,7 @@ void VRenderView::OnVolumeMethodCheck(wxCommandEvent& event)
 			Color gamma = m_glview->GetGamma();
 			Color brightness = m_glview->GetBrightness();
 			Color hdr = m_glview->GetHdr();
+            Color level = m_glview->GetLevels();
 			for (int i=0; i<GetLayerNum(); i++)
 			{
 				TreeLayer* layer = GetLayer(i);
@@ -18282,6 +18295,7 @@ void VRenderView::OnVolumeMethodCheck(wxCommandEvent& event)
 						gamma = group->GetGamma();
 						brightness = group->GetBrightness();
 						hdr = group->GetHdr();
+                        level = group->GetLevels();
 					}
 				}
 				cnt++;
@@ -18292,6 +18306,7 @@ void VRenderView::OnVolumeMethodCheck(wxCommandEvent& event)
 				gamma[1] = gamma[2] = gamma[0];
 				brightness[1] = brightness[2] = brightness[0];
 				hdr[1] = hdr[2] = hdr[0];
+                level[1] = level[2] = level[0];
 			}
 			else
 			{
@@ -18300,24 +18315,28 @@ void VRenderView::OnVolumeMethodCheck(wxCommandEvent& event)
 					gamma[1] = gamma[0];
 					brightness[1] = brightness[0];
 					hdr[1] = hdr[0];
+                    level[1] = level[0];
 				}
 				else if (r & b)
 				{
 					gamma[2] = gamma[0];
 					brightness[2] = brightness[0];
 					hdr[2] = hdr[0];
+                    level[2] = level[0];
 				}
 				else if (g & b)
 				{
 					gamma[2] = gamma[1];
 					brightness[2] = brightness[1];
 					hdr[2] = hdr[1];
+                    level[2] = level[1];
 				}
 			}
 
 			m_glview->SetGamma(gamma);
 			m_glview->SetBrightness(brightness);
 			m_glview->SetHdr(hdr);
+            m_glview->SetLevels(level);
 			m_glview->SetSyncR(r);
 			m_glview->SetSyncG(g);
 			m_glview->SetSyncB(b);

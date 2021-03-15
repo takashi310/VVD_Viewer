@@ -32,7 +32,7 @@ BEGIN_EVENT_TABLE(AdjustView, wxPanel)
     EVT_TEXT(ID_RLvText, AdjustView::OnRLevelText)
     EVT_COMMAND_SCROLL(ID_GLvSldr, AdjustView::OnGLevelChange)
     EVT_TEXT(ID_GLvText, AdjustView::OnGLevelText)
-    EVT_COMMAND_SCROLL(ID_BLvSldr, AdjustView::OnBHdrChange)
+    EVT_COMMAND_SCROLL(ID_BLvSldr, AdjustView::OnBLevelChange)
     EVT_TEXT(ID_BLvText, AdjustView::OnBLevelText)
 	//reset
 	EVT_BUTTON(ID_RResetBtn, AdjustView::OnRReset)
