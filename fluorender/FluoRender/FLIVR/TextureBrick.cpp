@@ -106,10 +106,12 @@ namespace FLIVR
 
       //if it's been drawn in a full update loop
       for (int i=0; i<TEXTURE_RENDER_MODES; i++)
+      {
          drawn_[i] = false;
-
-	   for (int i=0; i<TEXTURE_MAX_COMPONENTS; i++)
          dirty_[i] = false;
+         skip_[i] = false;
+         modified_[i] = true;
+      }
 
       //priority
       priority_ = 0;

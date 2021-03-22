@@ -2007,19 +2007,31 @@ class EmptyBlockDetector;
 class EmptyBlockDetectorQueue
 {
 public:
-    shared_ptr<VL_Nrrd> nv;
     TextureBrick* b;
+    int c;
+    shared_ptr<VL_Nrrd> nrrd;
+    shared_ptr<VL_Nrrd> msknrrd;
     
-    EmptyBlockDetectorQueue(const shared_ptr<VL_Nrrd> &nv_, TextureBrick* b_)
+    EmptyBlockDetectorQueue(TextureBrick* b_,int c_, const shared_ptr<VL_Nrrd> &nrrd_)
     {
-        nv = nv_;
         b = b_;
+        c = c_;
+        nrrd = nrrd_;
+    }
+    EmptyBlockDetectorQueue(TextureBrick* b_, int c_, const shared_ptr<VL_Nrrd> &nrrd_, const shared_ptr<VL_Nrrd> &msknrrd_)
+    {
+        b = b_;
+        c = c_;
+        nrrd = nrrd_;
+        msknrrd = msknrrd_;
     }
     
     EmptyBlockDetectorQueue(const EmptyBlockDetectorQueue &copy)
     {
-        nv = copy.nv;
         b = copy.b;
+        c = copy.c;
+        nrrd = copy.nrrd;
+        msknrrd = copy.msknrrd;
     }
     
 };

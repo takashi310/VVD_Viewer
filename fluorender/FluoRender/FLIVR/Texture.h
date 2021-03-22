@@ -226,6 +226,18 @@ namespace FLIVR
 		void DeleteCacheFiles();
 
 		Vector GetBrickIdSpaceMaxExtent() { return brick_idspace_max_extent_; }
+        
+        void SetModifiedAllLevels(bool val, int c)
+        {
+            for (int i = 0; i < pyramid_.size(); i++)
+                pyramid_[i].modified[c] = val;
+        }
+        bool GetModifiedLevel(int lv, int c)
+        {
+            if (lv < 0 || lv >= pyramid_.size() || c < 0 || c >= TEXTURE_MAX_COMPONENTS)
+                return false;
+            return pyramid_[lv].modified[c];
+        }
 
 	protected:
 		void build_bricks(vector<TextureBrick*> &bricks,

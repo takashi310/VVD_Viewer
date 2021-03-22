@@ -9513,39 +9513,128 @@ wxThread::ExitCode EmptyBlockDetectorThread::Entry()
             break;
         }
         
-        TextureBrick *b = m_ebd->m_queues[0].b;
-        shared_ptr<VL_Nrrd> nv = m_ebd->m_queues[0].nv;
+        TextureBrick* b = m_ebd->m_queues[0].b;
+        int c = m_ebd->m_queues[0].c;
+        auto nrrd = m_ebd->m_queues[0].nrrd;
+        auto msknrrd = m_ebd->m_queues[0].msknrrd;
         
         m_ebd->m_queued.push_back(m_ebd->m_queues[0]);
         m_ebd->m_queues.erase(m_ebd->m_queues.begin());
         
         m_ebd->ms_pThreadCS->Leave();
         
-        Nrrd* nrrd = nv->getNrrd();
-        int numb;
-        if (nrrd)
-        {
-            if (nrrd->type == nrrdTypeChar ||
-                nrrd->type == nrrdTypeUChar)
-                numb = 1;
-            else
-                numb = 2;
-        }
-        else
-            numb = 0;
+        if (!b->modified(c))
+            continue;
         
-        BBox bb(Point(0,0,0), Point(1,1,1));
+        if (!nrrd || !nrrd->getNrrd())
+            continue;
         
-        size_t dim = nrrd->dim;
-        int size[3] = {};
+        size_t dim = nrrd->getNrrd()->dim;
+        size_t size[3] = {};
         
         int offset = 0;
         if (dim > 3) offset = 1;
         
         for (size_t p = 0; p < 3; p++)
-            size[p] = (int)nrrd->axis[p + offset].size;
+            size[p] = (size_t)nrrd->getNrrd()->axis[p + offset].size;
         
+        size_t ox = b->ox();
+        size_t oy = b->oy();
+        size_t oz = b->oz();
+        size_t nx = b->nx();
+        size_t ny = b->ny();
+        size_t nz = b->nz();
+        size_t nb = b->nb(c);
         
+        if (nrrd->getNrrd()->type == nrrdTypeChar ||
+            nrrd->getNrrd()->type == nrrdTypeUChar)
+            nb = 1;
+        else
+            nb = 2;
+        
+        size_t ypitch = size[0];
+        size_t zpitch = size[1] * size[0];
+        
+        if (msknrrd)
+        {
+            size_t msk_dim = msknrrd->getNrrd()->dim;
+            size_t msk_size[3] = {};
+            
+            int msk_offset = 0;
+            if (msk_dim > 3) msk_offset = 1;
+            
+            for (size_t p = 0; p < 3; p++)
+                msk_size[p] = (size_t)msknrrd->getNrrd()->axis[p + msk_offset].size;
+            
+            double xscale = (double)msk_size[0] / size[0];
+            double yscale = (double)msk_size[1] / size[1];
+            double zscale = (double)msk_size[2] / size[2];
+            
+            ox = (size_t)floor((double)b->ox() * xscale);
+            oy = (size_t)floor((double)b->oy() * yscale);
+            oz = (size_t)floor((double)b->oz() * zscale);
+            
+            double endx_d = (double)(b->ox() + b->nx()) * xscale;
+            double endy_d = (double)(b->oy() + b->ny()) * yscale;
+            double endz_d = (double)(b->oz() + b->nz()) * zscale;
+            nx = (size_t)ceil(endx_d) - ox;
+            ny = (size_t)ceil(endy_d) - oy;
+            nz = (size_t)ceil(endz_d) - oz;
+            
+            if (msknrrd->getNrrd()->type == nrrdTypeChar ||
+                msknrrd->getNrrd()->type == nrrdTypeUChar)
+                nb = 1;
+            else
+                nb = 2;
+            
+            ypitch = msk_size[0];
+            zpitch = msk_size[1] * msk_size[0];
+            
+            nrrd = msknrrd;
+        }
+        
+        bool isempty = true;
+        if (nb == 1)
+        {
+            unsigned char *data = (unsigned char *)(nrrd->getNrrd()->data) + oz*zpitch + oy*ypitch + ox;
+            for (int zz = 0; zz < nz && isempty; zz++)
+            {
+                unsigned char *line = data;
+                for (int yy = 0; yy < ny && isempty; yy++)
+                {
+                    for (int xx = 0; xx < nx && isempty; xx++)
+                    {
+                        if (line[xx] != 0)
+                            isempty = false;
+                    }
+                    line += ypitch;
+                }
+                data += zpitch;
+            }
+        }
+        else if (nb == 2)
+        {
+            unsigned short *data = (unsigned short *)(nrrd->getNrrd()->data) + oz*zpitch + oy*ypitch + ox;
+            for (int zz = 0; zz < nz && isempty; zz++)
+            {
+                unsigned short *line = data;
+                for (int yy = 0; yy < ny && isempty; yy++)
+                {
+                    for (int xx = 0; xx < nx && isempty; xx++)
+                    {
+                        if (line[xx] != 0)
+                            isempty = false;
+                    }
+                    line += ypitch;
+                }
+                data += zpitch;
+            }
+        }
+        
+        m_ebd->ms_pThreadCS->Enter();
+        b->set_skip(c, isempty);
+        b->set_modified(c, false);
+        m_ebd->ms_pThreadCS->Leave();
     }
     
     return (wxThread::ExitCode)0;
@@ -9586,6 +9675,9 @@ void EmptyBlockDetector::ClearQueues()
 
 void EmptyBlockDetector::Set(vector<EmptyBlockDetectorQueue> &queues)
 {
+    ms_pThreadCS->Enter();
+    m_queues.clear();
+    ms_pThreadCS->Leave();
     Join();
     m_queues = queues;
 }

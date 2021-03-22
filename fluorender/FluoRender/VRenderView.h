@@ -722,6 +722,7 @@ public:
 	{
 		ms_pThreadCS = crtsec;
 		VolumeLoader::setCriticalSection(crtsec);
+        EmptyBlockDetector::setCriticalSection(crtsec);
 	}
 	static wxCriticalSection* ms_pThreadCS;
 
@@ -1142,6 +1143,8 @@ private:
 
 	VolumeLoader m_loader;
 	bool m_load_in_main_thread;
+    
+    EmptyBlockDetector m_ebd;
 
 	wxTimer *m_idleTimer;
 

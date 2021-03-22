@@ -782,6 +782,8 @@ VRenderVulkanView::~VRenderVulkanView()
 #endif
 
 	m_loader.StopAll();
+    m_ebd.ClearQueues();
+    m_ebd.Join();
 
 	int i;
 	//delete groups
@@ -13433,6 +13435,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 		//reset drawn status for all bricks
 
 		vector<VolumeData*> displist;
+        vector<EmptyBlockDetectorQueue> ebd_queues;
 		for (i=(int)m_layer_list.size()-1; i>=0; i--)
 		{
 			if (!m_layer_list[i])
@@ -13496,10 +13499,12 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 				Texture* tex = vd->GetTexture();
 				if (tex && vd->GetVR())
 				{
-					if (m_draw_mask && tex->isBrxml() && vd->GetTexture()->nmask() >= 0 && !vd->GetSharedMaskName().IsEmpty())
+                    shared_ptr<VL_Nrrd> msk_nrrd;
+					if (m_draw_mask && tex->isBrxml() && (vd->GetTexture()->nmask() >= 0 || !vd->GetSharedMaskName().IsEmpty()))
 					{
 						int curlv = vd->GetLevel();
 						vd->SetLevel(vd->GetMaskLv());
+                        msk_nrrd = tex->get_nrrd(tex->nmask());
 						Transform *tform = tex->transform();
 						double mvmat2[16];
 						tform->get_trans(mvmat2);
@@ -13528,10 +13533,17 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 							else
 								(*bricks2)[j]->set_disp(true);
 							if (m_draw_mask && tex->nmask() != -1 && vd->GetMaskHideMode() == VOL_MASK_HIDE_NONE)
-							{
-								total_num++;
-								num_chan++;
-							}
+                            {
+                                total_num++;
+                                num_chan++;
+                                if ((*bricks2)[j]->modified(tex->nmask()))
+                                {
+                                    EmptyBlockDetectorQueue eq((*bricks2)[j], tex->nmask(), tex->get_nrrd(tex->nmask()));
+                                    if (curlv != vd->GetMaskLv())
+                                        eq.msknrrd = (*bricks2)[j]->get_nrrd(tex->nmask());
+                                    ebd_queues.push_back(eq);
+                                }
+                            }
 							if (m_draw_label && tex->nlabel() != -1)
 							{
 								total_num++;
@@ -13575,10 +13587,18 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 							total_num++;
 							num_chan++;
 						}
-						if (m_draw_mask && (tex->nmask() != -1 || !vd->GetSharedMaskName().IsEmpty()) && !tex->isBrxml() && vd->GetMaskHideMode() == VOL_MASK_HIDE_NONE)
+						if (m_draw_mask && (tex->nmask() != -1 || !vd->GetSharedMaskName().IsEmpty()))
 						{
-							total_num++;
-							num_chan++;
+                            if (!tex->isBrxml() && vd->GetMaskHideMode() == VOL_MASK_HIDE_NONE)
+                            {
+                                total_num++;
+                                num_chan++;
+                            }
+                            if ((*bricks)[j]->modified(tex->nmask()))
+                            {
+                                EmptyBlockDetectorQueue eq((*bricks)[j], tex->nmask(), tex->get_nrrd(0), msk_nrrd);
+                                ebd_queues.push_back(eq);
+                            }
 						}
 						if (m_draw_label && tex->nlabel() != -1 && !tex->isBrxml())
 						{
@@ -13935,10 +13955,10 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 				toffset++;
 			}
 		}
-
+        
+        bool runvl = false;
 		if (queues.size() > 0 && !m_interactive)
 		{
-            bool runvl = false;
             for (auto q : queues)
             {
                 if ( (q.brick && !q.brick->isLoaded() && !q.brick->isLoading()) ||
@@ -13954,9 +13974,27 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
                 m_loader.Set(queues);
                 m_loader.SetMemoryLimitByte((long long)TextureRenderer::mainmem_buf_size_*1024LL*1024LL);
                 TextureRenderer::set_load_on_main_thread(false);
-                m_loader.Run();
+                
             }
 		}
+        if (ebd_queues.size() > 0)
+        {
+            m_ebd.Set(ebd_queues);
+            if (runvl)
+                m_ebd.SetMaxThreadNum((wxThread::GetCPUCount()-1)/2);
+            else
+                m_ebd.SetMaxThreadNum(wxThread::GetCPUCount()-1);
+            m_ebd.Run();
+            //m_ebd.Join();
+        }
+        if (runvl)
+        {
+            if (ebd_queues.size() > 0)
+                m_loader.SetMaxThreadNum((wxThread::GetCPUCount()-1) - m_ebd.GetMaxThreadNum());
+            else
+                m_loader.SetMaxThreadNum(wxThread::GetCPUCount()-1);
+            m_loader.Run();
+        }
 
 		if (total_num > 0)
 		{

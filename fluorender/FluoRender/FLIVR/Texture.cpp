@@ -999,6 +999,17 @@ namespace FLIVR
 		pyramid_cur_lv_ = lv;
 		build(pyramid_[pyramid_cur_lv_].data, 0, 0, 256, 0, 0, &pyramid_[pyramid_cur_lv_].bricks);
 		set_data_file(pyramid_[pyramid_cur_lv_].filenames, pyramid_[pyramid_cur_lv_].filetype);
+        
+        for (auto b : pyramid_[pyramid_cur_lv_].bricks)
+        {
+            for (int i = 0; i < TEXTURE_MAX_COMPONENTS; i++)
+            {
+                if (pyramid_[pyramid_cur_lv_].modified[i])
+                    b->set_modified(true);
+            }
+        }
+        for (int i = 0; i < TEXTURE_MAX_COMPONENTS; i++)
+            pyramid_[pyramid_cur_lv_].modified[i] = false;
 		
 		int offset = 0;
 		if (pyramid_[lv].data->getNrrd()->dim > 3) offset = 1; 
@@ -1039,6 +1050,9 @@ namespace FLIVR
 				pyramid_[i].bricks[j]->set_nrrd(pyramid_[i].data, 0);
 				pyramid_[i].bricks[j]->set_nrrd(0, 1);
 			}
+            
+            for (int k = 0; k < TEXTURE_MAX_COMPONENTS; k++)
+                pyramid_[i].modified[k] = true;
 		}
 		setLevel(pyramid_lv_num_ - 1);
 		pyramid_cur_lv_ = -1;

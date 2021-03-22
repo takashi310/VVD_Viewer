@@ -432,6 +432,27 @@ namespace FLIVR {
         { for (int i=0; i<TEXTURE_MAX_COMPONENTS; i++) skip_[i] = val; }
         inline bool skip(int comp)
         { if (comp>=0 && comp<TEXTURE_MAX_COMPONENTS) return skip_[comp]; else return false;}
+        
+        inline void set_modified(int comp, bool val)
+        {
+            if (comp>=0 && comp<TEXTURE_MAX_COMPONENTS)
+            {
+                modified_[comp] = val;
+                if (val)
+                    skip_[comp] = false;
+            }
+        }
+        inline void set_modified(bool val)
+        {
+            for (int i=0; i<TEXTURE_MAX_COMPONENTS; i++)
+            {
+                modified_[i] = val;
+                if (val)
+                    skip_[i] = false;
+            }
+        }
+        inline bool modified(int comp)
+        { if (comp>=0 && comp<TEXTURE_MAX_COMPONENTS) return modified_[comp]; else return false;}
 
 		// Creator of the brick owns the nrrd memory.
 		void set_nrrd(const std::shared_ptr<FLIVR::VL_Nrrd> &data, int index)
@@ -611,6 +632,7 @@ namespace FLIVR {
 		bool dirty_[TEXTURE_MAX_COMPONENTS];
         
         bool skip_[TEXTURE_MAX_COMPONENTS];
+        bool modified_[TEXTURE_MAX_COMPONENTS];
 
 		long long offset_;
 		long long fsize_;
@@ -648,10 +670,11 @@ namespace FLIVR {
 	};
 
 	struct Pyramid_Level {
-			std::vector<FileLocInfo *> *filenames;
-			int filetype;
-			std::shared_ptr<FLIVR::VL_Nrrd> data;
-			std::vector<TextureBrick *> bricks;
+        std::vector<FileLocInfo *> *filenames;
+        int filetype;
+        std::shared_ptr<FLIVR::VL_Nrrd> data;
+        std::vector<TextureBrick *> bricks;
+        bool modified[TEXTURE_MAX_COMPONENTS];
 	};
 
 } // namespace FLIVR

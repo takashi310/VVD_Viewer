@@ -2847,6 +2847,21 @@ namespace FLIVR
 				}
 				continue;
 			}
+            
+            if (b->skip(0) || (b->skip(tex_->nmask()) && m_mask_hide_mode != VOL_MASK_HIDE_NONE)
+                || (b->skip(tex_->nmask()) && bmode == TEXTURE_RENDER_MODE_MASK && m_mask_hide_mode == VOL_MASK_HIDE_NONE) )
+            {
+                if (mem_swap_ && start_update_loop_ && !done_update_loop_)
+                {
+                    if (!b->drawn(bmode))
+                    {
+                        b->set_drawn(bmode, true);
+                        cur_brick_num_++;
+                        cur_chan_brick_num_++;
+                    }
+                }
+                continue;
+            }
 
 			unsigned int slicenum;
 			double tmax, tmin;
@@ -3833,7 +3848,11 @@ namespace FLIVR
 			vkDestroyFence(prim_dev->logicalDevice, fence, nullptr);
 
 			b->set_dirty(b->nmask(), true);
+            b->set_modified(b->nmask(), true);
 		}
+        
+        if (tex_->isBrxml())
+            tex_->SetModifiedAllLevels(true, tex_->nmask());
 	}
 
 	//generate the labeling assuming the mask is already generated
@@ -4008,8 +4027,11 @@ namespace FLIVR
 			vkDestroyFence(prim_dev->logicalDevice, fence, nullptr);
 
 			b->set_dirty(b->nlabel(), true);
+            b->set_modified(b->nlabel(), true);
 		}
-
+        
+        if (tex_->isBrxml())
+            tex_->SetModifiedAllLevels(true, tex_->nlabel());
 	}
 
 
@@ -4345,7 +4367,11 @@ namespace FLIVR
 			vkDestroyFence(prim_dev->logicalDevice, fence, nullptr);
 
 			b->set_dirty(0, true);
+            b->set_modified(0, true);
 		}
+        
+        if (tex_->isBrxml())
+            tex_->SetModifiedAllLevels(true, 0);
 
 		vkFreeCommandBuffers(prim_dev->logicalDevice, prim_dev->compute_commandPool, 1, &cmdbuf);
 
@@ -4810,6 +4836,9 @@ namespace FLIVR
 			VK_CHECK_RESULT(vkWaitForFences(prim_dev->logicalDevice, 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
 
 			vkDestroyFence(prim_dev->logicalDevice, fence, nullptr);
+            
+            b->set_dirty(b->nmask(), true);
+            b->set_modified(b->nmask(), true);
 		}
 
 		vkFreeCommandBuffers(prim_dev->logicalDevice, prim_dev->compute_commandPool, 1, &cmdbuf);
