@@ -218,6 +218,23 @@ namespace FLIVR {
 			return size[0] * size[1] * size[2] * b;
 		}
 
+		void getDimensions(int &w, int &h, int &d)
+		{
+			if (!m_nrrd)
+				return;
+			size_t size[3] = {};
+			int offset = 0;
+			if (m_nrrd->dim > 3) offset = 1;
+			for (size_t p = 0; p < 3 && p+offset < m_nrrd->dim; p++)
+				size[p] = (int)m_nrrd->axis[p + offset].size;
+			
+			w = size[0];
+			h = size[1];
+			d = size[2];
+
+			return;
+		}
+
 	};
 
 	class EXPORT_API VL_Array

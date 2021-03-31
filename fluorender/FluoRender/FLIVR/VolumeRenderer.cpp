@@ -2811,6 +2811,10 @@ namespace FLIVR
 		int count = 0;
 		int que = 1;
 		int cur_finished_bricks = finished_bricks_;
+		bool tex_updated = false;
+		bool mask_updated = false;
+		bool label_updated = false;
+		vector<vks::VulkanSemaphoreSettings> semaphores;
 		for (unsigned int i = 0; i < bricks->size(); i++)
 		{
 			//comment off when debug_ds
@@ -2878,6 +2882,170 @@ namespace FLIVR
 				}
 				continue;
 			}
+
+			bool end_pass = false;
+			if (mem_swap_ && start_update_loop_ && !done_update_loop_)
+			{
+				TextureBrick* nextb = (*bricks)[i];
+				if (prim_dev->findTexInPool(nextb, 0, nextb->nx(), nextb->ny(), nextb->nz(), nextb->nb(0), nextb->tex_format(0)) < 0)
+					end_pass = true;
+				else if (mask_)
+				{
+					if (ext_msk && ext_msk->nmask() != -1)
+					{
+						TextureBrick* nextmb = (*msk_bricks)[i];
+						if (prim_dev->findTexInPool(nextmb, nextmb->nmask(), nextmb->nx(), nextmb->ny(), nextmb->nz(), nextmb->nb(nextmb->nmask()), nextmb->tex_format(nextmb->nmask())) < 0)
+							end_pass = true;
+					}
+					else if (tex_->nmask() != -1)
+					{
+						if (prim_dev->findTexInPool(nextb, nextb->nmask(), nextb->nx(), nextb->ny(), nextb->nz(), nextb->nb(nextb->nmask()), nextb->tex_format(nextb->nmask())) < 0)
+							end_pass = true;
+					}
+				}
+				else if (msk_exists && m_mask_hide_mode != VOL_MASK_HIDE_NONE)
+				{
+#ifndef _UNIT_TEST_VOLUME_RENDERER_
+					if (tex_->isBrxml() && tex_->GetMaskLv() != tex_->GetCurLevel())
+					{
+						int cnx = b->nx(), cny = b->ny(), cnz = b->nz();
+						int cox = b->ox(), coy = b->oy(), coz = b->oz();
+						int csx = b->sx(), csy = b->sy(), csz = b->sz();
+
+						auto next_mnrrd = tex_->get_nrrd_lv(tex_->GetMaskLv(), 0);
+						int sx = 0, sy = 0, sz = 0;
+						next_mnrrd->getDimensions(sx, sy, sz);
+						double xscale = (double)sx / csx;
+						double yscale = (double)sy / csy;
+						double zscale = (double)sz / csz;
+
+						double ox_d = (double)cox * xscale;
+						double oy_d = (double)coy * yscale;
+						double oz_d = (double)coz * zscale;
+						int ox = (int)floor(ox_d);
+						int oy = (int)floor(oy_d);
+						int oz = (int)floor(oz_d);
+
+						double endx_d = (double)(cox + cnx) * xscale;
+						double endy_d = (double)(coy + cny) * yscale;
+						double endz_d = (double)(coz + cnz) * zscale;
+						int nx = (int)ceil(endx_d) - ox;
+						int ny = (int)ceil(endy_d) - oy;
+						int nz = (int)ceil(endz_d) - oz;
+
+						if (prim_dev->findTexInPool(nextb, nextb->nmask(), nx, ny, nz, nextb->nb(nextb->nmask()), nextb->tex_format(nextb->nmask())) < 0)
+							end_pass = true;
+					}
+					else
+					{
+						if (ext_msk && ext_msk->nmask() != -1)
+						{
+							TextureBrick* nextmb = (*msk_bricks)[i];
+							if (prim_dev->findTexInPool(nextmb, nextmb->nmask(), nextmb->nx(), nextmb->ny(), nextmb->nz(), nextmb->nb(nextmb->nmask()), nextmb->tex_format(nextmb->nmask())) < 0)
+								end_pass = true;
+						}
+						else if (tex_->nmask() != -1)
+						{
+							if (prim_dev->findTexInPool(nextb, nextb->nmask(), nextb->nx(), nextb->ny(), nextb->nz(), nextb->nb(nextb->nmask()), nextb->tex_format(nextb->nmask())) < 0)
+								end_pass = true;
+						}
+					}
+#endif
+				}
+
+				if (!end_pass)
+				{
+					if (label_)
+					{
+						if (prim_dev->findTexInPool(nextb, nextb->nlabel(), nextb->nx(), nextb->ny(), nextb->nz(), nextb->nb(nextb->nlabel()), nextb->tex_format(nextb->nlabel())) < 0)
+							end_pass = true;
+					}
+					else if (m_na_mode)
+					{
+						if (ext_lbl && ext_lbl->nlabel() != -1)
+						{
+							TextureBrick* nextlb = (*msk_bricks)[i];
+							if (prim_dev->findTexInPool(nextlb, nextlb->nlabel(), nextlb->nx(), nextlb->ny(), nextlb->nz(), nextlb->nb(nextlb->nlabel()), nextlb->tex_format(nextlb->nlabel())) < 0)
+								end_pass = true;
+						}
+						else if (tex_->nlabel() != -1)
+						{
+							if (prim_dev->findTexInPool(nextb, nextb->nlabel(), nextb->nx(), nextb->ny(), nextb->nz(), nextb->nb(nextb->nlabel()), nextb->tex_format(nextb->nlabel())) < 0)
+								end_pass = true;
+						}
+					}
+				}
+			}
+
+			//comment off when debug_ds
+			bool time_out = false;
+			if (streaming_ && count > 0/* && !mask_ && !label_*/)
+			{
+				uint32_t rn_time = GET_TICK_COUNT();
+				if (rn_time - st_time_ > get_up_time())
+					time_out = true;
+			}
+
+			if (mem_swap_ && count > 0 && (time_out || end_pass))
+			{
+				char dbgstr[50];
+				sprintf(dbgstr, "render bricks: %d\n", count);
+				OutputDebugStringA(dbgstr);
+
+				count = 0;
+
+				vkCmdEndRenderPass(cmdbuf);
+
+				VK_CHECK_RESULT(vkEndCommandBuffer(cmdbuf));
+
+				VkSubmitInfo submitInfo = vks::initializers::submitInfo();
+				submitInfo.commandBufferCount = 1;
+				submitInfo.pCommandBuffers = &cmdbuf;
+
+				if (tex_updated | mask_updated | label_updated)
+				{
+					vks::VulkanSemaphoreSettings brksem = semaphores.back();
+					submitInfo.signalSemaphoreCount = brksem.signalSemaphoreCount;
+					submitInfo.pSignalSemaphores = brksem.signalSemaphores;
+					std::vector<VkSemaphore> waitSems;
+
+					std::vector<VkPipelineStageFlags> waitStages;
+					if (brksem.waitSemaphoreCount > 0)
+					{
+						for (uint32_t i = 0; i < brksem.waitSemaphoreCount; i++)
+							waitStages.push_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+						submitInfo.waitSemaphoreCount = brksem.waitSemaphoreCount;
+						submitInfo.pWaitSemaphores = brksem.waitSemaphores;
+						submitInfo.pWaitDstStageMask = waitStages.data();
+					}
+
+					VK_CHECK_RESULT(vkQueueSubmit(prim_dev->queue, 1, &submitInfo, VK_NULL_HANDLE));
+				}
+				else
+				{
+					submitInfo.signalSemaphoreCount = semaphores[0].signalSemaphoreCount;
+					submitInfo.pSignalSemaphores = semaphores[0].signalSemaphores;
+
+					std::vector<VkPipelineStageFlags> waitStages;
+					if (semaphores[0].waitSemaphoreCount > 0)
+					{
+						for (uint32_t i = 0; i < semaphores[0].waitSemaphoreCount; i++)
+							waitStages.push_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+						submitInfo.waitSemaphoreCount = semaphores[0].waitSemaphoreCount;
+						submitInfo.pWaitSemaphores = semaphores[0].waitSemaphores;
+						submitInfo.pWaitDstStageMask = waitStages.data();
+					}
+
+					VK_CHECK_RESULT(vkQueueSubmit(prim_dev->queue, 1, &submitInfo, VK_NULL_HANDLE));
+				}
+				semaphores.clear();
+			}
+			
+			if (time_out)
+			{
+				VK_CHECK_RESULT(vkQueueWaitIdle(prim_dev->queue));
+				break;
+			}
 			
 			VkFilter filter;
 			if (interpolate_ && colormap_mode_ != 3)
@@ -2886,12 +3054,12 @@ namespace FLIVR
 				filter = VK_FILTER_NEAREST;
 
 			vector<vks::VulkanSemaphoreSettings> semaphores;
-			if (mem_swap_)
+			if (mem_swap_ && count == 0)
 				semaphores.push_back(prim_dev->GetNextRenderSemaphoreSettings());
 
-			bool tex_updated = false;
-			bool mask_updated = false;
-			bool label_updated = false;
+			tex_updated = false;
+			mask_updated = false;
+			label_updated = false;
 			shared_ptr<vks::VTexture> brktex, msktex, lbltex;
 
 			brktex = load_brick(prim_dev, 0, 0, bricks, i, filter, compression_, mode,
@@ -2952,9 +3120,7 @@ namespace FLIVR
 					b->nx(nx); b->ny(ny); b->nz(nz);
 					b->mx(nx); b->my(ny); b->mz(nz);
 
-                    if (ext_msk && ext_msk->nmask() != -1)
-                        msktex = load_brick_mask(prim_dev, msk_bricks, i, filter, false, 0, true, false, &mask_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
-                    else if (tex_->nmask() != -1)
+                    if (tex_->nmask() != -1)
                         msktex = load_brick_mask(prim_dev, bricks, i, filter, false, 0, true, false, &mask_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
 
 					double trans_x = ox_d / sx;
@@ -3133,9 +3299,12 @@ namespace FLIVR
 			vkCmdBindIndexBuffer(cmdbuf, m_vray_vbufs[prim_dev].indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 			vkCmdDrawIndexed(cmdbuf, m_vray_vbufs[prim_dev].indexCount, 1, 0, 0, 0);
 
-			count++;
-			if (mem_swap_ && (count >= que || i >= bricks->size() - 1))
+			if (mem_swap_ && i >= bricks->size() - 1)
 			{
+				char dbgstr[50];
+				sprintf(dbgstr, "render bricks: %d\n", count);
+				OutputDebugStringA(dbgstr);
+
 				count = 0;
 
 				vkCmdEndRenderPass(cmdbuf);
@@ -3153,19 +3322,6 @@ namespace FLIVR
 					submitInfo.pSignalSemaphores = brksem.signalSemaphores;
 					std::vector<VkSemaphore> waitSems;
 					
-					/*
-					for (int i = 0 ; i < semaphores.size()-1; i++)
-						waitSems.push_back(semaphores[i].signalSemaphores[0]);
-					std::vector<VkPipelineStageFlags> waitStages;
-					if (waitSems.size() > 0)
-					{
-						for (uint32_t i = 0; i < waitSems.size(); i++)
-							waitStages.push_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
-						submitInfo.waitSemaphoreCount = waitSems.size();
-						submitInfo.pWaitSemaphores = waitSems.data();
-						submitInfo.pWaitDstStageMask = waitStages.data();
-					}
-					*/
 					std::vector<VkPipelineStageFlags> waitStages;
 					if (brksem.waitSemaphoreCount > 0)
 					{
@@ -3177,17 +3333,6 @@ namespace FLIVR
 					}
 
 					VK_CHECK_RESULT(vkQueueSubmit(prim_dev->queue, 1, &submitInfo, VK_NULL_HANDLE));
-
-					//VkFenceCreateInfo fenceInfo = vks::initializers::fenceCreateInfo(VK_FLAGS_NONE);
-					//VkFence fence;
-					//VK_CHECK_RESULT(vkCreateFence(prim_dev->logicalDevice, &fenceInfo, nullptr, &fence));
-
-					//// Submit to the queue
-					//VK_CHECK_RESULT(vkQueueSubmit(prim_dev->queue, 1, &submitInfo, fence));
-					//// Wait for the fence to signal that command buffer has finished executing
-					//VK_CHECK_RESULT(vkWaitForFences(prim_dev->logicalDevice, 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
-
-					//vkDestroyFence(prim_dev->logicalDevice, fence, nullptr);
 				}
 				else
 				{
@@ -3206,20 +3351,9 @@ namespace FLIVR
 
 					VK_CHECK_RESULT(vkQueueSubmit(prim_dev->queue, 1, &submitInfo, VK_NULL_HANDLE));
 				}
-
-				finished_bricks_++;
 			}
-
-			//comment off when debug_ds
-			if (streaming_/* && !mask_ && !label_*/ && count == 0)
-			{
-				uint32_t rn_time = GET_TICK_COUNT();
-				if (rn_time - st_time_ > get_up_time())
-				{
-					VK_CHECK_RESULT(vkQueueWaitIdle(prim_dev->queue));
-					break;
-				}	
-			}
+			finished_bricks_++;
+			count++;
 		}
 
 		if (!mem_swap_)
