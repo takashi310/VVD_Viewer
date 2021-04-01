@@ -2806,6 +2806,14 @@ namespace FLIVR
 			
 			cmdbuf = prim_dev->GetNextCommandBuffer();
 			VK_CHECK_RESULT(vkBeginCommandBuffer(cmdbuf, &cmdBufInfo));
+            
+            vkCmdBeginRenderPass(cmdbuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+            
+            VkViewport viewport = vks::initializers::viewport((float)w2, (float)h2, 0.0f, 1.0f);
+            vkCmdSetViewport(cmdbuf, 0, 1, &viewport);
+            
+            VkRect2D scissor = vks::initializers::rect2D(w2, h2, 0, 0);
+            vkCmdSetScissor(cmdbuf, 0, 1, &scissor);
 		}
 
 		int count = 0;
@@ -2814,6 +2822,7 @@ namespace FLIVR
 		bool tex_updated = false;
 		bool mask_updated = false;
 		bool label_updated = false;
+        bool time_out = false;
 		vector<vks::VulkanSemaphoreSettings> semaphores;
 		for (unsigned int i = 0; i < bricks->size(); i++)
 		{
@@ -2824,6 +2833,7 @@ namespace FLIVR
 				if (rn_time - st_time_ > get_up_time())
 				{
 					VK_CHECK_RESULT(vkQueueWaitIdle(prim_dev->queue));
+                    time_out = true;
 					break;
 				}
 			}
@@ -2886,8 +2896,11 @@ namespace FLIVR
 			bool end_pass = false;
 			if (mem_swap_ && start_update_loop_ && !done_update_loop_)
 			{
-				TextureBrick* nextb = (*bricks)[i];
-				if (prim_dev->findTexInPool(nextb, 0, nextb->nx(), nextb->ny(), nextb->nz(), nextb->nb(0), nextb->tex_format(0)) < 0)
+                TextureBrick* nextb = (*bricks)[i];
+                
+                if (tex_updated | mask_updated | label_updated)
+                    end_pass = true;
+				else if (prim_dev->findTexInPool(nextb, 0, nextb->nx(), nextb->ny(), nextb->nz(), nextb->nb(0), nextb->tex_format(0)) < 0)
 					end_pass = true;
 				else if (mask_)
 				{
@@ -2978,7 +2991,6 @@ namespace FLIVR
 			}
 
 			//comment off when debug_ds
-			bool time_out = false;
 			if (streaming_ && count > 0/* && !mask_ && !label_*/)
 			{
 				uint32_t rn_time = GET_TICK_COUNT();
@@ -2988,11 +3000,9 @@ namespace FLIVR
 
 			if (mem_swap_ && count > 0 && (time_out || end_pass))
 			{
-				char dbgstr[50];
-				sprintf(dbgstr, "render bricks: %d\n", count);
-				OutputDebugStringA(dbgstr);
-
-				count = 0;
+				//char dbgstr[50];
+				//sprintf(dbgstr, "render bricks: %d\n", count);
+				//OutputDebugStringA(dbgstr);
 
 				vkCmdEndRenderPass(cmdbuf);
 
@@ -3039,6 +3049,7 @@ namespace FLIVR
 					VK_CHECK_RESULT(vkQueueSubmit(prim_dev->queue, 1, &submitInfo, VK_NULL_HANDLE));
 				}
 				semaphores.clear();
+                count = 0;
 			}
 			
 			if (time_out)
@@ -3053,7 +3064,6 @@ namespace FLIVR
 			else
 				filter = VK_FILTER_NEAREST;
 
-			vector<vks::VulkanSemaphoreSettings> semaphores;
 			if (mem_swap_ && count == 0)
 				semaphores.push_back(prim_dev->GetNextRenderSemaphoreSettings());
 
@@ -3067,11 +3077,16 @@ namespace FLIVR
 			if (!brktex)
 			{
 				prim_dev->m_cur_semaphore_id--;
+                semaphores.clear();
 				continue;
 			}
 			b->prevent_tex_deletion(true);
 			if (tex_updated && mem_swap_)
+            {
 				semaphores.push_back(prim_dev->GetNextRenderSemaphoreSettings());
+                if (!end_pass)
+                    int dummy = 0;
+            }
 
 			if (mask_)
             {
@@ -3158,7 +3173,11 @@ namespace FLIVR
 #endif
 			}
 			if (mask_updated && mem_swap_)
+            {
 				semaphores.push_back(prim_dev->GetNextRenderSemaphoreSettings());
+                if (!end_pass)
+                    int dummy = 0;
+            }
 
 			if (label_)
 				lbltex = load_brick_label(prim_dev, bricks, i, true,true, &label_updated, !mem_swap_ ? nullptr : &(semaphores.back()));
@@ -3237,15 +3256,15 @@ namespace FLIVR
 				cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
 				VK_CHECK_RESULT(vkBeginCommandBuffer(cmdbuf, &cmdBufInfo));
+                
+                vkCmdBeginRenderPass(cmdbuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+                
+                VkViewport viewport = vks::initializers::viewport((float)w2, (float)h2, 0.0f, 1.0f);
+                vkCmdSetViewport(cmdbuf, 0, 1, &viewport);
+                
+                VkRect2D scissor = vks::initializers::rect2D(w2, h2, 0, 0);
+                vkCmdSetScissor(cmdbuf, 0, 1, &scissor);
 			}
-
-			vkCmdBeginRenderPass(cmdbuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-			VkViewport viewport = vks::initializers::viewport((float)w2, (float)h2, 0.0f, 1.0f);
-			vkCmdSetViewport(cmdbuf, 0, 1, &viewport);
-
-			VkRect2D scissor = vks::initializers::rect2D(w2, h2, 0, 0);
-			vkCmdSetScissor(cmdbuf, 0, 1, &scissor);
 
 			if (!descriptorWrites.empty())
 			{
@@ -3299,84 +3318,85 @@ namespace FLIVR
 			vkCmdBindIndexBuffer(cmdbuf, m_vray_vbufs[prim_dev].indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 			vkCmdDrawIndexed(cmdbuf, m_vray_vbufs[prim_dev].indexCount, 1, 0, 0, 0);
 
-			if (mem_swap_ && i >= bricks->size() - 1)
-			{
-				char dbgstr[50];
-				sprintf(dbgstr, "render bricks: %d\n", count);
-				OutputDebugStringA(dbgstr);
-
-				count = 0;
-
-				vkCmdEndRenderPass(cmdbuf);
-
-				VK_CHECK_RESULT(vkEndCommandBuffer(cmdbuf));
-
-				VkSubmitInfo submitInfo = vks::initializers::submitInfo();
-				submitInfo.commandBufferCount = 1;
-				submitInfo.pCommandBuffers = &cmdbuf;
-
-				if (tex_updated | mask_updated | label_updated)
-				{
-					vks::VulkanSemaphoreSettings brksem = semaphores.back();
-					submitInfo.signalSemaphoreCount = brksem.signalSemaphoreCount;
-					submitInfo.pSignalSemaphores = brksem.signalSemaphores;
-					std::vector<VkSemaphore> waitSems;
-					
-					std::vector<VkPipelineStageFlags> waitStages;
-					if (brksem.waitSemaphoreCount > 0)
-					{
-						for (uint32_t i = 0; i < brksem.waitSemaphoreCount; i++)
-							waitStages.push_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
-						submitInfo.waitSemaphoreCount = brksem.waitSemaphoreCount;
-						submitInfo.pWaitSemaphores = brksem.waitSemaphores;
-						submitInfo.pWaitDstStageMask = waitStages.data();
-					}
-
-					VK_CHECK_RESULT(vkQueueSubmit(prim_dev->queue, 1, &submitInfo, VK_NULL_HANDLE));
-				}
-				else
-				{
-					submitInfo.signalSemaphoreCount = semaphores[0].signalSemaphoreCount;
-					submitInfo.pSignalSemaphores = semaphores[0].signalSemaphores;
-
-					std::vector<VkPipelineStageFlags> waitStages;
-					if (semaphores[0].waitSemaphoreCount > 0)
-					{
-						for (uint32_t i = 0; i < semaphores[0].waitSemaphoreCount; i++)
-							waitStages.push_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
-						submitInfo.waitSemaphoreCount = semaphores[0].waitSemaphoreCount;
-						submitInfo.pWaitSemaphores = semaphores[0].waitSemaphores;
-						submitInfo.pWaitDstStageMask = waitStages.data();
-					}
-
-					VK_CHECK_RESULT(vkQueueSubmit(prim_dev->queue, 1, &submitInfo, VK_NULL_HANDLE));
-				}
-			}
 			finished_bricks_++;
 			count++;
 		}
 
+        if (mem_swap_ && count > 0 && !time_out && cmdbuf != VK_NULL_HANDLE)
+        {
+            //char dbgstr[50];
+            //sprintf(dbgstr, "render bricks: %d\n", count);
+            //OutputDebugStringA(dbgstr);
+            
+            count = 0;
+            
+            vkCmdEndRenderPass(cmdbuf);
+            
+            VK_CHECK_RESULT(vkEndCommandBuffer(cmdbuf));
+            
+            VkSubmitInfo submitInfo = vks::initializers::submitInfo();
+            submitInfo.commandBufferCount = 1;
+            submitInfo.pCommandBuffers = &cmdbuf;
+            
+            if (tex_updated | mask_updated | label_updated)
+            {
+                vks::VulkanSemaphoreSettings brksem = semaphores.back();
+                submitInfo.signalSemaphoreCount = brksem.signalSemaphoreCount;
+                submitInfo.pSignalSemaphores = brksem.signalSemaphores;
+                std::vector<VkSemaphore> waitSems;
+                
+                std::vector<VkPipelineStageFlags> waitStages;
+                if (brksem.waitSemaphoreCount > 0)
+                {
+                    for (uint32_t i = 0; i < brksem.waitSemaphoreCount; i++)
+                        waitStages.push_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+                    submitInfo.waitSemaphoreCount = brksem.waitSemaphoreCount;
+                    submitInfo.pWaitSemaphores = brksem.waitSemaphores;
+                    submitInfo.pWaitDstStageMask = waitStages.data();
+                }
+                
+                VK_CHECK_RESULT(vkQueueSubmit(prim_dev->queue, 1, &submitInfo, VK_NULL_HANDLE));
+            }
+            else
+            {
+                submitInfo.signalSemaphoreCount = semaphores[0].signalSemaphoreCount;
+                submitInfo.pSignalSemaphores = semaphores[0].signalSemaphores;
+                
+                std::vector<VkPipelineStageFlags> waitStages;
+                if (semaphores[0].waitSemaphoreCount > 0)
+                {
+                    for (uint32_t i = 0; i < semaphores[0].waitSemaphoreCount; i++)
+                        waitStages.push_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+                    submitInfo.waitSemaphoreCount = semaphores[0].waitSemaphoreCount;
+                    submitInfo.pWaitSemaphores = semaphores[0].waitSemaphores;
+                    submitInfo.pWaitDstStageMask = waitStages.data();
+                }
+                
+                VK_CHECK_RESULT(vkQueueSubmit(prim_dev->queue, 1, &submitInfo, VK_NULL_HANDLE));
+            }
+        }
+        
 		if (!mem_swap_)
 		{
 			vkCmdEndRenderPass(cmdbuf);
 
 			VK_CHECK_RESULT(vkEndCommandBuffer(cmdbuf));
 
-			vks::VulkanSemaphoreSettings semaphores = prim_dev->GetNextRenderSemaphoreSettings();
+			vks::VulkanSemaphoreSettings semaphores2 = prim_dev->GetNextRenderSemaphoreSettings();
 
 			VkSubmitInfo submitInfo = vks::initializers::submitInfo();
 			submitInfo.commandBufferCount = 1;
 			submitInfo.pCommandBuffers = &cmdbuf;
-			submitInfo.signalSemaphoreCount = semaphores.signalSemaphoreCount;
-			submitInfo.pSignalSemaphores = semaphores.signalSemaphores;
+			submitInfo.signalSemaphoreCount = semaphores2.signalSemaphoreCount;
+			submitInfo.pSignalSemaphores = semaphores2.signalSemaphores;
 
 			std::vector<VkPipelineStageFlags> waitStages;
-			if (waitsemaphore && semaphores.waitSemaphoreCount > 0)
+			if (waitsemaphore && semaphores2.waitSemaphoreCount > 0)
 			{
-				for (uint32_t i = 0; i < semaphores.waitSemaphoreCount; i++)
+				for (uint32_t i = 0; i < semaphores2.waitSemaphoreCount; i++)
 					waitStages.push_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
-				submitInfo.waitSemaphoreCount = semaphores.waitSemaphoreCount;
-				submitInfo.pWaitSemaphores = semaphores.waitSemaphores;
+				submitInfo.waitSemaphoreCount = semaphores2.waitSemaphoreCount;
+				submitInfo.pWaitSemaphores = semaphores2.waitSemaphores;
 				submitInfo.pWaitDstStageMask = waitStages.data();
 				waitsemaphore = false;
 			}
