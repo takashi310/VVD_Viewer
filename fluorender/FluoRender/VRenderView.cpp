@@ -699,7 +699,9 @@ VRenderVulkanView::VRenderVulkanView(wxWindow* frame,
 	m_recording(false),
 	m_recording_frame(false),
 	m_abort(false),
-    m_easy_2d_adjust(false)
+    m_easy_2d_adjust(false),
+	m_loader_run(true),
+	m_ebd_run(true)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -1651,9 +1653,9 @@ void VRenderVulkanView::DrawVolumes(int peel)
 		{
 			TextureRenderer::reset_update_loop();
 			vkQueueWaitIdle(m_vulkan->vulkanDevice->queue);
-//            ed_time = milliseconds_now();
-//            sprintf(dbgstr, "Frame Draw: %lld \n", ed_time - st_time);
-//            OutputDebugStringA(dbgstr);
+            //ed_time = milliseconds_now();
+            //sprintf(dbgstr, "Frame Draw: %lld \n", ed_time - st_time);
+            //OutputDebugStringA(dbgstr);
 		}
 	}
 
@@ -2120,7 +2122,7 @@ void VRenderVulkanView::DrawVolumesDP()
 		}
 	}
 
-	/*if (TextureRenderer::get_mem_swap())
+/*	if (TextureRenderer::get_mem_swap())
 	{
 		TextureRenderer::set_consumed_time(GET_TICK_COUNT() - TextureRenderer::get_st_time());
 		if (TextureRenderer::get_start_update_loop() &&
@@ -12511,15 +12513,21 @@ void VRenderVulkanView::DrawInfo(int nx, int ny)
 			TextureRenderer::get_total_brick_num(),
 			TextureRenderer::get_cur_brick_num());
         */
+
+		str = wxString::Format(
+			"FPS: %.2f, Bricks: %d, Time: %lu",
+			fps_ >= 0.0 && fps_ < 300.0 ? fps_ : 0.0,
+			TextureRenderer::get_total_brick_num(),
+			TextureRenderer::get_cor_up_time());
         
-        str = wxString::Format(
+        /*str = wxString::Format(
                                "FPS: %.2f, Bricks: %d, Quota: %d, Int: %s, Time: %lu, Dist: %f",
                                fps_>=0.0&&fps_<300.0?fps_:0.0,
                                TextureRenderer::get_total_brick_num(),
                                TextureRenderer::get_quota_bricks(),
                                m_interactive?"Yes":"No",
                                TextureRenderer::get_cor_up_time(),
-                               CalcCameraDistance());
+                               CalcCameraDistance());*/
         
 		////budget_test
 		//if (m_interactive)
@@ -13955,6 +13963,9 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 				toffset++;
 			}
 		}
+
+		if (!m_ebd_run)
+			ebd_queues.clear();
         
         bool runvl = false;
 		if (queues.size() > 0 && !m_interactive)
@@ -13970,7 +13981,6 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
             }
             if (runvl)
             {
-				//m_loader.SetMaxThreadNum(1);
                 m_loader.Set(queues);
                 m_loader.SetMemoryLimitByte((long long)TextureRenderer::mainmem_buf_size_*1024LL*1024LL);
                 TextureRenderer::set_load_on_main_thread(false);

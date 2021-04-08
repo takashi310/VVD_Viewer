@@ -8030,7 +8030,7 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 					continue;
 				}
 
-				if (m_vl->m_used_memory >= m_vl->m_memory_limit)
+				if (m_vl->m_used_memory >= m_vl->m_memory_limit || m_vl->m_used_memory < 0)
 				{
 					m_vl->ms_pThreadCS->Enter();
 					//OutputDebugStringA("CleanupLoadedBrick: enter\n");

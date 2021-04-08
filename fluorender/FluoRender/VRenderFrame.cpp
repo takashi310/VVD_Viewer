@@ -4852,6 +4852,7 @@ void VRenderFrame::OpenProject(wxString& filename)
 				continue;
 
 			vrv->Clear();
+			vrv->SetEmptyBlockDetectorActive(false);
 
 			if (i==0 && m_setting_dlg && m_setting_dlg->GetTestMode(1))
 				vrv->m_glview->m_test_speed = true;
@@ -5873,6 +5874,12 @@ void VRenderFrame::OpenProject(wxString& filename)
 
 	if (!expstate.IsEmpty())
 		m_tree_panel->ImportExpState(expstate.ToStdString());
+	
+	for (int i = 0; i < (int)m_vrv_list.size(); i++)
+	{
+		if (m_vrv_list[i])
+			m_vrv_list[i]->SetEmptyBlockDetectorActive(true);
+	}
 	RefreshVRenderViews();
 
 	if (m_movie_view)

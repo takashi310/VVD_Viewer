@@ -718,6 +718,8 @@ public:
     bool GetEasy2DAdjustMode() { return m_easy_2d_adjust; }
     void SetEasy2DAdjustMode(bool mode) { m_easy_2d_adjust = mode; }
 
+	void SetEmptyBlockDetectorActive(bool val) { m_ebd_run = val; }
+
 	static void setCriticalSection(wxCriticalSection* crtsec) 
 	{
 		ms_pThreadCS = crtsec;
@@ -1143,8 +1145,10 @@ private:
 
 	VolumeLoader m_loader;
 	bool m_load_in_main_thread;
+	bool m_loader_run;
     
     EmptyBlockDetector m_ebd;
+	bool m_ebd_run;
 
 	wxTimer *m_idleTimer;
 
@@ -1991,6 +1995,9 @@ public:
     
     void SetEasy2DAdjustMode(bool val) { if (m_glview) m_glview->SetEasy2DAdjustMode(val); }
     bool GetEasy2DAdjustMode() { if (m_glview) return m_glview->GetEasy2DAdjustMode(); else return false; }
+
+	void SetEmptyBlockDetectorActive(bool val) { if (m_glview) m_glview->SetEmptyBlockDetectorActive(val); }
+
 
 public:
 	wxWindow* m_frame;

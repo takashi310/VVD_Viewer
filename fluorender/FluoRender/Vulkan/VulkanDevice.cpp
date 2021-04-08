@@ -885,34 +885,32 @@ namespace vks
 		if (staging_buf.buffer == VK_NULL_HANDLE)
 		{
 			createBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT| VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
 				&staging_buf, size);
 			// Map persistent
 			VK_CHECK_RESULT(staging_buf.map());
 		}
 	}
 
-//    long long milliseconds_now() {
-//        static LARGE_INTEGER s_frequency;
-//        static BOOL s_use_qpc = QueryPerformanceFrequency(&s_frequency);
-//        if (s_use_qpc) {
-//            LARGE_INTEGER now;
-//            QueryPerformanceCounter(&now);
-//            return (1000LL * now.QuadPart) / s_frequency.QuadPart;
-//        }
-//        else {
-//            return GetTickCount64();
-//        }
-//    }
+    //long long milliseconds_now() {
+    //    static LARGE_INTEGER s_frequency;
+    //    static BOOL s_use_qpc = QueryPerformanceFrequency(&s_frequency);
+    //    if (s_use_qpc) {
+    //        LARGE_INTEGER now;
+    //        QueryPerformanceCounter(&now);
+    //        return (1000LL * now.QuadPart) / s_frequency.QuadPart;
+    //    }
+    //    else {
+    //        return GetTickCount64();
+    //    }
+    //}
 
 	bool VulkanDevice::UploadTexture3D(
 		const std::shared_ptr<VTexture> &tex, void *data, VkOffset3D offset, uint32_t ypitch, uint32_t zpitch,
 		bool flush, vks::VulkanSemaphoreSettings* semaphore, bool sync 
 	)
 	{
-		/*uint64_t st_time, ed_time;
-		char dbgstr[50];
-		st_time = milliseconds_now();*/
+		static int bufsize = 4096;
 
 		VkDeviceSize texMemSize = tex->memsize;
 
@@ -921,8 +919,10 @@ namespace vks
 
 		checkStagingBuffer(texMemSize);
 
+		//uint64_t st_time, ed_time;
+		//char dbgstr[50];
 		//st_time = milliseconds_now();
-		
+
 		// Copy texture data into staging buffer
 		if (tex->format != VK_FORMAT_BC4_UNORM_BLOCK)
 		{
@@ -937,7 +937,7 @@ namespace vks
 			std::vector<std::thread> threads(nthreads);
 			int grain_size = tex->d / nthreads;
 			auto worker = [&zpitch, &dst_zpitch, &ypitch, &dst_ypitch](unsigned char* dst, unsigned char* src, int d, int texh) {
-				int xite = dst_ypitch / 4096;
+				int xite = dst_ypitch / bufsize;
 				unsigned char* src_p, * dst_p, * tmp_xsrc_p, * tmp_xdst_p;
 				for (uint32_t z = 0; z < d; z++)
 				{
@@ -950,11 +950,11 @@ namespace vks
 						tmp_xdst_p = dst_p + (VkDeviceSize)y * dst_ypitch;
 						for (int x = 0; x < xite - 1; x++)
 						{
-							memcpy(tmp_xdst_p, tmp_xsrc_p, 4096);
-							tmp_xdst_p += 4096;
-							tmp_xsrc_p += 4096;
+							memcpy(tmp_xdst_p, tmp_xsrc_p, bufsize);
+							tmp_xdst_p += bufsize;
+							tmp_xsrc_p += bufsize;
 						}
-						memcpy(tmp_xdst_p, tmp_xsrc_p, dst_ypitch - 4096LL * (xite >= 1 ? xite - 1 : 0));
+						memcpy(tmp_xdst_p, tmp_xsrc_p, dst_ypitch - bufsize * (xite >= 1 ? xite - 1 : 0));
 					}
 				}
 			};
@@ -1073,9 +1073,9 @@ namespace vks
 			}
 		}
 
-		/*ed_time = milliseconds_now();
-		sprintf(dbgstr, "memcpy time: %lld  size: %lld\n", ed_time - st_time, texMemSize);
-		OutputDebugStringA(dbgstr);*/
+		//ed_time = milliseconds_now();
+		//sprintf(dbgstr, "memcpy time: %lld  size: %lld\n", ed_time - st_time, texMemSize);
+		//OutputDebugStringA(dbgstr);
 
 		VkDeviceSize atom = properties.limits.nonCoherentAtomSize;
 		if (atom > 0)
@@ -1124,6 +1124,8 @@ namespace vks
 
 	bool VulkanDevice::UploadTexture(const std::shared_ptr<VTexture> &tex, void *data, bool flush, vks::VulkanSemaphoreSettings* semaphore, bool sync)
 	{
+		static int bufsize = 4096;
+
 		VkDeviceSize texMemSize = (VkDeviceSize)tex->w * (VkDeviceSize)tex->h * (VkDeviceSize)tex->d * (VkDeviceSize)tex->bytes;
 
 		if (sync)
@@ -1131,26 +1133,31 @@ namespace vks
 
 		checkStagingBuffer(texMemSize);
 
+		//uint64_t st_time, ed_time;
+		//char dbgstr[50];
+		//st_time = milliseconds_now();
+
 		// Copy texture data into staging buffer
 		if (tex->format != VK_FORMAT_BC4_UNORM_BLOCK)
 		{
-			std::stringstream debugMessage;
-			debugMessage << "uploadTex: " << data;
+			//std::stringstream debugMessage;
+			//debugMessage << "uploadTex: " << data;
 			//OutputDebugStringA(debugMessage.str().c_str()); OutputDebugString(L"\n");
 			
 			size_t nthreads = std::thread::hardware_concurrency();
 			if (nthreads > 8) nthreads = 8;
+			nthreads = 1;
 			std::vector<std::thread> threads(nthreads);
 			size_t grain_size = texMemSize / nthreads;
 			auto worker = [](unsigned char* dst, unsigned char* src, size_t size) {
-				int ite = size / 4096;
+				int ite = size / bufsize;
 				for (int i = 0; i < ite - 1; i++)
 				{
-					memcpy(dst, src, 4096);
-					dst += 4096;
-					src += 4096;
+					memcpy(dst, src, bufsize);
+					dst += bufsize;
+					src += bufsize;
 				}
-				memcpy(dst, src, size - 4096LL * (ite >= 1 ? ite - 1 : 0));
+				memcpy(dst, src, size - bufsize * (ite >= 1 ? ite - 1 : 0));
 			};
 			unsigned char* dstp = (unsigned char*)staging_buf.mapped;
 			unsigned char* stp = (unsigned char*)data;
@@ -1168,15 +1175,15 @@ namespace vks
 			/*
 			unsigned char* dstp = (unsigned char*)staging_buf.mapped;
 			unsigned char* stp = (unsigned char*)data;
-			int ite = texMemSize / 4096;
+			int ite = texMemSize / bufsize;
 			for (int i = 0; i < ite; i++)
 			{
-				memcpy(dstp, stp, 4096);
-				dstp += 4096;
-				stp += 4096;
+				memcpy(dstp, stp, bufsize);
+				dstp += bufsize;
+				stp += bufsize;
 			}
-			if (texMemSize % 4096 > 0)
-				memcpy(dstp, stp, texMemSize % 4096);
+			if (texMemSize % bufsize > 0)
+				memcpy(dstp, stp, texMemSize % bufsize);
 			*/
 			//OutputDebugStringA("uploadtex finished\n");
 			
@@ -1286,6 +1293,10 @@ namespace vks
 				i.join();
 			}
 		}
+
+		//ed_time = milliseconds_now();
+		//sprintf(dbgstr, "memcpy time: %lld  size: %lld\n", ed_time - st_time, texMemSize);
+		//OutputDebugStringA(dbgstr);
 
 		VkDeviceSize atom = properties.limits.nonCoherentAtomSize;
 		if (atom > 0)
