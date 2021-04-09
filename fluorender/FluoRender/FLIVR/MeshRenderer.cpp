@@ -366,7 +366,7 @@ namespace FLIVR
 
 		ShaderProgram* shader = m_vulkan->msh_shader_factory_->shader(
 			device->logicalDevice,
-			type, depth_peel_, tex && data_->texcoords, fog_, light_ && data_->normals);
+			type, depth_peel_, tex && data_->texcoords, fog_, light_ && (data_->normals || data_->facetnorms));
 
 		if (m_prev_msh_pipeline >= 0) {
 			if (m_msh_pipelines[m_prev_msh_pipeline].device == device &&
@@ -568,7 +568,7 @@ namespace FLIVR
 		}
 		m_vertbufs.clear();
         
-		bool bnormal = data_->normals;
+		bool bnormal = data_->normals || data_->facetnorms;
 		bool btexcoord = data_->texcoords;
 
 		if (bnormal && btexcoord)
@@ -601,10 +601,20 @@ namespace FLIVR
 					verts.push_back(1.0f);
 					if (bnormal)
 					{
-						verts.push_back(data_->normals[3*triangle->nindices[j]]);
-						verts.push_back(data_->normals[3*triangle->nindices[j]+1]);
-						verts.push_back(data_->normals[3*triangle->nindices[j]+2]);
-						verts.push_back(0.0f);
+                        if (data_->normals)
+                        {
+                            verts.push_back(data_->normals[3*triangle->nindices[j]]);
+                            verts.push_back(data_->normals[3*triangle->nindices[j]+1]);
+                            verts.push_back(data_->normals[3*triangle->nindices[j]+2]);
+                            verts.push_back(0.0f);
+                        }
+                        else if (data_->facetnorms)
+                        {
+                            verts.push_back(data_->facetnorms[3*triangle->findex]);
+                            verts.push_back(data_->facetnorms[3*triangle->findex+1]);
+                            verts.push_back(data_->facetnorms[3*triangle->findex+2]);
+                            verts.push_back(0.0f);
+                        }
 					}
 					if (btexcoord)
 					{
@@ -731,7 +741,7 @@ namespace FLIVR
 
 		vubo.proj_mat = m_proj_mat;
 		vubo.mv_mat = m_mv_mat;
-		if (light_ && data_->normals)
+		if (light_ && (data_->normals || data_->facetnorms))
 			vubo.normal_mat = glm::mat4(glm::inverseTranspose(glm::mat3(m_mv_mat)));
 
 		if (fog_)
@@ -783,7 +793,7 @@ namespace FLIVR
 			m_vulkan->msh_shader_factory_->getDescriptorSetWriteUniforms(device_, vert_ubuf, frag_ubuf, descriptorWritesBase);
 
 			//uniforms
-			if (light_ && data_->normals)
+			if (light_ && (data_->normals || data_->facetnorms))
 			{
 				GLMmaterial* material = &data_->materials[group->material];
 				if (material)

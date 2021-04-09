@@ -4175,6 +4175,7 @@ m_data(0),
 	m_def_r = 0.25;
 	m_subdiv = 0;
 	m_swc_reader = NULL;
+    m_ply_reader = NULL;
 	m_clip_dist_x = 1;
 	m_clip_dist_y = 1;
 	m_clip_dist_z = 1;
@@ -4282,7 +4283,7 @@ int MeshData::Load(wxString &filename)
 			} else break;
 		}
 	}
-	if (suffix == ".swc")
+	else if (suffix == ".swc")
 	{
 		if (!m_swc_reader) m_swc_reader = new SWCReader();
 		wstring wstr = m_data_path.ToStdWstring();
@@ -4291,16 +4292,27 @@ int MeshData::Load(wxString &filename)
 		m_data = m_swc_reader->GenerateSolidModel(m_def_r, m_r_scale, m_subdiv);
 		m_swc = true;
 	}
+    else if (suffix == ".ply")
+    {
+        if (!m_ply_reader) m_ply_reader = new PLYReader();
+        wstring wstr = m_data_path.ToStdWstring();
+        m_ply_reader->SetFile(wstr);
+        m_data = m_ply_reader->GetSolidModel();
+    }
 
 	if (!m_data)
 		return 0;
 
+    if (!m_data->facetnorms && m_data->numtriangles)
+        glmFacetNormals(m_data);
+    /*
 	if (!m_data->normals && m_data->numtriangles)
 	{
 		if (!m_data->facetnorms)
 			glmFacetNormals(m_data);
 		glmVertexNormals(m_data, 89.0);
 	}
+    */
 
 	if (!m_data->materials)
 	{

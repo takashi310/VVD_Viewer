@@ -54,6 +54,7 @@ DEALINGS IN THE SOFTWARE.
 #include "Formats/brkxml_reader.h"
 #include "Formats/h5j_reader.h"
 #include "Formats/swc_reader.h"
+#include "Formats/ply_reader.h"
 #include "Formats/v3dpbd_reader.h"
 
 #include "Tracking/TrackMap.h"
@@ -344,6 +345,7 @@ private:
 	double m_def_r;
 	int m_subdiv;
 	SWCReader *m_swc_reader;
+    PLYReader *m_ply_reader;
 
 	wstring m_info;
 

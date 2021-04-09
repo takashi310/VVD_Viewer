@@ -1360,7 +1360,7 @@ void VRenderFrame::StartupLoad(wxArrayString files, size_t datasize)
 		{
 			LoadVolumes(files, NULL, vector<vector<AnnotationDB>>(), datasize);
 		}
-		else if (suffix == ".obj" || suffix == ".swc")
+		else if (suffix == ".obj" || suffix == ".swc" || suffix == ".ply")
 		{
 			LoadMeshes(files);
 		}
@@ -1421,14 +1421,15 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv)
 	//if (vrv)
 	//	vrv->InitView(INIT_BOUNDS|INIT_CENTER);
 
-	delete prg_diag;
+    if (prg_diag)
+        delete prg_diag;
 }
 
 void VRenderFrame::OnOpenMesh(wxCommandEvent& WXUNUSED(event))
 {
 	wxFileDialog *fopendlg = new wxFileDialog(
 		this, "Choose the volume data file", "", "",
-		"All Supported|*.obj;*.swc|OBJ files (*.obj)|*.obj|SWC files (*.swc)|*.swc",
+        "All Supported|*.obj;*.swc;*.ply|OBJ files (*.obj)|*.obj|SWC files (*.swc)|*.swc|PLY files (*.ply)|*.ply",
 		wxFD_OPEN|wxFD_MULTIPLE);
 
 	int rval = fopendlg->ShowModal();
