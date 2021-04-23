@@ -1080,7 +1080,7 @@ void VRenderFrame::OnDownloadVolume(wxCommandEvent& WXUNUSED(event))
 	m_aui_mgr.Update();
 }
 
-void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<vector<AnnotationDB>> annotations, size_t datasize)
+void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<vector<AnnotationDB>> annotations, size_t datasize, wxArrayString descs)
 {
 	int j;
 
@@ -1118,28 +1118,29 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
 
 			int ch_num = 0;
 			wxString filename = files[j];
+            wxString prefix = j < descs.Count() ? descs[j] : wxT("");
 			wxString suffix = filename.Mid(filename.Find('.', true)).MakeLower();
 
 			if (suffix == ".nrrd")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_NRRD, -1, -1, datasize);
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_NRRD, -1, -1, datasize, prefix);
 			else if (suffix==".tif" || suffix==".tiff" || suffix==".zip")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_TIFF, -1, -1, datasize);
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_TIFF, -1, -1, datasize, prefix);
 			else if (suffix == ".oib")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_OIB, -1, -1, datasize);
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_OIB, -1, -1, datasize, prefix);
 			else if (suffix == ".oif")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_OIF, -1, -1, datasize);
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_OIF, -1, -1, datasize, prefix);
 			else if (suffix==".lsm")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_LSM, -1, -1, datasize);
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_LSM, -1, -1, datasize, prefix);
 			else if (suffix==".xml")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_PVXML, -1, -1, datasize);
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_PVXML, -1, -1, datasize, prefix);
 			else if (suffix==".vvd" || suffix==".n5" || suffix==".json" || suffix==".n5fs_ch")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_BRKXML, -1, -1, datasize);
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_BRKXML, -1, -1, datasize, prefix);
 			else if (suffix == ".h5j")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_H5J, -1, -1, datasize);
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_H5J, -1, -1, datasize, prefix);
 			else if (suffix == ".v3dpbd")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_V3DPBD, -1, -1, datasize);
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_V3DPBD, -1, -1, datasize, prefix);
             else if (suffix == ".idi")
-                ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_IDI, -1, -1, datasize);
+                ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_IDI, -1, -1, datasize, prefix);
 
 			if (ch_num > 1)
 			{
@@ -1329,7 +1330,7 @@ void VRenderFrame::AddVolume(VolumeData *vd, VRenderView* view)
 	vrv->RefreshGL();
 }
 
-void VRenderFrame::StartupLoad(wxArrayString files, size_t datasize)
+void VRenderFrame::StartupLoad(wxArrayString files, size_t datasize, wxArrayString descs)
 {
 	if (m_vrv_list[0])
 		m_vrv_list[0]->m_glview->Init();
@@ -1343,31 +1344,48 @@ void VRenderFrame::StartupLoad(wxArrayString files, size_t datasize)
 		{
 			OpenProject(files[0]);
 		}
-		else if (suffix == ".nrrd" ||
-			suffix == ".tif" ||
-			suffix == ".tiff" ||
-			suffix == ".oib" ||
-			suffix == ".oif" ||
-			suffix == ".lsm" ||
-			suffix == ".xml" ||
-			suffix == ".vvd" ||
-            suffix == ".n5" ||
-            suffix == ".json" ||
-			suffix == ".h5j" ||
-			suffix == ".v3dpbd" ||
-			suffix == ".zip" ||
-            suffix == ".idi")
-		{
-			LoadVolumes(files, NULL, vector<vector<AnnotationDB>>(), datasize);
-		}
-		else if (suffix == ".obj" || suffix == ".swc" || suffix == ".ply")
-		{
-			LoadMeshes(files);
-		}
+		else
+        {
+            wxArrayString vol_files, msh_files;
+            wxArrayString vol_descs, msh_descs;
+            for (int i = 0; i < files.Count(); i++)
+            {
+                suffix = files[i].Mid(files[i].Find('.', true)).MakeLower();
+                if (suffix == ".nrrd" ||
+                    suffix == ".tif" ||
+                    suffix == ".tiff" ||
+                    suffix == ".oib" ||
+                    suffix == ".oif" ||
+                    suffix == ".lsm" ||
+                    suffix == ".xml" ||
+                    suffix == ".vvd" ||
+                    suffix == ".n5" ||
+                    suffix == ".json" ||
+                    suffix == ".h5j" ||
+                    suffix == ".v3dpbd" ||
+                    suffix == ".zip" ||
+                    suffix == ".idi")
+                {
+                    vol_files.Add(files[i]);
+                    if (i < descs.Count())
+                        vol_descs.Add(descs[i]);
+                }
+                else if (suffix == ".obj" || suffix == ".swc" || suffix == ".ply")
+                {
+                    msh_files.Add(files[i]);
+                    if (i < descs.Count())
+                        msh_descs.Add(descs[i]);
+                }
+            }
+            if (vol_files.Count() > 0)
+                LoadVolumes(vol_files, NULL, vector<vector<AnnotationDB>>(), datasize, vol_descs);
+            if (msh_files.Count() > 0)
+                LoadMeshes(msh_files, NULL, msh_descs);
+        }
 	}
 }
 
-void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv)
+void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayString descs)
 {
 	if (!vrv)
 		vrv = GetView(0);
@@ -1391,7 +1409,7 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv)
 		prg_diag->Update(90*(i+1)/(int)files.Count());
 
 		wxString filename = files[i];
-		m_data_mgr.LoadMeshData(filename);
+        m_data_mgr.LoadMeshData(filename, i < descs.Count() ? descs[i] : wxT(""));
 
 		MeshData* md = m_data_mgr.GetLastMeshData();
 		if (vrv && md)

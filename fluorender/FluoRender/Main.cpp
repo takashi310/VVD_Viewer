@@ -45,10 +45,9 @@ IMPLEMENT_APP(VRenderApp)
 
 static const wxCmdLineEntryDesc g_cmdLineDesc [] =
 {
-   { wxCMD_LINE_OPTION, "p", NULL, NULL,
-	  wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL },
-   { wxCMD_LINE_PARAM, NULL, NULL, "input file",
-      wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL|wxCMD_LINE_PARAM_MULTIPLE },
+   { wxCMD_LINE_OPTION, "p", "plugin", NULL, wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL },
+   { wxCMD_LINE_OPTION, "d", "desc", NULL, wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL },
+   { wxCMD_LINE_PARAM, NULL, NULL, "input file", wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL|wxCMD_LINE_PARAM_MULTIPLE },
    { wxCMD_LINE_NONE }
 };
 
@@ -144,7 +143,7 @@ bool VRenderApp::OnInit()
 	   ((VRenderFrame *)m_frame)->SetRealtimeCompression(setting_dlg->GetRealtimeCompress());
 
    if (m_files.Count()>0)
-      ((VRenderFrame*)m_frame)->StartupLoad(m_files);
+      ((VRenderFrame*)m_frame)->StartupLoad(m_files, 0LL, m_descs);
 
    if (!m_plugin_name.IsEmpty())
 	   ((VRenderFrame*)m_frame)->RunPlugin(m_plugin_name, m_plugin_params, true);
@@ -172,10 +171,83 @@ void VRenderApp::OnInitCmdLine(wxCmdLineParser& parser)
 
 bool VRenderApp::OnCmdLineParsed(wxCmdLineParser& parser)
 {
-   int i=0;
-   wxString params;
+    int i=0;
+    wxString params;
     
     
+    for (wxCmdLineArgs::const_iterator itarg=parser.GetArguments().begin();
+         itarg!=parser.GetArguments().end();
+         ++itarg)
+    {
+        wxString optionName;
+        switch (itarg->GetKind())
+        {
+            case wxCMD_LINE_SWITCH:
+                if (itarg->IsNegated()) {
+                }
+                else {
+                }
+                break;
+            case wxCMD_LINE_OPTION:
+                // assuming that all the options have a short name
+                optionName = itarg->GetShortName();
+                if (optionName == wxT("p")) {
+                    wxString val = itarg->GetStrVal();
+                    m_plugin_name = val.BeforeFirst(' ');
+                    m_plugin_params = val.AfterFirst(' ');
+                }
+                else if (optionName == wxT("d")) {
+                    wxString val = itarg->GetStrVal();
+                    m_descs.Add(val);
+                }
+                break;
+            case wxCMD_LINE_PARAM:
+                {
+                    wxString file = itarg->GetStrVal();
+                    if (file.StartsWith(wxT("vvd:")))
+                    {
+                        m_open_by_web_browser = true;
+                        if (file.Length() >= 5)
+                        {
+                            params = file.SubString(4, file.Length() - 1);
+                            wxStringTokenizer tkz(params, wxT(","));
+                            while (tkz.HasMoreTokens())
+                            {
+                                wxString path = tkz.GetNextToken();
+                                m_files.Add(path);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        m_files.Add(file);
+                    }
+                }
+                break;
+            case wxCMD_LINE_NONE:
+                switch (itarg->GetType()) {
+                    case wxCMD_LINE_VAL_NUMBER:
+                        // do something with itarg->GetLongVal();
+                        break;
+                    case wxCMD_LINE_VAL_DOUBLE:
+                        // do something with itarg->GetDoubleVal();
+                        break;
+                    case wxCMD_LINE_VAL_DATE:
+                        // do something with itarg->GetDateVal();
+                        break;
+                    case wxCMD_LINE_VAL_STRING:
+                        // do something with itarg->GetStrVal();
+                        break;
+                    default:
+                        break;
+                }
+                break;
+            default:
+                break;
+        }
+    }
+    
+    /*
     wxString list;
     for (i = 0; i < (int)parser.GetParamCount(); i++)
     {
@@ -222,6 +294,7 @@ bool VRenderApp::OnCmdLineParsed(wxCmdLineParser& parser)
 		   m_files.Add(file);
 	   }
    }
+    */
     
 #ifdef _WIN32
 /*   {
