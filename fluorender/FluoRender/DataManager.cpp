@@ -6864,7 +6864,7 @@ bool DataManager::DownloadToCurrentDir(wxString &filename)
 	return true;
 }
 
-int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_num, size_t datasize)
+int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_num, size_t datasize, wxString prefix)
 {
 	wxString pathname = filename;
 	bool isURL = false;
@@ -7086,11 +7086,14 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 				BRKXMLReader* breader = (BRKXMLReader*)reader;
 				name = reader->GetDataName();
 				name = name.Mid(0, name.find_last_of(wxT('.')));
-				if(ch_num > 1) name = wxT("_Ch") + wxString::Format("%i", i);
+				if(ch_num > 1) name += wxT("_Ch") + wxString::Format("%i", i);
 				pathname = filename;
 				breader->SetCurChan(i);
 				breader->SetCurTime(0);
 			}
+            
+            if (!prefix.IsEmpty())
+                name = prefix + wxT("_") + name;
 
 			bool valid_spc = reader->IsSpcInfoValid();
 			if (vd && vd->Load(data, name, pathname, (type == LOAD_TYPE_BRKXML) ? (BRKXMLReader*)reader : NULL))
@@ -7199,7 +7202,7 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 	return result;
 }
 
-int DataManager::LoadMeshData(wxString &filename)
+int DataManager::LoadMeshData(wxString &filename, wxString prefix)
 {
 	wxString pathname = filename;
 	if (!wxFileExists(pathname))
@@ -7213,11 +7216,11 @@ int DataManager::LoadMeshData(wxString &filename)
 	md->Load(pathname);
 
 	wxString name = md->GetName();
-	wxString new_name = name;
+    wxString new_name = prefix + wxT("_") + name;
 	int i;
 	for (i=1; CheckNames(new_name, DATA_MESH); i++)
 		new_name = name+wxString::Format("_%d", i);
-	if (i>1)
+	if (i>1 || !prefix.IsEmpty())
 		md->SetName(new_name);
 	m_md_list.push_back(md);
 

@@ -55,6 +55,7 @@ class VRenderApp : public wxApp
 
    private:
       wxArrayString m_files;
+      wxArrayString m_descs;
       wxString m_plugin_params;
       wxString m_plugin_name;
       wxFrame *m_frame;
