@@ -4964,7 +4964,7 @@ void VRenderVulkanView::DrawOLShadowsMesh(const std::shared_ptr<vks::VTexture>& 
 			m_fbo_final->attachments[0]->is_swapchain_images);
 	params_final.tex[0] = m_tex_ol2.get();
 	params_final.tex[1] = tex_depth.get();
-	params_final.tex[2] = m_tex_final.get();
+	params_final.tex[2] = m_tex_final.get();	//TODO: FIX (copy texture?) This causes validation errors (image layout mismatch)
 	params_final.loc[0] = { 1.0f / nx, 1.0f / ny, max(m_scale_factor, 1.0), 0.0f };
 	params_final.loc[1] = { (float)darkness, 0.0f, 0.0f, 0.0f };
 	params_final.clear = m_clear_final_buffer;
@@ -5335,7 +5335,7 @@ void VRenderVulkanView::DrawOLShadows(vector<VolumeData*> &vlist, std::unique_pt
 				0,
 				fb->attachments[0]->is_swapchain_images);
 		params_final.tex[0] = m_tex_ol2.get();
-		params_final.tex[1] = fb->attachments[0].get();
+		params_final.tex[1] = fb->attachments[0].get();	//TODO: FIX (copy texture?) This causes validation errors (image layout mismatch)
 		params_final.loc[0] = { 1.0f / nx, 1.0f / ny, max(m_scale_factor, 1.0), 0.0f };
 		params_final.loc[1] = { (float)shadow_darkness, 0.0f, 0.0f, 0.0f };
 

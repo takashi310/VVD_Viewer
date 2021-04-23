@@ -779,6 +779,43 @@ void Vulkan2dRender::seq_buildCommandBuffer(VkCommandBuffer commandbufs[], int c
 		VkPipeline prev_pl = VK_NULL_HANDLE;
 		for (int s = 0; s < num; s++)
 		{
+			VkImageLayout layout[IMG_SHDR_SAMPLER_NUM];
+			for (int j = 0; j < IMG_SHDR_SAMPLER_NUM; j++)
+			{
+				if (params[s].tex[j] && params[s].pipeline.samplers[j])
+				{
+					VkImageLayout src = params[s].tex[j]->descriptor.imageLayout;
+					VkImageLayout dst = VK_IMAGE_LAYOUT_UNDEFINED;
+					layout[j] = params[s].tex[j]->descriptor.imageLayout;
+					switch (params[s].tex[j]->descriptor.imageLayout) {
+					case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+						dst = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+						break;
+					case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
+						dst = VK_IMAGE_LAYOUT_GENERAL;
+						break;
+					case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+						dst = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+						break;
+					}
+
+					if (dst != VK_IMAGE_LAYOUT_UNDEFINED)
+					{
+						params[s].tex[j]->descriptor.imageLayout = dst;
+						vks::tools::setImageLayout(
+							commandbufs[i],
+							params[s].tex[j]->image,
+							src,
+							dst,
+							params[s].tex[j]->subresourceRange);
+					}
+				}
+				else
+				{
+					layout[j] = VK_IMAGE_LAYOUT_UNDEFINED;
+				}
+			}
+
 			std::vector<VkWriteDescriptorSet> descriptorWrites;
 			setupDescriptorSetWrites(params[s], params[s].pipeline, descriptorWrites);
 
@@ -844,6 +881,22 @@ void Vulkan2dRender::seq_buildCommandBuffer(VkCommandBuffer commandbufs[], int c
 				);
 			}
 			
+			for (int j = 0; j < IMG_SHDR_SAMPLER_NUM; j++)
+			{
+				if (params[s].tex[j] && params[s].pipeline.samplers[j])
+				{
+					if (layout[j] != params[s].tex[j]->descriptor.imageLayout)
+					{
+						vks::tools::setImageLayout(
+							commandbufs[i],
+							params[s].tex[j]->image,
+							params[s].tex[j]->descriptor.imageLayout,
+							layout[j],
+							params[s].tex[j]->subresourceRange);
+						params[s].tex[j]->descriptor.imageLayout = layout[j];
+					}
+				}
+			}
 		}
 
 		vkCmdEndRenderPass(commandbufs[i]);

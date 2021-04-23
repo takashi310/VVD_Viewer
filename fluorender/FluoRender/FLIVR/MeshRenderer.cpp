@@ -293,11 +293,11 @@ namespace FLIVR
 			VkAttachmentDescription attd = {};
 			attd.format = framebuf_format;
 			attd.samples = VK_SAMPLE_COUNT_1_BIT;
-			attd.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+			attd.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 			attd.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 			attd.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 			attd.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-			attd.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			attd.initialLayout = isSwapChainImage ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			attd.finalLayout = isSwapChainImage ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			attchmentDescriptions.push_back(attd);
 
@@ -307,11 +307,11 @@ namespace FLIVR
 		VkAttachmentDescription attd_d = {};
 		attd_d.format = m_vulkan->depthFormat;
 		attd_d.samples = VK_SAMPLE_COUNT_1_BIT;
-		attd_d.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		attd_d.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 		attd_d.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		attd_d.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		attd_d.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		attd_d.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		attd_d.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 		attd_d.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 		attchmentDescriptions.push_back(attd_d);
 		
