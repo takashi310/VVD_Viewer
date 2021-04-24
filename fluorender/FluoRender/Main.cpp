@@ -199,6 +199,8 @@ bool VRenderApp::OnCmdLineParsed(wxCmdLineParser& parser)
                 else if (optionName == wxT("d")) {
                     wxString val = itarg->GetStrVal();
                     m_descs.Add(val);
+                    if (!m_plugin_name.IsEmpty())
+                        m_plugin_params += wxT(" -d ") + val;
                 }
                 break;
             case wxCMD_LINE_PARAM:

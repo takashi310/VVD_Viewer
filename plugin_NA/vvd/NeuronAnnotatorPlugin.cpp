@@ -233,7 +233,7 @@ bool NAGuiPlugin::runNALoader(wxString id_path, wxString vol_path, wxString chsp
 	size_t avmem = (size_t)(vrv->GetAvailableGraphicsMemory(0) * 1024.0 * 1024.0 * 0.8);
 	//size_t avmem = (size_t)(1024.0 * 1024.0 * 1024.0);
 
-	LoadFiles(vol_path, avmem);
+	LoadFiles(vol_path, avmem, prefix);
 	int vol_chan = dm->GetLatestVolumeChannelNum();
 	
 	m_vol_suffix = vol_path.Mid(vol_path.Find('.', true)).MakeLower();
@@ -919,7 +919,7 @@ bool NAGuiPlugin::OnRun(wxString options)
 	   { wxCMD_LINE_OPTION, "v", NULL, NULL, wxCMD_LINE_VAL_STRING, wxCMD_LINE_OPTION_MANDATORY },
 	   { wxCMD_LINE_OPTION, "c", NULL, NULL, wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL },
 	   { wxCMD_LINE_OPTION, "s", NULL, NULL, wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL },
-	   { wxCMD_LINE_OPTION, "p", NULL, NULL, wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL },
+	   { wxCMD_LINE_OPTION, "d", NULL, NULL, wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL },
 	   { wxCMD_LINE_NONE }
 	};
 
@@ -942,7 +942,7 @@ bool NAGuiPlugin::OnRun(wxString options)
 		ch = val;
 	if (parser.Found(wxT("s"), &val))
 		spacings = val;
-	if (parser.Found(wxT("p"), &val))
+	if (parser.Found(wxT("d"), &val))
 		prefix = val;
 
 	runNALoader(label, volume, ch, spacings, prefix, true);
@@ -1002,14 +1002,17 @@ bool NAGuiPlugin::LoadSWC(wxString name, wxString swc_zip_path)
 	return true;
 }
 
-bool NAGuiPlugin::LoadFiles(wxString path, size_t datasize)
+bool NAGuiPlugin::LoadFiles(wxString path, size_t datasize, wxString desc)
 {
 	VRenderFrame *vframe = (VRenderFrame *)m_vvd;
 	if (!vframe) return false;
 
 	wxArrayString arr;
 	arr.Add(path);
-	vframe->StartupLoad(arr, datasize);
+    wxArrayString descs;
+    if (!desc.IsEmpty())
+        descs.Add(desc);
+	vframe->StartupLoad(arr, datasize, descs);
 
 	return true;
 }
