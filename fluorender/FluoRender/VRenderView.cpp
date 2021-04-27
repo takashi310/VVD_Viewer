@@ -8424,9 +8424,9 @@ void VRenderVulkanView::SetCenter()
 		(*planes)[3]->get_copy(abcd);
 		y2 = fabs(abcd[3])*bbox.max().y();
 		(*planes)[4]->get_copy(abcd);
-		z1 = fabs(abcd[3])*bbox.max().z();
+		z1 = fabs(abcd[3])*bbox.min().z();
 		(*planes)[5]->get_copy(abcd);
-		z2 = fabs(abcd[3])*bbox.max().z();
+		z2 = fabs(abcd[3])*bbox.min().z();
 
 		m_obj_ctrx = (x1 + x2) / 2.0;
 		m_obj_ctry = (y1 + y2) / 2.0;
