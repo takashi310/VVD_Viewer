@@ -7191,6 +7191,76 @@ void VRenderVulkanView::SetParams(double t)
 		if (interpolator->GetDouble(keycode, t, val))
 			vd->SetRightThresh(val);
 	}
+    
+    for (int i=0; i<GetMeshNum(); i++)
+    {
+        MeshData* md = GetMeshData(i);
+        if (!md) continue;
+        
+        keycode.l1 = 2;
+        keycode.l1_name = md->GetName();
+        
+        //display
+        keycode.l2 = 0;
+        keycode.l2_name = "display";
+        bool bval;
+        if (interpolator->GetBoolean(keycode, t, bval))
+            md->SetDisp(bval);
+        
+        //clipping planes
+        vector<Plane*> *planes = md->GetMR()->get_planes();
+        if (!planes) continue;
+        if(planes->size() != 6) continue;
+        Plane *plane = 0;
+        double val = 0;
+        //x1
+        plane = (*planes)[0];
+        keycode.l2 = 0;
+        keycode.l2_name = "x1_val";
+        if (interpolator->GetDouble(keycode, t, val))
+            plane->ChangePlane(Point(abs(val), 0.0, 0.0),
+                               Vector(1.0, 0.0, 0.0));
+        //x2
+        plane = (*planes)[1];
+        keycode.l2 = 0;
+        keycode.l2_name = "x2_val";
+        if (interpolator->GetDouble(keycode, t, val))
+            plane->ChangePlane(Point(abs(val), 0.0, 0.0),
+                               Vector(-1.0, 0.0, 0.0));
+        //y1
+        plane = (*planes)[2];
+        keycode.l2 = 0;
+        keycode.l2_name = "y1_val";
+        if (interpolator->GetDouble(keycode, t, val))
+            plane->ChangePlane(Point(0.0, abs(val), 0.0),
+                               Vector(0.0, 1.0, 0.0));
+        //y2
+        plane = (*planes)[3];
+        keycode.l2 = 0;
+        keycode.l2_name = "y2_val";
+        if (interpolator->GetDouble(keycode, t, val))
+            plane->ChangePlane(Point(0.0, abs(val), 0.0),
+                               Vector(0.0, -1.0, 0.0));
+        //z1
+        plane = (*planes)[4];
+        keycode.l2 = 0;
+        keycode.l2_name = "z1_val";
+        if (interpolator->GetDouble(keycode, t, val))
+            plane->ChangePlane(Point(0.0, 0.0, abs(val)),
+                               Vector(0.0, 0.0, 1.0));
+        //z2
+        plane = (*planes)[5];
+        keycode.l2 = 0;
+        keycode.l2_name = "z2_val";
+        if (interpolator->GetDouble(keycode, t, val))
+            plane->ChangePlane(Point(0.0, 0.0, abs(val)),
+                               Vector(0.0, 0.0, -1.0));
+        
+        keycode.l2 = 0;
+        keycode.l2_name = "transparency";
+        if (interpolator->GetDouble(keycode, t, val))
+            md->SetFloat(val, MESH_FLOAT_ALPHA);
+    }
 /*
 	//t
 	double frame;

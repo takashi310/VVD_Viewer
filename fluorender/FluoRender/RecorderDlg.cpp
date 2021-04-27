@@ -899,54 +899,54 @@ void RecorderDlg::InsertKey(int index, double duration, int interpolation)
 		interpolator->AddKey(flkeyB);
 		//clipping planes
 		vector<Plane*> * planes = vd->GetVR()->get_planes();
-		if (!planes)
-			continue;
-		if (planes->size() != 6)
-			continue;
-		Plane* plane = 0;
-		double abcd[4];
-		//x1
-		plane = (*planes)[0];
-		plane->get_copy(abcd);
-		keycode.l2 = 0;
-		keycode.l2_name = "x1_val";
-		flkey = new FlKeyDouble(keycode, abs(abcd[3]));
-		interpolator->AddKey(flkey);
-		//x2
-		plane = (*planes)[1];
-		plane->get_copy(abcd);
-		keycode.l2 = 0;
-		keycode.l2_name = "x2_val";
-		flkey = new FlKeyDouble(keycode, abs(abcd[3]));
-		interpolator->AddKey(flkey);
-		//y1
-		plane = (*planes)[2];
-		plane->get_copy(abcd);
-		keycode.l2 = 0;
-		keycode.l2_name = "y1_val";
-		flkey = new FlKeyDouble(keycode, abs(abcd[3]));
-		interpolator->AddKey(flkey);
-		//y2
-		plane = (*planes)[3];
-		plane->get_copy(abcd);
-		keycode.l2 = 0;
-		keycode.l2_name = "y2_val";
-		flkey = new FlKeyDouble(keycode, abs(abcd[3]));
-		interpolator->AddKey(flkey);
-		//z1
-		plane = (*planes)[4];
-		plane->get_copy(abcd);
-		keycode.l2 = 0;
-		keycode.l2_name = "z1_val";
-		flkey = new FlKeyDouble(keycode, abs(abcd[3]));
-		interpolator->AddKey(flkey);
-		//z2
-		plane = (*planes)[5];
-		plane->get_copy(abcd);
-		keycode.l2 = 0;
-		keycode.l2_name = "z2_val";
-		flkey = new FlKeyDouble(keycode, abs(abcd[3]));
-		interpolator->AddKey(flkey);
+		
+        if (planes && planes->size() == 6)
+        {
+            Plane* plane = 0;
+            double abcd[4];
+            //x1
+            plane = (*planes)[0];
+            plane->get_copy(abcd);
+            keycode.l2 = 0;
+            keycode.l2_name = "x1_val";
+            flkey = new FlKeyDouble(keycode, abs(abcd[3]));
+            interpolator->AddKey(flkey);
+            //x2
+            plane = (*planes)[1];
+            plane->get_copy(abcd);
+            keycode.l2 = 0;
+            keycode.l2_name = "x2_val";
+            flkey = new FlKeyDouble(keycode, abs(abcd[3]));
+            interpolator->AddKey(flkey);
+            //y1
+            plane = (*planes)[2];
+            plane->get_copy(abcd);
+            keycode.l2 = 0;
+            keycode.l2_name = "y1_val";
+            flkey = new FlKeyDouble(keycode, abs(abcd[3]));
+            interpolator->AddKey(flkey);
+            //y2
+            plane = (*planes)[3];
+            plane->get_copy(abcd);
+            keycode.l2 = 0;
+            keycode.l2_name = "y2_val";
+            flkey = new FlKeyDouble(keycode, abs(abcd[3]));
+            interpolator->AddKey(flkey);
+            //z1
+            plane = (*planes)[4];
+            plane->get_copy(abcd);
+            keycode.l2 = 0;
+            keycode.l2_name = "z1_val";
+            flkey = new FlKeyDouble(keycode, abs(abcd[3]));
+            interpolator->AddKey(flkey);
+            //z2
+            plane = (*planes)[5];
+            plane->get_copy(abcd);
+            keycode.l2 = 0;
+            keycode.l2_name = "z2_val";
+            flkey = new FlKeyDouble(keycode, abs(abcd[3]));
+            interpolator->AddKey(flkey);
+        }
 
 		if (m_vol_record_chk->GetValue())
 		{
@@ -986,6 +986,81 @@ void RecorderDlg::InsertKey(int index, double duration, int interpolation)
 			interpolator->AddKey(flkey);
 		}
 	}
+    
+    for (int i=0; i<mgr->GetMeshNum() ; i++)
+    {
+        MeshData* md = mgr->GetMeshData(i);
+        keycode.l0 = 1;
+        keycode.l0_name = m_view->GetName();
+        keycode.l1 = 2;
+        keycode.l1_name = md->GetName();
+        //display
+        keycode.l2 = 0;
+        keycode.l2_name = "display";
+        flkeyB = new FlKeyBoolean(keycode, md->GetDisp());
+        interpolator->AddKey(flkeyB);
+        //clipping planes
+        vector<Plane*> * planes = md->GetMR()->get_planes();
+        
+        if (planes && planes->size() == 6)
+        {
+            Plane* plane = 0;
+            double abcd[4];
+            //x1
+            plane = (*planes)[0];
+            plane->get_copy(abcd);
+            keycode.l2 = 0;
+            keycode.l2_name = "x1_val";
+            flkey = new FlKeyDouble(keycode, abs(abcd[3]));
+            interpolator->AddKey(flkey);
+            //x2
+            plane = (*planes)[1];
+            plane->get_copy(abcd);
+            keycode.l2 = 0;
+            keycode.l2_name = "x2_val";
+            flkey = new FlKeyDouble(keycode, abs(abcd[3]));
+            interpolator->AddKey(flkey);
+            //y1
+            plane = (*planes)[2];
+            plane->get_copy(abcd);
+            keycode.l2 = 0;
+            keycode.l2_name = "y1_val";
+            flkey = new FlKeyDouble(keycode, abs(abcd[3]));
+            interpolator->AddKey(flkey);
+            //y2
+            plane = (*planes)[3];
+            plane->get_copy(abcd);
+            keycode.l2 = 0;
+            keycode.l2_name = "y2_val";
+            flkey = new FlKeyDouble(keycode, abs(abcd[3]));
+            interpolator->AddKey(flkey);
+            //z1
+            plane = (*planes)[4];
+            plane->get_copy(abcd);
+            keycode.l2 = 0;
+            keycode.l2_name = "z1_val";
+            flkey = new FlKeyDouble(keycode, abs(abcd[3]));
+            interpolator->AddKey(flkey);
+            //z2
+            plane = (*planes)[5];
+            plane->get_copy(abcd);
+            keycode.l2 = 0;
+            keycode.l2_name = "z2_val";
+            flkey = new FlKeyDouble(keycode, abs(abcd[3]));
+            interpolator->AddKey(flkey);
+        }
+        
+        if (m_vol_record_chk->GetValue())
+        {
+            keycode.l2 = 0;
+            keycode.l2_name = "transparency";
+            if (md->GetMR()) {
+                flkey = new FlKeyDouble(keycode, md->GetMR()->get_alpha());
+                interpolator->AddKey(flkey);
+            }
+        }
+    }
+    
 	//for the view
 	keycode.l0 = 1;
 	keycode.l0_name = m_view->GetName();
