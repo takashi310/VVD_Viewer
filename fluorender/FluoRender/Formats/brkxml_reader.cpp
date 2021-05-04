@@ -386,10 +386,12 @@ void BRKXMLReader::ReadLevel(tinyxml2::XMLElement* lvNode, LevelInfo &lvinfo)
 	if (lvNode->Attribute("FileType"))
 	{
 		strValue = lvNode->Attribute("FileType");
+        std::transform(strValue.begin(), strValue.end(), strValue.begin(), ::toupper);
 		if (strValue == "RAW") lvinfo.file_type = BRICK_FILE_TYPE_RAW;
 		else if (strValue == "JPEG") lvinfo.file_type = BRICK_FILE_TYPE_JPEG;
 		else if (strValue == "ZLIB") lvinfo.file_type = BRICK_FILE_TYPE_ZLIB;
 		else if (strValue == "H265") lvinfo.file_type = BRICK_FILE_TYPE_H265;
+        else if (strValue == "GZIP") lvinfo.file_type = BRICK_FILE_TYPE_N5GZIP;
 	}
 	else lvinfo.file_type = BRICK_FILE_TYPE_NONE;
 
@@ -601,11 +603,13 @@ void BRKXMLReader::ReadFilenames(tinyxml2::XMLElement* fileRootNode, vector<vect
 				
 				if (child->Attribute("filetype"))
 				{
-					str = child->Attribute("filetype");
+                    str = child->Attribute("filetype");
+                    std::transform(str.begin(), str.end(), str.begin(), ::toupper);
 					if (str == "RAW") filename[frame][channel][id]->type = BRICK_FILE_TYPE_RAW;
 					else if (str == "JPEG") filename[frame][channel][id]->type = BRICK_FILE_TYPE_JPEG;
 					else if (str == "ZLIB") filename[frame][channel][id]->type = BRICK_FILE_TYPE_ZLIB;
 					else if (str == "H265") filename[frame][channel][id]->type = BRICK_FILE_TYPE_H265;
+                    else if (str == "GZIP") filename[frame][channel][id]->type = BRICK_FILE_TYPE_N5GZIP;
 				}
 				else
 				{

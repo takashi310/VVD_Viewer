@@ -2941,12 +2941,15 @@ int VRenderVulkanView::CompAnalysis(double min_voxels, double max_voxels, double
 
 	bool copied = false;
 	VolumeData *vd = m_selector.GetVolume();
-	if (vd && vd->isBrxml())
+	
+/*
+ if (vd && vd->isBrxml())
 	{
 		vd = CopyLevel(vd);
 		m_selector.SetVolume(vd);
 		if (vd) copied = true;
 	}
+*/
 
 	if (!select)
 	{
@@ -7192,9 +7195,9 @@ void VRenderVulkanView::SetParams(double t)
 			vd->SetRightThresh(val);
 	}
     
-    for (int i=0; i<GetMeshNum(); i++)
+    for (int i=0; i<GetAllMeshNum(); i++)
     {
-        MeshData* md = GetMeshData(i);
+        MeshData* md = GetAllMeshData(i);
         if (!md) continue;
         
         keycode.l1 = 2;
@@ -8652,6 +8655,39 @@ VolumeData* VRenderVulkanView::GetAllVolumeData(int index)
 	return 0;
 }
 
+MeshData* VRenderVulkanView::GetAllMeshData(int index)
+{
+    int cnt = 0;
+    int i, j;
+    for (i=0; i<(int)m_layer_list.size(); i++)
+    {
+        if (!m_layer_list[i])
+            continue;
+        switch (m_layer_list[i]->IsA())
+        {
+            case 3:  //mesh data
+                if (cnt == index)
+                    return (MeshData*)m_layer_list[i];
+                cnt++;
+                break;
+            case 6:  //mesh group
+            {
+                MeshGroup* group = (MeshGroup*)m_layer_list[i];
+                if (!group)
+                    break;
+                for (j=0; j<group->GetMeshNum(); j++)
+                {
+                    if (cnt == index)
+                        return group->GetMeshData(j);
+                    cnt++;
+                }
+            }
+                break;
+        }
+    }
+    return 0;
+}
+
 VolumeData* VRenderVulkanView::GetDispVolumeData(int index)
 {
 	if (GetDispVolumeNum()<=0)
@@ -8856,6 +8892,29 @@ int VRenderVulkanView::GetAllVolumeNum()
 		}
 	}
 	return num;
+}
+
+int VRenderVulkanView::GetAllMeshNum()
+{
+    int num = 0;
+    for (int i=0; i<(int)m_layer_list.size(); i++)
+    {
+        if (!m_layer_list[i])
+            continue;
+        switch (m_layer_list[i]->IsA())
+        {
+            case 3:  //mesh data
+                num++;
+                break;
+            case 6:  //mesh group
+            {
+                MeshGroup* group = (MeshGroup*)m_layer_list[i];
+                num += group->GetMeshNum();
+            }
+                break;
+        }
+    }
+    return num;
 }
 
 int VRenderVulkanView::GetMeshNum()

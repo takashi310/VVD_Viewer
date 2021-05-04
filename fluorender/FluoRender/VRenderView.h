@@ -248,10 +248,12 @@ public:
 	int GetDispVolumeNum();
 	int GetAllVolumeNum();
 	int GetMeshNum();
+    int GetAllMeshNum();
 	int GetGroupNum();
 	int GetLayerNum();
 	VolumeData* GetAllVolumeData(int index);
 	VolumeData* GetDispVolumeData(int index);
+    MeshData* GetAllMeshData(int index);
 	MeshData* GetMeshData(int index);
 	TreeLayer* GetLayer(int index);
 	MultiVolumeRenderer* GetMultiVolumeData() {return m_mvr;};

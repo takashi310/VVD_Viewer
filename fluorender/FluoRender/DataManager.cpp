@@ -1383,8 +1383,8 @@ void VolumeData::AddEmptyLabel(int mode)
 		switch (mode)
 		{
 		case 0://zeros
-			memset(val32, 0, sizeof(unsigned int) * (unsigned long long)m_res_x *
-				(unsigned long long)m_res_y * (unsigned long long)m_res_z);
+			memset(val32, 0, sizeof(unsigned int) * (unsigned long long)res_x *
+				(unsigned long long)res_y * (unsigned long long)res_z);
 			break;
 		case 1://ordered
 			SetOrderedID(val32);
@@ -1401,8 +1401,8 @@ void VolumeData::AddEmptyLabel(int mode)
 		{
 			auto data = (unsigned char*)vlnrrd_label->getNrrd()->data;
 			if (data)
-				memset(val32, 0, sizeof(unsigned char) * (unsigned long long)m_res_x * (unsigned long long)m_res_y *
-					(unsigned long long)m_res_z * (unsigned long long)vlnrrd_label->getBytesPerSample());
+				memset(data, 0, sizeof(unsigned char) * (unsigned long long)res_x * (unsigned long long)res_y *
+					(unsigned long long)res_z * (unsigned long long)vlnrrd_label->getBytesPerSample());
 		}
 	}
 

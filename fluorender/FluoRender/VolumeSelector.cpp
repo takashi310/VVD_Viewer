@@ -263,7 +263,7 @@ int VolumeSelector::CompAnalysis(double min_voxels, double max_voxels, double th
 	int return_val = 0;
 	m_label_thresh = thresh;
 	m_label_falloff = falloff;
-	if (!m_vd || m_vd->isBrxml())
+	if (!m_vd/* || m_vd->isBrxml()*/)
 		return return_val;
 
 	bool use_sel = false;
@@ -420,22 +420,32 @@ int VolumeSelector::CompIslandCount(double min_voxels, double max_voxels)
 	m_max_voxels = max_voxels;
 	m_ca_comps = 0;
 	m_ca_volume = 0;
-	if (!m_vd || m_vd->isBrxml())
+	if (!m_vd/* || m_vd->isBrxml()*/)
 		return 0;
 	Texture* tex = m_vd->GetTexture();
 	if (!tex)
 		return 0;
 
-	Nrrd* orig_nrrd = tex->get_nrrd_raw(0);
+	std::shared_ptr<VL_Nrrd> orig_nrrd;
+    if (tex->isBrxml())
+    {
+        int msklv = tex->GetMaskLv();
+        orig_nrrd = make_shared<VL_Nrrd>(tex->loadData(msklv));
+    }
+    else
+        orig_nrrd = tex->get_nrrd(0);
+    
 	if (!orig_nrrd)
 		return 0;
-	void* orig_data = orig_nrrd->data;
+	void* orig_data = orig_nrrd->getNrrd()->data;
 	if (!orig_data)
 		return 0;
 	
 	//resolution
 	int nx, ny, nz;
 	m_vd->GetResolution(nx, ny, nz);
+    if (tex->isBrxml())
+        tex->GetDimensionLv(tex->GetMaskLv(), nx, ny, nz);
 
 	m_comps.clear();
 	
@@ -446,17 +456,17 @@ int VolumeSelector::CompIslandCount(double min_voxels, double max_voxels)
 		
 		m_vd->AddEmptyLabel(0);
 
-		Nrrd* label_nrrd = tex->get_nrrd_raw(tex->nlabel());
+		std::shared_ptr<VL_Nrrd> label_nrrd = tex->get_nrrd(tex->nlabel());
 		if (!label_nrrd)
 			return 0;
-		unsigned int* label_data = (unsigned int*)(label_nrrd->data);
+		unsigned int* label_data = (unsigned int*)(label_nrrd->getNrrd()->data);
 		if (!label_data)
 			return 0;
 
-		Nrrd* mask_nrrd = tex->get_nrrd_raw(tex->nmask());
+		std::shared_ptr<VL_Nrrd> mask_nrrd = tex->get_nrrd(tex->nmask());
 		if (!mask_nrrd)
 			return 0;
-		unsigned char* mask_data = (unsigned char*)mask_nrrd->data;
+		unsigned char* mask_data = (unsigned char*)(mask_nrrd->getNrrd()->data);
 		if (!mask_data)
 			return 0;
 
@@ -467,7 +477,7 @@ int VolumeSelector::CompIslandCount(double min_voxels, double max_voxels)
 		m_total_pr = nz;
 		m_progress = 0;
 
-		int label_th_i = orig_nrrd->type == nrrdTypeUChar ? (unsigned int)(m_label_thresh * 255.0) : (unsigned int)(m_label_thresh * 65535.0);
+		int label_th_i = orig_nrrd->getNrrd()->type == nrrdTypeUChar ? (unsigned int)(m_label_thresh * 255.0) : (unsigned int)(m_label_thresh * 65535.0);
 
 		unsigned int segid = 1;
 		unsigned int finalid = 1;
@@ -477,7 +487,7 @@ int VolumeSelector::CompIslandCount(double min_voxels, double max_voxels)
 			for (y = 0; y < ny; y++) {
 				for (x = 0; x < nx; x++) {
 					size_t id = (size_t)nx*(size_t)ny*z + (size_t)nx*y + x;
-					unsigned int val = orig_nrrd->type == nrrdTypeUChar ? ((unsigned char*)orig_data)[id] : ((unsigned short*)orig_data)[id];
+					unsigned int val = orig_nrrd->getNrrd()->type == nrrdTypeUChar ? ((unsigned char*)orig_data)[id] : ((unsigned short*)orig_data)[id];
 					unsigned char mask_val = mask_data[id];
 					unsigned int segval = tmplabel[id];
 					if (mask_val == 0 || val <= label_th_i) {
@@ -512,7 +522,7 @@ int VolumeSelector::CompIslandCount(double min_voxels, double max_voxels)
 							pts.push_back(cid);
 							comp.counter++;
 							comp.acc_pos += Vector(cx, cy, cz);
-							comp.acc_int += orig_nrrd->type == nrrdTypeUChar ? double(((unsigned char*)orig_data)[cid]) / 255.0 : double(((unsigned short*)orig_data)[cid]) / 65535.0;
+							comp.acc_int += orig_nrrd->getNrrd()->type == nrrdTypeUChar ? double(((unsigned char*)orig_data)[cid]) / 255.0 : double(((unsigned short*)orig_data)[cid]) / 65535.0;
 
 							int stx = -1, sty = -1, stz = -1, edx = 1, edy = 1, edz = 1;
 							if (cx == 0) stx = 0;
@@ -526,7 +536,7 @@ int VolumeSelector::CompIslandCount(double min_voxels, double max_voxels)
 								for (int dy = sty; dy <= edy; dy++)
 									for (int dx = stx; dx <= edx; dx++) {
 										size_t did = (size_t)nx*(size_t)ny*(cz + dz) + (size_t)nx*(cy + dy) + cx + dx;
-										unsigned int next_val = orig_nrrd->type == nrrdTypeUChar ? ((unsigned char*)orig_data)[did] : ((unsigned short*)orig_data)[did];
+										unsigned int next_val = orig_nrrd->getNrrd()->type == nrrdTypeUChar ? ((unsigned char*)orig_data)[did] : ((unsigned short*)orig_data)[did];
 										if (mask_data[did] > 0 && tmplabel[did] == 0 && next_val > label_th_i) {
 											tmplabel[did] = segid;
 											que.push(((long long)(cx + dx) << 16 | (long long)(cy + dy)) << 16 | (long long)(cz + dz));
@@ -1182,12 +1192,20 @@ void VolumeSelector::GenerateAnnotations(bool use_sel)
 		m_annotations = 0;
 		return;
 	}
+    
+    int curLv = m_vd->GetLevel();
+    if (m_vd->isBrxml())
+        m_vd->SetLevel(m_vd->GetMaskLv());
+
+    Texture* tex = m_vd->GetTexture();
+    if (!tex)
+        return;
 
 	m_annotations = new Annotations();
-	int nx, ny, nz;
-	m_vd->GetResolution(nx, ny, nz);
+	size_t nx, ny, nz;
+	tex->get_dimensions(nx, ny, nz);
 	double spcx, spcy, spcz;
-	m_vd->GetSpacings(spcx, spcy, spcz);
+    tex->get_spacings(spcx, spcy, spcz);
 
 	double mul = 255.0;
 	if (m_vd->GetTexture()->get_nrrd_raw(0)->type == nrrdTypeUChar)
@@ -1249,10 +1267,6 @@ void VolumeSelector::GenerateAnnotations(bool use_sel)
 	m_annotations->SetMemo(str1);
 	m_annotations->SetMemoRO(true);
 
-	//copy label
-	Texture* tex = m_vd->GetTexture();
-	if (!tex) return;
-
 	Nrrd* label_nrrd = tex->get_nrrd_raw(tex->nlabel());
 	if (!label_nrrd) return;
 	unsigned int* label_data = (unsigned int*)(label_nrrd->data);
@@ -1278,6 +1292,9 @@ void VolumeSelector::GenerateAnnotations(bool use_sel)
 	memcpy(val32, label_data, voxelnum*sizeof(unsigned int));
 	auto sptr = std::make_shared<VL_Nrrd>(copy);
 	m_annotations->SetLabel(sptr);
+    
+    if (m_vd->isBrxml())
+        m_vd->SetLevel(curLv);
 }
 
 Annotations* VolumeSelector::GetAnnotations()

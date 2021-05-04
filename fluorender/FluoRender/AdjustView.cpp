@@ -1642,6 +1642,8 @@ void AdjustView::OnSaveDefault(wxCommandEvent &event)
     str = m_easy_b_level_text->GetValue();
     str.ToDouble(&dft_b_level);
     fconfig.Write("b_level_text", dft_b_level);
+    
+    fconfig.Write("easy_mode", m_easy_chk->GetValue());
 
 	m_dft_gamma = Color(dft_r_gamma, dft_g_gamma, dft_b_gamma);
 	m_dft_brightness = Color(dft_r_brightness, dft_g_brightness, dft_b_brightness);
@@ -1728,6 +1730,13 @@ void AdjustView::LoadSettings()
 		sVal.ToDouble(&dft_b_hdr);
     if (fconfig.Read("b_level_text", &sVal))
         sVal.ToDouble(&dft_b_level);
+    
+    if (fconfig.Read("easy_mode", &bVal))
+    {
+        m_easy_chk->SetValue(bVal);
+        wxCommandEvent e;
+        OnEasyModeCheck(e);
+    }
 
 	m_dft_gamma = Color(dft_r_gamma, dft_g_gamma, dft_b_gamma);
 	m_dft_brightness = Color(dft_r_brightness, dft_g_brightness, dft_b_brightness);
