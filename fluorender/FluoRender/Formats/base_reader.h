@@ -137,6 +137,13 @@ public:
 	{
 		m_info = info;
 	}
+    
+    virtual wstring GetErrorMsg()
+    {
+        wstring ret = m_error_msg;
+        m_error_msg.clear();
+        return ret;
+    }
 
 protected:
 	wstring m_id_string;	//the path and file name used to read files
@@ -153,6 +160,8 @@ protected:
 	wstring m_path_name;
 
 	wstring m_info;
+    
+    wstring m_error_msg;
 
 	//all the decoding stuff
 	#define MAXCODE(n)	((1L<<(n))-1)

@@ -6994,6 +6994,13 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 			}
 		}
 	}
+    
+    wxString msg = reader->GetErrorMsg();
+    if (!msg.IsEmpty())
+    {
+        wxMessageBox(msg);
+        return result;
+    }
 
 	if (!m_latest_vols.empty())
 		m_latest_vols.clear();

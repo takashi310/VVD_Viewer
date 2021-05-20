@@ -1307,7 +1307,13 @@ void BRKXMLReader::loadFSN5()
     }
 
 	if (ch_dirs.empty())
+        ch_dirs.push_back(L"");
+    
+    if (ch_dirs.empty())
+    {
+        m_error_msg = L"Error (N5 Reader): No channel exists.";
 		return;
+    }
 
 	sort(ch_dirs.begin(), ch_dirs.end(),
 		[](const wstring& x, const wstring& y) { return WSTOI(x.substr(1)) < WSTOI(y.substr(1)); });
@@ -1567,7 +1573,11 @@ DatasetAttributes* BRKXMLReader::parseDatasetMetadata(wstring jpath)
 	else if (str == "uint16")
 		ret->m_dataType = 16;
 	else
+    {
 		ret->m_dataType = 0;
+        m_error_msg = L"Error (N5Reader): Unsupported data type ";
+        m_error_msg += s2ws(str);
+    }
     
     ret->m_blockSize = jf[BlockSizeKey].get<vector<int>>();
     
@@ -1580,8 +1590,9 @@ DatasetAttributes* BRKXMLReader::parseDatasetMetadata(wstring jpath)
 		ret->m_pix_res = vector<double>(3, -1.0);
     
     /* version 0 */
+    string cptype;
     if (jf.contains(CompressionKey) && jf[CompressionKey].contains(CompressionTypeKey)) {
-        auto cptype = jf[CompressionKey][CompressionTypeKey].get<string>();
+        cptype = jf[CompressionKey][CompressionTypeKey].get<string>();
         if (cptype == "raw")
 			ret->m_compression = 0;
         else if (cptype == "gzip")
@@ -1619,6 +1630,11 @@ DatasetAttributes* BRKXMLReader::parseDatasetMetadata(wstring jpath)
                     ret->m_blosc_param.ctype = BLOSC_ZLIB;
                 else if (bcptype == BLOSC_ZSTD_COMPNAME)
                     ret->m_blosc_param.ctype = BLOSC_ZSTD;
+                else
+                {
+                    m_error_msg = L"Error (N5Reader): Unsupported blosc compression format ";
+                    m_error_msg += s2ws(bcptype);
+                }
             }
             else ret->m_blosc_param.ctype = BLOSC_BLOSCLZ;
             
@@ -1626,6 +1642,8 @@ DatasetAttributes* BRKXMLReader::parseDatasetMetadata(wstring jpath)
                 ret->m_blosc_param.suffle = jf[CompressionKey][BloscShuffleKey].get<int>();
             else ret->m_blosc_param.suffle = 0;
         }
+        else
+            ret->m_compression = -1;
     }
 
 	switch (ret->m_compression)
@@ -1644,6 +1662,8 @@ DatasetAttributes* BRKXMLReader::parseDatasetMetadata(wstring jpath)
         break;
 	default:
 		ret->m_compression = BRICK_FILE_TYPE_NONE;
+        m_error_msg = L"Error (N5Reader): Unsupported compression format ";
+        m_error_msg += s2ws(cptype);
 	}
 
 	return ret;

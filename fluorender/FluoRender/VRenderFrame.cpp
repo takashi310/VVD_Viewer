@@ -80,6 +80,7 @@ BEGIN_EVENT_TABLE(VRenderFrame, wxFrame)
 	EVT_MENU(ID_ShowHideToolbar, VRenderFrame::OnShowHideToolbar)
 	EVT_MENU(ID_Plugins, VRenderFrame::OnPlugins)
 	//ui menu events
+    EVT_MENU(ID_UIToggleAllViews, VRenderFrame::OnToggleAllUIs)
 	EVT_MENU(ID_UITreeView, VRenderFrame::OnShowHideView)
 	EVT_MENU(ID_UIMeasureView, VRenderFrame::OnShowHideView)
 	EVT_MENU(ID_UIMovieView, VRenderFrame::OnShowHideView)
@@ -158,6 +159,8 @@ VRenderFrame::VRenderFrame(
     m_main_tb->SetToolBitmapSize(wxSize(95,42));
 	//create the menu for UI management
 	m_tb_menu_ui = new wxMenu;
+    m_tb_menu_ui->Append(ID_UIToggleAllViews, "Toggle All Panels",
+        "Show/hide all panels", wxITEM_NORMAL);
 	m_tb_menu_ui->Append(ID_UITreeView, UITEXT_TREEVIEW,
 		"Show/hide the workspace panel", wxITEM_CHECK);
 	m_tb_menu_ui->Append(ID_UIMeasureView, UITEXT_MEASUREMENT,
@@ -220,11 +223,19 @@ VRenderFrame::VRenderFrame(
 		wxGetBitmapFromMemory(icon_new_view), wxNullBitmap, wxITEM_NORMAL,
 		"Create a new render viewport",
 		"Create a new render viewport");
+#ifndef _DARWIN
 	m_main_tb->AddTool(ID_ShowHideUI, "Show/Hide UI",
 		wxGetBitmapFromMemory(icon_show_hide_ui), wxNullBitmap, wxITEM_DROPDOWN,
 		"Show or hide all control panels",
 		"Show or hide all control panels");
-	m_main_tb->SetDropdownMenu(ID_ShowHideUI, m_tb_menu_ui);
+    m_main_tb->SetDropdownMenu(ID_ShowHideUI, m_tb_menu_ui);
+#else
+    m_main_tb->AddTool(ID_ShowHideUI, "Show/Hide UI",
+        wxGetBitmapFromMemory(icon_show_hide_ui), wxNullBitmap, wxITEM_NORMAL,
+        "Show or hide control panels",
+        "Show or hide control panels");
+#endif
+	
 	m_main_tb->AddSeparator();
 	m_main_tb->AddTool(ID_OpenMesh, "Open Mesh",
 		wxGetBitmapFromMemory(icon_open_mesh), wxNullBitmap, wxITEM_NORMAL,
@@ -236,10 +247,12 @@ VRenderFrame::VRenderFrame(
                        "Tools for analyzing selected channel",
                        "Tools for analyzing selected channel");
     m_main_tb->SetDropdownMenu(ID_PaintTool, m_tb_menu_edit);
+/*
 	m_main_tb->AddTool(ID_Recorder, "Recorder",
 		wxGetBitmapFromMemory(icon_recorder), wxNullBitmap, wxITEM_NORMAL,
 		"Recorder: Record actions by key frames and play back",
 		"Recorder: Record actions by key frames and play back");
+*/
 	m_main_tb->AddSeparator();
 
 	m_plugin_manager = new PluginManager(this);
@@ -1155,7 +1168,7 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
                             VolumeData* vd = m_data_mgr.GetVolumeData(m_data_mgr.GetVolumeNum()-i);
                             if (vd)
                             {
-                                vrv->AddVolumeData(vd);
+                                vrv->AddVolumeData(vd, group_name);
                                 wxString vol_name = vd->GetName();
                                 if (vol_name.Find("_1ch")!=-1 &&
                                     (i==1 || i==2))
@@ -1182,8 +1195,7 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
                         VolumeData* rvd = m_data_mgr.GetVolumeData(m_data_mgr.GetVolumeNum()-1);
                         if (rvd)
                         {
-                            
-                            vrv->AddVolumeData(rvd);
+                            vrv->AddVolumeData(rvd, ref_group_name);
                             wxString vol_name = rvd->GetName();
                             
                             if (rvd->GetReader() && rvd->GetReader()->GetTimeNum()>1)
@@ -1205,7 +1217,7 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
                             VolumeData* vd = m_data_mgr.GetVolumeData(m_data_mgr.GetVolumeNum()-i);
                             if (vd)
                             {
-                                vrv->AddVolumeData(vd);
+                                vrv->AddVolumeData(vd, group_name);
                                 wxString vol_name = vd->GetName();
                                 if (vol_name.Find("_1ch")!=-1 &&
                                     (i==1 || i==2))
@@ -6111,7 +6123,16 @@ void VRenderFrame::OnTwitter(wxCommandEvent& WXUNUSED(event))
 
 void VRenderFrame::OnShowHideUI(wxCommandEvent& WXUNUSED(event))
 {
+#ifndef _DARWIN
 	ToggleAllTools();
+#else
+    PopupMenu(m_tb_menu_ui);
+#endif
+}
+
+void VRenderFrame::OnToggleAllUIs(wxCommandEvent& WXUNUSED(event))
+{
+    ToggleAllTools();
 }
 
 void VRenderFrame::OnShowHideToolbar(wxCommandEvent& WXUNUSED(event))

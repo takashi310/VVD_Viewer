@@ -142,6 +142,7 @@ class EXPORT_API VRenderFrame: public wxFrame
 		ID_InfoDlg,
 		ID_Settings,
 		//UI menu
+        ID_UIToggleAllViews,
 		ID_UIListView,
 		ID_UITreeView,
 		ID_UIMeasureView,
@@ -472,6 +473,7 @@ private:
 	void OnTwitter(wxCommandEvent& WXUNUSED(event));
 	void OnShowHideUI(wxCommandEvent& WXUNUSED(event));
 	void OnShowHideToolbar(wxCommandEvent& WXUNUSED(event));
+    void OnToggleAllUIs(wxCommandEvent& WXUNUSED(event));
 	void OnShowHideView(wxCommandEvent &event);
 	void OnPlugins(wxCommandEvent& WXUNUSED(event));
 	void OnPluginMenuSelect(wxCommandEvent& event);
