@@ -6952,6 +6952,8 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 			reader = new OIFReader();
 		else if (type == LOAD_TYPE_LSM)
 			reader = new LSMReader();
+        else if (type == LOAD_TYPE_CZI)
+            reader = new CZIReader();
 		else if (type == LOAD_TYPE_PVXML)
 			reader = new PVXMLReader();
 		else if (type == LOAD_TYPE_BRKXML)

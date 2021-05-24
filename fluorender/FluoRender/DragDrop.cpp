@@ -106,6 +106,7 @@ bool DnDFile::OnDropFiles(wxCoord x, wxCoord y, const wxArrayString &filenames)
 				suffix == ".oib" ||
 				suffix == ".oif" ||
 				suffix == ".lsm" ||
+                suffix == ".czi" ||
 				suffix == ".xml" ||
 				suffix == ".vvd" ||
 				suffix == ".h5j" ||

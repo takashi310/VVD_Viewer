@@ -1052,11 +1052,12 @@ void VRenderFrame::OnOpenVolume(wxCommandEvent& WXUNUSED(event))
 
 	wxFileDialog *fopendlg = new wxFileDialog(
 		this, "Choose the volume data file", "", "",
-        "All Supported|*.tif;*.tiff;*.zip;*.oib;*.oif;*.lsm;*.xml;*.nrrd;*.h5j;*.vvd;*.v3dpbd;*.n5;*.json;|"\
+        "All Supported|*.tif;*.tiff;*.zip;*.oib;*.oif;*.lsm;*.czi;*.xml;*.nrrd;*.h5j;*.vvd;*.v3dpbd;*.n5;*.json;|"\
 		"Tiff Files (*.tif, *.tiff, *.zip)|*.tif;*.tiff;*.zip|"\
 		"Olympus Image Binary Files (*.oib)|*.oib|"\
 		"Olympus Original Imaging Format (*.oif)|*.oif|"\
 		"Zeiss Laser Scanning Microscope (*.lsm)|*.lsm|"\
+        "Carl Zeiss Image (*.czi)|*.czi|"\
 		"Prairie View XML (*.xml)|*.xml|"\
 		"Nrrd files (*.nrrd)|*.nrrd|"\
 		"H5J files (*.h5j)|*.h5j|"\
@@ -1144,6 +1145,8 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_OIF, -1, -1, datasize, prefix);
 			else if (suffix==".lsm")
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_LSM, -1, -1, datasize, prefix);
+            else if (suffix==".czi")
+                ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_CZI, -1, -1, datasize, prefix);
 			else if (suffix==".xml")
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_PVXML, -1, -1, datasize, prefix);
 			else if (suffix==".vvd" || suffix==".n5" || suffix==".json" || suffix==".n5fs_ch")
@@ -1369,6 +1372,7 @@ void VRenderFrame::StartupLoad(wxArrayString files, size_t datasize, wxArrayStri
                     suffix == ".oib" ||
                     suffix == ".oif" ||
                     suffix == ".lsm" ||
+                    suffix == ".czi" ||
                     suffix == ".xml" ||
                     suffix == ".vvd" ||
                     suffix == ".n5" ||
@@ -3672,6 +3676,8 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_OIF, cur_chan, cur_time);
 					else if (suffix == ".lsm")
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_LSM, cur_chan, cur_time);
+                    else if (suffix == ".czi")
+                        loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_CZI, cur_chan, cur_time);
 					else if (suffix == ".xml")
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_PVXML, cur_chan, cur_time);
 					else if (suffix == ".vvd" || suffix == ".n5" || suffix == ".json")

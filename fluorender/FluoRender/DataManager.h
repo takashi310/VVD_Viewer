@@ -49,6 +49,7 @@ DEALINGS IN THE SOFTWARE.
 #include "Formats/msk_reader.h"
 #include "Formats/msk_writer.h"
 #include "Formats/lsm_reader.h"
+#include "Formats/czi_reader.h"
 #include "Formats/lbl_reader.h"
 #include "Formats/pvxml_reader.h"
 #include "Formats/brkxml_reader.h"
@@ -85,6 +86,7 @@ using namespace FLIVR;
 #define LOAD_TYPE_H5J		8
 #define LOAD_TYPE_V3DPBD	9
 #define LOAD_TYPE_IDI       10
+#define LOAD_TYPE_CZI       11
 
 
 class EXPORT_API TreeLayer
@@ -1928,6 +1930,8 @@ public:
             type = LOAD_TYPE_OIF;
         else if (suffix == ".lsm")
             type = LOAD_TYPE_LSM;
+        else if (suffix == ".CZI")
+            type = LOAD_TYPE_CZI;
         else if (suffix == ".xml")
             type = LOAD_TYPE_PVXML;
         else if (suffix == ".vvd" || suffix == ".n5" || suffix == ".json")
