@@ -642,7 +642,10 @@ namespace FLIVR
 		int numc, int* numb)
 	{
 		bool force_pow2 = false;
-		int max_texture_size = 65535;
+        
+        int max_texture_size = 65535;
+        if (TextureRenderer::m_vulkan && TextureRenderer::m_vulkan->devices.size() > 0)
+            max_texture_size = TextureRenderer::m_vulkan->devices[0]->properties.limits.maxImageDimension3D;
 		
 		//further determine the max texture size
 		if (TextureRenderer::get_mem_swap())

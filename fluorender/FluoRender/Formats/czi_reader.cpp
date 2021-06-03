@@ -84,12 +84,31 @@ void CZIReader::SetFile(wstring &file)
 
 void CZIReader::Preprocess()
 {
-    FILE* pfile = 0;
     auto stream = libCZI::CreateStreamFromFile(m_path_name.c_str());
     auto cziReader = libCZI::CreateCZIReader();
     cziReader->Open(stream);
     
+    cziReader->EnumerateSubBlocks( [&](int idx, const libCZI::SubBlockInfo& info)
+    {
+        cout << "Index " << idx << ": " << libCZI::Utils::DimCoordinateToString(&info.coordinate) << " Rect=" << info.logicalRect << endl;
+        
+        if (idx == 0)
+        {
+            auto sbBlk = cziReader->ReadSubBlock(idx);
+            auto bitmap = sbBlk->CreateBitmap();
+            auto lockinfo = bitmap->Lock();
+            cout << "bitmap size: " << lockinfo.size << endl;
+            unsigned char *data = (unsigned char *)(lockinfo.ptrData);
+            cout << "first: " << (int)data[0] << endl;
+            cout << "last: " << (int)data[lockinfo.size - 1] << endl;
+        }
+        
+        return true;
+    });
+    
     auto stats = cziReader->GetStatistics();
+    auto sbd = stats.sceneBoundingBoxes[0];
+    cout << "BD " << sbd.boundingBox << " BD0: " << sbd.boundingBoxLayer0 << endl;
     m_slice_min = 0;
     m_slice_num = 1;
     m_chan_min = 0;
@@ -160,7 +179,7 @@ void CZIReader::Preprocess()
     else
         m_valid_spc = false;
     
-    //auto meta_xml = md->GetXml();
+    auto meta_xml = md->GetXml();
     
     cout << "Z " << m_slice_min << " " << m_slice_num << " " << stats.boundingBox << " " << libCZI::Utils::PixelTypeToInformalString(pxtype) << endl;
     //cout << meta_xml << endl;
@@ -301,11 +320,30 @@ Nrrd* CZIReader::Convert_ThreadSafe(int t, int c, bool get_max)
                 
                 auto slice_bd = libCZI::IntRect{m_x_min, m_y_min, m_x_size, m_y_size};
                 
-                libCZI::CDimCoordinate planeCoord{
-                    { libCZI::DimensionIndex::Z, m_slice_min },
-                    { libCZI::DimensionIndex::C, c+m_chan_min },
-                    { libCZI::DimensionIndex::T, t+m_time_min }
-                };
+                libCZI::CDimCoordinate planeCoord;
+                
+                auto stats = cziReader->GetStatistics();
+                stats.dimBounds.EnumValidDimensions(
+                    [this, &planeCoord, c, t](libCZI::DimensionIndex idx, int start, int size)
+                    {
+                        switch(idx)
+                        {
+                            case libCZI::DimensionIndex::Z:
+                                planeCoord.Set(idx, m_slice_min);
+                                break;
+                            case libCZI::DimensionIndex::C:
+                                planeCoord.Set(idx, c+m_chan_min);
+                                break;
+                            case libCZI::DimensionIndex::T:
+                                planeCoord.Set(idx, t+m_time_min);
+                                break;
+                            default:
+                                planeCoord.Set(idx, start);
+                                break;
+                        }
+                        return true;
+                    }
+                );
                 
                 int slice_max = m_slice_min + m_slice_num;
                 size_t slice_size = (unsigned long long)m_x_size * (unsigned long long)m_y_size;
@@ -337,13 +375,32 @@ Nrrd* CZIReader::Convert_ThreadSafe(int t, int c, bool get_max)
                 auto accessor = cziReader->CreateSingleChannelTileAccessor();
                 
                 auto slice_bd = libCZI::IntRect{m_x_min, m_y_min, m_x_size, m_y_size};
+
+                libCZI::CDimCoordinate planeCoord;
                 
-                libCZI::CDimCoordinate planeCoord{
-                    { libCZI::DimensionIndex::Z, m_slice_min },
-                    { libCZI::DimensionIndex::C, c+m_chan_min },
-                    { libCZI::DimensionIndex::T, t+m_time_min }
-                };
-                
+                auto stats = cziReader->GetStatistics();
+                stats.dimBounds.EnumValidDimensions(
+                    [this, &planeCoord, c, t](libCZI::DimensionIndex idx, int start, int size)
+                    {
+                        switch(idx)
+                        {
+                            case libCZI::DimensionIndex::Z:
+                                planeCoord.Set(idx, m_slice_min);
+                                break;
+                            case libCZI::DimensionIndex::C:
+                                planeCoord.Set(idx, c+m_chan_min);
+                                break;
+                            case libCZI::DimensionIndex::T:
+                                planeCoord.Set(idx, t+m_time_min);
+                                break;
+                            default:
+                                planeCoord.Set(idx, start);
+                                break;
+                        }
+                        return true;
+                    }
+                );
+
                 int slice_max = m_slice_min + m_slice_num;
                 size_t slice_size = (unsigned long long)m_x_size * (unsigned long long)m_y_size * 2ULL;
                 for (size_t i = m_slice_min; i < slice_max; i++)
