@@ -101,6 +101,7 @@ void CZIReader::Preprocess()
             unsigned char *data = (unsigned char *)(lockinfo.ptrData);
             cout << "first: " << (int)data[0] << endl;
             cout << "last: " << (int)data[lockinfo.size - 1] << endl;
+            bitmap->Unlock();
         }
         
         return true;
@@ -337,6 +338,8 @@ Nrrd* CZIReader::Convert_ThreadSafe(int t, int c, bool get_max)
                             case libCZI::DimensionIndex::T:
                                 planeCoord.Set(idx, t+m_time_min);
                                 break;
+                            case libCZI::DimensionIndex::S:
+                                break;
                             default:
                                 planeCoord.Set(idx, start);
                                 break;
@@ -347,12 +350,29 @@ Nrrd* CZIReader::Convert_ThreadSafe(int t, int c, bool get_max)
                 
                 int slice_max = m_slice_min + m_slice_num;
                 size_t slice_size = (unsigned long long)m_x_size * (unsigned long long)m_y_size;
+                size_t pitchY = m_x_size;
                 for (size_t i = m_slice_min; i < slice_max; i++)
                 {
                     planeCoord.Set(libCZI::DimensionIndex::Z, i);
                     auto multiTileComposit = accessor->Get(libCZI::PixelType::Gray8, slice_bd, &planeCoord, nullptr);
                     auto lockinfo = multiTileComposit->Lock();
-                    memcpy(val + i * slice_size, lockinfo.ptrDataRoi, lockinfo.size < slice_size ? lockinfo.size : slice_size);
+                    if (pitchY == lockinfo.stride)
+                        memcpy((unsigned char *)val + i * slice_size, lockinfo.ptrDataRoi, lockinfo.size < slice_size ? lockinfo.size : slice_size);
+                    else
+                    {
+                        size_t src_offset = 0;
+                        size_t dst_offset = 0;
+                        unsigned char *src = (unsigned char *)lockinfo.ptrDataRoi;
+                        unsigned char *dst = (unsigned char *)val + i * slice_size;
+                        while (src_offset < lockinfo.size && dst_offset < slice_size)
+                        {
+                            memcpy(dst + dst_offset, src + src_offset,
+                                   (src_offset + pitchY <= lockinfo.size) ? (dst_offset + pitchY <= slice_size ? pitchY : slice_size - dst_offset) : lockinfo.size - src_offset);
+                            src_offset += lockinfo.stride;
+                            dst_offset += pitchY;
+                        }
+                    }
+                    multiTileComposit->Unlock();
                 }
                 
                 //create nrrd
@@ -393,6 +413,8 @@ Nrrd* CZIReader::Convert_ThreadSafe(int t, int c, bool get_max)
                             case libCZI::DimensionIndex::T:
                                 planeCoord.Set(idx, t+m_time_min);
                                 break;
+                            case libCZI::DimensionIndex::S:
+                                break;
                             default:
                                 planeCoord.Set(idx, start);
                                 break;
@@ -403,12 +425,29 @@ Nrrd* CZIReader::Convert_ThreadSafe(int t, int c, bool get_max)
 
                 int slice_max = m_slice_min + m_slice_num;
                 size_t slice_size = (unsigned long long)m_x_size * (unsigned long long)m_y_size * 2ULL;
+                size_t pitchY = m_x_size * 2ULL;
                 for (size_t i = m_slice_min; i < slice_max; i++)
                 {
                     planeCoord.Set(libCZI::DimensionIndex::Z, i);
                     auto multiTileComposit = accessor->Get(libCZI::PixelType::Gray16, slice_bd, &planeCoord, nullptr);
                     auto lockinfo = multiTileComposit->Lock();
-                    memcpy((unsigned char *)val + i * slice_size, lockinfo.ptrDataRoi, lockinfo.size < slice_size ? lockinfo.size : slice_size);
+                    if (pitchY == lockinfo.stride)
+                        memcpy((unsigned char *)val + i * slice_size, lockinfo.ptrDataRoi, lockinfo.size < slice_size ? lockinfo.size : slice_size);
+                    else
+                    {
+                        size_t src_offset = 0;
+                        size_t dst_offset = 0;
+                        unsigned char *src = (unsigned char *)lockinfo.ptrDataRoi;
+                        unsigned char *dst = (unsigned char *)val + i * slice_size;
+                        while (src_offset < lockinfo.size && dst_offset < slice_size)
+                        {
+                            memcpy(dst + dst_offset, src + src_offset,
+                                   (src_offset + pitchY <= lockinfo.size) ? (dst_offset + pitchY <= slice_size ? pitchY : slice_size - dst_offset) : lockinfo.size - src_offset);
+                            src_offset += lockinfo.stride;
+                            dst_offset += pitchY;
+                        }
+                    }
+                    multiTileComposit->Unlock();
                 }
                 
                 //create nrrd
