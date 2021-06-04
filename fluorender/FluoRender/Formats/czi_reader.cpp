@@ -88,6 +88,7 @@ void CZIReader::Preprocess()
     auto cziReader = libCZI::CreateCZIReader();
     cziReader->Open(stream);
     
+    /*
     cziReader->EnumerateSubBlocks( [&](int idx, const libCZI::SubBlockInfo& info)
     {
         cout << "Index " << idx << ": " << libCZI::Utils::DimCoordinateToString(&info.coordinate) << " Rect=" << info.logicalRect << endl;
@@ -106,6 +107,7 @@ void CZIReader::Preprocess()
         
         return true;
     });
+    */
     
     auto stats = cziReader->GetStatistics();
     auto sbd = stats.sceneBoundingBoxes[0];
