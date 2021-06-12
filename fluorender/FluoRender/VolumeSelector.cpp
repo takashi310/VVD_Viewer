@@ -189,9 +189,18 @@ void VolumeSelector::Select(double radius)
         
 		//loop for growing
 		int iter = m_iter_num*(radius/20.0>1.0?radius/20.0:1.0);
+        int bnum = m_vd->GetTexture()->get_brick_num();
 		for (int i=0; i<iter; i++)
         {
-			m_vd->DrawMask(1, m_mode, 0, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0, ext_msk);
+            bool clear_cache = false;
+            
+            if (m_vd->isBrxml() && bnum > 1)
+            {
+                if (i % 5 == 4 || i == iter-1)
+                    clear_cache = true;
+            }
+            m_vd->DrawMask(1, m_mode, 0, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0, false, ext_msk, clear_cache);
+            
             auto rn_time = GET_TICK_COUNT();
             if (!prog_diag && rn_time - st_time > 3000)
             {

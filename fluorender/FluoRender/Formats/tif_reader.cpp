@@ -32,6 +32,8 @@ DEALINGS IN THE SOFTWARE.
 #   include "wx/msw/winundef.h"
 #endif
 
+#include <tiffio.h>
+
 #include "wx/stdpaths.h"
 #include "wx/zipstrm.h"
 #include "wx/wfstream.h"

@@ -1215,7 +1215,7 @@ void VolumeData::AddEmptyMask()
 		m_tex->set_nrrd(sptr, m_tex->nmask());
 	}
 
-	if (!isBrxml())
+	//if (!isBrxml())
 		AddEmptyStroke();
 
 	if (isBrxml())
@@ -2674,7 +2674,7 @@ void VolumeData::DrawBounds()
 //hr_mode (hidden removal): 0-none; 1-ortho; 2-persp
 void VolumeData::DrawMask(int type, int paint_mode, int hr_mode,
 						  double ini_thresh, double gm_falloff, double scl_falloff, double scl_translate,
-						  double w2d, double bins, bool ortho, Texture* ext_msk)
+						  double w2d, double bins, bool ortho, Texture* ext_msk, bool clear_msk_cache)
 {
 	if (m_vr)
 	{
@@ -2692,11 +2692,14 @@ void VolumeData::DrawMask(int type, int paint_mode, int hr_mode,
 		{
 			int lvnum = GetLevelNum();
 			int masklv = GetMaskLv();
-			for (int i = 0; i < lvnum; i++)
-			{
-				SetLevel(i);
-				m_vr->clear_tex_current_mask();
-			}
+            if (clear_msk_cache)
+            {
+                for (int i = 0; i < lvnum; i++)
+                {
+                    SetLevel(i);
+                    m_vr->clear_tex_current_mask();
+                }
+            }
 			SetLevel(curlv);
 		}
 		//OutputDebugStringA("DrawMask Leave\n");

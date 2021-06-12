@@ -1472,6 +1472,21 @@ namespace FLIVR
 
 		//update mask data
 		data_[nmask_] = new_data;
+        if (brkxml_) {
+            int mlv = (masklv_ >= 0 && masklv_ < pyramid_lv_num_) ? masklv_ : pyramid_lv_num_ - 1;
+            for (int i=0; i<pyramid_[mlv].bricks.size(); i++) {
+                pyramid_[mlv].bricks[i]->set_nrrd(data_[nmask_], nmask_);
+                pyramid_[mlv].bricks[i]->set_modified(nmask_, true);
+            }
+        }
+        else {
+            for (int i=0; i<(int)(*bricks_).size(); i++) {
+                (*bricks_)[i]->set_nrrd(data_[nmask_], nmask_);
+            }
+        }
+        
+        if (brkxml_)
+            setLevel(pyramid_cur_lv_);
 	}
 
 	void Texture:: mask_undos_backward()
@@ -1490,6 +1505,18 @@ namespace FLIVR
 
 		//update mask data
 		data_[nmask_] = mask_undos_[mask_undo_pointer_];
+        if (brkxml_) {
+            int mlv = (masklv_ >= 0 && masklv_ < pyramid_lv_num_) ? masklv_ : pyramid_lv_num_ - 1;
+            for (int i=0; i<pyramid_[mlv].bricks.size(); i++) {
+                pyramid_[mlv].bricks[i]->set_nrrd(data_[nmask_], nmask_);
+                pyramid_[mlv].bricks[i]->set_modified(nmask_, true);
+            }
+        }
+        else {
+            for (int i=0; i<(int)(*bricks_).size(); i++) {
+                (*bricks_)[i]->set_nrrd(data_[nmask_], nmask_);
+            }
+        }
 	}
 
 	void Texture::mask_undos_forward()
@@ -1508,6 +1535,18 @@ namespace FLIVR
 
 		//update mask data
 		data_[nmask_] = mask_undos_[mask_undo_pointer_];
+        if (brkxml_) {
+            int mlv = (masklv_ >= 0 && masklv_ < pyramid_lv_num_) ? masklv_ : pyramid_lv_num_ - 1;
+            for (int i=0; i<pyramid_[mlv].bricks.size(); i++) {
+                pyramid_[mlv].bricks[i]->set_nrrd(data_[nmask_], nmask_);
+                pyramid_[mlv].bricks[i]->set_modified(nmask_, true);
+            }
+        }
+        else {
+            for (int i=0; i<(int)(*bricks_).size(); i++) {
+                (*bricks_)[i]->set_nrrd(data_[nmask_], nmask_);
+            }
+        }
 	}
 
 	void Texture::GetDimensionLv(int lv, int &x, int &y, int &z)

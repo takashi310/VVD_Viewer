@@ -457,7 +457,7 @@ public:
 	//hr_mode (hidden removal): 0-none; 1-ortho; 2-persp
 	void DrawMask(int type, int paint_mode, int hr_mode,
 		double ini_thresh, double gm_falloff, double scl_falloff, double scl_translate,
-		double w2d, double bins, bool ortho = false, Texture* ext_msk = NULL);
+		double w2d, double bins, bool ortho = false, Texture* ext_msk = NULL, bool clear_msk_cache = true);
 	void DrawMaskThreshold(float th, bool ortho = false);
 	void DrawMaskDSLT(int type, int paint_mode, int hr_mode,
 		double ini_thresh, double gm_falloff, double scl_falloff, double scl_translate,

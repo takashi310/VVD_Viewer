@@ -1653,6 +1653,7 @@ void VRenderVulkanView::DrawVolumes(int peel)
 		{
 			TextureRenderer::reset_update_loop();
 			vkQueueWaitIdle(m_vulkan->vulkanDevice->queue);
+            if (m_capture) m_postdraw = true;
             //ed_time = milliseconds_now();
             //sprintf(dbgstr, "Frame Draw: %lld \n", ed_time - st_time);
             //OutputDebugStringA(dbgstr);
@@ -18729,7 +18730,10 @@ void VRenderView::OnCapture(wxCommandEvent& event)
 			m_glview->StartTileRendering(m_cap_resx, m_cap_resy, tilew, tileh);
 		}
 		else
-			m_glview->StartTileRendering(m_cap_resx, m_cap_resy, m_cap_resx, m_cap_resy);
+        {
+            m_glview->Resize();
+		//	m_glview->StartTileRendering(m_cap_resx, m_cap_resy, m_cap_resx, m_cap_resy);
+        }
 
 		if (vr_frame && vr_frame->GetSettingDlg() &&
 			vr_frame->GetSettingDlg()->GetProjSave())
