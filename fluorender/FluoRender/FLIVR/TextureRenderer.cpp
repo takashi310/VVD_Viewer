@@ -1224,8 +1224,19 @@ namespace FLIVR
 		if (!tex_)
 			return;
 
-		vector<TextureBrick*>* bricks = tex_->get_bricks();
-		m_vulkan->eraseBricksFromTexpools(bricks, tex_->nmask());
+        if (tex_->isBrxml())
+        {
+            for (int i = 0; i < tex_->GetLevelNum(); i++)
+            {
+                vector<TextureBrick*>* bricks = tex_->get_bricks(i);
+                m_vulkan->eraseBricksFromTexpools(bricks, tex_->nmask());
+            }
+        }
+        else
+        {
+            vector<TextureBrick*>* bricks = tex_->get_bricks();
+            m_vulkan->eraseBricksFromTexpools(bricks, tex_->nmask());
+        }
 	}
 
 	//resize the fbo texture

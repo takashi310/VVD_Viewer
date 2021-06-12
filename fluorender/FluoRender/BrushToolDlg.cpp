@@ -826,34 +826,44 @@ void BrushToolDlg::OnBrushCreate(wxCommandEvent &event)
       frame->GetTree()->BrushCreate();
 }
 
+void BrushToolDlg::BrushUndo()
+{
+    VolumeData* sel_vol = 0;
+    VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+    if (vr_frame)
+        sel_vol = vr_frame->GetCurSelVol();
+    if (sel_vol && sel_vol->GetTexture())
+    {
+        sel_vol->GetTexture()->mask_undos_backward();
+        sel_vol->GetVR()->clear_tex_current_mask();
+    }
+    vr_frame->RefreshVRenderViews();
+    UpdateUndoRedo();
+}
+
 void BrushToolDlg::OnBrushUndo(wxCommandEvent &event)
 {
-	VolumeData* sel_vol = 0;
-	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-	if (vr_frame)
-		sel_vol = vr_frame->GetCurSelVol();
-	if (sel_vol && sel_vol->GetTexture())
-	{
-		sel_vol->GetTexture()->mask_undos_backward();
-		sel_vol->GetVR()->clear_tex_current_mask();
-	}
-	vr_frame->RefreshVRenderViews();
-	UpdateUndoRedo();
+    BrushUndo();
+}
+
+void BrushToolDlg::BrushRedo()
+{
+    VolumeData* sel_vol = 0;
+    VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+    if (vr_frame)
+        sel_vol = vr_frame->GetCurSelVol();
+    if (sel_vol && sel_vol->GetTexture())
+    {
+        sel_vol->GetTexture()->mask_undos_forward();
+        sel_vol->GetVR()->clear_tex_current_mask();
+    }
+    vr_frame->RefreshVRenderViews();
+    UpdateUndoRedo();
 }
 
 void BrushToolDlg::OnBrushRedo(wxCommandEvent &event)
 {
-	VolumeData* sel_vol = 0;
-	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-	if (vr_frame)
-		sel_vol = vr_frame->GetCurSelVol();
-	if (sel_vol && sel_vol->GetTexture())
-	{
-		sel_vol->GetTexture()->mask_undos_forward();
-		sel_vol->GetVR()->clear_tex_current_mask();
-	}
-	vr_frame->RefreshVRenderViews();
-	UpdateUndoRedo();
+    BrushRedo();
 }
 
 void BrushToolDlg::DrawBrush(double val)

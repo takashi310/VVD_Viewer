@@ -701,7 +701,9 @@ VRenderVulkanView::VRenderVulkanView(wxWindow* frame,
 	m_abort(false),
     m_easy_2d_adjust(false),
 	m_loader_run(true),
-	m_ebd_run(true)
+	m_ebd_run(true),
+    m_undo_keydown(false),
+    m_redo_keydown(false)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -6502,7 +6504,31 @@ void VRenderVulkanView::OnIdle(wxTimerEvent& event)
 				m_selector.SetVolume(m_cur_vol);
 			}
 		}
+        
+        if (wxGetKeyState(wxKeyCode('Z')) && wxGetKeyState(WXK_CONTROL) && !wxGetKeyState(WXK_SHIFT) && !wxGetKeyState(WXK_ALT) && !m_undo_keydown && !m_key_lock)
+        {
+            VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+            if (frame && vr_frame->GetBrushToolDlg())
+                vr_frame->GetBrushToolDlg()->BrushUndo();
+            m_undo_keydown = true;
+        }
+        if (wxGetKeyState(wxKeyCode('Y')) && wxGetKeyState(WXK_CONTROL) && !wxGetKeyState(WXK_SHIFT) && !wxGetKeyState(WXK_ALT) && !m_redo_keydown && !m_key_lock)
+        {
+            VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+            if (frame && vr_frame->GetBrushToolDlg())
+                vr_frame->GetBrushToolDlg()->BrushRedo();
+            m_redo_keydown = true;
+        }
 	}
+    
+    if (!(wxGetKeyState(wxKeyCode('Z')) && wxGetKeyState(WXK_CONTROL) && !wxGetKeyState(WXK_SHIFT) && !wxGetKeyState(WXK_ALT)))
+    {
+        m_undo_keydown = false;
+    }
+    if (!(wxGetKeyState(wxKeyCode('Y')) && wxGetKeyState(WXK_CONTROL) && !wxGetKeyState(WXK_SHIFT) && !wxGetKeyState(WXK_ALT)))
+    {
+        m_redo_keydown = false;
+    }
 
 	if (window && !editting && this == cur_glview && !m_key_lock && m_tile_rendering)
 	{

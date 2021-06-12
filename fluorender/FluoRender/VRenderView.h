@@ -1178,6 +1178,9 @@ private:
 	bool m_abort;
     
     bool m_easy_2d_adjust;
+    
+    bool m_undo_keydown;
+    bool m_redo_keydown;
 
 private:
 #ifdef _WIN32

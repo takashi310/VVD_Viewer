@@ -140,6 +140,9 @@ public:
 
 	void SetCalcA(wxString name){m_calc_a_text->SetValue(name);}
 	void SetCalcB(wxString name){m_calc_b_text->SetValue(name);}
+    
+    void BrushUndo();
+    void BrushRedo();
 	
 private:
 	wxWindow* m_frame;

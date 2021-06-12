@@ -1473,10 +1473,11 @@ namespace FLIVR
 		//update mask data
 		data_[nmask_] = new_data;
         if (brkxml_) {
-            int mlv = (masklv_ >= 0 && masklv_ < pyramid_lv_num_) ? masklv_ : pyramid_lv_num_ - 1;
-            for (int i=0; i<pyramid_[mlv].bricks.size(); i++) {
-                pyramid_[mlv].bricks[i]->set_nrrd(data_[nmask_], nmask_);
-                pyramid_[mlv].bricks[i]->set_modified(nmask_, true);
+            for (int lv = 0; lv < pyramid_lv_num_; lv++) {
+                for (int i=0; i<pyramid_[lv].bricks.size(); i++) {
+                    pyramid_[lv].bricks[i]->set_nrrd(data_[nmask_], nmask_);
+                    pyramid_[lv].bricks[i]->set_modified(nmask_, true);
+                }
             }
         }
         else {
@@ -1506,10 +1507,11 @@ namespace FLIVR
 		//update mask data
 		data_[nmask_] = mask_undos_[mask_undo_pointer_];
         if (brkxml_) {
-            int mlv = (masklv_ >= 0 && masklv_ < pyramid_lv_num_) ? masklv_ : pyramid_lv_num_ - 1;
-            for (int i=0; i<pyramid_[mlv].bricks.size(); i++) {
-                pyramid_[mlv].bricks[i]->set_nrrd(data_[nmask_], nmask_);
-                pyramid_[mlv].bricks[i]->set_modified(nmask_, true);
+            for (int lv = 0; lv < pyramid_lv_num_; lv++) {
+                for (int i=0; i<pyramid_[lv].bricks.size(); i++) {
+                    pyramid_[lv].bricks[i]->set_nrrd(data_[nmask_], nmask_);
+                    pyramid_[lv].bricks[i]->set_modified(nmask_, true);
+                }
             }
         }
         else {
@@ -1536,10 +1538,11 @@ namespace FLIVR
 		//update mask data
 		data_[nmask_] = mask_undos_[mask_undo_pointer_];
         if (brkxml_) {
-            int mlv = (masklv_ >= 0 && masklv_ < pyramid_lv_num_) ? masklv_ : pyramid_lv_num_ - 1;
-            for (int i=0; i<pyramid_[mlv].bricks.size(); i++) {
-                pyramid_[mlv].bricks[i]->set_nrrd(data_[nmask_], nmask_);
-                pyramid_[mlv].bricks[i]->set_modified(nmask_, true);
+            for (int lv = 0; lv < pyramid_lv_num_; lv++) {
+                for (int i=0; i<pyramid_[lv].bricks.size(); i++) {
+                    pyramid_[lv].bricks[i]->set_nrrd(data_[nmask_], nmask_);
+                    pyramid_[lv].bricks[i]->set_modified(nmask_, true);
+                }
             }
         }
         else {
