@@ -797,11 +797,13 @@ namespace FLIVR
 			{
 				for (i = 0; i < pyramid_.size(); i++)
 				{
+                    pyramid_[i].modified[nmask_] = true;
 					for (int j = 0; j < pyramid_[i].bricks.size(); j++)
 					{
 						pyramid_[i].bricks[j]->nmask(nmask_);
 						pyramid_[i].bricks[j]->nb(1, nmask_);
 						pyramid_[i].bricks[j]->ntype(TextureBrick::TYPE_MASK, nmask_);
+                        pyramid_[i].bricks[j]->modified(nmask_);
 					}
 				}
 			}
@@ -957,11 +959,23 @@ namespace FLIVR
 				{
 					(*bricks_)[i]->set_nrrd(data, index);
 				}
+                
 				//add to undo list
 				if (index==nmask_)
-					set_mask(data);
+                {
+                    if (mask_undo_num_ > 0)
+                        set_mask(data);
+                    else
+                    {
+                        for (int lv = 0; lv < pyramid_lv_num_; lv++)
+                            for (int i=0; i<pyramid_[lv].bricks.size(); i++)
+                                pyramid_[lv].bricks[i]->set_nrrd(data_[nmask_], nmask_);
+                    }
+                }
+                
 			}
 		}
+        
 	}
 
 	void Texture::set_data_file(vector<FileLocInfo *> *fname, int type)
