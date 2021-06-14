@@ -197,7 +197,11 @@ void VolumeSelector::Select(double radius)
             if (m_vd->isBrxml() && bnum > 1)
             {
                 if (i % 5 == 4 || i == iter-1)
+                {
                     clear_cache = true;
+                    if (m_vd->GetVR())
+                        m_vd->GetVR()->return_mask();
+                }
             }
             m_vd->DrawMask(1, m_mode, 0, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0, false, ext_msk, clear_cache);
             
@@ -231,11 +235,13 @@ void VolumeSelector::Select(double radius)
 
 	if (m_mode == 6)
 		m_vd->SetUseMaskThreshold(false);
+    
+    if (m_vd->GetVR())
+        m_vd->GetVR()->return_mask();
 
 	if (Texture::mask_undo_num_>0 &&
 		m_vd->GetVR())
 	{
-		m_vd->GetVR()->return_mask();
 		m_vd->GetVR()->clear_tex_current_mask();
 	}
 }

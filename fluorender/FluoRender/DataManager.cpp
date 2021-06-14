@@ -1100,7 +1100,7 @@ bool VolumeData::LoadMask(const std::shared_ptr<VL_Nrrd>& mask)
         {
             SetLevel(i);
             m_tex->GetDimensionLv(GetLevel(), w, h, d);
-            if (w == mskw || h == mskh || d == mskd)
+            if (w == mskw && h == mskh && d == mskd)
             {
                 found = true;
                 m_tex->SetMaskLv(i);

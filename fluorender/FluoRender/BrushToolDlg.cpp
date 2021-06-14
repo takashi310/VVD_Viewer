@@ -881,7 +881,10 @@ void BrushToolDlg::DrawBrush(double val)
 				thval = sel_vol->GetLeftThresh();
 			thval *= sel_vol->GetMaxValue();
 			if (sel_vol->GetMask(false))
+            {
 				sel_vol->DrawMaskThreshold((float)thval, m_cur_view->GetPersp());
+                sel_vol->GetMask(true);
+            }
 		}
 		else
 		{
@@ -898,7 +901,10 @@ void BrushToolDlg::DrawBrush(double val)
 							thval = vd->GetLeftThresh();
 						thval *= sel_vol->GetMaxValue();
 						if (vd->GetMask(false))
+                        {
 							vd->DrawMaskThreshold((float)thval, m_cur_view->GetPersp());
+                            sel_vol->GetMask(true);
+                        }
 					}
 				}
 			}
