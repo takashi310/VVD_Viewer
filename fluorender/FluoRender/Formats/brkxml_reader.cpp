@@ -1510,7 +1510,7 @@ void BRKXMLReader::loadFSN5()
                 boost::filesystem::path br_file_path(wss2.str());
                 
                 FLIVR::FileLocInfo* fi = nullptr;
-                if (boost::filesystem::exists(br_file_path))
+                //if (boost::filesystem::exists(br_file_path))
                     fi = new FLIVR::FileLocInfo(wss2.str(), 0, 0, lvinfo.file_type, false, true, lvinfo.blosc_blocksize, lvinfo.blosc_clevel, lvinfo.blosc_ctype, lvinfo.blosc_suffle);
 				lvinfo.filename[0][i][pid] = fi;
 			}
@@ -1649,13 +1649,13 @@ DatasetAttributes* BRKXMLReader::parseDatasetMetadata(wstring jpath)
 	switch (ret->m_compression)
 	{
 	case 0:
-		ret->m_compression = BRICK_FILE_TYPE_RAW;
+		ret->m_compression = BRICK_FILE_TYPE_N5RAW;
 		break;
 	case 1:
 		ret->m_compression = BRICK_FILE_TYPE_N5GZIP;
 		break;
 	case 3:
-		ret->m_compression = BRICK_FILE_TYPE_LZ4;
+		ret->m_compression = BRICK_FILE_TYPE_N5LZ4;
 		break;
     case 5:
         ret->m_compression = BRICK_FILE_TYPE_N5BLOSC;

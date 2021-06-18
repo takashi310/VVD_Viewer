@@ -8078,7 +8078,10 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 				size_t readsize;
 				TextureBrick::read_brick_without_decomp(ptr, readsize, b.finfo, this);
 				if (!ptr)
+                {
+                    b.finfo->isvalid = false;
 					continue;
+                }
 
 				if (b.finfo->type == BRICK_FILE_TYPE_RAW)
 				{

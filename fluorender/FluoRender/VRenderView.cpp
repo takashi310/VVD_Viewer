@@ -13689,7 +13689,8 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 							(*bricks2)[j]->set_drawn(false);
 							if ((*bricks2)[j]->get_priority()>0 ||
 								!vd->GetVR()->test_against_view_clip((*bricks2)[j]->bbox(), (*bricks2)[j]->tbox(), (*bricks2)[j]->dbox(), m_persp) ||
-                                !tex->GetFileName((*bricks2)[j]->getID()) )
+                                !tex->GetFileName((*bricks2)[j]->getID()) ||
+                                !tex->GetFileName((*bricks2)[j]->getID())->isvalid)
 							{
 								(*bricks2)[j]->set_disp(false);
 								continue;
@@ -13737,7 +13738,7 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 						(*bricks)[j]->set_drawn(false);
 						if ((*bricks)[j]->get_priority()>0 ||
 							!vd->GetVR()->test_against_view_clip((*bricks)[j]->bbox(), (*bricks)[j]->tbox(), (*bricks)[j]->dbox(), m_persp) ||
-                            (tex->isBrxml() && !tex->GetFileName((*bricks)[j]->getID())) )
+                            (tex->isBrxml() && (!tex->GetFileName((*bricks)[j]->getID()) || !tex->GetFileName((*bricks)[j]->getID())->isvalid)) )
 						{
 							(*bricks)[j]->set_disp(false);
 							continue;

@@ -44,6 +44,7 @@
 #include <zlib.h>
 #include <wx/stdpaths.h>
 #include <h5j_reader.h>
+//#include <lz4frame.h>
 #include <lz4.h>
 #include <blosc2.h>
 #endif
@@ -1116,7 +1117,7 @@ z
    {
 	   bool result = false;
 #ifndef _UNIT_TEST_VOLUME_RENDERER_
-	   if (!finfo) return result;
+	   if (!finfo || !finfo->isvalid) return result;
 
 	   FileLocInfo tmpinfo = *finfo;
 	   char *tmp = NULL;
@@ -1181,7 +1182,7 @@ z
    {
 	   readsize = -1;
 
-	   if (!finfo) return false;
+	   if (!finfo || !finfo->isvalid) return false;
 
 	   if (finfo->type == BRICK_FILE_TYPE_H265) {
 		   auto itr = memcache_table_.find(finfo->filename);
@@ -1333,13 +1334,20 @@ z
            
            if (zsize >= 16)
            {
-                int dnum = ((int)zdata[2] << 8) + (int)zdata[3];
+               int mode = ((int)zdata[0] << 8) + (int)zdata[1];
+               int dnum = ((int)zdata[2] << 8) + (int)zdata[3];
                if (dnum >= 1)
                    finfo->blosc_blocksize_x = ((int)zdata[4] << 24) + ((int)zdata[5] << 16) + ((int)zdata[6] << 8) + (int)zdata[7];
                if (dnum >= 2)
                    finfo->blosc_blocksize_y = ((int)zdata[8] << 24) + ((int)zdata[9] << 16) + ((int)zdata[10] << 8) + (int)zdata[11];
                if (dnum >= 3)
                    finfo->blosc_blocksize_z = ((int)zdata[12] << 24) + ((int)zdata[13] << 16) + ((int)zdata[14] << 8) + (int)zdata[15];
+               if (mode == 1 && zsize >= 4 + dnum * 4 + 4)
+               {
+                   int idx = 4 + dnum * 4;
+                   int numelems = ((int)zdata[idx] << 24) + ((int)zdata[idx+1] << 16) + ((int)zdata[idx+2] << 8) + (int)zdata[idx+3];
+               }
+               //cout << finfo->blosc_blocksize_x << " " << finfo->blosc_blocksize_y << " " << finfo->blosc_blocksize_z << endl;
            }
            
            memcpy(blockdata, zdata + 16, zsize-16);
@@ -1395,15 +1403,62 @@ z
 
    bool TextureBrick::decompress_brick(char *out, char* in, size_t out_size, size_t in_size, int type, int w, int h, int d, int nb, int n5_w, int n5_h, int n5_d)
    {
-	   if	   (type == BRICK_FILE_TYPE_JPEG) return jpeg_decompressor(out, in, out_size, in_size);
+       if      (type == BRICK_FILE_TYPE_N5RAW) return raw_decompressor(out, in, out_size, in_size, true, nb, w, h, d, n5_w, n5_h, n5_d);
+	   else if (type == BRICK_FILE_TYPE_JPEG) return jpeg_decompressor(out, in, out_size, in_size);
 	   else if (type == BRICK_FILE_TYPE_ZLIB) return zlib_decompressor(out, in, out_size, in_size);
-	   else if (type == BRICK_FILE_TYPE_N5GZIP) return zlib_decompressor(out, in, out_size, in_size, true, nb);
+	   else if (type == BRICK_FILE_TYPE_N5GZIP) return zlib_decompressor(out, in, out_size, in_size, true, nb, w, h, d, n5_w, n5_h, n5_d);
 	   else if (type == BRICK_FILE_TYPE_H265) return h265_decompressor(out, in, out_size, in_size, w, h);
 	   else if (type == BRICK_FILE_TYPE_LZ4) return lz4_decompressor(out, in, out_size, in_size);
+       else if (type == BRICK_FILE_TYPE_N5LZ4) return lz4_decompressor(out, in, out_size, in_size, true, nb, w, h, d, n5_w, n5_h, n5_d);
        else if (type == BRICK_FILE_TYPE_N5BLOSC) return blosc_decompressor(out, in, out_size, in_size, true, w, h, d, nb, n5_w, n5_h, n5_d);
 
 	   return false;
    }
+    
+    bool TextureBrick::raw_decompressor(char* out, char* in, size_t out_size, size_t in_size, bool isn5, int nb, int w, int h, int d, int n5_w, int n5_h, int n5_d)
+    {
+        if (!isn5)
+            memcpy(out, in, in_size);
+        else
+        {
+            size_t n5out_size = nb * n5_w * n5_h * n5_d;
+            if (n5out_size <= 0 || n5out_size != in_size)
+                return false;
+            
+            if (n5out_size != out_size)
+            {
+                char* src = in;
+                char* dst = out;
+                int src_y_pitch = n5_w * nb;
+                int dst_y_pitch = w * nb;
+                int src_z_pitch = n5_w * n5_h * nb;
+                int dst_z_pitch = w * h * nb;
+                for (int zz = 0; zz < d; zz++)
+                {
+                    for (int yy = 0; yy < h; yy++)
+                        memcpy(dst + dst_y_pitch * yy, src + src_y_pitch * yy, dst_y_pitch);
+                    src += src_z_pitch;
+                    dst += dst_z_pitch;
+                }
+            }
+            else
+            {
+                memcpy(out, in, in_size);
+            }
+            
+            if (nb == 2)
+            {
+                char e = check_machine_endian();
+                if (e == 'L')
+                {
+                    for (int i = 0; i < out_size-1; i += 2)
+                        swap(out[i], out[i+1]);
+                }
+            }
+        }
+        
+        return true;
+    }
 
    struct my_error_mgr {
 	   struct jpeg_error_mgr pub;	/* "public" fields */
@@ -1464,7 +1519,7 @@ z
 	   return true;
    }
 
-   bool TextureBrick::zlib_decompressor(char *out, char* in, size_t out_size, size_t in_size, bool isn5, int nb)
+   bool TextureBrick::zlib_decompressor(char *out, char* in, size_t out_size, size_t in_size, bool isn5, int nb, int w, int h, int d, int n5_w, int n5_h, int n5_d)
    {
 	   try
 	   {
@@ -1474,10 +1529,18 @@ z
 		   zInfo.next_in = (Bytef*)in;
 
 		   if (isn5)
-		   { 
-			   zInfo.avail_out = out_size;
+		   {
+               zInfo.avail_out = nb * n5_w * n5_h * n5_d;
+               if (zInfo.avail_out <= 0)
+                   return false;
+               
+               bool use_buf = (zInfo.avail_out != out_size);
+               char* buf = nullptr;
+               if (use_buf)
+                   buf = new char[zInfo.avail_out];
+               
+               zInfo.next_out = use_buf ? (Bytef*)buf : (Bytef*)out;
 			   zInfo.total_out = 0;
-			   zInfo.next_out = (Bytef*)out;
 
 			   int nErr, nOut = -1;
 			   nErr = inflateInit2(&zInfo, MAX_WBITS | 32);
@@ -1488,10 +1551,28 @@ z
 				   }
 			   }
 			   inflateEnd(&zInfo);
-			   if (nOut != out_size || nErr != Z_STREAM_END)
+			   if (nErr != Z_STREAM_END)
 				   return false;
                
-               if (isn5 && nb == 2)
+               if (use_buf)
+               {
+                   char* src = buf;
+                   char* dst = out;
+                   int src_y_pitch = n5_w * nb;
+                   int dst_y_pitch = w * nb;
+                   int src_z_pitch = n5_w * n5_h * nb;
+                   int dst_z_pitch = w * h * nb;
+                   for (int zz = 0; zz < d; zz++)
+                   {
+                       for (int yy = 0; yy < h; yy++)
+                           memcpy(dst + dst_y_pitch * yy, src + src_y_pitch * yy, dst_y_pitch);
+                       src += src_z_pitch;
+                       dst += dst_z_pitch;
+                   }
+                   delete[] buf;
+               }
+               
+               if (nb == 2)
                {
                    char e = check_machine_endian();
                    if (e == 'L')
@@ -1543,11 +1624,85 @@ z
    }
 
 
-   bool TextureBrick::lz4_decompressor(char* out, char* in, size_t out_size, size_t in_size)
+   bool TextureBrick::lz4_decompressor(char* out, char* in, size_t out_size, size_t in_size, bool isn5, int nb, int w, int h, int d, int n5_w, int n5_h, int n5_d)
    {
-	   const int decompressed_size = LZ4_decompress_safe(in, out, in_size, out_size);
-	   if (decompressed_size != out_size || decompressed_size < 0)
-		   return false;
+       /*
+       LZ4F_dctx* dctx = nullptr;
+       {
+           size_t const dctxStatus = LZ4F_createDecompressionContext(&dctx, LZ4F_VERSION);
+           if (LZ4F_isError(dctxStatus)) {
+               cerr << "LZ4F_dctx creation error: " << LZ4F_getErrorName(dctxStatus) << endl;
+               return false;
+           }
+       }
+       */
+       if (!isn5)
+       {
+           /*
+           size_t ret = LZ4F_decompress(dctx, out, &out_size, in, &in_size, NULL);
+           if (LZ4F_isError(ret)) {
+               cerr << "Decompression error: " << LZ4F_getErrorName(ret) << endl;
+               return false;
+           }
+           */
+           const int decompressed_size = LZ4_decompress_safe(in, out, in_size, out_size);
+           if (decompressed_size != out_size || decompressed_size < 0)
+               return false;
+           
+       }
+       else
+       {
+           size_t n5out_size = nb * n5_w * n5_h * n5_d;
+           if (n5out_size <= 0)
+               return false;
+           
+           bool use_buf = (n5out_size != out_size);
+           char* buf = nullptr;
+           if (use_buf)
+               buf = new char[n5out_size];
+           
+           char *lz4_out = use_buf ? buf : out;
+           /*
+           size_t ret = LZ4F_decompress(dctx, lz4_out, &n5out_size, in, &in_size, NULL);
+           if (LZ4F_isError(ret)) {
+               cerr << "Decompression error: " << LZ4F_getErrorName(ret) << endl;
+               return false;
+           }
+           */
+           const int decompressed_size = LZ4_decompress_safe(in, lz4_out, in_size, n5out_size);
+           if (decompressed_size != n5out_size || decompressed_size < 0)
+               return false;
+           
+           if (use_buf)
+           {
+               char* src = buf;
+               char* dst = out;
+               int src_y_pitch = n5_w * nb;
+               int dst_y_pitch = w * nb;
+               int src_z_pitch = n5_w * n5_h * nb;
+               int dst_z_pitch = w * h * nb;
+               for (int zz = 0; zz < d; zz++)
+               {
+                   for (int yy = 0; yy < h; yy++)
+                       memcpy(dst + dst_y_pitch * yy, src + src_y_pitch * yy, dst_y_pitch);
+                   src += src_z_pitch;
+                   dst += dst_z_pitch;
+               }
+               delete[] buf;
+           }
+           
+           if (nb == 2)
+           {
+               char e = check_machine_endian();
+               if (e == 'L')
+               {
+                   for (int i = 0; i < out_size-1; i += 2)
+                       swap(out[i], out[i+1]);
+               }
+           }
+       }
+       
+       //LZ4F_freeDecompressionContext(dctx);
 
 	   return true;
    }
