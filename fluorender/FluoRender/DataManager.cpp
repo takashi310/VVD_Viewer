@@ -1037,7 +1037,7 @@ void VolumeData::AddEmptyData(int bits,
 	m_tex->set_use_priority(false);
 	shared_ptr<VL_Nrrd> sptr = make_shared<VL_Nrrd>(nv);
 	m_tex->build(sptr, 0, 0, 256, 0, 0);
-	m_tex->set_spacings(spcx, spcy, spcz);
+    SetBaseSpacings(spcx, spcy, spcz);
 
 	//clipping planes
 	vector<Plane*> planelist(0);
