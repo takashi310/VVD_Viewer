@@ -7291,6 +7291,8 @@ void VRenderVulkanView::SetParams(double t)
         if (interpolator->GetDouble(keycode, t, val))
             md->SetFloat(val, MESH_FLOAT_ALPHA);
     }
+    
+    m_vrv->SetEvtHandlerEnabled(false);
 /*
 	//t
 	double frame;
@@ -7359,6 +7361,8 @@ void VRenderVulkanView::SetParams(double t)
 	int ival;
 	if (interpolator->GetInt(keycode, t, ival))
 		SetVolMethod(ival);
+    
+    m_vrv->SetEvtHandlerEnabled(true);
 
 	if (clip_view)
 		clip_view->SetVolumeData(vr_frame->GetCurSelVol());
