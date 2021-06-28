@@ -1532,7 +1532,11 @@ z
 		   {
                zInfo.avail_out = nb * n5_w * n5_h * n5_d;
                if (zInfo.avail_out <= 0)
-                   return false;
+               {
+                   zInfo.avail_out = nb * w * h * d;
+                   if (zInfo.avail_out <= 0)
+                       return false;
+               }
                
                bool use_buf = (zInfo.avail_out != out_size);
                char* buf = nullptr;

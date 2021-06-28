@@ -1165,25 +1165,27 @@ void BRKXMLReader::build_bricks(vector<FLIVR::TextureBrick*> &tbrks, int lv)
 	vector<BrickInfo *>::iterator bite = m_pyramid[lev].bricks.begin();
 	while (bite != m_pyramid[lev].bricks.end())
 	{
-		FLIVR::BBox tbox(FLIVR::Point((*bite)->tx0, (*bite)->ty0, (*bite)->tz0), FLIVR::Point((*bite)->tx1, (*bite)->ty1, (*bite)->tz1));
-		FLIVR::BBox bbox(FLIVR::Point((*bite)->bx0, (*bite)->by0, (*bite)->bz0), FLIVR::Point((*bite)->bx1, (*bite)->by1, (*bite)->bz1));
+        if ((*bite))
+        {
+            FLIVR::BBox tbox(FLIVR::Point((*bite)->tx0, (*bite)->ty0, (*bite)->tz0), FLIVR::Point((*bite)->tx1, (*bite)->ty1, (*bite)->tz1));
+            FLIVR::BBox bbox(FLIVR::Point((*bite)->bx0, (*bite)->by0, (*bite)->bz0), FLIVR::Point((*bite)->bx1, (*bite)->by1, (*bite)->bz1));
 
-		double dx0, dy0, dz0, dx1, dy1, dz1;
-		dx0 = (double)((*bite)->x_start) / m_pyramid[lev].imageW;
-		dy0 = (double)((*bite)->y_start) / m_pyramid[lev].imageH;
-		dz0 = (double)((*bite)->z_start) / m_pyramid[lev].imageD;
-		dx1 = (double)((*bite)->x_start + (*bite)->x_size) / m_pyramid[lev].imageW;
-		dy1 = (double)((*bite)->y_start + (*bite)->y_size) / m_pyramid[lev].imageH;
-		dz1 = (double)((*bite)->z_start + (*bite)->z_size) / m_pyramid[lev].imageD;
+            double dx0, dy0, dz0, dx1, dy1, dz1;
+            dx0 = (double)((*bite)->x_start) / m_pyramid[lev].imageW;
+            dy0 = (double)((*bite)->y_start) / m_pyramid[lev].imageH;
+            dz0 = (double)((*bite)->z_start) / m_pyramid[lev].imageD;
+            dx1 = (double)((*bite)->x_start + (*bite)->x_size) / m_pyramid[lev].imageW;
+            dy1 = (double)((*bite)->y_start + (*bite)->y_size) / m_pyramid[lev].imageH;
+            dz1 = (double)((*bite)->z_start + (*bite)->z_size) / m_pyramid[lev].imageD;
 
-		FLIVR::BBox dbox = FLIVR::BBox(FLIVR::Point(dx0, dy0, dz0), FLIVR::Point(dx1, dy1, dz1));
+            FLIVR::BBox dbox = FLIVR::BBox(FLIVR::Point(dx0, dy0, dz0), FLIVR::Point(dx1, dy1, dz1));
 
-		//numc? gm_nrrd?
-		FLIVR::TextureBrick *b = new FLIVR::TextureBrick(0, 0, (*bite)->x_size, (*bite)->y_size, (*bite)->z_size, 1, numb, 
-														 (*bite)->x_start, (*bite)->y_start, (*bite)->z_start,
-														 (*bite)->x_size, (*bite)->y_size, (*bite)->z_size, bbox, tbox, dbox, (*bite)->id, (*bite)->offset, (*bite)->fsize);
-		tbrks.push_back(b);
-		
+            //numc? gm_nrrd?
+            FLIVR::TextureBrick *b = new FLIVR::TextureBrick(0, 0, (*bite)->x_size, (*bite)->y_size, (*bite)->z_size, 1, numb,
+                                                             (*bite)->x_start, (*bite)->y_start, (*bite)->z_start,
+                                                             (*bite)->x_size, (*bite)->y_size, (*bite)->z_size, bbox, tbox, dbox, (*bite)->id, (*bite)->offset, (*bite)->fsize);
+            tbrks.push_back(b);
+        }
 		bite++;
 	}
 
