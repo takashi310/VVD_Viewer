@@ -16675,7 +16675,22 @@ void VRenderVulkanView::OnMouse(wxMouseEvent& event)
 		}
 		else
 		{
-			m_scale_factor += wheel/1000.0;
+            double delta = wheel/1000.0;
+            if (m_free)
+            {
+                Vector pos(m_transx, m_transy, m_transz);
+                pos.normalize();
+                Vector ctr(m_ctrx, m_ctry, m_ctrz);
+                ctr -= delta * pos * m_radius * 10;//1000;
+                m_ctrx = ctr.x();
+                m_ctry = ctr.y();
+                m_ctrz = ctr.z();
+                m_scale_factor = m_radius/tan(d2r(m_aov/2.0)) / ( CalcCameraDistance() + (m_radius/tan(d2r(m_aov/2.0))/12.0) );
+            }
+            else
+                m_scale_factor += delta;
+
+			//m_scale_factor += wheel/1000.0;
 			if (m_scale_factor < 0.01)
 				m_scale_factor = 0.01;
 			wxString str = wxString::Format("%.0f", m_scale_factor*100.0);

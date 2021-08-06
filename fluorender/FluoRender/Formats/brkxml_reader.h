@@ -230,6 +230,14 @@ public:
     wstring getDataBlockPath(wstring datasetPathName, const vector<long>& gridPosition);
     wstring getAttributesPath(wstring pathName);
     wstring removeLeadingSlash(const wstring pathName);
+    
+    wstring getChannelName(int i)
+    {
+        wstring ret;
+        if (i >= 0 && i < m_chan_names.size())
+            ret = m_chan_names[i];
+        return ret;
+    }
 
 protected:
 	Nrrd* ConvertNrrd(int t, int c, bool get_max);
@@ -340,6 +348,8 @@ private:
 	};
 	vector<Landmark> m_landmarks;
 	wstring m_metadata_id;
+    
+    vector<wstring> m_chan_names;
 
 private:
 	ImageInfo ReadImageInfo(tinyxml2::XMLElement *seqNode);

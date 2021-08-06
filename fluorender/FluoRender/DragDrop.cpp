@@ -56,7 +56,8 @@ bool DnDFile::OnDropFiles(wxCoord x, wxCoord y, const wxArrayString &filenames)
             for (auto fn : filenames)
             {
                 wxDir dir(fn);
-                if (wxDirExists(fn) && dir.IsOpened())
+                wxString suffix = fn.Mid(fn.Find('.', true)).MakeLower();
+                if (wxDirExists(fn) && dir.IsOpened() && suffix != ".n5")
                 {
                     wxRegEx scdir_pattern("^s[0-9]+$");
                     wxString n;
@@ -88,40 +89,57 @@ bool DnDFile::OnDropFiles(wxCoord x, wxCoord y, const wxArrayString &filenames)
             if (flatfns.IsEmpty())
                 return false;
             
-			wxString filename = flatfns[0];
-			wxString suffix = filename.Mid(filename.Find('.', true)).MakeLower();
+            wxString proj_path;
+            wxArrayString volumes;
+            wxArrayString meshes;
+            for (wxString filename : flatfns)
+            {
+                wxString suffix = filename.Mid(filename.Find('.', true)).MakeLower();
+                if (suffix == ".vrp")
+                {
+                    if (m_view)
+                    {
+                        wxMessageBox("For project files, drag and drop to regions other than render views.");
+                        return false;
+                    }
+                    proj_path = filename;
+                }
+                else if (suffix == ".nrrd" ||
+                         suffix == ".tif" ||
+                         suffix == ".tiff" ||
+                         suffix == ".oib" ||
+                         suffix == ".oif" ||
+                         suffix == ".lsm" ||
+                         suffix == ".czi" ||
+                         suffix == ".xml" ||
+                         suffix == ".vvd" ||
+                         suffix == ".h5j" ||
+                         suffix == ".v3dpbd" ||
+                         suffix == ".zip" ||
+                         suffix == ".idi" ||
+                         suffix == ".n5" ||
+                         suffix == ".json" ||
+                         suffix == ".n5fs_ch")
+                {
+                    volumes.Add(filename);
+                }
+                else if (suffix == ".obj" || suffix == ".swc" || suffix == ".ply")
+                {
+                    meshes.Add(filename);
+                }
+            }
 
-			if (suffix == ".vrp")
+			if (!proj_path.IsEmpty())
 			{
-				if (m_view)
-				{
-					wxMessageBox("For project files, drag and drop to regions other than render views.");
-					return false;
-				}
-				vr_frame->OpenProject(filename);
+				vr_frame->OpenProject(proj_path);
 			}
-			else if (suffix == ".nrrd" ||
-				suffix == ".tif" ||
-				suffix == ".tiff" ||
-				suffix == ".oib" ||
-				suffix == ".oif" ||
-				suffix == ".lsm" ||
-                suffix == ".czi" ||
-				suffix == ".xml" ||
-				suffix == ".vvd" ||
-				suffix == ".h5j" ||
-				suffix == ".v3dpbd" ||
-				suffix == ".zip" ||
-				suffix == ".idi" ||
-                suffix == ".n5" ||
-                suffix == ".json" ||
-                suffix == ".n5fs_ch")
+			if (!volumes.IsEmpty())
 			{
-				vr_frame->LoadVolumes(flatfns, (VRenderView*)m_view);
+				vr_frame->LoadVolumes(volumes, (VRenderView*)m_view);
 			}
-			else if (suffix == ".obj" || suffix == ".swc" || suffix == ".ply")
+			if (!meshes.IsEmpty())
 			{
-				vr_frame->LoadMeshes(flatfns, (VRenderView*)m_view);
+				vr_frame->LoadMeshes(meshes, (VRenderView*)m_view);
 			}
 		}
 	}

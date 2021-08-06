@@ -1320,6 +1320,7 @@ void BRKXMLReader::loadFSN5()
 	sort(ch_dirs.begin(), ch_dirs.end(),
 		[](const wstring& x, const wstring& y) { return WSTOI(x.substr(1)) < WSTOI(y.substr(1)); });
 
+    m_chan_names = ch_dirs;
 
 	vector<vector<wstring>> relpaths;
 	for (int i = 0; i < ch_dirs.size(); i++) {

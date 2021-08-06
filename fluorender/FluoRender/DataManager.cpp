@@ -4,6 +4,7 @@
 #include <wx/progdlg.h>
 #include <wx/wfstream.h>
 #include <wx/txtstrm.h>
+#include <wx/zipstrm.h>
 #include <wx/url.h>
 #include <wx/file.h>
 #include <wx/stdpaths.h>
@@ -6909,6 +6910,51 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 	int i;
 	int result = 0;
 	BaseReader* reader = 0;
+    
+    wxString idi_metadata_path;
+    int idi_type = 0;
+    if (type == LOAD_TYPE_IDI)
+    {
+        wxString idi_volpath;
+        wxFileInputStream ist(pathname);
+        if (!ist.IsOk()) return result;
+        wxZipInputStream zstream(ist);
+        if (!zstream.IsOk()) return result;
+        
+        wxZipEntry *entry;
+        while (entry = zstream.GetNextEntry())
+        {
+            wxString ename = entry->GetName();
+            if (entry->IsDir())
+                continue;
+            if (ename.Mid(ename.Find(wxFileName::GetPathSeparator(), true)+1).StartsWith("."))
+                continue;
+            wxString ret = (wxStandardPaths::Get().GetTempDir() + wxFileName::GetPathSeparator() + ename).ToStdWstring();
+            wxString esuffix = ret.Mid(ret.Find('.', true)).MakeLower();
+            if (esuffix == ".nrrd" || esuffix == ".tif" || esuffix == ".xml")
+            {
+                if (esuffix == ".nrrd")
+                {
+                    idi_volpath = ret;
+                    idi_type = LOAD_TYPE_NRRD;
+                }
+                else if (esuffix == ".tif")
+                {
+                    idi_volpath = ret;
+                    idi_type = LOAD_TYPE_TIFF;
+                }
+                else if (esuffix == ".xml")
+                    idi_metadata_path = ret;
+                wxFileOutputStream file(ret);
+                if (!file.IsOk()) return result;
+                file.Write(zstream);
+            }
+        }
+        zstream.CloseEntry();
+        if (idi_volpath.IsEmpty() || idi_metadata_path.IsEmpty())
+            return result;
+        pathname = idi_volpath;
+    }
 
 	for (i=0; i<(int)m_reader_list.size(); i++)
 	{
@@ -6945,9 +6991,9 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 	else
 	{
 		//RGB tiff
-		if (type == LOAD_TYPE_TIFF)
+		if (type == LOAD_TYPE_TIFF || (type == LOAD_TYPE_IDI && idi_type == LOAD_TYPE_TIFF))
 			reader = new TIFReader();
-		else if (type == LOAD_TYPE_NRRD)
+		else if (type == LOAD_TYPE_NRRD || (type == LOAD_TYPE_IDI && idi_type == LOAD_TYPE_NRRD))
 			reader = new NRRDReader();
 		else if (type == LOAD_TYPE_OIB)
 			reader = new OIBReader();
@@ -7098,7 +7144,11 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 				BRKXMLReader* breader = (BRKXMLReader*)reader;
 				name = reader->GetDataName();
 				name = name.Mid(0, name.find_last_of(wxT('.')));
-				if(ch_num > 1) name += wxT("_Ch") + wxString::Format("%i", i);
+                wstring chan_name = breader->getChannelName(i);
+                if (!chan_name.empty())
+                    name += wxT("_") + chan_name;
+				else if(chan > 1)
+                    name += wxT("_Ch") + wxString::Format("%i", i);
 				pathname = filename;
 				breader->SetCurChan(i);
 				breader->SetCurTime(0);
@@ -7202,6 +7252,17 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 						vd->SetColor(white);
 				}
 			}
+            
+            if (type == LOAD_TYPE_IDI)
+            {
+                vd->ImportROITreeXML(idi_metadata_path.ToStdWstring());
+                if (!vd->ExportROITree().empty())
+                {
+                    vd->SetColormapMode(3);
+                    vd->SelectAllNamedROI();
+                    vd->SetIDColDispMode(2);
+                }
+            }
 			
 			m_latest_vols.push_back(vd);
 		}

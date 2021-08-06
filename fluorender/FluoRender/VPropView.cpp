@@ -230,8 +230,10 @@ wxPanel(parent, id, pos, size,style, name),
 		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
 	m_hi_shading_text = new wxTextCtrl(this, ID_HiShadingText, "0.00",
 		wxDefaultPosition, wxSize(60, 20), 0, vald_fp2);
-	sizer_r3->Add(m_hi_shading_text, 0, wxALIGN_CENTER);
-	sizer_r3->Add(m_hi_shading_sldr, 1, wxEXPAND);
+    m_hi_shading_sldr->Hide();
+    m_hi_shading_text->Hide();
+    //sizer_r3->Add(m_hi_shading_text, 0, wxALIGN_CENTER);
+	//sizer_r3->Add(m_hi_shading_sldr, 1, wxEXPAND);
 
 	//4th line
 	//alpha
