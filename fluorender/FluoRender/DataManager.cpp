@@ -7261,6 +7261,7 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
                     vd->SetColormapMode(3);
                     vd->SelectAllNamedROI();
                     vd->SetIDColDispMode(2);
+                    vd->SetAlpha(0.5);
                 }
             }
 			

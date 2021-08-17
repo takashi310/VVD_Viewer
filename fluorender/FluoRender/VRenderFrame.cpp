@@ -1157,8 +1157,24 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_V3DPBD, -1, -1, datasize, prefix);
             else if (suffix == ".idi")
                 ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_IDI, -1, -1, datasize, prefix);
-
-			if (ch_num > 1)
+            
+            
+            if (suffix == ".idi")
+            {
+                wxString group_name = vrv->AddGroup();
+                DataGroup* group = vrv->GetGroup(group_name);
+                if (group)
+                {
+                    VolumeData* vd = m_data_mgr.GetVolumeData(m_data_mgr.GetVolumeNum()-1);
+                    if (vd)
+                    {
+                        Color gamma(1.0, 1.0, 1.0);
+                        group->SetGammaAll(gamma);
+                        vrv->AddVolumeData(vd, group_name);
+                    }
+                }
+            }
+			else if (ch_num > 1)
 			{
 				wxString group_name = vrv->AddGroup();
 				DataGroup* group = vrv->GetGroup(group_name);
