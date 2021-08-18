@@ -49,6 +49,7 @@ DEALINGS IN THE SOFTWARE.
 #include <wx/event.h>
 #include <wx/srchctrl.h>
 #include <wx/thread.h>
+#include <wx/checklst.h>
 
 #include <vector>
 #include <stdarg.h>
@@ -1342,6 +1343,38 @@ private:
 	friend class VRenderView;
 };
 
+
+class LegendListCtrl : public wxListCtrl
+{
+    
+public:
+    LegendListCtrl(VRenderView* parent,
+                   wxWindowID id,
+                   const wxPoint& pos=wxDefaultPosition,
+                   const wxSize& size=wxDefaultSize,
+                   long style=wxLC_REPORT|wxLC_SINGLE_SEL|wxLC_NO_HEADER);
+    ~LegendListCtrl();
+    
+    wxString GetText(long item, int col);
+    
+private:
+    VRenderView* m_view;
+    
+private:
+    void OnItemSelected(wxListEvent& event);
+    void OnItemChecked(wxListEvent& event);
+    void OnItemUnchecked(wxListEvent& event);
+    void OnLeftDown(wxMouseEvent& event);
+    void OnScroll(wxScrollWinEvent& event);
+    void OnScroll(wxMouseEvent& event);
+    
+    DECLARE_EVENT_TABLE()
+protected:
+    wxSize GetSizeAvailableForScrollTarget(const wxSize& size) {
+        return size - GetEffectiveMinSize();
+    }
+};
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 class EXPORT_API VRenderView: public wxPanel
 {
@@ -1388,7 +1421,9 @@ public:
 		ID_PPIText,
 		ID_Searcher,
 		ID_SearchChk,
-		ID_Timer
+		ID_Timer,
+        ID_LegendBtn,
+        ID_LegendList
 	};
 
 	VRenderView(wxWindow* frame,
@@ -2087,6 +2122,9 @@ public:
 	double m_dft_scale_factor;
 
 	wxTimer *m_idleTimer;
+    
+    wxButton *m_legend_btn;
+    LegendListCtrl *m_legend_list;
 
 private:
 	//called when updated from bars
@@ -2150,6 +2188,9 @@ private:
 	void OnCapHeightTextChange(wxCommandEvent &event);
 	void OnSetOrgResButton(wxCommandEvent &event);
 	void OnSetDispResButton(wxCommandEvent &event);
+    
+    void OnLegendButton(wxCommandEvent &event);
+    void OnLegendList(wxCommandEvent &event);
 
 	void OnSaveDefault(wxCommandEvent &event);
 

@@ -17410,6 +17410,187 @@ void VRenderVulkanView::GetTiledViewQuadVerts(int tileid, vector<Vulkan2dRender:
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+BEGIN_EVENT_TABLE(LegendListCtrl, wxListCtrl)
+EVT_LIST_ITEM_SELECTED(wxID_ANY, LegendListCtrl::OnItemSelected)
+EVT_LIST_ITEM_CHECKED(wxID_ANY, LegendListCtrl::OnItemChecked)
+EVT_LIST_ITEM_UNCHECKED(wxID_ANY, LegendListCtrl::OnItemUnchecked)
+EVT_LEFT_DOWN(LegendListCtrl::OnLeftDown)
+EVT_SCROLLWIN(LegendListCtrl::OnScroll)
+EVT_MOUSEWHEEL(LegendListCtrl::OnScroll)
+END_EVENT_TABLE()
+
+LegendListCtrl::LegendListCtrl(
+                               VRenderView* parent,
+                               wxWindowID id,
+                               const wxPoint& pos,
+                               const wxSize& size,
+                               long style) :
+wxListCtrl(parent, id, pos, size, style)
+{
+    m_view = parent;
+    
+    SetEvtHandlerEnabled(false);
+    Freeze();
+    
+    if (m_view)
+    {
+        vector<wxString> choices;
+        vector<wxString> types;
+        vector<bool> disp_states;
+        for (int i = 0; i < m_view->GetDispVolumeNum(); i++)
+        {
+            VolumeData* vd = m_view->GetDispVolumeData(i);
+            if (vd)
+            {
+                choices.push_back(vd->GetName());
+                types.push_back("Volume");
+                disp_states.push_back(vd->GetLegend());
+            }
+        }
+        for (int i = 0; i < m_view->GetMeshNum(); i++)
+        {
+            MeshData* md = m_view->GetMeshData(i);
+            if (md)
+            {
+                choices.push_back(md->GetName());
+                types.push_back("Mesh");
+                disp_states.push_back(md->GetLegend());
+            }
+        }
+        
+        wxListItem itemCol;
+        itemCol.SetText("Name");
+        InsertColumn(0, itemCol);
+        itemCol.SetText("Type");
+        InsertColumn(1, itemCol);
+        EnableCheckBoxes(true);
+        for (int i = 0; i < choices.size(); i++)
+        {
+            InsertItem(i, choices[i]);
+            SetItem(i, 1, types[i]);
+            CheckItem(i, disp_states[i]);
+        }
+        SetColumnWidth(0, wxLIST_AUTOSIZE);
+        SetColumnWidth(1, 0);
+    }
+    
+    Thaw();
+    SetEvtHandlerEnabled(true);
+}
+
+LegendListCtrl::~LegendListCtrl()
+{
+    
+}
+
+wxString LegendListCtrl::GetText(long item, int col)
+{
+    wxListItem info;
+    info.SetId(item);
+    info.SetColumn(col);
+    info.SetMask(wxLIST_MASK_TEXT);
+    GetItem(info);
+    return info.GetText();
+}
+
+void LegendListCtrl::OnItemSelected(wxListEvent& event)
+{
+    SetItemState(event.GetIndex(), 0, wxLIST_STATE_SELECTED|wxLIST_STATE_FOCUSED);
+}
+
+void LegendListCtrl::OnItemChecked(wxListEvent& event)
+{
+    if (m_view)
+    {
+        wxString name = GetItemText(event.GetIndex(), 0);
+        wxString type = GetItemText(event.GetIndex(), 1);
+        if (type == "Volume")
+        {
+            for (int i = 0; i < m_view->GetDispVolumeNum(); i++)
+            {
+                VolumeData* vd = m_view->GetDispVolumeData(i);
+                if (vd && name == vd->GetName())
+                {
+                    vd->SetLegend(true);
+                }
+            }
+        }
+        else if (type == "Mesh")
+        {
+            for (int i = 0; i < m_view->GetMeshNum(); i++)
+            {
+                MeshData* md = m_view->GetMeshData(i);
+                if (md && name == md->GetName())
+                {
+                    md->SetLegend(true);
+                }
+            }
+        }
+        m_view->RefreshGL();
+    }
+}
+
+void LegendListCtrl::OnItemUnchecked(wxListEvent& event)
+{
+    if (m_view)
+    {
+        wxString name = GetItemText(event.GetIndex(), 0);
+        wxString type = GetItemText(event.GetIndex(), 1);
+        if (type == "Volume")
+        {
+            for (int i = 0; i < m_view->GetDispVolumeNum(); i++)
+            {
+                VolumeData* vd = m_view->GetDispVolumeData(i);
+                if (vd && name == vd->GetName())
+                {
+                    vd->SetLegend(false);
+                }
+            }
+        }
+        else if (type == "Mesh")
+        {
+            for (int i = 0; i < m_view->GetMeshNum(); i++)
+            {
+                MeshData* md = m_view->GetMeshData(i);
+                if (md && name == md->GetName())
+                {
+                    md->SetLegend(false);
+                }
+            }
+        }
+        m_view->RefreshGL();
+    }
+}
+
+void LegendListCtrl::OnLeftDown(wxMouseEvent& event)
+{
+    wxPoint pos = event.GetPosition();
+    int flags = wxLIST_HITTEST_ONITEM;
+    long item = HitTest(pos, flags, NULL);
+    if (item != -1)
+    {
+        wxString name = GetText(item, 0);
+        if (IsItemChecked(item))
+            CheckItem(item, false);
+        else
+            CheckItem(item, true);
+    }
+}
+
+void LegendListCtrl::OnScroll(wxScrollWinEvent& event)
+{
+    event.Skip(true);
+}
+
+void LegendListCtrl::OnScroll(wxMouseEvent& event)
+{
+    event.Skip(true);
+}
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 BEGIN_EVENT_TABLE(VRenderView, wxPanel)
 	//bar top
 	EVT_RADIOBUTTON(ID_VolumeSeqRd, VRenderView::OnVolumeMethodCheck)
@@ -17461,6 +17642,8 @@ BEGIN_EVENT_TABLE(VRenderView, wxPanel)
 	//reset
 	EVT_BUTTON(ID_DefaultBtn, VRenderView::OnSaveDefault)
 	EVT_TIMER(ID_Timer, VRenderView::OnAovSldrIdle)
+
+    EVT_BUTTON(ID_LegendBtn, VRenderView::OnLegendButton)
 
 	EVT_KEY_DOWN(VRenderView::OnKeyDown)
 	END_EVENT_TABLE()
@@ -17575,9 +17758,12 @@ void VRenderView::CreateBar()
 	m_fps_chk = new wxCheckBox(this, ID_FpsChk, "Info.",
 		wxDefaultPosition, wxSize(-1, 20));
 	m_fps_chk->SetValue(false);
-	m_legend_chk = new wxCheckBox(this, ID_LegendChk, "Legend",
-		wxDefaultPosition, wxSize(-1, 20));
-	m_legend_chk->SetValue(false);
+    m_legend_chk = new wxCheckBox(this, ID_LegendChk, "",
+                                  wxDefaultPosition, wxSize(-1, 20));
+    m_legend_chk->SetValue(false);
+    m_legend_btn = new wxButton(this, ID_LegendBtn, "Legend",
+                                 wxDefaultPosition, wxSize(60, 20));
+    m_legend_list = NULL;
 	m_intp_chk = new wxCheckBox(this, ID_IntpChk, "Intrp.",
 		wxDefaultPosition, wxSize(-1, 20));
 	m_intp_chk->SetValue(true);
@@ -17639,8 +17825,10 @@ void VRenderView::CreateBar()
 	sizer_h_1->Add(5, 5, 0);
 	sizer_h_1->Add(m_fps_chk, 0, wxALIGN_CENTER);
 	sizer_h_1->Add(5, 5, 0);
-	sizer_h_1->Add(m_legend_chk, 0, wxALIGN_CENTER);
-	sizer_h_1->Add(5, 5, 0);
+    sizer_h_1->Add(m_legend_chk, 0, wxALIGN_CENTER);
+	sizer_h_1->Add(m_legend_btn, 0, wxALIGN_CENTER);
+    m_legend_btn->Disable();
+	sizer_h_1->Add(10, 5, 0);
 	sizer_h_1->Add(m_intp_chk, 0, wxALIGN_CENTER);
 	sizer_h_1->Add(5, 5, 0);
 	//	sizer_h_1->Add(m_search_chk, 0, wxALIGN_CENTER);
@@ -19139,6 +19327,17 @@ void VRenderView::OnFpsCheck(wxCommandEvent& event)
 
 void VRenderView::OnLegendCheck(wxCommandEvent& event)
 {
+    if (!m_legend_chk->GetValue() && m_legend_list)
+    {
+        delete m_legend_list;
+        m_legend_list = NULL;
+    }
+    
+    if (m_legend_chk->GetValue())
+        m_legend_btn->Enable();
+    else
+        m_legend_btn->Disable();
+    
 	m_glview->m_draw_legend = m_legend_chk->GetValue();
 	RefreshGL();
 }
@@ -19277,6 +19476,75 @@ void VRenderView::OnPPIEdit(wxCommandEvent &event)
 		m_glview->m_min_ppi = val;
 		RefreshGL(true);
 	}
+}
+
+void VRenderView::OnLegendButton(wxCommandEvent &event)
+{
+    if (!m_legend_list)
+    {
+        if (m_glview)
+        {
+            vector<wxString> choices;
+            for (int i = 0; i < m_glview->GetDispVolumeNum(); i++)
+            {
+                VolumeData* vd = m_glview->GetDispVolumeData(i);
+                if (vd)
+                    choices.push_back(vd->GetName());
+            }
+            for (int i = 0; i < m_glview->GetMeshNum(); i++)
+            {
+                MeshData* md = m_glview->GetMeshData(i);
+                if (md)
+                    choices.push_back(md->GetName());
+            }
+            
+            wxSize view_size = this->GetSize();
+            
+            wxPoint pos = m_legend_btn->GetPosition();
+            pos.y += 20;
+            m_legend_list = new LegendListCtrl(this, wxID_ANY, pos, wxSize(300, 300));
+            
+            m_legend_list->SetColumnWidth(0, wxLIST_AUTOSIZE);
+            int w = m_legend_list->GetColumnWidth(0);
+            m_legend_list->SetColumnWidth(0, w+30);
+            
+            long height = 0L;
+            for (long i = 0; i < m_legend_list->GetItemCount(); i++)
+            {
+                wxRect rect;
+                m_legend_list->GetItemRect(i, rect);
+                height += rect.height;
+            }
+            int new_w = w + 30 + 30;
+            int new_h = height + 10;
+            if (pos.x + new_w > view_size.x)
+            {
+                pos.x = view_size.x - new_w;
+                if (pos.x < 0)
+                {
+                    pos.x = 0;
+                    new_w = view_size.x;
+                }
+            }
+            if (pos.y + new_h > view_size.y)
+            {
+                new_h = view_size.y - pos.y;
+            }
+            
+            m_legend_list->SetSize(pos.x, pos.y, new_w, new_h);
+            m_legend_list->Update();
+        }
+    }
+    else
+    {
+        delete m_legend_list;
+        m_legend_list = NULL;
+    }
+}
+
+void VRenderView::OnLegendList(wxCommandEvent &event)
+{
+    
 }
 
 void VRenderView::SaveDefault(unsigned int mask)
