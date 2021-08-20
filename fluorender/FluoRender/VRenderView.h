@@ -1348,7 +1348,8 @@ class LegendListCtrl : public wxListCtrl
 {
     
 public:
-    LegendListCtrl(VRenderView* parent,
+    LegendListCtrl(wxWindow* parent,
+                   VRenderView* view,
                    wxWindowID id,
                    const wxPoint& pos=wxDefaultPosition,
                    const wxSize& size=wxDefaultSize,
@@ -1356,6 +1357,13 @@ public:
     ~LegendListCtrl();
     
     wxString GetText(long item, int col);
+    void UpdateContents();
+    
+    void SetView(VRenderView* view)
+    {
+        m_view = view;
+        UpdateContents();
+    }
     
 private:
     VRenderView* m_view;
@@ -1373,6 +1381,44 @@ protected:
     wxSize GetSizeAvailableForScrollTarget(const wxSize& size) {
         return size - GetEffectiveMinSize();
     }
+};
+
+class EXPORT_API LegendPanel : public wxPanel
+{
+public:
+    enum
+    {
+        ID_SearchTextCtrl,
+        ID_DownloadBtn,
+        ID_DBTextCtrl,
+        ID_BrowseBtn,
+        ID_AddDBBtn
+    };
+    
+    LegendPanel(wxWindow* frame,
+                VRenderView* view);
+    ~LegendPanel();
+    
+    void SetViewAndReload(VRenderView* view)
+    {
+        m_view = view;
+        m_list->SetView(m_view);
+    }
+    VRenderView* GetView()
+    {
+        return m_view;
+    }
+    void Reload();
+    
+    wxSize GetListSize();
+    
+private:
+    wxWindow* m_frame;
+    //current view
+    VRenderView* m_view;
+    
+    LegendListCtrl *m_list;
+    
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -438,8 +438,9 @@ wxPanel(parent, id, pos, size,style, name),
 	//legend
 	m_legend_chk = new wxCheckBox(this, ID_LegendChk, "Legend:",
 		wxDefaultPosition, wxDefaultSize, wxALIGN_RIGHT);
-	sizer_b->Add(10, 5, 0);
-	sizer_b->Add(m_legend_chk, 0, wxALIGN_CENTER);
+    m_legend_chk->Hide();
+	//sizer_b->Add(10, 5, 0);
+	//sizer_b->Add(m_legend_chk, 0, wxALIGN_CENTER);
 
 	//mask
 	st = new wxStaticText(this, 0, "Mask:");

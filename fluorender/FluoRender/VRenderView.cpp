@@ -17419,21 +17419,49 @@ EVT_SCROLLWIN(LegendListCtrl::OnScroll)
 EVT_MOUSEWHEEL(LegendListCtrl::OnScroll)
 END_EVENT_TABLE()
 
-LegendListCtrl::LegendListCtrl(
-                               VRenderView* parent,
+LegendListCtrl::LegendListCtrl(wxWindow* parent,
+                               VRenderView* view,
                                wxWindowID id,
                                const wxPoint& pos,
                                const wxSize& size,
                                long style) :
 wxListCtrl(parent, id, pos, size, style)
 {
-    m_view = parent;
+    m_view = view;
     
     SetEvtHandlerEnabled(false);
     Freeze();
     
+    UpdateContents();
+    
+    Thaw();
+    SetEvtHandlerEnabled(true);
+}
+
+LegendListCtrl::~LegendListCtrl()
+{
+    
+}
+
+wxString LegendListCtrl::GetText(long item, int col)
+{
+    wxListItem info;
+    info.SetId(item);
+    info.SetColumn(col);
+    info.SetMask(wxLIST_MASK_TEXT);
+    GetItem(info);
+    return info.GetText();
+}
+
+void LegendListCtrl::UpdateContents()
+{
     if (m_view)
     {
+        SetEvtHandlerEnabled(false);
+        Freeze();
+        
+        DeleteAllItems();
+        
         vector<wxString> choices;
         vector<wxString> types;
         vector<bool> disp_states;
@@ -17472,25 +17500,10 @@ wxListCtrl(parent, id, pos, size, style)
         }
         SetColumnWidth(0, wxLIST_AUTOSIZE);
         SetColumnWidth(1, 0);
+        
+        Thaw();
+        SetEvtHandlerEnabled(true);
     }
-    
-    Thaw();
-    SetEvtHandlerEnabled(true);
-}
-
-LegendListCtrl::~LegendListCtrl()
-{
-    
-}
-
-wxString LegendListCtrl::GetText(long item, int col)
-{
-    wxListItem info;
-    info.SetId(item);
-    info.SetColumn(col);
-    info.SetMask(wxLIST_MASK_TEXT);
-    GetItem(info);
-    return info.GetText();
 }
 
 void LegendListCtrl::OnItemSelected(wxListEvent& event)
@@ -17587,6 +17600,54 @@ void LegendListCtrl::OnScroll(wxMouseEvent& event)
     event.Skip(true);
 }
 
+
+LegendPanel::LegendPanel(wxWindow* frame, VRenderView* view)
+: wxPanel(frame, wxID_ANY, wxDefaultPosition, wxSize(100, 100), 0, "Legend")
+{
+    m_frame = frame;
+    m_view = view;
+    
+    SetEvtHandlerEnabled(false);
+    Freeze();
+    
+    m_list = new LegendListCtrl(this, m_view, wxID_ANY, wxDefaultPosition, wxDefaultSize);
+    
+    //all controls
+    wxBoxSizer *sizerV = new wxBoxSizer(wxVERTICAL);
+    sizerV->Add(m_list, 1, wxEXPAND);
+    SetSizer(sizerV);
+    Layout();
+    
+    Thaw();
+    SetEvtHandlerEnabled(true);
+}
+
+LegendPanel::~LegendPanel()
+{
+    
+}
+
+void LegendPanel::Reload()
+{
+    m_list->UpdateContents();
+}
+
+wxSize LegendPanel::GetListSize()
+{
+    m_list->SetColumnWidth(0, wxLIST_AUTOSIZE);
+    int w = m_list->GetColumnWidth(0) + 30;
+    m_list->SetColumnWidth(0, w);
+    
+    long height = 0L;
+    for (long i = 0; i < m_list->GetItemCount(); i++)
+    {
+        wxRect rect;
+        m_list->GetItemRect(i, rect);
+        height += rect.height;
+    }
+    
+    return wxSize(w, height);
+}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19336,7 +19397,19 @@ void VRenderView::OnLegendCheck(wxCommandEvent& event)
     if (m_legend_chk->GetValue())
         m_legend_btn->Enable();
     else
+    {
         m_legend_btn->Disable();
+        if (m_glview && m_frame)
+        {
+            VRenderFrame* vframe = (VRenderFrame*) m_frame;
+            LegendPanel* lpanel = vframe->GetLegendPanel();
+            if (lpanel)
+            {
+                if (lpanel->GetView() == this && vframe->IsShownLegendPanel())
+                    vframe->HideLegendPanel();
+            }
+        }
+    }
     
 	m_glview->m_draw_legend = m_legend_chk->GetValue();
 	RefreshGL();
@@ -19480,65 +19553,36 @@ void VRenderView::OnPPIEdit(wxCommandEvent &event)
 
 void VRenderView::OnLegendButton(wxCommandEvent &event)
 {
-    if (!m_legend_list)
+    if (m_glview && m_frame)
     {
-        if (m_glview)
+        VRenderFrame* vframe = (VRenderFrame*) m_frame;
+        LegendPanel* lpanel = vframe->GetLegendPanel();
+        
+        if (lpanel)
         {
-            vector<wxString> choices;
-            for (int i = 0; i < m_glview->GetDispVolumeNum(); i++)
+            if (lpanel->GetView() == this && vframe->IsShownLegendPanel())
+                vframe->HideLegendPanel();
+            else
             {
-                VolumeData* vd = m_glview->GetDispVolumeData(i);
-                if (vd)
-                    choices.push_back(vd->GetName());
+                wxDisplay display(wxDisplay::GetFromWindow(m_legend_btn));
+                wxRect screen = display.GetClientArea();
+                
+                lpanel->SetViewAndReload(this);
+                wxSize panel_size = lpanel->GetListSize();
+                panel_size.x += 20;
+                panel_size.y += 20;
+                wxPoint pos = m_legend_btn->GetPosition();
+                pos.y += 20;
+                pos = ClientToScreen(pos);
+                if (panel_size.x > screen.GetWidth())
+                    panel_size.x = screen.GetWidth();
+                if (pos.x + panel_size.x > screen.GetWidth() )
+                    pos.x = screen.GetWidth() - panel_size.x;
+                if (pos.y + panel_size.y > screen.GetHeight() )
+                    panel_size.y = screen.GetHeight() - pos.y;
+                vframe->ShowLegendPanel(this, pos, panel_size);
             }
-            for (int i = 0; i < m_glview->GetMeshNum(); i++)
-            {
-                MeshData* md = m_glview->GetMeshData(i);
-                if (md)
-                    choices.push_back(md->GetName());
-            }
-            
-            wxSize view_size = this->GetSize();
-            
-            wxPoint pos = m_legend_btn->GetPosition();
-            pos.y += 20;
-            m_legend_list = new LegendListCtrl(this, wxID_ANY, pos, wxSize(300, 300));
-            
-            m_legend_list->SetColumnWidth(0, wxLIST_AUTOSIZE);
-            int w = m_legend_list->GetColumnWidth(0);
-            m_legend_list->SetColumnWidth(0, w+30);
-            
-            long height = 0L;
-            for (long i = 0; i < m_legend_list->GetItemCount(); i++)
-            {
-                wxRect rect;
-                m_legend_list->GetItemRect(i, rect);
-                height += rect.height;
-            }
-            int new_w = w + 30 + 30;
-            int new_h = height + 10;
-            if (pos.x + new_w > view_size.x)
-            {
-                pos.x = view_size.x - new_w;
-                if (pos.x < 0)
-                {
-                    pos.x = 0;
-                    new_w = view_size.x;
-                }
-            }
-            if (pos.y + new_h > view_size.y)
-            {
-                new_h = view_size.y - pos.y;
-            }
-            
-            m_legend_list->SetSize(pos.x, pos.y, new_w, new_h);
-            m_legend_list->Update();
         }
-    }
-    else
-    {
-        delete m_legend_list;
-        m_legend_list = NULL;
     }
 }
 

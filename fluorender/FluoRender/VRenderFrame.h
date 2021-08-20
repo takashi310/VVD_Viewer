@@ -261,6 +261,9 @@ public:
 	//database dialog
 	DatabaseDlg* GetDatabaseDlg()
 	{ return m_database_dlg; }
+    //legend panel
+    LegendPanel* GetLegendPanel()
+    { return m_legend_panel; }
 
 	//selection
 	int GetCurSelType()
@@ -347,6 +350,31 @@ public:
 	bool PluginExists(wxString name);
 	int UploadFileRemote(wxString url, wxString upfname, wxString loc_fpath, wxString usr, wxString pwd=wxString());
 	int DownloadFileRemote(wxString url, wxString dir, wxString usr=wxString(), wxString pwd=wxString());
+    
+    void ShowLegendPanel(VRenderView* view, const wxPoint pos, const wxSize size)
+    {
+        if (m_legend_panel)
+        {
+            m_aui_mgr.GetPane(m_legend_panel).FloatingSize(size).FloatingPosition(pos).Show().Float();
+            m_aui_mgr.Update();
+            m_legend_panel->SetSize(size);
+            m_legend_panel->Layout();
+        }
+    }
+    void HideLegendPanel()
+    {
+        if (m_legend_panel)
+        {
+            m_aui_mgr.GetPane(m_legend_panel).Hide();
+            m_aui_mgr.Update();
+        }
+    }
+    bool IsShownLegendPanel()
+    {
+        if (m_legend_panel)
+            return m_aui_mgr.GetPane(m_legend_panel).IsShown();
+        return false;
+    }
 	
 public: //public so export window can see it and set it. 
 	RecorderDlg* m_recorder_dlg;
@@ -382,6 +410,7 @@ private:
 	MeasureDlg* m_measure_dlg;
 	TraceDlg* m_trace_dlg;
 	DatabaseDlg *m_database_dlg;
+    LegendPanel *m_legend_panel;
 	VAnnoView *m_anno_view;
 	//prop panel children
 	wxBoxSizer* m_prop_sizer;

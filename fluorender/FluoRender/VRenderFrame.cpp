@@ -425,6 +425,8 @@ VRenderFrame::VRenderFrame(
 #ifdef WITH_DATABASE
 	m_database_dlg = new DatabaseDlg(this, this);
 #endif // WITH_DATABASE
+    
+    m_legend_panel = new LegendPanel(this, m_vrv_list[0]);
 
 	//help dialog
 	m_help_dlg = new HelpDlg(this, this);
@@ -532,6 +534,11 @@ VRenderFrame::VRenderFrame(
 	m_aui_mgr.GetPane(m_database_dlg).Float();
 	m_aui_mgr.GetPane(m_database_dlg).Hide();
 #endif // WITH_DATABASE
+    m_aui_mgr.AddPane(m_legend_panel, wxAuiPaneInfo().
+            Name("m_legend_panel").Caption("Legend").
+            Dockable(false).CloseButton(false));
+    m_aui_mgr.GetPane(m_legend_panel).Float();
+    m_aui_mgr.GetPane(m_legend_panel).Hide();
 	//settings
 	m_aui_mgr.AddPane(m_setting_dlg, wxAuiPaneInfo().
 		Name("m_setting_dlg").Caption("Settings").
