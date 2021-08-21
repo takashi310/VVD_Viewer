@@ -536,7 +536,7 @@ VRenderFrame::VRenderFrame(
 #endif // WITH_DATABASE
     m_aui_mgr.AddPane(m_legend_panel, wxAuiPaneInfo().
             Name("m_legend_panel").Caption("Legend").
-            Dockable(false).CloseButton(false));
+            Dockable(false).CloseButton(true));
     m_aui_mgr.GetPane(m_legend_panel).Float();
     m_aui_mgr.GetPane(m_legend_panel).Hide();
 	//settings

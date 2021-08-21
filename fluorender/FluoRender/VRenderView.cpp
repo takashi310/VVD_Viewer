@@ -17432,6 +17432,13 @@ wxListCtrl(parent, id, pos, size, style)
     SetEvtHandlerEnabled(false);
     Freeze();
     
+    wxListItem itemCol;
+    itemCol.SetText("Name");
+    InsertColumn(0, itemCol);
+    itemCol.SetText("Type");
+    InsertColumn(1, itemCol);
+    EnableCheckBoxes(true);
+    
     UpdateContents();
     
     Thaw();
@@ -17486,12 +17493,6 @@ void LegendListCtrl::UpdateContents()
             }
         }
         
-        wxListItem itemCol;
-        itemCol.SetText("Name");
-        InsertColumn(0, itemCol);
-        itemCol.SetText("Type");
-        InsertColumn(1, itemCol);
-        EnableCheckBoxes(true);
         for (int i = 0; i < choices.size(); i++)
         {
             InsertItem(i, choices[i]);
@@ -17645,6 +17646,8 @@ wxSize LegendPanel::GetListSize()
         m_list->GetItemRect(i, rect);
         height += rect.height;
     }
+    
+    m_list->SetSize(wxSize(w, height));
     
     return wxSize(w, height);
 }
@@ -19571,6 +19574,9 @@ void VRenderView::OnLegendButton(wxCommandEvent &event)
                 wxSize panel_size = lpanel->GetListSize();
                 panel_size.x += 20;
                 panel_size.y += 20;
+#ifdef _WIN32
+                panel_size.y += 25;
+#endif
                 wxPoint pos = m_legend_btn->GetPosition();
                 pos.y += 20;
                 pos = ClientToScreen(pos);
