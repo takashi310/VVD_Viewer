@@ -17589,6 +17589,7 @@ void LegendListCtrl::OnLeftDown(wxMouseEvent& event)
         else
             CheckItem(item, true);
     }
+    event.Skip(true);
 }
 
 void LegendListCtrl::OnScroll(wxScrollWinEvent& event)
