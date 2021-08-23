@@ -19572,21 +19572,25 @@ void VRenderView::OnLegendButton(wxCommandEvent &event)
                 
                 lpanel->SetViewAndReload(this);
                 wxSize panel_size = lpanel->GetListSize();
-                panel_size.x += 20;
-                panel_size.y += 20;
+                
+                if (panel_size.y > 0)
+                {
+                    panel_size.x += 20;
+                    panel_size.y += 20;
 #ifdef _WIN32
-                panel_size.y += 25;
+                    panel_size.y += 25;
 #endif
-                wxPoint pos = m_legend_btn->GetPosition();
-                pos.y += 20;
-                pos = ClientToScreen(pos);
-                if (panel_size.x > screen.GetWidth())
-                    panel_size.x = screen.GetWidth();
-                if (pos.x + panel_size.x > screen.GetWidth() )
-                    pos.x = screen.GetWidth() - panel_size.x;
-                if (pos.y + panel_size.y > screen.GetHeight() )
-                    panel_size.y = screen.GetHeight() - pos.y;
-                vframe->ShowLegendPanel(this, pos, panel_size);
+                    wxPoint pos = m_legend_btn->GetPosition();
+                    pos.y += 20;
+                    pos = ClientToScreen(pos);
+                    if (panel_size.x > screen.GetWidth())
+                        panel_size.x = screen.GetWidth();
+                    if (pos.x + panel_size.x > screen.GetWidth() )
+                        pos.x = screen.GetWidth() - panel_size.x;
+                    if (pos.y + panel_size.y > screen.GetHeight() )
+                        panel_size.y = screen.GetHeight() - pos.y;
+                    vframe->ShowLegendPanel(this, pos, panel_size);
+                }
             }
         }
     }
