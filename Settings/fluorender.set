@@ -31,7 +31,7 @@ value=_T
 [grad\ bg]
 value=0
 [override\ vox]
-value=1
+value=0
 [soft\ threshold]
 value=0
 [save\ cmp]
