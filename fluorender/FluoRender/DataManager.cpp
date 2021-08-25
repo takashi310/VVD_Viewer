@@ -145,7 +145,7 @@ VolumeData::VolumeData()
 	m_clip_dist_z = 0;
 
 	//legend
-	m_legend = true;
+	m_legend = false;
 	//interpolate
 	m_interpolate = true;
 
@@ -476,7 +476,7 @@ VolumeData* VolumeData::DeepCopy(VolumeData &copy, bool use_default_settings, Da
 		vd->m_skip_brick = false;
 
 		//legend
-		vd->m_legend = true;
+		vd->m_legend = false;
 
 		//interpolate
 		vd->m_interpolate = copy.m_interpolate;
@@ -3518,7 +3518,7 @@ VolumeData* VolumeData::CopyLevel(int lv)
 	vd->m_skip_brick = false;
 
 	//legend
-	vd->m_legend = true;
+	vd->m_legend = false;
 
 	vd->m_annotation = m_annotation;
 
@@ -4172,7 +4172,7 @@ m_data(0),
 	Color color(HSVColor(hue, sat, val));
 	m_mat_diff = color;
 
-	m_legend = true;
+	m_legend = false;
 
 	m_swc = false;
 	m_r_scale = 1.0;

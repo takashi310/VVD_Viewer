@@ -474,7 +474,7 @@ VRenderVulkanView::VRenderVulkanView(wxWindow* frame,
 	m_draw_frame(false),
 	m_test_speed(false),
 	m_draw_clip(false),
-	m_draw_legend(false),
+	m_draw_legend(true),
 	m_mouse_focus(false),
 	m_test_wiref(false),
 	m_draw_rulers(true),
@@ -17589,7 +17589,7 @@ void LegendListCtrl::OnLeftDown(wxMouseEvent& event)
         else
             CheckItem(item, true);
     }
-    event.Skip(true);
+    event.Skip(false);
 }
 
 void LegendListCtrl::OnScroll(wxScrollWinEvent& event)
@@ -17825,7 +17825,8 @@ void VRenderView::CreateBar()
 	m_fps_chk->SetValue(false);
     m_legend_chk = new wxCheckBox(this, ID_LegendChk, "",
                                   wxDefaultPosition, wxSize(-1, 20));
-    m_legend_chk->SetValue(false);
+    m_legend_chk->SetValue(true);
+    m_legend_chk->Hide();
     m_legend_btn = new wxButton(this, ID_LegendBtn, "Legend",
                                  wxDefaultPosition, wxSize(60, 20));
     m_legend_list = NULL;
@@ -17892,7 +17893,7 @@ void VRenderView::CreateBar()
 	sizer_h_1->Add(5, 5, 0);
     sizer_h_1->Add(m_legend_chk, 0, wxALIGN_CENTER);
 	sizer_h_1->Add(m_legend_btn, 0, wxALIGN_CENTER);
-    m_legend_btn->Disable();
+    //m_legend_btn->Disable();
 	sizer_h_1->Add(10, 5, 0);
 	sizer_h_1->Add(m_intp_chk, 0, wxALIGN_CENTER);
 	sizer_h_1->Add(5, 5, 0);
@@ -19768,7 +19769,7 @@ void VRenderView::LoadSettings()
 	if (fconfig.Read("legend_chk", &bVal))
 	{
 		m_legend_chk->SetValue(bVal);
-		m_glview->m_draw_legend = bVal;
+		m_glview->m_draw_legend = true;
 	}
 	if (fconfig.Read("search_chk", &bVal))
 	{

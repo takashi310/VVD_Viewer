@@ -5197,7 +5197,23 @@ void VRenderFrame::OpenProject(wxString& filename)
 				if (fconfig.Read("draw_legend", &bVal))
 				{
 					vrv->m_glview->m_draw_legend = bVal;
-					vrv->m_legend_chk->SetValue(bVal);
+                    if (!bVal)
+                    {
+                        int vnum = vrv->GetAllVolumeNum();
+                        for (int vid = 0; vid < vnum; vid++)
+                        {
+                            VolumeData* vd = vrv->GetAllVolumeData(vid);
+                            if (vd)
+                                vd->SetLegend(false);
+                        }
+                        int mnum = vrv->GetMeshNum();
+                        for (int mid = 0; mid < mnum; mid++)
+                        {
+                            MeshData* md = vrv->GetMeshData(mid);
+                            if (md)
+                                md->SetLegend(false);
+                        }
+                    }
 				}
 
 				//camera
