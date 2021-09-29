@@ -1585,7 +1585,7 @@ public:
 
 	bool DownloadToCurrentDir(wxString &filename);
 	//load volume
-	int LoadVolumeData(wxString &filename, int type, int ch_num=-1, int t_num=-1, size_t datasize = 0, wxString prefix = wxT(""));
+	int LoadVolumeData(wxString &filename, int type, int ch_num=-1, int t_num=-1, size_t datasize = 0, wxString prefix = wxT(""), wxString metadata = wxT(""));
 	//set default
 	void SetVolumeDefault(VolumeData* vd);
 	//load volume options

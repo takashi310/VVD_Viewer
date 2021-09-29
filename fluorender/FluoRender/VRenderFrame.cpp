@@ -452,7 +452,7 @@ VRenderFrame::VRenderFrame(
 		FloatingSize(wxSize(320, 300)).Layer(3));
 	m_aui_mgr.AddPane(m_movie_view, wxAuiPaneInfo().
 		Name("m_movie_view").Caption(UITEXT_MAKEMOVIE).
-		Left().CloseButton(true).MinSize(wxSize(320, 300)).
+		Left().CloseButton(true).MinSize(wxSize(320, 330)).
 		FloatingSize(wxSize(320, 300)).Layer(3));
     m_aui_mgr.AddPane(m_measure_dlg, wxAuiPaneInfo().
         Name("m_measure_dlg").Caption(UITEXT_MEASUREMENT).
@@ -1113,6 +1113,53 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
 		vrv = view;
 	else
 		vrv = GetView(0);
+    
+    wxArrayString tmpfiles;
+    wxArrayString metadatafiles;
+    for (j=0; j<(int)files.Count(); j++)
+    {
+        wxString suffix = files[j].Mid(files[j].Find('.', true)).MakeLower();
+        if (suffix==".n5" || suffix==".json" || suffix==".xml")
+        {
+            vector<wstring> n5paths;
+            BRKXMLReader::GetN5ChannelPaths(files[j].ToStdWstring(), n5paths);
+#ifdef _WIN32
+            wchar_t slash = L'\\';
+#else
+            wchar_t slash = L'/';
+#endif
+            wxArrayString list;
+            for (wstring &p : n5paths)
+            {
+                wxString data_name = p.substr(p.find_last_of(slash)+1);
+                list.Add(data_name);
+            }
+            
+            DatasetSelectionDialog dsdlg(this, wxID_ANY, files[j], list, wxDefaultPosition, wxSize(500, 600));
+            
+            if (dsdlg.ShowModal() == wxID_OK)
+            {
+                for (int i = 0; i < dsdlg.GetDatasetNum(); i++)
+                {
+                    if (dsdlg.isDatasetSelected(i))
+                    {
+                        tmpfiles.Add(n5paths[i] + L".n5fs_ch");
+                        if (suffix==".json" || suffix==".xml")
+                            metadatafiles.Add(files[j]);
+                        else
+                            metadatafiles.Add(wxEmptyString);
+                    }
+                }
+            }
+        }
+        else
+        {
+            tmpfiles.Add(files[j]);
+            metadatafiles.Add(wxEmptyString);
+        }
+    }
+    
+    files = tmpfiles;
 
 	wxProgressDialog *prg_diag = 0;
 	if (vrv)
@@ -1154,10 +1201,10 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_LSM, -1, -1, datasize, prefix);
             else if (suffix==".czi")
                 ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_CZI, -1, -1, datasize, prefix);
-			else if (suffix==".xml")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_PVXML, -1, -1, datasize, prefix);
-			else if (suffix==".vvd" || suffix==".n5" || suffix==".json" || suffix==".n5fs_ch")
-				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_BRKXML, -1, -1, datasize, prefix);
+			//else if (suffix==".xml")
+			//	ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_PVXML, -1, -1, datasize, prefix);
+			else if (suffix==".vvd" || suffix==".n5" || suffix==".json" || suffix==".n5fs_ch" || suffix==".xml")
+				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_BRKXML, -1, -1, datasize, prefix, metadatafiles[j]);
 			else if (suffix == ".h5j")
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_H5J, -1, -1, datasize, prefix);
 			else if (suffix == ".v3dpbd")
@@ -3701,9 +3748,9 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_LSM, cur_chan, cur_time);
                     else if (suffix == ".czi")
                         loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_CZI, cur_chan, cur_time);
-					else if (suffix == ".xml")
-						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_PVXML, cur_chan, cur_time);
-					else if (suffix == ".vvd" || suffix == ".n5" || suffix == ".json")
+					//else if (suffix == ".xml")
+					//	loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_PVXML, cur_chan, cur_time);
+					else if (suffix == ".vvd" || suffix == ".n5" || suffix == ".json" || suffix==".xml")
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_BRKXML, cur_chan, cur_time);
 					else if (suffix == ".h5j")
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_H5J, cur_chan, cur_time);
@@ -6539,3 +6586,187 @@ void VRenderFrame::OnKeyDown(wxKeyEvent& event)
 	event.Skip();
 }
 
+
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+BEGIN_EVENT_TABLE(DatasetListCtrl, wxListCtrl)
+EVT_LIST_ITEM_SELECTED(wxID_ANY, DatasetListCtrl::OnItemSelected)
+EVT_LEFT_DOWN(DatasetListCtrl::OnLeftDown)
+EVT_SCROLLWIN(DatasetListCtrl::OnScroll)
+EVT_MOUSEWHEEL(DatasetListCtrl::OnScroll)
+END_EVENT_TABLE()
+
+DatasetListCtrl::DatasetListCtrl(wxWindow* parent,
+                               wxWindowID id,
+                               const wxArrayString& list,
+                               const wxPoint& pos,
+                               const wxSize& size,
+                               long style) :
+wxListCtrl(parent, id, pos, size, style)
+{
+    SetEvtHandlerEnabled(false);
+    Freeze();
+    
+    wxListItem itemCol;
+    itemCol.SetText("Name");
+    InsertColumn(0, itemCol);
+    EnableCheckBoxes(true);
+    
+    for (int i = 0; i < list.size(); i++)
+    {
+        InsertItem(i, list[i]);
+        CheckItem(i, false);
+    }
+    
+    Thaw();
+    SetEvtHandlerEnabled(true);
+    
+    SetColumnWidth(0, 460);
+}
+
+DatasetListCtrl::~DatasetListCtrl()
+{
+    
+}
+
+void DatasetListCtrl::SelectAllDataset()
+{
+    for (long i = 0; i < GetItemCount(); i++)
+        CheckItem(i, true);
+}
+
+bool DatasetListCtrl::isDatasetSelected(int id)
+{
+    if (id >= 0 && id < GetItemCount())
+        return IsItemChecked(id);
+    else
+        return false;
+}
+
+wxString DatasetListCtrl::GetDatasetName(int id)
+{
+    if (id < 0 || id >= GetItemCount())
+        return GetText(id, 0);
+    else
+        return wxEmptyString;
+}
+
+wxString DatasetListCtrl::GetText(long item, int col)
+{
+    wxListItem info;
+    info.SetId(item);
+    info.SetColumn(col);
+    info.SetMask(wxLIST_MASK_TEXT);
+    GetItem(info);
+    return info.GetText();
+}
+
+void DatasetListCtrl::OnItemSelected(wxListEvent& event)
+{
+    SetItemState(event.GetIndex(), 0, wxLIST_STATE_SELECTED|wxLIST_STATE_FOCUSED);
+}
+
+void DatasetListCtrl::OnLeftDown(wxMouseEvent& event)
+{
+    wxPoint pos = event.GetPosition();
+    int flags = wxLIST_HITTEST_ONITEM;
+    long item = HitTest(pos, flags, NULL);
+    if (item != -1)
+    {
+        wxString name = GetText(item, 0);
+        if (IsItemChecked(item))
+            CheckItem(item, false);
+        else
+            CheckItem(item, true);
+    }
+    event.Skip(false);
+}
+
+void DatasetListCtrl::OnScroll(wxScrollWinEvent& event)
+{
+    event.Skip(true);
+}
+
+void DatasetListCtrl::OnScroll(wxMouseEvent& event)
+{
+    event.Skip(true);
+}
+
+BEGIN_EVENT_TABLE( DatasetSelectionDialog, wxDialog )
+EVT_BUTTON( ID_SelectAllButton, DatasetSelectionDialog::OnSelectAllButtonClick )
+EVT_BUTTON( wxID_OK, DatasetSelectionDialog::OnOk )
+END_EVENT_TABLE()
+
+DatasetSelectionDialog::DatasetSelectionDialog(wxWindow* parent, wxWindowID id, const wxString &title, const wxArrayString& list,
+                               const wxPoint &pos, const wxSize &size, long style)
+: wxDialog (parent, id, title, pos, size, style)
+{
+    
+    SetEvtHandlerEnabled(false);
+    Freeze();
+    
+    wxBoxSizer* itemBoxSizer = new wxBoxSizer(wxVERTICAL);
+    
+    wxBoxSizer *sizer1 = new wxBoxSizer(wxVERTICAL);
+    wxStaticText *st = new wxStaticText(this, 0, "Choose N5 datasets", wxDefaultPosition, wxDefaultSize, wxALIGN_RIGHT);
+    m_list = new DatasetListCtrl(this, wxID_ANY, list, wxDefaultPosition, wxSize(480, 500));
+    sizer1->Add(st, 0, wxALIGN_CENTER);
+    sizer1->Add(5,10);
+    sizer1->Add(m_list, 1, wxEXPAND);
+    sizer1->Add(5,10);
+    itemBoxSizer->Add(5, 5);
+    itemBoxSizer->Add(sizer1, 1, wxEXPAND);
+    
+    wxBoxSizer *sizerb = new wxBoxSizer(wxHORIZONTAL);
+    wxButton *b = new wxButton(this, wxID_OK, _("OK"), wxDefaultPosition, wxDefaultSize);
+    wxButton *c = new wxButton(this, wxID_CANCEL, _("Cancel"), wxDefaultPosition, wxDefaultSize);
+    sizerb->Add(5,10);
+    sizerb->Add(b);
+    sizerb->Add(5,10);
+    sizerb->Add(c);
+    sizerb->Add(10,10);
+    itemBoxSizer->Add(10, 10);
+    itemBoxSizer->Add(sizerb, 0, wxALIGN_RIGHT);
+    itemBoxSizer->Add(10, 10);
+    
+    SetSizer(itemBoxSizer);
+    
+    Thaw();
+    SetEvtHandlerEnabled(true);
+}
+
+int DatasetSelectionDialog::GetDatasetNum()
+{
+    return m_list ? m_list->GetItemCount() : 0;
+}
+
+bool DatasetSelectionDialog::isDatasetSelected(int id)
+{
+    return m_list ? m_list->isDatasetSelected(id) : false;
+}
+
+wxString DatasetSelectionDialog::GetDatasetName(int id)
+{
+    if (m_list)
+        return m_list->GetDatasetName(id);
+    else
+        return wxEmptyString;
+}
+
+void DatasetSelectionDialog::OnSelectAllButtonClick( wxCommandEvent& event )
+{
+    if (m_list)
+        m_list->SelectAllDataset();
+}
+
+void DatasetSelectionDialog::OnOk( wxCommandEvent& event )
+{
+    event.Skip();
+}
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////

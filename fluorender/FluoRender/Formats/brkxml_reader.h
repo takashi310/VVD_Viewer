@@ -4,6 +4,7 @@
 #include <vector>
 #include <base_reader.h>
 #include <FLIVR/TextureBrick.h>
+#include <FLIVR/Transform.h>
 #include <tinyxml2.h>
 #include <memory>
 
@@ -223,6 +224,7 @@ public:
 	tinyxml2::XMLDocument *GetMetadataXMLDoc() {return &m_md_doc;}
     
 	void loadFSN5();
+    void SetBDVMetadataPath(const wstring path) { m_bdv_metadata_path = path; }
 	DatasetAttributes* parseDatasetMetadata(wstring jpath);
     map<wstring, wstring> getAttributes(wstring pathName);
     DataBlock readBlock(wstring pathName, const DatasetAttributes& datasetAttributes, const vector<long> gridPosition);
@@ -238,6 +240,10 @@ public:
             ret = m_chan_names[i];
         return ret;
     }
+    
+    FLIVR::Transform GetBDVTransform(int setup = -1, int timepoint = -1);
+    
+    static bool GetN5ChannelPaths(wstring n5path, vector<wstring> &output);
 
 protected:
 	Nrrd* ConvertNrrd(int t, int c, bool get_max);
@@ -304,6 +310,9 @@ private:
         int maskLv;
 	};
 	ImageInfo m_imageinfo;
+    
+    vector<vector<double>> m_bdv_resolutions;
+    vector<vector<FLIVR::Transform>> m_bdv_view_transforms;
 
 	int m_file_type;
 
@@ -350,6 +359,9 @@ private:
 	wstring m_metadata_id;
     
     vector<wstring> m_chan_names;
+    
+    wstring m_bdv_metadata_path;
+    int m_bdv_setup_id;
 
 private:
 	ImageInfo ReadImageInfo(tinyxml2::XMLElement *seqNode);
@@ -359,6 +371,11 @@ private:
 	void ReadPackedBricks(tinyxml2::XMLElement* packNode, vector<BrickInfo *> &brks);
 	void Readbox(tinyxml2::XMLElement *boxNode, double &x0, double &y0, double &z0, double &x1, double &y1, double &z1);
 	void ReadPyramid(tinyxml2::XMLElement *lvRootNode, vector<LevelInfo> &pylamid);
+    
+    static string ReadBDVFilePath(tinyxml2::XMLDocument& xXmlDocument);
+    void ReadBDVResolutions(tinyxml2::XMLDocument& xXmlDocument, vector<vector<double>> &resolutions);
+    void ReadBDVViewRegistrations(tinyxml2::XMLDocument& xXmlDocument, vector<vector<FLIVR::Transform>> &transforms);
+    void ReadResolutionPyramidFromSingleN5Dataset(wstring root_dir, int f, int c, vector<double> pix_res);
 
 	void Clear();
 };

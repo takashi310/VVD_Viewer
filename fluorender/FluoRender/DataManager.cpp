@@ -6868,7 +6868,7 @@ bool DataManager::DownloadToCurrentDir(wxString &filename)
 	return true;
 }
 
-int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_num, size_t datasize, wxString prefix)
+int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_num, size_t datasize, wxString prefix, wxString metadata)
 {
 	wxString pathname = filename;
 	bool isURL = false;
@@ -6986,7 +6986,18 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 			preprocess = true;
 		}
 		if (preprocess)
+        {
+            if (type == LOAD_TYPE_BRKXML)
+            {
+                wxString msuffix = metadata.Mid(metadata.Find('.', true)).MakeLower();
+                if (msuffix.compare(".xml") == 0)
+                {
+                    BRKXMLReader* br = (BRKXMLReader *)reader;
+                    br->SetBDVMetadataPath(metadata.ToStdWstring().c_str());
+                }
+            }
 			reader->Preprocess();
+        }
 	}
 	else
 	{
@@ -7031,7 +7042,16 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 			wstring dir_name = str_w.substr(0, str_w.find_last_of(slash)+1);
 			((BRKXMLReader *)reader)->SetDir(str_w);
 		}
-
+        
+        if (type == LOAD_TYPE_BRKXML)
+        {
+            wxString suffix = metadata.Mid(metadata.Find('.', true)).MakeLower();
+            if (suffix.compare(".xml") == 0)
+            {
+                BRKXMLReader* br = (BRKXMLReader *)reader;
+                br->SetBDVMetadataPath(metadata.ToStdWstring().c_str());
+            }
+        }
 		reader->Preprocess();
 
 		if (type == LOAD_TYPE_BRKXML && !((BRKXMLReader *)reader)->GetExMetadataURL().empty())
@@ -7264,6 +7284,27 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
                     vd->SetAlpha(0.5);
                 }
             }
+            
+            if (type == LOAD_TYPE_BRKXML)
+            {
+                wxString msuffix = metadata.Mid(metadata.Find('.', true)).MakeLower();
+                if (msuffix.compare(".xml") == 0)
+                {
+                    BRKXMLReader* br = (BRKXMLReader *)reader;
+                    Transform bdv_tranform;
+                    if (suffix == ".n5fs_ch")
+                        bdv_tranform = br->GetBDVTransform();
+                    else
+                        bdv_tranform = br->GetBDVTransform(i, t_num>=0?t_num:reader->GetCurTime());
+                    Texture* tex = vd->GetTexture();
+                    if (tex)
+                    {
+                        Transform* tform = tex->transform();
+                        tform->post_trans(bdv_tranform);
+                        tex->set_additional_transform(bdv_tranform);
+                    }
+                }
+            }
 			
 			m_latest_vols.push_back(vd);
 		}
@@ -7290,7 +7331,7 @@ int DataManager::LoadMeshData(wxString &filename, wxString prefix)
 	md->Load(pathname);
 
 	wxString name = md->GetName();
-    wxString new_name = prefix + wxT("_") + name;
+    wxString new_name = (prefix.IsEmpty() ? wxT("") : prefix + wxT("_")) + name;
 	int i;
 	for (i=1; CheckNames(new_name, DATA_MESH); i++)
 		new_name = name+wxString::Format("_%d", i);

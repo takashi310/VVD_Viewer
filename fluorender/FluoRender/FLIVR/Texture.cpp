@@ -86,6 +86,8 @@ namespace FLIVR
 		}
 
 		bricks_ = &default_vec_;
+        
+        additional_transform_.load_identity();
 	}
 
 	Texture::~Texture()
@@ -431,6 +433,7 @@ namespace FLIVR
 			tform.load_identity();
 			Point nmax(nx_*x, ny_*y, -nz_*z);
 			tform.pre_scale(Vector(nmax));
+            tform.post_trans(additional_transform_);
 			set_transform(tform);
 		}
 		else
@@ -442,6 +445,7 @@ namespace FLIVR
 			tform.load_identity();
 			Point nmax(nx_*spcx_*s_spcx_, ny_*spcy_*s_spcy_, -nz_*spcz_*s_spcz_);
 			tform.pre_scale(Vector(nmax));
+            tform.post_trans(additional_transform_);
 			set_transform(tform);
 		}
 	}
@@ -461,6 +465,7 @@ namespace FLIVR
 			tform.load_identity();
 			Point nmax(nx_*x, ny_*y, -nz_*z);
 			tform.pre_scale(Vector(nmax));
+            tform.post_trans(additional_transform_);
 			set_transform(tform);
 		}
 	}
@@ -1037,6 +1042,7 @@ namespace FLIVR
 		tform.load_identity();
 		Point nmax(nx_*spcx_*s_spcx_, ny_*spcy_*s_spcy_, -nz_*spcz_*s_spcz_);
 		tform.pre_scale(Vector(nmax));
+        tform.post_trans(additional_transform_);
 		set_transform(tform);
 		set_sort_bricks();
 	}

@@ -1413,7 +1413,15 @@ namespace FLIVR
 		v.safe_normalize();
 		Transform mv;
 		mv.set_trans(mvmat);
-		Point p = field_trans->unproject(mv.unproject(Point(0,0,0)));
+        
+        Transform field_trans_tr = *field_trans;
+        field_trans_tr.get_trans(mvmat);
+        swap(mvmat[3], mvmat[12]);
+        swap(mvmat[7], mvmat[13]);
+        swap(mvmat[11], mvmat[14]);
+        field_trans_tr.set(mvmat);
+        
+		Point p = field_trans_tr.unproject(mv.unproject(Point(0,0,0)));
 		return Ray(p, v);
 	}
 
@@ -1526,11 +1534,15 @@ namespace FLIVR
 
 	bool TextureRenderer::test_against_view(const BBox &bbox, bool persp)
 	{
+        if (!tex_)
+            return false;
+        
 		memcpy(mvmat_, glm::value_ptr(m_mv_mat2), 16*sizeof(float));
 		memcpy(prmat_, glm::value_ptr(m_proj_mat), 16*sizeof(float));
 
 		Transform mv;
 		Transform pr;
+        Transform ttr;
 		mv.set_trans(mvmat_);
 		pr.set_trans(prmat_);
 

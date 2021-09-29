@@ -69,6 +69,8 @@ BRKXMLReader::BRKXMLReader()
 
    m_copy_lv = -1;
    m_mask_lv = -1;
+    
+    m_bdv_setup_id = -1;
 }
 
 BRKXMLReader::~BRKXMLReader()
@@ -231,7 +233,7 @@ void BRKXMLReader::Preprocess()
     wstring ext = m_path_name.substr(ext_pos+1);
     transform(ext.begin(), ext.end(), ext.begin(), towlower);
     
-    if (ext == L"n5" || ext == L"json" || ext == L"n5fs_ch") {
+    if (ext.compare(L"n5") || ext.compare(L"json") || ext.compare(L"n5fs_ch") || ext.compare(L"xml")) {
         loadFSN5();
     }
     else if (ext == L"vvd") {
@@ -1275,12 +1277,6 @@ void BRKXMLReader::loadFSN5()
 	boost::filesystem::path::imbue(std::locale(std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
 	boost::filesystem::path root_path(m_dir_name);
 
-#ifdef _WIN32
-	wchar_t slash = L'\\';
-#else
-	wchar_t slash = L'/';
-#endif
-
 	vector<double> pix_res(3, 1.0);
 	auto root_attrpath = root_path / "attributes.json";
 	std::ifstream ifs(root_attrpath.string());
@@ -1293,7 +1289,49 @@ void BRKXMLReader::loadFSN5()
     directory_iterator end_itr; // default construction yields past-the-end
     vector<wstring> ch_dirs;
     if (file_path.extension() == ".n5fs_ch") {
-        ch_dirs.push_back((file_path.stem()).generic_wstring());
+        ch_dirs.push_back(file_path.stem().wstring());
+        if (!m_bdv_metadata_path.empty())
+        {
+            wstring ch_name = file_path.stem().wstring();
+            std::regex chdir_pattern("^setup\\d+$");
+            if (regex_match(ws2s(ch_name), chdir_pattern))
+            {
+                m_bdv_setup_id = WSTOI(ch_name.substr(5));
+                tinyxml2::XMLDocument xmldoc;
+                if (xmldoc.LoadFile(ws2s(m_bdv_metadata_path).c_str()) != 0){
+                    return;
+                }
+                ReadBDVResolutions(xmldoc, m_bdv_resolutions);
+                ReadBDVViewRegistrations(xmldoc, m_bdv_view_transforms);
+                
+                if (m_bdv_resolutions.size() > m_bdv_setup_id && m_bdv_resolutions[m_bdv_setup_id].size() >= 3)
+                {
+                    pix_res[0] = m_bdv_resolutions[m_bdv_setup_id][0];
+                    pix_res[1] = m_bdv_resolutions[m_bdv_setup_id][1];
+                    pix_res[2] = m_bdv_resolutions[m_bdv_setup_id][2];
+                }
+            }
+        }
+    }
+    else if (file_path.extension() == ".xml") {
+        m_bdv_metadata_path = file_path.wstring();
+        tinyxml2::XMLDocument xmldoc;
+        if (xmldoc.LoadFile(file_path.c_str()) != 0){
+            return;
+        }
+        string r_n5path = ReadBDVFilePath(xmldoc);
+        ReadBDVResolutions(xmldoc, m_bdv_resolutions);
+        ReadBDVViewRegistrations(xmldoc, m_bdv_view_transforms);
+        root_path = root_path / r_n5path;
+        std::regex chdir_pattern("^setup\\d+$");
+        for (directory_iterator itr(root_path); itr != end_itr; ++itr)
+        {
+            if (is_directory(itr->status()))
+            {
+                if (regex_match(itr->path().filename().string(), chdir_pattern))
+                    ch_dirs.push_back(itr->path().filename().wstring());
+            }
+        }
     }
     else
     {
@@ -1324,202 +1362,36 @@ void BRKXMLReader::loadFSN5()
 
 	vector<vector<wstring>> relpaths;
 	for (int i = 0; i < ch_dirs.size(); i++) {
-		vector<wstring> scale_dirs;
-		std::regex scdir_pattern("^s\\d+$");
-		for (directory_iterator itr(root_path / ch_dirs[i]); itr != end_itr; ++itr)
-		{
-			if (is_directory(itr->status()))
-			{
-				if (regex_match(itr->path().filename().string(), scdir_pattern))
-					scale_dirs.push_back(itr->path().filename().wstring());
-			}
-		}
-
-		if (scale_dirs.empty())
-			continue;
-
-		sort(scale_dirs.begin(), scale_dirs.end(),
-			[](const wstring& x, const wstring& y) { return WSTOI(x.substr(1)) < WSTOI(y.substr(1)); });
-
-		int orgw = 0;
-		int orgh = 0;
-		int orgd = 0;
-		if (m_pyramid.size() < scale_dirs.size())
-			m_pyramid.resize(scale_dirs.size());
-		for (int j = 0; j < scale_dirs.size(); j++) {
-			auto attrpath = root_path / ch_dirs[i] / scale_dirs[j] / "attributes.json";
-			DatasetAttributes* attr = parseDatasetMetadata(attrpath.wstring());
-
-			LevelInfo& lvinfo = m_pyramid[j];
-			if (i == 0) {
-				lvinfo.imageW = attr->m_dimensions[0];
-
-				lvinfo.imageH = attr->m_dimensions[1];
-
-				lvinfo.imageD = attr->m_dimensions[2];
-
-				if (i == 0 && j == 0) {
-					orgw = lvinfo.imageW;
-					orgh = lvinfo.imageH;
-					orgd = lvinfo.imageD;
-				}
-
-				lvinfo.file_type = attr->m_compression;
-                lvinfo.blosc_ctype = attr->m_blosc_param.ctype;
-                lvinfo.blosc_clevel = attr->m_blosc_param.clevel;
-                lvinfo.blosc_suffle = attr->m_blosc_param.suffle;
-                lvinfo.blosc_blocksize = attr->m_blosc_param.blocksize;
-
-				if (attr->m_pix_res[0] > 0.0)
-					lvinfo.xspc = attr->m_pix_res[0];
-				else
-					lvinfo.xspc = pix_res[0] / ((double)lvinfo.imageW / orgw);
-
-				if (attr->m_pix_res[1] > 0.0)
-					lvinfo.yspc = attr->m_pix_res[1];
-				else
-					lvinfo.yspc = pix_res[1] / ((double)lvinfo.imageH / orgh);
-
-				if (attr->m_pix_res[2] > 0.0)
-					lvinfo.zspc = attr->m_pix_res[2];
-				else
-					lvinfo.zspc = pix_res[2] / ((double)lvinfo.imageD / orgd);
-
-				lvinfo.bit_depth = attr->m_dataType;
-
-				lvinfo.brick_baseW = attr->m_blockSize[0];
-
-				lvinfo.brick_baseH = attr->m_blockSize[1];
-
-				lvinfo.brick_baseD = attr->m_blockSize[2];
-
-				vector<wstring> lvpaths;
-				int ii, jj, kk;
-				int mx, my, mz, mx2, my2, mz2, ox, oy, oz;
-				double tx0, ty0, tz0, tx1, ty1, tz1;
-				double bx1, by1, bz1;
-				double dx0, dy0, dz0, dx1, dy1, dz1;
-				const int overlapx = 0;
-				const int overlapy = 0;
-				const int overlapz = 0;
-				size_t count = 0;
-				size_t zcount = 0;
-				for (kk = 0; kk < lvinfo.imageD; kk += lvinfo.brick_baseD)
-				{
-					if (kk) kk -= overlapz;
-					size_t ycount = 0;
-					for (jj = 0; jj < lvinfo.imageH; jj += lvinfo.brick_baseH)
-					{
-						if (jj) jj -= overlapy;
-						size_t xcount = 0;
-						for (ii = 0; ii < lvinfo.imageW; ii += lvinfo.brick_baseW)
-						{
-							BrickInfo* binfo = new BrickInfo();
-
-							if (ii) ii -= overlapx;
-							mx = min(lvinfo.brick_baseW, lvinfo.imageW - ii);
-							my = min(lvinfo.brick_baseH, lvinfo.imageH - jj);
-							mz = min(lvinfo.brick_baseD, lvinfo.imageD - kk);
-
-							mx2 = mx;
-							my2 = my;
-							mz2 = mz;
-
-							// Compute Texture Box.
-							tx0 = ii ? ((mx2 - mx + overlapx / 2.0) / mx2) : 0.0;
-							ty0 = jj ? ((my2 - my + overlapy / 2.0) / my2) : 0.0;
-							tz0 = kk ? ((mz2 - mz + overlapz / 2.0) / mz2) : 0.0;
-
-							tx1 = 1.0 - overlapx / 2.0 / mx2;
-							if (mx < lvinfo.brick_baseW) tx1 = 1.0;
-							if (lvinfo.imageW - ii == lvinfo.brick_baseW) tx1 = 1.0;
-
-							ty1 = 1.0 - overlapy / 2.0 / my2;
-							if (my < lvinfo.brick_baseH) ty1 = 1.0;
-							if (lvinfo.imageH - jj == lvinfo.brick_baseH) ty1 = 1.0;
-
-							tz1 = 1.0 - overlapz / 2.0 / mz2;
-							if (mz < lvinfo.brick_baseD) tz1 = 1.0;
-							if (lvinfo.imageD - kk == lvinfo.brick_baseD) tz1 = 1.0;
-
-							binfo->tx0 = tx0;
-							binfo->ty0 = ty0;
-							binfo->tz0 = tz0;
-							binfo->tx1 = tx1;
-							binfo->ty1 = ty1;
-							binfo->tz1 = tz1;
-
-							// Compute BBox.
-							bx1 = min((ii + lvinfo.brick_baseW - overlapx / 2.0) / (double)lvinfo.imageW, 1.0);
-							if (lvinfo.imageW - ii == lvinfo.brick_baseW) bx1 = 1.0;
-
-							by1 = min((jj + lvinfo.brick_baseH - overlapy / 2.0) / (double)lvinfo.imageH, 1.0);
-							if (lvinfo.imageH - jj == lvinfo.brick_baseH) by1 = 1.0;
-
-							bz1 = min((kk + lvinfo.brick_baseD - overlapz / 2.0) / (double)lvinfo.imageD, 1.0);
-							if (lvinfo.imageD - kk == lvinfo.brick_baseD) bz1 = 1.0;
-
-							binfo->bx0 = ii == 0 ? 0 : (ii + overlapx / 2.0) / (double)lvinfo.imageW;
-							binfo->by0 = jj == 0 ? 0 : (jj + overlapy / 2.0) / (double)lvinfo.imageH;
-							binfo->bz0 = kk == 0 ? 0 : (kk + overlapz / 2.0) / (double)lvinfo.imageD;
-							binfo->bx1 = bx1;
-							binfo->by1 = by1;
-							binfo->bz1 = bz1;
-
-							ox = ii - (mx2 - mx);
-							oy = jj - (my2 - my);
-							oz = kk - (mz2 - mz);
-
-							binfo->id = count++;
-							binfo->x_start = ox;
-							binfo->y_start = oy;
-							binfo->z_start = oz;
-							binfo->x_size = mx2;
-							binfo->y_size = my2;
-							binfo->z_size = mz2;
-
-							binfo->fsize = 0;
-							binfo->offset = 0;
-
-							if (count > lvinfo.bricks.size())
-								lvinfo.bricks.resize(count, NULL);
-
-							lvinfo.bricks[binfo->id] = binfo;
-
-							wstringstream wss;
-							wss << xcount << slash << ycount << slash << zcount;
-							lvpaths.push_back(wss.str());
-
-							xcount++;
-						}
-						ycount++;
-					}
-					zcount++;
-				}
-				relpaths.push_back(lvpaths);
-			}
-
-			if (1 > lvinfo.filename.size())
-				lvinfo.filename.resize(1);
-			if (i + 1 > lvinfo.filename[0].size())
-				lvinfo.filename[0].resize(i + 1);
-			if (relpaths[j].size() > lvinfo.filename[0][i].size())
-				lvinfo.filename[0][i].resize(relpaths[j].size(), NULL);
-
-			for (int pid = 0; pid < relpaths[j].size(); pid++)
-			{
-				wstringstream wss2;
-				wss2 << m_dir_name << ch_dirs[i] << slash << scale_dirs[j] << slash << relpaths[j][pid];
-                boost::filesystem::path br_file_path(wss2.str());
-                
-                FLIVR::FileLocInfo* fi = nullptr;
-                //if (boost::filesystem::exists(br_file_path))
-                    fi = new FLIVR::FileLocInfo(wss2.str(), 0, 0, lvinfo.file_type, false, true, lvinfo.blosc_blocksize, lvinfo.blosc_clevel, lvinfo.blosc_ctype, lvinfo.blosc_suffle);
-				lvinfo.filename[0][i][pid] = fi;
-			}
-
-			delete attr;
-		}
+        if (m_bdv_metadata_path.empty())
+        {
+            boost::filesystem::path pyramid_abs_path = root_path / ch_dirs[i];
+            ReadResolutionPyramidFromSingleN5Dataset(pyramid_abs_path.wstring(), 0, i, pix_res);
+        }
+        else
+        {
+            vector<wstring> frame_dirs;
+            std::regex fdir_pattern("^timepoint\\d+$");
+            for (directory_iterator itr(root_path / ch_dirs[i]); itr != end_itr; ++itr)
+            {
+                if (is_directory(itr->status()))
+                {
+                    if (regex_match(itr->path().filename().string(), fdir_pattern))
+                        frame_dirs.push_back(itr->path().filename().wstring());
+                }
+            }
+            
+            if (frame_dirs.empty())
+                continue;
+            
+            sort(frame_dirs.begin(), frame_dirs.end(),
+                 [](const wstring& x, const wstring& y) { return WSTOI(x.substr(5)) < WSTOI(y.substr(5)); });
+            
+            for (int f = 0; f < frame_dirs.size(); f++)
+            {
+                boost::filesystem::path pyramid_abs_path = root_path / ch_dirs[i] / frame_dirs[f];
+                ReadResolutionPyramidFromSingleN5Dataset(pyramid_abs_path.wstring(), f, i, pix_res);
+            }
+        }
 	}
 
 	m_imageinfo.nFrame = 1;
@@ -1547,6 +1419,260 @@ void BRKXMLReader::loadFSN5()
 	m_level_num = m_pyramid.size();
 	m_cur_level = 0;
 
+}
+
+void BRKXMLReader::ReadResolutionPyramidFromSingleN5Dataset(wstring root_dir, int f, int c, vector<double> pix_res)
+{
+#ifdef _WIN32
+    wchar_t slash = L'\\';
+#else
+    wchar_t slash = L'/';
+#endif
+    
+    boost::filesystem::path root_path(root_dir);
+    directory_iterator end_itr;
+    
+    vector<vector<wstring>> relpaths;
+    
+    vector<wstring> scale_dirs;
+    std::regex scdir_pattern("^s\\d+$");
+    for (directory_iterator itr(root_path); itr != end_itr; ++itr)
+    {
+        if (is_directory(itr->status()))
+        {
+            if (regex_match(itr->path().filename().string(), scdir_pattern))
+                scale_dirs.push_back(itr->path().filename().wstring());
+        }
+    }
+    
+    if (scale_dirs.empty())
+        return;
+    
+    sort(scale_dirs.begin(), scale_dirs.end(),
+         [](const wstring& x, const wstring& y) { return WSTOI(x.substr(1)) < WSTOI(y.substr(1)); });
+    
+    int orgw = 0;
+    int orgh = 0;
+    int orgd = 0;
+    if (m_pyramid.size() < scale_dirs.size())
+        m_pyramid.resize(scale_dirs.size());
+    for (int j = 0; j < scale_dirs.size(); j++) {
+        auto attrpath = root_path / scale_dirs[j] / "attributes.json";
+        DatasetAttributes* attr = parseDatasetMetadata(attrpath.wstring());
+        
+        LevelInfo& lvinfo = m_pyramid[j];
+        if (c == 0 && f == 0) {
+            lvinfo.imageW = attr->m_dimensions[0];
+            
+            lvinfo.imageH = attr->m_dimensions[1];
+            
+            lvinfo.imageD = attr->m_dimensions[2];
+            
+            if (c == 0 && j == 0) {
+                orgw = lvinfo.imageW;
+                orgh = lvinfo.imageH;
+                orgd = lvinfo.imageD;
+            }
+            
+            lvinfo.file_type = attr->m_compression;
+            lvinfo.blosc_ctype = attr->m_blosc_param.ctype;
+            lvinfo.blosc_clevel = attr->m_blosc_param.clevel;
+            lvinfo.blosc_suffle = attr->m_blosc_param.suffle;
+            lvinfo.blosc_blocksize = attr->m_blosc_param.blocksize;
+            
+            if (attr->m_pix_res[0] > 0.0)
+                lvinfo.xspc = attr->m_pix_res[0];
+            else
+                lvinfo.xspc = pix_res[0] / ((double)lvinfo.imageW / orgw);
+            
+            if (attr->m_pix_res[1] > 0.0)
+                lvinfo.yspc = attr->m_pix_res[1];
+            else
+                lvinfo.yspc = pix_res[1] / ((double)lvinfo.imageH / orgh);
+            
+            if (attr->m_pix_res[2] > 0.0)
+                lvinfo.zspc = attr->m_pix_res[2];
+            else
+                lvinfo.zspc = pix_res[2] / ((double)lvinfo.imageD / orgd);
+            
+            lvinfo.bit_depth = attr->m_dataType;
+            
+            lvinfo.brick_baseW = attr->m_blockSize[0];
+            
+            lvinfo.brick_baseH = attr->m_blockSize[1];
+            
+            lvinfo.brick_baseD = attr->m_blockSize[2];
+            
+            vector<wstring> lvpaths;
+            int ii, jj, kk;
+            int mx, my, mz, mx2, my2, mz2, ox, oy, oz;
+            double tx0, ty0, tz0, tx1, ty1, tz1;
+            double bx1, by1, bz1;
+            double dx0, dy0, dz0, dx1, dy1, dz1;
+            const int overlapx = 0;
+            const int overlapy = 0;
+            const int overlapz = 0;
+            size_t count = 0;
+            size_t zcount = 0;
+            for (kk = 0; kk < lvinfo.imageD; kk += lvinfo.brick_baseD)
+            {
+                if (kk) kk -= overlapz;
+                size_t ycount = 0;
+                for (jj = 0; jj < lvinfo.imageH; jj += lvinfo.brick_baseH)
+                {
+                    if (jj) jj -= overlapy;
+                    size_t xcount = 0;
+                    for (ii = 0; ii < lvinfo.imageW; ii += lvinfo.brick_baseW)
+                    {
+                        BrickInfo* binfo = new BrickInfo();
+                        
+                        if (ii) ii -= overlapx;
+                        mx = min(lvinfo.brick_baseW, lvinfo.imageW - ii);
+                        my = min(lvinfo.brick_baseH, lvinfo.imageH - jj);
+                        mz = min(lvinfo.brick_baseD, lvinfo.imageD - kk);
+                        
+                        mx2 = mx;
+                        my2 = my;
+                        mz2 = mz;
+                        
+                        // Compute Texture Box.
+                        tx0 = ii ? ((mx2 - mx + overlapx / 2.0) / mx2) : 0.0;
+                        ty0 = jj ? ((my2 - my + overlapy / 2.0) / my2) : 0.0;
+                        tz0 = kk ? ((mz2 - mz + overlapz / 2.0) / mz2) : 0.0;
+                        
+                        tx1 = 1.0 - overlapx / 2.0 / mx2;
+                        if (mx < lvinfo.brick_baseW) tx1 = 1.0;
+                        if (lvinfo.imageW - ii == lvinfo.brick_baseW) tx1 = 1.0;
+                        
+                        ty1 = 1.0 - overlapy / 2.0 / my2;
+                        if (my < lvinfo.brick_baseH) ty1 = 1.0;
+                        if (lvinfo.imageH - jj == lvinfo.brick_baseH) ty1 = 1.0;
+                        
+                        tz1 = 1.0 - overlapz / 2.0 / mz2;
+                        if (mz < lvinfo.brick_baseD) tz1 = 1.0;
+                        if (lvinfo.imageD - kk == lvinfo.brick_baseD) tz1 = 1.0;
+                        
+                        binfo->tx0 = tx0;
+                        binfo->ty0 = ty0;
+                        binfo->tz0 = tz0;
+                        binfo->tx1 = tx1;
+                        binfo->ty1 = ty1;
+                        binfo->tz1 = tz1;
+                        
+                        // Compute BBox.
+                        bx1 = min((ii + lvinfo.brick_baseW - overlapx / 2.0) / (double)lvinfo.imageW, 1.0);
+                        if (lvinfo.imageW - ii == lvinfo.brick_baseW) bx1 = 1.0;
+                        
+                        by1 = min((jj + lvinfo.brick_baseH - overlapy / 2.0) / (double)lvinfo.imageH, 1.0);
+                        if (lvinfo.imageH - jj == lvinfo.brick_baseH) by1 = 1.0;
+                        
+                        bz1 = min((kk + lvinfo.brick_baseD - overlapz / 2.0) / (double)lvinfo.imageD, 1.0);
+                        if (lvinfo.imageD - kk == lvinfo.brick_baseD) bz1 = 1.0;
+                        
+                        binfo->bx0 = ii == 0 ? 0 : (ii + overlapx / 2.0) / (double)lvinfo.imageW;
+                        binfo->by0 = jj == 0 ? 0 : (jj + overlapy / 2.0) / (double)lvinfo.imageH;
+                        binfo->bz0 = kk == 0 ? 0 : (kk + overlapz / 2.0) / (double)lvinfo.imageD;
+                        binfo->bx1 = bx1;
+                        binfo->by1 = by1;
+                        binfo->bz1 = bz1;
+                        
+                        ox = ii - (mx2 - mx);
+                        oy = jj - (my2 - my);
+                        oz = kk - (mz2 - mz);
+                        
+                        binfo->id = count++;
+                        binfo->x_start = ox;
+                        binfo->y_start = oy;
+                        binfo->z_start = oz;
+                        binfo->x_size = mx2;
+                        binfo->y_size = my2;
+                        binfo->z_size = mz2;
+                        
+                        binfo->fsize = 0;
+                        binfo->offset = 0;
+                        
+                        if (count > lvinfo.bricks.size())
+                            lvinfo.bricks.resize(count, NULL);
+                        
+                        lvinfo.bricks[binfo->id] = binfo;
+                        
+                        wstringstream wss;
+                        wss << xcount << slash << ycount << slash << zcount;
+                        lvpaths.push_back(wss.str());
+                        
+                        xcount++;
+                    }
+                    ycount++;
+                }
+                zcount++;
+            }
+            relpaths.push_back(lvpaths);
+        }
+        
+        if (f + 1 > lvinfo.filename.size())
+            lvinfo.filename.resize(f + 1);
+        if (c + 1 > lvinfo.filename[f].size())
+            lvinfo.filename[f].resize(c + 1);
+        if (relpaths[j].size() > lvinfo.filename[f][c].size())
+            lvinfo.filename[f][c].resize(relpaths[j].size(), NULL);
+        
+        for (int pid = 0; pid < relpaths[j].size(); pid++)
+        {
+            boost::filesystem::path br_file_path(root_path / scale_dirs[j] / relpaths[j][pid]);
+            FLIVR::FileLocInfo* fi = nullptr;
+            fi = new FLIVR::FileLocInfo(br_file_path.wstring(), 0, 0, lvinfo.file_type, false, true, lvinfo.blosc_blocksize, lvinfo.blosc_clevel, lvinfo.blosc_ctype, lvinfo.blosc_suffle);
+            lvinfo.filename[f][c][pid] = fi;
+        }
+        
+        delete attr;
+    }
+}
+
+bool BRKXMLReader::GetN5ChannelPaths(wstring n5path, vector<wstring> &output)
+{
+#ifdef _WIN32
+    wchar_t slash = L'\\';
+#else
+    wchar_t slash = L'/';
+#endif
+    
+    size_t ext_pos = n5path.find_last_of(L".");
+    wstring ext = n5path.substr(ext_pos+1);
+    transform(ext.begin(), ext.end(), ext.begin(), towlower);
+    wstring dir_name = n5path.substr(0, n5path.find_last_of(slash)+1);
+    
+    if (dir_name.size() > 1 && ext == L"n5")
+        dir_name = n5path + slash;
+    
+    
+    boost::filesystem::path file_path(n5path);
+    
+    boost::filesystem::path::imbue(std::locale(std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
+    boost::filesystem::path root_path(dir_name);
+    
+    directory_iterator end_itr; // default construction yields past-the-end
+    if (output.size() > 0)
+        output.clear();
+    if (file_path.extension() == ".xml") {
+        tinyxml2::XMLDocument xmldoc;
+        if (xmldoc.LoadFile(file_path.c_str()) != 0){
+            return false;
+        }
+        string r_n5path = ReadBDVFilePath(xmldoc);
+        root_path = root_path / r_n5path;
+    }
+    
+    for (directory_iterator itr(root_path); itr != end_itr; ++itr)
+    {
+        if (is_directory(itr->status()))
+        {
+            output.push_back(itr->path().wstring());
+        }
+    }
+    
+    std::sort(output.begin(), output.end());
+    
+    return true;
 }
 
 DatasetAttributes* BRKXMLReader::parseDatasetMetadata(wstring jpath)
@@ -1850,4 +1976,338 @@ wstring BRKXMLReader::getAttributesPath(wstring pathName) {
 wstring BRKXMLReader::removeLeadingSlash(const wstring pathName)
 {
     return (pathName.rfind(L"/", 0) == 0) || (pathName.rfind(L"\\", 0) == 0) ? pathName.substr(1) : pathName;
+}
+
+
+//https://stackoverflow.com/questions/11921463/find-a-specific-node-in-a-xml-document-with-tinyxml
+static bool parseXML(tinyxml2::XMLDocument& xXmlDocument, std::string sSearchString, std::function<void(tinyxml2::XMLNode*)> fFoundSomeElement)
+{
+    if ( xXmlDocument.ErrorID() != tinyxml2::XML_SUCCESS )
+    {
+        return false;
+    } // if
+    
+    //ispired by http://stackoverflow.com/questions/11921463/find-a-specific-node-in-a-xml-document-with-tinyxml
+    tinyxml2::XMLNode * xElem = xXmlDocument.FirstChild();
+    while(xElem)
+    {
+        if (xElem->Value() && !std::string(xElem->Value()).compare(sSearchString))
+        {
+            fFoundSomeElement(xElem);
+        }
+        
+        /*
+         *   We move through the XML tree following these rules (basically in-order tree walk):
+         *
+         *   (1) if there is one or more child element(s) visit the first one
+         *       else
+         *   (2)     if there is one or more next sibling element(s) visit the first one
+         *               else
+         *   (3)             move to the parent until there is one or more next sibling elements
+         *   (4)             if we reach the end break the loop
+         */
+        if (xElem->FirstChildElement()) //(1)
+            xElem = xElem->FirstChildElement();
+        else if (xElem->NextSiblingElement())  //(2)
+            xElem = xElem->NextSiblingElement();
+        else
+        {
+            while(xElem->Parent() && !xElem->Parent()->NextSiblingElement()) //(3)
+                xElem = xElem->Parent();
+            if(xElem->Parent() && xElem->Parent()->NextSiblingElement())
+                xElem = xElem->Parent()->NextSiblingElement();
+            else //(4)
+                break;
+        }//else
+    }//while
+    
+    return true;
+}
+
+string BRKXMLReader::ReadBDVFilePath(tinyxml2::XMLDocument& xXmlDocument)
+{
+    string rpath;
+    
+    parseXML(xXmlDocument, "n5",[&rpath](tinyxml2::XMLNode* xElem)
+             {
+                 tinyxml2::XMLElement *elem = xElem->ToElement();
+                 if (elem && elem->Attribute("type") && elem->GetText())
+                 {
+                     string str;
+                     str = elem->Attribute("type");
+                     if (str.compare("relative") == 0)
+                     {
+                         const char* txt = elem->GetText();
+                         if (txt)
+                             rpath = elem->GetText();
+                     }
+                 }
+             });
+    
+    return rpath;
+}
+
+void BRKXMLReader::ReadBDVResolutions(tinyxml2::XMLDocument& xXmlDocument, vector<vector<double>> &resolutions)
+{
+    string rpath;
+    
+    parseXML(xXmlDocument, "ViewSetup",[&resolutions](tinyxml2::XMLNode* xElem)
+             {
+                 int id = -1;
+                 tinyxml2::XMLElement *elem = xElem->ToElement();
+                 if (elem)
+                 {
+                     tinyxml2::XMLElement *child = elem->FirstChildElement();
+                     while (child)
+                     {
+                         if (child->Name() && strcmp(child->Name(), "id") == 0)
+                         {
+                             const char* txt = child->GetText();
+                             if (txt)
+                             {
+                                 id = STOI(txt);
+                                 if (id >= resolutions.size())
+                                     resolutions.resize(id+1);
+                                 break;
+                             }
+                         }
+                         child = child->NextSiblingElement();
+                     }
+                     
+                     if (id < 0 || id >= resolutions.size())
+                         return;
+                     
+                     child = elem->FirstChildElement();
+                     while (child)
+                     {
+                         if (strcmp(child->Name(), "voxelSize") == 0)
+                         {
+                             tinyxml2::XMLElement *child2 = child->FirstChildElement();
+                             while (child2)
+                             {
+                                 if (child2->Name())
+                                 {
+                                     if (strcmp(child2->Name(), "size") == 0)
+                                     {
+                                         const char* txt = child2->GetText();
+                                         if (txt)
+                                         {
+                                             string str = txt;
+                                             string space_delimiter = " ";
+                                             size_t pos = 0;
+                                             while ((pos = str.find(space_delimiter)) != string::npos) {
+                                                 resolutions[id].push_back(STOD(str.substr(0, pos).c_str()));
+                                                 str.erase(0, pos + space_delimiter.length());
+                                             }
+                                             resolutions[id].push_back(STOD(str.c_str()));
+                                             break;
+                                         }
+                                     }
+                                 }
+                                 child2 = child2->NextSiblingElement();
+                             }
+                             break;
+                         }
+                         child = child->NextSiblingElement();
+                     }
+                 }
+             });
+}
+
+void BRKXMLReader::ReadBDVViewRegistrations(tinyxml2::XMLDocument& xXmlDocument, vector<vector<FLIVR::Transform>> &transforms)
+{
+    string rpath;
+    
+    vector<vector<double>> setup_dimemsions;
+    
+    parseXML(xXmlDocument, "ViewSetup",[&setup_dimemsions](tinyxml2::XMLNode* xElem)
+             {
+                 int id = -1;
+                 tinyxml2::XMLElement *elem = xElem->ToElement();
+                 if (elem)
+                 {
+                     tinyxml2::XMLElement *child = elem->FirstChildElement();
+                     while (child)
+                     {
+                         if (child->Name() && strcmp(child->Name(), "id") == 0)
+                         {
+                             const char* txt = child->GetText();
+                             if (txt)
+                             {
+                                 id = STOI(txt);
+                                 if (id >= setup_dimemsions.size())
+                                     setup_dimemsions.resize(id+1);
+                                 break;
+                             }
+                         }
+                         child = child->NextSiblingElement();
+                     }
+                     
+                     if (id < 0 || id >= setup_dimemsions.size())
+                         return;
+                     
+                     child = elem->FirstChildElement();
+                     while (child)
+                     {
+                         if (strcmp(child->Name(), "size") == 0)
+                         {
+                             const char* txt = child->GetText();
+                             if (txt)
+                             {
+                                 string str = txt;
+                                 string space_delimiter = " ";
+                                 size_t pos = 0;
+                                 while ((pos = str.find(space_delimiter)) != string::npos) {
+                                     setup_dimemsions[id].push_back(STOD(str.substr(0, pos).c_str()));
+                                     str.erase(0, pos + space_delimiter.length());
+                                 }
+                                 setup_dimemsions[id].push_back(STOD(str.c_str()));
+                                 break;
+                             }
+                             break;
+                         }
+                         child = child->NextSiblingElement();
+                     }
+                 }
+             });
+    
+    
+    parseXML(xXmlDocument, "ViewRegistration",[setup_dimemsions, &transforms](tinyxml2::XMLNode* xElem)
+             {
+                 int timepoint, setup;
+                 tinyxml2::XMLElement *elem = xElem->ToElement();
+                 if (elem && elem->Attribute("timepoint") && elem->Attribute("setup"))
+                 {
+                     timepoint = STOI(elem->Attribute("timepoint"));
+                     setup = STOI(elem->Attribute("setup"));
+                     if (timepoint >= transforms.size())
+                         transforms.resize(timepoint+1);
+                     if (setup >= transforms[timepoint].size())
+                         transforms[timepoint].resize(setup+1);
+                     vector<string> strmats;
+                     string strcalib;
+                     tinyxml2::XMLElement *child = elem->FirstChildElement();
+                     while (child)
+                     {
+                         if (child->Name() && strcmp(child->Name(), "ViewTransform") == 0 && child->Attribute("type"))
+                         {
+                             if (strcmp(child->Attribute("type"), "affine") == 0)
+                             {
+                                 bool calib = false;
+                                 tinyxml2::XMLElement *child2 = child->FirstChildElement();
+                                 while (child2)
+                                 {
+                                     if (child2->Name())
+                                     {
+                                         if (strcmp(child2->Name(), "Name") == 0 && child2->GetText() && strcmp(child2->GetText(), "calibration") == 0)
+                                         {
+                                             calib = true;
+                                         }
+                                         else if (strcmp(child2->Name(), "affine") == 0 )
+                                         {
+                                             const char* txt = child2->GetText();
+                                             if (txt)
+                                                 strmats.push_back(txt);
+                                         }
+                                     }
+                                     child2 = child2->NextSiblingElement();
+                                 }
+                                 if (calib)
+                                 {
+                                     strcalib = strmats.back();
+                                     strmats.pop_back();
+                                 }
+                             }
+                         }
+                         child = child->NextSiblingElement();
+                     }
+                     
+                     FLIVR::Transform view_tform;
+                     view_tform.load_identity();
+                     string space_delimiter = " ";
+                     
+                     double dim_x = 1.0;
+                     double dim_y = 1.0;
+                     double dim_z = 1.0;
+                     if (!strcalib.empty())
+                     {
+                         vector<double> calib;
+                         size_t pos = 0;
+                         while ((pos = strcalib.find(space_delimiter)) != string::npos) {
+                             calib.push_back(STOD(strcalib.substr(0, pos).c_str()));
+                             strcalib.erase(0, pos + space_delimiter.length());
+                         }
+                         calib.push_back(STOD(strcalib.c_str()));
+                         if (calib.size() == 12)
+                         {
+                             dim_x *= calib[0];
+                             dim_y *= calib[5];
+                             dim_z *= calib[10];
+                         }
+                     }
+                     if (setup_dimemsions.size() > setup && setup_dimemsions[setup].size() >= 3)
+                     {
+                         dim_x *= setup_dimemsions[setup][0];
+                         dim_y *= setup_dimemsions[setup][1];
+                         dim_z *= setup_dimemsions[setup][2];
+                     }
+                     
+                     for (auto &text : strmats)
+                     {
+                         vector<double> mat;
+                         size_t pos = 0;
+                         while ((pos = text.find(space_delimiter)) != string::npos) {
+                             mat.push_back(STOD(text.substr(0, pos).c_str()));
+                             text.erase(0, pos + space_delimiter.length());
+                         }
+                         mat.push_back(STOD(text.c_str()));
+                         
+                         //mat[0] = 1.0; mat[1] = 0.0; mat[2]  = 0.0;
+                         //mat[4] = 0.0; mat[5] = 0.70710678118; mat[6]  = -0.70710678118;
+                         //mat[8] = 0.0; mat[9] = 0.70710678118; mat[10] = 0.70710678118;
+                         
+                         //mat[0] = 1.0; mat[1] = 0.0; mat[2]  = 0.0;
+                         //mat[4] = 0.0; mat[5] = 1.0; mat[6]  = 0.0;
+                         //mat[8] = 0.0; mat[9] = 0.0; mat[10] = 1.0;
+                         
+                         //mat[3] = 0.0; mat[7] = 0.0; mat[11] = 0.0;
+                         
+                         mat.push_back(0.0); mat.push_back(0.0); mat.push_back(0.0); mat.push_back(1.0);
+                         if (mat.size() == 16)
+                         {
+                             mat[3] /= dim_x; mat[7] /= dim_y; mat[11] /= dim_z;
+                             
+                             FLIVR::Transform tform;
+                             tform.set(mat.data());
+                             //view_tform.pre_trans(tform);
+                             view_tform.set(mat.data());
+                         }
+                         
+                         //break;
+                     }
+                     
+                     transforms[timepoint][setup] = view_tform;
+                 }
+             });
+}
+
+FLIVR::Transform BRKXMLReader::GetBDVTransform(int setup, int timepoint)
+{
+    FLIVR::Transform ret;
+    ret.load_identity();
+    
+    if (setup < 0)
+        setup = m_bdv_setup_id;
+    if (timepoint < 0)
+        timepoint = m_cur_time;
+    
+    if (timepoint >= 0 && timepoint < m_bdv_view_transforms.size())
+    {
+        if (setup >= 0 && setup < m_bdv_view_transforms[timepoint].size())
+        {
+            return m_bdv_view_transforms[timepoint][setup];
+        }
+    }
+    
+    return ret;
 }

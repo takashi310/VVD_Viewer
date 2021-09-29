@@ -115,6 +115,8 @@ namespace FLIVR
 		inline void set_bbox(BBox bbox) { bbox_ = bbox; }
 		inline Transform *transform() { return &transform_; }
 		inline void set_transform(Transform tform) { transform_ = tform; }
+        inline Transform *additional_transform() { return &additional_transform_; }
+        inline void set_additional_transform(Transform tform) { additional_transform_ = tform; }
 
 		// get sorted bricks
 		vector<TextureBrick*>* get_sorted_bricks(
@@ -272,7 +274,8 @@ namespace FLIVR
 		//! bytes per texel for each component.
 		int											nb_[TEXTURE_MAX_COMPONENTS];
 		//! data tform
-		Transform									transform_; 
+		Transform									transform_;
+        Transform                                   additional_transform_;
 		double										vmin_;
 		double										vmax_;
 		double										gmin_;

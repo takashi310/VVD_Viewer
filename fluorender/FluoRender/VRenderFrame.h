@@ -106,6 +106,66 @@ using namespace std;
 #define UITEXT_PROPERTIES	"Properties"
 #define UITEXT_PLUGINS		"Plugins"
 
+ 
+class DatasetListCtrl : public wxListCtrl
+{
+    
+public:
+    DatasetListCtrl(wxWindow* parent,
+                   wxWindowID id,
+                   const wxArrayString& list,
+                   const wxPoint& pos=wxDefaultPosition,
+                   const wxSize& size=wxDefaultSize,
+                   long style=wxLC_REPORT|wxLC_SINGLE_SEL|wxLC_NO_HEADER);
+    ~DatasetListCtrl();
+    
+    wxString GetText(long item, int col);
+    void SelectAllDataset();
+    bool isDatasetSelected(int id);
+    wxString GetDatasetName(int id);
+    
+private:
+    void OnItemSelected(wxListEvent& event);
+    void OnLeftDown(wxMouseEvent& event);
+    void OnScroll(wxScrollWinEvent& event);
+    void OnScroll(wxMouseEvent& event);
+    
+    DECLARE_EVENT_TABLE()
+protected:
+    wxSize GetSizeAvailableForScrollTarget(const wxSize& size) {
+        return size - GetEffectiveMinSize();
+    }
+};
+
+class DatasetSelectionDialog : public wxDialog
+{
+    enum
+    {
+        ID_SelectAllButton
+    };
+    
+public:
+    DatasetSelectionDialog(wxWindow* parent, wxWindowID id, const wxString &title, const wxArrayString& list,
+                   const wxPoint &pos = wxDefaultPosition,
+                   const wxSize &size = wxDefaultSize,
+                   long style = wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER );
+    
+    int GetDatasetNum();
+    bool isDatasetSelected(int id);
+    wxString GetDatasetName(int id);
+    
+private:
+    DatasetListCtrl *m_list;
+    wxButton* m_sel_all_button;
+    
+public:
+    void OnSelectAllButtonClick( wxCommandEvent& event );
+    void OnOk( wxCommandEvent& event );
+    
+    DECLARE_EVENT_TABLE();
+};
+
+
 class EXPORT_API VRenderFrame: public wxFrame
 {
 	enum

@@ -669,10 +669,16 @@ namespace FLIVR
 		else maxlen = vdmaxlen;
 
 		if(rate_fac != nullptr && sampling_frq_fac > 0.0) *rate_fac = sampling_frq_fac / vdmaxlen;
-
+        
+        double normal_mat[16];
+        Transform normal_trans = *field_trans;
+        //normal_trans.invert();
+        normal_trans.get_trans(normal_mat);
+        normal_trans.set(normal_mat);
+        
 		// index space view direction
 		Vector mv_ray = Vector(-mvmat[2], -mvmat[6], -mvmat[10]);//normalized
-		Vector v = field_trans->project(Vector(-mvmat[2], -mvmat[6], -mvmat[10]));
+		Vector v = normal_trans.project(Vector(-mvmat[2], -mvmat[6], -mvmat[10]));
 		v.safe_normalize();
 		v = field_trans->project(v);
 
@@ -699,10 +705,16 @@ namespace FLIVR
 		uint32_t mindim = min(w, h);
 
 		double pxlen = 1.0 / mindim / sclfac;
+        
+        double normal_mat[16];
+        Transform normal_trans = *field_trans;
+        //normal_trans.invert();
+        normal_trans.get_trans(normal_mat);
+        normal_trans.set(normal_mat);
 		
 		// index space view direction
 		Vector mv_ray = Vector(-mvmat[2], -mvmat[6], -mvmat[10]);//normalized
-		Vector v = field_trans->project(Vector(-mvmat[2], -mvmat[6], -mvmat[10])); //for scaling (unproject normal)
+		Vector v = normal_trans.project(Vector(-mvmat[2], -mvmat[6], -mvmat[10])); //for scaling (unproject normal)
 		/*
 		double f_e_len = v.length();
 		v = field_trans->project(v);
@@ -733,8 +745,8 @@ namespace FLIVR
 		Point bmax = bbox.max();
 		Point bmin = bbox.min();
 
-		bmax = tform->transform(bmax);
-		bmin = tform->transform(bmin);
+		bmax = tform->project(bmax);
+		bmin = tform->project(bmin);
 
 		float b_e[3];
 		b_e[0] = abs(bmax.x() - bmin.x()) * 0.5f;
@@ -794,7 +806,7 @@ namespace FLIVR
 			return true;
 
 		for (int i = 0; i < 8; i++)
-			pp[i] = tform->transform(pp[i]);
+			pp[i] = tform->project(pp[i]);
 		
 		Vector a_u[3];
 		Vector scv(tform->get_mat_val(0,0), tform->get_mat_val(1,1), tform->get_mat_val(2,2));
@@ -1916,10 +1928,10 @@ namespace FLIVR
 		double mvmat[16];
 		tform->get_trans(mvmat);
 		m_mv_mat2 = glm::mat4(
-			mvmat[0], mvmat[4], mvmat[8], mvmat[12],
-			mvmat[1], mvmat[5], mvmat[9], mvmat[13],
-			mvmat[2], mvmat[6], mvmat[10], mvmat[14],
-			mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
+                              mvmat[0], mvmat[4], mvmat[8], mvmat[3],
+                              mvmat[1], mvmat[5], mvmat[9], mvmat[7],
+                              mvmat[2], mvmat[6], mvmat[10], mvmat[11],
+                              mvmat[12], mvmat[13], mvmat[14], mvmat[15]);
 		m_mv_mat2 = m_mv_mat * m_mv_mat2;
 		vert_ubo.proj_mat = m_proj_mat;
 		vert_ubo.mv_mat = m_mv_mat2;
@@ -2753,10 +2765,10 @@ namespace FLIVR
 		double mvmat[16];
 		tform->get_trans(mvmat);
 		m_mv_mat2 = glm::mat4(
-			mvmat[0], mvmat[4], mvmat[8], mvmat[12],
-			mvmat[1], mvmat[5], mvmat[9], mvmat[13],
-			mvmat[2], mvmat[6], mvmat[10], mvmat[14],
-			mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
+			mvmat[0], mvmat[4], mvmat[8], mvmat[3],
+			mvmat[1], mvmat[5], mvmat[9], mvmat[7],
+			mvmat[2], mvmat[6], mvmat[10], mvmat[11],
+			mvmat[12], mvmat[13], mvmat[14], mvmat[15]);
 		m_mv_mat2 = m_mv_mat * m_mv_mat2;
 		vert_ubo.proj_mat = m_proj_mat;
 		vert_ubo.mv_mat = m_mv_mat2;
@@ -2782,6 +2794,14 @@ namespace FLIVR
 		
 		Transform mv;
 		mv.set_trans(glm::value_ptr(m_mv_mat));
+        Transform tform_tr;
+        double tr_mvmat[16] = {
+            mvmat[0], mvmat[1], mvmat[2], mvmat[12],
+            mvmat[4], mvmat[5], mvmat[6], mvmat[13],
+            mvmat[8], mvmat[9], mvmat[10], mvmat[14],
+            mvmat[3], mvmat[7], mvmat[11], mvmat[15]
+        };
+        tform_tr.set(tr_mvmat);
 
 		//////////////////////////////////////////
 		//render bricks
@@ -3220,9 +3240,9 @@ namespace FLIVR
 			Point p = view_ray.origin() + view_ray.direction() * tmin;
 			Point p2 = view_ray.origin() + view_ray.direction() * tmax;
 			Vector dv = view_ray.direction() * dt;
-			p = mv.project(tform->project(p));
-			p2 = mv.project(tform->project(p2));
-			dv = mv.project(tform->project(dv));
+			p = mv.project(tform_tr.project(p));
+			p2 = mv.project(tform_tr.project(p2));
+			dv = mv.project(tform_tr.project(dv));
 			frag_const.loc_zmin_zmax_dz = { p.z(), p2.z(), dv.z() };
 			frag_const.stepnum = slicenum;
 
@@ -3837,10 +3857,10 @@ namespace FLIVR
 		double mvmat[16];
 		tform->get_trans(mvmat);
 		m_mv_mat2 = glm::mat4(
-			mvmat[0], mvmat[4], mvmat[8], mvmat[12],
-			mvmat[1], mvmat[5], mvmat[9], mvmat[13],
-			mvmat[2], mvmat[6], mvmat[10], mvmat[14],
-			mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
+                              mvmat[0], mvmat[4], mvmat[8], mvmat[3],
+                              mvmat[1], mvmat[5], mvmat[9], mvmat[7],
+                              mvmat[2], mvmat[6], mvmat[10], mvmat[11],
+                              mvmat[12], mvmat[13], mvmat[14], mvmat[15]);
 		seg_ubo.mv_mat = m_mv_mat * m_mv_mat2;
 		seg_ubo.proj_mat = m_proj_mat;
 		if (hr_mode > 0)

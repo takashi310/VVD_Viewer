@@ -468,10 +468,10 @@ namespace FLIVR
 			double mvmat[16];
 			tform->get_trans(mvmat);
 			vr->m_mv_mat2 = glm::mat4(
-				mvmat[0], mvmat[4], mvmat[8], mvmat[12],
-				mvmat[1], mvmat[5], mvmat[9], mvmat[13],
-				mvmat[2], mvmat[6], mvmat[10], mvmat[14],
-				mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
+				mvmat[0], mvmat[4], mvmat[8], mvmat[3],
+				mvmat[1], mvmat[5], mvmat[9], mvmat[7],
+				mvmat[2], mvmat[6], mvmat[10], mvmat[11],
+				mvmat[12], mvmat[13], mvmat[14], mvmat[15]);
 			vr->m_mv_mat2 = vr->m_mv_mat * vr->m_mv_mat2;
 			vert_ubo.proj_mat = vr->m_proj_mat;
 			vert_ubo.mv_mat = vr->m_mv_mat2;

@@ -10791,10 +10791,10 @@ void VRenderVulkanView::DrawClippingPlanes(bool border, int face_winding)
 			glm::mat4 mv_mat = glm::scale(m_mv_mat,
 				glm::vec3(float(sclx), float(scly), float(sclz)));
 			glm::mat4 mv_mat2 = glm::mat4(
-				mvmat[0], mvmat[4], mvmat[8], mvmat[12],
-				mvmat[1], mvmat[5], mvmat[9], mvmat[13],
-				mvmat[2], mvmat[6], mvmat[10], mvmat[14],
-				mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
+				mvmat[0], mvmat[4], mvmat[8], mvmat[3],
+				mvmat[1], mvmat[5], mvmat[9], mvmat[7],
+				mvmat[2], mvmat[6], mvmat[10], mvmat[11],
+				mvmat[12], mvmat[13], mvmat[14], mvmat[15]);
 			mv_mat = mv_mat * mv_mat2;
 			glm::mat4 matrix = m_proj_mat * mv_mat;
 
@@ -13677,10 +13677,10 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 						double mvmat2[16];
 						tform->get_trans(mvmat2);
 						vd->GetVR()->m_mv_mat2 = glm::mat4(
-							mvmat2[0], mvmat2[4], mvmat2[8], mvmat2[12],
-							mvmat2[1], mvmat2[5], mvmat2[9], mvmat2[13],
-							mvmat2[2], mvmat2[6], mvmat2[10], mvmat2[14],
-							mvmat2[3], mvmat2[7], mvmat2[11], mvmat2[15]);
+							mvmat2[0], mvmat2[4], mvmat2[8], mvmat2[3],
+							mvmat2[1], mvmat2[5], mvmat2[9], mvmat2[7],
+							mvmat2[2], mvmat2[6], mvmat2[10], mvmat2[11],
+							mvmat2[12], mvmat2[13], mvmat2[14], mvmat2[15]);
 						vd->GetVR()->m_mv_mat2 = vd->GetVR()->m_mv_mat * vd->GetVR()->m_mv_mat2;
 
 						Ray view_ray = vd->GetVR()->compute_view();
@@ -13726,10 +13726,10 @@ void VRenderVulkanView::StartLoopUpdate(bool reset_peeling_layer)
 					double mvmat[16];
 					tform->get_trans(mvmat);
 					vd->GetVR()->m_mv_mat2 = glm::mat4(
-						mvmat[0], mvmat[4], mvmat[8], mvmat[12],
-						mvmat[1], mvmat[5], mvmat[9], mvmat[13],
-						mvmat[2], mvmat[6], mvmat[10], mvmat[14],
-						mvmat[3], mvmat[7], mvmat[11], mvmat[15]);
+                                                       mvmat[0], mvmat[4], mvmat[8], mvmat[3],
+                                                       mvmat[1], mvmat[5], mvmat[9], mvmat[7],
+                                                       mvmat[2], mvmat[6], mvmat[10], mvmat[11],
+                                                       mvmat[12], mvmat[13], mvmat[14], mvmat[15]);
 					vd->GetVR()->m_mv_mat2 = vd->GetVR()->m_mv_mat * vd->GetVR()->m_mv_mat2;
 
 					Ray view_ray = vd->GetVR()->compute_view();
@@ -19256,6 +19256,7 @@ void VRenderView::OnRotReset(wxCommandEvent &event)
 	m_z_rot_text->ChangeValue("0.0");
 	SetRotations(0.0, 0.0, 0.0);
     m_glview->InitView(INIT_BOUNDS|INIT_CENTER|INIT_ROTATE);
+    m_glview->SetCenter();
 	RefreshGL();
 	if (m_glview->m_mouse_focus)
 		m_glview->SetFocus();
