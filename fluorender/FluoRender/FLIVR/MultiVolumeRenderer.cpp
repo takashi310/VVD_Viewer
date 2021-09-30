@@ -398,7 +398,7 @@ namespace FLIVR
 			setting.pipeline = vr->prepareVRayPipeline(prim_dev, blendmode, vr->update_order_, vr->colormap_mode_, !orthographic_p);
 			setting.pipelineLayout = VolumeRenderer::m_vulkan->vray_shader_factory_->pipeline_[prim_dev].pipelineLayout;
 
-			Ray view_ray = valid_vrs[0]->compute_view();
+			Ray view_ray = vr->compute_view();
 			vector<TextureBrick*>* brs = vr->tex_->get_bricks();
 
 			Vector light = view_ray.direction();
@@ -864,15 +864,27 @@ namespace FLIVR
 					Transform mv;
 					mv.set_trans(glm::value_ptr(vr->m_mv_mat));
 					Transform* tform = vr->tex_->transform();
+                    
+                    double tmpmat[16];
+                    tform->get_trans(tmpmat);
+                    Transform tform_tr;
+                    double tr_mvmat[16] = {
+                        tmpmat[0], tmpmat[1], tmpmat[2], tmpmat[12],
+                        tmpmat[4], tmpmat[5], tmpmat[6], tmpmat[13],
+                        tmpmat[8], tmpmat[9], tmpmat[10], tmpmat[14],
+                        tmpmat[3], tmpmat[7], tmpmat[11], tmpmat[15]
+                    };
+                    tform_tr.set(tr_mvmat);
+                    
 					unsigned int slicenum = 0;
 					int timax = i, timin = i;
 					double vr_dt = b->dt();
 					Point p = view_ray.parameter(timin * vr_dt);
 					Point p2 = view_ray.parameter(timax * vr_dt);
 					Vector dv = view_ray.direction() * vr_dt;
-					p = mv.project(tform->project(p));
-					p2 = mv.project(tform->project(p2));
-					dv = mv.project(tform->project(dv));
+					p = mv.project(tform_tr.project(p));
+					p2 = mv.project(tform_tr.project(p2));
+					dv = mv.project(tform_tr.project(dv));
 					cur_brs[j].frag_const.loc_zmin_zmax_dz = { p.z(), p2.z(), dv.z() };
 					cur_brs[j].frag_const.stepnum = slicenum;
 
