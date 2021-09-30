@@ -121,6 +121,7 @@ public:
     
     wxString GetText(long item, int col);
     void SelectAllDataset();
+    void DeselectAllDataset();
     bool isDatasetSelected(int id);
     wxString GetDatasetName(int id);
     
@@ -141,7 +142,8 @@ class DatasetSelectionDialog : public wxDialog
 {
     enum
     {
-        ID_SelectAllButton
+        ID_SelectAllButton,
+        ID_DeselectAllButton
     };
     
 public:
@@ -160,6 +162,7 @@ private:
     
 public:
     void OnSelectAllButtonClick( wxCommandEvent& event );
+    void OnDeselectAllButtonClick( wxCommandEvent& event );
     void OnOk( wxCommandEvent& event );
     
     DECLARE_EVENT_TABLE();

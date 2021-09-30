@@ -6638,6 +6638,12 @@ void DatasetListCtrl::SelectAllDataset()
         CheckItem(i, true);
 }
 
+void DatasetListCtrl::DeselectAllDataset()
+{
+    for (long i = 0; i < GetItemCount(); i++)
+        CheckItem(i, false);
+}
+
 bool DatasetListCtrl::isDatasetSelected(int id)
 {
     if (id >= 0 && id < GetItemCount())
@@ -6697,6 +6703,7 @@ void DatasetListCtrl::OnScroll(wxMouseEvent& event)
 
 BEGIN_EVENT_TABLE( DatasetSelectionDialog, wxDialog )
 EVT_BUTTON( ID_SelectAllButton, DatasetSelectionDialog::OnSelectAllButtonClick )
+EVT_BUTTON( ID_DeselectAllButton, DatasetSelectionDialog::OnDeselectAllButtonClick )
 EVT_BUTTON( wxID_OK, DatasetSelectionDialog::OnOk )
 END_EVENT_TABLE()
 
@@ -6728,6 +6735,17 @@ DatasetSelectionDialog::DatasetSelectionDialog(wxWindow* parent, wxWindowID id, 
     sizerb->Add(5,10);
     sizerb->Add(c);
     sizerb->Add(10,10);
+    
+    wxBoxSizer *sizerb2 = new wxBoxSizer(wxHORIZONTAL);
+    wxButton *d = new wxButton(this, ID_SelectAllButton, _("Select All"), wxDefaultPosition, wxDefaultSize);
+    wxButton *e = new wxButton(this, ID_DeselectAllButton, _("Deselect All"), wxDefaultPosition, wxDefaultSize);
+    sizerb2->Add(5,10);
+    sizerb2->Add(d);
+    sizerb2->Add(5,10);
+    sizerb2->Add(e);
+    
+    itemBoxSizer->Add(10, 10);
+    itemBoxSizer->Add(sizerb2, 0, wxALIGN_LEFT);
     itemBoxSizer->Add(10, 10);
     itemBoxSizer->Add(sizerb, 0, wxALIGN_RIGHT);
     itemBoxSizer->Add(10, 10);
@@ -6760,6 +6778,13 @@ void DatasetSelectionDialog::OnSelectAllButtonClick( wxCommandEvent& event )
 {
     if (m_list)
         m_list->SelectAllDataset();
+}
+
+
+void DatasetSelectionDialog::OnDeselectAllButtonClick( wxCommandEvent& event )
+{
+    if (m_list)
+        m_list->DeselectAllDataset();
 }
 
 void DatasetSelectionDialog::OnOk( wxCommandEvent& event )
