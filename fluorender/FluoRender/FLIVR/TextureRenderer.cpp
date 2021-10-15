@@ -1542,7 +1542,6 @@ namespace FLIVR
 
 		Transform mv;
 		Transform pr;
-        Transform ttr;
 		mv.set_trans(mvmat_);
 		pr.set_trans(prmat_);
 

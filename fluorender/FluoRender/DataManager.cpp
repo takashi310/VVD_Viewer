@@ -877,6 +877,13 @@ int VolumeData::Load(const shared_ptr<VL_Nrrd> &data, const wxString &name, cons
 		planelist.push_back(plane);
 		plane = new Plane(Point(0.0, 0.0, 1.0), Vector(0.0, 0.0, -1.0));
 		planelist.push_back(plane);
+        
+        planelist[0]->SetRange(planelist[0]->get_point(), planelist[0]->normal(), planelist[1]->get_point(), planelist[1]->normal());
+        planelist[1]->SetRange(planelist[1]->get_point(), planelist[1]->normal(), planelist[0]->get_point(), planelist[0]->normal());
+        planelist[2]->SetRange(planelist[2]->get_point(), planelist[2]->normal(), planelist[3]->get_point(), planelist[3]->normal());
+        planelist[3]->SetRange(planelist[3]->get_point(), planelist[3]->normal(), planelist[2]->get_point(), planelist[2]->normal());
+        planelist[4]->SetRange(planelist[4]->get_point(), planelist[4]->normal(), planelist[5]->get_point(), planelist[5]->normal());
+        planelist[5]->SetRange(planelist[5]->get_point(), planelist[5]->normal(), planelist[4]->get_point(), planelist[4]->normal());
 
 		m_vr = new VolumeRenderer(m_tex, planelist, true);
 		m_vr->set_sampling_rate(m_sample_rate);
@@ -1058,6 +1065,13 @@ void VolumeData::AddEmptyData(int bits,
 	planelist.push_back(plane);
 	plane = new Plane(Point(0.0, 0.0, 1.0), Vector(0.0, 0.0, -1.0));
 	planelist.push_back(plane);
+    
+    planelist[0]->SetRange(planelist[0]->get_point(), planelist[0]->normal(), planelist[1]->get_point(), planelist[1]->normal());
+    planelist[1]->SetRange(planelist[1]->get_point(), planelist[1]->normal(), planelist[0]->get_point(), planelist[0]->normal());
+    planelist[2]->SetRange(planelist[2]->get_point(), planelist[2]->normal(), planelist[3]->get_point(), planelist[3]->normal());
+    planelist[3]->SetRange(planelist[3]->get_point(), planelist[3]->normal(), planelist[2]->get_point(), planelist[2]->normal());
+    planelist[4]->SetRange(planelist[4]->get_point(), planelist[4]->normal(), planelist[5]->get_point(), planelist[5]->normal());
+    planelist[5]->SetRange(planelist[5]->get_point(), planelist[5]->normal(), planelist[4]->get_point(), planelist[4]->normal());
 
 	//create volume renderer
 	m_vr = new VolumeRenderer(m_tex, planelist, true);

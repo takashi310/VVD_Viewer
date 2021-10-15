@@ -35,13 +35,20 @@ DEALINGS IN THE SOFTWARE.
 namespace FLIVR
 {
 	Plane::Plane()
-		: n(Vector(0,0,1)), d(0)
+		: n(Vector(0,0,1)), d(0), range(1), param(0)
 	{
 		n_copy = n;
 		d_copy = d;
+        
+        param_copy = param;
+        
+        m_n0 = normal();
+        m_p0 = get_point();
+        m_n1 = normal();
+        m_p1 = get_point();
 	}
 
-	Plane::Plane(double a, double b, double c, double d) : n(Vector(a,b,c)), d(d)
+	Plane::Plane(double a, double b, double c, double d) : n(Vector(a,b,c)), d(d), range(1), param(0)
 	{
 		double l=n.length();
 		d/=l;
@@ -49,20 +56,36 @@ namespace FLIVR
 
 		n_copy = n;
 		d_copy = d;
+        
+        param_copy = param;
+        
+        m_n0 = normal();
+        m_p0 = get_point();
+        m_n1 = normal();
+        m_p1 = get_point();
 	}
 
 	Plane::Plane(const Point &p, const Vector &normal)
-		: n(normal), d(-Dot(p, normal))
+		: n(normal), d(-Dot(p, normal)), range(1), param(0)
 	{
 		n_copy = n;
 		d_copy = d;
+        
+        param_copy = param;
+        
+        m_n0 = n;
+        m_p0 = p;
+        m_n1 = n;
+        m_p1 = p;
 	}
 
 	Plane::Plane(const Plane &copy)
-		: n(copy.n), d(copy.d)
+		: n(copy.n), d(copy.d), range(copy.range), param(copy.param), m_n0(copy.m_n0), m_p0(copy.m_p0), m_n1(copy.m_n1), m_p1(copy.m_p1)
 	{
 		n_copy = copy.n_copy;
 		d_copy = copy.d_copy;
+        
+        param_copy = copy.param_copy;
 	}
 
 	Plane::Plane(const Point &p1, const Point &p2, const Point &p3)
@@ -75,6 +98,16 @@ namespace FLIVR
 
 		n_copy = n;
 		d_copy = d;
+        
+        param = 0;
+        param_copy = param;
+        
+        range = 1;
+        
+        m_n0 = normal();
+        m_p0 = get_point();
+        m_n1 = normal();
+        m_p1 = get_point();
 	}
 
 	Plane::~Plane()
@@ -107,6 +140,11 @@ namespace FLIVR
 	{
 		return -d*Point(n);
 	}
+    
+    Point Plane::get_remembered_point() const
+    {
+        return -d_copy*Point(n_copy);
+    }
 
 	Point Plane::project(const Point& p) const
 	{
@@ -122,6 +160,11 @@ namespace FLIVR
 	{
 		return n;
 	}
+    
+    Vector Plane::remembered_normal() const
+    {
+        return n_copy;
+    }
 
 	void Plane::ChangePlane(const Point &p1, const Point &p2, const Point &p3)
 	{
@@ -293,6 +336,28 @@ namespace FLIVR
         double dd = n.length();
         n.safe_normalize();
         d = d / dd;
+    }
+    
+    void Plane::SetRange(const Point &p0, const Vector &n0, const Point &p1, const Vector &n1)
+    {
+        m_p0 = p0;
+        m_n0 = n0;
+        m_p1 = p1;
+        m_n1 = n1;
+    }
+    
+    void Plane::SetParam(double p)
+    {
+        param = p;
+        
+        Point new_p = Point((1.0 - p) * m_p0 + p * m_p1);
+        Vector new_n = (1.0 - p) * m_n0 + p * -1.0 * m_n1;
+        
+        n = new_n;
+        d = -Dot(new_p, new_n);
+        
+        n_copy = n;
+        d_copy = d;
     }
 
 } // End namespace FLIVR

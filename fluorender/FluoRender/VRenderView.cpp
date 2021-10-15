@@ -9108,19 +9108,7 @@ DataGroup* VRenderVulkanView::AddVolumeData(VolumeData* vd, wxString group_name)
 
 			if (vr_frame->GetClippingView()->GetChannLink() && group->GetVolumeData(0) != vd && src_planes)
 			{
-				vector<Plane*> *dst_planes = vd->GetVR()->get_planes();
-				for (int k=0; k<(int)dst_planes->size(); k++)
-				{
-					if ((*dst_planes)[k])
-						delete (*dst_planes)[k];
-				}
-				dst_planes->clear();
-
-				for (int k=0; k<(int)src_planes->size(); k++)
-				{
-					Plane* plane = new Plane(*(*src_planes)[k]);
-					dst_planes->push_back(plane);
-				}
+                CalcAndSetCombinedClippingPlanes();
 			}
 		}
 	}
@@ -9168,19 +9156,7 @@ void VRenderVulkanView::AddMeshData(MeshData* md)
 
 		if (src_planes && vr_frame->GetClippingView()->GetChannLink())
 		{
-			vector<Plane*> *dst_planes = md->GetMR()->get_planes();
-			for (int k=0; k<(int)dst_planes->size(); k++)
-			{
-				if ((*dst_planes)[k])
-					delete (*dst_planes)[k];
-			}
-			dst_planes->clear();
-
-			for (int k=0; k<(int)src_planes->size(); k++)
-			{
-				Plane* plane = new Plane(*(*src_planes)[k]);
-				dst_planes->push_back(plane);
-			}
+			CalcAndSetCombinedClippingPlanes();
 		}
 	}
 	m_md_pop_dirty = true;
@@ -9886,20 +9862,7 @@ void VRenderVulkanView::MoveLayertoGroup(wxString &group_name, wxString &src_nam
 		vr_frame->GetAdjustView()->SetGroupLink(group);
 		if (vr_frame->GetClippingView()->GetChannLink() && group->GetVolumeData(0) != src_vd)
 		{
-			vector<Plane*> *dst_planes = src_vd->GetVR()->get_planes();
-			for (int k=0; k<(int)dst_planes->size(); k++)
-			{
-				if ((*dst_planes)[k])
-					delete (*dst_planes)[k];
-			}
-			dst_planes->clear();
-
-			vector<Plane*> *src_planes = group->GetVolumeData(0)->GetVR()->get_planes();
-			for (int k=0; k<(int)src_planes->size(); k++)
-			{
-				Plane* plane = new Plane(*(*src_planes)[k]);
-				dst_planes->push_back(plane);
-			}
+			CalcAndSetCombinedClippingPlanes();
 		}
 	}
 
@@ -10009,20 +9972,7 @@ void VRenderVulkanView::MoveLayerfromtoGroup(wxString &src_group_name, wxString 
 		vr_frame->GetAdjustView()->SetGroupLink(dst_group);
 		if (vr_frame->GetClippingView()->GetChannLink() && dst_group->GetVolumeData(0) != src_vd)
 		{
-			vector<Plane*> *dst_planes = src_vd->GetVR()->get_planes();
-			for (int k=0; k<(int)dst_planes->size(); k++)
-			{
-				if ((*dst_planes)[k])
-					delete (*dst_planes)[k];
-			}
-			dst_planes->clear();
-
-			vector<Plane*> *src_planes = dst_group->GetVolumeData(0)->GetVR()->get_planes();
-			for (int k=0; k<(int)src_planes->size(); k++)
-			{
-				Plane* plane = new Plane(*(*src_planes)[k]);
-				dst_planes->push_back(plane);
-			}
+			CalcAndSetCombinedClippingPlanes();
 		}
 	}
 
@@ -10350,25 +10300,20 @@ void VRenderVulkanView::InitView(unsigned int type)
 		m_bounds.reset();
 		PopVolumeList();
 		PopMeshList();
-
-		if (m_vd_pop_list.size() > 0)
-		{
-			for (i = 0; i < (int)m_vd_pop_list.size(); i++)
-				m_bounds.extend(m_vd_pop_list[i]->GetBounds());
-			for (i = 0; i < (int)m_md_pop_list.size(); i++)
-			{
-				m_md_pop_list[i]->RecalcBounds();
-				m_bounds.extend(m_md_pop_list[i]->GetBounds());
-			}
-		}
-		else
-		{
-			for (i = 0; i < (int)m_md_pop_list.size(); i++)
-			{
-				m_md_pop_list[i]->RecalcBounds();
-				m_bounds.extend(m_md_pop_list[i]->GetBounds());
-			}
-		}
+        
+        VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+        if (vr_frame && vr_frame->GetClippingView())
+        {
+            for (i = 0; i < (int)m_md_pop_list.size(); i++)
+                m_md_pop_list[i]->RecalcBounds();
+            if (vr_frame->GetClippingView()->GetChannLink())
+                CalcAndSetCombinedClippingPlanes();
+        }
+        
+        for (i = 0; i < (int)m_vd_pop_list.size(); i++)
+            m_bounds.extend(m_vd_pop_list[i]->GetBounds());
+        for (i = 0; i < (int)m_md_pop_list.size(); i++)
+            m_bounds.extend(m_md_pop_list[i]->GetBounds());
 
 		if (m_bounds.valid())
 		{
@@ -17406,6 +17351,125 @@ void VRenderVulkanView::GetTiledViewQuadVerts(int tileid, vector<Vulkan2dRender:
 	verts.push_back(Vulkan2dRender::Vertex{ {(float)edpos_x, (float)stpos_y, 0.0f}, {(float)tex_x, (float)tex_y, 0.0f} });
 	
 }
+
+void VRenderVulkanView::CalcAndSetCombinedClippingPlanes()
+{
+    int i;
+    
+    m_bounds.reset();
+    PopVolumeList();
+    PopMeshList();
+    
+    BBox bounds;
+    
+    for (i = 0; i < (int)m_vd_pop_list.size(); i++)
+    {
+        VolumeData* vd = m_vd_pop_list[i];
+        if (vd)
+        {
+            if (!vd->GetTexture())
+                continue;
+            Transform *tform = vd->GetTexture()->transform();
+            if (!tform)
+                continue;
+            Transform tform_copy;
+            double mvmat[16];
+            tform->get_trans(mvmat);
+            swap(mvmat[3], mvmat[12]);
+            swap(mvmat[7], mvmat[13]);
+            swap(mvmat[11], mvmat[14]);
+            tform_copy.set(mvmat);
+            
+            FLIVR::Point p[8] = {
+                FLIVR::Point(0.0f, 0.0f, 0.0f),
+                FLIVR::Point(1.0f, 0.0f, 0.0f),
+                FLIVR::Point(1.0f, 1.0f, 0.0f),
+                FLIVR::Point(0.0f, 1.0f, 0.0f),
+                FLIVR::Point(0.0f, 0.0f, 1.0f),
+                FLIVR::Point(1.0f, 0.0f, 1.0f),
+                FLIVR::Point(1.0f, 1.0f, 1.0f),
+                FLIVR::Point(0.0f, 1.0f, 1.0f)
+            };
+            
+            for (int j = 0; j < 8; j++)
+            {
+                p[j] = tform_copy.project(p[j]);
+                bounds.extend(p[j]);
+            }
+        }
+    }
+    
+    
+    for (i = 0; i < (int)m_md_pop_list.size(); i++)
+    {
+        m_md_pop_list[i]->RecalcBounds();
+        bounds.extend(m_md_pop_list[i]->GetBounds());
+    }
+    
+    for (i = 0; i < (int)m_vd_pop_list.size(); i++)
+    {
+        
+        VolumeData* vd = m_vd_pop_list[i];
+        if (vd)
+        {
+            FLIVR::Point pp[6] = {
+                FLIVR::Point(bounds.min().x(), 0.0, 0.0),
+                FLIVR::Point(bounds.max().x(), 0.0, 0.0),
+                FLIVR::Point(0.0, bounds.min().y(), 0.0),
+                FLIVR::Point(0.0, bounds.max().y(), 0.0),
+                FLIVR::Point(0.0, 0.0, bounds.min().z()),
+                FLIVR::Point(0.0, 0.0, bounds.max().z())
+            };
+            
+            FLIVR::Vector pn[6] = {
+                FLIVR::Vector(1.0, 0.0, 0.0),
+                FLIVR::Vector(-1.0, 0.0, 0.0),
+                FLIVR::Vector(0.0, 1.0, 0.0),
+                FLIVR::Vector(0.0, -1.0, 0.0),
+                FLIVR::Vector(0.0, 0.0, 1.0),
+                FLIVR::Vector(0.0, 0.0, -1.0)
+            };
+            
+            if (!vd->GetVR())
+                continue;
+            if (!vd->GetTexture())
+                continue;
+            Transform *tform = vd->GetTexture()->transform();
+            if (!tform)
+                continue;
+            Transform tform_copy;
+            double mvmat[16];
+            tform->get_trans(mvmat);
+            swap(mvmat[3], mvmat[12]);
+            swap(mvmat[7], mvmat[13]);
+            swap(mvmat[11], mvmat[14]);
+            tform_copy.set(mvmat);
+            
+            vector<Plane*> *planes = vd->GetVR()->get_planes();
+            
+            for (int j = 0; j < 6; j++)
+            {
+                pp[j] = tform_copy.unproject(pp[j]);
+                pn[j] = tform->project(pn[j]);
+                pn[j].safe_normalize();
+                
+                (*planes)[j]->RememberParam();
+                (*planes)[j]->ChangePlane(pp[j], pn[j]);
+            }
+            
+            (*planes)[0]->SetRange((*planes)[0]->get_point(), (*planes)[0]->normal(), (*planes)[1]->get_point(), (*planes)[1]->normal());
+            (*planes)[1]->SetRange((*planes)[1]->get_point(), (*planes)[1]->normal(), (*planes)[0]->get_point(), (*planes)[0]->normal());
+            (*planes)[2]->SetRange((*planes)[2]->get_point(), (*planes)[2]->normal(), (*planes)[3]->get_point(), (*planes)[3]->normal());
+            (*planes)[3]->SetRange((*planes)[3]->get_point(), (*planes)[3]->normal(), (*planes)[2]->get_point(), (*planes)[2]->normal());
+            (*planes)[4]->SetRange((*planes)[4]->get_point(), (*planes)[4]->normal(), (*planes)[5]->get_point(), (*planes)[5]->normal());
+            (*planes)[5]->SetRange((*planes)[5]->get_point(), (*planes)[5]->normal(), (*planes)[4]->get_point(), (*planes)[4]->normal());
+        }
+    }
+    
+    for (i = 0; i < (int)m_md_pop_list.size(); i++)
+        m_md_pop_list[i]->SetBounds(bounds);
+}
+
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -68,6 +68,13 @@ namespace FLIVR
 		planes_.push_back(plane);
 		plane = new Plane(Point(0.0, 0.0, 1.0), Vector(0.0, 0.0, -1.0));
 		planes_.push_back(plane);
+        
+        planes_[0]->SetRange(planes_[0]->get_point(), planes_[0]->normal(), planes_[1]->get_point(), planes_[1]->normal());
+        planes_[1]->SetRange(planes_[1]->get_point(), planes_[1]->normal(), planes_[0]->get_point(), planes_[0]->normal());
+        planes_[2]->SetRange(planes_[2]->get_point(), planes_[2]->normal(), planes_[3]->get_point(), planes_[3]->normal());
+        planes_[3]->SetRange(planes_[3]->get_point(), planes_[3]->normal(), planes_[2]->get_point(), planes_[2]->normal());
+        planes_[4]->SetRange(planes_[4]->get_point(), planes_[4]->normal(), planes_[5]->get_point(), planes_[5]->normal());
+        planes_[5]->SetRange(planes_[5]->get_point(), planes_[5]->normal(), planes_[4]->get_point(), planes_[4]->normal());
 
 		setupVertexDescriptions();
 

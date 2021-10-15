@@ -195,6 +195,19 @@ public:
     int GetXdist();
     int GetYdist();
     int GetZdist();
+    
+    void SetLinkedX1Param(double p) { m_linked_plane_params[0] = p; }
+    void SetLinkedX2Param(double p) { m_linked_plane_params[1] = p; }
+    void SetLinkedY1Param(double p) { m_linked_plane_params[2] = p; }
+    void SetLinkedY2Param(double p) { m_linked_plane_params[3] = p; }
+    void SetLinkedZ1Param(double p) { m_linked_plane_params[4] = p; }
+    void SetLinkedZ2Param(double p) { m_linked_plane_params[5] = p; }
+    double GetLinkedX1Param() { return m_linked_plane_params[0]; }
+    double GetLinkedX2Param() { return m_linked_plane_params[1]; }
+    double GetLinkedY1Param() { return m_linked_plane_params[2]; }
+    double GetLinkedY2Param() { return m_linked_plane_params[3]; }
+    double GetLinkedZ1Param() { return m_linked_plane_params[4]; }
+    double GetLinkedZ2Param() { return m_linked_plane_params[5]; }
 
 private:
 	wxWindow* m_frame;
@@ -278,6 +291,8 @@ private:
 	wxTextCtrl *m_xy_dist_text;
 
 	wxTimer *m_timer;
+    
+    double m_linked_plane_params[6];
 
 private:
 	void GetSettings();

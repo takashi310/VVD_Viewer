@@ -42,10 +42,19 @@ namespace FLIVR
 	{
 		Vector n;
 		double d;
+        double range;
+        double param;
+        
+        Vector m_n0;
+        Point m_p0;
+        Vector m_n1;
+        Point m_p1;
 
 		//copy of the values for restoration
 		Vector n_copy;
 		double d_copy;
+        
+        double param_copy;
 
 	public:
 		Plane(const Plane &copy);
@@ -58,12 +67,18 @@ namespace FLIVR
 		Plane& operator=(const Plane&);
 		double eval_point(const Point &p) const;
 		Point get_point() const;
+        Point get_remembered_point() const;
 		void flip();
 		Point project(const Point& p) const;
 		Vector project(const Vector& v) const;
 		Vector normal() const;
+        Vector remembered_normal() const;
 		void get(double (&abcd)[4]) const;
 		void get_copy(double (&abcd)[4]) const;
+        
+        void SetRange(const Point &p0, const Vector &n0, const Point &p1, const Vector &n1);
+        void SetParam(double p);
+        double GetParam() { return param; }
 
 		// Not a great ==, doesnt take into account for floating point error.
 		bool operator==(const Plane &rhs) const; 
@@ -90,6 +105,9 @@ namespace FLIVR
 		//remember and restore
 		void Remember() {n_copy = n; d_copy = d;};
 		void Restore() {n = n_copy; d = d_copy;};
+        
+        void RememberParam() {param_copy = param;};
+        void RestoreParam() {SetParam(param_copy);};
 	};
 
 } // End namespace FLIVR

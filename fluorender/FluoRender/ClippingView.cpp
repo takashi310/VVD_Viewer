@@ -470,6 +470,9 @@ m_update_only_ui(false)
 
 	m_timer = new wxTimer(this, ID_CLTimer);
 	m_timer->Start(100);
+    
+    for(auto &e : m_linked_plane_params)
+        e = 0.0;
 }
 
 ClippingView::~ClippingView()
@@ -579,6 +582,33 @@ void ClippingView::GetSettings()
 	}
 
 	EnableAll();
+    
+    vector<Plane*> *planes = 0;
+    Transform tform;
+    tform.load_identity();
+    switch (m_sel_type)
+    {
+        case 2:    //volume
+            if (m_vd->GetVR() && m_vd->GetTexture() && m_vd->GetTexture()->transform())
+            {
+                planes = m_vd->GetVR()->get_planes();
+                tform = *m_vd->GetTexture()->transform();
+            }
+            break;
+        case 3:    //mesh
+            if (m_md->GetMR())
+            {
+                planes = m_md->GetMR()->get_planes();
+                BBox bb = m_md->GetBounds();
+                Vector sc(bb.max().x() - bb.min().x(), bb.max().y() - bb.min().y(), bb.max().z() - bb.min().z());
+                tform.post_scale(sc);
+            }
+            break;
+    }
+    if (!planes)
+        return;
+    if (planes->size()!=6)    //it has to be 6
+        return;
 
 	int resx, resy, resz;
 	int resx_n, resy_n, resz_n;
@@ -587,6 +617,32 @@ void ClippingView::GetSettings()
 	case 2:	//volume
 		m_vd->GetResolution(resx, resy, resz);
 		resx_n = resy_n = resz_n = 0;
+        if (m_link_channels->GetValue())
+        {
+            double mvmat[16];
+            tform.get_trans(mvmat);
+            swap(mvmat[3], mvmat[12]);
+            swap(mvmat[7], mvmat[13]);
+            swap(mvmat[11], mvmat[14]);
+            tform.set(mvmat);
+            
+            double dims[3];
+            for (int j = 0; j < 3; j++)
+            {
+                double param = (*planes)[2*j]->GetParam();
+                (*planes)[2*j]->SetParam(0.0);
+                Point p0 = (*planes)[2*j]->get_point();
+                (*planes)[2*j]->SetParam(1.0);
+                Point p1 = (*planes)[j+1]->get_point();
+                (*planes)[2*j]->SetParam(param);
+                p0 = tform.project(p0);
+                p1 = tform.project(p1);
+                dims[j] = (p1 - p0).length();
+            }
+            resx = dims[0];
+            resy = dims[1];
+            resz = dims[2];
+        }
 		break;
 	case 3:	//mesh
 		resx = resy = resz = 0;
@@ -597,6 +653,25 @@ void ClippingView::GetSettings()
 			resx = (int)dim.x();
 			resy = (int)dim.y();
 			resz = (int)dim.z();
+            if (m_link_channels->GetValue())
+            {
+                double dims[3];
+                for (int j = 0; j < 3; j++)
+                {
+                    double param = (*planes)[2*j]->GetParam();
+                    (*planes)[2*j]->SetParam(0.0);
+                    Point p0 = (*planes)[2*j]->get_point();
+                    (*planes)[2*j]->SetParam(1.0);
+                    Point p1 = (*planes)[j+1]->get_point();
+                    (*planes)[2*j]->SetParam(param);
+                    p0 = tform.project(p0);
+                    p1 = tform.project(p1);
+                    dims[j] = (p1 - p0).length();
+                }
+                resx = dims[0];
+                resy = dims[1];
+                resz = dims[2];
+            }
 		}
 		break;
 	}
@@ -659,32 +734,18 @@ void ClippingView::GetSettings()
 		break;
 	}
 
-	vector<Plane*> *planes = 0;
-	switch (m_sel_type)
-	{
-	case 2:	//volume
-		if (m_vd->GetVR())
-			planes = m_vd->GetVR()->get_planes();
-		break;
-	case 3:	//mesh
-		if (m_md->GetMR())
-			planes = m_md->GetMR()->get_planes();
-		break;
-	}
-	if (!planes)
-		return;
-	if (planes->size()!=6)	//it has to be 6
-		return;
-
 	wxString str;
 	Plane* plane = 0;
 	int val = 0;
-	double abcd[4];
+	double param;
 
 	//x1
 	plane = (*planes)[0];
-	plane->get_copy(abcd);
-	val = fabs(abcd[3]*resx)+0.499;
+    if (m_link_channels->GetValue())
+        param = m_linked_plane_params[0];
+    else
+        param = plane->GetParam();
+	val = fabs(param*resx)+0.499;
 	m_x1_clip_sldr->SetValue(val);
 	double percent = (double)val/(double)m_x1_clip_sldr->GetMax();
 	int barsize = (m_x1_clip_sldr->GetSize().GetHeight() - 20);
@@ -692,8 +753,11 @@ void ClippingView::GetSettings()
 	m_x1_clip_text->ChangeValue(str);
 	//x2
 	plane = (*planes)[1];
-	plane->get_copy(abcd);
-	val = fabs(abcd[3]*resx)+0.499;
+    if (m_link_channels->GetValue())
+        param = 1.0 - m_linked_plane_params[1];
+    else
+        param = 1.0 - plane->GetParam();
+    val = fabs(param*resx)+0.499;
 	m_x2_clip_sldr->SetValue(val);
 	m_xBar->SetPosition(wxPoint(20,10+percent*barsize));
 	m_xBar->SetSize(wxSize(3,barsize*((double)
@@ -702,8 +766,11 @@ void ClippingView::GetSettings()
 	m_x2_clip_text->ChangeValue(str);
 	//y1
 	plane = (*planes)[2];
-	plane->get_copy(abcd);
-	val = fabs(abcd[3]*resy)+0.499;
+    if (m_link_channels->GetValue())
+        param = m_linked_plane_params[2];
+    else
+        param = plane->GetParam();
+    val = fabs(param*resy)+0.499;
 	m_y1_clip_sldr->SetValue(val);
 	percent = (double)val/(double)m_y1_clip_sldr->GetMax();
 	barsize = (m_y1_clip_sldr->GetSize().GetHeight() - 20);
@@ -711,8 +778,11 @@ void ClippingView::GetSettings()
 	m_y1_clip_text->ChangeValue(str);
 	//y2
 	plane = (*planes)[3];
-	plane->get_copy(abcd);
-	val = fabs(abcd[3]*resy)+0.499;
+    if (m_link_channels->GetValue())
+        param = 1.0 - m_linked_plane_params[3];
+    else
+        param = 1.0 - plane->GetParam();
+    val = fabs(param*resy)+0.499;
 	m_y2_clip_sldr->SetValue(val);
 	m_yBar->SetPosition(wxPoint(20,10+percent*barsize));
 	m_yBar->SetSize(wxSize(3,barsize*((double)
@@ -721,8 +791,11 @@ void ClippingView::GetSettings()
 	m_y2_clip_text->ChangeValue(str);
 	//z1
 	plane = (*planes)[4];
-	plane->get_copy(abcd);
-	val = fabs(abcd[3]*resz)+0.499;
+    if (m_link_channels->GetValue())
+        param = m_linked_plane_params[4];
+    else
+        param = plane->GetParam();
+    val = fabs(param*resz)+0.499;
 	m_z1_clip_sldr->SetValue(val);
 	percent = (double)val/(double)m_z1_clip_sldr->GetMax();
 	barsize = (m_z1_clip_sldr->GetSize().GetHeight() - 20);
@@ -730,8 +803,11 @@ void ClippingView::GetSettings()
 	m_z1_clip_text->ChangeValue(str);
 	//z2
 	plane = (*planes)[5];
-	plane->get_copy(abcd);
-	val = fabs(abcd[3]*resz)+0.499;
+    if (m_link_channels->GetValue())
+        param = 1.0 - m_linked_plane_params[5];
+    else
+        param = 1.0 - plane->GetParam();
+    val = fabs(param*resz)+0.499;
 	m_zBar->SetPosition(wxPoint(20,10+percent*barsize));
 	m_zBar->SetSize(wxSize(3,barsize*((double)
 		(val - m_z1_clip_sldr->GetValue())/(double)m_z1_clip_sldr->GetMax())));
@@ -750,100 +826,143 @@ void ClippingView::OnLinkChannelsCheck(wxCommandEvent &event)
 	{
 		if (!m_mgr)
 			return;
-
-		wxString str;
-		//x1
-		str = m_x1_clip_text->GetValue();
-		long x1_val = 0;
-		str.ToLong(&x1_val);
-		//x2
-		str = m_x2_clip_text->GetValue();
-		long x2_val = 0;
-		str.ToLong(&x2_val);
-		//y1
-		str = m_y1_clip_text->GetValue();
-		long y1_val = 0;
-		str.ToLong(&y1_val);
-		//y2
-		str = m_y2_clip_text->GetValue();
-		long y2_val = 0;
-		str.ToLong(&y2_val);
-		//z1
-		str = m_z1_clip_text->GetValue();
-		long z1_val = 0;
-		str.ToLong(&z1_val);
-		//z2
-		str = m_z2_clip_text->GetValue();
-		long z2_val = 0;
-		str.ToLong(&z2_val);
-
-		int resx, resy, resz;
-		if (m_sel_type == 2)
-			m_vd->GetResolution(resx, resy, resz);
-		else if (m_sel_type == 3)
-		{
-			Vector dim = m_md->GetBounds().diagonal();
-			resx = (int)dim.x();
-			resy = (int)dim.y();
-			resz = (int)dim.z();
-		}
-
-		double x1_dv = double(x1_val)/double(resx);
-		double x2_dv = double(x2_val)/double(resx);
-		double y1_dv = double(y1_val)/double(resy);
-		double y2_dv = double(y2_val)/double(resy);
-		double z1_dv = double(z1_val)/double(resz);
-		double z2_dv = double(z2_val)/double(resz);
-
-		int i;
-
-		for (i=0; i<m_mgr->GetVolumeNum(); i++)
-		{
-			VolumeData* vd = m_mgr->GetVolumeData(i);
-			if (!vd || vd == m_vd)
-				continue;
-
-			vector<Plane*> *planes = 0;
-			if (vd->GetVR())
-				planes = vd->GetVR()->get_planes();
-			if (!planes)
-				continue;
-			if (planes->size() != 6)
-				continue;
-
-			(*planes)[0]->ChangePlane(Point(x1_dv, 0.0, 0.0), Vector(1.0, 0.0, 0.0));
-			(*planes)[1]->ChangePlane(Point(x2_dv, 0.0, 0.0), Vector(-1.0, 0.0, 0.0));
-			(*planes)[2]->ChangePlane(Point(0.0, y1_dv, 0.0), Vector(0.0, 1.0, 0.0));
-			(*planes)[3]->ChangePlane(Point(0.0, y2_dv, 0.0), Vector(0.0, -1.0, 0.0));
-			(*planes)[4]->ChangePlane(Point(0.0, 0.0, z1_dv), Vector(0.0, 0.0, 1.0));
-			(*planes)[5]->ChangePlane(Point(0.0, 0.0, z2_dv), Vector(0.0, 0.0, -1.0));
-		}
-
-		for (i=0; i<m_mgr->GetMeshNum(); i++)
-		{
-			MeshData* md = m_mgr->GetMeshData(i);
-			if (!md || md == m_md)
-				continue;
-
-			vector<Plane*> *planes = 0;
-			if (md->GetMR())
-				planes = md->GetMR()->get_planes();
-			if (!planes)
-				continue;
-			if (planes->size() != 6)
-				continue;
-
-			(*planes)[0]->ChangePlane(Point(x1_dv, 0.0, 0.0), Vector(1.0, 0.0, 0.0));
-			(*planes)[1]->ChangePlane(Point(x2_dv, 0.0, 0.0), Vector(-1.0, 0.0, 0.0));
-			(*planes)[2]->ChangePlane(Point(0.0, y1_dv, 0.0), Vector(0.0, 1.0, 0.0));
-			(*planes)[3]->ChangePlane(Point(0.0, y2_dv, 0.0), Vector(0.0, -1.0, 0.0));
-			(*planes)[4]->ChangePlane(Point(0.0, 0.0, z1_dv), Vector(0.0, 0.0, 1.0));
-			(*planes)[5]->ChangePlane(Point(0.0, 0.0, z2_dv), Vector(0.0, 0.0, -1.0));
-		}
-
-		RefreshVRenderViews();
-
+        
+        VRenderFrame* vrender_frame = (VRenderFrame*)m_frame;
+        if (vrender_frame)
+        {
+            for (int i=0; i<(int)vrender_frame->GetViewList()->size(); i++)
+            {
+                VRenderView *vrv = (*vrender_frame->GetViewList())[i];
+                if (vrv)
+                {
+                    vrv->CalcAndSetCombinedClippingPlanes();
+                }
+            }
+        }
+        if (m_mgr)
+        {
+            vector<Plane*> *planes;
+            int i;
+            for (i=0; i<m_mgr->GetVolumeNum(); i++)
+            {
+                VolumeData* vd = m_mgr->GetVolumeData(i);
+                if (!vd)
+                    continue;
+                
+                planes = 0;
+                if (vd->GetVR())
+                    planes = vd->GetVR()->get_planes();
+                if (!planes)
+                    continue;
+                if (planes->size() != 6)
+                    continue;
+                
+                for (int i = 0; i < 6; i++)
+                    (*planes)[i]->SetParam(m_linked_plane_params[i]);
+            }
+            for (i=0; i<m_mgr->GetMeshNum(); i++)
+            {
+                MeshData* md = m_mgr->GetMeshData(i);
+                if (!md)
+                    continue;
+                
+                planes = 0;
+                if (md->GetMR())
+                    planes = md->GetMR()->get_planes();
+                if (!planes)
+                    continue;
+                if (planes->size() != 6)
+                    continue;
+                
+                for (int i = 0; i < 6; i++)
+                    (*planes)[i]->SetParam(m_linked_plane_params[i]);
+            }
+        }
 	}
+    else
+    {
+        if (m_mgr)
+        {
+            vector<Plane*> *planes;
+            int i;
+            for (i=0; i<m_mgr->GetVolumeNum(); i++)
+            {
+                VolumeData* vd = m_mgr->GetVolumeData(i);
+                if (!vd)
+                    continue;
+                
+                planes = 0;
+                if (vd->GetVR())
+                    planes = vd->GetVR()->get_planes();
+                if (!planes)
+                    continue;
+                if (planes->size() != 6)
+                    continue;
+                
+                Plane* plane = (*planes)[0];
+                plane->ChangePlane(Point(0.0, 0.0, 0.0), Vector(1.0, 0.0, 0.0));
+                plane = (*planes)[1];
+                plane->ChangePlane(Point(1.0, 0.0, 0.0), Vector(-1.0, 0.0, 0.0));
+                plane = (*planes)[2];
+                plane->ChangePlane(Point(0.0, 0.0, 0.0), Vector(0.0, 1.0, 0.0));
+                plane = (*planes)[3];
+                plane->ChangePlane(Point(0.0, 1.0, 0.0), Vector(0.0, -1.0, 0.0));
+                plane = (*planes)[4];
+                plane->ChangePlane(Point(0.0, 0.0, 0.0), Vector(0.0, 0.0, 1.0));
+                plane = (*planes)[5];
+                plane->ChangePlane(Point(0.0, 0.0, 1.0), Vector(0.0, 0.0, -1.0));
+                
+                (*planes)[0]->SetRange((*planes)[0]->get_point(), (*planes)[0]->normal(), (*planes)[1]->get_point(), (*planes)[1]->normal());
+                (*planes)[1]->SetRange((*planes)[1]->get_point(), (*planes)[1]->normal(), (*planes)[0]->get_point(), (*planes)[0]->normal());
+                (*planes)[2]->SetRange((*planes)[2]->get_point(), (*planes)[2]->normal(), (*planes)[3]->get_point(), (*planes)[3]->normal());
+                (*planes)[3]->SetRange((*planes)[3]->get_point(), (*planes)[3]->normal(), (*planes)[2]->get_point(), (*planes)[2]->normal());
+                (*planes)[4]->SetRange((*planes)[4]->get_point(), (*planes)[4]->normal(), (*planes)[5]->get_point(), (*planes)[5]->normal());
+                (*planes)[5]->SetRange((*planes)[5]->get_point(), (*planes)[5]->normal(), (*planes)[4]->get_point(), (*planes)[4]->normal());
+                
+                for (auto p : *planes)
+                    p->RestoreParam();
+            }
+            for (i=0; i<m_mgr->GetMeshNum(); i++)
+            {
+                MeshData* md = m_mgr->GetMeshData(i);
+                if (!md)
+                    continue;
+                
+                planes = 0;
+                if (md->GetMR())
+                    planes = md->GetMR()->get_planes();
+                if (!planes)
+                    continue;
+                if (planes->size() != 6)
+                    continue;
+                
+                Plane* plane = (*planes)[0];
+                plane->ChangePlane(Point(0.0, 0.0, 0.0), Vector(1.0, 0.0, 0.0));
+                plane = (*planes)[1];
+                plane->ChangePlane(Point(1.0, 0.0, 0.0), Vector(-1.0, 0.0, 0.0));
+                plane = (*planes)[2];
+                plane->ChangePlane(Point(0.0, 0.0, 0.0), Vector(0.0, 1.0, 0.0));
+                plane = (*planes)[3];
+                plane->ChangePlane(Point(0.0, 1.0, 0.0), Vector(0.0, -1.0, 0.0));
+                plane = (*planes)[4];
+                plane->ChangePlane(Point(0.0, 0.0, 0.0), Vector(0.0, 0.0, 1.0));
+                plane = (*planes)[5];
+                plane->ChangePlane(Point(0.0, 0.0, 1.0), Vector(0.0, 0.0, -1.0));
+                
+                (*planes)[0]->SetRange((*planes)[0]->get_point(), (*planes)[0]->normal(), (*planes)[1]->get_point(), (*planes)[1]->normal());
+                (*planes)[1]->SetRange((*planes)[1]->get_point(), (*planes)[1]->normal(), (*planes)[0]->get_point(), (*planes)[0]->normal());
+                (*planes)[2]->SetRange((*planes)[2]->get_point(), (*planes)[2]->normal(), (*planes)[3]->get_point(), (*planes)[3]->normal());
+                (*planes)[3]->SetRange((*planes)[3]->get_point(), (*planes)[3]->normal(), (*planes)[2]->get_point(), (*planes)[2]->normal());
+                (*planes)[4]->SetRange((*planes)[4]->get_point(), (*planes)[4]->normal(), (*planes)[5]->get_point(), (*planes)[5]->normal());
+                (*planes)[5]->SetRange((*planes)[5]->get_point(), (*planes)[5]->normal(), (*planes)[4]->get_point(), (*planes)[4]->normal());
+                
+                for (auto p : *planes)
+                    p->RestoreParam();
+            }
+        }
+    }
+    GetSettings();
+    RefreshVRenderViews();
 }
 
 void ClippingView::OnPlaneModesCombo(wxCommandEvent &event)
@@ -894,7 +1013,17 @@ void ClippingView::OnClipResetBtn(wxCommandEvent &event)
 	plane->ChangePlane(Point(0.0, 0.0, 0.0), Vector(0.0, 0.0, 1.0));
 	plane = (*planes)[5];
 	plane->ChangePlane(Point(0.0, 0.0, 1.0), Vector(0.0, 0.0, -1.0));
-
+    
+    (*planes)[0]->SetRange((*planes)[0]->get_point(), (*planes)[0]->normal(), (*planes)[1]->get_point(), (*planes)[1]->normal());
+    (*planes)[1]->SetRange((*planes)[1]->get_point(), (*planes)[1]->normal(), (*planes)[0]->get_point(), (*planes)[0]->normal());
+    (*planes)[2]->SetRange((*planes)[2]->get_point(), (*planes)[2]->normal(), (*planes)[3]->get_point(), (*planes)[3]->normal());
+    (*planes)[3]->SetRange((*planes)[3]->get_point(), (*planes)[3]->normal(), (*planes)[2]->get_point(), (*planes)[2]->normal());
+    (*planes)[4]->SetRange((*planes)[4]->get_point(), (*planes)[4]->normal(), (*planes)[5]->get_point(), (*planes)[5]->normal());
+    (*planes)[5]->SetRange((*planes)[5]->get_point(), (*planes)[5]->normal(), (*planes)[4]->get_point(), (*planes)[4]->normal());
+    for (auto p : *planes)
+        p->SetParam(0.0);
+    
+    
 	//links
 	m_link_x = false;
 	m_link_y = false;
@@ -924,51 +1053,24 @@ void ClippingView::OnClipResetBtn(wxCommandEvent &event)
 	{
 		if (m_mgr)
 		{
-			int i;
-			for (i=0; i<m_mgr->GetVolumeNum(); i++)
-			{
-				VolumeData* vd = m_mgr->GetVolumeData(i);
-				if (!vd || vd == m_vd)
-					continue;
-
-				planes = 0;
-				if (vd->GetVR())
-					planes = vd->GetVR()->get_planes();
-				if (!planes)
-					continue;
-				if (planes->size() != 6)
-					continue;
-
-				(*planes)[0]->ChangePlane(Point(0.0, 0.0, 0.0), Vector(1.0, 0.0, 0.0));
-				(*planes)[1]->ChangePlane(Point(1.0, 0.0, 0.0), Vector(-1.0, 0.0, 0.0));
-				(*planes)[2]->ChangePlane(Point(0.0, 0.0, 0.0), Vector(0.0, 1.0, 0.0));
-				(*planes)[3]->ChangePlane(Point(0.0, 1.0, 0.0), Vector(0.0, -1.0, 0.0));
-				(*planes)[4]->ChangePlane(Point(0.0, 0.0, 0.0), Vector(0.0, 0.0, 1.0));
-				(*planes)[5]->ChangePlane(Point(0.0, 0.0, 1.0), Vector(0.0, 0.0, -1.0));
-			}
-			for (i=0; i<m_mgr->GetMeshNum(); i++)
-			{
-				MeshData* md = m_mgr->GetMeshData(i);
-				if (!md || md == m_md)
-					continue;
-
-				planes = 0;
-				if (md->GetMR())
-					planes = md->GetMR()->get_planes();
-				if (!planes)
-					continue;
-				if (planes->size() != 6)
-					continue;
-
-				(*planes)[0]->ChangePlane(Point(0.0, 0.0, 0.0), Vector(1.0, 0.0, 0.0));
-				(*planes)[1]->ChangePlane(Point(1.0, 0.0, 0.0), Vector(-1.0, 0.0, 0.0));
-				(*planes)[2]->ChangePlane(Point(0.0, 0.0, 0.0), Vector(0.0, 1.0, 0.0));
-				(*planes)[3]->ChangePlane(Point(0.0, 1.0, 0.0), Vector(0.0, -1.0, 0.0));
-				(*planes)[4]->ChangePlane(Point(0.0, 0.0, 0.0), Vector(0.0, 0.0, 1.0));
-				(*planes)[5]->ChangePlane(Point(0.0, 0.0, 1.0), Vector(0.0, 0.0, -1.0));
-			}
+            VRenderFrame* vrender_frame = (VRenderFrame*)m_frame;
+            if (vrender_frame)
+            {
+                for (int i=0; i<(int)vrender_frame->GetViewList()->size(); i++)
+                {
+                    VRenderView *vrv = (*vrender_frame->GetViewList())[i];
+                    if (vrv)
+                    {
+                        vrv->CalcAndSetCombinedClippingPlanes();
+                    }
+                }
+            }
 		}
+        for (int i = 0; i < 6; i++)
+            m_linked_plane_params[i] = 0.0;
 	}
+    
+    GetSettings();
 
 	//views
 	VRenderFrame* vrender_frame = (VRenderFrame*)m_frame;
@@ -1019,6 +1121,12 @@ void ClippingView::OnX1ClipEdit(wxCommandEvent &event)
 		if (m_md->GetMR())
 			planes = m_md->GetMR()->get_planes();
 	}
+    
+    if (!m_x1_clip_sldr || !m_y1_clip_sldr || !m_z1_clip_sldr)
+        return;
+    resx = m_x1_clip_sldr->GetMax();
+    resy = m_y1_clip_sldr->GetMax();
+    resz = m_z1_clip_sldr->GetMax();
 
 	if(!planes)
 		return;
@@ -1052,16 +1160,23 @@ void ClippingView::OnX1ClipEdit(wxCommandEvent &event)
 	m_xBar->SetPosition(wxPoint(20,10+val*barsize));
 	m_xBar->SetSize(wxSize(3,barsize*((double)
 		(m_x2_clip_sldr->GetValue()-ival)/(double)m_x1_clip_sldr->GetMax())));
-	Plane* plane = (*planes)[0];
-	plane->ChangePlane(Point(val, 0.0, 0.0), Vector(1.0, 0.0, 0.0));
+	
+    Plane* plane = (*planes)[0];
+    if (m_link_channels->GetValue())
+        m_linked_plane_params[0] = val;
+    plane->SetParam(val);
+    
 	if (m_link_x)
 	{
-		val2 = (double)ival2/(double)resx;
+		val2 = 1.0 - (double)ival2/(double)resx;
 		str = wxString::Format("%d", ival2);
 		m_x2_clip_text->ChangeValue(str);
 		m_x2_clip_sldr->SetValue(ival2);
-		plane = (*planes)[1];
-		plane->ChangePlane(Point(val2, 0.0, 0.0), Vector(-1.0, 0.0, 0.0));
+		
+        plane = (*planes)[1];
+        if (m_link_channels->GetValue())
+            m_linked_plane_params[1] = val2;
+        plane->SetParam(val2);
 	}
 
 	if (m_link_channels->GetValue())
@@ -1083,9 +1198,9 @@ void ClippingView::OnX1ClipEdit(wxCommandEvent &event)
 				if (planes->size() != 6)
 					continue;
 
-				(*planes)[0]->ChangePlane(Point(val, 0.0, 0.0), Vector(1.0, 0.0, 0.0));
+                (*planes)[0]->SetParam(val);
 				if (m_link_x)
-					(*planes)[1]->ChangePlane(Point(val2, 0.0, 0.0), Vector(-1.0, 0.0, 0.0));
+					(*planes)[1]->SetParam(val2);
 			}
 			for (i=0; i<m_mgr->GetMeshNum(); i++)
 			{
@@ -1101,9 +1216,9 @@ void ClippingView::OnX1ClipEdit(wxCommandEvent &event)
 				if (planes->size() != 6)
 					continue;
 
-				(*planes)[0]->ChangePlane(Point(val, 0.0, 0.0), Vector(1.0, 0.0, 0.0));
-				if (m_link_x)
-					(*planes)[1]->ChangePlane(Point(val2, 0.0, 0.0), Vector(-1.0, 0.0, 0.0));
+                (*planes)[0]->SetParam(val);
+                if (m_link_x)
+                    (*planes)[1]->SetParam(val2);
 			}
 		}
 	}
@@ -1165,6 +1280,12 @@ void ClippingView::OnX2ClipEdit(wxCommandEvent &event)
 		if (m_md->GetMR())
 			planes = m_md->GetMR()->get_planes();
 	}
+    
+    if (!m_x1_clip_sldr || !m_y1_clip_sldr || !m_z1_clip_sldr)
+        return;
+    resx = m_x1_clip_sldr->GetMax();
+    resy = m_y1_clip_sldr->GetMax();
+    resz = m_z1_clip_sldr->GetMax();
 
 	if (!planes)
 		return;
@@ -1190,7 +1311,7 @@ void ClippingView::OnX2ClipEdit(wxCommandEvent &event)
 	else if (ival < ival2)
 		return;
 
-	val = (double)ival/(double)resx;
+	val = 1.0 - (double)ival/(double)resx;
 	//str = wxString::Format("%d", ival);
 	//m_x2_clip_text->ChangeValue(str);
 	m_x2_clip_sldr->SetValue(ival);
@@ -1199,16 +1320,23 @@ void ClippingView::OnX2ClipEdit(wxCommandEvent &event)
 		(double)m_x1_clip_sldr->GetMax())*barsize));
 	m_xBar->SetSize(wxSize(3,barsize*((double)
 		(ival - m_x1_clip_sldr->GetValue())/(double)m_x1_clip_sldr->GetMax())));
-	Plane* plane = (*planes)[1];
-	plane->ChangePlane(Point(val, 0.0, 0.0), Vector(-1.0, 0.0, 0.0));
+	
+    Plane* plane = (*planes)[1];
+    if (m_link_channels->GetValue())
+        m_linked_plane_params[1] = val;
+    plane->SetParam(val);
+    
 	if (m_link_x)
 	{
 		val2 = (double)ival2/(double)resx;
 		str = wxString::Format("%d", ival2);
 		m_x1_clip_text->ChangeValue(str);
 		m_x1_clip_sldr->SetValue(ival2);
-		plane = (*planes)[0];
-		plane->ChangePlane(Point(val2, 0.0, 0.0), Vector(1.0, 0.0, 0.0));
+		
+        plane = (*planes)[0];
+        if (m_link_channels->GetValue())
+            m_linked_plane_params[0] = val2;
+        plane->SetParam(val2);
 	}
 
 	if (m_link_channels->GetValue())
@@ -1229,9 +1357,10 @@ void ClippingView::OnX2ClipEdit(wxCommandEvent &event)
 					continue;
 				if (planes->size() != 6)
 					continue;
-				(*planes)[1]->ChangePlane(Point(val, 0.0, 0.0), Vector(-1.0, 0.0, 0.0));
-				if (m_link_x)
-					(*planes)[0]->ChangePlane(Point(val2, 0.0, 0.0), Vector(1.0, 0.0, 0.0));
+                
+                (*planes)[1]->SetParam(val);
+                if (m_link_x)
+                    (*planes)[0]->SetParam(val2);
 			}
 			for (i=0; i<m_mgr->GetMeshNum(); i++)
 			{
@@ -1246,9 +1375,10 @@ void ClippingView::OnX2ClipEdit(wxCommandEvent &event)
 					continue;
 				if (planes->size() != 6)
 					continue;
-				(*planes)[1]->ChangePlane(Point(val, 0.0, 0.0), Vector(-1.0, 0.0, 0.0));
-				if (m_link_x)
-					(*planes)[0]->ChangePlane(Point(val2, 0.0, 0.0), Vector(1.0, 0.0, 0.0));
+                
+                (*planes)[1]->SetParam(val);
+                if (m_link_x)
+                    (*planes)[0]->SetParam(val2);
 			}
 		}
 	}
@@ -1304,6 +1434,12 @@ void ClippingView::OnY1ClipEdit(wxCommandEvent &event)
 		if (m_md->GetMR())
 			planes = m_md->GetMR()->get_planes();
 	}
+    
+    if (!m_x1_clip_sldr || !m_y1_clip_sldr || !m_z1_clip_sldr)
+        return;
+    resx = m_x1_clip_sldr->GetMax();
+    resy = m_y1_clip_sldr->GetMax();
+    resz = m_z1_clip_sldr->GetMax();
 
 	if (!planes)
 		return;
@@ -1337,16 +1473,23 @@ void ClippingView::OnY1ClipEdit(wxCommandEvent &event)
 	m_yBar->SetPosition(wxPoint(20,10+val*barsize));
 	m_yBar->SetSize(wxSize(3,barsize*((double)
 		(m_y2_clip_sldr->GetValue()-ival)/(double)m_y1_clip_sldr->GetMax())));
-	Plane* plane = (*planes)[2];
-	plane->ChangePlane(Point(0.0, val, 0.0), Vector(0.0, 1.0, 0.0));
+	
+    Plane* plane = (*planes)[2];
+    if (m_link_channels->GetValue())
+        m_linked_plane_params[2] = val;
+    plane->SetParam(val);
+    
 	if (m_link_y)
 	{
-		val2 = (double)ival2/(double)resy;
+		val2 = 1.0 - (double)ival2/(double)resy;
 		str = wxString::Format("%d", ival2);
 		m_y2_clip_text->ChangeValue(str);
 		m_y2_clip_sldr->SetValue(ival2);
-		plane = (*planes)[3];
-		plane->ChangePlane(Point(0.0, val2, 0.0), Vector(0.0, -1.0, 0.0));
+		
+        plane = (*planes)[3];
+        if (m_link_channels->GetValue())
+            m_linked_plane_params[3] = val2;
+        plane->SetParam(val2);
 	}
 
 	if (m_link_channels->GetValue())
@@ -1368,9 +1511,9 @@ void ClippingView::OnY1ClipEdit(wxCommandEvent &event)
 				if (planes->size() != 6)
 					continue;
 
-				(*planes)[2]->ChangePlane(Point(0.0, val, 0.0), Vector(0.0, 1.0, 0.0));
-				if (m_link_y)
-					(*planes)[3]->ChangePlane(Point(0.0, val2, 0.0), Vector(0.0, -1.0, 0.0));
+                (*planes)[2]->SetParam(val);
+                if (m_link_x)
+                    (*planes)[3]->SetParam(val2);
 			}
 			for (i=0; i<m_mgr->GetMeshNum(); i++)
 			{
@@ -1386,9 +1529,9 @@ void ClippingView::OnY1ClipEdit(wxCommandEvent &event)
 				if (planes->size() != 6)
 					continue;
 
-				(*planes)[2]->ChangePlane(Point(0.0, val, 0.0), Vector(0.0, 1.0, 0.0));
-				if (m_link_y)
-					(*planes)[3]->ChangePlane(Point(0.0, val2, 0.0), Vector(0.0, -1.0, 0.0));
+                (*planes)[2]->SetParam(val);
+                if (m_link_x)
+                    (*planes)[3]->SetParam(val2);
 			}
 		}
 	}
@@ -1451,6 +1594,12 @@ void ClippingView::OnY2ClipEdit(wxCommandEvent &event)
 		if (m_md->GetMR())
 			planes = m_md->GetMR()->get_planes();
 	}
+    
+    if (!m_x1_clip_sldr || !m_y1_clip_sldr || !m_z1_clip_sldr)
+        return;
+    resx = m_x1_clip_sldr->GetMax();
+    resy = m_y1_clip_sldr->GetMax();
+    resz = m_z1_clip_sldr->GetMax();
 
 	if (!planes)
 		return;
@@ -1476,7 +1625,7 @@ void ClippingView::OnY2ClipEdit(wxCommandEvent &event)
 	else if (ival < ival2)
 		return;
 	
-	val = (double)ival/(double)resy;
+	val = 1.0 - (double)ival/(double)resy;
 	//str = wxString::Format("%d", ival);
 	//m_y2_clip_text->ChangeValue(str);
 	m_y2_clip_sldr->SetValue(ival);
@@ -1485,16 +1634,23 @@ void ClippingView::OnY2ClipEdit(wxCommandEvent &event)
 		(double)m_y1_clip_sldr->GetMax())*barsize));
 	m_yBar->SetSize(wxSize(3,barsize*((double)
 		(ival - m_y1_clip_sldr->GetValue())/(double)m_y1_clip_sldr->GetMax())));
-	Plane* plane = (*planes)[3];
-	plane->ChangePlane(Point(0.0, val, 0.0), Vector(0.0, -1.0, 0.0));
+	
+    Plane* plane = (*planes)[3];
+    if (m_link_channels->GetValue())
+        m_linked_plane_params[3] = val;
+    plane->SetParam(val);
+    
 	if (m_link_y)
 	{
 		val2 = (double)ival2/(double)resy;
 		str = wxString::Format("%d", ival2);
 		m_y1_clip_text->ChangeValue(str);
 		m_y1_clip_sldr->SetValue(ival2);
-		plane = (*planes)[2];
-		plane->ChangePlane(Point(0.0, val2, 0.0), Vector(0.0, 1.0, 0.0));
+		
+        plane = (*planes)[2];
+        if (m_link_channels->GetValue())
+            m_linked_plane_params[2] = val2;
+        plane->SetParam(val2);
 	}
 
 	if (m_link_channels->GetValue())
@@ -1516,9 +1672,9 @@ void ClippingView::OnY2ClipEdit(wxCommandEvent &event)
 				if (planes->size() != 6)
 					continue;
 
-				(*planes)[3]->ChangePlane(Point(0.0, val, 0.0), Vector(0.0, -1.0, 0.0));
-				if (m_link_y)
-					(*planes)[2]->ChangePlane(Point(0.0, val2, 0.0), Vector(0.0, 1.0, 0.0));
+                (*planes)[3]->SetParam(val);
+                if (m_link_x)
+                    (*planes)[2]->SetParam(val2);
 			}
 			for (i=0; i<m_mgr->GetMeshNum(); i++)
 			{
@@ -1534,9 +1690,9 @@ void ClippingView::OnY2ClipEdit(wxCommandEvent &event)
 				if (planes->size() != 6)
 					continue;
 
-				(*planes)[3]->ChangePlane(Point(0.0, val, 0.0), Vector(0.0, -1.0, 0.0));
-				if (m_link_y)
-					(*planes)[2]->ChangePlane(Point(0.0, val2, 0.0), Vector(0.0, 1.0, 0.0));
+                (*planes)[3]->SetParam(val);
+                if (m_link_x)
+                    (*planes)[2]->SetParam(val2);
 			}
 		}
 	}
@@ -1592,6 +1748,12 @@ void ClippingView::OnZ1ClipEdit(wxCommandEvent &event)
 		if (m_md->GetMR())
 			planes = m_md->GetMR()->get_planes();
 	}
+    
+    if (!m_x1_clip_sldr || !m_y1_clip_sldr || !m_z1_clip_sldr)
+        return;
+    resx = m_x1_clip_sldr->GetMax();
+    resy = m_y1_clip_sldr->GetMax();
+    resz = m_z1_clip_sldr->GetMax();
 
 	if (!planes)
 		return;
@@ -1625,16 +1787,23 @@ void ClippingView::OnZ1ClipEdit(wxCommandEvent &event)
 	m_zBar->SetPosition(wxPoint(20,10+val*barsize));
 	m_zBar->SetSize(wxSize(3,barsize*((double)
 		(m_z2_clip_sldr->GetValue()-ival)/(double)m_z1_clip_sldr->GetMax())));
-	Plane* plane = (*planes)[4];
-	plane->ChangePlane(Point(0.0, 0.0, val), Vector(0.0, 0.0, 1.0));
+	
+    Plane* plane = (*planes)[4];
+    if (m_link_channels->GetValue())
+        m_linked_plane_params[4] = val;
+    plane->SetParam(val);
+    
 	if (m_link_z)
 	{
-		val2 = (double)ival2/(double)resz;
+		val2 = 1.0 - (double)ival2/(double)resz;
 		str = wxString::Format("%d", ival2);
 		m_z2_clip_text->ChangeValue(str);
 		m_z2_clip_sldr->SetValue(ival2);
-		plane = (*planes)[5];
-		plane->ChangePlane(Point(0.0, 0.0, val2), Vector(0.0, 0.0, -1.0));
+		
+        plane = (*planes)[5];
+        if (m_link_channels->GetValue())
+            m_linked_plane_params[5] = val2;
+        plane->SetParam(val2);
 	}
 
 	if (m_link_channels->GetValue())
@@ -1656,9 +1825,9 @@ void ClippingView::OnZ1ClipEdit(wxCommandEvent &event)
 				if (planes->size() != 6)
 					continue;
 
-				(*planes)[4]->ChangePlane(Point(0.0, 0.0, val), Vector(0.0, 0.0, 1.0));
-				if (m_link_z)
-					(*planes)[5]->ChangePlane(Point(0.0, 0.0, val2), Vector(0.0, 0.0, -1.0));
+                (*planes)[4]->SetParam(val);
+                if (m_link_x)
+                    (*planes)[5]->SetParam(val2);
 			}
 			for (i=0; i<m_mgr->GetMeshNum(); i++)
 			{
@@ -1674,9 +1843,9 @@ void ClippingView::OnZ1ClipEdit(wxCommandEvent &event)
 				if (planes->size() != 6)
 					continue;
 
-				(*planes)[4]->ChangePlane(Point(0.0, 0.0, val), Vector(0.0, 0.0, 1.0));
-				if (m_link_z)
-					(*planes)[5]->ChangePlane(Point(0.0, 0.0, val2), Vector(0.0, 0.0, -1.0));
+                (*planes)[4]->SetParam(val);
+                if (m_link_x)
+                    (*planes)[5]->SetParam(val2);
 			}
 		}
 	}
@@ -1739,6 +1908,12 @@ void ClippingView::OnZ2ClipEdit(wxCommandEvent &event)
 		if (m_md->GetMR())
 			planes = m_md->GetMR()->get_planes();
 	}
+    
+    if (!m_x1_clip_sldr || !m_y1_clip_sldr || !m_z1_clip_sldr)
+        return;
+    resx = m_x1_clip_sldr->GetMax();
+    resy = m_y1_clip_sldr->GetMax();
+    resz = m_z1_clip_sldr->GetMax();
 
 	if (!planes)
 		return;
@@ -1764,7 +1939,7 @@ void ClippingView::OnZ2ClipEdit(wxCommandEvent &event)
 	else if (ival < ival2)
 		return;
 	
-	val = (double)ival/(double)resz;
+	val = 1.0 - (double)ival/(double)resz;
 	//str = wxString::Format("%d", ival);
 	//m_z2_clip_text->ChangeValue(str);
 	m_z2_clip_sldr->SetValue(ival);
@@ -1773,16 +1948,24 @@ void ClippingView::OnZ2ClipEdit(wxCommandEvent &event)
 		(double)m_z1_clip_sldr->GetMax())*barsize));
 	m_zBar->SetSize(wxSize(3,barsize*((double)
 		(ival - m_z1_clip_sldr->GetValue())/(double)m_z1_clip_sldr->GetMax())));
-	Plane* plane = (*planes)[5];
-	plane->ChangePlane(Point(0.0, 0.0, val), Vector(0.0, 0.0, -1.0));
+	
+    Plane* plane = (*planes)[5];
+    if (m_link_channels->GetValue())
+        m_linked_plane_params[5] = val;
+    plane->SetParam(val);
+    
 	if (m_link_z)
 	{
 		val2 = (double)ival2/(double)resz;
 		str = wxString::Format("%d", ival2);
 		m_z1_clip_text->ChangeValue(str);
 		m_z1_clip_sldr->SetValue(ival2);
-		plane = (*planes)[4];
-		plane->ChangePlane(Point(0.0, 0.0, val2), Vector(0.0, 0.0, 1.0));
+		
+        plane = (*planes)[4];
+        if (m_link_channels->GetValue())
+            m_linked_plane_params[4] = val2;
+        plane->SetParam(val2);
+        
 	}
 
 	if (m_link_channels->GetValue())
@@ -1804,9 +1987,9 @@ void ClippingView::OnZ2ClipEdit(wxCommandEvent &event)
 				if (planes->size() != 6)
 					continue;
 
-				(*planes)[5]->ChangePlane(Point(0.0, 0.0, val), Vector(0.0, 0.0, -1.0));
-				if (m_link_z)
-					(*planes)[4]->ChangePlane(Point(0.0, 0.0, val2), Vector(0.0, 0.0, 1.0));
+                (*planes)[5]->SetParam(val);
+                if (m_link_x)
+                    (*planes)[4]->SetParam(val2);
 			}
 			for (i=0; i<m_mgr->GetMeshNum(); i++)
 			{
@@ -1822,9 +2005,9 @@ void ClippingView::OnZ2ClipEdit(wxCommandEvent &event)
 				if (planes->size() != 6)
 					continue;
 
-				(*planes)[5]->ChangePlane(Point(0.0, 0.0, val), Vector(0.0, 0.0, -1.0));
-				if (m_link_z)
-					(*planes)[4]->ChangePlane(Point(0.0, 0.0, val2), Vector(0.0, 0.0, 1.0));
+                (*planes)[5]->SetParam(val);
+                if (m_link_x)
+                    (*planes)[4]->SetParam(val2);
 			}
 		}
 	}

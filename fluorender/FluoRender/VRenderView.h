@@ -730,6 +730,8 @@ public:
         EmptyBlockDetector::setCriticalSection(crtsec);
 	}
 	static wxCriticalSection* ms_pThreadCS;
+    
+    void CalcAndSetCombinedClippingPlanes();
 
 public:
 	//script run
@@ -2083,7 +2085,8 @@ public:
     bool GetEasy2DAdjustMode() { if (m_glview) return m_glview->GetEasy2DAdjustMode(); else return false; }
 
 	void SetEmptyBlockDetectorActive(bool val) { if (m_glview) m_glview->SetEmptyBlockDetectorActive(val); }
-
+    
+    void CalcAndSetCombinedClippingPlanes() { if (m_glview) m_glview->CalcAndSetCombinedClippingPlanes(); }
 
 public:
 	wxWindow* m_frame;
