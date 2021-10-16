@@ -189,6 +189,13 @@ namespace FLIVR
 
 		Remember();
 	}
+    
+    void Plane::ChangePlaneTemp(const Point &P, const Vector &N)
+    {
+        n = N;
+        n.safe_normalize();
+        d = -Dot(P,n);
+    }
 
 	int Plane::Intersect( Point s, Vector v, Point& hit ) const
 	{

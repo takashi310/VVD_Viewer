@@ -125,6 +125,7 @@ VRenderFrame::VRenderFrame(
 	m_tree_panel(0),
 	m_prop_panel(0),
 	m_setting_dlg(0),
+    m_clip_view(0),
 	m_ui_state(true),
 	m_cur_sel_type(-1),
 	m_cur_sel_vol(-1),

@@ -747,11 +747,33 @@ namespace FLIVR
 
 		bmax = tform->project(bmax);
 		bmin = tform->project(bmin);
+        
+        Transform tform_copy;
+        double mvmat[16];
+        tform->get_trans(mvmat);
+        swap(mvmat[3], mvmat[12]);
+        swap(mvmat[7], mvmat[13]);
+        swap(mvmat[11], mvmat[14]);
+        tform_copy.set(mvmat);
+        
+        FLIVR::Point p[8] = {
+            FLIVR::Point(bmin.x(), bmin.y(), bmin.z()),
+            FLIVR::Point(bmax.x(), bmin.y(), bmin.z()),
+            FLIVR::Point(bmax.x(), bmax.y(), bmin.z()),
+            FLIVR::Point(bmin.x(), bmax.y(), bmin.z()),
+            FLIVR::Point(bmin.x(), bmin.y(), bmax.z()),
+            FLIVR::Point(bmax.x(), bmin.y(), bmax.z()),
+            FLIVR::Point(bmax.x(), bmax.y(), bmax.z()),
+            FLIVR::Point(bmin.x(), bmax.y(), bmax.z())
+        };
+        for (int j = 0; j < 8; j++)
+            p[j] = tform_copy.project(p[j]);
+        
 
 		float b_e[3];
-		b_e[0] = abs(bmax.x() - bmin.x()) * 0.5f;
-		b_e[1] = abs(bmax.y() - bmin.y()) * 0.5f;
-		b_e[2] = abs(bmax.z() - bmin.z()) * 0.5f;
+		b_e[0] = abs(p[1].x() - p[0].x()) * 0.5f;
+		b_e[1] = abs(p[3].y() - p[0].y()) * 0.5f;
+		b_e[2] = abs(p[4].z() - p[0].z()) * 0.5f;
 
 		Vector b_c = (bmax + bmin) * 0.5f;
 		

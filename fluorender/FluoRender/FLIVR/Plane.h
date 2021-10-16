@@ -84,7 +84,9 @@ namespace FLIVR
 		bool operator==(const Plane &rhs) const; 
 		// changes the plane ( n and d )
 		void ChangePlane( const Point &p1, const Point &p2, const Point &p3 );
-		void ChangePlane( const Point &p1, const Vector &v); 
+		void ChangePlane( const Point &p1, const Vector &v);
+        
+        void ChangePlaneTemp( const Point &p1, const Vector &v);
 
 		// plane-line intersection
 		// returns true if the line  v*t+s  for -inf < t < inf intersects

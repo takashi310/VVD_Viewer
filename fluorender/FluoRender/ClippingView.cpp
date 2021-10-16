@@ -633,7 +633,7 @@ void ClippingView::GetSettings()
                 (*planes)[2*j]->SetParam(0.0);
                 Point p0 = (*planes)[2*j]->get_point();
                 (*planes)[2*j]->SetParam(1.0);
-                Point p1 = (*planes)[j+1]->get_point();
+                Point p1 = (*planes)[2*j+1]->get_point();
                 (*planes)[2*j]->SetParam(param);
                 p0 = tform.project(p0);
                 p1 = tform.project(p1);
@@ -662,7 +662,7 @@ void ClippingView::GetSettings()
                     (*planes)[2*j]->SetParam(0.0);
                     Point p0 = (*planes)[2*j]->get_point();
                     (*planes)[2*j]->SetParam(1.0);
-                    Point p1 = (*planes)[j+1]->get_point();
+                    Point p1 = (*planes)[2*j+1]->get_point();
                     (*planes)[2*j]->SetParam(param);
                     p0 = tform.project(p0);
                     p1 = tform.project(p1);
@@ -814,7 +814,22 @@ void ClippingView::GetSettings()
 	m_z2_clip_sldr->SetValue(val);
 	str = wxString::Format("%d", val);
 	m_z2_clip_text->ChangeValue(str);
-
+    
+    VRenderFrame* vrender_frame = (VRenderFrame*)m_frame;
+    if (vrender_frame)
+    {
+        for (int i=0; i<(int)vrender_frame->GetViewList()->size(); i++)
+        {
+            VRenderView *vrv = (*vrender_frame->GetViewList())[i];
+            if (vrv)
+            {
+                double rotx, roty, rotz;
+                vrv->GetClippingPlaneRotations(rotx, roty, rotz);
+                vrv->SetClippingPlaneRotations(rotx, roty, rotz);
+                vrv->RefreshGL();
+            }
+        }
+    }
 }
 
 void ClippingView::OnLinkChannelsCheck(wxCommandEvent &event)
@@ -1021,8 +1036,10 @@ void ClippingView::OnClipResetBtn(wxCommandEvent &event)
     (*planes)[4]->SetRange((*planes)[4]->get_point(), (*planes)[4]->normal(), (*planes)[5]->get_point(), (*planes)[5]->normal());
     (*planes)[5]->SetRange((*planes)[5]->get_point(), (*planes)[5]->normal(), (*planes)[4]->get_point(), (*planes)[4]->normal());
     for (auto p : *planes)
+    {
         p->SetParam(0.0);
-    
+        p->RememberParam();
+    }
     
 	//links
 	m_link_x = false;
@@ -1031,23 +1048,7 @@ void ClippingView::OnClipResetBtn(wxCommandEvent &event)
 	m_link_x_chk->SetValue(false);
 	m_link_y_chk->SetValue(false);
 	m_link_z_chk->SetValue(false);
-
-	//controls
-	//sliders
-	m_x1_clip_sldr->SetValue(0);
-	m_x2_clip_sldr->SetValue(resx);
-	m_y1_clip_sldr->SetValue(0);
-	m_y2_clip_sldr->SetValue(resy);
-	m_z1_clip_sldr->SetValue(0);
-	m_z2_clip_sldr->SetValue(resz);
-	//texts
-	m_x1_clip_text->SetValue("0");
-	m_x2_clip_text->SetValue(wxString::Format("%d", resx));
-	m_y1_clip_text->SetValue("0");
-	m_y2_clip_text->SetValue(wxString::Format("%d", resy));
-	m_z1_clip_text->SetValue("0");
-	m_z2_clip_text->SetValue(wxString::Format("%d", resz));
-
+    
 	//link
 	if (m_link_channels->GetValue())
 	{
@@ -1063,6 +1064,42 @@ void ClippingView::OnClipResetBtn(wxCommandEvent &event)
                     {
                         vrv->CalcAndSetCombinedClippingPlanes();
                     }
+                }
+            }
+            for (int i=0; i<m_mgr->GetVolumeNum(); i++)
+            {
+                VolumeData* vd = m_mgr->GetVolumeData(i);
+                if (!vd || vd == m_vd)
+                    continue;
+                planes = nullptr;
+                if (vd->GetVR())
+                    planes = vd->GetVR()->get_planes();
+                if (!planes)
+                    continue;
+                for (auto plane : *planes)
+                {
+                    plane->SetParam(0.0);
+                    plane->RememberParam();
+                }
+                
+            }
+            for (int i=0; i<m_mgr->GetMeshNum(); i++)
+            {
+                MeshData* md = m_mgr->GetMeshData(i);
+                if (!md || md == m_md)
+                    continue;
+                
+                planes = nullptr;
+                if (md->GetMR())
+                    planes = md->GetMR()->get_planes();
+                if (!planes)
+                    continue;
+                if (planes->size() != 6)
+                    continue;
+                for (auto plane : *planes)
+                {
+                    plane->SetParam(0.0);
+                    plane->RememberParam();
                 }
             }
 		}

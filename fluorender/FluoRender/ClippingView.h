@@ -112,7 +112,7 @@ public:
 
 	bool GetChannLink()
 	{
-		return m_link_channels->GetValue();
+        return m_link_channels ? m_link_channels->GetValue() : false;
 	}
 	void SetChannLink(bool chann)
 	{

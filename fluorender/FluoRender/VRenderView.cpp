@@ -8435,41 +8435,116 @@ void VRenderVulkanView::SetCenter()
 	InitView(INIT_BOUNDS|INIT_CENTER|INIT_OBJ_TRANSL);
 
 	VolumeData *vd = 0;
+    BBox bounds;
+    
 	if (m_cur_vol)
+    {
 		vd = m_cur_vol;
-	else if (m_vd_pop_list.size())
-		vd = m_vd_pop_list[0];
-
-	if (vd)
-	{
-		BBox bbox = vd->GetBounds();
-		VolumeRenderer *vr = vd->GetVR();
-		if (!vr) return;
-		vector<Plane*> *planes = vr->get_planes();
-		if (planes->size() != 6) return;
-		double x1, x2, y1, y2, z1, z2;
-		double abcd[4];
-		(*planes)[0]->get_copy(abcd);
-		x1 = fabs(abcd[3])*bbox.max().x();
-		(*planes)[1]->get_copy(abcd);
-		x2 = fabs(abcd[3])*bbox.max().x();
-		(*planes)[2]->get_copy(abcd);
-		y1 = fabs(abcd[3])*bbox.max().y();
-		(*planes)[3]->get_copy(abcd);
-		y2 = fabs(abcd[3])*bbox.max().y();
-		(*planes)[4]->get_copy(abcd);
-		z1 = fabs(abcd[3])*bbox.min().z();
-		(*planes)[5]->get_copy(abcd);
-		z2 = fabs(abcd[3])*bbox.min().z();
-
-		m_obj_ctrx = (x1 + x2) / 2.0;
-		m_obj_ctry = (y1 + y2) / 2.0;
-		m_obj_ctrz = (z1 + z2) / 2.0;
-
-		//SetSortBricks();
-
-		RefreshGL();
-	}
+        if (vd)
+        {
+            if (!vd->GetTexture() || !vd->GetVR())
+                return;
+            Transform *tform = vd->GetTexture()->transform();
+            if (!tform)
+                return;
+            vector<Plane*> *planes = vd->GetVR()->get_planes();
+            if (!planes || planes->size() != 6)
+                return;
+            
+            double params[6];
+            for (int j = 0; j < 6; j++)
+                params[j] = (*planes)[j]->GetParam();
+            
+            Transform tform_copy;
+            double mvmat[16];
+            tform->get_trans(mvmat);
+            swap(mvmat[3], mvmat[12]);
+            swap(mvmat[7], mvmat[13]);
+            swap(mvmat[11], mvmat[14]);
+            tform_copy.set(mvmat);
+            
+            FLIVR::Point p[8] = {
+                FLIVR::Point(params[0],       params[2],       params[4]),
+                FLIVR::Point(1.0 - params[1], params[2],       params[4]),
+                FLIVR::Point(1.0 - params[1], 1.0 - params[3], params[4]),
+                FLIVR::Point(params[0],       1.0 - params[3], params[4]),
+                FLIVR::Point(params[0],       params[2],       1.0 - params[5]),
+                FLIVR::Point(1.0 - params[1], params[2],       1.0 - params[5]),
+                FLIVR::Point(1.0 - params[1], 1.0 - params[3], 1.0 - params[5]),
+                FLIVR::Point(params[0],       1.0 - params[3], 1.0 - params[5])
+            };
+            
+            for (int j = 0; j < 8; j++)
+            {
+                p[j] = tform_copy.project(p[j]);
+                bounds.extend(p[j]);
+            }
+            
+            m_obj_ctrx = (bounds.min().x() + bounds.max().x()) / 2.0;
+            m_obj_ctry = (bounds.min().y() + bounds.max().y()) / 2.0;
+            m_obj_ctrz = (bounds.min().z() + bounds.max().z()) / 2.0;
+            
+            //SetSortBricks();
+            
+            RefreshGL();
+        }
+    }
+	else
+    {
+        for (auto vd : m_vd_pop_list)
+        {
+            if (vd)
+            {
+                if (!vd->GetTexture() || !vd->GetVR())
+                    return;
+                Transform *tform = vd->GetTexture()->transform();
+                if (!tform)
+                    return;
+                vector<Plane*> *planes = vd->GetVR()->get_planes();
+                if (!planes || planes->size() != 6)
+                    return;
+                
+                double params[6];
+                for (int j = 0; j < 6; j++)
+                    params[j] = (*planes)[j]->GetParam();
+                
+                Transform tform_copy;
+                double mvmat[16];
+                tform->get_trans(mvmat);
+                swap(mvmat[3], mvmat[12]);
+                swap(mvmat[7], mvmat[13]);
+                swap(mvmat[11], mvmat[14]);
+                tform_copy.set(mvmat);
+                
+                FLIVR::Point p[8] = {
+                    FLIVR::Point(params[0],       params[2],       params[4]),
+                    FLIVR::Point(1.0 - params[1], params[2],       params[4]),
+                    FLIVR::Point(1.0 - params[1], 1.0 - params[3], params[4]),
+                    FLIVR::Point(params[0],       1.0 - params[3], params[4]),
+                    FLIVR::Point(params[0],       params[2],       1.0 - params[5]),
+                    FLIVR::Point(1.0 - params[1], params[2],       1.0 - params[5]),
+                    FLIVR::Point(1.0 - params[1], 1.0 - params[3], 1.0 - params[5]),
+                    FLIVR::Point(params[0],       1.0 - params[3], 1.0 - params[5])
+                };
+                
+                for (int j = 0; j < 8; j++)
+                {
+                    p[j] = tform_copy.project(p[j]);
+                    bounds.extend(p[j]);
+                }
+            }
+        }
+        for (auto md : m_md_pop_list)
+            bounds.extend(md->GetBounds());
+        
+        m_obj_ctrx = (bounds.min().x() + bounds.max().x()) / 2.0;
+        m_obj_ctry = (bounds.min().y() + bounds.max().y()) / 2.0;
+        m_obj_ctrz = (bounds.min().z() + bounds.max().z()) / 2.0;
+        
+        //SetSortBricks();
+        
+        RefreshGL();
+    }
 }
 
 void VRenderVulkanView::SetScale121()
@@ -10307,11 +10382,48 @@ void VRenderVulkanView::InitView(unsigned int type)
             for (i = 0; i < (int)m_md_pop_list.size(); i++)
                 m_md_pop_list[i]->RecalcBounds();
             if (vr_frame->GetClippingView()->GetChannLink())
+            {
                 CalcAndSetCombinedClippingPlanes();
+                A2Q();
+            }
         }
         
         for (i = 0; i < (int)m_vd_pop_list.size(); i++)
-            m_bounds.extend(m_vd_pop_list[i]->GetBounds());
+        {
+            VolumeData* vd = m_vd_pop_list[i];
+            if (vd)
+            {
+                if (!vd->GetTexture())
+                    continue;
+                Transform *tform = vd->GetTexture()->transform();
+                if (!tform)
+                    continue;
+                Transform tform_copy;
+                double mvmat[16];
+                tform->get_trans(mvmat);
+                swap(mvmat[3], mvmat[12]);
+                swap(mvmat[7], mvmat[13]);
+                swap(mvmat[11], mvmat[14]);
+                tform_copy.set(mvmat);
+                
+                FLIVR::Point p[8] = {
+                    FLIVR::Point(0.0f, 0.0f, 0.0f),
+                    FLIVR::Point(1.0f, 0.0f, 0.0f),
+                    FLIVR::Point(1.0f, 1.0f, 0.0f),
+                    FLIVR::Point(0.0f, 1.0f, 0.0f),
+                    FLIVR::Point(0.0f, 0.0f, 1.0f),
+                    FLIVR::Point(1.0f, 0.0f, 1.0f),
+                    FLIVR::Point(1.0f, 1.0f, 1.0f),
+                    FLIVR::Point(0.0f, 1.0f, 1.0f)
+                };
+                
+                for (int j = 0; j < 8; j++)
+                {
+                    p[j] = tform_copy.project(p[j]);
+                    m_bounds.extend(p[j]);
+                }
+            }
+        }
         for (i = 0; i < (int)m_md_pop_list.size(); i++)
             m_bounds.extend(m_md_pop_list[i]->GetBounds());
 
@@ -12865,6 +12977,8 @@ void VRenderVulkanView::Q2A()
 		}
 
 		vector<Plane*> *planes = 0;
+        Vector n;
+        Point p;
 		for (int i=0; i<(int)m_vd_pop_list.size(); i++)
 		{
 			if (!m_vd_pop_list[i])
@@ -12890,6 +13004,26 @@ void VRenderVulkanView::Q2A()
                 scale2 = Vector(1.0, 1.0, 1.0);
                 scale2inv = Vector(1.0, 1.0, 1.0);
             }
+            
+            if (!m_vd_pop_list[i]->GetTexture())
+                continue;
+            Transform *tform = m_vd_pop_list[i]->GetTexture()->transform();
+            if (!tform)
+                continue;
+            Transform tform_copy;
+            double mvmat[16];
+            tform->get_trans(mvmat);
+            swap(mvmat[3], mvmat[12]);
+            swap(mvmat[7], mvmat[13]);
+            swap(mvmat[11], mvmat[14]);
+            tform_copy.set(mvmat);
+            
+            double rotx, roty, rotz;
+            Quaternion q_cl, q_cl_fix;
+            m_q_cl.ToEuler(rotx, roty, rotz);
+            q_cl.FromEuler(-rotx, -roty, rotz);
+            m_q_cl_fix.ToEuler(rotx, roty, rotz);
+            q_cl_fix.FromEuler(-rotx, -roty, rotz);
 
 			if (m_vd_pop_list[i]->GetVR())
 				planes = m_vd_pop_list[i]->GetVR()->get_planes();
@@ -12911,72 +13045,66 @@ void VRenderVulkanView::Q2A()
 				(*planes)[5]->get_copy(abcd);
 				z2 = fabs(abcd[3]);
                 
-                Vector trans1(-0.5, -0.5, -0.5);
-                Vector trans2(0.5, 0.5, 0.5);
+                Vector trans1(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz);
+                Vector trans2(m_obj_ctrx, m_obj_ctry, m_obj_ctrz);
                 
                 if (m_clip_mode == 3)
                 {
                     Vector obj_trans1 = m_trans_fix;
                     Vector obj_trans2 = -obj_trans1;
-                    Vector obj_trans3 = obj_trans1 - Vector(m_obj_transx, m_obj_transy, -m_obj_transz);
+                    Vector obj_trans3 = obj_trans1 - Vector(m_obj_transx, m_obj_transy, m_obj_transz);
                     
                     for (int i = 0; i < 6; i++)
                     {
                         (*planes)[i]->Restore();
+                        
+                        p = (*planes)[i]->get_point();
+                        n = (*planes)[i]->normal();
+                        p = tform_copy.project(p);
+                        n = tform->unproject(n);
+                        n.safe_normalize();
+                        (*planes)[i]->ChangePlaneTemp(p, n);
+                        
                         (*planes)[i]->Translate(trans1);
-                        (*planes)[i]->Scale2(scale2);
-                        (*planes)[i]->Rotate(m_q_cl_fix);
+                        (*planes)[i]->Rotate(q_cl_fix);
                         (*planes)[i]->Translate(obj_trans1);
-                        (*planes)[i]->Rotate(m_q_cl);
+                        (*planes)[i]->Rotate(q_cl);
                         (*planes)[i]->Translate(obj_trans2);
                         (*planes)[i]->Translate(obj_trans3);
-                        (*planes)[i]->Scale2(scale2inv);
                         (*planes)[i]->Translate(trans2);
+                        
+                        p = (*planes)[i]->get_point();
+                        n = (*planes)[i]->normal();
+                        p = tform_copy.unproject(p);
+                        n = tform->project(n);
+                        n.safe_normalize();
+                        (*planes)[i]->ChangePlaneTemp(p, n);
                     }
                 }
                 else
                 {
-                    (*planes)[0]->Restore();
-                    (*planes)[0]->Translate(trans1);
-                    (*planes)[0]->Scale2(scale2);
-                    (*planes)[0]->Rotate(m_q_cl);
-                    (*planes)[0]->Scale2(scale2inv);
-                    (*planes)[0]->Translate(trans2);
-                    
-                    (*planes)[1]->Restore();
-                    (*planes)[1]->Translate(trans1);
-                    (*planes)[1]->Scale2(scale2);
-                    (*planes)[1]->Rotate(m_q_cl);
-                    (*planes)[1]->Scale2(scale2inv);
-                    (*planes)[1]->Translate(trans2);
-                    
-                    (*planes)[2]->Restore();
-                    (*planes)[2]->Translate(trans1);
-                    (*planes)[2]->Scale2(scale2);
-                    (*planes)[2]->Rotate(m_q_cl);
-                    (*planes)[2]->Scale2(scale2inv);
-                    (*planes)[2]->Translate(trans2);
-                    
-                    (*planes)[3]->Restore();
-                    (*planes)[3]->Translate(trans1);
-                    (*planes)[3]->Scale2(scale2);
-                    (*planes)[3]->Rotate(m_q_cl);
-                    (*planes)[3]->Scale2(scale2inv);
-                    (*planes)[3]->Translate(trans2);
-                    
-                    (*planes)[4]->Restore();
-                    (*planes)[4]->Translate(trans1);
-                    (*planes)[4]->Scale2(scale2);
-                    (*planes)[4]->Rotate(m_q_cl);
-                    (*planes)[4]->Scale2(scale2inv);
-                    (*planes)[4]->Translate(trans2);
-                    
-                    (*planes)[5]->Restore();
-                    (*planes)[5]->Translate(trans1);
-                    (*planes)[5]->Scale2(scale2);
-                    (*planes)[5]->Rotate(m_q_cl);
-                    (*planes)[5]->Scale2(scale2inv);
-                    (*planes)[5]->Translate(trans2);
+                    for (int i = 0; i < 6; i++)
+                    {
+                        (*planes)[i]->Restore();
+                        
+                        p = (*planes)[i]->get_point();
+                        n = (*planes)[i]->normal();
+                        p = tform_copy.project(p);
+                        n = tform->unproject(n);
+                        n.safe_normalize();
+                        (*planes)[i]->ChangePlaneTemp(p, n);
+                        
+                        (*planes)[i]->Translate(trans1);
+                        (*planes)[i]->Rotate(q_cl);
+                        (*planes)[i]->Translate(trans2);
+                        
+                        p = (*planes)[i]->get_point();
+                        n = (*planes)[i]->normal();
+                        p = tform_copy.unproject(p);
+                        n = tform->project(n);
+                        n.safe_normalize();
+                        (*planes)[i]->ChangePlaneTemp(p, n);
+                    }
                 }
 			}
 		}
@@ -13129,6 +13257,8 @@ void VRenderVulkanView::A2Q()
 				continue;
 
 			vector<Plane*> *planes = 0;
+            Vector n;
+            Point p;
 			double spcx, spcy, spcz;
 			int resx, resy, resz;
 			m_vd_pop_list[i]->GetSpacings(spcx, spcy, spcz);
@@ -13149,6 +13279,26 @@ void VRenderVulkanView::A2Q()
                 scale2 = Vector(1.0, 1.0, 1.0);
                 scale2inv = Vector(1.0, 1.0, 1.0);
             }
+            
+            if (!m_vd_pop_list[i]->GetTexture())
+                continue;
+            Transform *tform = m_vd_pop_list[i]->GetTexture()->transform();
+            if (!tform)
+                continue;
+            Transform tform_copy;
+            double mvmat[16];
+            tform->get_trans(mvmat);
+            swap(mvmat[3], mvmat[12]);
+            swap(mvmat[7], mvmat[13]);
+            swap(mvmat[11], mvmat[14]);
+            tform_copy.set(mvmat);
+            
+            double rotx, roty, rotz;
+            Quaternion q_cl, q_cl_fix;
+            m_q_cl.ToEuler(rotx, roty, rotz);
+            q_cl.FromEuler(-rotx, -roty, rotz);
+            m_q_cl_fix.ToEuler(rotx, roty, rotz);
+            q_cl_fix.FromEuler(-rotx, -roty, rotz);
 
 			if (m_vd_pop_list[i]->GetVR())
 				planes = m_vd_pop_list[i]->GetVR()->get_planes();
@@ -13171,72 +13321,66 @@ void VRenderVulkanView::A2Q()
 				(*planes)[5]->get_copy(abcd);
 				z2 = fabs(abcd[3]);
 
-                Vector trans1(-0.5, -0.5, -0.5);
-                Vector trans2(0.5, 0.5, 0.5);
+                Vector trans1(-m_obj_ctrx, -m_obj_ctry, -m_obj_ctrz);
+                Vector trans2(m_obj_ctrx, m_obj_ctry, m_obj_ctrz);
                 
                 if (m_clip_mode == 3)
                 {
                     Vector obj_trans1 = m_trans_fix;
                     Vector obj_trans2 = -obj_trans1;
-                    Vector obj_trans3 = obj_trans1 - Vector(m_obj_transx, m_obj_transy, -m_obj_transz);
+                    Vector obj_trans3 = obj_trans1 - Vector(m_obj_transx, m_obj_transy, m_obj_transz);
                     
                     for (int i = 0; i < 6; i++)
                     {
                         (*planes)[i]->Restore();
+                        
+                        p = (*planes)[i]->get_point();
+                        n = (*planes)[i]->normal();
+                        p = tform_copy.project(p);
+                        n = tform->unproject(n);
+                        n.safe_normalize();
+                        (*planes)[i]->ChangePlaneTemp(p, n);
+                        
                         (*planes)[i]->Translate(trans1);
-                        (*planes)[i]->Scale2(scale2);
-                        (*planes)[i]->Rotate(m_q_cl_fix);
+                        (*planes)[i]->Rotate(q_cl_fix);
                         (*planes)[i]->Translate(obj_trans1);
-                        (*planes)[i]->Rotate(m_q_cl);
+                        (*planes)[i]->Rotate(q_cl);
                         (*planes)[i]->Translate(obj_trans2);
                         (*planes)[i]->Translate(obj_trans3);
-                        (*planes)[i]->Scale2(scale2inv);
                         (*planes)[i]->Translate(trans2);
+                        
+                        p = (*planes)[i]->get_point();
+                        n = (*planes)[i]->normal();
+                        p = tform_copy.unproject(p);
+                        n = tform->project(n);
+                        n.safe_normalize();
+                        (*planes)[i]->ChangePlaneTemp(p, n);
                     }
                 }
                 else
                 {
-                    (*planes)[0]->Restore();
-                    (*planes)[0]->Translate(trans1);
-                    (*planes)[0]->Scale2(scale2);
-                    (*planes)[0]->Rotate(m_q_cl);
-                    (*planes)[0]->Scale2(scale2inv);
-                    (*planes)[0]->Translate(trans2);
-                    
-                    (*planes)[1]->Restore();
-                    (*planes)[1]->Translate(trans1);
-                    (*planes)[1]->Scale2(scale2);
-                    (*planes)[1]->Rotate(m_q_cl);
-                    (*planes)[1]->Scale2(scale2inv);
-                    (*planes)[1]->Translate(trans2);
-                    
-                    (*planes)[2]->Restore();
-                    (*planes)[2]->Translate(trans1);
-                    (*planes)[2]->Scale2(scale2);
-                    (*planes)[2]->Rotate(m_q_cl);
-                    (*planes)[2]->Scale2(scale2inv);
-                    (*planes)[2]->Translate(trans2);
-                    
-                    (*planes)[3]->Restore();
-                    (*planes)[3]->Translate(trans1);
-                    (*planes)[3]->Scale2(scale2);
-                    (*planes)[3]->Rotate(m_q_cl);
-                    (*planes)[3]->Scale2(scale2inv);
-                    (*planes)[3]->Translate(trans2);
-                    
-                    (*planes)[4]->Restore();
-                    (*planes)[4]->Translate(trans1);
-                    (*planes)[4]->Scale2(scale2);
-                    (*planes)[4]->Rotate(m_q_cl);
-                    (*planes)[4]->Scale2(scale2inv);
-                    (*planes)[4]->Translate(trans2);
-                    
-                    (*planes)[5]->Restore();
-                    (*planes)[5]->Translate(trans1);
-                    (*planes)[5]->Scale2(scale2);
-                    (*planes)[5]->Rotate(m_q_cl);
-                    (*planes)[5]->Scale2(scale2inv);
-                    (*planes)[5]->Translate(trans2);
+                    for (int i = 0; i < 6; i++)
+                    {
+                        (*planes)[i]->Restore();
+                        
+                        p = (*planes)[i]->get_point();
+                        n = (*planes)[i]->normal();
+                        p = tform_copy.project(p);
+                        n = tform->unproject(n);
+                        n.safe_normalize();
+                        (*planes)[i]->ChangePlaneTemp(p, n);
+                        
+                        (*planes)[i]->Translate(trans1);
+                        (*planes)[i]->Rotate(q_cl);
+                        (*planes)[i]->Translate(trans2);
+                        
+                        p = (*planes)[i]->get_point();
+                        n = (*planes)[i]->normal();
+                        p = tform_copy.unproject(p);
+                        n = tform->project(n);
+                        n.safe_normalize();
+                        (*planes)[i]->ChangePlaneTemp(p, n);
+                    }
                 }
 			}
 		}
@@ -17463,6 +17607,9 @@ void VRenderVulkanView::CalcAndSetCombinedClippingPlanes()
             (*planes)[3]->SetRange((*planes)[3]->get_point(), (*planes)[3]->normal(), (*planes)[2]->get_point(), (*planes)[2]->normal());
             (*planes)[4]->SetRange((*planes)[4]->get_point(), (*planes)[4]->normal(), (*planes)[5]->get_point(), (*planes)[5]->normal());
             (*planes)[5]->SetRange((*planes)[5]->get_point(), (*planes)[5]->normal(), (*planes)[4]->get_point(), (*planes)[4]->normal());
+            
+            for (int j = 0; j < 6; j++)
+                (*planes)[j]->RestoreParam();
         }
     }
     
