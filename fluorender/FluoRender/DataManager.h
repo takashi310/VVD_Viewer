@@ -150,6 +150,11 @@ public:
 	{return m_sync_b;}
 	void SetSyncB(bool sync_b)
 	{m_sync_b = sync_b;}
+    
+    wxString GetMetadataPath()
+    {return m_metadata;}
+    void SetMetadataPath(wxString mpath)
+    {m_metadata = mpath;}
 
 	//randomize color
 	virtual void RandomizeColor() {}
@@ -168,6 +173,8 @@ protected:
 	int type;//-1:invalid, 2:volume, 3:mesh, 4:annotations, 5:group, 6:mesh group, 7:ruler, 8:traces
 	wxString m_name;
 	unsigned int m_id;
+    
+    wxString m_metadata;
 
 	//layer adjustment
 	Color m_gamma;
@@ -1892,6 +1899,7 @@ class ProjectDataLoaderQueue
 public:
     wxString path;
     wxString name;
+    wxString metadata;
     int ch;
     int t;
     bool compression;
@@ -1904,7 +1912,7 @@ public:
     wxString lblpath;
     int type;
     
-    ProjectDataLoaderQueue(const wxString &_path, int _ch, int _t, wxString _name=wxEmptyString , bool _compression=false, bool _skip_brick=false, bool _slice_seq=false, bool _time_seq=false, wxString _time_id=wxEmptyString, bool _load_mask=true, wxString _mskpath=wxEmptyString, wxString _lblpath=wxEmptyString)
+    ProjectDataLoaderQueue(const wxString &_path, int _ch, int _t, wxString _name=wxEmptyString , bool _compression=false, bool _skip_brick=false, bool _slice_seq=false, bool _time_seq=false, wxString _time_id=wxEmptyString, bool _load_mask=true, wxString _mskpath=wxEmptyString, wxString _lblpath=wxEmptyString, wxString _metadata=wxEmptyString)
     {
         path = _path;
         name = _name;
@@ -1918,6 +1926,7 @@ public:
         load_mask = _load_mask;
         mskpath = _mskpath;
         lblpath = _lblpath;
+        metadata = _metadata;
         
         wxString suffix = path.Mid(path.Find('.', true)).MakeLower();
         if (suffix == ".nrrd")
@@ -1932,9 +1941,9 @@ public:
             type = LOAD_TYPE_LSM;
         else if (suffix == ".CZI")
             type = LOAD_TYPE_CZI;
-        else if (suffix == ".xml")
-            type = LOAD_TYPE_PVXML;
-        else if (suffix == ".vvd" || suffix == ".n5" || suffix == ".json")
+       // else if (suffix == ".xml")
+       //     type = LOAD_TYPE_PVXML;
+        else if (suffix==".vvd" || suffix==".n5" || suffix==".json" || suffix==".n5fs_ch" || suffix==".xml")
             type = LOAD_TYPE_BRKXML;
         else if (suffix == ".h5j")
             type = LOAD_TYPE_H5J;
@@ -1948,6 +1957,7 @@ public:
     {
         path = copy.path;
         name = copy.name;
+        metadata = copy.metadata;
         ch = copy.ch;
         t = copy.t;
         compression = copy.compression;

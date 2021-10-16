@@ -1274,7 +1274,7 @@ void BRKXMLReader::loadFSN5()
     transform(ext.begin(), ext.end(), ext.begin(), towlower);
     boost::filesystem::path file_path(m_path_name);
     
-	boost::filesystem::path::imbue(std::locale(std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
+	//boost::filesystem::path::imbue(std::locale(std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
 	boost::filesystem::path root_path(m_dir_name);
 
 	vector<double> pix_res(3, 1.0);
@@ -1647,7 +1647,7 @@ bool BRKXMLReader::GetN5ChannelPaths(wstring n5path, vector<wstring> &output)
     
     boost::filesystem::path file_path(n5path);
     
-    boost::filesystem::path::imbue(std::locale(std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
+    //boost::filesystem::path::imbue(std::locale(std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
     boost::filesystem::path root_path(dir_name);
     
     directory_iterator end_itr; // default construction yields past-the-end
@@ -1677,7 +1677,7 @@ bool BRKXMLReader::GetN5ChannelPaths(wstring n5path, vector<wstring> &output)
 
 DatasetAttributes* BRKXMLReader::parseDatasetMetadata(wstring jpath)
 {
-    boost::filesystem::path::imbue(std::locale( std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
+    //boost::filesystem::path::imbue(std::locale( std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
     boost::filesystem::path path(jpath);
     std::ifstream ifs(path.string());
 

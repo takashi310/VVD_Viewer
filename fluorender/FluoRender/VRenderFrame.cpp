@@ -2910,6 +2910,8 @@ void VRenderFrame::SaveProject(wxString& filename)
 			fconfig.SetPath(str);
 			str = vd->GetName();
 			fconfig.Write("name", str);
+            str = vd->GetMetadataPath();
+            fconfig.Write("metadata", str);
 			//compression
 			fconfig.Write("compression", m_compression);
 			//skip brick
@@ -3003,32 +3005,32 @@ void VRenderFrame::SaveProject(wxString& filename)
 			if (planes && planes->size() == 6)
 			{
 				Plane* plane = 0;
-				double abcd[4];
+				double param;
 
-				//x1
-				plane = (*planes)[0];
-				plane->get_copy(abcd);
-				fconfig.Write("x1_val", abcd[3]);
-				//x2
-				plane = (*planes)[1];
-				plane->get_copy(abcd);
-				fconfig.Write("x2_val", abcd[3]);
-				//y1
-				plane = (*planes)[2];
-				plane->get_copy(abcd);
-				fconfig.Write("y1_val", abcd[3]);
-				//y2
-				plane = (*planes)[3];
-				plane->get_copy(abcd);
-				fconfig.Write("y2_val", abcd[3]);
-				//z1
-				plane = (*planes)[4];
-				plane->get_copy(abcd);
-				fconfig.Write("z1_val", abcd[3]);
-				//z2
-				plane = (*planes)[5];
-				plane->get_copy(abcd);
-				fconfig.Write("z2_val", abcd[3]);
+                //x1
+                plane = (*planes)[0];
+                param = plane->GetParam();
+                fconfig.Write("x1_param", param);
+                //x2
+                plane = (*planes)[1];
+                param = plane->GetParam();
+                fconfig.Write("x2_param", param);
+                //y1
+                plane = (*planes)[2];
+                param = plane->GetParam();
+                fconfig.Write("y1_param", param);
+                //y2
+                plane = (*planes)[3];
+                param = plane->GetParam();
+                fconfig.Write("y2_param", param);
+                //z1
+                plane = (*planes)[4];
+                param = plane->GetParam();
+                fconfig.Write("z1_param", param);
+                //z2
+                plane = (*planes)[5];
+                param = plane->GetParam();
+                fconfig.Write("z2_param", param);
 			}
 
 			//2d adjustment settings
@@ -3222,33 +3224,33 @@ void VRenderFrame::SaveProject(wxString& filename)
 				planes = md->GetMR()->get_planes();
 			if (planes && planes->size() == 6)
 			{
-				Plane* plane = 0;
-				double abcd[4];
-
-				//x1
-				plane = (*planes)[0];
-				plane->get_copy(abcd);
-				fconfig.Write("x1_val", abcd[3]);
-				//x2
-				plane = (*planes)[1];
-				plane->get_copy(abcd);
-				fconfig.Write("x2_val", abcd[3]);
-				//y1
-				plane = (*planes)[2];
-				plane->get_copy(abcd);
-				fconfig.Write("y1_val", abcd[3]);
-				//y2
-				plane = (*planes)[3];
-				plane->get_copy(abcd);
-				fconfig.Write("y2_val", abcd[3]);
-				//z1
-				plane = (*planes)[4];
-				plane->get_copy(abcd);
-				fconfig.Write("z1_val", abcd[3]);
-				//z2
-				plane = (*planes)[5];
-				plane->get_copy(abcd);
-				fconfig.Write("z2_val", abcd[3]);
+                Plane* plane = 0;
+                double param;
+                
+                //x1
+                plane = (*planes)[0];
+                param = plane->GetParam();
+                fconfig.Write("x1_param", param);
+                //x2
+                plane = (*planes)[1];
+                param = plane->GetParam();
+                fconfig.Write("x2_param", param);
+                //y1
+                plane = (*planes)[2];
+                param = plane->GetParam();
+                fconfig.Write("y1_param", param);
+                //y2
+                plane = (*planes)[3];
+                param = plane->GetParam();
+                fconfig.Write("y2_param", param);
+                //z1
+                plane = (*planes)[4];
+                param = plane->GetParam();
+                fconfig.Write("z1_param", param);
+                //z2
+                plane = (*planes)[5];
+                param = plane->GetParam();
+                fconfig.Write("z2_param", param);
 			}
 
 			//mesh transform
@@ -3532,6 +3534,12 @@ void VRenderFrame::SaveProject(wxString& filename)
 	fconfig.Write("x_link", m_clip_view->GetXLink());
 	fconfig.Write("y_link", m_clip_view->GetYLink());
 	fconfig.Write("z_link", m_clip_view->GetZLink());
+    fconfig.Write("linked_x1", m_clip_view->GetLinkedX1Param());
+    fconfig.Write("linked_x2", m_clip_view->GetLinkedX2Param());
+    fconfig.Write("linked_y1", m_clip_view->GetLinkedY1Param());
+    fconfig.Write("linked_y2", m_clip_view->GetLinkedY2Param());
+    fconfig.Write("linked_z1", m_clip_view->GetLinkedZ1Param());
+    fconfig.Write("linked_z2", m_clip_view->GetLinkedZ2Param());
 	//movie view
 	fconfig.SetPath("/movie_panel");
 	fconfig.Write("views_cmb", m_movie_view->m_views_cmb->GetCurrentSelection());
@@ -3711,6 +3719,9 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 					continue;
 				if (str != name)
 					continue;
+                
+                wxString metadata;
+                fconfig.Read("metadata", &metadata);
 				
 				bool compression = false;
 				fconfig.Read("compression", &compression);
@@ -3738,27 +3749,27 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 					m_data_mgr.SetTimeId(time_id);
 					wxString suffix = str.Mid(str.Find('.', true)).MakeLower();
 					if (suffix == ".nrrd")
-						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_NRRD, cur_chan, cur_time);
+						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_NRRD, cur_chan, cur_time, 0, wxEmptyString, metadata);
 					else if (suffix == ".tif"||suffix == ".tiff"||suffix == ".zip")
-						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_TIFF, cur_chan, cur_time);
+						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_TIFF, cur_chan, cur_time, 0, wxEmptyString, metadata);
 					else if (suffix == ".oib")
-						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_OIB, cur_chan, cur_time);
+						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_OIB, cur_chan, cur_time, 0, wxEmptyString, metadata);
 					else if (suffix == ".oif")
-						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_OIF, cur_chan, cur_time);
+						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_OIF, cur_chan, cur_time, 0, wxEmptyString, metadata);
 					else if (suffix == ".lsm")
-						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_LSM, cur_chan, cur_time);
+						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_LSM, cur_chan, cur_time, 0, wxEmptyString, metadata);
                     else if (suffix == ".czi")
-                        loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_CZI, cur_chan, cur_time);
+                        loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_CZI, cur_chan, cur_time, 0, wxEmptyString, metadata);
 					//else if (suffix == ".xml")
 					//	loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_PVXML, cur_chan, cur_time);
-					else if (suffix == ".vvd" || suffix == ".n5" || suffix == ".json" || suffix==".xml")
-						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_BRKXML, cur_chan, cur_time);
+					else if (suffix==".vvd" || suffix==".n5" || suffix==".json" || suffix==".n5fs_ch" || suffix==".xml")
+						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_BRKXML, cur_chan, cur_time, 0, wxEmptyString, metadata);
 					else if (suffix == ".h5j")
-						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_H5J, cur_chan, cur_time);
+						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_H5J, cur_chan, cur_time, 0, wxEmptyString, metadata);
 					else if (suffix == ".v3dpbd")
-						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_V3DPBD, cur_chan, cur_time);
+						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_V3DPBD, cur_chan, cur_time, 0, wxEmptyString, metadata);
                     else if (suffix == ".idi")
-                        loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_IDI, cur_chan, cur_time);
+                        loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_IDI, cur_chan, cur_time, 0, wxEmptyString, metadata);
 				}
 				if (loaded_num)
 					vd = m_data_mgr.GetLastVolumeData();
@@ -3917,6 +3928,8 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 							else if (fconfig.Read("x1_val", &val))
 								(*planes)[0]->ChangePlane(Point(abs(val), 0.0, 0.0),
 								Vector(1.0, 0.0, 0.0));
+                            else if (fconfig.Read("x1_param", &val))
+                                (*planes)[0]->SetParam(val);
 
 							//x2
 							if (fconfig.Read("x2_vali", &val))
@@ -3925,6 +3938,8 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 							else if (fconfig.Read("x2_val", &val))
 								(*planes)[1]->ChangePlane(Point(abs(val), 0.0, 0.0),
 								Vector(-1.0, 0.0, 0.0));
+                            else if (fconfig.Read("x2_param", &val))
+                                (*planes)[1]->SetParam(val);
 
 							//y1
 							if (fconfig.Read("y1_vali", &val))
@@ -3933,6 +3948,8 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 							else if (fconfig.Read("y1_val", &val))
 								(*planes)[2]->ChangePlane(Point(0.0, abs(val), 0.0),
 								Vector(0.0, 1.0, 0.0));
+                            else if (fconfig.Read("y1_param", &val))
+                                (*planes)[2]->SetParam(val);
 
 							//y2
 							if (fconfig.Read("y2_vali", &val))
@@ -3941,6 +3958,8 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 							else if (fconfig.Read("y2_val", &val))
 								(*planes)[3]->ChangePlane(Point(0.0, abs(val), 0.0),
 								Vector(0.0, -1.0, 0.0));
+                            else if (fconfig.Read("y2_param", &val))
+                                (*planes)[3]->SetParam(val);
 
 							//z1
 							if (fconfig.Read("z1_vali", &val))
@@ -3949,6 +3968,8 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 							else if (fconfig.Read("z1_val", &val))
 								(*planes)[4]->ChangePlane(Point(0.0, 0.0, abs(val)),
 								Vector(0.0, 0.0, 1.0));
+                            else if (fconfig.Read("z1_param", &val))
+                                (*planes)[4]->SetParam(val);
 
 							//z2
 							if (fconfig.Read("z2_vali", &val))
@@ -3957,6 +3978,8 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 							else if (fconfig.Read("z2_val", &val))
 								(*planes)[5]->ChangePlane(Point(0.0, 0.0, abs(val)),
 								Vector(0.0, 0.0, -1.0));
+                            else if (fconfig.Read("z2_param", &val))
+                                (*planes)[5]->SetParam(val);
 						}
 
 						//2d adjustment settings
@@ -4133,6 +4156,9 @@ void VRenderFrame::OpenVolumesFromProjectMT(wxFileConfig &fconfig, bool join)
                     continue;
                 wxString name = str;
                 
+                wxString metadata;
+                fconfig.Read("metadata", &metadata);
+                
                 bool compression = false;
                 fconfig.Read("compression", &compression);
                 bool skip_brick = false;
@@ -4175,7 +4201,8 @@ void VRenderFrame::OpenVolumesFromProjectMT(wxFileConfig &fconfig, bool join)
                                                  time_id,
                                                  m_load_mask,
                                                  mskpath,
-                                                 lblpath);
+                                                 lblpath,
+                                                 metadata);
                     queues.push_back(queue);
                 }
             }
@@ -4227,7 +4254,7 @@ void VRenderFrame::SetVolumePropertiesFromProject(wxFileConfig &fconfig)
                 wxString name;
                 if (!fconfig.Read("name", &name))
                     continue;
-
+                
                 vd = m_data_mgr.GetVolumeData(name);
                 if (vd)
                 {
@@ -4382,6 +4409,8 @@ void VRenderFrame::SetVolumePropertiesFromProject(wxFileConfig &fconfig)
                             else if (fconfig.Read("x1_val", &val))
                                 (*planes)[0]->ChangePlane(Point(abs(val), 0.0, 0.0),
                                                           Vector(1.0, 0.0, 0.0));
+                            else if (fconfig.Read("x1_param", &val))
+                                (*planes)[0]->SetParam(val);
                             
                             //x2
                             if (fconfig.Read("x2_vali", &val))
@@ -4390,6 +4419,8 @@ void VRenderFrame::SetVolumePropertiesFromProject(wxFileConfig &fconfig)
                             else if (fconfig.Read("x2_val", &val))
                                 (*planes)[1]->ChangePlane(Point(abs(val), 0.0, 0.0),
                                                           Vector(-1.0, 0.0, 0.0));
+                            else if (fconfig.Read("x2_param", &val))
+                                (*planes)[1]->SetParam(val);
                             
                             //y1
                             if (fconfig.Read("y1_vali", &val))
@@ -4398,6 +4429,8 @@ void VRenderFrame::SetVolumePropertiesFromProject(wxFileConfig &fconfig)
                             else if (fconfig.Read("y1_val", &val))
                                 (*planes)[2]->ChangePlane(Point(0.0, abs(val), 0.0),
                                                           Vector(0.0, 1.0, 0.0));
+                            else if (fconfig.Read("y1_param", &val))
+                                (*planes)[2]->SetParam(val);
                             
                             //y2
                             if (fconfig.Read("y2_vali", &val))
@@ -4406,6 +4439,8 @@ void VRenderFrame::SetVolumePropertiesFromProject(wxFileConfig &fconfig)
                             else if (fconfig.Read("y2_val", &val))
                                 (*planes)[3]->ChangePlane(Point(0.0, abs(val), 0.0),
                                                           Vector(0.0, -1.0, 0.0));
+                            else if (fconfig.Read("y2_param", &val))
+                                (*planes)[3]->SetParam(val);
                             
                             //z1
                             if (fconfig.Read("z1_vali", &val))
@@ -4414,6 +4449,8 @@ void VRenderFrame::SetVolumePropertiesFromProject(wxFileConfig &fconfig)
                             else if (fconfig.Read("z1_val", &val))
                                 (*planes)[4]->ChangePlane(Point(0.0, 0.0, abs(val)),
                                                           Vector(0.0, 0.0, 1.0));
+                            else if (fconfig.Read("z1_param", &val))
+                                (*planes)[4]->SetParam(val);
                             
                             //z2
                             if (fconfig.Read("z2_vali", &val))
@@ -4422,6 +4459,8 @@ void VRenderFrame::SetVolumePropertiesFromProject(wxFileConfig &fconfig)
                             else if (fconfig.Read("z2_val", &val))
                                 (*planes)[5]->ChangePlane(Point(0.0, 0.0, abs(val)),
                                                           Vector(0.0, 0.0, -1.0));
+                            else if (fconfig.Read("z2_param", &val))
+                                (*planes)[5]->SetParam(val);
                         }
                         
                         //2d adjustment settings
@@ -4684,53 +4723,65 @@ MeshData* VRenderFrame::OpenMeshFromProject(wxString name, wxFileConfig &fconfig
 							double val;
 							wxString splane;
 
-							//x1
-							if (fconfig.Read("x1_vali", &val))
-								(*planes)[0]->ChangePlane(Point(abs(val/iresx), 0.0, 0.0),
-								Vector(1.0, 0.0, 0.0));
-							else if (fconfig.Read("x1_val", &val))
-								(*planes)[0]->ChangePlane(Point(abs(val), 0.0, 0.0),
-								Vector(1.0, 0.0, 0.0));
-
-							//x2
-							if (fconfig.Read("x2_vali", &val))
-								(*planes)[1]->ChangePlane(Point(abs(val/iresx), 0.0, 0.0),
-								Vector(-1.0, 0.0, 0.0));
-							else if (fconfig.Read("x2_val", &val))
-								(*planes)[1]->ChangePlane(Point(abs(val), 0.0, 0.0),
-								Vector(-1.0, 0.0, 0.0));
-
-							//y1
-							if (fconfig.Read("y1_vali", &val))
-								(*planes)[2]->ChangePlane(Point(0.0, abs(val/iresy), 0.0),
-								Vector(0.0, 1.0, 0.0));
-							else if (fconfig.Read("y1_val", &val))
-								(*planes)[2]->ChangePlane(Point(0.0, abs(val), 0.0),
-								Vector(0.0, 1.0, 0.0));
-
-							//y2
-							if (fconfig.Read("y2_vali", &val))
-								(*planes)[3]->ChangePlane(Point(0.0, abs(val/iresy), 0.0),
-								Vector(0.0, -1.0, 0.0));
-							else if (fconfig.Read("y2_val", &val))
-								(*planes)[3]->ChangePlane(Point(0.0, abs(val), 0.0),
-								Vector(0.0, -1.0, 0.0));
-
-							//z1
-							if (fconfig.Read("z1_vali", &val))
-								(*planes)[4]->ChangePlane(Point(0.0, 0.0, abs(val/iresz)),
-								Vector(0.0, 0.0, 1.0));
-							else if (fconfig.Read("z1_val", &val))
-								(*planes)[4]->ChangePlane(Point(0.0, 0.0, abs(val)),
-								Vector(0.0, 0.0, 1.0));
-
-							//z2
-							if (fconfig.Read("z2_vali", &val))
-								(*planes)[5]->ChangePlane(Point(0.0, 0.0, abs(val/iresz)),
-								Vector(0.0, 0.0, -1.0));
-							else if (fconfig.Read("z2_val", &val))
-								(*planes)[5]->ChangePlane(Point(0.0, 0.0, abs(val)),
-								Vector(0.0, 0.0, -1.0));
+                            //x1
+                            if (fconfig.Read("x1_vali", &val))
+                                (*planes)[0]->ChangePlane(Point(abs(val/iresx), 0.0, 0.0),
+                                                          Vector(1.0, 0.0, 0.0));
+                            else if (fconfig.Read("x1_val", &val))
+                                (*planes)[0]->ChangePlane(Point(abs(val), 0.0, 0.0),
+                                                          Vector(1.0, 0.0, 0.0));
+                            else if (fconfig.Read("x1_param", &val))
+                                (*planes)[0]->SetParam(val);
+                            
+                            //x2
+                            if (fconfig.Read("x2_vali", &val))
+                                (*planes)[1]->ChangePlane(Point(abs(val/iresx), 0.0, 0.0),
+                                                          Vector(-1.0, 0.0, 0.0));
+                            else if (fconfig.Read("x2_val", &val))
+                                (*planes)[1]->ChangePlane(Point(abs(val), 0.0, 0.0),
+                                                          Vector(-1.0, 0.0, 0.0));
+                            else if (fconfig.Read("x2_param", &val))
+                                (*planes)[1]->SetParam(val);
+                            
+                            //y1
+                            if (fconfig.Read("y1_vali", &val))
+                                (*planes)[2]->ChangePlane(Point(0.0, abs(val/iresy), 0.0),
+                                                          Vector(0.0, 1.0, 0.0));
+                            else if (fconfig.Read("y1_val", &val))
+                                (*planes)[2]->ChangePlane(Point(0.0, abs(val), 0.0),
+                                                          Vector(0.0, 1.0, 0.0));
+                            else if (fconfig.Read("y1_param", &val))
+                                (*planes)[2]->SetParam(val);
+                            
+                            //y2
+                            if (fconfig.Read("y2_vali", &val))
+                                (*planes)[3]->ChangePlane(Point(0.0, abs(val/iresy), 0.0),
+                                                          Vector(0.0, -1.0, 0.0));
+                            else if (fconfig.Read("y2_val", &val))
+                                (*planes)[3]->ChangePlane(Point(0.0, abs(val), 0.0),
+                                                          Vector(0.0, -1.0, 0.0));
+                            else if (fconfig.Read("y2_param", &val))
+                                (*planes)[3]->SetParam(val);
+                            
+                            //z1
+                            if (fconfig.Read("z1_vali", &val))
+                                (*planes)[4]->ChangePlane(Point(0.0, 0.0, abs(val/iresz)),
+                                                          Vector(0.0, 0.0, 1.0));
+                            else if (fconfig.Read("z1_val", &val))
+                                (*planes)[4]->ChangePlane(Point(0.0, 0.0, abs(val)),
+                                                          Vector(0.0, 0.0, 1.0));
+                            else if (fconfig.Read("z1_param", &val))
+                                (*planes)[4]->SetParam(val);
+                            
+                            //z2
+                            if (fconfig.Read("z2_vali", &val))
+                                (*planes)[5]->ChangePlane(Point(0.0, 0.0, abs(val/iresz)),
+                                                          Vector(0.0, 0.0, -1.0));
+                            else if (fconfig.Read("z2_val", &val))
+                                (*planes)[5]->ChangePlane(Point(0.0, 0.0, abs(val)),
+                                                          Vector(0.0, 0.0, -1.0));
+                            else if (fconfig.Read("z2_param", &val))
+                                (*planes)[5]->SetParam(val);
 						}
 
 						//mesh transform
@@ -5513,6 +5564,19 @@ void VRenderFrame::OpenProject(wxString& filename)
 		}
 		bool link;
 		int mode;
+        double dval;
+        if (fconfig.Read("linked_x1", &dval))
+            m_clip_view->SetLinkedX1Param(dval);
+        if (fconfig.Read("linked_x2", &dval))
+            m_clip_view->SetLinkedX2Param(dval);
+        if (fconfig.Read("linked_y1", &dval))
+            m_clip_view->SetLinkedY1Param(dval);
+        if (fconfig.Read("linked_y2", &dval))
+            m_clip_view->SetLinkedY2Param(dval);
+        if (fconfig.Read("linked_z1", &dval))
+            m_clip_view->SetLinkedZ1Param(dval);
+        if (fconfig.Read("linked_z2", &dval))
+            m_clip_view->SetLinkedZ2Param(dval);
 		if (fconfig.Read("chann_link", &link))
 			m_clip_view->SetChannLink(link);
 		if (fconfig.Read("plane_mode", &mode))
@@ -6002,7 +6066,16 @@ void VRenderFrame::OpenProject(wxString& filename)
 	for (int i = 0; i < (int)m_vrv_list.size(); i++)
 	{
 		if (m_vrv_list[i])
+        {
 			m_vrv_list[i]->SetEmptyBlockDetectorActive(true);
+            if(m_clip_view->GetChannLink())
+            {
+                m_vrv_list[i]->CalcAndSetCombinedClippingPlanes();
+                double rotx, roty, rotz;
+                m_vrv_list[i]->GetClippingPlaneRotations(rotx, roty, rotz);
+                m_vrv_list[i]->SetClippingPlaneRotations(rotx, roty, rotz);
+            }
+        }
 	}
 	RefreshVRenderViews();
 

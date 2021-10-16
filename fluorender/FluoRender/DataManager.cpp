@@ -7319,7 +7319,7 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
                     }
                 }
             }
-			
+            vd->SetMetadataPath(metadata);
 			m_latest_vols.push_back(vd);
 		}
 
@@ -9234,6 +9234,7 @@ wxThread::ExitCode ProjectDataLoaderThread::Entry()
         
         wxString filename = m_pdl->m_queues[0].path;
         wxString name = m_pdl->m_queues[0].name;
+        wxString metadata = m_pdl->m_queues[0].metadata;
         int ch_num = m_pdl->m_queues[0].ch;
         int t_num = m_pdl->m_queues[0].t;
         bool compression = m_pdl->m_queues[0].compression;
@@ -9296,10 +9297,55 @@ wxThread::ExitCode ProjectDataLoaderThread::Entry()
         int result = 0;
         BaseReader* reader = 0;
         
+        wxString idi_metadata_path;
+        int idi_type = 0;
+        if (type == LOAD_TYPE_IDI)
+        {
+            wxString idi_volpath;
+            wxFileInputStream ist(pathname);
+            if (!ist.IsOk()) return (wxThread::ExitCode)1;
+            wxZipInputStream zstream(ist);
+            if (!zstream.IsOk()) return (wxThread::ExitCode)1;
+            
+            wxZipEntry *entry;
+            while (entry = zstream.GetNextEntry())
+            {
+                wxString ename = entry->GetName();
+                if (entry->IsDir())
+                    continue;
+                if (ename.Mid(ename.Find(wxFileName::GetPathSeparator(), true)+1).StartsWith("."))
+                    continue;
+                wxString ret = (wxStandardPaths::Get().GetTempDir() + wxFileName::GetPathSeparator() + ename).ToStdWstring();
+                wxString esuffix = ret.Mid(ret.Find('.', true)).MakeLower();
+                if (esuffix == ".nrrd" || esuffix == ".tif" || esuffix == ".xml")
+                {
+                    if (esuffix == ".nrrd")
+                    {
+                        idi_volpath = ret;
+                        idi_type = LOAD_TYPE_NRRD;
+                    }
+                    else if (esuffix == ".tif")
+                    {
+                        idi_volpath = ret;
+                        idi_type = LOAD_TYPE_TIFF;
+                    }
+                    else if (esuffix == ".xml")
+                        idi_metadata_path = ret;
+                    wxFileOutputStream file(ret);
+                    if (!file.IsOk()) return (wxThread::ExitCode)1;
+                    file.Write(zstream);
+                }
+            }
+            zstream.CloseEntry();
+            if (idi_volpath.IsEmpty() || idi_metadata_path.IsEmpty())
+                return (wxThread::ExitCode)1;
+            pathname = idi_volpath;
+        }
+        
         //RGB tiff
-        if (type == LOAD_TYPE_TIFF)
+        if (type == LOAD_TYPE_TIFF || (type == LOAD_TYPE_IDI && idi_type == LOAD_TYPE_TIFF))
             reader = new TIFReader();
-        else if (type == LOAD_TYPE_NRRD)
+        else if (type == LOAD_TYPE_NRRD || (type == LOAD_TYPE_IDI && idi_type == LOAD_TYPE_NRRD))
             reader = new NRRDReader();
         else if (type == LOAD_TYPE_OIB)
             reader = new OIBReader();
@@ -9307,6 +9353,8 @@ wxThread::ExitCode ProjectDataLoaderThread::Entry()
             reader = new OIFReader();
         else if (type == LOAD_TYPE_LSM)
             reader = new LSMReader();
+        else if (type == LOAD_TYPE_CZI)
+            reader = new CZIReader();
         else if (type == LOAD_TYPE_PVXML)
             reader = new PVXMLReader();
         else if (type == LOAD_TYPE_BRKXML)
@@ -9339,6 +9387,15 @@ wxThread::ExitCode ProjectDataLoaderThread::Entry()
             ((BRKXMLReader *)reader)->SetDir(str_w);
         }
         
+        if (type == LOAD_TYPE_BRKXML)
+        {
+            wxString suffix = metadata.Mid(metadata.Find('.', true)).MakeLower();
+            if (suffix.compare(".xml") == 0)
+            {
+                BRKXMLReader* br = (BRKXMLReader *)reader;
+                br->SetBDVMetadataPath(metadata.ToStdWstring().c_str());
+            }
+        }
         reader->Preprocess();
         
         if (type == LOAD_TYPE_BRKXML && !((BRKXMLReader *)reader)->GetExMetadataURL().empty())
@@ -9507,6 +9564,11 @@ wxThread::ExitCode ProjectDataLoaderThread::Entry()
                     vd->SetOffset(maxval/vxmax);
             }
             
+            if (type == LOAD_TYPE_BRKXML && vd->GetMaxValue() == 65535)
+            {
+                vd->SetOffset(4096.0/65535.0);
+            }
+            
             //get excitation wavelength
             double wavelength = reader->GetExcitationWavelength(i);
             if (wavelength > 0.0) {
@@ -9538,6 +9600,39 @@ wxThread::ExitCode ProjectDataLoaderThread::Entry()
                         vd->SetColor(white);
                 }
             }
+            if (type == LOAD_TYPE_IDI)
+            {
+                vd->ImportROITreeXML(idi_metadata_path.ToStdWstring());
+                if (!vd->ExportROITree().empty())
+                {
+                    vd->SetColormapMode(3);
+                    vd->SelectAllNamedROI();
+                    vd->SetIDColDispMode(2);
+                    vd->SetAlpha(0.5);
+                }
+            }
+            
+            if (type == LOAD_TYPE_BRKXML)
+            {
+                wxString msuffix = metadata.Mid(metadata.Find('.', true)).MakeLower();
+                if (msuffix.compare(".xml") == 0)
+                {
+                    BRKXMLReader* br = (BRKXMLReader *)reader;
+                    Transform bdv_tranform;
+                    if (suffix == ".n5fs_ch")
+                        bdv_tranform = br->GetBDVTransform();
+                    else
+                        bdv_tranform = br->GetBDVTransform(i, t_num>=0?t_num:reader->GetCurTime());
+                    Texture* tex = vd->GetTexture();
+                    if (tex)
+                    {
+                        Transform* tform = tex->transform();
+                        tform->post_trans(bdv_tranform);
+                        tex->set_additional_transform(bdv_tranform);
+                    }
+                }
+            }
+            vd->SetMetadataPath(metadata);
         }
         
         if (downloaded)

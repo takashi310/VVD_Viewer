@@ -9184,6 +9184,7 @@ DataGroup* VRenderVulkanView::AddVolumeData(VolumeData* vd, wxString group_name)
 			if (vr_frame->GetClippingView()->GetChannLink() && group->GetVolumeData(0) != vd && src_planes)
 			{
                 CalcAndSetCombinedClippingPlanes();
+                A2Q();
 			}
 		}
 	}
@@ -9232,6 +9233,7 @@ void VRenderVulkanView::AddMeshData(MeshData* md)
 		if (src_planes && vr_frame->GetClippingView()->GetChannLink())
 		{
 			CalcAndSetCombinedClippingPlanes();
+            A2Q();
 		}
 	}
 	m_md_pop_dirty = true;
@@ -9938,6 +9940,7 @@ void VRenderVulkanView::MoveLayertoGroup(wxString &group_name, wxString &src_nam
 		if (vr_frame->GetClippingView()->GetChannLink() && group->GetVolumeData(0) != src_vd)
 		{
 			CalcAndSetCombinedClippingPlanes();
+            A2Q();
 		}
 	}
 
@@ -10048,6 +10051,7 @@ void VRenderVulkanView::MoveLayerfromtoGroup(wxString &src_group_name, wxString 
 		if (vr_frame->GetClippingView()->GetChannLink() && dst_group->GetVolumeData(0) != src_vd)
 		{
 			CalcAndSetCombinedClippingPlanes();
+            A2Q();
 		}
 	}
 
