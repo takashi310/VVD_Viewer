@@ -1316,7 +1316,7 @@ void BRKXMLReader::loadFSN5()
     else if (file_path.extension() == ".xml") {
         m_bdv_metadata_path = file_path.wstring();
         tinyxml2::XMLDocument xmldoc;
-        if (xmldoc.LoadFile((char*)file_path.c_str()) != 0){
+        if (xmldoc.LoadFile(file_path.string().c_str()) != 0){
             return;
         }
         string r_n5path = ReadBDVFilePath(xmldoc);
@@ -1655,7 +1655,7 @@ bool BRKXMLReader::GetN5ChannelPaths(wstring n5path, vector<wstring> &output)
         output.clear();
     if (file_path.extension() == ".xml") {
         tinyxml2::XMLDocument xmldoc;
-        if (xmldoc.LoadFile((char*)file_path.c_str()) != 0){
+        if (xmldoc.LoadFile(file_path.string().c_str()) != 0){
             return false;
         }
         string r_n5path = ReadBDVFilePath(xmldoc);
