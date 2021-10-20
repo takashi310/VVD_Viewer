@@ -5578,7 +5578,11 @@ void VRenderFrame::OpenProject(wxString& filename)
         if (fconfig.Read("linked_z2", &dval))
             m_clip_view->SetLinkedZ2Param(dval);
 		if (fconfig.Read("chann_link", &link))
+        {
 			m_clip_view->SetChannLink(link);
+            if (link)
+                m_clip_view->CalcAndSetCombinedClippingPlanes();
+        }
 		if (fconfig.Read("plane_mode", &mode))
 			m_clip_view->SetPlaneMode(mode);
 		if (fconfig.Read("x_link", &link))

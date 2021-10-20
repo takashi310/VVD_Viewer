@@ -583,6 +583,29 @@ void ClippingView::GetSettings()
 
 	EnableAll();
     
+    double min_spcx = DBL_MAX;
+    double min_spcy = DBL_MAX;
+    double min_spcz = DBL_MAX;
+    if (m_link_channels->GetValue() && m_mgr)
+    {
+        for (int i=0; i<m_mgr->GetVolumeNum(); i++)
+        {
+            VolumeData* vd = m_mgr->GetVolumeData(i);
+            if (!vd)
+                continue;
+            double spcx = DBL_MAX;
+            double spcy = DBL_MAX;
+            double spcz = DBL_MAX;
+            vd->GetSpacings(spcx, spcy, spcz, 0);
+            min_spcx = min_spcx > spcx ? spcx : min_spcx;
+            min_spcy = min_spcy > spcy ? spcy : min_spcy;
+            min_spcz = min_spcz > spcz ? spcz : min_spcz;
+        }
+    }
+    if (min_spcx == DBL_MAX) min_spcx = 1.0;
+    if (min_spcy == DBL_MAX) min_spcy = 1.0;
+    if (min_spcz == DBL_MAX) min_spcz = 1.0;
+    
     vector<Plane*> *planes = 0;
     Transform tform;
     tform.load_identity();
@@ -639,9 +662,9 @@ void ClippingView::GetSettings()
                 p1 = tform.project(p1);
                 dims[j] = (p1 - p0).length();
             }
-            resx = dims[0];
-            resy = dims[1];
-            resz = dims[2];
+            resx = dims[0] / min_spcx;
+            resy = dims[1] / min_spcy;
+            resz = dims[2] / min_spcz;
         }
 		break;
 	case 3:	//mesh
@@ -668,9 +691,9 @@ void ClippingView::GetSettings()
                     p1 = tform.project(p1);
                     dims[j] = (p1 - p0).length();
                 }
-                resx = dims[0];
-                resy = dims[1];
-                resz = dims[2];
+                resx = dims[0] / min_spcx;
+                resy = dims[1] / min_spcy;
+                resz = dims[2] / min_spcz;
             }
 		}
 		break;
@@ -832,6 +855,65 @@ void ClippingView::GetSettings()
     }
 }
 
+void ClippingView::CalcAndSetCombinedClippingPlanes()
+{
+    if (!m_mgr)
+        return;
+    
+    VRenderFrame* vrender_frame = (VRenderFrame*)m_frame;
+    if (vrender_frame)
+    {
+        for (int i=0; i<(int)vrender_frame->GetViewList()->size(); i++)
+        {
+            VRenderView *vrv = (*vrender_frame->GetViewList())[i];
+            if (vrv)
+            {
+                vrv->CalcAndSetCombinedClippingPlanes();
+            }
+        }
+    }
+    if (m_mgr)
+    {
+        vector<Plane*> *planes;
+        int i;
+        for (i=0; i<m_mgr->GetVolumeNum(); i++)
+        {
+            VolumeData* vd = m_mgr->GetVolumeData(i);
+            if (!vd)
+                continue;
+            
+            planes = 0;
+            if (vd->GetVR())
+                planes = vd->GetVR()->get_planes();
+            if (!planes)
+                continue;
+            if (planes->size() != 6)
+                continue;
+            
+            for (int i = 0; i < 6; i++)
+                (*planes)[i]->SetParam(m_linked_plane_params[i]);
+        }
+        for (i=0; i<m_mgr->GetMeshNum(); i++)
+        {
+            MeshData* md = m_mgr->GetMeshData(i);
+            if (!md)
+                continue;
+            
+            planes = 0;
+            if (md->GetMR())
+                planes = md->GetMR()->get_planes();
+            if (!planes)
+                continue;
+            if (planes->size() != 6)
+                continue;
+            
+            for (int i = 0; i < 6; i++)
+                (*planes)[i]->SetParam(m_linked_plane_params[i]);
+        }
+    }
+    GetSettings();
+}
+
 void ClippingView::OnLinkChannelsCheck(wxCommandEvent &event)
 {
 	if ( !((m_sel_type==2 && m_vd) || (m_sel_type==3 && m_md)) )
@@ -839,60 +921,7 @@ void ClippingView::OnLinkChannelsCheck(wxCommandEvent &event)
 
 	if (m_link_channels->GetValue())
 	{
-		if (!m_mgr)
-			return;
-        
-        VRenderFrame* vrender_frame = (VRenderFrame*)m_frame;
-        if (vrender_frame)
-        {
-            for (int i=0; i<(int)vrender_frame->GetViewList()->size(); i++)
-            {
-                VRenderView *vrv = (*vrender_frame->GetViewList())[i];
-                if (vrv)
-                {
-                    vrv->CalcAndSetCombinedClippingPlanes();
-                }
-            }
-        }
-        if (m_mgr)
-        {
-            vector<Plane*> *planes;
-            int i;
-            for (i=0; i<m_mgr->GetVolumeNum(); i++)
-            {
-                VolumeData* vd = m_mgr->GetVolumeData(i);
-                if (!vd)
-                    continue;
-                
-                planes = 0;
-                if (vd->GetVR())
-                    planes = vd->GetVR()->get_planes();
-                if (!planes)
-                    continue;
-                if (planes->size() != 6)
-                    continue;
-                
-                for (int i = 0; i < 6; i++)
-                    (*planes)[i]->SetParam(m_linked_plane_params[i]);
-            }
-            for (i=0; i<m_mgr->GetMeshNum(); i++)
-            {
-                MeshData* md = m_mgr->GetMeshData(i);
-                if (!md)
-                    continue;
-                
-                planes = 0;
-                if (md->GetMR())
-                    planes = md->GetMR()->get_planes();
-                if (!planes)
-                    continue;
-                if (planes->size() != 6)
-                    continue;
-                
-                for (int i = 0; i < 6; i++)
-                    (*planes)[i]->SetParam(m_linked_plane_params[i]);
-            }
-        }
+        CalcAndSetCombinedClippingPlanes();
 	}
     else
     {
@@ -975,8 +1004,8 @@ void ClippingView::OnLinkChannelsCheck(wxCommandEvent &event)
                     p->RestoreParam();
             }
         }
+        GetSettings();
     }
-    GetSettings();
     RefreshVRenderViews();
 }
 

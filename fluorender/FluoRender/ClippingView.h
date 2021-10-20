@@ -208,6 +208,8 @@ public:
     double GetLinkedY2Param() { return m_linked_plane_params[3]; }
     double GetLinkedZ1Param() { return m_linked_plane_params[4]; }
     double GetLinkedZ2Param() { return m_linked_plane_params[5]; }
+    
+    void CalcAndSetCombinedClippingPlanes();
 
 private:
 	wxWindow* m_frame;
