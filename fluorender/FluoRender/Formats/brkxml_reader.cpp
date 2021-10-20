@@ -233,7 +233,7 @@ void BRKXMLReader::Preprocess()
     wstring ext = m_path_name.substr(ext_pos+1);
     transform(ext.begin(), ext.end(), ext.begin(), towlower);
     
-    if (ext.compare(L"n5") || ext.compare(L"json") || ext.compare(L"n5fs_ch") || ext.compare(L"xml")) {
+    if (ext == L"n5" || ext == L"json" || ext == L"n5fs_ch" || ext == L"xml") {
         loadFSN5();
     }
     else if (ext == L"vvd") {
