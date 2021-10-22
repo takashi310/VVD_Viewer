@@ -17565,8 +17565,8 @@ void VRenderVulkanView::CalcAndSetCombinedClippingPlanes()
                 FLIVR::Point(bounds.max().x(), 0.0, 0.0),
                 FLIVR::Point(0.0, bounds.min().y(), 0.0),
                 FLIVR::Point(0.0, bounds.max().y(), 0.0),
-                FLIVR::Point(0.0, 0.0, bounds.min().z()),
-                FLIVR::Point(0.0, 0.0, bounds.max().z())
+                FLIVR::Point(0.0, 0.0, bounds.max().z()),
+                FLIVR::Point(0.0, 0.0, bounds.min().z())
             };
             
             FLIVR::Vector pn[6] = {
@@ -17574,8 +17574,8 @@ void VRenderVulkanView::CalcAndSetCombinedClippingPlanes()
                 FLIVR::Vector(-1.0, 0.0, 0.0),
                 FLIVR::Vector(0.0, 1.0, 0.0),
                 FLIVR::Vector(0.0, -1.0, 0.0),
-                FLIVR::Vector(0.0, 0.0, 1.0),
-                FLIVR::Vector(0.0, 0.0, -1.0)
+                FLIVR::Vector(0.0, 0.0, -1.0),
+                FLIVR::Vector(0.0, 0.0, 1.0)
             };
             
             if (!vd->GetVR())

@@ -660,6 +660,21 @@ void Transform::load_identity(double m[4][4])
 	m[3][0] = 0.0; m[3][1] = 0.0; m[3][2] = 0.0; m[3][3] = 1.0;
 }
 
+bool Transform::is_identity()
+{
+    bool flag = true;
+    for (int i = 0; i < 4; i++)
+        for (int j = 0; j < 4; j++)
+        {
+            if ((mat[i][j] != 1) && (mat[j][i] != 0))
+            {
+                flag = false;
+                break;
+            }
+        }
+    return flag;
+}
+
 void Transform::invert()
 {
 	double tmp;

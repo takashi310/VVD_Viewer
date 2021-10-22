@@ -210,6 +210,7 @@ public:
     double GetLinkedZ2Param() { return m_linked_plane_params[5]; }
     
     void CalcAndSetCombinedClippingPlanes();
+    void CalcBoundingBoxDemensions(double &w, double &h, double &d);
 
 private:
 	wxWindow* m_frame;

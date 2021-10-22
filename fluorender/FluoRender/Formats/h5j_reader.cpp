@@ -94,8 +94,6 @@ void H5JReader::Preprocess()
 {
 	m_4d_seq.clear();
 
-	int i;
-
 	wstring path, name;
 	if (!SEP_PATH_NAME(m_path_name, path, name))
 		return;//READER_OPEN_FAIL;

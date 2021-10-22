@@ -4404,61 +4404,85 @@ void VRenderFrame::SetVolumePropertiesFromProject(wxFileConfig &fconfig)
                             
                             //x1
                             if (fconfig.Read("x1_vali", &val))
-                                (*planes)[0]->ChangePlane(Point(abs(val/iresx), 0.0, 0.0),
-                                                          Vector(1.0, 0.0, 0.0));
+                            {
+                                (*planes)[0]->SetParam(abs(val/iresx));
+                                m_clip_view->SetLinkedX1Param(abs(val/iresx));
+                            }
                             else if (fconfig.Read("x1_val", &val))
-                                (*planes)[0]->ChangePlane(Point(abs(val), 0.0, 0.0),
-                                                          Vector(1.0, 0.0, 0.0));
+                            {
+                                (*planes)[0]->SetParam(abs(val));
+                                m_clip_view->SetLinkedX1Param(abs(val));
+                            }
                             else if (fconfig.Read("x1_param", &val))
                                 (*planes)[0]->SetParam(val);
                             
                             //x2
                             if (fconfig.Read("x2_vali", &val))
-                                (*planes)[1]->ChangePlane(Point(abs(val/iresx), 0.0, 0.0),
-                                                          Vector(-1.0, 0.0, 0.0));
+                            {
+                                (*planes)[1]->SetParam(1.0 - abs(val/iresx));
+                                m_clip_view->SetLinkedX2Param(1.0 - abs(val/iresx));
+                            }
                             else if (fconfig.Read("x2_val", &val))
-                                (*planes)[1]->ChangePlane(Point(abs(val), 0.0, 0.0),
-                                                          Vector(-1.0, 0.0, 0.0));
+                            {
+                                (*planes)[1]->SetParam(1.0 - abs(val));
+                                m_clip_view->SetLinkedX2Param(1.0 - abs(val));
+                            }
                             else if (fconfig.Read("x2_param", &val))
                                 (*planes)[1]->SetParam(val);
                             
                             //y1
                             if (fconfig.Read("y1_vali", &val))
-                                (*planes)[2]->ChangePlane(Point(0.0, abs(val/iresy), 0.0),
-                                                          Vector(0.0, 1.0, 0.0));
+                            {
+                                (*planes)[2]->SetParam(abs(val/iresy));
+                                m_clip_view->SetLinkedY1Param(abs(val/iresy));
+                            }
                             else if (fconfig.Read("y1_val", &val))
-                                (*planes)[2]->ChangePlane(Point(0.0, abs(val), 0.0),
-                                                          Vector(0.0, 1.0, 0.0));
+                            {
+                                (*planes)[2]->SetParam(abs(val));
+                                m_clip_view->SetLinkedY1Param(abs(val));
+                            }
                             else if (fconfig.Read("y1_param", &val))
                                 (*planes)[2]->SetParam(val);
                             
                             //y2
                             if (fconfig.Read("y2_vali", &val))
-                                (*planes)[3]->ChangePlane(Point(0.0, abs(val/iresy), 0.0),
-                                                          Vector(0.0, -1.0, 0.0));
+                            {
+                                (*planes)[3]->SetParam(1.0 - abs(val/iresy));
+                                m_clip_view->SetLinkedY2Param(1.0 - abs(val/iresy));
+                            }
                             else if (fconfig.Read("y2_val", &val))
-                                (*planes)[3]->ChangePlane(Point(0.0, abs(val), 0.0),
-                                                          Vector(0.0, -1.0, 0.0));
+                            {
+                                (*planes)[3]->SetParam(1.0 - abs(val));
+                                m_clip_view->SetLinkedY2Param(1.0 - abs(val));
+                            }
                             else if (fconfig.Read("y2_param", &val))
                                 (*planes)[3]->SetParam(val);
                             
                             //z1
                             if (fconfig.Read("z1_vali", &val))
-                                (*planes)[4]->ChangePlane(Point(0.0, 0.0, abs(val/iresz)),
-                                                          Vector(0.0, 0.0, 1.0));
+                            {
+                                (*planes)[4]->SetParam(abs(val/iresz));
+                                m_clip_view->SetLinkedZ1Param(abs(val/iresz));
+                            }
                             else if (fconfig.Read("z1_val", &val))
-                                (*planes)[4]->ChangePlane(Point(0.0, 0.0, abs(val)),
-                                                          Vector(0.0, 0.0, 1.0));
+                            {
+                                (*planes)[4]->SetParam(abs(val));
+                                m_clip_view->SetLinkedZ1Param(abs(val));
+                            }
                             else if (fconfig.Read("z1_param", &val))
                                 (*planes)[4]->SetParam(val);
                             
                             //z2
                             if (fconfig.Read("z2_vali", &val))
-                                (*planes)[5]->ChangePlane(Point(0.0, 0.0, abs(val/iresz)),
-                                                          Vector(0.0, 0.0, -1.0));
+                            {
+                                (*planes)[5]->SetParam(1.0 - abs(val/iresz));
+                                m_clip_view->SetLinkedZ2Param(1.0 - abs(val/iresz));
+                            }
                             else if (fconfig.Read("z2_val", &val))
-                                (*planes)[5]->ChangePlane(Point(0.0, 0.0, abs(val)),
-                                                          Vector(0.0, 0.0, -1.0));
+                            {
+                                (*planes)[5]->SetParam(1.0 - abs(val));
+                                m_clip_view->SetLinkedZ2Param(1.0 - abs(val));
+                            }
                             else if (fconfig.Read("z2_param", &val))
                                 (*planes)[5]->SetParam(val);
                         }
@@ -4722,64 +4746,88 @@ MeshData* VRenderFrame::OpenMeshFromProject(wxString name, wxFileConfig &fconfig
 						{
 							double val;
 							wxString splane;
-
+                            
                             //x1
                             if (fconfig.Read("x1_vali", &val))
-                                (*planes)[0]->ChangePlane(Point(abs(val/iresx), 0.0, 0.0),
-                                                          Vector(1.0, 0.0, 0.0));
+                            {
+                                (*planes)[0]->SetParam(abs(val/iresx));
+                                m_clip_view->SetLinkedX1Param(abs(val/iresx));
+                            }
                             else if (fconfig.Read("x1_val", &val))
-                                (*planes)[0]->ChangePlane(Point(abs(val), 0.0, 0.0),
-                                                          Vector(1.0, 0.0, 0.0));
+                            {
+                                (*planes)[0]->SetParam(abs(val));
+                                m_clip_view->SetLinkedX1Param(abs(val));
+                            }
                             else if (fconfig.Read("x1_param", &val))
                                 (*planes)[0]->SetParam(val);
                             
                             //x2
                             if (fconfig.Read("x2_vali", &val))
-                                (*planes)[1]->ChangePlane(Point(abs(val/iresx), 0.0, 0.0),
-                                                          Vector(-1.0, 0.0, 0.0));
+                            {
+                                (*planes)[1]->SetParam(1.0 - abs(val/iresx));
+                                m_clip_view->SetLinkedX2Param(1.0 - abs(val/iresx));
+                            }
                             else if (fconfig.Read("x2_val", &val))
-                                (*planes)[1]->ChangePlane(Point(abs(val), 0.0, 0.0),
-                                                          Vector(-1.0, 0.0, 0.0));
+                            {
+                                (*planes)[1]->SetParam(1.0 - abs(val));
+                                m_clip_view->SetLinkedX2Param(1.0 - abs(val));
+                            }
                             else if (fconfig.Read("x2_param", &val))
                                 (*planes)[1]->SetParam(val);
                             
                             //y1
                             if (fconfig.Read("y1_vali", &val))
-                                (*planes)[2]->ChangePlane(Point(0.0, abs(val/iresy), 0.0),
-                                                          Vector(0.0, 1.0, 0.0));
+                            {
+                                (*planes)[2]->SetParam(abs(val/iresy));
+                                m_clip_view->SetLinkedY1Param(abs(val/iresy));
+                            }
                             else if (fconfig.Read("y1_val", &val))
-                                (*planes)[2]->ChangePlane(Point(0.0, abs(val), 0.0),
-                                                          Vector(0.0, 1.0, 0.0));
+                            {
+                                (*planes)[2]->SetParam(abs(val));
+                                m_clip_view->SetLinkedY1Param(abs(val));
+                            }
                             else if (fconfig.Read("y1_param", &val))
                                 (*planes)[2]->SetParam(val);
                             
                             //y2
                             if (fconfig.Read("y2_vali", &val))
-                                (*planes)[3]->ChangePlane(Point(0.0, abs(val/iresy), 0.0),
-                                                          Vector(0.0, -1.0, 0.0));
+                            {
+                                (*planes)[3]->SetParam(1.0 - abs(val/iresy));
+                                m_clip_view->SetLinkedY2Param(1.0 - abs(val/iresy));
+                            }
                             else if (fconfig.Read("y2_val", &val))
-                                (*planes)[3]->ChangePlane(Point(0.0, abs(val), 0.0),
-                                                          Vector(0.0, -1.0, 0.0));
+                            {
+                                (*planes)[3]->SetParam(1.0 - abs(val));
+                                 m_clip_view->SetLinkedY2Param(1.0 - abs(val));
+                            }
                             else if (fconfig.Read("y2_param", &val))
                                 (*planes)[3]->SetParam(val);
                             
                             //z1
                             if (fconfig.Read("z1_vali", &val))
-                                (*planes)[4]->ChangePlane(Point(0.0, 0.0, abs(val/iresz)),
-                                                          Vector(0.0, 0.0, 1.0));
+                            {
+                                (*planes)[4]->SetParam(abs(val/iresz));
+                                m_clip_view->SetLinkedZ1Param(abs(val/iresz));
+                            }
                             else if (fconfig.Read("z1_val", &val))
-                                (*planes)[4]->ChangePlane(Point(0.0, 0.0, abs(val)),
-                                                          Vector(0.0, 0.0, 1.0));
+                            {
+                                (*planes)[4]->SetParam(abs(val));
+                                m_clip_view->SetLinkedZ1Param(abs(val));
+                            }
                             else if (fconfig.Read("z1_param", &val))
                                 (*planes)[4]->SetParam(val);
                             
                             //z2
                             if (fconfig.Read("z2_vali", &val))
-                                (*planes)[5]->ChangePlane(Point(0.0, 0.0, abs(val/iresz)),
-                                                          Vector(0.0, 0.0, -1.0));
+                            {
+                                (*planes)[5]->SetParam(1.0 - abs(val/iresz));
+                                m_clip_view->SetLinkedZ2Param(1.0 - abs(val/iresz));
+                            }
                             else if (fconfig.Read("z2_val", &val))
-                                (*planes)[5]->ChangePlane(Point(0.0, 0.0, abs(val)),
-                                                          Vector(0.0, 0.0, -1.0));
+                            {
+                                (*planes)[5]->SetParam(1.0 - abs(val));
+                                m_clip_view->SetLinkedZ2Param(1.0 - abs(val));
+                            }
                             else if (fconfig.Read("z2_param", &val))
                                 (*planes)[5]->SetParam(val);
 						}
@@ -5577,12 +5625,55 @@ void VRenderFrame::OpenProject(wxString& filename)
             m_clip_view->SetLinkedZ1Param(dval);
         if (fconfig.Read("linked_z2", &dval))
             m_clip_view->SetLinkedZ2Param(dval);
+        
+        link = false;
 		if (fconfig.Read("chann_link", &link))
         {
+            if (!link && !fconfig.Read("linked_x1", &dval)) //old version
+            {
+                m_clip_view->SetLinkedX1Param(0.0);
+                m_clip_view->SetLinkedX2Param(0.0);
+                m_clip_view->SetLinkedY1Param(0.0);
+                m_clip_view->SetLinkedY2Param(0.0);
+                m_clip_view->SetLinkedZ1Param(0.0);
+                m_clip_view->SetLinkedZ2Param(0.0);
+            }
+            else if (link && !fconfig.Read("linked_x1", &dval))
+            {
+                vector<Plane*> *planes = nullptr;
+                switch (m_cur_sel_type)
+                {
+                    case 2:  //volume
+                    {
+                        VolumeData *vd = m_data_mgr.GetVolumeData(cur_sel_vol);
+                        if (vd && vd->GetVR())
+                            planes = vd->GetVR()->get_planes();
+                    }
+                    break;
+                    case 3:  //mesh
+                    {
+                        MeshData *md = m_data_mgr.GetMeshData(cur_sel_mesh);
+                        if (md && md->GetMR())
+                            planes = md->GetMR()->get_planes();
+                    }
+                    break;
+                }
+                if (planes && planes->size()==6)
+                {
+                    m_clip_view->SetLinkedX1Param((*planes)[0]->GetParam());
+                    m_clip_view->SetLinkedX2Param((*planes)[1]->GetParam());
+                    m_clip_view->SetLinkedY1Param((*planes)[2]->GetParam());
+                    m_clip_view->SetLinkedY2Param((*planes)[3]->GetParam());
+                    m_clip_view->SetLinkedZ1Param((*planes)[4]->GetParam());
+                    m_clip_view->SetLinkedZ2Param((*planes)[5]->GetParam());
+                }
+            }
+            
 			m_clip_view->SetChannLink(link);
             if (link)
                 m_clip_view->CalcAndSetCombinedClippingPlanes();
         }
+        
 		if (fconfig.Read("plane_mode", &mode))
 			m_clip_view->SetPlaneMode(mode);
 		if (fconfig.Read("x_link", &link))

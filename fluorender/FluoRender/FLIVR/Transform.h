@@ -129,6 +129,7 @@ namespace FLIVR
 		void invert();
 		bool inv_valid() { return inverse_valid!=0; }
 		void set_inv_valid(bool iv) { inverse_valid = iv; }
+        bool is_identity();
 	};
 
 	Point operator*(Transform &t, const Point &d);
