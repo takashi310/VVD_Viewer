@@ -6,8 +6,8 @@ Download VVDViewer
 ### Mac: [download](https://github.com/JaneliaSciComp/VVDViewer/releases/download/1.4.1/VVDViewer102221-macosx-vulkan.dmg) 
  
 ## Other Versions
-https://github.com/JaneliaSciComp/VVDViewer/releases 
-https://github.com/takashi310/VVD_Viewer/releases 
+https://github.com/JaneliaSciComp/VVDViewer/releases  
+https://github.com/takashi310/VVD_Viewer/releases  
 <br/>
 <br/>
 
