@@ -8474,15 +8474,23 @@ void VRenderVulkanView::SetCenter()
                 FLIVR::Point(params[0],       1.0 - params[3], 1.0 - params[5])
             };
             
+            double rotx, roty, rotz;
+            Quaternion q_cl;
+            m_q_cl.ToEuler(rotx, roty, rotz);
+            q_cl.FromEuler(-rotx, -roty, rotz);
+            
             for (int j = 0; j < 8; j++)
             {
                 p[j] = tform_copy.project(p[j]);
+                Quaternion p2(p[j].x() - m_obj_ctrx, p[j].y() - m_obj_ctry, p[j].z() - m_obj_ctrz, 0.0);
+                Quaternion p3 = q_cl * p2 * (-q_cl);
+                p[j] = Point(p3.x + m_obj_ctrx, p3.y + m_obj_ctry, p3.z + m_obj_ctrz);
                 bounds.extend(p[j]);
             }
             
-            m_obj_ctrx = (bounds.min().x() + bounds.max().x()) / 2.0;
-            m_obj_ctry = (bounds.min().y() + bounds.max().y()) / 2.0;
-            m_obj_ctrz = (bounds.min().z() + bounds.max().z()) / 2.0;
+            m_obj_transx += (bounds.min().x() + bounds.max().x()) / 2.0 - m_obj_ctrx;
+            m_obj_transy += (bounds.min().y() + bounds.max().y()) / 2.0 - m_obj_ctry;
+            m_obj_transz -= (bounds.min().z() + bounds.max().z()) / 2.0 - m_obj_ctrz;
             
             //SetSortBricks();
             
@@ -8527,9 +8535,17 @@ void VRenderVulkanView::SetCenter()
                     FLIVR::Point(params[0],       1.0 - params[3], 1.0 - params[5])
                 };
                 
+                double rotx, roty, rotz;
+                Quaternion q_cl;
+                m_q_cl.ToEuler(rotx, roty, rotz);
+                q_cl.FromEuler(-rotx, -roty, rotz);
+                
                 for (int j = 0; j < 8; j++)
                 {
                     p[j] = tform_copy.project(p[j]);
+                    Quaternion p2(p[j].x() - m_obj_ctrx, p[j].y() - m_obj_ctry, p[j].z() - m_obj_ctrz, 0.0);
+                    Quaternion p3 = q_cl * p2 * (-q_cl);
+                    p[j] = Point(p3.x + m_obj_ctrx, p3.y + m_obj_ctry, p3.z + m_obj_ctrz);
                     bounds.extend(p[j]);
                 }
             }
@@ -8537,9 +8553,9 @@ void VRenderVulkanView::SetCenter()
         for (auto md : m_md_pop_list)
             bounds.extend(md->GetBounds());
         
-        m_obj_ctrx = (bounds.min().x() + bounds.max().x()) / 2.0;
-        m_obj_ctry = (bounds.min().y() + bounds.max().y()) / 2.0;
-        m_obj_ctrz = (bounds.min().z() + bounds.max().z()) / 2.0;
+        m_obj_transx += (bounds.min().x() + bounds.max().x()) / 2.0 - m_obj_ctrx;
+        m_obj_transy += (bounds.min().y() + bounds.max().y()) / 2.0 - m_obj_ctry;
+        m_obj_transz -= (bounds.min().z() + bounds.max().z()) / 2.0 - m_obj_ctrz;
         
         //SetSortBricks();
         
@@ -10380,18 +10396,6 @@ void VRenderVulkanView::InitView(unsigned int type)
 		PopVolumeList();
 		PopMeshList();
         
-        VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-        if (vr_frame && vr_frame->GetClippingView())
-        {
-            for (i = 0; i < (int)m_md_pop_list.size(); i++)
-                m_md_pop_list[i]->RecalcBounds();
-            if (vr_frame->GetClippingView()->GetChannLink())
-            {
-                CalcAndSetCombinedClippingPlanes();
-                A2Q();
-            }
-        }
-        
         for (i = 0; i < (int)m_vd_pop_list.size(); i++)
         {
             VolumeData* vd = m_vd_pop_list[i];
@@ -10480,6 +10484,18 @@ void VRenderVulkanView::InitView(unsigned int type)
 			m_q.ToEuler(m_rotx, m_roty, m_rotz);
 		}
 	}
+    
+    VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+    if (vr_frame && vr_frame->GetClippingView())
+    {
+        for (i = 0; i < (int)m_md_pop_list.size(); i++)
+            m_md_pop_list[i]->RecalcBounds();
+        if (vr_frame->GetClippingView()->GetChannLink())
+        {
+            CalcAndSetCombinedClippingPlanes();
+            A2Q();
+        }
+    }
 
 	m_init_view = true;
 
