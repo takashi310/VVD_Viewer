@@ -1238,12 +1238,22 @@ void VRenderVulkanView::DrawMeshes(const std::unique_ptr<vks::VFrameBuffer>& fra
 			MeshData* md = (MeshData*)m_layer_list[i];
 			if (md && md->GetDisp())
 			{
+                bool cur_draw_bounds = false;
+                if (m_capture)
+                {
+                    cur_draw_bounds = md->GetDrawBounds();
+                    md->SetDrawBounds(false);
+                }
+                
 				md->SetMatrices(m_mv_mat, m_proj_mat);
 				md->SetFog(m_use_fog, m_fog_intensity, m_fog_start, m_fog_end);
 				md->SetDepthTex(depth_tex);
 				md->SetDevice(m_vulkan->devices[0]);
 				md->Draw(framebuf, clear_framebuf, peel);
 				clear_framebuf = false;
+                
+                if (m_capture)
+                    md->SetDrawBounds(cur_draw_bounds);
 			}
 		}
 		else if (m_layer_list[i]->IsA() == 6)
@@ -1256,12 +1266,22 @@ void VRenderVulkanView::DrawMeshes(const std::unique_ptr<vks::VFrameBuffer>& fra
 					MeshData* md = group->GetMeshData(j);
 					if (md && md->GetDisp())
 					{
+                        bool cur_draw_bounds = false;
+                        if (m_capture)
+                        {
+                            cur_draw_bounds = md->GetDrawBounds();
+                            md->SetDrawBounds(false);
+                        }
+                        
 						md->SetMatrices(m_mv_mat, m_proj_mat);
 						md->SetFog(m_use_fog, m_fog_intensity, m_fog_start, m_fog_end);
 						md->SetDepthTex(depth_tex);
 						md->SetDevice(m_vulkan->devices[0]);
 						md->Draw(framebuf, clear_framebuf, peel);
 						clear_framebuf = false;
+                        
+                        if (m_capture)
+                            md->SetDrawBounds(cur_draw_bounds);
 					}
 				}
 			}
@@ -12140,7 +12160,8 @@ void VRenderVulkanView::DrawLegend()
 			bool highlighted = false;
 			if (vr_frame->GetCurSelType() == 2 &&
 				vr_frame->GetCurSelVol() &&
-				vr_frame->GetCurSelVol()->GetName() == wxstr)
+				vr_frame->GetCurSelVol()->GetName() == wxstr &&
+                !m_capture)
 				highlighted = true;
 			DrawName(xpos+xoffset, ny-(lines-cur_line+0.1)*font_height-yoffset,
 				nx, ny, wxstr, m_vd_pop_list[i]->GetColor(),
@@ -12173,7 +12194,8 @@ void VRenderVulkanView::DrawLegend()
 			bool highlighted = false;
 			if (vr_frame->GetCurSelType() == 3 &&
 				vr_frame->GetCurSelMesh() &&
-				vr_frame->GetCurSelMesh()->GetName() == wxstr)
+				vr_frame->GetCurSelMesh()->GetName() == wxstr &&
+                !m_capture)
 				highlighted = true;
 			DrawName(xpos+xoffset, ny-(lines-cur_line+0.1)*font_height-yoffset,
 				nx, ny, wxstr, c, font_height, highlighted);

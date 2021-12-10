@@ -24,9 +24,6 @@ https://github.com/JaneliaSciComp/VVDViewer
 https://github.com/takashi310/VVD_Viewer  
 You can get the latest source code and precompiled binary from both repositories.  
 
-Precompiled Binaries
-========
-https://github.com/takashi310/VVD_Viewer/releases
 
 Aknowledgements
 ========

@@ -2374,6 +2374,16 @@ void VRenderFrame::OnSelection(int type,
 	case 2:  //volume
 		if (vd && vd->GetDisp())
 		{
+            wxString str = vd->GetName();
+            m_cur_sel_vol = m_data_mgr.GetVolumeIndex(str);
+            
+            for (int i=0; i<(int)m_vrv_list.size(); i++)
+            {
+                VRenderView* vrv = m_vrv_list[i];
+                if (!vrv)
+                    continue;
+                vrv->SetCurrentVolume(vd);
+            }
 			m_volume_prop->SetView(vrv);
 			m_volume_prop->SetGroup(group);
 			m_volume_prop->SetVolumeData(vd);
@@ -2388,16 +2398,6 @@ void VRenderFrame::OnSelection(int type,
 			m_aui_mgr.GetPane(m_prop_panel).Caption(
 				wxString(UITEXT_PROPERTIES)+wxString(" - ")+vd->GetName());
 			m_aui_mgr.Update();
-			wxString str = vd->GetName();
-			m_cur_sel_vol = m_data_mgr.GetVolumeIndex(str);
-
-			for (int i=0; i<(int)m_vrv_list.size(); i++)
-			{
-				VRenderView* vrv = m_vrv_list[i];
-				if (!vrv)
-					continue;
-				vrv->SetCurrentVolume(vd);
-			}
 
 			if (m_volume_prop)
 				m_volume_prop->Show(true);
@@ -2426,6 +2426,9 @@ void VRenderFrame::OnSelection(int type,
 	case 3:  //mesh
 		if (md)
 		{
+            md->SetDrawBounds(true);
+            wxString str = md->GetName();
+            m_cur_sel_mesh = m_data_mgr.GetMeshIndex(str);
 			m_mesh_prop->SetMeshData(md, vrv);
 			if (!m_mesh_prop->IsShown())
 			{
@@ -2438,9 +2441,6 @@ void VRenderFrame::OnSelection(int type,
 			m_aui_mgr.GetPane(m_prop_panel).Caption(
 				wxString(UITEXT_PROPERTIES)+wxString(" - ")+md->GetName());
 			m_aui_mgr.Update();
-			wxString str = md->GetName();
-			m_cur_sel_mesh = m_data_mgr.GetMeshIndex(str);
-			md->SetDrawBounds(true);
 
 			if (m_anno_view)
 				m_anno_view->SetData((TreeLayer *)md);
