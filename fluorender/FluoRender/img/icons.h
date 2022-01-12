@@ -373,4 +373,8 @@ const static unsigned char listicon_locator_24x24_png[393];
 
 /* listicon_polyline.png - 611 bytes */
 const static unsigned char listicon_polyline_24x24_png[611];
+    
+/* icon_open_new_vvd.png - 2941 bytes */
+const static unsigned char icon_open_new_vvd_png[2941];
+
 };

@@ -169,18 +169,27 @@ namespace FLIVR
 
 #define MSH_HEAD_CLIP \
 	"	//VOL_HEAD_CLIP\n" \
-	"	vec4 fp = fubo.matrix3*OutPosition;\n" \
-	"	if (dot(fp.xyz, fubo.loc10.xyz)+fubo.loc10.w < 0.0 ||\n" \
-	"		dot(fp.xyz, fubo.loc11.xyz)+fubo.loc11.w < 0.0 ||\n" \
-	"		dot(fp.xyz, fubo.loc12.xyz)+fubo.loc12.w < 0.0 ||\n" \
-	"		dot(fp.xyz, fubo.loc13.xyz)+fubo.loc13.w < 0.0 ||\n" \
-	"		dot(fp.xyz, fubo.loc14.xyz)+fubo.loc14.w < 0.0 ||\n" \
-	"		dot(fp.xyz, fubo.loc15.xyz)+fubo.loc15.w < 0.0)\n" \
+	"	vec4 clip = fubo.matrix3*OutPosition;\n" \
+	"	if (dot(clip.xyz, fubo.loc10.xyz)+fubo.loc10.w < 0.0 ||\n" \
+	"		dot(clip.xyz, fubo.loc11.xyz)+fubo.loc11.w < 0.0 ||\n" \
+	"		dot(clip.xyz, fubo.loc12.xyz)+fubo.loc12.w < 0.0 ||\n" \
+	"		dot(clip.xyz, fubo.loc13.xyz)+fubo.loc13.w < 0.0 ||\n" \
+	"		dot(clip.xyz, fubo.loc14.xyz)+fubo.loc14.w < 0.0 ||\n" \
+	"		dot(clip.xyz, fubo.loc15.xyz)+fubo.loc15.w < 0.0)\n" \
 	"	{\n" \
 	"		discard;//FragColor = vec4(0.0);\n" \
 	"		return;\n" \
 	"	}\n" \
 	"\n"
+    
+#define MSH_HEAD_FOG \
+"    //MSH_HEAD_FOG\n" \
+"    vec4 fp;\n" \
+"    fp.x = fubo.loc8.x;\n" \
+"    fp.y = fubo.loc8.y;\n" \
+"    fp.z = fubo.loc8.z;\n" \
+"    fp.w = abs(OutFogCoord.z/OutFogCoord.w);\n" \
+"\n"
 
 //1: draw depth after 15 (15)
 #define MSH_FRAG_BODY_DP_1 \
@@ -244,9 +253,14 @@ namespace FLIVR
 	"	//MSH_FRAG_BODY_TEXTURE\n" \
 	"	c = c * texture(tex0, OutTexcoord);\n"
 
-#define MSH_FRAG_BODY_FOG_V \
+#define MSH_FRAG_BODY_FOG \
 	"	// MSH_FRAG_BODY_FOG\n" \
-	"	vec4 v;\n"
+	"	vec4 v;\n" \
+    "   v.x = (fp.z-fp.w)/(fp.z-fp.y);\n" \
+    "   v.x = 1.0-clamp(v.x, 0.0, 1.0);\n" \
+    "   v.x = 1.0-exp(-pow(v.x*2.5, 2.0));\n" \
+    "   c.xyz = mix(c.xyz, vec3(0.0), v.x*fp.x); \n" \
+    "\n"
 
 #define MSH_FRAG_BODY_INT \
 	"	//MSH_FRAG_BODY_INT\n" \
@@ -409,7 +423,7 @@ namespace FLIVR
 			}
 
 			if (fog_)
-				z << VOL_HEAD_FOG;
+				z << MSH_HEAD_FOG;
 
 			z << MSH_FRAG_BODY_COLOR;
 			if (light_)
@@ -420,8 +434,7 @@ namespace FLIVR
 				z << MSH_FRAG_BODY_SIMPLE;
 			if (fog_)
 			{
-				z << MSH_FRAG_BODY_FOG_V;
-				z << VOL_FOG_BODY;
+				z << MSH_FRAG_BODY_FOG;
 			}
 			z << MSH_FRAG_BODY_COLOR_OUT;
 		}

@@ -220,10 +220,10 @@ VRenderFrame::VRenderFrame(
 		"Save current work as a project",
 		"Save current work as a project");
 	m_main_tb->AddSeparator();
-	m_main_tb->AddTool(ID_ViewNew, "New View",
-		wxGetBitmapFromMemory(icon_new_view), wxNullBitmap, wxITEM_NORMAL,
-		"Create a new render viewport",
-		"Create a new render viewport");
+	m_main_tb->AddTool(ID_ViewNew, "Open New VVDViewer",
+		wxGetBitmapFromMemory(icon_open_new_vvd), wxNullBitmap, wxITEM_NORMAL,
+		"Open a new VVDViewer",
+		"Open a new VVDViewer");
 #ifndef _DARWIN
 	m_main_tb->AddTool(ID_ShowHideUI, "Show/Hide UI",
 		wxGetBitmapFromMemory(icon_show_hide_ui), wxNullBitmap, wxITEM_DROPDOWN,
@@ -670,8 +670,8 @@ VRenderFrame::VRenderFrame(
 	m_top_window->Append(m);
 	m_top_window->Check(ID_UIPropView, true);
 	m_top_window->Append(wxID_SEPARATOR);
-	m = new wxMenuItem(m_top_window,ID_ViewNew, wxT("&New View"));
-	m->SetBitmap(wxGetBitmapFromMemory(icon_new_view_mini));
+	m = new wxMenuItem(m_top_window,ID_ViewNew, wxT("&Open New VVDViewer"));
+	//m->SetBitmap(wxGetBitmapFromMemory(icon_new_view_mini));
 	m_top_window->Append(m);
 #ifndef _DARWIN
 	m = new wxMenuItem(m_top_window, ID_FullScreen, wxT("&Full Screen"));
@@ -878,7 +878,16 @@ VRenderView* VRenderFrame::GetView(wxString& name)
 
 void VRenderFrame::OnNewView(wxCommandEvent& WXUNUSED(event))
 {
-	wxString str = CreateView();
+	//wxString str = CreateView();
+    wxString expath = wxStandardPaths::Get().GetExecutablePath();
+#ifdef _DARWIN
+    expath = expath.BeforeLast(wxFILE_SEP_PATH, NULL);
+    expath = "open -n " + expath + "/../../";
+    std::system(expath.ToStdString().c_str());
+#elif _WIN32
+    ShellExecute(NULL, _T("open"), _T(expath.ToStdString().c_str()), NULL, NULL, SW_SHOW);
+#endif
+
 }
 
 void VRenderFrame::OnFullScreen(wxCommandEvent& WXUNUSED(event))

@@ -653,7 +653,7 @@ namespace vks
 			std::cout << "Error: Device does not support flag TRANSFER_DST for selected texture format!" << std::endl;
 			return std::move(ret);
 		}
-		// Check if GPU supports requested 3D texture dimensions
+		// Check if GPU supports requested 2D texture dimensions
 		uint32_t maxImageDimension2D(ret->device->properties.limits.maxImageDimension2D);
 		if (w > maxImageDimension2D || h > maxImageDimension2D)
 		{

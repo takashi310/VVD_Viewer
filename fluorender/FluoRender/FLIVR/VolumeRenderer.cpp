@@ -1801,7 +1801,7 @@ namespace FLIVR
 		uint32_t h2 = h;
 		
 		double dt = compute_dt_fac_1px(w, h, sampling_frq_fac) / rate;
-		num_slices_ = (int)(tex_->GetBrickIdSpaceMaxExtent().length() / dt);
+		//num_slices_ = (int)(tex_->GetBrickIdSpaceMaxExtent().length() / dt);
 
 		//--------------------------------------------------------------------------
 		bool use_fog = m_use_fog && colormap_mode_ != 2;
@@ -2666,33 +2666,30 @@ namespace FLIVR
 		VkPipelineLayout pipelineLayout = m_vulkan->vray_shader_factory_->pipeline_[prim_dev].pipelineLayout;
 
 		prepareVRayVertexBuffers(prim_dev);
-
-		if (blend_num_bits_ > 8)
-		{
-			if (blend_framebuffer_ &&
-				(blend_framebuffer_resize_ || pipeline.renderpass != blend_framebuffer_->renderPass))
-			{
-				blend_framebuffer_.reset();
-				blend_tex_id_.reset();
-
-				if (blend_framebuffer_resize_) blend_framebuffer_resize_ = false;
-			}
-
-			if (!blend_framebuffer_)
-			{
-				blend_framebuffer_ = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
-				blend_framebuffer_->w = w2;
-				blend_framebuffer_->h = h2;
-				blend_framebuffer_->device = prim_dev;
-
-				if (!blend_tex_id_)
-					blend_tex_id_ = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, w2, h2);
-
-				blend_framebuffer_->addAttachment(blend_tex_id_);
-
-				blend_framebuffer_->setup(pipeline.renderpass);
-			}
-		}
+        
+        if (blend_framebuffer_ &&
+            (blend_framebuffer_resize_ || pipeline.renderpass != blend_framebuffer_->renderPass))
+        {
+            blend_framebuffer_.reset();
+            blend_tex_id_.reset();
+            
+            if (blend_framebuffer_resize_) blend_framebuffer_resize_ = false;
+        }
+        
+        if (!blend_framebuffer_)
+        {
+            blend_framebuffer_ = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+            blend_framebuffer_->w = w2;
+            blend_framebuffer_->h = h2;
+            blend_framebuffer_->device = prim_dev;
+            
+            if (!blend_tex_id_)
+                blend_tex_id_ = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, w2, h2);
+            
+            blend_framebuffer_->addAttachment(blend_tex_id_);
+            
+            blend_framebuffer_->setup(pipeline.renderpass);
+        }
         
         if (!label_ && m_na_mode && lbl_exists)
         {
