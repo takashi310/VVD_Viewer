@@ -885,7 +885,7 @@ void VRenderFrame::OnNewView(wxCommandEvent& WXUNUSED(event))
     expath = "open -n " + expath + "/../../";
     std::system(expath.ToStdString().c_str());
 #elif _WIN32
-    ShellExecute(NULL, _T("open"), _T(expath.ToStdString().c_str()), NULL, NULL, SW_SHOW);
+    ShellExecute(NULL, _T("open"), expath.ToStdWstring().c_str(), NULL, NULL, SW_SHOW);
 #endif
 
 }
