@@ -703,7 +703,8 @@ VRenderVulkanView::VRenderVulkanView(wxWindow* frame,
 	m_loader_run(true),
 	m_ebd_run(true),
     m_undo_keydown(false),
-    m_redo_keydown(false)
+    m_redo_keydown(false),
+    m_use_fog_mesh(false)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -1246,7 +1247,7 @@ void VRenderVulkanView::DrawMeshes(const std::unique_ptr<vks::VFrameBuffer>& fra
                 }
                 
 				md->SetMatrices(m_mv_mat, m_proj_mat);
-				md->SetFog(m_use_fog, m_fog_intensity, m_fog_start, m_fog_end);
+				md->SetFog(m_use_fog && m_use_fog_mesh, m_fog_intensity, m_fog_start, m_fog_end);
 				md->SetDepthTex(depth_tex);
 				md->SetDevice(m_vulkan->devices[0]);
 				md->Draw(framebuf, clear_framebuf, peel);
@@ -1274,7 +1275,7 @@ void VRenderVulkanView::DrawMeshes(const std::unique_ptr<vks::VFrameBuffer>& fra
                         }
                         
 						md->SetMatrices(m_mv_mat, m_proj_mat);
-						md->SetFog(m_use_fog, m_fog_intensity, m_fog_start, m_fog_end);
+						md->SetFog(m_use_fog && m_use_fog_mesh, m_fog_intensity, m_fog_start, m_fog_end);
 						md->SetDepthTex(depth_tex);
 						md->SetDevice(m_vulkan->devices[0]);
 						md->Draw(framebuf, clear_framebuf, peel);

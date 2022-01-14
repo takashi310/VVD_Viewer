@@ -696,6 +696,10 @@ void ClippingView::CalcBoundingBoxDemensions(double &w, double &h, double &d)
             }
             break;
     }
+    
+    w = w > 0 ? w : 1;
+    h = h > 0 ? h : 1;
+    d = d > 0 ? d : 1;
 }
 
 void ClippingView::GetSettings()

@@ -298,6 +298,7 @@ void SampleGuiPluginWindow1::doAction(ActionInfo *info)
 		}
 		break;
 	}
+    delete info;
 }
 
 void SampleGuiPluginWindow1::SendCommand(wxString com, bool send_mask)

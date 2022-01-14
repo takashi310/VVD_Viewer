@@ -415,6 +415,8 @@ public:
 			for (uint32_t i = 0; i < imageCount; i++)
 			{
 				vkDestroyImageView(device, buffers[i]->view, nullptr);
+                vkDestroySampler(device, buffers[i]->sampler, nullptr);
+                buffers[i]->sampler = VK_NULL_HANDLE;
 			}
 			fpDestroySwapchainKHR(device, oldSwapchain, nullptr);
 		}
@@ -478,7 +480,8 @@ public:
             sampler.maxAnisotropy = 1.0;
             sampler.anisotropyEnable = VK_FALSE;
             sampler.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
-            VK_CHECK_RESULT(vkCreateSampler(device, &sampler, nullptr, &buffers[i]->descriptor.sampler));
+            VK_CHECK_RESULT(vkCreateSampler(device, &sampler, nullptr, &buffers[i]->sampler));
+            buffers[i]->descriptor.sampler = buffers[i]->sampler;
             buffers[i]->free_sampler = true;
 
 			VK_CHECK_RESULT(vkCreateImageView(device, &colorAttachmentView, nullptr, &buffers[i]->view));

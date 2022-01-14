@@ -90,7 +90,8 @@ class EXPORT_API SettingDlg : public wxPanel
 		ID_PaintHistDepthText,
 		//save/close
 		ID_SaveBtn,
-		ID_CloseBtn
+		ID_CloseBtn,
+        ID_UseFogMesh
 	};
 
 public:
@@ -188,6 +189,9 @@ public:
 	int GetGLProfileMask() {return m_gl_profile_mask;}
 	//cl device
 	int GetCLDeviceID() {return m_cl_device_id;}
+    
+    bool GetUseFogMesh() {return m_use_fog_mesh;}
+    void SetUseFogMesh(bool val) {m_use_fog_mesh = val;}
 
 private:
 	wxWindow* m_frame;
@@ -263,6 +267,8 @@ private:
 	//full screen
 	bool m_stay_top;
 	bool m_show_cursor;
+    
+    bool m_use_fog_mesh;
 
 private:
 	//save project
@@ -319,6 +325,8 @@ private:
 	//history depth
 	wxSlider *m_paint_hist_depth_sldr;
 	wxTextCtrl *m_paint_hist_depth_text;
+    
+    wxCheckBox *m_use_fog_mesh_chk;
 
 	//save
 	wxButton *m_save_btn;
@@ -391,6 +399,8 @@ private:
 	//paint history depth
 	void OnPaintHistDepthChange(wxScrollEvent &event);
 	void OnPaintHistDepthEdit(wxCommandEvent &event);
+    
+    void OnUseFogMeshCheck(wxCommandEvent &event);
 
 	DECLARE_EVENT_TABLE();
 };

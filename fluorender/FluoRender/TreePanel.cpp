@@ -5049,6 +5049,7 @@ void TreePanel::doAction(ActionInfo *info)
 			m_toolbar->EnableTool(ID_BakeVolume, false);
 		}
 	}
+    delete info;
 }
 
 void TreePanel::OnSave(wxCommandEvent& event)

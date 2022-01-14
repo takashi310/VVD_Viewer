@@ -630,7 +630,6 @@ void VulkanExampleBase::windowResize()
 	// Recreate swap chain
 	width = destWidth;
 	height = destHeight;
-	setupSwapChain();
     
     if (width <= 0 || height <= 0)
     {
@@ -644,6 +643,7 @@ void VulkanExampleBase::windowResize()
 	setupDepthStencil();	
 	for (uint32_t i = 0; i < frameBuffers.size(); i++)
 		frameBuffers[i].reset();
+    setupSwapChain();
 	setupFrameBuffer();
 /*
 	if ((width > 0.0f) && (height > 0.0f)) {

@@ -358,8 +358,6 @@ void MPropView::GetSettings()
 	{
 		m_r_st->Disable();
 		m_r_text->Disable();
-		str = wxString::Format("%.2f", m_md->GetRadScale());
-		m_r_text->ChangeValue(str);
 	}
 
 	SetEvtHandlerEnabled(true);

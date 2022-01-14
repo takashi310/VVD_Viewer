@@ -87,6 +87,7 @@ BEGIN_EVENT_TABLE(SettingDlg, wxPanel)
 	EVT_TEXT(ID_PaintHistDepthText, SettingDlg::OnPaintHistDepthEdit)
 	//show
 	EVT_SHOW(SettingDlg::OnShow)
+    EVT_CHECKBOX(ID_UseFogMesh, SettingDlg::OnUseFogMeshCheck)
 END_EVENT_TABLE()
 
 wxWindow* SettingDlg::CreateProjectPage(wxWindow *parent)
@@ -242,6 +243,14 @@ wxWindow* SettingDlg::CreateRenderingPage(wxWindow *parent)
 	group1->Add(10, 5);
 	group1->Add(st);
 	group1->Add(10, 5);
+    
+    //fog on mesh
+    wxBoxSizer *groupf = new wxStaticBoxSizer(new wxStaticBox(page, wxID_ANY, "Depth Attenuation"), wxVERTICAL);
+    m_use_fog_mesh_chk = new wxCheckBox(page, ID_UseFogMesh,
+                                       "Enable depth attenuation on meshes");
+    groupf->Add(10, 5);
+    groupf->Add(m_use_fog_mesh_chk);
+    groupf->Add(10, 5);
 
 	//depth peeling
 	wxBoxSizer *group2 = new wxStaticBoxSizer(
@@ -314,6 +323,8 @@ wxWindow* SettingDlg::CreateRenderingPage(wxWindow *parent)
 
 	sizerV->Add(10, 10);
 	sizerV->Add(group1, 0, wxEXPAND);
+    sizerV->Add(10, 10);
+    sizerV->Add(groupf, 0, wxEXPAND);
 	sizerV->Add(10, 10);
 	sizerV->Add(group2, 0, wxEXPAND);
 	sizerV->Add(10, 10);
@@ -656,6 +667,7 @@ void SettingDlg::GetSettings()
 	m_paint_hist_depth = 0;
 	m_stay_top = false;
 	m_show_cursor = true;
+    m_use_fog_mesh = false;
 
 	wxString expath = wxStandardPaths::Get().GetExecutablePath();
 	expath = expath.BeforeLast(GETSLASH(),NULL);
@@ -873,6 +885,12 @@ void SettingDlg::GetSettings()
 		fconfig.SetPath("/cl device");
 		fconfig.Read("device_id", &m_cl_device_id);
 	}
+    //depth attenuation
+    if (fconfig.Exists("/use fog mesh"))
+    {
+        fconfig.SetPath("/use fog mesh");
+        fconfig.Read("use_fog_mesh", &m_use_fog_mesh);
+    }
 
 	UpdateUI();
 }
@@ -950,6 +968,8 @@ void SettingDlg::UpdateUI()
 	m_block_size_text->SetValue(wxString::Format("%d", m_force_brick_size));
 	m_response_time_text->SetValue(wxString::Format("%d", m_up_time));
 	m_main_mem_buf_text->SetValue(wxString::Format("%d", (int)m_main_mem_buf_size));
+    
+    m_use_fog_mesh_chk->SetValue(m_use_fog_mesh);
 }
 
 void SettingDlg::SaveSettings()
@@ -1078,6 +1098,9 @@ void SettingDlg::SaveSettings()
 	//cl device
 	fconfig.SetPath("/cl device");
 	fconfig.Write("device_id", m_cl_device_id);
+    
+    fconfig.SetPath("/use fog mesh");
+    fconfig.Write("use_fog_mesh", m_use_fog_mesh);
 
 	wxString expath = wxStandardPaths::Get().GetExecutablePath();
 	expath = expath.BeforeLast(GETSLASH(),NULL);
@@ -1321,6 +1344,28 @@ void SettingDlg::OnShadowDirEdit(wxCommandEvent &event)
 				vrv->RefreshGL();
 		}
 	}
+}
+
+void SettingDlg::OnUseFogMeshCheck(wxCommandEvent &event)
+{
+    if (m_use_fog_mesh_chk->GetValue())
+        m_use_fog_mesh = true;
+    else
+        m_use_fog_mesh = false;
+    
+    VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+    if (vr_frame)
+    {
+        for (int i=0 ; i<(int)vr_frame->GetViewList()->size() ; i++)
+        {
+            VRenderView* vrv = (*vr_frame->GetViewList())[i];
+            if (vrv)
+            {
+                vrv->SetUseFogMesh(m_use_fog_mesh);
+                vrv->RefreshGL();
+            }
+        }
+    }
 }
 
 void SettingDlg::EnableStreaming(bool enable)

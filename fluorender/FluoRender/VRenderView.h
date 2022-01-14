@@ -732,6 +732,9 @@ public:
 	static wxCriticalSection* ms_pThreadCS;
     
     void CalcAndSetCombinedClippingPlanes();
+    
+    bool GetUseFogMesh() { return m_use_fog_mesh; }
+    void SetUseFogMesh(bool val) { m_use_fog_mesh = val; }
 
 public:
 	//script run
@@ -1184,6 +1187,8 @@ private:
     
     bool m_undo_keydown;
     bool m_redo_keydown;
+    
+    bool m_use_fog_mesh;
 
 private:
 #ifdef _WIN32
@@ -2087,6 +2092,15 @@ public:
 	void SetEmptyBlockDetectorActive(bool val) { if (m_glview) m_glview->SetEmptyBlockDetectorActive(val); }
     
     void CalcAndSetCombinedClippingPlanes() { if (m_glview) m_glview->CalcAndSetCombinedClippingPlanes(); }
+    
+    void SetUseFogMesh(bool val)
+    {
+        if (m_glview) m_glview->SetUseFogMesh(val);
+    }
+    bool GetUseFogMesh()
+    {
+        if (m_glview) return m_glview->GetUseFogMesh(); else return false;
+    }
 
 public:
 	wxWindow* m_frame;

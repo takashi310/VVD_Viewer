@@ -2011,6 +2011,7 @@ void NBLASTGuiPluginWindow::doAction(ActionInfo *info)
 	default:
 		break;
 	}
+    delete info;
 }
 
 

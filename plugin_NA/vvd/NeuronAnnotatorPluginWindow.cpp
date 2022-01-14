@@ -1245,6 +1245,7 @@ void NAGuiPluginWindow::doAction(ActionInfo *info)
 	default:
 		break;
 	}
+    delete info;
 }
 
 

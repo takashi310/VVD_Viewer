@@ -332,6 +332,7 @@ void SampleGuiPlugin1::doAction(ActionInfo *info)
 		notifyAll(FI_COMMAND_FINISHED, info->data, info->size);
 		break;
 	}
+    delete info;
 }
 
 bool SampleGuiPlugin1::SendCommand(wxString command, bool send_mask)
