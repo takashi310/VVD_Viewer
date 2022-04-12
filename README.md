@@ -14,6 +14,8 @@ https://github.com/takashi310/VVD_Viewer/releases
 VVD Viewer
 ========
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5841616.svg)](https://doi.org/10.5281/zenodo.5841616)
+
 VVD Viewer Source Code
 
 This is the open-source repository for VVD Viewer, an interactive rendering tool for confocal microscopy data visualization. It combines the renderings of multi-channel volume data and polygon mesh data, where the properties of each dataset can be adjusted independently and quickly. The tool is designed especially for neurobiologists, and it helps them better visualize the fluorescent-stained confocal samples.
