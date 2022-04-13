@@ -1,4 +1,4 @@
-Download VVDViewer
+Download VVD Viewer
 ========
 
 ## Latest Releases
@@ -14,10 +14,11 @@ https://github.com/takashi310/VVD_Viewer/releases
 VVD Viewer
 ========
 
-VVD Viewer Source Code
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5841616.svg)](https://doi.org/10.5281/zenodo.5841616)
 
-This is the open-source repository for VVD Viewer, an interactive rendering tool for confocal microscopy data visualization. It combines the renderings of multi-channel volume data and polygon mesh data, where the properties of each dataset can be adjusted independently and quickly. The tool is designed especially for neurobiologists, and it helps them better visualize the fluorescent-stained confocal samples.
-This is a branch of Fluorender (https://github.com/SCIInstitute/fluorender)
+This is the open-source repository for VVD Viewer, an interactive rendering tool for confocal microscopy data visualization. It combines the rendering of multi-channel volume data and polygon mesh data, where the properties of each dataset can be adjusted independently and quickly. The tool is designed for neurobiologists, to better visualize the fluorescent-stained confocal samples.
+
+This code base started as a fork of Fluorender (https://github.com/SCIInstitute/fluorender)
 
 There are the following mirrored VVDViewer repositories.  
 https://github.com/JaneliaSciComp/VVDViewer  
@@ -25,7 +26,7 @@ https://github.com/takashi310/VVD_Viewer
 You can get the latest source code and precompiled binary from both repositories.  
 
 
-Aknowledgements
+Acknowledgements
 ========
 If you use VVD Viewer in work that leads to published research, we humbly ask that you add the following to the 'Acknowledgments' section of your paper: 
 "This work was made possible in part by software funded by the NIH: Fluorender: An Imaging Tool for Visualization and Analysis of Confocal Data as Applied to Zebrafish Research, R01-GM098151-01."
