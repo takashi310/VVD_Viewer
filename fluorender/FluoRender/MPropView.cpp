@@ -244,6 +244,7 @@ m_sync(false)
 	sizer_7->Add(m_scale_text, 0, wxALIGN_CENTER, 0);
 
 	//size limiter
+
 	wxBoxSizer* sizer_8 = new wxBoxSizer(wxHORIZONTAL);
 	m_size_chk = new wxCheckBox(this, ID_size_chk, " Size limit: ",
 		wxDefaultPosition, wxSize(100, 20));
@@ -255,7 +256,7 @@ m_sync(false)
 	sizer_8->Add(m_size_chk, 0, wxALIGN_CENTER);
 	sizer_8->Add(m_size_sldr, 0, wxALIGN_CENTER);
 	sizer_8->Add(m_size_text, 0, wxALIGN_CENTER);
-
+    
 	wxBoxSizer* sizer_9 = new wxBoxSizer(wxHORIZONTAL);
 	m_r_st = new wxStaticText(this, 0, " Radius Scale: ",
 		wxDefaultPosition, wxSize(100, 20));
@@ -280,6 +281,8 @@ m_sync(false)
 	sizer_v2->Add(sizer_8, 0, wxALIGN_LEFT);
 	sizer_v2->Add(sizer_9, 0, wxALIGN_LEFT);
 	sizer_v2->Add(sizer_10, 0, wxALIGN_RIGHT);
+    
+    sizer_v2->Hide(sizer_8);
 
 	wxBoxSizer* sizer_all = new wxBoxSizer(wxHORIZONTAL);
 	sizer_all->Add(sizer_v1, 0, wxALIGN_TOP);

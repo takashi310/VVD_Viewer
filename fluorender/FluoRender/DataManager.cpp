@@ -9396,7 +9396,14 @@ wxThread::ExitCode ProjectDataLoaderThread::Entry()
                 br->SetBDVMetadataPath(metadata.ToStdWstring().c_str());
             }
         }
+        
+        if (type == LOAD_TYPE_H5J)
+            m_pdl->ms_pThreadCS->Enter();
+        
         reader->Preprocess();
+        
+        if (type == LOAD_TYPE_H5J)
+            m_pdl->ms_pThreadCS->Leave();
         
         if (type == LOAD_TYPE_BRKXML && !((BRKXMLReader *)reader)->GetExMetadataURL().empty())
         {
@@ -9423,7 +9430,14 @@ wxThread::ExitCode ProjectDataLoaderThread::Entry()
         {
             VolumeData *vd = new VolumeData();
             vd->SetSkipBrick(skip_brick);
+            
+            if (type == LOAD_TYPE_H5J)
+                m_pdl->ms_pThreadCS->Enter();
+            
             auto data = reader->Convert(t_num>=0?t_num:reader->GetCurTime(), i, true);
+            
+            if (type == LOAD_TYPE_H5J)
+                m_pdl->ms_pThreadCS->Leave();
             
             /*
             if (datasize > 0)
