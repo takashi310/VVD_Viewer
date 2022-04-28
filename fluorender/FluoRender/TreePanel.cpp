@@ -374,6 +374,7 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 	wxTreeItemId sel_item = HitTest(ScreenToClient(event.GetPosition()), flag);
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (!vr_frame) return;
+    VRenderView* view = (VRenderView*)vr_frame->GetView(0);
 
 	if (sel_item.IsOk() && vr_frame)
 	{
@@ -428,7 +429,7 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 					menu.Append(ID_Rename, "Rename");
 					menu.Append(ID_Duplicate, "Duplicate");
 					menu.Append(ID_Save, "Save");
-                    menu.Append(ID_SaveSegVol, "Save Segmented Volume");
+                    menu.Append(ID_SaveSegVol, "Save 3D Painted Region");
                     menu.Append(ID_ShowEntireVolume, "Show Entire Volume");
                     menu.Append(ID_HideOutsideMask, "Show Only Inside of Mask");
                     menu.Append(ID_HideInsideMask, "Show Only Outside of Mask");
@@ -437,10 +438,10 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 					menu.Append(ID_BakeVolume, "Bake");
 					menu.Append(ID_Isolate, "Isolate");
 					menu.Append(ID_ShowAll, "Show All");
-					menu.Append(ID_ImportMetadata, "Import Metadata");
+					//menu.Append(ID_ImportMetadata, "Import Metadata");
 					menu.Append(ID_FlipH, "Flip Horizontally");
 					menu.Append(ID_FlipV, "Flip Vertically");
-                    menu.Append(ID_ToggleNAMode, "Toggle NA Mode");
+                    //menu.Append(ID_ToggleNAMode, "Toggle NA Mode");
 					//menu.Append(ID_ExportMeshMask, "Export Mesh Mask...");
 					if (vd->GetColormapMode() == 3)
 					{
