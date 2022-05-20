@@ -9836,6 +9836,10 @@ wxThread::ExitCode EmptyBlockDetectorThread::Entry()
             nx = (size_t)ceil(endx_d) - ox;
             ny = (size_t)ceil(endy_d) - oy;
             nz = (size_t)ceil(endz_d) - oz;
+
+			nx = ox + nx > msk_size[0] ? msk_size[0] - ox : nx;
+			ny = oy + ny > msk_size[1] ? msk_size[1] - oy : ny;
+			nz = oz + nz > msk_size[2] ? msk_size[2] - oz : nz;
             
             if (msknrrd->getNrrd()->type == nrrdTypeChar ||
                 msknrrd->getNrrd()->type == nrrdTypeUChar)
@@ -9848,7 +9852,7 @@ wxThread::ExitCode EmptyBlockDetectorThread::Entry()
             
             nrrd = msknrrd;
         }
-        
+
         bool isempty = true;
         if (nb == 1)
         {
@@ -9887,7 +9891,7 @@ wxThread::ExitCode EmptyBlockDetectorThread::Entry()
             }
         }
         
-        m_ebd->ms_pThreadCS->Enter();
+		m_ebd->ms_pThreadCS->Enter();
         b->set_skip(c, isempty);
         b->set_modified(c, false);
         m_ebd->ms_pThreadCS->Leave();

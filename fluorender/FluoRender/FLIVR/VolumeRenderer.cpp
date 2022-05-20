@@ -3171,6 +3171,17 @@ namespace FLIVR
 					int ny = (int)ceil(endy_d) - oy;
 					int nz = (int)ceil(endz_d) - oz;
 
+					auto msknrrd = b->get_nrrd(tex_->nmask());
+					size_t msk_dim = msknrrd->getNrrd()->dim;
+					size_t msk_size[3] = {};
+					int msk_offset = 0;
+					if (msk_dim > 3) msk_offset = 1;
+					for (size_t p = 0; p < 3; p++)
+						msk_size[p] = (size_t)msknrrd->getNrrd()->axis[p + msk_offset].size;
+					nx = ox + nx > msk_size[0] ? msk_size[0] - ox : nx;
+					ny = oy + ny > msk_size[1] ? msk_size[1] - oy : ny;
+					nz = oz + nz > msk_size[2] ? msk_size[2] - oz : nz;
+
 					b->nx(nx); b->ny(ny); b->nz(nz);
 					b->mx(nx); b->my(ny); b->mz(nz);
 
