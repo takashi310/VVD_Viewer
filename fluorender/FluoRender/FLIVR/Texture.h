@@ -198,7 +198,7 @@ namespace FLIVR
 		//for brkxml file
 		void set_data_file(vector<FileLocInfo *> *fname, int type);
 		int GetFileType() {return filetype_;}
-		FileLocInfo *GetFileName(int id);
+		FileLocInfo *GetFileName(int id, int lv = -1);
 		bool isBrxml() {return brkxml_;}
 		bool isURL() {return useURL_;}
 		bool buildPyramid(vector<Pyramid_Level> &pyramid, vector<vector<vector<vector<FileLocInfo *>>>> &filenames, bool useURL = false);

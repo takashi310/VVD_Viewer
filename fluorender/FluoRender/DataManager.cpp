@@ -2116,7 +2116,7 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 
 							VolumeLoaderData d;
 							d.brick = b;
-							d.finfo = m_tex->GetFileName(b->getID());
+							d.finfo = m_tex->GetFileName(b->getID(), tarlv);
 							d.vd = this;
 							d.mode = 0;
 							queues.push_back(d);

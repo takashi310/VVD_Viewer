@@ -989,10 +989,20 @@ namespace FLIVR
 		filetype_ = type; 
 	}
 
-	FileLocInfo *Texture::GetFileName(int id)
+	FileLocInfo *Texture::GetFileName(int id, int lv)
 	{
-		if (id < 0 || !filename_ || id >= filename_->size()) return NULL;
-		return (*filename_)[id];
+		vector<FileLocInfo*>* fnames = NULL;
+		if (lv >= 0 && lv < pyramid_lv_num_)
+			fnames = pyramid_[lv].filenames;
+		else
+			fnames = filename_;
+
+		if (id < 0 || !fnames || id >= fnames->size())
+		{
+			std::cerr << "GetFileName error: " << id << " " << (fnames ? fnames->size() : -1) << std::endl;
+			return NULL;
+		}
+		return (*fnames)[id];
 	}
 
 	void Texture::set_FrameAndChannel(int fr, int ch)
