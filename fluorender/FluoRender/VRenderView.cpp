@@ -2920,9 +2920,18 @@ void VRenderVulkanView::Segment()
 	else
 	{
 		VolumeData* vd = m_selector.GetVolume();
-		m_loader.SetMemoryLimitByte((long long)TextureRenderer::mainmem_buf_size_*1024LL*1024LL);
-		m_loader.PreloadLevel(vd, vd->GetMaskLv(), true);
-		m_selector.Select(m_brush_radius2-m_brush_radius1);
+		if (!vd && m_cur_vol)
+		{
+			m_selector.SetVolume(m_cur_vol);
+			vd = m_selector.GetVolume();
+		}
+
+		if (vd)
+		{
+			m_loader.SetMemoryLimitByte((long long)TextureRenderer::mainmem_buf_size_ * 1024LL * 1024LL);
+			m_loader.PreloadLevel(vd, vd->GetMaskLv(), true);
+			m_selector.Select(m_brush_radius2 - m_brush_radius1);
+		}
 	}
 
 	if (copied == true) RefreshGL(false, true);
