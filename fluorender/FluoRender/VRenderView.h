@@ -616,7 +616,7 @@ public:
 	VolumeCalculator* GetVolumeCalculator() {return &m_calculator;}
 
 	//force draw
-	void ForceDraw() {wxPaintEvent event; OnDraw(event);}
+	void ForceDraw() {UpdateScreen();}
 
 	//run 4d script
 	void SetRun4DScript(bool runscript) {m_run_script = runscript;}
@@ -1319,6 +1319,8 @@ private:
 	//added by takashi
 	bool SwitchRulerBalloonVisibility_Point(int mx, int my);
 
+    void UpdateScreen();
+    
 	//system call
 	void OnDraw(wxPaintEvent& event);
 	void OnResize(wxSizeEvent& event);

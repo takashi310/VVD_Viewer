@@ -8293,6 +8293,11 @@ void VRenderVulkanView::RunFetchMask(wxFileConfig &fconfig)
 //draw
 void VRenderVulkanView::OnDraw(wxPaintEvent& event)
 {
+    UpdateScreen();
+}
+
+void VRenderVulkanView::UpdateScreen()
+{
 	if (m_abort)
 	{
 		m_abort = false;
@@ -14357,8 +14362,7 @@ void VRenderVulkanView::RefreshGLOverlays(bool erase)
 //#ifdef __WXMAC__
 void VRenderVulkanView::Refresh( bool eraseBackground, const wxRect *rect)
 {
-    wxPaintEvent ev;
-    OnDraw(ev);
+    UpdateScreen();
 }
 //#endif
 
@@ -16639,8 +16643,7 @@ void VRenderVulkanView::OnMouse(wxMouseEvent& event)
 								{
 									view->m_glview->SetRotations(
 										m_rotx, m_roty, m_rotz, true, false);
-									wxPaintEvent evt;
-									view->m_glview->OnDraw(evt);
+									view->m_glview->UpdateScreen();
 								}
 							}
 						}
