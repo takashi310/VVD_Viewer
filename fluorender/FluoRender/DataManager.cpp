@@ -2127,7 +2127,8 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 						
 						size_t slicenum = lbs[0]->nz();
 						size_t buffer_size = w*h*slicenum*(size_t)(lbs[0]->nb(0));
-						vl->TryToFreeMemory(req_mem + buffer_size);
+						//vl->TryToFreeMemory(req_mem + buffer_size);
+                        vl->RemoveAllLoadedData();
 						long long avmem = vl->GetAvailableMemory();
 						bool runVL = true;
 						if (avmem < req_mem + buffer_size)
