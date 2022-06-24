@@ -44,6 +44,8 @@ EVT_TEXT(ID_BrushSize1Text, BrushToolDlg::OnBrushSize1Text)
 EVT_CHECKBOX(ID_BrushSize2Chk, BrushToolDlg::OnBrushSize2Chk)
 EVT_COMMAND_SCROLL(ID_BrushSize2Sldr, BrushToolDlg::OnBrushSize2Change)
 EVT_TEXT(ID_BrushSize2Text, BrushToolDlg::OnBrushSize2Text)
+//use absolute value
+EVT_CHECKBOX(ID_BrushUseAbsoluteValue, BrushToolDlg::OnBrushUseAbsoluteValueChk)
 //dslt
 EVT_CHECKBOX(ID_DSLTBrushChk, BrushToolDlg::OnDSLTBrushChk)
 EVT_COMMAND_SCROLL(ID_DSLTBrushRadSldr, BrushToolDlg::OnDSLTBrushRadChange)
@@ -147,11 +149,15 @@ wxWindow* BrushToolDlg::CreateBrushPage(wxWindow *parent)
 		wxDefaultPosition, wxDefaultSize, wxALIGN_RIGHT);
 	m_select_group_chk = new wxCheckBox(page, ID_BrushSelectGroupChk, "Apply to Group:",
 		wxDefaultPosition, wxDefaultSize, wxALIGN_RIGHT);
+    m_brush_use_absolute_chk = new wxCheckBox(page, ID_BrushUseAbsoluteValue, "Absolute Value:",
+        wxDefaultPosition, wxDefaultSize, wxALIGN_RIGHT);
 	sizer1_1->Add(m_edge_detect_chk, 0, wxALIGN_CENTER);
 	sizer1_1->Add(5, 5);
 	sizer1_1->Add(m_hidden_removal_chk, 0, wxALIGN_CENTER);
 	sizer1_1->Add(5, 5);
 	sizer1_1->Add(m_select_group_chk, 0, wxALIGN_CENTER);
+    sizer1_1->Add(5, 5);
+    sizer1_1->Add(m_brush_use_absolute_chk, 0, wxALIGN_CENTER);
 	//threshold4
 	wxBoxSizer *sizer1_2 = new wxBoxSizer(wxHORIZONTAL);
 	st = new wxStaticText(page, 0, "Threshold:",
@@ -882,7 +888,7 @@ void BrushToolDlg::DrawBrush(double val)
 			thval *= sel_vol->GetMaxValue();
 			if (sel_vol->GetMask(false))
             {
-				sel_vol->DrawMaskThreshold((float)thval, m_cur_view->GetPersp());
+				sel_vol->DrawMaskThreshold((float)thval, m_cur_view->GetPersp(), m_brush_use_absolute_chk->IsChecked());
                 sel_vol->GetMask(true);
             }
 		}
@@ -902,7 +908,7 @@ void BrushToolDlg::DrawBrush(double val)
 						thval *= sel_vol->GetMaxValue();
 						if (vd->GetMask(false))
                         {
-							vd->DrawMaskThreshold((float)thval, m_cur_view->GetPersp());
+							vd->DrawMaskThreshold((float)thval, m_cur_view->GetPersp(), m_brush_use_absolute_chk->IsChecked());
                             sel_vol->GetMask(true);
                         }
 					}
@@ -1002,6 +1008,15 @@ void BrushToolDlg::OnBrushSelectGroupChk(wxCommandEvent &event)
    //set select group
    if (m_cur_view)
       m_cur_view->SetSelectGroup(select_group);
+}
+
+//use absolute value
+void BrushToolDlg::OnBrushUseAbsoluteValueChk(wxCommandEvent &event)
+{
+   bool use_absolute = m_brush_use_absolute_chk->GetValue();
+
+   if (m_cur_view)
+      m_cur_view->SetSelectGroup(use_absolute);
 }
 
 //brush size 1

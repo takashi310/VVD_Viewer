@@ -748,14 +748,6 @@ namespace FLIVR
 		bmax = tform->project(bmax);
 		bmin = tform->project(bmin);
         
-        Transform tform_copy;
-        double mvmat[16];
-        tform->get_trans(mvmat);
-        swap(mvmat[3], mvmat[12]);
-        swap(mvmat[7], mvmat[13]);
-        swap(mvmat[11], mvmat[14]);
-        tform_copy.set(mvmat);
-        
         FLIVR::Point p[8] = {
             FLIVR::Point(bmin.x(), bmin.y(), bmin.z()),
             FLIVR::Point(bmax.x(), bmin.y(), bmin.z()),
@@ -766,8 +758,6 @@ namespace FLIVR
             FLIVR::Point(bmax.x(), bmax.y(), bmax.z()),
             FLIVR::Point(bmin.x(), bmax.y(), bmax.z())
         };
-        for (int j = 0; j < 8; j++)
-            p[j] = tform_copy.project(p[j]);
         
 
 		float b_e[3];
@@ -789,43 +779,43 @@ namespace FLIVR
 		Point lp_x1z1, lp_x1z2, lp_x2z1, lp_x2z2;
 		//x1z1
 		if (!px1->Intersect(*pz1, lp_x1z1, lv_x1z1))
-			return true;
+			return false;
 		//x1z2
 		if (!px1->Intersect(*pz2, lp_x1z2, lv_x1z2))
-			return true;
+			return false;
 		//x2z1
 		if (!px2->Intersect(*pz1, lp_x2z1, lv_x2z1))
-			return true;
+			return false;
 		//x2z2
 		if (!px2->Intersect(*pz2, lp_x2z2, lv_x2z2))
-			return true;
+			return false;
 
 		//calculate 8 points
 		Point pp[8];
 		//p0 = l_x1z1 * py1
 		if (!py1->Intersect(lp_x1z1, lv_x1z1, pp[0]))
-			return true;
+			return false;
 		//p1 = l_x1z2 * py1
 		if (!py1->Intersect(lp_x1z2, lv_x1z2, pp[1]))
-			return true;
+			return false;
 		//p2 = l_x2z1 *py1
 		if (!py1->Intersect(lp_x2z1, lv_x2z1, pp[2]))
-			return true;
+			return false;
 		//p3 = l_x2z2 * py1
 		if (!py1->Intersect(lp_x2z2, lv_x2z2, pp[3]))
-			return true;
+			return false;
 		//p4 = l_x1z1 * py2
 		if (!py2->Intersect(lp_x1z1, lv_x1z1, pp[4]))
-			return true;
+			return false;
 		//p5 = l_x1z2 * py2
 		if (!py2->Intersect(lp_x1z2, lv_x1z2, pp[5]))
-			return true;
+			return false;
 		//p6 = l_x2z1 * py2
 		if (!py2->Intersect(lp_x2z1, lv_x2z1, pp[6]))
-			return true;
+			return false;
 		//p7 = l_x2z2 * py2
 		if (!py2->Intersect(lp_x2z2, lv_x2z2, pp[7]))
-			return true;
+			return false;
 
 		for (int i = 0; i < 8; i++)
 			pp[i] = tform->project(pp[i]);
@@ -851,6 +841,9 @@ namespace FLIVR
 		a_e[0] = xx.length() * 0.5f;
 		a_e[1] = yy.length() * 0.5f;
 		a_e[2] = zz.length() * 0.5f;
+        
+        if (a_e[0] <= 0.0f || a_e[1] <= 0.0f || a_e[2] <= 0.0f)
+            return false;
 
 		Vector a_c = Vector(pp[0].x(),pp[0].y(),pp[0].z()) + (xx + yy + zz) * 0.5f;
 		
@@ -3765,7 +3758,7 @@ namespace FLIVR
 		int type, int paint_mode, int hr_mode,
 		double ini_thresh, double gm_falloff, double scl_falloff,
 		double scl_translate, double w2d, double bins, bool orthographic_p,
-		bool estimate, Texture* ext_msk)
+		bool estimate, Texture* ext_msk, bool use_absolute_value)
 	{
 /*		if (paint_mode == 1 || paint_mode == 2)
 		{
@@ -3863,7 +3856,7 @@ namespace FLIVR
 		//thresh1
 		seg_ubo.loc7_th = { ini_thresh, gm_falloff, scl_falloff, scl_translate };
 		//w2d
-		seg_ubo.loc8_w2d = { w2d, bins, 0.0, 0.0 };
+		seg_ubo.loc8_w2d = { w2d, bins, use_absolute_value ? 1.0 : 0.0, 0.0 };
 
 		//set clipping planes
 		double abcd[4];
@@ -4929,7 +4922,7 @@ namespace FLIVR
 //		return code;
 //	}
 //
-	void VolumeRenderer::draw_mask_th(float thresh, bool orthographic_p)
+	void VolumeRenderer::draw_mask_th(float thresh, bool orthographic_p, bool use_absolute_value)
 	{
 		if (!tex_ || tex_->nstroke() < 0 || tex_->nmask() < 0) return;
 
@@ -4944,13 +4937,15 @@ namespace FLIVR
 
 		vks::VulkanDevice* prim_dev = m_vulkan->devices[0];
 
-		VCalPipeline pipeline = prepareCalPipeline(prim_dev, CAL_MASK_THRESHOLD, out_bytes);
+		VCalPipeline pipeline = prepareCalPipeline(prim_dev, use_absolute_value ? CAL_MASK_THRESHOLD : CAL_MASK_THRESHOLD_TR, out_bytes);
 		VkPipelineLayout pipelineLayout = m_vulkan->cal_shader_factory_->pipeline_[prim_dev].pipelineLayout;
 
 		VolCalShaderFactory::CalCompShaderBrickConst cal_const;
 
 		float normalized_th = tex_->nb(0) == 2 ? thresh / 65535.0f : thresh / 255.0f;
 		cal_const.loc0_scale_usemask = { 1.0f, 1.0f, normalized_th, 0.0f };
+        cal_const.loc2_scscale_th = { inv_ ? -scalar_scale_ : scalar_scale_, gm_scale_, lo_thresh_, hi_thresh_ };
+        cal_const.loc3_gamma_offset = { 1.0 / gamma3d_, gm_thresh_, offset_, sw_ };
 
 		vkQueueWaitIdle(prim_dev->compute_queue);
 

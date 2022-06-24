@@ -222,7 +222,7 @@ namespace FLIVR
     "{\n" \
     "    vec4 t = vec4(OutTexCoord, 1.0);\n" \
     "    vec4 c = texture(tex0, t.xy);\n" \
-    "    c.x = ct.loc1.x <= 1.0 ? clamp(pow(c.x, ct.loc0.x) / clamp(ct.loc1.x, 0.001, 1.0), 0.0, 1.0) : clamp(pow(pow(c.x, ct.loc0.y), pow(ct.loc1.x, 3.0)), 0.0, 1.0);\n" \
+    "    c.x = ct.loc1.x <= 1.0 ? clamp(pow(c.x, ct.loc0.x) / clamp(ct.loc1.x, 0.001, 1.0), 0.0, 1.0) : clamp(pow(pow(c.x, ct.loc0.x), pow(ct.loc1.x, 3.0)), 0.0, 1.0);\n" \
     "    c.y = ct.loc1.y <= 1.0 ? clamp(pow(c.y, ct.loc0.y) / clamp(ct.loc1.y, 0.001, 1.0), 0.0, 1.0) : clamp(pow(pow(c.y, ct.loc0.y), pow(ct.loc1.y, 3.0)), 0.0, 1.0);\n" \
     "    c.z = ct.loc1.z <= 1.0 ? clamp(pow(c.z, ct.loc0.z) / clamp(ct.loc1.z, 0.001, 1.0), 0.0, 1.0) : clamp(pow(pow(c.z, ct.loc0.z), pow(ct.loc1.z, 3.0)), 0.0, 1.0);\n" \
     "    FragColor = c;\n" \

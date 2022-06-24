@@ -47,8 +47,9 @@ namespace FLIVR
 	#define CAL_APPLYMASKINV2	7	//apply the inverted mask
 	#define CAL_INTERSECTION_WITH_MASK	8	//minimum of two with mask
 	#define CAL_MASK_THRESHOLD	9	//minimum of two with mask
-	#define CAL_RGBAPPLYMASK	10	//apply mask to rgb volume
-	#define CAL_RGBAPPLYMASKINV 11	//apply the inverted mask to rgb mask
+    #define CAL_MASK_THRESHOLD_TR    10    //minimum of two with mask (use the transfer function)
+	#define CAL_RGBAPPLYMASK	11	//apply mask to rgb volume
+	#define CAL_RGBAPPLYMASKINV 12	//apply the inverted mask to rgb mask
 
 	#define CAL_SAMPLER_NUM 6
 
@@ -102,7 +103,9 @@ namespace FLIVR
 
 		struct CalCompShaderBrickConst {
 			glm::vec4 loc0_scale_usemask;	//(scale_a, scale_b, use_mask_a, use_mask_b)
-			glm::vec4 loc1_dim_inv;
+			glm::vec4 loc1_dim_inv;         //(1/nx, 1/ny, 1/nz, 1/sample_rate)
+            glm::vec4 loc2_scscale_th;      //(scalar_scale, gm_scale, left_thresh, right_thresh)
+            glm::vec4 loc3_gamma_offset;    //(gamma, gm_thresh, offset, sw)
 		};
 
 		static inline VkWriteDescriptorSet writeDescriptorSetTex(

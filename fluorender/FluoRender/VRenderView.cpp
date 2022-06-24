@@ -704,7 +704,8 @@ VRenderVulkanView::VRenderVulkanView(wxWindow* frame,
 	m_ebd_run(true),
     m_undo_keydown(false),
     m_redo_keydown(false),
-    m_use_fog_mesh(false)
+    m_use_fog_mesh(false),
+    m_use_absolute_value(false)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -2847,6 +2848,7 @@ void VRenderVulkanView::Segment()
 	m_selector.Set2DWeight(m_tex_final, m_tex_wt2?m_tex_wt2:m_tex);
 	//orthographic
 	m_selector.SetOrthographic(!m_persp);
+    m_selector.SetUseAbsoluteValue(m_use_absolute_value);
 
 	bool copied = false;
 

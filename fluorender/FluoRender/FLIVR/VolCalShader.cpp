@@ -57,72 +57,78 @@ namespace FLIVR
 
 #define CAL_UNIFORMS_COMMON \
 	"//CAL_UNIFORMS_COMMON\n" \
-	"layout (binding = 1) uniform sampler3D tex1;//operand A\n" \
-	"layout (binding = 2) uniform sampler3D tex2;//operand B\n" \
+	"layout (binding = 1) uniform sampler3D tex0;//operand A\n" \
+	"layout (binding = 2) uniform sampler3D tex1;//operand B\n" \
 	"layout (push_constant) uniform PushConsts {\n" \
 	"	vec4 loc0;//(scale_A, scale_B, 0.0, 0.0)\n" \
 	"	vec4 loc1;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
-	"} ct;" \
+    "   vec4 loc2;//(scalar_scale, gm_scale, left_thresh, right_thresh)\n" \
+    "   vec4 loc3;//(gamma, gm_thresh, offset, sw)\n" \
+	"} base;" \
 	"\n"
 
 #define CAL_UNIFORMS_WITH_MASK \
 	"//CAL_UNIFORMS_WITH_MASK\n" \
-	"layout (binding = 1) uniform sampler3D tex1;//operand A\n" \
-	"layout (binding = 3) uniform sampler3D tex3;//mask of A\n" \
-	"layout (binding = 2) uniform sampler3D tex2;//operand B\n" \
-	"layout (binding = 4) uniform sampler3D tex4;//mask of B\n" \
+	"layout (binding = 1) uniform sampler3D tex0;//operand A\n" \
+	"layout (binding = 3) uniform sampler3D tex2;//mask of A\n" \
+	"layout (binding = 2) uniform sampler3D tex1;//operand B\n" \
+	"layout (binding = 4) uniform sampler3D tex3;//mask of B\n" \
 	"layout (push_constant) uniform PushConsts {\n" \
 	"	vec4 loc0;//(scale_a, scale_b, use_mask_a, use_mask_b)\n" \
 	"	vec4 loc1;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
-	"} ct;" \
+    "   vec4 loc2;//(scalar_scale, gm_scale, left_thresh, right_thresh)\n" \
+    "   vec4 loc3;//(gamma, gm_thresh, offset, sw)\n" \
+	"} base;" \
 	"\n"
 
 #define CAL_UNIFORMS_RGB_WITH_MASK \
 	"//CAL_UNIFORMS_RGB_WITH_MASK\n" \
-	"layout (binding = 1) uniform sampler3D tex1;//operand A\n" \
-	"layout (binding = 2) uniform sampler3D tex2;//operand B\n" \
-	"layout (binding = 5) uniform sampler3D tex5;//operand C\n" \
-	"layout (binding = 3) uniform sampler3D tex3;//mask\n" \
-	"layout (binding = 4) uniform usampler3D tex4;//label\n" \
-	"layout (binding = 6) uniform sampler2D tex6;//segstat\n" \
+	"layout (binding = 1) uniform sampler3D tex0;//operand A\n" \
+	"layout (binding = 2) uniform sampler3D tex1;//operand B\n" \
+	"layout (binding = 5) uniform sampler3D tex4;//operand C\n" \
+	"layout (binding = 3) uniform sampler3D tex2;//mask\n" \
+	"layout (binding = 4) uniform usampler3D tex3;//label\n" \
+	"layout (binding = 6) uniform sampler2D tex5;//segstat\n" \
 	"layout (push_constant) uniform PushConsts {\n" \
 	"	vec4 loc0;//(scale_A, scale_B, scale_C, 0.0)\n" \
 	"	vec4 loc1;//(1/nx, 1/ny, 1/nz, 1/sample_rate)\n" \
-	"} ct;" \
+    "   vec4 loc2;//(scalar_scale, gm_scale, left_thresh, right_thresh)\n" \
+    "   vec4 loc3;//(gamma, gm_thresh, offset, sw)\n" \
+	"} base;" \
 	"\n"
 
 #define CAL_HEAD \
 	"//CAL_HEAD\n" \
 	"void main()\n" \
 	"{\n" \
-	"	vec4 t = vec4((gl_GlobalInvocationID.x+0.5)*ct.loc1.x, (gl_GlobalInvocationID.y+0.5)*ct.loc1.y, (gl_GlobalInvocationID.z+0.5)*ct.loc1.z, 1.0);\n" \
-	"	vec4 t1 = t;//position in the operand A\n" \
-	"	vec4 t2 = t;//position in the operand B\n" \
-	"	vec4 t3 = t;//position in the operand C\n" \
+	"	vec4 t = vec4((gl_GlobalInvocationID.x+0.5)*base.loc1.x, (gl_GlobalInvocationID.y+0.5)*base.loc1.y, (gl_GlobalInvocationID.z+0.5)*base.loc1.z, 1.0);\n" \
+	"	vec4 t0 = t;//position in the operand A\n" \
+	"	vec4 t1 = t;//position in the operand B\n" \
+	"	vec4 t2 = t;//position in the operand C\n" \
 	"\n"
 
 #define CAL_TEX_LOOKUP \
 	"	//CAL_TEX_LOOKUP\n" \
-	"	vec4 c1 = texture(tex1, t1.stp)*ct.loc0.x;\n" \
-	"	vec4 c2 = texture(tex2, t2.stp)*ct.loc0.y;\n" \
+	"	vec4 c1 = texture(tex0, t0.stp)*base.loc0.x;\n" \
+	"	vec4 c2 = texture(tex1, t1.stp)*base.loc0.y;\n" \
 	"\n"
 
 #define CAL_TEX_LOOKUP_WITH_MASK \
 	"	//CAL_TEX_LOOKUP_WITH_MASK\n" \
-	"	vec4 c1 = texture(tex1, t1.stp)*ct.loc0.x;\n" \
-	"	vec4 m1 = ct.loc0.z>0.0?texture(tex3, t1.stp):vec4(1.0);\n" \
-	"	vec4 c2 = texture(tex2, t2.stp)*ct.loc0.y;\n" \
-	"	vec4 m2 = ct.loc0.w>0.0?texture(tex4, t2.stp):vec4(1.0);\n" \
+	"	vec4 c1 = texture(tex0, t0.stp)*base.loc0.x;\n" \
+	"	vec4 m1 = base.loc0.z>0.0?texture(tex2, t0.stp):vec4(1.0);\n" \
+	"	vec4 c2 = texture(tex1, t1.stp)*base.loc0.y;\n" \
+	"	vec4 m2 = base.loc0.w>0.0?texture(tex3, t1.stp):vec4(1.0);\n" \
 	"\n"
 
 #define CAL_TEX_LOOKUP_RGB_WITH_MASK \
 	"	//CAL_TEX_LOOKUP_RGB_WITH_MASK\n" \
-	"	vec4 c1 = ct.loc0.x >= 0.0 ? texture(tex1, t1.stp)*ct.loc0.x : vec4(0.0);\n" \
-	"	vec4 c2 = ct.loc0.y >= 0.0 ? texture(tex2, t2.stp)*ct.loc0.y : vec4(0.0);\n" \
-	"	vec4 c3 = ct.loc0.z >= 0.0 ? texture(tex5, t3.stp)*ct.loc0.z : vec4(0.0);\n" \
-	"	vec4 msk = ct.loc0.x >= 0.0 ? texture(tex3, t1.stp)*ct.loc0.x : vec4(0.0);\n" \
-	"	uint lbl = texture(tex4, t1.stp).x;\n" \
-    "	vec4 b = texture(tex6, vec2((float(lbl%uint(256))+0.5)/256.0, (float(lbl/256)+0.5)/256.0));\n" \
+	"	vec4 c1 = base.loc0.x >= 0.0 ? texture(tex0, t0.stp)*base.loc0.x : vec4(0.0);\n" \
+	"	vec4 c2 = base.loc0.y >= 0.0 ? texture(tex1, t1.stp)*base.loc0.y : vec4(0.0);\n" \
+	"	vec4 c3 = base.loc0.z >= 0.0 ? texture(tex4, t2.stp)*base.loc0.z : vec4(0.0);\n" \
+	"	vec4 msk = base.loc0.x >= 0.0 ? texture(tex2, t0.stp)*base.loc0.x : vec4(0.0);\n" \
+	"	uint lbl = texture(tex3, t0.stp).x;\n" \
+    "	vec4 b = texture(tex5, vec2((float(lbl%uint(256))+0.5)/256.0, (float(lbl/256)+0.5)/256.0));\n" \
 	"\n"
 
 #define CAL_BODY_SUBSTRACTION \
@@ -154,7 +160,7 @@ namespace FLIVR
 
 #define CAL_BODY_APPLYMASK \
 	"	//CAL_BODY_APPLYMASK\n" \
-	"	vec4 c = vec4((ct.loc0.z<0.0?(1.0-c1.x):c1.x)*c2.x);\n" \
+	"	vec4 c = vec4((base.loc0.z<0.0?(1.0-c1.x):c1.x)*c2.x);\n" \
 	"\n"
 
 #define CAL_BODY_APPLYMASKINV \
@@ -167,8 +173,18 @@ namespace FLIVR
 	"	if (c2.r > 0.0)\n" \
 	"	{\n" \
 	"		//CAL_RESULT\n" \
-	"		imageStore(outimg, ivec3(gl_GlobalInvocationID.xyz), vec4(c1.r >= ct.loc0.z ? 1.0 : 0.0));\n" \
+	"		imageStore(outimg, ivec3(gl_GlobalInvocationID.xyz), vec4(c1.r >= base.loc0.z ? 1.0 : 0.0));\n" \
 	"	}\n" \
+
+#define CAL_BODY_MASK_THRESHOLD_TR \
+    "    //CAL_BODY_MASK_THRESHOLD_TR\n" \
+    "    if (c2.r > 0.0)\n" \
+    "    {\n" \
+    "        c1.y = length(vol_grad_func(vec4(t0.stp, 1.0), base.loc1).xyz);\n" \
+    "        c1 = vol_trans_sin_color_l(c1);\n" \
+    "        //CAL_RESULT\n" \
+    "        imageStore(outimg, ivec3(gl_GlobalInvocationID.xyz), vec4(c1.r >= base.loc0.z ? 1.0 : 0.0));\n" \
+    "    }\n" \
 
 #define CAL_BODY_RGBAPPLYMASK \
 	"	//CAL_BODY_RGBAPPLYMASK\n" \
@@ -230,6 +246,7 @@ namespace FLIVR
 		case CAL_APPLYMASKINV:
 		case CAL_APPLYMASKINV2:
 		case CAL_MASK_THRESHOLD:
+        case CAL_MASK_THRESHOLD_TR:
 			z << CAL_UNIFORMS_COMMON;
 			break;
 		case CAL_INTERSECTION_WITH_MASK:
@@ -240,6 +257,12 @@ namespace FLIVR
 			z << CAL_UNIFORMS_RGB_WITH_MASK;
 			break;
 		}
+        
+        if (type_ == CAL_MASK_THRESHOLD_TR)
+        {
+            z << VOL_GRAD_COMPUTE_FUNC;
+            z << VOL_TRANSFER_FUNCTION_SIN_COLOR_L_FUNC;
+        }
 
 		z << CAL_HEAD;
 
@@ -276,6 +299,9 @@ namespace FLIVR
 		case CAL_MASK_THRESHOLD:
 			z << CAL_BODY_MASK_THRESHOLD;
 			break;
+        case CAL_MASK_THRESHOLD_TR:
+            z << CAL_BODY_MASK_THRESHOLD_TR;
+            break;
 		case CAL_RGBAPPLYMASK:
 			z << CAL_BODY_RGBAPPLYMASK;
 			break;
@@ -284,7 +310,7 @@ namespace FLIVR
 			break;
 		}
 
-		if (type_ != CAL_MASK_THRESHOLD)
+		if (type_ != CAL_MASK_THRESHOLD && type_ != CAL_MASK_THRESHOLD_TR )
 		{
 			z << CAL_RESULT;
 		}

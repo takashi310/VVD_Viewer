@@ -581,6 +581,9 @@ public:
 	//select group
 	void SetSelectGroup(bool value);
 	bool GetSelectGroup();
+    //use absolute value
+    void SetUseAbsoluteValue(bool value);
+    bool GetUseAbsoluteValue();
 	//estimate threshold
 	void SetEstimateThresh(bool value);
 	bool GetEstimateThresh();
@@ -820,6 +823,8 @@ public:
 	bool m_ruler_time_dep;
 	//linked rotation
 	bool m_linked_rot;
+    //use absolute value for segmentation
+    bool m_use_absolute_value;
 
 	shared_ptr<VVulkan> m_vulkan;
 	std::shared_ptr<Vulkan2dRender> m_v2drender;
@@ -1892,6 +1897,11 @@ public:
 	{ if (m_glview) m_glview->SetSelectGroup(value); }
 	bool GetSelectGroup()
 	{ if (m_glview) return m_glview->GetSelectGroup(); else return false;}
+    //use absolute value
+    void SetUseAbsoluteValue(bool value)
+    { if (m_glview) m_glview->SetUseAbsoluteValue(value); }
+    bool GetUseAbsoluteValue()
+    { if (m_glview) return m_glview->GetUseAbsoluteValue(); else return false;}
 	//estimate threshold
 	void SetEstimateThresh(bool value)
 	{ if (m_glview) m_glview->SetEstimateThresh(value);}

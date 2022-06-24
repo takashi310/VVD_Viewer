@@ -49,6 +49,8 @@ public:
 		ID_BrushSize2Chk,
 		ID_BrushSize2Sldr,
 		ID_BrushSize2Text,
+        //use absolute value for threahold
+        ID_BrushUseAbsoluteValue,
 		//iterations
 		ID_BrushIterWRd,
 		ID_BrushIterSRd,
@@ -196,6 +198,8 @@ private:
 	wxCheckBox* m_brush_size2_chk;
 	wxSlider* m_brush_size2_sldr;
 	wxTextCtrl* m_brush_size2_text;
+    //use absolute value
+    wxCheckBox *m_brush_use_absolute_chk;
 	//dslt
 	wxCheckBox* m_dslt_chk;
 	wxStaticText *st_dslt_r;
@@ -290,6 +294,8 @@ private:
 	void OnBrushSize2Chk(wxCommandEvent &event);
 	void OnBrushSize2Change(wxScrollEvent &event);
 	void OnBrushSize2Text(wxCommandEvent &event);
+    //use absolute value
+    void OnBrushUseAbsoluteValueChk(wxCommandEvent &event);
 	//dslt
 	void OnDSLTBrushChk(wxCommandEvent &event);
 	void OnDSLTBrushRadChange(wxScrollEvent &event);

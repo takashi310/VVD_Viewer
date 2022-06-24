@@ -97,7 +97,7 @@ namespace FLIVR
 	"	vec4 loc5;//(spcx, spcy, spcz, max_id)\n" \
 	"	vec4 loc6;//(r, g, b, 0.0) or (1/vx, 1/vy, luminance, depth_mode)\n" \
 	"	vec4 loc7;//(ini_thresh, gm_falloff, scl_falloff, scl_translate)\n" \
-	"	vec4 loc8;//(w2d, bins, 0.0, 0.0)\n" \
+	"	vec4 loc8;//(w2d, bins, use_absolute_value, 0.0)\n" \
 	"	vec4 loc10; //plane0\n" \
 	"	vec4 loc11; //plane1\n" \
 	"	vec4 loc12; //plane2\n" \
@@ -284,7 +284,7 @@ namespace FLIVR
 	"			break;\n" \
 	"		v.x = texture(tex0, ray).x;\n" \
 	"		v.y = length(vol_grad_func(vec4(ray, 1.0), brk.loc4).xyz);\n" \
-	"		cray = vol_trans_sin_color_l(v);\n" \
+	"		cray = loc8.z > 0.5 ? v.x : vol_trans_sin_color_l(v);\n" \
 	"		if (cray.x > base.loc7.x && flag)\n" \
 	"		{\n" \
 	"			imageStore(maskimg, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
@@ -326,7 +326,7 @@ namespace FLIVR
 	"			break;\n" \
 	"		v.x = texture(tex0, ray).x;\n" \
 	"		v.y = length(vol_grad_func(vec4(ray, 1.0), brk.loc4).xyz);\n" \
-	"		cray = vol_trans_sin_color_l(v);\n" \
+	"		cray = loc8.z > 0.5 ? v.x : vol_trans_sin_color_l(v);\n" \
 	"		if (cray.x > base.loc7.x && flag)\n" \
 	"		{\n" \
 	"			imageStore(maskimg, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \

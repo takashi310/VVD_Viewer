@@ -68,7 +68,8 @@ VolumeSelector::VolumeSelector() :
 	m_ca_volume(0),
 	m_randv(113),
 	m_ps(false),
-	m_estimate_threshold(false)
+	m_estimate_threshold(false),
+    m_use_absolute_value(false)
 {
 }
 

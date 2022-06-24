@@ -61,7 +61,7 @@ namespace FLIVR
 		VkPipelineShaderStageCreateInfo get_compute_shader() { return compute_shader_stage_; }
 		std::string get_vertex_shader_code() { return vert_shader_; }
 		std::string get_fragment_shader_code() { return frag_shader_; }
-		std::string get_compute_shader_code() { return frag_shader_; }
+		std::string get_compute_shader_code() { return compute_shader_; }
 
 		static const int MAX_SHADER_UNIFORMS = 16;
 		static std::string glsl_version_;

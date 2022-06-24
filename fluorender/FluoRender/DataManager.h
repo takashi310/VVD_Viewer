@@ -464,11 +464,11 @@ public:
 	//hr_mode (hidden removal): 0-none; 1-ortho; 2-persp
 	void DrawMask(int type, int paint_mode, int hr_mode,
 		double ini_thresh, double gm_falloff, double scl_falloff, double scl_translate,
-		double w2d, double bins, bool ortho = false, Texture* ext_msk = NULL, bool clear_msk_cache = true);
-	void DrawMaskThreshold(float th, bool ortho = false);
+		double w2d, double bins, bool ortho = false, Texture* ext_msk = NULL, bool clear_msk_cache = true, bool use_absolute_value = false);
+	void DrawMaskThreshold(float th, bool ortho = false, bool use_absolute_value = false);
 	void DrawMaskDSLT(int type, int paint_mode, int hr_mode,
 		double ini_thresh, double gm_falloff, double scl_falloff, double scl_translate,
-		double w2d, double bins, int dslt_r, int dslt_q, double dslt_c, bool ortho = false);
+		double w2d, double bins, int dslt_r, int dslt_q, double dslt_c, bool ortho = false, bool use_absolute_value = false);
 	//draw label (create the label)
 	//type: 0-initialize; 1-maximum intensity filtering
 	//mode: 0-normal; 1-posterized, 2-copy values

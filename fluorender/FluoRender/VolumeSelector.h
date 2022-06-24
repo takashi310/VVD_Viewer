@@ -89,6 +89,9 @@ public:
 	//size map
 	void SetSizeMap(bool size_map) {m_size_map = size_map;}
 	bool GetSizeMap() {return m_size_map;}
+    //use absolute value
+    void SetUseAbsoluteValue(bool val) {m_use_absolute_value = val;}
+    bool GetUseAbsoluteValue() {return m_use_absolute_value;}
 
 	//modes
 	void SetMode(int mode) {m_mode = mode;}
@@ -172,6 +175,7 @@ private:
 	//label thresh
 	double m_label_thresh;
 	double m_label_falloff;
+    bool m_use_absolute_value;
 
 	//define structure
 	struct Component

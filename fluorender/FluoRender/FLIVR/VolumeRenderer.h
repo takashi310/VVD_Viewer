@@ -378,7 +378,7 @@ public:
 		void draw_mask(
 			int type, int paint_mode, int hr_mode,
 			double ini_thresh, double gm_falloff, double scl_falloff,
-			double scl_translate, double w2d, double bins, bool ortho, bool estimate, Texture* ext_msk = NULL);
+			double scl_translate, double w2d, double bins, bool ortho, bool estimate, Texture* ext_msk = NULL, bool use_absolute_value = false);
 
 		//generate the labeling assuming the mask is already generated
 		//type: 0-initialization; 1-maximum intensity filtering
@@ -402,7 +402,7 @@ public:
 		//void draw_mask_cpu(int type, int paint_mode, int hr_mode,
 		//	double ini_thresh, double gm_falloff, double scl_falloff,
 		//	double scl_translate, double w2d, double bins, bool ortho, bool estimate);
-		void draw_mask_th(float thresh, bool orthographic_p);
+		void draw_mask_th(float thresh, bool orthographic_p, bool use_absolute_value = false);
 		//void draw_mask_dslt(int type, int paint_mode, int hr_mode,
 		//	double ini_thresh, double gm_falloff, double scl_falloff,
 		//	double scl_translate, double w2d, double bins, bool ortho, bool estimate, int dslt_r, int dslt_q, double dslt_c);
