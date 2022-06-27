@@ -3379,6 +3379,15 @@ bool VRenderVulkanView::GetSelectGroup()
 	return m_selector.GetSelectGroup();
 }
 
+void VRenderVulkanView::SetUseAbsoluteValue(bool value)
+{
+    m_use_absolute_value = value;
+}
+bool VRenderVulkanView::GetUseAbsoluteValue()
+{
+    return m_use_absolute_value;
+}
+
 //estimate threshold
 void VRenderVulkanView::SetEstimateThresh(bool value)
 {
