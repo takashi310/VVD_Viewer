@@ -1818,48 +1818,49 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
             Point lp_x1z1, lp_x1z2, lp_x2z1, lp_x2z2;
             //x1z1
             if (!px1->Intersect(*pz1, lp_x1z1, lv_x1z1))
-                return false;
+                crop = false;
             //x1z2
             if (!px1->Intersect(*pz2, lp_x1z2, lv_x1z2))
-                return false;
+                crop = false;
             //x2z1
             if (!px2->Intersect(*pz1, lp_x2z1, lv_x2z1))
-                return false;
+                crop = false;
             //x2z2
             if (!px2->Intersect(*pz2, lp_x2z2, lv_x2z2))
-                return false;
+                crop = false;
             
             //calculate 8 points
             Point pp[8];
             //p0 = l_x1z1 * py1
             if (!py1->Intersect(lp_x1z1, lv_x1z1, pp[0]))
-                return false;
+                crop = false;
             //p1 = l_x1z2 * py1
             if (!py1->Intersect(lp_x1z2, lv_x1z2, pp[1]))
-                return false;
+                crop = false;
             //p2 = l_x2z1 *py1
             if (!py1->Intersect(lp_x2z1, lv_x2z1, pp[2]))
-                return false;
+                crop = false;
             //p3 = l_x2z2 * py1
             if (!py1->Intersect(lp_x2z2, lv_x2z2, pp[3]))
-                return false;
+                crop = false;
             //p4 = l_x1z1 * py2
             if (!py2->Intersect(lp_x1z1, lv_x1z1, pp[4]))
-                return false;
+                crop = false;
             //p5 = l_x1z2 * py2
             if (!py2->Intersect(lp_x1z2, lv_x1z2, pp[5]))
-                return false;
+                crop = false;
             //p6 = l_x2z1 * py2
             if (!py2->Intersect(lp_x2z1, lv_x2z1, pp[6]))
-                return false;
+                crop = false;
             //p7 = l_x2z2 * py2
             if (!py2->Intersect(lp_x2z2, lv_x2z2, pp[7]))
-                return false;
+                crop = false;
             
             for (int i = 0; i < 8; i++)
                 bbox.extend(pp[i]);
         }
-        else
+        
+        if (!crop)
         {
             bbox.extend(Point(0.0, 0.0, 0.0));
             bbox.extend(Point(1.0, 1.0, 1.0));
