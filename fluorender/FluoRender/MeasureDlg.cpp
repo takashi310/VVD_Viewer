@@ -206,13 +206,13 @@ void RulerListCtrl::UpdateRulers(VRenderView* vrv, bool update_annotaions)
 		if (num_points > 0)
 		{
 			p = ruler->GetPoint(0);
-			points += wxString::Format("(%.2f, %.2f, %.2f)", p->x(), p->y(), p->z());
+			points += wxString::Format("(%.2f, %.2f, %.2f)", p->x(), p->y(), -p->z());
 		}
 		if (num_points > 1)
 		{
 			p = ruler->GetPoint(num_points - 1);
 			points += ", ";
-			points += wxString::Format("(%.2f, %.2f, %.2f)", p->x(), p->y(), p->z());
+			points += wxString::Format("(%.2f, %.2f, %.2f)", p->x(), p->y(), -p->z());
 		}
 		wxString color;
 		if (ruler->GetUseColor())
@@ -250,7 +250,7 @@ void RulerListCtrl::UpdateRulers(VRenderView* vrv, bool update_annotaions)
 						VolumeData *vd = ann->GetVolume();
 						if (vd) 
 							vd->GetResolution(resx, resy, resz);
-						wxString points = wxString::Format("(%.2f, %.2f, %.2f)", p.x()*resx, p.y()*resy, p.z()*resz);
+						wxString points = wxString::Format("(%.2f, %.2f, %.2f)", p.x()*resx, p.y()*resy, -p.z()*resz);
 						wxString info = ann->GetTextInfo(j);
 						wxString voxnum;
 						wxStringTokenizer tokenizer(info, "\t");
@@ -323,13 +323,13 @@ void RulerListCtrl::UpdateText(VRenderView* vrv)
 		if (num_points > 0)
 		{
 			p = ruler->GetPoint(0);
-			points += wxString::Format("(%.2f, %.2f, %.2f)", p->x(), p->y(), p->z());
+			points += wxString::Format("(%.2f, %.2f, %.2f)", p->x(), p->y(), -p->z());
 		}
 		if (num_points > 1)
 		{
 			p = ruler->GetPoint(num_points - 1);
 			points += ", ";
-			points += wxString::Format("(%.2f, %.2f, %.2f)", p->x(), p->y(), p->z());
+			points += wxString::Format("(%.2f, %.2f, %.2f)", p->x(), p->y(), -p->z());
 		}
 		wxString color;
 		if (ruler->GetUseColor())
@@ -541,13 +541,13 @@ void RulerListCtrl::Export(wxString filename)
 			if (num_points > 0)
 			{
 				p = ruler->GetPoint(0);
-				str += wxString::Format("%.2f\t%.2f\t%.2f", p->x(), p->y(), p->z());
+				str += wxString::Format("%.2f\t%.2f\t%.2f", p->x(), p->y(), -p->z());
 			}
 			if (num_points > 1)
 			{
 				p = ruler->GetPoint(num_points - 1);
 				str += "\t";
-				str += wxString::Format("%.2f\t%.2f\t%.2f", p->x(), p->y(), p->z());
+				str += wxString::Format("%.2f\t%.2f\t%.2f", p->x(), p->y(), -p->z());
 			}
 			tos << str << "\t";
 			if (ruler->GetTimeDep())

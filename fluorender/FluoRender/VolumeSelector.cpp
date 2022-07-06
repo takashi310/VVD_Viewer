@@ -1122,6 +1122,7 @@ int VolumeSelector::ProcessSel(double thresh)
 		return 0;
 
 	m_vd->GetVR()->return_mask();
+    //m_vd->GetVR()->return_stroke();
 
 	//get all the data from original volume
 	Texture* tex_mvd = m_vd->GetTexture();
@@ -1171,11 +1172,12 @@ int VolumeSelector::ProcessSel(double thresh)
 			//clear data_mvd_mask
 			size_t set_num = res_x*res_y*res_z;
 			memset(data_mvd_mask, 0, set_num);
+            m_vd->GetVR()->clear_tex_current_mask();
 
 			if (nw > 0.0)
 			{
-				m_ps_center = Point(sump.x()*spc_x, sump.y()*spc_y, sump.z()*spc_z) / nw +
-					Vector(0.5*spc_x, 0.5*spc_y, 0.5*spc_z);
+				m_ps_center = Point(sump.x()*spc_x, sump.y()*spc_y, -sump.z()*spc_z) / nw +
+					Vector(0.5*spc_x, 0.5*spc_y, -0.5*spc_z);
 				m_ps_size *= spc_x*spc_y*spc_z;
 				m_ps = true;
 				return 1;

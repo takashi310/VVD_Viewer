@@ -1775,7 +1775,7 @@ int VolumeData::GetLabellValue(int i, int j, int k)
 
 
 //save
-void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bool save_msk, bool save_label, VolumeLoader *vl)
+void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bool save_msk, bool save_label, VolumeLoader *vl, bool crop)
 {
 	if (m_vr && m_tex)
 	{
@@ -1800,6 +1800,70 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 
 		double spcx, spcy, spcz;
 		GetSpacings(spcx, spcy, spcz);
+        
+        BBox bbox;
+        if (crop)
+        {
+            //Cropping
+            vector<Plane*> *planes = m_vr->get_planes();
+            Plane* px1 = (*planes)[0];
+            Plane* px2 = (*planes)[1];
+            Plane* py1 = (*planes)[2];
+            Plane* py2 = (*planes)[3];
+            Plane* pz1 = (*planes)[4];
+            Plane* pz2 = (*planes)[5];
+            
+            //calculate 4 lines
+            Vector lv_x1z1, lv_x1z2, lv_x2z1, lv_x2z2;
+            Point lp_x1z1, lp_x1z2, lp_x2z1, lp_x2z2;
+            //x1z1
+            if (!px1->Intersect(*pz1, lp_x1z1, lv_x1z1))
+                return false;
+            //x1z2
+            if (!px1->Intersect(*pz2, lp_x1z2, lv_x1z2))
+                return false;
+            //x2z1
+            if (!px2->Intersect(*pz1, lp_x2z1, lv_x2z1))
+                return false;
+            //x2z2
+            if (!px2->Intersect(*pz2, lp_x2z2, lv_x2z2))
+                return false;
+            
+            //calculate 8 points
+            Point pp[8];
+            //p0 = l_x1z1 * py1
+            if (!py1->Intersect(lp_x1z1, lv_x1z1, pp[0]))
+                return false;
+            //p1 = l_x1z2 * py1
+            if (!py1->Intersect(lp_x1z2, lv_x1z2, pp[1]))
+                return false;
+            //p2 = l_x2z1 *py1
+            if (!py1->Intersect(lp_x2z1, lv_x2z1, pp[2]))
+                return false;
+            //p3 = l_x2z2 * py1
+            if (!py1->Intersect(lp_x2z2, lv_x2z2, pp[3]))
+                return false;
+            //p4 = l_x1z1 * py2
+            if (!py2->Intersect(lp_x1z1, lv_x1z1, pp[4]))
+                return false;
+            //p5 = l_x1z2 * py2
+            if (!py2->Intersect(lp_x1z2, lv_x1z2, pp[5]))
+                return false;
+            //p6 = l_x2z1 * py2
+            if (!py2->Intersect(lp_x2z1, lv_x2z1, pp[6]))
+                return false;
+            //p7 = l_x2z2 * py2
+            if (!py2->Intersect(lp_x2z2, lv_x2z2, pp[7]))
+                return false;
+            
+            for (int i = 0; i < 8; i++)
+                bbox.extend(pp[i]);
+        }
+        else
+        {
+            bbox.extend(Point(0.0, 0.0, 0.0));
+            bbox.extend(Point(1.0, 1.0, 1.0));
+        }
 
 		//save data
 		auto vlnrrd = m_tex->get_nrrd(0);
@@ -1808,6 +1872,17 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 			data = vlnrrd->getNrrd();
 			if (!isBrxml())
 			{
+                int w = int(data->axis[0].size);
+                int h = int(data->axis[1].size);
+                int d = int(data->axis[2].size);
+                
+                int sx = (int)(bbox.min().x() * w + 0.5);
+                int sy = (int)(bbox.min().y() * h + 0.5);
+                int sz = (int)(bbox.min().z() * d + 0.5);
+                int nx = (int)(bbox.max().x() * w + 0.5) - sx;
+                int ny = (int)(bbox.max().y() * h + 0.5) - sy;
+                int nz = (int)(bbox.max().z() * d + 0.5) - sz;
+                
 				if (bake)
 				{
 					wxProgressDialog *prg_diag = new wxProgressDialog(
@@ -1817,9 +1892,6 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 
 					//process the data
 					int bits = data->type==nrrdTypeUShort?16:8;
-					int nx = int(data->axis[0].size);
-					int ny = int(data->axis[1].size);
-					int nz = int(data->axis[2].size);
 
 					//clipping planes
 					vector<Plane*> *planes = m_vr->get_planes();
@@ -1844,9 +1916,9 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 								{
 									int index = nx*ny*k + nx*j + i;
 									bool clipped = false;
-									Point p(double(i) / double(nx),
-										double(j) / double(ny),
-										double(k) / double(nz));
+									Point p(double(i+sx) / double(w),
+										double(j+sy) / double(h),
+										double(k+sz) / double(d));
 									for (int pi = 0; pi < 6; ++pi)
 									{
 										if ((*planes)[pi] &&
@@ -1858,7 +1930,7 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 									}
 									if (!clipped)
 									{
-										double new_value = GetTransferedValue(i, j, k);
+										double new_value = GetTransferedValue(i+sx, j+sy, k+sz);
 										val8[index] = uint8(new_value*255.0);
 									}
 								}
@@ -1884,9 +1956,9 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 								{
 									int index = nx*ny*k + nx*j + i;
 									bool clipped = false;
-									Point p(double(i) / double(nx),
-										double(j) / double(ny),
-										double(k) / double(nz));
+									Point p(double(i+sx) / double(w),
+										double(j+sy) / double(h),
+										double(k+sz) / double(d));
 									for (int pi = 0; pi < 6; ++pi)
 									{
 										if ((*planes)[pi] &&
@@ -1898,7 +1970,7 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 									}
 									if (!clipped)
 									{
-										double new_value = GetTransferedValue(i, j, k);
+										double new_value = GetTransferedValue(i+sx, j+sy, k+sz);
 										val16[index] = uint16(new_value*65535.0);
 									}
 								}
@@ -1921,24 +1993,25 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 				}
 				else
 				{
-                    if (m_tex->nmask() != -1 && save_msk && GetMaskHideMode() != VOL_MASK_HIDE_NONE)
+                    if (crop || (m_tex->nmask() != -1 && save_msk && GetMaskHideMode() != VOL_MASK_HIDE_NONE))
                     {
                         wxProgressDialog *prg_diag = new wxProgressDialog(
                                                                           "FluoRender: Saving volume data...",
                                                                           "Saving volume data. Please wait.",
                                                                           100, 0, wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);
                         
-                        m_vr->return_mask();
-                        auto vlnrrd_msk = m_tex->get_nrrd(m_tex->nmask());
-                        uint8 *mskdata = (uint8*)vlnrrd_msk->getNrrd()->data;
+                        uint8 *mskdata = NULL;
+                        if (m_tex->nmask() != -1 && save_msk && GetMaskHideMode() != VOL_MASK_HIDE_NONE)
+                        {
+                            m_vr->return_mask();
+                            auto vlnrrd_msk = m_tex->get_nrrd(m_tex->nmask());
+                            mskdata = (uint8*)vlnrrd_msk->getNrrd()->data;
+                        }
                         
                         Nrrd* baked_data = nrrdNew();
                         
                         //process the data
                         int bits = data->type==nrrdTypeUShort?16:8;
-                        int nx = int(data->axis[0].size);
-                        int ny = int(data->axis[1].size);
-                        int nz = int(data->axis[2].size);
                         
                         //clipping planes
                         vector<Plane*> *planes = m_vr->get_planes();
@@ -1963,9 +2036,9 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
                                     {
                                         int index = nx*ny*k + nx*j + i;
                                         bool clipped = false;
-                                        Point p(double(i) / double(nx),
-                                                double(j) / double(ny),
-                                                double(k) / double(nz));
+                                        Point p(double(i+sx) / double(w),
+                                                double(j+sx) / double(h),
+                                                double(k+sx) / double(d));
                                         for (int pi = 0; pi < 6; ++pi)
                                         {
                                             if ((*planes)[pi] &&
@@ -1976,9 +2049,9 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
                                             }
                                         }
                                         
-                                        if (!clipped && mskdata[index] >= 128)
+                                        if (!clipped && (mskdata == NULL || mskdata[index] >= 128))
                                         {
-                                            double new_value = GetTransferedValue(i, j, k);
+                                            double new_value = GetOriginalValue(i+sx, j+sy, k+sz);
                                             val8[index] = uint8(new_value*255.0);
                                         }
                                     }
@@ -2004,9 +2077,9 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
                                     {
                                         int index = nx*ny*k + nx*j + i;
                                         bool clipped = false;
-                                        Point p(double(i) / double(nx),
-                                                double(j) / double(ny),
-                                                double(k) / double(nz));
+                                        Point p(double(i+sx) / double(w),
+                                                double(j+sy) / double(h),
+                                                double(k+sz) / double(d));
                                         for (int pi = 0; pi < 6; ++pi)
                                         {
                                             if ((*planes)[pi] &&
@@ -2016,9 +2089,9 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
                                                 clipped = true;
                                             }
                                         }
-                                        if (!clipped && mskdata[index] >= 128)
+                                        if (!clipped && (mskdata == NULL || mskdata[index] >= 128))
                                         {
-                                            double new_value = GetTransferedValue(i, j, k);
+                                            double new_value = GetOriginalValue(i+sx, j+sy, k+sz);
                                             val16[index] = uint16(new_value*65535.0);
                                         }
                                     }
@@ -2047,7 +2120,7 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
                     }
 				}
 			}
-			else
+			else if (vl)
 			{
                 wxProgressDialog *prg_diag = new wxProgressDialog(
                                                                   "FluoRender: Saving volume data...",
@@ -2061,6 +2134,13 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 				GetSpacings(spcx, spcy, spcz);
 				size_t w, h, d;
 				m_tex->get_dimensions(w, h, d);
+                
+                int sx = (int)(bbox.min().x() * w + 0.5);
+                int sy = (int)(bbox.min().y() * h + 0.5);
+                int sz = (int)(bbox.min().z() * d + 0.5);
+                int nx = (int)(bbox.max().x() * w + 0.5) - sx;
+                int ny = (int)(bbox.max().y() * h + 0.5) - sy;
+                int nz = (int)(bbox.max().z() * d + 0.5) - sz;
 
 				TIFWriter *tifwriter = (TIFWriter *)writer;
 				int ndigit = int(log10(double(d))) + 1;
@@ -2075,13 +2155,13 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 				vector<int> bricknum_layer;
 				int count = 0;
 				int minz = (*bricks)[0]->oz();
-				int nz = (*bricks)[0]->nz();
+				int bnz = (*bricks)[0]->nz();
 				bool check = false;
 				for (auto &b : *bricks)
 				{
 					if (minz == b->oz())
 					{
-						if (nz != b->nz())
+						if (bnz != b->nz())
 							check = true;
 						count++;
 					}
@@ -2089,7 +2169,7 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 					{
 						bricknum_layer.push_back(count);
 						minz = b->oz();
-						nz = b->nz();
+						bnz = b->nz();
 						count = 1;
 					}
 				}
@@ -2111,6 +2191,8 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 						for (int i = 0; i < layercount; i++, bid++)
 						{
 							TextureBrick* b = (*bricks)[bid];
+                            if (b->ox() + b->nx() < sx || b->oy() + b->ny() < sy || b->oz() + b->nz() < sz || b->ox() >= sx + nx || b->oy() >= sy + ny || b->oz() >= sz + nz)
+                                continue;
 							b->lock_brickdata(true);
 							lbs.push_back(b);
 
@@ -2124,6 +2206,9 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 							if (!b->isLoaded())
 								req_mem += (size_t)(b->nx())*(size_t)(b->ny())*(size_t)(b->nz())*(size_t)(b->nb(0));
 						}
+                        
+                        if (lbs.empty())
+                            continue;
 						
 						size_t slicenum = lbs[0]->nz();
 						size_t buffer_size = w*h*slicenum*(size_t)(lbs[0]->nb(0));
@@ -2153,11 +2238,13 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 
 						int lnz = lbs[0]->nz();
 						int loz = lbs[0]->oz();
+                        if (loz + lnz >= sz + nz)
+                            lnz = sz + nz - loz;
 						for (int s = 0; s < lnz; s += slicenum)
 						{
 							size_t bufd = (s+slicenum <= lnz) ? slicenum : lnz-s;
 
-							Nrrd* datablock = m_tex->getSubData(tarlv, GetMaskHideMode(), &lbs, 0, 0, s+loz, w, h, bufd);
+							Nrrd* datablock = m_tex->getSubData(tarlv, GetMaskHideMode(), &lbs, sx, sy, s+loz, nx, ny, bufd);
 							auto block_vlnrrd = make_shared<VL_Nrrd>(datablock);
 							tifwriter->SetData(block_vlnrrd);
 							tifwriter->SetBaseSeqID(s+loz+1); //start from 1

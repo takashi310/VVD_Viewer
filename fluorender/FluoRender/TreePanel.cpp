@@ -842,7 +842,7 @@ void DataTreeCtrl::OnSave(wxCommandEvent& event)
 		{
 			wxString filename = fopendlg->GetPath();
 			if (vd)
-				vd->Save(filename, fopendlg->GetFilterIndex(), false, VRenderFrame::GetCompression(), true, true, GetCurrentView() ? GetCurrentView()->GetVolumeLoader() : NULL);
+				vd->Save(filename, fopendlg->GetFilterIndex(), false, VRenderFrame::GetCompression(), true, true, GetCurrentView() ? GetCurrentView()->GetVolumeLoader() : NULL, true);
 		}
 		if (vd && vd->isBrxml())
 			vr_frame->RefreshVRenderViews();
@@ -934,7 +934,7 @@ void DataTreeCtrl::OnSaveSegmentedVolume(wxCommandEvent& event)
             {
                 auto mskmode = vd->GetMaskHideMode();
                 vd->SetMaskHideMode(VOL_MASK_HIDE_OUTSIDE);
-                vd->Save(filename, fopendlg->GetFilterIndex(), false, VRenderFrame::GetCompression(), true, true, GetCurrentView() ? GetCurrentView()->GetVolumeLoader() : NULL);
+                vd->Save(filename, fopendlg->GetFilterIndex(), false, VRenderFrame::GetCompression(), true, true, GetCurrentView() ? GetCurrentView()->GetVolumeLoader() : NULL, true);
                 vd->SetMaskHideMode(mskmode);
             }
         }
@@ -1136,7 +1136,7 @@ void DataTreeCtrl::OnBakeVolume(wxCommandEvent& event)
 		{
 			wxString filename = fopendlg->GetPath();
 			if (vd)
-				vd->Save(filename, fopendlg->GetFilterIndex(), true, VRenderFrame::GetCompression());
+				vd->Save(filename, fopendlg->GetFilterIndex(), true, VRenderFrame::GetCompression(), false, false, NULL, true);
 		}
 
 		delete fopendlg;
