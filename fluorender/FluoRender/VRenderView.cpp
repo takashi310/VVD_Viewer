@@ -13003,6 +13003,9 @@ void VRenderVulkanView::Q2A()
 	//SetSortBricks();
 
 	m_q.ToEuler(m_rotx, m_roty, m_rotz);
+    //make rotation directions the same as the OpenGL version.
+    m_rotx = -m_rotx;
+    m_rotz = -m_rotz;
 
 	if (m_roty>360.0)
 		m_roty -= 360.0;
@@ -13289,8 +13292,9 @@ void VRenderVulkanView::A2Q()
 {
 	//view changed, re-sort bricks
 	//SetSortBricks();
-
-	m_q.FromEuler(m_rotx, m_roty, m_rotz);
+    
+    //make rotation directions the same as the OpenGL version.
+	m_q.FromEuler(-m_rotx, m_roty, -m_rotz);
 
 	if (m_clip_mode)
 	{
