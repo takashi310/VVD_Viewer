@@ -7162,6 +7162,16 @@ void VRenderVulkanView::SetParams(double t)
 	KeyCode keycode;
 	keycode.l0 = 1;
 	keycode.l0_name = m_vrv->GetName();
+    
+    //for the view
+    keycode.l1 = 1;
+    keycode.l1_name = m_vrv->GetName();
+    //link clipping planes
+    keycode.l2 = 0;
+    keycode.l2_name = "link_planes";
+    bool bval;
+    if (interpolator->GetBoolean(keycode, t, bval))
+        clip_view->SetChannLink(bval);
 
 	for (int i=0; i<GetAllVolumeNum(); i++)
 	{
@@ -7188,44 +7198,56 @@ void VRenderVulkanView::SetParams(double t)
 		plane = (*planes)[0];
 		keycode.l2 = 0;
 		keycode.l2_name = "x1_val";
-		if (interpolator->GetDouble(keycode, t, val))
-			plane->ChangePlane(Point(abs(val), 0.0, 0.0),
-			Vector(1.0, 0.0, 0.0));
+		if (interpolator->GetDouble(keycode, t, val)) {
+			plane->SetParam(val);
+            if (clip_view && clip_view->GetChannLink())
+                clip_view->SetLinkedX1Param(val);
+        }
 		//x2
 		plane = (*planes)[1];
 		keycode.l2 = 0;
 		keycode.l2_name = "x2_val";
-		if (interpolator->GetDouble(keycode, t, val))
-			plane->ChangePlane(Point(abs(val), 0.0, 0.0),
-			Vector(-1.0, 0.0, 0.0));
+        if (interpolator->GetDouble(keycode, t, val)) {
+            plane->SetParam(val);
+            if (clip_view && clip_view->GetChannLink())
+                clip_view->SetLinkedX2Param(val);
+        }
 		//y1
 		plane = (*planes)[2];
 		keycode.l2 = 0;
 		keycode.l2_name = "y1_val";
-		if (interpolator->GetDouble(keycode, t, val))
-			plane->ChangePlane(Point(0.0, abs(val), 0.0),
-			Vector(0.0, 1.0, 0.0));
+        if (interpolator->GetDouble(keycode, t, val)) {
+            plane->SetParam(val);
+            if (clip_view && clip_view->GetChannLink())
+                clip_view->SetLinkedY1Param(val);
+        }
 		//y2
 		plane = (*planes)[3];
 		keycode.l2 = 0;
 		keycode.l2_name = "y2_val";
-		if (interpolator->GetDouble(keycode, t, val))
-			plane->ChangePlane(Point(0.0, abs(val), 0.0),
-			Vector(0.0, -1.0, 0.0));
+        if (interpolator->GetDouble(keycode, t, val)) {
+            plane->SetParam(val);
+            if (clip_view && clip_view->GetChannLink())
+                clip_view->SetLinkedY2Param(val);
+        }
 		//z1
 		plane = (*planes)[4];
 		keycode.l2 = 0;
 		keycode.l2_name = "z1_val";
-		if (interpolator->GetDouble(keycode, t, val))
-			plane->ChangePlane(Point(0.0, 0.0, abs(val)),
-			Vector(0.0, 0.0, 1.0));
+        if (interpolator->GetDouble(keycode, t, val)) {
+            plane->SetParam(val);
+            if (clip_view && clip_view->GetChannLink())
+                clip_view->SetLinkedZ1Param(val);
+        }
 		//z2
 		plane = (*planes)[5];
 		keycode.l2 = 0;
 		keycode.l2_name = "z2_val";
-		if (interpolator->GetDouble(keycode, t, val))
-			plane->ChangePlane(Point(0.0, 0.0, abs(val)),
-			Vector(0.0, 0.0, -1.0));
+        if (interpolator->GetDouble(keycode, t, val)) {
+            plane->SetParam(val);
+            if (clip_view && clip_view->GetChannLink())
+                clip_view->SetLinkedZ2Param(val);
+        }
 
 		keycode.l2 = 0;
 		keycode.l2_name = "gamma";
@@ -7288,44 +7310,56 @@ void VRenderVulkanView::SetParams(double t)
         plane = (*planes)[0];
         keycode.l2 = 0;
         keycode.l2_name = "x1_val";
-        if (interpolator->GetDouble(keycode, t, val))
-            plane->ChangePlane(Point(abs(val), 0.0, 0.0),
-                               Vector(1.0, 0.0, 0.0));
+        if (interpolator->GetDouble(keycode, t, val)) {
+            plane->SetParam(val);
+            if (clip_view && clip_view->GetChannLink())
+                clip_view->SetLinkedX1Param(val);
+        }
         //x2
         plane = (*planes)[1];
         keycode.l2 = 0;
         keycode.l2_name = "x2_val";
-        if (interpolator->GetDouble(keycode, t, val))
-            plane->ChangePlane(Point(abs(val), 0.0, 0.0),
-                               Vector(-1.0, 0.0, 0.0));
+        if (interpolator->GetDouble(keycode, t, val)) {
+            plane->SetParam(val);
+            if (clip_view && clip_view->GetChannLink())
+                clip_view->SetLinkedX2Param(val);
+        }
         //y1
         plane = (*planes)[2];
         keycode.l2 = 0;
         keycode.l2_name = "y1_val";
-        if (interpolator->GetDouble(keycode, t, val))
-            plane->ChangePlane(Point(0.0, abs(val), 0.0),
-                               Vector(0.0, 1.0, 0.0));
+        if (interpolator->GetDouble(keycode, t, val)) {
+            plane->SetParam(val);
+            if (clip_view && clip_view->GetChannLink())
+                clip_view->SetLinkedY1Param(val);
+        }
         //y2
         plane = (*planes)[3];
         keycode.l2 = 0;
         keycode.l2_name = "y2_val";
-        if (interpolator->GetDouble(keycode, t, val))
-            plane->ChangePlane(Point(0.0, abs(val), 0.0),
-                               Vector(0.0, -1.0, 0.0));
+        if (interpolator->GetDouble(keycode, t, val)) {
+            plane->SetParam(val);
+            if (clip_view && clip_view->GetChannLink())
+                clip_view->SetLinkedY2Param(val);
+        }
         //z1
         plane = (*planes)[4];
         keycode.l2 = 0;
         keycode.l2_name = "z1_val";
-        if (interpolator->GetDouble(keycode, t, val))
-            plane->ChangePlane(Point(0.0, 0.0, abs(val)),
-                               Vector(0.0, 0.0, 1.0));
+        if (interpolator->GetDouble(keycode, t, val)) {
+            plane->SetParam(val);
+            if (clip_view && clip_view->GetChannLink())
+                clip_view->SetLinkedZ1Param(val);
+        }
         //z2
         plane = (*planes)[5];
         keycode.l2 = 0;
         keycode.l2_name = "z2_val";
-        if (interpolator->GetDouble(keycode, t, val))
-            plane->ChangePlane(Point(0.0, 0.0, abs(val)),
-                               Vector(0.0, 0.0, -1.0));
+        if (interpolator->GetDouble(keycode, t, val)) {
+            plane->SetParam(val);
+            if (clip_view && clip_view->GetChannLink())
+                clip_view->SetLinkedZ2Param(val);
+        }
         
         keycode.l2 = 0;
         keycode.l2_name = "transparency";
@@ -17215,48 +17249,48 @@ void VRenderVulkanView::SetManipKey(double t, int interpolation, const Point *vi
 		if (planes->size() != 6)
 			continue;
 		Plane* plane = 0;
-		double abcd[4];
+		double param;
 		//x1
 		plane = (*planes)[0];
-		plane->get_copy(abcd);
+		param = plane->GetParam();
 		keycode.l2 = 0;
 		keycode.l2_name = "x1_val";
-		flkey = new FlKeyDouble(keycode, abs(abcd[3]));
+		flkey = new FlKeyDouble(keycode, param);
 		m_manip_interpolator.AddKey(flkey);
 		//x2
 		plane = (*planes)[1];
-		plane->get_copy(abcd);
+        param = plane->GetParam();
 		keycode.l2 = 0;
 		keycode.l2_name = "x2_val";
-		flkey = new FlKeyDouble(keycode, abs(abcd[3]));
+		flkey = new FlKeyDouble(keycode, param);
 		m_manip_interpolator.AddKey(flkey);
 		//y1
 		plane = (*planes)[2];
-		plane->get_copy(abcd);
+        param = plane->GetParam();
 		keycode.l2 = 0;
 		keycode.l2_name = "y1_val";
-		flkey = new FlKeyDouble(keycode, abs(abcd[3]));
+		flkey = new FlKeyDouble(keycode, param);
 		m_manip_interpolator.AddKey(flkey);
 		//y2
 		plane = (*planes)[3];
-		plane->get_copy(abcd);
+        param = plane->GetParam();
 		keycode.l2 = 0;
 		keycode.l2_name = "y2_val";
-		flkey = new FlKeyDouble(keycode, abs(abcd[3]));
+		flkey = new FlKeyDouble(keycode, param);
 		m_manip_interpolator.AddKey(flkey);
 		//z1
 		plane = (*planes)[4];
-		plane->get_copy(abcd);
+        param = plane->GetParam();
 		keycode.l2 = 0;
 		keycode.l2_name = "z1_val";
-		flkey = new FlKeyDouble(keycode, abs(abcd[3]));
+		flkey = new FlKeyDouble(keycode, param);
 		m_manip_interpolator.AddKey(flkey);
 		//z2
 		plane = (*planes)[5];
-		plane->get_copy(abcd);
+        param = plane->GetParam();
 		keycode.l2 = 0;
 		keycode.l2_name = "z2_val";
-		flkey = new FlKeyDouble(keycode, abs(abcd[3]));
+		flkey = new FlKeyDouble(keycode, param);
 		m_manip_interpolator.AddKey(flkey);
 	}
 	//for the view
@@ -17264,6 +17298,13 @@ void VRenderVulkanView::SetManipKey(double t, int interpolation, const Point *vi
 	keycode.l0_name = m_vrv->GetName();
 	keycode.l1 = 1;
 	keycode.l1_name = m_vrv->GetName();
+    //link_planes
+    if (clip_view) {
+        keycode.l2 = 0;
+        keycode.l2_name = "link_planes";
+        flkeyB = new FlKeyBoolean(keycode, clip_view->GetChannLink());
+        m_manip_interpolator.AddKey(flkeyB);
+    }
 	//rotation
 	keycode.l2 = 0;
 	keycode.l2_name = "rotation";
@@ -17345,6 +17386,15 @@ void VRenderVulkanView::SetManipParams(double t)
 	KeyCode keycode;
 	keycode.l0 = 1;
 	keycode.l0_name = m_vrv->GetName();
+    
+    //for the view
+    keycode.l1 = 1;
+    keycode.l1_name = m_vrv->GetName();
+    keycode.l2 = 0;
+    keycode.l2_name = "link_planes";
+    bool bval;
+    if (m_manip_interpolator.GetBoolean(keycode, t, bval))
+        clip_view->SetChannLink(bval);
 
 	for (int i=0; i<GetAllVolumeNum(); i++)
 	{
@@ -17371,44 +17421,56 @@ void VRenderVulkanView::SetManipParams(double t)
 		plane = (*planes)[0];
 		keycode.l2 = 0;
 		keycode.l2_name = "x1_val";
-		if (m_manip_interpolator.GetDouble(keycode, t, val))
-			plane->ChangePlane(Point(abs(val), 0.0, 0.0),
-			Vector(1.0, 0.0, 0.0));
+        if (m_manip_interpolator.GetDouble(keycode, t, val)) {
+            plane->SetParam(val);
+            if (clip_view && clip_view->GetChannLink())
+                clip_view->SetLinkedX1Param(val);
+        }
 		//x2
 		plane = (*planes)[1];
 		keycode.l2 = 0;
 		keycode.l2_name = "x2_val";
-		if (m_manip_interpolator.GetDouble(keycode, t, val))
-			plane->ChangePlane(Point(abs(val), 0.0, 0.0),
-			Vector(-1.0, 0.0, 0.0));
+        if (m_manip_interpolator.GetDouble(keycode, t, val)) {
+            plane->SetParam(val);
+            if (clip_view && clip_view->GetChannLink())
+                clip_view->SetLinkedX2Param(val);
+        }
 		//y1
 		plane = (*planes)[2];
 		keycode.l2 = 0;
 		keycode.l2_name = "y1_val";
-		if (m_manip_interpolator.GetDouble(keycode, t, val))
-			plane->ChangePlane(Point(0.0, abs(val), 0.0),
-			Vector(0.0, 1.0, 0.0));
+        if (m_manip_interpolator.GetDouble(keycode, t, val)) {
+            plane->SetParam(val);
+            if (clip_view && clip_view->GetChannLink())
+                clip_view->SetLinkedY1Param(val);
+        }
 		//y2
 		plane = (*planes)[3];
 		keycode.l2 = 0;
 		keycode.l2_name = "y2_val";
-		if (m_manip_interpolator.GetDouble(keycode, t, val))
-			plane->ChangePlane(Point(0.0, abs(val), 0.0),
-			Vector(0.0, -1.0, 0.0));
+        if (m_manip_interpolator.GetDouble(keycode, t, val)) {
+            plane->SetParam(val);
+            if (clip_view && clip_view->GetChannLink())
+                clip_view->SetLinkedY2Param(val);
+        }
 		//z1
 		plane = (*planes)[4];
 		keycode.l2 = 0;
 		keycode.l2_name = "z1_val";
-		if (m_manip_interpolator.GetDouble(keycode, t, val))
-			plane->ChangePlane(Point(0.0, 0.0, abs(val)),
-			Vector(0.0, 0.0, 1.0));
+        if (m_manip_interpolator.GetDouble(keycode, t, val)) {
+            plane->SetParam(val);
+            if (clip_view && clip_view->GetChannLink())
+                clip_view->SetLinkedZ1Param(val);
+        }
 		//z2
 		plane = (*planes)[5];
 		keycode.l2 = 0;
 		keycode.l2_name = "z2_val";
-		if (m_manip_interpolator.GetDouble(keycode, t, val))
-			plane->ChangePlane(Point(0.0, 0.0, abs(val)),
-			Vector(0.0, 0.0, -1.0));
+        if (m_manip_interpolator.GetDouble(keycode, t, val)) {
+            plane->SetParam(val);
+            if (clip_view && clip_view->GetChannLink())
+                clip_view->SetLinkedZ2Param(val);
+        }
 	}
 
 	bool bx, by, bz;

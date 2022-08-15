@@ -233,6 +233,10 @@ private:
 	bool m_fix_rots;
 	bool m_update_only_ui;
     bool m_mouse_in;
+    
+    double m_x_factor;
+    double m_y_factor;
+    double m_z_factor;
 
 	//1st line
 	wxCheckBox *m_link_channels;
