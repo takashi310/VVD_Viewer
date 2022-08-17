@@ -2276,7 +2276,8 @@ void VRenderVulkanView::PopVolumeList()
 
 	int i, j;
 	m_vd_pop_list.clear();
-
+    
+    bool isbrxml = false;
 	for (i=0; i<(int)m_layer_list.size(); i++)
 	{
 		if (!m_layer_list[i])
@@ -2287,7 +2288,11 @@ void VRenderVulkanView::PopVolumeList()
 			{
 				VolumeData* vd = (VolumeData*)m_layer_list[i];
 				if (vd->GetDisp())
+                {
 					m_vd_pop_list.push_back(vd);
+                    if (vd->isBrxml())
+                        isbrxml = true;
+                }
 			}
 			break;
 		case 5://group
@@ -2297,13 +2302,29 @@ void VRenderVulkanView::PopVolumeList()
 					continue;
 				for (j=0; j<group->GetVolumeNum(); j++)
 				{
-					if (group->GetVolumeData(j) && group->GetVolumeData(j)->GetDisp())
-						m_vd_pop_list.push_back(group->GetVolumeData(j));
+                    VolumeData* vd = group->GetVolumeData(j);
+					if (vd && vd->GetDisp())
+                    {
+						m_vd_pop_list.push_back(vd);
+                        if (vd->isBrxml())
+                            isbrxml = true;
+                    }
 				}
 			}
 			break;
 		}
 	}
+    
+    VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+    if (vr_frame)
+    {
+        for (int i=0; i<vr_frame->GetViewNum(); i++)
+        {
+            VRenderView* view = vr_frame->GetView(i);
+            view->ToggleQualityDropDownBox(isbrxml);
+        }
+    }
+    
 	m_vd_pop_dirty = false;
 }
 
@@ -18205,7 +18226,7 @@ void VRenderView::CreateBar()
 		wxDefaultPosition, wxSize(40, 20), 0, vald_int);
 	m_ppi_text->Hide();
 
-	st3 = new wxStaticText(this, 0, "Quality:");
+    m_res_mode_text = new wxStaticText(this, 0, "Quality:");
 	m_res_mode_combo = new wxComboBox(this, ID_ResCombo, "",
 		wxDefaultPosition, wxSize(100, 24), 0, NULL, wxCB_READONLY);
 	vector<string>mode_list;
@@ -18242,7 +18263,7 @@ void VRenderView::CreateBar()
 	sizer_h_1->Add(5, 5, 0);
 	//	sizer_h_1->Add(m_search_chk, 0, wxALIGN_CENTER);
 	//	sizer_h_1->Add(5, 5, 0);
-	sizer_h_1->Add(st3, 0, wxALIGN_CENTER, 0);
+	sizer_h_1->Add(m_res_mode_text, 0, wxALIGN_CENTER, 0);
 	sizer_h_1->Add(m_res_mode_combo, 0, wxALIGN_CENTER);
 	sizer_h_1->Add(10, 5, 0);
 	sizer_h_1->Add(st2, 0, wxALIGN_CENTER, 0);
@@ -18358,6 +18379,9 @@ void VRenderView::CreateBar()
 
 	SetSizer(sizer_v);
 	Layout();
+    
+    m_res_mode_combo->Hide();
+    m_res_mode_text->Hide();
 }
 
 //recalculate view according to object bounds
@@ -19049,6 +19073,20 @@ void VRenderView::RefreshGLOverlays()
 	{
 		m_glview->RefreshGLOverlays();
 	}
+}
+
+void VRenderView::ToggleQualityDropDownBox(bool val)
+{
+    if (!val)
+    {
+        m_res_mode_combo->Hide();
+        m_res_mode_text->Hide();
+    }
+    else
+    {
+        m_res_mode_combo->Show();
+        m_res_mode_text->Show();
+    }
 }
 
 //bar top

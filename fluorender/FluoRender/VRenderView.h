@@ -2113,6 +2113,8 @@ public:
     {
         if (m_glview) return m_glview->GetUseFogMesh(); else return false;
     }
+    
+    void ToggleQualityDropDownBox(bool val);
 
 public:
 	wxWindow* m_frame;
@@ -2142,6 +2144,7 @@ public:
 	wxSlider* m_ppi_sldr;
 	wxTextCtrl* m_ppi_text;
 	int m_res_mode;
+    wxStaticText *m_res_mode_text;
 	wxComboBox *m_res_mode_combo;
 
 	//bottom bar///////////////////////////////////////////////////
