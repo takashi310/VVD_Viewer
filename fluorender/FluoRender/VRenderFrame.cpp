@@ -1076,6 +1076,7 @@ void VRenderFrame::OnOpenVolume(wxCommandEvent& WXUNUSED(event))
 		"Zeiss Laser Scanning Microscope (*.lsm)|*.lsm|"\
         "Carl Zeiss Image (*.czi)|*.czi|"\
 		"Prairie View XML (*.xml)|*.xml|"\
+        "Nikon files (*.nd2)|*.nd2|"\
 		"Nrrd files (*.nrrd)|*.nrrd|"\
 		"H5J files (*.h5j)|*.h5j|"\
 		"V3DPBD files (*.v3dpbd)|*.v3dpbd|"\
@@ -1211,6 +1212,8 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
 				ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_LSM, -1, -1, datasize, prefix);
             else if (suffix==".czi")
                 ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_CZI, -1, -1, datasize, prefix);
+            else if (suffix==".nd2")
+                ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_ND2, -1, -1, datasize, prefix);
 			//else if (suffix==".xml")
 			//	ch_num = m_data_mgr.LoadVolumeData(filename, LOAD_TYPE_PVXML, -1, -1, datasize, prefix);
 			else if (suffix==".vvd" || suffix==".n5" || suffix==".json" || suffix==".n5fs_ch" || suffix==".xml")
@@ -1456,6 +1459,7 @@ void VRenderFrame::StartupLoad(wxArrayString files, size_t datasize, wxArrayStri
                     suffix == ".xml" ||
                     suffix == ".vvd" ||
                     suffix == ".n5" ||
+                    suffix == ".nd2" ||
                     suffix == ".json" ||
                     suffix == ".h5j" ||
                     suffix == ".v3dpbd" ||
@@ -3769,6 +3773,8 @@ VolumeData* VRenderFrame::OpenVolumeFromProject(wxString name, wxFileConfig &fco
 						loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_LSM, cur_chan, cur_time, 0, wxEmptyString, metadata);
                     else if (suffix == ".czi")
                         loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_CZI, cur_chan, cur_time, 0, wxEmptyString, metadata);
+                    else if (suffix == ".nd2")
+                        loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_ND2, cur_chan, cur_time, 0, wxEmptyString, metadata);
 					//else if (suffix == ".xml")
 					//	loaded_num = m_data_mgr.LoadVolumeData(str, LOAD_TYPE_PVXML, cur_chan, cur_time);
 					else if (suffix==".vvd" || suffix==".n5" || suffix==".json" || suffix==".n5fs_ch" || suffix==".xml")

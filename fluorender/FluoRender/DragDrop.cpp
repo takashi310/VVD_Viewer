@@ -114,6 +114,7 @@ bool DnDFile::OnDropFiles(wxCoord x, wxCoord y, const wxArrayString &filenames)
                          suffix == ".xml" ||
                          suffix == ".vvd" ||
                          suffix == ".h5j" ||
+                         suffix == ".nd2" ||
                          suffix == ".v3dpbd" ||
                          suffix == ".zip" ||
                          suffix == ".idi" ||
