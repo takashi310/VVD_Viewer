@@ -299,8 +299,8 @@ VRenderFrame::VRenderFrame(
 	m_main_tb->AddSeparator();
 	m_main_tb->AddTool(ID_Settings, "Settings",
 		wxGetBitmapFromMemory(icon_settings), wxNullBitmap, wxITEM_NORMAL,
-		"Settings of FluoRender",
-		"Settings of FluoRender");
+		"Settings of VVDViewer",
+		"Settings of VVDViewer");
 	m_main_tb->AddStretchableSpace();
 /*	m_main_tb->AddTool(ID_CheckUpdates, "Update",
 		wxGetBitmapFromMemory(icon_check_updates), wxNullBitmap, wxITEM_NORMAL,
@@ -1176,7 +1176,7 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
 	if (vrv)
 	{
 		prg_diag = new wxProgressDialog(
-			"FluoRender: Loading volume data...",
+			"VVDViewer: Loading volume data...",
 			"Reading and processing selected volume data. Please wait.",
 			100, 0, wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);
 
@@ -1193,7 +1193,7 @@ void VRenderFrame::LoadVolumes(wxArrayString files, VRenderView* view, vector<ve
 		for (j=0; j<(int)files.Count(); j++)
 		{
 			prg_diag->Update(90*(j+1)/(int)files.Count(),
-				"FluoRender: Loading volume data...");
+				"VVDViewer: Loading volume data...");
 
 			int ch_num = 0;
 			wxString filename = files[j];
@@ -1493,7 +1493,7 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
 	MeshData* md_sel = 0;
 
 	wxProgressDialog *prg_diag = new wxProgressDialog(
-		"FluoRender: Loading mesh data...",
+		"VVDViewer: Loading mesh data...",
 		"Reading and processing selected mesh data. Please wait.",
 		100, 0, wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);
 
@@ -2889,7 +2889,7 @@ void VRenderFrame::SaveProject(wxString& filename)
 	fconfig.Write("ticks", ticks);
 	wxProgressDialog *prg_diag = 0;
 	prg_diag = new wxProgressDialog(
-		"FluoRender: Saving project...",
+		"VVDViewer: Saving project...",
 		"Saving project file. Please wait.",
 		100, 0, wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);
 
@@ -4914,10 +4914,10 @@ void VRenderFrame::OpenProject(wxString& filename)
 		ver_minor.ToLong(&l_minor);
 
 		if (l_major>VERSION_MAJOR)
-			::wxMessageBox("The project file is saved by a newer version of FluoRender.\n" \
+			::wxMessageBox("The project file is saved by a newer version of VVDViewer.\n" \
 			"Please check update and download the new version.");
 		else if (l_minor>VERSION_MINOR)
-			::wxMessageBox("The project file is saved by a newer version of FluoRender.\n" \
+			::wxMessageBox("The project file is saved by a newer version of VVDViewer.\n" \
 			"Please check update and download the new version.");
 	}
 
@@ -4926,7 +4926,7 @@ void VRenderFrame::OpenProject(wxString& filename)
 	fconfig.Read("ticks", &ticks);
 	wxProgressDialog *prg_diag = 0;
 	prg_diag = new wxProgressDialog(
-		"FluoRender: Loading project...",
+		"VVDViewer: Loading project...",
 		"Reading project file. Please wait.",
 		100, 0, wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);
 

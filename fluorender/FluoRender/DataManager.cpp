@@ -1887,7 +1887,7 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 				if (bake)
 				{
 					wxProgressDialog *prg_diag = new wxProgressDialog(
-						"FluoRender: Baking volume data...",
+						"VVDViewer: Baking volume data...",
 						"Baking volume data. Please wait.",
 						100, 0, wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);
 
@@ -1997,7 +1997,7 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
                     if (crop || (m_tex->nmask() != -1 && save_msk && GetMaskHideMode() != VOL_MASK_HIDE_NONE))
                     {
                         wxProgressDialog *prg_diag = new wxProgressDialog(
-                                                                          "FluoRender: Saving volume data...",
+                                                                          "VVDViewer: Saving volume data...",
                                                                           "Saving volume data. Please wait.",
                                                                           100, 0, wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);
                         
@@ -2124,7 +2124,7 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 			else if (vl)
 			{
                 wxProgressDialog *prg_diag = new wxProgressDialog(
-                                                                  "FluoRender: Saving volume data...",
+                                                                  "VVDViewer: Saving volume data...",
                                                                   "Saving volume data. Please wait.",
                                                                   100, 0, wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);
                 
@@ -2368,7 +2368,7 @@ void VolumeData::ExportEachSegment(wxString dir, const std::shared_ptr<VL_Nrrd>&
 	if (m_vr && m_tex)
 	{
 		wxProgressDialog* prog_diag = new wxProgressDialog(
-			"FluoRender: Export Segments...",
+			"VVDViewer: Export Segments...",
 			"Please wait.",
 			100, 0,
 			wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);

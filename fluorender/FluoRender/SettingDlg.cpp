@@ -158,7 +158,7 @@ wxWindow* SettingDlg::CreateProjectPage(wxWindow *parent)
 	group2->Add(10, 5);
 	st = new wxStaticText(page, 0,
 		"Put TrueType font files into the \"Fonts\" folder.\n"\
-		"Restart FluoRender to load new font files.");
+		"Restart VVDViewer to load new font files.");
 	group2->Add(st);
 	group2->Add(10, 5);
 

@@ -1171,7 +1171,7 @@ namespace FLIVR
 		memset(data->data, 0, (size_t)width * (size_t)height * (size_t)depth * (size_t)nbyte);
 
 		wxProgressDialog *prog_diag = new wxProgressDialog(
-			"FluoRender: Load Volume Data...",
+			"VVDViewer: Load Volume Data...",
 			"Loading... Please wait.",
 			100, 0,
 			wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);

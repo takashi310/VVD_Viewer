@@ -198,7 +198,7 @@ void ConvertDlg::OnCnvVolMeshConvert(wxCommandEvent& event)
 		return;
 
 	wxProgressDialog *prog_diag = new wxProgressDialog(
-		"FluoRender: Convert volume to polygon data",
+		"VVDViewer: Convert volume to polygon data",
 		"Converting... Please wait.",
 		100, 0,
 		wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);

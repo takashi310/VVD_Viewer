@@ -1001,7 +1001,7 @@ void DatabaseDlg::OnAddDB(wxCommandEvent &event)
 	StopSearch();
 
 	wxProgressDialog *prg_diag = new wxProgressDialog(
-            "FluoRender: Loading catalog data...",
+            "VVDViewer: Loading catalog data...",
             "Loading selected catalog data. Please wait.",
             100, 0, wxPD_APP_MODAL | wxPD_SMOOTH);
 	
