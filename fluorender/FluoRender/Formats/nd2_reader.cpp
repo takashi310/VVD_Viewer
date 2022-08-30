@@ -231,6 +231,8 @@ Nrrd* ND2Reader::ConvertNrrd(int t, int c, bool get_max)
             }
         }
     }
+
+	m_cur_time = t;
     
     return output;
 }
@@ -289,7 +291,6 @@ Nrrd* ND2Reader::Convert_ThreadSafe(int t, int c, bool get_max)
 	}
 
 	Lim_FileClose(h);
-	m_cur_time = t;
 
 	return data;
 }

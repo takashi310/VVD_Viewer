@@ -2539,6 +2539,12 @@ int VolumeData::GetCurChannel()
 //time sequence
 void VolumeData::SetCurTime(int time)
 {
+	if (time < 0) time = 0;
+	if (m_reader)
+	{
+		if (time >= m_reader->GetTimeNum())
+			time = m_reader->GetTimeNum() - 1;
+	}
 	m_time = time;
 }
 
@@ -4044,7 +4050,7 @@ wxThread::ExitCode NrrdScaleThread::Entry()
 	size_t dim = m_src->dim;
 
 	if (dim <= 2)
-		return nullptr;
+		return (wxThread::ExitCode)1;
 
 	std::vector<size_t> ssize(dim);
 	std::vector<double> sspc(dim);
@@ -4235,6 +4241,7 @@ wxThread::ExitCode NrrdScaleThread::Entry()
 			}
 		}
 	}
+	return (wxThread::ExitCode)0;
 }
 
 
@@ -8046,7 +8053,8 @@ Color DataManager::GetWavelengthColor(double wavelength)
 VolumeDecompressorThread::VolumeDecompressorThread(VolumeLoader *vl)
 	: wxThread(wxTHREAD_DETACHED), m_vl(vl)
 {
-
+	wxCriticalSectionLocker enter(*m_vl->ms_pThreadCS);
+	m_vl->m_running_decomp_th++;
 }
 
 VolumeDecompressorThread::~VolumeDecompressorThread()
@@ -8062,10 +8070,6 @@ wxThread::ExitCode VolumeDecompressorThread::Entry()
 
 	if (!m_vl->ms_pThreadCS)
 		return (wxThread::ExitCode)0;
-
-	m_vl->ms_pThreadCS->Enter();
-	m_vl->m_running_decomp_th++;
-	m_vl->ms_pThreadCS->Leave();
 
 	while(1)
 	{
@@ -8148,14 +8152,13 @@ wxThread::ExitCode VolumeDecompressorThread::Entry()
 		else
 		{
 			BaseReader* reader = q.vd->GetReader();
+			wstring nrrd_idstring;
+			std::wstringstream wss;
+			wss << reader->GetPathName() << L" " << q.chid << L" " << q.frameid;
+			nrrd_idstring = wss.str();
 			Nrrd* nrrd = reader->Convert_ThreadSafe(q.frameid, q.chid, false);
 			if (nrrd)
 			{
-				wstring nrrd_idstring;
-				std::wstringstream wss;
-				wss << reader->GetPathName() << L" " << q.chid << L" " << q.frameid;
-				nrrd_idstring = wss.str();
-
 				m_vl->ms_pThreadCS->Enter();
 				VolumeLoaderImage tmp;
 				tmp.vd = q.vd;
@@ -8163,7 +8166,14 @@ wxThread::ExitCode VolumeDecompressorThread::Entry()
 				tmp.frameid = q.frameid;
 				tmp.vlnrrd = make_shared<VL_Nrrd>(nrrd);
 				m_vl->m_used_memory += tmp.vlnrrd->getDatasize();
+				m_vl->m_loading_files.erase(nrrd_idstring);
 				m_vl->m_loaded_files[nrrd_idstring] = tmp;
+				m_vl->ms_pThreadCS->Leave();
+			}
+			else
+			{
+				m_vl->ms_pThreadCS->Enter();
+				m_vl->m_loading_files.erase(nrrd_idstring);
 				m_vl->ms_pThreadCS->Leave();
 			}
 		}
@@ -8194,6 +8204,18 @@ VolumeLoaderThread::~VolumeLoaderThread()
 				if (m_vl->m_decomp_queues[i].in_data != NULL)
 					delete[] m_vl->m_decomp_queues[i].in_data;
 				m_vl->m_used_memory -= m_vl->m_decomp_queues[i].datasize;
+			}
+			else
+			{
+				BaseReader* reader = m_vl->m_decomp_queues[i].vd->GetReader();
+				if (reader)
+				{
+					wstring nrrd_idstring;
+					std::wstringstream wss;
+					wss << reader->GetPathName() << L" " << m_vl->m_decomp_queues[i].chid << L" " << m_vl->m_decomp_queues[i].frameid;
+					nrrd_idstring = wss.str();
+					m_vl->m_loading_files.erase(nrrd_idstring);
+				}
 			}
 		}
 		m_vl->m_decomp_queues.clear();
@@ -8232,6 +8254,22 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 	//OutputDebugStringA("vl cleaning loading brick: leave\n");
 
 	m_vl->ms_pThreadCS->Leave();
+
+	long long submitted_frame_size = 0;
+	auto it = m_vl->m_queues.begin();
+	while (it != m_vl->m_queues.end())
+	{
+		if (!it->vd->isBrxml() && it->vd && it->vd->GetReader())
+		{
+			submitted_frame_size += it->vd->GetDataSize();
+			if (submitted_frame_size >= m_vl->m_memory_limit)
+				it = m_vl->m_queues.erase(it);
+			else
+				it++;
+		}
+		else
+			it++;
+	}
 
 	while(1)
 	{
@@ -8333,7 +8371,6 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 							m_vl->m_loaded[b.brick] = b;
 
 							//OutputDebugStringA("vl-1: leave\n");
-
 							m_vl->ms_pThreadCS->Leave();
 
 							dthread->Run();
@@ -8429,19 +8466,21 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 				continue;
 			}
 
+			m_vl->m_queues.erase(m_vl->m_queues.begin());
+			m_vl->m_queued.push_back(b);
+
 			wstring nrrd_idstring;
 			std::wstringstream wss;
 			wss << b.vd->GetReader()->GetPathName() << L" " << b.chid << L" " << b.frameid;
 			nrrd_idstring = wss.str();
 
-			m_vl->m_loading_files.erase(nrrd_idstring);
-			m_vl->m_queues.erase(m_vl->m_queues.begin());
-			m_vl->m_queued.push_back(b);
-			m_vl->ms_pThreadCS->Leave();
-
 			if (m_vl->m_loaded_files.find(nrrd_idstring) != m_vl->m_loaded_files.end() ||
 				m_vl->m_loading_files.find(nrrd_idstring) != m_vl->m_loading_files.end())
+			{
+				m_vl->ms_pThreadCS->Leave();
 				continue;
+			}
+			m_vl->ms_pThreadCS->Leave();
 
 			if (m_vl->m_used_memory >= m_vl->m_memory_limit)
 			{
@@ -8470,10 +8509,10 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 
 			bool decomp_in_this_thread = false;
 
-			if (m_vl->m_max_decomp_th == 0)
+			if (m_vl->m_frame_reader_max_decomp_th == 0)
 				decomp_in_this_thread = true;
-			else if (m_vl->m_max_decomp_th < 0 ||
-				m_vl->m_running_decomp_th < m_vl->m_max_decomp_th)
+			else if (m_vl->m_frame_reader_max_decomp_th < 0 ||
+				m_vl->m_running_decomp_th < m_vl->m_frame_reader_max_decomp_th)
 			{
 				VolumeDecompressorThread* dthread = new VolumeDecompressorThread(m_vl);
 				if (dthread->Create() == wxTHREAD_NO_ERROR)
@@ -8487,6 +8526,9 @@ wxThread::ExitCode VolumeLoaderThread::Entry()
 				}
 				else
 				{
+					if (dthread)
+						delete dthread;
+					dthread = nullptr;
 					if (m_vl->m_running_decomp_th <= 0)
 						decomp_in_this_thread = true;
 					else
@@ -8552,6 +8594,7 @@ VolumeLoader::VolumeLoader()
 	m_max_decomp_th = wxThread::GetCPUCount()-1;
 	if (m_max_decomp_th < 0)
 		m_max_decomp_th = -1;
+	m_frame_reader_max_decomp_th = 6;
 	m_memory_limit = 10000000LL;
 	m_used_memory = 0LL;
 }
@@ -8662,6 +8705,7 @@ void VolumeLoader::CheckMemoryCache()
 void VolumeLoader::CleanupLoadedBrick()
 {
 	long long required = 0;
+	long long b_required = 0;
 
 	for(int i = 0; i < m_queues.size(); i++)
 	{
@@ -8675,13 +8719,16 @@ void VolumeLoader::CleanupLoadedBrick()
 				m_loaded[b] = m_queues[i];
 			}
 			else
-				required += (size_t)b->nx()*(size_t)b->ny()*(size_t)b->nz()*(size_t)b->nb(0);
+				b_required += (size_t)b->nx() * (size_t)b->ny() * (size_t)b->nz() * (size_t)b->nb(0);
 		}
 		else if (m_queues[i].vd)
 		{
-			required += m_queues[i].vd->GetDataSize();
+			if (!IsNrrdLoaded(m_queues[i].vd, m_queues[i].chid, m_queues[i].frameid))
+				required += m_queues[i].vd->GetDataSize();
 		}
 	}
+
+	required += b_required;
 
 	if (required > 3LL*1024LL*1024LL*1024LL) 
 		required = 3LL*1024LL*1024LL*1024LL;
@@ -8689,6 +8736,8 @@ void VolumeLoader::CleanupLoadedBrick()
 	m_used_memory = 0;
 	for (auto& elem : m_memcached_data)
 		m_used_memory += elem.second->getSize();
+	for (auto& elem : m_loaded_files)
+		m_used_memory += elem.second.vlnrrd->getDatasize();
 
 	if (required > 0 || m_used_memory >= m_memory_limit)
 	{
@@ -8737,7 +8786,7 @@ void VolumeLoader::CleanupLoadedBrick()
 					required -= datasize;
 					m_used_memory -= datasize;
 					m_loaded_files.erase(it->key);
-					loaded_image_keys.erase((++it).base());
+					it = decltype(it)(loaded_image_keys.erase(next(it).base()));
 				}
 				else
 					it++;
@@ -8773,9 +8822,10 @@ void VolumeLoader::CleanupLoadedBrick()
 				{
 					long long datasize = m_loaded_files[it->key].vlnrrd->getDatasize();
 					required -= datasize;
+					b_required -= datasize;
 					m_used_memory -= datasize;
 					m_loaded_files.erase(it->key);
-					loaded_image_keys.erase((++it).base());
+					it = decltype(it)(loaded_image_keys.erase(next(it).base()));
 				}
 				else
 					it++;
@@ -8873,7 +8923,7 @@ void VolumeLoader::CleanupLoadedBrick()
 		for(int i = m_queues.size()-1; i >= 0; i--)
 		{
 			TextureBrick *b = m_queues[i].brick;
-			if (b->isLoaded() && !b->is_brickdata_locked() && m_loaded.find(b) != m_loaded.end())
+			if (b && b->isLoaded() && !b->is_brickdata_locked() && m_loaded.find(b) != m_loaded.end())
 			{
 				bool skip = false;
 				for (int j = m_queued.size()-1; j >= 0; j--)
@@ -8909,7 +8959,7 @@ void VolumeLoader::CleanupLoadedBrick()
 		for (int i = 0; i < b_locked.size(); i++)
 		{
 			TextureBrick *b = b_locked[i].brick;
-			if (!b->isLoaded())
+			if (!b || !b->isLoaded())
 				continue;
 			bool skip = false;
 			for (int j = m_queued.size()-1; j >= 0; j--)
@@ -9244,16 +9294,41 @@ void VolumeLoader::PreloadLevel(VolumeData *vd, int lv, bool lock)
 
 std::shared_ptr<VL_Nrrd> VolumeLoader::GetLoadedNrrd(VolumeData* vd, int ch, int frame)
 {
-	BaseReader* reader = vd->GetReader();
-	wstring nrrd_idstring;
-	std::wstringstream wss;
-	wss << reader->GetPathName() << L" " << ch << L" " << frame;
-	nrrd_idstring = wss.str();
+	wstring nrrd_idstring = GetTimeDataKeyString(vd, ch, frame);
 
 	if (m_loaded_files.find(nrrd_idstring) != m_loaded_files.end())
 		return m_loaded_files[nrrd_idstring].vlnrrd;
 	
 	return nullptr;
+}
+
+bool VolumeLoader::IsNrrdLoaded(VolumeData* vd, int ch, int frame)
+{
+	wstring nrrd_idstring = GetTimeDataKeyString(vd, ch, frame);
+
+	if (m_loaded_files.find(nrrd_idstring) != m_loaded_files.end())
+		return true;
+
+	return false;
+}
+
+bool VolumeLoader::IsNrrdLoading(VolumeData* vd, int ch, int frame)
+{
+	wstring nrrd_idstring = GetTimeDataKeyString(vd, ch, frame);
+
+	if (m_loading_files.find(nrrd_idstring) != m_loading_files.end())
+		return true;
+
+	return false;
+}
+
+wstring VolumeLoader::GetTimeDataKeyString(VolumeData* vd, int ch, int frame)
+{
+	BaseReader* reader = vd->GetReader();
+	wstring nrrd_idstring;
+	std::wstringstream wss;
+	wss << reader->GetPathName() << L" " << ch << L" " << frame;
+	return wss.str();
 }
 
 void VolumeLoader::AddLoadedNrrd(const std::shared_ptr<VL_Nrrd> &nrrd, VolumeData* vd, int ch, int frame)

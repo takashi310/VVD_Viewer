@@ -7579,7 +7579,23 @@ void VRenderVulkanView::Set4DSeqFrame(int frame, bool run_script)
 
 					auto data = m_loader.GetLoadedNrrd(vd, vd->GetCurChannel(), frame);
 					if (!data)
-						data = reader->Convert(frame, vd->GetCurChannel(), false);
+					{
+						if (m_loader.IsNrrdLoading(vd, vd->GetCurChannel(), frame))
+						{
+							uint32_t rn_time;
+							unsigned long elapsed;
+							long t;
+							uint32_t st_time = GET_TICK_COUNT();
+							do {
+								wxMilliSleep(10);
+								rn_time = GET_TICK_COUNT();
+								elapsed = rn_time - st_time;
+								data = m_loader.GetLoadedNrrd(vd, vd->GetCurChannel(), frame);
+							} while (elapsed <= 5000 && !data);
+						}
+						if (!data)
+							data = reader->Convert(frame, vd->GetCurChannel(), false);
+					}
 
 					if (!vd->Replace(data, false))
 						continue;
@@ -7591,7 +7607,7 @@ void VRenderVulkanView::Set4DSeqFrame(int frame, bool run_script)
 					vd->SetName(data_name);
 					vd->SetPath(data_path);
 
-					vd->SetCurTime(reader->GetCurTime());
+					vd->SetCurTime(frame);
 					vd->SetSpacings(spcx, spcy, spcz);
 
 					//update rulers
@@ -8371,7 +8387,7 @@ void VRenderVulkanView::UpdateScreen()
 	}
 
 	Init();
-	wxPaintDC dc(this);
+	//wxPaintDC dc(this);
 
 	m_nx = GetSize().x;
 	m_ny = GetSize().y;
@@ -12886,7 +12902,7 @@ void VRenderVulkanView::DrawInfo(int nx, int ny)
 	else
 		str = wxString::Format("FPS: %.2f", fps_>=0.0&&fps_<300.0?fps_:0.0);
 
-	if (m_cur_vol && m_cur_vol->isBrxml())
+	if (m_cur_vol)
 	{
 		int resx=0, resy=0, resz=0;
 		if (m_cur_vol->GetTexture())
@@ -12895,7 +12911,8 @@ void VRenderVulkanView::DrawInfo(int nx, int ny)
 			resy = m_cur_vol->GetTexture()->ny();
 			resz = m_cur_vol->GetTexture()->nz();
 		}
-		str += wxString::Format(" VVD_Level: %d/%d W:%d H:%d D:%d,", m_cur_vol->GetLevel()+1, m_cur_vol->GetLevelNum(), resx, resy, resz);
+		if (m_cur_vol->isBrxml())
+			str += wxString::Format(" VVD_Level: %d/%d W:%d H:%d D:%d,", m_cur_vol->GetLevel()+1, m_cur_vol->GetLevelNum(), resx, resy, resz);
 		long long used_mem;
 		int dtnum, qnum, dqnum;
 		m_loader.GetPalams(used_mem, dtnum, qnum, dqnum);

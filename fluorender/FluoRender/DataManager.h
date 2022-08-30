@@ -1837,6 +1837,7 @@ class EXPORT_API VolumeLoader
 		void Join();
 		bool Run();
 		void SetMaxThreadNum(int num) {m_max_decomp_th = num;}
+		void SetFrameReaderMaxThreadNum(int num) { m_frame_reader_max_decomp_th = num; }
 		void SetMemoryLimitByte(long long limit) {m_memory_limit = limit;}
 		void CleanupLoadedBrick();
 		void TryToFreeMemory(long long req=-1);
@@ -1847,8 +1848,14 @@ class EXPORT_API VolumeLoader
 		void GetPalams(long long &used_mem, int &running_decomp_th, int &queue_num, int &decomp_queue_num);
 		void PreloadLevel(VolumeData *vd, int lv, bool lock=false);
 		std::shared_ptr<VL_Nrrd> GetLoadedNrrd(VolumeData* vd, int ch, int frame);
+		bool IsNrrdLoaded(VolumeData* vd, int ch, int frame);
+		bool IsNrrdLoading(VolumeData* vd, int ch, int frame);
+		std::wstring GetTimeDataKeyString(VolumeData* vd, int ch, int frame);
 		void AddLoadedNrrd(const std::shared_ptr<VL_Nrrd> &nrrd, VolumeData* vd, int ch, int frame);
 		//void DeleteLoadedNrrd(Nrrd* nrrd, VolumeData* vd, int ch, int frame);
+
+		int GetMaxThreadNum() { return m_max_decomp_th; }
+		int GetFrameReaderMaxThreadNum() { return m_frame_reader_max_decomp_th; }
 
 		long long GetAvailableMemory() { return m_memory_limit - m_used_memory; }
 		long long GetMemoryLimitByte() { return m_memory_limit; }
@@ -1873,6 +1880,7 @@ class EXPORT_API VolumeLoader
 		unordered_map<wstring, VolumeLoaderImage> m_loaded_files;
 		int m_running_decomp_th;
 		int m_max_decomp_th;
+		int m_frame_reader_max_decomp_th;
 		bool m_valid;
 
 		long long m_memory_limit;
