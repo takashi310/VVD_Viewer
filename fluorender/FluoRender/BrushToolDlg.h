@@ -81,6 +81,12 @@ public:
 		ID_NRSizeText,
 		ID_NRAnalyzeBtn,
 		ID_NRRemoveBtn,
+		//EVE
+		ID_EVERadiusSldr,
+		ID_EVERadiusText,
+		ID_EVEThresholdSldr,
+		ID_EVEThresholdText,
+		ID_EVEAnalyzeBtn,
 		//help
 		ID_HelpBtn,
 		//default
@@ -127,6 +133,11 @@ public:
 	void SetDftNRThresh(double thresh) {m_dft_nr_thresh = thresh;}
 	double GetDftNRSize() {return m_dft_nr_size;}
 	void SetDftNRSize(double size) {m_dft_nr_size = size;}
+
+	int GetDftEVERadius() { return m_dft_eve_radius; }
+	void SetDftEVERadius(int r) { m_dft_eve_radius = r; }
+	double GetDftEVEThresh() { return m_dft_eve_thresh; }
+	void SetDftEVEThresh(double thresh) { m_dft_eve_thresh = thresh; }
     
     void SetBrushSclTranslate(double val)
     {
@@ -171,6 +182,9 @@ private:
 	double m_dft_nr_size;
 
 	double m_dft_dslt_c;
+
+	int m_dft_eve_radius;
+	double m_dft_eve_thresh;
 	
 	//tab control
 	wxNotebook *m_notebook;
@@ -233,6 +247,12 @@ private:
 	wxTextCtrl *m_nr_size_text;
 	wxButton *m_nr_analyze_btn;
 	wxButton *m_nr_remove_btn;
+	//EVE
+	wxSlider* m_eve_radius_sldr;
+	wxTextCtrl* m_eve_radius_text;
+	wxSlider* m_eve_threshold_sldr;
+	wxTextCtrl* m_eve_threshold_text;
+	wxButton* m_eve_analyze_btn;
 	//help button
 	//wxButton* m_help_btn;
 
@@ -319,6 +339,12 @@ private:
 	void OnNRSizeText(wxCommandEvent &event);
 	void OnNRAnalyzeBtn(wxCommandEvent &event);
 	void OnNRRemoveBtn(wxCommandEvent &event);
+	//EVE
+	void OnEVERadiusChange(wxScrollEvent& event);
+	void OnEVERadiusText(wxCommandEvent& event);
+	void OnEVEThresholdChange(wxScrollEvent& event);
+	void OnEVEThresholdText(wxCommandEvent& event);
+	void OnEVEAnalyzeBtn(wxCommandEvent& event);
 	//help
 	void OnHelpBtn(wxCommandEvent& event);
 
