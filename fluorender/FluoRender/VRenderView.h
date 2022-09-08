@@ -544,6 +544,7 @@ public:
 	void ShowAnnotations();
 	int NoiseAnalysis(double min_voxels, double max_voxels, double thresh);
 	void NoiseRemoval(int iter, double thresh);
+	string EVEAnalysis(int min_radius, int max_radius, double thresh, int target_lv = -1);
 
 	//brush properties
 	//load default;
@@ -2113,6 +2114,11 @@ public:
     {
         if (m_glview) return m_glview->GetUseFogMesh(); else return false;
     }
+
+	string EVEAnalysis(int min_radius, int max_radius, double thresh, int target_lv = -1)
+	{
+		if (m_glview) return m_glview->EVEAnalysis(min_radius, max_radius, thresh, target_lv); else return string();
+	}
     
     void ToggleQualityDropDownBox(bool val);
 

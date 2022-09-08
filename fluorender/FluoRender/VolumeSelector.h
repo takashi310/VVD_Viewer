@@ -112,6 +112,9 @@ public:
 	//mode: 0-no duplicate; 1-duplicate
 	void NoiseRemoval(int iter, double thresh, int mode=0);
 	vector<VolumeData*>* GetResultVols();
+	//EVE
+	void EVEAnalysis(int min_radius, int max_radius, double thresh, int target_lv = -1);
+	void EVECount(int min_radius, int max_radius, double thresh, int target_lv = -1);
 	//process current selection
 	int ProcessSel(double thresh);
 	int GetCenter(Point& p);

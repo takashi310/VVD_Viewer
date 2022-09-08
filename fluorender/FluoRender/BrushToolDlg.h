@@ -82,8 +82,10 @@ public:
 		ID_NRAnalyzeBtn,
 		ID_NRRemoveBtn,
 		//EVE
-		ID_EVERadiusSldr,
-		ID_EVERadiusText,
+		ID_EVEMinRadiusSldr,
+		ID_EVEMinRadiusText,
+		ID_EVEMaxRadiusSldr,
+		ID_EVEMaxRadiusText,
 		ID_EVEThresholdSldr,
 		ID_EVEThresholdText,
 		ID_EVEAnalyzeBtn,
@@ -134,8 +136,10 @@ public:
 	double GetDftNRSize() {return m_dft_nr_size;}
 	void SetDftNRSize(double size) {m_dft_nr_size = size;}
 
-	int GetDftEVERadius() { return m_dft_eve_radius; }
-	void SetDftEVERadius(int r) { m_dft_eve_radius = r; }
+	int GetDftEVEMinRadius() { return m_dft_eve_min_radius; }
+	void SetDftEVEMinRadius(int r) { m_dft_eve_min_radius = r; }
+	int GetDftEVEMaxRadius() { return m_dft_eve_max_radius; }
+	void SetDftEVEMaxRadius(int r) { m_dft_eve_max_radius = r; }
 	double GetDftEVEThresh() { return m_dft_eve_thresh; }
 	void SetDftEVEThresh(double thresh) { m_dft_eve_thresh = thresh; }
     
@@ -183,7 +187,8 @@ private:
 
 	double m_dft_dslt_c;
 
-	int m_dft_eve_radius;
+	int m_dft_eve_min_radius;
+	int m_dft_eve_max_radius;
 	double m_dft_eve_thresh;
 	
 	//tab control
@@ -248,8 +253,10 @@ private:
 	wxButton *m_nr_analyze_btn;
 	wxButton *m_nr_remove_btn;
 	//EVE
-	wxSlider* m_eve_radius_sldr;
-	wxTextCtrl* m_eve_radius_text;
+	wxSlider* m_eve_min_radius_sldr;
+	wxTextCtrl* m_eve_min_radius_text;
+	wxSlider* m_eve_max_radius_sldr;
+	wxTextCtrl* m_eve_max_radius_text;
 	wxSlider* m_eve_threshold_sldr;
 	wxTextCtrl* m_eve_threshold_text;
 	wxButton* m_eve_analyze_btn;
@@ -340,8 +347,10 @@ private:
 	void OnNRAnalyzeBtn(wxCommandEvent &event);
 	void OnNRRemoveBtn(wxCommandEvent &event);
 	//EVE
-	void OnEVERadiusChange(wxScrollEvent& event);
-	void OnEVERadiusText(wxCommandEvent& event);
+	void OnEVEMinRadiusChange(wxScrollEvent& event);
+	void OnEVEMinRadiusText(wxCommandEvent& event);
+	void OnEVEMaxRadiusChange(wxScrollEvent& event);
+	void OnEVEMaxRadiusText(wxCommandEvent& event);
 	void OnEVEThresholdChange(wxScrollEvent& event);
 	void OnEVEThresholdText(wxCommandEvent& event);
 	void OnEVEAnalyzeBtn(wxCommandEvent& event);

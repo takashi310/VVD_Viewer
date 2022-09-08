@@ -1459,6 +1459,97 @@ void VolumeSelector::NoiseRemoval(int iter, double thresh, int mode)
 	delete m_prog_diag;
 }
 
+void VolumeSelector::EVEAnalysis(int min_radius, int max_radius, double thresh, int target_lv)
+{
+	int return_val = 0;
+	m_label_thresh = thresh;
+	if (!m_vd)
+		return;
+
+	bool use_sel = false;
+	if (select && m_vd->GetTexture() && m_vd->GetTexture()->nmask() != -1)
+		use_sel = true;
+
+	m_prog_diag = new wxProgressDialog(
+		"VVDViewer: EVE Analysis...",
+		"Analyzing... Please wait.",
+		100, 0,
+		wxPD_SMOOTH | wxPD_ELAPSED_TIME | wxPD_AUTO_HIDE);
+	m_progress = 0;
+
+	/*
+	if (!use_sel)
+	{
+		//first, grow in the whole volume
+		m_vd->AddEmptyMask();
+		if (m_use2d && m_2d_weight1 && m_2d_weight2)
+			m_vd->Set2DWeight(m_2d_weight1, m_2d_weight2);
+		else
+		{
+			auto blank = std::shared_ptr<vks::VTexture>();
+			m_vd->Set2DWeight(blank, blank);
+		}
+
+		m_vd->DrawMask(0, 5, 0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+		//next do the same as when it's selected by brush
+	}
+	m_vd->GetVR()->return_mask();
+*/
+
+	EVECount(min_radius, max_radius, thresh);
+
+	GenerateAnnotations(use_sel);
+
+	if (m_prog_diag)
+	{
+		m_prog_diag->Update(100);
+		delete m_prog_diag;
+		m_prog_diag = 0;
+	}
+
+	return;
+}
+
+void VolumeSelector::EVECount(int min_radius, int max_radius, double thresh, int target_lv)
+{
+	if (!m_vd)
+		return;
+	Texture* tex = m_vd->GetTexture();
+	if (!tex)
+		return;
+
+	int lv = target_lv;
+	if (lv < -1 && tex->isBrxml())
+		lv = tex->GetMaskLv();
+
+	//resolution
+	int nx, ny, nz;
+	m_vd->GetResolution(nx, ny, nz);
+	if (tex->isBrxml())
+		tex->GetDimensionLv(lv, nx, ny, nz);
+/*
+	if (tex->isBrxml())
+	{
+		int div = 1;
+		while (1)
+		{
+			(nx / div) * (ny / div) * (nz / div);
+		}
+	}
+	else
+	{
+		std::shared_ptr<VL_Nrrd> orig_nrrd;
+		orig_nrrd = tex->get_nrrd(0);
+		if (!orig_nrrd)
+			return;
+		void* orig_data = orig_nrrd->getNrrd()->data;
+		if (!orig_data)
+			return;
+	}
+	Nrrd* datablock = tex->getSubData(target_lv, 0, nullptr, bsx, bsy, bsz, bnx, bny, bnz);
+	auto block_vlnrrd = make_shared<VL_Nrrd>(datablock);*/
+}
+
 void VolumeSelector::Test()
 {
 	/*  if (!m_vd)

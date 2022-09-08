@@ -72,8 +72,10 @@ EVT_TEXT(ID_NRSizeText, BrushToolDlg::OnNRSizeText)
 EVT_BUTTON(ID_NRAnalyzeBtn, BrushToolDlg::OnNRAnalyzeBtn)
 EVT_BUTTON(ID_NRRemoveBtn, BrushToolDlg::OnNRRemoveBtn)
 //EVE
-EVT_COMMAND_SCROLL(ID_EVERadiusSldr, BrushToolDlg::OnEVERadiusChange)
-EVT_TEXT(ID_EVERadiusText, BrushToolDlg::OnEVERadiusText)
+EVT_COMMAND_SCROLL(ID_EVEMinRadiusSldr, BrushToolDlg::OnEVEMinRadiusChange)
+EVT_TEXT(ID_EVEMinRadiusText, BrushToolDlg::OnEVEMinRadiusText)
+EVT_COMMAND_SCROLL(ID_EVEMaxRadiusSldr, BrushToolDlg::OnEVEMaxRadiusChange)
+EVT_TEXT(ID_EVEMaxRadiusText, BrushToolDlg::OnEVEMaxRadiusText)
 EVT_COMMAND_SCROLL(ID_EVEThresholdSldr, BrushToolDlg::OnEVEThresholdChange)
 EVT_TEXT(ID_EVEThresholdText, BrushToolDlg::OnEVEThresholdText)
 EVT_BUTTON(ID_EVEAnalyzeBtn, BrushToolDlg::OnEVEAnalyzeBtn)
@@ -553,39 +555,54 @@ wxWindow* BrushToolDlg::CreateAnalysisPage(wxWindow *parent)
     wxBoxSizer* sizer3 = new wxStaticBoxSizer(
         new wxStaticBox(page, wxID_ANY, "EVE (Partice Detection)"),
         wxVERTICAL);
-    //radius
+    //min radius
     wxBoxSizer* sizer3_1 = new wxBoxSizer(wxHORIZONTAL);
-    st = new wxStaticText(page, 0, "Radius:",
+    st = new wxStaticText(page, 0, "Min Radius:",
         wxDefaultPosition, wxSize(75, -1));
-    m_eve_radius_sldr = new wxSlider(page, ID_EVERadiusSldr, 5, 1, 50,
+    m_eve_min_radius_sldr = new wxSlider(page, ID_EVEMinRadiusSldr, 5, 1, 50,
         wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
-    m_eve_radius_text = new wxTextCtrl(page, ID_EVERadiusText, "5",
+    m_eve_min_radius_text = new wxTextCtrl(page, ID_EVEMinRadiusText, "5",
         wxDefaultPosition, wxSize(40, -1), 0, vald_int);
     sizer3_1->Add(5, 5);
     sizer3_1->Add(st, 0, wxALIGN_CENTER);
-    sizer3_1->Add(m_eve_radius_sldr, 1, wxEXPAND);
-    sizer3_1->Add(m_eve_radius_text, 0, wxALIGN_CENTER);
+    sizer3_1->Add(m_eve_min_radius_sldr, 1, wxEXPAND);
+    sizer3_1->Add(m_eve_min_radius_text, 0, wxALIGN_CENTER);
     st = new wxStaticText(page, 0, "vx",
         wxDefaultPosition, wxSize(25, 15));
     sizer3_1->Add(st, 0, wxALIGN_CENTER);
-    //threshold
+    //max radius
     wxBoxSizer* sizer3_2 = new wxBoxSizer(wxHORIZONTAL);
+    st = new wxStaticText(page, 0, "Max Radius:",
+        wxDefaultPosition, wxSize(75, -1));
+    m_eve_max_radius_sldr = new wxSlider(page, ID_EVEMaxRadiusSldr, 5, 1, 50,
+        wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
+    m_eve_max_radius_text = new wxTextCtrl(page, ID_EVEMaxRadiusText, "5",
+        wxDefaultPosition, wxSize(40, -1), 0, vald_int);
+    sizer3_2->Add(5, 5);
+    sizer3_2->Add(st, 0, wxALIGN_CENTER);
+    sizer3_2->Add(m_eve_max_radius_sldr, 1, wxEXPAND);
+    sizer3_2->Add(m_eve_max_radius_text, 0, wxALIGN_CENTER);
+    st = new wxStaticText(page, 0, "vx",
+        wxDefaultPosition, wxSize(25, 15));
+    sizer3_2->Add(st, 0, wxALIGN_CENTER);
+    //threshold
+    wxBoxSizer* sizer3_3 = new wxBoxSizer(wxHORIZONTAL);
     st = new wxStaticText(page, 0, "Threshold:",
         wxDefaultPosition, wxSize(75, -1));
     m_eve_threshold_sldr = new wxSlider(page, ID_EVEThresholdSldr, 0, 0, 2550,
         wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
     m_eve_threshold_text = new wxTextCtrl(page, ID_EVEThresholdText, "0.0",
         wxDefaultPosition, wxSize(40, -1), 0, vald_fp1);
-    sizer3_2->Add(5, 5);
-    sizer3_2->Add(st, 0, wxALIGN_CENTER);
-    sizer3_2->Add(m_eve_threshold_sldr, 1, wxEXPAND);
-    sizer3_2->Add(m_eve_threshold_text, 0, wxALIGN_CENTER);
+    sizer3_3->Add(5, 5);
+    sizer3_3->Add(st, 0, wxALIGN_CENTER);
+    sizer3_3->Add(m_eve_threshold_sldr, 1, wxEXPAND);
+    sizer3_3->Add(m_eve_threshold_text, 0, wxALIGN_CENTER);
     //buttons
-    wxBoxSizer* sizer3_3 = new wxBoxSizer(wxHORIZONTAL);
+    wxBoxSizer* sizer3_4 = new wxBoxSizer(wxHORIZONTAL);
     m_eve_analyze_btn = new wxButton(page, ID_EVEAnalyzeBtn, "Analyze",
         wxDefaultPosition, wxSize(-1, 23));
-    sizer3_3->AddStretchSpacer();
-    sizer3_3->Add(m_eve_analyze_btn, 0, wxALIGN_CENTER);
+    sizer3_4->AddStretchSpacer();
+    sizer3_4->Add(m_eve_analyze_btn, 0, wxALIGN_CENTER);
     //sizer2
     sizer3->Add(10, 10);
     sizer3->Add(sizer3_1, 0, wxEXPAND);
@@ -593,6 +610,8 @@ wxWindow* BrushToolDlg::CreateAnalysisPage(wxWindow *parent)
     sizer3->Add(sizer3_2, 0, wxEXPAND);
     sizer3->Add(10, 10);
     sizer3->Add(sizer3_3, 0, wxEXPAND);
+    sizer3->Add(10, 10);
+    sizer3->Add(sizer3_4, 0, wxEXPAND);
     sizer3->Add(10, 10);
 
 	//vertical sizer
@@ -1415,20 +1434,36 @@ void BrushToolDlg::OnNRRemoveBtn(wxCommandEvent &event)
 }
 
 //eve
-void BrushToolDlg::OnEVERadiusChange(wxScrollEvent& event)
+void BrushToolDlg::OnEVEMinRadiusChange(wxScrollEvent& event)
 {
     int ival = event.GetPosition();
     wxString str = wxString::Format("%d", ival);
-    m_eve_radius_text->SetValue(str);
+    m_eve_min_radius_text->SetValue(str);
 }
 
-void BrushToolDlg::OnEVERadiusText(wxCommandEvent& event)
+void BrushToolDlg::OnEVEMinRadiusText(wxCommandEvent& event)
 {
-    wxString str = m_eve_radius_text->GetValue();
+    wxString str = m_eve_min_radius_text->GetValue();
     double val;
     str.ToDouble(&val);
-    m_dft_eve_radius = val;
-    m_eve_radius_sldr->SetValue(int(val));
+    m_dft_eve_min_radius = val;
+    m_eve_min_radius_sldr->SetValue(int(val));
+}
+
+void BrushToolDlg::OnEVEMaxRadiusChange(wxScrollEvent& event)
+{
+    int ival = event.GetPosition();
+    wxString str = wxString::Format("%d", ival);
+    m_eve_max_radius_text->SetValue(str);
+}
+
+void BrushToolDlg::OnEVEMaxRadiusText(wxCommandEvent& event)
+{
+    wxString str = m_eve_max_radius_text->GetValue();
+    double val;
+    str.ToDouble(&val);
+    m_dft_eve_max_radius = val;
+    m_eve_max_radius_sldr->SetValue(int(val));
 }
 
 void BrushToolDlg::OnEVEThresholdChange(wxScrollEvent& event)
@@ -1452,18 +1487,24 @@ void BrushToolDlg::OnEVEAnalyzeBtn(wxCommandEvent& event)
 {
     if (m_cur_view)
     {
-        double radius;
-        radius = 1;
-        wxString str = m_eve_radius_text->GetValue();
-        str.ToDouble(&radius);
+        double min_radius;
+        min_radius = 1;
+        wxString str = m_eve_min_radius_text->GetValue();
+        str.ToDouble(&min_radius);
+
+        double max_radius;
+        max_radius = 1;
+        str = m_eve_max_radius_text->GetValue();
+        str.ToDouble(&max_radius);
 
         double threshold;
         threshold = 0.0;
-        wxString str = m_eve_threshold_text->GetValue();
+        str = m_eve_threshold_text->GetValue();
         str.ToDouble(&threshold);
 
-        string annotation_name = m_cur_view->EVEAnalysis(radius, threshold);
+        string annotation_name = m_cur_view->EVEAnalysis(min_radius, max_radius, threshold);
 
+        VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
         if (vr_frame)
             vr_frame->RefreshVRenderViews();
     }
@@ -1545,7 +1586,8 @@ void BrushToolDlg::SaveDefault()
    //eve thresh
    fconfig.Write("eve_thresh", m_dft_eve_thresh);
    //eve radius
-   fconfig.Write("eve_radius", m_dft_eve_radius);
+   fconfig.Write("eve_min_radius", m_dft_eve_min_radius);
+   fconfig.Write("eve_max_radius", m_dft_eve_max_radius);
 	wxString expath = wxStandardPaths::Get().GetExecutablePath();
 	expath = expath.BeforeLast(GETSLASH(),NULL);
 #ifdef _WIN32
@@ -1748,10 +1790,15 @@ void BrushToolDlg::LoadDefault()
    //eve thresh
    fconfig.Read("eve_thresh", &m_dft_eve_thresh);
    //eve radius
-   if (fconfig.Read("eve_radius", &m_dft_eve_radius))
+   if (fconfig.Read("eve_min_radius", &m_dft_eve_min_radius))
    {
        str = wxString::Format("%d", (int)val);
-       m_eve_radius_text->SetValue(str);
+       m_eve_min_radius_text->SetValue(str);
+   }
+   if (fconfig.Read("eve_max_radius", &m_dft_eve_max_radius))
+   {
+       str = wxString::Format("%d", (int)val);
+       m_eve_max_radius_text->SetValue(str);
    }
 }
 

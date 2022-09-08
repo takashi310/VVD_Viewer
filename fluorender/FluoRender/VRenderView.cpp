@@ -3183,6 +3183,37 @@ void VRenderVulkanView::NoiseRemoval(int iter, double thresh)
 		m_selector.NoiseRemoval(iter, thresh);
 }
 
+//EVE
+string VRenderVulkanView::EVEAnalysis(int min_radius, int max_radius, double thresh, int target_lv)
+{
+	string return_val = "";
+
+	VolumeData* vd = m_selector.GetVolume();
+
+	if (!select)
+	{
+		m_selector.Set2DMask(m_tex_paint);
+		m_selector.Set2DWeight(m_tex_final, m_tex_wt2 ? m_tex_wt2 : m_tex);
+	}
+	m_selector.SetSizeMap(false);
+	m_selector.EVEAnalysis(min_radius, max_radius, thresh, target_lv);
+
+	Annotations* ann = m_selector.GetAnnotations();
+	if (ann)
+	{
+		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+		if (vr_frame)
+		{
+			DataManager* mgr = vr_frame->GetDataManager();
+			if (mgr)
+				mgr->AddAnnotations(ann);
+		}
+		return_val = ann->GetName();
+	}
+
+	return return_val;
+}
+
 //brush properties
 //load default
 void VRenderVulkanView::LoadDefaultBrushSettings()
