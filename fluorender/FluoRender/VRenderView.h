@@ -924,6 +924,10 @@ private:
 	vector<std::shared_ptr<vks::VTexture>> m_dp_ctex_list;
 	std::unique_ptr<vks::VFrameBuffer> m_dp_buf_fbo;
 	std::shared_ptr<vks::VTexture> m_dp_buf_tex;
+    //annotation buffers
+    std::unique_ptr<vks::VFrameBuffer> m_anno_fbo;
+    std::shared_ptr<vks::VTexture> m_anno_tex;
+    std::shared_ptr<vks::VTexture> m_anno_dp_tex;
 
 	//depth front tex for volume renderer (tex14)
 	std::shared_ptr<vks::VTexture> m_vol_dp_fr_tex;

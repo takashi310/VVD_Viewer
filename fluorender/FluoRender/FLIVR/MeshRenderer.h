@@ -96,6 +96,10 @@ namespace FLIVR
 		{ fog_ = use_fog; m_fog_intensity = fog_intensity; m_fog_start = fog_start; m_fog_end = fog_end; }
 		bool get_fog()
 		{ return fog_; }
+        void set_threshold(float th)
+        { threshold_ = th; }
+        bool get_threshold()
+        { return threshold_; }
 
 		std::shared_ptr<vks::VTexture> m_depth_tex;
 
@@ -116,6 +120,11 @@ namespace FLIVR
 		{
 			return device_;
 		}
+        
+        void set_extra_vertex_data(float* data)
+        {
+            extra_vertex_data_ = data;
+        }
 
 		void set_bounds(BBox b) { bounds_ = b; }
 		BBox get_bounds() { return bounds_; } 
@@ -188,6 +197,7 @@ namespace FLIVR
 		double m_fog_start;
 		double m_fog_end;
 		float alpha_;
+        float threshold_;
 		//bool update
 		bool update_;
 		BBox bounds_;
@@ -207,6 +217,8 @@ namespace FLIVR
 		static std::shared_ptr<VVulkan> m_vulkan;
 
 		void setupVertexDescriptions();
+        
+        float* extra_vertex_data_;
 	};
 
 } // End namespace FLIVR

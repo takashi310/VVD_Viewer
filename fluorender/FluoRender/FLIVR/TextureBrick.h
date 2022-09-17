@@ -236,6 +236,33 @@ namespace FLIVR {
 
 			return;
 		}
+        
+        //you must check null before using this
+        float getFloatUnsafe(size_t idx)
+        {
+            float ret = 0.0f;
+            switch (m_nrrd->type)
+            {
+            case nrrdTypeChar:
+            case nrrdTypeUChar:
+                ret = (float)( ((unsigned char *)m_nrrd->data)[idx] );
+                break;
+            case nrrdTypeShort:
+            case nrrdTypeUShort:
+                ret = (float)( ((unsigned short *)m_nrrd->data)[idx] );
+                break;
+            case nrrdTypeInt:
+            case nrrdTypeUInt:
+                    ret = (float)( ((unsigned short *)m_nrrd->data)[idx] );
+                break;
+            case nrrdTypeFloat:
+                ret = ((float *)m_nrrd->data)[idx];
+                break;
+            }
+            
+            return ret;
+        }
+
 
 	};
 

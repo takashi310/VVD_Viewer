@@ -190,9 +190,19 @@ private:
 		std::unordered_set<unsigned int > links;
 		bool marker;
 	};
+    
+    struct LMaxima
+    {
+        int r;
+        int zr;
+        unsigned long long pos;
+        float score;
+    };
 
 	std::unordered_map <unsigned int, Component> m_comps;
 	double m_min_voxels, m_max_voxels;
+    
+    std::unordered_map <unsigned long long, LMaxima> m_maxima;
 
 	//exported volumes
 	vector<VolumeData*> m_result_vols;

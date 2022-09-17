@@ -31,6 +31,7 @@ DEALINGS IN THE SOFTWARE.
 #include <wx/wx.h>
 #include <algorithm>
 #include <queue>
+#include <thread>
 
 VolumeSelector::VolumeSelector() :
 	m_vd(0),
@@ -1498,8 +1499,6 @@ void VolumeSelector::EVEAnalysis(int min_radius, int max_radius, double thresh, 
 
 	EVECount(min_radius, max_radius, thresh);
 
-	GenerateAnnotations(use_sel);
-
 	if (m_prog_diag)
 	{
 		m_prog_diag->Update(100);
@@ -1524,17 +1523,35 @@ void VolumeSelector::EVECount(int min_radius, int max_radius, double thresh, int
 
 	//resolution
 	int nx, ny, nz;
+    double spcx, spcy, spcz;
 	m_vd->GetResolution(nx, ny, nz);
+    m_vd->GetSpacings(spcx, spcy, spcz);
 	if (tex->isBrxml())
+    {
 		tex->GetDimensionLv(lv, nx, ny, nz);
-/*
+        tex->get_spacings(spcx, spcy, spcz, lv);
+    }
+    
+    float xzratio = (float)(spcx/spcz);
+    
+    std::vector <LMaxima> eve_points;
+    std::vector <LMaxima> maxima_all;
+    std::unordered_set <unsigned long long> maxima_set;
+    m_maxima.clear();
+
 	if (tex->isBrxml())
 	{
 		int div = 1;
 		while (1)
 		{
-			(nx / div) * (ny / div) * (nz / div);
+			unsigned long long datasize = (unsigned long long)(nx / div) * (unsigned long long)(ny / div) * (unsigned long long)(nz / div);
+            if (datasize < 2ULL * 1024ULL * 1024ULL * 1024ULL)
+                break;
+            div++;
 		}
+        
+        //Nrrd* datablock = tex->getSubData(target_lv, 0, nullptr, bsx, bsy, bsz, bnx, bny, bnz);
+        //auto block_vlnrrd = make_shared<VL_Nrrd>(datablock);
 	}
 	else
 	{
@@ -1542,12 +1559,359 @@ void VolumeSelector::EVECount(int min_radius, int max_radius, double thresh, int
 		orig_nrrd = tex->get_nrrd(0);
 		if (!orig_nrrd)
 			return;
-		void* orig_data = orig_nrrd->getNrrd()->data;
-		if (!orig_data)
-			return;
+        
+        float* scores = new float[(size_t)nx * (size_t)ny * (size_t)nz];
+		
+        for (int r = max_radius; r >= min_radius; r--)
+        {
+            maxima_all.clear();
+            maxima_set.clear();
+                
+            if (r * xzratio < 1.0f) xzratio = 1.0f/r;
+            int zr = (int)(r*xzratio) > 0 ? (int)(r*xzratio) : 1;
+            float zfac = r*xzratio >= 1.0f ? (float)(spcz/spcx) : 1.0f/r;
+            int rr = r*r;
+            
+            int filter_r = max(r, zr);
+            int min_r = min(r, zr);
+            int ksize = 2*filter_r + 1;
+            int deg = 4;
+            int fcenter = filter_r*ksize*ksize + filter_r*ksize + filter_r;
+            float* filter = new float[ksize*ksize*ksize];
+            {
+                double xx, yy, zz, d, p;
+                int x, y, z;
+                
+                double sum = 0;
+                for(z = 0; z < ksize; z++){
+                    for(y = 0; y < ksize; y++){
+                        for(x = 0; x < ksize; x++){
+                            xx = x - filter_r;
+                            yy = y - filter_r;
+                            zz = z - filter_r;
+                            d = sqrt(xx*xx+yy*yy+zz*zz);
+                            if (d <= filter_r+0.00001) {
+                                p = -1.0*pow(1.2*d/min_r, deg);
+                                filter[z*ksize*ksize+y*ksize+x] =  (float)(exp(p));
+                                sum += filter[z*ksize*ksize+y*ksize+x];
+                            } else {
+                                filter[z*ksize*ksize+y*ksize+x] = 0.0f;
+                            }
+                        }
+                    }
+                }
+                for(int i = 0; i < ksize*ksize*ksize; i++)
+                    filter[i] /= sum;
+            }
+             
+            size_t nthreads = std::thread::hardware_concurrency() - 1;
+            //if (nthreads > 8) nthreads = 8;
+            std::vector<std::thread> threads(nthreads);
+            bool is_divisible = ((nz - zr * 2) % nthreads == 0);
+            int grain_size = is_divisible ? (nz - zr * 2) / nthreads : (nz - zr * 2) / (nthreads - 1) ;
+            
+            if (orig_nrrd->getBytesPerSample() == 1) {
+                unsigned char* orig_data = (unsigned char *)orig_nrrd->getNrrd()->data;
+                if (!orig_data)
+                    return;
+                auto worker = [&nx, &ny, &r, &zr, &thresh, &rr, &zfac, &ksize, &fcenter](unsigned char* orig_data, float* scores, float* filter, int stz, int edz) {
+                    for (int z = stz; z < edz; z++) {
+                        for(int y = r; y < ny-r; y++) {
+                            for(int x = r; x < nx-r; x++) {
+                                int id = z*ny*nx + y*nx + x;
+                                float sum = 0.0f;
+                                float center = orig_data[id];
+                                if (center >= thresh) {
+                                    for (int dz = -zr; dz <= zr; dz++){
+                                        for (int dy = -r; dy <= r; dy++){
+                                            for (int dx = -r; dx <= r; dx++){
+                                                if (dx*dx+dy*dy+dz*zfac*dz*zfac <= rr)
+                                                    sum += orig_data[(z+dz)*ny*nx + (y+dy)*nx + (x+dx)] * filter[fcenter + dz*ksize*ksize + dy*ksize + dx];
+                                            }
+                                        }
+                                    }
+                                }
+                                scores[id] = sum;
+                            }
+                        }
+                    }
+                };
+                int ite_num = is_divisible ? nthreads : nthreads - 1;
+                for (uint32_t i = 0; i < ite_num; i++)
+                    threads[i] = std::thread(worker, orig_data, scores, filter, i * grain_size + zr, (i + 1) * grain_size + zr);
+                if (!is_divisible)
+                    threads.back() = std::thread(worker, orig_data, scores, filter, (nthreads - 1) * grain_size + zr, nz - zr);
+                for (auto&& i : threads) {
+                    i.join();
+                }
+            }
+            else if (orig_nrrd->getBytesPerSample() == 2) {
+                unsigned short* orig_data = (unsigned short*)orig_nrrd->getNrrd()->data;
+                if (!orig_data)
+                    return;
+                auto worker = [&nx, &ny, &r, &zr, &thresh, &rr, &zfac, &ksize, &fcenter](unsigned short* orig_data, float* scores, float* filter, int stz, int edz) {
+                    for (int z = stz; z < edz; z++) {
+                        for(int y = r; y < ny-r; y++) {
+                            for(int x = r; x < nx-r; x++) {
+                                int id = z*ny*nx + y*nx + x;
+                                float sum = 0.0f;
+                                float center = orig_data[id];
+                                if (center >= thresh) {
+                                    for (int dz = -zr; dz <= zr; dz++){
+                                        for (int dy = -r; dy <= r; dy++){
+                                            for (int dx = -r; dx <= r; dx++){
+                                                if (dx*dx+dy*dy+dz*zfac*dz*zfac <= rr)
+                                                    sum += orig_data[(z+dz)*ny*nx + (y+dy)*nx + (x+dx)] * filter[fcenter + dz*ksize*ksize + dy*ksize + dx];
+                                            }
+                                        }
+                                    }
+                                }
+                                scores[id] = sum;
+                            }
+                        }
+                    }
+                };
+                int ite_num = is_divisible ? nthreads : nthreads - 1;
+                for (uint32_t i = 0; i < ite_num; i++)
+                    threads[i] = std::thread(worker, orig_data, scores, filter, i * grain_size + zr, (i + 1) * grain_size + zr);
+                if (!is_divisible)
+                    threads.back() = std::thread(worker, orig_data, scores, filter, (nthreads - 1) * grain_size + zr, nz - zr);
+                for (auto&& i : threads) {
+                    i.join();
+                }
+            }
+            
+            is_divisible = ((nz - 2) % nthreads == 0);
+            grain_size = is_divisible ? (nz - 2) / nthreads : (nz - 2) / (nthreads - 1) ;
+            std::vector<std::thread> threads2(nthreads);
+            vector<LMaxima> *temp_maxima = new vector<LMaxima>[nthreads];
+            auto worker = [&nx, &ny, &r, &zr, &thresh](float* scores, vector<LMaxima>* maxima_vec, int stz, int edz) {
+                for (int z = stz; z < edz; z++) {
+                    for(int y = 1; y < ny-1; y++) {
+                        for(int x = 1; x < nx-1; x++) {
+                            int id = z*ny*nx + y*nx + x;
+                            bool ismaxima = true;
+                            float center = scores[id];
+                            if (center > 0.0f) {
+                                for (int dz = -1; dz <= 1; dz++){
+                                    for (int dy = -1; dy <= 1; dy++){
+                                        for (int dx = -1; dx <= 1; dx++){
+                                            if (dx != 0 || dy != 0 || dz != 0)
+                                                ismaxima = (ismaxima && center > scores[(z+dz)*ny*nx + (y+dy)*nx + (x+dx)]);
+                                        }
+                                    }
+                                }
+                                if (ismaxima)
+                                {
+                                    unsigned long long pos = (((unsigned long long)z & 0x1FFFFF) << 42) + (((unsigned long long)y & 0x1FFFFF) << 21) + ((unsigned long long)x & 0x1FFFFF);
+                                    LMaxima m;
+                                    m.pos = pos;
+                                    m.r = r;
+                                    m.zr = zr;
+                                    m.score = scores[id];
+                                    maxima_vec->push_back(m);
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+            int ite_num = is_divisible ? nthreads : nthreads - 1;
+            for (uint32_t i = 0; i < ite_num; i++)
+                threads2[i] = std::thread(worker, scores, &temp_maxima[i], i * grain_size + 1, (i + 1) * grain_size + 1);
+            if (!is_divisible)
+                threads2.back() = std::thread(worker, scores, &temp_maxima[nthreads-1], (nthreads - 1) * grain_size + 1, nz - 1);
+            for (auto&& i : threads2) {
+                i.join();
+            }
+            for (int i = 0; i < nthreads; i++)
+            {
+                for (LMaxima &m : temp_maxima[i])
+                {
+                    maxima_set.insert(m.pos);
+                    maxima_all.push_back(m);
+                }
+            }
+            delete [] temp_maxima;
+            
+            sort(maxima_all.begin(), maxima_all.end(), [](const LMaxima & a, const LMaxima & b) -> bool { return a.score > b.score; });
+                
+            for (auto p : eve_points)
+            {
+                int x = p.pos & 0x1FFFFF;
+                int y = (p.pos >> 21) & 0x1FFFFF;
+                int z = (p.pos >> 42) & 0x1FFFFF;
+                int pr = r + p.r;
+                int pzr = zr + p.zr;
+                    
+                for (int zz = z - pzr; zz <= z + pzr; zz++) {
+                    for (int yy = y - pr; yy <= y + pr; yy++) {
+                        for (int xx = x - pr; xx <= x + pr; xx++) {
+                            unsigned long long pos = (((unsigned long long)zz & 0x1FFFFF) << 42) + (((unsigned long long)yy & 0x1FFFFF) << 21) + ((unsigned long long)xx & 0x1FFFFF);
+                            maxima_set.erase(pos);
+                        }
+                    }
+                }
+            }
+                
+            for (auto p : maxima_all)
+            {
+                if (maxima_set.count(p.pos))
+                {
+                    int x = p.pos & 0x1FFFFF;
+                    int y = (p.pos >> 21) & 0x1FFFFF;
+                    int z = (p.pos >> 42) & 0x1FFFFF;
+                    int pr = p.r * 2;
+                    int pzr = p.zr * 2;
+                        
+                    for (int zz = z - pzr; zz <= z + pzr; zz++) {
+                        for (int yy = y - pr; yy <= y + pr; yy++) {
+                            for (int xx = x - pr; xx <= x + pr; xx++) {
+                                unsigned long long pos = (((unsigned long long)zz & 0x1FFFFF) << 42) + (((unsigned long long)yy & 0x1FFFFF) << 21) + ((unsigned long long)xx & 0x1FFFFF);
+                                maxima_set.erase(pos);
+                            }
+                        }
+                    }
+                    eve_points.push_back(p);
+                }
+            }
+            
+            delete [] filter;
+        }
+            
+        delete [] scores;
 	}
-	Nrrd* datablock = tex->getSubData(target_lv, 0, nullptr, bsx, bsy, bsz, bnx, bny, bnz);
-	auto block_vlnrrd = make_shared<VL_Nrrd>(datablock);*/
+    
+    if (eve_points.size() == 0)
+    {
+        m_annotations = 0;
+        return;
+    }
+    
+    sort(eve_points.begin(), eve_points.end(), [](const LMaxima & a, const LMaxima & b) -> bool { return a.score > b.score; });
+    
+    #define EVE_BINS 128
+    double globalmax = eve_points[0].score;
+    int scorehist[EVE_BINS];
+    memset(scorehist, 0, sizeof(scorehist));
+    for (LMaxima p : eve_points) {
+        int iscore = (int)(p.score/globalmax*EVE_BINS);
+        if (iscore >= EVE_BINS) iscore = EVE_BINS - 1;
+        scorehist[iscore]++;
+    }
+    
+    bool st_decr = false;
+    bool st_incr = false;
+    double max_curvature = 0.0;
+    int max_curvature_point = 0;
+    for (int i = 2; i < EVE_BINS-2; i++) {
+        double df = (scorehist[i+1] - scorehist[i-1]) / (2.0 * eve_points.size() / EVE_BINS);
+        double df1 = (scorehist[i] - scorehist[i-2]) / (2.0 * eve_points.size() / EVE_BINS);
+        double df2 = (scorehist[i+2] - scorehist[i]) / (2.0 * eve_points.size() / EVE_BINS);
+        double ddf = df2 - df1;
+        double curvature = abs(ddf) / pow(1.0+df*df, 3.0/2.0);
+        if (!st_decr && ddf < 0.0)
+            st_decr = true;
+        if (st_decr && ddf > 0.0)
+            st_incr = true;
+            
+        if (st_incr && max_curvature <= curvature) {
+            max_curvature = curvature;
+            max_curvature_point = i;
+        }
+    }
+    
+    int curLv = m_vd->GetLevel();
+    if (m_vd->isBrxml())
+        m_vd->SetLevel(lv);
+
+    m_annotations = new Annotations();
+
+    double mul = 255.0;
+    if (m_vd->GetTexture()->get_nrrd_raw(0)->type == nrrdTypeUChar)
+        mul = 255.0;
+    else if (m_vd->GetTexture()->get_nrrd_raw(0)->type == nrrdTypeUShort)
+        mul = 65535.0;
+    double total_int = 0.0;
+
+    int count = 0;
+    for (LMaxima p : eve_points)
+    {
+        wxString str_id = wxString::Format("%d", count);
+        Vector pos = Vector(p.pos & 0x1FFFFF, (p.pos >> 21) & 0x1FFFFF, (p.pos >> 42) & 0x1FFFFF);
+        pos *= Vector(nx==0?0.0:1.0/nx,
+            ny==0?0.0:1.0/ny,
+            nz==0?0.0:1.0/nz);
+        wxString str_info = wxString::Format("%f\t%d\t%d", p.score, p.r, p.zr);
+        m_annotations->AddText(str_id.ToStdString(), Point(pos), str_info.ToStdString());
+        count++;
+    }
+
+    m_annotations->SetVolume(m_vd);
+    m_annotations->SetTransform(m_vd->GetTexture()->transform());
+    wxString info_meaning = "SCORE\tRADIUS\tZRADIUS";
+    m_annotations->SetInfoMeaning(info_meaning);
+
+    //memo
+    wxString memo;
+    memo += "Volume: " + m_vd->GetName() + "\n";
+    memo += "Maxima: " + wxString::Format("%lu", eve_points.size()) + "\n";
+    memo += "\nSettings:\n";
+    memo += "Threshold: " + wxString::Format("%f", thresh) + "\n";
+    memo += "Min_Radius: " + wxString::Format("%d", min_radius) + "\n";
+    memo += "Max_Radius: " + wxString::Format("%d", max_radius) + "\n";
+    memo += "Level: " + wxString::Format("%d", lv) + "\n";
+    std::string str1 = memo.ToStdString();
+    m_annotations->SetMemo(str1);
+    m_annotations->SetMemoRO(true);
+    m_annotations->SetMaxScore(eve_points[0].score);
+    
+    if (m_vd->isBrxml())
+        m_vd->SetLevel(curLv);
+    
+    //generate swc
+    wxString temp_swc_path = wxFileName::CreateTempFileName(wxStandardPaths::Get().GetTempDir() + wxFileName::GetPathSeparator()) + ".swc";
+    wxTextFile swc(temp_swc_path);
+    if (swc.Exists())
+    {
+        if (!swc.Open())
+            return;
+        swc.Clear();
+    }
+    else
+    {
+        if (!swc.Create())
+            return;
+    }
+    
+    count = 0;
+    for (LMaxima p : eve_points)
+    {
+        wxString str_id = wxString::Format("%d", count);
+        Vector pos = Vector(p.pos & 0x1FFFFF, (p.pos >> 21) & 0x1FFFFF, (p.pos >> 42) & 0x1FFFFF);
+        pos *= Vector(spcx, spcy, spcz);
+        wxString str_line = wxString::Format("%d 6 %f %f %f %f -1 %f", count, pos.x(), pos.y(), pos.z(), p.r*spcx, p.score);
+        swc.AddLine(str_line);
+        count++;
+    }
+    
+    swc.Write();
+    swc.Close();
+    
+    MeshData *md = new MeshData();
+    md->SetSWCSubdivLevel(1);
+    if (md->Load(temp_swc_path))
+    {
+        Color color(HSVColor(0.0, 0.0, 1.0));
+        md->SetColor(color, MESH_COLOR_DIFF);
+        Color amb = color * 0.3;
+        md->SetColor(amb, MESH_COLOR_AMB);
+        m_annotations->SetMesh(md);
+        md->SetThreshold((float)max_curvature_point * globalmax / EVE_BINS);
+    }
+    else
+        delete md;
+        
 }
 
 void VolumeSelector::Test()

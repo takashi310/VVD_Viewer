@@ -589,10 +589,10 @@ wxWindow* BrushToolDlg::CreateAnalysisPage(wxWindow *parent)
     wxBoxSizer* sizer3_3 = new wxBoxSizer(wxHORIZONTAL);
     st = new wxStaticText(page, 0, "Threshold:",
         wxDefaultPosition, wxSize(75, -1));
-    m_eve_threshold_sldr = new wxSlider(page, ID_EVEThresholdSldr, 0, 0, 2550,
+    m_eve_threshold_sldr = new wxSlider(page, ID_EVEThresholdSldr, 0, 0, 65535,
         wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
-    m_eve_threshold_text = new wxTextCtrl(page, ID_EVEThresholdText, "0.0",
-        wxDefaultPosition, wxSize(40, -1), 0, vald_fp1);
+    m_eve_threshold_text = new wxTextCtrl(page, ID_EVEThresholdText, "0",
+        wxDefaultPosition, wxSize(60, -1), 0, vald_int);
     sizer3_3->Add(5, 5);
     sizer3_3->Add(st, 0, wxALIGN_CENTER);
     sizer3_3->Add(m_eve_threshold_sldr, 1, wxEXPAND);
@@ -649,7 +649,8 @@ BrushToolDlg::BrushToolDlg(wxWindow *frame, wxWindow *parent)
 	m_dft_ca_falloff(1.0),
    m_dft_nr_thresh(0.0),
    m_dft_nr_size(0.0),
-   m_dft_dslt_c(0.0)
+   m_dft_dslt_c(0.0),
+   m_dft_eve_thresh(0.1)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -787,9 +788,9 @@ void BrushToolDlg::GetSettings(VRenderView* vrv)
       m_dslt_c_sldr->SetValue(int(m_dft_dslt_c*m_max_value*10.0+0.5));
 	  m_dslt_c_text->ChangeValue(wxString::Format("%.1f", m_dft_dslt_c*m_max_value));
 
-      m_eve_threshold_sldr->SetRange(0, int(m_max_value * 10.0));
-      m_eve_threshold_sldr->SetValue(int(m_dft_eve_thresh * m_max_value * 10.0 + 0.5));
-      m_eve_threshold_text->ChangeValue(wxString::Format("%.1f", m_dft_eve_thresh * m_max_value));
+      m_eve_threshold_sldr->SetRange(0, int(m_max_value));
+      m_eve_threshold_sldr->SetValue(int(m_dft_eve_thresh * m_max_value + 0.5));
+      m_eve_threshold_text->ChangeValue(wxString::Format("%d", int(m_dft_eve_thresh * m_max_value + 0.5)));
    }
 
 	UpdateUndoRedo();
@@ -1468,9 +1469,8 @@ void BrushToolDlg::OnEVEMaxRadiusText(wxCommandEvent& event)
 
 void BrushToolDlg::OnEVEThresholdChange(wxScrollEvent& event)
 {
-    int ival = event.GetPosition();
-    double val = double(ival) / 10.0;
-    wxString str = wxString::Format("%.1f", val);
+    int ival = (int)(event.GetPosition() + 0.5);
+    wxString str = wxString::Format("%d", ival);
     m_eve_threshold_text->SetValue(str);
 }
 
@@ -1480,7 +1480,7 @@ void BrushToolDlg::OnEVEThresholdText(wxCommandEvent& event)
     double val;
     str.ToDouble(&val);
     m_dft_eve_thresh = val / m_max_value;
-    m_eve_threshold_sldr->SetValue(int(val * 10.0 + 0.5));
+    m_eve_threshold_sldr->SetValue(int(val + 0.5));
 }
 
 void BrushToolDlg::OnEVEAnalyzeBtn(wxCommandEvent& event)

@@ -17,7 +17,12 @@ class EXPORT_API APropView : public wxPanel
 	enum
 	{
 		ID_MemoText = wxID_HIGHEST+1801,
-		ID_MemoUpdateBtn
+		ID_MemoUpdateBtn,
+        ID_diff_picker,
+        ID_alpha_sldr,
+        ID_alpha_text,
+        ID_th_sldr,
+        ID_th_text
 	};
 
 public:
@@ -42,9 +47,21 @@ private:
 
 	wxTextCtrl* m_memo_text;
 	wxButton* m_memo_update_btn;
+    
+    wxColourPickerCtrl *m_diff_picker;
+    wxSlider *m_alpha_sldr;
+    wxTextCtrl* m_alpha_text;
+    wxSlider *m_th_sldr;
+    wxTextCtrl* m_th_text;
 
 	//memo
 	void OnMemoUpdateBtn(wxCommandEvent& event);
+    void OnDiffChange(wxColourPickerEvent& event);
+    void OnAlphaChange(wxScrollEvent & event);
+    void OnAlphaText(wxCommandEvent& event);
+    void OnThresholdChange(wxScrollEvent & event);
+    void OnThresholdText(wxCommandEvent& event);
+    
 	DECLARE_EVENT_TABLE();
 };
 

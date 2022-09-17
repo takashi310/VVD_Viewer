@@ -4293,6 +4293,7 @@ m_data(0),
 	m_clip_dist_x = 1;
 	m_clip_dist_y = 1;
 	m_clip_dist_z = 1;
+    m_extra_vertex_data = NULL;
 }
 
 MeshData::~MeshData()
@@ -4303,6 +4304,8 @@ MeshData::~MeshData()
 		glmDelete(m_data);
 	if (m_swc_reader)
 		delete m_swc_reader;
+    if (m_extra_vertex_data)
+        delete [] m_extra_vertex_data;
 }
 
 int MeshData::Load(GLMmodel* mesh)
@@ -4472,6 +4475,9 @@ int MeshData::Load(wxString &filename)
 	if (m_mr)
 		delete m_mr;
 	m_mr = new FLIVR::MeshRenderer(m_data);
+    
+    if (m_swc_reader)
+        SetExtraVertexData(m_swc_reader->GetModelExtraData());
 
 	return 1;
 }
@@ -4495,6 +4501,12 @@ MeshData* MeshData::DeepCopy(MeshData &copy, bool use_default_settings, DataMana
 	{
 		model->vertices = (float*)malloc(sizeof(float) * 3 * (model->numvertices + 1));
 		memcpy(model->vertices, mi->vertices, sizeof(float) * 3 * (model->numvertices + 1));
+        if (copy.m_extra_vertex_data)
+        {
+            float* copydata = new float[model->numvertices + 1];
+            memcpy(copydata, copy.m_extra_vertex_data, sizeof(float) * (model->numvertices + 1));
+            md->SetExtraVertexData(copydata);
+        }
 	}
 	model->numnormals = mi->numnormals;
 	model->normals = NULL;
@@ -5266,6 +5278,9 @@ Annotations::Annotations()
 	m_disp = true;
 	m_memo_ro = false;
 	m_label = NULL;
+    m_md = NULL;
+    m_alpha = 1.0;
+    m_max_score = 65535.0;
 }
 
 Annotations::~Annotations()
@@ -5346,6 +5361,16 @@ VolumeData* Annotations::GetVolume()
 	return m_vd;
 }
 
+void Annotations::SetMesh(MeshData *md)
+{
+    m_md = md;
+}
+
+MeshData* Annotations::GetMesh()
+{
+    return m_md;
+}
+
 void Annotations::Clear()
 {
 	for (int i=0; i<(int)m_alist.size(); i++)
@@ -5355,6 +5380,9 @@ void Annotations::Clear()
 			delete atext;
 	}
 	m_alist.clear();
+    
+    if (m_md)
+        delete m_md;
 }
 
 //memo
@@ -5463,6 +5491,32 @@ int Annotations::Load(wxString &filename, DataManager* mgr)
 				str = tis.ReadLine();
 			}
 		}
+        else if (sline.SubString(0, 5) == "Mesh: ")
+        {
+            str = sline.SubString(6, sline.Length()-1);
+            MeshData *md = new MeshData();
+            md->Load(str);
+            if (md)
+                m_md = md;
+        }
+        else if (sline.SubString(0, 6) == "Alpha: ")
+        {
+            str = sline.SubString(7, sline.Length()-1);
+            str.ToDouble(&m_alpha);
+        }
+        else if (sline.SubString(0, 10) == "Threshold: ")
+        {
+            double th;
+            str = sline.SubString(11, sline.Length()-1);
+            str.ToDouble(&th);
+            if (m_md)
+                m_md->SetThreshold(th);
+        }
+        else if (sline.SubString(0, 9) == "MaxScore: ")
+        {
+            str = sline.SubString(10, sline.Length()-1);
+            str.ToDouble(&m_max_score);
+        }
 	}
 
 	m_data_path = filename;
@@ -5526,6 +5580,18 @@ void Annotations::Save(wxString &filename)
 		writer.SetCompression(true);
 		writer.Save(labelpath.ToStdWstring(), 0);
 	}
+    
+    if (m_md)
+    {
+        wxString mesh_path = filename.Mid(0, filename.find_last_of(wxT('.'))) + ".swc";
+        wxString src = m_md->GetPath();
+        wxCopyFile(src, mesh_path);
+        tos << "Mesh: " << mesh_path << "\n";
+        
+        tos << "Alpha: " << m_alpha << "\n";
+        tos << "Threshold: " << m_md->GetThreshold() << "\n";
+        tos << "MaxScore: " << m_max_score << "\n";
+    }
 }
 
 wxString Annotations::GetInfoMeaning()

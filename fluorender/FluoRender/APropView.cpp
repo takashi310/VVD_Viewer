@@ -4,6 +4,11 @@
 
 BEGIN_EVENT_TABLE(APropView, wxPanel)
 	EVT_BUTTON(ID_MemoUpdateBtn, APropView::OnMemoUpdateBtn)
+    EVT_COLOURPICKER_CHANGED(ID_diff_picker, APropView::OnDiffChange)
+    EVT_COMMAND_SCROLL(ID_alpha_sldr, APropView::OnAlphaChange)
+    EVT_TEXT(ID_alpha_text, APropView::OnAlphaText)
+    EVT_COMMAND_SCROLL(ID_th_sldr, APropView::OnThresholdChange)
+    EVT_TEXT(ID_th_text, APropView::OnThresholdText)
 END_EVENT_TABLE()
 
 APropView::APropView(wxWindow* frame, wxWindow* parent,
@@ -22,6 +27,9 @@ m_vrv(0)
 
 	wxBoxSizer* sizer_v1 = new wxBoxSizer(wxVERTICAL);
 	wxStaticText* st = 0;
+    
+    wxFloatingPointValidator<double> vald_fp2(2);
+    wxIntegerValidator<unsigned int> vald_int;
 
 	wxBoxSizer* sizer_1 = new wxBoxSizer(wxHORIZONTAL);
 	st = new wxStaticText(this, 0, "Memo:",
@@ -43,8 +51,48 @@ m_vrv(0)
 	sizer_v1->Add(sizer_1, 0, wxALIGN_LEFT);
 	sizer_v1->Add(sizer_2, 1, wxALIGN_LEFT);
 	sizer_v1->Add(sizer_3, 0, wxALIGN_LEFT);
-
-	SetSizer(sizer_v1);
+    
+    wxBoxSizer* sizer_v2 = new wxBoxSizer(wxVERTICAL);
+    
+    wxBoxSizer* sizer_4 = new wxBoxSizer(wxHORIZONTAL);
+    st = new wxStaticText(this, 0, " Transparency: ", wxDefaultPosition, wxSize(100, 20));
+    m_alpha_sldr = new wxSlider(this, ID_alpha_sldr, 255, 0, 255, wxDefaultPosition, wxSize(200, 20), wxSL_HORIZONTAL);
+    m_alpha_text = new wxTextCtrl(this, ID_alpha_text, "1.00", wxDefaultPosition, wxSize(50, 20), 0, vald_fp2);
+    sizer_4->Add(20, 5, 0);
+    sizer_4->Add(st, 0, wxALIGN_CENTER, 0);
+    sizer_4->Add(m_alpha_sldr, 0, wxALIGN_CENTER, 0);
+    sizer_4->Add(m_alpha_text, 0, wxALIGN_CENTER, 0);
+    
+    wxBoxSizer* sizer_5 = new wxBoxSizer(wxHORIZONTAL);
+    st = new wxStaticText(this, 0, " Threshold: ", wxDefaultPosition, wxSize(100, 20));
+    m_th_sldr = new wxSlider(this, ID_th_sldr, 0, 0, 65535, wxDefaultPosition, wxSize(200, 20), wxSL_HORIZONTAL);
+    m_th_text = new wxTextCtrl(this, ID_th_text, "0", wxDefaultPosition, wxSize(50, 20), 0, vald_int);
+    sizer_5->Add(20, 5, 0);
+    sizer_5->Add(st, 0, wxALIGN_CENTER, 0);
+    sizer_5->Add(m_th_sldr, 0, wxALIGN_CENTER, 0);
+    sizer_5->Add(m_th_text, 0, wxALIGN_CENTER, 0);
+    
+    wxBoxSizer* sizer_6 = new wxBoxSizer(wxHORIZONTAL);
+    st = new wxStaticText(this, 0, " Color: ",
+        wxDefaultPosition, wxSize(110, 20));
+    m_diff_picker = new wxColourPickerCtrl(this, ID_diff_picker, *wxWHITE,
+        wxDefaultPosition, wxSize(180, 30));
+    sizer_6->Add(st, 0, wxALIGN_LEFT, 0);
+    sizer_6->Add(m_diff_picker, 0, wxALIGN_CENTER, 0);
+    
+    sizer_v2->Add(5,5);
+    sizer_v2->Add(sizer_4, 0, wxALIGN_LEFT);
+    sizer_v2->Add(5,5);
+    sizer_v2->Add(sizer_5, 0, wxALIGN_LEFT);
+    sizer_v2->Add(5,5);
+    sizer_v2->Add(sizer_6, 0, wxALIGN_LEFT);
+    
+    wxBoxSizer* sizer_all = new wxBoxSizer(wxHORIZONTAL);
+    sizer_all->Add(sizer_v1, 0, wxALIGN_TOP);
+    sizer_all->Add(sizer_v2, 0, wxALIGN_TOP);
+    
+    SetSizer(sizer_all);
+    
 	Layout();
 
 	Thaw();
@@ -72,6 +120,49 @@ void APropView::GetSettings()
 		m_memo_text->SetEditable(true);
 		m_memo_update_btn->Enable();
 	}
+    
+    if (m_ann->GetMesh())
+    {
+        string str;
+        Color amb, diff, spec;
+        double shine, alpha, th;
+        m_ann->GetMesh()->GetMaterial(amb, diff, spec, shine, alpha);
+
+        wxColor c;
+        c = wxColor(diff.r()*255, diff.g()*255, diff.b()*255);
+        m_diff_picker->SetColour(c);
+        Color color(c.Red()/255.0, c.Green()/255.0, c.Blue()/255.0);
+        m_ann->GetMesh()->SetColor(color, MESH_COLOR_DIFF);
+        amb = color * 0.3;
+        m_ann->GetMesh()->SetColor(amb, MESH_COLOR_AMB);
+        
+        //alpha
+        alpha = m_ann->GetAlpha();
+        m_alpha_sldr->SetValue(int(alpha*255));
+        str = wxString::Format("%.2f", alpha);
+        m_alpha_text->ChangeValue(str);
+        
+        //threshold
+        m_th_sldr->SetMax((int)(m_ann->GetMaxScore() + 1.0));
+        th = m_ann->GetThreshold();
+        m_th_sldr->SetValue(int(th + 0.5));
+        str = wxString::Format("%d", (int)(th + 0.5));
+        m_th_text->ChangeValue(str);
+        
+        m_diff_picker->Show();
+        m_alpha_sldr->Show();
+        m_alpha_text->Show();
+        m_th_sldr->Show();
+        m_th_text->Show();
+    }
+    else
+    {
+        m_diff_picker->Hide();
+        m_alpha_sldr->Hide();
+        m_alpha_text->Hide();
+        m_th_sldr->Hide();
+        m_th_text->Hide();
+    }
 }
 
 void APropView::SetAnnotations(Annotations* ann, VRenderView* vrv)
@@ -102,4 +193,59 @@ void APropView::OnMemoUpdateBtn(wxCommandEvent& event)
                 std::string str = memo.ToStdString();
 		m_ann->SetMemo(str);
 	}
+}
+
+void APropView::OnAlphaChange(wxScrollEvent & event)
+{
+    double val = (double)event.GetPosition() / 255.0;
+    wxString str = wxString::Format("%.2f", val);
+    m_alpha_text->SetValue(str);
+}
+
+void APropView::OnAlphaText(wxCommandEvent& event)
+{
+    wxString str = m_alpha_text->GetValue();
+    double alpha;
+    str.ToDouble(&alpha);
+    m_alpha_sldr->SetValue(int(alpha*255.0+0.5));
+
+    if (m_ann)
+    {
+        m_ann->SetAlpha(alpha);
+        RefreshVRenderViews();
+    }
+}
+
+void APropView::OnThresholdChange(wxScrollEvent & event)
+{
+    double val = (double)event.GetPosition();
+    wxString str = wxString::Format("%d", (int)(val + 0.5));
+    m_th_text->SetValue(str);
+}
+
+void APropView::OnThresholdText(wxCommandEvent& event)
+{
+    wxString str = m_th_text->GetValue();
+    double th;
+    str.ToDouble(&th);
+    m_th_sldr->SetValue(int(th+0.5));
+
+    if (m_ann)
+    {
+        m_ann->SetThreshold(th);
+        RefreshVRenderViews();
+    }
+}
+
+void APropView::OnDiffChange(wxColourPickerEvent& event)
+{
+    wxColor c = event.GetColour();
+    Color color(c.Red()/255.0, c.Green()/255.0, c.Blue()/255.0);
+    if (m_ann && m_ann->GetMesh())
+    {
+        m_ann->GetMesh()->SetColor(color, MESH_COLOR_DIFF);
+        Color amb = color * 0.3;
+        m_ann->GetMesh()->SetColor(amb, MESH_COLOR_AMB);
+        RefreshVRenderViews(true);
+    }
 }

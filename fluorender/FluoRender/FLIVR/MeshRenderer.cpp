@@ -50,6 +50,7 @@ namespace FLIVR
 		light_(true),
 		fog_(false),
 		alpha_(1.0),
+        threshold_(0.0f),
 		update_(true)
 	{
 		Plane* plane = 0;
@@ -81,6 +82,8 @@ namespace FLIVR
 		m_vin = nullptr;
 
 		m_prev_msh_pipeline = -1;
+        
+        extra_vertex_data_ = nullptr;
 	}
 
 	MeshRenderer::MeshRenderer(MeshRenderer &copy)
@@ -91,6 +94,7 @@ namespace FLIVR
 		light_(copy.light_),
 		fog_(copy.fog_),
 		alpha_(copy.alpha_),
+        threshold_(copy.threshold_),
 		update_(true),
 		bounds_(copy.bounds_),
 		device_(copy.device_),
@@ -111,6 +115,8 @@ namespace FLIVR
 		m_vin = copy.m_vin;
 
 		m_prev_msh_pipeline = copy.m_prev_msh_pipeline;
+        
+        extra_vertex_data_ = copy.extra_vertex_data_;
 	}
 
 	MeshRenderer::~MeshRenderer()
@@ -127,7 +133,6 @@ namespace FLIVR
 			vb.vertexBuffer.destroy();
 			vb.indexBuffer.destroy();
 		}
-
 	}
 
 	void MeshRenderer::init(std::shared_ptr<VVulkan> vulkan)
@@ -373,7 +378,7 @@ namespace FLIVR
 
 		ShaderProgram* shader = m_vulkan->msh_shader_factory_->shader(
 			device->logicalDevice,
-			type, depth_peel_, tex && data_->texcoords, fog_, light_ && (data_->normals || data_->facetnorms));
+			type, depth_peel_, tex && data_->texcoords, fog_, light_ && (data_->normals || data_->facetnorms), extra_vertex_data_ != nullptr);
 
 		if (m_prev_msh_pipeline >= 0) {
 			if (m_msh_pipelines[m_prev_msh_pipeline].device == device &&
@@ -605,7 +610,10 @@ namespace FLIVR
 					verts.push_back(data_->vertices[3*triangle->vindices[j]]);
 					verts.push_back(data_->vertices[3*triangle->vindices[j]+1]);
 					verts.push_back(data_->vertices[3*triangle->vindices[j]+2]);
-					verts.push_back(1.0f);
+                    if (!extra_vertex_data_)
+                        verts.push_back(1.0f);
+                    else
+                        verts.push_back(extra_vertex_data_[triangle->vindices[j]]);
 					if (bnormal)
 					{
                         if (data_->normals)
@@ -750,6 +758,7 @@ namespace FLIVR
 		vubo.mv_mat = m_mv_mat;
 		if (light_ && (data_->normals || data_->facetnorms))
 			vubo.normal_mat = glm::mat4(glm::inverseTranspose(glm::mat3(m_mv_mat)));
+        vubo.threshold = threshold_;
 
 		if (fog_)
 			fubo.loc8 = { m_fog_intensity, m_fog_start, m_fog_end, 0.0f };

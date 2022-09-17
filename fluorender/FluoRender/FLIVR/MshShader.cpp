@@ -90,6 +90,7 @@ namespace FLIVR
 	"	mat4 matrix0; //projection matrix\n" \
 	"	mat4 matrix1; //modelview matrix\n" \
 	"	mat4 matrix2; //normal\n" \
+    "   float threshold; //threshold\n" \
 	"} vubo;" \
 
 #define MSH_HEAD \
@@ -101,6 +102,11 @@ namespace FLIVR
 	"//MSH_VERTEX_BODY_POS\n" \
 	"	gl_Position = vubo.matrix0 * vubo.matrix1 * vec4(InVertex.xyz, 1.0);\n" \
 	"	OutPosition = vec4(InVertex.xyz, 1.0);\n"
+
+#define MSH_VERTEX_BODY_POS_PARTICLE \
+    "//MSH_VERTEX_BODY_POS_PARTICLE\n" \
+    "    gl_Position = InVertex.w > vubo.threshold ? vubo.matrix0 * vubo.matrix1 * vec4(InVertex.xyz, 1.0) : vec4(0.0);\n" \
+    "    OutPosition = vec4(InVertex.xyz, 1.0);\n"
 
 #define MSH_VERTEX_BODY_NORMAL \
 	"//MSH_VERTEX_BODY_NORMAL\n" \
@@ -272,13 +278,14 @@ namespace FLIVR
 	MshShader::MshShader(VkDevice device, 
 		int type,
 		int peel, bool tex,
-		bool fog, bool light)
+		bool fog, bool light, bool particle)
 		: device_(device),
 		type_(type),
 		peel_(peel),
 		tex_(tex),
 		fog_(fog),
 		light_(light),
+        particle_(particle),
 		program_(0)
 	{}
 
@@ -346,7 +353,11 @@ namespace FLIVR
 		z << MSH_HEAD;
 
 		//body
-		z << MSH_VERTEX_BODY_POS;
+        if (particle_)
+            z << MSH_VERTEX_BODY_POS_PARTICLE;
+        else
+            z << MSH_VERTEX_BODY_POS;
+        
 		if (type_ == 0)
 		{
 			if (light_)
@@ -490,25 +501,25 @@ namespace FLIVR
 	ShaderProgram* MshShaderFactory::shader(VkDevice device,
 		int type,
 		int peel, bool tex,
-		bool fog, bool light)
+		bool fog, bool light, bool particle)
 	{
 		if(prev_shader_ >= 0)
 		{
-			if(shader_[prev_shader_]->match(device, type, peel, tex, fog, light))
+			if(shader_[prev_shader_]->match(device, type, peel, tex, fog, light, particle))
 			{
 				return shader_[prev_shader_]->program();
 			}
 		}
 		for(unsigned int i=0; i<shader_.size(); i++)
 		{
-			if(shader_[i]->match(device, type, peel, tex, fog, light)) 
+			if(shader_[i]->match(device, type, peel, tex, fog, light, particle))
 			{
 				prev_shader_ = i;
 				return shader_[i]->program();
 			}
 		}
 
-		MshShader* s = new MshShader(device, type, peel, tex, fog, light);
+		MshShader* s = new MshShader(device, type, peel, tex, fog, light, particle);
 		if(s->create())
 		{
 			delete s;

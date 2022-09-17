@@ -27,7 +27,7 @@ vector<string> split(const string &str, const string &delim, const string &abort
 	return res;
 }
 
-void SWCReader::AddSolidSphere(glm::vec3 center, double radius, unsigned int subdiv)
+void SWCReader::AddSolidSphere(glm::vec3 center, double radius, unsigned int subdiv, float score)
 {
 	// create 12 vertices of a icosahedron
 	float t = (1.0 + sqrt(5.0)) / 2.0;
@@ -147,6 +147,15 @@ void SWCReader::AddSolidSphere(glm::vec3 center, double radius, unsigned int sub
 		*n_ite++ = vertices[i].y;
 		*n_ite++ = vertices[i].z;
 	}
+    
+    if (score >= 0.0f)
+    {
+        int e_offset = m_model_extra_data.size();
+        m_model_extra_data.resize(e_offset + vertices.size());
+        vector<float>::iterator e_ite = m_model_extra_data.begin() + e_offset;
+        while(e_ite != m_model_extra_data.end())
+            *e_ite++ = score;
+    }
 
 	int t_offset = m_model_tris.size();
 	m_model_tris.resize(t_offset + triangles.size()*3);
@@ -345,27 +354,32 @@ void SWCReader::RotateVertices(vector<float> &vertices, glm::vec3 center, float 
 
 GLMmodel *SWCReader::GenerateSolidModel(double def_r, double r_scale, unsigned int subdiv)
 {
-	if (m_vertices.empty() || m_edges.empty()) return NULL;
+	if (m_vertices.empty()) return NULL;
 
 	if (!m_model_verts.empty()) m_model_verts.clear();
 	if (!m_model_norms.empty()) m_model_norms.clear();
+    if (!m_model_extra_data.empty()) m_model_extra_data.clear();
 	if (!m_model_tris.empty()) m_model_tris.clear();
 
-	m_model_verts.push_back(0.0);
-	m_model_verts.push_back(0.0);
-	m_model_verts.push_back(0.0);
-	m_model_norms.push_back(0.0);
-	m_model_norms.push_back(0.0);
-	m_model_norms.push_back(0.0);
+	m_model_verts.push_back(0.0f);
+	m_model_verts.push_back(0.0f);
+	m_model_verts.push_back(0.0f);
+	m_model_norms.push_back(0.0f);
+	m_model_norms.push_back(0.0f);
+	m_model_norms.push_back(0.0f);
+    m_model_extra_data.push_back(0.0f);
 
 	//generate solid spheres
-	for (auto vr : m_vertices)
+    for (int i = 0; i < m_vertices.size(); i++)
 	{
-		glm::vec3 v = glm::vec3(vr);
-		double r = vr.w;
+		glm::vec3 v = glm::vec3(m_vertices[i]);
+		double r = m_vertices[i].w;
 
 		if (r <= 0.0) r = def_r;
-		AddSolidSphere(v, r*r_scale, subdiv);
+        if (m_extra_data.size() > i)
+            AddSolidSphere(v, r*r_scale, subdiv, m_extra_data[i]);
+        else
+            AddSolidSphere(v, r*r_scale, subdiv);
 	}
 
 	//generate solid cylinders
@@ -472,6 +486,7 @@ void SWCReader::Preprocess()
 {
 	if (!m_vertices.empty()) m_vertices.clear();
 	if (!m_edges.empty()) m_edges.clear();
+    if (!m_extra_data.empty()) m_extra_data.clear();
 
 	//separate path and name
 	int64_t pos = m_path_name.find_last_of(GETSLASH());
@@ -497,7 +512,7 @@ void SWCReader::Preprocess()
 			continue;
 		stringstream ls(line);
 		vector<string> tokens = split(line, " ", "#");
-		if (tokens.size() == 7)
+		if (tokens.size() >= 7)
 		{
 			glm::vec4 v4;
 			float fval;
@@ -516,6 +531,12 @@ void SWCReader::Preprocess()
 			}
 			else
 				v4.w = 0.0;
+            
+            if (tokens.size() >= 8)
+            {
+                fval = STOD(tokens[7].c_str());
+                m_extra_data.push_back(fval);
+            }
 
 			int newid = m_vertices.size();
 			id_corresp[id] = newid;
@@ -524,6 +545,7 @@ void SWCReader::Preprocess()
 			ival = STOI(tokens[6].c_str());
 			if (ival != -1)
 				m_edges.push_back(glm::ivec2(id, ival));
+            
 		}
 	}
 
@@ -544,10 +566,12 @@ bool SWCReader::DeepCopy(SWCReader *in, SWCReader *out)
 	out->m_data_name = in->m_data_name;
 	out->m_path_name = in->m_path_name;
 	out->m_vertices = in->m_vertices; //4th element: radius
+    out->m_extra_data = in->m_extra_data;
 	out->m_edges = in->m_edges;
 	out->m_model_verts = in->m_model_verts;
 	out->m_model_norms = in->m_model_norms;
 	out->m_model_tris = in->m_model_tris;
+    out->m_model_extra_data = in->m_model_extra_data;
 
 	out->m_sphere_verts_cache = in->m_sphere_verts_cache;
 	out->m_sphere_tris_cache = in->m_sphere_tris_cache;

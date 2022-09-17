@@ -25,6 +25,11 @@ public:
 
 	GLMmodel *GenerateSolidModel(double def_r, double r_scale, unsigned int subdiv);
 	//GLMmodel *GenerateWireModel();
+    
+    vector<float>* GetModelExtraData()
+    {
+        return &m_model_extra_data;
+    }
 
 	static bool DeepCopy(SWCReader *in, SWCReader *out);
 
@@ -32,9 +37,11 @@ private:
 	wstring m_data_name;
 	wstring m_path_name;
 	vector<glm::vec4> m_vertices; //4th element: radius
+    vector<float> m_extra_data;
 	vector<glm::ivec2> m_edges;
 	vector<float> m_model_verts;
 	vector<float> m_model_norms;
+    vector<float> m_model_extra_data;
 	vector<unsigned int> m_model_tris;
 
 	vector<glm::vec3> m_sphere_verts_cache;
@@ -50,7 +57,7 @@ private:
 
 private:
 	static void RotateVertices(vector<float> &vertices, glm::vec3 center, float angle, glm::vec3 axis);
-	void AddSolidSphere(glm::vec3 center, double radius, unsigned int subdiv);
+	void AddSolidSphere(glm::vec3 center, double radius, unsigned int subdiv, float score = -1.0f);
 	void AddSolidCylinder(glm::vec3 p1, glm::vec3 p2, double radius1, double radius2, unsigned int subdiv);
 };
 

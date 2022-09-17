@@ -261,6 +261,15 @@ public:
 	bool GetShadow();
 	void SetShadowParams(double val);
 	void GetShadowParams(double &val);
+    
+    void SetThreshold(float th)
+    {
+        if (m_mr) m_mr->set_threshold(th);
+    }
+    float GetThreshold()
+    {
+        return m_mr ? m_mr->get_threshold() : 0.0f;
+    }
 
 	void SetTranslation(double x, double y, double z);
 	void GetTranslation(double &x, double &y, double &z);
@@ -317,11 +326,39 @@ public:
 	}
 
 	void RecalcBounds();
+    
+    void SetExtraVertexData(float* data)
+    {
+        if (m_mr) m_mr->set_extra_vertex_data(data);
+        m_extra_vertex_data = data;
+    }
+    
+    void SetExtraVertexData(std::vector<float>* data_vec)
+    {
+        if (data_vec && data_vec->size() > 0)
+        {
+            float* data = new float[data_vec->size()];
+            memcpy(data, data_vec->data(), sizeof(float)*data_vec->size());
+            if (m_mr) m_mr->set_extra_vertex_data(data);
+            m_extra_vertex_data = data;
+        }
+    }
+    
+    void SetSWCSubdivLevel(int lv)
+    {
+        if (m_subdiv >= 0)
+            m_subdiv = lv;
+    }
+    int GetSWCSubdivLevel()
+    {
+        return m_subdiv;
+    }
 
 private:
 	//wxString m_name;
 	wxString m_data_path;
 	GLMmodel* m_data;
+    float* m_extra_vertex_data;
 	MeshRenderer *m_mr;
 	BBox m_bounds;
 	Point m_center;
@@ -946,6 +983,8 @@ public:
 	void SetTransform(Transform *tform);
 	void SetVolume(VolumeData* vd);
 	VolumeData* GetVolume();
+    void SetMesh(MeshData* md);
+    MeshData* GetMesh();
 
 	void Clear();
 
@@ -982,6 +1021,19 @@ public:
 
 	void SetLabel(const std::shared_ptr<VL_Nrrd>& label) {m_label = label;}
 	std::shared_ptr<VL_Nrrd> GetLabel() {return m_label;}
+    
+    void SetAlpha(double alpha) { m_alpha = alpha; }
+    double GetAlpha() { return m_alpha; }
+    
+    void SetMaxScore(double max_score) { m_max_score = max_score; }
+    double GetMaxScore() { return m_max_score; }
+    
+    void SetThreshold(double th)
+    {
+        if (m_md)
+            m_md->SetThreshold(th);
+    }
+    double GetThreshold() { return m_md ? m_md->GetThreshold() : 0.0; }
 
 private:
 	static int m_num;
@@ -989,6 +1041,9 @@ private:
 	Transform *m_tform;
 	VolumeData* m_vd;
 	std::shared_ptr<VL_Nrrd> m_label;
+    MeshData* m_md;
+    double m_alpha;
+    double m_max_score;
 
 	bool m_disp;
 

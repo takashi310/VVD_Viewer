@@ -49,7 +49,7 @@ namespace FLIVR
 
 		MshShader(VkDevice device, int type,
 			int peel, bool tex,
-			bool fog, bool light);
+			bool fog, bool light, bool particle);
 		~MshShader();
 
 		bool create();
@@ -60,17 +60,19 @@ namespace FLIVR
 		inline bool tex() { return tex_; }
 		inline bool fog() { return fog_; }
 		inline bool light() { return light_; }
+        inline bool particle() { return particle_; }
 
 		inline bool match(VkDevice device, int type,
 			int peel, bool tex,
-			bool fog, bool light)
+			bool fog, bool light, bool particle)
 		{ 
 			return (device_ == device &&
 					type_ == type &&
 					fog_ == fog && 
 					peel_ == peel &&
 					tex_ == tex &&
-					light_ == light); 
+					light_ == light &&
+                    particle_ == particle);
 		}
 
 		inline ShaderProgram* program() { return program_; }
@@ -85,6 +87,7 @@ namespace FLIVR
 		bool tex_;
 		bool fog_;
 		bool light_;
+        bool particle_;
 
 		ShaderProgram* program_;
 	};
@@ -98,7 +101,7 @@ namespace FLIVR
 		~MshShaderFactory();
 
 		ShaderProgram* shader(VkDevice device, int type, int peel, bool tex,
-			bool fog, bool light);
+			bool fog, bool light, bool particle);
 
 		void init(std::vector<vks::VulkanDevice*>& devices);
 
@@ -112,6 +115,7 @@ namespace FLIVR
 			glm::mat4 proj_mat;
 			glm::mat4 mv_mat;
 			glm::mat4 normal_mat;
+            float threshold;
 		};
 
 		struct MshFragShaderUBO {
