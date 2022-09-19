@@ -1561,6 +1561,20 @@ void VolumeSelector::EVECount(int min_radius, int max_radius, double thresh, int
 			return;
         
         float* scores = new float[(size_t)nx * (size_t)ny * (size_t)nz];
+        
+        int totalsteps = 0;
+        for (int r = max_radius; r >= min_radius; r--)
+        {
+            if (r * xzratio < 1.0f) xzratio = 1.0f/r;
+            int zr = (int)(r*xzratio) > 0 ? (int)(r*xzratio) : 1;
+            size_t nthreads = std::thread::hardware_concurrency() - 1;
+            int grain_size = ((nz - zr * 2) % nthreads == 0) ? (nz - zr * 2) / nthreads : (nz - zr * 2) / (nthreads - 1);
+            totalsteps += grain_size;
+            
+            grain_size = ((nz - 2) % nthreads == 0) ? (nz - 2) / nthreads : (nz - 2) / (nthreads - 1) ;
+            totalsteps += grain_size;
+        }
+        totalsteps += 2;
 		
         for (int r = max_radius; r >= min_radius; r--)
         {
@@ -1605,8 +1619,8 @@ void VolumeSelector::EVECount(int min_radius, int max_radius, double thresh, int
             }
              
             size_t nthreads = std::thread::hardware_concurrency() - 1;
-            //if (nthreads > 8) nthreads = 8;
-            std::vector<std::thread> threads(nthreads);
+            if (nthreads <= 1) nthreads = 2;
+            std::vector<std::thread> threads(nthreads - 1);
             bool is_divisible = ((nz - zr * 2) % nthreads == 0);
             int grain_size = is_divisible ? (nz - zr * 2) / nthreads : (nz - zr * 2) / (nthreads - 1) ;
             
@@ -1614,7 +1628,7 @@ void VolumeSelector::EVECount(int min_radius, int max_radius, double thresh, int
                 unsigned char* orig_data = (unsigned char *)orig_nrrd->getNrrd()->data;
                 if (!orig_data)
                     return;
-                auto worker = [&nx, &ny, &r, &zr, &thresh, &rr, &zfac, &ksize, &fcenter](unsigned char* orig_data, float* scores, float* filter, int stz, int edz) {
+                auto worker = [&nx, &ny, &r, &zr, &thresh, &rr, &zfac, &ksize, &fcenter, &totalsteps](unsigned char* orig_data, float* scores, float* filter, int stz, int edz, int* m_progress, wxProgressDialog* m_prog_diag) {
                     for (int z = stz; z < edz; z++) {
                         for(int y = r; y < ny-r; y++) {
                             for(int x = r; x < nx-r; x++) {
@@ -1634,13 +1648,19 @@ void VolumeSelector::EVECount(int min_radius, int max_radius, double thresh, int
                                 scores[id] = sum;
                             }
                         }
+                        if (m_prog_diag && m_progress)
+                        {
+                            (*m_progress)++;
+                            m_prog_diag->Update(95*((*m_progress)+1)/totalsteps);
+                        }
                     }
                 };
                 int ite_num = is_divisible ? nthreads : nthreads - 1;
-                for (uint32_t i = 0; i < ite_num; i++)
-                    threads[i] = std::thread(worker, orig_data, scores, filter, i * grain_size + zr, (i + 1) * grain_size + zr);
+                for (uint32_t i = 1; i < ite_num; i++)
+                    threads[i-1] = std::thread(worker, orig_data, scores, filter, i * grain_size + zr, (i + 1) * grain_size + zr, nullptr, nullptr);
                 if (!is_divisible)
-                    threads.back() = std::thread(worker, orig_data, scores, filter, (nthreads - 1) * grain_size + zr, nz - zr);
+                    threads.back() = std::thread(worker, orig_data, scores, filter, (nthreads - 1) * grain_size + zr, nz - zr, nullptr, nullptr);
+                worker(orig_data, scores, filter, zr, grain_size + zr, &m_progress, m_prog_diag);
                 for (auto&& i : threads) {
                     i.join();
                 }
@@ -1649,7 +1669,7 @@ void VolumeSelector::EVECount(int min_radius, int max_radius, double thresh, int
                 unsigned short* orig_data = (unsigned short*)orig_nrrd->getNrrd()->data;
                 if (!orig_data)
                     return;
-                auto worker = [&nx, &ny, &r, &zr, &thresh, &rr, &zfac, &ksize, &fcenter](unsigned short* orig_data, float* scores, float* filter, int stz, int edz) {
+                auto worker = [&nx, &ny, &r, &zr, &thresh, &rr, &zfac, &ksize, &fcenter, &totalsteps](unsigned short* orig_data, float* scores, float* filter, int stz, int edz, int* m_progress, wxProgressDialog* m_prog_diag) {
                     for (int z = stz; z < edz; z++) {
                         for(int y = r; y < ny-r; y++) {
                             for(int x = r; x < nx-r; x++) {
@@ -1669,13 +1689,19 @@ void VolumeSelector::EVECount(int min_radius, int max_radius, double thresh, int
                                 scores[id] = sum;
                             }
                         }
+                        if (m_prog_diag && m_progress)
+                        {
+                            (*m_progress)++;
+                            m_prog_diag->Update(95*((*m_progress)+1)/totalsteps);
+                        }
                     }
                 };
                 int ite_num = is_divisible ? nthreads : nthreads - 1;
-                for (uint32_t i = 0; i < ite_num; i++)
-                    threads[i] = std::thread(worker, orig_data, scores, filter, i * grain_size + zr, (i + 1) * grain_size + zr);
+                for (uint32_t i = 1; i < ite_num; i++)
+                    threads[i-1] = std::thread(worker, orig_data, scores, filter, i * grain_size + zr, (i + 1) * grain_size + zr, nullptr, nullptr);
                 if (!is_divisible)
-                    threads.back() = std::thread(worker, orig_data, scores, filter, (nthreads - 1) * grain_size + zr, nz - zr);
+                    threads.back() = std::thread(worker, orig_data, scores, filter, (nthreads - 1) * grain_size + zr, nz - zr, nullptr, nullptr);
+                worker(orig_data, scores, filter, zr, grain_size + zr, &m_progress, m_prog_diag);
                 for (auto&& i : threads) {
                     i.join();
                 }
@@ -1683,9 +1709,9 @@ void VolumeSelector::EVECount(int min_radius, int max_radius, double thresh, int
             
             is_divisible = ((nz - 2) % nthreads == 0);
             grain_size = is_divisible ? (nz - 2) / nthreads : (nz - 2) / (nthreads - 1) ;
-            std::vector<std::thread> threads2(nthreads);
+            std::vector<std::thread> threads2(nthreads - 1);
             vector<LMaxima> *temp_maxima = new vector<LMaxima>[nthreads];
-            auto worker = [&nx, &ny, &r, &zr, &thresh](float* scores, vector<LMaxima>* maxima_vec, int stz, int edz) {
+            auto worker = [&nx, &ny, &r, &zr, &thresh, &totalsteps](float* scores, vector<LMaxima>* maxima_vec, int stz, int edz, int* m_progress, wxProgressDialog* m_prog_diag) {
                 for (int z = stz; z < edz; z++) {
                     for(int y = 1; y < ny-1; y++) {
                         for(int x = 1; x < nx-1; x++) {
@@ -1714,16 +1740,23 @@ void VolumeSelector::EVECount(int min_radius, int max_radius, double thresh, int
                             }
                         }
                     }
+                    if (m_prog_diag && m_progress)
+                    {
+                        (*m_progress)++;
+                        m_prog_diag->Update(95*((*m_progress)+1)/totalsteps);
+                    }
                 }
             };
             int ite_num = is_divisible ? nthreads : nthreads - 1;
-            for (uint32_t i = 0; i < ite_num; i++)
-                threads2[i] = std::thread(worker, scores, &temp_maxima[i], i * grain_size + 1, (i + 1) * grain_size + 1);
+            for (uint32_t i = 1; i < ite_num; i++)
+                threads2[i-1] = std::thread(worker, scores, &temp_maxima[i], i * grain_size + 1, (i + 1) * grain_size + 1, nullptr, nullptr);
             if (!is_divisible)
-                threads2.back() = std::thread(worker, scores, &temp_maxima[nthreads-1], (nthreads - 1) * grain_size + 1, nz - 1);
+                threads2.back() = std::thread(worker, scores, &temp_maxima[nthreads-1], (nthreads - 1) * grain_size + 1, nz - 1, nullptr, nullptr);
+            worker(scores, &temp_maxima[0], 1, grain_size + 1, &m_progress, m_prog_diag);
             for (auto&& i : threads2) {
                 i.join();
             }
+            
             for (int i = 0; i < nthreads; i++)
             {
                 for (LMaxima &m : temp_maxima[i])

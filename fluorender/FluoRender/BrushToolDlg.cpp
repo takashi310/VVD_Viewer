@@ -1439,32 +1439,62 @@ void BrushToolDlg::OnEVEMinRadiusChange(wxScrollEvent& event)
 {
     int ival = event.GetPosition();
     wxString str = wxString::Format("%d", ival);
-    m_eve_min_radius_text->SetValue(str);
+    if (m_eve_min_radius_text) m_eve_min_radius_text->SetValue(str);
 }
 
 void BrushToolDlg::OnEVEMinRadiusText(wxCommandEvent& event)
 {
-    wxString str = m_eve_min_radius_text->GetValue();
-    double val;
-    str.ToDouble(&val);
-    m_dft_eve_min_radius = val;
-    m_eve_min_radius_sldr->SetValue(int(val));
+    double minval = 0.0;
+    double maxval = 0.0;
+    if (m_eve_min_radius_text && m_eve_min_radius_sldr)
+    {
+        wxString str = m_eve_min_radius_text->GetValue();
+        str.ToDouble(&minval);
+        m_dft_eve_min_radius = minval;
+        m_eve_min_radius_sldr->SetValue(int(minval));
+    }
+    
+    if (m_eve_max_radius_text && m_eve_max_radius_sldr)
+    {
+        wxString str = m_eve_max_radius_text->GetValue();
+        str.ToDouble(&maxval);
+        if (maxval < minval)
+        {
+            m_eve_max_radius_sldr->SetValue(int(minval));
+            m_eve_max_radius_text->ChangeValue(wxString::Format("%d", int(minval)));
+        }
+    }
 }
 
 void BrushToolDlg::OnEVEMaxRadiusChange(wxScrollEvent& event)
 {
     int ival = event.GetPosition();
     wxString str = wxString::Format("%d", ival);
-    m_eve_max_radius_text->SetValue(str);
+    if (m_eve_max_radius_text) m_eve_max_radius_text->SetValue(str);
 }
 
 void BrushToolDlg::OnEVEMaxRadiusText(wxCommandEvent& event)
 {
-    wxString str = m_eve_max_radius_text->GetValue();
-    double val;
-    str.ToDouble(&val);
-    m_dft_eve_max_radius = val;
-    m_eve_max_radius_sldr->SetValue(int(val));
+    double minval = 0.0;
+    double maxval = 0.0;
+    if (m_eve_max_radius_text && m_eve_max_radius_sldr)
+    {
+        wxString str = m_eve_max_radius_text->GetValue();
+        str.ToDouble(&maxval);
+        m_dft_eve_max_radius = maxval;
+        m_eve_max_radius_sldr->SetValue(int(maxval));
+    }
+    
+    if (m_eve_min_radius_text && m_eve_min_radius_sldr)
+    {
+        wxString str = m_eve_min_radius_text->GetValue();
+        str.ToDouble(&minval);
+        if (minval > maxval)
+        {
+            m_eve_min_radius_sldr->SetValue(int(maxval));
+            m_eve_min_radius_text->ChangeValue(wxString::Format("%d", int(maxval)));
+        }
+    }
 }
 
 void BrushToolDlg::OnEVEThresholdChange(wxScrollEvent& event)

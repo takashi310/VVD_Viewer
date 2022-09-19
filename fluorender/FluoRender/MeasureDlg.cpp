@@ -77,7 +77,7 @@ wxListCtrl(parent, id, pos, size, style),
 	itemCol.SetText("Time");
 	this->InsertColumn(7, itemCol);
 	SetColumnWidth(7, wxLIST_AUTOSIZE_USEHEADER);
-	itemCol.SetText("Volumes");
+	itemCol.SetText("Volumes/Score");
 	this->InsertColumn(8, itemCol);
 	SetColumnWidth(8, wxLIST_AUTOSIZE_USEHEADER);
 	//itemCol.SetText("Description");
@@ -250,14 +250,14 @@ void RulerListCtrl::UpdateRulers(VRenderView* vrv, bool update_annotaions)
 						VolumeData *vd = ann->GetVolume();
 						if (vd) 
 							vd->GetResolution(resx, resy, resz);
-						wxString points = wxString::Format("(%.2f, %.2f, %.2f)", p.x()*resx, p.y()*resy, -p.z()*resz);
+						wxString points = wxString::Format("(%.2f, %.2f, %.2f)", p.x()*resx, p.y()*resy, p.z()*resz);
 						wxString info = ann->GetTextInfo(j);
 						wxString voxnum;
 						wxStringTokenizer tokenizer(info, "\t");
 						while (tokenizer.HasMoreTokens())
 						{
 							wxString token = tokenizer.GetNextToken();
-							voxnum = token + " voxels";
+							voxnum = ann->GetMesh() ? token : token + " voxels";
 							break;
 						}
 						Append(name, color, 0.0, unit, 0.0, points, false, 0, voxnum, 1);
