@@ -367,7 +367,8 @@ GLMmodel *SWCReader::GenerateSolidModel(double def_r, double r_scale, unsigned i
 	m_model_norms.push_back(0.0f);
 	m_model_norms.push_back(0.0f);
 	m_model_norms.push_back(0.0f);
-    m_model_extra_data.push_back(0.0f);
+    if (m_extra_data.size() > 0)
+        m_model_extra_data.push_back(0.0f);
 
 	//generate solid spheres
     for (int i = 0; i < m_vertices.size(); i++)

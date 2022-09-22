@@ -28,7 +28,7 @@ public:
     
     vector<float>* GetModelExtraData()
     {
-        return &m_model_extra_data;
+        return m_model_extra_data.size() > 0 ? &m_model_extra_data : NULL;
     }
 
 	static bool DeepCopy(SWCReader *in, SWCReader *out);
