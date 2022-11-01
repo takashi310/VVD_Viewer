@@ -87,16 +87,21 @@ bool FijiServerConnection::OnPoke(const wxString& topic, const wxString& item, c
 		if (item == "version")
 		{
 			notifyAll(FI_VERSION_CHECK, data, size);
-			int newbuffersize = 300*1024*1024;
-			m_sock->SetOption(SOL_SOCKET, SO_RCVBUF, &newbuffersize, sizeof(newbuffersize));
-			m_sock->SetOption(SOL_SOCKET, SO_SNDBUF, &newbuffersize, sizeof(newbuffersize));
-			m_sock->SetFlags(wxSOCKET_BLOCK|wxSOCKET_WAITALL);
 			//m_sock->Write(ret, 1);
+            int newbuffersize = 1024 * 1024 * 128;
+            m_sock->SetOption(SOL_SOCKET, SO_RCVBUF, &newbuffersize, sizeof(newbuffersize));
+            m_sock->SetOption(SOL_SOCKET, SO_SNDBUF, &newbuffersize, sizeof(newbuffersize));
+            m_sock->SetFlags(wxSOCKET_BLOCK|wxSOCKET_WAITALL);
 		}
 		if (item == "confirm")
 		{
 			Poke(item, data, size, wxIPC_TEXT);
 			notifyAll(FI_CONFIRM, data, size);
+            int newbuffersize = 1024 * 1024 * 128;
+            m_sock->SetOption(SOL_SOCKET, SO_RCVBUF, &newbuffersize, sizeof(newbuffersize));
+            m_sock->SetOption(SOL_SOCKET, SO_SNDBUF, &newbuffersize, sizeof(newbuffersize));
+            SetTimeout(30);
+            
 		}
 		if (item == "pid")
 		{
@@ -106,6 +111,7 @@ bool FijiServerConnection::OnPoke(const wxString& topic, const wxString& item, c
 			notifyAll(FI_COMMAND_FINISHED, data, size);
 		break;
 	case wxIPC_PRIVATE:
+        //wxMessageBox(wxString::Format("OnPoke(\"%s\",\"%s\",\"%s\")", topic.c_str(), item.c_str(), (const char*)data));
 		if (item == "settimeout" && size == 4)
 		{
 			int sec = *((const int32_t *)data);
@@ -186,8 +192,8 @@ void SampleGuiPlugin1::doAction(ActionInfo *info)
 		notifyAll(FI_VERSION_CHECK, info->data, info->size);
 		break;
 	case FI_PID:
-		//m_pid = wxString((char *)info->data);
-		notifyAll(FI_PID, info->data, info->size);
+		m_pid = wxString((char *)info->data);
+		//notifyAll(FI_PID, info->data, info->size);
 		break;
 	case FI_CONFIRM:
 		m_initialized = true;
