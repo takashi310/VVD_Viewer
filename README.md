@@ -11,9 +11,11 @@ https://github.com/takashi310/VVD_Viewer/releases
 <br/>
 
 ## Documentations
-https://github.com/JaneliaSciComp/VVDViewer/wiki
 
-Josh Lillvis created a ditailed documentation for large data segmentation.
+###VVDViewer manual
+https://github.com/JaneliaSciComp/VVDViewer/wiki
+  
+###Large volume segmentation (by Joshua Lillvis)
 https://github.com/JaneliaSciComp/exllsm-circuit-reconstruction/blob/master/docs/NeuronSegmentation.md
 Joshua L Lillvis, Hideo Otsuna, Xiaoyu Ding, Igor Pisarev, Takashi Kawase, Jennifer Colonell, Konrad Rokicki, Cristian Goina, Ruixuan Gao, Amy Hu, Kaiyu Wang, John Bogovic, Daniel E Milkie, Linus Meienberg, Brett D Mensh, Edward S Boyden, Stephan Saalfeld, Paul W Tillberg, Barry J Dickson (2022) Rapid reconstruction of neural circuits using tissue expansion and light sheet microscopy eLife 11:e81248  
 https://doi.org/10.7554/eLife.81248  
