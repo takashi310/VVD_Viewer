@@ -9,7 +9,6 @@ Download VVD Viewer
 https://github.com/JaneliaSciComp/VVDViewer/releases  
 https://github.com/takashi310/VVD_Viewer/releases  
 <br/>
-<br/>
 
 ## Documentations
 https://github.com/JaneliaSciComp/VVDViewer/wiki
