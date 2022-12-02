@@ -343,7 +343,7 @@ namespace FLIVR
 
 			Texture* tex = vr->tex_;
 
-			double vr_dt = vr->compute_dt_fac_1px(w, h, sampling_frq_fac) / rate;
+			double vr_dt = vr->compute_dt_fac_1px(w, h, zoom, rate);
 
 			vector<TextureBrick*>* brs = tex->get_bricks();
 			Ray view_ray = vr->compute_view();
@@ -443,7 +443,7 @@ namespace FLIVR
 			}
 
 			//setup depth peeling
-			frag_ubo.loc7_view = { 1.0 / double(w2), 1.0 / double(h2), 1.0 / (rate * minwh * 0.001 * zoom * 2.0), 0.0 };
+			frag_ubo.loc7_view = { 1.0 / double(w2), 1.0 / double(h2), 1.0 / (rate * min(max(zoom, 1.0), 10.0) * 2.0), 0.0 };
 
 			//fog
 			frag_ubo.loc8_fog = { vr->m_fog_intensity, vr->m_fog_start, vr->m_fog_end, 0.0 };

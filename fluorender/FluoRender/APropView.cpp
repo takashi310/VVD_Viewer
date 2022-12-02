@@ -133,7 +133,7 @@ void APropView::GetSettings()
         m_diff_picker->SetColour(c);
         Color color(c.Red()/255.0, c.Green()/255.0, c.Blue()/255.0);
         m_ann->GetMesh()->SetColor(color, MESH_COLOR_DIFF);
-        amb = color * 0.3;
+        amb = color;
         m_ann->GetMesh()->SetColor(amb, MESH_COLOR_AMB);
         
         //alpha
@@ -232,6 +232,14 @@ void APropView::OnThresholdText(wxCommandEvent& event)
 
     if (m_ann)
     {
+        VRenderFrame* vrender_frame = (VRenderFrame*)m_frame;
+        if (vrender_frame)
+        {
+            MeasureDlg* mdlg = vrender_frame->GetMeasureDlg();
+            if (mdlg)
+                mdlg->UpdateList();
+        }
+        
         m_ann->SetThreshold(th);
         RefreshVRenderViews();
     }
@@ -244,7 +252,7 @@ void APropView::OnDiffChange(wxColourPickerEvent& event)
     if (m_ann && m_ann->GetMesh())
     {
         m_ann->GetMesh()->SetColor(color, MESH_COLOR_DIFF);
-        Color amb = color * 0.3;
+        Color amb = color;
         m_ann->GetMesh()->SetColor(amb, MESH_COLOR_AMB);
         RefreshVRenderViews(true);
     }

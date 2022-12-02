@@ -98,7 +98,7 @@ namespace FLIVR
 		{ return fog_; }
         void set_threshold(float th)
         { threshold_ = th; }
-        bool get_threshold()
+        float get_threshold()
         { return threshold_; }
 
 		std::shared_ptr<vks::VTexture> m_depth_tex;

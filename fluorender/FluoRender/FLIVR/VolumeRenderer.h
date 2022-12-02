@@ -138,7 +138,7 @@ namespace FLIVR
 		int get_depth_peel() {return depth_peel_;}
 
 		double compute_dt_fac(double sampling_frq_fac=-1.0, double *rate_fac=nullptr);
-		double compute_dt_fac_1px(uint32_t w, uint32_t h, double sclfac);
+		double compute_dt_fac_1px(uint32_t w, uint32_t h, double zoom, double rate);
 
 		//draw
 		void eval_ml_mode(Texture* ext_msk = NULL, Texture* ext_lbl = NULL);
@@ -501,7 +501,7 @@ public:
 		};
 		static std::vector<VSegPipeline> m_seg_pipelines;
 		int m_prev_seg_pipeline;
-		VSegPipeline prepareSegPipeline(vks::VulkanDevice* device, int type, int paint_mode, int hr_mode, bool use_stroke, bool stroke_clear, int out_bytes);
+		VSegPipeline prepareSegPipeline(vks::VulkanDevice* device, int type, int paint_mode, int hr_mode, bool use_stroke, bool stroke_clear, int out_bytes, bool use_absolute_value);
 
 		struct VCalPipeline {
 			VkPipeline vkpipeline;

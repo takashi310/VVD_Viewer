@@ -437,11 +437,11 @@ namespace FLIVR
 				z << MSH_HEAD_FOG;
 
 			z << MSH_FRAG_BODY_COLOR;
-			if (light_)
+			if (light_ && !particle_)
 				z << MSH_FRAG_BODY_COLOR_LIGHT;
 			if (tex_)
 				z << MSH_FRAG_BODY_TEXTURE;
-			if (!light_ && !tex_)
+			if ( (!light_ && !tex_) || particle_ )
 				z << MSH_FRAG_BODY_SIMPLE;
 			if (fog_)
 			{

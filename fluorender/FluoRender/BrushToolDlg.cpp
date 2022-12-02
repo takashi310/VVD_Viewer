@@ -963,7 +963,6 @@ void BrushToolDlg::DrawBrush(double val)
 			double thval = val / sel_vol->GetMaxValue();
 			if (thval < sel_vol->GetLeftThresh())
 				thval = sel_vol->GetLeftThresh();
-			thval *= sel_vol->GetMaxValue();
 			if (sel_vol->GetMask(false))
             {
 				sel_vol->DrawMaskThreshold((float)thval, m_cur_view->GetPersp(), m_brush_use_absolute_chk->IsChecked());
@@ -983,7 +982,6 @@ void BrushToolDlg::DrawBrush(double val)
 						double thval = val / vd->GetMaxValue();
 						if (thval < vd->GetLeftThresh())
 							thval = vd->GetLeftThresh();
-						thval *= sel_vol->GetMaxValue();
 						if (vd->GetMask(false))
                         {
 							vd->DrawMaskThreshold((float)thval, m_cur_view->GetPersp(), m_brush_use_absolute_chk->IsChecked());
@@ -1094,7 +1092,7 @@ void BrushToolDlg::OnBrushUseAbsoluteValueChk(wxCommandEvent &event)
    bool use_absolute = m_brush_use_absolute_chk->GetValue();
 
    if (m_cur_view)
-      m_cur_view->SetSelectGroup(use_absolute);
+      m_cur_view->SetUseAbsoluteValue(use_absolute);
 }
 
 //brush size 1

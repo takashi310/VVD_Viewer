@@ -9474,7 +9474,27 @@ void VRenderVulkanView::AddAnnotations(Annotations* ann)
 	for (auto layer : m_layer_list)
 		if (layer->IsA() == 4 && ann == (Annotations*)layer)
 			exist = true;
-	if (!exist) m_layer_list.push_back(ann);
+	if (!exist)
+    {
+        m_layer_list.push_back(ann);
+        VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+        if (vr_frame && vr_frame->GetClippingView())
+        {
+            VolumeData* cvd = vr_frame->GetClippingView()->GetVolumeData();
+            MeshData* cmd = vr_frame->GetClippingView()->GetMeshData();
+            vector<Plane*> *src_planes = 0;
+            if (cmd && cmd->GetMR())
+                src_planes = cmd->GetMR()->get_planes();
+            else if (cvd && cvd->GetVR())
+                src_planes = cvd->GetVR()->get_planes();
+
+            if (src_planes && vr_frame->GetClippingView()->GetChannLink())
+            {
+                CalcAndSetCombinedClippingPlanes();
+                A2Q();
+            }
+        }
+    }
 }
 
 void VRenderVulkanView::ReplaceVolumeData(wxString &name, VolumeData *dst)
@@ -11335,22 +11355,49 @@ void VRenderVulkanView::DrawClippingPlanes(bool border, int face_winding)
 
 	if (draw_type == 3)
 	{
-		for (i=0; i<GetMeshNum(); i++)
+        bool disp = false;
+        for (i=0; i<GetMeshNum(); i++)
+        {
+            MeshData* md = GetMeshData(i);
+            if (md==cur_md)
+            {
+                disp = true;
+                break;
+            }
+        }
+        for (i=0; i<(int)m_layer_list.size(); i++)
+        {
+            if (!m_layer_list[i])
+                continue;
+            switch (m_layer_list[i]->IsA())
+            {
+            case 4://annotations
+                {
+                    Annotations* ann = (Annotations*)m_layer_list[i];
+                    if (ann && ann->GetDisp() && ann->GetMesh() && ann->GetMesh() == cur_md)
+                    {
+                        disp = true;
+                        break;
+                    }
+                }
+            }
+        }
+		if (disp)
 		{
-			MeshData* md = GetMeshData(i);
+			MeshData* md = cur_md;
 			if (!md)
-				continue;
+				return;
 
 			if (md!=cur_md)
-				continue;
+                return;
 
 			MeshRenderer *mr = md->GetMR();
 			if (!mr)
-				continue;
+                return;
 
 			vector<Plane*> *planes = mr->get_planes();
 			if (planes->size() != 6)
-				continue;
+                return;
 
 			//calculating planes
 			//get six planes
@@ -11366,43 +11413,43 @@ void VRenderVulkanView::DrawClippingPlanes(bool border, int face_winding)
 			Point lp_x1z1, lp_x1z2, lp_x2z1, lp_x2z2;
 			//x1z1
 			if (!px1->Intersect(*pz1, lp_x1z1, lv_x1z1))
-				continue;
+                return;
 			//x1z2
 			if (!px1->Intersect(*pz2, lp_x1z2, lv_x1z2))
-				continue;
+                return;
 			//x2z1
 			if (!px2->Intersect(*pz1, lp_x2z1, lv_x2z1))
-				continue;
+                return;
 			//x2z2
 			if (!px2->Intersect(*pz2, lp_x2z2, lv_x2z2))
-				continue;
+                return;
 
 			//calculate 8 points
 			Point pp[8];
 			//p0 = l_x1z1 * py1
 			if (!py1->Intersect(lp_x1z1, lv_x1z1, pp[0]))
-				continue;
+                return;
 			//p1 = l_x1z2 * py1
 			if (!py1->Intersect(lp_x1z2, lv_x1z2, pp[1]))
-				continue;
+                return;
 			//p2 = l_x2z1 *py1
 			if (!py1->Intersect(lp_x2z1, lv_x2z1, pp[2]))
-				continue;
+                return;
 			//p3 = l_x2z2 * py1
 			if (!py1->Intersect(lp_x2z2, lv_x2z2, pp[3]))
-				continue;
+                return;
 			//p4 = l_x1z1 * py2
 			if (!py2->Intersect(lp_x1z1, lv_x1z1, pp[4]))
-				continue;
+                return;
 			//p5 = l_x1z2 * py2
 			if (!py2->Intersect(lp_x1z2, lv_x1z2, pp[5]))
-				continue;
+                return;
 			//p6 = l_x2z1 * py2
 			if (!py2->Intersect(lp_x2z1, lv_x2z1, pp[6]))
-				continue;
+                return;
 			//p7 = l_x2z2 * py2
 			if (!py2->Intersect(lp_x2z2, lv_x2z2, pp[7]))
-				continue;
+                return;
 
 			//draw the six planes out of the eight points
 			//get color
@@ -13053,37 +13100,39 @@ void VRenderVulkanView::DrawInfo(int nx, int ny)
 			px*sx, py*sy);
 	}
 
-	//if (m_test_wiref)
-	//{
-	//	if (m_vol_method == VOL_METHOD_MULTI && m_mvr)
-	//	{
-	//		str = wxString::Format("SLICES: %d", m_mvr->get_slice_num());
-	//		wstr_temp = str.ToStdWstring();
-	//		px = gapw-nx/2;
-	//		py = ny/2-gaph*1.5;
-	//		m_text_renderer->RenderText(
-	//			wstr_temp, text_color,
-	//			px*sx, py*sy, sx, sy);
-	//	}
-	//	else
-	//	{
-	//		for (int i=0; i<(int)m_vd_pop_list.size(); i++)
-	//		{
-	//			VolumeData* vd = m_vd_pop_list[i];
-	//			if (vd && vd->GetVR())
-	//			{
-	//				str = wxString::Format("SLICES_%d: %d", i+1, vd->GetVR()->get_slice_num());
-	//				wstr_temp = str.ToStdWstring();
-	//				px = gapw-nx/2;
-	//				py = ny/2-gaph*(3+i)/2;
-	//				if (m_text_renderer)
-	//					m_text_renderer->RenderText(
-	//					wstr_temp, text_color,
-	//					px*sx, py*sy, sx, sy);
-	//			}
-	//		}
-	//	}
-	//}
+    if (/*m_test_wiref*/1)
+    {
+        if (m_vol_method == VOL_METHOD_MULTI && m_mvr)
+        {
+            str = wxString::Format("SLICES: %d", m_mvr->get_slice_num());
+            wstr_temp = str.ToStdWstring();
+            px = gapw-nx/2;
+            py = ny/2-gaph*1.5;
+            m_text_renderer->RenderText(
+                m_vulkan->frameBuffers[m_vulkan->currentBuffer],
+                wstr_temp, text_color,
+                px*sx, py*sy);
+        }
+        else
+        {
+            for (int i=0; i<(int)m_vd_pop_list.size(); i++)
+            {
+                VolumeData* vd = m_vd_pop_list[i];
+                if (vd && vd->GetVR())
+                {
+                    str = wxString::Format("SLICES_%d: %d", i+1, vd->GetVR()->get_slice_num());
+                    wstr_temp = str.ToStdWstring();
+                    px = gapw-nx/2;
+                    py = ny/2-gaph*(3+i)/2;
+                    if (m_text_renderer)
+                        m_text_renderer->RenderText(
+                        m_vulkan->frameBuffers[m_vulkan->currentBuffer],
+                        wstr_temp, text_color,
+                        px*sx, py*sy);
+                }
+            }
+        }
+    }
 
 	//wxString dbgstr = wxString::Format("fps: %.2f\n", fps_ >= 0.0 && fps_ < 300.0 ? fps_ : 0.0);
 	//OutputDebugStringA(dbgstr.ToStdString().c_str());
@@ -13346,14 +13395,30 @@ void VRenderVulkanView::Q2A()
 			}
 		}
         
-        for (int i=0; i<(int)m_md_pop_list.size(); i++)
+        vector<MeshData*> md_list(m_md_pop_list);
+        for (size_t i=0; i<m_layer_list.size(); i++)
         {
-            if (!m_md_pop_list[i])
+            if (!m_layer_list[i])
+                continue;
+            if (m_layer_list[i]->IsA() == 4)
+            {
+                Annotations* ann = (Annotations*)m_layer_list[i];
+                if (!ann) continue;
+                if (ann->GetDisp() && ann->GetMesh())
+                {
+                    ann->GetMesh()->RecalcBounds();
+                    md_list.push_back(ann->GetMesh());
+                }
+            }
+        }
+        for (int i=0; i<(int)md_list.size(); i++)
+        {
+            if (!md_list[i])
                 continue;
             
             vector<Plane*> *planes = 0;
             
-            Vector sz = m_md_pop_list[i]->GetBounds().diagonal();
+            Vector sz = md_list[i]->GetBounds().diagonal();
             Vector scale, scale2, scale2inv;
             scale = Vector(1.0/sz.x(), 1.0/sz.y(), 1.0/sz.z());
             scale.safe_normalize();
@@ -13362,8 +13427,8 @@ void VRenderVulkanView::Q2A()
             scale2inv = Vector(1.0/sz.x(), 1.0/sz.y(), 1.0/sz.z());
             //scale2inv.safe_normalize();
             
-            if (m_md_pop_list[i]->GetMR())
-                planes = m_md_pop_list[i]->GetMR()->get_planes();
+            if (md_list[i]->GetMR())
+                planes = md_list[i]->GetMR()->get_planes();
             if (planes && planes->size()==6)
             {
                 double x1, x2, y1, y2, z1, z2;
@@ -13622,15 +13687,31 @@ void VRenderVulkanView::A2Q()
                 }
 			}
 		}
-
-		for (int i=0; i<(int)m_md_pop_list.size(); i++)
+        
+        vector<MeshData*> md_list(m_md_pop_list);
+        for (size_t i=0; i<m_layer_list.size(); i++)
+        {
+            if (!m_layer_list[i])
+                continue;
+            if (m_layer_list[i]->IsA() == 4)
+            {
+                Annotations* ann = (Annotations*)m_layer_list[i];
+                if (!ann) continue;
+                if (ann->GetDisp() && ann->GetMesh())
+                {
+                    ann->GetMesh()->RecalcBounds();
+                    md_list.push_back(ann->GetMesh());
+                }
+            }
+        }
+		for (int i=0; i<(int)md_list.size(); i++)
 		{
-			if (!m_md_pop_list[i])
+			if (!md_list[i])
 				continue;
 
 			vector<Plane*> *planes = 0;
 
-			Vector sz = m_md_pop_list[i]->GetBounds().diagonal();
+			Vector sz = md_list[i]->GetBounds().diagonal();
 			Vector scale, scale2, scale2inv;
 			scale = Vector(1.0/sz.x(), 1.0/sz.y(), 1.0/sz.z());
 			scale.safe_normalize();
@@ -13639,8 +13720,8 @@ void VRenderVulkanView::A2Q()
             scale2inv = Vector(1.0/sz.x(), 1.0/sz.y(), 1.0/sz.z());
             //scale2inv.safe_normalize();
 			
-			if (m_md_pop_list[i]->GetMR())
-				planes = m_md_pop_list[i]->GetMR()->get_planes();
+			if (md_list[i]->GetMR())
+				planes = md_list[i]->GetMR()->get_planes();
 			if (planes && planes->size()==6)
 			{
 				double x1, x2, y1, y2, z1, z2;
@@ -17814,6 +17895,22 @@ void VRenderVulkanView::CalcAndSetCombinedClippingPlanes()
         bounds.extend(m_md_pop_list[i]->GetBounds());
     }
     
+    for (size_t i=0; i<m_layer_list.size(); i++)
+    {
+        if (!m_layer_list[i])
+            continue;
+        if (m_layer_list[i]->IsA() == 4)
+        {
+            Annotations* ann = (Annotations*)m_layer_list[i];
+            if (!ann) continue;
+            if (ann->GetDisp() && ann->GetMesh())
+            {
+                ann->GetMesh()->RecalcBounds();
+                bounds.extend(ann->GetMesh()->GetBounds());
+            }
+        }
+    }
+    
     for (i = 0; i < (int)m_vd_pop_list.size(); i++)
     {
         
@@ -17879,6 +17976,19 @@ void VRenderVulkanView::CalcAndSetCombinedClippingPlanes()
     
     for (i = 0; i < (int)m_md_pop_list.size(); i++)
         m_md_pop_list[i]->SetBounds(bounds);
+    
+    for (size_t i=0; i<m_layer_list.size(); i++)
+    {
+        if (!m_layer_list[i])
+            continue;
+        if (m_layer_list[i]->IsA() == 4)
+        {
+            Annotations* ann = (Annotations*)m_layer_list[i];
+            if (!ann) continue;
+            if (ann->GetDisp() && ann->GetMesh())
+                ann->GetMesh()->SetBounds(bounds);
+        }
+    }
 }
 
 
@@ -18407,8 +18517,6 @@ void VRenderView::CreateBar()
 	//bar right///////////////////////////////////////////////////
 	wxBoxSizer* sizer_v_4 = new wxBoxSizer(wxVERTICAL);
 	st1 = new wxStaticText(this, 0, "Zoom:\n");
-	m_center_btn = new wxButton(this, ID_CenterBtn, "Center",
-		wxDefaultPosition, wxSize(65, 20));
 	m_scale_121_btn = new wxButton(this, ID_Scale121Btn, "1:1",
 		wxDefaultPosition, wxSize(40, 20));
 	m_scale_factor_sldr = new wxSlider(this, ID_ScaleFactorSldr, 100, 50, 999,
@@ -18421,7 +18529,6 @@ void VRenderView::CreateBar()
 		wxDefaultPosition, wxSize(40, 20));
 	sizer_v_4->Add(5, 10, 0);
 	sizer_v_4->Add(st1, 0, wxALIGN_CENTER);
-	sizer_v_4->Add(m_center_btn, 0, wxALIGN_CENTER);
 	sizer_v_4->Add(m_scale_121_btn, 0, wxALIGN_CENTER);
 	sizer_v_4->Add(m_scale_factor_sldr, 1, wxALIGN_CENTER);
 	sizer_v_4->Add(m_scale_factor_spin, 0, wxALIGN_CENTER);
@@ -18436,7 +18543,9 @@ void VRenderView::CreateBar()
 	//bar bottom///////////////////////////////////////////////////
 	wxBoxSizer* sizer_h_2 = new wxBoxSizer(wxHORIZONTAL);
 	m_rot_link_chk = new wxCheckBox(this, ID_RotLinkChk, "Link");
-	m_rot_reset_btn = new wxButton(this, ID_RotResetBtn, "Reset to 0",
+    m_center_btn = new wxButton(this, ID_CenterBtn, "Reset Trans",
+        wxDefaultPosition, wxSize(85, 20));
+	m_rot_reset_btn = new wxButton(this, ID_RotResetBtn, "Reset Rot",
 		wxDefaultPosition, wxSize(85, 20));
 	st1 = new wxStaticText(this, 0, "X:");
 	m_x_rot_sldr = new wxSlider(this, ID_XRotSldr, 0, 0, 360,
@@ -18462,8 +18571,11 @@ void VRenderView::CreateBar()
 	m_rot_lock_chk = new wxCheckBox(this, ID_RotLockChk, "45 Increments");
 	m_default_btn = new wxButton(this, ID_DefaultBtn, "Save as Default",
 		wxDefaultPosition, wxSize(115, 20));
-	sizer_h_2->Add(m_rot_link_chk, 0, wxALIGN_CENTER);
+    sizer_h_2->Add(m_center_btn, 0, wxALIGN_CENTER);
+    sizer_h_2->Add(5, 5, 0);
 	sizer_h_2->Add(m_rot_reset_btn, 0, wxALIGN_CENTER);
+    sizer_h_2->Add(5, 5, 0);
+    sizer_h_2->Add(m_rot_link_chk, 0, wxALIGN_CENTER);
 	sizer_h_2->Add(5, 5, 0);
 	sizer_h_2->Add(st1, 0, wxALIGN_CENTER, 0);
 	sizer_h_2->Add(m_x_rot_sldr, 1, wxEXPAND, 0);
@@ -19748,7 +19860,7 @@ void VRenderView::OnRotReset(wxCommandEvent &event)
 	m_z_rot_text->ChangeValue("0.0");
 	SetRotations(0.0, 0.0, 0.0);
     m_glview->InitView(INIT_BOUNDS|INIT_CENTER|INIT_ROTATE);
-    m_glview->SetCenter();
+    //m_glview->SetCenter();
 	RefreshGL();
 	if (m_glview->m_mouse_focus)
 		m_glview->SetFocus();

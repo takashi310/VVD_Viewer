@@ -2357,6 +2357,8 @@ void VRenderFrame::OnSelection(int type,
 			{
 				VolumeData* vd_ann = ann->GetVolume();
 				m_clip_view->SetVolumeData(vd_ann);
+                MeshData* md_ann = ann->GetMesh();
+                m_clip_view->SetMeshData(md_ann);
 			}
 			break;
 		}

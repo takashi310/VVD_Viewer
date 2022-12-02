@@ -467,6 +467,14 @@ namespace FLIVR
 	"	c = vec4(v.x);\n" \
 	"\n"
 
+#define VOL_TRANSFER_FUNCTION_SIN_COLOR_ORG \
+    "    //VOL_TRANSFER_FUNCTION_SIN_COLOR_ORG\n" \
+    "    vec4 c;\n" \
+    "    float tf_alp = 0.0;\n" \
+    "    float alpha = 0.0;\n" \
+    "    c = vec4(v.x);\n" \
+    "\n"
+
 #define VOL_TRANSFER_FUNCTION_SIN_COLOR_L_FUNC \
 	"//VOL_TRANSFER_FUNCTION_SIN_COLOR_L_FUNC\n" \
 	"vec4 vol_trans_sin_color_l(vec4 v)\n" \

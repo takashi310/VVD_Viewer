@@ -53,7 +53,7 @@ namespace FLIVR
 	{
 	public:
 		SegShader(VkDevice device, int type, int paint_mode, int hr_mode,
-			bool use_2d, bool shading, int peel, bool clip, bool hiqual, bool use_stroke, bool stroke_clear, int out_bytes);
+			bool use_2d, bool shading, int peel, bool clip, bool hiqual, bool use_stroke, bool stroke_clear, int out_bytes, bool use_abs);
 		~SegShader();
 
 		bool create();
@@ -69,7 +69,7 @@ namespace FLIVR
 		inline bool hiqual() {return hiqual_;}
 
 		inline bool match(VkDevice device, int type, int paint_mode, int hr_mode,
-			bool use_2d, bool shading, int peel, bool clip, bool hiqual, bool use_stroke, bool stroke_clear, int out_bytes)
+			bool use_2d, bool shading, int peel, bool clip, bool hiqual, bool use_stroke, bool stroke_clear, int out_bytes, bool use_abs)
 		{ 
 			return (device_ == device &&
 				type_ == type &&
@@ -82,7 +82,8 @@ namespace FLIVR
 				hiqual_ == hiqual &&
 				use_stroke_ == use_stroke &&
 				stroke_clear_ == stroke_clear &&
-				out_bytes_ == out_bytes);
+				out_bytes_ == out_bytes &&
+                use_abs_ == use_abs);
 		}
 
 		inline ShaderProgram* program() { return program_; }
@@ -102,6 +103,7 @@ namespace FLIVR
 		bool use_stroke_;
 		bool stroke_clear_;
 		int out_bytes_;
+        bool use_abs_;
 
 		ShaderProgram* program_;
 	};
@@ -114,7 +116,7 @@ namespace FLIVR
 		~SegShaderFactory();
 
 		ShaderProgram* shader(VkDevice device, int type, int paint_mode, int hr_mode,
-			bool use_2d, bool shading, int peel, bool clip, bool hiqual, bool use_stroke, bool stroke_clear, int out_bytes);
+			bool use_2d, bool shading, int peel, bool clip, bool hiqual, bool use_stroke, bool stroke_clear, int out_bytes, bool use_abs);
 
 		void init(std::vector<vks::VulkanDevice*> &devices);
 

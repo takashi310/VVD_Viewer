@@ -565,7 +565,7 @@ namespace FLIVR
 	"\n"
 
 	SegShader::SegShader(VkDevice device, int type, int paint_mode, int hr_mode,
-		bool use_2d, bool shading, int peel, bool clip, bool hiqual, bool use_stroke, bool stroke_clear, int out_bytes) :
+		bool use_2d, bool shading, int peel, bool clip, bool hiqual, bool use_stroke, bool stroke_clear, int out_bytes, bool use_abs) :
 	device_(device),
 	type_(type),
 	paint_mode_(paint_mode),
@@ -578,6 +578,7 @@ namespace FLIVR
 	use_stroke_(use_stroke),
 	stroke_clear_(stroke_clear),
 	out_bytes_(out_bytes),
+    use_abs_(use_abs),
 	program_(0)
 	{}
 
@@ -689,7 +690,10 @@ namespace FLIVR
 					z << VOL_DATA_VOLUME_LOOKUP;
 					//z << VOL_GRAD_COMPUTE_HI;
 					//z << VOL_COMPUTED_GM_LOOKUP;
-					z << VOL_TRANSFER_FUNCTION_SIN_COLOR_L;
+                    if (use_abs_)
+                        z << VOL_TRANSFER_FUNCTION_SIN_COLOR_ORG;
+                    else
+                        z << VOL_TRANSFER_FUNCTION_SIN_COLOR_L;
 
 					if (use_2d_)
 					{
@@ -741,9 +745,12 @@ namespace FLIVR
 				{
 					z << SEG_HEAD_LIT;
 					z << VOL_DATA_VOLUME_LOOKUP;
-					z << VOL_GRAD_COMPUTE_HI;
-					z << VOL_COMPUTED_GM_LOOKUP;
-					z << VOL_TRANSFER_FUNCTION_SIN_COLOR_L;
+					//z << VOL_GRAD_COMPUTE_HI;
+					//z << VOL_COMPUTED_GM_LOOKUP;
+                    if (use_abs_)
+                        z << VOL_TRANSFER_FUNCTION_SIN_COLOR_ORG;
+                    else
+                        z << VOL_TRANSFER_FUNCTION_SIN_COLOR_L;
 
 					if (use_2d_)
 					{
@@ -822,6 +829,9 @@ namespace FLIVR
 		z << SEG_TAIL;
 
 		s = z.str();
+        
+        std::cout << s << std::endl;
+        
 		return false;
 	}
 
@@ -858,25 +868,25 @@ namespace FLIVR
 	}
 
 	ShaderProgram* SegShaderFactory::shader(VkDevice device, int type, int paint_mode, int hr_mode,
-		bool use_2d, bool shading, int peel, bool clip, bool hiqual, bool use_stroke, bool stroke_clear, int out_bytes)
+		bool use_2d, bool shading, int peel, bool clip, bool hiqual, bool use_stroke, bool stroke_clear, int out_bytes, bool use_abs)
 	{
 		if(prev_shader_ >= 0)
 		{
-			if(shader_[prev_shader_]->match(device, type, paint_mode, hr_mode, use_2d, shading, peel, clip, hiqual, use_stroke, stroke_clear, out_bytes))
+			if(shader_[prev_shader_]->match(device, type, paint_mode, hr_mode, use_2d, shading, peel, clip, hiqual, use_stroke, stroke_clear, out_bytes, use_abs))
 			{
 				return shader_[prev_shader_]->program();
 			}
 		}
 		for(unsigned int i=0; i<shader_.size(); i++)
 		{
-			if(shader_[i]->match(device, type, paint_mode, hr_mode, use_2d, shading, peel, clip, hiqual, use_stroke, stroke_clear, out_bytes))
+			if(shader_[i]->match(device, type, paint_mode, hr_mode, use_2d, shading, peel, clip, hiqual, use_stroke, stroke_clear, out_bytes, use_abs))
 			{
 				prev_shader_ = i;
 				return shader_[i]->program();
 			}
 		}
 
-		SegShader* s = new SegShader(device, type, paint_mode, hr_mode, use_2d, shading, peel, clip, hiqual, use_stroke, stroke_clear, out_bytes);
+		SegShader* s = new SegShader(device, type, paint_mode, hr_mode, use_2d, shading, peel, clip, hiqual, use_stroke, stroke_clear, out_bytes, use_abs);
 		if(s->create())
 		{
 			delete s;

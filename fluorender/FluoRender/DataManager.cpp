@@ -7403,6 +7403,7 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 			AddVolumeData(vd);
 
 			SetVolumeDefault(vd);
+            /*
 			if (type == LOAD_TYPE_TIFF)
 			{
 				double minval, maxval, vxmax;
@@ -7413,6 +7414,7 @@ int DataManager::LoadVolumeData(wxString &filename, int type, int ch_num, int t_
 				if (maxval >= 0)
 					vd->SetOffset(maxval/vxmax);
 			}
+             */
             
             if (type == LOAD_TYPE_BRKXML && vd->GetMaxValue() == 65535)
             {
@@ -9801,6 +9803,7 @@ wxThread::ExitCode ProjectDataLoaderThread::Entry()
             m_pdl->ms_pThreadCS->Leave();
             
             m_pdl->m_dm->SetVolumeDefault(vd);
+            /*
             if (type == LOAD_TYPE_TIFF)
             {
                 double minval, maxval, vxmax;
@@ -9811,6 +9814,7 @@ wxThread::ExitCode ProjectDataLoaderThread::Entry()
                 if (maxval >= 0)
                     vd->SetOffset(maxval/vxmax);
             }
+             */
             
             if (type == LOAD_TYPE_BRKXML && vd->GetMaxValue() == 65535)
             {

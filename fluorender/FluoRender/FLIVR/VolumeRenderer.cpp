@@ -686,12 +686,8 @@ namespace FLIVR
 		return maxlen / l;
 	}
 
-	//sclfac: m_proj_mat[0][0] (ortho)
-	double VolumeRenderer::compute_dt_fac_1px(uint32_t w, uint32_t h, double sclfac)
+	double VolumeRenderer::compute_dt_fac_1px(uint32_t w, uint32_t h, double zoom, double rate)
 	{
-		if (sclfac <= 0.0)
-			return 1.0;
-
 		double maxlen;
 		double vdmaxlen;
 		Transform *field_trans = tex_->transform();
@@ -704,7 +700,7 @@ namespace FLIVR
 
 		uint32_t mindim = min(w, h);
 
-		double pxlen = 1.0 / mindim / sclfac;
+        double pxlen = 1.0 / (min(max(zoom, 1.0), 10.0) * 1.5 * rate);
         
         double normal_mat[16];
         Transform normal_trans = *field_trans;
@@ -1793,7 +1789,7 @@ namespace FLIVR
 		uint32_t w2 = w;
 		uint32_t h2 = h;
 		
-		double dt = compute_dt_fac_1px(w, h, sampling_frq_fac) / rate;
+		double dt = compute_dt_fac_1px(w, h, zoom, rate);
 		//num_slices_ = (int)(tex_->GetBrickIdSpaceMaxExtent().length() / dt);
 
 		//--------------------------------------------------------------------------
@@ -2143,7 +2139,7 @@ namespace FLIVR
 			}
 
 			frag_const.loc_dim_inv = { 1.0 / b->nx(), 1.0 / b->ny(), 1.0 / b->nz(),
-									   mode_ == MODE_OVER ? 1.0 / (rate * minwh * 0.001 * zoom * 2.0) : 1.0 };
+									   mode_ == MODE_OVER ? 1.0 / (rate * min(max(zoom, 1.0), 10.0) * 2.0) : 1.0 };
 			//for brick transformation
 			BBox dbox = b->dbox();
 			frag_const.b_scale = { float(dbox.max().x() - dbox.min().x()),
@@ -2622,7 +2618,7 @@ namespace FLIVR
 		uint32_t w2 = w;
 		uint32_t h2 = h;
 
-		double dt = compute_dt_fac_1px(w, h, sampling_frq_fac) / rate;
+		double dt = compute_dt_fac_1px(w, h, zoom, rate);
 		num_slices_ = (int)(tex_->GetBrickIdSpaceMaxExtent().length() / dt);
 
 		//--------------------------------------------------------------------------
@@ -2751,7 +2747,7 @@ namespace FLIVR
 
 		//setup depth peeling
 		frag_ubo.loc7_view = { 1.0 / double(w2), 1.0 / double(h2), 
-			mode_ == MODE_OVER ? 1.0 / (rate * minwh * 0.001 * zoom * 2.0) : 1.0 , 0.0 };
+			mode_ == MODE_OVER ? 1.0 / (rate * min(max(zoom, 1.0), 10.0) * 2.0) : 1.0 , 0.0 };
 
 		//fog
 		if (m_use_fog)
@@ -3671,7 +3667,7 @@ namespace FLIVR
 	//		shader->release();
 	//}
 
-	VolumeRenderer::VSegPipeline VolumeRenderer::prepareSegPipeline(vks::VulkanDevice* device, int type, int paint_mode, int hr_mode, bool use_stroke, bool stroke_clear, int out_bytes)
+	VolumeRenderer::VSegPipeline VolumeRenderer::prepareSegPipeline(vks::VulkanDevice* device, int type, int paint_mode, int hr_mode, bool use_stroke, bool stroke_clear, int out_bytes, bool use_absolute_value)
 	{
 		VSegPipeline ret_pipeline;
 
@@ -3684,31 +3680,31 @@ namespace FLIVR
 			seg_shader = m_vulkan->seg_shader_factory_->shader(
 				device->logicalDevice,
 				SEG_SHDR_INITIALIZE, paint_mode, hr_mode,
-				use_2d_weight, true, depth_peel_, true, hiqual_, use_stroke, stroke_clear, out_bytes);
+				use_2d_weight, true, depth_peel_, true, hiqual_, use_stroke, stroke_clear, out_bytes, use_absolute_value);
 			break;
 		case SEG_SHDR_DB_GROW://diffusion-based growing
 			seg_shader = m_vulkan->seg_shader_factory_->shader(
 				device->logicalDevice,
 				SEG_SHDR_DB_GROW, paint_mode, hr_mode,
-				use_2d_weight, true, depth_peel_, true, hiqual_, use_stroke, stroke_clear, out_bytes);
+				use_2d_weight, true, depth_peel_, true, hiqual_, use_stroke, stroke_clear, out_bytes, use_absolute_value);
 			break;
 		case FLT_SHDR_NR://noise removal
 			seg_shader = m_vulkan->seg_shader_factory_->shader(
 				device->logicalDevice,
 				FLT_SHDR_NR, paint_mode, hr_mode,
-				false, false, depth_peel_, false, hiqual_, use_stroke, stroke_clear, out_bytes);
+				false, false, depth_peel_, false, hiqual_, use_stroke, stroke_clear, out_bytes, use_absolute_value);
 			break;
 		case LBL_SHDR_INITIALIZE://initialize label
 			seg_shader = m_vulkan->seg_shader_factory_->shader(
 				device->logicalDevice,
 				LBL_SHDR_INITIALIZE, paint_mode, 0,
-				tex_->nmask() != -1, false, 0, false, false, hiqual_, false, 4);
+				tex_->nmask() != -1, false, 0, false, false, hiqual_, false, 4, use_absolute_value);
 			break;
 		case LBL_SHDR_MIF://label maximum filter
 			seg_shader = m_vulkan->seg_shader_factory_->shader(
 				device->logicalDevice,
 				LBL_SHDR_MIF, paint_mode, 0,
-				tex_->nmask() != -1, false, 0, false, false, hiqual_, false, 4);
+				tex_->nmask() != -1, false, 0, false, false, hiqual_, false, 4, use_absolute_value);
 			break;
 		}
 
@@ -3824,7 +3820,7 @@ namespace FLIVR
 			break;
 		}
 
-		VSegPipeline pipeline = prepareSegPipeline(prim_dev, seg_shader_type, paint_mode, hr_mode, use_stroke, clear_stroke, out_bytes);
+		VSegPipeline pipeline = prepareSegPipeline(prim_dev, seg_shader_type, paint_mode, hr_mode, use_stroke, clear_stroke, out_bytes, use_absolute_value);
 		VkPipelineLayout pipelineLayout = m_vulkan->seg_shader_factory_->pipeline_[prim_dev].pipelineLayout;
 
 		std::vector<VkWriteDescriptorSet> descriptorWritesBase;
@@ -4079,7 +4075,7 @@ namespace FLIVR
 
 		bool has_mask = tex_->nmask() != -1;
 
-		VSegPipeline pipeline = prepareSegPipeline(prim_dev, type, mode, 0, false, false, 4);
+		VSegPipeline pipeline = prepareSegPipeline(prim_dev, type, mode, 0, false, false, 4, false);
 		VkPipelineLayout pipelineLayout = m_vulkan->seg_shader_factory_->pipeline_[prim_dev].pipelineLayout;
 
 		std::vector<VkWriteDescriptorSet> descriptorWritesBase;
@@ -4942,7 +4938,7 @@ namespace FLIVR
 
 		VolCalShaderFactory::CalCompShaderBrickConst cal_const;
 
-		float normalized_th = tex_->nb(0) == 2 ? thresh / 65535.0f : thresh / 255.0f;
+        float normalized_th = thresh;//tex_->nb(0) == 2 ? thresh / 65535.0f : thresh / 255.0f;
 		cal_const.loc0_scale_usemask = { 1.0f, 1.0f, normalized_th, 0.0f };
         cal_const.loc2_scscale_th = { inv_ ? -scalar_scale_ : scalar_scale_, gm_scale_, lo_thresh_, hi_thresh_ };
         cal_const.loc3_gamma_offset = { 1.0 / gamma3d_, gm_thresh_, offset_, sw_ };

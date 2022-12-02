@@ -173,17 +173,16 @@ namespace FLIVR
 	"	if (c2.r > 0.0)\n" \
 	"	{\n" \
 	"		//CAL_RESULT\n" \
-	"		imageStore(outimg, ivec3(gl_GlobalInvocationID.xyz), vec4(c1.r >= base.loc0.z ? 1.0 : 0.0));\n" \
+	"		imageStore(outimg, ivec3(gl_GlobalInvocationID.xyz), vec4(c1.r > base.loc0.z ? 1.0 : 0.0));\n" \
 	"	}\n" \
 
 #define CAL_BODY_MASK_THRESHOLD_TR \
     "    //CAL_BODY_MASK_THRESHOLD_TR\n" \
     "    if (c2.r > 0.0)\n" \
     "    {\n" \
-    "        c1.y = length(vol_grad_func(vec4(t0.stp, 1.0), base.loc1).xyz);\n" \
-    "        c1 = vol_trans_sin_color_l(c1);\n" \
+    "        c1.r = base.loc2.x<0.0?(1.0+c1.r*base.loc2.x):c1.r*base.loc2.x;" \
     "        //CAL_RESULT\n" \
-    "        imageStore(outimg, ivec3(gl_GlobalInvocationID.xyz), vec4(c1.r >= base.loc0.z ? 1.0 : 0.0));\n" \
+    "        imageStore(outimg, ivec3(gl_GlobalInvocationID.xyz), vec4(c1.r > base.loc0.z ? 1.0 : 0.0));\n" \
     "    }\n" \
 
 #define CAL_BODY_RGBAPPLYMASK \
@@ -257,12 +256,6 @@ namespace FLIVR
 			z << CAL_UNIFORMS_RGB_WITH_MASK;
 			break;
 		}
-        
-        if (type_ == CAL_MASK_THRESHOLD_TR)
-        {
-            z << VOL_GRAD_COMPUTE_FUNC;
-            z << VOL_TRANSFER_FUNCTION_SIN_COLOR_L_FUNC;
-        }
 
 		z << CAL_HEAD;
 
@@ -318,6 +311,9 @@ namespace FLIVR
 		z << CAL_TAIL;
 
 		s = z.str();
+        
+        std::cout << s << std::endl;
+        
 		return false;
 	}
 
