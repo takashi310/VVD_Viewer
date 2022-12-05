@@ -260,7 +260,7 @@ void RulerListCtrl::UpdateRulers(VRenderView* vrv, bool update_annotaions)
 							voxnum = ann->GetMesh() ? token : token + " voxels";
 							break;
 						}
-                        if ( !ann->GetMesh() || (ann->GetMesh() && ann->GetThreshold() < STOD(voxnum)))
+                        if ( !ann->GetMesh() || (ann->GetMesh() && ann->GetThreshold() <  STOD(voxnum.ToStdString().c_str())) )
                             Append(name, color, 0.0, unit, 0.0, points, false, 0, voxnum, 1);
 					}
 				}
