@@ -921,10 +921,10 @@ z
 
    size_t TextureBrick::tex_format_size(VkFormat t)
    {
-      if (t == VK_FORMAT_R8_SNORM || VK_FORMAT_BC4_SNORM_BLOCK)  { return sizeof(int8_t); }
-      if (t == VK_FORMAT_R8_UNORM || VK_FORMAT_BC4_UNORM_BLOCK || VK_FORMAT_R8_UINT)  { return sizeof(uint8_t); }
+      if (t == VK_FORMAT_R8_SNORM || t == VK_FORMAT_BC4_SNORM_BLOCK)  { return sizeof(int8_t); }
+      if (t == VK_FORMAT_R8_UNORM || t == VK_FORMAT_BC4_UNORM_BLOCK || t == VK_FORMAT_R8_UINT)  { return sizeof(uint8_t); }
       if (t == VK_FORMAT_R16_SNORM) { return sizeof(int16_t); }
-      if (t == VK_FORMAT_R16_UNORM || VK_FORMAT_R16_UINT) { return sizeof(uint16_t); }
+      if (t == VK_FORMAT_R16_UNORM || t == VK_FORMAT_R16_UINT) { return sizeof(uint16_t); }
       if (t == VK_FORMAT_R32_SINT)  { return sizeof(int32_t); }
       if (t == VK_FORMAT_R32_UINT)  { return sizeof(uint32_t); }
       if (t == VK_FORMAT_R32_SFLOAT){ return sizeof(float); }
@@ -1123,10 +1123,14 @@ z
 	   char *tmp = NULL;
 	   size_t tmpsize;
 	   read_brick_without_decomp(tmp, tmpsize, &tmpinfo);
-	   if	   (finfo->type == BRICK_FILE_TYPE_RAW) { data = tmp; size = tmpsize; return true; }
-	   else if (finfo->type == BRICK_FILE_TYPE_JPEG) result = jpeg_decompressor(data, tmp, size, tmpsize);
-	   else if (finfo->type == BRICK_FILE_TYPE_ZLIB) result = zlib_decompressor(data, tmp, size, tmpsize);
-	   else if (finfo->type == BRICK_FILE_TYPE_H265) result = h265_decompressor(data, tmp, size, tmpsize, nx_, ny_);
+	   if (finfo->type == BRICK_FILE_TYPE_RAW)
+       {
+           data = tmp;
+           size = tmpsize;
+           return true;
+       }
+	   else
+           result = decompress_brick(data, tmp, size, tmpsize, finfo->type, nx(), ny(), nz(), nb(0), finfo->blosc_blocksize_x, finfo->blosc_blocksize_y, finfo->blosc_blocksize_z);
 
 	   if (tmp)
 		   delete[] tmp;

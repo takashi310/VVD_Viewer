@@ -136,6 +136,8 @@ void TextRenderer::RenderText(const std::unique_ptr<vks::VFrameBuffer>& framebuf
 {
 	if (!m_valid)
 		return;
+    if (text.empty())
+        return;
 	
 	vks::VulkanDevice* prim_dev = m_v2drender->m_vulkan->vulkanDevice;
 	TextDimensions dims = m_cur_font->Measure(text);

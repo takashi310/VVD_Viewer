@@ -18517,6 +18517,8 @@ void VRenderView::CreateBar()
 	//bar right///////////////////////////////////////////////////
 	wxBoxSizer* sizer_v_4 = new wxBoxSizer(wxVERTICAL);
 	st1 = new wxStaticText(this, 0, "Zoom:\n");
+    m_center_btn = new wxButton(this, ID_CenterBtn, "Reset\nTransl.",
+        wxDefaultPosition, wxSize(60, 35));
 	m_scale_121_btn = new wxButton(this, ID_Scale121Btn, "1:1",
 		wxDefaultPosition, wxSize(40, 20));
 	m_scale_factor_sldr = new wxSlider(this, ID_ScaleFactorSldr, 100, 50, 999,
@@ -18529,6 +18531,7 @@ void VRenderView::CreateBar()
 		wxDefaultPosition, wxSize(40, 20));
 	sizer_v_4->Add(5, 10, 0);
 	sizer_v_4->Add(st1, 0, wxALIGN_CENTER);
+    sizer_v_4->Add(m_center_btn, 0, wxALIGN_CENTER);
 	sizer_v_4->Add(m_scale_121_btn, 0, wxALIGN_CENTER);
 	sizer_v_4->Add(m_scale_factor_sldr, 1, wxALIGN_CENTER);
 	sizer_v_4->Add(m_scale_factor_spin, 0, wxALIGN_CENTER);
@@ -18543,9 +18546,7 @@ void VRenderView::CreateBar()
 	//bar bottom///////////////////////////////////////////////////
 	wxBoxSizer* sizer_h_2 = new wxBoxSizer(wxHORIZONTAL);
 	m_rot_link_chk = new wxCheckBox(this, ID_RotLinkChk, "Link");
-    m_center_btn = new wxButton(this, ID_CenterBtn, "Reset Trans",
-        wxDefaultPosition, wxSize(85, 20));
-	m_rot_reset_btn = new wxButton(this, ID_RotResetBtn, "Reset Rot",
+	m_rot_reset_btn = new wxButton(this, ID_RotResetBtn, "Reset Rot.",
 		wxDefaultPosition, wxSize(85, 20));
 	st1 = new wxStaticText(this, 0, "X:");
 	m_x_rot_sldr = new wxSlider(this, ID_XRotSldr, 0, 0, 360,
@@ -18554,6 +18555,8 @@ void VRenderView::CreateBar()
 		wxDefaultPosition, wxSize(60,20), 0, vald_fp1);
 	m_x_rot_spin = new wxSpinButton(this, ID_XRotSpin,
 		wxDefaultPosition, wxSize(20, 20), wxSP_HORIZONTAL);
+    m_x_rot_spin->SetRange(0, 360);
+    m_x_rot_spin->SetValue(180);
 	st2 = new wxStaticText(this, 0, "Y:");
 	m_y_rot_sldr = new wxSlider(this, ID_YRotSldr, 0, 0, 360,
 		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
@@ -18561,6 +18564,8 @@ void VRenderView::CreateBar()
 		wxDefaultPosition, wxSize(60,20), 0, vald_fp1);
 	m_y_rot_spin = new wxSpinButton(this, ID_YRotSpin,
 		wxDefaultPosition, wxSize(20, 20), wxSP_HORIZONTAL);
+    m_y_rot_spin->SetRange(0, 360);
+    m_y_rot_spin->SetValue(180);
 	st3 = new wxStaticText(this, 0, "Z:");
 	m_z_rot_sldr = new wxSlider(this, ID_ZRotSldr, 0, 0, 360,
 		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
@@ -18568,15 +18573,15 @@ void VRenderView::CreateBar()
 		wxDefaultPosition, wxSize(60,20), 0, vald_fp1);
 	m_z_rot_spin = new wxSpinButton(this, ID_ZRotSpin,
 		wxDefaultPosition, wxSize(20, 20), wxSP_HORIZONTAL);
+    m_z_rot_spin->SetRange(0, 360);
+    m_z_rot_spin->SetValue(180);
 	m_rot_lock_chk = new wxCheckBox(this, ID_RotLockChk, "45 Increments");
 	m_default_btn = new wxButton(this, ID_DefaultBtn, "Save as Default",
 		wxDefaultPosition, wxSize(115, 20));
-    sizer_h_2->Add(m_center_btn, 0, wxALIGN_CENTER);
-    sizer_h_2->Add(5, 5, 0);
-	sizer_h_2->Add(m_rot_reset_btn, 0, wxALIGN_CENTER);
-    sizer_h_2->Add(5, 5, 0);
     sizer_h_2->Add(m_rot_link_chk, 0, wxALIGN_CENTER);
 	sizer_h_2->Add(5, 5, 0);
+    sizer_h_2->Add(m_rot_reset_btn, 0, wxALIGN_CENTER);
+    sizer_h_2->Add(5, 5, 0);
 	sizer_h_2->Add(st1, 0, wxALIGN_CENTER, 0);
 	sizer_h_2->Add(m_x_rot_sldr, 1, wxEXPAND, 0);
 	sizer_h_2->Add(m_x_rot_spin, 0, wxALIGN_CENTER, 0);
@@ -19920,58 +19925,64 @@ void VRenderView::OnRotLockCheck(wxCommandEvent& event)
 	}
 }
 
-void VRenderView::OnXRotSpinUp(wxSpinEvent& event)
+void VRenderView::OnXRotSpinDown(wxSpinEvent& event)
 {
 	wxString str_val = m_x_rot_text->GetValue();
 	int value = STOI(str_val.fn_str())+1;
 	value = value>360?value-360:value;
 	wxString str = wxString::Format("%.1f", double(value));
 	m_x_rot_text->SetValue(str);
+    m_x_rot_spin->SetValue(180);
 }
 
-void VRenderView::OnXRotSpinDown(wxSpinEvent& event)
+void VRenderView::OnXRotSpinUp(wxSpinEvent& event)
 {
 	wxString str_val = m_x_rot_text->GetValue();
 	int value = STOI(str_val.fn_str())-1;
 	value = value<0?value+360:value;
 	wxString str = wxString::Format("%.1f", double(value));
 	m_x_rot_text->SetValue(str);
-}
-
-void VRenderView::OnYRotSpinUp(wxSpinEvent& event)
-{
-	wxString str_val = m_y_rot_text->GetValue();
-	int value = STOI(str_val.fn_str())+1;
-	value = value>360?value-360:value;
-	wxString str = wxString::Format("%.1f", double(value));
-	m_y_rot_text->SetValue(str);
+    m_x_rot_spin->SetValue(180);
 }
 
 void VRenderView::OnYRotSpinDown(wxSpinEvent& event)
 {
 	wxString str_val = m_y_rot_text->GetValue();
+	int value = STOI(str_val.fn_str())+1;
+	value = value>360?value-360:value;
+	wxString str = wxString::Format("%.1f", double(value));
+	m_y_rot_text->SetValue(str);
+    m_y_rot_spin->SetValue(180);
+}
+
+void VRenderView::OnYRotSpinUp(wxSpinEvent& event)
+{
+	wxString str_val = m_y_rot_text->GetValue();
 	int value = STOI(str_val.fn_str())-1;
 	value = value<0?value+360:value;
 	wxString str = wxString::Format("%.1f", double(value));
 	m_y_rot_text->SetValue(str);
+    m_y_rot_spin->SetValue(180);
 }
 
-void VRenderView::OnZRotSpinUp(wxSpinEvent& event)
+void VRenderView::OnZRotSpinDown(wxSpinEvent& event)
 {
 	wxString str_val = m_z_rot_text->GetValue();
 	int value = STOI(str_val.fn_str())+1;
 	value = value>360?value-360:value;
 	wxString str = wxString::Format("%.1f", double(value));
 	m_z_rot_text->SetValue(str);
+    m_z_rot_spin->SetValue(180);
 }
 
-void VRenderView::OnZRotSpinDown(wxSpinEvent& event)
+void VRenderView::OnZRotSpinUp(wxSpinEvent& event)
 {
 	wxString str_val = m_z_rot_text->GetValue();
 	int value = STOI(str_val.fn_str())-1;
 	value = value<0?value+360:value;
 	wxString str = wxString::Format("%.1f", double(value));
 	m_z_rot_text->SetValue(str);
+    m_z_rot_spin->SetValue(180);
 }
 
 //top

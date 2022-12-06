@@ -830,7 +830,7 @@ namespace FLIVR
 
 		s = z.str();
         
-        std::cout << s << std::endl;
+        //std::cout << s << std::endl;
         
 		return false;
 	}

@@ -2216,6 +2216,9 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 						//vl->TryToFreeMemory(req_mem + buffer_size);
                         vl->RemoveAllLoadedData();
 						long long avmem = vl->GetAvailableMemory();
+                        cout << "queues: " << queues.size() << endl;
+                        cout << "req_mem: " << req_mem << endl;
+                        cout << "avmem (pre): " << avmem << endl;
 						bool runVL = true;
 						if (avmem < req_mem + buffer_size)
 						{
@@ -2229,13 +2232,17 @@ void VolumeData::Save(wxString &filename, int mode, bool bake, bool compress, bo
 							if (slicenum == 0) slicenum = 1;
 							buffer_size = w*h*slicenum*(size_t)(lbs[0]->nb(0));
 						}
-
+                        
 						if (runVL)
 						{
 							vl->Set(queues);
 							vl->Run();
 							vl->Join();
 						}
+                        
+                        cout << "runVL: " << runVL << endl;
+                        cout << "slicenum: " << slicenum << endl;
+                        cout << "avmem (post): " << vl->GetAvailableMemory() << endl;
 
 						int lnz = lbs[0]->nz();
 						int loz = lbs[0]->oz();

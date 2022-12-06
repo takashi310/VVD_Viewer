@@ -1331,7 +1331,8 @@ namespace FLIVR
 			if(!b->isLoaded())
 			{
 				FileLocInfo *finfo = filenames_[level][pyramid_cur_fr_][pyramid_cur_ch_][b->getID()];
-				b->tex_data_brk(0, finfo);
+				if (!b->tex_data_brk(0, finfo))
+                    cerr << "failed to load: " << b->getID() << " " << finfo->offset << " " << finfo->type << endl;
 				tmp = true;
 			}
 			
