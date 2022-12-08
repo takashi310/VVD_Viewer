@@ -155,7 +155,7 @@ void VolumeSelector::Select(double radius)
 		scl_falloff = 0.0;
 	}
 	if (m_edge_detect)
-		gm_falloff = m_gm_falloff;
+        gm_falloff = 0.005;//m_gm_falloff;
 	else
 		gm_falloff = 1.0;
 
@@ -175,10 +175,13 @@ void VolumeSelector::Select(double radius)
 		m_scl_translate = ini_thresh;
 	}*/
     
-	if (m_use_dslt && (m_mode == 1 || m_mode == 2))
-		m_vd->DrawMaskDSLT(0, m_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0, m_dslt_r, m_dslt_q, m_dslt_c);
-	else
-		m_vd->DrawMask(0, m_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0, false, ext_msk);
+    if (m_mode != 4)
+    {
+        if (m_use_dslt && (m_mode == 1 || m_mode == 2))
+            m_vd->DrawMaskDSLT(0, m_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0, m_dslt_r, m_dslt_q, m_dslt_c);
+        else
+            m_vd->DrawMask(0, m_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, m_scl_translate, m_w2d, 0.0, false, ext_msk);
+    }
 
 	//grow the selection when paint mode is select, append, erase, or invert
 	if (/*m_mode==1 ||

@@ -3884,7 +3884,7 @@ namespace FLIVR
 		seg_ubo.proj_mat = m_proj_mat;
 		if (hr_mode > 0)
 		{
-			seg_ubo.mv_mat_inv = glm::inverse(m_mv_mat2);
+			seg_ubo.mv_mat_inv = glm::inverse(seg_ubo.mv_mat);
 		}
 
 		//bind 2d mask texture

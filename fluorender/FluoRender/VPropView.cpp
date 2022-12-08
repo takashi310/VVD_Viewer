@@ -1825,7 +1825,7 @@ void VPropView::OnIDCLCheck(wxCommandEvent &event)
 			adjust_view->UpdateSync();
 		
 		UpdateUIsROI();
-		vr_frame->UpdateTree();
+		vr_frame->UpdateTree(m_vd->GetName(), 2);
 		if (vr_frame->GetTree())
 		{
 			vr_frame->GetTree()->CollapseDataTreeItem(m_vd->GetName(), true);

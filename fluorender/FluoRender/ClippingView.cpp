@@ -175,8 +175,8 @@ m_z_factor(1.0)
 
 	//reset clipping
 	wxBoxSizer* sizer_4 = new wxBoxSizer(wxHORIZONTAL);
-	m_clip_reset_btn = new wxButton(this, ID_ClipResetBtn, "Reset Clips",
-		wxDefaultPosition, wxSize(85, 22));
+	m_clip_reset_btn = new wxButton(this, ID_ClipResetBtn, "Reset Clipping Planes",
+		wxDefaultPosition, wxSize(150, 22));
 	sizer_4->Add(5, 5, 0);
 	sizer_4->Add(m_clip_reset_btn, 0, wxALIGN_CENTER);
 
@@ -437,9 +437,9 @@ m_z_factor(1.0)
 	sizer_v->Add(5, 5, 0);
 	sizer_v->Add(sizer_pm, 0, wxALIGN_CENTER);
 	sizer_v->Add(5, 5, 0);
+    sizer_v->Add(sizer_4, 0, wxALIGN_CENTER);
+    sizer_v->Add(5, 5, 0);
 	sizer_v->Add(sizer_h2, 3, wxEXPAND);
-	sizer_v->Add(5, 5, 0);
-	sizer_v->Add(sizer_4, 0, wxALIGN_CENTER);
 	sizer_v->Add(5, 5, 0);
 	sizer_v->Add(sizer_5, 0, wxALIGN_CENTER);
 	sizer_v->Add(5, 5, 0);

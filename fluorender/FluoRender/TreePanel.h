@@ -150,7 +150,8 @@ class EXPORT_API DataTreeCtrl: public wxTreeCtrl, Notifier
 		ID_FlipH,
 		ID_FlipV,
 		ID_ExportMeshMask,
-        ID_ToggleNAMode
+        ID_ToggleNAMode,
+        ID_SetSameColor
 	};
 
 public:
@@ -245,13 +246,19 @@ public:
 	void ClearVisHistory();
 	void PushVisHistory();
 
+    void HideOtherDatasets();
 	void HideOtherDatasets(wxString name);
 	void HideOtherDatasets(wxTreeItemId item);
 	void HideOtherDatasetsTraversal(wxTreeItemId item, wxTreeItemId self);
+    
+    void HideOtherVolumes();
 	void HideOtherVolumes(wxString name);
 	void HideOtherVolumes(wxTreeItemId item);
 	void HideOtherVolumesTraversal(wxTreeItemId item, wxTreeItemId self);
-	void HideSelectedItem();
+	
+    void HideSelectedItem();
+    
+    void GetSelectedItem(wxString &name, int &type);
 
 	friend class TreePanel;
 
@@ -333,6 +340,7 @@ private:
 	void OnFlipV(wxCommandEvent& event);
 	void OnExportMeshMask(wxCommandEvent& event);
     void OnToggleNAMode(wxCommandEvent& event);
+    void SetSameColorToAllDatasetsInGroup(wxCommandEvent& event);
 
 	void OnSelChanged(wxTreeEvent& event);
 	void OnSelChanging(wxTreeEvent& event);
@@ -454,9 +462,13 @@ public:
 	void RedoVisibility();
 	void ClearVisHistory();
 	void PushVisHistory();
+    void HideOtherDatasets();
 	void HideOtherDatasets(wxString name);
+    void HideOtherVolumes();
 	void HideOtherVolumes(wxString name);
 	void HideSelectedItem();
+    
+    void GetSelectedItem(wxString &name, int &type);
 
 private:
 	wxWindow* m_frame;

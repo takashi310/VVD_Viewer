@@ -267,7 +267,7 @@ namespace FLIVR
 	"		imageStore(maskimg, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
 	"		return;\n" \
 	"	}\n" \
-	"	vec4 cv = base.matrix3 * vec4(0.0, 0.0, 1.0, 0.0);\n" \
+	"	vec4 cv = base.matrix3 * vec4(0.0, 0.0, 1.0, 0.0) / vec4(brk.brkscale.xyz, 1.);\n" \
 	"	vec3 step = cv.xyz;\n" \
 	"	step = normalize(step);\n" \
 	"	step = step * length(step * brk.loc4.xyz);\n" \
@@ -283,8 +283,7 @@ namespace FLIVR
 	"		if (vol_clip_func(vec4(ray, 1.0)))\n" \
 	"			break;\n" \
 	"		v.x = texture(tex0, ray).x;\n" \
-	"		v.y = length(vol_grad_func(vec4(ray, 1.0), brk.loc4).xyz);\n" \
-	"		cray = loc8.z > 0.5 ? v.x : vol_trans_sin_color_l(v);\n" \
+	"		cray.x = base.loc8.z > 0.5 ? v.x : (base.loc2.x<0.0?(1.0+v.x*base.loc2.x):v.x*base.loc2.x);\n" \
 	"		if (cray.x > base.loc7.x && flag)\n" \
 	"		{\n" \
 	"			imageStore(maskimg, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
@@ -308,7 +307,7 @@ namespace FLIVR
 	"		imageStore(maskimg, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
 	"		return;\n" \
 	"	}\n" \
-	"	vec4 cv = base.matrix3 * vec4(0.0, 0.0, 0.0, 1.0);\n" \
+	"	vec4 cv = base.matrix3 * vec4(0.0, 0.0, 0.0, 1.0) / vec4(brk.brkscale.xyz, 1.);\n" \
 	"	cv = cv / cv.w;\n" \
 	"	vec3 step = cv.xyz - t.xyz;\n" \
 	"	step = normalize(step);\n" \
@@ -325,8 +324,7 @@ namespace FLIVR
 	"		if (vol_clip_func(vec4(ray, 1.0)))\n" \
 	"			break;\n" \
 	"		v.x = texture(tex0, ray).x;\n" \
-	"		v.y = length(vol_grad_func(vec4(ray, 1.0), brk.loc4).xyz);\n" \
-	"		cray = loc8.z > 0.5 ? v.x : vol_trans_sin_color_l(v);\n" \
+	"		cray.x = base.loc8.z > 0.5 ? v.x : (base.loc2.x<0.0?(1.0+v.x*base.loc2.x):v.x*base.loc2.x);\n" \
 	"		if (cray.x > base.loc7.x && flag)\n" \
 	"		{\n" \
 	"			imageStore(maskimg, ivec3(gl_GlobalInvocationID.xyz), vec4(0.0));\n" \
@@ -745,8 +743,8 @@ namespace FLIVR
 				{
 					z << SEG_HEAD_LIT;
 					z << VOL_DATA_VOLUME_LOOKUP;
-					//z << VOL_GRAD_COMPUTE_HI;
-					//z << VOL_COMPUTED_GM_LOOKUP;
+					z << VOL_GRAD_COMPUTE_HI;
+					z << VOL_COMPUTED_GM_LOOKUP;
                     if (use_abs_)
                         z << VOL_TRANSFER_FUNCTION_SIN_COLOR_ORG;
                     else
@@ -830,7 +828,7 @@ namespace FLIVR
 
 		s = z.str();
         
-        //std::cout << s << std::endl;
+        std::cout << s << std::endl;
         
 		return false;
 	}

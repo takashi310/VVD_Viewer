@@ -418,9 +418,9 @@ void LMSeacher::OnMouse(wxMouseEvent& event)
 wxCriticalSection* VRenderVulkanView::ms_pThreadCS = nullptr;
 
 BEGIN_EVENT_TABLE(VRenderVulkanView, wxWindow)
-	EVT_MENU(ID_CTXMENU_SHOW_ALL, VRenderVulkanView::OnShowAllVolumes)
-	EVT_MENU(ID_CTXMENU_HIDE_OTHER_VOLS, VRenderVulkanView::OnHideOtherVolumes)
-	EVT_MENU(ID_CTXMENU_HIDE_THIS_VOL, VRenderVulkanView::OnHideSelectedVolume)
+	EVT_MENU(ID_CTXMENU_SHOW_ALL, VRenderVulkanView::OnShowAllDatasets)
+	EVT_MENU(ID_CTXMENU_HIDE_OTHER_VOLS, VRenderVulkanView::OnHideOtherDatasets)
+	EVT_MENU(ID_CTXMENU_HIDE_THIS_VOL, VRenderVulkanView::OnHideSelectedDataset)
 	EVT_MENU(ID_CTXMENU_SHOW_ALL_FRAGMENTS, VRenderVulkanView::OnShowAllFragments)
     EVT_MENU(ID_CTXMENU_DESELECT_ALL_FRAGMENTS, VRenderVulkanView::OnDeselectAllFragments)
 	EVT_MENU(ID_CTXMENU_HIDE_OTHER_FRAGMENTS, VRenderVulkanView::OnHideOtherFragments)
@@ -6767,7 +6767,7 @@ void VRenderVulkanView::OnContextMenu(wxContextMenuEvent& event)
 
 }
 
-void VRenderVulkanView::OnShowAllVolumes(wxCommandEvent& event)
+void VRenderVulkanView::OnShowAllDatasets(wxCommandEvent& event)
 {
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (!vr_frame) return;
@@ -6784,7 +6784,7 @@ void VRenderVulkanView::OnShowAllVolumes(wxCommandEvent& event)
 		case 2://volume data
 		{
 			VolumeData* vd = (VolumeData*)m_layer_list[i];
-			if (!vd->GetDisp())
+			if (vd && !vd->GetDisp())
 			{
 				if (!changed)
 				{
@@ -6798,22 +6798,60 @@ void VRenderVulkanView::OnShowAllVolumes(wxCommandEvent& event)
 		case 5://group
 		{
 			DataGroup* group = (DataGroup*)m_layer_list[i];
-			for (int j = 0; j < group->GetVolumeNum(); j++)
-			{
-				VolumeData* vd = group->GetVolumeData(j);
-				if (!vd->GetDisp())
-				{
-					if (!changed)
-					{
-						tree_panel->PushVisHistory();
-						changed = true;
-					}
-					vd->SetDisp(true);
-				}
-			}
+            if (group)
+            {
+                for (int j = 0; j < group->GetVolumeNum(); j++)
+                {
+                    VolumeData* vd = group->GetVolumeData(j);
+                    if (vd && !vd->GetDisp())
+                    {
+                        if (!changed)
+                        {
+                            tree_panel->PushVisHistory();
+                            changed = true;
+                        }
+                        vd->SetDisp(true);
+                    }
+                }
+            }
 		}
 		break;
+        case 3://mesh data
+        {
+            MeshData* md = (MeshData*)m_layer_list[i];
+            if (md && !md->GetDisp())
+            {
+                if (!changed)
+                {
+                    tree_panel->PushVisHistory();
+                    changed = true;
+                }
+                md->SetDisp(true);
+            }
+        }
+        break;
+        case 6://mesh group
+        {
+            MeshGroup* group = (MeshGroup*)m_layer_list[i];
+            if (group)
+            {
+                for (int j = 0; j < group->GetMeshNum(); j++)
+                {
+                    MeshData* md = group->GetMeshData(j);
+                    if (md && !md->GetDisp())
+                    {
+                        if (!changed)
+                        {
+                            tree_panel->PushVisHistory();
+                            changed = true;
+                        }
+                        md->SetDisp(true);
+                    }
+                }
+            }
 		}
+        break;
+        }
 	}
 
 	if (changed)
@@ -6822,26 +6860,25 @@ void VRenderVulkanView::OnShowAllVolumes(wxCommandEvent& event)
 		{
 			VRenderView* vrv = vr_frame->GetView(i);
 			if (vrv)
+            {
 				vrv->SetVolPopDirty();
+                vrv->SetMeshPopDirty();
+            }
 		}
 		RefreshGL();
 		vr_frame->UpdateTreeIcons();
 	}
 }
-void VRenderVulkanView::OnHideOtherVolumes(wxCommandEvent& event)
+void VRenderVulkanView::OnHideOtherDatasets(wxCommandEvent& event)
 {
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (!vr_frame) return;
+    TreePanel* tree_panel = vr_frame->GetTree();
+    if (!tree_panel) return;
 
-	VolumeData *vd = vr_frame->GetCurSelVol();
-	if (!vd) return;
-
-	TreePanel* tree_panel = vr_frame->GetTree();
-	if (!tree_panel) return;
-
-	tree_panel->HideOtherVolumes(vd->GetName());
+    tree_panel->HideOtherDatasets();
 }
-void VRenderVulkanView::OnHideSelectedVolume(wxCommandEvent& event)
+void VRenderVulkanView::OnHideSelectedDataset(wxCommandEvent& event)
 {
 	VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 	if (!vr_frame) return;
@@ -18503,8 +18540,8 @@ void VRenderView::CreateBar()
 	m_depth_atten_chk->SetValue(true);
 	m_depth_atten_factor_sldr = new wxSlider(this, ID_DepthAttenFactorSldr, 0, 0, 100,
 		wxDefaultPosition, wxDefaultSize, wxSL_VERTICAL|wxSL_INVERSE);
-	m_depth_atten_reset_btn = new wxButton(this, ID_DepthAttenResetBtn, "Reset",
-		wxDefaultPosition, wxSize(60, 20));
+	m_depth_atten_reset_btn = new wxButton(this, ID_DepthAttenResetBtn, "Reset\nDepth\nInt",
+		wxDefaultPosition, wxSize(60, 60));
 	m_depth_atten_factor_text = new wxTextCtrl(this, ID_DepthAttenFactorText, "0.0",
 		wxDefaultPosition, wxSize(40, 20), 0, vald_fp2);
 	sizer_v_3->Add(5, 10, 0);
@@ -18517,21 +18554,20 @@ void VRenderView::CreateBar()
 	//bar right///////////////////////////////////////////////////
 	wxBoxSizer* sizer_v_4 = new wxBoxSizer(wxVERTICAL);
 	st1 = new wxStaticText(this, 0, "Zoom:\n");
-    m_center_btn = new wxButton(this, ID_CenterBtn, "Reset\nTransl.",
-        wxDefaultPosition, wxSize(60, 35));
 	m_scale_121_btn = new wxButton(this, ID_Scale121Btn, "1:1",
 		wxDefaultPosition, wxSize(40, 20));
 	m_scale_factor_sldr = new wxSlider(this, ID_ScaleFactorSldr, 100, 50, 999,
 		wxDefaultPosition, wxDefaultSize, wxSL_VERTICAL);
-	m_scale_reset_btn = new wxButton(this, ID_ScaleResetBtn, "Reset",
-		wxDefaultPosition, wxSize(60, 20));
+	m_scale_reset_btn = new wxButton(this, ID_ScaleResetBtn, "Reset\nZoom",
+		wxDefaultPosition, wxSize(60, 40));
 	m_scale_factor_text = new wxTextCtrl(this, ID_ScaleFactorText, "100",
 		wxDefaultPosition, wxSize(40, 20), 0, vald_int);
 	m_scale_factor_spin = new wxSpinButton(this, ID_ScaleFactorSpin,
 		wxDefaultPosition, wxSize(40, 20));
+    m_scale_factor_spin->SetRange(0, 1000);
+    m_scale_factor_spin->SetValue(100);
 	sizer_v_4->Add(5, 10, 0);
 	sizer_v_4->Add(st1, 0, wxALIGN_CENTER);
-    sizer_v_4->Add(m_center_btn, 0, wxALIGN_CENTER);
 	sizer_v_4->Add(m_scale_121_btn, 0, wxALIGN_CENTER);
 	sizer_v_4->Add(m_scale_factor_sldr, 1, wxALIGN_CENTER);
 	sizer_v_4->Add(m_scale_factor_spin, 0, wxALIGN_CENTER);
@@ -18576,6 +18612,8 @@ void VRenderView::CreateBar()
     m_z_rot_spin->SetRange(0, 360);
     m_z_rot_spin->SetValue(180);
 	m_rot_lock_chk = new wxCheckBox(this, ID_RotLockChk, "45 Increments");
+    m_center_btn = new wxButton(this, ID_CenterBtn, "Reset Transl.",
+        wxDefaultPosition, wxSize(100, 20));
 	m_default_btn = new wxButton(this, ID_DefaultBtn, "Save as Default",
 		wxDefaultPosition, wxSize(115, 20));
     sizer_h_2->Add(m_rot_link_chk, 0, wxALIGN_CENTER);
@@ -18599,6 +18637,8 @@ void VRenderView::CreateBar()
 	sizer_h_2->Add(5, 5, 0);
 	sizer_h_2->Add(m_rot_lock_chk, 0, wxALIGN_CENTER, 0);
 	sizer_h_2->Add(5, 5, 0);
+    sizer_h_2->Add(m_center_btn, 0, wxALIGN_CENTER);
+    sizer_h_2->Add(5, 5, 0);
 	sizer_h_2->Add(m_default_btn, 0, wxALIGN_CENTER);
 
 	sizer_v->Add(sizer_h_1, 0, wxEXPAND);
@@ -19671,12 +19711,14 @@ void VRenderView::OnDepthAttenCheck(wxCommandEvent& event)
 		SetFog(true);
 		m_depth_atten_factor_sldr->Enable();
 		m_depth_atten_factor_text->Enable();
+        m_depth_atten_reset_btn->Enable();
 	}
 	else
 	{
 		SetFog(false);
 		m_depth_atten_factor_sldr->Disable();
 		m_depth_atten_factor_text->Disable();
+        m_depth_atten_reset_btn->Disable();
 	}
 
 	RefreshGL();
@@ -19762,8 +19804,9 @@ void VRenderView::OnScaleFactorSpinUp(wxSpinEvent& event)
 	long val;
 	str_val.ToLong(&val);
 	val++;
-	str_val = wxString::Format("%d", val);
+	str_val = wxString::Format("%ld", val);
 	m_scale_factor_text->SetValue(str_val);
+    m_scale_factor_spin->SetValue(100);
 }
 
 void VRenderView::OnScaleFactorSpinDown(wxSpinEvent& event)
@@ -19772,8 +19815,9 @@ void VRenderView::OnScaleFactorSpinDown(wxSpinEvent& event)
 	long val;
 	str_val.ToLong(&val);
 	val--;
-	str_val = wxString::Format("%d", val);
+	str_val = wxString::Format("%ld", val);
 	m_scale_factor_text->SetValue(str_val);
+    m_scale_factor_spin->SetValue(100);
 }
 
 void VRenderView::OnScaleReset(wxCommandEvent &event)
@@ -20463,11 +20507,13 @@ void VRenderView::LoadSettings()
 		{
 			m_depth_atten_factor_sldr->Enable();
 			m_depth_atten_factor_text->Enable();
+            m_depth_atten_reset_btn->Enable();
 		}
 		else
 		{
 			m_depth_atten_factor_sldr->Disable();
 			m_depth_atten_factor_text->Disable();
+            m_depth_atten_reset_btn->Disable();
 		}
 	}
 	if (fconfig.Read("depth_atten_factor_text", &str))

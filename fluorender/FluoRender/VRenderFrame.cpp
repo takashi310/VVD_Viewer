@@ -1485,7 +1485,7 @@ void VRenderFrame::StartupLoad(wxArrayString files, size_t datasize, wxArrayStri
 	}
 }
 
-void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayString descs)
+void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayString descs, wxString group_name)
 {
 	if (!vrv)
 		vrv = GetView(0);
@@ -1500,8 +1500,12 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
 	MeshGroup* group = 0;
 	if (files.Count() > 1)
 	{
-		wxString group_name = vrv->AddMGroup();
-		group = vrv->GetMGroup(group_name);
+		wxString tmp_group_name = vrv->AddMGroup();
+		group = vrv->GetMGroup(tmp_group_name);
+        if (!group_name.IsEmpty())
+            group->SetName(group_name);
+        else
+            group_name = tmp_group_name;
 	}
 
 	for (int i=0; i<(int)files.Count(); i++)

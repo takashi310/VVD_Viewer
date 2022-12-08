@@ -1339,9 +1339,9 @@ private:
 	void OnKeyDown(wxKeyEvent& event);
 	void OnContextMenu(wxContextMenuEvent& event);
 	
-	void OnShowAllVolumes(wxCommandEvent& event);
-	void OnHideOtherVolumes(wxCommandEvent& event);
-	void OnHideSelectedVolume(wxCommandEvent& event);
+	void OnShowAllDatasets(wxCommandEvent& event);
+	void OnHideOtherDatasets(wxCommandEvent& event);
+	void OnHideSelectedDataset(wxCommandEvent& event);
 	void OnShowAllFragments(wxCommandEvent& event);
     void OnDeselectAllFragments(wxCommandEvent& event);
 	void OnHideOtherFragments(wxCommandEvent& event);

@@ -52,48 +52,13 @@ bool DnDFile::OnDropFiles(wxCoord x, wxCoord y, const wxArrayString &filenames)
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 		if (vr_frame)
 		{
-            wxArrayString flatfns;
-            for (auto fn : filenames)
-            {
-                wxDir dir(fn);
-                wxString suffix = fn.Mid(fn.Find('.', true)).MakeLower();
-                if (wxDirExists(fn) && dir.IsOpened() && suffix != ".n5")
-                {
-                    wxRegEx scdir_pattern("^s[0-9]+$");
-                    wxString n;
-                    
-                    bool bOk = dir.GetFirst(&n);
-                    while(bOk)
-                    {
-                        wxString fullpath = dir.GetNameWithSep() + n;
-                        if (wxDirExists(fullpath))
-                        {
-                            if (scdir_pattern.Matches(n))
-                            {
-                                if (wxFileExists(fullpath + wxFILE_SEP_PATH + "attributes.json"))
-                                {
-                                    flatfns.Add(fn + ".n5fs_ch");
-                                    break;
-                                }
-                            }
-                        }
-                        else if (wxFileExists(fullpath))
-                            flatfns.Add(fullpath);
-                        bOk = dir.GetNext(&n);
-                    }
-                }
-                else
-                    flatfns.Add(fn);
-            }
-            
-            if (flatfns.IsEmpty())
-                return false;
-            
             wxString proj_path;
             wxArrayString volumes;
             wxArrayString meshes;
-            for (wxString filename : flatfns)
+            
+            if (filenames.size() > 0)
             {
+                wxString filename = filenames[0];
                 wxString suffix = filename.Mid(filename.Find('.', true)).MakeLower();
                 if (suffix == ".vrp")
                 {
@@ -104,44 +69,146 @@ bool DnDFile::OnDropFiles(wxCoord x, wxCoord y, const wxArrayString &filenames)
                     }
                     proj_path = filename;
                 }
-                else if (suffix == ".nrrd" ||
-                         suffix == ".tif" ||
-                         suffix == ".tiff" ||
-                         suffix == ".oib" ||
-                         suffix == ".oif" ||
-                         suffix == ".lsm" ||
-                         suffix == ".czi" ||
-                         suffix == ".xml" ||
-                         suffix == ".vvd" ||
-                         suffix == ".h5j" ||
-                         suffix == ".nd2" ||
-                         suffix == ".v3dpbd" ||
-                         suffix == ".zip" ||
-                         suffix == ".idi" ||
-                         suffix == ".n5" ||
-                         suffix == ".json" ||
-                         suffix == ".n5fs_ch")
+            }
+                
+            if (!proj_path.IsEmpty())
+            {
+                vr_frame->OpenProject(proj_path);
+            }
+            else
+            {
+                for (wxString filename : filenames)
                 {
-                    volumes.Add(filename);
+                    wxDir dir(filename);
+                    wxString suffix = filename.Mid(filename.Find('.', true)).MakeLower();
+                    if (suffix == ".vrp")
+                    {
+                        if (m_view)
+                        {
+                            wxMessageBox("For project files, drag and drop to regions other than render views.");
+                            return false;
+                        }
+                        proj_path = filename;
+                    }
+                    else if (suffix == ".nrrd" ||
+                             suffix == ".tif" ||
+                             suffix == ".tiff" ||
+                             suffix == ".oib" ||
+                             suffix == ".oif" ||
+                             suffix == ".lsm" ||
+                             suffix == ".czi" ||
+                             suffix == ".xml" ||
+                             suffix == ".vvd" ||
+                             suffix == ".h5j" ||
+                             suffix == ".nd2" ||
+                             suffix == ".v3dpbd" ||
+                             suffix == ".zip" ||
+                             suffix == ".idi" ||
+                             suffix == ".n5" ||
+                             suffix == ".json" ||
+                             suffix == ".n5fs_ch")
+                    {
+                        volumes.Add(filename);
+                    }
+                    else if (suffix == ".obj" || suffix == ".swc" || suffix == ".ply")
+                    {
+                        meshes.Add(filename);
+                    }
+                    else if (wxDirExists(filename) && dir.IsOpened())
+                    {
+                        if (!volumes.IsEmpty())
+                        {
+                            volumes.Sort();
+                            vr_frame->LoadVolumes(volumes, (VRenderView*)m_view);
+                            volumes.clear();
+                        }
+                        if (!meshes.IsEmpty())
+                        {
+                            meshes.Sort();
+                            vr_frame->LoadMeshes(meshes, (VRenderView*)m_view);
+                            meshes.clear();
+                        }
+                        
+                        wxArrayString flatfns;
+                        wxRegEx scdir_pattern("^s[0-9]+$");
+                        wxString n;
+                        bool bOk = dir.GetFirst(&n);
+                        while(bOk)
+                        {
+                            wxString fullpath = dir.GetNameWithSep() + n;
+                            if (wxDirExists(fullpath))
+                            {
+                                if (scdir_pattern.Matches(n))
+                                {
+                                    if (wxFileExists(fullpath + wxFILE_SEP_PATH + "attributes.json"))
+                                    {
+                                        flatfns.Add(filename + ".n5fs_ch");
+                                        break;
+                                    }
+                                }
+                            }
+                            else if (wxFileExists(fullpath))
+                                flatfns.Add(fullpath);
+                            bOk = dir.GetNext(&n);
+                        }
+
+                        if (flatfns.IsEmpty())
+                            continue;
+                        
+                        for (wxString fn : flatfns)
+                        {
+                            suffix = fn.Mid(fn.Find('.', true)).MakeLower();
+                            if (suffix == ".nrrd" ||
+                                suffix == ".tif" ||
+                                suffix == ".tiff" ||
+                                suffix == ".oib" ||
+                                suffix == ".oif" ||
+                                suffix == ".lsm" ||
+                                suffix == ".czi" ||
+                                suffix == ".xml" ||
+                                suffix == ".vvd" ||
+                                suffix == ".h5j" ||
+                                suffix == ".nd2" ||
+                                suffix == ".v3dpbd" ||
+                                suffix == ".zip" ||
+                                suffix == ".idi" ||
+                                suffix == ".n5" ||
+                                suffix == ".json" ||
+                                suffix == ".n5fs_ch")
+                            {
+                                volumes.Add(fn);
+                            }
+                            else if (suffix == ".obj" || suffix == ".swc" || suffix == ".ply")
+                            {
+                                meshes.Add(fn);
+                            }
+                        }
+                        if (!volumes.IsEmpty())
+                        {
+                            volumes.Sort();
+                            vr_frame->LoadVolumes(volumes, (VRenderView*)m_view);
+                            volumes.clear();
+                        }
+                        if (!meshes.IsEmpty())
+                        {
+                            wxFileName wfn(filename);
+                            meshes.Sort();
+                            vr_frame->LoadMeshes(meshes, (VRenderView*)m_view, wxArrayString(), wfn.GetName());
+                            meshes.clear();
+                        }
+                    }
                 }
-                else if (suffix == ".obj" || suffix == ".swc" || suffix == ".ply")
+                if (!volumes.IsEmpty())
                 {
-                    meshes.Add(filename);
+                    volumes.Sort();
+                    vr_frame->LoadVolumes(volumes, (VRenderView*)m_view);
+                }
+                if (!meshes.IsEmpty())
+                {
+                    meshes.Sort();
+                    vr_frame->LoadMeshes(meshes, (VRenderView*)m_view);
                 }
             }
-
-			if (!proj_path.IsEmpty())
-			{
-				vr_frame->OpenProject(proj_path);
-			}
-			if (!volumes.IsEmpty())
-			{
-				vr_frame->LoadVolumes(volumes, (VRenderView*)m_view);
-			}
-			if (!meshes.IsEmpty())
-			{
-				vr_frame->LoadMeshes(meshes, (VRenderView*)m_view);
-			}
 		}
 	}
 
