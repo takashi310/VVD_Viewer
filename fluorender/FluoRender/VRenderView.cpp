@@ -5990,8 +5990,8 @@ void VRenderVulkanView::Pick()
 		if (!SelSegVolume(3))
 		{
 			PickVolume();
-			PickMesh();
 		}
+        PickMesh();
 
 		tree_panel->Thaw();
 		tree_panel->SetEvtHandlerEnabled(true);
