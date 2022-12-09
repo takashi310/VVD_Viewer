@@ -34,6 +34,7 @@ DEALINGS IN THE SOFTWARE.
 #include <wx/progdlg.h>
 #include <wx/hyperlink.h>
 #include <wx/stdpaths.h>
+#include <wx/tokenzr.h>
 #include "Formats/png_resource.h"
 #include "Formats/msk_writer.h"
 #include "Formats/msk_reader.h"
@@ -1498,7 +1499,15 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
 		100, 0, wxPD_SMOOTH|wxPD_ELAPSED_TIME|wxPD_AUTO_HIDE);
 
 	MeshGroup* group = 0;
-	if (files.Count() > 1)
+    int count = 0;
+    for (int i=0; i<(int)files.Count(); i++)
+    {
+        wxString filename = files[i];
+        wxString suffix = filename.Mid(filename.Find('.', true)).MakeLower();
+        if (suffix != ".csv")
+            count++;
+    }
+	if (count > 1)
 	{
 		wxString tmp_group_name = vrv->AddMGroup();
 		group = vrv->GetMGroup(tmp_group_name);
@@ -1513,23 +1522,108 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
 		prg_diag->Update(90*(i+1)/(int)files.Count());
 
 		wxString filename = files[i];
-        m_data_mgr.LoadMeshData(filename, i < descs.Count() ? descs[i] : wxT(""));
+        wxString suffix = filename.Mid(filename.Find('.', true)).MakeLower();
+        if (suffix == ".csv")
+        {
+            wxTextFile csv(filename);
+            csv.Open();
+            if (!csv.IsOpened())
+                continue;
+            
+            map<wxString, wxArrayString> swcdata;
+            wxString str = csv.GetFirstLine();
+            while(!csv.Eof())
+            {
+                str = csv.GetNextLine();
+                wxStringTokenizer tkz(str, wxT(","));
+                wxArrayString elems;
+                while(tkz.HasMoreTokens())
+                    elems.Add(tkz.GetNextToken());
+                if (elems.Count() >= 10)
+                {
+                    wxString key = elems[3] + " " + elems[9];
+                    if (swcdata.count(key) == 0)
+                        swcdata[key] = wxArrayString();
+                    //wxString swc_line = wxString::Format("%d 6 %s %s %s %f -1 %s", (int)swcdata[key].Count(), elems[0], elems[1], elems[2], 3.0f, elems[4]);
+                    wxString swc_line = wxString::Format("%d 6 %s %s %s %f -1", (int)swcdata[key].Count(), elems[1], elems[0], elems[2], 3.0f);
+                    swcdata[key].Add(swc_line);
+                }
+            }
+            csv.Close();
+            
+            auto it = swcdata.begin();
+            bool first = true;
+            MeshGroup* mg = nullptr;
+            while (it != swcdata.end())
+            {
+                wxString name = it->first;
+                wxArrayString data = it->second;
+                it++;
+                
+                //generate swc
+                wxString temp_swc_path = wxFileName::CreateTempFileName(wxStandardPaths::Get().GetTempDir() + wxFileName::GetPathSeparator()) + ".swc";
+                wxTextFile swc(temp_swc_path);
+                if (swc.Exists())
+                {
+                    if (!swc.Open())
+                        continue;
+                    swc.Clear();
+                }
+                else
+                {
+                    if (!swc.Create())
+                        continue;
+                }
+                for(int j = 0; j < data.Count(); j++)
+                    swc.AddLine(data[j]);
+                swc.Write();
+                swc.Close();
+                
+                //load swc
+                m_data_mgr.LoadMeshData(temp_swc_path, wxT(""));
+                MeshData* md = m_data_mgr.GetLastMeshData();
+                if (vrv && md)
+                {
+                    md->SetName(name);
+                    if (first)
+                    {
+                        wxString tmp_group_name = vrv->AddMGroup();
+                        mg = vrv->GetMGroup(tmp_group_name);
+                        wxFileName wfn(filename);
+                        mg->SetName(wfn.GetName());
+                        first = false;
+                    }
+                    if (mg)
+                    {
+                        mg->InsertMeshData(mg->GetMeshNum()-1, md);
+                        vrv->SetMeshPopDirty();
+                        vrv->InitView(INIT_BOUNDS | INIT_CENTER);
+                    }
+                    else
+                        vrv->AddMeshData(md);
+                }
+            }
+        }
+        else
+        {
+            m_data_mgr.LoadMeshData(filename, i < descs.Count() ? descs[i] : wxT(""));
 
-		MeshData* md = m_data_mgr.GetLastMeshData();
-		if (vrv && md)
-		{
-			if (group)
-			{
-				group->InsertMeshData(group->GetMeshNum()-1, md);
-				vrv->SetMeshPopDirty();
-                vrv->InitView(INIT_BOUNDS | INIT_CENTER);
-			}
-			else
-				vrv->AddMeshData(md);
+            MeshData* md = m_data_mgr.GetLastMeshData();
+            if (vrv && md)
+            {
+                if (group)
+                {
+                    group->InsertMeshData(group->GetMeshNum()-1, md);
+                    vrv->SetMeshPopDirty();
+                    vrv->InitView(INIT_BOUNDS | INIT_CENTER);
+                }
+                else
+                    vrv->AddMeshData(md);
 
-			if (i==int(files.Count()-1))
-				md_sel = md;
-		}
+                if (i==int(files.Count()-1))
+                    md_sel = md;
+            }
+        }
 	}
 
 	//if (vrv)
@@ -1537,7 +1631,9 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
 
 	if (md_sel)
 		UpdateTree(md_sel->GetName(), 3);
-	else
+	else if (group)
+        UpdateTree(group->GetName(), 6);
+    else
 		UpdateTree();
 
 	//if (vrv)
