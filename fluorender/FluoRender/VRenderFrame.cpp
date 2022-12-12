@@ -1507,21 +1507,21 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
         if (suffix != ".csv")
             count++;
     }
-	if (count > 1)
-	{
-		wxString tmp_group_name = vrv->AddMGroup();
-		group = vrv->GetMGroup(tmp_group_name);
+    if (count > 1)
+    {
+        wxString tmp_group_name = vrv->AddMGroup();
+        group = vrv->GetMGroup(tmp_group_name);
         if (!group_name.IsEmpty())
             group->SetName(group_name);
         else
             group_name = tmp_group_name;
-	}
+    }
+    for (int i=0; i<(int)files.Count(); i++)
+    {
+        prg_diag->Update(90*(i+1)/(int)files.Count());
 
-	for (int i=0; i<(int)files.Count(); i++)
-	{
-		prg_diag->Update(90*(i+1)/(int)files.Count());
-
-		wxString filename = files[i];
+        wxString filename = files[i];
+        m_data_mgr.LoadMeshData(filename, i < descs.Count() ? descs[i] : wxT(""));
         wxString suffix = filename.Mid(filename.Find('.', true)).MakeLower();
         if (suffix == ".csv")
         {
@@ -1529,8 +1529,8 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
             csv.Open();
             if (!csv.IsOpened())
                 continue;
-            
-            map<wxString, wxArrayString> celldata;
+
+            map<wxString, wxArrayString> swcdata;
             wxString str = csv.GetFirstLine();
             while(!csv.Eof())
             {
@@ -1541,109 +1541,68 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
                     elems.Add(tkz.GetNextToken());
                 if (elems.Count() >= 10)
                 {
-                    wxString key = elems[4];
-                    int cellID = 0;
-                    key.ToInt(&cellID);
-                    key = wxString::Format("%04d", cellID);
-                    if (celldata.count(key) == 0)
-                        celldata[key] = wxArrayString();
-                    celldata[key].Add(str);
+                    wxString key = elems[3] + " " + elems[9];
+                    if (swcdata.count(key) == 0)
+                        swcdata[key] = wxArrayString();
+                    //wxString swc_line = wxString::Format("%d 6 %s %s %s %f -1 %s", (int)swcdata[key].Count(), elems[0], elems[1], elems[2], 3.0f, elems[4]);
+                    wxString swc_line = wxString::Format("%d 6 %s %s %s %f -1", (int)swcdata[key].Count(), elems[1], elems[0], elems[2], 3.0f);
+                    swcdata[key].Add(swc_line);
                 }
             }
             csv.Close();
-            
-            map<wxString, MeshData*> coldata;
-            auto cit = celldata.begin();
-            while (cit != celldata.end())
+
+            auto it = swcdata.begin();
+            bool first = true;
+            MeshGroup* mg = nullptr;
+            while (it != swcdata.end())
             {
-                wxString cell = cit->first;
-                wxArrayString lines = cit->second;
-                cit++;
-                
-                map<wxString, wxArrayString> swcdata;
-                for(int j = 0; j < lines.Count(); j++)
+                wxString name = it->first;
+                wxArrayString data = it->second;
+                it++;
+
+                //generate swc
+                wxString temp_swc_path = wxFileName::CreateTempFileName(wxStandardPaths::Get().GetTempDir() + wxFileName::GetPathSeparator()) + ".swc";
+                wxTextFile swc(temp_swc_path);
+                if (swc.Exists())
                 {
-                    str = lines[j];
-                    wxStringTokenizer tkz(str, wxT(","));
-                    wxArrayString elems;
-                    while(tkz.HasMoreTokens())
-                        elems.Add(tkz.GetNextToken());
-                    if (elems.Count() >= 10)
-                    {
-                        wxString key = elems[3] + " " + elems[9];
-                        if (swcdata.count(key) == 0)
-                            swcdata[key] = wxArrayString();
-                        //wxString swc_line = wxString::Format("%d 6 %s %s %s %f -1 %s", (int)swcdata[key].Count(), elems[0], elems[1], elems[2], 3.0f, elems[4]);
-                        wxString swc_line = wxString::Format("%d 6 %s %s %s %f -1", (int)swcdata[key].Count(), elems[1], elems[0], elems[2], 3.0f);
-                        swcdata[key].Add(swc_line);
-                    }
+                    if (!swc.Open())
+                        continue;
+                    swc.Clear();
                 }
-                
-                auto it = swcdata.begin();
-                bool first = true;
-                MeshGroup* mg = nullptr;
-                while (it != swcdata.end())
+                else
                 {
-                    wxString name = it->first;
-                    wxArrayString data = it->second;
-                    it++;
-                    
-                    //generate swc
-                    wxString temp_swc_path = wxFileName::CreateTempFileName(wxStandardPaths::Get().GetTempDir() + wxFileName::GetPathSeparator()) + ".swc";
-                    wxTextFile swc(temp_swc_path);
-                    if (swc.Exists())
+                    if (!swc.Create())
+                        continue;
+                }
+                for(int j = 0; j < data.Count(); j++)
+                    swc.AddLine(data[j]);
+                swc.Write();
+                swc.Close();
+
+                //load swc
+                m_data_mgr.LoadMeshData(temp_swc_path, wxT(""));
+                MeshData* md = m_data_mgr.GetLastMeshData();
+                if (vrv && md)
+                {
+                    md->SetName(name);
+                    if (first)
                     {
-                        if (!swc.Open())
-                            continue;
-                        swc.Clear();
+                        wxString tmp_group_name = vrv->AddMGroup();
+                        mg = vrv->GetMGroup(tmp_group_name);
+                        wxFileName wfn(filename);
+                        mg->SetName(wfn.GetName());
+                        first = false;
+                    }
+                    if (mg)
+                    {
+                        mg->InsertMeshData(mg->GetMeshNum()-1, md);
+                        vrv->SetMeshPopDirty();
+                        vrv->InitView(INIT_BOUNDS | INIT_CENTER);
                     }
                     else
-                    {
-                        if (!swc.Create())
-                            continue;
-                    }
-                    for(int j = 0; j < data.Count(); j++)
-                        swc.AddLine(data[j]);
-                    swc.Write();
-                    swc.Close();
-                    
-                    //load swc
-                    m_data_mgr.LoadMeshData(temp_swc_path, wxT(""));
-                    MeshData* md = m_data_mgr.GetLastMeshData();
-                    if (vrv && md)
-                    {
-                        md->SetName(name + wxT(" ") + cell);
-                        if (coldata.count(name) > 0)
-                        {
-                            MeshData* gmd = coldata[name];
-                            Color amb, diff, spec;
-                            double shine, alpha;
-                            gmd->GetMaterial(amb, diff, spec, shine, alpha);
-                            md->SetMaterial(amb, diff, spec);
-                        }
-                        else
-                            coldata[name] = md;
-                        if (first)
-                        {
-                            wxString tmp_group_name = vrv->AddMGroup();
-                            mg = vrv->GetMGroup(tmp_group_name);
-                            mg->SetName(wxT("Cell ") + cell);
-                            first = false;
-                        }
-                        if (mg)
-                        {
-                            mg->InsertMeshData(mg->GetMeshNum()-1, md);
-                            //vrv->SetMeshPopDirty();
-                            //vrv->InitView(INIT_BOUNDS | INIT_CENTER);
-                        }
-                        else
-                            vrv->AddMeshData(md);
-                    }
+                        vrv->AddMeshData(md);
                 }
             }
-            
-            vrv->SetMeshPopDirty();
-            vrv->InitView(INIT_BOUNDS | INIT_CENTER);
         }
         else
         {
