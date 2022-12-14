@@ -1559,6 +1559,7 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
                         col[0] = col[0] / 255.0;
                         col[1] = col[1] / 255.0;
                         col[2] = col[2] / 255.0;
+                        swccolors[key] = col;
                         
                         long link2 = -1;
                         elems[13].ToLong(&link2);
