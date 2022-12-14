@@ -1002,6 +1002,7 @@ namespace FLIVR
 
 		vubo.proj_mat = m_proj_mat;
 		vubo.mv_mat = m_mv_mat;
+        vubo.threshold = threshold_;
 		GLMmaterial* material = &data_->materials[0];
 		if (material)
 			fubo.loc0 = { material->diffuse[0], material->diffuse[1], material->diffuse[2], material->diffuse[3] };
@@ -1207,6 +1208,7 @@ namespace FLIVR
 
 		vubo.proj_mat = m_proj_mat;
 		vubo.mv_mat = m_mv_mat;
+        vubo.threshold = threshold_;
 		GLMmaterial* material = &data_->materials[0];
 		fubo.loci0 = name;
 

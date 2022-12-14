@@ -264,6 +264,7 @@ public:
 	DataGroup* GetGroup(wxString &name);
 	DataGroup* GetParentGroup(wxString& name);
 	MeshGroup* GetMGroup(wxString str);
+    MeshGroup* GetParentMGroup(wxString& name);
 	//add
 	DataGroup* AddVolumeData(VolumeData* vd, wxString group_name="");
 	void AddMeshData(MeshData* md);
@@ -1528,6 +1529,7 @@ public:
 	Annotations* GetAnnotations(wxString &name);
 	DataGroup* GetGroup(wxString &name);
 	DataGroup* GetParentGroup(wxString& name);
+    MeshGroup* GetParentMGroup(wxString& name);
 	DataGroup* AddVolumeData(VolumeData* vd, wxString group_name="");
 	void AddMeshData(MeshData* md);
 	void AddAnnotations(Annotations* ann);

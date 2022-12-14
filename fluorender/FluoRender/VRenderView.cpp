@@ -2189,73 +2189,14 @@ void VRenderVulkanView::DrawAnnotations()
 	{
 		if (!m_layer_list[i])
 			continue;
-		if (m_layer_list[i]->IsA() == 4)
-		{
-			Annotations* ann = (Annotations*)m_layer_list[i];
-			if (!ann) continue;
-			if (ann->GetDisp())
-			{
-                MeshData* md = ann->GetMesh();
-                if (md)
+        switch (m_layer_list[i]->IsA())
+        {
+        case 3://mesh data
+            {
+                MeshData* md = (MeshData*)m_layer_list[i];
+                if (md && md->GetDisp() && md->GetLabelVisibility() && md->GetAnnotations())
                 {
-                    vks::VulkanDevice* prim_dev = m_vulkan->devices[0];
-                    if (m_anno_fbo && (m_anno_fbo->w != m_nx || m_anno_fbo->h != m_ny))
-                    {
-                        m_anno_fbo.reset();
-                        m_anno_tex.reset();
-                        m_anno_dp_tex.reset();
-                    }
-                    if (!m_anno_fbo)
-                    {
-                        m_anno_fbo = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
-                        m_anno_fbo->w = m_nx;
-                        m_anno_fbo->h = m_ny;
-                        m_anno_fbo->device = prim_dev;
-
-                        m_anno_tex = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
-                        m_anno_fbo->addAttachment(m_anno_tex);
-                        
-                        m_anno_dp_tex = prim_dev->GenTexture2D(
-                            m_vulkan->depthFormat,
-                            VK_FILTER_LINEAR,
-                            m_nx, m_ny,
-                            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-                            VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-                            VK_IMAGE_USAGE_SAMPLED_BIT |
-                            VK_IMAGE_USAGE_TRANSFER_SRC_BIT
-                        );
-                        m_anno_fbo->addAttachment(m_anno_dp_tex);
-                    }
-                    
-                    md->SetDepthTex(nullptr);
-                    md->SetMatrices(m_mv_mat, m_proj_mat);
-                    md->SetFog(m_use_fog && m_use_fog_mesh, m_fog_intensity, m_fog_start, m_fog_end);
-                    md->SetDevice(m_vulkan->devices[0]);
-                    md->SetDrawBounds(false);
-                    md->Draw(m_anno_fbo, true, 0);
-                    
-                    Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
-                    vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
-                    params.pipeline =
-                        m_v2drender->preparePipeline(
-                            IMG_SHDR_BRIGHTNESS_CONTRAST,
-                            V2DRENDER_BLEND_ADD,
-                            current_fbo->attachments[0]->format,
-                            current_fbo->attachments.size(),
-                            0,
-                            current_fbo->attachments[0]->is_swapchain_images);
-                    params.loc[0] = glm::vec4(1.0f);
-                    params.loc[1] = glm::vec4((float)ann->GetAlpha(), (float)ann->GetAlpha(), (float)ann->GetAlpha(), 1.0f);
-                    params.tex[0] = m_anno_tex.get();
-                    params.clear = m_frame_clear;
-                    params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
-                    m_frame_clear = false;
-                    if (!current_fbo->renderPass)
-                        current_fbo->replaceRenderPass(params.pipeline.pass);
-                    m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
-                }
-                else
-                {
+                    Annotations* ann = md->GetAnnotations();
                     string str;
                     Point pos;
                     wstring wstr;
@@ -2264,9 +2205,10 @@ void VRenderVulkanView::DrawAnnotations()
                         str = ann->GetTextText(j);
                         wstr = s2ws(str);
                         pos = ann->GetTextPos(j);
-                        if (!ann->InsideClippingPlanes(pos))
+                        if (!md->InsideClippingPlanes(pos))
                             continue;
-                        pos = ann->GetTextTransformedPos(j);
+                        //pos = ann->GetTextTransformedPos(j);
+                        pos.z(-pos.z());
                         pos = mv.transform(pos);
                         pos = p.transform(pos);
                         if (pos.x() >= -1.0 && pos.x() <= 1.0 &&
@@ -2283,8 +2225,148 @@ void VRenderVulkanView::DrawAnnotations()
                         }
                     }
                 }
-			}
-		}
+            }
+            break;
+        case 6://mesh group
+            {
+                MeshGroup* group = (MeshGroup*)m_layer_list[i];
+                if (!group->GetDisp())
+                    continue;
+                for (int j=0; j<group->GetMeshNum(); j++)
+                {
+                    MeshData* md = group->GetMeshData(j);
+                    if (md && md->GetDisp() && md->GetLabelVisibility() && md->GetAnnotations())
+                    {
+                        Annotations* ann = md->GetAnnotations();
+                        string str;
+                        Point pos;
+                        wstring wstr;
+                        for (int j=0; j<ann->GetTextNum(); ++j)
+                        {
+                            str = ann->GetTextText(j);
+                            wstr = s2ws(str);
+                            pos = ann->GetTextPos(j);
+                            if (!md->InsideClippingPlanes(pos))
+                                continue;
+                            //pos = ann->GetTextTransformedPos(j);
+                            pos.z(-pos.z());
+                            pos = mv.transform(pos);
+                            pos = p.transform(pos);
+                            if (pos.x() >= -1.0 && pos.x() <= 1.0 &&
+                                pos.y() >= -1.0 && pos.y() <= 1.0)
+                            {
+                                if (pos.z()<=0.0 || pos.z()>=1.0)
+                                    continue;
+                                px = pos.x()*nx/2.0;
+                                py = pos.y()*ny/2.0;
+                                m_text_renderer->RenderText(
+                                    m_vulkan->frameBuffers[m_vulkan->currentBuffer],
+                                    wstr, text_color,
+                                    px*sx, py*sy);
+                            }
+                        }
+                    }
+                }
+            }
+            break;
+        case 4:
+            {
+                Annotations* ann = (Annotations*)m_layer_list[i];
+                if (!ann) continue;
+                if (ann->GetDisp())
+                {
+                    MeshData* md = ann->GetMesh();
+                    if (md)
+                    {
+                        vks::VulkanDevice* prim_dev = m_vulkan->devices[0];
+                        if (m_anno_fbo && (m_anno_fbo->w != m_nx || m_anno_fbo->h != m_ny))
+                        {
+                            m_anno_fbo.reset();
+                            m_anno_tex.reset();
+                            m_anno_dp_tex.reset();
+                        }
+                        if (!m_anno_fbo)
+                        {
+                            m_anno_fbo = std::make_unique<vks::VFrameBuffer>(vks::VFrameBuffer());
+                            m_anno_fbo->w = m_nx;
+                            m_anno_fbo->h = m_ny;
+                            m_anno_fbo->device = prim_dev;
+
+                            m_anno_tex = prim_dev->GenTexture2D(VK_FORMAT_R32G32B32A32_SFLOAT, VK_FILTER_LINEAR, m_nx, m_ny);
+                            m_anno_fbo->addAttachment(m_anno_tex);
+                            
+                            m_anno_dp_tex = prim_dev->GenTexture2D(
+                                m_vulkan->depthFormat,
+                                VK_FILTER_LINEAR,
+                                m_nx, m_ny,
+                                VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+                                VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                                VK_IMAGE_USAGE_SAMPLED_BIT |
+                                VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+                            );
+                            m_anno_fbo->addAttachment(m_anno_dp_tex);
+                        }
+                        
+                        md->SetDepthTex(nullptr);
+                        md->SetMatrices(m_mv_mat, m_proj_mat);
+                        md->SetFog(m_use_fog && m_use_fog_mesh, m_fog_intensity, m_fog_start, m_fog_end);
+                        md->SetDevice(m_vulkan->devices[0]);
+                        md->SetDrawBounds(false);
+                        md->Draw(m_anno_fbo, true, 0);
+                        
+                        Vulkan2dRender::V2DRenderParams params = m_v2drender->GetNextV2dRenderSemaphoreSettings();
+                        vks::VFrameBuffer* current_fbo = m_vulkan->frameBuffers[m_vulkan->currentBuffer].get();
+                        params.pipeline =
+                            m_v2drender->preparePipeline(
+                                IMG_SHDR_BRIGHTNESS_CONTRAST,
+                                V2DRENDER_BLEND_ADD,
+                                current_fbo->attachments[0]->format,
+                                current_fbo->attachments.size(),
+                                0,
+                                current_fbo->attachments[0]->is_swapchain_images);
+                        params.loc[0] = glm::vec4(1.0f);
+                        params.loc[1] = glm::vec4((float)ann->GetAlpha(), (float)ann->GetAlpha(), (float)ann->GetAlpha(), 1.0f);
+                        params.tex[0] = m_anno_tex.get();
+                        params.clear = m_frame_clear;
+                        params.clearColor = { (float)m_bg_color.r(), (float)m_bg_color.g(), (float)m_bg_color.b() };
+                        m_frame_clear = false;
+                        if (!current_fbo->renderPass)
+                            current_fbo->replaceRenderPass(params.pipeline.pass);
+                        m_v2drender->render(m_vulkan->frameBuffers[m_vulkan->currentBuffer], params);
+                    }
+                    else
+                    {
+                        string str;
+                        Point pos;
+                        wstring wstr;
+                        for (int j=0; j<ann->GetTextNum(); ++j)
+                        {
+                            str = ann->GetTextText(j);
+                            wstr = s2ws(str);
+                            pos = ann->GetTextPos(j);
+                            if (!ann->InsideClippingPlanes(pos))
+                                continue;
+                            pos = ann->GetTextTransformedPos(j);
+                            pos = mv.transform(pos);
+                            pos = p.transform(pos);
+                            if (pos.x() >= -1.0 && pos.x() <= 1.0 &&
+                                pos.y() >= -1.0 && pos.y() <= 1.0)
+                            {
+                                if (pos.z()<=0.0 || pos.z()>=1.0)
+                                    continue;
+                                px = pos.x()*nx/2.0;
+                                py = pos.y()*ny/2.0;
+                                m_text_renderer->RenderText(
+                                    m_vulkan->frameBuffers[m_vulkan->currentBuffer],
+                                    wstr, text_color,
+                                    px*sx, py*sy);
+                            }
+                        }
+                    }
+                }
+            }
+            break;
+        }
 	}
 }
 
@@ -9224,6 +9306,35 @@ DataGroup* VRenderVulkanView::GetParentGroup(wxString& name)
 	}
 
 	return 0;
+}
+
+MeshGroup* VRenderVulkanView::GetParentMGroup(wxString& name)
+{
+    int i, j;
+
+    for (i = 0; i < (int)m_layer_list.size(); i++)
+    {
+        if (!m_layer_list[i])
+            continue;
+        switch (m_layer_list[i]->IsA())
+        {
+        case 6://group
+        {
+            MeshGroup* group = (MeshGroup*)m_layer_list[i];
+            if (!group)
+                break;
+            for (j = 0; j < group->GetMeshNum(); j++)
+            {
+                MeshData* md = group->GetMeshData(j);
+                if (md && md->GetName() == name)
+                    return group;
+            }
+        }
+        break;
+        }
+    }
+
+    return 0;
 }
 
 int VRenderVulkanView::GetAny()
@@ -18795,6 +18906,14 @@ DataGroup* VRenderView::GetParentGroup(wxString& name)
 		return m_glview->GetParentGroup(name);
 	else
 		return 0;
+}
+
+MeshGroup* VRenderView::GetParentMGroup(wxString& name)
+{
+    if (m_glview)
+        return m_glview->GetParentMGroup(name);
+    else
+        return 0;
 }
 
 DataGroup* VRenderView::AddVolumeData(VolumeData* vd, wxString group_name)

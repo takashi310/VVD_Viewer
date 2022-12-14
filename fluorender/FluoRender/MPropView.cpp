@@ -135,6 +135,8 @@ BEGIN_EVENT_TABLE(MPropView, wxPanel)
 	EVT_COMMAND_SCROLL(ID_size_sldr, MPropView::OnSizeChange)
 	EVT_TEXT(ID_size_text, MPropView::OnSizeText)
 	EVT_TEXT_ENTER(ID_r_text, MPropView::OnEnterInRadScaleText)
+    //label
+    EVT_CHECKBOX(ID_label_chk, MPropView::OnLabelCheck)
 	EVT_CHECKBOX(ID_sync_chk, MPropView::OnSyncCheck)
 END_EVENT_TABLE()
 
@@ -265,6 +267,12 @@ m_sync(false)
 	sizer_9->Add(20, 5, 0);
 	sizer_9->Add(m_r_st, 0, wxALIGN_CENTER);
 	sizer_9->Add(m_r_text, 0, wxALIGN_CENTER);
+    
+    wxBoxSizer* sizer_11 = new wxBoxSizer(wxHORIZONTAL);
+    m_label_chk = new wxCheckBox(this, ID_label_chk, "Label: ",
+        wxDefaultPosition, wxSize(100, 20));
+    sizer_11->Add(20, 5, 0);
+    sizer_11->Add(m_label_chk, 0, wxALIGN_CENTER, 0);
 
 	wxBoxSizer* sizer_10 = new wxBoxSizer(wxHORIZONTAL);
 	m_sync_chk = new wxCheckBox(this, ID_sync_chk, " Sync",
@@ -277,11 +285,13 @@ m_sync(false)
 	sizer_v2->Add(sizer_1, 0, wxALIGN_LEFT);
 	sizer_v2->Add(sizer_2, 0, wxALIGN_LEFT);
 	sizer_v2->Add(sizer_3, 0, wxALIGN_LEFT);
-	sizer_v2->Add(sizer_7, 0, wxALIGN_LEFT);
+    sizer_v2->Add(sizer_7, 0, wxALIGN_LEFT);
 	sizer_v2->Add(sizer_8, 0, wxALIGN_LEFT);
 	sizer_v2->Add(sizer_9, 0, wxALIGN_LEFT);
+    sizer_v2->Add(sizer_11, 0, wxALIGN_LEFT);
 	sizer_v2->Add(sizer_10, 0, wxALIGN_RIGHT);
     
+    sizer_v2->Hide(sizer_7);
     sizer_v2->Hide(sizer_8);
 
 	wxBoxSizer* sizer_all = new wxBoxSizer(wxHORIZONTAL);
@@ -349,6 +359,8 @@ void MPropView::GetSettings()
 	int limit = m_md->GetLimitNumber();
 	m_size_sldr->SetValue(limit);
 	m_size_text->SetValue(wxString::Format("%d", limit));
+    //label
+    m_label_chk->SetValue(m_md->GetLabelVisibility());
 	//swc
 	if (m_md->isSWC())
 	{
@@ -362,6 +374,11 @@ void MPropView::GetSettings()
 		m_r_st->Disable();
 		m_r_text->Disable();
 	}
+    
+    if (m_md->GetAnnotations())
+        m_label_chk->Enable();
+    else
+        m_label_chk->Disable();
 
 	SetEvtHandlerEnabled(true);
 }
@@ -391,25 +408,62 @@ void MPropView::UpdateSync()
 	int limitnum = m_md->GetLimitNumber();
 	
 	double rs = m_md->GetRadScale();
+    
+    //label
+    bool show_label = m_md->GetLabelVisibility();
+    
+    wxString mname = m_md->GetName();
+    MeshGroup *mg = m_vrv->GetParentMGroup(mname);
 	
-	int mesh_num = m_vrv->GetMeshNum();
-	for (int i = 0; i < mesh_num; i++)
-	{
-		MeshData *md = m_vrv->GetMeshData(i);
-		if (!md) continue;
+    if (mg)
+    {
+        int mesh_num = mg->GetMeshNum();
+        for (int i = 0; i < mesh_num; i++)
+        {
+            MeshData *md = mg->GetMeshData(i);
+            if (!md) continue;
 
-		double dummy1, dummy2;
-		md->GetMaterial(amb, diff, spec, dummy1, dummy2);
-		
-		md->SetMaterial(amb, diff, spec, shine, alpha);
-		md->SetFloat(alpha, MESH_FLOAT_ALPHA);
-		md->SetLighting(lighting);
-		md->SetScaling(sx, sy, sz);
-		md->SetShadow(shadow);
-		md->SetLimit(limit);
-		md->SetLimitNumer(limitnum);
-		md->SetRadScale(rs);
-	}
+            double dummy1, dummy2;
+            md->GetMaterial(amb, diff, spec, dummy1, dummy2);
+            
+            md->SetMaterial(amb, diff, spec, shine, alpha);
+            md->SetFloat(alpha, MESH_FLOAT_ALPHA);
+            md->SetLighting(lighting);
+            md->SetScaling(sx, sy, sz);
+            md->SetShadow(shadow);
+            md->SetLimit(limit);
+            md->SetLimitNumer(limitnum);
+            md->SetRadScale(rs);
+            md->SetLabelVisibility(show_label);
+        }
+    }
+    else
+    {
+        int mesh_num = m_vrv->GetMeshNum();
+        for (int i = 0; i < mesh_num; i++)
+        {
+            MeshData *md = m_vrv->GetMeshData(i);
+            if (!md) continue;
+            
+            mname = md->GetName();
+            MeshGroup *mg = m_vrv->GetParentMGroup(mname);
+            if (mg) continue;
+            
+
+            double dummy1, dummy2;
+            md->GetMaterial(amb, diff, spec, dummy1, dummy2);
+            
+            md->SetMaterial(amb, diff, spec, shine, alpha);
+            md->SetFloat(alpha, MESH_FLOAT_ALPHA);
+            md->SetLighting(lighting);
+            md->SetScaling(sx, sy, sz);
+            md->SetShadow(shadow);
+            md->SetLimit(limit);
+            md->SetLimitNumer(limitnum);
+            md->SetRadScale(rs);
+            md->SetLabelVisibility(show_label);
+        }
+    }
 }
 
 void MPropView::SetMeshData(MeshData* md, VRenderView* vrv)
@@ -646,4 +700,16 @@ void MPropView::OnSizeText(wxCommandEvent& event)
 		if (m_sync) UpdateSync();
 		RefreshVRenderViews();
 	}
+}
+
+//label
+void MPropView::OnLabelCheck(wxCommandEvent& event)
+{
+    bool bval = m_label_chk->GetValue();
+    if (m_md)
+    {
+        m_md->SetLabelVisibility(bval);
+        if (m_sync) UpdateSync();
+        RefreshVRenderViews();
+    }
 }

@@ -93,6 +93,7 @@ class EXPORT_API MPropView: public wxPanel
 		ID_size_sldr,
 		ID_size_text,
 		ID_r_text,
+        ID_label_chk,
 		ID_sync_chk
 	};
 
@@ -139,6 +140,8 @@ private:
 
 	wxStaticText *m_r_st;
 	mpTextCtrl *m_r_text;
+    
+    wxCheckBox *m_label_chk;
 
 	wxCheckBox *m_sync_chk;
 	bool m_sync;
@@ -164,6 +167,8 @@ private:
 	void OnSizeText(wxCommandEvent& event);
 
 	void OnEnterInRadScaleText(wxCommandEvent& event);
+    
+    void OnLabelCheck(wxCommandEvent& event);
 
 	void OnSyncCheck(wxCommandEvent& event);
 

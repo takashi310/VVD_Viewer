@@ -1531,7 +1531,9 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
                 continue;
 
             map<wxString, wxArrayString> swcdata;
+            map<wxString, Color> swccolors;
             wxString str = csv.GetFirstLine();
+            wxArrayString linkswcstr;
             while(!csv.Eof())
             {
                 str = csv.GetNextLine();
@@ -1545,11 +1547,64 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
                     if (swcdata.count(key) == 0)
                         swcdata[key] = wxArrayString();
                     //wxString swc_line = wxString::Format("%d 6 %s %s %s %f -1 %s", (int)swcdata[key].Count(), elems[0], elems[1], elems[2], 3.0f, elems[4]);
-                    wxString swc_line = wxString::Format("%d 6 %s %s %s %f -1", (int)swcdata[key].Count(), elems[1], elems[0], elems[2], 3.0f);
+                    wxString swc_line = wxString::Format("%d 6 %s %s %s %f -1", (int)swcdata[key].Count()+1, elems[1], elems[0], elems[2], 0.1f);
                     swcdata[key].Add(swc_line);
+                    
+                    if (elems.Count() >= 14)
+                    {
+                        Color col(1.0, 1.0, 1.0);
+                        elems[10].ToDouble(&col[0]);
+                        elems[11].ToDouble(&col[1]);
+                        elems[12].ToDouble(&col[2]);
+                        col[0] = col[0] / 255.0;
+                        col[1] = col[1] / 255.0;
+                        col[2] = col[2] / 255.0;
+                        
+                        int link2 = -1;
+                        elems[13].ToInt(&link2);
+                        if (link2 == 0)
+                            link2 = -1;
+                        swc_line = wxString::Format("%d 0 %s %s %s %f %d", (int)linkswcstr.Count()+1, elems[1], elems[0], elems[2], 0.01f, link2);
+                        linkswcstr.Add(swc_line);
+                    }
                 }
             }
             csv.Close();
+            
+            //generate link swc
+            if (linkswcstr.Count() > 0)
+            {
+                wxString temp_swc_path = wxFileName::CreateTempFileName(wxStandardPaths::Get().GetTempDir() + wxFileName::GetPathSeparator()) + ".swc";
+                wxTextFile swc(temp_swc_path);
+                if (swc.Exists())
+                {
+                    if (!swc.Open())
+                        continue;
+                    swc.Clear();
+                }
+                else
+                {
+                    if (!swc.Create())
+                        continue;
+                }
+                for(int j = 0; j < linkswcstr.Count(); j++)
+                    swc.AddLine(linkswcstr[j]);
+                swc.Write();
+                swc.Close();
+
+                //load swc
+                m_data_mgr.LoadMeshData(temp_swc_path, wxT(""));
+                MeshData* md = m_data_mgr.GetLastMeshData();
+                if (vrv && md)
+                {
+                    wxFileName wfn(filename);
+                    md->SetName(wxT("Linkage-")+wfn.GetName());
+                    Color color(1.0, 1.0, 1.0);
+                    md->SetColor(color, MESH_COLOR_DIFF);
+                    md->SetColor(color, MESH_COLOR_AMB);
+                    vrv->AddMeshData(md);
+                }
+            }
 
             auto it = swcdata.begin();
             bool first = true;
@@ -1559,6 +1614,9 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
                 wxString name = it->first;
                 wxArrayString data = it->second;
                 it++;
+                
+                Annotations *annotations = new Annotations();
+                wxString gname = name.Mid(name.Find(' ', true)+1);
 
                 //generate swc
                 wxString temp_swc_path = wxFileName::CreateTempFileName(wxStandardPaths::Get().GetTempDir() + wxFileName::GetPathSeparator()) + ".swc";
@@ -1575,7 +1633,23 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
                         continue;
                 }
                 for(int j = 0; j < data.Count(); j++)
+                {
                     swc.AddLine(data[j]);
+                    
+                    wxStringTokenizer tkz(data[j], wxT(" "));
+                    wxArrayString elems;
+                    while(tkz.HasMoreTokens())
+                        elems.Add(tkz.GetNextToken());
+                    if (elems.Count() >= 5)
+                    {
+                        double x, y, z;
+                        elems[2].ToDouble(&x);
+                        elems[3].ToDouble(&y);
+                        elems[4].ToDouble(&z);
+                        Point pos = Point(x, y, z);
+                        annotations->AddText(gname.ToStdString(), pos, "");
+                    }
+                }
                 swc.Write();
                 swc.Close();
 
@@ -1585,6 +1659,14 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
                 if (vrv && md)
                 {
                     md->SetName(name);
+                    md->SetAnnotations(annotations);
+                    if (swccolors.count(name) > 0)
+                    {
+                        Color color = swccolors[name];
+                        md->SetColor(color, MESH_COLOR_DIFF);
+                        md->SetColor(color, MESH_COLOR_AMB);
+                    }
+                    
                     if (first)
                     {
                         wxString tmp_group_name = vrv->AddMGroup();
@@ -1602,6 +1684,8 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
                     else
                         vrv->AddMeshData(md);
                 }
+                else
+                    delete annotations;
             }
         }
         else

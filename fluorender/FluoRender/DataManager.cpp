@@ -4301,6 +4301,8 @@ m_data(0),
 	m_clip_dist_y = 1;
 	m_clip_dist_z = 1;
     m_extra_vertex_data = NULL;
+    m_anno = nullptr;
+    m_show_labels = false;
 }
 
 MeshData::~MeshData()
@@ -4313,6 +4315,8 @@ MeshData::~MeshData()
 		delete m_swc_reader;
     if (m_extra_vertex_data)
         delete [] m_extra_vertex_data;
+    if (m_anno)
+        delete m_anno;
 }
 
 int MeshData::Load(GLMmodel* mesh)
@@ -5231,6 +5235,37 @@ void MeshData::RecalcBounds()
 	m_center = Point((m_bounds.min().x() + m_bounds.max().x()) * 0.5,
 		(m_bounds.min().y() + m_bounds.max().y()) * 0.5,
 		(m_bounds.min().z() + m_bounds.max().z()) * 0.5);
+}
+
+//test if point is inside the clipping planes
+bool MeshData::InsideClippingPlanes(Point pos)
+{
+    if (!m_mr)
+        return true;
+    
+    vector<Plane*> *planes = m_mr->get_planes();
+    if (!planes)
+        return true;
+    if (planes->size() != 6)
+        return true;
+    
+    BBox dbox = m_mr->get_bounds();
+    
+    pos.x( (pos.x() - dbox.min().x()) / (dbox.max().x() - dbox.min().x()) );
+    pos.y( (pos.y() - dbox.min().y()) / (dbox.max().y() - dbox.min().y()) );
+    pos.z( (pos.z() + dbox.max().z()) / (dbox.max().z() - dbox.min().z()) );
+
+    Plane* plane = 0;
+    for (int i=0; i<6; i++)
+    {
+        plane = (*planes)[i];
+        if (!plane)
+            continue;
+        if (plane->eval_point(pos) < 0)
+            return false;
+    }
+
+    return true;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

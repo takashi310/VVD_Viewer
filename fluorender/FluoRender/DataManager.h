@@ -211,6 +211,7 @@ class VolumeLoader;
 #define MESH_FLOAT_SHN	4
 #define MESH_FLOAT_ALPHA	5
 
+class Annotations;
 class EXPORT_API MeshData : public TreeLayer
 {
 public:
@@ -353,6 +354,26 @@ public:
     {
         return m_subdiv;
     }
+    
+    void SetAnnotations(Annotations *anno)
+    {
+        m_anno = anno;
+    }
+    Annotations* GetAnnotations()
+    {
+        return m_anno;
+    }
+    
+    void SetLabelVisibility(bool show)
+    {
+        m_show_labels = show;
+    }
+    bool GetLabelVisibility()
+    {
+        return m_show_labels;
+    }
+
+    bool InsideClippingPlanes(Point pos);
 
 private:
 	//wxString m_name;
@@ -394,6 +415,9 @@ private:
 	int m_subdiv;
 	SWCReader *m_swc_reader;
     PLYReader *m_ply_reader;
+    
+    Annotations *m_anno;
+    bool m_show_labels;
 
 	wstring m_info;
 
