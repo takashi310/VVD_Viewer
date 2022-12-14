@@ -434,7 +434,7 @@ void MPropView::UpdateSync()
             md->SetLimit(limit);
             md->SetLimitNumer(limitnum);
             md->SetRadScale(rs);
-            md->SetLabelVisibility(show_label);
+            //md->SetLabelVisibility(show_label);
         }
     }
     else
@@ -461,7 +461,7 @@ void MPropView::UpdateSync()
             md->SetLimit(limit);
             md->SetLimitNumer(limitnum);
             md->SetRadScale(rs);
-            md->SetLabelVisibility(show_label);
+            //md->SetLabelVisibility(show_label);
         }
     }
 }
