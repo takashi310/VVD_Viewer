@@ -6066,8 +6066,8 @@ void VRenderVulkanView::Pick()
 		TreePanel *tree_panel = frame->GetTree();
 		if (!tree_panel) return;
 
-		tree_panel->SetEvtHandlerEnabled(false);
-		tree_panel->Freeze();
+		//tree_panel->SetEvtHandlerEnabled(false);
+		//tree_panel->Freeze();
 
 		if (!SelSegVolume(3))
 		{
@@ -6075,8 +6075,8 @@ void VRenderVulkanView::Pick()
 		}
         PickMesh();
 
-		tree_panel->Thaw();
-		tree_panel->SetEvtHandlerEnabled(true);
+		//tree_panel->Thaw();
+		//tree_panel->SetEvtHandlerEnabled(true);
 	}
 }
 
