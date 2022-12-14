@@ -1560,11 +1560,11 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
                         col[1] = col[1] / 255.0;
                         col[2] = col[2] / 255.0;
                         
-                        int link2 = -1;
-                        elems[13].ToInt(&link2);
+                        long link2 = -1;
+                        elems[13].ToLong(&link2);
                         if (link2 == 0)
                             link2 = -1;
-                        swc_line = wxString::Format("%d 0 %s %s %s %f %d", (int)linkswcstr.Count()+1, elems[1], elems[0], elems[2], 0.01f, link2);
+                        swc_line = wxString::Format("%d 0 %s %s %s %f %d", (int)linkswcstr.Count()+1, elems[1], elems[0], elems[2], 0.01f, (int)link2);
                         linkswcstr.Add(swc_line);
                     }
                 }
