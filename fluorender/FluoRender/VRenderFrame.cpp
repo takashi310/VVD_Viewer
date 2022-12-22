@@ -1507,7 +1507,7 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
         if (suffix != ".csv")
             count++;
     }
-    if (count > 1)
+    if (count > 1 || !group_name.IsEmpty())
     {
         wxString tmp_group_name = vrv->AddMGroup();
         group = vrv->GetMGroup(tmp_group_name);

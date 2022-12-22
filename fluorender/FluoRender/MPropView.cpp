@@ -524,12 +524,7 @@ void MPropView::OnLightingCheck(wxCommandEvent& event)
 	{
 		bool val = m_light_chk->GetValue();
 		m_md->SetLighting(val);
-		for (int i=0; i<m_vrv->GetMeshNum(); i++)
-		{
-			MeshData* md = m_vrv->GetMeshData(i);
-			if (md)
-				md->SetLighting(val);
-		}
+        if (m_sync) UpdateSync();
 		RefreshVRenderViews();
 	}
 }
@@ -631,12 +626,7 @@ void MPropView::OnShadowCheck(wxCommandEvent& event)
 	{
 		bool val = m_shadow_chk->GetValue();
 		m_md->SetShadow(val);
-		for (int i=0; i<m_vrv->GetMeshNum(); i++)
-		{
-			MeshData* md = m_vrv->GetMeshData(i);
-			if (md)
-				md->SetShadow(val);
-		}
+        if (m_sync) UpdateSync();
 		RefreshVRenderViews();
 	}
 }
@@ -658,12 +648,7 @@ void MPropView::OnShadowText(wxCommandEvent& event)
 	if (m_md && m_vrv)
 	{
 		m_md->SetShadowParams(dval);
-		for (int i=0; i<m_vrv->GetMeshNum(); i++)
-		{
-			MeshData* md = m_vrv->GetMeshData(i);
-			if (md)
-				md->SetShadowParams(dval);
-		}
+        if (m_sync) UpdateSync();
 		RefreshVRenderViews();
 	}
 }
