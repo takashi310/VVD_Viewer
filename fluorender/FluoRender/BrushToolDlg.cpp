@@ -166,6 +166,10 @@ wxWindow* BrushToolDlg::CreateBrushPage(wxWindow *parent)
 	sizer1_1->Add(m_select_group_chk, 0, wxALIGN_CENTER);
     sizer1_1->Add(5, 5);
     sizer1_1->Add(m_brush_use_absolute_chk, 0, wxALIGN_CENTER);
+    
+    m_edge_detect_chk->Hide();
+    m_hidden_removal_chk->Hide();
+    
 	//threshold4
 	wxBoxSizer *sizer1_2 = new wxBoxSizer(wxHORIZONTAL);
 	st = new wxStaticText(page, 0, "Threshold:",
@@ -346,6 +350,17 @@ wxWindow* BrushToolDlg::CreateBrushPage(wxWindow *parent)
 	st_dslt_c->Disable();
 	m_dslt_c_sldr->Disable();
 	m_dslt_c_text->Disable();
+    
+    m_dslt_chk->Hide();
+    st_dslt_r->Hide();
+    m_dslt_r_sldr->Hide();
+    m_dslt_r_text->Hide();
+    st_dslt_q->Hide();
+    m_dslt_q_sldr->Hide();
+    m_dslt_q_text->Hide();
+    st_dslt_c->Hide();
+    m_dslt_c_sldr->Hide();
+    m_dslt_c_text->Hide();
 
 	//set the page
 	page->SetSizer(sizer_v);
