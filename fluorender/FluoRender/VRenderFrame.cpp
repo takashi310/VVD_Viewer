@@ -1521,7 +1521,6 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
         prg_diag->Update(90*(i+1)/(int)files.Count());
 
         wxString filename = files[i];
-        m_data_mgr.LoadMeshData(filename, i < descs.Count() ? descs[i] : wxT(""));
         wxString suffix = filename.Mid(filename.Find('.', true)).MakeLower();
         if (suffix == ".csv")
         {
