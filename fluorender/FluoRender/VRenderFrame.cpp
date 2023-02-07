@@ -459,7 +459,7 @@ VRenderFrame::VRenderFrame(
     m_aui_mgr.AddPane(m_measure_dlg, wxAuiPaneInfo().
         Name("m_measure_dlg").Caption(UITEXT_MEASUREMENT).
         Left().CloseButton(true).BestSize(wxSize(320, 400)).
-        FloatingSize(wxSize(550, 500)).Layer(3).Dockable(false));
+        FloatingSize(wxSize(650, 500)).Layer(3).Dockable(false));
 	m_aui_mgr.AddPane(m_prop_panel, wxAuiPaneInfo().
 		Name("m_prop_panel").Caption(UITEXT_PROPERTIES).
 		Bottom().CloseButton(true).MinSize(wxSize(300, 150)).
@@ -3488,6 +3488,30 @@ void VRenderFrame::SaveProject(wxString& filename)
 			fconfig.Write("name", str);
 			str = ann->GetPath();
 			fconfig.Write("path", str);
+            Color col;
+            double transparency, threshold;
+            MeshData* md = ann->GetMesh();
+            if (md)
+            {
+                wxString new_folder;
+                wxString srcpath = md->GetPath();
+                new_folder = filename + "_files";
+                CREATE_DIR(new_folder.fn_str());
+                wxString ext = ".swc";
+                if (md->GetName().AfterLast(L'.') == wxT("swc"))
+                    ext = "";
+                wxString dstpath = new_folder + GETSLASH() + md->GetName() + ext;
+                wxCopyFile(srcpath, dstpath);
+                fconfig.Write("mesh_path", dstpath);
+                Color amb, diff, spec;
+                double shine, alpha;
+                md->GetMaterial(amb, diff, spec, shine, alpha);
+                str = wxString::Format("%f %f %f", diff.r(), diff.g(), diff.b());
+                fconfig.Write("color", str);
+                fconfig.Write("transparency", ann->GetAlpha());
+                fconfig.Write("max_score", ann->GetMaxScore());
+                fconfig.Write("threshold", ann->GetThreshold());
+            }
 		}
 	}
 	//views
@@ -5225,15 +5249,51 @@ void VRenderFrame::OpenProject(wxString& filename)
 			str = wxString::Format("/data/annotations/%d", i);
 			if (fconfig.Exists(str))
 			{
+                Annotations* ann = nullptr;
 				fconfig.SetPath(str);
 				if (fconfig.Read("path", &str))
 				{
-					m_data_mgr.LoadAnnotations(str);
+                    ann = m_data_mgr.LoadAnnotations(str);
 				}
+                
+                if (fconfig.Read("mesh_path", &str))
+                {
+                    MeshData *md = new MeshData();
+                    md->SetSWCSubdivLevel(1);
+                    if (md->Load(str))
+                    {
+                        Color color(HSVColor(0.0, 0.0, 1.0));
+                        md->SetColor(color, MESH_COLOR_DIFF);
+                        Color amb = color;
+                        md->SetColor(amb, MESH_COLOR_AMB);
+                        if (fconfig.Read("color", &str))
+                        {
+                            float r, g, b;
+                            if (SSCANF(str.c_str(), "%f%f%f", &r, &g, &b)){
+                                FLIVR::Color col(r,g,b);
+                                md->SetColor(col, MESH_COLOR_DIFF);
+                                md->SetColor(col, MESH_COLOR_AMB);
+                            }
+                        }
+                        ann->SetMesh(md);
+                        double transparency;
+                        if (fconfig.Read("transparency", &transparency))
+                            ann->SetAlpha(transparency);
+                        double max_score;
+                        if (fconfig.Read("max_score", &max_score))
+                            ann->SetMaxScore(max_score);
+                        double th;
+                        if (fconfig.Read("threshold", &th))
+                            ann->SetThreshold(th);
+                    }
+                    else
+                        delete md;
+                    ann = m_data_mgr.LoadAnnotations(str);
+                }
 			}
-			tick_cnt++;
-            if (ticks && prg_diag)
-                prg_diag->Update(90*tick_cnt/ticks);
+			//tick_cnt++;
+            //if (ticks && prg_diag)
+            //    prg_diag->Update(90*tick_cnt/ticks);
 		}
 	}
 

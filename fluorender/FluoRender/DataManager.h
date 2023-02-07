@@ -1736,7 +1736,7 @@ public:
 	void RemoveMeshData(const wxString &name);
 
 	//annotations
-	int LoadAnnotations(wxString &filename);
+	Annotations* LoadAnnotations(wxString &filename);
 	void AddAnnotations(Annotations* ann);
 	void RemoveAnnotations(int index);
 	void RemoveAnnotations(const wxString &name);

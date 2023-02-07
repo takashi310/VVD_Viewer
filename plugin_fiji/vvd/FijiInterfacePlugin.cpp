@@ -313,7 +313,15 @@ void SampleGuiPlugin1::doAction(ActionInfo *info)
 						}
 						vd->SetMaxValue((double)maxval);
 					}
-					vframe->AddVolume(vd, NULL);
+                    wxString name_wx(name);
+                    int vid = dm->GetVolumeIndex(name_wx);
+                    if (vid >= 0)
+                    {
+                        vframe->GetView(0)->ReplaceVolumeData(name_wx, vd);
+                        vframe->GetPropView()->SetVolumeData(vd);
+                    }
+                    else
+                        vframe->AddVolume(vd, NULL);
 				}
 			}
 			delete [] name;

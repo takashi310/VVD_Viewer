@@ -7839,14 +7839,14 @@ MeshData* DataManager::DuplicateMeshData(MeshData* md, bool use_default_settings
 	return md_new;
 }
 
-int DataManager::LoadAnnotations(wxString &filename)
+Annotations* DataManager::LoadAnnotations(wxString &filename)
 {
 	wxString pathname = filename;
 	if (!wxFileExists(pathname))
 	{
 		pathname = SearchProjectPath(filename);
 		if (!wxFileExists(pathname))
-			return 0;
+			return nullptr;
 	}
 
 	Annotations* ann = new Annotations();
@@ -7877,7 +7877,7 @@ int DataManager::LoadAnnotations(wxString &filename)
 
 	m_annotation_list.push_back(ann);
 
-	return 1;
+	return ann;
 }
 
 void DataManager::AddAnnotations(Annotations* ann)

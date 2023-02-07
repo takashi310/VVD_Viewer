@@ -54,7 +54,7 @@ public:
 		wxWindowID id,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize,
-		long style=wxLC_REPORT|wxLC_SINGLE_SEL);
+		long style=wxLC_VIRTUAL|wxLC_REPORT|wxLC_SINGLE_SEL);
 	~RulerListCtrl();
 
 	void Append(wxString name, wxString &color, double length, wxString &unit,
@@ -69,6 +69,8 @@ public:
 	wxString GetText(long item, int col);
 	void SetText(long item, int col, const wxString &str);
 	void UpdateText(VRenderView* vrv=0);
+    
+    virtual wxString OnGetItemText(long item, long column) const wxOVERRIDE;
 
 	friend class MeasureDlg;
 
@@ -88,6 +90,10 @@ private:
 	bool m_show_anno;
 
 	long m_ruler_count;
+    
+    std::vector<std::vector<wxString>> m_list_items;
+    
+    std::vector<long> m_counts;
 
 private:
 	void EndEdit();

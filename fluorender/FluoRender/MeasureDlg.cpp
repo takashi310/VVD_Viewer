@@ -84,10 +84,10 @@ wxListCtrl(parent, id, pos, size, style),
 	//this->InsertColumn(6, itemCol);
 	//SetColumnWidth(6, 200);
 
-	m_images = new wxImageList(16, 16, true);
-	wxIcon icon = wxIcon(ruler_xpm);
-	m_images->Add(icon);
-	AssignImageList(m_images, wxIMAGE_LIST_SMALL);
+	//m_images = new wxImageList(16, 16, true);
+	//wxIcon icon = wxIcon(ruler_xpm);
+	//m_images->Add(icon);
+	//AssignImageList(m_images, wxIMAGE_LIST_SMALL);
 
 	//frame edit
 	m_name_disp = new wxTextCtrl(this, ID_RulerNameDispText, "",
@@ -109,6 +109,178 @@ RulerListCtrl::~RulerListCtrl()
 {
 }
 
+wxString RulerListCtrl::OnGetItemText(long item, long column) const
+{
+    //if (item < 0 || item >= m_list_items.size() || column < 0 || column >= m_list_items[item].size())
+    //    return wxT("");
+    //return m_list_items[item][column];
+    
+    wxString ret_str;
+    
+    vector<Ruler*>* ruler_list = m_view->GetRulerList();
+    if (!ruler_list) return ret_str;
+    
+    if (m_counts.size() == 0)
+        return ret_str;
+    
+    long count = 0;
+    int cid = 0;
+    if (item < m_counts[cid])
+    {
+        for (int i=0; i<(int)ruler_list->size(); i++)
+        {
+            Ruler* ruler = (*ruler_list)[i];
+            if (!ruler) continue;
+            if (ruler->GetTimeDep() &&
+                ruler->GetTime() != m_view->m_glview->m_tseq_cur_num)
+                continue;
+            if (count == item)
+            {
+                switch(column)
+                {
+                    case 0: //name
+                        ret_str = ruler->GetNameDisp();
+                        break;
+                    case 1: //type
+                        ret_str = wxString::Format("%d", 0);
+                        break;
+                    case 2: //name
+                        ret_str = ruler->GetNameDisp();
+                        break;
+                    case 3: //color
+                        if (ruler->GetUseColor())
+                            ret_str = wxString::Format("RGB(%d, %d, %d)",
+                            int(ruler->GetColor().r()*255),
+                            int(ruler->GetColor().g()*255),
+                            int(ruler->GetColor().b()*255));
+                        break;
+                    case 4: //length
+                    {
+                        wxString unit;
+                        switch (m_view->m_glview->m_sb_unit)
+                        {
+                        case 0:
+                            unit = "nm";
+                            break;
+                        case 1:
+                        default:
+                            unit = L"\u03BCm";
+                            break;
+                        case 2:
+                            unit = "mm";
+                            break;
+                        }
+                        ret_str = wxString::Format("%.2f", ruler->GetLength()) + unit;
+                    }
+                        break;
+                    case 5: //angle
+                        ret_str = wxString::Format("%.1f", ruler->GetAngle()) + "Deg";
+                        break;
+                    case 6: //points
+                        if (ruler->GetNumPoint() > 0)
+                        {
+                            Point *p = ruler->GetPoint(0);
+                            ret_str += wxString::Format("(%.2f, %.2f, %.2f)", p->x(), p->y(), -p->z());
+                        }
+                        if (ruler->GetNumPoint() > 1)
+                        {
+                            Point *p = ruler->GetPoint(ruler->GetNumPoint() - 1);
+                            ret_str += ", ";
+                            ret_str += wxString::Format("(%.2f, %.2f, %.2f)", p->x(), p->y(), -p->z());
+                        }
+                        break;
+                    case 7: //time
+                        if (ruler->GetTimeDep())
+                            ret_str = wxString::Format("%d", ruler->GetTime());
+                        else
+                            ret_str = "N/A";
+                        break;
+                    case 8: //info
+                        ret_str = ruler->GetDelInfoValues(", ");
+                        break;
+                }
+                return ret_str;
+            }
+            count++;
+        }
+    }
+    
+    count = m_counts[cid];
+    cid++;
+    if (m_counts.size() <= cid)
+        return ret_str;
+    
+    int lnum = m_view->GetLayerNum();
+    for (int i = 0; i < lnum; i++)
+    {
+        auto layer = m_view->GetLayer(i);
+        if (!layer)
+            continue;
+        switch (layer->IsA())
+        {
+            case 4://annotations
+            {
+                Annotations* ann = (Annotations*)layer;
+                if (!ann || !ann->GetDisp()) continue;
+                if (m_counts.size() <= cid)
+                    return ret_str;
+                int tnum = ann->GetTextNum();
+                if (item < count + m_counts[cid])
+                {
+                    int id = item - count;
+                    switch(column)
+                    {
+                        case 0: //name
+                            ret_str = ann->GetTextText(id) + "  (" + ann->GetName() + ")";
+                            break;
+                        case 1: //type
+                            ret_str = wxString::Format("%d", 1);
+                            break;
+                        case 2: //name
+                            ret_str = ann->GetTextText(id) + "  (" + ann->GetName() + ")";
+                            break;
+                        case 3: //color
+                            break;
+                        case 4: //length
+                            break;
+                        case 5: //angle
+                            break;
+                        case 6: //points
+                            {
+                                Point p = ann->GetTextPos(id);
+                                int resx = 1, resy = 1, resz = 1;
+                                VolumeData *vd = ann->GetVolume();
+                                if (vd)
+                                    vd->GetResolution(resx, resy, resz);
+                                ret_str = wxString::Format("(%.2f, %.2f, %.2f)", p.x()*resx, p.y()*resy, p.z()*resz);
+                            }
+                            break;
+                        case 7: //time
+                            break;
+                        case 8: //info
+                            {
+                                wxString info = ann->GetTextInfo(id);
+                                wxStringTokenizer tokenizer(info, "\t");
+                                while (tokenizer.HasMoreTokens())
+                                {
+                                    wxString token = tokenizer.GetNextToken();
+                                    ret_str = ann->GetMesh() ? token : token + " voxels";
+                                    break;
+                                }
+                            }
+                            break;
+                    }
+                    return ret_str;
+                }
+                count += m_counts[cid];
+                cid++;
+            }
+        }
+    }
+    
+    return ret_str;
+}
+
 void RulerListCtrl::OnColBeginDrag(wxListEvent& event)
 {
 	if (event.GetColumn() == 0 || event.GetColumn() == 1)
@@ -123,28 +295,27 @@ void RulerListCtrl::Append(wxString name, wxString &color, double length, wxStri
 	long pos = m_ruler_count;
 
 	if (type == 0) m_ruler_count++;
-	else pos = GetItemCount();
-
-	long tmp = InsertItem(pos, name, 0);
-	SetItem(tmp, 1, wxString::Format("%d", type));
-	SetItem(tmp, 2, name);
-	SetItem(tmp, 3, color);
-	//SetColumnWidth(3, wxLIST_AUTOSIZE);
-	wxString str = wxString::Format("%.2f", length) + unit;
-	SetItem(tmp, 4, str);
-	//SetColumnWidth(4, wxLIST_AUTOSIZE);
-	str = wxString::Format("%.1f", angle) + "Deg";
-	SetItem(tmp, 5, str);
-	//SetColumnWidth(5, wxLIST_AUTOSIZE);
-	SetItem(tmp, 6, points);
-	if (time_dep)
-		str = wxString::Format("%d", time);
-	else
-		str = "N/A";
-	SetItem(tmp, 7, str);
-	//SetColumnWidth(7, wxLIST_AUTOSIZE_USEHEADER);
-	SetItem(tmp, 8, desc);
-	//SetColumnWidth(8, wxLIST_AUTOSIZE_USEHEADER);
+	else pos = m_list_items.size();
+    
+    vector<wxString> data;
+    
+    data.push_back(name);
+    data.push_back(wxString::Format("%d", type));
+    data.push_back(name);
+    data.push_back(color);
+    wxString str = wxString::Format("%.2f", length) + unit;
+    data.push_back(str);
+    str = wxString::Format("%.1f", angle) + "Deg";
+    data.push_back(str);
+    data.push_back(points);
+    if (time_dep)
+        str = wxString::Format("%d", time);
+    else
+        str = "N/A";
+    data.push_back(str);
+    data.push_back(desc);
+    
+    m_list_items.insert(m_list_items.begin()+pos, data);
 }
 
 void RulerListCtrl::UpdateRulers(VRenderView* vrv, bool update_annotaions)
@@ -160,21 +331,11 @@ void RulerListCtrl::UpdateRulers(VRenderView* vrv, bool update_annotaions)
 	vector<Ruler*>* ruler_list = m_view->GetRulerList();
 	if (!ruler_list) return;
 
-	if (update_annotaions) {
-		DeleteAllItems();
-		m_ruler_count = 0;
-	}
-	else {
-		long item = -1;
-		while (m_ruler_count > 0) {
-			DeleteItem(0);
-			m_ruler_count--;
-		}
-	}
+	if (update_annotaions)
+        m_counts.clear();
 
 	SetEvtHandlerEnabled(false);
-	Freeze();
-
+    int count = 0;
 	wxString points;
 	Point *p;
 	int num_points;
@@ -185,46 +346,13 @@ void RulerListCtrl::UpdateRulers(VRenderView* vrv, bool update_annotaions)
 		if (ruler->GetTimeDep() &&
 			ruler->GetTime() != m_view->m_glview->m_tseq_cur_num)
 			continue;
-
-		wxString unit;
-		switch (m_view->m_glview->m_sb_unit)
-		{
-		case 0:
-			unit = "nm";
-			break;
-		case 1:
-		default:
-			unit = L"\u03BCm";
-			break;
-		case 2:
-			unit = "mm";
-			break;
-		}
-
-		points = "";
-		num_points = ruler->GetNumPoint();
-		if (num_points > 0)
-		{
-			p = ruler->GetPoint(0);
-			points += wxString::Format("(%.2f, %.2f, %.2f)", p->x(), p->y(), -p->z());
-		}
-		if (num_points > 1)
-		{
-			p = ruler->GetPoint(num_points - 1);
-			points += ", ";
-			points += wxString::Format("(%.2f, %.2f, %.2f)", p->x(), p->y(), -p->z());
-		}
-		wxString color;
-		if (ruler->GetUseColor())
-			color = wxString::Format("RGB(%d, %d, %d)",
-			int(ruler->GetColor().r()*255),
-			int(ruler->GetColor().g()*255),
-			int(ruler->GetColor().b()*255));
-		else
-			color = "N/A";
-		Append(ruler->GetNameDisp(), color, ruler->GetLength(), unit,
-			ruler->GetAngle(), points, ruler->GetTimeDep(), ruler->GetTime(), ruler->GetDelInfoValues(", "), 0);
+        count++;
 	}
+    
+    if (m_counts.size() > 0)
+        m_counts[0] = count;
+    else
+        m_counts.push_back(count);
 
 	if (m_show_anno && update_annotaions) {
 		int i;
@@ -241,44 +369,80 @@ void RulerListCtrl::UpdateRulers(VRenderView* vrv, bool update_annotaions)
 					Annotations* ann = (Annotations*)layer;
 					if (!ann || !ann->GetDisp()) continue;
 					int tnum = ann->GetTextNum();
-					for (int j = 0; j < tnum; j++) {
-						wxString name = ann->GetTextText(j) + "  (" + ann->GetName() + ")";
-						wxString color = "N/A";
-						wxString unit = m_view->GetSBText();
-						Point p = ann->GetTextPos(j);
-						int resx = 1, resy = 1, resz = 1;
-						VolumeData *vd = ann->GetVolume();
-						if (vd) 
-							vd->GetResolution(resx, resy, resz);
-						wxString points = wxString::Format("(%.2f, %.2f, %.2f)", p.x()*resx, p.y()*resy, p.z()*resz);
-						wxString info = ann->GetTextInfo(j);
-						wxString voxnum;
-						wxStringTokenizer tokenizer(info, "\t");
-						while (tokenizer.HasMoreTokens())
-						{
-							wxString token = tokenizer.GetNextToken();
-							voxnum = ann->GetMesh() ? token : token + " voxels";
-							break;
-						}
-                        if ( !ann->GetMesh() || (ann->GetMesh() && ann->GetThreshold() <  STOD(voxnum.ToStdString().c_str())) )
-                            Append(name, color, 0.0, unit, 0.0, points, false, 0, voxnum, 1);
-					}
+                    
+                    if (ann->GetMesh())
+                    {
+                        count = 0;
+                        int st = 0;
+                        int ed = tnum;
+                        if (tnum > 10000)
+                        {
+                            for (int j = 0; j < tnum; j += 10000) {
+                                wxString info = ann->GetTextInfo(j);
+                                wxString score;
+                                wxStringTokenizer tokenizer(info, "\t");
+                                while (tokenizer.HasMoreTokens())
+                                {
+                                    wxString token = tokenizer.GetNextToken();
+                                    score = token;
+                                    break;
+                                }
+                                if ( ann->GetThreshold() <  STOD(score.ToStdString().c_str()) )
+                                    st = j;
+                                else
+                                {
+                                    ed = j;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        count = st;
+                        for (int j = st; j < ed; j++) {
+                            wxString info = ann->GetTextInfo(j);
+                            wxString score;
+                            wxStringTokenizer tokenizer(info, "\t");
+                            while (tokenizer.HasMoreTokens())
+                            {
+                                wxString token = tokenizer.GetNextToken();
+                                score = token;
+                                break;
+                            }
+                            if ( ann->GetThreshold() <  STOD(score.ToStdString().c_str()) )
+                                count++;
+                            else
+                                break;
+                        }
+                    }
+                    else
+                        count = tnum;
+                    m_counts.push_back(count);
 				}
+                break;
 			}
 		}
 	}
 
-	if (GetItemCount() > 0) {
-		SetColumnWidth(3, wxLIST_AUTOSIZE);
-		SetColumnWidth(4, wxLIST_AUTOSIZE);
-		SetColumnWidth(5, wxLIST_AUTOSIZE);
-		SetColumnWidth(6, wxLIST_AUTOSIZE);
-		SetColumnWidth(7, wxLIST_AUTOSIZE_USEHEADER);
-		SetColumnWidth(8, wxLIST_AUTOSIZE_USEHEADER);
-	}
-
-	Thaw();
 	SetEvtHandlerEnabled(true);
+    
+    long total_count = 0;
+    for (long c : m_counts)
+        total_count += c;
+    
+    SetItemCount(total_count);
+    if (total_count > 0)
+    {
+        //RefreshItems(0, m_list_items.size()-1);
+        
+        if (GetItemCount() > 0) {
+            SetColumnWidth(3, wxLIST_AUTOSIZE);
+            SetColumnWidth(4, wxLIST_AUTOSIZE);
+            SetColumnWidth(5, wxLIST_AUTOSIZE);
+            SetColumnWidth(6, wxLIST_AUTOSIZE);
+            SetColumnWidth(7, wxLIST_AUTOSIZE_USEHEADER);
+            SetColumnWidth(8, wxLIST_AUTOSIZE_USEHEADER);
+        }
+    }
 }
 
 void RulerListCtrl::UpdateText(VRenderView* vrv)
@@ -340,24 +504,32 @@ void RulerListCtrl::UpdateText(VRenderView* vrv)
 			int(ruler->GetColor().b()*255));
 		else
 			color = "N/A";
-
-		SetText(i, 0, ruler->GetNameDisp());
-		SetText(i, 2, ruler->GetNameDisp());
-		SetText(i, 3, color);
-		wxString length = wxString::Format("%.2f", ruler->GetLength()) + unit;
-		SetText(i, 4, length);
-		wxString angle = wxString::Format("%.1f", ruler->GetAngle()) + "Deg";
-		SetText(i, 5, angle);
-		SetText(i, 6, points);
-		SetColumnWidth(6, wxLIST_AUTOSIZE);
-		wxString time;
-		if (ruler->GetTimeDep())
-			time = wxString::Format("%d", ruler->GetTime());
-		else
-			time = "N/A";
-		SetText(i, 7, time);
-		SetText(i, 8, ruler->GetDelInfoValues(", "));
+        
+        if(i < m_list_items.size() && m_list_items[i].size() >= 9)
+        {
+            SetText(i, 0, ruler->GetNameDisp());
+            SetText(i, 2, ruler->GetNameDisp());
+            SetText(i, 3, color);
+            wxString length = wxString::Format("%.2f", ruler->GetLength()) + unit;
+            SetText(i, 4, length);
+            wxString angle = wxString::Format("%.1f", ruler->GetAngle()) + "Deg";
+            SetText(i, 5, angle);
+            SetText(i, 6, points);
+            SetColumnWidth(6, wxLIST_AUTOSIZE);
+            wxString time;
+            if (ruler->GetTimeDep())
+                time = wxString::Format("%d", ruler->GetTime());
+            else
+                time = "N/A";
+            SetText(i, 7, time);
+            SetText(i, 8, ruler->GetDelInfoValues(", "));
+        }
 	}
+    if (m_list_items.size() > 0)
+    {
+        RefreshItems(0, ruler_list->size());
+        SetColumnWidth(6, wxLIST_AUTOSIZE);
+    }
 	/*
 	if (m_show_anno) {
 		int i;
@@ -564,23 +736,16 @@ void RulerListCtrl::Export(wxString filename)
 
 wxString RulerListCtrl::GetText(long item, int col)
 {
-	wxListItem info;
-	info.SetId(item);
-	info.SetColumn(col);
-	info.SetMask(wxLIST_MASK_TEXT);
-	GetItem(info);
-	return info.GetText();
+    if (item < 0 || item >= m_list_items.size() || col < 0 || col >= m_list_items[item].size())
+        return wxT("");
+    return m_list_items[item][col];
 }
 
 void RulerListCtrl::SetText(long item, int col, const wxString &str)
 {
-	wxListItem info;
-	info.SetId(item);
-	info.SetColumn(col);
-	info.SetMask(wxLIST_MASK_TEXT);
-	GetItem(info);
-	info.SetText(str);
-	SetItem(info);
+    if (item < 0 || item >= m_list_items.size() || col < 0 || col >= m_list_items[item].size())
+        return;
+    m_list_items[item][col] = str;
 }
 
 void RulerListCtrl::ShowTextCtrls(long item)

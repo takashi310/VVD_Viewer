@@ -740,6 +740,8 @@ public:
     
     bool GetUseFogMesh() { return m_use_fog_mesh; }
     void SetUseFogMesh(bool val) { m_use_fog_mesh = val; }
+    
+    void WarpCurrentVolume();
 
 public:
 	//script run
@@ -2127,6 +2129,11 @@ public:
 	}
     
     void ToggleQualityDropDownBox(bool val);
+    
+    void ReplaceVolumeData(wxString &name, VolumeData *dst)
+    {
+        if (m_glview) m_glview->ReplaceVolumeData(name, dst);
+    }
 
 public:
 	wxWindow* m_frame;

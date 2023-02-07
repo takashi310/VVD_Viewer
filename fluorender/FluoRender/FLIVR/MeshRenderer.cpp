@@ -638,6 +638,31 @@ namespace FLIVR
 					}
 					ids.push_back(ids.size());
 				}
+                
+                if (verts.size() * 4ULL > 1610612720ULL)
+                {
+                    MeshVertexBuffers v;
+                    if (!verts.empty() && !ids.empty())
+                    {
+                        VK_CHECK_RESULT(device_->createBuffer(
+                            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                            &v.vertexBuffer,
+                            verts.size() * sizeof(float)));
+                        device_->UploadData2Buffer(verts.data(), &v.vertexBuffer, 0, verts.size() * sizeof(float));
+
+                        VK_CHECK_RESULT(device_->createBuffer(
+                            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                            &v.indexBuffer,
+                            ids.size() * sizeof(uint32_t)));
+                        device_->UploadData2Buffer(ids.data(), &v.indexBuffer, 0, ids.size() * sizeof(uint32_t));
+                    }
+                    v.indexCount = ids.size();
+                    m_vertbufs.push_back(v);
+                    verts.clear();
+                    ids.clear();
+                }
 			}
 
 			MeshVertexBuffers v;

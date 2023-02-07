@@ -6757,6 +6757,11 @@ void VRenderVulkanView::OnIdle(wxTimerEvent& event)
                 vr_frame->GetBrushToolDlg()->BrushRedo();
             m_redo_keydown = true;
         }
+        
+        if (wxGetKeyState(wxKeyCode('W')) && wxGetKeyState(WXK_CONTROL) && !wxGetKeyState(WXK_SHIFT) && !wxGetKeyState(WXK_ALT) && !m_key_lock)
+        {
+            WarpCurrentVolume();
+        }
 	}
     
     if (!(wxGetKeyState(wxKeyCode('Z')) && wxGetKeyState(WXK_CONTROL) && !wxGetKeyState(WXK_SHIFT) && !wxGetKeyState(WXK_ALT)))
@@ -9674,7 +9679,10 @@ void VRenderVulkanView::ReplaceVolumeData(wxString &name, VolumeData *dst)
 					m_layer_list[i] = dst;
 					m_vd_pop_dirty = true;
 					found = true;
-					dm->RemoveVolumeData(name);
+                    wxString vname = dst->GetName();
+                    int vid = dm->GetVolumeIndex(vname);
+                    if (vid >= 0)
+                        dm->ReplaceVolumeData(vid, dst);
 					break;
 				}
 			}
@@ -9694,7 +9702,10 @@ void VRenderVulkanView::ReplaceVolumeData(wxString &name, VolumeData *dst)
 						m_vd_pop_dirty = true;
 						found = true;
 						group = tmpgroup;
-						dm->RemoveVolumeData(name);
+                        wxString vname = dst->GetName();
+                        int vid = dm->GetVolumeIndex(vname);
+                        if (vid >= 0)
+                            dm->ReplaceVolumeData(vid, dst);
 						break;
 					}
 				}
@@ -18136,6 +18147,86 @@ void VRenderVulkanView::CalcAndSetCombinedClippingPlanes()
             if (ann->GetDisp() && ann->GetMesh())
                 ann->GetMesh()->SetBounds(bounds);
         }
+    }
+}
+
+void VRenderVulkanView::WarpCurrentVolume()
+{
+    wxArrayString lines;
+    int count = 0;
+    for (size_t i = 0; i < m_ruler_list.size(); ++i)
+    {
+        if (m_ruler_list[i])
+        {
+            wxString str;
+            if (m_ruler_list[i]->GetRulerType() == 2) //locator (single point)
+            {
+                Point* p = m_ruler_list[i]->GetPoint(0);
+                if (p)
+                    str = wxString::Format("\"Pt-%d\",\"true\",\"%.14f\",\"%.14f\",\"%.14f\",\"%.14f\",\"%.14f\",\"%.14f\"", count, p->x(), p->y(), p->z()*-1.0, p->x(), p->y(), p->z()*-1.0);
+            }
+            else if (m_ruler_list[i]->GetRulerType() == 0) //2 points
+            {
+                Point* p1 = m_ruler_list[i]->GetPoint(0);
+                Point* p2 = m_ruler_list[i]->GetPoint(1);
+                if (p1 && p2)
+                    str = wxString::Format("\"Pt-%d\",\"true\",\"%.14f\",\"%.14f\",\"%.14f\",\"%.14f\",\"%.14f\",\"%.14f\"", count, p1->x(), p1->y(), p1->z()*-1.0, p2->x(), p2->y(), p2->z()*-1.0);
+            }
+            
+            if (!str.IsEmpty())
+            {
+                lines.Add(str);
+                count++;
+            }
+        }
+    }
+    
+    if (lines.Count() == 0)
+        return;
+    
+    wxString temp_csv_path = wxStandardPaths::Get().GetTempDir() + wxFileName::GetPathSeparator() + "warp.csv";
+    wxTextFile csv(temp_csv_path);
+    if (csv.Exists())
+    {
+        if (!csv.Open())
+            return;
+        csv.Clear();
+    }
+    else
+    {
+        if (!csv.Create())
+            return;
+    }
+    for(int j = 0; j < lines.Count(); j++)
+        csv.AddLine(lines[j]);
+    csv.Write();
+    csv.Close();
+    
+    wxString fi_name = _("Fiji Interface");
+
+    VRenderFrame *vframe = (VRenderFrame *)m_frame;
+    if (!vframe) return false;
+
+    if (!vframe->PluginExists(fi_name))
+    {
+        wxMessageBox("ERROR: Could not found Fiji interface", "Warping");
+        return false;
+    }
+
+    if (!vframe->IsCreatedPluginWindow(fi_name))
+    {
+        vframe->CreatePluginWindow(fi_name);
+        vframe->ToggleVisibilityPluginWindow(fi_name, false);
+    }
+    
+    if (m_cur_vol && !m_cur_vol->isBrxml())
+    {
+        int resx, resy, resz;
+        double spcx, spcy, spcz;
+        m_cur_vol->GetResolution(resx, resy, resz);
+        m_cur_vol->GetSpacings(spcx, spcy, spcz);
+        wxString command = wxString::Format("Apply Bigwarp Filter, landmark_file=%s x_size=%d y_size=%d z_size=%d x_spacing=%f y_spacing=%f z_spacing=%f transform_type=[Thin Plate Spline] interpolation=Linear threads=8;false;false", temp_csv_path, resx, resy, resz, spcx, spcy, spcz);
+        vframe->RunPlugin(fi_name, command);
     }
 }
 
