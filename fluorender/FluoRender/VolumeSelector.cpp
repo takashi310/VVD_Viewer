@@ -1893,7 +1893,7 @@ void VolumeSelector::EVECount(int min_radius, int max_radius, double thresh, int
     memo += "Volume: " + m_vd->GetName() + "\n";
     memo += "Maxima: " + wxString::Format("%lu", eve_points.size()) + "\n";
     memo += "\nSettings:\n";
-    memo += "Threshold: " + wxString::Format("%f", thresh) + "\n";
+    memo += "Min_Brightness: " + wxString::Format("%f", thresh) + "\n";
     memo += "Min_Radius: " + wxString::Format("%d", min_radius) + "\n";
     memo += "Max_Radius: " + wxString::Format("%d", max_radius) + "\n";
     memo += "Level: " + wxString::Format("%d", lv) + "\n";
