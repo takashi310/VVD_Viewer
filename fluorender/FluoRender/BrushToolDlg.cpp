@@ -602,8 +602,8 @@ wxWindow* BrushToolDlg::CreateAnalysisPage(wxWindow *parent)
     sizer3_2->Add(st, 0, wxALIGN_CENTER);
     //threshold
     wxBoxSizer* sizer3_3 = new wxBoxSizer(wxHORIZONTAL);
-    st = new wxStaticText(page, 0, "Threshold:",
-        wxDefaultPosition, wxSize(75, -1));
+    st = new wxStaticText(page, 0, "Min Brightness:",
+        wxDefaultPosition, wxSize(100, -1));
     m_eve_threshold_sldr = new wxSlider(page, ID_EVEThresholdSldr, 0, 0, 65535,
         wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
     m_eve_threshold_text = new wxTextCtrl(page, ID_EVEThresholdText, "0",

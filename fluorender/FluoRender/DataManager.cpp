@@ -5423,8 +5423,8 @@ void Annotations::Clear()
 	}
 	m_alist.clear();
     
-    if (m_md)
-        delete m_md;
+    //if (m_md)
+    //    delete m_md;
 }
 
 //memo
@@ -6932,6 +6932,9 @@ m_vol_exb(0.0),
 
 DataManager::~DataManager()
 {
+    for (int i=0; i<(int)m_annotation_list.size(); i++)
+        if (m_annotation_list[i])
+            delete m_annotation_list[i];
 	for (int i=0 ; i<(int)m_vd_list.size() ; i++)
 		if (m_vd_list[i])
 			delete m_vd_list[i];
@@ -6941,13 +6944,13 @@ DataManager::~DataManager()
 	for (int i=0; i<(int)m_reader_list.size(); i++)
 		if (m_reader_list[i])
 			delete m_reader_list[i];
-	for (int i=0; i<(int)m_annotation_list.size(); i++)
-		if (m_annotation_list[i])
-			delete m_annotation_list[i];
 }
 
 void DataManager::ClearAll()
 {
+    for (int i=0; i<(int)m_annotation_list.size(); i++)
+        if (m_annotation_list[i])
+            delete m_annotation_list[i];
 	for (int i=0 ; i<(int)m_vd_list.size() ; i++)
 		if (m_vd_list[i])
 			delete m_vd_list[i];
@@ -6957,9 +6960,6 @@ void DataManager::ClearAll()
 	for (int i=0; i<(int)m_reader_list.size(); i++)
 		if (m_reader_list[i])
 			delete m_reader_list[i];
-	for (int i=0; i<(int)m_annotation_list.size(); i++)
-		if (m_annotation_list[i])
-			delete m_annotation_list[i];
 	m_vd_list.clear();
 	m_md_list.clear();
 	m_reader_list.clear();
@@ -7894,6 +7894,22 @@ void DataManager::AddAnnotations(Annotations* ann)
 
 	if (i>1)
 		ann->SetName(new_name);
+    
+    MeshData* md = ann->GetMesh();
+    if (md)
+    {
+        bool found = false;
+        for (int i=0 ; i<(int)m_md_list.size() ; i++)
+        {
+            if (md == m_md_list[i])
+            {
+                found = true;
+                break;
+            }
+        }
+        if (!found)
+            AddMeshData(md);
+    }
 
 	m_annotation_list.push_back(ann);
 }
@@ -7903,6 +7919,35 @@ void DataManager::RemoveAnnotations(int index)
 	Annotations* ann = m_annotation_list[index];
 	if (ann)
 	{
+        MeshData* md = ann->GetMesh();
+        if (md)
+        {
+            int id = -1;
+            for (int i=0 ; i<(int)m_md_list.size() ; i++)
+            {
+                if (md == m_md_list[i])
+                {
+                    id = i;
+                    break;
+                }
+            }
+            if (id > 0)
+            {
+                bool found = false;
+                for (int i=0 ; i<(int)m_annotation_list.size() ; i++)
+                {
+                    if (m_md_list[id] == m_annotation_list[i]->GetMesh())
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found)
+                    RemoveMeshData(id);
+            }
+            else
+                delete md;
+        }
 		m_annotation_list.erase(m_annotation_list.begin()+index);
 		delete ann;
 		ann = 0;

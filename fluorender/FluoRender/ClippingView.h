@@ -211,6 +211,8 @@ public:
     
     void CalcAndSetCombinedClippingPlanes();
     void CalcBoundingBoxDemensions(double &w, double &h, double &d);
+    
+    void SyncClippingPlanes();
 
 private:
 	wxWindow* m_frame;

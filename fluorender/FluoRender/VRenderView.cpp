@@ -3257,7 +3257,7 @@ void VRenderVulkanView::CompExport(int mode, bool select)
 	}
 }
 
-void VRenderVulkanView::ShowAnnotations()
+void VRenderVulkanView::ShowAnnotations(bool select_annotations)
 {
 	Annotations* ann = m_selector.GetAnnotations();
 	if (ann)
@@ -3265,7 +3265,12 @@ void VRenderVulkanView::ShowAnnotations()
 		AddAnnotations(ann);
 		VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
 		if (vr_frame)
-			vr_frame->UpdateTree(vr_frame->GetCurSelVol()->GetName(), 2);
+        {
+            if (select_annotations)
+                vr_frame->UpdateTree(ann->GetName(), 4);
+			else
+                vr_frame->UpdateTree(vr_frame->GetCurSelVol()->GetName(), 2);
+        }
 	}
 }
 
@@ -3350,10 +3355,12 @@ string VRenderVulkanView::EVEAnalysis(int min_radius, int max_radius, double thr
 		{
 			DataManager* mgr = vr_frame->GetDataManager();
 			if (mgr)
+            {
 				mgr->AddAnnotations(ann);
+            }
 		}
 		return_val = ann->GetName();
-        ShowAnnotations();
+        ShowAnnotations(true);
 	}
 
 	return return_val;

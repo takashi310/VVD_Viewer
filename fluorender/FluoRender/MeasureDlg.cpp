@@ -289,6 +289,57 @@ void RulerListCtrl::OnColBeginDrag(wxListEvent& event)
 	}
 }
 
+long RulerListCtrl::GetCount(Annotations* ann)
+{
+    if (!m_view)
+        return 0;
+
+    vector<Ruler*>* ruler_list = m_view->GetRulerList();
+    if (!ruler_list) return;
+
+    int id = 0;
+    int count = 0;
+    wxString points;
+    Point *p;
+    int num_points;
+    for (int i=0; i<(int)ruler_list->size(); i++)
+    {
+        Ruler* ruler = (*ruler_list)[i];
+        if (!ruler) continue;
+        if (ruler->GetTimeDep() &&
+            ruler->GetTime() != m_view->m_glview->m_tseq_cur_num)
+            continue;
+        count++;
+    }
+    
+    if (!ann)
+        return count;
+    id++;
+
+    int lnum = m_view->GetLayerNum();
+    for (int i = 0; i < lnum; i++)
+    {
+        auto layer = m_view->GetLayer(i);
+        if (!layer)
+            continue;
+        switch (layer->IsA())
+        {
+            case 4://annotations
+            {
+                Annotations* annotations = (Annotations*)layer;
+                if (!annotations || !annotations->GetDisp()) continue;
+                int tnum = annotations->GetTextNum();
+                if (ann == annotations && id < m_counts.size())
+                    return m_counts[id];
+                id++;
+            }
+            break;
+        }
+    }
+    
+    return 0;
+}
+
 void RulerListCtrl::Append(wxString name, wxString &color, double length, wxString &unit,
 	double angle, wxString &points, bool time_dep, int time, wxString desc, int type)
 {

@@ -542,7 +542,7 @@ public:
 	//noise removal
 	int CompAnalysis(double min_voxels, double max_voxels, double thresh, bool select, bool gen_ann, int iter_limit=-1);
 	void CompExport(int mode, bool select);//mode: 0-multi channels; 1-random colors
-	void ShowAnnotations();
+	void ShowAnnotations(bool select_annotations = false);
 	int NoiseAnalysis(double min_voxels, double max_voxels, double thresh);
 	void NoiseRemoval(int iter, double thresh);
 	string EVEAnalysis(int min_radius, int max_radius, double thresh, int target_lv = -1);

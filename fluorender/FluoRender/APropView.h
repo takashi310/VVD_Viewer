@@ -54,6 +54,8 @@ private:
     wxSlider *m_th_sldr;
     wxTextCtrl* m_th_text;
 
+    wxStaticText* m_num_particles;
+
 	//memo
 	void OnMemoUpdateBtn(wxCommandEvent& event);
     void OnDiffChange(wxColourPickerEvent& event);

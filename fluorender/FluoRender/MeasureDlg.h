@@ -38,6 +38,7 @@ using namespace std;
 using namespace FLIVR;
 
 class VRenderView;
+class Annotations;
 
 class EXPORT_API RulerListCtrl : public wxListCtrl
 {
@@ -69,6 +70,7 @@ public:
 	wxString GetText(long item, int col);
 	void SetText(long item, int col, const wxString &str);
 	void UpdateText(VRenderView* vrv=0);
+    long GetCount(Annotations* ann = nullptr);
     
     virtual wxString OnGetItemText(long item, long column) const wxOVERRIDE;
 
@@ -155,6 +157,12 @@ public:
 	void GetSettings(VRenderView* vrv, bool update_annotaions = true);
 	VRenderView* GetView();
 	void UpdateList(bool update_annotaions=true);
+    long GetCount(Annotations* ann = nullptr)
+    {
+        if (m_rulerlist)
+           return m_rulerlist->GetCount(ann);
+        return 0;
+    }
 
 private:
 	wxWindow* m_frame;

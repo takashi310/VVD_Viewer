@@ -2475,7 +2475,9 @@ void VRenderFrame::UpdateTree(wxString name, int type, bool set_calc)
 				m_data_mgr.RemoveVolumeData(j);
 		}
 	}
-
+    
+    m_clip_view->SyncClippingPlanes();
+    
 	m_tree_panel->LoadExpState();
 	m_tree_panel->SetScrollPos(wxVERTICAL, scroll_pos);
 
@@ -5256,7 +5258,7 @@ void VRenderFrame::OpenProject(wxString& filename)
                     ann = m_data_mgr.LoadAnnotations(str);
 				}
                 
-                if (fconfig.Read("mesh_path", &str))
+                if (ann && fconfig.Read("mesh_path", &str))
                 {
                     MeshData *md = new MeshData();
                     md->SetSWCSubdivLevel(1);
@@ -5264,7 +5266,7 @@ void VRenderFrame::OpenProject(wxString& filename)
                     {
                         Color color(HSVColor(0.0, 0.0, 1.0));
                         md->SetColor(color, MESH_COLOR_DIFF);
-                        Color amb = color;
+                        Color amb = color * 0.3;
                         md->SetColor(amb, MESH_COLOR_AMB);
                         if (fconfig.Read("color", &str))
                         {
@@ -5272,9 +5274,11 @@ void VRenderFrame::OpenProject(wxString& filename)
                             if (SSCANF(str.c_str(), "%f%f%f", &r, &g, &b)){
                                 FLIVR::Color col(r,g,b);
                                 md->SetColor(col, MESH_COLOR_DIFF);
-                                md->SetColor(col, MESH_COLOR_AMB);
+                                amb = col * 0.3;
+                                md->SetColor(amb, MESH_COLOR_AMB);
                             }
                         }
+                        m_data_mgr.AddMeshData(md);
                         ann->SetMesh(md);
                         double transparency;
                         if (fconfig.Read("transparency", &transparency))
@@ -5288,7 +5292,6 @@ void VRenderFrame::OpenProject(wxString& filename)
                     }
                     else
                         delete md;
-                    ann = m_data_mgr.LoadAnnotations(str);
                 }
 			}
 			//tick_cnt++;

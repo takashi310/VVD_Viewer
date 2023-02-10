@@ -1048,15 +1048,15 @@ void ClippingView::CalcAndSetCombinedClippingPlanes()
     GetSettings();
 }
 
-void ClippingView::OnLinkChannelsCheck(wxCommandEvent &event)
+void ClippingView::SyncClippingPlanes()
 {
-	if ( !((m_sel_type==2 && m_vd) || (m_sel_type==3 && m_md)) )
-		return;
+    if ( !((m_sel_type==2 && m_vd) || (m_sel_type==3 && m_md)) )
+        return;
 
-	if (m_link_channels->GetValue())
-	{
+    if (m_link_channels->GetValue())
+    {
         CalcAndSetCombinedClippingPlanes();
-	}
+    }
     else
     {
         if (m_mgr)
@@ -1168,6 +1168,11 @@ void ClippingView::OnLinkChannelsCheck(wxCommandEvent &event)
         GetSettings();
     }
     RefreshVRenderViews();
+}
+
+void ClippingView::OnLinkChannelsCheck(wxCommandEvent &event)
+{
+    SyncClippingPlanes();
 }
 
 void ClippingView::OnPlaneModesCombo(wxCommandEvent &event)

@@ -1940,7 +1940,7 @@ void VolumeSelector::EVECount(int min_radius, int max_radius, double thresh, int
     {
         Color color(HSVColor(0.0, 0.0, 1.0));
         md->SetColor(color, MESH_COLOR_DIFF);
-        Color amb = color;
+        Color amb = color * 0.3;
         md->SetColor(amb, MESH_COLOR_AMB);
         m_annotations->SetMesh(md);
         md->SetThreshold((float)max_curvature_point * globalmax / EVE_BINS);

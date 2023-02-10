@@ -442,7 +442,8 @@ namespace FLIVR
 			if (tex_)
 				z << MSH_FRAG_BODY_TEXTURE;
 			if ( (!light_ && !tex_) || particle_ )
-				z << MSH_FRAG_BODY_SIMPLE;
+                z << MSH_FRAG_BODY_COLOR_LIGHT;
+				//z << MSH_FRAG_BODY_SIMPLE;
 			if (fog_)
 			{
 				z << MSH_FRAG_BODY_FOG;

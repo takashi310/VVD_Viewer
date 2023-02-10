@@ -64,13 +64,15 @@ m_vrv(0)
     sizer_4->Add(m_alpha_text, 0, wxALIGN_CENTER, 0);
     
     wxBoxSizer* sizer_5 = new wxBoxSizer(wxHORIZONTAL);
-    st = new wxStaticText(this, 0, " Threshold: ", wxDefaultPosition, wxSize(100, 20));
+    st = new wxStaticText(this, 0, " Min Score: ", wxDefaultPosition, wxSize(100, 20));
     m_th_sldr = new wxSlider(this, ID_th_sldr, 0, 0, 65535, wxDefaultPosition, wxSize(200, 20), wxSL_HORIZONTAL);
     m_th_text = new wxTextCtrl(this, ID_th_text, "0", wxDefaultPosition, wxSize(50, 20), 0, vald_int);
     sizer_5->Add(20, 5, 0);
     sizer_5->Add(st, 0, wxALIGN_CENTER, 0);
     sizer_5->Add(m_th_sldr, 0, wxALIGN_CENTER, 0);
     sizer_5->Add(m_th_text, 0, wxALIGN_CENTER, 0);
+    
+    m_num_particles = new wxStaticText(this, 0, "        Number of Particles:  ", wxDefaultPosition, wxSize(250, 20));
     
     wxBoxSizer* sizer_6 = new wxBoxSizer(wxHORIZONTAL);
     st = new wxStaticText(this, 0, " Color: ",
@@ -84,6 +86,8 @@ m_vrv(0)
     sizer_v2->Add(sizer_4, 0, wxALIGN_LEFT);
     sizer_v2->Add(5,5);
     sizer_v2->Add(sizer_5, 0, wxALIGN_LEFT);
+    sizer_v2->Add(5,5);
+    sizer_v2->Add(m_num_particles, 0, wxALIGN_LEFT);
     sizer_v2->Add(5,5);
     sizer_v2->Add(sizer_6, 0, wxALIGN_LEFT);
     
@@ -133,7 +137,7 @@ void APropView::GetSettings()
         m_diff_picker->SetColour(c);
         Color color(c.Red()/255.0, c.Green()/255.0, c.Blue()/255.0);
         m_ann->GetMesh()->SetColor(color, MESH_COLOR_DIFF);
-        amb = color;
+        amb = color * 0.3;
         m_ann->GetMesh()->SetColor(amb, MESH_COLOR_AMB);
         
         //alpha
@@ -154,6 +158,11 @@ void APropView::GetSettings()
         m_alpha_text->Show();
         m_th_sldr->Show();
         m_th_text->Show();
+        m_num_particles->Show();
+        
+        wxCommandEvent event;
+        OnThresholdText(event);
+        m_num_particles->GetParent()->Layout();
     }
     else
     {
@@ -162,6 +171,7 @@ void APropView::GetSettings()
         m_alpha_text->Hide();
         m_th_sldr->Hide();
         m_th_text->Hide();
+        m_num_particles->Hide();
     }
 }
 
@@ -229,7 +239,8 @@ void APropView::OnThresholdText(wxCommandEvent& event)
     double th;
     str.ToDouble(&th);
     m_th_sldr->SetValue(int(th+0.5));
-
+    
+    long count = 0;
     if (m_ann)
     {
         VRenderFrame* vrender_frame = (VRenderFrame*)m_frame;
@@ -237,8 +248,14 @@ void APropView::OnThresholdText(wxCommandEvent& event)
         {
             MeasureDlg* mdlg = vrender_frame->GetMeasureDlg();
             if (mdlg)
+            {
                 mdlg->UpdateList();
+                count = mdlg->GetCount(m_ann);
+            }
         }
+        
+        m_num_particles->SetLabelText(wxString::Format("       Number of Particles:  %ld", count));
+        m_num_particles->GetParent()->Layout();
         
         m_ann->SetThreshold(th);
         RefreshVRenderViews();
@@ -252,7 +269,7 @@ void APropView::OnDiffChange(wxColourPickerEvent& event)
     if (m_ann && m_ann->GetMesh())
     {
         m_ann->GetMesh()->SetColor(color, MESH_COLOR_DIFF);
-        Color amb = color;
+        Color amb = color * 0.3;
         m_ann->GetMesh()->SetColor(amb, MESH_COLOR_AMB);
         RefreshVRenderViews(true);
     }
