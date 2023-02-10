@@ -18212,7 +18212,7 @@ void VRenderVulkanView::WarpCurrentVolume()
     wxString fi_name = _("Fiji Interface");
 
     VRenderFrame *vframe = (VRenderFrame *)m_frame;
-    if (!vframe) return false;
+    if (!vframe) return;
 
     if (!vframe->PluginExists(fi_name))
     {

@@ -295,7 +295,7 @@ long RulerListCtrl::GetCount(Annotations* ann)
         return 0;
 
     vector<Ruler*>* ruler_list = m_view->GetRulerList();
-    if (!ruler_list) return;
+    if (!ruler_list) return 0;
 
     int id = 0;
     int count = 0;
