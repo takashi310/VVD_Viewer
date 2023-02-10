@@ -18217,7 +18217,7 @@ void VRenderVulkanView::WarpCurrentVolume()
     if (!vframe->PluginExists(fi_name))
     {
         wxMessageBox("ERROR: Could not found Fiji interface", "Warping");
-        return false;
+        return;
     }
 
     if (!vframe->IsCreatedPluginWindow(fi_name))
