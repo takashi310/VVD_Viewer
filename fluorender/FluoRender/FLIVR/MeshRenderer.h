@@ -36,7 +36,14 @@
 #include "BBox.h"
 #include "VVulkan.h"
 #include <vector>
+#include <unordered_set>
+#include <unordered_map>
 #include <glm/glm.hpp>
+
+#include <boost/property_tree/ptree.hpp>
+#include <boost/optional.hpp>
+
+#include <tinyxml2.h>
 
 #include "DLLExport.h"
 
@@ -59,6 +66,54 @@ namespace FLIVR
 		MeshRenderer(GLMmodel* data);
 		MeshRenderer(MeshRenderer&);
 		~MeshRenderer();
+        
+        void set_roi_name(wstring name, int id=-1, wstring parent_name=wstring());
+        void set_roi_name(wstring name, int id, int parent_id);
+        wstring check_new_roi_name(wstring name);
+        int add_roi_group_node(int parent_id, wstring name=L"");
+        int add_roi_group_node(wstring parent_name=L"", wstring name=L"");
+        int get_available_group_id();
+        int get_next_sibling_roi(int id);
+        void move_roi_node(int src_id, int dst_id, int insert_mode=0);
+        bool insert_roi_node(boost::property_tree::wptree& tree, int dst_id, const boost::property_tree::wptree& node, int id, int insert_mode=0);
+        void erase_node(int id=-1);
+        void erase_node(wstring name);
+        wstring get_roi_name(int id=-1);
+        void set_roi_select(wstring name, bool select, bool traverse=false);
+        void set_roi_select_children(wstring name, bool select, bool traverse=false);
+        void set_roi_select_r(const boost::property_tree::wptree& tree, bool select, bool recursive=true);
+        void update_sel_segs();
+        void update_sel_segs(const boost::property_tree::wptree& tree);
+        boost::property_tree::wptree *get_roi_tree(){ return &roi_tree_; }
+        boost::optional<wstring> get_roi_path(int id);
+        boost::optional<wstring> get_roi_path(int id, const boost::property_tree::wptree& tree, const wstring& parent);
+        boost::optional<wstring> get_roi_path(wstring name);
+        boost::optional<wstring> get_roi_path(wstring name, const boost::property_tree::wptree& tree, const wstring& parent);
+        int get_roi_id(wstring name);
+        void set_id_color(unsigned char r, unsigned char g, unsigned char b, bool update=true, int id=-1);
+        void get_id_color(unsigned char &r, unsigned char &g, unsigned char &b, int id=-1);
+        void get_rendered_id_color(unsigned char &r, unsigned char &g, unsigned char &b, int id=-1);
+        //0-dark; 1-gray; 2-invisible;
+        void update_palette(int mode, float fac=-1.0f);
+        void set_desel_palette_mode_dark(float fac=0.1);
+        void set_desel_palette_mode_gray(float fac=0.1);
+        void set_desel_palette_mode_invisible();
+        bool is_sel_id(int id);
+        void add_sel_id(int id);
+        void del_sel_id(int id);
+        void set_edit_sel_id(int id);
+        void clear_sel_ids();
+        void clear_sel_ids_roi_only();
+        void clear_roi();
+        void import_roi_tree_xml(const wstring &filepath);
+        void import_roi_tree_xml_r(tinyxml2::XMLElement *lvNode, const boost::property_tree::wptree& tree, const wstring& parent, int& gid);
+        wstring export_roi_tree();
+        void export_roi_tree_r(wstring &buf, const boost::property_tree::wptree& tree, const wstring& parent);
+        string exprot_selected_roi_ids();
+        void import_roi_tree(const wstring &tree);
+        void import_selected_ids(const string &sel_ids_str);
+
+        boost::property_tree::wptree roi_tree_;
 
 		//draw
 		void draw(const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf);
@@ -201,6 +256,10 @@ namespace FLIVR
 		//bool update
 		bool update_;
 		BBox bounds_;
+        
+        int edit_sel_id_;
+        unordered_set<int> sel_ids_;
+        unordered_set<int> sel_segs_;
 
 		vks::VulkanDevice* device_;
 		MshVertexSettings m_vertices4, m_vertices42, m_vertices44, m_vertices442;

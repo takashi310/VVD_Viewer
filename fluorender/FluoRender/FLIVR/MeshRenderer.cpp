@@ -32,6 +32,10 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
 
+#include <boost/foreach.hpp>
+#include <boost/lexical_cast.hpp>
+using boost::property_tree::wptree;
+
 using namespace std;
 
 namespace FLIVR
@@ -134,6 +138,523 @@ namespace FLIVR
 			vb.indexBuffer.destroy();
 		}
 	}
+
+boost::optional<wstring> MeshRenderer::get_roi_path(int id)
+{
+    return get_roi_path(id, roi_tree_, L"");
+}
+boost::optional<wstring> MeshRenderer::get_roi_path(int id, const wptree& tree, const wstring &parent)
+{
+    for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
+    {
+        wstring c_path = (parent.empty() ? L"" : parent + L".") + child->first;
+        try
+        {
+            int val = boost::lexical_cast<int>(child->first);
+            if (val == id)
+                return c_path;
+        }
+        catch (boost::bad_lexical_cast e)
+        {
+            cerr << "TextureRenderer::get_roi_path(int id, const wptree& tree): bad_lexical_cast" << endl;
+        }
+        if (auto rval = get_roi_path(id, child->second, c_path))
+            return rval;
+    }
+
+    return boost::none;
+}
+
+boost::optional<wstring> MeshRenderer::get_roi_path(wstring name)
+{
+    return get_roi_path(name, roi_tree_, L"");
+}
+boost::optional<wstring> MeshRenderer::get_roi_path(wstring name, const wptree& tree, const wstring& parent)
+{
+    for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
+    {
+        wstring c_path = (parent.empty() ? L"" : parent + L".") + child->first;
+        if (const auto val = tree.get_optional<wstring>(child->first))
+        {
+            if (val == name)
+                return c_path;
+        }
+        if (auto rval = get_roi_path(name, child->second, c_path))
+            return rval;
+    }
+
+    return boost::none;
+}
+
+void MeshRenderer::set_roi_name(wstring name, int id, wstring parent_name)
+{
+    int edid = (id == -1) ? edit_sel_id_ : id;
+    
+    if (edid == -1)
+        return;
+
+    if (!name.empty())
+    {
+        if(auto path = get_roi_path(edid))
+        {
+            wstring newname = check_new_roi_name(name);
+            roi_tree_.put(*path, newname);
+        }
+        else
+        {
+            wstring prefix(L"");
+            if(auto path = get_roi_path(parent_name))
+                prefix = *path + L".";
+            roi_tree_.add(prefix + boost::lexical_cast<wstring>(edid), name);
+        }
+    }
+    else
+    {
+        if(auto path = get_roi_path(edid))
+        {
+            auto pos = path->find_last_of(L'.');
+            wstring strid(L""), prefix(L"");
+            if (pos != wstring::npos && pos+1 < path->length())
+            {
+                strid = path->substr(pos+1);
+                prefix = path->substr(0, pos);
+            }
+            else
+                strid = *path;
+            roi_tree_.get_child(prefix).erase(strid);
+        }
+    }
+}
+
+void MeshRenderer::set_roi_name(wstring name, int id, int parent_id)
+{
+    int edid = (id == -1) ? edit_sel_id_ : id;
+    
+    if (edid == -1)
+        return;
+
+    if (!name.empty())
+    {
+        if(auto path = get_roi_path(edid))
+        {
+            wstring newname = check_new_roi_name(name);
+            roi_tree_.put(*path, newname);
+        }
+        else
+        {
+            wstring prefix(L"");
+            if(auto path = get_roi_path(parent_id))
+                prefix = *path + L".";
+            roi_tree_.add(prefix + boost::lexical_cast<wstring>(edid), name);
+        }
+    }
+    else
+    {
+        if(auto path = get_roi_path(edid))
+        {
+            auto pos = path->find_last_of(L'.');
+            wstring strid(L""), prefix(L"");
+            if (pos != wstring::npos && pos+1 < path->length())
+            {
+                strid = path->substr(pos+1);
+                prefix = path->substr(0, pos);
+            }
+            else
+                strid = *path;
+            roi_tree_.get_child(prefix).erase(strid);
+        }
+    }
+}
+
+wstring MeshRenderer::check_new_roi_name(wstring name)
+{
+    wstring result = name;
+    
+    int i;
+    for (i=1; get_roi_path(name); i++)
+    {
+        std::wostringstream w;
+        w << "_" << i;
+        result = name + w.str();
+    }
+
+    return result;
+}
+
+int MeshRenderer::get_available_group_id()
+{
+    int id = -2;
+    while (1)
+    {
+        if (!get_roi_path(id))
+            break;
+        id--;
+    }
+    return id;
+}
+
+int MeshRenderer::add_roi_group_node(int parent_id, wstring name)
+{
+    int gid = get_available_group_id();
+    wstring prefix(L"");
+
+    if (name.empty())
+    {
+        wstringstream wss;
+        wss << L"Seg Group " << (gid*-1)-1;
+        name = wss.str();
+    }
+
+    if(auto path = get_roi_path(parent_id))
+        prefix = *path + L".";
+
+    roi_tree_.add(prefix + boost::lexical_cast<wstring>(gid), name);
+
+    return gid;
+}
+
+int MeshRenderer::add_roi_group_node(wstring parent_name, wstring name)
+{
+    int pid = parent_name.empty() ? -1 : get_roi_id(parent_name);
+    
+    return add_roi_group_node(pid, name);
+}
+
+//return the parent if there is no sibling.
+int MeshRenderer::get_next_sibling_roi(int id)
+{
+    if(auto path = get_roi_path(id))
+    {
+        auto pos = path->find_last_of(L'.');
+        wstring prefix(L"");
+        if (pos != wstring::npos && pos+1 < path->length())
+            prefix = path->substr(0, pos);
+        
+        auto subtree = roi_tree_.get_child_optional(prefix);
+        if (subtree)
+        {
+            bool found_myself = false;
+            int prev_id = -1;
+            int temp_id = -1;
+            for (wptree::const_iterator child = subtree->begin(); child != subtree->end(); ++child)
+            {
+                wstring strid = child->first;
+                int cid = -1;
+                try
+                {
+                    cid = boost::lexical_cast<int>(strid);
+                }
+                catch (boost::bad_lexical_cast e)
+                {
+                    cerr << "TextureRenderer::get_next_child_roi(int id): bad_lexical_cast" << endl;
+                }
+
+                if (found_myself)
+                    return cid;
+
+                if (id == cid)
+                {
+                    found_myself = true;
+                    prev_id = temp_id;
+                }
+                temp_id = cid;
+            }
+
+            if (found_myself)
+            {
+                if (prev_id != -1)
+                    return prev_id;
+                else if (!prefix.empty())
+                {
+                    auto pos = prefix.find_last_of(L'.');
+                    wstring parent_strid(L"");
+                    if (pos != wstring::npos && pos+1 < prefix.length())
+                        parent_strid = prefix.substr(pos+1);
+                    else
+                        parent_strid = prefix;
+
+                    int pid = -1;
+                    try
+                    {
+                        pid = boost::lexical_cast<int>(parent_strid);
+                    }
+                    catch (boost::bad_lexical_cast e)
+                    {
+                        cerr << "TextureRenderer::get_next_child_roi(int id): bad_lexical_cast 2" << endl;
+                    }
+
+                    return pid;
+                }
+            }
+        }
+    }
+
+    return -1;
+}
+
+//insert_mode: 0-before dst; 1-after dst; 2-into group
+void MeshRenderer::move_roi_node(int src_id, int dst_id, int insert_mode)
+{
+    auto path = get_roi_path(src_id);
+    if (!path || src_id == dst_id) return;
+    
+    wptree subtree = roi_tree_.get_child(*path);
+    erase_node(src_id);
+
+    if (dst_id != -1)
+    {
+        if (insert_mode == 0 || insert_mode == 1)
+            insert_roi_node(roi_tree_, dst_id, subtree, src_id, insert_mode);
+        else if (insert_mode == 2 && dst_id < -1)
+        {
+            if (auto dst_par_path = get_roi_path(dst_id))
+            {
+                try
+                {
+                    wstring dst_path = *dst_par_path + L"." + boost::lexical_cast<wstring>(src_id);
+                    roi_tree_.put_child(dst_path, subtree);
+                }
+                catch (boost::bad_lexical_cast e)
+                {
+                    cerr << "TextureRenderer::move_roi_node(int src_id, int dst_id): bad_lexical_cast" << endl;
+                }
+            }
+        }
+    }
+    else
+    {
+        try
+        {
+            roi_tree_.put_child(boost::lexical_cast<wstring>(src_id), subtree);
+        }
+        catch (boost::bad_lexical_cast e)
+        {
+            cerr << "TextureRenderer::move_roi_node(int src_id, int dst_id): bad_lexical_cast 2" << endl;
+        }
+    }
+}
+
+//insert_mode: 0-before dst; 1-after dst;
+bool MeshRenderer::insert_roi_node(wptree& tree, int dst_id, const wptree& node, int id, int insert_mode)
+{
+    for (wptree::iterator child = tree.begin(); child != tree.end(); ++child)
+    {
+        wstring strid = child->first;
+        int cid = -1;
+        try
+        {
+            cid = boost::lexical_cast<int>(strid);
+            if (dst_id == cid)
+            {
+                wptree::value_type v(boost::lexical_cast<wstring>(id), node);
+                if (insert_mode == 1) ++child;
+                tree.insert(child, v);
+                return true;
+            }
+        }
+        catch (boost::bad_lexical_cast e)
+        {
+            cerr << "TextureRenderer::insert_roi_node(wptree& tree, int dst_id, const wptree& node, int id): bad_lexical_cast" << endl;
+        }
+        
+        if (insert_roi_node(child->second, dst_id, node, id, insert_mode))
+            return true;
+    }
+
+    return false;
+}
+
+void MeshRenderer::erase_node(int id)
+{
+    int edid = (id == -1) ? edit_sel_id_ : id;
+    
+    if(auto path = get_roi_path(edid))
+    {
+        auto pos = path->find_last_of(L'.');
+        wstring strid(L""), parent(L"");
+        if (pos != wstring::npos && pos+1 < path->length())
+        {
+            strid = path->substr(pos+1);
+            parent = path->substr(0, pos);
+        }
+        else
+            strid = *path;
+        roi_tree_.get_child(parent).erase(strid);
+    }
+}
+
+void MeshRenderer::erase_node(wstring name)
+{
+    int edid = get_roi_id(name);
+    
+    if (edid != -1) erase_node(edid);
+}
+
+wstring MeshRenderer::get_roi_name(int id)
+{
+    wstring rval;
+
+    int edid = (id == -1) ? edit_sel_id_ : id;
+    
+    if (edid != -1)
+    {
+        if(auto path = get_roi_path(edid))
+            rval = roi_tree_.get<wstring>(*path);
+    }
+
+    return rval;
+}
+
+int MeshRenderer::get_roi_id(wstring name)
+{
+    int rval = -1;
+
+    if (auto path = get_roi_path(name))
+    {
+        auto pos = path->find_last_of(L'.');
+        wstring strid;
+        if (pos != wstring::npos && pos+1 < path->length())
+            strid = path->substr(pos+1);
+        else
+            strid = *path;
+        try
+        {
+            rval = boost::lexical_cast<int>(strid);
+        }
+        catch (boost::bad_lexical_cast e)
+        {
+            cerr << "TextureRenderer::get_roi_id(wstring name): bad_lexical_cast" << endl;
+        }
+    }
+
+    return rval;
+}
+
+void MeshRenderer::set_roi_select(wstring name, bool select, bool traverse)
+{
+    if (auto path = get_roi_path(name))
+    {
+        auto pos = path->find_last_of(L'.');
+        wstring strid;
+        if (pos != wstring::npos && pos+1 < path->length())
+            strid = path->substr(pos+1);
+        else
+            strid = *path;
+        try
+        {
+            int id = boost::lexical_cast<int>(strid);
+            if (id != -1)
+            {
+                if (select)
+                    sel_ids_.insert(id);
+                else
+                {
+                    auto ite = sel_ids_.find(id);
+                    if (ite != sel_ids_.end())
+                        sel_ids_.erase(ite);
+                }
+            }
+        }
+        catch (boost::bad_lexical_cast e)
+        {
+            cerr << "TextureRenderer::set_roi_select(wstring name, bool select): bad_lexical_cast" << endl;
+        }
+
+        if (traverse)
+        {
+            if (auto subtree = roi_tree_.get_child_optional(*path))
+                set_roi_select_r(*subtree, select);
+        }
+
+        //update_palette(desel_palette_mode_, desel_col_fac_);
+    }
+}
+
+void MeshRenderer::set_roi_select_children(wstring name, bool select, bool traverse)
+{
+    if (name.empty())
+    {
+        set_roi_select_r(roi_tree_, select, traverse);
+    }
+    else if (auto path = get_roi_path(name))
+    {
+        if (auto subtree = roi_tree_.get_child_optional(*path))
+            set_roi_select_r(*subtree, select, traverse);
+    }
+    
+    //update_palette(desel_palette_mode_, desel_col_fac_);
+}
+
+void MeshRenderer::set_roi_select_r(const boost::property_tree::wptree& tree, bool select, bool recursive)
+{
+    for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
+    {
+        wstring strid = child->first;
+        int id = -1;
+        try
+        {
+            id = boost::lexical_cast<int>(strid);
+            if (id != -1)
+            {
+                if (select)
+                    sel_ids_.insert(id);
+                else
+                {
+                    auto ite = sel_ids_.find(id);
+                    if (ite != sel_ids_.end())
+                        sel_ids_.erase(ite);
+                }
+            }
+        }
+        catch (boost::bad_lexical_cast e)
+        {
+            cerr << "TextureRenderer::toggle_roi_select(boost::property_tree::wptree& tree, bool select): bad_lexical_cast" << endl;
+        }
+
+        if (recursive) set_roi_select_r(child->second, select, recursive);
+    }
+}
+
+void MeshRenderer::update_sel_segs()
+{
+    sel_segs_.clear();
+    update_sel_segs(roi_tree_);
+
+    //add unnamed visible segments
+    for(auto ite = sel_ids_.begin(); ite != sel_ids_.end(); ++ite)
+    {
+        if(!get_roi_path(*ite) && (*ite >= 0))
+            sel_segs_.insert(*ite);
+    }
+}
+
+void MeshRenderer::update_sel_segs(const wptree& tree)
+{
+    for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
+    {
+        wstring strid = child->first;
+        int id = -1;
+        try
+        {
+            id = boost::lexical_cast<int>(strid);
+            if (id != -1)
+            {
+                auto ite = sel_ids_.find(id);
+                if (ite != sel_ids_.end())
+                {
+                    if (*ite >= 0)
+                        sel_segs_.insert(*ite);
+                    update_sel_segs(child->second);
+                }
+            }
+        }
+        catch (boost::bad_lexical_cast e)
+        {
+            cerr << "TextureRenderer::update_sel_segs(const wptree& tree): bad_lexical_cast" << endl;
+        }
+    }
+}
+
 
 	void MeshRenderer::init(std::shared_ptr<VVulkan> vulkan)
 	{

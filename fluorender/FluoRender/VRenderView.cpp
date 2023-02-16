@@ -13385,8 +13385,8 @@ void VRenderVulkanView::Q2A()
 
 	m_q.ToEuler(m_rotx, m_roty, m_rotz);
     //make rotation directions the same as the OpenGL version.
-    m_rotx = -m_rotx;
-    m_rotz = -m_rotz;
+    //m_rotx = -m_rotx;
+    //m_rotz = -m_rotz;
 
 	if (m_roty>360.0)
 		m_roty -= 360.0;
@@ -13691,8 +13691,10 @@ void VRenderVulkanView::A2Q()
 	//SetSortBricks();
     
     //make rotation directions the same as the OpenGL version.
-	m_q.FromEuler(-m_rotx, m_roty, -m_rotz);
+	//m_q.FromEuler(-m_rotx, m_roty, -m_rotz);
 
+    m_q.FromEuler(m_rotx, m_roty, m_rotz);
+    
 	if (m_clip_mode)
 	{
 		if (m_clip_mode == 1)
@@ -17392,20 +17394,20 @@ void VRenderVulkanView::SetRotations(double rotx, double roty, double rotz, bool
 
 	if (m_rot_lock)
 	{
-		m_vrv->m_x_rot_sldr->SetValue(int(m_rotx/45.0));
+		m_vrv->m_x_rot_sldr->SetValue(int((360.0-m_rotx)/45.0));
 		m_vrv->m_y_rot_sldr->SetValue(int(m_roty/45.0));
 		m_vrv->m_z_rot_sldr->SetValue(int(m_rotz/45.0));
 	}
 	else
 	{
-		m_vrv->m_x_rot_sldr->SetValue(int(m_rotx));
+		m_vrv->m_x_rot_sldr->SetValue(int(360.0-m_rotx));
 		m_vrv->m_y_rot_sldr->SetValue(int(m_roty));
 		m_vrv->m_z_rot_sldr->SetValue(int(m_rotz));
 	}
 
 	if (ui_update)
 	{
-		wxString str = wxString::Format("%.1f", m_rotx);
+		wxString str = wxString::Format("%.1f", 360.0-m_rotx);
 		m_vrv->m_x_rot_text->ChangeValue(str);
 		str = wxString::Format("%.1f", m_roty);
 		m_vrv->m_y_rot_text->ChangeValue(str);
@@ -19225,7 +19227,7 @@ void VRenderView::GetRotations(double &rotx, double &roty, double &rotz)
 void VRenderView::SetRotations(double rotx, double roty, double rotz, bool ui_update)
 {
 	if (m_glview)
-		m_glview->SetRotations(rotx, roty, rotz, ui_update);
+		m_glview->SetRotations(360.0-rotx, roty, rotz, ui_update);
 
 }
 

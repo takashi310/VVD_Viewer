@@ -321,7 +321,7 @@ public:
 	}
 	void GetRotations(double &rotx, double &roty, double &rotz)
 	{
-		rotx = m_rotx;
+		rotx = 360.0 - m_rotx;
 		roty = m_roty;
 		rotz = m_rotz;
 	}
@@ -1956,11 +1956,15 @@ public:
 	}
 	void SetClippingPlaneRotations(double rotx, double roty, double rotz)
 	{
-		if (m_glview) m_glview->SetClippingPlaneRotations(rotx, roty, rotz);
+		if (m_glview) m_glview->SetClippingPlaneRotations(360.0 - rotx, roty, rotz);
 	}
 	void GetClippingPlaneRotations(double &rotx, double &roty, double &rotz)
 	{
-		if (m_glview) m_glview->GetClippingPlaneRotations(rotx, roty, rotz);
+		if (m_glview)
+        {
+            m_glview->GetClippingPlaneRotations(rotx, roty, rotz);
+            rotx = 360.0 - rotx;
+        }
 	}
 
 	//get volume selector
