@@ -1878,7 +1878,7 @@ void VolumeSelector::EVECount(int min_radius, int max_radius, double thresh, int
         pos *= Vector(nx==0?0.0:1.0/nx,
             ny==0?0.0:1.0/ny,
             nz==0?0.0:1.0/nz);
-        wxString str_info = wxString::Format("%f\t%d\t%d", p.score, p.r, p.zr);
+        wxString str_info = wxString::Format("%.4f\t%d\t%d", p.score, p.r, p.zr);
         m_annotations->AddText(str_id.ToStdString(), Point(pos), str_info.ToStdString());
         count++;
     }
@@ -1938,9 +1938,20 @@ void VolumeSelector::EVECount(int min_radius, int max_radius, double thresh, int
     md->SetSWCSubdivLevel(1);
     if (md->Load(temp_swc_path))
     {
-        Color color(HSVColor(0.0, 0.0, 1.0));
-        md->SetColor(color, MESH_COLOR_DIFF);
-        Color amb = color * 0.3;
+        //generate opposite color for annotations
+        HSVColor hsv_color(m_vd->GetColor());
+        Color anno_col = Color(0.0, 1.0, 0.0);
+        double h, s, v;
+        if (hsv_color.sat() >= 0.2)
+        {
+            double h0 = hsv_color.hue();
+            h = h0<30.0?h0-180.0:h0<90.0?h0+120.0:h0<210.0?h0-120.0:h0-180.0;
+            s = 1.0;
+            v = 1.0;
+            anno_col = Color(HSVColor(h<0.0?h+360.0:h, s, v));
+        }
+        md->SetColor(anno_col, MESH_COLOR_DIFF);
+        Color amb = anno_col * 0.3;
         md->SetColor(amb, MESH_COLOR_AMB);
         m_annotations->SetMesh(md);
         md->SetThreshold((float)max_curvature_point * globalmax / EVE_BINS);

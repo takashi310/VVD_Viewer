@@ -712,77 +712,132 @@ void RulerListCtrl::Export(wxString filename)
 {
 	if (!m_view) return;
 	vector<Ruler*>* ruler_list = m_view->GetRulerList();
-	if (ruler_list)
-	{
-		wxFileOutputStream fos(filename);
-		if (!fos.Ok())
-			return;
-		wxTextOutputStream tos(fos);
-
-		wxString str;
-		wxString unit;
-		int num_points;
-		Point *p;
-		Ruler* ruler;
-		switch (m_view->m_glview->m_sb_unit)
-		{
-		case 0:
-			unit = "nm";
-			break;
-		case 1:
-		default:
-			unit = L"\u03BCm";
-			break;
-		case 2:
-			unit = "mm";
-			break;
-		}
-
-		tos << "Name\tColor\tLength(" << unit << ")\tAngle/Pitch(Deg)\tx1\ty1\tz1\txn\tyn\tzn\tTime\tv1\tv2\n";
-
-		Color color;
-		for (size_t i=0; i<ruler_list->size(); i++)
-		{
-			ruler = (*ruler_list)[i];
-			if (!ruler) continue;
-
-			tos << ruler->GetName() << "\t";
-			if (ruler->GetUseColor())
-			{
-				color = ruler->GetColor();
-				str = wxString::Format("RGB(%d, %d, %d)",
-					int(color.r()*255), int(color.g()*255), int(color.b()*255));
-			}
-			else
-				str = "N/A";
-			tos << str << "\t";
-			str = wxString::Format("%.2f", ruler->GetLength());
-			tos << str << "\t";
-			str = wxString::Format("%.1f", ruler->GetAngle());
-			tos << str << "\t";
-			str = "";
-			num_points = ruler->GetNumPoint();
-			if (num_points > 0)
-			{
-				p = ruler->GetPoint(0);
-				str += wxString::Format("%.2f\t%.2f\t%.2f", p->x(), p->y(), -p->z());
-			}
-			if (num_points > 1)
-			{
-				p = ruler->GetPoint(num_points - 1);
-				str += "\t";
-				str += wxString::Format("%.2f\t%.2f\t%.2f", p->x(), p->y(), -p->z());
-			}
-			tos << str << "\t";
-			if (ruler->GetTimeDep())
-				str = wxString::Format("%d", ruler->GetTime());
-			else
-				str = "N/A";
-			tos << str << "\t";
-			tos << ruler->GetInfoValues() << "\n";
-
-		}
-	}
+    
+    wxFileOutputStream fos(filename);
+    if (!fos.Ok())
+        return;
+    wxTextOutputStream tos(fos);
+    
+    wxString str;
+    wxString unit;
+    int num_points;
+    Point *p;
+    Ruler* ruler;
+    switch (m_view->m_glview->m_sb_unit)
+    {
+        case 0:
+            unit = "nm";
+            break;
+        case 1:
+        default:
+            unit = L"\u03BCm";
+            break;
+        case 2:
+            unit = "mm";
+            break;
+    }
+    
+    tos << "Name\tColor\tLength(" << unit << ")\tAngle/Pitch(Deg)\tx1\ty1\tz1\txn\tyn\tzn\tTime\tvolumes/scores\n";
+    
+    Color color;
+    for (size_t i=0; i<ruler_list->size(); i++)
+    {
+        ruler = (*ruler_list)[i];
+        if (!ruler) continue;
+        
+        tos << ruler->GetName() << "\t";
+        if (ruler->GetUseColor())
+        {
+            color = ruler->GetColor();
+            str = wxString::Format("RGB(%d, %d, %d)",
+                                   int(color.r()*255), int(color.g()*255), int(color.b()*255));
+        }
+        else
+            str = "N/A";
+        tos << str << "\t";
+        str = wxString::Format("%.2f", ruler->GetLength());
+        tos << str << "\t";
+        str = wxString::Format("%.1f", ruler->GetAngle());
+        tos << str << "\t";
+        str = "";
+        num_points = ruler->GetNumPoint();
+        if (num_points > 0)
+        {
+            p = ruler->GetPoint(0);
+            str += wxString::Format("%.2f\t%.2f\t%.2f", p->x(), p->y(), -p->z());
+        }
+        if (num_points > 1)
+        {
+            p = ruler->GetPoint(num_points - 1);
+            str += "\t";
+            str += wxString::Format("%.2f\t%.2f\t%.2f", p->x(), p->y(), -p->z());
+        }
+        else
+            str += "\t\t\t";
+        tos << str << "\t";
+        if (ruler->GetTimeDep())
+            str = wxString::Format("%d", ruler->GetTime());
+        else
+            str = "N/A";
+        tos << str << "\t";
+        tos << ruler->GetInfoValues() << "\n";
+        
+    }
+    
+    if (m_show_anno) {
+        int cid = 1;
+        int i;
+        int lnum = m_view->GetLayerNum();
+        for (i = 0; i < lnum; i++)
+        {
+            auto layer = m_view->GetLayer(i);
+            if (!layer)
+                continue;
+            switch (layer->IsA())
+            {
+                case 4://annotations
+                {
+                    Annotations* ann = (Annotations*)layer;
+                    if (!ann || !ann->GetDisp()) continue;
+                    if (cid >= m_counts.size()) return;
+                    int tnum = ann->GetTextNum();
+                    for (int j = 0; j < tnum && j < m_counts[cid]; j++) {
+                        wxString name = ann->GetTextText(j) + "  (" + ann->GetName() + ")";
+                        wxString color = "N/A";
+                        wxString unit = m_view->GetSBText();
+                        wxString length = wxString::Format("%.2f", 0.0);
+                        Point p = ann->GetTextPos(j);
+                        int resx = 1, resy = 1, resz = 1;
+                        VolumeData *vd = ann->GetVolume();
+                        if (vd)
+                            vd->GetResolution(resx, resy, resz);
+                        wxString points = wxString::Format("%.2f\t%.2f\t%.2f", p.x()*resx, p.y()*resy, p.z()*resz);
+                        wxString info = ann->GetTextInfo(j);
+                        wxStringTokenizer tokenizer(info, "\t");
+                        wxString vx_or_score;
+                        while (tokenizer.HasMoreTokens())
+                        {
+                            wxString token = tokenizer.GetNextToken();
+                            vx_or_score = ann->GetMesh() ? token : token + " voxels";
+                            break;
+                        }
+                        
+                        tos << name << "\t";
+                        tos << color << "\t";
+                        tos << length << "\t";
+                        wxString angle = wxString::Format("%.1f", 0.0);
+                        tos << angle << "\t";
+                        tos << points << "\t";
+                        tos << "\t\t" << "\t";
+                        wxString time = "N/A";
+                        tos << time << "\t";
+                        tos << vx_or_score << "\n";
+                    }
+                    cid++;
+                }
+            }
+        }
+    }
 }
 
 wxString RulerListCtrl::GetText(long item, int col)
