@@ -68,7 +68,7 @@ bool VRenderApp::OnInit()
       std::string(VERSION_MAJOR_TAG) +  std::string(".") +
       std::string(VERSION_MINOR_TAG);
 */   
-   std::string title =  std::string(FLUORENDER_TITLE) + "1.5.11";
+   std::string title =  std::string(FLUORENDER_TITLE) + "1.5.12";
 
    m_frame = new VRenderFrame(
 	     this,
