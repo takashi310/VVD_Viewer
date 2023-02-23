@@ -399,7 +399,7 @@ wxWindow* BrushToolDlg::CreateCalculationPage(wxWindow *parent)
 		new wxStaticBox(page, wxID_ANY,
 		"Single-valued Operators (Require A)"), wxVERTICAL);
 	//sizer3
-	m_calc_fill_btn = new wxButton(page, ID_CalcFillBtn, "Consolidate Voxels",
+	m_calc_fill_btn = new wxButton(page, ID_CalcFillBtn, "3D Fill Holes",
 		wxDefaultPosition, wxDefaultSize);
 	sizer3->Add(m_calc_fill_btn, 0, wxEXPAND);
 	//two operators
@@ -408,7 +408,7 @@ wxWindow* BrushToolDlg::CreateCalculationPage(wxWindow *parent)
 		"Two-valued Operators (Require both A and B)"), wxHORIZONTAL);
 	m_calc_sub_btn = new wxButton(page, ID_CalcSubBtn, "Subtract",
 		wxDefaultPosition, wxSize(50, 25));
-	m_calc_add_btn = new wxButton(page, ID_CalcAddBtn, "Add",
+	m_calc_add_btn = new wxButton(page, ID_CalcAddBtn, "Max",
 		wxDefaultPosition, wxSize(50, 25));
 	m_calc_div_btn = new wxButton(page, ID_CalcDivBtn, "Divide",
 		wxDefaultPosition, wxSize(50, 25));

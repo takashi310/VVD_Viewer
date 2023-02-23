@@ -43,6 +43,10 @@ private:
 	vector<float> m_model_norms;
     vector<float> m_model_extra_data;
 	vector<unsigned int> m_model_tris;
+    
+    vector<vector<unsigned int>> m_model_group_tris;
+    vector<string> m_group_names;
+    vector<size_t> m_v_group_id;
 
 	vector<glm::vec3> m_sphere_verts_cache;
 	vector<glm::ivec3> m_sphere_tris_cache;

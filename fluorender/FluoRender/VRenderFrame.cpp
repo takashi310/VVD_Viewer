@@ -1535,7 +1535,6 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
             wxArrayString linkswcstr;
             while(!csv.Eof())
             {
-                str = csv.GetNextLine();
                 wxStringTokenizer tkz(str, wxT(","));
                 wxArrayString elems;
                 while(tkz.HasMoreTokens())
@@ -1568,6 +1567,15 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
                         linkswcstr.Add(swc_line);
                     }
                 }
+                else if (elems.Count() >= 3)
+                {
+                    wxString key = "default";
+                    if (swcdata.count(key) == 0)
+                        swcdata[key] = wxArrayString();
+                    wxString swc_line = wxString::Format("%d 6 %s %s %s %f -1", (int)swcdata[key].Count()+1, elems[0], elems[1], elems[2], 0.1f);
+                    swcdata[key].Add(swc_line);
+                }
+                str = csv.GetNextLine();
             }
             csv.Close();
             

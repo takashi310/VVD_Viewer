@@ -485,78 +485,132 @@ void SWCReader::SetFile(wstring &file)
 
 void SWCReader::Preprocess()
 {
-	if (!m_vertices.empty()) m_vertices.clear();
-	if (!m_edges.empty()) m_edges.clear();
+    if (!m_vertices.empty()) m_vertices.clear();
+    if (!m_edges.empty()) m_edges.clear();
     if (!m_extra_data.empty()) m_extra_data.clear();
+//    if (!m_group_names.empty()) m_group_names.clear();
+//    if (!m_v_group_id.empty()) m_v_group_id.clear();
 
-	//separate path and name
-	int64_t pos = m_path_name.find_last_of(GETSLASH());
-	if (pos == -1)
-		return;
-	wstring path = m_path_name.substr(0, pos+1);
-	wstring name = m_path_name.substr(pos+1);
+    //separate path and name
+    int64_t pos = m_path_name.find_last_of(GETSLASH());
+    if (pos == -1)
+        return;
+    wstring path = m_path_name.substr(0, pos+1);
+    wstring name = m_path_name.substr(pos+1);
 
-	ifstream ifs(ws2s(m_path_name));
-	if (ifs.fail())
-	{
-		cerr << "file open error: " << ws2s(m_path_name) << endl;
-		return;
-	}
+    ifstream ifs(ws2s(m_path_name));
+    if (ifs.fail())
+    {
+        cerr << "file open error: " << ws2s(m_path_name) << endl;
+        return;
+    }
 
-	string line, token;
-	vector<vector<string>> str_data;
-	map<int, int> id_corresp;
-	int maxid = 0;
-	while (getline(ifs, line))
-	{
-		if (line.empty() || line[0] == '#')
-			continue;
-		stringstream ls(line);
-		vector<string> tokens = split(line, " ", "#");
-		if (tokens.size() >= 7)
-		{
-			glm::vec4 v4;
-			float fval;
-			int ival;
-			int id = STOI(tokens[0].c_str());
-			fval = STOD(tokens[2].c_str());
-			v4.x = fval;
-			fval = STOD(tokens[3].c_str());
-			v4.y = fval;
-			fval = STOD(tokens[4].c_str());
-			v4.z = -fval;
-			if (tokens[5] != "NA")
-			{
-				fval = STOD(tokens[5].c_str());
-				v4.w = fval;
-			}
-			else
-				v4.w = 0.0;
-            
+    string line, token;
+    vector<vector<string>> str_data;
+    map<string, vector<size_t>, less<string>> group_verts;
+    map<int, int> id_corresp;
+    map<int, int> id_corresp2;
+    int maxid = 0;
+    while (getline(ifs, line))
+    {
+        if (line.empty() || line[0] == '#')
+            continue;
+        vector<string> tokens = split(line, " ", "#");
+        if (tokens.size() >= 7)
+        {
+            glm::vec4 v4;
+            float fval;
+            int ival;
+            int id = STOI(tokens[0].c_str());
+            fval = STOD(tokens[2].c_str());
+            v4.x = fval;
+            fval = STOD(tokens[3].c_str());
+            v4.y = fval;
+            fval = STOD(tokens[4].c_str());
+            v4.z = -fval;
+            if (tokens[5] != "NA")
+            {
+                fval = STOD(tokens[5].c_str());
+                v4.w = fval;
+            }
+            else
+                v4.w = 0.0;
+/*
+            if (tokens.size() >= 8)
+            {
+                string gname = tokens[7].c_str();
+                if (group_verts.find(gname) == group_verts.end())
+                {
+                    vector<size_t> e;
+                    e.push_back(m_vertices.size());
+                    group_verts[gname] = e;
+                }
+                else
+                    group_verts[gname].push_back(m_vertices.size());
+            }
+            if (tokens.size() >= 9)
+            {
+                fval = STOD(tokens[8].c_str());
+                m_extra_data.push_back(fval);
+            }
+*/
             if (tokens.size() >= 8)
             {
                 fval = STOD(tokens[7].c_str());
                 m_extra_data.push_back(fval);
             }
-
-			int newid = m_vertices.size();
-			id_corresp[id] = newid;
-			m_vertices.push_back(v4);
-			
-			ival = STOI(tokens[6].c_str());
-			if (ival != -1)
-				m_edges.push_back(glm::ivec2(id, ival));
             
-		}
-	}
+            int newid = m_vertices.size();
+            id_corresp[id] = newid;
+            m_vertices.push_back(v4);
+            
+            ival = STOI(tokens[6].c_str());
+            if (ival != -1)
+                m_edges.push_back(glm::ivec2(id, ival));
+            
+        }
+    }
 
-	for (auto &e : m_edges)
-	{
-		e[0] = id_corresp[e[0]];
-		e[1] = id_corresp[e[1]];
-	}
+    for (auto &e : m_edges)
+    {
+        e[0] = id_corresp[e[0]];
+        e[1] = id_corresp[e[1]];
+    }
+/*
+    if (!group_verts.empty())
+    {
+        size_t count = 0;
+        for (map<string, vector<size_t>>::iterator it = group_verts.begin(); it != group_verts.end(); it++)
+        {
+            for (int i = 0; i < it->second.size(); i++)
+            {
+                id_corresp2[it->second[i]] = count;
+                m_v_group_id.push_back(m_group_names.size());
+                count++;
+            }
+            m_group_names.push_back(it->first);
+        }
 
-	return;
+        vector<glm::vec4> tmp_vertices;
+        tmp_vertices.resize(m_vertices.size());
+        for (int i = 0; i < m_vertices.size(); i++)
+            tmp_vertices[i] = m_vertices[id_corresp2[i]];
+        m_vertices = tmp_vertices;
+        
+        vector<float> tmp_extra_data;
+        tmp_extra_data.resize(m_extra_data.size());
+        for (int i = 0; i < m_extra_data.size(); i++)
+            tmp_extra_data[i] = m_extra_data[id_corresp2[i]];
+        m_extra_data = tmp_extra_data;
+        
+        for (auto &e : m_edges)
+        {
+            e[0] = id_corresp2[e[0]];
+            e[1] = id_corresp2[e[1]];
+        }
+    }
+*/
+    return;
 }
 
 bool SWCReader::DeepCopy(SWCReader *in, SWCReader *out)
