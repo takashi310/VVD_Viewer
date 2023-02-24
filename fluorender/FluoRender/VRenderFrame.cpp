@@ -132,6 +132,8 @@ VRenderFrame::VRenderFrame(
 	m_cur_sel_vol(-1),
 	m_cur_sel_mesh(-1),
 	m_gpu_max_mem(-1.0),
+    m_run_tasks(false),
+    m_waiting_for_task(false),
 	m_app(app)
 {
 	SetEvtHandlerEnabled(false);
@@ -713,14 +715,14 @@ VRenderFrame::VRenderFrame(
 	//Initialize plugins
 	m_plugin_manager->InitPlugins();
 
-	//m_timer = new wxTimer(this, ID_Timer);
-	//m_timer->Start(100);
+	m_timer = new wxTimer(this, ID_Timer);
+	m_timer->Start(100);
 }
 
 VRenderFrame::~VRenderFrame()
 {
-	//m_timer->Stop();
-	//wxDELETE(m_timer);
+	m_timer->Stop();
+	wxDELETE(m_timer);
 	//Finalize plugins
 	//VolumeRenderer::vol_kernel_factory_.clean();
 	m_plugin_manager->FinalizePligins();
@@ -741,7 +743,93 @@ VRenderFrame::~VRenderFrame()
 
 void VRenderFrame::OnTimer(wxTimerEvent& event)
 {
-	event.Skip();
+    if (m_run_tasks)
+    {
+        if (m_tasks.Count() > 0)
+        {
+           if (m_tasks[0] == "hideui")
+           {
+               if (m_ui_state)
+                   ToggleAllTools();
+               m_tasks.RemoveAt(0);
+           }
+           else if (m_tasks[0] == "showui")
+           {
+               if (!m_ui_state)
+                   ToggleAllTools();
+               m_tasks.RemoveAt(0);
+           }
+           else if (m_tasks[0] == "basic")
+           {
+               if(m_movie_view)
+               {
+                   if (!m_waiting_for_task)
+                   {
+                       m_movie_view->SetMode(VMovieView::MODE_BASIC);
+                       m_waiting_for_task = true;
+                   }
+                   else if (m_movie_view->GetMode() == 0)
+                   {
+                       m_tasks.RemoveAt(0);
+                       m_waiting_for_task = false;
+                   }
+               }
+               else
+                   m_tasks.RemoveAt(0);
+           }
+           else if (m_tasks[0] == "advanced")
+           {
+               if(m_movie_view)
+               {
+                   if (!m_waiting_for_task)
+                   {
+                       m_movie_view->SetMode(VMovieView::MODE_ADVANCED);
+                       m_waiting_for_task = true;
+                   }
+                   else if (m_movie_view->GetMode() == 1)
+                   {
+                       m_tasks.RemoveAt(0);
+                       m_waiting_for_task = false;
+                   }
+               }
+               else
+                   m_tasks.RemoveAt(0);
+           }
+           else if (m_tasks[0] == "record")
+           {
+               if (m_tasks.Count() >= 2)
+               {
+                   if(m_movie_view)
+                   {
+                       if (!m_waiting_for_task)
+                       {
+                           m_movie_view->SaveMovie(m_tasks[1]);
+                           m_waiting_for_task = true;
+                       }
+                       else if (!m_movie_view->IsRecording())
+                       {
+                           m_tasks.RemoveAt(0);
+                           m_tasks.RemoveAt(0);
+                           m_waiting_for_task = false;
+                       }
+                   }
+                   else
+                   {
+                       m_tasks.RemoveAt(0);
+                       m_tasks.RemoveAt(0);
+                   }
+               }
+               else
+                   m_tasks.RemoveAt(0);
+           }
+           else
+               m_tasks.RemoveAt(0);
+        }
+        else
+        {
+            Close(true);
+        }
+    }
 }
 
 void VRenderFrame::OnExit(wxCommandEvent& WXUNUSED(event))
@@ -6998,6 +7086,17 @@ void VRenderFrame::OnPaneClose(wxAuiManagerEvent& event)
 		m_tb_menu_ui->Check(ID_UIAdjView, false);
 	else if (name == "ClippingView")
 		m_tb_menu_ui->Check(ID_UIClipView, false);
+}
+
+void VRenderFrame::SetTasks(wxString comma_separated_tasks)
+{
+    wxStringTokenizer tkz(comma_separated_tasks, wxT(","));
+    m_tasks.Clear();
+    while(tkz.HasMoreTokens())
+        m_tasks.Add(tkz.GetNextToken());
+    
+    if (m_tasks.Count() > 0)
+        m_run_tasks = true;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -60,6 +60,7 @@ class VRenderApp : public wxApp
       wxString m_plugin_name;
       wxFrame *m_frame;
 	  MyServer *m_server;
+      wxString m_tasks;
 };
 
 DECLARE_APP(VRenderApp)

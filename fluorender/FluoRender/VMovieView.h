@@ -132,6 +132,14 @@ public:
 
 	void DisableRendering() { m_without_rendering = true; }
 	void EnableRendering() { m_without_rendering = false; }
+    
+    const static int MODE_BASIC = 0;
+    const static int MODE_ADVANCED = 1;
+    void SetMode(size_t page_id) { if (m_notebook) m_notebook->SetSelection(page_id); }
+    int GetMode() { if (m_notebook) return m_notebook->GetSelection(); else return -1; }
+    void SaveMovie(wxString filename);
+    
+    bool IsRecording() { return m_record; }
 
 public:
 	//controls

@@ -47,6 +47,7 @@ static const wxCmdLineEntryDesc g_cmdLineDesc [] =
 {
    { wxCMD_LINE_OPTION, "p", "plugin", NULL, wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL },
    { wxCMD_LINE_OPTION, "d", "desc", NULL, wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL },
+   { wxCMD_LINE_OPTION, "m", "macro", NULL, wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL },
    { wxCMD_LINE_PARAM, NULL, NULL, "input file", wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL|wxCMD_LINE_PARAM_MULTIPLE },
    { wxCMD_LINE_NONE }
 };
@@ -153,6 +154,10 @@ bool VRenderApp::OnInit()
 	   setting_dlg->SetRealtimeCompress(((VRenderFrame *)m_frame)->GetRealtimeCompression());
 	   setting_dlg->UpdateUI();
    }
+    
+   if (!m_tasks.IsEmpty())
+      ((VRenderFrame*)m_frame)->SetTasks(m_tasks);
+    
    return true;
 }
 
@@ -201,6 +206,9 @@ bool VRenderApp::OnCmdLineParsed(wxCmdLineParser& parser)
                     m_descs.Add(val);
                     if (!m_plugin_name.IsEmpty())
                         m_plugin_params += wxT(" -d ") + val;
+                }
+                else if (optionName == wxT("m")) {
+                    m_tasks = itarg->GetStrVal();
                 }
                 break;
             case wxCMD_LINE_PARAM:

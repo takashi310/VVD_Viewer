@@ -308,8 +308,11 @@ bool QVideoEncoder::write_video_frame(size_t frame_num) {
 			fprintf(stderr, "Error encoding video frame: %d\n", ret);
 			return false;
 		}
-		if(got_packet) 
+		if(got_packet)
+        {
 			ret = write_frame(&c->time_base, &pkt);
+            av_free_packet(&pkt);
+        }
 		else
 			ret = 0;
     }

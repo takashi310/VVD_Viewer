@@ -438,6 +438,8 @@ public:
             return m_aui_mgr.GetPane(m_legend_panel).IsShown();
         return false;
     }
+    
+    void SetTasks(wxString comma_separated_tasks);
 	
 public: //public so export window can see it and set it. 
 	RecorderDlg* m_recorder_dlg;
@@ -533,6 +535,10 @@ private:
 	static wxCriticalSection ms_criticalSection;
     
     ProjectDataLoader m_project_data_loader;
+    
+    wxArrayString m_tasks;
+    bool m_run_tasks;
+    bool m_waiting_for_task;
 
 private:
 	//views
