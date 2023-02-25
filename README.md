@@ -2,8 +2,8 @@ Download VVD Viewer
 ========
 
 ## Latest Releases
-### Windows: [download](https://github.com/JaneliaSciComp/VVDViewer/releases/download/1.5.12/VVDViewer022323-win64-vulkan.zip) 
-### Mac: [download](https://github.com/JaneliaSciComp/VVDViewer/releases/download/1.5.12/VVDViewer022323-macosx-vulkan.dmg) 
+### Windows: [download](https://github.com/JaneliaSciComp/VVDViewer/releases/download/1.5.13/VVDViewer022423-win64-vulkan.zip) 
+### Mac: [download](https://github.com/JaneliaSciComp/VVDViewer/releases/download/1.5.13/VVDViewer022423-macosx-vulkan.dmg) 
  
 ## Other Versions
 https://github.com/JaneliaSciComp/VVDViewer/releases  
