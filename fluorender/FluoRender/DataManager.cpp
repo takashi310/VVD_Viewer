@@ -5536,8 +5536,7 @@ int Annotations::Load(wxString &filename, DataManager* mgr)
         else if (sline.SubString(0, 5) == "Mesh: ")
         {
             str = sline.SubString(6, sline.Length()-1);
-            MeshData *md = new MeshData();
-            md->Load(str);
+            MeshData *md = mgr->GetMeshData(str);
             if (md)
                 m_md = md;
         }
@@ -5626,10 +5625,7 @@ void Annotations::Save(wxString &filename)
     if (m_md)
     {
         wxString mesh_path = filename.Mid(0, filename.find_last_of(wxT('.'))) + ".swc";
-        wxString src = m_md->GetPath();
-        wxCopyFile(src, mesh_path);
-        tos << "Mesh: " << mesh_path << "\n";
-        
+        tos << "Mesh: " << m_md->GetName() << "\n";
         tos << "Alpha: " << m_alpha << "\n";
         tos << "Threshold: " << m_md->GetThreshold() << "\n";
         tos << "MaxScore: " << m_max_score << "\n";
@@ -7675,6 +7671,12 @@ void DataManager::RemoveVolumeData(int index)
 	VolumeData* data = m_vd_list[index];
 	if (data)
 	{
+        for (int i=0 ; i<(int)m_annotation_list.size() ; i++)
+        {
+            if (m_annotation_list[i] && data == m_annotation_list[i]->GetVolume())
+                m_annotation_list[i]->SetVolume(NULL);
+        }
+        
 		auto p = find(m_latest_vols.begin(), m_latest_vols.end(), data);
 		if (p != m_latest_vols.end())
 			m_latest_vols.erase(p);
@@ -7704,9 +7706,7 @@ void DataManager::RemoveVolumeDataset(BaseReader *reader, int channel)
 		VolumeData* data = m_vd_list[i];
 		if (data && data->GetReader() == reader && data->GetCurChannel() == channel)
 		{
-			m_vd_list.erase(m_vd_list.begin()+i);
-			delete data;
-			data = 0;
+            RemoveVolumeData(i);
 		}
 	}
 }
@@ -7716,6 +7716,11 @@ void DataManager::RemoveMeshData(int index)
 	MeshData* data = m_md_list[index];
 	if (data)
 	{
+        for (int i=0 ; i<(int)m_annotation_list.size() ; i++)
+        {
+            if (m_annotation_list[i] && data == m_annotation_list[i]->GetMesh())
+                m_annotation_list[i]->SetMesh(NULL);
+        }
 		m_md_list.erase(m_md_list.begin()+index);
 		delete data;
 		data = 0;
@@ -7931,7 +7936,7 @@ void DataManager::RemoveAnnotations(int index)
                     break;
                 }
             }
-            if (id > 0)
+            if (id >= 0)
             {
                 bool found = false;
                 for (int i=0 ; i<(int)m_annotation_list.size() ; i++)

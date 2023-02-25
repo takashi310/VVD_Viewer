@@ -699,8 +699,11 @@ namespace FLIVR
 			 m_mv_mat[3][0], m_mv_mat[3][1], m_mv_mat[3][2], m_mv_mat[3][3]};
 
 		uint32_t mindim = min(w, h);
+        double spcx, spcy, spcz;
+        tex_->get_spacings(spcx, spcy, spcz);
+        double cbrtspcs = cbrt(spcx * spcy * spcz);
 
-        double pxlen = 1.0 / (min(max(zoom, 1.0), 10.0) * 1.5 * rate);
+        double pxlen = cbrtspcs / (min(max(zoom, 1.0), 10.0) * 1.5 * rate);
         
         double normal_mat[16];
         Transform normal_trans = *field_trans;

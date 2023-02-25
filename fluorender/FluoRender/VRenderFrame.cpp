@@ -2641,6 +2641,8 @@ void VRenderFrame::OnSelection(int type,
 				m_clip_view->SetVolumeData(vd_ann);
                 MeshData* md_ann = ann->GetMesh();
                 m_clip_view->SetMeshData(md_ann);
+                if (!vd_ann && !md_ann)
+                    m_clip_view->ClearData();
 			}
 			break;
 		}
@@ -3591,16 +3593,6 @@ void VRenderFrame::SaveProject(wxString& filename)
             MeshData* md = ann->GetMesh();
             if (md)
             {
-                wxString new_folder;
-                wxString srcpath = md->GetPath();
-                new_folder = filename + "_files";
-                CREATE_DIR(new_folder.fn_str());
-                wxString ext = ".swc";
-                if (md->GetName().AfterLast(L'.') == wxT("swc"))
-                    ext = "";
-                wxString dstpath = new_folder + GETSLASH() + md->GetName() + ext;
-                wxCopyFile(srcpath, dstpath);
-                fconfig.Write("mesh_path", dstpath);
                 Color amb, diff, spec;
                 double shine, alpha;
                 md->GetMaterial(amb, diff, spec, shine, alpha);
@@ -5354,40 +5346,34 @@ void VRenderFrame::OpenProject(wxString& filename)
                     ann = m_data_mgr.LoadAnnotations(str);
 				}
                 
-                if (ann && fconfig.Read("mesh_path", &str))
+                if (ann && ann->GetMesh())
                 {
-                    MeshData *md = new MeshData();
-                    md->SetSWCSubdivLevel(1);
-                    if (md->Load(str))
+                    MeshData *md = ann->GetMesh();
+                    Color color(HSVColor(0.0, 0.0, 1.0));
+                    md->SetColor(color, MESH_COLOR_DIFF);
+                    Color amb = color * 0.3;
+                    md->SetColor(amb, MESH_COLOR_AMB);
+                    if (fconfig.Read("color", &str))
                     {
-                        Color color(HSVColor(0.0, 0.0, 1.0));
-                        md->SetColor(color, MESH_COLOR_DIFF);
-                        Color amb = color * 0.3;
-                        md->SetColor(amb, MESH_COLOR_AMB);
-                        if (fconfig.Read("color", &str))
-                        {
-                            float r, g, b;
-                            if (SSCANF(str.c_str(), "%f%f%f", &r, &g, &b)){
-                                FLIVR::Color col(r,g,b);
-                                md->SetColor(col, MESH_COLOR_DIFF);
-                                amb = col * 0.3;
-                                md->SetColor(amb, MESH_COLOR_AMB);
-                            }
+                        float r, g, b;
+                        if (SSCANF(str.c_str(), "%f%f%f", &r, &g, &b)){
+                            FLIVR::Color col(r,g,b);
+                            md->SetColor(col, MESH_COLOR_DIFF);
+                            amb = col * 0.3;
+                            md->SetColor(amb, MESH_COLOR_AMB);
                         }
-                        m_data_mgr.AddMeshData(md);
-                        ann->SetMesh(md);
-                        double transparency;
-                        if (fconfig.Read("transparency", &transparency))
-                            ann->SetAlpha(transparency);
-                        double max_score;
-                        if (fconfig.Read("max_score", &max_score))
-                            ann->SetMaxScore(max_score);
-                        double th;
-                        if (fconfig.Read("threshold", &th))
-                            ann->SetThreshold(th);
                     }
-                    else
-                        delete md;
+                    m_data_mgr.AddMeshData(md);
+                    ann->SetMesh(md);
+                    double transparency;
+                    if (fconfig.Read("transparency", &transparency))
+                        ann->SetAlpha(transparency);
+                    double max_score;
+                    if (fconfig.Read("max_score", &max_score))
+                        ann->SetMaxScore(max_score);
+                    double th;
+                    if (fconfig.Read("threshold", &th))
+                        ann->SetThreshold(th);
                 }
 			}
 			//tick_cnt++;

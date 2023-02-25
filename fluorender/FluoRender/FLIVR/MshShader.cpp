@@ -238,7 +238,7 @@ namespace FLIVR
 
 #define MSH_FRAG_BODY_SIMPLE \
 	"	//MSH_FRAG_BODY_SIMPLE\n" \
-	"	c = fubo.loc0;\n"
+	"	vec4 c = fubo.loc0;\n"
 
 #define MSH_FRAG_BODY_COLOR_LIGHT \
 	"	//MSH_FRAG_BODY_COLOR_LIGHT\n" \
@@ -435,15 +435,15 @@ namespace FLIVR
 
 			if (fog_)
 				z << MSH_HEAD_FOG;
-
-			z << MSH_FRAG_BODY_COLOR;
-			if (light_ && !particle_)
-				z << MSH_FRAG_BODY_COLOR_LIGHT;
+            if (light_)
+            {
+                z << MSH_FRAG_BODY_COLOR;
+                z << MSH_FRAG_BODY_COLOR_LIGHT;
+            }
+            else
+                z << MSH_FRAG_BODY_SIMPLE;
 			if (tex_)
 				z << MSH_FRAG_BODY_TEXTURE;
-			if ( (!light_ && !tex_) || particle_ )
-                z << MSH_FRAG_BODY_COLOR_LIGHT;
-				//z << MSH_FRAG_BODY_SIMPLE;
 			if (fog_)
 			{
 				z << MSH_FRAG_BODY_FOG;

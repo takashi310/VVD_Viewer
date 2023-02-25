@@ -316,6 +316,7 @@ namespace FLIVR
 		if (!shader.parse(&Resources, 100, false, messages)) {
 			puts(shader.getInfoLog());
 			puts(shader.getInfoDebugLog());
+            puts(pshader);
 			//auto aa = shader.getInfoLog();
 			//auto bb = shader.getInfoDebugLog();
 			return false;  // something didn't work
@@ -330,6 +331,7 @@ namespace FLIVR
 		if (!program.link(messages)) {
 			puts(shader.getInfoLog());
 			puts(shader.getInfoDebugLog());
+            puts(pshader);
 			fflush(stdout);
 			return false;
 		}
