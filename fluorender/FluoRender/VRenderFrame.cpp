@@ -1617,7 +1617,7 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
             if (!csv.IsOpened())
                 continue;
 
-            map<wxString, wxArrayString> swcdata;
+            wxArrayString swcdata = wxArrayString();
             map<wxString, Color> swccolors;
             wxString str = csv.GetFirstLine();
             wxArrayString linkswcstr;
@@ -1629,12 +1629,12 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
                     elems.Add(tkz.GetNextToken());
                 if (elems.Count() >= 10)
                 {
-                    wxString key = elems[3] + " " + elems[9];
-                    if (swcdata.count(key) == 0)
-                        swcdata[key] = wxArrayString();
-                    //wxString swc_line = wxString::Format("%d 6 %s %s %s %f -1 %s", (int)swcdata[key].Count(), elems[0], elems[1], elems[2], 3.0f, elems[4]);
-                    wxString swc_line = wxString::Format("%d 6 %s %s %s %f -1", (int)swcdata[key].Count()+1, elems[1], elems[0], elems[2], 0.1f);
-                    swcdata[key].Add(swc_line);
+                    if (swcdata.Count() == 0)
+                        str = csv.GetNextLine(); //skip the first line (header)
+                    wxString key = elems[3] + "_" + elems[9];
+                    wxString path = "Cell" + elems[4] + "." + elems[3] + "_" + elems[9];
+                    wxString swc_line = wxString::Format("%d 6 %s %s %s %f -1 %s", (int)swcdata.Count()+1, elems[1], elems[0], elems[2], 0.1f, path);
+                    swcdata.Add(swc_line);
                     
                     if (elems.Count() >= 14)
                     {
@@ -1651,131 +1651,92 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
                         elems[13].ToLong(&link2);
                         if (link2 == 0)
                             link2 = -1;
-                        swc_line = wxString::Format("%d 0 %s %s %s %f %d", (int)linkswcstr.Count()+1, elems[1], elems[0], elems[2], 0.01f, (int)link2);
-                        linkswcstr.Add(swc_line);
+                        path = "Cell" + elems[4];
+                        swc_line = wxString::Format("%d 0 %s %s %s %f %d %s", (int)swcdata.Count()+1, elems[1], elems[0], elems[2], 0.01f, (int)link2, path);
+                        swcdata.Add(swc_line);
                     }
                 }
                 else if (elems.Count() >= 3)
                 {
-                    wxString key = "default";
-                    if (swcdata.count(key) == 0)
-                        swcdata[key] = wxArrayString();
-                    wxString swc_line = wxString::Format("%d 6 %s %s %s %f -1", (int)swcdata[key].Count()+1, elems[0], elems[1], elems[2], 0.1f);
-                    swcdata[key].Add(swc_line);
+                    wxString swc_line = wxString::Format("%d 6 %s %s %s %f -1", (int)swcdata.Count()+1, elems[0], elems[1], elems[2], 0.1f);
+                    swcdata.Add(swc_line);
                 }
                 str = csv.GetNextLine();
             }
             csv.Close();
-            
-            //generate link swc
-            if (linkswcstr.Count() > 0)
-            {
-                wxString temp_swc_path = wxFileName::CreateTempFileName(wxStandardPaths::Get().GetTempDir() + wxFileName::GetPathSeparator()) + ".swc";
-                wxTextFile swc(temp_swc_path);
-                if (swc.Exists())
-                {
-                    if (!swc.Open())
-                        continue;
-                    swc.Clear();
-                }
-                else
-                {
-                    if (!swc.Create())
-                        continue;
-                }
-                for(int j = 0; j < linkswcstr.Count(); j++)
-                    swc.AddLine(linkswcstr[j]);
-                swc.Write();
-                swc.Close();
 
-                //load swc
-                m_data_mgr.LoadMeshData(temp_swc_path, wxT(""));
-                MeshData* md = m_data_mgr.GetLastMeshData();
-                if (vrv && md)
-                {
-                    wxFileName wfn(filename);
-                    md->SetName(wxT("Linkage-")+wfn.GetName());
-                    Color color(1.0, 1.0, 1.0);
-                    md->SetColor(color, MESH_COLOR_DIFF);
-                    md->SetColor(color, MESH_COLOR_AMB);
-                    vrv->AddMeshData(md);
-                }
-            }
-
-            auto it = swcdata.begin();
-            bool first = true;
             MeshGroup* mg = nullptr;
-            while (it != swcdata.end())
+            
+            wxString name = filename;
+            wxArrayString data = swcdata;
+            
+            Annotations *annotations = new Annotations();
+            wxString gname = name.Mid(name.Find(' ', true)+1);
+            
+            //generate swc
+            wxString temp_swc_path = wxFileName::CreateTempFileName(wxStandardPaths::Get().GetTempDir() + wxFileName::GetPathSeparator()) + ".swc";
+            wxTextFile swc(temp_swc_path);
+            if (swc.Exists())
             {
-                wxString name = it->first;
-                wxArrayString data = it->second;
-                it++;
-                
-                Annotations *annotations = new Annotations();
-                wxString gname = name.Mid(name.Find(' ', true)+1);
-
-                //generate swc
-                wxString temp_swc_path = wxFileName::CreateTempFileName(wxStandardPaths::Get().GetTempDir() + wxFileName::GetPathSeparator()) + ".swc";
-                wxTextFile swc(temp_swc_path);
-                if (swc.Exists())
+                if (!swc.Open())
+                    continue;
+                swc.Clear();
+            }
+            else
+            {
+                if (!swc.Create())
+                    continue;
+            }
+            for(int j = 0; j < data.Count(); j++)
+            {
+                swc.AddLine(data[j]);
+                wxStringTokenizer tkz(data[j], wxT(" "));
+                wxArrayString elems;
+                while(tkz.HasMoreTokens())
+                    elems.Add(tkz.GetNextToken());
+                if (elems.Count() >= 7)
                 {
-                    if (!swc.Open())
-                        continue;
-                    swc.Clear();
-                }
-                else
-                {
-                    if (!swc.Create())
-                        continue;
-                }
-                for(int j = 0; j < data.Count(); j++)
-                {
-                    swc.AddLine(data[j]);
-                    
-                    wxStringTokenizer tkz(data[j], wxT(" "));
-                    wxArrayString elems;
-                    while(tkz.HasMoreTokens())
-                        elems.Add(tkz.GetNextToken());
-                    if (elems.Count() >= 5)
+                    double x, y, z;
+                    int link;
+                    elems[2].ToDouble(&x);
+                    elems[3].ToDouble(&y);
+                    elems[4].ToDouble(&z);
+                    elems[6].ToInt(&link);
+                    Point pos = Point(x, y, z);
+                    if (link < 0)
                     {
-                        double x, y, z;
-                        elems[2].ToDouble(&x);
-                        elems[3].ToDouble(&y);
-                        elems[4].ToDouble(&z);
-                        Point pos = Point(x, y, z);
-                        annotations->AddText(gname.ToStdString(), pos, "");
+                        if (elems.Count() >= 8)
+                            annotations->AddText(elems[7].ToStdString(), pos, "");
+                        else
+                            annotations->AddText(gname.ToStdString(), pos, "");
                     }
                 }
-                swc.Write();
-                swc.Close();
-
-                //load swc
-                m_data_mgr.LoadMeshData(temp_swc_path, wxT(""));
+            }
+            swc.Write();
+            swc.Close();
+            
+            //load swc
+            if (m_data_mgr.LoadMeshData(temp_swc_path, wxT("")))
+            {
                 MeshData* md = m_data_mgr.GetLastMeshData();
-                if (vrv && md)
+                if (md)
                 {
                     md->SetName(name);
                     md->SetAnnotations(annotations);
                     if (swccolors.count(name) > 0)
                     {
                         Color color = swccolors[name];
-                        md->SetColor(color, MESH_COLOR_DIFF);
-                        md->SetColor(color, MESH_COLOR_AMB);
+                        //TODO: set colors of mesh groups
                     }
                     
-                    if (first)
-                    {
-                        wxString tmp_group_name = vrv->AddMGroup();
-                        mg = vrv->GetMGroup(tmp_group_name);
-                        wxFileName wfn(filename);
-                        mg->SetName(wfn.GetName());
-                        first = false;
-                    }
                     if (mg)
                     {
                         mg->InsertMeshData(mg->GetMeshNum()-1, md);
-                        vrv->SetMeshPopDirty();
-                        vrv->InitView(INIT_BOUNDS | INIT_CENTER);
+                        if (vrv)
+                        {
+                            vrv->SetMeshPopDirty();
+                            vrv->InitView(INIT_BOUNDS | INIT_CENTER);
+                        }
                     }
                     else
                         vrv->AddMeshData(md);
@@ -1783,6 +1744,8 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
                 else
                     delete annotations;
             }
+            else
+                delete annotations;
         }
         else
         {

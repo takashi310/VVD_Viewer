@@ -1926,7 +1926,7 @@ void VolumeSelector::EVECount(int min_radius, int max_radius, double thresh, int
         wxString str_id = wxString::Format("%d", count);
         Vector pos = Vector(p.pos & 0x1FFFFF, (p.pos >> 21) & 0x1FFFFF, (p.pos >> 42) & 0x1FFFFF);
         pos *= Vector(spcx, spcy, spcz);
-        wxString str_line = wxString::Format("%d 6 %f %f %f %f -1 %f", count, pos.x(), pos.y(), pos.z(), p.r*spcx, p.score);
+        wxString str_line = wxString::Format("%d 6 %f %f %f %f -1 default %f", count, pos.x(), pos.y(), pos.z(), p.r*spcx, p.score);
         swc.AddLine(str_line);
         count++;
     }

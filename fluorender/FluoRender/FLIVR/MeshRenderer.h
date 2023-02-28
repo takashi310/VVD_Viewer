@@ -62,11 +62,20 @@ namespace FLIVR
 		static constexpr int MSHRENDER_BLEND_OVER_UI = 3;
 		static constexpr int MSHRENDER_BLEND_ADD = 4;
 		static constexpr int MSHRENDER_BLEND_SHADE_SHADOW = 5;
+        
+        static constexpr int MR_PALETTE_W = 256;
+        static constexpr int MR_PALETTE_H = 256;
+        static constexpr int MR_PALETTE_SIZE = (MR_PALETTE_W*MR_PALETTE_H);
+        static constexpr int MR_PALETTE_ELEM_COMP = 4;
 
 		MeshRenderer(GLMmodel* data);
 		MeshRenderer(MeshRenderer&);
 		~MeshRenderer();
         
+        void init_palette();
+        void update_palette_tex();
+        std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> get_palette();
+        void put_node(wstring path, wstring name=L"");
         void set_roi_name(wstring name, int id=-1, wstring parent_name=wstring());
         void set_roi_name(wstring name, int id, int parent_id);
         wstring check_new_roi_name(wstring name);
@@ -82,6 +91,9 @@ namespace FLIVR
         void set_roi_select(wstring name, bool select, bool traverse=false);
         void set_roi_select_children(wstring name, bool select, bool traverse=false);
         void set_roi_select_r(const boost::property_tree::wptree& tree, bool select, bool recursive=true);
+        void select_all_roi_tree(){ set_roi_select_r(roi_tree_, true); update_palette(desel_palette_mode_, desel_col_fac_); }
+        void deselect_all_roi_tree(){ set_roi_select_r(roi_tree_, false); update_palette(desel_palette_mode_, desel_col_fac_); }
+        void deselect_all_roi(){ clear_sel_ids_roi_only(); update_palette(desel_palette_mode_, desel_col_fac_); }
         void update_sel_segs();
         void update_sel_segs(const boost::property_tree::wptree& tree);
         boost::property_tree::wptree *get_roi_tree(){ return &roi_tree_; }
@@ -95,6 +107,7 @@ namespace FLIVR
         void get_rendered_id_color(unsigned char &r, unsigned char &g, unsigned char &b, int id=-1);
         //0-dark; 1-gray; 2-invisible;
         void update_palette(int mode, float fac=-1.0f);
+        int get_roi_disp_mode(){ return desel_palette_mode_; }
         void set_desel_palette_mode_dark(float fac=0.1);
         void set_desel_palette_mode_gray(float fac=0.1);
         void set_desel_palette_mode_invisible();
@@ -102,6 +115,7 @@ namespace FLIVR
         void add_sel_id(int id);
         void del_sel_id(int id);
         void set_edit_sel_id(int id);
+        int get_edit_sel_id(){ return edit_sel_id_; };
         void clear_sel_ids();
         void clear_sel_ids_roi_only();
         void clear_roi();
@@ -257,9 +271,15 @@ namespace FLIVR
 		bool update_;
 		BBox bounds_;
         
-        int edit_sel_id_;
+        std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> palette_tex_id_;
+        std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> base_palette_tex_id_;
+        unsigned char palette_[MR_PALETTE_SIZE*MR_PALETTE_ELEM_COMP];
+        unsigned char base_palette_[MR_PALETTE_SIZE*MR_PALETTE_ELEM_COMP];
         unordered_set<int> sel_ids_;
         unordered_set<int> sel_segs_;
+        int desel_palette_mode_;
+        float desel_col_fac_;
+        int edit_sel_id_;
 
 		vks::VulkanDevice* device_;
 		MshVertexSettings m_vertices4, m_vertices42, m_vertices44, m_vertices442;

@@ -360,6 +360,7 @@ GLMmodel *SWCReader::GenerateSolidModel(double def_r, double r_scale, unsigned i
 	if (!m_model_norms.empty()) m_model_norms.clear();
     if (!m_model_extra_data.empty()) m_model_extra_data.clear();
 	if (!m_model_tris.empty()) m_model_tris.clear();
+    if (!m_model_group_tris.empty()) m_model_group_tris.clear();
 
 	m_model_verts.push_back(0.0f);
 	m_model_verts.push_back(0.0f);
@@ -369,18 +370,29 @@ GLMmodel *SWCReader::GenerateSolidModel(double def_r, double r_scale, unsigned i
 	m_model_norms.push_back(0.0f);
     if (m_extra_data.size() > 0)
         m_model_extra_data.push_back(0.0f);
+    
+    if (m_group_names.size() > 0)
+        m_model_group_tris.resize(m_group_names.size());
 
 	//generate solid spheres
     for (int i = 0; i < m_vertices.size(); i++)
 	{
 		glm::vec3 v = glm::vec3(m_vertices[i]);
 		double r = m_vertices[i].w;
-
+        
+        size_t st_tris_id = m_model_tris.size()/3;
 		if (r <= 0.0) r = def_r;
         if (m_extra_data.size() > i)
             AddSolidSphere(v, r*r_scale, subdiv, m_extra_data[i]);
         else
             AddSolidSphere(v, r*r_scale, subdiv);
+        
+        if (m_group_names.size() > 0)
+        {
+            size_t tris_num = m_model_tris.size()/3 - st_tris_id;
+            for (size_t j = 0; j < tris_num; j++)
+                m_model_group_tris[m_v_group_id[i]].push_back(st_tris_id + j);
+        }
 	}
 
 	//generate solid cylinders
@@ -390,18 +402,27 @@ GLMmodel *SWCReader::GenerateSolidModel(double def_r, double r_scale, unsigned i
 		double r1 = m_vertices[e[0]].w;
 		glm::vec3 p2 = glm::vec3(m_vertices[e[1]]);
 		double r2 = m_vertices[e[1]].w;
+        
+        size_t st_tris_id = m_model_tris.size()/3;
 
 		if (r1 <= 0.0) r1 = def_r;
 		if (r2 <= 0.0) r2 = def_r;
 		int cy_subdiv = (int)pow(2.0, subdiv+2);
 		AddSolidCylinder(p1, p2, r1*r_scale, r2*r_scale, cy_subdiv);
+        
+        if (m_group_names.size() > 0)
+        {
+            size_t tris_num = m_model_tris.size()/3 - st_tris_id;
+            for (size_t j = st_tris_id; j < tris_num; j++)
+                m_model_group_tris[m_v_group_id[e[0]]].push_back(j);
+        }
+
 	}
 
 	GLMmodel *model = (GLMmodel*)malloc(sizeof(GLMmodel));
 	float *verts = (float*)malloc(sizeof(float)*m_model_verts.size());
 	float *norms = (float*)malloc(sizeof(float)*m_model_norms.size());
 	GLMtriangle *tris = (GLMtriangle*)malloc(sizeof(GLMtriangle)*m_model_tris.size()/3);
-	unsigned int *gtris = (unsigned int*)malloc(sizeof(unsigned int)*m_model_tris.size()/3);
 
 	memcpy(verts, m_model_verts.data(), sizeof(float)*m_model_verts.size());
 	memcpy(norms, m_model_norms.data(), sizeof(float)*m_model_norms.size());
@@ -416,7 +437,6 @@ GLMmodel *SWCReader::GenerateSolidModel(double def_r, double r_scale, unsigned i
 		tris[i].nindices[1] = *t_ite++;
 		tris[i].vindices[2] = *t_ite;
 		tris[i].nindices[2] = *t_ite++;
-		gtris[i] = i;
 	}
 
 	model->pathname    = STRDUP(ws2s(m_path_name).c_str());
@@ -442,15 +462,45 @@ GLMmodel *SWCReader::GenerateSolidModel(double def_r, double r_scale, unsigned i
 	model->position[2]   = 0.0;
 	model->hastexture = false;
 	
-	GLMgroup* group;
-	group = (GLMgroup*)malloc(sizeof(GLMgroup));
-	group->name = STRDUP("default");
-	group->material = 0;
-	group->numtriangles = numtris;
-	group->triangles = gtris;
-	group->next = model->groups;
-	model->groups = group;
-	model->numgroups++;
+    if (m_group_names.size() == 0)
+    {
+        unsigned int *gtris = (unsigned int*)malloc(sizeof(unsigned int)*m_model_tris.size()/3);
+        for (int i = 0; i < numtris; i++)
+            gtris[i] = i;
+        GLMgroup* group;
+        group = (GLMgroup*)malloc(sizeof(GLMgroup));
+        group->name = STRDUP("default");
+        group->material = 0;
+        group->numtriangles = numtris;
+        group->triangles = gtris;
+        group->next = model->groups;
+        model->groups = group;
+        model->numgroups++;
+    }
+    else
+    {
+        GLMgroup* prev_group = NULL;
+        for (int i = 0; i < m_group_names.size(); i++)
+        {
+            unsigned int *gtris = (unsigned int*)malloc(sizeof(unsigned int)*m_model_group_tris[i].size());
+            for (int j = 0; j < m_model_group_tris[i].size(); j++)
+                gtris[j] = m_model_group_tris[i][j];
+            GLMgroup* group;
+            group = (GLMgroup*)malloc(sizeof(GLMgroup));
+            group->name = STRDUP(m_group_names[i].c_str());
+            group->material = 0;
+            group->numtriangles = m_model_group_tris[i].size();
+            group->triangles = gtris;
+            group->next = NULL;
+            model->numgroups++;
+            if (prev_group)
+                prev_group->next = group;
+            else
+                model->groups = group;
+            prev_group = group;
+        }
+    }
+
 
 	return model;
 }
@@ -488,8 +538,8 @@ void SWCReader::Preprocess()
     if (!m_vertices.empty()) m_vertices.clear();
     if (!m_edges.empty()) m_edges.clear();
     if (!m_extra_data.empty()) m_extra_data.clear();
-//    if (!m_group_names.empty()) m_group_names.clear();
-//    if (!m_v_group_id.empty()) m_v_group_id.clear();
+    if (!m_group_names.empty()) m_group_names.clear();
+    if (!m_v_group_id.empty()) m_v_group_id.clear();
 
     //separate path and name
     int64_t pos = m_path_name.find_last_of(GETSLASH());
@@ -535,7 +585,7 @@ void SWCReader::Preprocess()
             }
             else
                 v4.w = 0.0;
-/*
+            
             if (tokens.size() >= 8)
             {
                 string gname = tokens[7].c_str();
@@ -551,12 +601,6 @@ void SWCReader::Preprocess()
             if (tokens.size() >= 9)
             {
                 fval = STOD(tokens[8].c_str());
-                m_extra_data.push_back(fval);
-            }
-*/
-            if (tokens.size() >= 8)
-            {
-                fval = STOD(tokens[7].c_str());
                 m_extra_data.push_back(fval);
             }
             
@@ -576,7 +620,7 @@ void SWCReader::Preprocess()
         e[0] = id_corresp[e[0]];
         e[1] = id_corresp[e[1]];
     }
-/*
+
     if (!group_verts.empty())
     {
         size_t count = 0;
@@ -609,7 +653,7 @@ void SWCReader::Preprocess()
             e[1] = id_corresp2[e[1]];
         }
     }
-*/
+    
     return;
 }
 

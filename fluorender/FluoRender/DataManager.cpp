@@ -7546,7 +7546,8 @@ int DataManager::LoadMeshData(wxString &filename, wxString prefix)
 	}
 
 	MeshData *md = new MeshData();
-	md->Load(pathname);
+	if (!md->Load(pathname))
+        return 0;
 
 	wxString name = md->GetName();
     wxString new_name = (prefix.IsEmpty() ? wxT("") : prefix + wxT("_")) + name;

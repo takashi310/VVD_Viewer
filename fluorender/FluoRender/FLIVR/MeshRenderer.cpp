@@ -31,6 +31,7 @@
 #include <vector>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
+#include <FLIVR/palettes.h>
 
 #include <boost/foreach.hpp>
 #include <boost/lexical_cast.hpp>
@@ -88,6 +89,8 @@ namespace FLIVR
 		m_prev_msh_pipeline = -1;
         
         extra_vertex_data_ = nullptr;
+        
+        init_palette();
 	}
 
 	MeshRenderer::MeshRenderer(MeshRenderer &copy)
@@ -121,6 +124,20 @@ namespace FLIVR
 		m_prev_msh_pipeline = copy.m_prev_msh_pipeline;
         
         extra_vertex_data_ = copy.extra_vertex_data_;
+        
+        
+        memcpy(palette_, copy.palette_, sizeof(unsigned char)*MR_PALETTE_SIZE*MR_PALETTE_ELEM_COMP);
+        memcpy(base_palette_, copy.base_palette_, sizeof(unsigned char)*MR_PALETTE_SIZE*MR_PALETTE_ELEM_COMP);
+        
+        if (palette_tex_id_.empty())
+            m_vulkan->GenTextures2DAllDevice(palette_tex_id_, VK_FORMAT_R8G8B8A8_UNORM, VK_FILTER_NEAREST, MR_PALETTE_W, MR_PALETTE_H);
+        m_vulkan->UploadTextures(palette_tex_id_, palette_);
+        
+        if (base_palette_tex_id_.empty())
+            m_vulkan->GenTextures2DAllDevice(base_palette_tex_id_, VK_FORMAT_R8G8B8A8_UNORM, VK_FILTER_NEAREST, MR_PALETTE_W, MR_PALETTE_H);
+        m_vulkan->UploadTextures(base_palette_tex_id_, base_palette_);
+        
+        update_palette_tex();
 	}
 
 	MeshRenderer::~MeshRenderer()
@@ -138,6 +155,38 @@ namespace FLIVR
 			vb.indexBuffer.destroy();
 		}
 	}
+
+void MeshRenderer::init_palette()
+{
+    memcpy(palette_, (const void *)palettes::palette_random_256_256_4, sizeof(unsigned char)*MR_PALETTE_SIZE*MR_PALETTE_ELEM_COMP);
+    memcpy(base_palette_, (const void *)palettes::palette_random_256_256_4, sizeof(unsigned char)*MR_PALETTE_SIZE*MR_PALETTE_ELEM_COMP);
+    
+    if (palette_tex_id_.empty())
+        m_vulkan->GenTextures2DAllDevice(palette_tex_id_, VK_FORMAT_R8G8B8A8_UNORM, VK_FILTER_NEAREST, MR_PALETTE_W, MR_PALETTE_H);
+    m_vulkan->UploadTextures(palette_tex_id_, palette_);
+    
+    if (base_palette_tex_id_.empty())
+        m_vulkan->GenTextures2DAllDevice(base_palette_tex_id_, VK_FORMAT_R8G8B8A8_UNORM, VK_FILTER_NEAREST, MR_PALETTE_W, MR_PALETTE_H);
+    m_vulkan->UploadTextures(base_palette_tex_id_, base_palette_);
+}
+
+void MeshRenderer::update_palette_tex()
+{
+    m_vulkan->UploadTextures(palette_tex_id_, palette_);
+    m_vulkan->UploadTextures(base_palette_tex_id_, base_palette_);
+}
+
+std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> MeshRenderer::get_palette()
+{
+    update_sel_segs();
+    
+    if (sel_ids_.empty() && roi_tree_.empty()) return base_palette_tex_id_;
+    else return palette_tex_id_;
+}
+void MeshRenderer::put_node(wstring path, wstring name)
+{
+    roi_tree_.put(path, name);
+}
 
 boost::optional<wstring> MeshRenderer::get_roi_path(int id)
 {

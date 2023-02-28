@@ -374,6 +374,50 @@ public:
     }
 
     bool InsideClippingPlanes(Point pos);
+    
+    void PutROINode(wstring path, wstring name=L""){ if (m_mr) m_mr->put_node(path, name); }
+    void SetROIName(wstring name, int id=-1, wstring parent_name=L""){ if (m_mr) m_mr->set_roi_name(name, id, parent_name); }
+    int AddROIGroup(wstring parent_name=L"", wstring name=L""){ return m_mr ? m_mr->add_roi_group_node(parent_name, name) : -1; }
+    int GetNextSiblingROI(int id){ return m_mr ? m_mr->get_next_sibling_roi(id) : -1; }
+    //insert_mode: 0-before dst; 1-after dst; 2-into group
+    void MoveROINode(int src_id, int dst_id, int insert_mode=0){ if (m_mr) m_mr->move_roi_node(src_id, dst_id, insert_mode); }
+    void EraseROITreeNode(int id=-1){ if (m_mr) m_mr->erase_node(id); }
+    void EraseROITreeNode(wstring name){ if (m_mr) m_mr->erase_node(name); }
+    wstring GetROIName(int id=-1){ return m_mr ? m_mr->get_roi_name(id) : wstring(); }
+    int GetROIid(wstring name){ return m_mr ? m_mr->get_roi_id(name) : -1; }
+    void SetROISel(wstring name, bool select, bool traverse=false){ if (m_mr) m_mr->set_roi_select(name, select, traverse); }
+    void SetROISelChildren(wstring name, bool select, bool traverse=false){ if (m_mr) m_mr->set_roi_select_children(name, select, traverse); }
+    void SelectAllNamedROI(){ if (m_mr) m_mr->select_all_roi_tree(); }
+    void DeselectAllNamedROI(){ if (m_mr) m_mr->deselect_all_roi_tree(); }
+    void DeselectAllROI(){ if (m_mr) m_mr->deselect_all_roi(); }
+    void ClearROIs(){ if (m_mr) m_mr->clear_roi(); }
+    void SetIDColor(unsigned char r, unsigned char g, unsigned char b, bool update_palette=true, int id=-1)
+    {
+        if (m_mr) m_mr->set_id_color(r, g, b, update_palette, id);
+    }
+    void GetIDColor(unsigned char &r, unsigned char &g, unsigned char &b, int id=-1)
+    {
+        if (m_mr) m_mr->get_id_color(r, g, b, id);
+    }
+    void GetRenderedIDColor(unsigned char &r, unsigned char &g, unsigned char &b, int id=-1)
+    {
+        if (m_mr) m_mr->get_rendered_id_color(r, g, b, id);
+    }
+    bool isSelID(int id){ return m_mr ? m_mr->is_sel_id(id) : false; }
+    void AddSelID(int id){ if (m_mr) m_mr->add_sel_id(id); }
+    void DelSelID(int id){ if (m_mr) m_mr->del_sel_id(id); }
+    int GetEditSelID(){ return m_mr ? m_mr->get_edit_sel_id() : -1; }
+    void SetEditSelID(int id){ if (m_mr) m_mr->set_edit_sel_id(id); }
+    void ClearSelIDs(){ if (m_mr) m_mr->clear_sel_ids(); }
+    void SetIDColDispMode(int mode){ if (m_mr) m_mr->update_palette(mode); }
+    int GetIDColDispMode(){ return m_mr ? m_mr->get_roi_disp_mode() : 0; }
+    boost::property_tree::wptree *getROITree(){ return m_mr ? m_mr->get_roi_tree() : NULL; };
+    wstring ExportROITree(){ return m_mr ? m_mr->export_roi_tree() : wstring(); }
+    string ExportSelIDs(){ return m_mr ? m_mr->exprot_selected_roi_ids() : string(); }
+    void ImportROITree(const wstring &tree){ if (m_mr) m_mr->import_roi_tree(tree); }
+    void ImportROITreeXML(const wstring &filepath){ if (m_mr) m_mr->import_roi_tree_xml(filepath); }
+    void ImportSelIDs(const string &sel_ids_str){ if (m_mr) m_mr->import_selected_ids(sel_ids_str); }
+
 
 private:
 	//wxString m_name;
