@@ -1,49 +1,45 @@
-Download VVD Viewer
-========
-
-## Latest Releases
-### Windows: [download](https://github.com/JaneliaSciComp/VVDViewer/releases/download/1.5.13/VVDViewer022423-win64-vulkan.zip) 
-### Mac: [download](https://github.com/JaneliaSciComp/VVDViewer/releases/download/1.5.13/VVDViewer022423-macosx-vulkan.dmg) 
- 
-## Other Versions
-https://github.com/JaneliaSciComp/VVDViewer/releases  
-https://github.com/takashi310/VVD_Viewer/releases  
-<br/>
-
-If you get Vulkan-related errors, please try to update your graphics device driver.
-
-## Documentations
-
-### VVDViewer manual
-https://github.com/JaneliaSciComp/VVDViewer/wiki
-  
-### Large volume segmentation (by Joshua Lillvis)
-https://github.com/JaneliaSciComp/exllsm-circuit-reconstruction/blob/master/docs/NeuronSegmentation.md
-Joshua L Lillvis, Hideo Otsuna, Xiaoyu Ding, Igor Pisarev, Takashi Kawase, Jennifer Colonell, Konrad Rokicki, Cristian Goina, Ruixuan Gao, Amy Hu, Kaiyu Wang, John Bogovic, Daniel E Milkie, Linus Meienberg, Brett D Mensh, Edward S Boyden, Stephan Saalfeld, Paul W Tillberg, Barry J Dickson (2022) Rapid reconstruction of neural circuits using tissue expansion and light sheet microscopy *eLife* 11:e81248  
-https://doi.org/10.7554/eLife.81248  
-
-VVD Viewer
-========
+# VVDViewer
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5841616.svg)](https://doi.org/10.5281/zenodo.5841616)
 
-This is the open-source repository for VVD Viewer, an interactive rendering tool for confocal microscopy data visualization. It combines the rendering of multi-channel volume data and polygon mesh data, where the properties of each dataset can be adjusted independently and quickly. The tool is designed for neurobiologists, to better visualize the fluorescent-stained confocal samples.
+This is the open-source repository for VVDViewer, an interactive rendering tool for confocal microscopy data visualization. It combines the rendering of multi-channel volume data and polygon mesh data, where the properties of each dataset can be adjusted independently and quickly. The tool is designed for neurobiologists, to better visualize the fluorescent-stained confocal samples. This code base started as a fork of [Fluorender](https://github.com/SCIInstitute/fluorender).
 
-This code base started as a fork of Fluorender (https://github.com/SCIInstitute/fluorender)
+## Download 
 
+Click on your operating system to download VVDViewer:
+
+[![Windows](https://img.shields.io/static/v1?style=for-the-badge&logo=&label=&message=Windows&color=0f83db)](https://github.com/JaneliaSciComp/VVDViewer/releases/download/1.5.13/VVDViewer022423-win64-vulkan.zip)
+[![Mac](https://img.shields.io/static/v1?style=for-the-badge&logo=&label=&message=Mac&color=00a835)](https://github.com/JaneliaSciComp/VVDViewer/releases/download/1.5.13/VVDViewer022423-macosx-vulkan.dmg)
+ 
+If you get Vulkan-related errors, please try to update your graphics device driver.
+
+## Documentation
+
+### User Manual
+
+https://github.com/JaneliaSciComp/VVDViewer/wiki
+  
+### Using VVDViewer for large volume segmentation (by Joshua Lillvis)
+
+https://github.com/JaneliaSciComp/exllsm-circuit-reconstruction/blob/master/docs/NeuronSegmentation.md
+
+Joshua L Lillvis, Hideo Otsuna, Xiaoyu Ding, Igor Pisarev, Takashi Kawase, Jennifer Colonell, Konrad Rokicki, Cristian Goina, Ruixuan Gao, Amy Hu, Kaiyu Wang, John Bogovic, Daniel E Milkie, Linus Meienberg, Brett D Mensh, Edward S Boyden, Stephan Saalfeld, Paul W Tillberg, Barry J Dickson (2022) Rapid reconstruction of neural circuits using tissue expansion and light sheet microscopy *eLife* [11:e81248](https://doi.org/10.7554/eLife.81248  )
+
+## How to Cite
+
+If you use VVDViewer in work that leads to published research, we humbly ask that you add the following to the 'Acknowledgments' section of your paper: 
+"This work was made possible in part by software funded by the NIH: Fluorender: An Imaging Tool for Visualization and Analysis of Confocal Data as Applied to Zebrafish Research, R01-GM098151-01."
+
+## Source Code
 There are the following mirrored VVDViewer repositories.  
 https://github.com/JaneliaSciComp/VVDViewer  
 https://github.com/takashi310/VVD_Viewer  
 You can get the latest source code and precompiled binary from both repositories.  
 
 
-Acknowledgements
-========
-If you use VVD Viewer in work that leads to published research, we humbly ask that you add the following to the 'Acknowledgments' section of your paper: 
-"This work was made possible in part by software funded by the NIH: Fluorender: An Imaging Tool for Visualization and Analysis of Confocal Data as Applied to Zebrafish Research, R01-GM098151-01."
+## Building VVDViewer
 
-Requirements
-========
+### Dependencies
  * Git (https://git-scm.com/)
  * CMake 2.6+ (http://www.cmake.org/)
  * wxWidgets (https://github.com/wxWidgets/wxWidgets)
@@ -52,10 +48,7 @@ Requirements
  * Other platforms may work, but are not officially supported.
  * Boost 1.59.0+ (http://www.boost.org/users/download/#live)
 
-
-Building VVD Viewer
-========
-We recommend building VVD Viewer outside of the source tree. <br/>
+We recommend building VVDViewer outside of the source tree. <br/>
 <h4>OSX</h4> 
 
 1) Clone the latest wxWidgets using GIT (<code>git clone https://github.com/wxWidgets/wxWidgets.git</code>).
@@ -100,7 +93,7 @@ We recommend building VVD Viewer outside of the source tree. <br/>
    * <code>brew install curl --with-openssl</code>
    * <code>brew link curl --force</code>
 
-5) Get and build VVD Viewer
+5) Get and build VVDViewer
 
    * <code>git clone https://github.com/takashi310/VVD_Viewer.git</code><br/>
    
@@ -110,7 +103,7 @@ We recommend building VVD Viewer outside of the source tree. <br/>
 
    * <code>cmake ../VVD_Viewer -G Xcode</code><br/>
 
-5) Open the Xcode file generated to build and run VVD Viewer.
+5) Open the Xcode file generated to build and run VVDViewer.
 
 <h4>Windows</h4> 
 
@@ -145,12 +138,12 @@ We recommend building VVD Viewer outside of the source tree. <br/>
    
    * In 4 places, you will need to add above each line with a "29" a new line that is exactly the same, but with a "31" instead, assuming your version of wxWidgets is 3.1.*). <br/>
 
-6) Download VVD Viewer using Git <code>git clone https://github.com/takashi310/VVD_Viewer.git</code>
+6) Download VVDViewer using Git <code>git clone https://github.com/takashi310/VVD_Viewer.git</code>
 
 7) Use the <code>C:\Program Files(x86)\CMake2.8\bin\cmake-gui.exe</code> program to configure build properties and generate your Visual Studio Solution file. (Remember to keep your MSVC version consistent)
    
-   * Select your VVD Viewer source and build directories (create a new folder for building), and add the locations of boost and wxWidgets. <br/>
-   	- Choose the VVD Viewer main folder for source and create a new folder for the build. <br/>
+   * Select your VVDViewer source and build directories (create a new folder for building), and add the locations of boost and wxWidgets. <br/>
+   	- Choose the VVDViewer main folder for source and create a new folder for the build. <br/>
 
    	- Click Configure.  NOTE: You may need to display advanced options to set below options. <br/>
    	
@@ -196,7 +189,7 @@ We recommend building VVD Viewer outside of the source tree. <br/>
    
     - Open Visual Studio Command Prompt. Go to the CMakeLists.txt directory. <br/>
     	
-    - Type <code> cmake -G "Visual Studio 14 2015 Win64" -DwxWidgets_LIB_DIR="C:\wxWidgets\lib\vc_x64_lib" -DwxWidgets_ROOT_DIR="C:\wxWidgets" -DBoost_INCLUDE_DIR="C:\boost_1_55_0" -DCMAKE_BUILD_TYPE="Debug" ..</code> in your build directory (again assuming these are your directory locations / Generator versions, and the build folder is in the VVD Viewer root directory). <br/>
+    - Type <code> cmake -G "Visual Studio 14 2015 Win64" -DwxWidgets_LIB_DIR="C:\wxWidgets\lib\vc_x64_lib" -DwxWidgets_ROOT_DIR="C:\wxWidgets" -DBoost_INCLUDE_DIR="C:\boost_1_55_0" -DCMAKE_BUILD_TYPE="Debug" ..</code> in your build directory (again assuming these are your directory locations / Generator versions, and the build folder is in the VVDViewer root directory). <br/>
     	
    * Open the Visual Studio SLN file generated by CMake (found in your "build" directory). <br/>
    
