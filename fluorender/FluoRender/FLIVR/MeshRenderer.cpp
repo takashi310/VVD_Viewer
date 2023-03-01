@@ -33,6 +33,9 @@
 #include <glm/gtc/matrix_inverse.hpp>
 #include <FLIVR/palettes.h>
 
+#include "compatibility.h"
+#include <wx/utils.h>
+
 #include <boost/foreach.hpp>
 #include <boost/lexical_cast.hpp>
 using boost::property_tree::wptree;
@@ -704,6 +707,379 @@ void MeshRenderer::update_sel_segs(const wptree& tree)
     }
 }
 
+void MeshRenderer::set_id_color(unsigned char r, unsigned char g, unsigned char b, bool update, int id)
+{
+	int edid = (id == -1) ? edit_sel_id_ : id;
+
+	if (edid < 0 || edid >= MR_PALETTE_SIZE)
+		return;
+
+	base_palette_[edid * MR_PALETTE_ELEM_COMP + 0] = r;
+	base_palette_[edid * MR_PALETTE_ELEM_COMP + 1] = g;
+	base_palette_[edid * MR_PALETTE_ELEM_COMP + 2] = b;
+
+	if (update)
+		update_palette(desel_palette_mode_, desel_col_fac_);
+}
+
+void MeshRenderer::get_id_color(unsigned char& r, unsigned char& g, unsigned char& b, int id)
+{
+	int edid = (id == -1) ? edit_sel_id_ : id;
+
+	if (edid < 0 || edid >= MR_PALETTE_SIZE)
+		return;
+
+	r = base_palette_[edid * MR_PALETTE_ELEM_COMP + 0];
+	g = base_palette_[edid * MR_PALETTE_ELEM_COMP + 1];
+	b = base_palette_[edid * MR_PALETTE_ELEM_COMP + 2];
+}
+
+void MeshRenderer::get_rendered_id_color(unsigned char& r, unsigned char& g, unsigned char& b, int id)
+{
+	update_palette(desel_palette_mode_, desel_col_fac_);
+
+	int edid = (id == -1) ? edit_sel_id_ : id;
+
+	if (edid < 0 || edid >= MR_PALETTE_SIZE)
+		return;
+
+	if (sel_ids_.empty() && roi_tree_.empty())
+	{
+		r = base_palette_[edid * MR_PALETTE_ELEM_COMP + 0];
+		g = base_palette_[edid * MR_PALETTE_ELEM_COMP + 1];
+		b = base_palette_[edid * MR_PALETTE_ELEM_COMP + 2];
+	}
+	else
+	{
+		r = palette_[edid * MR_PALETTE_ELEM_COMP + 0];
+		g = palette_[edid * MR_PALETTE_ELEM_COMP + 1];
+		b = palette_[edid * MR_PALETTE_ELEM_COMP + 2];
+	}
+}
+
+void MeshRenderer::set_desel_palette_mode_dark(float fac)
+{
+	for (int i = 1; i < MR_PALETTE_SIZE; i++)
+	{
+		for (int j = 0; j < 3; j++)
+			palette_[i * MR_PALETTE_ELEM_COMP + j] = (unsigned char)(base_palette_[i * MR_PALETTE_ELEM_COMP + j] * fac);
+		palette_[i * MR_PALETTE_ELEM_COMP + 3] = (unsigned char)255;
+	}
+	palette_[0] = 0; palette_[1] = 0; palette_[2] = 0; palette_[3] = 0;
+
+	for (auto ite = sel_segs_.begin(); ite != sel_segs_.end(); ++ite)
+		for (int j = 0; j < MR_PALETTE_ELEM_COMP; j++)
+			if ((*ite) >= 0) palette_[(*ite) * MR_PALETTE_ELEM_COMP + j] = base_palette_[(*ite) * MR_PALETTE_ELEM_COMP + j];
+	/*
+			for (int i = 0; i < 256*64; i++)
+				for (int j = 0; j < MR_PALETTE_ELEM_COMP; j++)
+					palette_[i*MR_PALETTE_ELEM_COMP+j] = base_palette_[i*MR_PALETTE_ELEM_COMP+j];
+	*/
+	update_palette_tex();
+}
+
+void MeshRenderer::set_desel_palette_mode_gray(float fac)
+{
+	for (int i = 1; i < MR_PALETTE_SIZE; i++)
+	{
+		for (int j = 0; j < 3; j++)
+			palette_[i * MR_PALETTE_ELEM_COMP + j] = (unsigned char)(128.0 * fac);
+		palette_[i * MR_PALETTE_ELEM_COMP + 3] = (unsigned char)255;
+	}
+	palette_[0] = 0; palette_[1] = 0; palette_[2] = 0; palette_[3] = 0;
+
+	for (auto ite = sel_segs_.begin(); ite != sel_segs_.end(); ++ite)
+		for (int j = 0; j < MR_PALETTE_ELEM_COMP; j++)
+			if ((*ite) >= 0) palette_[(*ite) * MR_PALETTE_ELEM_COMP + j] = base_palette_[(*ite) * MR_PALETTE_ELEM_COMP + j];
+
+	update_palette_tex();
+}
+
+void MeshRenderer::set_desel_palette_mode_invisible()
+{
+	for (int i = 0; i < MR_PALETTE_SIZE; i++)
+		for (int j = 0; j < 4; j++)
+			palette_[i * MR_PALETTE_ELEM_COMP + j] = 0;
+
+	for (auto ite = sel_segs_.begin(); ite != sel_segs_.end(); ++ite)
+		for (int j = 0; j < MR_PALETTE_ELEM_COMP; j++)
+			if ((*ite) >= 0) palette_[(*ite) * MR_PALETTE_ELEM_COMP + j] = base_palette_[(*ite) * MR_PALETTE_ELEM_COMP + j];
+
+	update_palette_tex();
+}
+
+void MeshRenderer::update_palette(int mode, float fac)
+{
+	update_sel_segs();
+
+	switch (mode)
+	{
+	case 0:
+		if (fac < 0.0f) fac = 0.3f;
+		set_desel_palette_mode_dark(fac);
+		break;
+	case 1:
+		if (fac < 0.0f) fac = 0.1f;
+		set_desel_palette_mode_gray(fac);
+		break;
+	case 2:
+		set_desel_palette_mode_invisible();
+		break;
+	}
+
+	desel_palette_mode_ = mode;
+	desel_col_fac_ = fac;
+}
+
+bool MeshRenderer::is_sel_id(int id)
+{
+	auto ite = sel_ids_.find(id);
+
+	if (ite != sel_ids_.end())
+		return true;
+	else
+		return false;
+}
+
+void MeshRenderer::add_sel_id(int id)
+{
+	if (id == -1)
+		return;
+
+	sel_ids_.insert(id);
+	edit_sel_id_ = id;
+
+	update_palette(desel_palette_mode_, desel_col_fac_);
+}
+
+void MeshRenderer::del_sel_id(int id)
+{
+	if (sel_ids_.empty()) return;
+
+	auto ite = sel_ids_.find(id);
+	if (ite != sel_ids_.end())
+	{
+		sel_ids_.erase(ite);
+		if (edit_sel_id_ == id) edit_sel_id_ = -1;
+	}
+
+	update_palette(desel_palette_mode_, desel_col_fac_);
+}
+
+void MeshRenderer::set_edit_sel_id(int id)
+{
+	edit_sel_id_ = id;
+}
+
+void MeshRenderer::clear_sel_ids()
+{
+	if (!sel_ids_.empty()) sel_ids_.clear();
+
+	edit_sel_id_ = -1;
+
+	update_palette(desel_palette_mode_, desel_col_fac_);
+}
+
+void MeshRenderer::clear_sel_ids_roi_only()
+{
+	auto ite = sel_ids_.begin();
+	while (ite != sel_ids_.end())
+	{
+		if ((*ite) >= 0)
+			ite = sel_ids_.erase(ite);
+		else
+			++ite;
+	}
+
+	if (edit_sel_id_ >= 0) edit_sel_id_ = -1;
+
+	update_palette(desel_palette_mode_, desel_col_fac_);
+}
+
+void MeshRenderer::clear_roi()
+{
+	if (!roi_tree_.empty()) roi_tree_.clear();
+
+	clear_sel_ids();
+}
+
+wstring MeshRenderer::export_roi_tree()
+{
+	wstring str;
+
+	export_roi_tree_r(str, roi_tree_, wstring(L""));
+
+	return str;
+}
+
+void MeshRenderer::export_roi_tree_r(wstring& buf, const wptree& tree, const wstring& parent)
+{
+	for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
+	{
+		wstring c_path = (parent.empty() ? L"" : parent + L".") + child->first;
+		wstring strid = child->first;
+		int id = -1;
+		try
+		{
+			id = boost::lexical_cast<int>(strid);
+			if (id != -1)
+			{
+				if (const auto val = tree.get_optional<wstring>(child->first))
+				{
+					buf += c_path + L"\n";	//path
+					buf += *val + L"\n";	//name
+
+					//id and color
+					wstringstream wss;
+					unsigned char r = 0, g = 0, b = 0;
+					get_id_color(r, g, b, id);
+					wss << id << L" " << (int)r << L" " << (int)g << L" " << (int)b << L"\n";
+					buf += wss.str();
+				}
+			}
+		}
+		catch (boost::bad_lexical_cast e)
+		{
+			cerr << "TextureRenderer::update_sel_segs(const wptree& tree): bad_lexical_cast" << endl;
+		}
+		export_roi_tree_r(buf, child->second, c_path);
+	}
+}
+
+string MeshRenderer::exprot_selected_roi_ids()
+{
+	stringstream ss;
+	for (auto ite = sel_ids_.begin(); ite != sel_ids_.end(); ++ite)
+		ss << *ite << " ";
+
+	return ss.str();
+}
+
+void MeshRenderer::import_roi_tree_xml(const wstring& filepath)
+{
+	tinyxml2::XMLDocument doc;
+	if (doc.LoadFile(ws2s(filepath).c_str()) != 0) {
+		return;
+	}
+
+	tinyxml2::XMLElement* root = doc.RootElement();
+	if (!root || strcmp(root->Name(), "Metadata"))
+		return;
+
+	init_palette();
+	roi_tree_.clear();
+
+	tinyxml2::XMLElement* child = root->FirstChildElement();
+	while (child)
+	{
+		if (child->Name())
+		{
+			if (strcmp(child->Name(), "ROI_Tree") == 0)
+			{
+				int gid = -2;
+				import_roi_tree_xml_r(child, roi_tree_, wstring(L""), gid);
+			}
+		}
+		child = child->NextSiblingElement();
+	}
+
+	update_palette(desel_palette_mode_, desel_col_fac_);
+}
+
+void MeshRenderer::import_roi_tree_xml_r(tinyxml2::XMLElement* lvNode, const wptree& tree, const wstring& parent, int& gid)
+{
+	tinyxml2::XMLElement* child = lvNode->FirstChildElement();
+	while (child)
+	{
+		if (child->Name() && child->Attribute("name"))
+		{
+			try
+			{
+				wstring name = s2ws(child->Attribute("name"));
+				if (strcmp(child->Name(), "Group") == 0)
+				{
+					wstringstream wss;
+					wss << (parent.empty() ? L"" : parent + L".") << gid;
+					wstring c_path = wss.str();
+
+					roi_tree_.add(c_path, name);
+					import_roi_tree_xml_r(child, tree, c_path, --gid);
+				}
+				if (strcmp(child->Name(), "ROI") == 0 && child->Attribute("id"))
+				{
+					string strid = child->Attribute("id");
+					int id = boost::lexical_cast<int>(strid);
+					if (id >= 0 && id < MR_PALETTE_SIZE && child->Attribute("r") && child->Attribute("g") && child->Attribute("b"))
+					{
+						wstring c_path = (parent.empty() ? L"" : parent + L".") + s2ws(strid);
+						string strR = child->Attribute("r");
+						string strG = child->Attribute("g");
+						string strB = child->Attribute("b");
+						int r = boost::lexical_cast<int>(strR);
+						int g = boost::lexical_cast<int>(strG);
+						int b = boost::lexical_cast<int>(strB);
+						roi_tree_.add(c_path, name);
+						set_id_color(r, g, b, false, id);
+					}
+				}
+			}
+			catch (boost::bad_lexical_cast e)
+			{
+				cerr << "TextureRenderer::import_roi_tree_xml_r(XMLElement *lvNode, const wptree& tree, const wstring& parent): bad_lexical_cast" << endl;
+			}
+		}
+		child = child->NextSiblingElement();
+	}
+}
+
+void MeshRenderer::import_roi_tree(const wstring& tree)
+{
+	wistringstream wiss(tree);
+
+	init_palette();
+
+	while (1)
+	{
+		wstring path, name, strcol;
+
+		if (!getline(wiss, path))
+			break;
+		if (!getline(wiss, name))
+			break;
+		if (!getline(wiss, strcol))
+			break;
+
+		vector<int> col;
+		int ival;
+		std::wistringstream ls(strcol);
+		while (ls >> ival)
+			col.push_back(ival);
+
+		if (col.size() < 4)
+			break;
+
+		roi_tree_.add(path, name);
+		set_id_color((unsigned char)col[1], (unsigned char)col[2], (unsigned char)col[3], false, col[0]);
+	}
+
+	update_palette(desel_palette_mode_, desel_col_fac_);
+}
+
+void MeshRenderer::import_selected_ids(const string& sel_ids_str)
+{
+	istringstream iss(sel_ids_str);
+
+	clear_sel_ids();
+
+	int id;
+	while (iss >> id)
+	{
+		if (id != 0 && id != -1)
+			add_sel_id(id);
+	}
+
+	update_palette(desel_palette_mode_, desel_col_fac_);
+}
 
 	void MeshRenderer::init(std::shared_ptr<VVulkan> vulkan)
 	{
@@ -1170,8 +1546,8 @@ void MeshRenderer::update_sel_segs(const wptree& tree)
 		uint32_t count = 0;
 		while (group)
 		{
-			verts.clear();
-			ids.clear();
+			//verts.clear();
+			//ids.clear();
 			for (size_t i=0; i<group->numtriangles; ++i)
 			{
 				triangle = &(data_->triangles[group->triangles[i]]);
@@ -1234,32 +1610,28 @@ void MeshRenderer::update_sel_segs(const wptree& tree)
                     ids.clear();
                 }
 			}
-
-			MeshVertexBuffers v;
-			if (!verts.empty() && !ids.empty())
-			{
-				VK_CHECK_RESULT(device_->createBuffer(
-					VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-					VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-					&v.vertexBuffer,
-					verts.size() * sizeof(float)));
-				device_->UploadData2Buffer(verts.data(), &v.vertexBuffer, 0, verts.size() * sizeof(float));
-
-				VK_CHECK_RESULT(device_->createBuffer(
-					VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-					VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-					&v.indexBuffer,
-					ids.size() * sizeof(uint32_t)));
-				device_->UploadData2Buffer(ids.data(), &v.indexBuffer, 0, ids.size() * sizeof(uint32_t));
-			}
-
-			v.indexCount = ids.size();
-
-			m_vertbufs.push_back(v);
-
 			group = group->next;
 		}
 
+		MeshVertexBuffers v;
+		if (!verts.empty() && !ids.empty())
+		{
+			VK_CHECK_RESULT(device_->createBuffer(
+				VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+				&v.vertexBuffer,
+				verts.size() * sizeof(float)));
+			device_->UploadData2Buffer(verts.data(), &v.vertexBuffer, 0, verts.size() * sizeof(float));
+
+			VK_CHECK_RESULT(device_->createBuffer(
+				VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+				&v.indexBuffer,
+				ids.size() * sizeof(uint32_t)));
+			device_->UploadData2Buffer(ids.data(), &v.indexBuffer, 0, ids.size() * sizeof(uint32_t));
+		}
+		v.indexCount = ids.size();
+		m_vertbufs.push_back(v);
 	}
 
 	void MeshRenderer::draw(const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf)
@@ -1385,13 +1757,14 @@ void MeshRenderer::update_sel_segs(const wptree& tree)
 		fubo.plane5 = { abcd[0], abcd[1], abcd[2], abcd[3] };
 
 		GLMgroup* group = data_->groups;
-		int count = 0;
-		while (group)
+		//int count = 0;
+		//while (group)
+		for (int count = 0; count < m_vertbufs.size(); count++)
 		{
 			if (m_vertbufs[count].indexCount == 0)
 			{
-				group = group->next;
-				count++;
+				//group = group->next;
+				//count++;
 				continue;
 			}
 
@@ -1465,8 +1838,8 @@ void MeshRenderer::update_sel_segs(const wptree& tree)
 			vkCmdBindIndexBuffer(cmdbuf, m_vertbufs[count].indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 			vkCmdDrawIndexed(cmdbuf, m_vertbufs[count].indexCount, 1, 0, 0, 0);
 
-			group = group->next;
-			count++;
+			//group = group->next;
+			//count++;
 		}
 
 		vkCmdEndRenderPass(cmdbuf);
@@ -1669,13 +2042,14 @@ void MeshRenderer::update_sel_segs(const wptree& tree)
 		}
 
 		GLMgroup* group = data_->groups;
-		int count = 0;
-		while (group)
+		//int count = 0;
+		//while (group)
+		for (int count = 0; count < m_vertbufs.size(); count++)
 		{
 			if (m_vertbufs[count].indexCount == 0)
 			{
-				group = group->next;
-				count++;
+				//group = group->next;
+				//count++;
 				continue;
 			}
 
@@ -1684,8 +2058,8 @@ void MeshRenderer::update_sel_segs(const wptree& tree)
 			vkCmdBindIndexBuffer(cmdbuf, m_vertbufs[count].indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 			vkCmdDrawIndexed(cmdbuf, m_vertbufs[count].indexCount, 1, 0, 0, 0);
 
-			group = group->next;
-			count++;
+			//group = group->next;
+			//count++;
 		}
 
 		vkCmdEndRenderPass(cmdbuf);
@@ -1864,13 +2238,14 @@ void MeshRenderer::update_sel_segs(const wptree& tree)
 		}
 
 		GLMgroup* group = data_->groups;
-		int count = 0;
-		while (group)
+		//int count = 0;
+		//while (group)
+		for (int count = 0; count < m_vertbufs.size(); count++)
 		{
 			if (m_vertbufs[count].indexCount == 0)
 			{
-				group = group->next;
-				count++;
+				//group = group->next;
+				//count++;
 				continue;
 			}
 
@@ -1879,8 +2254,8 @@ void MeshRenderer::update_sel_segs(const wptree& tree)
 			vkCmdBindIndexBuffer(cmdbuf, m_vertbufs[count].indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 			vkCmdDrawIndexed(cmdbuf, m_vertbufs[count].indexCount, 1, 0, 0, 0);
 
-			group = group->next;
-			count++;
+			//group = group->next;
+			//count++;
 		}
 
 		vkCmdEndRenderPass(cmdbuf);

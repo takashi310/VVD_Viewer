@@ -6153,6 +6153,7 @@ void VRenderVulkanView::PickMesh()
 		if (md)
 		{
 			md->SetMatrices(m_mv_mat, m_proj_mat);
+			md->SetDevice(m_vulkan->devices[0]);
 			md->DrawInt(i+1, m_fbo_pick, clear);
 			clear = false;
 		}

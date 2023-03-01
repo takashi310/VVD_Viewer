@@ -1629,8 +1629,14 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
                     elems.Add(tkz.GetNextToken());
                 if (elems.Count() >= 10)
                 {
-                    if (swcdata.Count() == 0)
-                        str = csv.GetNextLine(); //skip the first line (header)
+					if (swcdata.Count() == 0)
+					{
+						elems.Clear();
+						str = csv.GetNextLine(); //skip the first line (header)
+						wxStringTokenizer tkz(str, wxT(","));
+						while (tkz.HasMoreTokens())
+							elems.Add(tkz.GetNextToken());
+					}
                     wxString key = elems[3] + "_" + elems[9];
                     wxString path = "Cell" + elems[4] + "." + elems[3] + "_" + elems[9];
                     wxString swc_line = wxString::Format("%d 6 %s %s %s %f -1 %s", (int)swcdata.Count()+1, elems[1], elems[0], elems[2], 0.1f, path);
@@ -1649,10 +1655,10 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
                         
                         long link2 = -1;
                         elems[13].ToLong(&link2);
-                        if (link2 == 0)
-                            link2 = -1;
+						if (link2 == 0)
+							link2 = -1;
                         path = "Cell" + elems[4];
-                        swc_line = wxString::Format("%d 0 %s %s %s %f %d %s", (int)swcdata.Count()+1, elems[1], elems[0], elems[2], 0.01f, (int)link2, path);
+                        swc_line = wxString::Format("%d 0 %s %s %s %f %d %s", (int)swcdata.Count()+1, elems[1], elems[0], elems[2], 0.01f, (int)link2*2, path);
                         swcdata.Add(swc_line);
                     }
                 }
@@ -1697,11 +1703,11 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
                 if (elems.Count() >= 7)
                 {
                     double x, y, z;
-                    int link;
+                    long link;
                     elems[2].ToDouble(&x);
                     elems[3].ToDouble(&y);
                     elems[4].ToDouble(&z);
-                    elems[6].ToInt(&link);
+                    elems[6].ToLong(&link);
                     Point pos = Point(x, y, z);
                     if (link < 0)
                     {
@@ -1740,6 +1746,8 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
                     }
                     else
                         vrv->AddMeshData(md);
+
+					md_sel = md;
                 }
                 else
                     delete annotations;

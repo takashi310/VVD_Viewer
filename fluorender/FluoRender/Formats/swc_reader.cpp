@@ -408,13 +408,15 @@ GLMmodel *SWCReader::GenerateSolidModel(double def_r, double r_scale, unsigned i
 		if (r1 <= 0.0) r1 = def_r;
 		if (r2 <= 0.0) r2 = def_r;
 		int cy_subdiv = (int)pow(2.0, subdiv+2);
+		if (abs(r1 - r2) > 0.0001)
+			int dummy = 0;
 		AddSolidCylinder(p1, p2, r1*r_scale, r2*r_scale, cy_subdiv);
         
         if (m_group_names.size() > 0)
         {
             size_t tris_num = m_model_tris.size()/3 - st_tris_id;
-            for (size_t j = st_tris_id; j < tris_num; j++)
-                m_model_group_tris[m_v_group_id[e[0]]].push_back(j);
+            for (size_t j = 0; j < tris_num; j++)
+                m_model_group_tris[m_v_group_id[e[0]]].push_back(st_tris_id + j);
         }
 
 	}
@@ -609,7 +611,7 @@ void SWCReader::Preprocess()
             m_vertices.push_back(v4);
             
             ival = STOI(tokens[6].c_str());
-            if (ival != -1)
+            if (ival >= 0)
                 m_edges.push_back(glm::ivec2(id, ival));
             
         }
@@ -623,28 +625,21 @@ void SWCReader::Preprocess()
 
     if (!group_verts.empty())
     {
-        size_t count = 0;
+		vector<glm::vec4> tmp_vertices;
+		vector<float> tmp_extra_data;
         for (map<string, vector<size_t>>::iterator it = group_verts.begin(); it != group_verts.end(); it++)
         {
             for (int i = 0; i < it->second.size(); i++)
             {
-                id_corresp2[it->second[i]] = count;
+                id_corresp2[it->second[i]] = tmp_vertices.size();
+				tmp_vertices.push_back(m_vertices[it->second[i]]);
+				if (m_extra_data.size() > it->second[i])
+					tmp_extra_data.push_back(m_extra_data[it->second[i]]);
                 m_v_group_id.push_back(m_group_names.size());
-                count++;
             }
             m_group_names.push_back(it->first);
         }
-
-        vector<glm::vec4> tmp_vertices;
-        tmp_vertices.resize(m_vertices.size());
-        for (int i = 0; i < m_vertices.size(); i++)
-            tmp_vertices[i] = m_vertices[id_corresp2[i]];
         m_vertices = tmp_vertices;
-        
-        vector<float> tmp_extra_data;
-        tmp_extra_data.resize(m_extra_data.size());
-        for (int i = 0; i < m_extra_data.size(); i++)
-            tmp_extra_data[i] = m_extra_data[id_corresp2[i]];
         m_extra_data = tmp_extra_data;
         
         for (auto &e : m_edges)
