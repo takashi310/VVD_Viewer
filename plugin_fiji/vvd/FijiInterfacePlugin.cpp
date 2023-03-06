@@ -208,6 +208,7 @@ void SampleGuiPlugin1::doAction(ActionInfo *info)
 			size_t chk = info->size;
 
 			VRenderFrame *vframe = (VRenderFrame *)m_vvd;
+            VolumeData* cur_vol = vframe->GetCurSelVol();
 						
 			int name_len = *((const int32_t *)ptr);
 			ptr += 4;
@@ -318,10 +319,11 @@ void SampleGuiPlugin1::doAction(ActionInfo *info)
                     if (vid >= 0)
                     {
                         vframe->GetView(0)->ReplaceVolumeData(name_wx, vd);
-                        vframe->GetPropView()->SetVolumeData(vd);
+                        //vframe->GetPropView()->SetVolumeData(vd);
                     }
                     else
                         vframe->AddVolume(vd, NULL);
+                    vframe->OnSelection(2, 0, 0, cur_vol);
 				}
 			}
 			delete [] name;
@@ -525,6 +527,8 @@ bool SampleGuiPlugin1::StartFiji()
 		wxCopyFile(rdir+"vvd_listener.jar", plugindir+"vvd_listener.jar");
 	if (wxDirExists(plugindir) && wxFileExists(rdir+"NBLAST_Skeletonize.jar"))
 		wxCopyFile(rdir+"NBLAST_Skeletonize.jar", plugindir+"NBLAST_Skeletonize.jar");
+    if (wxDirExists(plugindir) && wxFileExists(rdir+"Apply_Bigwarp_Filter.jar"))
+        wxCopyFile(rdir+"Apply_Bigwarp_Filter.jar", plugindir+"Apply_Bigwarp_Filter.jar");
 
 	m_initialized = false;
 #ifdef _WIN32

@@ -142,7 +142,8 @@ public:
 		ID_ExportBtn,
 		ID_IntensityMethodsCombo,
 		ID_UseTransferChk,
-		ID_TransientChk
+		ID_TransientChk,
+        ID_WarpBtn
 	};
 
 	MeasureDlg(wxWindow* frame,
@@ -177,6 +178,7 @@ private:
 	wxComboBox *m_int_method_combo;
 	wxCheckBox *m_use_transfer_chk;
 	wxCheckBox *m_transient_chk;
+    wxButton *m_warp_btn;
 
 private:
 	void OnNewLocator(wxCommandEvent& event);
@@ -189,6 +191,7 @@ private:
 	void OnIntensityMethodsCombo(wxCommandEvent& event);
 	void OnUseTransferCheck(wxCommandEvent& event);
 	void OnTransientCheck(wxCommandEvent& event);
+    void OnWarp(wxCommandEvent& event);
 
 	DECLARE_EVENT_TABLE();
 };

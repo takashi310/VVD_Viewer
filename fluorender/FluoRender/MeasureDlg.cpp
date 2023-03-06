@@ -1164,6 +1164,7 @@ BEGIN_EVENT_TABLE(MeasureDlg, wxPanel)
 	EVT_COMBOBOX(ID_IntensityMethodsCombo, MeasureDlg::OnIntensityMethodsCombo)
 	EVT_CHECKBOX(ID_UseTransferChk, MeasureDlg::OnUseTransferCheck)
 	EVT_CHECKBOX(ID_TransientChk, MeasureDlg::OnTransientCheck)
+    EVT_BUTTON(ID_WarpBtn, MeasureDlg::OnWarp)
 	END_EVENT_TABLE()
 
 MeasureDlg::MeasureDlg(wxWindow* frame, wxWindow* parent,
@@ -1247,10 +1248,14 @@ wxPanel(parent, id, pos, size, style, name),
 		wxDefaultPosition, wxDefaultSize);
 	m_use_transfer_chk = new wxCheckBox(this, ID_UseTransferChk, "Use Volume Properties",
 		wxDefaultPosition, wxDefaultSize);
+    m_warp_btn = new wxButton(this, ID_WarpBtn, "Apply Transform",
+        wxDefaultPosition, wxSize(110, 20));
 	sizer_2->Add(10, 10);
 	sizer_2->Add(m_transient_chk, 0, wxALIGN_CENTER);
 	sizer_2->Add(10, 10);
 	sizer_2->Add(m_use_transfer_chk, 0, wxALIGN_CENTER);
+    sizer_2->Add(10, 10);
+    sizer_2->Add(m_warp_btn, 0, wxALIGN_CENTER);
 
 	//list
 	m_rulerlist = new RulerListCtrl(frame, this, wxID_ANY);
@@ -1415,7 +1420,8 @@ void MeasureDlg::OnExport(wxCommandEvent& event)
 {
 	wxFileDialog *fopendlg = new wxFileDialog(
 		m_frame, "Export rulers", "", "",
-		"Text file (*.txt)|*.txt",
+        "Text file (*.txt)|*.txt|"\
+        "BigWarp landmarks (*.csv)|*.csv",
 		wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
 
 	int rval = fopendlg->ShowModal();
@@ -1423,7 +1429,14 @@ void MeasureDlg::OnExport(wxCommandEvent& event)
 	if (rval == wxID_OK)
 	{
 		wxString filename = fopendlg->GetPath();
-		m_rulerlist->Export(filename);
+        wxString suffix = filename.Mid(filename.Find('.', true)).MakeLower();
+        if (suffix == ".txt")
+            m_rulerlist->Export(filename);
+        else if (suffix == ".csv")
+        {
+            if (m_view)
+                m_view->ExportBigWarpCSV(filename);
+        }
 	}
 
 	if (fopendlg)
@@ -1464,4 +1477,12 @@ void MeasureDlg::OnTransientCheck(wxCommandEvent& event)
 	VRenderFrame* frame = (VRenderFrame*)m_frame;
 	if (frame && frame->GetSettingDlg())
 		frame->GetSettingDlg()->SetRulerTimeDep(val);
+}
+
+void MeasureDlg::OnWarp(wxCommandEvent& event)
+{
+    if (!m_view)
+        return;
+
+    m_view->WarpCurrentVolume();
 }

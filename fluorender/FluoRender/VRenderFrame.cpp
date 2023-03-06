@@ -1651,7 +1651,7 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
                         col[0] = col[0] / 255.0;
                         col[1] = col[1] / 255.0;
                         col[2] = col[2] / 255.0;
-                        swccolors[key] = col;
+                        swccolors[path] = col;
                         
                         long link2 = -1;
                         elems[13].ToLong(&link2);
@@ -1673,7 +1673,7 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
 
             MeshGroup* mg = nullptr;
             
-            wxString name = filename;
+            wxString name = filename.Mid(filename.Find(GETSLASH(), true)+1);;
             wxArrayString data = swcdata;
             
             Annotations *annotations = new Annotations();

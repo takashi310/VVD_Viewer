@@ -27,7 +27,7 @@ vector<string> split(const string &str, const string &delim, const string &abort
 	return res;
 }
 
-void SWCReader::AddSolidSphere(glm::vec3 center, double radius, unsigned int subdiv, float score)
+void SWCReader::AddSolidSphere(glm::vec3 center, double radius, unsigned int subdiv, float score, int groupid)
 {
 	// create 12 vertices of a icosahedron
 	float t = (1.0 + sqrt(5.0)) / 2.0;
@@ -133,11 +133,17 @@ void SWCReader::AddSolidSphere(glm::vec3 center, double radius, unsigned int sub
 	for (int i = 0; i < vertices.size(); i++)
 		vertices[i] *= radius;
 
+    float uv_u = ((groupid+1) % 256 + 0.5f) / 256.0f;
+    float uv_v = ((groupid+1) / 256 + 0.5f) / 256.0f;
+    
 	int v_offset = m_model_verts.size();
+    int uv_offset = m_model_uvs.size();
 	m_model_verts.resize(v_offset + vertices.size()*3);
 	m_model_norms.resize(v_offset + vertices.size()*3);
+    if (groupid >= 0) m_model_uvs.resize(uv_offset + vertices.size()*2);
 	vector<float>::iterator v_ite = m_model_verts.begin() + v_offset;
 	vector<float>::iterator n_ite = m_model_norms.begin() + v_offset;
+    vector<float>::iterator uv_ite = m_model_uvs.begin() + uv_offset;
 	for (int i = 0; i < vertices.size(); i++)
 	{
 		*v_ite++ = vertices[i].x + center.x;
@@ -146,6 +152,11 @@ void SWCReader::AddSolidSphere(glm::vec3 center, double radius, unsigned int sub
 		*n_ite++ = vertices[i].x;
 		*n_ite++ = vertices[i].y;
 		*n_ite++ = vertices[i].z;
+        if (groupid >= 0)
+        {
+            *uv_ite++ = uv_u;
+            *uv_ite++ = uv_v;
+        }
 	}
     
     if (score >= 0.0f)
@@ -170,7 +181,7 @@ void SWCReader::AddSolidSphere(glm::vec3 center, double radius, unsigned int sub
 	return;
 }
 
-void SWCReader::AddSolidCylinder(glm::vec3 p1, glm::vec3 p2, double radius1, double radius2, unsigned int subdiv)
+void SWCReader::AddSolidCylinder(glm::vec3 p1, glm::vec3 p2, double radius1, double radius2, unsigned int subdiv, int groupid)
 {
 	int sectors = 2*(subdiv+1)+2;
 
@@ -281,12 +292,18 @@ void SWCReader::AddSolidCylinder(glm::vec3 p1, glm::vec3 p2, double radius1, dou
 		RotateVertices(vertices, glm::vec3(0.0), angle, glm::vec3(n));
 		RotateVertices(normals, glm::vec3(0.0), angle, glm::vec3(n));
 	}
+    
+    float uv_u = ((groupid+1) % 256 + 0.5f) / 256.0f;
+    float uv_v = ((groupid+1) / 256 + 0.5f) / 256.0f;
 
 	int v_offset = m_model_verts.size();
-	m_model_verts.resize(v_offset + vertices.size());
-	m_model_norms.resize(v_offset + vertices.size());
+    int uv_offset = m_model_uvs.size();
+	m_model_verts.resize(v_offset + vertices.size()*3);
+	m_model_norms.resize(v_offset + vertices.size()*3);
+    if (groupid >= 0) m_model_uvs.resize(uv_offset + vertices.size()*2);
 	vector<float>::iterator mv_ite = m_model_verts.begin() + v_offset;
 	vector<float>::iterator mn_ite = m_model_norms.begin() + v_offset;
+    vector<float>::iterator uv_ite = m_model_uvs.begin() + uv_offset;
 	vector<float>::iterator v_ite = vertices.begin();
 	vector<float>::iterator n_ite = normals.begin();
 	for (int i = 0; i < vertices.size()/3; i++)
@@ -297,6 +314,11 @@ void SWCReader::AddSolidCylinder(glm::vec3 p1, glm::vec3 p2, double radius1, dou
 		*mn_ite++ = *n_ite++;
 		*mv_ite++ = *v_ite++ + center.z;
 		*mn_ite++ = *n_ite++;
+        if (groupid >= 0)
+        {
+            *uv_ite++ = uv_u;
+            *uv_ite++ = uv_v;
+        }
 	}
 
 	int t_offset = m_model_tris.size();
@@ -359,6 +381,7 @@ GLMmodel *SWCReader::GenerateSolidModel(double def_r, double r_scale, unsigned i
 	if (!m_model_verts.empty()) m_model_verts.clear();
 	if (!m_model_norms.empty()) m_model_norms.clear();
     if (!m_model_extra_data.empty()) m_model_extra_data.clear();
+    if (!m_model_uvs.empty()) m_model_uvs.clear();
 	if (!m_model_tris.empty()) m_model_tris.clear();
     if (!m_model_group_tris.empty()) m_model_group_tris.clear();
 
@@ -368,6 +391,8 @@ GLMmodel *SWCReader::GenerateSolidModel(double def_r, double r_scale, unsigned i
 	m_model_norms.push_back(0.0f);
 	m_model_norms.push_back(0.0f);
 	m_model_norms.push_back(0.0f);
+    m_model_uvs.push_back(0.1f);
+    m_model_uvs.push_back(0.2f);
     if (m_extra_data.size() > 0)
         m_model_extra_data.push_back(0.0f);
     
@@ -380,12 +405,14 @@ GLMmodel *SWCReader::GenerateSolidModel(double def_r, double r_scale, unsigned i
 		glm::vec3 v = glm::vec3(m_vertices[i]);
 		double r = m_vertices[i].w;
         
+        int groupid = m_v_group_id.size() > i ? m_v_group_id[i] : -1;
+        
         size_t st_tris_id = m_model_tris.size()/3;
 		if (r <= 0.0) r = def_r;
         if (m_extra_data.size() > i)
-            AddSolidSphere(v, r*r_scale, subdiv, m_extra_data[i]);
+            AddSolidSphere(v, r*r_scale, subdiv, m_extra_data[i], groupid);
         else
-            AddSolidSphere(v, r*r_scale, subdiv);
+            AddSolidSphere(v, r*r_scale, subdiv, -1.0f, groupid);
         
         if (m_group_names.size() > 0)
         {
@@ -403,6 +430,8 @@ GLMmodel *SWCReader::GenerateSolidModel(double def_r, double r_scale, unsigned i
 		glm::vec3 p2 = glm::vec3(m_vertices[e[1]]);
 		double r2 = m_vertices[e[1]].w;
         
+        int groupid = m_v_group_id.size() > e[0] ? m_v_group_id[e[0]] : -1;
+        
         size_t st_tris_id = m_model_tris.size()/3;
 
 		if (r1 <= 0.0) r1 = def_r;
@@ -410,7 +439,7 @@ GLMmodel *SWCReader::GenerateSolidModel(double def_r, double r_scale, unsigned i
 		int cy_subdiv = (int)pow(2.0, subdiv+2);
 		if (abs(r1 - r2) > 0.0001)
 			int dummy = 0;
-		AddSolidCylinder(p1, p2, r1*r_scale, r2*r_scale, cy_subdiv);
+		AddSolidCylinder(p1, p2, r1*r_scale, r2*r_scale, cy_subdiv, groupid);
         
         if (m_group_names.size() > 0)
         {
@@ -418,26 +447,31 @@ GLMmodel *SWCReader::GenerateSolidModel(double def_r, double r_scale, unsigned i
             for (size_t j = 0; j < tris_num; j++)
                 m_model_group_tris[m_v_group_id[e[0]]].push_back(st_tris_id + j);
         }
-
 	}
-
+    
 	GLMmodel *model = (GLMmodel*)malloc(sizeof(GLMmodel));
 	float *verts = (float*)malloc(sizeof(float)*m_model_verts.size());
 	float *norms = (float*)malloc(sizeof(float)*m_model_norms.size());
+    float *uvs = (m_model_uvs.size() > 2) ? (float*)malloc(sizeof(float)*m_model_uvs.size()) : NULL;
 	GLMtriangle *tris = (GLMtriangle*)malloc(sizeof(GLMtriangle)*m_model_tris.size()/3);
 
 	memcpy(verts, m_model_verts.data(), sizeof(float)*m_model_verts.size());
 	memcpy(norms, m_model_norms.data(), sizeof(float)*m_model_norms.size());
+    if (uvs)
+        memcpy(uvs, m_model_uvs.data(), sizeof(float)*m_model_uvs.size());
 	
 	int numtris = m_model_tris.size()/3;
 	vector<unsigned int>::iterator t_ite = m_model_tris.begin();
 	for (int i = 0; i < numtris; i++)
 	{
 		tris[i].vindices[0] = *t_ite;
+        tris[i].tindices[0] = *t_ite;
 		tris[i].nindices[0] = *t_ite++;
 		tris[i].vindices[1] = *t_ite;
+        tris[i].tindices[1] = *t_ite;
 		tris[i].nindices[1] = *t_ite++;
 		tris[i].vindices[2] = *t_ite;
+        tris[i].tindices[2] = *t_ite;
 		tris[i].nindices[2] = *t_ite++;
 	}
 
@@ -447,8 +481,8 @@ GLMmodel *SWCReader::GenerateSolidModel(double def_r, double r_scale, unsigned i
 	model->vertices    = verts;
 	model->numnormals    = m_model_norms.size()/3-1;
 	model->normals     = norms;
-	model->numtexcoords  = 0;
-	model->texcoords       = NULL;
+	model->numtexcoords  = m_model_uvs.size()/2-1;
+	model->texcoords       = uvs;
 	model->numfacetnorms = 0;
 	model->facetnorms    = NULL;
 	model->numtriangles  = numtris;
@@ -664,6 +698,7 @@ bool SWCReader::DeepCopy(SWCReader *in, SWCReader *out)
 	out->m_edges = in->m_edges;
 	out->m_model_verts = in->m_model_verts;
 	out->m_model_norms = in->m_model_norms;
+    out->m_model_uvs = in->m_model_uvs;
 	out->m_model_tris = in->m_model_tris;
     out->m_model_extra_data = in->m_model_extra_data;
 

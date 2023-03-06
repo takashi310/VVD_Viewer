@@ -6766,7 +6766,7 @@ void VRenderVulkanView::OnIdle(wxTimerEvent& event)
             m_redo_keydown = true;
         }
         
-        if (wxGetKeyState(wxKeyCode('W')) && wxGetKeyState(WXK_CONTROL) && !wxGetKeyState(WXK_SHIFT) && !wxGetKeyState(WXK_ALT) && !m_key_lock)
+        if (wxGetKeyState(wxKeyCode('B')) && wxGetKeyState(WXK_CONTROL) && !wxGetKeyState(WXK_SHIFT) && !wxGetKeyState(WXK_ALT) && !m_key_lock)
         {
             WarpCurrentVolume();
         }
@@ -18160,7 +18160,7 @@ void VRenderVulkanView::CalcAndSetCombinedClippingPlanes()
     }
 }
 
-void VRenderVulkanView::WarpCurrentVolume()
+void VRenderVulkanView::ExportBigWarpCSV(wxString outpath)
 {
     wxArrayString lines;
     int count = 0;
@@ -18194,8 +18194,7 @@ void VRenderVulkanView::WarpCurrentVolume()
     if (lines.Count() == 0)
         return;
     
-    wxString temp_csv_path = wxStandardPaths::Get().GetTempDir() + wxFileName::GetPathSeparator() + "warp.csv";
-    wxTextFile csv(temp_csv_path);
+    wxTextFile csv(outpath);
     if (csv.Exists())
     {
         if (!csv.Open())
@@ -18211,6 +18210,12 @@ void VRenderVulkanView::WarpCurrentVolume()
         csv.AddLine(lines[j]);
     csv.Write();
     csv.Close();
+}
+
+void VRenderVulkanView::WarpCurrentVolume()
+{
+    wxString temp_csv_path = wxStandardPaths::Get().GetTempDir() + wxFileName::GetPathSeparator() + "warp.csv";
+    ExportBigWarpCSV(temp_csv_path);
     
     wxString fi_name = _("Fiji Interface");
 

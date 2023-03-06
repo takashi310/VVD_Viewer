@@ -208,7 +208,7 @@ boost::optional<wstring> MeshRenderer::get_roi_path(int id, const wptree& tree, 
         }
         catch (boost::bad_lexical_cast e)
         {
-            cerr << "TextureRenderer::get_roi_path(int id, const wptree& tree): bad_lexical_cast" << endl;
+            cerr << "MeshRenderer::get_roi_path(int id, const wptree& tree): bad_lexical_cast" << endl;
         }
         if (auto rval = get_roi_path(id, child->second, c_path))
             return rval;
@@ -398,7 +398,7 @@ int MeshRenderer::get_next_sibling_roi(int id)
                 }
                 catch (boost::bad_lexical_cast e)
                 {
-                    cerr << "TextureRenderer::get_next_child_roi(int id): bad_lexical_cast" << endl;
+                    cerr << "MeshRenderer::get_next_child_roi(int id): bad_lexical_cast" << endl;
                 }
 
                 if (found_myself)
@@ -432,7 +432,7 @@ int MeshRenderer::get_next_sibling_roi(int id)
                     }
                     catch (boost::bad_lexical_cast e)
                     {
-                        cerr << "TextureRenderer::get_next_child_roi(int id): bad_lexical_cast 2" << endl;
+                        cerr << "MeshRenderer::get_next_child_roi(int id): bad_lexical_cast 2" << endl;
                     }
 
                     return pid;
@@ -468,7 +468,7 @@ void MeshRenderer::move_roi_node(int src_id, int dst_id, int insert_mode)
                 }
                 catch (boost::bad_lexical_cast e)
                 {
-                    cerr << "TextureRenderer::move_roi_node(int src_id, int dst_id): bad_lexical_cast" << endl;
+                    cerr << "MeshRenderer::move_roi_node(int src_id, int dst_id): bad_lexical_cast" << endl;
                 }
             }
         }
@@ -481,7 +481,7 @@ void MeshRenderer::move_roi_node(int src_id, int dst_id, int insert_mode)
         }
         catch (boost::bad_lexical_cast e)
         {
-            cerr << "TextureRenderer::move_roi_node(int src_id, int dst_id): bad_lexical_cast 2" << endl;
+            cerr << "MeshRenderer::move_roi_node(int src_id, int dst_id): bad_lexical_cast 2" << endl;
         }
     }
 }
@@ -506,7 +506,7 @@ bool MeshRenderer::insert_roi_node(wptree& tree, int dst_id, const wptree& node,
         }
         catch (boost::bad_lexical_cast e)
         {
-            cerr << "TextureRenderer::insert_roi_node(wptree& tree, int dst_id, const wptree& node, int id): bad_lexical_cast" << endl;
+            cerr << "MeshRenderer::insert_roi_node(wptree& tree, int dst_id, const wptree& node, int id): bad_lexical_cast" << endl;
         }
         
         if (insert_roi_node(child->second, dst_id, node, id, insert_mode))
@@ -575,7 +575,7 @@ int MeshRenderer::get_roi_id(wstring name)
         }
         catch (boost::bad_lexical_cast e)
         {
-            cerr << "TextureRenderer::get_roi_id(wstring name): bad_lexical_cast" << endl;
+            cerr << "MeshRenderer::get_roi_id(wstring name): bad_lexical_cast" << endl;
         }
     }
 
@@ -609,7 +609,7 @@ void MeshRenderer::set_roi_select(wstring name, bool select, bool traverse)
         }
         catch (boost::bad_lexical_cast e)
         {
-            cerr << "TextureRenderer::set_roi_select(wstring name, bool select): bad_lexical_cast" << endl;
+            cerr << "MeshRenderer::set_roi_select(wstring name, bool select): bad_lexical_cast" << endl;
         }
 
         if (traverse)
@@ -660,7 +660,7 @@ void MeshRenderer::set_roi_select_r(const boost::property_tree::wptree& tree, bo
         }
         catch (boost::bad_lexical_cast e)
         {
-            cerr << "TextureRenderer::toggle_roi_select(boost::property_tree::wptree& tree, bool select): bad_lexical_cast" << endl;
+            cerr << "MeshRenderer::toggle_roi_select(boost::property_tree::wptree& tree, bool select): bad_lexical_cast" << endl;
         }
 
         if (recursive) set_roi_select_r(child->second, select, recursive);
@@ -702,7 +702,7 @@ void MeshRenderer::update_sel_segs(const wptree& tree)
         }
         catch (boost::bad_lexical_cast e)
         {
-            cerr << "TextureRenderer::update_sel_segs(const wptree& tree): bad_lexical_cast" << endl;
+            cerr << "MeshRenderer::update_sel_segs(const wptree& tree): bad_lexical_cast" << endl;
         }
     }
 }
@@ -1646,7 +1646,7 @@ void MeshRenderer::import_selected_ids(const string& sel_ids_str)
 			update_ = false;
 		}
 
-		bool tex = data_->hastexture;
+		bool tex = data_->hastexture || (data_->groups && data_->groups->next);
 
 		MeshPipeline pipeline = prepareMeshPipeline(device_, 0, MSHRENDER_BLEND_DISABLE, tex);
 		VkPipelineLayout pipelineLayout = m_vulkan->msh_shader_factory_->pipeline_[device_].pipelineLayout;
@@ -1798,11 +1798,17 @@ void MeshRenderer::import_selected_ids(const string& sel_ids_str)
 				fubo.loc3 = { 0.0f, alpha_, 0.0f, 0.0f };//alpha
 			}
 			//This won't happen now.
-			if (tex && data_->texcoords)
-			{
-				GLMmaterial* material = &data_->materials[group->material];
+			//if (tex && data_->texcoords)
+			//{
+				//GLMmaterial* material = &data_->materials[group->material];
 				//descriptorWritesBase.push_back(MshShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 0, material->textureID))
-			}
+			//}
+            if (group->next) //multiple groups
+            {
+                auto palette = get_palette();
+                if (palette.count(device_) > 0)
+                    descriptorWritesBase.push_back(MshShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 0, &palette[device_]->descriptor));
+            }
 			if (depth_peel_)
 			{
 				descriptorWritesBase.push_back(MshShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 1, &m_depth_tex->descriptor));

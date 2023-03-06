@@ -64,6 +64,7 @@ public:
 				//2-volume data; 3-mesh data;
 				//5-group; 6-mesh group
 				//7-volume segment; 8-segment group
+                //9-mesh segment; 10-mesh segment group
 
 	int id;		//for volume segments
 

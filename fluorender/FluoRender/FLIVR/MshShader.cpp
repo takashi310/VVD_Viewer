@@ -259,6 +259,26 @@ namespace FLIVR
 	"	//MSH_FRAG_BODY_TEXTURE\n" \
 	"	c = c * texture(tex0, OutTexcoord);\n"
 
+#define MSH_FRAG_BODY_PALETTE_SIMPLE \
+    "    //MSH_FRAG_BODY_PALETTE_SIMPLE\n" \
+    "    vec4 c = texture(tex0, OutTexcoord);\n" \
+
+#define MSH_FRAG_BODY_PALETTE_LIGHT \
+    "    //MSH_FRAG_BODY_PALETTE_LIGHT\n" \
+    "    vec4 c = texture(tex0, OutTexcoord);\n" \
+    "    vec4 spec = vec4(0.0);\n" \
+    "    vec3 eye = vec3(0.0, 0.0, 1.0);\n" \
+    "    vec3 l_dir = vec3(0.0, 0.0, 1.0);\n" \
+    "    vec3 n = normalize(OutNormal);\n" \
+    "    float intensity = abs(dot(n, l_dir));\n" \
+    "    if (intensity > 0.0)\n" \
+    "    {\n" \
+    "        vec3 h = normalize(l_dir+eye);\n" \
+    "        float intSpec = max(dot(h, n), 0.0);\n" \
+    "        spec = c * pow(intSpec, fubo.loc3.x);\n" \
+    "    }\n" \
+    "    c.xyz = max(intensity * c + spec, c * 0.5).xyz;\n"
+
 #define MSH_FRAG_BODY_FOG \
 	"	// MSH_FRAG_BODY_FOG\n" \
 	"	vec4 v;\n" \
@@ -437,13 +457,21 @@ namespace FLIVR
 				z << MSH_HEAD_FOG;
             if (light_)
             {
-                z << MSH_FRAG_BODY_COLOR;
-                z << MSH_FRAG_BODY_COLOR_LIGHT;
+                if (tex_)
+                    z << MSH_FRAG_BODY_PALETTE_LIGHT;
+                else
+                {
+                    z << MSH_FRAG_BODY_COLOR;
+                    z << MSH_FRAG_BODY_COLOR_LIGHT;
+                }
             }
             else
-                z << MSH_FRAG_BODY_SIMPLE;
-			if (tex_)
-				z << MSH_FRAG_BODY_TEXTURE;
+            {
+                if (tex_)
+                    z << MSH_FRAG_BODY_PALETTE_SIMPLE;
+                else
+                    z << MSH_FRAG_BODY_SIMPLE;
+            }
 			if (fog_)
 			{
 				z << MSH_FRAG_BODY_FOG;
@@ -463,6 +491,8 @@ namespace FLIVR
 		z << MSH_TAIL;
 
 		s = z.str();
+        
+        //std::cerr << s << std::endl;
 
 		return false;
 	}

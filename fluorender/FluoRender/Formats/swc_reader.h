@@ -30,6 +30,14 @@ public:
     {
         return m_model_extra_data.size() > 0 ? &m_model_extra_data : NULL;
     }
+    
+    string GetGroupName(size_t id)
+    {
+        if (id < 0 || id >= m_group_names.size())
+            return "";
+        return m_group_names[id];
+    }
+    size_t GetGroupNum() { m_group_names.size(); }
 
 	static bool DeepCopy(SWCReader *in, SWCReader *out);
 
@@ -41,6 +49,7 @@ private:
 	vector<glm::ivec2> m_edges;
 	vector<float> m_model_verts;
 	vector<float> m_model_norms;
+    vector<float> m_model_uvs;
     vector<float> m_model_extra_data;
 	vector<unsigned int> m_model_tris;
     
@@ -61,8 +70,8 @@ private:
 
 private:
 	static void RotateVertices(vector<float> &vertices, glm::vec3 center, float angle, glm::vec3 axis);
-	void AddSolidSphere(glm::vec3 center, double radius, unsigned int subdiv, float score = -1.0f);
-	void AddSolidCylinder(glm::vec3 p1, glm::vec3 p2, double radius1, double radius2, unsigned int subdiv);
+	void AddSolidSphere(glm::vec3 center, double radius, unsigned int subdiv, float score = -1.0f, int groupid = -1);
+	void AddSolidCylinder(glm::vec3 p1, glm::vec3 p2, double radius1, double radius2, unsigned int subdiv, int groupid = -1);
 };
 
 #endif//_SWC_READER_H_
