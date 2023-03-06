@@ -37,7 +37,7 @@ public:
             return "";
         return m_group_names[id];
     }
-    size_t GetGroupNum() { m_group_names.size(); }
+    size_t GetGroupNum() { return m_group_names.size(); }
 
 	static bool DeepCopy(SWCReader *in, SWCReader *out);
 
