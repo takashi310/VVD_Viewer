@@ -313,6 +313,10 @@ void SampleGuiPlugin1::doAction(ActionInfo *info)
 							p += 2;
 						}
 						vd->SetMaxValue((double)maxval);
+                        double scalar_scale = 1.0;
+                        if (maxval > 0.0)
+                            scalar_scale = 65535.0 / maxval;
+                        vd->SetScalarScale(scalar_scale);
 					}
                     wxString name_wx(name);
                     int vid = dm->GetVolumeIndex(name_wx);
