@@ -840,6 +840,8 @@ public:
 
 		return ret;
 	}
+    
+    bool InsideClippingPlanes(Point pos);
 
 private:
 	//duplication indicator and counter

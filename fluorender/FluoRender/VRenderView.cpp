@@ -16142,6 +16142,25 @@ void VRenderVulkanView::DrawRulers()
 			(ruler->GetTimeDep() &&
 			ruler->GetTime() == m_tseq_cur_num))
 		{
+            bool skip = true;
+            if (m_cur_vol)
+            {
+                for (size_t j=0; j<ruler->GetNumPoint(); ++j)
+                {
+                    p2 = *(ruler->GetPoint(j));
+                    if (m_cur_vol->InsideClippingPlanes(p2))
+                    {
+                        skip = false;
+                        break;
+                    }
+                }
+            }
+            else
+                skip = false;
+            
+            if (skip)
+                continue;
+            
 			if (ruler->GetUseColor())
 				color = ruler->GetColor();
 			else
@@ -16181,11 +16200,27 @@ void VRenderVulkanView::DrawRulers()
 					if (p1.z() <= 0.0 || p1.z() >= 1.0)
 						continue;
 					verts.push_back(Vulkan2dRender::Vertex{ {px, py, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
-					px = (p1.x()+1.0)*nx/2.0;
-					py = (p1.y()+1.0)*ny/2.0;
-					verts.push_back(Vulkan2dRender::Vertex{ {px, py, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+					p2x = (p1.x()+1.0)*nx/2.0;
+					p2y = (p1.y()+1.0)*ny/2.0;
+					verts.push_back(Vulkan2dRender::Vertex{ {p2x, p2y, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
 					index.push_back(vnum); index.push_back(vnum+1);
+                    int vid = vnum;
 					vnum += 2;
+                    
+                    float vx = p2x - px;
+                    float vy = p2y - py;
+                    p2x = 0.8660254f * vx - 0.5f * vy;
+                    p2y = 0.5f * vx + 0.8660254f * vy;
+                    float d = 15.0f / sqrt(p2x*p2x + p2y*p2y);
+                    verts.push_back(Vulkan2dRender::Vertex{ {p2x*d+px, p2y*d+py, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+                    index.push_back(vid); index.push_back(vnum);
+                    vnum += 1;
+                    
+                    p2x = 0.8660254f * vx + 0.5f * vy;
+                    p2y = -0.5f * vx + 0.8660254f * vy;
+                    verts.push_back(Vulkan2dRender::Vertex{ {p2x*d+px, p2y*d+py, 0.0f}, {(float)color.r(), (float)color.g(), (float)color.b()} });
+                    index.push_back(vid); index.push_back(vnum);
+                    vnum += 1;
 				}
 
 				if(ruler->GetBalloonVisibility(j))

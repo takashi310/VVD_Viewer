@@ -3804,6 +3804,69 @@ MeshData *VolumeData::ExportMeshMask()
     return result;
 }
 
+//test if point is inside the clipping planes
+bool VolumeData::InsideClippingPlanes(Point pos)
+{
+    pos.z(-pos.z());
+    
+    if (!m_vr)
+        return true;
+    
+    vector<Plane*> *planes = m_vr->get_planes();
+    if (!planes)
+        return true;
+    if (planes->size() != 6)
+        return true;
+    
+    
+    if (!m_tex)
+        return true;
+    Transform *tform = m_tex->transform();
+    if (!tform)
+        return true;
+    Transform tform_copy;
+    double mvmat[16];
+    tform->get_trans(mvmat);
+    swap(mvmat[3], mvmat[12]);
+    swap(mvmat[7], mvmat[13]);
+    swap(mvmat[11], mvmat[14]);
+    tform_copy.set(mvmat);
+    
+    FLIVR::Point p[8] = {
+        FLIVR::Point(0.0f, 0.0f, 0.0f),
+        FLIVR::Point(1.0f, 0.0f, 0.0f),
+        FLIVR::Point(1.0f, 1.0f, 0.0f),
+        FLIVR::Point(0.0f, 1.0f, 0.0f),
+        FLIVR::Point(0.0f, 0.0f, 1.0f),
+        FLIVR::Point(1.0f, 0.0f, 1.0f),
+        FLIVR::Point(1.0f, 1.0f, 1.0f),
+        FLIVR::Point(0.0f, 1.0f, 1.0f)
+    };
+    
+    BBox dbox;
+    for (int j = 0; j < 8; j++)
+    {
+        p[j] = tform_copy.project(p[j]);
+        dbox.extend(p[j]);
+    }
+    
+    pos.x( (pos.x() - dbox.min().x()) / (dbox.max().x() - dbox.min().x()) );
+    pos.y( (pos.y() - dbox.min().y()) / (dbox.max().y() - dbox.min().y()) );
+    pos.z( (pos.z() + dbox.max().z()) / (dbox.max().z() - dbox.min().z()) );
+
+    Plane* plane = 0;
+    for (int i=0; i<6; i++)
+    {
+        plane = (*planes)[i];
+        if (!plane)
+            continue;
+        if (plane->eval_point(pos) < 0)
+            return false;
+    }
+
+    return true;
+}
+
 Nrrd* VolumeData::NrrdScale(Nrrd* src, size_t dst_datasize, bool interpolation)
 {
 	if (!src) return nullptr;
