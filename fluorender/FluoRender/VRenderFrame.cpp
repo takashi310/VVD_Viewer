@@ -1829,7 +1829,7 @@ void VRenderFrame::ConvertNML2SWC(wxString filename, VRenderView* vrv)
             wxString name;
             Color col;
             wxArrayString swclines;
-            double radius_scale = res.length();
+            double radius_scale = glm::length(res);
             
             if (elem->Attribute("name"))
                 name = elem->Attribute("name");

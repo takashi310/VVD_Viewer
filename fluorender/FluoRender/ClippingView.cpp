@@ -715,6 +715,27 @@ void ClippingView::GetSettings()
 		DisableAll();
 		return;
 	}
+    
+    bool found = false;
+    for (int i = 0; i < m_mgr->GetVolumeNum(); i++)
+    {
+        VolumeData* vd = m_mgr->GetVolumeData(i);
+        if (vd == m_vd)
+            found = true;
+    }
+    for (int i = 0; i < m_mgr->GetMeshNum(); i++)
+    {
+        MeshData* md = m_mgr->GetMeshData(i);
+        if (md == m_md)
+            found = true;
+    }
+    if (!found)
+    {
+        m_vd = NULL;
+        m_md = NULL;
+        DisableAll();
+        return;
+    }
 
 	EnableAll();
 

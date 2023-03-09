@@ -1256,6 +1256,7 @@ wxPanel(parent, id, pos, size, style, name),
 	sizer_2->Add(m_use_transfer_chk, 0, wxALIGN_CENTER);
     sizer_2->Add(10, 10);
     sizer_2->Add(m_warp_btn, 0, wxALIGN_CENTER);
+    //m_warp_btn->Hide();
 
 	//list
 	m_rulerlist = new RulerListCtrl(frame, this, wxID_ANY);
