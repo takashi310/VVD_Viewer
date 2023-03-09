@@ -1559,7 +1559,7 @@ void VRenderFrame::StartupLoad(wxArrayString files, size_t datasize, wxArrayStri
                     if (i < descs.Count())
                         vol_descs.Add(descs[i]);
                 }
-                else if (suffix == ".obj" || suffix == ".swc" || suffix == ".ply")
+                else if (suffix == ".obj" || suffix == ".swc" || suffix == ".ply" || suffix == ".csv" || suffix == ".nml")
                 {
                     msh_files.Add(files[i]);
                     if (i < descs.Count())
@@ -1572,6 +1572,400 @@ void VRenderFrame::StartupLoad(wxArrayString files, size_t datasize, wxArrayStri
                 LoadMeshes(msh_files, NULL, msh_descs);
         }
 	}
+}
+
+void VRenderFrame::ConvertCSV2SWC(wxString filename, VRenderView* vrv)
+{
+    if (!vrv)
+        vrv = GetView(0);
+    
+    MeshData* md_sel = 0;
+    
+    wxTextFile csv(filename);
+    csv.Open();
+    if (!csv.IsOpened())
+        return;
+
+    wxArrayString swcdata = wxArrayString();
+    map<wxString, Color> swccolors;
+    wxString str = csv.GetFirstLine();
+    wxArrayString linkswcstr;
+    while(!csv.Eof())
+    {
+        wxStringTokenizer tkz(str, wxT(","));
+        wxArrayString elems;
+        while(tkz.HasMoreTokens())
+            elems.Add(tkz.GetNextToken());
+        if (elems.Count() >= 10)
+        {
+            if (swcdata.Count() == 0)
+            {
+                elems.Clear();
+                str = csv.GetNextLine(); //skip the first line (header)
+                wxStringTokenizer tkz(str, wxT(","));
+                while (tkz.HasMoreTokens())
+                    elems.Add(tkz.GetNextToken());
+            }
+            wxString key = elems[3] + "_" + elems[9];
+            wxString path = "Cell" + elems[4] + "." + elems[3] + "_" + elems[9];
+            wxString swc_line = wxString::Format("%d 6 %s %s %s %f -1 %s", (int)swcdata.Count()+1, elems[1], elems[0], elems[2], 0.1f, path);
+            swcdata.Add(swc_line);
+            
+            if (elems.Count() >= 14)
+            {
+                Color col(1.0, 1.0, 1.0);
+                elems[10].ToDouble(&col[0]);
+                elems[11].ToDouble(&col[1]);
+                elems[12].ToDouble(&col[2]);
+                col[0] = col[0] / 255.0;
+                col[1] = col[1] / 255.0;
+                col[2] = col[2] / 255.0;
+                swccolors[path] = col;
+                
+                long link2 = -1;
+                elems[13].ToLong(&link2);
+                if (link2 == 0)
+                    link2 = -1;
+                path = "Cell" + elems[4];
+                swc_line = wxString::Format("%d 0 %s %s %s %f %d %s", (int)swcdata.Count()+1, elems[1], elems[0], elems[2], 0.01f, (int)link2*2, path);
+                swcdata.Add(swc_line);
+            }
+        }
+        else if (elems.Count() >= 3)
+        {
+            wxString swc_line = wxString::Format("%d 6 %s %s %s %f -1", (int)swcdata.Count()+1, elems[0], elems[1], elems[2], 0.1f);
+            swcdata.Add(swc_line);
+        }
+        str = csv.GetNextLine();
+    }
+    csv.Close();
+
+    MeshGroup* mg = nullptr;
+    
+    wxString name = filename.Mid(filename.Find(GETSLASH(), true)+1);
+    wxArrayString data = swcdata;
+    
+    Annotations *annotations = new Annotations();
+    wxString gname = name.Mid(name.Find(' ', true)+1);
+    
+    //generate swc
+    wxString temp_swc_path = wxFileName::CreateTempFileName(wxStandardPaths::Get().GetTempDir() + wxFileName::GetPathSeparator()) + ".swc";
+    wxTextFile swc(temp_swc_path);
+    if (swc.Exists())
+    {
+        if (!swc.Open())
+            return;
+        swc.Clear();
+    }
+    else
+    {
+        if (!swc.Create())
+            return;
+    }
+    for(int j = 0; j < data.Count(); j++)
+    {
+        swc.AddLine(data[j]);
+        wxStringTokenizer tkz(data[j], wxT(" "));
+        wxArrayString elems;
+        while(tkz.HasMoreTokens())
+            elems.Add(tkz.GetNextToken());
+        if (elems.Count() >= 7)
+        {
+            double x, y, z;
+            long link;
+            elems[2].ToDouble(&x);
+            elems[3].ToDouble(&y);
+            elems[4].ToDouble(&z);
+            elems[6].ToLong(&link);
+            Point pos = Point(x, y, z);
+            if (link < 0)
+            {
+                if (elems.Count() >= 8)
+                    annotations->AddText(elems[7].ToStdString(), pos, "");
+                else
+                    annotations->AddText(gname.ToStdString(), pos, "");
+            }
+        }
+    }
+    swc.Write();
+    swc.Close();
+    
+    //load swc
+    if (m_data_mgr.LoadMeshData(temp_swc_path, wxT("")))
+    {
+        MeshData* md = m_data_mgr.GetLastMeshData();
+        if (md)
+        {
+            md->SetName(name);
+            md->SetAnnotations(annotations);
+            if (swccolors.count(name) > 0)
+            {
+                Color color = swccolors[name];
+                //TODO: set colors of mesh groups
+            }
+            
+            if (mg)
+            {
+                mg->InsertMeshData(mg->GetMeshNum()-1, md);
+                if (vrv)
+                {
+                    vrv->SetMeshPopDirty();
+                    vrv->InitView(INIT_BOUNDS | INIT_CENTER);
+                }
+            }
+            else
+                vrv->AddMeshData(md);
+
+            md_sel = md;
+        }
+        else
+            delete annotations;
+    }
+    else
+        delete annotations;
+    
+    if (md_sel)
+        UpdateTree(md_sel->GetName(), 3);
+    else
+        UpdateTree();
+    
+    return;
+}
+
+//https://stackoverflow.com/questions/11921463/find-a-specific-node-in-a-xml-document-with-tinyxml
+static bool parseXML(tinyxml2::XMLDocument& xXmlDocument, std::string sSearchString, std::function<void(tinyxml2::XMLNode*)> fFoundSomeElement)
+{
+    if ( xXmlDocument.ErrorID() != tinyxml2::XML_SUCCESS )
+    {
+        return false;
+    } // if
+    
+    //ispired by http://stackoverflow.com/questions/11921463/find-a-specific-node-in-a-xml-document-with-tinyxml
+    tinyxml2::XMLNode * xElem = xXmlDocument.FirstChild();
+    while(xElem)
+    {
+        if (xElem->Value() && !std::string(xElem->Value()).compare(sSearchString))
+        {
+            fFoundSomeElement(xElem);
+        }
+        
+        /*
+         *   We move through the XML tree following these rules (basically in-order tree walk):
+         *
+         *   (1) if there is one or more child element(s) visit the first one
+         *       else
+         *   (2)     if there is one or more next sibling element(s) visit the first one
+         *               else
+         *   (3)             move to the parent until there is one or more next sibling elements
+         *   (4)             if we reach the end break the loop
+         */
+        if (xElem->FirstChildElement()) //(1)
+            xElem = xElem->FirstChildElement();
+        else if (xElem->NextSiblingElement())  //(2)
+            xElem = xElem->NextSiblingElement();
+        else
+        {
+            while(xElem->Parent() && !xElem->Parent()->NextSiblingElement()) //(3)
+                xElem = xElem->Parent();
+            if(xElem->Parent() && xElem->Parent()->NextSiblingElement())
+                xElem = xElem->Parent()->NextSiblingElement();
+            else //(4)
+                break;
+        }//else
+    }//while
+    
+    return true;
+}
+
+void VRenderFrame::ConvertNML2SWC(wxString filename, VRenderView* vrv)
+{
+    if (!vrv)
+        vrv = GetView(0);
+    
+    MeshGroup* group = 0;
+    
+    tinyxml2::XMLDocument xmldoc;
+    if (xmldoc.LoadFile(filename.ToStdString().c_str()) != 0){
+        return;
+    }
+    
+    glm::vec3 res;
+    res.x = 1.0;
+    res.y = 1.0;
+    res.z = 1.0;
+    parseXML(xmldoc, "parameters", [&res](tinyxml2::XMLNode* xElem)
+    {
+        int id = -1;
+        tinyxml2::XMLElement *elem = xElem->ToElement();
+        if (elem)
+        {
+            tinyxml2::XMLElement *child = elem->FirstChildElement();
+            while (child)
+            {
+                if (strcmp(child->Name(), "scale") == 0)
+                {
+                    if (STOD(child->Attribute("x")))
+                        res.x = STOD(child->Attribute("x"));
+                    if (STOD(child->Attribute("y")))
+                        res.y = STOD(child->Attribute("y"));
+                    if (STOD(child->Attribute("z")))
+                        res.z = STOD(child->Attribute("z"));
+                    break;
+                }
+                child = child->NextSiblingElement();
+            }
+        }
+    });
+    
+    wxArrayString names;
+    vector<Color> cols;
+    wxArrayString swcpaths;
+    int count = 0;
+    parseXML(xmldoc, "thing", [&count, &names, &cols, &swcpaths, res](tinyxml2::XMLNode* xElem)
+    {
+        tinyxml2::XMLElement *elem = xElem->ToElement();
+        if (elem)
+        {
+            wxString name;
+            Color col;
+            wxArrayString swclines;
+            double radius_scale = res.length();
+            
+            if (elem->Attribute("name"))
+                name = elem->Attribute("name");
+            else
+                name = wxString::Format("component_%d", count);
+            
+            if (elem->Attribute("color.r"))
+            {
+                col.r(STOD(elem->Attribute("color.r")));
+                col.g(STOD(elem->Attribute("color.g")));
+                col.b(STOD(elem->Attribute("color.b")));
+            }
+            else
+            {
+                double hue = (double)rand()/(RAND_MAX) * 360.0;
+                col = Color(HSVColor(hue, 1.0, 1.0));
+            }
+            
+            map<int, glm::vec4> nodes;
+            map<int, int> nextnode;
+            tinyxml2::XMLElement *child = elem->FirstChildElement();
+            while (child)
+            {
+                if (strcmp(child->Name(), "nodes") == 0)
+                {
+                    tinyxml2::XMLElement *child2 = child->FirstChildElement();
+                    while (child2)
+                    {
+                        if (child2->Name())
+                        {
+                            if (strcmp(child2->Name(), "node") == 0)
+                            {
+                                int id = STOI(child2->Attribute("id"));
+                                glm::vec4 v;
+                                v.x = STOD(child2->Attribute("x")) * res.x;
+                                v.y = STOD(child2->Attribute("y")) * res.y;
+                                v.z = STOD(child2->Attribute("z")) * res.z;
+                                if (child2->Attribute("radius"))
+                                    v.w = STOD(child2->Attribute("radius")) * radius_scale;
+                                else
+                                    v.w = radius_scale;
+                                nodes[id] = v;
+                                if (nextnode.count(id) == 0)
+                                    nextnode[id] = -1;
+                            }
+                        }
+                        child2 = child2->NextSiblingElement();
+                    }
+                }
+                else if (strcmp(child->Name(), "edges") == 0)
+                {
+                    tinyxml2::XMLElement *child2 = child->FirstChildElement();
+                    while (child2)
+                    {
+                        if (child2->Name())
+                        {
+                            if (strcmp(child2->Name(), "edge") == 0)
+                            {
+                                int s = STOI(child2->Attribute("source"));
+                                int t = STOI(child2->Attribute("target"));
+                                nextnode[s] = t;
+                            }
+                        }
+                        child2 = child2->NextSiblingElement();
+                    }
+                }
+                child = child->NextSiblingElement();
+            }
+            
+            for (auto const& x : nodes)
+            {
+                int id = x.first;
+                glm::vec4 v = x.second;
+                wxString swc_line = wxString::Format("%d 0 %f %f %f %f %d", id, v.x, v.y, v.z, v.w, nextnode[id]);
+                swclines.Add(swc_line);
+            }
+            
+            //generate swc
+            wxString temp_swc_path = wxFileName::CreateTempFileName(wxStandardPaths::Get().GetTempDir() + wxFileName::GetPathSeparator()) + ".swc";
+            wxTextFile swc(temp_swc_path);
+            if (swc.Exists())
+            {
+                if (!swc.Open())
+                    return;
+                swc.Clear();
+            }
+            else
+            {
+                if (!swc.Create())
+                    return;
+            }
+            for(int j = 0; j < swclines.Count(); j++)
+                swc.AddLine(swclines[j]);
+            swc.Write();
+            swc.Close();
+            
+            swcpaths.Add(temp_swc_path);
+            names.Add(name);
+            cols.push_back(col);
+        }
+    });
+    
+    if (swcpaths.Count() > 0 && swcpaths.Count() == names.Count() && swcpaths.Count() == cols.size())
+    {
+        wxString tmp_group_name = vrv->AddMGroup();
+        group = vrv->GetMGroup(tmp_group_name);
+        if (!group)
+            return;
+        wxString gname = filename.Mid(filename.Find(GETSLASH(), true)+1);;
+        group->SetName(gname);
+        for(int i = 0; i < swcpaths.Count(); i++)
+        {
+            if (m_data_mgr.LoadMeshData(swcpaths[i], wxT("")))
+            {
+                MeshData* md = m_data_mgr.GetLastMeshData();
+                if (md)
+                {
+                    md->SetName(names[i]);
+                    md->SetColor(cols[i], MESH_COLOR_DIFF);
+                    Color amb = cols[i] * 0.3;
+                    md->SetColor(amb, MESH_COLOR_AMB);
+                    group->InsertMeshData(group->GetMeshNum()-1, md);
+                    if (vrv)
+                    {
+                        vrv->SetMeshPopDirty();
+                        vrv->InitView(INIT_BOUNDS | INIT_CENTER);
+                    }
+                }
+            }
+        }
+    }
+    
+    if (group)
+        UpdateTree(group->GetName(), 6);
+    else
+        UpdateTree();
 }
 
 void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayString descs, wxString group_name)
@@ -1612,148 +2006,11 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
         wxString suffix = filename.Mid(filename.Find('.', true)).MakeLower();
         if (suffix == ".csv")
         {
-            wxTextFile csv(filename);
-            csv.Open();
-            if (!csv.IsOpened())
-                continue;
-
-            wxArrayString swcdata = wxArrayString();
-            map<wxString, Color> swccolors;
-            wxString str = csv.GetFirstLine();
-            wxArrayString linkswcstr;
-            while(!csv.Eof())
-            {
-                wxStringTokenizer tkz(str, wxT(","));
-                wxArrayString elems;
-                while(tkz.HasMoreTokens())
-                    elems.Add(tkz.GetNextToken());
-                if (elems.Count() >= 10)
-                {
-					if (swcdata.Count() == 0)
-					{
-						elems.Clear();
-						str = csv.GetNextLine(); //skip the first line (header)
-						wxStringTokenizer tkz(str, wxT(","));
-						while (tkz.HasMoreTokens())
-							elems.Add(tkz.GetNextToken());
-					}
-                    wxString key = elems[3] + "_" + elems[9];
-                    wxString path = "Cell" + elems[4] + "." + elems[3] + "_" + elems[9];
-                    wxString swc_line = wxString::Format("%d 6 %s %s %s %f -1 %s", (int)swcdata.Count()+1, elems[1], elems[0], elems[2], 0.1f, path);
-                    swcdata.Add(swc_line);
-                    
-                    if (elems.Count() >= 14)
-                    {
-                        Color col(1.0, 1.0, 1.0);
-                        elems[10].ToDouble(&col[0]);
-                        elems[11].ToDouble(&col[1]);
-                        elems[12].ToDouble(&col[2]);
-                        col[0] = col[0] / 255.0;
-                        col[1] = col[1] / 255.0;
-                        col[2] = col[2] / 255.0;
-                        swccolors[path] = col;
-                        
-                        long link2 = -1;
-                        elems[13].ToLong(&link2);
-						if (link2 == 0)
-							link2 = -1;
-                        path = "Cell" + elems[4];
-                        swc_line = wxString::Format("%d 0 %s %s %s %f %d %s", (int)swcdata.Count()+1, elems[1], elems[0], elems[2], 0.01f, (int)link2*2, path);
-                        swcdata.Add(swc_line);
-                    }
-                }
-                else if (elems.Count() >= 3)
-                {
-                    wxString swc_line = wxString::Format("%d 6 %s %s %s %f -1", (int)swcdata.Count()+1, elems[0], elems[1], elems[2], 0.1f);
-                    swcdata.Add(swc_line);
-                }
-                str = csv.GetNextLine();
-            }
-            csv.Close();
-
-            MeshGroup* mg = nullptr;
-            
-            wxString name = filename.Mid(filename.Find(GETSLASH(), true)+1);;
-            wxArrayString data = swcdata;
-            
-            Annotations *annotations = new Annotations();
-            wxString gname = name.Mid(name.Find(' ', true)+1);
-            
-            //generate swc
-            wxString temp_swc_path = wxFileName::CreateTempFileName(wxStandardPaths::Get().GetTempDir() + wxFileName::GetPathSeparator()) + ".swc";
-            wxTextFile swc(temp_swc_path);
-            if (swc.Exists())
-            {
-                if (!swc.Open())
-                    continue;
-                swc.Clear();
-            }
-            else
-            {
-                if (!swc.Create())
-                    continue;
-            }
-            for(int j = 0; j < data.Count(); j++)
-            {
-                swc.AddLine(data[j]);
-                wxStringTokenizer tkz(data[j], wxT(" "));
-                wxArrayString elems;
-                while(tkz.HasMoreTokens())
-                    elems.Add(tkz.GetNextToken());
-                if (elems.Count() >= 7)
-                {
-                    double x, y, z;
-                    long link;
-                    elems[2].ToDouble(&x);
-                    elems[3].ToDouble(&y);
-                    elems[4].ToDouble(&z);
-                    elems[6].ToLong(&link);
-                    Point pos = Point(x, y, z);
-                    if (link < 0)
-                    {
-                        if (elems.Count() >= 8)
-                            annotations->AddText(elems[7].ToStdString(), pos, "");
-                        else
-                            annotations->AddText(gname.ToStdString(), pos, "");
-                    }
-                }
-            }
-            swc.Write();
-            swc.Close();
-            
-            //load swc
-            if (m_data_mgr.LoadMeshData(temp_swc_path, wxT("")))
-            {
-                MeshData* md = m_data_mgr.GetLastMeshData();
-                if (md)
-                {
-                    md->SetName(name);
-                    md->SetAnnotations(annotations);
-                    if (swccolors.count(name) > 0)
-                    {
-                        Color color = swccolors[name];
-                        //TODO: set colors of mesh groups
-                    }
-                    
-                    if (mg)
-                    {
-                        mg->InsertMeshData(mg->GetMeshNum()-1, md);
-                        if (vrv)
-                        {
-                            vrv->SetMeshPopDirty();
-                            vrv->InitView(INIT_BOUNDS | INIT_CENTER);
-                        }
-                    }
-                    else
-                        vrv->AddMeshData(md);
-
-					md_sel = md;
-                }
-                else
-                    delete annotations;
-            }
-            else
-                delete annotations;
+            ConvertCSV2SWC(filename, vrv);
+        }
+        else if (suffix == ".nml")
+        {
+            ConvertNML2SWC(filename, vrv);
         }
         else
         {
@@ -1774,18 +2031,18 @@ void VRenderFrame::LoadMeshes(wxArrayString files, VRenderView* vrv, wxArrayStri
                 if (i==int(files.Count()-1))
                     md_sel = md;
             }
+            
+            if (md_sel)
+                UpdateTree(md_sel->GetName(), 3);
+            else if (group)
+                UpdateTree(group->GetName(), 6);
+            else
+                UpdateTree();
         }
 	}
 
 	//if (vrv)
 	//	vrv->InitView(INIT_BOUNDS | INIT_CENTER);
-
-	if (md_sel)
-		UpdateTree(md_sel->GetName(), 3);
-	else if (group)
-        UpdateTree(group->GetName(), 6);
-    else
-		UpdateTree();
 
 	//if (vrv)
 	//	vrv->InitView(INIT_BOUNDS|INIT_CENTER);
@@ -1798,7 +2055,7 @@ void VRenderFrame::OnOpenMesh(wxCommandEvent& WXUNUSED(event))
 {
 	wxFileDialog *fopendlg = new wxFileDialog(
 		this, "Choose the volume data file", "", "",
-        "All Supported|*.obj;*.swc;*.ply|OBJ files (*.obj)|*.obj|SWC files (*.swc)|*.swc|PLY files (*.ply)|*.ply",
+        "All Supported|*.obj;*.swc;*.ply;*.nml|OBJ files (*.obj)|*.obj|SWC files (*.swc)|*.swc|PLY files (*.ply)|*.ply||NML files (*.nml)|*.nml",
 		wxFD_OPEN|wxFD_MULTIPLE);
 
 	int rval = fopendlg->ShowModal();

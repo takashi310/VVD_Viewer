@@ -347,6 +347,8 @@ public:
 	void SaveProject(wxString& filename);
 	void LoadVolumes(wxArrayString files, VRenderView* view = 0, vector<vector<AnnotationDB>> annotations = vector<vector<AnnotationDB>>(), size_t datasize = 0LL, wxArrayString descs = wxArrayString());
 	void LoadMeshes(wxArrayString files, VRenderView* view = 0, wxArrayString descs = wxArrayString(), wxString group_name=wxString());
+    void ConvertCSV2SWC(wxString filename, VRenderView* view = NULL);
+    void ConvertNML2SWC(wxString filename, VRenderView* view = NULL);
 
 	void AddVolume(VolumeData *vd, VRenderView* view);
 

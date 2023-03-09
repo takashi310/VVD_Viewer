@@ -110,7 +110,7 @@ bool DnDFile::OnDropFiles(wxCoord x, wxCoord y, const wxArrayString &filenames)
                     {
                         volumes.Add(filename);
                     }
-                    else if (suffix == ".obj" || suffix == ".swc" || suffix == ".ply" || suffix == ".csv")
+                    else if (suffix == ".obj" || suffix == ".swc" || suffix == ".ply" || suffix == ".csv" || suffix == ".nml")
                     {
                         meshes.Add(filename);
                     }
@@ -178,7 +178,7 @@ bool DnDFile::OnDropFiles(wxCoord x, wxCoord y, const wxArrayString &filenames)
                             {
                                 volumes.Add(fn);
                             }
-                            else if (suffix == ".obj" || suffix == ".swc" || suffix == ".ply" || suffix == ".csv")
+                            else if (suffix == ".obj" || suffix == ".swc" || suffix == ".ply" || suffix == ".csv" || suffix == ".nml")
                             {
                                 meshes.Add(fn);
                             }
