@@ -15788,6 +15788,24 @@ Point* VRenderVulkanView::GetEditingRulerPoint(int mx, int my)
 	{
 		Ruler* ruler = m_ruler_list[i];
 		if (!ruler) continue;
+        
+        bool skip = true;
+        if (m_cur_vol)
+        {
+            for (size_t j=0; j<ruler->GetNumPoint(); ++j)
+            {
+                if (m_cur_vol->InsideClippingPlanes(*(ruler->GetPoint(j))))
+                {
+                    skip = false;
+                    break;
+                }
+            }
+        }
+        else
+            skip = false;
+        
+        if (skip)
+            continue;
 
 		for (j=0; j<ruler->GetNumPoint(); j++)
 		{
@@ -17225,6 +17243,7 @@ void VRenderVulkanView::OnMouse(wxMouseEvent& event)
 					if (t <= 0.0)
 						failed = true;
 				}
+                
 				if (!failed)
 				{
 					m_editing_ruler_point->x(point.x());

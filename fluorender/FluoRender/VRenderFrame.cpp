@@ -1832,9 +1832,13 @@ void VRenderFrame::ConvertNML2SWC(wxString filename, VRenderView* vrv)
             double radius_scale = glm::length(res);
             
             if (elem->Attribute("name"))
+            {
                 name = elem->Attribute("name");
+                name = wxString::Format("%d_", count) + name;
+            }
             else
                 name = wxString::Format("component_%d", count);
+            count++;
             
             if (elem->Attribute("color.r"))
             {
