@@ -59,7 +59,8 @@ namespace FLIVR
 		fog_(false),
 		alpha_(1.0),
         threshold_(0.0f),
-		update_(true)
+		update_(true),
+        palette_dirty(false)
 	{
 		Plane* plane = 0;
 		//x
@@ -108,7 +109,11 @@ namespace FLIVR
 		update_(true),
 		bounds_(copy.bounds_),
 		device_(copy.device_),
-		depthformat_(copy.depthformat_)
+		depthformat_(copy.depthformat_),
+        roi_tree_(copy.roi_tree_),
+        palette_dirty(true),
+        roi_inv_dict_(copy.roi_inv_dict_),
+        roi_inv_state_(copy.roi_inv_state_)
 	{
 		//clipping planes
 		for (int i=0; i<(int)copy.planes_.size(); i++)
@@ -164,6 +169,9 @@ void MeshRenderer::init_palette()
     memcpy(palette_, (const void *)palettes::palette_random_256_256_4, sizeof(unsigned char)*MR_PALETTE_SIZE*MR_PALETTE_ELEM_COMP);
     memcpy(base_palette_, (const void *)palettes::palette_random_256_256_4, sizeof(unsigned char)*MR_PALETTE_SIZE*MR_PALETTE_ELEM_COMP);
     
+    palette_[0] = 255;
+    base_palette_[0] = 255;
+    
     if (palette_tex_id_.empty())
         m_vulkan->GenTextures2DAllDevice(palette_tex_id_, VK_FORMAT_R8G8B8A8_UNORM, VK_FILTER_NEAREST, MR_PALETTE_W, MR_PALETTE_H);
     m_vulkan->UploadTextures(palette_tex_id_, palette_);
@@ -181,20 +189,133 @@ void MeshRenderer::update_palette_tex()
 
 std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> MeshRenderer::get_palette()
 {
-    update_sel_segs();
+    if (palette_dirty)
+        update_palette_tex();
     
     if (sel_ids_.empty() && roi_tree_.empty()) return base_palette_tex_id_;
     else return palette_tex_id_;
 }
-void MeshRenderer::put_node(wstring path, wstring name)
+
+void MeshRenderer::update_palette(const wstring &path)
 {
-    roi_tree_.put(path, name);
+    boost::property_tree::wptree &tree = roi_tree_.get_child(path);
+    int id = boost::lexical_cast<int>(tree.get_value<wstring>());
+    bool state = roi_inv_state_[id];
+    bool pstate = true;
+    if (state)
+    {
+        wstring parent = path;
+        size_t found = path.find_last_of(L".");
+        while (found != wstring::npos)
+        {
+            parent = parent.substr(0, found);
+            int pid = boost::lexical_cast<int>(roi_tree_.get<wstring>(parent));
+            pstate = roi_inv_state_[pid];
+            if (!pstate)
+                break;
+            found = parent.find_last_of(L".");
+        }
+    }
+    if (pstate)
+    {
+        update_palette(tree, state);
+        palette_dirty = true;
+    }
+}
+
+void MeshRenderer::update_palette(const boost::property_tree::wptree& tree, bool inherited_state)
+{
+    int id = boost::lexical_cast<int>(tree.get_value<wstring>());
+    bool state = roi_inv_state_[id] && inherited_state;
+    if (id < 0)
+    {
+        for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
+            update_palette(child->second, state);
+    }
+    else
+    {
+        if (state)
+        {
+            for (int j = 0; j < MR_PALETTE_ELEM_COMP; j++)
+                palette_[id * MR_PALETTE_ELEM_COMP + j] = base_palette_[id * MR_PALETTE_ELEM_COMP + j];
+        }
+        else
+        {
+            for (int j = 0; j < MR_PALETTE_ELEM_COMP; j++)
+                palette_[id * MR_PALETTE_ELEM_COMP + j] = 0;
+        }
+    }
+}
+
+void MeshRenderer::put_node(wstring path, wstring wsid)
+{
+    int id = boost::lexical_cast<int>(wsid);
+    roi_tree_.put(path, wsid);
+    roi_inv_dict_[id] = path;
+    roi_inv_state_[id] = true;
+}
+void MeshRenderer::put_node(wstring path, int id)
+{
+    wstring wsid = boost::lexical_cast<wstring>(id);
+    roi_tree_.put(path, wsid);
+    roi_inv_dict_[id] = path;
+    roi_inv_state_[id] = true;
+}
+
+void MeshRenderer::init_group_ids()
+{
+    int count = 0;
+    init_group_ids(roi_tree_, count, L"");
+}
+
+void MeshRenderer::init_group_ids(const boost::property_tree::wptree& tree, int &count, const wstring& parent)
+{
+    for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
+    {
+        wstring c_path = (parent.empty() ? L"" : parent + L".") + child->first;
+        try
+        {
+            const auto val = tree.get_optional<wstring>(child->first);
+            if (!val || val->empty())
+            {
+                count--;
+                put_node(c_path, count);
+            }
+        }
+        catch (boost::bad_lexical_cast e)
+        {
+            cerr << "MeshRenderer::init_group_ids(const boost::property_tree::wptree& tree, int &count, const wstring& parent): bad_lexical_cast" << endl;
+        }
+        init_group_ids(child->second, count, parent);
+    }
+}
+
+void MeshRenderer::set_roi_state(int id, bool state)
+{
+    roi_inv_state_[id] = state;
+    update_palette(roi_inv_dict_[id]);
+}
+void MeshRenderer::toggle_roi_state(int id)
+{
+    if (roi_inv_state_.count(id) > 0)
+    {
+        roi_inv_state_[id] = !roi_inv_state_[id];
+        update_palette(roi_inv_dict_[id]);
+    }
+}
+bool MeshRenderer::get_roi_state(int id)
+{
+    if (roi_inv_state_.count(id) > 0)
+        return roi_inv_state_[id];
+    else
+        return false;
 }
 
 boost::optional<wstring> MeshRenderer::get_roi_path(int id)
 {
-    return get_roi_path(id, roi_tree_, L"");
+    return roi_inv_dict_[id];
 }
+/*
 boost::optional<wstring> MeshRenderer::get_roi_path(int id, const wptree& tree, const wstring &parent)
 {
     for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
@@ -216,11 +337,13 @@ boost::optional<wstring> MeshRenderer::get_roi_path(int id, const wptree& tree, 
 
     return boost::none;
 }
-
-boost::optional<wstring> MeshRenderer::get_roi_path(wstring name)
+*/
+boost::optional<wstring> MeshRenderer::get_roi_path(wstring wsid)
 {
-    return get_roi_path(name, roi_tree_, L"");
+    int id = boost::lexical_cast<int>(wsid);
+    return roi_inv_dict_[id];
 }
+/*
 boost::optional<wstring> MeshRenderer::get_roi_path(wstring name, const wptree& tree, const wstring& parent)
 {
     for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
@@ -237,7 +360,7 @@ boost::optional<wstring> MeshRenderer::get_roi_path(wstring name, const wptree& 
 
     return boost::none;
 }
-
+*/
 void MeshRenderer::set_roi_name(wstring name, int id, wstring parent_name)
 {
     int edid = (id == -1) ? edit_sel_id_ : id;
@@ -833,12 +956,15 @@ void MeshRenderer::update_palette(int mode, float fac)
 
 bool MeshRenderer::is_sel_id(int id)
 {
-	auto ite = sel_ids_.find(id);
+	/*
+    auto ite = sel_ids_.find(id);
 
 	if (ite != sel_ids_.end())
 		return true;
 	else
 		return false;
+     */
+    return true;
 }
 
 void MeshRenderer::add_sel_id(int id)

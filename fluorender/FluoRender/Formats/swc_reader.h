@@ -31,10 +31,10 @@ public:
         return m_model_extra_data.size() > 0 ? &m_model_extra_data : NULL;
     }
     
-    string GetGroupName(size_t id)
+    wstring GetGroupName(size_t id)
     {
         if (id < 0 || id >= m_group_names.size())
-            return "";
+            return L"";
         return m_group_names[id];
     }
     size_t GetGroupNum() { return m_group_names.size(); }
@@ -54,7 +54,7 @@ private:
 	vector<unsigned int> m_model_tris;
     
     vector<vector<unsigned int>> m_model_group_tris;
-    vector<string> m_group_names;
+    vector<wstring> m_group_names;
     vector<size_t> m_v_group_id;
 
 	vector<glm::vec3> m_sphere_verts_cache;

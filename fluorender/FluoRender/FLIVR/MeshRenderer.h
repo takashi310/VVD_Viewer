@@ -75,7 +75,8 @@ namespace FLIVR
         void init_palette();
         void update_palette_tex();
         std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> get_palette();
-        void put_node(wstring path, wstring name=L"");
+        void put_node(wstring path, int id=-1);
+        void put_node(wstring path, wstring wsid=L"");
         void set_roi_name(wstring name, int id=-1, wstring parent_name=wstring());
         void set_roi_name(wstring name, int id, int parent_id);
         wstring check_new_roi_name(wstring name);
@@ -98,14 +99,16 @@ namespace FLIVR
         void update_sel_segs(const boost::property_tree::wptree& tree);
         boost::property_tree::wptree *get_roi_tree(){ return &roi_tree_; }
         boost::optional<wstring> get_roi_path(int id);
-        boost::optional<wstring> get_roi_path(int id, const boost::property_tree::wptree& tree, const wstring& parent);
-        boost::optional<wstring> get_roi_path(wstring name);
-        boost::optional<wstring> get_roi_path(wstring name, const boost::property_tree::wptree& tree, const wstring& parent);
+        //boost::optional<wstring> get_roi_path(int id, const boost::property_tree::wptree& tree, const wstring& parent);
+        boost::optional<wstring> get_roi_path(wstring wsid);
+        //boost::optional<wstring> get_roi_path(wstring name, const boost::property_tree::wptree& tree, const wstring& parent);
         int get_roi_id(wstring name);
         void set_id_color(unsigned char r, unsigned char g, unsigned char b, bool update=true, int id=-1);
         void get_id_color(unsigned char &r, unsigned char &g, unsigned char &b, int id=-1);
         void get_rendered_id_color(unsigned char &r, unsigned char &g, unsigned char &b, int id=-1);
         //0-dark; 1-gray; 2-invisible;
+        void update_palette(const wstring &path);
+        void update_palette(const boost::property_tree::wptree& tree, bool inherited_state);
         void update_palette(int mode, float fac=-1.0f);
         int get_roi_disp_mode(){ return desel_palette_mode_; }
         void set_desel_palette_mode_dark(float fac=0.1);
@@ -126,8 +129,17 @@ namespace FLIVR
         string exprot_selected_roi_ids();
         void import_roi_tree(const wstring &tree);
         void import_selected_ids(const string &sel_ids_str);
+        bool is_tree() {return !roi_inv_dict_.empty(); }
 
+        void init_group_ids();
+        void init_group_ids(const boost::property_tree::wptree& tree, int &count, const wstring& parent);
+        void set_roi_state(int id, bool state);
+        void toggle_roi_state(int id);
+        bool get_roi_state(int id);
         boost::property_tree::wptree roi_tree_;
+        map<int, wstring> roi_inv_dict_;
+        map<int, bool> roi_inv_state_;
+        bool palette_dirty;
 
 		//draw
 		void draw(const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf);

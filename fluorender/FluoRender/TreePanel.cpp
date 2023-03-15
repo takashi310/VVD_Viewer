@@ -2940,6 +2940,22 @@ void DataTreeCtrl::OnAct(wxTreeEvent &event)
 					}
 				}
 				break;
+            case 9://mesh segment
+            case 10://mesh segment group
+                {
+                    wxTreeItemId mesh_item = GetParentMeshItem(sel_item);
+                    if (mesh_item.IsOk())
+                    {
+                        wxString mname = GetItemBaseText(mesh_item);
+                        MeshData* md = vr_frame->GetDataManager()->GetMeshData(mname);
+                        if (md)
+                        {
+                            LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+                            md->ToggleROIState(item_data->id);
+                        }
+                    }
+                }
+                break;
 			}
 		}
 
@@ -3797,6 +3813,146 @@ wxTreeItemId DataTreeCtrl::AddMeshItem(wxTreeItemId par_item, const wxString &te
 	return item;
 }
 
+wxTreeItemId DataTreeCtrl::AddMeshItem(wxTreeItemId par_item, MeshData *md)
+{
+    wxTreeItemId item = AppendItem(par_item, md->GetName(), 1);
+    LayerInfo* item_data = new LayerInfo;
+    item_data->type = 3;//mesh data
+    SetItemData(item, item_data);
+
+    if (md->isTree())
+        BuildROITree(item, *md->getROITree(), md);
+
+    CollapseAllChildren(item);
+    
+    return item;
+}
+
+void DataTreeCtrl::UpdateROITreeIcons(MeshData* md)
+{
+    if (!md) return;
+
+    wxTreeItemId v_item = FindTreeItem(md->GetName());
+    if (!v_item.IsOk()) return;
+
+    UpdateROITreeIcons(v_item, md);
+}
+
+void DataTreeCtrl::UpdateROITreeIcons(wxTreeItemId par_item, MeshData* md)
+{
+    if (!par_item.IsOk() || !md) return;
+
+    wxTreeItemIdValue cookie;
+    wxTreeItemId child_item = GetFirstChild(par_item, cookie);
+    while (child_item.IsOk())
+    {
+        LayerInfo* item_data = (LayerInfo*)GetItemData(child_item);
+        if (!item_data)
+            continue;
+        int ii = item_data->icon / 2;
+        int id = item_data->id;
+        SetItemImage(child_item, md->GetROIState(id)?2*ii+1:2*ii);
+        item_data->icon = md->GetROIState(id)?2*ii+1:2*ii;
+
+        UpdateROITreeIcons(child_item, md);
+        child_item = GetNextChild(par_item, cookie);
+    }
+}
+
+void DataTreeCtrl::UpdateROITreeIconColor(MeshData* md)
+{
+    if (!md) return;
+
+    wxTreeItemId v_item = FindTreeItem(md->GetName());
+    if (!v_item.IsOk()) return;
+
+    UpdateROITreeIconColor(v_item, md);
+}
+
+void DataTreeCtrl::UpdateROITreeIconColor(wxTreeItemId par_item, MeshData* md)
+{
+    if (!par_item.IsOk() || !md) return;
+
+    wxTreeItemIdValue cookie;
+    wxTreeItemId child_item = GetFirstChild(par_item, cookie);
+    while (child_item.IsOk())
+    {
+        LayerInfo* item_data = (LayerInfo*)GetItemData(child_item);
+        if (!item_data)
+            continue;
+        int ii = item_data->icon / 2;
+        int id = item_data->id;
+        unsigned char r = 255, g = 255, b = 255;
+        if (item_data->type == 7)
+            md->GetIDColor(r, g, b, id);
+        wxColor wxc(r, g, b);
+        ChangeIconColor(ii, wxc);
+        
+        UpdateROITreeIconColor(child_item, md);
+        child_item = GetNextChild(par_item, cookie);
+    }
+}
+
+void DataTreeCtrl::UpdateMeshItem(wxTreeItemId item, MeshData *md)
+{
+    if (!item.IsOk() || !md) return;
+
+    SaveExpState();
+
+    SetItemText(item, md->GetName());
+
+    LayerInfo* item_data = (LayerInfo *)GetItemData(item);
+    item_data->type = 3;//volume data
+    
+    DeleteChildren(item);
+    if (md->isTree())
+        BuildROITree(item, *md->getROITree(), md);
+
+    LoadExpState();
+
+    return;
+}
+
+void DataTreeCtrl::BuildROITree(wxTreeItemId par_item, const boost::property_tree::wptree& tree, MeshData *md)
+{
+    for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
+    {
+        if (const auto val = tree.get_optional<wstring>(child->first))
+        {
+            try
+            {
+                wxString name = child->first;
+                wxTreeItemId item = AppendItem(par_item, name, 1);
+                wptree subtree = child->second;
+                LayerInfo* item_data = new LayerInfo;
+                int id = boost::lexical_cast<int>(*val);
+                item_data->type = id >= 0 ? 9 : 10; //9-mesh segment; 10-mesh segment group
+                item_data->id = id;
+                SetItemData(item, item_data);
+                if (md)
+                {
+                    AppendIcon();
+                    unsigned char r = 255, g = 255, b = 255;
+                    if (item_data->type == 9)
+                        md->GetIDColor(r, g, b, id);
+                    wxColor wxc(r, g, b);
+                    int ii = GetIconNum()-1;
+                    ChangeIconColor(ii, wxc);
+                    SetItemImage(item, md->isSelID(id)?2*ii+1:2*ii);
+                    item_data->icon = md->isSelID(id)?2*ii+1:2*ii;
+                }
+
+                BuildROITree(item, subtree, md);
+            }
+            catch (boost::bad_lexical_cast e)
+            {
+                cerr << "DataTreeCtrl::BuildROITree(wxTreeItemId par_item, const boost::property_tree::wptree& tree): bad_lexical_cast" << endl;
+            }
+            
+        }
+    }
+}
+
 void DataTreeCtrl::SetMeshItemImage(const wxTreeItemId item, int image)
 {
 	SetItemImage(item, image);
@@ -4281,6 +4437,30 @@ wxTreeItemId DataTreeCtrl::GetParentVolItem(wxTreeItemId item)
 		parent = GetItemParent(parent);
 	}
 	return rval;
+}
+
+wxTreeItemId DataTreeCtrl::GetParentMeshItem(wxTreeItemId item)
+{
+    wxTreeItemId rval;
+
+    if (!item.IsOk()) return rval;
+
+    LayerInfo* item_data = (LayerInfo*)GetItemData(item);
+    if (item_data->type != 9 && item_data->type != 10)
+        return rval;
+
+    wxTreeItemId parent = GetItemParent(item);
+    while (parent.IsOk())
+    {
+        item_data = (LayerInfo*)GetItemData(parent);
+        if (item_data->type == 3)
+        {
+            rval = parent;
+            break;
+        }
+        parent = GetItemParent(parent);
+    }
+    return rval;
 }
 
 void DataTreeCtrl::ExpandDataTreeItem(wxString name, bool expand_children)
@@ -5113,6 +5293,31 @@ wxTreeItemId TreePanel::AddMeshItem(wxTreeItemId par_item, const wxString &text)
 	if (m_datatree)
 		id = m_datatree->AddMeshItem(par_item, text);
 	return id;
+}
+
+wxTreeItemId TreePanel::AddMeshItem(wxTreeItemId par_item, MeshData* md)
+{
+    wxTreeItemId id;
+    if (m_datatree)
+        id = m_datatree->AddMeshItem(par_item, md);
+    return id;
+}
+
+void TreePanel::UpdateROITreeIcons(MeshData* md)
+{
+    if (m_datatree)
+        m_datatree->UpdateROITreeIcons(md);
+}
+void TreePanel::UpdateROITreeIconColor(MeshData* md)
+{
+    if (m_datatree)
+        m_datatree->UpdateROITreeIconColor(md);
+}
+
+void TreePanel::UpdateMeshItem(wxTreeItemId item, MeshData* md)
+{
+    if (m_datatree)
+        m_datatree->UpdateMeshItem(item, md);
 }
 
 void TreePanel::SetMeshItemImage(const wxTreeItemId item, int image)

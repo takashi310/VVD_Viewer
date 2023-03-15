@@ -44,6 +44,7 @@ DEALINGS IN THE SOFTWARE.
 
 class VRenderView;
 class VolumeData;
+class MeshData;
 
 //---------------------------------------
 
@@ -200,6 +201,10 @@ public:
 	void SetVolItemImage(const wxTreeItemId item, int image);
 	//mesh data item
 	wxTreeItemId AddMeshItem(wxTreeItemId par_item, const wxString &text);
+    wxTreeItemId AddMeshItem(wxTreeItemId par_item, MeshData* md);
+    void UpdateMeshItem(wxTreeItemId item, MeshData* md);
+    void UpdateROITreeIcons(MeshData* md);
+    void UpdateROITreeIconColor(MeshData* md);
 	void SetMeshItemImage(const wxTreeItemId item, int image);
 	//annotation item
 	wxTreeItemId AddAnnotationItem(wxTreeItemId par_item, const wxString &text);
@@ -237,6 +242,7 @@ public:
 
 	void TraversalExpand(wxTreeItemId item);
 	wxTreeItemId GetParentVolItem(wxTreeItemId item);
+    wxTreeItemId GetParentMeshItem(wxTreeItemId item);
 	void ExpandDataTreeItem(wxString name, bool expand_children=false);
 	void CollapseDataTreeItem(wxString name, bool collapse_children=false);
 
@@ -297,7 +303,10 @@ private:
 
 	void UpdateROITreeIcons(wxTreeItemId par_item, VolumeData* vd);
 	void UpdateROITreeIconColor(wxTreeItemId par_item, VolumeData* vd);
+    void UpdateROITreeIcons(wxTreeItemId par_item, MeshData* md);
+    void UpdateROITreeIconColor(wxTreeItemId par_item, MeshData* md);
 	void BuildROITree(wxTreeItemId par_item, const boost::property_tree::wptree& tree, VolumeData *vd);
+    void BuildROITree(wxTreeItemId par_item, const boost::property_tree::wptree& tree, MeshData *md);
 
 	void OnContextMenu(wxContextMenuEvent &event );
 
@@ -415,6 +424,10 @@ public:
 	wxTreeItemId FindTreeItem(wxString name);
 	void SetVolItemImage(const wxTreeItemId item, int image);
 	wxTreeItemId AddMeshItem(wxTreeItemId par_item, const wxString &text);
+    wxTreeItemId AddMeshItem(wxTreeItemId par_item, MeshData* md);
+    void UpdateROITreeIcons(MeshData* md);
+    void UpdateROITreeIconColor(MeshData* md);
+    void UpdateMeshItem(wxTreeItemId item, MeshData* md);
 	void SetMeshItemImage(const wxTreeItemId item, int image);
 	wxTreeItemId AddAnnotationItem(wxTreeItemId par_item, const wxString &text);
 	void SetAnnotationItemImage(const wxTreeItemId item, int image);

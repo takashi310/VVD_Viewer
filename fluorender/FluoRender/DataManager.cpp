@@ -4551,7 +4551,16 @@ int MeshData::Load(wxString &filename)
 	m_mr = new FLIVR::MeshRenderer(m_data);
     
     if (m_swc_reader)
+    {
         SetExtraVertexData(m_swc_reader->GetModelExtraData());
+        
+        int group_num = m_swc_reader->GetGroupNum();
+        for (int i = 0; i < group_num; i++)
+        {
+            PutROINode(m_swc_reader->GetGroupName(i), i);
+        }
+        InitROIGroup();
+    }
 
 	return 1;
 }

@@ -375,7 +375,13 @@ public:
 
     bool InsideClippingPlanes(Point pos);
     
+    bool isTree() { return m_mr ? m_mr->is_tree() : false; }
+    void InitROIGroup() { if (m_mr) m_mr->init_group_ids(); }
+    void SetROIState(int id, bool state) { if (m_mr) m_mr->set_roi_state(id, state); }
+    void ToggleROIState(int id) { if (m_mr) m_mr->toggle_roi_state(id); }
+    bool GetROIState(int id)  { return m_mr ? m_mr->get_roi_state(id) : false; }
     void PutROINode(wstring path, wstring name=L""){ if (m_mr) m_mr->put_node(path, name); }
+    void PutROINode(wstring path, int id = -1){ if (m_mr) m_mr->put_node(path, id); }
     void SetROIName(wstring name, int id=-1, wstring parent_name=L""){ if (m_mr) m_mr->set_roi_name(name, id, parent_name); }
     int AddROIGroup(wstring parent_name=L"", wstring name=L""){ return m_mr ? m_mr->add_roi_group_node(parent_name, name) : -1; }
     int GetNextSiblingROI(int id){ return m_mr ? m_mr->get_next_sibling_roi(id) : -1; }

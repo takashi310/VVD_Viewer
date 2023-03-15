@@ -1626,7 +1626,7 @@ void VRenderFrame::ConvertCSV2SWC(wxString filename, VRenderView* vrv)
                 elems[13].ToLong(&link2);
                 if (link2 == 0)
                     link2 = -1;
-                path = "Cell" + elems[4];
+                path = "Cell" + elems[4] + ".links";
                 swc_line = wxString::Format("%d 0 %s %s %s %f %d %s", (int)swcdata.Count()+1, elems[1], elems[0], elems[2], 0.01f, (int)link2*2, path);
                 swcdata.Add(swc_line);
             }
@@ -2349,6 +2349,8 @@ void VRenderFrame::UpdateTreeIcons()
 					if (!md)
 						break;
 					m_tree_panel->SetMeshItemImage(layer_item, md->GetDisp()?2*iconid+1:2*iconid);
+                    if (md->isTree())
+                        m_tree_panel->UpdateROITreeIcons(md);
 				}
 				break;
 			case 4://annotations
@@ -2412,6 +2414,8 @@ void VRenderFrame::UpdateTreeIcons()
                             continue;
                         int iconid = item_data->icon / 2;
 						m_tree_panel->SetMeshItemImage(mesh_item, md->GetDisp()?2*iconid+1:2*iconid);
+                        if (md->isTree())
+                            m_tree_panel->UpdateROITreeIcons(md);
 					}
 				}
 				break;
@@ -2495,6 +2499,8 @@ void VRenderFrame::UpdateTreeColors()
 						(unsigned char)(diff.g()*255),
 						(unsigned char)(diff.b()*255));
 					m_tree_panel->ChangeIconColor(iconid, wxc);
+                    if (md->isTree())
+                        m_tree_panel->UpdateROITreeIconColor(md);
 				}
 				break;
 			case 4://annotations
@@ -2570,6 +2576,8 @@ void VRenderFrame::UpdateTreeColors()
 							(unsigned char)(diff.g()*255),
 							(unsigned char)(diff.b()*255));
 						m_tree_panel->ChangeIconColor(iconid, wxc);
+                        if (md->isTree())
+                            m_tree_panel->UpdateROITreeIconColor(md);
 					}
 				}
 				break;
@@ -2685,7 +2693,7 @@ void VRenderFrame::UpdateTree(wxString name, int type, bool set_calc)
 						(unsigned char)(diff.b()*255));
 					int ii = m_tree_panel->GetIconNum()-1;
 					m_tree_panel->ChangeIconColor(ii, wxc);
-					wxTreeItemId item = m_tree_panel->AddMeshItem(vrv_item, md->GetName());
+					wxTreeItemId item = m_tree_panel->AddMeshItem(vrv_item, md);
 					m_tree_panel->SetMeshItemImage(item, md->GetDisp()?2*ii+1:2*ii);
 					if (name == md->GetName() && (type == 3 || type < 0)) {
 						GetMeasureDlg()->GetSettings(vrv);
@@ -2779,7 +2787,7 @@ void VRenderFrame::UpdateTree(wxString name, int type, bool set_calc)
 							(unsigned char)(diff.b()*255));
 						int ii = m_tree_panel->GetIconNum()-1;
 						m_tree_panel->ChangeIconColor(ii, wxc);
-						wxTreeItemId item = m_tree_panel->AddMeshItem(group_item, md->GetName());
+						wxTreeItemId item = m_tree_panel->AddMeshItem(group_item, md);
 						m_tree_panel->SetMeshItemImage(item, md->GetDisp()?2*ii+1:2*ii);
 						if (name == md->GetName() && (type == 3 || type < 0))
 							sel_item = item;

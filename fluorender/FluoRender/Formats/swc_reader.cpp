@@ -133,8 +133,8 @@ void SWCReader::AddSolidSphere(glm::vec3 center, double radius, unsigned int sub
 	for (int i = 0; i < vertices.size(); i++)
 		vertices[i] *= radius;
 
-    float uv_u = ((groupid+1) % 256 + 0.5f) / 256.0f;
-    float uv_v = ((groupid+1) / 256 + 0.5f) / 256.0f;
+    float uv_u = ((groupid) % 256 + 0.5f) / 256.0f;
+    float uv_v = ((groupid) / 256 + 0.5f) / 256.0f;
     
 	int v_offset = m_model_verts.size();
     int uv_offset = m_model_uvs.size();
@@ -293,8 +293,8 @@ void SWCReader::AddSolidCylinder(glm::vec3 p1, glm::vec3 p2, double radius1, dou
 		RotateVertices(normals, glm::vec3(0.0), angle, glm::vec3(n));
 	}
     
-    float uv_u = ((groupid+1) % 256 + 0.5f) / 256.0f;
-    float uv_v = ((groupid+1) / 256 + 0.5f) / 256.0f;
+    float uv_u = ((groupid) % 256 + 0.5f) / 256.0f;
+    float uv_v = ((groupid) / 256 + 0.5f) / 256.0f;
 
 	int v_offset = m_model_verts.size();
     int uv_offset = m_model_uvs.size();
@@ -523,7 +523,7 @@ GLMmodel *SWCReader::GenerateSolidModel(double def_r, double r_scale, unsigned i
                 gtris[j] = m_model_group_tris[i][j];
             GLMgroup* group;
             group = (GLMgroup*)malloc(sizeof(GLMgroup));
-            group->name = STRDUP(m_group_names[i].c_str());
+            group->name = STRDUP(ws2s(m_group_names[i]).c_str());
             group->material = 0;
             group->numtriangles = m_model_group_tris[i].size();
             group->triangles = gtris;
@@ -592,8 +592,7 @@ void SWCReader::Preprocess()
     }
 
     string line, token;
-    vector<vector<string>> str_data;
-    map<string, vector<size_t>, less<string>> group_verts;
+    map<wstring, vector<size_t>, less<wstring>> group_verts;
     map<int, int> id_corresp;
     map<int, int> id_corresp2;
     int maxid = 0;
@@ -624,7 +623,7 @@ void SWCReader::Preprocess()
             
             if (tokens.size() >= 8)
             {
-                string gname = tokens[7].c_str();
+                wstring gname = s2ws(tokens[7]);
                 if (group_verts.find(gname) == group_verts.end())
                 {
                     vector<size_t> e;
@@ -661,7 +660,7 @@ void SWCReader::Preprocess()
     {
 		vector<glm::vec4> tmp_vertices;
 		vector<float> tmp_extra_data;
-        for (map<string, vector<size_t>>::iterator it = group_verts.begin(); it != group_verts.end(); it++)
+        for (map<wstring, vector<size_t>>::iterator it = group_verts.begin(); it != group_verts.end(); it++)
         {
             for (int i = 0; i < it->second.size(); i++)
             {
