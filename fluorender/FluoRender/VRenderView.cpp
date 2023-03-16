@@ -6169,12 +6169,26 @@ void VRenderVulkanView::PickMesh()
 		MeshData* md = m_md_pop_list[choose-1];
 		if (md)
 		{
-			VRenderFrame* frame = (VRenderFrame*)m_frame;
-			if (frame && frame->GetTree())
-			{
-				frame->GetTree()->SetFocus();
-				frame->GetTree()->Select(m_vrv->GetName(), md->GetName());
-			}
+            VRenderFrame* frame = (VRenderFrame*)m_frame;
+            if (frame && frame->GetTree())
+            {
+                if (md->isTree())
+                {
+                    md->SetMatrices(m_mv_mat, m_proj_mat);
+                    md->SetDevice(m_vulkan->devices[0]);
+                    md->DrawInt(0, m_fbo_pick, true, VkRect2D{0,0,0,0}, true);
+                    prim_dev->DownloadSubTexture2D(m_fbo_pick->attachments[0], &choose, offset, extent);
+                    VRenderFrame* frame = (VRenderFrame*)m_frame;
+                    frame->GetTree()->SetFocus();
+                    frame->GetTree()->SelectROI(md, choose);
+                }
+                else
+                {
+                    VRenderFrame* frame = (VRenderFrame*)m_frame;
+                    frame->GetTree()->SetFocus();
+                    frame->GetTree()->Select(m_vrv->GetName(), md->GetName());
+                }
+            }
 		}
 	}
 	else

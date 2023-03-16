@@ -292,6 +292,10 @@ namespace FLIVR
 	"	//MSH_FRAG_BODY_INT\n" \
 	"	FragUint = fubo.loci0;\n"
 
+#define MSH_FRAG_BODY_INT_SEGMENT \
+    "    //MSH_FRAG_BODY_INT_SEGMENT\n" \
+    "    FragUint = uint(OutTexcoord.x * 256.0) + uint(OutTexcoord.y * 256.0) * 256;\n"
+
 #define MSH_TAIL \
 	"}\n"
 
@@ -369,6 +373,13 @@ namespace FLIVR
 		}
 		else if (type_ == 1)
 			z << MSH_VERTEX_UNIFORM_MATRIX;
+        else if (type_ == 2)
+        {
+            z << MSH_VERTEX_INPUTS_N(1);
+            z << MSH_VERTEX_INPUTS_T(2);
+            z << MSH_VERTEX_OUTPUTS_T(1);
+            z << MSH_VERTEX_UNIFORM_MATRIX;
+        }
 
 		z << MSH_HEAD;
 
@@ -387,10 +398,15 @@ namespace FLIVR
 			if (fog_)
 				z << MSH_VERTEX_BODY_FOG;
 		}
+        else if (type_ == 2)
+            z << MSH_VERTEX_BODY_TEX;
 
 		z << MSH_TAIL;
 
 		s = z.str();
+        
+        //std::cerr << s << std::endl;
+        
 		return false;
 	}
 
@@ -487,6 +503,16 @@ namespace FLIVR
 			z << MSH_HEAD_CLIP;
 			z << MSH_FRAG_BODY_INT;
 		}
+        else if (type_ == 2)
+        {
+            z << MSH_FRAG_OUTPUTS_INT;
+            z << MSH_FRAG_INPUTS_POS(0);
+            z << MSH_FRAG_INPUTS_T(1);
+            z << MSH_FRAG_UNIFORMS;
+            z << MSH_HEAD;
+            z << MSH_HEAD_CLIP;
+            z << MSH_FRAG_BODY_INT_SEGMENT;
+        }
 
 		z << MSH_TAIL;
 

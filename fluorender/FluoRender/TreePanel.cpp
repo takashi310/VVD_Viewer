@@ -2785,6 +2785,29 @@ void DataTreeCtrl::SelectROI(VolumeData* vd, int id)
 	}
 }
 
+void DataTreeCtrl::SelectROI(MeshData* md, int id)
+{
+    if (!md || id < 0)
+        return;
+    
+    wxTreeItemId mitem = FindTreeItem(md->GetName());
+    if (!mitem.IsOk())
+            return;
+    
+    wxTreeItemId ritem = FindTreeItemBySegmentID(mitem, id);
+    if (!ritem.IsOk())
+        SelectItem(mitem);
+    else
+    {
+        int old_sposy = GetScrollPos(wxVERTICAL);
+        TraversalExpand(ritem);
+        SelectItem(ritem);
+        int new_sposy = GetScrollPos(wxVERTICAL);
+        if (old_sposy < new_sposy)
+            SetScrollPos(wxVERTICAL, new_sposy-1);
+    }
+}
+
 void DataTreeCtrl::OnSelChanged(wxTreeEvent& event)
 {
 	UpdateSelection();
@@ -3777,7 +3800,7 @@ wxTreeItemId DataTreeCtrl::FindTreeItem(wxTreeItemId par_item, const wxString& n
 	if (!item.IsOk()) return rval;
 
 	LayerInfo* item_data = (LayerInfo*)GetItemData(item);
-	if (!roi_tree && (item_data->type == 7 || item_data->type == 8))
+	if (!roi_tree && (item_data->type == 7 || item_data->type == 8 || item_data->type == 9 || item_data->type == 10))
 		return rval;
 
 	if (GetItemBaseText(item) == name) return item;
@@ -3792,6 +3815,28 @@ wxTreeItemId DataTreeCtrl::FindTreeItem(wxTreeItemId par_item, const wxString& n
 	}
 
 	return rval;
+}
+
+wxTreeItemId DataTreeCtrl::FindTreeItemBySegmentID(wxTreeItemId par_item, int id)
+{
+    wxTreeItemId item = par_item;
+    wxTreeItemId rval;
+    if (!item.IsOk()) return rval;
+
+    LayerInfo* item_data = (LayerInfo*)GetItemData(item);
+    if ((item_data->type == 7 || item_data->type == 8 || item_data->type == 9 || item_data->type == 10) && item_data && item_data->id == id)
+        return item;
+
+    wxTreeItemIdValue cookie;
+    wxTreeItemId child_item = GetFirstChild(item, cookie);
+    while (child_item.IsOk())
+    {
+        rval = FindTreeItemBySegmentID(child_item, id);
+        if (rval.IsOk()) return rval;
+        child_item = GetNextChild(item, cookie);
+    }
+
+    return rval;
 }
 
 void DataTreeCtrl::SetVolItemImage(const wxTreeItemId item, int image)
@@ -3822,8 +3867,6 @@ wxTreeItemId DataTreeCtrl::AddMeshItem(wxTreeItemId par_item, MeshData *md)
 
     if (md->isTree())
         BuildROITree(item, *md->getROITree(), md);
-
-    CollapseAllChildren(item);
     
     return item;
 }
@@ -4311,12 +4354,12 @@ void DataTreeCtrl::SaveExpState(wxTreeItemId node, const wxString& prefix)
 	}
 }
 
-void DataTreeCtrl::LoadExpState()
+void DataTreeCtrl::LoadExpState(bool expand_newitem)
 {
 	wxTreeItemId item = GetRootItem();
 	if (!item.IsOk()) return;
 
-	LoadExpState(item);
+	LoadExpState(item, wxT(""), expand_newitem);
 }
 
 void DataTreeCtrl::LoadExpState(wxTreeItemId node, const wxString& prefix, bool expand_newitem)
@@ -5400,6 +5443,12 @@ void TreePanel::SelectROI(VolumeData* vd, int id)
 		m_datatree->SelectROI(vd, id);
 }
 
+void TreePanel::SelectROI(MeshData* md, int id)
+{
+    if (m_datatree)
+        m_datatree->SelectROI(md, id);
+}
+
 void TreePanel::SelectBrush(int id)
 {
 	m_toolbar->ToggleTool(ID_BrushAppend, false);
@@ -5784,10 +5833,10 @@ void TreePanel::SaveExpState()
 		m_datatree->SaveExpState();
 }
 
-void TreePanel::LoadExpState()
+void TreePanel::LoadExpState(bool expand_newitem)
 {
 	if (m_datatree) 
-		m_datatree->LoadExpState();
+		m_datatree->LoadExpState(expand_newitem);
 }
 
 string TreePanel::ExportExpState()

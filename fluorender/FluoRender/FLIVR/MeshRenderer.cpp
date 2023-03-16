@@ -1509,7 +1509,7 @@ void MeshRenderer::import_selected_ids(const string& sel_ids_str)
 				static_cast<uint32_t>(dynamicStateEnables.size()),
 				0);
 
-		VkRenderPass renderpass = type != 1 ? m_msh_draw_pass[device] : m_msh_intdraw_pass[device];
+		VkRenderPass renderpass = (type == 1 || type == 2) ? m_msh_intdraw_pass[device] : m_msh_draw_pass[device];
 
 		MshShaderFactory::MshPipelineSettings pipeline_settings = m_vulkan->msh_shader_factory_->pipeline_[device];
 		VkGraphicsPipelineCreateInfo pipelineCreateInfo =
@@ -2233,7 +2233,7 @@ void MeshRenderer::import_selected_ids(const string& sel_ids_str)
 
 	}
 
-	void MeshRenderer::draw_integer(unsigned int name, const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf, VkRect2D scissor)
+	void MeshRenderer::draw_integer(unsigned int name, const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf, VkRect2D scissor, bool segment)
 	{
 		if (!data_ || !data_->vertices || !data_->triangles)
 			return;
@@ -2247,7 +2247,7 @@ void MeshRenderer::import_selected_ids(const string& sel_ids_str)
 
 		bool tex = data_->hastexture;
 
-		MeshPipeline pipeline = prepareMeshPipeline(device_, 1, MSHRENDER_BLEND_DISABLE, false);
+		MeshPipeline pipeline = prepareMeshPipeline(device_, segment ? 2 : 1, MSHRENDER_BLEND_DISABLE, false);
 		VkPipelineLayout pipelineLayout = m_vulkan->msh_shader_factory_->pipeline_[device_].pipelineLayout;
 
 		framebuf->replaceRenderPass(pipeline.renderpass);

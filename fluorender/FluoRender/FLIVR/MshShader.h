@@ -82,7 +82,7 @@ namespace FLIVR
 		bool emit_f(std::string& s);
 
 		VkDevice device_;
-		int type_;	//0:normal; 1:integer
+		int type_;	//0:normal; 1:integer 2:integer-segments
 		int peel_;	//0:no peeling; 1:peel positive; 2:peel both; -1:peel negative
 		bool tex_;
 		bool fog_;

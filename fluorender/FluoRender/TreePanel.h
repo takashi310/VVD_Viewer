@@ -198,6 +198,7 @@ public:
 	wxTreeItemId GetNextSibling_loop(wxTreeItemId item);
 	wxTreeItemId FindTreeItem(wxString name);
 	wxTreeItemId FindTreeItem(wxTreeItemId par_item, const wxString& name, bool roi_tree=false);
+    wxTreeItemId FindTreeItemBySegmentID(wxTreeItemId par_item, int id);
 	void SetVolItemImage(const wxTreeItemId item, int image);
 	//mesh data item
 	wxTreeItemId AddMeshItem(wxTreeItemId par_item, const wxString &text);
@@ -222,6 +223,7 @@ public:
 	int TraversalSelect(wxTreeItemId item, wxString name);
 	void Select(wxString view, wxString name);
 	void SelectROI(VolumeData* vd, int id);
+    void SelectROI(MeshData* vd, int id);
 
 	//brush commands (from the panel)
 	void BrushClear();
@@ -235,7 +237,7 @@ public:
 
 	void SaveExpState();
 	void SaveExpState(wxTreeItemId node, const wxString& prefix=wxT(""));
-	void LoadExpState();
+	void LoadExpState(bool expand_newitem=true);
 	void LoadExpState(wxTreeItemId node, const wxString& prefix=wxT(""), bool expand_newitem=true);
 	std::string ExportExpState();
 	void ImportExpState(const std::string &state);
@@ -442,7 +444,8 @@ public:
 	wxString GetCurrentSel();
 	void Select(wxString view, wxString name);
 	void SelectROI(VolumeData* vd, int id);
-
+    void SelectROI(MeshData* vd, int id);
+    
 	//set the brush icon down
 	void SelectBrush(int id);
 	int GetBrushSelected();
@@ -461,7 +464,7 @@ public:
 	bool isFixed() { return m_datatree ? m_datatree->isFixed() : false; }
 
 	void SaveExpState();
-	void LoadExpState();
+	void LoadExpState(bool expand_newitem = true);
 	std::string ExportExpState();
 	void ImportExpState(const std::string &state);
 

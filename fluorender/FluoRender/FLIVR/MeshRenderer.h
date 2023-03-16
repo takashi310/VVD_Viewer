@@ -144,7 +144,7 @@ namespace FLIVR
 		//draw
 		void draw(const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf);
 		void draw_wireframe(const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf);
-		void draw_integer(unsigned int name, const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf, VkRect2D scissor = { 0,0,0,0 });
+		void draw_integer(unsigned int name, const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf, VkRect2D scissor = { 0,0,0,0 }, bool segment=false);
 		void update();
 
 		//depth peeling

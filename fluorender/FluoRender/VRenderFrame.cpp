@@ -2623,6 +2623,8 @@ void VRenderFrame::UpdateTree(wxString name, int type, bool set_calc)
 	if (dm_vnum > 0) used_vols.resize(dm_vnum, 0);
 
 	wxTreeItemId sel_item;
+    
+    bool expand_newitem = true;
 
 	for (int i=0 ; i<(int)m_vrv_list.size() ; i++)
 	{
@@ -2694,6 +2696,7 @@ void VRenderFrame::UpdateTree(wxString name, int type, bool set_calc)
 					int ii = m_tree_panel->GetIconNum()-1;
 					m_tree_panel->ChangeIconColor(ii, wxc);
 					wxTreeItemId item = m_tree_panel->AddMeshItem(vrv_item, md);
+                    expand_newitem = false;
 					m_tree_panel->SetMeshItemImage(item, md->GetDisp()?2*ii+1:2*ii);
 					if (name == md->GetName() && (type == 3 || type < 0)) {
 						GetMeasureDlg()->GetSettings(vrv);
@@ -2788,6 +2791,7 @@ void VRenderFrame::UpdateTree(wxString name, int type, bool set_calc)
 						int ii = m_tree_panel->GetIconNum()-1;
 						m_tree_panel->ChangeIconColor(ii, wxc);
 						wxTreeItemId item = m_tree_panel->AddMeshItem(group_item, md);
+                        expand_newitem = false;
 						m_tree_panel->SetMeshItemImage(item, md->GetDisp()?2*ii+1:2*ii);
 						if (name == md->GetName() && (type == 3 || type < 0))
 							sel_item = item;
@@ -2814,7 +2818,7 @@ void VRenderFrame::UpdateTree(wxString name, int type, bool set_calc)
     
     m_clip_view->SyncClippingPlanes();
     
-	m_tree_panel->LoadExpState();
+    m_tree_panel->LoadExpState(expand_newitem);
 	m_tree_panel->SetScrollPos(wxVERTICAL, scroll_pos);
 
 	if (sel_item.IsOk())
