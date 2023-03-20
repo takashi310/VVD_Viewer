@@ -136,10 +136,15 @@ namespace FLIVR
         
         memcpy(palette_, copy.palette_, sizeof(unsigned char)*MR_PALETTE_SIZE*MR_PALETTE_ELEM_COMP);
         memcpy(base_palette_, copy.base_palette_, sizeof(unsigned char)*MR_PALETTE_SIZE*MR_PALETTE_ELEM_COMP);
+        memcpy(selection_palette_, copy.selection_palette_, sizeof(unsigned char)*MR_PALETTE_SIZE*MR_PALETTE_ELEM_COMP);
         
         if (palette_tex_id_.empty())
             m_vulkan->GenTextures2DAllDevice(palette_tex_id_, VK_FORMAT_R8G8B8A8_UNORM, VK_FILTER_NEAREST, MR_PALETTE_W, MR_PALETTE_H);
         m_vulkan->UploadTextures(palette_tex_id_, palette_);
+        
+        if (selection_palette_tex_id_.empty())
+            m_vulkan->GenTextures2DAllDevice(selection_palette_tex_id_, VK_FORMAT_R8G8B8A8_UNORM, VK_FILTER_NEAREST, MR_PALETTE_W, MR_PALETTE_H);
+        m_vulkan->UploadTextures(selection_palette_tex_id_, selection_palette_);
         
         if (base_palette_tex_id_.empty())
             m_vulkan->GenTextures2DAllDevice(base_palette_tex_id_, VK_FORMAT_R8G8B8A8_UNORM, VK_FILTER_NEAREST, MR_PALETTE_W, MR_PALETTE_H);
@@ -170,11 +175,16 @@ void MeshRenderer::init_palette()
     memcpy(base_palette_, (const void *)palettes::palette_random_256_256_4, sizeof(unsigned char)*MR_PALETTE_SIZE*MR_PALETTE_ELEM_COMP);
     
     palette_[0] = 255;
+    selection_palette_[0] = 255;
     base_palette_[0] = 255;
     
     if (palette_tex_id_.empty())
         m_vulkan->GenTextures2DAllDevice(palette_tex_id_, VK_FORMAT_R8G8B8A8_UNORM, VK_FILTER_NEAREST, MR_PALETTE_W, MR_PALETTE_H);
     m_vulkan->UploadTextures(palette_tex_id_, palette_);
+    
+    if (selection_palette_tex_id_.empty())
+        m_vulkan->GenTextures2DAllDevice(selection_palette_tex_id_, VK_FORMAT_R8G8B8A8_UNORM, VK_FILTER_NEAREST, MR_PALETTE_W, MR_PALETTE_H);
+    m_vulkan->UploadTextures(selection_palette_tex_id_, selection_palette_);
     
     if (base_palette_tex_id_.empty())
         m_vulkan->GenTextures2DAllDevice(base_palette_tex_id_, VK_FORMAT_R8G8B8A8_UNORM, VK_FILTER_NEAREST, MR_PALETTE_W, MR_PALETTE_H);
@@ -184,6 +194,7 @@ void MeshRenderer::init_palette()
 void MeshRenderer::update_palette_tex()
 {
     m_vulkan->UploadTextures(palette_tex_id_, palette_);
+    m_vulkan->UploadTextures(selection_palette_tex_id_, selection_palette_);
     m_vulkan->UploadTextures(base_palette_tex_id_, base_palette_);
 }
 
@@ -194,6 +205,14 @@ std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> MeshRenderer::get_p
     
     if (sel_ids_.empty() && roi_tree_.empty()) return base_palette_tex_id_;
     else return palette_tex_id_;
+}
+
+std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> MeshRenderer::get_selection_palette()
+{
+    if (palette_dirty)
+        update_palette_tex();
+    
+    return selection_palette_tex_id_;
 }
 
 void MeshRenderer::update_palette(const wstring &path)
@@ -244,6 +263,48 @@ void MeshRenderer::update_palette(const boost::property_tree::wptree& tree, bool
             for (int j = 0; j < MR_PALETTE_ELEM_COMP; j++)
                 palette_[id * MR_PALETTE_ELEM_COMP + j] = 0;
         }
+    }
+}
+
+void MeshRenderer::select_segment(int id)
+{
+    wstring path = L"";
+    if(roi_inv_dict_.count(id) > 0)
+        path = roi_inv_dict_[id];
+    select_segment(path);
+}
+
+void MeshRenderer::select_segment(const wstring &path)
+{
+    memset(selection_palette_, 0, sizeof(*selection_palette_)*MR_PALETTE_SIZE*MR_PALETTE_ELEM_COMP);
+    boost::property_tree::wptree &tree = roi_tree_.get_child(path);
+    select_segment(tree);
+    palette_dirty = true;
+    
+    if (!path.empty())
+    {
+        int id = boost::lexical_cast<int>(tree.get_value<wstring>());
+        if (id > 0)
+        {
+            for (int j = 0; j < MR_PALETTE_ELEM_COMP; j++)
+                selection_palette_[id * MR_PALETTE_ELEM_COMP + j] = base_palette_[id * MR_PALETTE_ELEM_COMP + j];
+        }
+    }
+}
+
+void MeshRenderer::select_segment(const boost::property_tree::wptree& tree)
+{
+    wstring val = tree.get_value<wstring>();
+    int id = !val.empty() ? boost::lexical_cast<int>(tree.get_value<wstring>()) : -1;
+    if (id < 0)
+    {
+        for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
+            select_segment(child->second);
+    }
+    else
+    {
+        for (int j = 0; j < MR_PALETTE_ELEM_COMP; j++)
+            selection_palette_[id * MR_PALETTE_ELEM_COMP + j] = base_palette_[id * MR_PALETTE_ELEM_COMP + j];
     }
 }
 
@@ -309,6 +370,15 @@ bool MeshRenderer::get_roi_state(int id)
         return roi_inv_state_[id];
     else
         return false;
+}
+map<int, bool> MeshRenderer::get_all_roi_state()
+{
+    return roi_inv_state_;
+}
+void MeshRenderer::set_all_roi_state(const map<int, bool> &states)
+{
+    roi_inv_state_ = states;
+    update_palette(roi_tree_, true);
 }
 
 boost::optional<wstring> MeshRenderer::get_roi_path(int id)
@@ -2025,9 +2095,10 @@ void MeshRenderer::import_selected_ids(const string& sel_ids_str)
 			update_ = false;
 		}
 
-		bool tex = data_->hastexture;
+        bool tex = data_->hastexture || (data_->groups && data_->groups->next);
+        int type = (data_->groups && data_->groups->next) ? 3 : 0;
 
-		MeshPipeline pipeline = prepareMeshPipeline(device_, 0, MSHRENDER_BLEND_DISABLE, tex, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_LINE);
+		MeshPipeline pipeline = prepareMeshPipeline(device_, type, MSHRENDER_BLEND_OVER, tex, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_LINE);
 		VkPipelineLayout pipelineLayout = m_vulkan->msh_shader_factory_->pipeline_[device_].pipelineLayout;
 
 		framebuf->replaceRenderPass(pipeline.renderpass);
@@ -2158,8 +2229,20 @@ void MeshRenderer::import_selected_ids(const string& sel_ids_str)
 				vert_ubuf.flush(VK_WHOLE_SIZE, vert_ubuf_offset);
 			frag_ubuf.flush();
 		}
-		if (depth_peel_)
-			descriptorWritesBase.push_back(MshShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 1, &m_depth_tex->descriptor));
+        
+        if (data_->groups && data_->groups->next) //multiple groups
+        {
+            auto palette = get_palette();
+            if (palette.count(device_) > 0)
+                descriptorWritesBase.push_back(MshShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 0, &palette[device_]->descriptor));
+            auto sel_palette = get_selection_palette();
+            if (sel_palette.count(device_) > 0)
+                descriptorWritesBase.push_back(MshShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 2, &sel_palette[device_]->descriptor));
+        }
+        if (depth_peel_)
+        {
+            descriptorWritesBase.push_back(MshShaderFactory::writeDescriptorSetTex(VK_NULL_HANDLE, 1, &m_depth_tex->descriptor));
+        }
 
 		if (!descriptorWritesBase.empty())
 		{

@@ -375,6 +375,7 @@ public:
 
     bool InsideClippingPlanes(Point pos);
     
+    void SelectSegment(int id=-INT_MAX) { if (m_mr) m_mr->select_segment(id); }
     bool isTree() { return m_mr ? m_mr->is_tree() : false; }
     void InitROIGroup() { if (m_mr) m_mr->init_group_ids(); }
     void SetROIState(int id, bool state) { if (m_mr) m_mr->set_roi_state(id, state); }

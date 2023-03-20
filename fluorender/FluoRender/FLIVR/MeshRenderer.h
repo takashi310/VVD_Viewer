@@ -75,6 +75,7 @@ namespace FLIVR
         void init_palette();
         void update_palette_tex();
         std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> get_palette();
+        std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> get_selection_palette();
         void put_node(wstring path, int id=-1);
         void put_node(wstring path, wstring wsid=L"");
         void set_roi_name(wstring name, int id=-1, wstring parent_name=wstring());
@@ -110,6 +111,9 @@ namespace FLIVR
         void update_palette(const wstring &path);
         void update_palette(const boost::property_tree::wptree& tree, bool inherited_state);
         void update_palette(int mode, float fac=-1.0f);
+        void select_segment(int id);
+        void select_segment(const wstring &path);
+        void select_segment(const boost::property_tree::wptree& tree);
         int get_roi_disp_mode(){ return desel_palette_mode_; }
         void set_desel_palette_mode_dark(float fac=0.1);
         void set_desel_palette_mode_gray(float fac=0.1);
@@ -136,9 +140,12 @@ namespace FLIVR
         void set_roi_state(int id, bool state);
         void toggle_roi_state(int id);
         bool get_roi_state(int id);
+        map<int, bool> get_all_roi_state();
+        void set_all_roi_state(const map<int, bool> &states);
         boost::property_tree::wptree roi_tree_;
         map<int, wstring> roi_inv_dict_;
         map<int, bool> roi_inv_state_;
+        map<int, bool> roi_inv_selection_;
         bool palette_dirty;
 
 		//draw
@@ -285,8 +292,10 @@ namespace FLIVR
         
         std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> palette_tex_id_;
         std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> base_palette_tex_id_;
+        std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> selection_palette_tex_id_;
         unsigned char palette_[MR_PALETTE_SIZE*MR_PALETTE_ELEM_COMP];
         unsigned char base_palette_[MR_PALETTE_SIZE*MR_PALETTE_ELEM_COMP];
+        unsigned char selection_palette_[MR_PALETTE_SIZE*MR_PALETTE_ELEM_COMP];
         unordered_set<int> sel_ids_;
         unordered_set<int> sel_segs_;
         int desel_palette_mode_;

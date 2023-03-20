@@ -173,6 +173,10 @@ namespace FLIVR
 	"// MSH_FRAG_UNIFORMS_DP\n" \
 	"layout (binding = 3) uniform sampler2D tex1; //tex15 \n"
 
+#define MSH_FRAG_UNIFORMS_SEL_TEX \
+    "// MSH_FRAG_UNIFORMS_SEL_TEX\n" \
+    "layout (binding = 4) uniform sampler2D tex2;\n"
+
 #define MSH_HEAD_CLIP \
 	"	//VOL_HEAD_CLIP\n" \
 	"	vec4 clip = fubo.matrix3*OutPosition;\n" \
@@ -261,11 +265,33 @@ namespace FLIVR
 
 #define MSH_FRAG_BODY_PALETTE_SIMPLE \
     "    //MSH_FRAG_BODY_PALETTE_SIMPLE\n" \
-    "    vec4 c = texture(tex0, OutTexcoord);\n" \
+    "    vec4 c = texture(tex0, OutTexcoord);\n"
 
 #define MSH_FRAG_BODY_PALETTE_LIGHT \
     "    //MSH_FRAG_BODY_PALETTE_LIGHT\n" \
     "    vec4 c = texture(tex0, OutTexcoord);\n" \
+    "    vec4 spec = vec4(0.0);\n" \
+    "    vec3 eye = vec3(0.0, 0.0, 1.0);\n" \
+    "    vec3 l_dir = vec3(0.0, 0.0, 1.0);\n" \
+    "    vec3 n = normalize(OutNormal);\n" \
+    "    float intensity = abs(dot(n, l_dir));\n" \
+    "    if (intensity > 0.0)\n" \
+    "    {\n" \
+    "        vec3 h = normalize(l_dir+eye);\n" \
+    "        float intSpec = max(dot(h, n), 0.0);\n" \
+    "        spec = c * pow(intSpec, fubo.loc3.x);\n" \
+    "    }\n" \
+    "    c.xyz = max(intensity * c + spec, c * 0.5).xyz;\n"
+
+#define MSH_FRAG_BODY_SELECTION_PALETTE_SIMPLE \
+    "    //MSH_FRAG_BODY_SELECTION_PALETTE_SIMPLE\n" \
+    "    if (texture(tex0, OutTexcoord).w < 0.001) discard;\n" \
+    "    vec4 c = texture(tex2, OutTexcoord);\n"
+
+#define MSH_FRAG_BODY_SELECTION_PALETTE_LIGHT \
+    "    //MSH_FRAG_BODY_SELECTION_PALETTE_LIGHT\n" \
+    "    if (texture(tex0, OutTexcoord).w < 0.001) discard;\n" \
+    "    vec4 c = texture(tex2, OutTexcoord);\n" \
     "    vec4 spec = vec4(0.0);\n" \
     "    vec3 eye = vec3(0.0, 0.0, 1.0);\n" \
     "    vec3 l_dir = vec3(0.0, 0.0, 1.0);\n" \
@@ -338,7 +364,7 @@ namespace FLIVR
 		//inputs
 		z << MSH_VERTEX_INPUTS_V(0);
 		z << MSH_VERTEX_OUTPUTS_POS(0);
-		if (type_ == 0)
+		if (type_ == 0 || type_ == 3)
 		{
 			if (light_ && tex_)
 			{
@@ -389,7 +415,7 @@ namespace FLIVR
         else
             z << MSH_VERTEX_BODY_POS;
         
-		if (type_ == 0)
+		if (type_ == 0 || type_ == 3)
 		{
 			if (light_)
 				z << MSH_VERTEX_BODY_NORMAL;
@@ -416,7 +442,7 @@ namespace FLIVR
 
 		z << ShaderProgram::glsl_version_;
 
-		if (type_ == 0)
+		if (type_ == 0 || type_ == 3)
 		{
 			z << MSH_FRAG_OUTPUTS;
 			//inputs
@@ -445,6 +471,8 @@ namespace FLIVR
 				z << MSH_FRAG_UNIFORMS_TEX;
 			if (peel_)
 				z << MSH_FRAG_UNIFORMS_DP;
+            if (type_ == 3)
+                z << MSH_FRAG_UNIFORMS_SEL_TEX;
 
 			z << MSH_HEAD;
 			z << MSH_HEAD_CLIP;
@@ -474,7 +502,12 @@ namespace FLIVR
             if (light_)
             {
                 if (tex_)
-                    z << MSH_FRAG_BODY_PALETTE_LIGHT;
+                {
+                    if (type_ == 3)
+                        z << MSH_FRAG_BODY_SELECTION_PALETTE_LIGHT;
+                    else
+                        z << MSH_FRAG_BODY_PALETTE_LIGHT;
+                }
                 else
                 {
                     z << MSH_FRAG_BODY_COLOR;
@@ -484,7 +517,12 @@ namespace FLIVR
             else
             {
                 if (tex_)
-                    z << MSH_FRAG_BODY_PALETTE_SIMPLE;
+                {
+                    if (type_ == 3)
+                        z << MSH_FRAG_BODY_SELECTION_PALETTE_SIMPLE;
+                    else
+                        z << MSH_FRAG_BODY_PALETTE_SIMPLE;
+                }
                 else
                     z << MSH_FRAG_BODY_SIMPLE;
             }
@@ -518,7 +556,7 @@ namespace FLIVR
 
 		s = z.str();
         
-        //std::cerr << s << std::endl;
+        std::cerr << s << std::endl;
 
 		return false;
 	}

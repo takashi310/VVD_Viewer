@@ -45,7 +45,7 @@ namespace FLIVR
 	class EXPORT_API MshShader
 	{
 	public:
-		static const int MSH_SAMPLER_NUM = 2;
+		static const int MSH_SAMPLER_NUM = 3;
 
 		MshShader(VkDevice device, int type,
 			int peel, bool tex,

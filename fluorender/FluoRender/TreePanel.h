@@ -78,6 +78,7 @@ public:
 	bool disp;
 	bool na_mode;
 	std::map<int, int> label;
+    std::map<int, bool> mesh_segs;
 
 	VolVisState()
 	{
@@ -276,6 +277,9 @@ private:
 
 	std::unordered_map<wxString, VolVisState> m_vtmp;
 	std::vector<std::unordered_map<wxString, VolVisState>> m_v_undo, m_v_redo;
+    
+    std::unordered_map<wxString, VolVisState> m_mtmp;
+    std::vector<std::unordered_map<wxString, VolVisState>> m_m_undo, m_m_redo;
 
 	//drag
 	wxTreeItemId m_drag_item;
