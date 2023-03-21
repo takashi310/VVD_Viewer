@@ -8,8 +8,8 @@ This is the open-source repository for VVDViewer, an interactive rendering tool 
 
 Click on your operating system to download VVDViewer:
 
-[![Windows](https://img.shields.io/static/v1?style=for-the-badge&logo=&label=&message=Windows&color=0f83db)](https://github.com/JaneliaSciComp/VVDViewer/releases/download/1.6.1/VVDViewer031323-win64-vulkan.zip)
-[![Mac](https://img.shields.io/static/v1?style=for-the-badge&logo=&label=&message=Mac&color=00a835)](https://github.com/JaneliaSciComp/VVDViewer/releases/download/1.6.1/VVDViewer031323-macosx-vulkan.dmg)
+[![Windows](https://img.shields.io/static/v1?style=for-the-badge&logo=&label=&message=Windows&color=0f83db)](https://github.com/JaneliaSciComp/VVDViewer/releases/download/1.6.2/VVDViewer032123-win64-vulkan.zip)
+[![Mac](https://img.shields.io/static/v1?style=for-the-badge&logo=&label=&message=Mac&color=00a835)](https://github.com/takashi310/VVD_Viewer/releases/download/1.6.2/VVDViewer032123-macosx-vulkan.dmg)
  
 If you get Vulkan-related errors, please try to update your graphics device driver.
 
