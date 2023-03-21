@@ -218,8 +218,8 @@ std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> MeshRenderer::get_s
 void MeshRenderer::update_palette(const wstring &path)
 {
     boost::property_tree::wptree &tree = roi_tree_.get_child(path);
-    int id = boost::lexical_cast<int>(tree.get_value<wstring>());
-    bool state = roi_inv_state_[id];
+    int id = path.empty() ? -INT_MAX : boost::lexical_cast<int>(tree.get_value<wstring>());
+    bool state = id == -INT_MAX ? true : roi_inv_state_[id];
     bool pstate = true;
     if (state)
     {
@@ -244,8 +244,9 @@ void MeshRenderer::update_palette(const wstring &path)
 
 void MeshRenderer::update_palette(const boost::property_tree::wptree& tree, bool inherited_state)
 {
-    int id = boost::lexical_cast<int>(tree.get_value<wstring>());
-    bool state = roi_inv_state_[id] && inherited_state;
+    wstring str_val = tree.get_value<wstring>();
+    int id = !str_val.empty() ? boost::lexical_cast<int>(tree.get_value<wstring>()) : -INT_MAX;
+    bool state = id != -INT_MAX ? roi_inv_state_[id] && inherited_state : true;
     if (id < 0)
     {
         for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
@@ -355,6 +356,51 @@ void MeshRenderer::set_roi_state(int id, bool state)
 {
     roi_inv_state_[id] = state;
     update_palette(roi_inv_dict_[id]);
+}
+void MeshRenderer::set_roi_state_traverse(int id, bool state, int exclude)
+{
+    wstring path = id != -INT_MAX ? roi_inv_dict_[id] : L"";
+    boost::property_tree::wptree &tree = id != -INT_MAX ? roi_tree_.get_child(path) : roi_tree_;
+    bool pstate = true;
+    if (state)
+    {
+        wstring parent = path;
+        size_t found = path.find_last_of(L".");
+        while (found != wstring::npos)
+        {
+            parent = parent.substr(0, found);
+            int pid = boost::lexical_cast<int>(roi_tree_.get<wstring>(parent));
+            roi_inv_state_[pid] = true;
+            found = parent.find_last_of(L".");
+        }
+    }
+    
+    if (id != -INT_MAX) roi_inv_state_[id] = state;
+    set_roi_state_traverse(tree, state, exclude);
+    
+    update_palette(path);
+}
+void MeshRenderer::set_roi_state_traverse(const boost::property_tree::wptree& tree, bool state, int exclude)
+{
+    for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
+    {
+        try
+        {
+            wstring val = tree.get<wstring>(child->first);
+            if (!val.empty())
+            {
+                int id = boost::lexical_cast<int>(val);
+                if (id == exclude)
+                    continue;
+                roi_inv_state_[id] = state;
+            }
+        }
+        catch (boost::bad_lexical_cast e)
+        {
+            cerr << "MeshRenderer::set_roi_state_traverse(const wptree& tree, bool state): bad_lexical_cast" << endl;
+        }
+        set_roi_state_traverse(child->second, state);
+    }
 }
 void MeshRenderer::toggle_roi_state(int id)
 {

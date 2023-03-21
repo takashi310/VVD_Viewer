@@ -349,6 +349,51 @@ namespace FLIVR
 		return boost::none;
 	}
 
+    void TextureRenderer::gen_all_roi_names()
+    {
+        if (!tex_)
+            return;
+        
+        set<int> ids;
+        
+        //get all the data from original volume
+        auto nrrd = tex_->get_nrrd(0);
+        if (!nrrd) return;
+        void* vdata = nrrd->getNrrd()->data;
+
+        //find center
+        int w, h, d;
+        
+        nrrd->getDimensions(w, h, d);
+        
+        size_t vnum = (size_t)w * (size_t)h * (size_t)d;
+        
+        int bd = nrrd->getBytesPerSample();
+        if (bd == 1)
+        {
+            unsigned char *vdata = (unsigned char*)nrrd->getNrrd()->data;
+            for (size_t i = 0; i < vnum; i++)
+                ids.insert((int)vdata[i]);
+        }
+        else if (bd == 2)
+        {
+            unsigned short *vdata = (unsigned short*)nrrd->getNrrd()->data;
+            for (size_t i = 0; i < vnum; i++)
+                ids.insert((int)vdata[i]);
+        }
+        
+        wstring prefix(L"Segment ");
+        set<int>::iterator it;
+        for (it = ids.begin(); it != ids.end(); ++it) {
+            int id = *it;
+            if (id != 0 && !get_roi_path(id))
+            {
+                set_roi_name(prefix + boost::lexical_cast<wstring>(id), id);
+                add_sel_id(id);
+            }
+        }
+    }
+
 	void TextureRenderer::set_roi_name(wstring name, int id, wstring parent_name)
 	{
 		int edid = (id == -1) ? edit_sel_id_ : id;

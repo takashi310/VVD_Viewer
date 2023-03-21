@@ -31,6 +31,7 @@ DEALINGS IN THE SOFTWARE.
 #include "utility.h"
 #include <map>
 #include <unordered_map>
+#include <unordered_set>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/optional.hpp>
 #include "DLLExport.h"
@@ -78,6 +79,7 @@ public:
 	bool disp;
 	bool na_mode;
 	std::map<int, int> label;
+    std::unordered_set<int> v_sel_ids;
     std::map<int, bool> mesh_segs;
 
 	VolVisState()
@@ -96,6 +98,8 @@ public:
 		disp = copy.disp;
 		na_mode = copy.na_mode;
 		label = copy.label;
+        v_sel_ids = copy.v_sel_ids;
+        mesh_segs = copy.mesh_segs;
 	}
 
 	VolVisState& operator=(const VolVisState& copy)
@@ -103,6 +107,8 @@ public:
 		disp = copy.disp;
 		na_mode = copy.na_mode;
 		label = copy.label;
+        v_sel_ids = copy.v_sel_ids;
+        mesh_segs = copy.mesh_segs;
 
 		return (*this);
 	}
@@ -140,6 +146,7 @@ class EXPORT_API DataTreeCtrl: public wxTreeCtrl, Notifier
 		ID_AddDataGroup,
 		ID_AddMeshGroup,
 		ID_AddSegGroup,
+        ID_AddSegments,
 		ID_Expand,
 		ID_Edit,
 		ID_Info,
@@ -357,6 +364,7 @@ private:
 	void OnExportMeshMask(wxCommandEvent& event);
     void OnToggleNAMode(wxCommandEvent& event);
     void SetSameColorToAllDatasetsInGroup(wxCommandEvent& event);
+    void OnAddSegments(wxCommandEvent& event);
 
 	void OnSelChanged(wxTreeEvent& event);
 	void OnSelChanging(wxTreeEvent& event);

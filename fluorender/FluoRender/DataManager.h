@@ -29,6 +29,7 @@ DEALINGS IN THE SOFTWARE.
 #include "compatibility.h"
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <string.h>
 #include <tiffio.h>
 #include "FLIVR/BBox.h"
@@ -378,6 +379,7 @@ public:
     void SelectSegment(int id=-INT_MAX) { if (m_mr) m_mr->select_segment(id); }
     bool isTree() { return m_mr ? m_mr->is_tree() : false; }
     void InitROIGroup() { if (m_mr) m_mr->init_group_ids(); }
+    void SetROIStateTraverse(bool state=true, int id=-INT_MAX, int exclude=-INT_MAX) { if (m_mr) m_mr->set_roi_state_traverse(id, state, exclude); }
     void SetROIState(int id, bool state) { if (m_mr) m_mr->set_roi_state(id, state); }
     void ToggleROIState(int id) { if (m_mr) m_mr->toggle_roi_state(id); }
     bool GetROIState(int id)  { return m_mr ? m_mr->get_roi_state(id) : false; }
@@ -750,6 +752,9 @@ public:
 
 	void SetFog(bool use_fog, double fog_intensity, double fog_start, double fog_end);
 
+    void GenAllROINames(){ if (m_vr) m_vr->gen_all_roi_names(); }
+    std::unordered_set<int> GetSelIDs() { return m_vr ? m_vr->get_sel_ids() : std::unordered_set<int>(); }
+    void SetSelIDs(const std::unordered_set<int> &ids) { if (m_vr) m_vr->set_sel_ids(ids); }
 	void SetROIName(wstring name, int id=-1, wstring parent_name=L""){ if (m_vr) m_vr->set_roi_name(name, id, parent_name); }
 	int AddROIGroup(wstring parent_name=L"", wstring name=L""){ return m_vr ? m_vr->add_roi_group_node(parent_name, name) : -1; }
 	int GetNextSiblingROI(int id){ return m_vr ? m_vr->get_next_sibling_roi(id) : -1; }

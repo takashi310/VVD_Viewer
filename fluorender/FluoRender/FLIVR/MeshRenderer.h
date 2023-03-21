@@ -137,6 +137,8 @@ namespace FLIVR
 
         void init_group_ids();
         void init_group_ids(const boost::property_tree::wptree& tree, int &count, const wstring& parent);
+        void set_roi_state_traverse(int id=-INT_MAX, bool state=true, int exclude=-INT_MAX);
+        void set_roi_state_traverse(const boost::property_tree::wptree& tree, bool state=true, int exclude=-INT_MAX);
         void set_roi_state(int id, bool state);
         void toggle_roi_state(int id);
         bool get_roi_state(int id);

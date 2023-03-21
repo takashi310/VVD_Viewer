@@ -6854,7 +6854,7 @@ void VRenderVulkanView::OnContextMenu(wxContextMenuEvent& event)
 	{
 		menu.Append(ID_CTXMENU_SHOW_ALL, "Show all");
         menu.AppendSeparator();
-		menu.Append(ID_CTXMENU_HIDE_OTHER_VOLS, "Sohw only selected");
+		menu.Append(ID_CTXMENU_HIDE_OTHER_VOLS, "Show only selected");
 		menu.Append(ID_CTXMENU_HIDE_THIS_VOL, "Hide selected");
 	}
     menu.AppendSeparator();

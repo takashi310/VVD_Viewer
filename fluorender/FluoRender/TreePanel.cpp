@@ -53,6 +53,7 @@ BEGIN_EVENT_TABLE(DataTreeCtrl, wxTreeCtrl)
 	EVT_MENU(ID_BakeVolume, DataTreeCtrl::OnBakeVolume)
 	EVT_MENU(ID_Isolate, DataTreeCtrl::OnIsolate)
 	EVT_MENU(ID_ShowAll, DataTreeCtrl::OnShowAll)
+    EVT_MENU(ID_AddSegments, DataTreeCtrl::OnAddSegments)
 	EVT_MENU(ID_ExportMetadata, DataTreeCtrl::OnExportMetadata)
 	EVT_MENU(ID_ImportMetadata, DataTreeCtrl::OnImportMetadata)
 	EVT_MENU(ID_ShowAllSegChildren, DataTreeCtrl::OnShowAllSegChildren)
@@ -447,6 +448,7 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 					if (vd->GetColormapMode() == 3)
 					{
 						menu.AppendSeparator();
+                        menu.Append(ID_AddSegments, "Add Segments");
 						menu.Append(ID_ExportMetadata, "Export Metadata");
 						menu.Append(ID_AddSegGroup, "Add Segment Group");
 						menu.Append(ID_ShowAllSegChildren, "Select Children");
@@ -1267,6 +1269,39 @@ void DataTreeCtrl::OnShowAll(wxCommandEvent& event)
 		UpdateSelection();
 	}
 }
+
+
+void DataTreeCtrl::OnAddSegments(wxCommandEvent& event)
+{
+    if (m_fixed)
+        return;
+
+    wxTreeItemId sel_item = GetSelection();
+    VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+    if (!vr_frame) return;
+    DataManager* d_manager = vr_frame->GetDataManager();
+    if (!d_manager) return;
+    
+    if (sel_item.IsOk())
+    {
+        wxString viewname = "";
+        LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
+        if (item_data)
+        {
+            int item_type = item_data->type;
+            wxString itemname = GetItemBaseText(sel_item);
+            if (item_type == 2)
+            {
+                VolumeData* vd = d_manager->GetVolumeData(GetItemBaseText(sel_item));
+                if (vd && vd->GetColormapMode() == 3)
+                    vd->GenAllROINames();
+            }
+        }
+        vr_frame->RefreshVRenderViews();
+        vr_frame->UpdateTree();
+    }
+}
+
 
 void DataTreeCtrl::OnImportMetadata(wxCommandEvent& event)
 {
@@ -4624,7 +4659,7 @@ void DataTreeCtrl::GetVisHistoryTraversal(wxTreeItemId item)
 	}
 
 	LayerInfo* item_data = (LayerInfo*)GetItemData(item);
-	if (item_data->type != 7 && item_data->type != 8)
+	if (item_data->type != 7 && item_data->type != 8 && item_data->type != 9 && item_data->type != 10)
 	{
 		wxString name = GetItemBaseText(item);
 		VolVisState state;
@@ -4637,6 +4672,7 @@ void DataTreeCtrl::GetVisHistoryTraversal(wxTreeItemId item)
 			if (vd)
 			{
 				state.na_mode = vd->GetNAMode();
+                state.v_sel_ids = vd->GetSelIDs();
 				auto ids = vd->GetActiveSegIDs();
 				if (ids)
 				{
@@ -4722,6 +4758,7 @@ void DataTreeCtrl::SetVisHistoryTraversal(wxTreeItemId item)
 				{
 					vd->SetDisp(m_vtmp[name].disp);
 					//vd->SetNAMode(m_vtmp[name].na_mode);
+                    vd->SetSelIDs(m_vtmp[name].v_sel_ids);
 					auto it = m_vtmp[name].label.begin();
 					while (it != m_vtmp[name].label.end())
 					{
@@ -4838,7 +4875,7 @@ void DataTreeCtrl::HideOtherDatasets(wxTreeItemId item)
 	if (!item.IsOk()) return;
 
 	LayerInfo* item_data = (LayerInfo*)GetItemData(item);
-	if (!item_data || (item_data->type != 2 && item_data->type != 3 && item_data->type != 4))
+	if (!item_data || (item_data->type != 2 && item_data->type != 3 && item_data->type != 4 && item_data->type != 7 && item_data->type != 8 && item_data->type != 9 && item_data->type != 10))
 		return;
     
     wxString name = GetItemBaseText(item);
@@ -4849,15 +4886,35 @@ void DataTreeCtrl::HideOtherDatasets(wxTreeItemId item)
         case 2://volume data
         {
             VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(name);
-            if (!vd || !vd->GetDisp())
+            if (!vd)
                 return;
+            if (!vd->GetDisp())
+            {
+                vd->SetDisp(true);
+                for (int i = 0; i < vr_frame->GetViewNum(); i++)
+                {
+                    VRenderView* vrv = vr_frame->GetView(i);
+                    if (vrv)
+                        vrv->SetVolPopDirty();
+                }
+            }
         }
         break;
         case 3://mesh data
         {
             MeshData* md = vr_frame->GetDataManager()->GetMeshData(name);
-            if (!md || !md->GetDisp())
+            if (!md)
                 return;
+            if (!md->GetDisp())
+            {
+                md->SetDisp(true);
+                for (int i = 0; i < vr_frame->GetViewNum(); i++)
+                {
+                    VRenderView* vrv = vr_frame->GetView(i);
+                    if (vrv)
+                        vrv->SetMeshPopDirty();
+                }
+            }
         }
         break;
         case 4://annotations
@@ -4865,6 +4922,43 @@ void DataTreeCtrl::HideOtherDatasets(wxTreeItemId item)
             Annotations* ann = vr_frame->GetDataManager()->GetAnnotations(name);
             if (!ann || !ann->GetDisp())
                 return;
+            if (!ann->GetDisp())
+                ann->SetDisp(true);
+        }
+        break;
+        case 7://volume segment
+        case 8://segment group
+        {
+            wxTreeItemId vol_item = GetParentVolItem(item);
+            if (vol_item.IsOk())
+            {
+                wxString vname = GetItemBaseText(vol_item);
+                VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(vname);
+                if (vd)
+                {
+                    int id = vd->GetROIid(GetItemBaseText(item).ToStdWstring());
+                    if (id == -1)
+                        return;
+                    if (!vd->isSelID(id))
+                        vd->SetROISel(GetItemBaseText(item).ToStdWstring(), true);
+                }
+            }
+        }
+        break;
+        case 9://mesh segment
+        case 10://mesh segment group
+        {
+            wxTreeItemId mesh_item = GetParentMeshItem(item);
+            if (mesh_item.IsOk())
+            {
+                wxString mname = GetItemBaseText(mesh_item);
+                MeshData* md = vr_frame->GetDataManager()->GetMeshData(mname);
+                if (md)
+                {
+                    if (!md->GetROIState(item_data->id))
+                        md->SetROIState(item_data->id, true);
+                }
+            }
         }
         break;
         }
@@ -4872,7 +4966,35 @@ void DataTreeCtrl::HideOtherDatasets(wxTreeItemId item)
 
 	PushVisHistory();
 
-	HideOtherDatasetsTraversal(GetRootItem(), item);
+    if (item_data->type == 7 || item_data->type == 8)
+    {
+        wxTreeItemId vol_item = GetParentVolItem(item);
+        if (vol_item.IsOk())
+        {
+            wxString vname = GetItemBaseText(vol_item);
+            VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(vname);
+            if (vd)
+            {
+                wstring ws_name = GetItemBaseText(item).ToStdWstring();
+                int id = vd->GetROIid(ws_name);
+                vd->ClearSelIDs();
+                vd->SetROISel(ws_name, true, true);
+            }
+        }
+    }
+    else if (item_data->type == 9 || item_data->type == 10)
+    {
+        wxTreeItemId mesh_item = GetParentMeshItem(item);
+        if (mesh_item.IsOk())
+        {
+            wxString mname = GetItemBaseText(mesh_item);
+            MeshData* md = vr_frame->GetDataManager()->GetMeshData(mname);
+            if (md)
+                md->SetROIStateTraverse(false, -INT_MAX, item_data->id);
+        }
+    }
+    else
+        HideOtherDatasetsTraversal(GetRootItem(), item);
 
 	//m_scroll_pos = GetScrollPos(wxVERTICAL);
 	vr_frame->UpdateTreeIcons();
@@ -5113,6 +5235,37 @@ void DataTreeCtrl::HideSelectedItem()
 				}
 			}
 			break;
+            case 7://volume segment
+            case 8://segment group
+            {
+                wxTreeItemId vol_item = GetParentVolItem(sel_item);
+                if (vol_item.IsOk())
+                {
+                    wxString vname = GetItemBaseText(vol_item);
+                    VolumeData* vd = vr_frame->GetDataManager()->GetVolumeData(vname);
+                    if (vd)
+                    {
+                        int id = vd->GetROIid(GetItemBaseText(sel_item).ToStdWstring());
+                        if (id == -1)
+                            return;
+                        vd->SetROISel(GetItemBaseText(sel_item).ToStdWstring(), false);
+                    }
+                }
+            }
+            break;
+                case 9://mesh segment
+                case 10://mesh segment group
+                {
+                    wxTreeItemId mesh_item = GetParentMeshItem(sel_item);
+                    if (mesh_item.IsOk())
+                    {
+                        wxString mname = GetItemBaseText(mesh_item);
+                        MeshData* md = vr_frame->GetDataManager()->GetMeshData(mname);
+                        if (md)
+                            md->SetROIState(item_data->id, false);
+                    }
+                }
+                break;
 			}
 		}
 

@@ -186,6 +186,9 @@ namespace FLIVR
 		std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> get_palette();
 
 #ifndef _UNIT_TEST_VOLUME_RENDERER_WITHOUT_IDVOL
+         void gen_all_roi_names();
+         std::unordered_set<int> get_sel_ids() { return sel_ids_; }
+         void set_sel_ids(const std::unordered_set<int> &ids) { sel_ids_ = ids; update_palette(desel_palette_mode_, desel_col_fac_); }
 		 void set_roi_name(wstring name, int id=-1, wstring parent_name=wstring());
 		 void set_roi_name(wstring name, int id, int parent_id);
 		 wstring check_new_roi_name(wstring name);
@@ -383,8 +386,8 @@ namespace FLIVR
 			   std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> base_palette_tex_id_;
 			   unsigned char palette_[PALETTE_SIZE*PALETTE_ELEM_COMP];
 			   unsigned char base_palette_[PALETTE_SIZE*PALETTE_ELEM_COMP];
-			   unordered_set<int> sel_ids_;
-			   unordered_set<int> sel_segs_;
+			   std::unordered_set<int> sel_ids_;
+			   std::unordered_set<int> sel_segs_;
 
 			   int desel_palette_mode_;
 			   float desel_col_fac_;
