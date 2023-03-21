@@ -35,6 +35,7 @@ DEALINGS IN THE SOFTWARE.
 #include <wx/gdicmn.h>
 #include <wx/display.h>
 #include <wx/stdpaths.h>
+#include <wx/tokenzr.h>
 #include <algorithm>
 #include <limits>
 #include <unordered_set>
@@ -18228,6 +18229,71 @@ void VRenderVulkanView::CalcAndSetCombinedClippingPlanes()
     }
 }
 
+void VRenderVulkanView::ImportBigWarpCSV(wxString inputpath)
+{
+    wxTextFile csv(inputpath);
+    if (!csv.Exists())
+        return;
+    if (!csv.Open())
+        return;
+    
+    for (int i=m_ruler_list.size()-1; i>=0; i--)
+    {
+        Ruler* ruler = m_ruler_list[i];
+        if (ruler)
+            delete ruler;
+    }
+    m_ruler_list.clear();
+    Ruler::ResetID();
+    
+    wxString line = csv.GetFirstLine();
+    while(!csv.Eof())
+    {
+        wxStringTokenizer tkz(line, wxT(","));
+        wxArrayString elems;
+        while(tkz.HasMoreTokens())
+        {
+            wxString token = tkz.GetNextToken();
+            token.Replace("\"", "");
+            elems.Add(token);
+        }
+        if (elems.Count() == 8)
+        {
+            Point p1, p2;
+            double dval;
+            elems[2].ToDouble(&dval);
+            p1.x(dval);
+            elems[3].ToDouble(&dval);
+            p1.y(dval);
+            elems[4].ToDouble(&dval);
+            p1.z(-dval);
+            elems[5].ToDouble(&dval);
+            p2.x(dval);
+            elems[6].ToDouble(&dval);
+            p2.y(dval);
+            elems[7].ToDouble(&dval);
+            p2.z(-dval);
+            
+            Ruler* ruler = new Ruler();
+            ruler->SetRulerType(m_ruler_type);
+            ruler->AddPoint(p1);
+            ruler->SetTimeDep(m_ruler_time_dep);
+            ruler->SetTime(m_tseq_cur_num);
+            if (p1 != p2) // 2 points
+                ruler->AddPoint(p2);
+            m_ruler_list.push_back(ruler);
+        }
+        line = csv.GetNextLine();
+    }
+    csv.Close();
+
+    VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+    if (m_vrv && vr_frame && vr_frame->GetMeasureDlg())
+        vr_frame->GetMeasureDlg()->GetSettings(m_vrv);
+    
+    RefreshGL();
+}
+
 void VRenderVulkanView::ExportBigWarpCSV(wxString outpath)
 {
     wxArrayString lines;
@@ -18306,10 +18372,103 @@ void VRenderVulkanView::WarpCurrentVolume()
     {
         int resx, resy, resz;
         double spcx, spcy, spcz;
+        double offsetx, offsety, offsetz;
         m_cur_vol->GetResolution(resx, resy, resz);
         m_cur_vol->GetSpacings(spcx, spcy, spcz);
-        wxString command = wxString::Format("Apply Bigwarp Filter, landmark_file=%s x_size=%d y_size=%d z_size=%d x_spacing=%f y_spacing=%f z_spacing=%f transform_type=[Thin Plate Spline] interpolation=Linear threads=8;false;false", temp_csv_path, resx, resy, resz, spcx, spcy, spcz);
-        vframe->RunPlugin(fi_name, command);
+        
+        bool crop = true;
+        BBox bbox;
+        if (crop)
+        {
+            //Cropping
+            vector<Plane*> *planes = m_cur_vol->GetVR()->get_planes();
+            Plane* px1 = (*planes)[0];
+            Plane* px2 = (*planes)[1];
+            Plane* py1 = (*planes)[2];
+            Plane* py2 = (*planes)[3];
+            Plane* pz1 = (*planes)[4];
+            Plane* pz2 = (*planes)[5];
+            
+            //calculate 4 lines
+            Vector lv_x1z1, lv_x1z2, lv_x2z1, lv_x2z2;
+            Point lp_x1z1, lp_x1z2, lp_x2z1, lp_x2z2;
+            //x1z1
+            if (!px1->Intersect(*pz1, lp_x1z1, lv_x1z1))
+                crop = false;
+            //x1z2
+            if (!px1->Intersect(*pz2, lp_x1z2, lv_x1z2))
+                crop = false;
+            //x2z1
+            if (!px2->Intersect(*pz1, lp_x2z1, lv_x2z1))
+                crop = false;
+            //x2z2
+            if (!px2->Intersect(*pz2, lp_x2z2, lv_x2z2))
+                crop = false;
+            
+            //calculate 8 points
+            Point pp[8];
+            //p0 = l_x1z1 * py1
+            if (!py1->Intersect(lp_x1z1, lv_x1z1, pp[0]))
+                crop = false;
+            //p1 = l_x1z2 * py1
+            if (!py1->Intersect(lp_x1z2, lv_x1z2, pp[1]))
+                crop = false;
+            //p2 = l_x2z1 *py1
+            if (!py1->Intersect(lp_x2z1, lv_x2z1, pp[2]))
+                crop = false;
+            //p3 = l_x2z2 * py1
+            if (!py1->Intersect(lp_x2z2, lv_x2z2, pp[3]))
+                crop = false;
+            //p4 = l_x1z1 * py2
+            if (!py2->Intersect(lp_x1z1, lv_x1z1, pp[4]))
+                crop = false;
+            //p5 = l_x1z2 * py2
+            if (!py2->Intersect(lp_x1z2, lv_x1z2, pp[5]))
+                crop = false;
+            //p6 = l_x2z1 * py2
+            if (!py2->Intersect(lp_x2z1, lv_x2z1, pp[6]))
+                crop = false;
+            //p7 = l_x2z2 * py2
+            if (!py2->Intersect(lp_x2z2, lv_x2z2, pp[7]))
+                crop = false;
+            
+            for (int i = 0; i < 8; i++)
+                bbox.extend(pp[i]);
+        }
+        
+        if (!crop)
+        {
+            bbox.extend(Point(0.0, 0.0, 0.0));
+            bbox.extend(Point(1.0, 1.0, 1.0));
+        }
+
+        //save data
+        auto vlnrrd = m_cur_vol->GetTexture()->get_nrrd(0);
+        if (vlnrrd && vlnrrd->getNrrd())
+        {
+            Nrrd* data = vlnrrd->getNrrd();
+                
+            int w = int(data->axis[0].size);
+            int h = int(data->axis[1].size);
+            int d = int(data->axis[2].size);
+                
+            int sx = (int)(bbox.min().x() * w + 0.5);
+            int sy = (int)(bbox.min().y() * h + 0.5);
+            int sz = (int)(bbox.min().z() * d + 0.5);
+            int nx = (int)(bbox.max().x() * w + 0.5) - sx;
+            int ny = (int)(bbox.max().y() * h + 0.5) - sy;
+            int nz = (int)(bbox.max().z() * d + 0.5) - sz;
+            
+            resx = nx;
+            resy = ny;
+            resz = nz;
+            offsetx = sx;
+            offsety = sy;
+            offsetz = sz;
+            
+            wxString command = wxString::Format("Apply Bigwarp Filter, landmark_file=%s x_size=%d y_size=%d z_size=%d x_spacing=%f y_spacing=%f z_spacing=%f x_offset=%f y_offset=%f z_offset=%f transform_type=[Thin Plate Spline] interpolation=Linear threads=8;false;false", temp_csv_path, resx, resy, resz, spcx, spcy, spcz, offsetx, offsety, offsetz);
+            vframe->RunPlugin(fi_name, command);
+        }
     }
 }
 

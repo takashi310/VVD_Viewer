@@ -741,6 +741,7 @@ public:
     bool GetUseFogMesh() { return m_use_fog_mesh; }
     void SetUseFogMesh(bool val) { m_use_fog_mesh = val; }
     
+    void ImportBigWarpCSV(wxString inputpath);
     void ExportBigWarpCSV(wxString outpath);
     void WarpCurrentVolume();
 
@@ -2138,6 +2139,11 @@ public:
     void ReplaceVolumeData(wxString &name, VolumeData *dst)
     {
         if (m_glview) m_glview->ReplaceVolumeData(name, dst);
+    }
+    
+    void ImportBigWarpCSV(wxString inputpath)
+    {
+        if (m_glview) m_glview->ImportBigWarpCSV(inputpath);
     }
     
     void ExportBigWarpCSV(wxString outpath)

@@ -1160,6 +1160,7 @@ BEGIN_EVENT_TABLE(MeasureDlg, wxPanel)
 	EVT_MENU(ID_RulerEditBtn, MeasureDlg::OnRulerEdit)
 	EVT_MENU(ID_DeleteBtn, MeasureDlg::OnDelete)
 	EVT_MENU(ID_DeleteAllBtn, MeasureDlg::OnDeleteAll)
+    EVT_MENU(ID_ImportBtn, MeasureDlg::OnImport)
 	EVT_MENU(ID_ExportBtn, MeasureDlg::OnExport)
 	EVT_COMBOBOX(ID_IntensityMethodsCombo, MeasureDlg::OnIntensityMethodsCombo)
 	EVT_CHECKBOX(ID_UseTransferChk, MeasureDlg::OnUseTransferCheck)
@@ -1209,6 +1210,9 @@ wxPanel(parent, id, pos, size, style, name),
 	m_toolbar->AddTool(ID_ExportBtn, "Export",
 		wxGetBitmapFromMemory(listicon_save),
 		"Export rulers to a text file");
+    m_toolbar->AddTool(ID_ImportBtn, "Import",
+        wxGetBitmapFromMemory(plus),
+        "Import rulers from a BigWarp csv");
 	m_toolbar->Realize();
 
 	wxStaticLine *st_line = new wxStaticLine(this);
@@ -1415,6 +1419,30 @@ void MeasureDlg::OnDelete(wxCommandEvent& event)
 void MeasureDlg::OnDeleteAll(wxCommandEvent& event)
 {
 	m_rulerlist->DeleteAll();
+}
+
+void MeasureDlg::OnImport(wxCommandEvent& event)
+{
+    wxFileDialog *fopendlg = new wxFileDialog(
+        m_frame, "Import rulers", "", "",
+        "BigWarp landmarks (*.csv)|*.csv",
+        wxFD_OPEN);
+
+    int rval = fopendlg->ShowModal();
+
+    if (rval == wxID_OK)
+    {
+        wxString filename = fopendlg->GetPath();
+        wxString suffix = filename.Mid(filename.Find('.', true)).MakeLower();
+        if (suffix == ".csv")
+        {
+            if (m_view)
+                m_view->ImportBigWarpCSV(filename);
+        }
+    }
+
+    if (fopendlg)
+        delete fopendlg;
 }
 
 void MeasureDlg::OnExport(wxCommandEvent& event)

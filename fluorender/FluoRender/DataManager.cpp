@@ -5951,7 +5951,7 @@ Ruler::Ruler()
 	m_time_dep = false;
 	m_time = 0;
 
-	m_name_disp = wxString::Format("Ruler %d", m_num);
+	m_name_disp = wxString::Format("%d", m_num);
 	m_desc = wxString();
 
 }

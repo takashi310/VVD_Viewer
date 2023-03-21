@@ -140,6 +140,7 @@ public:
 		ID_DeleteBtn,
 		ID_DeleteAllBtn,
 		ID_ExportBtn,
+        ID_ImportBtn,
 		ID_IntensityMethodsCombo,
 		ID_UseTransferChk,
 		ID_TransientChk,
@@ -187,6 +188,7 @@ private:
 	void OnRulerEdit(wxCommandEvent& event);
 	void OnDelete(wxCommandEvent& event);
 	void OnDeleteAll(wxCommandEvent& event);
+    void OnImport(wxCommandEvent& event);
 	void OnExport(wxCommandEvent& event);
 	void OnIntensityMethodsCombo(wxCommandEvent& event);
 	void OnUseTransferCheck(wxCommandEvent& event);
