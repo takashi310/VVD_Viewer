@@ -104,7 +104,9 @@ namespace FLIVR
         boost::optional<wstring> get_roi_path(wstring wsid);
         //boost::optional<wstring> get_roi_path(wstring name, const boost::property_tree::wptree& tree, const wstring& parent);
         int get_roi_id(wstring name);
+        void set_id_color(unsigned char r, unsigned char g, unsigned char b, bool update=true, const wstring &path=L"");
         void set_id_color(unsigned char r, unsigned char g, unsigned char b, bool update=true, int id=-1);
+        void get_id_color(unsigned char &r, unsigned char &g, unsigned char &b, const wstring &path=L"");
         void get_id_color(unsigned char &r, unsigned char &g, unsigned char &b, int id=-1);
         void get_rendered_id_color(unsigned char &r, unsigned char &g, unsigned char &b, int id=-1);
         //0-dark; 1-gray; 2-invisible;

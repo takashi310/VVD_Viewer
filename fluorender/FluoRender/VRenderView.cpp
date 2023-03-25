@@ -16947,6 +16947,15 @@ void VRenderVulkanView::OnMouse(wxMouseEvent& event)
 		}
 		else if (m_int_mode == 2 || m_int_mode == 7)
 		{
+            if (m_int_mode == 7)
+            {
+                int int_mode = GetIntMode();
+                int paint_mode = GetPaintMode();
+                SetPaintMode(6);
+                Segment();
+                SetPaintMode(paint_mode);
+                SetIntMode(int_mode);
+            }
 			m_paint_enable = true;
 			m_clear_paint = true;
 			RefreshGLOverlays();
@@ -20561,7 +20570,7 @@ void VRenderView::OnAovSldrIdle(wxTimerEvent& event)
 
 	int plane_mode = cp_view->GetPlaneMode();
 
-	if (window && reg.Contains(pos))
+	if (reg.Contains(pos))
 	{
 		if (!m_draw_clip)
 		{
@@ -20586,7 +20595,6 @@ void VRenderView::OnAovSldrIdle(wxTimerEvent& event)
 			m_draw_clip = false;
 		}
 	}
-	event.Skip();
 }
 
 void VRenderView::OnAovChange(wxScrollEvent& event)

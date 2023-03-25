@@ -497,7 +497,7 @@ int VolumeSelector::CompIslandCount(double min_voxels, double max_voxels)
 		m_total_pr = nz;
 		m_progress = 0;
 
-		int label_th_i = orig_nrrd->getNrrd()->type == nrrdTypeUChar ? (unsigned int)(m_label_thresh * 255.0) : (unsigned int)(m_label_thresh * 65535.0);
+		int label_th_i = m_label_thresh * m_vd->GetMaxValue();
 
 		unsigned int segid = 1;
 		unsigned int finalid = 1;
@@ -1173,21 +1173,21 @@ int VolumeSelector::ProcessSel(double thresh)
 				}
 			}
 
-			//clear data_mvd_mask
-			size_t set_num = res_x*res_y*res_z;
-			memset(data_mvd_mask, 0, set_num);
-            m_vd->GetVR()->clear_tex_current_mask();
+    //clear data_mvd_mask
+    //size_t set_num = res_x*res_y*res_z;
+    //memset(data_mvd_mask, 0, set_num);
+    //m_vd->GetVR()->clear_tex_current_mask();
 
-			if (nw > 0.0)
-			{
-				m_ps_center = Point(sump.x()*spc_x, sump.y()*spc_y, -sump.z()*spc_z) / nw +
-					Vector(0.5*spc_x, 0.5*spc_y, -0.5*spc_z);
-				m_ps_size *= spc_x*spc_y*spc_z;
-				m_ps = true;
-				return 1;
-			}
-			else
-				return 0;
+    if (nw > 0.0)
+    {
+        m_ps_center = Point(sump.x()*spc_x, sump.y()*spc_y, -sump.z()*spc_z) / nw +
+            Vector(0.5*spc_x, 0.5*spc_y, -0.5*spc_z);
+        m_ps_size *= spc_x*spc_y*spc_z;
+        m_ps = true;
+        return 1;
+    }
+    else
+        return 0;
 }
 
 //get center

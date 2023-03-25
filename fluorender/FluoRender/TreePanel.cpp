@@ -2538,6 +2538,7 @@ void DataTreeCtrl::UpdateSelection()
 									vr_frame->GetBrushToolDlg()->GetSettings(vrv);
 									vr_frame->GetMeasureDlg()->GetSettings(vrv, false);
 									vr_frame->GetTraceDlg()->GetSettings(vrv);
+                                    vr_frame->GetConvertDlg()->GetSettings(vrv);
 								}
 							}
 							else if (par_item_data && par_item_data->type == 1)
@@ -2554,6 +2555,7 @@ void DataTreeCtrl::UpdateSelection()
 									vr_frame->GetBrushToolDlg()->GetSettings(vrv);
 									vr_frame->GetMeasureDlg()->GetSettings(vrv, false);
 									vr_frame->GetTraceDlg()->GetSettings(vrv);
+                                    vr_frame->GetConvertDlg()->GetSettings(vrv);
 								}
 							}
 						}

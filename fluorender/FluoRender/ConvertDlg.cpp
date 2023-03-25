@@ -19,7 +19,9 @@ ConvertDlg::ConvertDlg(wxWindow *frame, wxWindow *parent) :
 wxPanel(parent, wxID_ANY,
 	wxPoint(520, 170), wxSize(400, 300),
 	0, "ConvertDlg"),
-	m_frame(parent)
+	m_frame(parent),
+    m_max_value(1.0),
+    m_cnv_vol_mesh_thresh(0.3)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -42,7 +44,7 @@ wxPanel(parent, wxID_ANY,
 		wxDefaultPosition, wxSize(100, 23));
 	m_cnv_vol_mesh_thresh_sldr = new wxSlider(this, ID_CnvVolMeshThreshSldr, 30, 1, 99,
 		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
-	m_cnv_vol_mesh_thresh_text = new wxTextCtrl(this, ID_CnvVolMeshThreshText, "0.30",
+	m_cnv_vol_mesh_thresh_text = new wxTextCtrl(this, ID_CnvVolMeshThreshText, "30",
 		wxDefaultPosition, wxSize(40, 23), 0, vald_fp2);
 	sizer11->Add(st, 0, wxALIGN_CENTER);
 	sizer11->Add(10, 10);
@@ -88,6 +90,7 @@ wxPanel(parent, wxID_ANY,
 	sizer14->Add(m_cnv_vol_mesh_usetransf_chk, 0, wxALIGN_CENTER);
 	sizer14->Add(m_cnv_vol_mesh_selected_chk, 0, wxALIGN_CENTER);
 	sizer14->Add(m_cnv_vol_mesh_weld_chk, 0, wxALIGN_CENTER);
+    m_cnv_vol_mesh_weld_chk->Hide();
 	//button
 	wxBoxSizer *sizer15 = new wxBoxSizer(wxHORIZONTAL);
 	m_cnv_vol_mesh_convert_btn = new wxButton(this, ID_CnvVolMeshConvertBtn, "Convert",
@@ -136,21 +139,41 @@ ConvertDlg::~ConvertDlg()
 {
 }
 
+void ConvertDlg::GetSettings(VRenderView* vrv)
+{
+    if (!vrv)
+       return;
+
+    VolumeData* sel_vol = 0;
+    VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+    if (vr_frame)
+    {
+        sel_vol = vr_frame->GetCurSelVol();
+        if (sel_vol)
+        {
+            m_max_value = sel_vol->GetMaxValue();
+            m_cnv_vol_mesh_thresh_sldr->SetRange(0, (int)m_max_value);
+            m_cnv_vol_mesh_thresh_sldr->SetValue(int(m_cnv_vol_mesh_thresh * m_max_value + 0.5));
+            m_cnv_vol_mesh_thresh_text->ChangeValue(wxString::Format("%d", int(m_cnv_vol_mesh_thresh*m_max_value + 0.5)));
+        }
+    }
+}
+
 //threshold
 void ConvertDlg::OnCnvVolMeshThreshChange(wxScrollEvent &event)
 {
-	int ival = event.GetPosition();
-	double val = double(ival)/100.0;
-	wxString str = wxString::Format("%.2f", val);
-	m_cnv_vol_mesh_thresh_text->SetValue(str);
+    int ival = (int)(event.GetPosition() + 0.5);
+    wxString str = wxString::Format("%d", ival);
+    m_cnv_vol_mesh_thresh_text->SetValue(str);
 }
 
 void ConvertDlg::OnCnvVolMeshThreshText(wxCommandEvent &event)
 {
-	wxString str = m_cnv_vol_mesh_thresh_text->GetValue();
-	double val;
-	str.ToDouble(&val);
-	m_cnv_vol_mesh_thresh_sldr->SetValue(int(val*100.0+0.5));
+    wxString str = m_cnv_vol_mesh_thresh_text->GetValue();
+    double val;
+    str.ToDouble(&val);
+    m_cnv_vol_mesh_thresh = val / m_max_value;
+    m_cnv_vol_mesh_thresh_sldr->SetValue(int(val + 0.5));
 }
 
 //downsampling

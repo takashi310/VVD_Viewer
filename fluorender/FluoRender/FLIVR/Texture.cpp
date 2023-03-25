@@ -968,14 +968,12 @@ namespace FLIVR
 				//add to undo list
 				if (index==nmask_)
                 {
-                    if (mask_undo_num_ > 0)
-                        set_mask(data);
-                    else
-                    {
-                        for (int lv = 0; lv < pyramid_lv_num_; lv++)
-                            for (int i=0; i<pyramid_[lv].bricks.size(); i++)
-                                pyramid_[lv].bricks[i]->set_nrrd(data_[nmask_], nmask_);
-                    }
+                    set_mask(data);
+                    
+                    for (int lv = 0; lv < pyramid_lv_num_; lv++)
+                        for (int i=0; i<pyramid_[lv].bricks.size(); i++)
+                            pyramid_[lv].bricks[i]->set_nrrd(data_[nmask_], nmask_);
+                    
                 }
                 
 			}
@@ -1395,7 +1393,7 @@ namespace FLIVR
 	//mask undo management
 	bool Texture::trim_mask_undos_head()
 	{
-		if (nmask_<=-1 || mask_undo_num_==0)
+		if (nmask_<=-1)
 			return true;
 		if (mask_undos_.size() <= mask_undo_num_+1)
 			return true;
@@ -1413,7 +1411,7 @@ namespace FLIVR
 
 	bool Texture::trim_mask_undos_tail()
 	{
-		if (nmask_<=-1 || mask_undo_num_==0)
+		if (nmask_<=-1)
 			return true;
 		if (mask_undos_.size() <= mask_undo_num_+1)
 			return true;
@@ -1448,7 +1446,7 @@ namespace FLIVR
 
 	void Texture::set_mask(const shared_ptr<VL_Nrrd>& mask_data)
 	{
-		if (nmask_<=-1 || mask_undo_num_==0)
+		if (nmask_<=-1)
 			return;
 
 		if (mask_undo_pointer_>-1 &&
@@ -1458,7 +1456,7 @@ namespace FLIVR
 				mask_undos_.begin()+mask_undo_pointer_+1,
 				mask_data);
 			mask_undo_pointer_++;
-			if (!trim_mask_undos_head())
+			//if (!trim_mask_undos_head())
 				trim_mask_undos_tail();
 		}
 		else
@@ -1491,7 +1489,7 @@ namespace FLIVR
 				mask_undos_.begin()+mask_undo_pointer_+1,
 				new_data);
 			mask_undo_pointer_++;
-			if (!trim_mask_undos_head())
+			//if (!trim_mask_undos_head())
 				trim_mask_undos_tail();
 		}
 		else
@@ -1521,7 +1519,7 @@ namespace FLIVR
             setLevel(pyramid_cur_lv_);
 	}
 
-	void Texture:: mask_undos_backward()
+	void Texture::mask_undos_backward()
 	{
 		if (nmask_<=-1 || mask_undo_num_==0)
 			return;

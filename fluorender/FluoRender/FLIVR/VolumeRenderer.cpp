@@ -132,7 +132,9 @@ namespace FLIVR
 		compression_(false),
 		m_mask_hide_mode(VOL_MASK_HIDE_NONE),
 		m_use_fog(false),
-        m_na_mode(false)
+        m_na_mode(false),
+        m_highlight(false),
+        m_highlight_th(0.0)
 	{
 		//mode
 		mode_ = MODE_OVER;
@@ -214,7 +216,9 @@ namespace FLIVR
 		filter_size_shp_(0.0),
 		inv_(copy.inv_),
 		compression_(copy.compression_),
-		m_mask_hide_mode(copy.m_mask_hide_mode)
+		m_mask_hide_mode(copy.m_mask_hide_mode),
+        m_highlight(false),
+        m_highlight_th(copy.m_highlight_th)
 	{
 		//mode
 		mode_ = copy.mode_;
@@ -1261,7 +1265,7 @@ namespace FLIVR
 		return ret_pipeline;
 	}
 
-	VolumeRenderer::VRayPipeline VolumeRenderer::prepareVRayPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode, bool persp, int multi_mode, bool na_mode, Texture* ext_msk)
+	VolumeRenderer::VRayPipeline VolumeRenderer::prepareVRayPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode, bool persp, int multi_mode, bool na_mode, Texture* ext_msk, bool highlight)
 	{
 		VRayPipeline ret_pipeline;
         
@@ -1279,7 +1283,7 @@ namespace FLIVR
 			depth_peel_, true,
 			hiqual_, ml_mode_,
 			colormap_mode_, colormap_, colormap_proj_,
-			solid_, 1, (tex_->nmask() != -1 || (ext_msk && ext_msk->nmask() != -1)) ? m_mask_hide_mode : VOL_MASK_HIDE_NONE, persp, mode_, multi_mode, na_mode);
+			solid_, 1, (tex_->nmask() != -1 || (ext_msk && ext_msk->nmask() != -1)) ? m_mask_hide_mode : VOL_MASK_HIDE_NONE, persp, mode_, multi_mode, na_mode, highlight);
         
 #ifdef _DARWIN
         if (slice_mode_)
@@ -2728,9 +2732,9 @@ namespace FLIVR
 			if (mask_ && !label_)
             {
                 if (m_na_mode)
-                    frag_ubo.loc6_colparam = { mask_color_.r(), mask_color_.g(), mask_color_.b(), mask_thresh_ };
+                    frag_ubo.loc6_colparam = { mask_color_.r(), mask_color_.g(), mask_color_.b(), mask_thresh_ / scalar_scale_ };
                 else
-                    frag_ubo.loc6_colparam = { mask_color_.r(), mask_color_.g(), mask_color_.b(), mask_thresh_ };
+                    frag_ubo.loc6_colparam = { mask_color_.r(), mask_color_.g(), mask_color_.b(), mask_thresh_ / scalar_scale_ };
             }
 			else
 				frag_ubo.loc6_colparam = { color_.r(), color_.g(), color_.b(), 0.0 };
@@ -2750,7 +2754,7 @@ namespace FLIVR
 
 		//setup depth peeling
 		frag_ubo.loc7_view = { 1.0 / double(w2), 1.0 / double(h2), 
-			mode_ == MODE_OVER ? 1.0 / (rate * min(max(zoom, 1.0), 10.0) * 2.0) : 1.0 , 0.0 };
+			mode_ == MODE_OVER ? 1.0 / (rate * min(max(zoom, 1.0), 10.0) * 2.0) : 1.0 , m_highlight_th / scalar_scale_ };
 
 		//fog
 		if (m_use_fog)
@@ -3757,7 +3761,7 @@ namespace FLIVR
 		int type, int paint_mode, int hr_mode,
 		double ini_thresh, double gm_falloff, double scl_falloff,
 		double scl_translate, double w2d, double bins, bool orthographic_p,
-		bool estimate, Texture* ext_msk, bool use_absolute_value)
+		bool estimate, Texture* ext_msk, bool use_absolute_value, bool save_stroke)
 	{
 /*		if (paint_mode == 1 || paint_mode == 2)
 		{
@@ -3769,7 +3773,7 @@ namespace FLIVR
 			est_thresh_ = 0.0;
 		bool use_2d = tex_2d_weight1_ && tex_2d_weight2_ ? true : false;
 
-		bool use_stroke = (tex_->nstroke() >= 0 && (type == 0 || type == 1)) ? true : false;
+		bool use_stroke = (save_stroke && tex_->nstroke() >= 0 && (type == 0 || type == 1)) ? true : false;
 		bool clear_stroke = use_stroke && (paint_mode == 1 || paint_mode == 2 || (paint_mode == 4 && type == 0) || paint_mode == 6 || paint_mode == 7);
 
 		bool write_to_vol = false;

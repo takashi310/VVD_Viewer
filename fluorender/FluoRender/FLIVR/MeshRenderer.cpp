@@ -946,6 +946,12 @@ void MeshRenderer::update_sel_segs(const wptree& tree)
     }
 }
 
+void MeshRenderer::set_id_color(unsigned char r, unsigned char g, unsigned char b, bool update, const wstring &path)
+{
+    int id = path.empty() ? -1 : boost::lexical_cast<int>(roi_tree_.get<wstring>(path));
+    set_id_color(r, g, b, update, id);
+}
+
 void MeshRenderer::set_id_color(unsigned char r, unsigned char g, unsigned char b, bool update, int id)
 {
 	int edid = (id == -1) ? edit_sel_id_ : id;
@@ -956,9 +962,16 @@ void MeshRenderer::set_id_color(unsigned char r, unsigned char g, unsigned char 
 	base_palette_[edid * MR_PALETTE_ELEM_COMP + 0] = r;
 	base_palette_[edid * MR_PALETTE_ELEM_COMP + 1] = g;
 	base_palette_[edid * MR_PALETTE_ELEM_COMP + 2] = b;
+    palette_dirty = true;
 
 	if (update)
-		update_palette(desel_palette_mode_, desel_col_fac_);
+		update_palette(L"");
+}
+
+void MeshRenderer::get_id_color(unsigned char& r, unsigned char& g, unsigned char& b, const wstring &path)
+{
+    int id = path.empty() ? -1 : boost::lexical_cast<int>(roi_tree_.get<wstring>(path));
+    get_id_color(r, g, b, id);
 }
 
 void MeshRenderer::get_id_color(unsigned char& r, unsigned char& g, unsigned char& b, int id)

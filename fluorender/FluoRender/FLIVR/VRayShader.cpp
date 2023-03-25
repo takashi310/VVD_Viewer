@@ -87,7 +87,7 @@ namespace FLIVR
 	"	vec4 loc3;//(gamma, gm_thresh, offset, sw)\n" \
 	"	vec4 loc5;//(spcx, spcy, spcz, max_id)\n" \
 	"	vec4 loc6;//(r, g, b, 0.0) or (1/vx, 1/vy, luminance, depth_mode)\n" \
-	"	vec4 loc7;//(1/vx, 1/vy, 1/sample_rate, 0.0)\n" \
+	"	vec4 loc7;//(1/vx, 1/vy, 1/sample_rate, highlight_thresh)\n" \
 	"	vec4 loc8;//(int, start, end, 0.0)\n" \
 	"	vec4 loc10; //plane0\n" \
 	"	vec4 loc11; //plane1\n" \
@@ -283,6 +283,13 @@ namespace FLIVR
 	"	float highlight = 0.0;\n" \
 	"\n"
 
+#define VRAY_HEAD_HIGHLIGHT \
+    "    //VRAY_HEAD_HIGHLIGHT\n" \
+    "    bool highlight = false;\n" \
+    "    float maxplusmin = max(max(base.loc6.r, base.loc6.g), base.loc6.b) + min(min(base.loc6.r, base.loc6.g), base.loc6.b);\n" \
+    "    vec4 hcol = vec4(maxplusmin - base.loc6.r, maxplusmin - base.loc6.g, maxplusmin - base.loc6.b, 0.2);\n" \
+    "\n"
+
 #define VRAY_LOOP_HEAD \
 	"	//VRAY_LOOP_HEAD\n" \
 	"	for (uint i = 0; i <= brk.stnum; i++)\n" \
@@ -334,6 +341,11 @@ namespace FLIVR
 #define VRAY_LOOP_CONDITION_END_DMAP \
 	"!vol_clip_func(t) && t.x >= brk.tbmin.x && t.x <= brk.tbmax.x && t.y >= brk.tbmin.y && t.y <= brk.tbmax.y && t.z >= brk.tbmin.z && t.z <= brk.tbmax.z)\n" \
 	"		{\n" 
+
+#define VRAY_HIGHLIGHT_THRESHOLD \
+    "           //VRAY_HIGHLIGHT_THRESHOLD\n" \
+    "           highlight = texture(tex0, t.stp).r >= base.loc7.w || highlight ? true : false;\n" \
+    "\n"
 
 #define VRAY_MULTI_DEFAULT_COLORMAP_INDEX_BODY \
 	"			//VRAY_MULTI_DEFAULT_COLORMAP_INDEX_BODY\n" \
@@ -657,6 +669,7 @@ namespace FLIVR
 #define VRAY_DATA_VOLUME_LOOKUP \
 	"			//VRAY_DATA_VOLUME_LOOKUP\n" \
 	"			vec4 v = texture(tex0, t.stp);\n" \
+    "           float orig = v.x;\n" \
 	"\n"
     
 #define VRAY_DATA_LABEL_SEG_IF \
@@ -995,13 +1008,13 @@ namespace FLIVR
 #define VRAY_RASTER_BLEND_MASK \
 	"			//VRAY_RASTER_BLEND_MASK\n" \
 	"			vec4 cmask = texture(tex2, t.stp); //get mask value\n" \
-	"			c = tf_alp*cmask.x<base.loc6.w?vec4(cmask.x*0.0002):vec4(cmask.x*0.0002)+vec4(cmask.x)*c*l.w;\n" \
+	"			c = orig<base.loc6.w?vec4(0.0):vec4(cmask.x*0.0001)+vec4(cmask.x)*c*l.w;\n" \
 	"\n"
 
 #define VRAY_RASTER_BLEND_MASK_SOLID \
 	"			//VRAY_RASTER_BLEND_MASK_SOLID\n" \
 	"			vec4 cmask = texture(tex2, t.stp); //get mask value\n" \
-	"			c = tf_alp*cmask.x<base.loc6.w?vec4(0.0):vec4(cmask.x)*c;\n" \
+	"			c = orig<base.loc6.w?vec4(0.0):vec4(cmask.x)*c;\n" \
 	"\n"
 
 #define VRAY_RASTER_BLEND_MASK_ID \
@@ -1105,24 +1118,24 @@ namespace FLIVR
 	"			outcol = (1.0 - c.w) * outcol + c;\n" \
 	"\n"
 
-#define VRAY_LABEL_SEG_LOOP_TAIL \
-    "		}\n" \
-	"	}\n" \
-	"\n" \
+#define VRAY_LOOP_TAIL \
+    "        }\n" \
+    "    }\n" \
+    "\n"
+
+#define VRAY_HIGHLIGHT_ADD \
+    "    outcol.rgb = highlight ? clamp(outcol.rgb + hcol.rgb*hcol.w, 0.0, 1.0) : outcol.rgb;\n" \
+    "\n"
+
+#define VRAY_ASSIGN_COLOR_LABEL_SEG \
 	"	FragColor = outcol + highlight * 0.1 * clamp(outcol, 0.01, 1.0);\n" \
 	"\n"
 
-#define VRAY_LOOP_NA_MASK_TAIL \
-"        }\n" \
-"    }\n" \
-"\n" \
-"    FragColor = outcol * 0.001;\n" \
-"\n"
+#define VRAY_ASSIGN_COLOR_NA_MASK \
+    "    FragColor = outcol * 0.001;\n" \
+    "\n"
     
-#define VRAY_LOOP_TAIL \
-	"		}\n" \
-	"	}\n" \
-	"\n" \
+#define VRAY_VRAY_ASSIGN_COLOR \
 	"	FragColor = outcol;\n" \
 	"\n" 
 
@@ -1641,7 +1654,7 @@ VRayShader::VRayShader(
 	int peel, bool clip,
 	bool hiqual, int mask,
 	int color_mode, int colormap, int colormap_proj,
-	bool solid, int vertex_shader, int mask_hide_mode, bool persp, int blend_mode, int multi_mode, bool na_mode)
+	bool solid, int vertex_shader, int mask_hide_mode, bool persp, int blend_mode, int multi_mode, bool na_mode, bool highlight)
 	: device_(device),
 	poly_(poly),
 	channels_(channels),
@@ -1661,7 +1674,8 @@ VRayShader::VRayShader(
 	blend_mode_(blend_mode),
 	program_(0),
 	multi_mode_(0),
-    na_mode_(na_mode)
+    na_mode_(na_mode),
+    highlight_(highlight)
 	{
 	}
 
@@ -1831,6 +1845,9 @@ VRayShader::VRayShader(
 
 		if (na_mode_)
 			z << VRAY_HEAD_LABEL_SEG;
+        
+        if (highlight_)
+            z << VRAY_HEAD_HIGHLIGHT;
 
 		z << VRAY_LOOP_HEAD;
 		if (peel_ != 0 || color_mode_ == 2)
@@ -1863,7 +1880,10 @@ VRayShader::VRayShader(
 			z << VRAY_LOOP_CONDITION_END;
 		else
 			z << VRAY_LOOP_CONDITION_END_DMAP;
-
+        
+        if (highlight_)
+            z << VRAY_HIGHLIGHT_THRESHOLD;
+        
 		//bodies
 		if (color_mode_ == 3)
 		{
@@ -2046,12 +2066,17 @@ VRayShader::VRayShader(
         if (na_mode_)
             z << VRAY_DATA_LABEL_SEG_ENDIF;
 
+        z << VRAY_LOOP_TAIL;
+        
+        if (highlight_)
+            z << VRAY_HIGHLIGHT_ADD;
+        
 		if (na_mode_ && mask_ != 1)
-			z << VRAY_LABEL_SEG_LOOP_TAIL;
+			z << VRAY_ASSIGN_COLOR_LABEL_SEG;
         else if (na_mode_ && mask_ == 1)
-            z << VRAY_LOOP_NA_MASK_TAIL;
+            z << VRAY_ASSIGN_COLOR_NA_MASK;
 		else
-			z << VRAY_LOOP_TAIL;
+			z << VRAY_VRAY_ASSIGN_COLOR;
 
 		//the common tail
 		z << VRAY_TAIL;
@@ -2101,7 +2126,7 @@ VRayShader::VRayShader(
 		int peel, bool clip,
 		bool hiqual, int mask,
 		int color_mode, int colormap, int colormap_proj,
-		bool solid, int vertex_shader, int mask_hide_mode, bool persp, int blend_mode, int multi_mode, bool na_mode)
+		bool solid, int vertex_shader, int mask_hide_mode, bool persp, int blend_mode, int multi_mode, bool na_mode, bool highlight)
 	{
 		VRayShader*ret = nullptr;
 		if(prev_shader_ >= 0)
@@ -2112,7 +2137,7 @@ VRayShader::VRayShader(
 				peel, clip,
 				hiqual, mask,
 				color_mode, colormap, colormap_proj,
-				solid, vertex_shader, mask_hide_mode, persp, blend_mode, multi_mode, na_mode))
+				solid, vertex_shader, mask_hide_mode, persp, blend_mode, multi_mode, na_mode, highlight))
 			{
 				ret = shader_[prev_shader_];
 			}
@@ -2127,7 +2152,7 @@ VRayShader::VRayShader(
 					peel, clip,
 					hiqual, mask,
 					color_mode, colormap, colormap_proj,
-					solid, vertex_shader, mask_hide_mode, persp, blend_mode, multi_mode, na_mode))
+					solid, vertex_shader, mask_hide_mode, persp, blend_mode, multi_mode, na_mode, highlight))
 				{
 					prev_shader_ = i;
 					ret = shader_[i];
@@ -2143,7 +2168,7 @@ VRayShader::VRayShader(
 				peel, clip,
 				hiqual, mask,
 				color_mode, colormap, colormap_proj,
-				solid, vertex_shader, mask_hide_mode, persp, blend_mode, multi_mode, na_mode);
+				solid, vertex_shader, mask_hide_mode, persp, blend_mode, multi_mode, na_mode, highlight);
 			if(s->create())
 				delete s;
 			else

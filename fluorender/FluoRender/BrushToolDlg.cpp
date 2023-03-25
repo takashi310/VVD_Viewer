@@ -91,6 +91,7 @@ EVT_BUTTON(ID_CalcDivBtn, BrushToolDlg::OnCalcDiv)
 EVT_BUTTON(ID_CalcIscBtn, BrushToolDlg::OnCalcIsc)
 //one-operators
 EVT_BUTTON(ID_CalcFillBtn, BrushToolDlg::OnCalcFill)
+EVT_TIMER(ID_Timer, BrushToolDlg::OnIdle)
 END_EVENT_TABLE()
 
 wxWindow* BrushToolDlg::CreateBrushPage(wxWindow *parent)
@@ -510,13 +511,13 @@ wxWindow* BrushToolDlg::CreateAnalysisPage(wxWindow *parent)
 	//export
 	wxBoxSizer *sizer1_4 = new wxBoxSizer(wxHORIZONTAL);
 	sizer1_4->AddStretchSpacer();
-	st = new wxStaticText(page, 0, "Export:  ");
+	st = new wxStaticText(page, 0, "Output:  ");
 	sizer1_4->Add(st, 0, wxALIGN_CENTER);
-	m_ca_multi_chann_btn = new wxButton(page, ID_CAMultiChannBtn, "Multi-Channels",
+	m_ca_multi_chann_btn = new wxButton(page, ID_CAMultiChannBtn, "Individual Channels",
 		wxDefaultPosition, wxSize(-1, 23));
-	m_ca_random_color_btn = new wxButton(page, ID_CARandomColorBtn, "Random Colors",
+	m_ca_random_color_btn = new wxButton(page, ID_CARandomColorBtn, "Random RGB",
 		wxDefaultPosition, wxSize(-1, 23));
-	m_ca_annotations_btn = new wxButton(page, ID_CAAnnotationsBtn, "Show Annotations",
+	m_ca_annotations_btn = new wxButton(page, ID_CAAnnotationsBtn, "Annotations",
 		wxDefaultPosition, wxSize(-1, 23));
 	sizer1_4->Add(m_ca_multi_chann_btn, 0, wxALIGN_CENTER);
 	sizer1_4->Add(m_ca_random_color_btn, 0, wxALIGN_CENTER);
@@ -665,7 +666,8 @@ BrushToolDlg::BrushToolDlg(wxWindow *frame, wxWindow *parent)
    m_dft_nr_thresh(0.0),
    m_dft_nr_size(0.0),
    m_dft_dslt_c(0.0),
-   m_dft_eve_thresh(0.1)
+   m_dft_eve_thresh(0.1),
+    mask_undo_num_modified(false)
 {
 	SetEvtHandlerEnabled(false);
 	Freeze();
@@ -690,11 +692,16 @@ BrushToolDlg::BrushToolDlg(wxWindow *frame, wxWindow *parent)
 	Thaw();
 	SetEvtHandlerEnabled(true);
 	//m_watch.Start();
+    
+    m_idleTimer = new wxTimer(this, ID_Timer);
+    m_idleTimer->Start(100);
 }
 
 BrushToolDlg::~BrushToolDlg()
 {
-   SaveDefault();
+    m_idleTimer->Stop();
+    wxDELETE(m_idleTimer);
+    SaveDefault();
 }
 
 void BrushToolDlg::GetSettings(VRenderView* vrv)
@@ -1311,20 +1318,28 @@ void BrushToolDlg::OnCAThreshChange(wxScrollEvent &event)
 
 void BrushToolDlg::OnCAThreshText(wxCommandEvent &event)
 {
-   wxString str = m_ca_thresh_text->GetValue();
-   double val;
-   str.ToDouble(&val);
-   m_dft_ca_thresh = val/m_max_value;
-   m_ca_thresh_sldr->SetValue(int(val*10.0+0.5));
-
-   //change mask threshold
-   VolumeData* sel_vol = 0;
-   VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
-   if (vr_frame)
-      sel_vol = vr_frame->GetCurSelVol();
-   //if (sel_vol)
-   //   sel_vol->SetMaskThreshold(m_dft_ca_thresh);
-   vr_frame->RefreshVRenderViews();
+    wxString str = m_ca_thresh_text->GetValue();
+    double val;
+    str.ToDouble(&val);
+    m_dft_ca_thresh = val/m_max_value;
+    m_ca_thresh_sldr->SetValue(int(val*10.0+0.5));
+    
+    if (m_cur_view && m_cur_view->GetVolumeA())
+    {
+        VolumeData *vd = m_cur_view->GetVolumeA();
+        vd->SetMaskThreshold(m_dft_ca_thresh);
+        m_cur_view->RefreshGL();
+    }
+    /*
+     //change mask threshold
+     VolumeData* sel_vol = 0;
+     VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+     if (vr_frame)
+     sel_vol = vr_frame->GetCurSelVol();
+     //if (sel_vol)
+     //   sel_vol->SetMaskThreshold(m_dft_ca_thresh);
+     vr_frame->RefreshVRenderViews();
+     */
 }
 
 void BrushToolDlg::OnCAAnalyzeBtn(wxCommandEvent &event)
@@ -1524,6 +1539,13 @@ void BrushToolDlg::OnEVEThresholdText(wxCommandEvent& event)
     str.ToDouble(&val);
     m_dft_eve_thresh = val / m_max_value;
     m_eve_threshold_sldr->SetValue(int(val + 0.5));
+    
+    if (m_cur_view && m_cur_view->GetVolumeA())
+    {
+        VolumeData *vd = m_cur_view->GetVolumeA();
+        vd->SetMaskThreshold(m_dft_eve_thresh);
+        m_cur_view->RefreshGL();
+    }
 }
 
 void BrushToolDlg::OnEVEAnalyzeBtn(wxCommandEvent& event)
@@ -2073,4 +2095,79 @@ void BrushToolDlg::OnCalcFill(wxCommandEvent &event)
 		 m_calc_b_text->SetValue(m_vol2 ? m_vol2->GetName() : wxT(""));
       }
    }
+}
+
+void BrushToolDlg::OnIdle(wxTimerEvent &event)
+{
+    VRenderFrame* vr_frame = (VRenderFrame*)m_frame;
+    if (!vr_frame) return;
+
+    if (!m_cur_view || !m_cur_view->m_glview || m_cur_view->m_glview->m_capture )
+        return;
+    
+    VolumeData *vd = m_cur_view->GetVolumeA();
+    if (!vd)
+        return;
+
+    wxPoint pos = wxGetMousePosition();
+    wxRect ca_reg = m_ca_thresh_sldr->GetScreenRect();
+    wxRect eve_reg = m_eve_threshold_sldr->GetScreenRect();
+    
+    bool cur_mode = vd->GetHighlightingMode();
+    
+    bool focused =  this->HasFocus();
+    int page = m_notebook->GetSelection();
+    
+    if ((m_notebook && m_notebook->GetSelection() == 2) && (ca_reg.Contains(pos) || eve_reg.Contains(pos)) )
+    {
+        if (!cur_mode)
+        {
+            if (Texture::mask_undo_num_ == 0)
+            {
+                Texture::mask_undo_num_ = 1;
+                mask_undo_num_modified = true;
+            }
+            vd->AddEmptyMask();
+            if (vd->GetVR())
+                vd->GetVR()->return_mask();
+            if (vd->GetTexture())
+                vd->GetTexture()->push_mask();
+            auto blank = std::shared_ptr<vks::VTexture>();
+            vd->Set2DWeight(blank, blank);
+            vd->DrawMask(0, 5, 0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, false, NULL, true, false, false);
+            if (vd->GetVR())
+            {
+                vd->GetVR()->return_mask();
+                vd->GetVR()->clear_tex_current_mask();
+            }
+            vd->SetUseMaskThreshold(true);
+            if (ca_reg.Contains(pos))
+                vd->SetMaskThreshold(m_dft_ca_thresh);
+            else
+                vd->SetMaskThreshold(m_dft_eve_thresh);
+            vd->SetHighlightingMode(true);
+            m_cur_view->RefreshGL();
+        }
+    }
+    else
+    {
+        if (cur_mode)
+        {
+            if (vd->GetTexture())
+            {
+                vd->GetTexture()->mask_undos_backward();
+                if (mask_undo_num_modified)
+                {
+                    mask_undo_num_modified = false;
+                    Texture::mask_undo_num_ = 0;
+                    vd->GetTexture()->trim_mask_undos_tail();
+                }
+            }
+            if (vd->GetVR())
+                vd->GetVR()->clear_tex_current_mask();
+            vd->SetUseMaskThreshold(false);
+            vd->SetHighlightingMode(false);
+            m_cur_view->RefreshGL();
+        }
+    }
 }

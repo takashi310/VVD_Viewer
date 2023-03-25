@@ -205,6 +205,11 @@ namespace FLIVR
         void set_na_mode(bool val) { m_na_mode = val; }
         bool get_na_mode() { return m_na_mode; }
         
+        void set_highlight_mode(bool val) { m_highlight = val; }
+        bool get_highlight_mode() { return m_highlight; }
+        void set_highlight_th(double val) { m_highlight_th = val; }
+        double get_highlight_th() { return m_highlight_th; }
+        
 #ifdef _DARWIN
         bool get_slice_mode() { return false; }
         void set_slice_mode(bool val) { slice_mode_ = val; }
@@ -287,6 +292,9 @@ namespace FLIVR
 		double m_fog_end;
         
         bool m_na_mode;
+        
+        bool m_highlight;
+        double m_highlight_th;
 
 		/*
 		static KernelProgram* m_dslt_kernel = NULL;
@@ -378,7 +386,7 @@ public:
 		void draw_mask(
 			int type, int paint_mode, int hr_mode,
 			double ini_thresh, double gm_falloff, double scl_falloff,
-			double scl_translate, double w2d, double bins, bool ortho, bool estimate, Texture* ext_msk = NULL, bool use_absolute_value = false);
+			double scl_translate, double w2d, double bins, bool ortho, bool estimate, Texture* ext_msk = NULL, bool use_absolute_value = false, bool save_stroke = true);
 
 		//generate the labeling assuming the mask is already generated
 		//type: 0-initialization; 1-maximum intensity filtering
@@ -457,7 +465,7 @@ public:
 		static std::vector<VRayPipeline> m_vray_pipelines;
 		static std::map<vks::VulkanDevice*, VkRenderPass> m_vray_draw_pass;
 		int m_prev_vray_pipeline;
-        VRayPipeline prepareVRayPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode, bool persp, int multi_mode = 0, bool na_mode = false, Texture* ext_msk = NULL);
+        VRayPipeline prepareVRayPipeline(vks::VulkanDevice* device, int mode, int update_order, int colormap_mode, bool persp, int multi_mode = 0, bool na_mode = false, Texture* ext_msk = NULL, bool highlight = false);
 		
 		struct VRayVertexBuffers {
 			vks::Buffer vertexBuffer;

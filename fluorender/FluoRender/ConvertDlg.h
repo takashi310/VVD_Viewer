@@ -73,6 +73,9 @@ private:
 	wxButton* m_cnv_vol_mesh_convert_btn;
 	//output
 	wxTextCtrl* m_stat_text;
+    
+    double m_max_value;
+    double m_cnv_vol_mesh_thresh;
 
 	//convert from volume to mesh
 	void OnCnvVolMeshThreshChange(wxScrollEvent &event);

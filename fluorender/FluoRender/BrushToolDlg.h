@@ -108,7 +108,8 @@ public:
 		ID_CalcDivBtn,
 		ID_CalcIscBtn,
 		//one-opeartors
-		ID_CalcFillBtn
+		ID_CalcFillBtn,
+        ID_Timer
 	};
 
 	BrushToolDlg(wxWindow* frame,
@@ -190,6 +191,8 @@ private:
 	int m_dft_eve_min_radius;
 	int m_dft_eve_max_radius;
 	double m_dft_eve_thresh;
+    
+    bool mask_undo_num_modified;
 	
 	//tab control
 	wxNotebook *m_notebook;
@@ -278,6 +281,8 @@ private:
 	wxButton *m_calc_fill_btn;
 
 	wxStopWatch m_watch;
+    
+    wxTimer *m_idleTimer;
 
 private:
 	void LoadDefault();
@@ -368,6 +373,8 @@ private:
 	void OnCalcIsc(wxCommandEvent &event);
 	//one-operators
 	void OnCalcFill(wxCommandEvent &event);
+    
+    void OnIdle(wxTimerEvent& event);
 
 	DECLARE_EVENT_TABLE();
 };

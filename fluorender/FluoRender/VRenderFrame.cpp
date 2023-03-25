@@ -1628,6 +1628,10 @@ void VRenderFrame::ConvertCSV2SWC(wxString filename, VRenderView* vrv)
                     link2 = -1;
                 path = "Cell" + elems[4] + ".links";
                 swc_line = wxString::Format("%d 0 %s %s %s %f %d %s", (int)swcdata.Count()+1, elems[1], elems[0], elems[2], 0.01f, (int)link2*2, path);
+                col[0] = 200.0 / 255.0;
+                col[1] = 200.0 / 255.0;
+                col[2] = 200.0 / 255.0;
+                swccolors[path] = col;
                 swcdata.Add(swc_line);
             }
         }
@@ -1698,11 +1702,14 @@ void VRenderFrame::ConvertCSV2SWC(wxString filename, VRenderView* vrv)
         {
             md->SetName(name);
             md->SetAnnotations(annotations);
-            if (swccolors.count(name) > 0)
+
+            for (auto ite = swccolors.begin(); ite != swccolors.end(); ite++)
             {
-                Color color = swccolors[name];
-                //TODO: set colors of mesh groups
+                wxString path = ite->first;
+                Color col = ite->second;
+                md->SetIDColor((int)(col.r()*255), (int)(col.g()*255), (int)(col.b()*255), false, path.ToStdWstring());
             }
+            md->UpdateIDPalette();
             
             if (mg)
             {
@@ -2676,6 +2683,7 @@ void VRenderFrame::UpdateTree(wxString name, int type, bool set_calc)
 						GetBrushToolDlg()->GetSettings(vrv);
 						GetMeasureDlg()->GetSettings(vrv);
 						GetTraceDlg()->GetSettings(vrv);
+                        GetConvertDlg()->GetSettings(vrv);
 					}
 				}
 				break;
@@ -2757,6 +2765,7 @@ void VRenderFrame::UpdateTree(wxString name, int type, bool set_calc)
 							GetBrushToolDlg()->GetSettings(vrv);
 							GetMeasureDlg()->GetSettings(vrv);
 							GetTraceDlg()->GetSettings(vrv);
+                            GetConvertDlg()->GetSettings(vrv);
 						}
 					}
 					if (name == group->GetName() && (type == 5 || type < 0)) {

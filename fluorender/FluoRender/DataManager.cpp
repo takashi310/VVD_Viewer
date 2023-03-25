@@ -2791,7 +2791,7 @@ void VolumeData::DrawBounds()
 //hr_mode (hidden removal): 0-none; 1-ortho; 2-persp
 void VolumeData::DrawMask(int type, int paint_mode, int hr_mode,
 						  double ini_thresh, double gm_falloff, double scl_falloff, double scl_translate,
-						  double w2d, double bins, bool ortho, Texture* ext_msk, bool clear_msk_cache, bool use_absolute_value)
+						  double w2d, double bins, bool ortho, Texture* ext_msk, bool clear_msk_cache, bool use_absolute_value, bool save_stroke)
 {
 	if (m_vr)
 	{
@@ -2804,7 +2804,7 @@ void VolumeData::DrawMask(int type, int paint_mode, int hr_mode,
 		//OutputDebugStringA("DrawMask Enter\n");
 		m_vr->set_2d_mask(m_2d_mask);
 		m_vr->set_2d_weight(m_2d_weight1, m_2d_weight2);
-		m_vr->draw_mask(type, paint_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, scl_translate, w2d, bins, ortho, false, ext_msk, use_absolute_value);
+		m_vr->draw_mask(type, paint_mode, hr_mode, ini_thresh, gm_falloff, scl_falloff, scl_translate, w2d, bins, ortho, false, ext_msk, use_absolute_value, save_stroke);
 		if (isBrxml())
 		{
 			int lvnum = GetLevelNum();

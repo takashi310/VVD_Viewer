@@ -376,6 +376,7 @@ public:
 
     bool InsideClippingPlanes(Point pos);
     
+    void UpdateIDPalette() { if (m_mr) m_mr->update_palette(L""); }
     void SelectSegment(int id=-INT_MAX) { if (m_mr) m_mr->select_segment(id); }
     bool isTree() { return m_mr ? m_mr->is_tree() : false; }
     void InitROIGroup() { if (m_mr) m_mr->init_group_ids(); }
@@ -400,9 +401,17 @@ public:
     void DeselectAllNamedROI(){ if (m_mr) m_mr->deselect_all_roi_tree(); }
     void DeselectAllROI(){ if (m_mr) m_mr->deselect_all_roi(); }
     void ClearROIs(){ if (m_mr) m_mr->clear_roi(); }
+    void SetIDColor(unsigned char r, unsigned char g, unsigned char b, bool update_palette=true, const wstring &path = L"")
+    {
+        if (m_mr) m_mr->set_id_color(r, g, b, update_palette, path);
+    }
     void SetIDColor(unsigned char r, unsigned char g, unsigned char b, bool update_palette=true, int id=-1)
     {
         if (m_mr) m_mr->set_id_color(r, g, b, update_palette, id);
+    }
+    void GetIDColor(unsigned char &r, unsigned char &g, unsigned char &b, const wstring &path)
+    {
+        if (m_mr) m_mr->get_id_color(r, g, b, path);
     }
     void GetIDColor(unsigned char &r, unsigned char &g, unsigned char &b, int id=-1)
     {
@@ -580,7 +589,7 @@ public:
 	//hr_mode (hidden removal): 0-none; 1-ortho; 2-persp
 	void DrawMask(int type, int paint_mode, int hr_mode,
 		double ini_thresh, double gm_falloff, double scl_falloff, double scl_translate,
-		double w2d, double bins, bool ortho = false, Texture* ext_msk = NULL, bool clear_msk_cache = true, bool use_absolute_value = false);
+		double w2d, double bins, bool ortho = false, Texture* ext_msk = NULL, bool clear_msk_cache = true, bool use_absolute_value = false, bool save_stroke = true);
 	void DrawMaskThreshold(float th, bool ortho = false, bool use_absolute_value = false);
 	void DrawMaskDSLT(int type, int paint_mode, int hr_mode,
 		double ini_thresh, double gm_falloff, double scl_falloff, double scl_translate,
@@ -854,6 +863,11 @@ public:
 	}
     
     bool InsideClippingPlanes(Point pos);
+    
+    void SetHighlightingMode(bool val) { if (m_vr) m_vr->set_highlight_mode(val); }
+    bool GetHighlightingMode() { return m_vr ? m_vr->get_highlight_mode() : false; }
+    void SetHighlightingThreshold(double val) { if (m_vr) m_vr->set_highlight_th(val); }
+    double GetHighlightingThreshold() { return m_vr ? m_vr->get_highlight_th() : 0.0; }
 
 private:
 	//duplication indicator and counter

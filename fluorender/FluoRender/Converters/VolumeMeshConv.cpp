@@ -256,21 +256,21 @@ void VolumeMeshConv::Convert()
 		//vertex 1
 		vertices[3*numvertices + 0] = float(tri.p[0].x());
 		vertices[3*numvertices + 1] = float(tri.p[0].y());
-		vertices[3*numvertices + 2] = float(tri.p[0].z());
+		vertices[3*numvertices + 2] = float(-tri.p[0].z());
 		//triangle
 		m_mesh->triangles[numtriangles].vindices[0] = numvertices;
 		numvertices++;
 		//vertex 2
 		vertices[3*numvertices + 0] = float(tri.p[1].x());
 		vertices[3*numvertices + 1] = float(tri.p[1].y());
-		vertices[3*numvertices + 2] = float(tri.p[1].z());
+		vertices[3*numvertices + 2] = float(-tri.p[1].z());
 		//triangle
 		m_mesh->triangles[numtriangles].vindices[1] = numvertices;
 		numvertices++;
 		//vertex 3
 		vertices[3*numvertices + 0] = float(tri.p[2].x());
 		vertices[3*numvertices + 1] = float(tri.p[2].y());
-		vertices[3*numvertices + 2] = float(tri.p[2].z());
+		vertices[3*numvertices + 2] = float(-tri.p[2].z());
 		//triangle
 		m_mesh->triangles[numtriangles].vindices[2] = numvertices;
 		numvertices++;
