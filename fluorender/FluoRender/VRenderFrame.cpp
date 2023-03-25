@@ -190,8 +190,8 @@ VRenderFrame::VRenderFrame(
 		"Show analysis tools for volume data");
 	m_tb_menu_edit->Append(ID_Measure, "Measurement...",
 		"Show measurement tools");
-	m_tb_menu_edit->Append(ID_Trace, "Components && Tracking...",
-		"Show tracking tools");
+	//m_tb_menu_edit->Append(ID_Trace, "Components && Tracking...",
+	//	"Show tracking tools");
 	m_tb_menu_edit->Append(ID_NoiseCancelling, "Noise Reduction...",
 		"Show noise reduction dialog");
 	m_tb_menu_edit->Append(ID_Counting, "Counting and Volume...",
@@ -629,8 +629,8 @@ VRenderFrame::VRenderFrame(
 	m_top_tools->Append(m);
 	m = new wxMenuItem(m_top_tools,ID_Measure, wxT("&Measurement Tools..."));
 	m_top_tools->Append(m);
-	m = new wxMenuItem(m_top_tools,ID_Trace, wxT("Components && &Tracking..."));
-	m_top_tools->Append(m);
+	//m = new wxMenuItem(m_top_tools,ID_Trace, wxT("Components && &Tracking..."));
+	//m_top_tools->Append(m);
 	m = new wxMenuItem(m_top_tools,ID_NoiseCancelling, wxT("&Noise Reduction..."));
 	m_top_tools->Append(m);
 	m = new wxMenuItem(m_top_tools,ID_Counting, wxT("&Counting and Volume..."));

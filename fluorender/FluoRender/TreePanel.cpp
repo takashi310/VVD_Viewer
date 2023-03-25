@@ -465,7 +465,7 @@ void DataTreeCtrl::OnContextMenu(wxContextMenuEvent &event )
 					menu.AppendSeparator();
 					menu.Append(ID_Edit, "Analyze...");
 					menu.Append(ID_Info, "Information...");
-					menu.Append(ID_Trace, "Components && Tracking...");
+					//menu.Append(ID_Trace, "Components && Tracking...");
 					menu.Append(ID_NoiseCancelling, "Noise Reduction...");
 					menu.Append(ID_Counting, "Counting and Volume...");
 					menu.Append(ID_Colocalization, "Colocalization Analysis...");
