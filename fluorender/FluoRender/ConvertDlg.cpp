@@ -238,9 +238,9 @@ void ConvertDlg::OnCnvVolMeshConvert(wxCommandEvent& event)
 	converter.SetMaxValue(sel_vol->GetMaxValue());
 	wxString str;
 	//get iso value
-	str = m_cnv_vol_mesh_thresh_text->GetValue();
-	double iso_value;
-	str.ToDouble(&iso_value);
+	//str = m_cnv_vol_mesh_thresh_text->GetValue();
+	double iso_value = m_cnv_vol_mesh_thresh;
+	//str.ToDouble(&iso_value);
 	converter.SetIsoValue(iso_value);
 	//get downsampling
 	str = m_cnv_vol_mesh_downsample_text->GetValue();
@@ -276,6 +276,14 @@ void ConvertDlg::OnCnvVolMeshConvert(wxCommandEvent& event)
 		converter.SetVolumeUseMask(false);
 	//start converting
 	converter.Convert();
+    
+    if (!converter.isModelValid())
+    {
+        (*m_stat_text) << "The generated mesh is empty." << "\n";
+        delete prog_diag;
+        return;
+    }
+    
 	GLMmodel* mesh = converter.GetMesh();
 
 	progress = 90;

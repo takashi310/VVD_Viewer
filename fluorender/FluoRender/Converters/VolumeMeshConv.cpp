@@ -235,6 +235,12 @@ void VolumeMeshConv::Convert()
 			tri_list.push_back(tri);
 		}
 	}
+    
+    if (tri_list.size() == 0)
+    {
+        glmClear(m_mesh);
+        return;
+    }
 
 	int numtriangles = int(tri_list.size());
 	m_mesh->numvertices = numtriangles*3;
@@ -422,4 +428,13 @@ Vector VolumeMeshConv::Intersect(double verts[8], int v1, int v2,
 		Vector(p.x()*m_spcx*m_downsample, p.y()*m_spcy*m_downsample, p.z()*m_spcz*m_downsample_z);
 
 	return p;
+}
+
+bool VolumeMeshConv::isModelValid()
+{
+    if (!m_mesh)
+        return false;
+    if (m_mesh->numvertices == 0)
+        return false;
+    return true;
 }

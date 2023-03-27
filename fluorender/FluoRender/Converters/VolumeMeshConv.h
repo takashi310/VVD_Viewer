@@ -55,6 +55,8 @@ public:
 	void SetDownsample(int downsample);
 	void SetDownsampleZ(int downsample);
 	void Convert();
+    
+    bool isModelValid();
 
 	//soft threshold
 	static void SetSoftThreshold(double val)
