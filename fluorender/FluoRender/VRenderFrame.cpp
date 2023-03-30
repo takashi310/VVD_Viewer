@@ -1685,7 +1685,10 @@ void VRenderFrame::ConvertCSV2SWC(wxString filename, VRenderView* vrv)
             if (link < 0)
             {
                 if (elems.Count() >= 8)
-                    annotations->AddText(elems[7].ToStdString(), pos, "");
+                {
+                    if (!elems[7].AfterLast('.').IsSameAs("links"))
+                        annotations->AddText(elems[7].AfterLast('_').ToStdString(), pos, "");
+                }
                 else
                     annotations->AddText(gname.ToStdString(), pos, "");
             }
