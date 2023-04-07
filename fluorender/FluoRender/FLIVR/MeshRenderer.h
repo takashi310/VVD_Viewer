@@ -148,8 +148,11 @@ namespace FLIVR
         void set_roi_state_traverse(int id=-INT_MAX, bool state=true, int exclude=-INT_MAX);
         void set_roi_state_traverse(const boost::property_tree::wptree& tree, bool state=true, int exclude=-INT_MAX);
         void set_roi_state(int id, bool state);
+        void set_roi_state_siblings(int id, bool state);
+        void set_roi_state_by_name(int id, bool state);
         void toggle_roi_state(int id);
         bool get_roi_state(int id);
+        void set_roi_visibility(int id, bool state);
         bool get_roi_visibility(int id);
         map<int, bool> get_all_roi_state();
         bool get_submesh_label_state(int id);

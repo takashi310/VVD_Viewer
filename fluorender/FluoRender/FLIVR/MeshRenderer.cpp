@@ -496,6 +496,51 @@ void MeshRenderer::set_roi_state(int id, bool state)
     roi_inv_state_[id] = state;
     update_palette(roi_inv_dict_[id]);
 }
+void MeshRenderer::set_roi_state_siblings(int id, bool state)
+{
+    if (roi_inv_dict_.count(id) == 0)
+        return;
+    wstring path = roi_inv_dict_[id];
+    size_t found = path.find_last_of(L".");
+    wstring parent = L"";
+    if (found != wstring::npos)
+        parent = path.substr(0, found);
+    
+    boost::property_tree::wptree &tree = roi_tree_.get_child(parent);
+    for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
+    {
+        try
+        {
+            if ( const auto val = tree.get_optional<wstring>(child->first) )
+            {
+                int cid = boost::lexical_cast<int>(*val);
+                set_roi_visibility(cid, state);
+            }
+        }
+        catch (boost::bad_lexical_cast e)
+        {
+            cerr << "MeshRenderer::set_roi_state_siblings(int id, bool state): bad_lexical_cast" << endl;
+        }
+    }
+}
+void MeshRenderer::set_roi_state_by_name(int id, bool state)
+{
+    if (roi_inv_dict_.count(id) == 0)
+        return;
+    
+    wstring name = roi_inv_dict_[id];
+    auto pos = name.find_last_of(L'.');
+    if (pos != wstring::npos && pos+1 < name.length())
+        name = name.substr(pos+1);
+    
+    if (roi_labels_name_dict_.count(name) == 0)
+        return;
+    
+    vector<int> ids = roi_labels_name_dict_[name];
+    
+    for (auto id : ids)
+        set_roi_visibility(id, state);
+}
 void MeshRenderer::set_roi_state_traverse(int id, bool state, int exclude)
 {
     wstring path = id != -INT_MAX ? roi_inv_dict_[id] : L"";
@@ -556,6 +601,25 @@ bool MeshRenderer::get_roi_state(int id)
         return roi_inv_state_[id];
     else
         return false;
+}
+void MeshRenderer::set_roi_visibility(int id, bool state)
+{
+    wstring path = id != -INT_MAX ? roi_inv_dict_[id] : L"";
+    boost::property_tree::wptree &tree = id != -INT_MAX ? roi_tree_.get_child(path) : roi_tree_;
+    bool pstate = true;
+    if (state)
+    {
+        wstring parent = path;
+        size_t found = path.find_last_of(L".");
+        while (found != wstring::npos)
+        {
+            parent = parent.substr(0, found);
+            int pid = boost::lexical_cast<int>(roi_tree_.get<wstring>(parent));
+            roi_inv_state_[pid] = true;
+            found = parent.find_last_of(L".");
+        }
+    }
+    set_roi_state(id, state);
 }
 bool MeshRenderer::get_roi_visibility(int id)
 {

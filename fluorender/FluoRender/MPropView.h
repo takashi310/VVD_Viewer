@@ -115,6 +115,9 @@ public:
 	void GetSettings();
 
 	void UpdateRadScale();
+    
+    bool GetSyncGroup() { return m_group_sync; }
+    bool GetSyncName() { return m_name_sync; }
 
 private:
 	wxWindow* m_frame;

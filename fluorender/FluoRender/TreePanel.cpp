@@ -3195,6 +3195,14 @@ void DataTreeCtrl::OnAct(wxTreeEvent &event)
                         {
                             LayerInfo* item_data = (LayerInfo*)GetItemData(sel_item);
                             md->ToggleROIState(item_data->id);
+                            if (vr_frame->GetMPropView())
+                            {
+                                bool state = md->GetROIState(item_data->id);
+                                if (vr_frame->GetMPropView()->GetSyncGroup())
+                                    md->SetROIStateSiblings(item_data->id, state);
+                                if (vr_frame->GetMPropView()->GetSyncName())
+                                    md->SetRoiStateByName(item_data->id, state);
+                            }
                         }
                     }
                 }

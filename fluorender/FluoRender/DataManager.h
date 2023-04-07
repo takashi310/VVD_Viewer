@@ -401,6 +401,8 @@ public:
     void InitROIGroup() { if (m_mr) m_mr->init_group_ids(); }
     void SetROIStateTraverse(bool state=true, int id=-INT_MAX, int exclude=-INT_MAX) { if (m_mr) m_mr->set_roi_state_traverse(id, state, exclude); }
     void SetROIState(int id, bool state) { if (m_mr) m_mr->set_roi_state(id, state); }
+    void SetROIStateSiblings(int id, bool state) { if (m_mr) m_mr->set_roi_state_siblings(id, state); }
+    void SetRoiStateByName(int id, bool state) { if (m_mr) m_mr->set_roi_state_by_name(id, state); }
     void ToggleROIState(int id) { if (m_mr) m_mr->toggle_roi_state(id); }
     bool GetROIState(int id)  { return m_mr ? m_mr->get_roi_state(id) : false; }
     void PutROINode(wstring path, wstring name=L""){ if (m_mr) m_mr->put_node(path, name); }

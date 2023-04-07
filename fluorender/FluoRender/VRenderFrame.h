@@ -283,6 +283,8 @@ public:
 	//tool views
 	VPropView* GetPropView()
 	{ return m_volume_prop; }
+    MPropView* GetMPropView()
+    { return m_mesh_prop; }
 	//movie view
 	VMovieView* GetMovieView()
 	{ return m_movie_view; }
