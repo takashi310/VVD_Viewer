@@ -137,6 +137,8 @@ BEGIN_EVENT_TABLE(MPropView, wxPanel)
 	EVT_TEXT_ENTER(ID_r_text, MPropView::OnEnterInRadScaleText)
     //label
     EVT_CHECKBOX(ID_label_chk, MPropView::OnLabelCheck)
+    EVT_CHECKBOX(ID_sync_group_chk, MPropView::OnSyncGroupCheck)
+    EVT_CHECKBOX(ID_sync_name_chk, MPropView::OnSyncNameCheck)
 	EVT_CHECKBOX(ID_sync_chk, MPropView::OnSyncCheck)
 END_EVENT_TABLE()
 
@@ -150,6 +152,8 @@ wxPanel(parent, id, pos, size,style, name),
 m_frame(frame),
 m_md(0),
 m_vrv(0),
+m_group_sync(false),
+m_name_sync(false),
 m_sync(false)
 {
 	SetEvtHandlerEnabled(false);
@@ -269,10 +273,23 @@ m_sync(false)
 	sizer_9->Add(m_r_text, 0, wxALIGN_CENTER);
     
     wxBoxSizer* sizer_11 = new wxBoxSizer(wxHORIZONTAL);
-    m_label_chk = new wxCheckBox(this, ID_label_chk, "Label: ",
+    m_label_chk = new wxCheckBox(this, ID_label_chk, "Label",
         wxDefaultPosition, wxSize(100, 20));
     sizer_11->Add(20, 5, 0);
     sizer_11->Add(m_label_chk, 0, wxALIGN_CENTER, 0);
+    
+    wxBoxSizer* sizer_12 = new wxBoxSizer(wxHORIZONTAL);
+    m_sync_group_chk = new wxCheckBox(this, ID_sync_group_chk, " Sync (Group)",
+        wxDefaultPosition, wxSize(110, 20));
+    m_sync_name_chk = new wxCheckBox(this, ID_sync_name_chk, " Sync (Name)",
+        wxDefaultPosition, wxSize(100, 20));
+    sizer_12->Add(20, 5, 0);
+    sizer_12->Add(m_sync_group_chk, 0, wxALIGN_CENTER);
+    sizer_12->Add(20, 5, 0);
+    sizer_12->Add(m_sync_name_chk, 0, wxALIGN_CENTER);
+    
+    m_sync_group_chk->Hide();
+    m_sync_name_chk->Hide();
 
 	wxBoxSizer* sizer_10 = new wxBoxSizer(wxHORIZONTAL);
 	m_sync_chk = new wxCheckBox(this, ID_sync_chk, " Sync",
@@ -287,8 +304,10 @@ m_sync(false)
 	sizer_v2->Add(sizer_3, 0, wxALIGN_LEFT);
     sizer_v2->Add(sizer_7, 0, wxALIGN_LEFT);
 	sizer_v2->Add(sizer_8, 0, wxALIGN_LEFT);
+    sizer_v2->Add(5,5);
 	sizer_v2->Add(sizer_9, 0, wxALIGN_LEFT);
     sizer_v2->Add(sizer_11, 0, wxALIGN_LEFT);
+    sizer_v2->Add(sizer_12, 0, wxALIGN_RIGHT);
 	sizer_v2->Add(sizer_10, 0, wxALIGN_RIGHT);
     
     sizer_v2->Hide(sizer_7);
@@ -360,7 +379,35 @@ void MPropView::GetSettings()
 	m_size_sldr->SetValue(limit);
 	m_size_text->SetValue(wxString::Format("%d", limit));
     //label
-    m_label_chk->SetValue(m_md->GetLabelVisibility());
+    if (m_md->isTree())
+    {
+        m_sync_group_chk->Show();
+        m_sync_name_chk->Show();
+        m_sync_chk->Hide();
+        int id = m_md->GetSelectedSubmeshID();
+        if (id >= 0)
+        {
+            m_label_chk->Enable();
+            m_label_chk->SetValue(m_md->GetSubmeshLabelState(id));
+        }
+        else
+        {
+            m_label_chk->Disable();
+            m_label_chk->SetValue(false);
+        }
+    }
+    else
+    {
+        m_sync_group_chk->Hide();
+        m_sync_name_chk->Hide();
+        m_sync_chk->Show();
+        m_label_chk->SetValue(m_md->GetLabelVisibility());
+        if (m_md->GetAnnotations())
+            m_label_chk->Enable();
+        else
+            m_label_chk->Disable();
+
+    }
 	//swc
 	if (m_md->isSWC())
 	{
@@ -374,12 +421,6 @@ void MPropView::GetSettings()
 		m_r_st->Disable();
 		m_r_text->Disable();
 	}
-    
-    if (m_md->GetAnnotations())
-        m_label_chk->Enable();
-    else
-        m_label_chk->Disable();
-
 	SetEvtHandlerEnabled(true);
 }
 
@@ -693,8 +734,65 @@ void MPropView::OnLabelCheck(wxCommandEvent& event)
     bool bval = m_label_chk->GetValue();
     if (m_md)
     {
-        m_md->SetLabelVisibility(bval);
+        if (m_md->isTree())
+        {
+            int id = m_md->GetSelectedSubmeshID();
+            if (id >= 0)
+            {
+                m_md->SetSubmeshLabelState(id, bval);
+                if (m_group_sync)
+                {
+                    bool state = m_md->GetSubmeshLabelState(id);
+                    m_md->SetSubmeshLabelStateSiblings(id, state);
+                }
+                if (m_name_sync)
+                {
+                    bool state = m_md->GetSubmeshLabelState(id);
+                    m_md->SetSubmeshLabelStateByName(m_md->GetROIName(id), state);
+                }
+            }
+        }
+        else
+            m_md->SetLabelVisibility(bval);
         if (m_sync) UpdateSync();
+        RefreshVRenderViews();
+    }
+}
+
+void MPropView::OnSyncGroupCheck(wxCommandEvent& event)
+{
+    m_group_sync = m_sync_group_chk->GetValue();
+
+    if (m_group_sync)
+    {
+        if (m_md && m_md->isTree())
+        {
+            int id = m_md->GetSelectedSubmeshID();
+            if (id >= 0)
+            {
+                bool state = m_md->GetSubmeshLabelState(id);
+                m_md->SetSubmeshLabelStateSiblings(id, state);
+            }
+        }
+        RefreshVRenderViews();
+    }
+}
+
+void MPropView::OnSyncNameCheck(wxCommandEvent& event)
+{
+    m_name_sync = m_sync_name_chk->GetValue();
+
+    if (m_name_sync)
+    {
+        if (m_md && m_md->isTree())
+        {
+            int id = m_md->GetSelectedSubmeshID();
+            if (id >= 0)
+            {
+                bool state = m_md->GetSubmeshLabelState(id);
+                m_md->SetSubmeshLabelStateByName(m_md->GetROIName(id), state);
+            }
+        }
         RefreshVRenderViews();
     }
 }

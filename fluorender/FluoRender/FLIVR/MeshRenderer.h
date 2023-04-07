@@ -72,6 +72,7 @@ namespace FLIVR
 		MeshRenderer(MeshRenderer&);
 		~MeshRenderer();
         
+        void set_model(GLMmodel* data);
         void init_palette();
         void update_palette_tex();
         std::map<vks::VulkanDevice*, std::shared_ptr<vks::VTexture>> get_palette();
@@ -98,12 +99,12 @@ namespace FLIVR
         void deselect_all_roi(){ clear_sel_ids_roi_only(); update_palette(desel_palette_mode_, desel_col_fac_); }
         void update_sel_segs();
         void update_sel_segs(const boost::property_tree::wptree& tree);
-        boost::property_tree::wptree *get_roi_tree(){ return &roi_tree_; }
+        boost::property_tree::wptree *get_roi_tree(int id = -INT_MAX);
         boost::optional<wstring> get_roi_path(int id);
         //boost::optional<wstring> get_roi_path(int id, const boost::property_tree::wptree& tree, const wstring& parent);
         boost::optional<wstring> get_roi_path(wstring wsid);
         //boost::optional<wstring> get_roi_path(wstring name, const boost::property_tree::wptree& tree, const wstring& parent);
-        int get_roi_id(wstring name);
+        int get_roi_id(const wstring &path);
         void set_id_color(unsigned char r, unsigned char g, unsigned char b, bool update=true, const wstring &path=L"");
         void set_id_color(unsigned char r, unsigned char g, unsigned char b, bool update=true, int id=-1);
         void get_id_color(unsigned char &r, unsigned char &g, unsigned char &b, const wstring &path=L"");
@@ -137,6 +138,11 @@ namespace FLIVR
         void import_selected_ids(const string &sel_ids_str);
         bool is_tree() {return !roi_inv_dict_.empty(); }
 
+        struct SubMeshLabel {
+            bool state;
+            wstring name;
+            vector<FLIVR::Point> points;
+        };
         void init_group_ids();
         void init_group_ids(const boost::property_tree::wptree& tree, int &count, const wstring& parent);
         void set_roi_state_traverse(int id=-INT_MAX, bool state=true, int exclude=-INT_MAX);
@@ -144,13 +150,28 @@ namespace FLIVR
         void set_roi_state(int id, bool state);
         void toggle_roi_state(int id);
         bool get_roi_state(int id);
+        bool get_roi_visibility(int id);
         map<int, bool> get_all_roi_state();
+        bool get_submesh_label_state(int id);
         void set_all_roi_state(const map<int, bool> &states);
+        void set_submesh_label(int id, const SubMeshLabel &label_data);
+        void set_submesh_label_state(int id, bool state);
+        void set_submesh_label_state_siblings(int id, bool state);
+        void set_submesh_label_state_by_name(wstring name, bool state);
+        map<int, SubMeshLabel>* get_submesh_labels();
+        unordered_set<int>* get_active_label_set();
+        void set_selected_submesh_id(int id) { selected_submesh_id_ = id; }
+        int get_selected_submesh_id() { return selected_submesh_id_; }
+        
         boost::property_tree::wptree roi_tree_;
         map<int, wstring> roi_inv_dict_;
         map<int, bool> roi_inv_state_;
         map<int, bool> roi_inv_selection_;
+        map<int, SubMeshLabel> roi_labels_;
+        unordered_set<int> roi_active_labels_;
+        map<wstring, vector<int>> roi_labels_name_dict_;
         bool palette_dirty;
+        int selected_submesh_id_;
 
 		//draw
 		void draw(const std::unique_ptr<vks::VFrameBuffer>& framebuf, bool clear_framebuf);

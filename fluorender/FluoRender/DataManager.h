@@ -376,6 +376,25 @@ public:
 
     bool InsideClippingPlanes(Point pos);
     
+    wstring GetROIPath(int id)
+    {
+        if (m_mr)
+        {
+            if (auto ret = m_mr->get_roi_path(id))
+                return *ret;
+        }
+        return wstring();
+    }
+    bool GetROIVisibility(int id) { return m_mr ? m_mr->get_roi_visibility(id) : false; }
+    bool GetSubmeshLabelState(int id) { return m_mr ? m_mr->get_submesh_label_state(id) : false; }
+    void SetSelectedSubmeshID(int id) { if (m_mr) m_mr->set_selected_submesh_id(id); }
+    int GetSelectedSubmeshID() { return m_mr ? m_mr->get_selected_submesh_id() : -INT_MAX; }
+    void SetSubmeshLabel(int id, const MeshRenderer::SubMeshLabel &label_data) { if (m_mr) m_mr->set_submesh_label(id, label_data); }
+    void SetSubmeshLabelState(int id, bool state) { if (m_mr) m_mr->set_submesh_label_state(id, state); }
+    void SetSubmeshLabelStateSiblings(int id, bool state) { if (m_mr) m_mr->set_submesh_label_state_siblings(id, state); }
+    void SetSubmeshLabelStateByName(wstring name, bool state) { if (m_mr) m_mr->set_submesh_label_state_by_name(name, state); }
+    map<int, MeshRenderer::SubMeshLabel>* GetSubmeshLabels() { return m_mr ? m_mr->get_submesh_labels() : NULL; }
+    unordered_set<int>* GetActiveLabelSet() { return m_mr ? m_mr->get_active_label_set() : NULL; }
     void UpdateIDPalette() { if (m_mr) m_mr->update_palette(L""); }
     void SelectSegment(int id=-INT_MAX) { if (m_mr) m_mr->select_segment(id); }
     bool isTree() { return m_mr ? m_mr->is_tree() : false; }
@@ -394,7 +413,7 @@ public:
     void EraseROITreeNode(int id=-1){ if (m_mr) m_mr->erase_node(id); }
     void EraseROITreeNode(wstring name){ if (m_mr) m_mr->erase_node(name); }
     wstring GetROIName(int id=-1){ return m_mr ? m_mr->get_roi_name(id) : wstring(); }
-    int GetROIid(wstring name){ return m_mr ? m_mr->get_roi_id(name) : -1; }
+    int GetROIid(const wstring &path){ return m_mr ? m_mr->get_roi_id(path) : -INT_MAX; }
     void SetROISel(wstring name, bool select, bool traverse=false){ if (m_mr) m_mr->set_roi_select(name, select, traverse); }
     void SetROISelChildren(wstring name, bool select, bool traverse=false){ if (m_mr) m_mr->set_roi_select_children(name, select, traverse); }
     void SelectAllNamedROI(){ if (m_mr) m_mr->select_all_roi_tree(); }
@@ -429,7 +448,7 @@ public:
     void ClearSelIDs(){ if (m_mr) m_mr->clear_sel_ids(); }
     void SetIDColDispMode(int mode){ if (m_mr) m_mr->update_palette(mode); }
     int GetIDColDispMode(){ return m_mr ? m_mr->get_roi_disp_mode() : 0; }
-    boost::property_tree::wptree *getROITree(){ return m_mr ? m_mr->get_roi_tree() : NULL; };
+    boost::property_tree::wptree *getROITree(int id=-INT_MAX){ return m_mr ? m_mr->get_roi_tree(id) : NULL; };
     wstring ExportROITree(){ return m_mr ? m_mr->export_roi_tree() : wstring(); }
     string ExportSelIDs(){ return m_mr ? m_mr->exprot_selected_roi_ids() : string(); }
     void ImportROITree(const wstring &tree){ if (m_mr) m_mr->import_roi_tree(tree); }

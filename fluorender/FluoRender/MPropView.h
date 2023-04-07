@@ -94,6 +94,8 @@ class EXPORT_API MPropView: public wxPanel
 		ID_size_text,
 		ID_r_text,
         ID_label_chk,
+        ID_sync_group_chk,
+        ID_sync_name_chk,
 		ID_sync_chk
 	};
 
@@ -143,8 +145,12 @@ private:
     
     wxCheckBox *m_label_chk;
 
+    wxCheckBox *m_sync_group_chk;
+    wxCheckBox *m_sync_name_chk;
 	wxCheckBox *m_sync_chk;
 	bool m_sync;
+    bool m_group_sync;
+    bool m_name_sync;
 
 private:
 	//lighting
@@ -170,6 +176,8 @@ private:
     
     void OnLabelCheck(wxCommandEvent& event);
 
+    void OnSyncGroupCheck(wxCommandEvent& event);
+    void OnSyncNameCheck(wxCommandEvent& event);
 	void OnSyncCheck(wxCommandEvent& event);
 
 	void UpdateSync();

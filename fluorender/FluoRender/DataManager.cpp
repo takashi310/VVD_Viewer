@@ -4877,7 +4877,9 @@ bool MeshData::UpdateModelSWC()
 		(m_bounds.min().y()+m_bounds.max().y())*0.5,
 		(m_bounds.min().z()+m_bounds.max().z())*0.5);
 
-
+    if (m_mr)
+        m_mr->set_model(m_data);
+/*
 	MeshRenderer *tmp = 0;
 	if (m_mr)
 		tmp = m_mr;
@@ -4893,7 +4895,7 @@ bool MeshData::UpdateModelSWC()
 		m_mr->set_limit(tmp->get_limit());
 		delete tmp;
 	}
-
+*/
 	return true;
 }
 

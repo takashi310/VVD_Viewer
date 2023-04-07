@@ -93,6 +93,10 @@ namespace FLIVR
     "   float threshold; //threshold\n" \
 	"} vubo;" \
 
+#define MSH_VERTEX_UNIFORMS_TEX \
+    "// MSH_VERTEX_UNIFORMS_TEX\n" \
+    "layout (binding = 2) uniform sampler2D tex0;\n"
+
 #define MSH_HEAD \
 	"// MSH_HEAD\n" \
 	"void main()\n" \
@@ -106,6 +110,11 @@ namespace FLIVR
 #define MSH_VERTEX_BODY_POS_PARTICLE \
     "//MSH_VERTEX_BODY_POS_PARTICLE\n" \
     "    gl_Position = InVertex.w > vubo.threshold ? vubo.matrix0 * vubo.matrix1 * vec4(InVertex.xyz, 1.0) : vec4(0.0);\n" \
+    "    OutPosition = vec4(InVertex.xyz, 1.0);\n"
+
+#define MSH_VERTEX_BODY_POS_PALETTE \
+    "//MSH_VERTEX_BODY_POS_PALETTE\n" \
+    "    gl_Position = texture(tex0, InTexcoord).w >= 0.001 ? vubo.matrix0 * vubo.matrix1 * vec4(InVertex.xyz, 1.0) : vec4(0.0);\n" \
     "    OutPosition = vec4(InVertex.xyz, 1.0);\n"
 
 #define MSH_VERTEX_BODY_NORMAL \
@@ -398,20 +407,30 @@ namespace FLIVR
 			z << MSH_VERTEX_UNIFORM_MATRIX;
 		}
 		else if (type_ == 1)
+        {
+            if (tex_)
+                z << MSH_VERTEX_INPUTS_T(2);
 			z << MSH_VERTEX_UNIFORM_MATRIX;
+        }
         else if (type_ == 2)
         {
             z << MSH_VERTEX_INPUTS_N(1);
             z << MSH_VERTEX_INPUTS_T(2);
             z << MSH_VERTEX_OUTPUTS_T(1);
             z << MSH_VERTEX_UNIFORM_MATRIX;
+            z << MSH_VERTEX_UNIFORMS_TEX;
         }
+        
+        if (tex_)
+            z << MSH_VERTEX_UNIFORMS_TEX;
 
 		z << MSH_HEAD;
 
 		//body
         if (particle_)
             z << MSH_VERTEX_BODY_POS_PARTICLE;
+        else if (tex_)
+            z << MSH_VERTEX_BODY_POS_PALETTE;
         else
             z << MSH_VERTEX_BODY_POS;
         
@@ -651,7 +670,7 @@ namespace FLIVR
 				setLayoutBindings.push_back(
 					vks::initializers::descriptorSetLayoutBinding(
 						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-						VK_SHADER_STAGE_FRAGMENT_BIT,
+						VK_SHADER_STAGE_FRAGMENT_BIT|VK_SHADER_STAGE_VERTEX_BIT,
 						offset + i)
 				);
 			}

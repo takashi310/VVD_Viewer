@@ -2195,7 +2195,40 @@ void VRenderVulkanView::DrawAnnotations()
         case 3://mesh data
             {
                 MeshData* md = (MeshData*)m_layer_list[i];
-                if (md && md->GetDisp() && md->GetLabelVisibility() && md->GetAnnotations())
+                if (md && md->GetDisp() && md->isTree())
+                {
+                    auto labels = md->GetSubmeshLabels();
+                    auto active_ids = md->GetActiveLabelSet();
+
+                    for(auto ite = active_ids->begin(); ite != active_ids->end(); ++ite)
+                    {
+                        if(labels->count(*ite) > 0 && md->GetROIVisibility(*ite))
+                        {
+                            MeshRenderer::SubMeshLabel &lbl = (*labels)[*ite];
+                            for (auto pos : lbl.points)
+                            {
+                                if (!md->InsideClippingPlanes(pos))
+                                    continue;
+                                pos.z(-pos.z());
+                                pos = mv.transform(pos);
+                                pos = p.transform(pos);
+                                if (pos.x() >= -1.0 && pos.x() <= 1.0 &&
+                                    pos.y() >= -1.0 && pos.y() <= 1.0)
+                                {
+                                    if (pos.z()<=0.0 || pos.z()>=1.0)
+                                        continue;
+                                    px = pos.x()*nx/2.0;
+                                    py = pos.y()*ny/2.0;
+                                    m_text_renderer->RenderText(
+                                        m_vulkan->frameBuffers[m_vulkan->currentBuffer],
+                                        lbl.name, text_color,
+                                        px*sx, py*sy);
+                                }
+                            }
+                        }
+                    }
+                }
+                else if (md && md->GetDisp() && md->GetLabelVisibility() && md->GetAnnotations())
                 {
                     Annotations* ann = md->GetAnnotations();
                     string str;
@@ -6884,100 +6917,7 @@ void VRenderVulkanView::OnShowAllDatasets(wxCommandEvent& event)
 	TreePanel* tree_panel = vr_frame->GetTree();
 	if (!tree_panel) return;
 
-	bool changed = false;
-	for (int i = 0; i < (int)m_layer_list.size(); i++)
-	{
-		if (!m_layer_list[i])
-			continue;
-		switch (m_layer_list[i]->IsA())
-		{
-		case 2://volume data
-		{
-			VolumeData* vd = (VolumeData*)m_layer_list[i];
-			if (vd && !vd->GetDisp())
-			{
-				if (!changed)
-				{
-					tree_panel->PushVisHistory();
-					changed = true;
-				}
-				vd->SetDisp(true);
-			}
-		}
-		break;
-		case 5://group
-		{
-			DataGroup* group = (DataGroup*)m_layer_list[i];
-            if (group)
-            {
-                for (int j = 0; j < group->GetVolumeNum(); j++)
-                {
-                    VolumeData* vd = group->GetVolumeData(j);
-                    if (vd && !vd->GetDisp())
-                    {
-                        if (!changed)
-                        {
-                            tree_panel->PushVisHistory();
-                            changed = true;
-                        }
-                        vd->SetDisp(true);
-                    }
-                }
-            }
-		}
-		break;
-        case 3://mesh data
-        {
-            MeshData* md = (MeshData*)m_layer_list[i];
-            if (md && !md->GetDisp())
-            {
-                if (!changed)
-                {
-                    tree_panel->PushVisHistory();
-                    changed = true;
-                }
-                md->SetDisp(true);
-            }
-        }
-        break;
-        case 6://mesh group
-        {
-            MeshGroup* group = (MeshGroup*)m_layer_list[i];
-            if (group)
-            {
-                for (int j = 0; j < group->GetMeshNum(); j++)
-                {
-                    MeshData* md = group->GetMeshData(j);
-                    if (md && !md->GetDisp())
-                    {
-                        if (!changed)
-                        {
-                            tree_panel->PushVisHistory();
-                            changed = true;
-                        }
-                        md->SetDisp(true);
-                    }
-                }
-            }
-		}
-        break;
-        }
-	}
-
-	if (changed)
-	{
-		for (int i = 0; i < vr_frame->GetViewNum(); i++)
-		{
-			VRenderView* vrv = vr_frame->GetView(i);
-			if (vrv)
-            {
-				vrv->SetVolPopDirty();
-                vrv->SetMeshPopDirty();
-            }
-		}
-		RefreshGL();
-		vr_frame->UpdateTreeIcons();
-	}
+    tree_panel->ShowAllDatasets();
 }
 void VRenderVulkanView::OnHideOtherDatasets(wxCommandEvent& event)
 {

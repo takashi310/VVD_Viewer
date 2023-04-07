@@ -161,7 +161,8 @@ class EXPORT_API DataTreeCtrl: public wxTreeCtrl, Notifier
 		ID_FlipV,
 		ID_ExportMeshMask,
         ID_ToggleNAMode,
-        ID_SetSameColor
+        ID_SetSameColor,
+        ID_ExpandItem
 	};
 
 public:
@@ -191,6 +192,8 @@ public:
 	void DeleteSelection();
 	//traversal delete
 	void TraversalDelete(wxTreeItemId item);
+    void TraversalDeleteItem(wxTreeItemId item);
+    void TraversalDeleteChildren(wxTreeItemId item);
 	//root item
 	wxTreeItemId AddRootItem(const wxString &text);
 	void ExpandRootItem();
@@ -262,6 +265,9 @@ public:
 	void RedoVisibility();
 	void ClearVisHistory();
 	void PushVisHistory();
+    
+    void ShowAllDatasets();
+    void ShowAllDatasetsTraversal(wxTreeItemId item);
 
     void HideOtherDatasets();
 	void HideOtherDatasets(wxString name);
@@ -320,6 +326,9 @@ private:
     void UpdateROITreeIconColor(wxTreeItemId par_item, MeshData* md);
 	void BuildROITree(wxTreeItemId par_item, const boost::property_tree::wptree& tree, VolumeData *vd);
     void BuildROITree(wxTreeItemId par_item, const boost::property_tree::wptree& tree, MeshData *md);
+    void InitROITree(wxTreeItemId par_item, const boost::property_tree::wptree& tree, MeshData *md);
+    void AddChildrenROITree(wxTreeItemId par_item, const boost::property_tree::wptree& tree, MeshData *md);
+    void ExpandROITree(wxTreeItemId item);
 
 	void OnContextMenu(wxContextMenuEvent &event );
 
@@ -374,6 +383,7 @@ private:
 	void OnEndDrag(wxTreeEvent& event);
 	void OnRename(wxTreeEvent& event);
 	void OnRenamed(wxTreeEvent& event);
+    void OnExpandItem(wxTreeEvent& event);
 
 	void OnDragging(wxMouseEvent& event);
 
@@ -491,6 +501,7 @@ public:
 	void RedoVisibility();
 	void ClearVisHistory();
 	void PushVisHistory();
+    void ShowAllDatasets();
     void HideOtherDatasets();
 	void HideOtherDatasets(wxString name);
     void HideOtherVolumes();

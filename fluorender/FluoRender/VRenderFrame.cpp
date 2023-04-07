@@ -1590,6 +1590,7 @@ void VRenderFrame::ConvertCSV2SWC(wxString filename, VRenderView* vrv)
     map<wxString, Color> swccolors;
     wxString str = csv.GetFirstLine();
     wxArrayString linkswcstr;
+    map<wxString, MeshRenderer::SubMeshLabel> labels;
     while(!csv.Eof())
     {
         wxStringTokenizer tkz(str, wxT(","));
@@ -1608,10 +1609,32 @@ void VRenderFrame::ConvertCSV2SWC(wxString filename, VRenderView* vrv)
             }
             wxString key = elems[3] + "_" + elems[9];
             wxString path = "Cell" + elems[4] + "." + elems[3] + "_" + elems[9];
-            wxString swc_line = wxString::Format("%d 6 %s %s %s %f -1 %s", (int)swcdata.Count()+1, elems[1], elems[0], elems[2], 0.1f, path);
+            double r = 0.1f;
+            if (elems.Count() >= 15)
+            {
+                elems[14].ToDouble(&r);
+                r *= 0.001f;
+            }
+            wxString swc_line = wxString::Format("%d 6 %s %s %s %f -1 %s", (int)swcdata.Count()+1, elems[1], elems[0], elems[2], r, path);
             swcdata.Add(swc_line);
             
-            if (elems.Count() >= 14)
+            double x, y, z;
+            elems[1].ToDouble(&x);
+            elems[0].ToDouble(&y);
+            elems[2].ToDouble(&z);
+            Point pos = Point(x, y, z);
+            if (labels.count(path) == 0)
+            {
+                MeshRenderer::SubMeshLabel lbl;
+                lbl.name = elems[9].ToStdWstring();
+                lbl.state = false;
+                lbl.points.push_back(pos);
+                labels[path] = lbl;
+            }
+            else
+                labels[path].points.push_back(pos);
+            
+            if (elems.Count() >= 13)
             {
                 Color col(1.0, 1.0, 1.0);
                 elems[10].ToDouble(&col[0]);
@@ -1622,17 +1645,20 @@ void VRenderFrame::ConvertCSV2SWC(wxString filename, VRenderView* vrv)
                 col[2] = col[2] / 255.0;
                 swccolors[path] = col;
                 
-                long link2 = -1;
-                elems[13].ToLong(&link2);
-                if (link2 == 0)
-                    link2 = -1;
-                path = "Cell" + elems[4] + ".links";
-                swc_line = wxString::Format("%d 0 %s %s %s %f %d %s", (int)swcdata.Count()+1, elems[1], elems[0], elems[2], 0.01f, (int)link2*2, path);
-                col[0] = 200.0 / 255.0;
-                col[1] = 200.0 / 255.0;
-                col[2] = 200.0 / 255.0;
-                swccolors[path] = col;
-                swcdata.Add(swc_line);
+                if (elems.Count() >= 14)
+                {
+                    long link2 = -1;
+                    elems[13].ToLong(&link2);
+                    if (link2 == 0)
+                        link2 = -1;
+                    path = "Cell" + elems[4] + ".links";
+                    swc_line = wxString::Format("%d 0 %s %s %s %f %d %s", (int)swcdata.Count()+1, elems[1], elems[0], elems[2], r*0.1, (int)link2*2, path);
+                    col[0] = 200.0 / 255.0;
+                    col[1] = 200.0 / 255.0;
+                    col[2] = 200.0 / 255.0;
+                    swccolors[path] = col;
+                    swcdata.Add(swc_line);
+                }
             }
         }
         else if (elems.Count() >= 3)
@@ -1649,7 +1675,6 @@ void VRenderFrame::ConvertCSV2SWC(wxString filename, VRenderView* vrv)
     wxString name = filename.Mid(filename.Find(GETSLASH(), true)+1);
     wxArrayString data = swcdata;
     
-    Annotations *annotations = new Annotations();
     wxString gname = name.Mid(name.Find(' ', true)+1);
     
     //generate swc
@@ -1667,33 +1692,7 @@ void VRenderFrame::ConvertCSV2SWC(wxString filename, VRenderView* vrv)
             return;
     }
     for(int j = 0; j < data.Count(); j++)
-    {
         swc.AddLine(data[j]);
-        wxStringTokenizer tkz(data[j], wxT(" "));
-        wxArrayString elems;
-        while(tkz.HasMoreTokens())
-            elems.Add(tkz.GetNextToken());
-        if (elems.Count() >= 7)
-        {
-            double x, y, z;
-            long link;
-            elems[2].ToDouble(&x);
-            elems[3].ToDouble(&y);
-            elems[4].ToDouble(&z);
-            elems[6].ToLong(&link);
-            Point pos = Point(x, y, z);
-            if (link < 0)
-            {
-                if (elems.Count() >= 8)
-                {
-                    if (!elems[7].AfterLast('.').IsSameAs("links"))
-                        annotations->AddText(elems[7].AfterLast('_').ToStdString(), pos, "");
-                }
-                else
-                    annotations->AddText(gname.ToStdString(), pos, "");
-            }
-        }
-    }
     swc.Write();
     swc.Close();
     
@@ -1704,7 +1703,11 @@ void VRenderFrame::ConvertCSV2SWC(wxString filename, VRenderView* vrv)
         if (md)
         {
             md->SetName(name);
-            md->SetAnnotations(annotations);
+            for (auto ite = labels.begin(); ite != labels.end(); ite++)
+            {
+                int id = md->GetROIid(ite->first.ToStdWstring());
+                md->SetSubmeshLabel(id, ite->second);
+            }
 
             for (auto ite = swccolors.begin(); ite != swccolors.end(); ite++)
             {
@@ -1728,11 +1731,7 @@ void VRenderFrame::ConvertCSV2SWC(wxString filename, VRenderView* vrv)
 
             md_sel = md;
         }
-        else
-            delete annotations;
     }
-    else
-        delete annotations;
     
     if (md_sel)
         UpdateTree(md_sel->GetName(), 3);

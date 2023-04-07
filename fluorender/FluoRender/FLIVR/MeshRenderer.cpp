@@ -169,6 +169,120 @@ namespace FLIVR
 		}
 	}
 
+bool MeshRenderer::get_submesh_label_state(int id)
+{
+    auto ite = roi_active_labels_.find(id);
+    if (ite != roi_active_labels_.end())
+        return true;
+    return false;
+}
+
+void MeshRenderer::set_submesh_label(int id, const SubMeshLabel &label_data)
+{
+    if (id < 0)
+        return;
+    if (roi_inv_dict_.count(id) == 0)
+        return;
+    
+    roi_labels_[id] = label_data;
+    
+    wstring name = roi_inv_dict_[id];
+    auto pos = name.find_last_of(L'.');
+    if (pos != wstring::npos && pos+1 < name.length())
+        name = name.substr(pos+1);
+    
+    if (roi_labels_name_dict_.count(name) == 0)
+    {
+        vector<int> ids;
+        ids.push_back(id);
+        roi_labels_name_dict_[name] = ids;
+    }
+    else
+        roi_labels_name_dict_[name].push_back(id);
+}
+
+void MeshRenderer::set_submesh_label_state(int id, bool state)
+{
+    if (id < 0)
+        return;
+    
+    if (state)
+        roi_active_labels_.insert(id);
+    else
+    {
+        if (roi_active_labels_.empty()) return;
+
+        auto ite = roi_active_labels_.find(id);
+        if (ite != roi_active_labels_.end())
+            roi_active_labels_.erase(ite);
+    }
+}
+
+void MeshRenderer::set_submesh_label_state_siblings(int id, bool state)
+{
+    if (roi_inv_dict_.count(id) == 0)
+        return;
+    wstring path = roi_inv_dict_[id];
+    size_t found = path.find_last_of(L".");
+    wstring parent = L"";
+    if (found != wstring::npos)
+        parent = path.substr(0, found);
+    
+    boost::property_tree::wptree &tree = roi_tree_.get_child(parent);
+    for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
+    {
+        try
+        {
+            if ( const auto val = tree.get_optional<wstring>(child->first) )
+            {
+                int cid = boost::lexical_cast<int>(*val);
+                set_submesh_label_state(cid, state);
+            }
+        }
+        catch (boost::bad_lexical_cast e)
+        {
+            cerr << "MeshRenderer::set_submesh_label_state_siblings(int id, bool state): bad_lexical_cast" << endl;
+        }
+    }
+}
+void MeshRenderer::set_submesh_label_state_by_name(wstring name, bool state)
+{
+    if (roi_labels_name_dict_.count(name) == 0)
+        return;
+    
+    vector<int> ids = roi_labels_name_dict_[name];
+    
+    for (auto id : ids)
+        set_submesh_label_state(id, state);
+}
+map<int, MeshRenderer::SubMeshLabel>* MeshRenderer::get_submesh_labels()
+{
+    return &roi_labels_;
+}
+unordered_set<int>* MeshRenderer::get_active_label_set()
+{
+    return &roi_active_labels_;
+}
+
+void MeshRenderer::set_model(GLMmodel* data)
+{
+    data_ = data;
+    update_ = true;
+}
+
+boost::property_tree::wptree *MeshRenderer::get_roi_tree(int id)
+{
+    if (id == -INT_MAX)
+        return &roi_tree_;
+    else if(roi_inv_dict_.count(id) > 0)
+    {
+        wstring path = roi_inv_dict_[id];
+        return &roi_tree_.get_child(path);
+    }
+    
+    return NULL;
+}
+
 void MeshRenderer::init_palette()
 {
     memcpy(palette_, (const void *)palettes::palette_random_256_256_4, sizeof(unsigned char)*MR_PALETTE_SIZE*MR_PALETTE_ELEM_COMP);
@@ -267,11 +381,36 @@ void MeshRenderer::update_palette(const boost::property_tree::wptree& tree, bool
     }
 }
 
+
+int MeshRenderer::get_roi_id(const wstring &path)
+{
+    int rval = -INT_MAX;
+    
+    wstring wsval;
+    try
+    {
+        rval = boost::lexical_cast<int>(roi_tree_.get(path, wsval));
+    }
+    catch (boost::bad_lexical_cast e)
+    {
+        cerr << "MeshRenderer::get_roi_id(const wstring &path): bad_lexical_cast" << endl;
+        return -INT_MAX;
+    }
+    
+    return rval;
+}
+
 void MeshRenderer::select_segment(int id)
 {
     wstring path = L"";
     if(roi_inv_dict_.count(id) > 0)
+    {
         path = roi_inv_dict_[id];
+        selected_submesh_id_ = id;
+    }
+    else
+        selected_submesh_id_ = -INT_MAX;
+    
     select_segment(path);
 }
 
@@ -375,31 +514,32 @@ void MeshRenderer::set_roi_state_traverse(int id, bool state, int exclude)
         }
     }
     
-    if (id != -INT_MAX) roi_inv_state_[id] = state;
+    //if (id != -INT_MAX) roi_inv_state_[id] = state;
     set_roi_state_traverse(tree, state, exclude);
     
     update_palette(path);
 }
 void MeshRenderer::set_roi_state_traverse(const boost::property_tree::wptree& tree, bool state, int exclude)
 {
+    try
+    {
+        wstring val = tree.get_value<wstring>();
+        if (!val.empty())
+        {
+            int id = boost::lexical_cast<int>(val);
+            if (id == exclude)
+                return;
+            roi_inv_state_[id] = state;
+        }
+    }
+    catch (boost::bad_lexical_cast e)
+    {
+        cerr << "MeshRenderer::set_roi_state_traverse(const wptree& tree, bool state): bad_lexical_cast" << endl;
+    }
+    
     for (wptree::const_iterator child = tree.begin(); child != tree.end(); ++child)
     {
-        try
-        {
-            wstring val = tree.get<wstring>(child->first);
-            if (!val.empty())
-            {
-                int id = boost::lexical_cast<int>(val);
-                if (id == exclude)
-                    continue;
-                roi_inv_state_[id] = state;
-            }
-        }
-        catch (boost::bad_lexical_cast e)
-        {
-            cerr << "MeshRenderer::set_roi_state_traverse(const wptree& tree, bool state): bad_lexical_cast" << endl;
-        }
-        set_roi_state_traverse(child->second, state);
+        set_roi_state_traverse(child->second, state, exclude);
     }
 }
 void MeshRenderer::toggle_roi_state(int id)
@@ -416,6 +556,32 @@ bool MeshRenderer::get_roi_state(int id)
         return roi_inv_state_[id];
     else
         return false;
+}
+bool MeshRenderer::get_roi_visibility(int id)
+{
+    wstring path = id != -INT_MAX ? roi_inv_dict_[id] : L"";
+    boost::property_tree::wptree &tree = id != -INT_MAX ? roi_tree_.get_child(path) : roi_tree_;
+    bool state = roi_inv_state_[id];
+    
+    if (state)
+    {
+        wstring parent = path;
+        size_t found = path.find_last_of(L".");
+        while (found != wstring::npos)
+        {
+            parent = parent.substr(0, found);
+            int pid = boost::lexical_cast<int>(roi_tree_.get<wstring>(parent));
+            if (roi_inv_state_.count(pid) > 0)
+            {
+                state = state && roi_inv_state_[pid];
+                if (!state)
+                    break;
+            }
+            found = parent.find_last_of(L".");
+        }
+    }
+    
+    return state;
 }
 map<int, bool> MeshRenderer::get_all_roi_state()
 {
@@ -783,40 +949,11 @@ void MeshRenderer::erase_node(wstring name)
 
 wstring MeshRenderer::get_roi_name(int id)
 {
-    wstring rval;
-
-    int edid = (id == -1) ? edit_sel_id_ : id;
+    wstring rval = roi_inv_dict_[id];
     
-    if (edid != -1)
-    {
-        if(auto path = get_roi_path(edid))
-            rval = roi_tree_.get<wstring>(*path);
-    }
-
-    return rval;
-}
-
-int MeshRenderer::get_roi_id(wstring name)
-{
-    int rval = -1;
-
-    if (auto path = get_roi_path(name))
-    {
-        auto pos = path->find_last_of(L'.');
-        wstring strid;
-        if (pos != wstring::npos && pos+1 < path->length())
-            strid = path->substr(pos+1);
-        else
-            strid = *path;
-        try
-        {
-            rval = boost::lexical_cast<int>(strid);
-        }
-        catch (boost::bad_lexical_cast e)
-        {
-            cerr << "MeshRenderer::get_roi_id(wstring name): bad_lexical_cast" << endl;
-        }
-    }
+    auto pos = rval.find_last_of(L'.');
+    if (pos != wstring::npos && pos+1 < rval.length())
+        rval = rval.substr(pos+1);
 
     return rval;
 }

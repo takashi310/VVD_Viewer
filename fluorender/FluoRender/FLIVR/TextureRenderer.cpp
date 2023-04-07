@@ -1594,8 +1594,9 @@ namespace FLIVR
 		{
 			const Point p0_cam(0.0, 0.0, 0.0);
 			Point p0, p0_obj;
-			pr.unproject(p0_cam, p0);
-			mv.unproject(p0, p0_obj);
+			//pr.unproject(p0_cam, p0);
+			//mv.unproject(p0, p0_obj);
+            mv.unproject(p0_cam, p0_obj);
 			if (bbox.inside(p0_obj))
 				return true;
 		}
@@ -1608,10 +1609,14 @@ namespace FLIVR
 		bool underz = true;
 		for (int i = 0; i < 8; i++)
 		{
-			const Point pold((i & 1) ? bbox.min().x() : bbox.max().x(),
+			Point p0((i & 1) ? bbox.min().x() : bbox.max().x(),
 				(i&2)?bbox.min().y():bbox.max().y(),
 				(i&4)?bbox.min().z():bbox.max().z());
-			const Point p = pr.project(mv.project(pold));
+			Point p1 = mv.project(p0);
+            bool zinv = p1.z() > 0;
+            if (zinv) p1.z(-p1.z());
+            Point p = pr.project(p1);
+            if (zinv) p.z(-p.z());
 			overx = overx && (p.x() > 1.0);
 			overy = overy && (p.y() > 1.0);
 			overz = overz && (p.z() > 1.0);
