@@ -450,7 +450,7 @@ namespace FLIVR
 
 		s = z.str();
         
-        //std::cerr << s << std::endl;
+        std::cerr << s << std::endl;
         
 		return false;
 	}
@@ -575,7 +575,7 @@ namespace FLIVR
 
 		s = z.str();
         
-        std::cerr << s << std::endl;
+        //std::cerr << s << std::endl;
 
 		return false;
 	}

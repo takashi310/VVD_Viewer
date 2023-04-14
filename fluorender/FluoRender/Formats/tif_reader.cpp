@@ -191,12 +191,15 @@ void TIFReader::Preprocess()
 				m_time_num = list.size();
 			}
 		}
+        
+        if (list.size() == 0)
+            list.push_back(m_path_name);
 
 		//build sequence information for the hyperstack
 		isHyperstack_ = true;
 		m_data_name = name;
 		int page_cnt = 0;
-		for (int i = 0; i < m_time_num; ++i)
+		for (int i = 0; i < list.size(); ++i)
 		{
 			TimeDataInfo info;
 
